@@ -1,0 +1,39 @@
+name: lean
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The Sail guard compares the PR's base and head commits, so both
+          # commits must be available to git rather than using a shallow clone.
+          fetch-depth: 0
+      # LeanRV64D is generated Sail output and is treated as trusted input.
+      # Reject additions, edits, deletions, and renames affecting either the
+      # root module or anything below LeanRV64D/ before attempting the build.
+      # This protects PRs; main must also disallow unchecked direct pushes.
+      - name: Protect generated Sail sources
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ! git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/; then
+            echo "::error::Generated Sail sources are trusted and must not be changed."
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/
+            exit 1
+          fi
+      - uses: leanprover/lean-action@v1
+        with:
+          build: true
