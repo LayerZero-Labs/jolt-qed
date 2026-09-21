@@ -15,7 +15,6 @@ in this repository.
 
 For general questions, or other recommendations, you are welcome to email us at [jolt-qed@layerzerolabs.org](mailto:jolt-qed@layerzero-labs.org).
 Before preparing your correspondence, please read the code of conduct above, and also make sure to follow the rules outlined [here](http://www.catb.org/esr/faqs/smart-questions.html).
-Beyond that, there are no set rules.
 
 ## Pull Requests
 
@@ -29,6 +28,8 @@ Briefly explain which tool(s) you used and how you used it.
 
 ### Pull Request Guidelines
 
+To contribute, open a pull request from your fork or open an issue to report a problem.
+
 1. **Keep PRs focused:** Try to target one feature, proof, or bug fix per pull request.
 
 2. **Use a descriptive title:** Use a short title that says what changed. No particular prefix is required.
@@ -38,4 +39,3 @@ Briefly explain which tool(s) you used and how you used it.
 4. **Allow maintainer edits:** Please ensure the **"Allow edits from maintainers"** box is checked when opening your pull request. This allows maintainers to quickly fix minor typos, formatting, or lint issues directly on your branch, speeding up the review process.
 
 5. **Documentation**: Explain what changed and why. If the change is a large re-organisation of the proofs that greatly simplify, and shorten existing proofs then reach out via the mailing list first so we can have a discussion.
-

@@ -1,0 +1,40 @@
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: ['**']
+    tags: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze GitHub Actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read # Read workflow metadata in this private repository.
+      # Fork PR tokens stay read-only. Code scanning permits uploads made by
+      # pull_request runs without enabling write tokens for fork workflows.
+      security-events: write # Upload CodeQL results; never grant contents write.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@c23de5a82f64bb08c6d9f28844551440ca298e76 # v4.38.1
+        with:
+          # CodeQL supports GitHub Actions, but does not analyze Lean source.
+          languages: actions
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@c23de5a82f64bb08c6d9f28844551440ca298e76 # v4.38.1
+        with:
+          category: /language:actions
