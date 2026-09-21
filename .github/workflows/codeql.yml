@@ -26,7 +26,7 @@ jobs:
       # pull_request runs without enabling write tokens for fork workflows.
       security-events: write # Upload CodeQL results; never grant contents write.
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: github/codeql-action/init@c23de5a82f64bb08c6d9f28844551440ca298e76 # v4.38.1
