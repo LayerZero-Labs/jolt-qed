@@ -10,19 +10,27 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: lean-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    # Keep this job name stable: the proposed main rules require `build`.
+    name: build
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           # The Sail guard compares the PR's base and head commits, so both
           # commits must be available to git rather than using a shallow clone.
           fetch-depth: 0
       # LeanRV64D is generated Sail output and is treated as trusted input.
       # Reject additions, edits, deletions, and renames affecting either the
       # root module or anything below LeanRV64D/ before attempting the build.
-      # This protects PRs; main must also disallow unchecked direct pushes.
+      # This checks PRs; the main rules must enforce it and disallow direct pushes.
       - name: Protect generated Sail sources
         if: github.event_name == 'pull_request'
         env:
@@ -34,6 +42,9 @@ jobs:
             git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/
             exit 1
           fi
-      - uses: leanprover/lean-action@v1
+      - uses: leanprover/lean-action@50fcf42d2e460296f1a34b402e990d1b24f8b596 # v1.6.0
         with:
           build: true
+          # The composite action's GitHub cache steps use floating action tags.
+          # Keep those steps disabled; Mathlib's dependency cache remains enabled.
+          use-github-cache: false

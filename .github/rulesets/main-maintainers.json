@@ -1,0 +1,17 @@
+{
+  "name": "main: only Research may merge",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [
+    {"actor_id": 11854497, "actor_type": "Team", "bypass_mode": "pull_request"}
+  ],
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {"type": "update", "parameters": {"update_allows_fetch_and_merge": false}}
+  ]
+}
