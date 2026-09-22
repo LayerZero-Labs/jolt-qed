@@ -22,14 +22,20 @@ noncomputable def RamReadValue [Field F] {program : JoltProgram}
       let row := getElem trace.rows t.val inBounds
       let instruction :=
         (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
-      match h : instruction with
+      match hInstr : instruction with
       | .LD _ _ _ _ => rdValue instruction row.postState
       | .SD base value imm =>
           let address := Memory.effectiveAddr12 (JoltISA.sourceValue base row.preState) imm
           let word := (JoltISA.memoryWord? row.preState address).get
+             -- This is why SD assumption exists in tracerow
+             -- It guarantees that the old memory word exists before the store,
+             -- so .get can read it. A successful store alone does not guarantee
+             -- this. Rust also reads the old word when recording a store.
             (by
-              have stored : program.expandedBytecode[row.rowIndex].instruction =
-                  .SD base value imm := h
+              -- The match above gives hInstr : instruction = .SD base value imm.
+              -- Restate it using the bytecode entry so we can select the SD
+              -- case of storeMemoryPresent.
+              have stored : program.expandedBytecode[row.rowIndex].instruction = .SD base value imm := hInstr
               simpa only [stored] using row.storeMemoryPresent)
           (word.toNat : F)
       | _ => 0
