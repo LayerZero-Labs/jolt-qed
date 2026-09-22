@@ -41,3 +41,7 @@ import JoltConstraints.witness_helpers.right_lookup_operand
 import JoltConstraints.witness_helpers.lookup_output
 import JoltConstraints.witness_helpers.product
 import JoltConstraints.witness_helpers.should_jump
+
+import JoltConstraints.witness_helpers.registers_val
+import JoltConstraints.witness_helpers.ram_val
+import JoltConstraints.witness_helpers.ram_val_final
