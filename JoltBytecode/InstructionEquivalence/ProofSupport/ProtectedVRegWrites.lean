@@ -66,6 +66,7 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .VirtualXORROT24 dst _ _
   | .VirtualXORROT16 dst _ _
   | .VirtualXORROT63 dst _ _
+  | .VirtualXORROTL1 dst _ _
   | .VirtualXORROTW16 dst _ _
   | .VirtualXORROTW12 dst _ _
   | .VirtualXORROTW8 dst _ _
