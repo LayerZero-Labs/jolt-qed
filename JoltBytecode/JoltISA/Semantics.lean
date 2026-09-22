@@ -6,6 +6,7 @@ Authors: Ari
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.RegisterAccess
 import JoltBytecode.JoltISA.Values
+import JoltBytecode.JoltISA.semantic_helpers
 
 /-!
 # Jolt ISA semantics
@@ -89,7 +90,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .BEQ lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if x = y then
+      if branchDecisionPure (.BEQ lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
         liftSail (jump_to (pc + sign_extend (m := 64) imm))
       else
@@ -97,7 +98,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .BNE lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if x ≠ y then
+      if branchDecisionPure (.BNE lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
         liftSail (jump_to (pc + sign_extend (m := 64) imm))
       else
@@ -105,7 +106,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .BLT lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if zopz0zI_s x y then
+      if branchDecisionPure (.BLT lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
         liftSail (jump_to (pc + sign_extend (m := 64) imm))
       else
@@ -113,7 +114,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .BGE lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if zopz0zKzJ_s x y then
+      if branchDecisionPure (.BGE lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
         liftSail (jump_to (pc + sign_extend (m := 64) imm))
       else
@@ -121,7 +122,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .BLTU lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if zopz0zI_u x y then
+      if branchDecisionPure (.BLTU lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
         liftSail (jump_to (pc + sign_extend (m := 64) imm))
       else
@@ -129,7 +130,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .BGEU lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if zopz0zKzJ_u x y then
+      if branchDecisionPure (.BGEU lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
         liftSail (jump_to (pc + sign_extend (m := 64) imm))
       else
