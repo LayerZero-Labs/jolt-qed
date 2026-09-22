@@ -24,6 +24,10 @@ import JoltConstraints.witness_helpers.ram_write_value
 import JoltConstraints.witness_helpers.rd_inc
 import JoltConstraints.witness_helpers.ram_inc
 
+import JoltConstraints.witness_helpers.instruction_ra_chunk
+import JoltConstraints.witness_helpers.bytecode_ra_chunk
+import JoltConstraints.witness_helpers.ram_ra_chunk
+import JoltConstraints.witness_helpers.instruction_ra
 import JoltConstraints.witness_helpers.left_instruction_input
 import JoltConstraints.witness_helpers.right_instruction_input
 import JoltConstraints.witness_helpers.imm
