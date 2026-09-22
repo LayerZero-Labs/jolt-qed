@@ -1,0 +1,27 @@
+name = "JoltBytecode"
+defaultTargets = ["JoltBytecode"]
+moreLeanArgs = ["--tstack=400000"]
+
+[leanOptions]
+pp.unicode.fun = true
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "9d092b118b6f9f777ba67c7a2d2c2bcdd1b52395"
+
+[[require]]
+name = "Sail"
+git = "https://github.com/rems-project/lean-sail"
+rev = "v3"
+
+[[lean_lib]]
+name = "JoltBytecode"
+leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+# Trusted generated layer: not a default target. Lake rebuilds imported modules
+# only when its source, toolchain, or build configuration changes.
+[[lean_lib]]
+name = "LeanRV64D"
+leanOptions.weak.linter.style.nameCheck = false
+moreLeancArgs = ["-fbracket-depth=500"]
