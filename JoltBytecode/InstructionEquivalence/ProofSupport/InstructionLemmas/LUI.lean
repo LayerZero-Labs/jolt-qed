@@ -28,7 +28,7 @@ theorem execInstr_lui_vreg_run (vd : VReg) (imm : BitVec 64)
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.LUI (.vreg vd) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then imm else js.vregs r } := by
   unfold execInstr writeDst
   exact writeVReg_retire_run_of_writable vd imm js hvd

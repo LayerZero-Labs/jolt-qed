@@ -348,7 +348,7 @@ private theorem jolt_mulhsu_value_eq_correction (x y : BitVec 64) :
   by_cases hx : x.toNat < 9223372036854775808
   · rw [jolt_mulhsu_value, jolt_mulhsu_correction_value,
       jolt_movsign_value_eq_zero_of_toNat_lt_half x hx]
-    unfold jolt_mulhu_value
+    unfold jolt_mulhu_value JoltISA.mulWide
     rw [jolt_sltu_value_eq_zero_of_not_lt]
     · apply BitVec.eq_of_toNat_eq
       simp
@@ -372,7 +372,7 @@ private theorem jolt_mulhsu_value_eq_correction (x y : BitVec 64) :
     rw [BitVec.toNat_add]
     rw [xor_neg_one_toNat
       ((BitVec.ofNat 64 (18446744073709551616 - x.toNat)) * y)]
-    unfold jolt_mulhu_value
+    unfold jolt_mulhu_value JoltISA.mulWide
     rw [BitVec.toNat_ofNat, BitVec.toNat_add, BitVec.toNat_mul,
       BitVec.toNat_ofNat, BitVec.toNat_mul]
     rw [show (1 : BitVec 64).toNat = 1 by decide]
@@ -402,14 +402,14 @@ private theorem jolt_mulhsu_correction_eq_mulhsu (x y : BitVec 64) :
   by_cases hx : x.toNat < 9223372036854775808
   · rw [jolt_mulhsu_correction_value,
       jolt_movsign_value_eq_zero_of_toNat_lt_half x hx]
-    unfold jolt_mulhu_value mulhsu
+    unfold jolt_mulhu_value JoltISA.mulWide mulhsu
     rw [toInt_of_toNat_lt_half x hx]
     apply BitVec.eq_of_toNat_eq
     simp
     omega
   · rw [jolt_mulhsu_correction_value,
       jolt_movsign_value_eq_neg_one_of_half_le x hx]
-    unfold jolt_mulhu_value mulhsu
+    unfold jolt_mulhu_value JoltISA.mulWide mulhsu
     rw [toInt_of_half_le x hx]
     apply BitVec.eq_of_toNat_eq
     simp

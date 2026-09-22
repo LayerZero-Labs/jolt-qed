@@ -233,11 +233,11 @@ theorem phase_writeback_run
     have hz : sign_extend (m := 64) (0 : BitVec 12) = 0#64 := by decide
     rw [hz, BitVec.add_zero]
   obtain ⟨s', hw⟩ := wX_shape rd sext_q js.sail
-  refine ⟨{ sail := s', vregs := js.vregs }, ?_, ?_⟩
+  refine ⟨{ js with sail := s' }, ?_, ?_⟩
   · have h1 : (JoltISA.execInstr (.ADDI (.xreg rd) (.vreg tempVReg) 0)).run js =
-        .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } :=
+        .ok RETIRE_SUCCESS { js with sail := s' } :=
       JoltISA.addi_run_xreg_vreg rd tempVReg 0 js s' (by rw [hq]; exact hw)
-    rw [JoltISA.execProgram_instr_run_retire _ _ js { sail := s', vregs := js.vregs } h1]
+    rw [JoltISA.execProgram_instr_run_retire _ _ js { js with sail := s' } h1]
     rfl
   · show s' = stateAfterWrite js_ref rd sext_q
     rw [← h_sail]
@@ -424,9 +424,9 @@ theorem phase_writeback_run_sound
   obtain ⟨s', hw⟩ := wX_shape rd sext_q js.sail
   have hp_concrete :
       (JoltISA.execInstr (.ADDI (.xreg rd) (.vreg tempVReg) 0)).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } :=
+      .ok RETIRE_SUCCESS { js with sail := s' } :=
     JoltISA.addi_run_xreg_vreg rd tempVReg 0 js s' (by rw [hq]; exact hw)
-  rw [JoltISA.execProgram_instr_run_retire _ _ js { sail := s', vregs := js.vregs }
+  rw [JoltISA.execProgram_instr_run_retire _ _ js { js with sail := s' }
     hp_concrete] at hp
   cases hp
   show s' = stateAfterWrite js_ref rd sext_q

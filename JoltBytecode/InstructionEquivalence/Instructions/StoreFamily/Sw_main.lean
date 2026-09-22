@@ -140,7 +140,7 @@ theorem swProgramAuto_reduces_to_dword_store (imm : BitVec 12) (rs2 rs1 : regidx
   rcases StoreProgramBlocks.sdWriteBlock (.done RETIRE_SUCCESS)
       js_splice base dword_new finalSail hsplice_v1 hdword_new
       (by simpa [base] using StoreSplice.dword_base_aligns rs1_val imm)
-      hwrite_for_sd with
+      hwrite_for_sd hread_mmio.ram with
     ⟨js_write, hsd_run, hsail_write, _hvregs_write⟩
   refine ⟨js_write, ?_, ?_⟩
   · calc

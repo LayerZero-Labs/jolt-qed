@@ -118,10 +118,10 @@ theorem srawProgram_eq_sail
     exact (sail_sraw_eq_riscv v1 v2).symm
 
   let js_tmp : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = tmp then mask else js.vregs r }
   obtain ⟨s', h_write⟩ := wX_shape rd (sraw_sail_operation v1 v2) js.sail
-  let js_final : SailJoltState := { sail := s', vregs := js_tmp.vregs }
+  let js_final : SailJoltState := { js_tmp with sail := s' }
 
   simp only [execute_RTYPEW]
   simp only [EStateM.run_bind]

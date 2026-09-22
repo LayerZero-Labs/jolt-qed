@@ -22,7 +22,7 @@ def stateAfterVRegWrite (js : SailJoltState) (vd : JoltISA.VReg)
 
 /-- After writing `v` to vreg `vd`, the lookup at `vd` returns `v`. -/
 theorem vregs_write_self (js : SailJoltState) (vd : BitVec 7) (v : BitVec 64) :
-    ({ sail := js.sail
+    ({ js with
        vregs := fun r => if r = vd then v else js.vregs r } : SailJoltState).vregs vd
       = v := by
   show (if vd = vd then v else js.vregs vd) = v
@@ -31,7 +31,7 @@ theorem vregs_write_self (js : SailJoltState) (vd : BitVec 7) (v : BitVec 64) :
 /-- After writing `v` to vreg `vd`, other vregs are preserved. -/
 theorem vregs_write_pres (js : SailJoltState) (vd : BitVec 7) (v : BitVec 64)
     (k : BitVec 7) (h : k ≠ vd) :
-    ({ sail := js.sail
+    ({ js with
        vregs := fun r => if r = vd then v else js.vregs r } : SailJoltState).vregs k
       = js.vregs k := by
   show (if k = vd then v else js.vregs k) = js.vregs k
@@ -46,7 +46,7 @@ theorem writeSingleVReg_ex
     {comp : JoltMonad ExecutionResult} {js : SailJoltState}
     {vd : BitVec 7} {value : BitVec 64}
     (hrun : comp.run js = .ok RETIRE_SUCCESS
-      { sail := js.sail
+      { js with
         vregs := fun r => if r = vd then value else js.vregs r }) :
     ∃ js',
       comp.run js = .ok RETIRE_SUCCESS js' ∧

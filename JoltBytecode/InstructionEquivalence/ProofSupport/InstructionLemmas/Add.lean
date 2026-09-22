@@ -22,11 +22,11 @@ theorem add_run_vreg_vreg_vreg (vd lhs rhs : VReg)
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.ADD (.vreg vd) (.vreg lhs) (.vreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then js.vregs lhs + js.vregs rhs else js.vregs r } := by
   unfold WritableVReg at hvd
   unfold execInstr readSrc writeDst readVReg writeVReg
-  simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [addWide_low, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get,
     hvd, ↓reduceIte, modify, modifyGet, MonadStateOf.modifyGet,
     EStateM.modifyGet]
@@ -45,7 +45,7 @@ theorem exists_state_after_add_run_vreg_vreg_vreg
       (execInstr (.ADD (.vreg vd) (.vreg lhs) (.vreg rhs))).run js =
         .ok RETIRE_SUCCESS js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then js.vregs lhs + js.vregs rhs else js.vregs r }
   refine ⟨js', rfl, ?_, ?_, ?_⟩
   · simp [js', h_lhs, h_rhs]
@@ -59,9 +59,9 @@ theorem add_run_xreg_vreg_vreg (rd : regidx) (lhs rhs : VReg)
     (js : SailJoltState) (s' : SailState)
     (h : wX_bits rd (js.vregs lhs + js.vregs rhs) js.sail = .ok () s') :
     (execInstr (.ADD (.xreg rd) (.vreg lhs) (.vreg rhs))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst readVReg liftSail
-  simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [addWide_low, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get, h]
 
 /-- `ADD` from two virtual sources to a real destination, packaged from known
@@ -83,7 +83,7 @@ theorem exists_state_after_add_run_xreg_vreg_vreg
   have h_sail_after_add :
       s' = stateAfterWrite s rd (x + y) :=
     wX_bits_eq_stateAfterWrite rd (x + y) s s' h_write
-  exact ⟨{ sail := s', vregs := js.vregs },
+  exact ⟨{ js with sail := s' },
     h_sail_after_add,
     add_run_xreg_vreg_vreg rd lhs rhs js s' h_write_current⟩
 

@@ -153,9 +153,9 @@ theorem phase_writeback_run
     have hz : sign_extend (m := 64) (0 : BitVec 12) = 0#64 := by decide
     rw [hz, BitVec.add_zero]
   obtain ⟨s', hw⟩ := wX_shape rd rem js.sail
-  refine ⟨{ sail := s', vregs := js.vregs }, ?_, ?_⟩
+  refine ⟨{ js with sail := s' }, ?_, ?_⟩
   · have hrun := JoltISA.addi_run_xreg_vreg rd v0VReg 0 js s' (by rw [hrem]; exact hw)
-    rw [JoltISA.execProgram_instr_run_retire _ _ js { sail := s', vregs := js.vregs } hrun]
+    rw [JoltISA.execProgram_instr_run_retire _ _ js { js with sail := s' } hrun]
     rfl
   · show s' = stateAfterWrite js_ref rd rem
     rw [← h_sail]
@@ -303,7 +303,7 @@ theorem phase_writeback_run_sound
   obtain ⟨s', hw⟩ := wX_shape rd rem js.sail
   have hp_concrete :
       (JoltISA.execInstr (.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } :=
+      .ok RETIRE_SUCCESS { js with sail := s' } :=
     JoltISA.addi_run_xreg_vreg rd v0VReg 0 js s' (by rw [hrem]; exact hw)
   rw [hp_concrete] at hrun
   cases hrun

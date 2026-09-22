@@ -174,9 +174,9 @@ theorem phase_writeback_run
     exact hw
   have hrun := JoltISA.virtual_negate_if_run_xreg_vreg_vreg
     rd v0 v5 js s' hwrite
-  refine ⟨{ sail := s', vregs := js.vregs }, ?_, ?_⟩
+  refine ⟨{ js with sail := s' }, ?_, ?_⟩
   · rw [JoltISA.execProgram_instr_run_retire _ _ js
-      { sail := s', vregs := js.vregs } hrun]
+      { js with sail := s' } hrun]
     rfl
   · rw [← h_sail]
     exact wX_bits_eq_stateAfterWrite rd result js.sail s' hw

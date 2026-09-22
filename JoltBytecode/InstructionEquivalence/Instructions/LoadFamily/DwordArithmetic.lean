@@ -416,7 +416,7 @@ theorem window_mask_h_pext (d base : BitVec 64) (imm : BitVec 12)
   have hfit : 8 * offset + 16 ≤ 64 := by omega
   have hpext := JoltISA.pext_value_contiguous d (8 * offset) 16 hfit
   have hoffset_eq := halfword_window_offset_eq ea halign
-  simpa only [jolt_virtual_window_mask_h_value, load_effective_address, ea, offset,
+  simpa only [jolt_virtual_window_mask_h_value, JoltISA.addWide_low, load_effective_address, ea, offset,
     hoffset_eq, halfword_of_dword, Nat.shiftLeft_eq,
     show (0xFFFF : Nat) = 2 ^ 16 - 1 by norm_num] using hpext
 
@@ -434,7 +434,7 @@ theorem window_mask_h_pext_signed (d base : BitVec 64) (imm : BitVec 12)
   have hfit : 8 * offset + 16 ≤ 64 := by omega
   have hpext := JoltISA.pext_signed_value_contiguous d (8 * offset) 16 (by omega) hfit
   have hoffset_eq := halfword_window_offset_eq ea halign
-  simpa only [jolt_virtual_window_mask_h_value, load_effective_address, ea, offset,
+  simpa only [jolt_virtual_window_mask_h_value, JoltISA.addWide_low, load_effective_address, ea, offset,
     hoffset_eq, halfword_of_dword, Nat.shiftLeft_eq,
     show (0xFFFF : Nat) = 2 ^ 16 - 1 by norm_num] using hpext
 
@@ -458,7 +458,7 @@ theorem window_mask_w_pext (d base : BitVec 64) (imm : BitVec 12)
     · simp only [offset, hfour, hword]
   have hfit : 32 * word + 32 ≤ 64 := by omega
   have hpext := JoltISA.pext_value_contiguous d (32 * word) 32 hfit
-  simpa only [jolt_virtual_window_mask_w_value, load_effective_address, ea, word,
+  simpa only [jolt_virtual_window_mask_w_value, JoltISA.addWide_low, load_effective_address, ea, word,
     offset, hshift, word_of_dword, Nat.shiftLeft_eq,
     show (0xFFFF_FFFF : Nat) = 2 ^ 32 - 1 by norm_num] using hpext
 
@@ -482,7 +482,7 @@ theorem window_mask_w_pext_signed (d base : BitVec 64) (imm : BitVec 12)
     · simp only [offset, hfour, hword]
   have hfit : 32 * word + 32 ≤ 64 := by omega
   have hpext := JoltISA.pext_signed_value_contiguous d (32 * word) 32 (by omega) hfit
-  simpa only [jolt_virtual_window_mask_w_value, load_effective_address, ea, word,
+  simpa only [jolt_virtual_window_mask_w_value, JoltISA.addWide_low, load_effective_address, ea, word,
     offset, hshift, word_of_dword, Nat.shiftLeft_eq,
     show (0xFFFF_FFFF : Nat) = 2 ^ 32 - 1 by norm_num] using hpext
 

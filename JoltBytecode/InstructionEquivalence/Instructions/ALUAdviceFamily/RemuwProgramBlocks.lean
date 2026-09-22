@@ -166,13 +166,13 @@ theorem phase_writeback_run
   unfold phase_writeback
   obtain ⟨s', hw⟩ := wX_shape rd
     (sign_extend (m := 64) (Sail.BitVec.extractLsb rem 31 0)) js.sail
-  refine ⟨{ sail := s', vregs := js.vregs }, ?_, ?_⟩
+  refine ⟨{ js with sail := s' }, ?_, ?_⟩
   · have h1 : (JoltISA.execInstr (.VirtualSignExtendWord (.xreg rd) (.vreg tempVReg))).run js =
-        .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+        .ok RETIRE_SUCCESS { js with sail := s' } := by
       apply vreg_sign_extend_word_to_real_run rd tempVReg js s'
       rw [h_v3]
       exact hw
-    rw [JoltISA.execProgram_instr_run_retire _ _ js { sail := s', vregs := js.vregs } h1]
+    rw [JoltISA.execProgram_instr_run_retire _ _ js { js with sail := s' } h1]
     rfl
   · show s' = stateAfterWrite js_ref rd
         (sign_extend (m := 64) (Sail.BitVec.extractLsb rem 31 0))
@@ -323,9 +323,9 @@ theorem phase_writeback_run_sound
   have hrun :
       (JoltISA.execInstr (.VirtualSignExtendWord (.xreg rd) (.vreg tempVReg))).run js =
         .ok RETIRE_SUCCESS
-      { sail := s', vregs := js.vregs } :=
+      { js with sail := s' } :=
     vreg_sign_extend_word_to_real_run rd tempVReg js s' (by rw [h_v3]; exact hw)
-  rw [JoltISA.execProgram_instr_run_retire _ _ js { sail := s', vregs := js.vregs } hrun] at hp
+  rw [JoltISA.execProgram_instr_run_retire _ _ js { js with sail := s' } hrun] at hp
   cases hp
   show s' = stateAfterWrite js_ref rd
     (sign_extend (m := 64) (Sail.BitVec.extractLsb rem 31 0))

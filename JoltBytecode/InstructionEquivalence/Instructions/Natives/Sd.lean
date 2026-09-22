@@ -62,8 +62,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
         h.cur_privilege h.mstatus_mprv haligned_access
         hstore_access.store_pmp hstore_access.write_mmio
     let js' : SailJoltState :=
-      { sail := state_after_dword_store js.sail ea h.rs2_val
-        vregs := js.vregs }
+      { js with sail := state_after_dword_store js.sail ea h.rs2_val }
     have h_project_final :
         System.systemProject js' = state_after_dword_store js.sail ea h.rs2_val := by
       have hregs : js'.sail.regs = js.sail.regs := by
@@ -80,6 +79,8 @@ theorem sdJolt_reduces_to_vmem_write_addr
         .ok (Ok true) (state_after_dword_store js.sail ea h.rs2_val) := by
       simpa [ea, load_effective_address, Memory.effectiveAddr12] using hwrite
     simp only [halign, if_true]
+    rw [JoltISA.writeMemoryWord_ram _ _ hstore_access.write_mmio.ram]
+    unfold liftSail
     unfold System.systemProjectResult
     simp only [hwrite_raw, EStateM.bind, EStateM.pure]
     rw [h_project_final]
@@ -106,7 +107,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
     rw [hwrite]
     unfold System.systemProjectResult
     simp only [EStateM.pure]
-    rw [show System.systemProject { sail := js.sail, vregs := js.vregs } = js.sail by
+    rw [show System.systemProject { js with vregs := js.vregs } = js.sail by
       simpa using Projection.systemProject_eq_sail_of_compatible js h.linkedCSRs]
 
 /-- The Sail `execute_STORE ... 8` side reduces to the same virtual-memory

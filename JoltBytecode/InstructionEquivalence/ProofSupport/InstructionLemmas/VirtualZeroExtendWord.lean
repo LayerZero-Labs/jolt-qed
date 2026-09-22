@@ -21,7 +21,7 @@ theorem virtual_zero_extend_word_run_vreg_xreg (vd : VReg) (rs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualZeroExtendWord (.vreg vd) (.xreg rs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then zero_extend (m := 64) (Sail.BitVec.extractLsb x 31 0)
             else js.vregs r } := by
@@ -43,7 +43,7 @@ theorem exists_state_after_virtual_zero_extend_word_run_vreg_xreg
       (∀ k, k ≠ vd → js'.vregs k = js.vregs k) ∧
       js'.sail = js.sail := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = vd then zero_extend (m := 64) (Sail.BitVec.extractLsb x 31 0)
         else js.vregs r }

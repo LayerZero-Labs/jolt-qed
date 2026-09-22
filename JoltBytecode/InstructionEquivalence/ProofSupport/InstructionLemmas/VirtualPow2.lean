@@ -22,7 +22,7 @@ theorem virtual_pow2_run_vreg_xreg (vd : VReg) (rs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualPow2 (.vreg vd) (.xreg rs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then jolt_virtual_pow2_value x else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail
   simp only [h, bind, EStateM.bind, EStateM.run]
@@ -42,7 +42,7 @@ theorem exists_state_after_virtual_pow2_run_vreg_xreg
       (execInstr (.VirtualPow2 (.vreg vd) (.xreg rs))).run js =
         .ok RETIRE_SUCCESS js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then jolt_virtual_pow2_value x else js.vregs r }
   refine ⟨js', h, rfl, ?_, ?_, ?_⟩
   · simp [js']
@@ -56,7 +56,7 @@ theorem virtual_pow2_run_vreg_vreg (vd vs : VReg)
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualPow2 (.vreg vd) (.vreg vs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_pow2_value (js.vregs vs) else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg

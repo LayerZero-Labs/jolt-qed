@@ -135,6 +135,7 @@ theorem jalInstr_eq_sail
         liftSail (execute_JAL imm rd) := by
     funext js
     unfold JoltISA.execInstr execute_JAL JoltISA.writeDst liftSail
+    simp only [JoltISA.addWide_low]
     simp only [bind, EStateM.bind]
     cases hlink : (get_next_pc ()) js.sail with
     | error e s1 =>

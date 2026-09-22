@@ -78,7 +78,7 @@ theorem mulInstr_eq_sail
     mul_sail_retire_after_write rd h.rs1_val h.rs2_val js.sail s' h_write
 
   -- LHS
-  simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+  simp only [JoltISA.execInstr, JoltISA.mulWide_low, JoltISA.readSrc, JoltISA.writeDst, liftSail,
     bind, EStateM.bind, h.rs1_read, h.rs2_read, h_write]
   exact (Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'
     (op h.rs1_val h.rs2_val)

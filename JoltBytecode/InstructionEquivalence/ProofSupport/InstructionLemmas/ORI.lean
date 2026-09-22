@@ -22,7 +22,7 @@ theorem ori_run_vreg_xreg (vd : VReg) (rs : regidx) (imm : BitVec 12)
     (hvd : WritableVReg vd) :
     (execInstr (.ORI (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then x ||| sign_extend (m := 64) imm else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail
   simp only [h, bind, EStateM.bind, EStateM.run]
@@ -47,7 +47,7 @@ theorem exists_state_after_ori_run_vreg_xreg_of_sail_eq
   have h_read_current : rX_bits rs js.sail = .ok x js.sail := by
     simpa only [h_sail] using h_read
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = vd then x ||| sign_extend (m := 64) imm else js.vregs r }
   refine ⟨js', h_read_current, rfl, ?_, ?_, ?_⟩

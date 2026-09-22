@@ -22,7 +22,7 @@ theorem vreg_sign_extend_word_run
     (JoltISA.execInstr
       (.VirtualSignExtendWord (.vreg vd) (.vreg vs1))).run js =
       .ok RETIRE_SUCCESS
-      { sail := js.sail
+      { js with
         vregs := fun r =>
           if r = vd then
             sign_extend (m := 64)
@@ -44,7 +44,7 @@ theorem vreg_sign_extend_word_run_ex
       (∀ k, k ≠ vd → js'.vregs k = js.vregs k) ∧
       js'.sail = js.sail := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = vd then
           sign_extend (m := 64)
@@ -70,7 +70,7 @@ theorem vreg_sign_extend_word_to_real_run
         js.sail = .ok () s') :
     (JoltISA.execInstr
       (.VirtualSignExtendWord (.xreg rd) (.vreg vs1))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } :=
+      .ok RETIRE_SUCCESS { js with sail := s' } :=
   JoltISA.virtual_sign_extend_word_run_xreg_vreg rd vs1 js s' hwrite
 
 end

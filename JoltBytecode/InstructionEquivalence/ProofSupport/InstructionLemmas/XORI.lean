@@ -19,7 +19,7 @@ theorem execInstr_xori_vreg_vreg_run (vd vs : VReg) (imm : BitVec 12)
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.XORI (.vreg vd) (.vreg vs) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then js.vregs vs ^^^ sign_extend (m := 64) imm else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,

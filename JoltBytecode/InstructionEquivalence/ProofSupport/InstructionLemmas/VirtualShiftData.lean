@@ -17,7 +17,7 @@ theorem virtual_shift_data_b_run_vreg_xreg_vreg
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualShiftDataB (.vreg vd) (.xreg rs) (.vreg address))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then
               jolt_virtual_shift_data_b_value x (js.vregs address)
@@ -35,7 +35,7 @@ theorem virtual_shift_data_h_run_vreg_xreg_vreg
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualShiftDataH (.vreg vd) (.xreg rs) (.vreg address))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then
               jolt_virtual_shift_data_h_value x (js.vregs address)
@@ -53,7 +53,7 @@ theorem virtual_shift_data_w_run_vreg_xreg_vreg
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualShiftDataW (.vreg vd) (.xreg rs) (.vreg address))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then
               jolt_virtual_shift_data_w_value x (js.vregs address)

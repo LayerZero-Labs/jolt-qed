@@ -26,7 +26,7 @@ theorem virtual_negate_if_run_vreg_xreg_xreg
     (execInstr
       (.VirtualNegateIf (.vreg vd) (.xreg signRs) (.xreg valueRs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_negate_if_value sign value
             else js.vregs r } := by
@@ -61,7 +61,7 @@ theorem virtual_negate_if_run_vreg_vreg_vreg
     (execInstr
       (.VirtualNegateIf (.vreg vd) (.vreg signVs) (.vreg valueVs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then
               jolt_virtual_negate_if_value
@@ -100,7 +100,7 @@ theorem virtual_negate_if_run_xreg_xreg_vreg
         .ok () s') :
     (execInstr
       (.VirtualNegateIf (.xreg rd) (.xreg signRs) (.vreg valueVs))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [hsign, hwrite, bind, EStateM.bind, pure, EStateM.pure,
     EStateM.run, get, getThe, MonadStateOf.get, EStateM.get]
@@ -114,7 +114,7 @@ theorem virtual_negate_if_run_xreg_vreg_vreg
         (js.vregs signVs) (js.vregs valueVs)) js.sail = .ok () s') :
     (execInstr
       (.VirtualNegateIf (.xreg rd) (.vreg signVs) (.vreg valueVs))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [hwrite, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]

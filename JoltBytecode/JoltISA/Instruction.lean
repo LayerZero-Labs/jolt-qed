@@ -51,6 +51,10 @@ def LoadFaultClass.alignFault : LoadFaultClass → ExceptionType
   | .amo => ExceptionType.E_SAMO_Addr_Align ()
 
 -- Opcodes (Jolt ISA)
+-- Preserve immediate fields even when execution ignores them: Rust's Imm witness
+-- still records them. Zero defaults describe the existing generated expansions;
+-- importing a Rust row must supply its actual immediate.
+-- Rust: [instruction formats](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format).
 inductive Instr where
   | ADDI (dst : Dst) (src : Src) (imm : BitVec 12)
   | ADDIW (dst : Dst) (src : Src) (imm : BitVec 12)
@@ -80,13 +84,13 @@ inductive Instr where
   | ANDN (dst : Dst) (lhs rhs : Src)
   | VirtualMULI (dst : Dst) (src : Src) (imm : BitVec 64)
   | VirtualMULIW (dst : Dst) (src : Src) (imm : BitVec 64)
-  | VirtualPow2 (dst : Dst) (src : Src)
-  | VirtualPow2W (dst : Dst) (src : Src)
+  | VirtualPow2 (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
+  | VirtualPow2W (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualPow2I (dst : Dst) (imm : Nat)
   | VirtualPow2IW (dst : Dst) (imm : Nat)
-  | VirtualShiftRightBitmask (dst : Dst) (src : Src)
+  | VirtualShiftRightBitmask (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualShiftRightBitmaskI (dst : Dst) (imm : Nat)
-  | VirtualShiftRightBitmaskW (dst : Dst) (src : Src)
+  | VirtualShiftRightBitmaskW (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualSRLI (dst : Dst) (src : Src) (bitmask : Nat)
   | VirtualSRAI (dst : Dst) (src : Src) (bitmask : Nat)
   | VirtualSRLIW (dst : Dst) (src : Src) (bitmask : Nat)
@@ -97,7 +101,7 @@ inductive Instr where
   | VirtualSRAW (dst : Dst) (value bitmask : Src)
   | VirtualROTRI (dst : Dst) (src : Src) (bitmask : Nat)
   | VirtualROTRIW (dst : Dst) (src : Src) (bitmask : Nat)
-  | VirtualRev8W (dst : Dst) (src : Src)
+  | VirtualRev8W (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualXORROT32 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROT24 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROT16 (dst : Dst) (lhs rhs : Src)
@@ -123,23 +127,29 @@ inductive Instr where
   | VirtualShiftDataB (dst : Dst) (value address : Src)
   | VirtualShiftDataH (dst : Dst) (value address : Src)
   | VirtualShiftDataW (dst : Dst) (value address : Src)
-  | VirtualSignExtendWord (dst : Dst) (src : Src)
-  | VirtualZeroExtendWord (dst : Dst) (src : Src)
-  | VirtualMovsign (dst : Dst) (src : Src)
+  | VirtualSignExtendWord (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
+  | VirtualZeroExtendWord (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
+  | VirtualMovsign (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualAssertHalfwordAlignment (base : regidx) (imm : BitVec 12) (fault : ExceptionType)
   | VirtualAssertWordAlignment (base : regidx) (imm : BitVec 12) (fault : ExceptionType)
   | LD (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 12)
   | SD (base value : Src) (imm : BitVec 12)
-  | VirtualAdvice (dst : Dst) (value : BitVec 64)
-  | VirtualAdviceLoad (dst : Dst) (value : BitVec 64)
-  | VirtualAdviceLen (dst : Dst) (remaining : BitVec 64)
-  | VirtualHostIO
+  | VirtualAdvice (dst : Dst) (value : BitVec 64) (imm : BitVec 64 := 0)
+  | VirtualAdviceLoad (dst : Dst) (byteCount : BitVec 64)
+  -- Rust captures src even though computing the advice length ignores it.
+  -- Rust: [VirtualAdviceLen format](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_advice_len.rs:9).
+  | VirtualAdviceLen (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
+  -- Rust captures src before execution and dst afterward, even though HOST_IO
+  -- does not write dst. Preserve the final row's operands, including rd=x0 rewrites.
+  -- Rust: [VirtualHostIO format](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_host_io.rs:8).
+  -- Rust: [FormatI capture](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_i.rs:72).
+  | VirtualHostIO (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualAssertEQ (lhs rhs : Src) (imm: BitVec 13)
-  | VirtualAssertValidDiv0 (divisor quotient : Src)
+  | VirtualAssertValidDiv0 (divisor quotient : Src) (imm : BitVec 128 := 0)
   | VirtualNegateIf (dst : Dst) (signSource value : Src)
-  | VirtualAssertValidUnsignedRemainder (remainder divisor : Src)
-  | VirtualAssertMulUNoOverflow (lhs rhs : Src)
-  | VirtualAssertLTE (lhs rhs : Src)
+  | VirtualAssertValidUnsignedRemainder (remainder divisor : Src) (imm : BitVec 128 := 0)
+  | VirtualAssertMulUNoOverflow (lhs rhs : Src) (imm : BitVec 128 := 0)
+  | VirtualAssertLTE (lhs rhs : Src) (imm : BitVec 128 := 0)
   deriving Repr
 
 /-- Source instructions that Rust expands before final Jolt bytecode.
@@ -156,10 +166,10 @@ inductive Expanded where
   | LHU (dst : Dst) (base : Src) (imm : BitVec 12)
   | LW (dst : Dst) (base : Src) (imm : BitVec 12)
   | LWU (dst : Dst) (base : Src) (imm : BitVec 12)
-  | AdviceLB (dst : Dst) (advice : BitVec 8)
-  | AdviceLH (dst : Dst) (advice : BitVec 16)
-  | AdviceLW (dst : Dst) (advice : BitVec 32)
-  | AdviceLD (dst : Dst) (advice : BitVec 64)
+  | AdviceLB (dst : Dst)
+  | AdviceLH (dst : Dst)
+  | AdviceLW (dst : Dst)
+  | AdviceLD (dst : Dst)
   | AMOADDD (dst : Dst) (addr value : Src)
   | AMOANDD (dst : Dst) (addr value : Src)
   | AMOORD (dst : Dst) (addr value : Src)

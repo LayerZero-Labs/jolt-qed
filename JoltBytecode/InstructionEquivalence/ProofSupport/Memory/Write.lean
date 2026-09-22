@@ -88,8 +88,7 @@ theorem mem_write_value_dword_eq_state_after_dword_store
     (hpmp :
       phys_access_check (Store Data) Privilege.Machine
         (physaddr.Physaddr addr) 8 false s = .ok none s)
-    (hmmio :
-      within_mmio_writable (physaddr.Physaddr addr) 8 s = .ok false s) :
+    (hmmio : Assumptions.NotWritableMmio addr 8 s) :
     mem_write_value (physaddr.Physaddr addr) 8 data
       (Store Data) false false false s =
     .ok (Ok true) (state_after_dword_store s addr data) := by
@@ -126,7 +125,7 @@ theorem mem_write_value_dword_eq_state_after_dword_store
       (fun result => EStateM.pure result)) s =
     .ok (Ok true) (state_after_dword_store s addr data)
   simp only [EStateM.bind, hpmp]
-  simp only [hmmio]
+  simp only [hmmio.sail]
   simp only [Bool.false_eq_true, if_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
@@ -229,8 +228,7 @@ theorem vmem_write_addr_dword_store_reduces
     (hpmp :
       phys_access_check (Store Data) Privilege.Machine
         (physaddr.Physaddr addr) 8 false s = .ok none s)
-    (hmmio :
-      within_mmio_writable (physaddr.Physaddr addr) 8 s = .ok false s) :
+    (hmmio : Assumptions.NotWritableMmio addr 8 s) :
     vmem_write_addr (Virtaddr addr) 8 data
       (Store Data) false false false s =
       .ok (Ok true) (state_after_dword_store s addr data) := by
@@ -505,7 +503,7 @@ theorem mem_write_value_byte_eq_state_after_byte_store
       (fun result => EStateM.pure result)) s =
     .ok (Ok true) (state_after_byte_store s addr data)
   simp only [EStateM.bind, hpmp]
-  simp only [hmmio]
+  simp only [hmmio.sail]
   simp only [Bool.false_eq_true, if_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
@@ -554,7 +552,7 @@ theorem mem_write_value_halfword_eq_state_after_halfword_store
       (fun result => EStateM.pure result)) s =
     .ok (Ok true) (state_after_halfword_store s addr data)
   simp only [EStateM.bind, hpmp]
-  simp only [hmmio]
+  simp only [hmmio.sail]
   simp only [Bool.false_eq_true, if_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
@@ -603,7 +601,7 @@ theorem mem_write_value_word_eq_state_after_word_store
       (fun result => EStateM.pure result)) s =
     .ok (Ok true) (state_after_word_store s addr data)
   simp only [EStateM.bind, hpmp]
-  simp only [hmmio]
+  simp only [hmmio.sail]
   simp only [Bool.false_eq_true, if_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
