@@ -25,6 +25,7 @@ theorem honestWitness_nextIsFirstInSequenceEqShift
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     nextIsFirstInSequenceEqShift
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro t
+  rfl
 
 end JoltConstraints

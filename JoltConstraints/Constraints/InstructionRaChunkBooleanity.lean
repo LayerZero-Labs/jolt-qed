@@ -16,7 +16,7 @@ def instructionRaChunkBooleanity {F : Type} [Field F] {params : WitnessParams}
     witness.InstructionRaChunk chunk entry t *
       (witness.InstructionRaChunk chunk entry t - 1) = 0
 
-/-- The honest witness satisfies constraint (54); proof pending. -/
+/-- The honest witness satisfies constraint (54). -/
 theorem honestWitness_instructionRaChunkBooleanity
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
@@ -25,6 +25,9 @@ theorem honestWitness_instructionRaChunkBooleanity
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     instructionRaChunkBooleanity
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro chunk entry t
+  dsimp [JoltProgram.honestWitness, HonestWitness.InstructionRaChunk,
+    HonestWitness.addressChunkEntry]
+  split_ifs <;> simp_all
 
 end JoltConstraints
