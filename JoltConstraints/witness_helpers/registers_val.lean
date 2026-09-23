@@ -14,6 +14,7 @@ noncomputable def RegistersVal {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program) :
     Fin 128 → Fin p.traceLength → F :=
   fun register t =>
+    -- RegVal[reg. t] = RegVal[reg, t -1] + RdWa[reg,
     (List.finRange t.val).foldl (fun value i =>
       let cycle : Fin p.traceLength := ⟨i.val, Nat.lt_trans i.isLt t.isLt⟩
       value + RdWa p trace register cycle * (RdWriteValue p trace cycle - value)) 0

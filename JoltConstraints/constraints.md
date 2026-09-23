@@ -1,6 +1,30 @@
 # Jolt constraints
 
-Source: the RV64 constraints in the current [Rust checkout](/Users/ari.biswas/Work-with-A16z/jolt), commit `eae0574a20c2b6481828bcc743a1c8ba683072b2`.
+Source: the RV64 constraints in the [Rust checkout](/Users/ari.biswas/Work-with-A16z/jolt), commit `eae0574a20c2b6481828bcc743a1c8ba683072b2`.
+
+A checked box means that the constraint predicate is modelled in Lean. It does
+not mean that its completeness theorem has been proved; proof placeholders use
+`sorry`. Some completeness statements still need additional program/trace validity
+assumptions, noted beside their theorem placeholders. The completeness theorem
+for constraint (22) explicitly requires at least one padding cycle, as Rust's
+trace-length calculation guarantees. The completeness theorem for (58) requires
+at least one RAM chunk. The register completeness targets require zero initial
+registers and still need admissible-register and history assumptions.
+
+Equations (43)–(47) were rechecked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`. Their completeness targets require a bytecode domain large enough for the expanded program plus its leading no-op slot.
+
+The remaining equations (23)–(26), (37)–(38), (40)–(41), (48)–(53), and (59)
+were also checked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`.
+This checklist covers the base RV64 relations; optional `akita` relations,
+including its extra instruction-address canonicality condition, are outside it.
+The final RAM and public-I/O completeness targets still need memory-history,
+layout, and termination assumptions. Constraint (53) takes the public entry slot
+explicitly and requires the trace to start there. Constraint (50) requires load
+destinations to have already been normalized by bytecode expansion.
+
+The current model audit and changes to previously accepted definitions are recorded in
+[model_review.md](model_review.md). In particular, matching constraint equations does
+not certify every current completeness statement.
 
 ## Notation
 
@@ -19,6 +43,26 @@ All equations are over the field. The variables are array entries (the polynomia
 Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `InstructionFlags(InstructionFlags::…)` columns. The suffix `Chunk` distinguishes the small `InstructionRa(d)`, `BytecodeRa(d)` and `RamRa(d)` arrays from the full-address/virtual selectors below.
 
 ## SpartanOuter — stage 1
+
+- [x] (01) [RAM address for loads and stores](Constraints/RamAddrEqRs1PlusImmIfLoadStore.lean)
+- [x] (02) [Zero RAM address for other instructions](Constraints/RamAddrEqZeroIfNotLoadStore.lean)
+- [x] (03) [Loads preserve RAM](Constraints/RamReadEqRamWriteIfLoad.lean)
+- [x] (04) [Loads copy RAM to the destination](Constraints/RamReadEqRdWriteIfLoad.lean)
+- [x] (05) [Stores copy the second source to RAM](Constraints/Rs2EqRamWriteIfStore.lean)
+- [x] (06) [Zero left lookup operand for add/subtract/multiply](Constraints/LeftLookupZeroIfAddSubMul.lean)
+- [x] (07) [Left lookup operand for other modes](Constraints/LeftLookupEqLeftInputOtherwise.lean)
+- [x] (08) [Addition lookup operand](Constraints/RightLookupAdd.lean)
+- [x] (09) [Subtraction lookup operand](Constraints/RightLookupSub.lean)
+- [x] (10) [Multiplication lookup operand](Constraints/RightLookupEqProductIfMul.lean)
+- [x] (11) [Right lookup operand for other modes](Constraints/RightLookupEqRightInputOtherwise.lean)
+- [x] (12) [Assertion lookup output](Constraints/AssertLookupOne.lean)
+- [x] (13) [Write lookup output to the destination](Constraints/RdWriteEqLookupIfWriteLookupToRd.lean)
+- [x] (14) [Jump return address](Constraints/RdWriteEqPCPlusConstIfJump.lean)
+- [x] (15) [Next address after a jump](Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean)
+- [x] (16) [Next address after a taken branch](Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean)
+- [x] (17) [Next address for other rows](Constraints/NextUnexpandedPCUpdateOtherwise.lean)
+- [x] (18) [Next expanded PC within a virtual sequence](Constraints/NextPCEqPCPlusOneIfInline.lean)
+- [x] (19) [Start virtual sequences at their beginning](Constraints/MustStartSequenceFromBeginning.lean)
 
 [Rust: the 19 equality-conditional rows](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-r1cs/src/constraints/rv64.rs:121).
 
@@ -73,6 +117,10 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanProductVirtualization — stage 2
 
+- [x] (20) [Product of instruction inputs](Constraints/ProductEqLeftInputMulRightInput.lean)
+- [x] (21) [ShouldBranch product](Constraints/ShouldBranchEqLookupOutputMulBranch.lean)
+- [x] (22) [ShouldJump product](Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean)
+
 [Rust: the three product rows](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-r1cs/src/constraints/rv64.rs:367); [sumcheck](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/spartan/product_remainder.rs).
 
 ∀ t ∈ T:
@@ -87,6 +135,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamReadWriteChecking — stage 2
 
+- [x] (23) [RAM read-value selection](Constraints/RamReadValueEqRamRead.lean)
+- [x] (24) [RAM write-value selection](Constraints/RamWriteValueEqRamReadWrite.lean)
+
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs:89).
 
 ∀ t ∈ T:
@@ -99,6 +150,8 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamRafEvaluation — stage 2
 
+- [x] (25) [RAM address reconstruction](Constraints/RamAddressEqRamRaf.lean)
+
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs:133).
 
 `lowest_address` is the memory layout's lowest byte address; remapped word `a` has byte address `lowest_address + 8a`.
@@ -110,6 +163,8 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamOutputCheck — stage 2
 
+- [x] (26) [Public RAM output](Constraints/RamOutputEqPublicIo.lean)
+
 [Rust: constraint](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs:115); [public arrays](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/preprocess/public_io.rs:20).
 
 `IoMask(a) = [io_mask_start ≤ a < io_mask_end]`. `ValIo` contains the public input/output words, the panic word, and termination word 1 when not panicking; other entries are zero, exactly as in `PublicIoMemory::new`.
@@ -120,6 +175,12 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 ```
 
 ## SpartanShift — stage 3
+
+- [x] (27) [NextUnexpandedPC shift](Constraints/NextUnexpandedPCEqShift.lean)
+- [x] (28) [NextPC shift](Constraints/NextPCEqShift.lean)
+- [x] (29) [NextIsVirtual shift](Constraints/NextIsVirtualEqShift.lean)
+- [x] (30) [NextIsFirstInSequence shift](Constraints/NextIsFirstInSequenceEqShift.lean)
+- [x] (31) [NextIsNoop shift](Constraints/NextIsNoopEqShift.lean)
 
 [Rust: constraint](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs:103); [non-wrapping successor](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-poly/src/eq_plus_one.rs:1).
 
@@ -144,6 +205,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## InstructionInputVirtualization — stage 3
 
+- [x] (32) [Left instruction-input selection](Constraints/LeftInstructionInputEqSelection.lean)
+- [x] (33) [Right instruction-input selection](Constraints/RightInstructionInputEqSelection.lean)
+
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs:102).
 
 ∀ t ∈ T:
@@ -160,6 +224,10 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RegistersReadWriteChecking — stage 4
 
+- [x] (34) [Destination register write-value selection](Constraints/RdWriteValueEqRegistersReadWrite.lean)
+- [x] (35) [First source register value selection](Constraints/Rs1ValueEqRegistersRead.lean)
+- [x] (36) [Second source register value selection](Constraints/Rs2ValueEqRegistersRead.lean)
+
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs:97).
 
 ∀ t ∈ T:
@@ -174,6 +242,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamValCheck — stage 4
 
+- [x] (37) [RAM value from preceding increments](Constraints/RamValEqInitialPlusPrefixRamInc.lean)
+- [x] (38) [Final RAM value from all increments](Constraints/RamValFinalEqInitialPlusRamInc.lean)
+
 [Rust: constraint](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs:135); [initial public RAM](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/preprocess/ram.rs:134).
 
 `Init(a)` is the initial word array: the program image and public inputs, together with the trusted/untrusted advice words at their memory-layout addresses, zero elsewhere. Advice words are inputs to this array, not additional public constants.
@@ -187,6 +258,10 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 ```
 
 ## InstructionReadRaf — stage 5
+
+- [x] (39) [Lookup output from the selected table](Constraints/LookupOutputEqInstructionReadRaf.lean)
+- [x] (40) [Left lookup operand reconstruction](Constraints/LeftLookupOperandEqInstructionRaf.lean)
+- [x] (41) [Right lookup operand reconstruction](Constraints/RightLookupOperandEqInstructionRaf.lean)
 
 [Rust: constraint](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs:90); [operand coefficients](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs:180).
 
@@ -221,6 +296,8 @@ LookupRa(x,t) = ∏_{j=0}^{J−1} InstructionRa_j(v_j(x),t)
 
 ## RegistersValEvaluation — stage 5
 
+- [x] (42) [Register value from preceding increments](Constraints/RegistersValEqPrefixRdInc.lean)
+
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs:69).
 
 ```text
@@ -231,6 +308,18 @@ LookupRa(x,t) = ∏_{j=0}^{J−1} InstructionRa_j(v_j(x),t)
 The empty sum at `t = 0` is zero.
 
 ## BytecodeReadRaf — stages 6a–6b
+
+- [x] (43) [Expanded PC from bytecode](Constraints/PCEqBytecodeRead.lean)
+- [x] (44) [Unexpanded PC from bytecode](Constraints/UnexpandedPCEqBytecodeRead.lean)
+- [x] (45) [Immediate from bytecode](Constraints/ImmEqBytecodeRead.lean)
+- [x] (46) [Circuit flags from bytecode](Constraints/OpFlagsEqBytecodeRead.lean)
+- [x] (47) [Instruction flags from bytecode](Constraints/InstructionFlagsEqBytecodeRead.lean)
+- [x] (48) [First source selector from bytecode](Constraints/Rs1RaEqBytecodeRead.lean)
+- [x] (49) [Second source selector from bytecode](Constraints/Rs2RaEqBytecodeRead.lean)
+- [x] (50) [Destination selector from bytecode](Constraints/RdWaEqBytecodeRead.lean)
+- [x] (51) [Lookup-table flags from bytecode](Constraints/LookupTableFlagEqBytecodeRead.lean)
+- [x] (52) [Instruction RAF flag from bytecode](Constraints/InstructionRafFlagEqBytecodeRead.lean)
+- [x] (53) [Entry bytecode row](Constraints/BytecodeRaAtEntryEqOne.lean)
 
 [Rust: row values](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs:533); [PC and entry](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs:358).
 
@@ -287,6 +376,10 @@ For the program's `entry_bytecode_index = e`:
 
 ## Booleanity — stages 6a–6b
 
+- [x] (54) [Instruction chunk selector booleanity](Constraints/InstructionRaChunkBooleanity.lean)
+- [x] (55) [Bytecode chunk selector booleanity](Constraints/BytecodeRaChunkBooleanity.lean)
+- [x] (56) [RAM chunk selector booleanity](Constraints/RamRaChunkBooleanity.lean)
+
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs:25).
 
 ∀ t ∈ T, ∀ u ∈ U, and every chunk d in the respective family:
@@ -301,6 +394,8 @@ For the program's `entry_bytecode_index = e`:
 
 ## RamHammingBooleanity — stage 6b
 
+- [x] (57) [RAM hamming-weight booleanity](Constraints/RamHammingWeightBooleanity.lean)
+
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs:85).
 
 ```text
@@ -310,6 +405,8 @@ For the program's `entry_bytecode_index = e`:
 
 ## RamRaVirtualization — stage 6b
 
+- [x] (58) [RAM address selector from chunks](Constraints/RamRaEqChunkProduct.lean)
+
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/ra_virtualization.rs); [chunk product](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/ram.rs:163).
 
 ```text
@@ -318,6 +415,8 @@ For the program's `entry_bytecode_index = e`:
 ```
 
 ## InstructionRaVirtualization — stage 6b
+
+- [x] (59) [Virtual instruction selectors from small chunks](Constraints/InstructionRaEqChunkProduct.lean)
 
 [Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/instruction/ra_virtualization.rs); [chunk grouping](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs:402).
 
@@ -330,6 +429,10 @@ For the program's `entry_bytecode_index = e`:
 Here `digit_h(v)` splits the `nb`-bit virtual chunk into its `n` small chunks.
 
 ## Hamming weights — HammingWeightClaimReduction, stage 7
+
+- [x] (60) [Instruction chunk hamming weights](Constraints/InstructionRaChunkHammingWeight.lean)
+- [x] (61) [Bytecode chunk hamming weights](Constraints/BytecodeRaChunkHammingWeight.lean)
+- [x] (62) [RAM chunk hamming weights](Constraints/RamRaChunkHammingWeight.lean)
 
 [Rust: prescribed weights](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs:82); [sumcheck](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/claim_reductions/hamming_weight.rs:102).
 

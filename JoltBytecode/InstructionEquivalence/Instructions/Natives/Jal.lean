@@ -19,7 +19,7 @@ def jalInstrEqSailStatement
     (js : SailJoltState)
     (_h : NoSourceReadWithLinkedCSRs js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.JAL (.xreg rd) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.JAL (.xreg rd) imm)).run js) =
     ((execute_JAL imm rd).run js.sail)
 
 private abbrev jalJumpSailStep (imm : BitVec 21) : SailM ExecutionResult := do
@@ -131,7 +131,7 @@ theorem jalInstr_eq_sail
     jalInstrEqSailStatement imm rd js h := by
   unfold jalInstrEqSailStatement
   have hExec :
-      JoltISA.execInstr (.JAL (.xreg rd) imm) =
+      JoltISA.execInstr (JoltISA.Encoded.JAL (.xreg rd) imm) =
         liftSail (execute_JAL imm rd) := by
     funext js
     unfold JoltISA.execInstr execute_JAL JoltISA.writeDst liftSail

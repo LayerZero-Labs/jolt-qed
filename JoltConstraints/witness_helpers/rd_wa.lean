@@ -30,6 +30,7 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualSRLW dst _ _ | .VirtualSRAW dst _ _ | .VirtualROTRI dst _ _
       | .VirtualROTRIW dst _ _ | .VirtualRev8W dst _ _ | .VirtualXORROT32 dst _ _
       | .VirtualXORROT24 dst _ _ | .VirtualXORROT16 dst _ _ | .VirtualXORROT63 dst _ _
+      | .VirtualXORROTL1 dst _ _
       | .VirtualXORROTW16 dst _ _ | .VirtualXORROTW12 dst _ _ | .VirtualXORROTW8 dst _ _
       | .VirtualXORROTW7 dst _ _ | .VirtualXORROTW22 dst _ _ | .VirtualXORROTW19 dst _ _
       | .VirtualXORROTW6 dst _ _ | .OR dst _ _ | .XOR dst _ _ | .AND dst _ _ | .SLT dst _ _
@@ -40,10 +41,9 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
       | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
           if address = destinationRegisterAddress dst then 1 else 0
-      -- LD execution uses this same ISA helper to redirect a destination of x0.
-      -- Select the effective destination, where execInstr actually wrote the value.
+      -- Rust captures the destination in the final row without rewriting it.
       | .LD _ dst _ _ =>
-          if address = destinationRegisterAddress (JoltISA.sideEffectingDst dst) then 1 else 0
+          if address = destinationRegisterAddress dst then 1 else 0
       | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
       | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
       | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _

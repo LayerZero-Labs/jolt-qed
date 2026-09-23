@@ -46,17 +46,17 @@ theorem addiInstr_preserves_projected_vregs
     {js js' : SailJoltState}
     {result : ExecutionResult}
     (hrun :
-      (JoltISA.execInstr (.ADDI (.xreg rd) (.xreg rs1) imm)).run js =
+      (JoltISA.execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm)).run js =
         .ok result js') :
     Projection.ProjectedVRegsPreserved js js' := by
   have hsafe :
       JoltISA.InstrWritesNoProtectedVReg
-        (.ADDI (.xreg rd) (.xreg rs1) imm) := by
+        (JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm) := by
     simp only [JoltISA.InstrWritesNoProtectedVReg,
       JoltISA.DstWritesNoProtectedVReg]
   have hprotected :=
     JoltISA.execInstr_preserves_protected
-      (instr := .ADDI (.xreg rd) (.xreg rs1) imm)
+      (instr := JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm)
       (js := js) (js' := js') (result := result) hsafe hrun
   exact ⟨
     hprotected JoltISA.trapHandlerVReg rfl,
@@ -73,7 +73,7 @@ def addiInstrEqSailStatement
     (js : SailJoltState)
     (_h : UnarySourceReadWithLinkedCSRs rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.ADDI (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm)).run js) =
     ((execute_ITYPE imm rs1 rd iop.ADDI).run js.sail)
 
 private abbrev op (rs1_val : BitVec 64) (imm : BitVec 12) : BitVec 64 :=

@@ -12,9 +12,10 @@ namespace HonestWitness
 variable {F : Type} (p : WitnessParams)
 
 -- Rust: crates/jolt-witness/src/witnesses/flags.rs::OpFlag::{extract_indexed, to_field}.
--- Rust: crates/jolt-witness/src/backend/trace/cycle.rs::walk_cycles;
--- crates/jolt-riscv/src/instructions/i/noop.rs (padding has no circuit flags).
--- Circuit-flag bits over the padded witness; every padding bit is zero.
+-- Rust: crates/jolt-witness/src/backend/trace/cycle.rs::walk_cycles.
+-- Rust: [no-op circuit flags](https://github.com/abiswas3/jolt/tree/main/crates/jolt-riscv/src/instructions/mod.rs#L536-L543).
+-- Circuit-flag bits over the padded witness. Padding sets only
+-- DoNotUpdateUnexpandedPC to one, keeping its zero unexpanded PC unchanged.
 noncomputable def OpFlags [Field F] {program : JoltProgram}
     (trace : JoltTrace program) : CircuitFlags → Fin p.traceLength → F :=
   fun flag t =>
@@ -22,6 +23,9 @@ noncomputable def OpFlags [Field F] {program : JoltProgram}
       let row := getElem trace.rows t.val inBounds
       let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
       if JoltMetadata.circuitFlag bytecodeRow flag then 1 else 0
-    else 0
+    else
+      match flag with
+      | .DoNotUpdateUnexpandedPC => 1
+      | _ => 0
 
 end HonestWitness

@@ -18,7 +18,7 @@ def andiInstrEqSailStatement
     (js : SailJoltState)
     (_h : UnarySourceReadWithLinkedCSRs rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.ANDI (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.ANDI (.xreg rd) (.xreg rs1) imm)).run js) =
     ((execute_ITYPE imm rs1 rd iop.ANDI).run js.sail)
 
 private abbrev op (rs1_val : BitVec 64) (imm: BitVec 12): BitVec 64 :=

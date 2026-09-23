@@ -16,9 +16,9 @@ def immediate (instruction : JoltISA.Instr) : Int :=
   | .SLTI _ _ imm | .SLTIU _ _ imm | .JALR _ _ imm | .VirtualAlignAddr _ _ imm
   | .VirtualWindowMaskB _ _ imm | .VirtualWindowMaskH _ _ imm | .VirtualWindowMaskW _ _ imm
   | .VirtualAssertHalfwordAlignment _ imm _ | .VirtualAssertWordAlignment _ imm _ =>
-      (imm.signExtend 64).toNat
-  | .JAL _ imm => (imm.signExtend 64).toNat
-  | .AUIPC _ imm => ((imm ++ (0 : BitVec 12)).signExtend 64).toNat
+      imm.toNat
+  | .JAL _ imm => imm.toNat
+  | .AUIPC _ imm => imm.toNat
   | .LUI _ imm | .VirtualMULI _ _ imm | .VirtualMULIW _ _ imm
   | .VirtualPow2 _ _ imm | .VirtualPow2W _ _ imm | .VirtualShiftRightBitmask _ _ imm
   | .VirtualShiftRightBitmaskW _ _ imm | .VirtualRev8W _ _ imm
@@ -37,6 +37,7 @@ def immediate (instruction : JoltISA.Instr) : Int :=
   | .FENCE | .ADD .. | .ADDW .. | .SUB .. | .SUBW .. | .MUL .. | .MULW ..
   | .MULHU .. | .ANDN .. | .VirtualSRL .. | .VirtualSRA .. | .VirtualSRLW .. | .VirtualSRAW ..
   | .VirtualXORROT32 .. | .VirtualXORROT24 .. | .VirtualXORROT16 .. | .VirtualXORROT63 ..
+  | .VirtualXORROTL1 ..
   | .VirtualXORROTW16 .. | .VirtualXORROTW12 .. | .VirtualXORROTW8 .. | .VirtualXORROTW7 ..
   | .VirtualXORROTW22 .. | .VirtualXORROTW19 .. | .VirtualXORROTW6 ..
   | .OR .. | .XOR .. | .AND .. | .SLT .. | .SLTU .. | .VirtualPext .. | .VirtualPextSigned ..
@@ -75,7 +76,7 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
       | .VirtualSRAI .. | .VirtualSRLIW .. | .VirtualSRAIW .. | .VirtualSRL ..
       | .VirtualSRA .. | .VirtualSRLW .. | .VirtualSRAW .. | .VirtualROTRI ..
       | .VirtualROTRIW .. | .VirtualRev8W .. | .VirtualXORROT32 .. | .VirtualXORROT24 ..
-      | .VirtualXORROT16 .. | .VirtualXORROT63 .. | .VirtualXORROTW16 ..
+      | .VirtualXORROT16 .. | .VirtualXORROT63 .. | .VirtualXORROTL1 .. | .VirtualXORROTW16 ..
       | .VirtualXORROTW12 .. | .VirtualXORROTW8 .. | .VirtualXORROTW7 ..
       | .VirtualXORROTW22 .. | .VirtualXORROTW19 .. | .VirtualXORROTW6 .. | .OR .. | .XOR ..
       | .AND .. | .SLT .. | .SLTU .. | .VirtualAlignAddr .. | .VirtualWindowMaskB ..
@@ -93,7 +94,7 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
       | .BEQ .. | .BNE .. | .BLT .. | .BGE .. | .BLTU .. | .BGEU .. | .ADD .. | .ADDW ..
       | .SUB .. | .SUBW .. | .MUL .. | .MULW .. | .MULHU .. | .ANDN .. | .VirtualSRL ..
       | .VirtualSRA .. | .VirtualSRLW .. | .VirtualSRAW .. | .VirtualXORROT32 ..
-      | .VirtualXORROT24 .. | .VirtualXORROT16 .. | .VirtualXORROT63 ..
+      | .VirtualXORROT24 .. | .VirtualXORROT16 .. | .VirtualXORROT63 .. | .VirtualXORROTL1 ..
       | .VirtualXORROTW16 .. | .VirtualXORROTW12 .. | .VirtualXORROTW8 ..
       | .VirtualXORROTW7 .. | .VirtualXORROTW22 .. | .VirtualXORROTW19 ..
       | .VirtualXORROTW6 .. | .OR .. | .XOR .. | .AND .. | .SLT .. | .SLTU ..
@@ -159,7 +160,7 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
       | .VirtualSRAIW .. | .VirtualSRL .. | .VirtualSRA .. | .VirtualSRLW ..
       | .VirtualSRAW .. | .VirtualROTRI .. | .VirtualROTRIW .. | .VirtualRev8W ..
       | .VirtualXORROT32 .. | .VirtualXORROT24 .. | .VirtualXORROT16 ..
-      | .VirtualXORROT63 .. | .VirtualXORROTW16 .. | .VirtualXORROTW12 ..
+      | .VirtualXORROT63 .. | .VirtualXORROTL1 .. | .VirtualXORROTW16 .. | .VirtualXORROTW12 ..
       | .VirtualXORROTW8 .. | .VirtualXORROTW7 .. | .VirtualXORROTW22 ..
       | .VirtualXORROTW19 .. | .VirtualXORROTW6 .. | .OR .. | .XOR .. | .AND .. | .SLT ..
       | .SLTU .. | .VirtualAlignAddr .. | .VirtualWindowMaskB .. | .VirtualWindowMaskH ..
@@ -245,6 +246,7 @@ def lookupTable (instruction : JoltISA.Instr) : Option LookupTableKind :=
   | .VirtualXORROT24 .. => some .VirtualXORROT24
   | .VirtualXORROT16 .. => some .VirtualXORROT16
   | .VirtualXORROT63 .. => some .VirtualXORROT63
+  | .VirtualXORROTL1 .. => some .VirtualXORROTL1
   | .VirtualXORROTW16 .. => some .VirtualXORROTW16
   | .VirtualXORROTW12 .. => some .VirtualXORROTW12
   | .VirtualXORROTW8 .. => some .VirtualXORROTW8

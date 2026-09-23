@@ -17,18 +17,18 @@ noncomputable def rowLookupOutput {program : JoltProgram}
   let instruction := bytecodeRow.instruction
   let source := fun src => JoltISA.sourceValue src row.preState
   match instruction with
-  | .ADDI _ src imm => BitVec.ofNat 64 (JoltISA.addWide (source src) (imm.signExtend 64))
-  | .ADDIW _ src imm => jolt_addiw_value (source src) imm
-  | .ANDI _ src imm => Riscv.andi (source src) (imm.signExtend 64)
-  | .ORI _ src imm => Riscv.ori (source src) (imm.signExtend 64)
-  | .XORI _ src imm => jolt_xor_value (source src) (imm.signExtend 64)
-  | .SLTI _ src imm => jolt_slt_value (source src) (imm.signExtend 64)
-  | .SLTIU _ src imm => jolt_sltu_value (source src) (imm.signExtend 64)
+  | .ADDI _ src imm => BitVec.ofNat 64 (JoltISA.addWide (source src) imm)
+  | .ADDIW _ src imm => jolt_addiw_value64 (source src) imm
+  | .ANDI _ src imm => Riscv.andi (source src) imm
+  | .ORI _ src imm => Riscv.ori (source src) imm
+  | .XORI _ src imm => jolt_xor_value (source src) imm
+  | .SLTI _ src imm => jolt_slt_value (source src) imm
+  | .SLTIU _ src imm => jolt_sltu_value (source src) imm
   | .LUI _ imm => imm
   | .AUIPC _ imm =>
-      BitVec.ofNat 64 (JoltISA.addWide bytecodeRow.address ((imm ++ (0 : BitVec 12)).signExtend 64))
-  | .JAL _ imm => BitVec.ofNat 64 (JoltISA.addWide bytecodeRow.address (imm.signExtend 64))
-  | .JALR _ base imm => jolt_jalr_target (source base) imm
+      BitVec.ofNat 64 (JoltISA.addWide bytecodeRow.address imm)
+  | .JAL _ imm => BitVec.ofNat 64 (JoltISA.addWide bytecodeRow.address imm)
+  | .JALR _ base imm => jolt_jalr_target64 (source base) imm
   | .BEQ lhs rhs _ | .BNE lhs rhs _ | .BLT lhs rhs _ | .BGE lhs rhs _
   | .BLTU lhs rhs _ | .BGEU lhs rhs _ =>
       if JoltISA.branchDecisionPure instruction (source lhs) (source rhs) then 1 else 0
@@ -69,6 +69,7 @@ noncomputable def rowLookupOutput {program : JoltProgram}
   | .VirtualXORROT24 _ lhs rhs => jolt_virtual_xorrot_value 24 (source lhs) (source rhs)
   | .VirtualXORROT16 _ lhs rhs => jolt_virtual_xorrot_value 16 (source lhs) (source rhs)
   | .VirtualXORROT63 _ lhs rhs => jolt_virtual_xorrot_value 63 (source lhs) (source rhs)
+  | .VirtualXORROTL1 _ lhs rhs => jolt_virtual_xorrotl1_value (source lhs) (source rhs)
   | .VirtualXORROTW16 _ lhs rhs => jolt_virtual_xorrotw_value 16 (source lhs) (source rhs)
   | .VirtualXORROTW12 _ lhs rhs => jolt_virtual_xorrotw_value 12 (source lhs) (source rhs)
   | .VirtualXORROTW8 _ lhs rhs => jolt_virtual_xorrotw_value 8 (source lhs) (source rhs)
@@ -76,10 +77,10 @@ noncomputable def rowLookupOutput {program : JoltProgram}
   | .VirtualXORROTW22 _ lhs rhs => jolt_virtual_xorrotw_value 22 (source lhs) (source rhs)
   | .VirtualXORROTW19 _ lhs rhs => jolt_virtual_xorrotw_value 19 (source lhs) (source rhs)
   | .VirtualXORROTW6 _ lhs rhs => jolt_virtual_xorrotw_value 6 (source lhs) (source rhs)
-  | .VirtualAlignAddr _ base imm => jolt_virtual_align_addr_value (source base) imm
-  | .VirtualWindowMaskB _ base imm => jolt_virtual_window_mask_b_value (source base) imm
-  | .VirtualWindowMaskH _ base imm => jolt_virtual_window_mask_h_value (source base) imm
-  | .VirtualWindowMaskW _ base imm => jolt_virtual_window_mask_w_value (source base) imm
+  | .VirtualAlignAddr _ base imm => jolt_virtual_align_addr_value64 (source base) imm
+  | .VirtualWindowMaskB _ base imm => jolt_virtual_window_mask_b_value64 (source base) imm
+  | .VirtualWindowMaskH _ base imm => jolt_virtual_window_mask_h_value64 (source base) imm
+  | .VirtualWindowMaskW _ base imm => jolt_virtual_window_mask_w_value64 (source base) imm
   | .VirtualPext _ src mask => jolt_virtual_pext_value (source src) (source mask)
   | .VirtualPextSigned _ src mask => jolt_virtual_pext_signed_value (source src) (source mask)
   | .VirtualShiftDataB _ src address => jolt_virtual_shift_data_b_value (source src) (source address)

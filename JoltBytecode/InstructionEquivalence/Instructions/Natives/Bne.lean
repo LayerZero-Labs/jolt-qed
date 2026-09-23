@@ -19,7 +19,7 @@ def bneInstrEqSailStatement
     (js : SailJoltState)
     (_h : BinarySourceReadWithLinkedCSRs rs2 rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.BNE (.xreg rs1) (.xreg rs2) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.BNE (.xreg rs1) (.xreg rs2) imm)).run js) =
     ((execute_BTYPE imm rs2 rs1 bop.BNE).run js.sail)
 
 theorem bneInstr_eq_sail
@@ -35,7 +35,7 @@ theorem bneInstr_eq_sail
   simp only [h.rs1_read, h.rs2_read]
   simp only [pure, EStateM.pure]
   -- LHS
-  simp only [JoltISA.execInstr, JoltISA.branchDecisionPure,
+  simp only [JoltISA.execInstr, encoded_branch_offset, JoltISA.branchDecisionPure,
     bind, EStateM.bind, pure,
     JoltISA.readSrc_xreg_run_of_read rs1 js h.rs1_val h.rs1_read,
     JoltISA.readSrc_xreg_run_of_read rs2 js h.rs2_val h.rs2_read]

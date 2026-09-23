@@ -122,7 +122,7 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
     (hlinked : LinkedCSRs js)
     (h_ram : JoltISA.ramStartAddress ≤ (load_effective_address val imm).toNat) :
     System.systemProjectResult
-      ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+      ((JoltISA.execInstr (JoltISA.Encoded.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
     .ok RETIRE_SUCCESS (stateAfterWrite js.sail rd loaded) := by
   unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst liftSail
   simp only [bind, EStateM.bind, pure, EStateM.run, hrx]
@@ -131,56 +131,15 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
   rw [JoltISA.readMemoryWord_ram _ h_ram]
   unfold liftSail
   simp only [hread, EStateM.bind]
-  by_cases hx0 : JoltISA.isX0 rd = true
-  · have hdst :
-        JoltISA.sideEffectingDst (JoltISA.Dst.xreg rd) =
-          JoltISA.Dst.vreg JoltISA.rdZeroRewriteVReg := by
-      simp [JoltISA.sideEffectingDst, JoltISA.sideEffectingRdZeroDst, hx0]
-    let js' : SailJoltState :=
-      { js with
-        vregs := fun r =>
-          if r = JoltISA.rdZeroRewriteVReg then loaded else js.vregs r }
-    have hprojected : Projection.ProjectedVRegsPreserved js js' := by
-      unfold Projection.ProjectedVRegsPreserved js'
-      simp [JoltISA.rdZeroRewriteVReg, JoltISA.inlineTmp,
-        JoltISA.inlineRegisterBase, JoltISA.riscvRegisterBase,
-        JoltISA.riscvRegisterCount, JoltISA.numReservedVirtualRegisters,
-        JoltISA.trapHandlerVReg, JoltISA.mscratchVReg, JoltISA.mepcVReg,
-        JoltISA.mcauseVReg, JoltISA.mtvalVReg, JoltISA.mstatusVReg]
-    have hproject : System.systemProject js' = js.sail := by
-      have hregs : js'.sail.regs = js.sail.regs := rfl
-      exact
-        Projection.systemProject_eq_sail_of_projected_vregs_preserved_of_sail_regs_eq
-          js js' hregs hprojected hlinked
-    have hwrite_vreg :
-        writeVReg JoltISA.rdZeroRewriteVReg loaded
-          ({ js with vregs := js.vregs } : SailJoltState) =
-        .ok () js' := by
-      unfold writeVReg js' JoltISA.rdZeroRewriteVReg JoltISA.inlineTmp
-        JoltISA.inlineRegisterBase JoltISA.riscvRegisterBase
-        JoltISA.riscvRegisterCount JoltISA.numReservedVirtualRegisters
-      simp [modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet]
-    simp only [hdst]
-    rw [hwrite_vreg]
-    simp only [EStateM.pure, System.systemProjectResult]
-    rw [hproject]
-    rw [JoltISA.stateAfterWrite_of_isX0_eq_true hx0 js.sail loaded]
-  · have hdst :
-        JoltISA.sideEffectingDst (JoltISA.Dst.xreg rd) =
-          JoltISA.Dst.xreg rd := by
-      have hx0_false : JoltISA.isX0 rd = false := by
-        cases hcase : JoltISA.isX0 rd <;> simp [hcase] at hx0 ⊢
-      simp [JoltISA.sideEffectingDst, JoltISA.sideEffectingRdZeroDst, hx0_false]
-    simp only [hdst]
-    obtain ⟨s', hwrite⟩ := wX_shape rd loaded js.sail
-    rw [hwrite]
-    simp only [EStateM.pure]
-    have hproject :=
-      Projection.systemProjectResult_pure_retire_after_xreg_write
-        rd js s' loaded hlinked hwrite
-    simp only [pure, EStateM.pure] at hproject
-    rw [hproject]
-    rw [wX_bits_eq_stateAfterWrite rd loaded js.sail s' hwrite]
+  obtain ⟨s', hwrite⟩ := wX_shape rd loaded js.sail
+  rw [hwrite]
+  simp only [EStateM.pure]
+  have hproject :=
+    Projection.systemProjectResult_pure_retire_after_xreg_write
+      rd js s' loaded hlinked hwrite
+  simp only [pure, EStateM.pure] at hproject
+  rw [hproject]
+  rw [wX_bits_eq_stateAfterWrite rd loaded js.sail s' hwrite]
 
 private theorem ldJolt_misaligned (imm : BitVec 12) (rs1 rd : regidx)
     (js : SailJoltState)
@@ -189,7 +148,7 @@ private theorem ldJolt_misaligned (imm : BitVec 12) (rs1 rd : regidx)
     (h_align : load_effective_address val imm &&& (7 : BitVec 64) ≠ 0)
     (hlinked : LinkedCSRs js) :
     System.systemProjectResult
-      ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+      ((JoltISA.execInstr (JoltISA.Encoded.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
     .ok (ExecutionResult.Memory_Exception
       (Virtaddr (load_effective_address val imm), ExceptionType.E_Load_Addr_Align ()))
       js.sail := by
@@ -208,7 +167,7 @@ def ldInstrEqSailStatement
     (js : SailJoltState)
     (_h : LoadProgramEqSailAssumptions imm rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
     ((execute_LOAD imm rs1 rd false 8).run js.sail)
 
 theorem ldInstr_eq_sail

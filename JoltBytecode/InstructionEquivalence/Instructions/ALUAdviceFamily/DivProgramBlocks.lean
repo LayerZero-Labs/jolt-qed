@@ -47,7 +47,7 @@ def phase_remainder : JoltISA.Program :=
   .done RETIRE_SUCCESS
 
 def phase_writeback (rd : regidx) : JoltISA.Program :=
-  .instr (.ADDI (.xreg rd) (.vreg v0) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg v0) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 theorem phase_setup_run

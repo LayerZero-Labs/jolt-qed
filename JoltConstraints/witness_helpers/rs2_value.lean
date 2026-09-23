@@ -27,7 +27,8 @@ noncomputable def Rs2Value [Field F] {program : JoltProgram}
       | .MULW _ _ src | .MULHU _ _ src | .ANDN _ _ src | .VirtualSRL _ _ src
       | .VirtualSRA _ _ src | .VirtualSRLW _ _ src | .VirtualSRAW _ _ src
       | .VirtualXORROT32 _ _ src | .VirtualXORROT24 _ _ src | .VirtualXORROT16 _ _ src
-      | .VirtualXORROT63 _ _ src | .VirtualXORROTW16 _ _ src | .VirtualXORROTW12 _ _ src
+      | .VirtualXORROT63 _ _ src
+      | .VirtualXORROTL1 _ _ src | .VirtualXORROTW16 _ _ src | .VirtualXORROTW12 _ _ src
       | .VirtualXORROTW8 _ _ src | .VirtualXORROTW7 _ _ src | .VirtualXORROTW22 _ _ src
       | .VirtualXORROTW19 _ _ src | .VirtualXORROTW6 _ _ src | .OR _ _ src | .XOR _ _ src
       | .AND _ _ src | .SLT _ _ src | .SLTU _ _ src | .VirtualPext _ _ src

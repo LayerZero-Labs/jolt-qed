@@ -17,7 +17,7 @@ def xoriInstrEqSailStatement
     (js : SailJoltState)
     (_h : UnarySourceReadWithLinkedCSRs rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.XORI (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.XORI (.xreg rd) (.xreg rs1) imm)).run js) =
     ((execute_ITYPE imm rs1 rd iop.XORI).run js.sail)
 
 private abbrev op (rs1_val : BitVec 64) (imm : BitVec 12) : BitVec 64 :=

@@ -32,6 +32,7 @@ noncomputable def Rs1Ra [Field F] {program : JoltProgram}
       | .VirtualSRLW _ src _ | .VirtualSRAW _ src _ | .VirtualROTRI _ src _
       | .VirtualROTRIW _ src _ | .VirtualRev8W _ src _ | .VirtualXORROT32 _ src _
       | .VirtualXORROT24 _ src _ | .VirtualXORROT16 _ src _ | .VirtualXORROT63 _ src _
+      | .VirtualXORROTL1 _ src _
       | .VirtualXORROTW16 _ src _ | .VirtualXORROTW12 _ src _ | .VirtualXORROTW8 _ src _
       | .VirtualXORROTW7 _ src _ | .VirtualXORROTW22 _ src _ | .VirtualXORROTW19 _ src _
       | .VirtualXORROTW6 _ src _ | .OR _ src _ | .XOR _ src _ | .AND _ src _ | .SLT _ src _
@@ -44,9 +45,9 @@ noncomputable def Rs1Ra [Field F] {program : JoltProgram}
       | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
       | .VirtualAssertLTE src _ _ | .VirtualAdviceLen _ src _ | .VirtualHostIO _ src _ =>
           if address = sourceRegisterAddress src then 1 else 0
-      -- Alignment assertions carry a Sail register index directly.
+      -- Alignment assertions can read architectural or virtual registers.
       | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
-          if address = sourceRegisterAddress (.xreg base) then 1 else 0
+          if address = sourceRegisterAddress base then 1 else 0
       | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualPow2I _ _ | .VirtualPow2IW _ _
       | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => 0
     else 0

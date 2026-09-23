@@ -110,15 +110,15 @@ private theorem amoswapdProgramAuto_eq_sail
     simp only [System.systemProjectResult]
     rw [hprojectFinal, hjolt_sail]
   · let rest : JoltISA.Program :=
-      .instr (.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12)) <|
-      .instr (.ADDI (JoltISA.amoDstFor rd) (.vreg (JoltISA.amoOldVRegFor rd))
+      .instr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (JoltISA.amoDstFor rd) (.vreg (JoltISA.amoOldVRegFor rd))
         (0 : BitVec 12)) <|
       .done RETIRE_SUCCESS
     let oldReg := JoltISA.amoOldVRegFor rd
     let e := (Virtaddr addr, ExceptionType.E_SAMO_Addr_Align ())
     have hld :
         (JoltISA.execInstr
-          (.LD .amo (.vreg oldReg) (.xreg rs1) (0 : BitVec 12))).run js =
+          (JoltISA.Encoded.LD .amo (.vreg oldReg) (.xreg rs1) (0 : BitVec 12))).run js =
         .ok (ExecutionResult.Memory_Exception e) js := by
       exact
         amo_dword_ld_xreg_misaligned_run
@@ -137,7 +137,7 @@ private theorem amoswapdProgramAuto_eq_sail
           JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst,
           JoltISA.rdZeroRewriteVReg] using
           (JoltISA.execProgram_instr_run_memory_exception
-            (.LD .amo (.vreg oldReg) (.xreg rs1) (0 : BitVec 12))
+            (JoltISA.Encoded.LD .amo (.vreg oldReg) (.xreg rs1) (0 : BitVec 12))
             rest js js e hld)
     have hsail :=
       execute_AMO_dword_misaligned

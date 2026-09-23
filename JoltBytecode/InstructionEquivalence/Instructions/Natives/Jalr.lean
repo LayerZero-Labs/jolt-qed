@@ -19,7 +19,7 @@ def jalrInstrEqSailStatement
     (js : SailJoltState)
     (_h : JalrInstrEqSailAssumptions rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.JALR (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.JALR (.xreg rd) (.xreg rs1) imm)).run js) =
     ((execute_JALR imm rs1 rd).run js.sail)
 
 private theorem updateELP_noop
@@ -227,10 +227,10 @@ theorem jalrInstr_eq_sail
   unfold jalrInstrEqSailStatement
   have hUpdate := updateELP_noop rs1 js.sail h.zicfilp_disabled
   have hExec :
-      (JoltISA.execInstr (.JALR (.xreg rd) (.xreg rs1) imm)).run js =
+      (JoltISA.execInstr (JoltISA.Encoded.JALR (.xreg rd) (.xreg rs1) imm)).run js =
     (liftSail (execute_JALR imm rs1 rd)) js := by
     unfold JoltISA.execInstr execute_JALR JoltISA.readSrc JoltISA.writeDst liftSail
-    simp only [jolt_jalr_target, JoltISA.addWide_low]
+    simp only [jolt_jalr_target64, jolt_jalr_target, JoltISA.addWide_low]
     simp only [hUpdate, bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
     cases hlink : (get_next_pc ()) js.sail with
     | error e s1 =>

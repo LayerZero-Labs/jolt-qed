@@ -10,7 +10,7 @@ namespace DestinationNormalizationChecks
 -- This is emitted by the built-in Rust CSRRS x0,mstatus,x0 expansion.
 -- It remains representable: the model must preserve the emitted instruction.
 def csrReadDiscarded : JoltProgramRow :=
-  { instruction := .ADDI (.xreg (.Regidx 0)) (.vreg 39) 0
+  { instruction := JoltISA.Encoded.ADDI (.xreg (.Regidx 0)) (.vreg 39) 0
     registerOperandsCanonical := rfl
     isBytecodeTemplate := True.intro
     address := 0x80000000
@@ -40,6 +40,6 @@ example (state : SailJoltState) :
 
 -- The ordinary source-rewrite no-op has zero result on both sides, even with arbitrary state.
 example (state : SailJoltState) :
-    (HonestWitness.rdValue (.ADDI (.xreg (.Regidx 0)) (.xreg (.Regidx 0)) 0) state : ℚ) = 0 := rfl
+    (HonestWitness.rdValue (JoltISA.Encoded.ADDI (.xreg (.Regidx 0)) (.xreg (.Regidx 0)) 0) state : ℚ) = 0 := rfl
 
 end DestinationNormalizationChecks

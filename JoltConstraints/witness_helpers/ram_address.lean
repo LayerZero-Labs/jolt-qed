@@ -13,7 +13,7 @@ noncomputable def ramAccessAddress (instruction : JoltISA.Instr)
     (preState : SailJoltState) : Option (BitVec 64) :=
   match instruction with
   | .LD _ _ base imm | .SD base _ imm =>
-      some (Memory.effectiveAddr12 (JoltISA.sourceValue base preState) imm)
+      some (((JoltISA.sourceValue base preState) + imm))
   | _ => none
 
 -- Rust: [RamAddress](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/ram.rs:41).

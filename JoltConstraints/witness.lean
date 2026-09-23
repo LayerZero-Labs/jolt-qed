@@ -79,6 +79,7 @@ inductive LookupTableKind where
   | ShiftDataB
   | ShiftDataH
   | ShiftDataW
+  | VirtualXORROTL1
   deriving DecidableEq, Fintype
 
 -- These are the things God gives before we can begin Jolt. Some are free params, some are derived from the users program.

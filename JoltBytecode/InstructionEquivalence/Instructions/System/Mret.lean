@@ -184,7 +184,7 @@ private theorem mretProgram_jolt_run
   have hReadMepc : JoltISA.readSrc (JoltISA.Src.vreg JoltISA.mepcVReg) js =
         .ok (js.vregs JoltISA.mepcVReg) js := by
     simp only [JoltISA.readSrc_vreg, readVReg_run]
-  simp only [hReadMepc, jolt_jalr_target, JoltISA.addWide_low]
+  simp only [hReadMepc, jolt_jalr_target64, jolt_jalr_target, JoltISA.addWide_low]
   -- The next instruction is to jump_to mepc value roughly cos we are adding 0 and we want to show that succeeds.
   have hJump := jump_to_mret_vreg_run js h
   simp only [hJump]

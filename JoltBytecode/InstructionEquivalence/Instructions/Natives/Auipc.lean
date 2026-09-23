@@ -19,7 +19,7 @@ def auipcInstrEqSailStatement
     (js : SailJoltState)
     (_h : NoSourceReadWithLinkedCSRs js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.AUIPC (.xreg rd) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.AUIPC (.xreg rd) imm)).run js) =
     ((execute_UTYPE imm rd uop.AUIPC).run js.sail)
 
 private theorem getArchPC_preservesSystemProjectRegs
@@ -82,7 +82,7 @@ theorem auipcInstr_eq_sail
     auipcInstrEqSailStatement imm rd js h := by
   unfold auipcInstrEqSailStatement
   have hExec :
-      JoltISA.execInstr (.AUIPC (.xreg rd) imm) =
+      JoltISA.execInstr (JoltISA.Encoded.AUIPC (.xreg rd) imm) =
         liftSail (execute_UTYPE imm rd uop.AUIPC) := by
     funext js
     unfold JoltISA.execInstr execute_UTYPE JoltISA.writeDst liftSail get_arch_pc

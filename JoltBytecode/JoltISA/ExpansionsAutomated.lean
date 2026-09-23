@@ -18,7 +18,7 @@ namespace JoltISA
 /-- Auto-generated from the Rust `DIV` expansion. -/
 def divProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualAdvice (.vreg (BitVec.ofNat 7 40)) advice0 (0 : BitVec 64)) <|
@@ -32,13 +32,13 @@ def divProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 128)) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.VirtualAssertValidUnsignedRemainder (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 128)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `DIVU` expansion. -/
 def divuProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualAdvice (.vreg (BitVec.ofNat 7 40)) advice0 (0 : BitVec 64)) <|
@@ -48,94 +48,94 @@ def divuProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 128)) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.VirtualAssertValidUnsignedRemainder (.vreg (BitVec.ofNat 7 41)) (.xreg rs2) (0 : BitVec 128)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LB` expansion. -/
 def lbProgramAuto (rd rs1 : regidx) (imm : BitVec 12) : Program :=
   if isX0 rd then
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
     .instr (.VirtualPextSigned (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
     .instr (.VirtualPextSigned (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40))) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LBU` expansion. -/
 def lbuProgramAuto (rd rs1 : regidx) (imm : BitVec 12) : Program :=
   if isX0 rd then
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
     .instr (.VirtualPext (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
     .instr (.VirtualPext (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40))) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LH` expansion. -/
 def lhProgramAuto (rd rs1 : regidx) (imm : BitVec 12) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
     .instr (.VirtualPextSigned (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
     .instr (.VirtualPextSigned (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40))) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LHU` expansion. -/
 def lhuProgramAuto (rd rs1 : regidx) (imm : BitVec 12) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
     .instr (.VirtualPext (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
     .instr (.VirtualPext (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40))) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LW` expansion. -/
 def lwProgramAuto (rd rs1 : regidx) (imm : BitVec 12) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
     .instr (.VirtualPextSigned (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
     .instr (.VirtualPextSigned (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40))) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `MULH` expansion. -/
 def mulhProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualMovsign (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 64)) <|
@@ -150,11 +150,11 @@ def mulhProgramAuto (rd rs1 rs2 : regidx) : Program :=
 /-- Auto-generated from the Rust `MULHSU` expansion. -/
 def mulhsuProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualMovsign (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 64)) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (1 : BitVec 12)) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MULHU (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (.xreg rs2)) <|
@@ -169,7 +169,7 @@ def mulhsuProgramAuto (rd rs1 rs2 : regidx) : Program :=
 /-- Auto-generated from the Rust `REM` expansion. -/
 def remProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualAdvice (.vreg (BitVec.ofNat 7 40)) advice0 (0 : BitVec 64)) <|
@@ -186,7 +186,7 @@ def remProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
 /-- Auto-generated from the Rust `REMU` expansion. -/
 def remuProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualAdvice (.vreg (BitVec.ofNat 7 40)) advice0 (0 : BitVec 64)) <|
@@ -195,38 +195,38 @@ def remuProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 128)) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.VirtualAssertValidUnsignedRemainder (.vreg (BitVec.ofNat 7 40)) (.xreg rs2) (0 : BitVec 128)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `SB` expansion. -/
 def sbProgramAuto (rs1 rs2 : regidx) (imm : BitVec 12) : Program :=
-  .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
-  .instr (.ANDI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (-8 : BitVec 12)) <|
-  .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-  .instr (.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+  .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (-8 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.VirtualWindowMaskB (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
   .instr (.ANDN (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
   .instr (.VirtualShiftDataB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
   .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
-  .instr (.SD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `SH` expansion. -/
 def shProgramAuto (rs1 rs2 : regidx) (imm : BitVec 12) : Program :=
-  .instr (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
-  .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
-  .instr (.ANDI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (-8 : BitVec 12)) <|
-  .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-  .instr (.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+  .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (-8 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
   .instr (.ANDN (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
   .instr (.VirtualShiftDataH (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
   .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
-  .instr (.SD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `SLL` expansion. -/
 def sllProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 40)) (.xreg rs2) (0 : BitVec 64)) <|
@@ -236,7 +236,7 @@ def sllProgramAuto (rd rs1 rs2 : regidx) : Program :=
 /-- Auto-generated from the Rust `SLLI` expansion. -/
 def slliProgramAuto (rd rs1 : regidx) (shamt : BitVec 6) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualMULI (.xreg rd) (.xreg rs1) (slliMultiplier shamt)) <|
@@ -245,7 +245,7 @@ def slliProgramAuto (rd rs1 : regidx) (shamt : BitVec 6) : Program :=
 /-- Auto-generated from the Rust `SRA` expansion. -/
 def sraProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 40)) (.xreg rs2) (0 : BitVec 64)) <|
@@ -255,7 +255,7 @@ def sraProgramAuto (rd rs1 rs2 : regidx) : Program :=
 /-- Auto-generated from the Rust `SRAI` expansion. -/
 def sraiProgramAuto (rd rs1 : regidx) (shamt : BitVec 6) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualSRAI (.xreg rd) (.xreg rs1) (sraiBitmask shamt)) <|
@@ -264,7 +264,7 @@ def sraiProgramAuto (rd rs1 : regidx) (shamt : BitVec 6) : Program :=
 /-- Auto-generated from the Rust `SRL` expansion. -/
 def srlProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 40)) (.xreg rs2) (0 : BitVec 64)) <|
@@ -274,7 +274,7 @@ def srlProgramAuto (rd rs1 rs2 : regidx) : Program :=
 /-- Auto-generated from the Rust `SRLI` expansion. -/
 def srliProgramAuto (rd rs1 : regidx) (shamt : BitVec 6) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualSRLI (.xreg rd) (.xreg rs1) (srliBitmask shamt)) <|
@@ -282,21 +282,21 @@ def srliProgramAuto (rd rs1 : regidx) (shamt : BitVec 6) : Program :=
 
 /-- Auto-generated from the Rust `SW` expansion. -/
 def swProgramAuto (rs1 rs2 : regidx) (imm : BitVec 12) : Program :=
-  .instr (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
-  .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
-  .instr (.ANDI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (-8 : BitVec 12)) <|
-  .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-  .instr (.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+  .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (-8 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
   .instr (.ANDN (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
   .instr (.VirtualShiftDataW (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
   .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
-  .instr (.SD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `SLLIW` expansion. -/
 def slliwProgramAuto (rd rs1 : regidx) (shamt : BitVec 5) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualMULIW (.xreg rd) (.xreg rs1) (BitVec.ofNat 64 (2 ^ shamt.toNat))) <|
@@ -305,7 +305,7 @@ def slliwProgramAuto (rd rs1 : regidx) (shamt : BitVec 5) : Program :=
 /-- Auto-generated from the Rust `SRLIW` expansion. -/
 def srliwProgramAuto (rd rs1 : regidx) (shamt : BitVec 5) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualSRLIW (.xreg rd) (.xreg rs1) ((1 <<< 32) - (1 <<< shamt.toNat))) <|
@@ -314,7 +314,7 @@ def srliwProgramAuto (rd rs1 : regidx) (shamt : BitVec 5) : Program :=
 /-- Auto-generated from the Rust `SRAIW` expansion. -/
 def sraiwProgramAuto (rd rs1 : regidx) (shamt : BitVec 5) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualSRAIW (.xreg rd) (.xreg rs1) ((1 <<< 32) - (1 <<< shamt.toNat))) <|
@@ -323,7 +323,7 @@ def sraiwProgramAuto (rd rs1 : regidx) (shamt : BitVec 5) : Program :=
 /-- Auto-generated from the Rust `SLLW` expansion. -/
 def sllwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualPow2W (.vreg (BitVec.ofNat 7 40)) (.xreg rs2) (0 : BitVec 64)) <|
@@ -333,7 +333,7 @@ def sllwProgramAuto (rd rs1 rs2 : regidx) : Program :=
 /-- Auto-generated from the Rust `SRLW` expansion. -/
 def srlwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualShiftRightBitmaskW (.vreg (BitVec.ofNat 7 40)) (.xreg rs2) (0 : BitVec 64)) <|
@@ -343,7 +343,7 @@ def srlwProgramAuto (rd rs1 rs2 : regidx) : Program :=
 /-- Auto-generated from the Rust `SRAW` expansion. -/
 def srawProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualShiftRightBitmaskW (.vreg (BitVec.ofNat 7 40)) (.xreg rs2) (0 : BitVec 64)) <|
@@ -353,24 +353,24 @@ def srawProgramAuto (rd rs1 rs2 : regidx) : Program :=
 /-- Auto-generated from the Rust `LWU` expansion. -/
 def lwuProgramAuto (rd rs1 : regidx) (imm : BitVec 12) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
     .instr (.VirtualPext (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
-    .instr (.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
-    .instr (.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_Load_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualAlignAddr (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
+    .instr (JoltISA.Encoded.LD .normal (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) imm) <|
     .instr (.VirtualPext (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40))) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `DIVUW` expansion. -/
 def divuwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualZeroExtendWord (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 64)) <|
@@ -383,13 +383,13 @@ def divuwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
     .instr (.VirtualAssertValidUnsignedRemainder (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 128)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.VirtualAssertValidDiv0 (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 128)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `DIVW` expansion. -/
 def divwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 64)) <|
@@ -411,7 +411,7 @@ def divwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
 /-- Auto-generated from the Rust `REMUW` expansion. -/
 def remuwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualZeroExtendWord (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 64)) <|
@@ -428,7 +428,7 @@ def remuwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
 /-- Auto-generated from the Rust `REMW` expansion. -/
 def remwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
   if isX0 rd then
-    .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 64)) <|
@@ -447,13 +447,13 @@ def remwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
 /-- Auto-generated from the Rust `AMOSWAPW` expansion. -/
 def amoswapwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 45))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 41)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 41)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -462,18 +462,18 @@ def amoswapwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 44))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 40)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 40)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 40)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 44))) <|
@@ -482,22 +482,22 @@ def amoswapwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOADDW` expansion. -/
 def amoaddwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 46))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 43)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 43)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 46))) <|
@@ -506,19 +506,19 @@ def amoaddwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.xreg rs2)) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 42)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 42)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -527,22 +527,22 @@ def amoaddwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOANDW` expansion. -/
 def amoandwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 46))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 43)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 43)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 46))) <|
@@ -551,19 +551,19 @@ def amoandwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.xreg rs2)) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 42)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 42)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -572,22 +572,22 @@ def amoandwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOORW` expansion. -/
 def amoorwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 46))) <|
     .instr (.OR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 43)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 43)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 46))) <|
@@ -596,19 +596,19 @@ def amoorwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.OR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.xreg rs2)) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 42)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 42)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -617,22 +617,22 @@ def amoorwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOXORW` expansion. -/
 def amoxorwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 46))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 43)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 43)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 45)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 46))) <|
@@ -641,19 +641,19 @@ def amoxorwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.xreg rs2)) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 42)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 42)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 44)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -662,17 +662,17 @@ def amoxorwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOMINW` expansion. -/
 def amominwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 44))) <|
@@ -682,7 +682,7 @@ def amominwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.SUB (.vreg (BitVec.ofNat 7 44)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 45)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 45)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 46))) <|
@@ -691,14 +691,14 @@ def amominwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43))) <|
@@ -708,7 +708,7 @@ def amominwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.SUB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 44)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 44)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -717,17 +717,17 @@ def amominwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOMAXW` expansion. -/
 def amomaxwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 44))) <|
@@ -737,7 +737,7 @@ def amomaxwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.SUB (.vreg (BitVec.ofNat 7 44)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 45)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 45)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 46))) <|
@@ -746,14 +746,14 @@ def amomaxwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43))) <|
@@ -763,7 +763,7 @@ def amomaxwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.SUB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 44)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 44)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -772,17 +772,17 @@ def amomaxwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOMINUW` expansion. -/
 def amominuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 44))) <|
@@ -792,7 +792,7 @@ def amominuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.SUB (.vreg (BitVec.ofNat 7 44)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 45)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 45)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 46))) <|
@@ -801,14 +801,14 @@ def amominuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43))) <|
@@ -818,7 +818,7 @@ def amominuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.SUB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 44)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 44)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -827,17 +827,17 @@ def amominuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOMAXUW` expansion. -/
 def amomaxuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 43)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 44))) <|
@@ -847,7 +847,7 @@ def amomaxuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.SUB (.vreg (BitVec.ofNat 7 44)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 45)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 45)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 46)) (.vreg (BitVec.ofNat 7 43)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 46))) <|
@@ -856,14 +856,14 @@ def amomaxuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 45))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 45)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (slliMultiplier 3)) <|
     .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.VirtualSRL (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43))) <|
@@ -873,7 +873,7 @@ def amomaxuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.SUB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 40))) <|
-    .instr (.ORI (.vreg (BitVec.ofNat 7 44)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 44)) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
     .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (srliBitmask 32)) <|
     .instr (.VirtualPow2 (.vreg (BitVec.ofNat 7 45)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 64)) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 45))) <|
@@ -882,166 +882,166 @@ def amomaxuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .instr (.XOR (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 44))) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
-    .instr (.SD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 44)) (.xreg rs1) (-8 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.vreg (BitVec.ofNat 7 44)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .instr (.VirtualSignExtendWord (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOSWAPD` expansion. -/
 def amoswapdProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
-    .instr (.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
-    .instr (.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOADDD` expansion. -/
 def amoadddProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (.xreg rs2)) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOANDD` expansion. -/
 def amoanddProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (.xreg rs2)) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.AND (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOORD` expansion. -/
 def amoordProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.OR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (.xreg rs2)) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.OR (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOXORD` expansion. -/
 def amoxordProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42)) (.xreg rs2)) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.XOR (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOMIND` expansion. -/
 def amomindProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.SLT (.vreg (BitVec.ofNat 7 42)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.SLT (.vreg (BitVec.ofNat 7 41)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 42)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOMAXD` expansion. -/
 def amomaxdProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.SLT (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.SLT (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.xreg rs2)) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 42)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOMINUD` expansion. -/
 def amominudProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.SLTU (.vreg (BitVec.ofNat 7 42)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.SLTU (.vreg (BitVec.ofNat 7 41)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 42)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AMOMAXUD` expansion. -/
 def amomaxudProgramAuto (rd rs1 rs2 : regidx) : Program :=
   if isX0 rd then
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.SLTU (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.xreg rs2)) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 43)) (.xreg rs2) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 43)) (.vreg (BitVec.ofNat 7 42))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 43))) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 42)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.LD .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.SLTU (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.xreg rs2)) <|
     .instr (.SUB (.vreg (BitVec.ofNat 7 42)) (.xreg rs2) (.vreg (BitVec.ofNat 7 40))) <|
     .instr (.MUL (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 42)) (.vreg (BitVec.ofNat 7 41))) <|
     .instr (.ADD (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 42))) <|
-    .instr (.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `AdviceLB` expansion. -/
