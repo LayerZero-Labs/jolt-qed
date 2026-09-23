@@ -28,7 +28,7 @@ theorem honestWitness_nextUnexpandedPCUpdateOtherwise
     (terminated : trace.Terminated)
     (tracePadded : trace.rows.size < params.traceLength) :
     nextUnexpandedPCUpdateOtherwise
-      (JoltProgram.honestWitness (F := F) params trace ramFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits (Nat.le_of_lt tracePadded)) := by
   sorry
 
 end JoltConstraints

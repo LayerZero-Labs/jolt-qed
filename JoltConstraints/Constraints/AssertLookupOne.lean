@@ -20,8 +20,9 @@ The original constraint is retained, with no assumption excluding the example. -
 def honestWitness_assertLookupOneStatement
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
-    (ramFits : params.RamFits trace) : Prop :=
+    (ramFits : params.RamFits trace)
+    (traceFits : trace.rows.size ≤ params.traceLength) : Prop :=
     assertLookupOne
-      (JoltProgram.honestWitness (F := F) params trace ramFits)
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits)
 
 end JoltConstraints

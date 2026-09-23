@@ -52,9 +52,10 @@ pending the fixed table definitions and their correspondence with ISA outputs. -
 theorem honestWitness_lookupOutputEqInstructionReadRaf
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
-    (ramFits : params.RamFits trace) :
+    (ramFits : params.RamFits trace)
+    (traceFits : trace.rows.size ≤ params.traceLength) :
     lookupOutputEqInstructionReadRaf
-      (JoltProgram.honestWitness (F := F) params trace ramFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
   · -- TODO: Show that the product of honest address chunks selects exactly

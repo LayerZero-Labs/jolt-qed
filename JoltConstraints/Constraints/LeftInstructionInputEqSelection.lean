@@ -20,9 +20,10 @@ def leftInstructionInputEqSelection {F : Type} [Field F] {params : WitnessParams
 theorem honestWitness_leftInstructionInputEqSelection
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
-    (ramFits : params.RamFits trace) :
+    (ramFits : params.RamFits trace)
+    (traceFits : trace.rows.size ≤ params.traceLength) :
     leftInstructionInputEqSelection
-      (JoltProgram.honestWitness (F := F) params trace ramFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
   sorry
 
 end JoltConstraints

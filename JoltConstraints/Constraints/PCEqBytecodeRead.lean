@@ -24,9 +24,10 @@ theorem honestWitness_pcEqBytecodeRead
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
+    (traceFits : trace.rows.size ≤ params.traceLength)
     (bytecodeFits : program.expandedBytecode.size + 1 ≤ 2 ^ params.logBytecodeK) :
     pcEqBytecodeRead
-      (JoltProgram.honestWitness (F := F) params trace ramFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
   sorry
 
 end JoltConstraints

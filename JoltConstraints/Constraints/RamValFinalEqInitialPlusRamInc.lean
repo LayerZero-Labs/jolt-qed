@@ -26,7 +26,7 @@ theorem honestWitness_ramValFinalEqInitialPlusRamInc
     (validAccesses : ramAccessesValid trace)
     (traceFits : trace.rows.size ≤ params.traceLength)
     : ramValFinalEqInitialPlusRamInc program
-      (JoltProgram.honestWitness (F := F) params trace ramFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
   sorry
 
 end JoltConstraints

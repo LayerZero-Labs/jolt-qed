@@ -22,9 +22,10 @@ rule out address wraparound in the admissible execution assumptions. -/
 theorem honestWitness_ramAddrEqRs1PlusImmIfLoadStore
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
-    (ramFits : params.RamFits trace) :
+    (ramFits : params.RamFits trace)
+    (traceFits : trace.rows.size ≤ params.traceLength) :
     ramAddrEqRs1PlusImmIfLoadStore
-      (JoltProgram.honestWitness (F := F) params trace ramFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
   sorry
 
 end JoltConstraints

@@ -26,6 +26,6 @@ def honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranchStatement
     (terminated : trace.Terminated)
     (tracePadded : trace.rows.size < params.traceLength) : Prop :=
     nextUnexpandedPCEqPCPlusImmIfShouldBranch
-      (JoltProgram.honestWitness (F := F) params trace ramFits)
+      (JoltProgram.honestWitness (F := F) params trace ramFits (Nat.le_of_lt tracePadded))
 
 end JoltConstraints

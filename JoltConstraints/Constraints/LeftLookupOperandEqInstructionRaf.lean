@@ -23,8 +23,9 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
+    (traceFits : trace.rows.size ≤ params.traceLength)
     : leftLookupOperandEqInstructionRaf
-      (JoltProgram.honestWitness (F := F) params trace ramFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
   sorry
 
 end JoltConstraints
