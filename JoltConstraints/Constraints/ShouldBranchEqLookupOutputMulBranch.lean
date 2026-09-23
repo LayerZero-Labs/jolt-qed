@@ -14,7 +14,7 @@ def shouldBranchEqLookupOutputMulBranch {F : Type} [Field F] {params : WitnessPa
   ∀ t : Fin params.traceLength,
     witness.ShouldBranch t = witness.LookupOutput t * witness.InstructionFlags .Branch t
 
-/-- Completeness target for the honest witness; proof pending. -/
+/-- Completeness target for the honest witness. -/
 theorem honestWitness_shouldBranchEqLookupOutputMulBranch
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
@@ -23,6 +23,21 @@ theorem honestWitness_shouldBranchEqLookupOutputMulBranch
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     shouldBranchEqLookupOutputMulBranch
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro t
+  by_cases h : t.val < trace.rows.size
+  · let row := getElem trace.rows t.val h
+    let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
+    dsimp [shouldBranchEqLookupOutputMulBranch, JoltProgram.honestWitness,
+      HonestWitness.ShouldBranch, HonestWitness.LookupOutput,
+      HonestWitness.InstructionFlags]
+    simp only [dif_pos h]
+    cases hi : bytecodeRow.instruction
+    all_goals simp only [bytecodeRow, row] at hi
+    all_goals simp [JoltMetadata.instructionFlag]
+    all_goals
+      simp [HonestWitness.rowLookupOutput, hi]
+    all_goals split_ifs <;> simp
+  · simp [JoltProgram.honestWitness, HonestWitness.ShouldBranch,
+      HonestWitness.LookupOutput, HonestWitness.InstructionFlags, h]
 
 end JoltConstraints

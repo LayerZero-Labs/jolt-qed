@@ -59,11 +59,11 @@ theorem honestWitness_lookupOutputEqInstructionReadRaf
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
-  · -- TODO: Show that the product of honest address chunks selects exactly
-    -- `HonestWitness.lookupIndex trace t.val`, using the chunk-width divisibility.
-    -- Then reduce the table flags to `JoltMetadata.lookupTable` and prove that
-    -- its entry at this address equals `HonestWitness.rowLookupOutput` in F.
-    -- Instructions with no lookup table must have lookup output zero.
+  · -- FIXME (translation): `lookup_table.lean` implements only And, Or, Xor,
+    -- and VirtualXORROTL1; the other fixed-table entries still use `sorry`.
+    -- The honest address selection is proved in `InstructionReadSelection.lean`.
+    -- Complete the remaining tables and relate each selected entry to
+    -- `HonestWitness.rowLookupOutput` before closing this target.
     sorry
   · -- Padding has zero output and every table flag is zero.
     simp [JoltProgram.honestWitness, HonestWitness.LookupOutput,
