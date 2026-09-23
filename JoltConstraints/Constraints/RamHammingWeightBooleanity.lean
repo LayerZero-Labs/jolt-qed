@@ -14,7 +14,7 @@ def ramHammingWeightBooleanity {F : Type} [Field F] {params : WitnessParams}
   ∀ t : Fin params.traceLength,
     witness.RamHammingWeight t * (witness.RamHammingWeight t - 1) = 0
 
-/-- The honest witness satisfies constraint (57); proof pending. -/
+/-- The honest witness satisfies constraint (57). -/
 theorem honestWitness_ramHammingWeightBooleanity
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
@@ -23,6 +23,10 @@ theorem honestWitness_ramHammingWeightBooleanity
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     ramHammingWeightBooleanity
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro t
+  dsimp [JoltProgram.honestWitness, HonestWitness.RamHammingWeight]
+  split_ifs
+  · split <;> (try split_ifs) <;> simp_all
+  · simp
 
 end JoltConstraints

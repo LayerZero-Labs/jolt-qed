@@ -15,7 +15,7 @@ def bytecodeRaAtEntryEqOne {F : Type} [Field F] {params : WitnessParams}
     (entry : Fin (2 ^ params.logBytecodeK)) (witness : WitnessType F params) : Prop :=
   bytecodeRa witness entry ⟨0, pow_pos (by decide : 0 < (2 : Nat)) _⟩ = 1
 
-/-- Completeness target for the honest witness; proof pending.
+/-- Completeness target for the honest witness.
 Trace linkage alone does not select the first instruction. startsAtEntry
 connects the first executed row to the public entry slot. -/
 theorem honestWitness_bytecodeRaAtEntryEqOne
@@ -29,6 +29,12 @@ theorem honestWitness_bytecodeRaAtEntryEqOne
     (startsAtEntry : (getElem trace.rows 0 nonempty).rowIndex.val + 1 = entry.val)
     : bytecodeRaAtEntryEqOne entry
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  unfold bytecodeRaAtEntryEqOne bytecodeRa
+  apply Finset.prod_eq_one
+  intro chunk _
+  dsimp [JoltProgram.honestWitness, HonestWitness.BytecodeRaChunk,
+    HonestWitness.addressChunkEntry, bytecodeAddressChunk,
+    HonestWitness.addressChunk]
+  simp [HonestWitness.bytecodePc, nonempty, startsAtEntry]
 
 end JoltConstraints

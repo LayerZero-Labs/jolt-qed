@@ -17,7 +17,7 @@ def instructionRaChunkHammingWeight {F : Type} [Field F] {params : WitnessParams
   ∀ (chunk : Fin params.instructionChunks) (t : Fin params.traceLength),
     (∑ entry : Fin (2 ^ params.chunkBits), witness.InstructionRaChunk chunk entry t) = 1
 
-/-- The honest witness satisfies constraint (60); proof pending. -/
+/-- The honest witness satisfies constraint (60). -/
 theorem honestWitness_instructionRaChunkHammingWeight
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
@@ -26,6 +26,10 @@ theorem honestWitness_instructionRaChunkHammingWeight
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     instructionRaChunkHammingWeight
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro chunk t
+  dsimp [instructionRaChunkHammingWeight, JoltProgram.honestWitness,
+    HonestWitness.InstructionRaChunk]
+  exact HonestWitness.sum_addressChunkEntry_some params.chunkBits chunk
+    (HonestWitness.lookupIndex trace t.val).toNat
 
 end JoltConstraints
