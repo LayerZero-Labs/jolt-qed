@@ -23,12 +23,12 @@ theorem honestWitness_bytecodeRaAtEntryEqOne
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeFits : program.expandedBytecode.size + 1 ≤ 2 ^ params.logBytecodeK)
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
     (entry : Fin (2 ^ params.logBytecodeK))
     (nonempty : 0 < trace.rows.size)
     (startsAtEntry : (getElem trace.rows 0 nonempty).rowIndex.val + 1 = entry.val)
     : bytecodeRaAtEntryEqOne entry
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   sorry
 
 end JoltConstraints

@@ -27,10 +27,11 @@ theorem honestWitness_rs1ValueEqRegistersRead
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src program.initialState = 0) :
     rs1ValueEqRegistersRead
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   sorry
 
 end JoltConstraints

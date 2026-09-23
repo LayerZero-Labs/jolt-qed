@@ -21,8 +21,9 @@ def honestWitness_assertLookupOneStatement
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size) : Prop :=
+    (traceFits : params.ProverPaddedFor trace.rows.size)
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) : Prop :=
     assertLookupOne
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits)
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain)
 
 end JoltConstraints

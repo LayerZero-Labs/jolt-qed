@@ -22,9 +22,10 @@ theorem honestWitness_ramWriteValueEqRamReadWrite
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
     (validAccesses : ramAccessesValid trace)
     : ramWriteValueEqRamReadWrite
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   sorry
 
 end JoltConstraints

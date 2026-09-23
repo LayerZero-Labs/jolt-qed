@@ -24,8 +24,9 @@ def honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranchStatement
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
     (terminated : trace.Terminated)
-    (tracePadded : params.ProverPaddedFor trace.rows.size) : Prop :=
+    (tracePadded : params.ProverPaddedFor trace.rows.size)
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) : Prop :=
     nextUnexpandedPCEqPCPlusImmIfShouldBranch
-      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded)
+      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain)
 
 end JoltConstraints

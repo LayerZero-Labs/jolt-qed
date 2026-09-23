@@ -23,9 +23,10 @@ theorem honestWitness_mustStartSequenceFromBeginning
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
-    (tracePadded : params.ProverPaddedFor trace.rows.size) :
+    (tracePadded : params.ProverPaddedFor trace.rows.size)
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     mustStartSequenceFromBeginning
-      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain) := by
   sorry
 
 end JoltConstraints

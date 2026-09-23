@@ -24,8 +24,9 @@ theorem honestWitness_ramOutputEqPublicIo
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
     : ramOutputEqPublicIo (HonestWitness.finalTraceState trace).io
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   sorry
 
 end JoltConstraints

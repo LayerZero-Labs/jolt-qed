@@ -1,4 +1,5 @@
 import Mathlib.Data.Fin.Basic
+import Mathlib.Data.Nat.Log
 import Mathlib.Tactic.DeriveFintype
 
 set_option autoImplicit false
@@ -128,6 +129,24 @@ def WitnessParams.ProverPaddedFor (p : WitnessParams) (physicalRows : Nat) : Pro
 theorem WitnessParams.ProverPaddedFor.traceFits {p : WitnessParams} {physicalRows : Nat}
     (padded : p.ProverPaddedFor physicalRows) : physicalRows ≤ p.traceLength :=
   Nat.le_of_lt padded.2
+
+/-- Rust inserts a leading no-op before rounding the expanded bytecode length
+up to a power of two, with a minimum of two rows.
+Rust: crates/jolt-program/src/preprocess/bytecode.rs::BytecodePreprocessing::preprocess. -/
+def WitnessParams.preprocessedBytecodeSize (expandedRows : Nat) : Nat :=
+  max 2 (2 ^ Nat.clog 2 (expandedRows + 1))
+
+/-- The bytecode witness domain is exactly the domain Rust preprocesses for
+the expanded program, including its leading no-op and trailing no-op padding. -/
+def WitnessParams.BytecodeDomainFor (p : WitnessParams) (expandedRows : Nat) : Prop :=
+  2 ^ p.logBytecodeK = WitnessParams.preprocessedBytecodeSize expandedRows
+
+theorem WitnessParams.BytecodeDomainFor.rowsFit {p : WitnessParams} {expandedRows : Nat}
+    (domain : p.BytecodeDomainFor expandedRows) :
+    expandedRows + 1 ≤ 2 ^ p.logBytecodeK := by
+  rw [WitnessParams.BytecodeDomainFor, WitnessParams.preprocessedBytecodeSize] at domain
+  rw [domain]
+  exact (Nat.le_pow_clog (by decide) (expandedRows + 1)).trans (Nat.le_max_right _ _)
 
 -- Rust: crates/jolt-witness/src/backend/trace/mod.rs::ram_log_k.
 def WitnessParams.ramSize (p : WitnessParams) : Nat := 2 ^ p.logRamK

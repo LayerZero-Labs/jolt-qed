@@ -14,11 +14,14 @@ set_option autoImplicit false
 -- ramFits certifies that every nonzero RAM access is representable in p.ramSize.
 -- The prover-padded-length premise matches Rust's selected cycle domain and
 -- ensures that no execution suffix is omitted and a padding row remains.
+-- The bytecode-domain premise matches Rust's leading no-op and power-of-two
+-- bytecode padding before any witness column is constructed.
 -- TODO: Eventually name it params and not p but its not a major issue for now
 noncomputable def JoltProgram.honestWitness {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : p.RamFits trace)
-    (_padded : p.ProverPaddedFor trace.rows.size) : WitnessType F p :=
+    (_padded : p.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : p.BytecodeDomainFor program.expandedBytecode.size) : WitnessType F p :=
   {
     PC := HonestWitness.PC p trace
     UnexpandedPC := HonestWitness.UnexpandedPC p trace
