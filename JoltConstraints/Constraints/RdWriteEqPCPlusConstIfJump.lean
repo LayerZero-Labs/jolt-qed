@@ -24,7 +24,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
-    (traceFits : trace.rows.size ≤ params.traceLength) :
+    (traceFits : params.ProverPaddedFor trace.rows.size) :
     rdWriteEqPCPlusConstIfJump
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by
   sorry

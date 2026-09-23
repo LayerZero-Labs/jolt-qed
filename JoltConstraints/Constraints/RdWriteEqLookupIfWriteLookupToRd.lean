@@ -22,7 +22,7 @@ def honestWitness_rdWriteEqLookupIfWriteLookupToRdStatement
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
-    (traceFits : trace.rows.size ≤ params.traceLength) : Prop :=
+    (traceFits : params.ProverPaddedFor trace.rows.size) : Prop :=
     rdWriteEqLookupIfWriteLookupToRd
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits)
 

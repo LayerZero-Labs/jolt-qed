@@ -21,9 +21,9 @@ theorem honestWitness_shouldJumpEqJumpMulNotNextIsNoop
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
-    (tracePadded : trace.rows.size < params.traceLength) :
+    (tracePadded : params.ProverPaddedFor trace.rows.size) :
     shouldJumpEqJumpMulNotNextIsNoop
-      (JoltProgram.honestWitness (F := F) params trace ramFits (Nat.le_of_lt tracePadded)) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded) := by
   sorry
 
 end JoltConstraints

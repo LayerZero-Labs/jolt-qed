@@ -12,13 +12,13 @@ set_option autoImplicit false
 -- its rows and program.initialState.
 -- Helpers fill p.traceLength witness positions, padding beyond trace.rows.size.
 -- ramFits certifies that every nonzero RAM access is representable in p.ramSize.
--- Rust rejects a physical trace longer than the cycle domain before witness
--- construction. Require the same bound so no execution suffix is omitted.
+-- The prover-padded-length premise matches Rust's selected cycle domain and
+-- ensures that no execution suffix is omitted and a padding row remains.
 -- TODO: Eventually name it params and not p but its not a major issue for now
 noncomputable def JoltProgram.honestWitness {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : p.RamFits trace)
-    (_traceFits : trace.rows.size ≤ p.traceLength) : WitnessType F p :=
+    (_padded : p.ProverPaddedFor trace.rows.size) : WitnessType F p :=
   {
     PC := HonestWitness.PC p trace
     UnexpandedPC := HonestWitness.UnexpandedPC p trace

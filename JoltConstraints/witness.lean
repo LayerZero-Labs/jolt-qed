@@ -109,6 +109,26 @@ Rust: [walk_cycles](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/sr
 -/
 def WitnessParams.traceLength (p : WitnessParams) : Nat := 2 ^ p.logT
 
+/-- Rust `ProverConfig::derive_from_rows` chooses the first power-of-two cycle
+domain strictly larger than the physical trace, subject to the compiled PCS
+floor. The ordinary build has `minimumLogT = 8` (256 cycles); Akita has
+`minimumLogT = 12` (4096 cycles). For zero rows the floor dominates.
+Rust: crates/jolt-prover/src/config.rs::derive_from_rows. -/
+def WitnessParams.proverTraceLength (minimumLogT physicalRows : Nat) : Nat :=
+  max (2 ^ minimumLogT) (2 ^ (Nat.log2 physicalRows + 1))
+
+/-- The witness cycle domain is the length selected by either supported Rust
+prover build, and contains at least one trailing padding row. The compiled
+backend/profile itself is not yet part of `WitnessParams` (see issue #21). -/
+def WitnessParams.ProverPaddedFor (p : WitnessParams) (physicalRows : Nat) : Prop :=
+  (p.traceLength = WitnessParams.proverTraceLength 8 physicalRows ∨
+    p.traceLength = WitnessParams.proverTraceLength 12 physicalRows) ∧
+  physicalRows < p.traceLength
+
+theorem WitnessParams.ProverPaddedFor.traceFits {p : WitnessParams} {physicalRows : Nat}
+    (padded : p.ProverPaddedFor physicalRows) : physicalRows ≤ p.traceLength :=
+  Nat.le_of_lt padded.2
+
 -- Rust: crates/jolt-witness/src/backend/trace/mod.rs::ram_log_k.
 def WitnessParams.ramSize (p : WitnessParams) : Nat := 2 ^ p.logRamK
 

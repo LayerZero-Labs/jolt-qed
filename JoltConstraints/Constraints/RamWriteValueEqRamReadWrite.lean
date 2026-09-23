@@ -21,7 +21,7 @@ theorem honestWitness_ramWriteValueEqRamReadWrite
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
-    (traceFits : trace.rows.size ≤ params.traceLength)
+    (traceFits : params.ProverPaddedFor trace.rows.size)
     (validAccesses : ramAccessesValid trace)
     : ramWriteValueEqRamReadWrite
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits) := by

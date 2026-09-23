@@ -26,7 +26,7 @@ theorem honestWitness_rs1ValueEqRegistersRead
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
-    (traceFits : trace.rows.size ≤ params.traceLength)
+    (traceFits : params.ProverPaddedFor trace.rows.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src program.initialState = 0) :
     rs1ValueEqRegistersRead

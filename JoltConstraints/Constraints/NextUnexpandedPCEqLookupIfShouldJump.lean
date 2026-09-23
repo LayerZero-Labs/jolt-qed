@@ -23,9 +23,9 @@ theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
     (terminated : trace.Terminated)
-    (tracePadded : trace.rows.size < params.traceLength) :
+    (tracePadded : params.ProverPaddedFor trace.rows.size) :
     nextUnexpandedPCEqLookupIfShouldJump
-      (JoltProgram.honestWitness (F := F) params trace ramFits (Nat.le_of_lt tracePadded)) := by
+      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded) := by
   sorry
 
 end JoltConstraints
