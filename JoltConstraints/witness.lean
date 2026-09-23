@@ -102,6 +102,19 @@ structure WitnessParams where
   virtualChunkBits_pos : 0 < virtualChunkBits
   chunkBits_dvd_virtual : chunkBits ∣ virtualChunkBits
   virtualChunkBits_dvd_lookup : virtualChunkBits ∣ 128
+  -- Rust: crates/jolt-prover/src/config.rs::one_hot_config.
+  -- The prover chooses both widths from the padded trace length.
+  proverChunkConfig :
+    (logT < 25 ∧ chunkBits = 4 ∧ virtualChunkBits = 16) ∨
+    (25 ≤ logT ∧ chunkBits = 8 ∧ virtualChunkBits = 32)
+  -- Rust's cycle, RAM, and bytecode domains are powers of two in `usize`.
+  -- These bounds describe the 64-bit host used by the witness backend.
+  logT_lt_usizeBits : logT < 64
+  logRamK_lt_usizeBits : logRamK < 64
+  logBytecodeK_lt_usizeBits : logBytecodeK < 64
+
+theorem WitnessParams.chunkBits_lt_128 (p : WitnessParams) : p.chunkBits < 128 := by
+  rcases p.proverChunkConfig with ⟨_, h, _⟩ | ⟨_, h, _⟩ <;> omega
 
 /-- Number of witness positions, including padding, always a power of two.
 `trace.rows.size` counts actual execution steps and may be smaller: for example,
@@ -150,6 +163,17 @@ theorem WitnessParams.BytecodeDomainFor.rowsFit {p : WitnessParams} {expandedRow
 
 -- Rust: crates/jolt-witness/src/backend/trace/mod.rs::ram_log_k.
 def WitnessParams.ramSize (p : WitnessParams) : Nat := 2 ^ p.logRamK
+
+/-- Resource check for materializing every dense grid in Rust's trace-backed
+witness backend with a field whose elements occupy `fieldBytes` bytes. The
+address counts are `2^chunkBits` for one-hot chunks, `128` for registers,
+and `ramSize` for RAM; each grid has `traceLength` cycles. Rust caps each
+allocation at `2^35` bytes. This check depends on the field and backend, so
+it is separate from the prover's dimension policy above.
+Rust: crates/jolt-witness/src/backend/trace/mod.rs::checked_dense_grid_len. -/
+def WitnessParams.TraceBackendGridFits (p : WitnessParams) (fieldBytes : Nat) : Prop :=
+  0 < fieldBytes ∧
+  fieldBytes * max (2 ^ p.chunkBits) (max 128 p.ramSize) * p.traceLength ≤ 2 ^ 35
 
 -- Rust: crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs::JoltFormulaDimensions::try_from (instruction_d).
 -- Rust: crates/jolt-witness/src/backend/trace/mod.rs::RV64_LOOKUP_ADDRESS_BITS = 128.
