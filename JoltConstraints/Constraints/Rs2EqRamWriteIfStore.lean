@@ -23,6 +23,21 @@ theorem honestWitness_rs2EqRamWriteIfStore
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     rs2EqRamWriteIfStore
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro t
+  change HonestWitness.OpFlags params trace .Store t *
+    (HonestWitness.Rs2Value params trace t -
+      HonestWitness.RamWriteValue params trace t) = 0
+  by_cases inBounds : t.val < trace.rows.size
+  · let instruction := (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
+    by_cases hStore : JoltMetadata.opcodeFlag instruction .Store = true
+    · obtain ⟨base, value, imm, hInstr⟩ :=
+        JoltMetadata.opcodeFlag_store_requiresSD instruction hStore
+      dsimp [instruction] at hInstr
+      simp [HonestWitness.OpFlags, HonestWitness.Rs2Value,
+        HonestWitness.RamWriteValue, JoltMetadata.circuitFlag, inBounds, hInstr]
+    · dsimp [instruction] at hStore
+      simp [HonestWitness.OpFlags, JoltMetadata.circuitFlag, inBounds, hStore]
+  · simp [HonestWitness.OpFlags, HonestWitness.Rs2Value,
+      HonestWitness.RamWriteValue, inBounds]
 
 end JoltConstraints

@@ -209,6 +209,16 @@ def circuitFlag (row : JoltProgramRow) (flag : CircuitFlags) : Bool :=
   | .IsFirstInSequence => row.isFirstInSequence
   | _ => opcodeFlag row.instruction flag
 
+theorem opcodeFlag_load_requiresLD (instruction : JoltISA.Instr)
+    (h : opcodeFlag instruction .Load = true) :
+    ∃ faultClass dst base imm, instruction = .LD faultClass dst base imm := by
+  cases instruction <;> simp_all [opcodeFlag]
+
+theorem opcodeFlag_store_requiresSD (instruction : JoltISA.Instr)
+    (h : opcodeFlag instruction .Store = true) :
+    ∃ base value imm, instruction = .SD base value imm := by
+  cases instruction <;> simp_all [opcodeFlag]
+
 -- Rust: crates/jolt-lookup-tables/src/instructions/{riscv,virt}/::impl_lookup_table.
 -- Map from instruction to Lookup tables (TODO: double check this connection)
 def lookupTable (instruction : JoltISA.Instr) : Option LookupTableKind :=

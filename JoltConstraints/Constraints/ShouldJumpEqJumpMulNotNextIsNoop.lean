@@ -25,6 +25,14 @@ theorem honestWitness_shouldJumpEqJumpMulNotNextIsNoop
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     shouldJumpEqJumpMulNotNextIsNoop
       (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain) := by
-  sorry
+  intro t
+  by_cases next : t.val + 1 < params.traceLength
+  · simp [JoltProgram.honestWitness, HonestWitness.ShouldJump,
+      HonestWitness.NextIsNoop, next]
+  · have padding : ¬ t.val < trace.rows.size := by
+      have rowsLt := tracePadded.2
+      omega
+    simp [JoltProgram.honestWitness, HonestWitness.ShouldJump,
+      HonestWitness.NextIsNoop, HonestWitness.OpFlags, next, padding]
 
 end JoltConstraints
