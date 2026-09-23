@@ -1,4 +1,5 @@
 import JoltConstraints.Constraints.BytecodeReadData
+import JoltConstraints.Constraints.BytecodeReadSelection
 import JoltConstraints.honest_witness
 
 set_option autoImplicit false
@@ -17,7 +18,7 @@ def instructionFlagsEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
       ∑ address : Fin (2 ^ params.logBytecodeK),
         bytecodeInstructionFlag program flag address.val * bytecodeRa witness address t
 
-/-- The honest witness satisfies constraint (47); proof pending.
+/-- The honest witness satisfies constraint (47).
 The bytecode domain must contain every program row and the leading no-op slot.
 This bound prevents the address chunks from truncating an executed bytecode PC. -/
 theorem honestWitness_instructionFlagsEqBytecodeRead
@@ -28,6 +29,14 @@ theorem honestWitness_instructionFlagsEqBytecodeRead
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     instructionFlagsEqBytecodeRead program
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro flag t
+  rw [bytecodeRead_honest params trace ramFits traceFits bytecodeDomain
+    (bytecodeInstructionFlag program flag) t]
+  by_cases h : t.val < trace.rows.size
+  · simp [JoltProgram.honestWitness, HonestWitness.InstructionFlags,
+      HonestWitness.bytecodePc, bytecodeInstructionFlag, bytecodeRow, h]
+  · cases flag <;>
+      simp [JoltProgram.honestWitness, HonestWitness.InstructionFlags,
+        HonestWitness.bytecodePc, bytecodeInstructionFlag, bytecodeRow, h]
 
 end JoltConstraints

@@ -2,6 +2,8 @@ import Mathlib.Algebra.Field.Defs
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 import Mathlib.Data.Fintype.Basic
+import Mathlib.Data.Nat.Log
+import Mathlib.Tactic
 
 set_option autoImplicit false
 
@@ -40,5 +42,49 @@ theorem sum_addressChunkEntry_some {F : Type} [Field F] (bits : Nat)
   simp only [addressChunkEntry]
   simp_rw [h]
   simp [Finset.sum_ite_eq']
+
+private theorem eq_of_baseDigits (base n a b : Nat) (basePos : 0 < base)
+    (ha : a < base ^ n) (hb : b < base ^ n)
+    (digits : ∀ i : Nat, i < n →
+      a / base ^ i % base = b / base ^ i % base) : a = b := by
+  induction n generalizing a b with
+  | zero =>
+      simp at ha hb
+      omega
+  | succ n ih =>
+      have ha' : a / base < base ^ n := by
+        apply (Nat.div_lt_iff_lt_mul basePos).2
+        simpa [pow_succ, mul_comm] using ha
+      have hb' : b / base < base ^ n := by
+        apply (Nat.div_lt_iff_lt_mul basePos).2
+        simpa [pow_succ, mul_comm] using hb
+      have hd : ∀ i : Nat, i < n →
+          (a / base) / base ^ i % base = (b / base) / base ^ i % base := by
+        intro i hi
+        have h := digits (i + 1) (by omega)
+        simpa [pow_succ, Nat.div_div_eq_div_mul, mul_comm] using h
+      have hquot := ih (a / base) (b / base) ha' hb' hd
+      have hrem := digits 0 (by omega)
+      simp only [pow_zero, Nat.div_one] at hrem
+      calc
+        a = a % base + base * (a / base) := (Nat.mod_add_div a base).symm
+        _ = b % base + base * (b / base) := by rw [hrem, hquot]
+        _ = b := Nat.mod_add_div b base
+
+/-- Two addresses in the represented range are equal if all of their
+most-significant-first chunks agree. -/
+theorem addressChunk_injective (bits chunks a b : Nat)
+    (ha : a < 2 ^ (chunks * bits)) (hb : b < 2 ^ (chunks * bits))
+    (digits : ∀ chunk : Fin chunks,
+      addressChunk bits chunk a = addressChunk bits chunk b) : a = b := by
+  apply eq_of_baseDigits (2 ^ bits) chunks a b (Nat.pow_pos (by decide))
+  · simpa only [mul_comm chunks bits, pow_mul] using ha
+  · simpa only [mul_comm chunks bits, pow_mul] using hb
+  · intro i hi
+    let chunk : Fin chunks := ⟨chunks - 1 - i, by omega⟩
+    have h := digits chunk
+    dsimp [addressChunk, chunk] at h
+    have hindex : chunks - 1 - (chunks - 1 - i) = i := by omega
+    simpa only [hindex, mul_comm i bits, pow_mul] using h
 
 end HonestWitness

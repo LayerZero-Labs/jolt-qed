@@ -1,4 +1,5 @@
 import JoltConstraints.Constraints.BytecodeReadSelectors
+import JoltConstraints.Constraints.BytecodeReadSelection
 import JoltConstraints.honest_witness
 
 set_option autoImplicit false
@@ -17,7 +18,7 @@ def lookupTableFlagEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
       ∑ address : Fin (2 ^ params.logBytecodeK),
         bytecodeLookupTableFlag program table address.val * bytecodeRa witness address t
 
-/-- Completeness target for the honest witness; proof pending.
+/-- Completeness target for the honest witness.
 The domain contains every expanded row and the leading no-op slot. -/
 theorem honestWitness_lookupTableFlagEqBytecodeRead
     {F : Type} [Field F] (params : WitnessParams)
@@ -27,6 +28,13 @@ theorem honestWitness_lookupTableFlagEqBytecodeRead
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
     : lookupTableFlagEqBytecodeRead program
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro table t
+  rw [bytecodeRead_honest params trace ramFits traceFits bytecodeDomain
+    (bytecodeLookupTableFlag program table) t]
+  by_cases h : t.val < trace.rows.size
+  · simp [JoltProgram.honestWitness, HonestWitness.LookupTableFlag,
+      HonestWitness.bytecodePc, bytecodeLookupTableFlag, bytecodeRow, h]
+  · simp [JoltProgram.honestWitness, HonestWitness.LookupTableFlag,
+      HonestWitness.bytecodePc, bytecodeLookupTableFlag, bytecodeRow, h]
 
 end JoltConstraints
