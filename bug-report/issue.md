@@ -23,6 +23,13 @@ ADDI x0, v39, 0
 
 Here `v39` holds `mstatus`, so it contains `9`. The addition computes `9`, but writing to `x0` discards the result: `x0` remains `0`.
 
+> [!IMPORTANT]
+> **Why x0 is not replaced by a virtual register**
+>
+> Rust [classifies CSRRS as handling rd=x0 internally](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/expand/operands.rs#L50-L59), so the [generic side-effecting destination rewrite is skipped](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/expand/mod.rs#L134-L149).
+>
+> The [CSRRS expansion checks rs1=x0 first](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/expand/control_flow/csrrs.rs#L17-L23). That branch emits `ADDI rd, vCSR, 0` and returns, even when `rd = x0`. The native ADDI is [emitted directly as a final row](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/expand/grammar.rs#L372-L382); it does not pass through the generic source-instruction rewrite again. Thus this case retains `ADDI x0, v39, 0`.
+
 ## Honest witness
 
 The honest witness must record what Rust actually executes. Using Rust's own trace conversion and witness extractors gives:
