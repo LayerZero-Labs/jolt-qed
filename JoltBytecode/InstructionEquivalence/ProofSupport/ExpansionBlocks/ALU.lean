@@ -267,7 +267,7 @@ theorem exists_state_after_sll_block_run_vreg_vreg_vreg
       vregs := fun r =>
         if r = vd then js_pow2.vregs value * js_pow2.vregs scratch else js_pow2.vregs r }
   have hpow2 :
-      (execInstr (.VirtualPow2 (.vreg scratch) (.vreg shift))).run js =
+      (execInstr (.VirtualPow2 (.vreg scratch) (.vreg shift) (0 : BitVec 64))).run js =
         .ok RETIRE_SUCCESS js_pow2 := by
     simpa [js_pow2] using virtual_pow2_run_vreg_vreg scratch shift js hscratch
   have hmul :
@@ -321,7 +321,7 @@ theorem exists_state_after_sll_block_run_vreg_xreg_vreg
       vregs := fun r =>
         if r = vd then x * js_pow2.vregs scratch else js_pow2.vregs r }
   have hpow2 :
-      (execInstr (.VirtualPow2 (.vreg scratch) (.vreg shift))).run js =
+      (execInstr (.VirtualPow2 (.vreg scratch) (.vreg shift) (0 : BitVec 64))).run js =
         .ok RETIRE_SUCCESS js_pow2 := by
     simpa [js_pow2] using virtual_pow2_run_vreg_vreg scratch shift js hscratch
   have h_read_pow2 : rX_bits value js_pow2.sail = .ok x js_pow2.sail := by

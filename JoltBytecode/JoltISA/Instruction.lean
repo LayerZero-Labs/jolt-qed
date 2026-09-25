@@ -90,7 +90,7 @@ inductive Instr where
   | ANDN (dst : Dst) (lhs rhs : Src)
   | VirtualMULI (dst : Dst) (src : Src) (imm : BitVec 64)
   | VirtualMULIW (dst : Dst) (src : Src) (imm : BitVec 64)
-  | VirtualPow2 (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
+  | VirtualPow2 (dst : Dst) (src : Src) (imm : BitVec 64)
   | VirtualPow2W (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualPow2I (dst : Dst) (imm : Nat)
   | VirtualPow2IW (dst : Dst) (imm : Nat)
@@ -372,6 +372,14 @@ def isX0 (rd : regidx) : Bool :=
 def pureWritebackTraceProgram (rd : regidx) (normal : Program) : Program :=
   if isX0 rd then pureWritebackRdZeroProgram else normal
 
+/-- Rust replaces a native instruction with no side effects by `ADDI x0, x0, 0`
+when its source destination is x0.
+This selects the actual instruction and operands before execution. -/
+def pureWritebackNativeInstr (rd : regidx) (normal : Instr) : Instr :=
+  if isX0 rd then
+    Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)
+  else normal
+
 /-- The first virtual register Rust's `allocate()` returns for top-level
 side-effecting `rd = x0` source rewrites. 
 -/
@@ -382,6 +390,20 @@ abbrev rdZeroRewriteVReg : VReg := inlineTmp 0
 virtual register so the final row never writes `x0`. -/
 def sideEffectingRdZeroDst (rd : regidx) : Dst :=
   if isX0 rd then .vreg rdZeroRewriteVReg else .xreg rd
+
+/-- Rust's native source LD dispatch: rewrite `rd = x0` to the first
+temporary before executing the final LD instruction.
+The top-level allocator starts with its instruction temporary pool free. -/
+def ldNativeInstr (rd rs1 : regidx) (imm : BitVec 12) : Instr :=
+  Encoded.LD .normal (sideEffectingRdZeroDst rd) (.xreg rs1) imm
+
+/-- Rust applies the destination-zero rewrite to native JAL too. -/
+def jalNativeInstr (rd : regidx) (imm : BitVec 21) : Instr :=
+  Encoded.JAL (sideEffectingRdZeroDst rd) imm
+
+/-- Rust applies the destination-zero rewrite to native JALR too. -/
+def jalrNativeInstr (rd rs1 : regidx) (imm : BitVec 12) : Instr :=
+  Encoded.JALR (sideEffectingRdZeroDst rd) (.xreg rs1) imm
 
 /-- Lift Rust's source-materialization rule to an already-parsed destination. -/
 def sideEffectingDst : Dst → Dst

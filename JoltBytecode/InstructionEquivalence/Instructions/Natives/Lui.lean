@@ -1,5 +1,5 @@
 import JoltBytecode.Bundles
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
+import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.LUI
 
@@ -31,7 +31,15 @@ theorem luiInstr_eq_sail
     (js : SailJoltState)
     (h : NoSourceReadWithLinkedCSRs js) :
     luiInstrEqSailStatement imm rd js h := by
-  unfold luiInstrEqSailStatement
+  unfold luiInstrEqSailStatement JoltISA.execLUI
+  -- Select Rust's no-op for x0; its full state agrees with a discarded write.
+  rw [NativeDispatch.pureWriteback_run_eq rd _ js (by
+    intro hx0
+    have hrd := JoltISA.eq_regidx_zero_of_isX0_eq_true hx0
+    subst rd
+    simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+      EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+      wX_bits_regidx_zero])]
   -- RHS
   simp only [execute_UTYPE, EStateM.run, bind, EStateM.bind]
   simp only [pure, EStateM.pure]
@@ -43,7 +51,7 @@ theorem luiInstr_eq_sail
   simp only [h_write_sail]
 
   -- LHS
-  simp only [JoltISA.execLUI, JoltISA.execInstr, JoltISA.writeDst, liftSail,
+  simp only [JoltISA.execInstr, JoltISA.writeDst, liftSail,
     bind, EStateM.bind, h_write]
   exact Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'
     (op imm)

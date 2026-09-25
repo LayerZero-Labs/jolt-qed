@@ -19,9 +19,9 @@ the native Jolt instruction. -/
 def luiValue (imm : BitVec 20) : BitVec 64 :=
   sign_extend (m := 64) (imm +++ (0x000#12 : BitVec 12))
 
-/-- Execute guest RV64 `LUI` through the native Jolt `LUI` instruction. -/
+/-- Execute guest RV64 LUI after Rust's destination-zero dispatch. -/
 def execLUI (imm : BitVec 20) (rd : regidx) : JoltMonad ExecutionResult :=
-  execInstr (.LUI (.xreg rd) (luiValue imm))
+  execInstr (pureWritebackNativeInstr rd (.LUI (.xreg rd) (luiValue imm)))
 
 /-- Jolt RV64 `LUI` writes the normalized immediate directly. -/
 theorem execInstr_lui_vreg_run (vd : VReg) (imm : BitVec 64)

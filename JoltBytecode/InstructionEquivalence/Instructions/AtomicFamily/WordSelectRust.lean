@@ -420,7 +420,7 @@ theorem amo_word_rust_select_shift_mask_prefix_run
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg JoltISA.amoWordSelectInlineTmpVReg)
-            (.vreg JoltISA.amoWordSelectShiftVReg)) <|
+            (.vreg JoltISA.amoWordSelectShiftVReg) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg JoltISA.amoWordSelectMaskVReg)
             (.vreg JoltISA.amoWordSelectMaskVReg)
             (.vreg JoltISA.amoWordSelectInlineTmpVReg)) tail)).run js =
@@ -465,7 +465,7 @@ theorem amo_word_rust_select_shift_new_prefix_run
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg JoltISA.amoWordSelectInlineTmpVReg)
-            (.vreg JoltISA.amoWordSelectShiftVReg)) <|
+            (.vreg JoltISA.amoWordSelectShiftVReg) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg JoltISA.amoWordSelectShiftVReg)
             (.xreg rs2) (.vreg JoltISA.amoWordSelectInlineTmpVReg)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
@@ -512,7 +512,7 @@ theorem amo_word_rust_select_shift_new_vreg_prefix_run
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg JoltISA.amoWordSelectInlineTmpVReg)
-            (.vreg JoltISA.amoWordSelectShiftVReg)) <|
+            (.vreg JoltISA.amoWordSelectShiftVReg) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg JoltISA.amoWordSelectShiftVReg)
             (.vreg new) (.vreg JoltISA.amoWordSelectInlineTmpVReg)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
@@ -977,7 +977,7 @@ theorem amo_word_rust_select_shift_mask_prefix_run_for
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg (JoltISA.amoWordSelectInlineTmpVRegFor rd))
-            (.vreg (JoltISA.amoWordSelectShiftVRegFor rd))) <|
+            (.vreg (JoltISA.amoWordSelectShiftVRegFor rd)) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg (JoltISA.amoWordSelectMaskVRegFor rd))
             (.vreg (JoltISA.amoWordSelectMaskVRegFor rd))
             (.vreg (JoltISA.amoWordSelectInlineTmpVRegFor rd))) tail)).run js =
@@ -1072,7 +1072,7 @@ theorem amo_word_rust_select_shift_new_vreg_prefix_run_for
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg (JoltISA.amoWordSelectInlineTmpVRegFor rd))
-            (.vreg (JoltISA.amoWordSelectShiftVRegFor rd))) <|
+            (.vreg (JoltISA.amoWordSelectShiftVRegFor rd)) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg (JoltISA.amoWordSelectShiftVRegFor rd))
             (.vreg (JoltISA.amoWordSelectNewVRegFor rd))
             (.vreg (JoltISA.amoWordSelectInlineTmpVRegFor rd))) tail)).run js =

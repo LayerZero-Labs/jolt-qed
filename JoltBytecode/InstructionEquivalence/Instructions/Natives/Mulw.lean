@@ -1,7 +1,7 @@
 import JoltBytecode.JoltISA.Core
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
+import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltBytecode.InstructionEquivalence.ProofSupport.ValueLemmas
 
 open Sail PreSail LeanRV64D.Functions
@@ -18,7 +18,8 @@ def mulwInstrEqSailStatement
     (js : SailJoltState)
     (_h : BinarySourceReadWithLinkedCSRs rs2 rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.MULW (.xreg rd) (.xreg rs1) (.xreg rs2))).run js) =
+    ((JoltISA.execInstr (JoltISA.pureWritebackNativeInstr rd
+      (.MULW (.xreg rd) (.xreg rs1) (.xreg rs2)))).run js) =
     ((execute_MULW rs2 rs1 rd).run js.sail)
 
 private abbrev op (rs1_val rs2_val : BitVec 64) : BitVec 64 :=
@@ -31,6 +32,14 @@ theorem mulwInstr_eq_sail
     (h : BinarySourceReadWithLinkedCSRs rs2 rs1 js) :
     mulwInstrEqSailStatement rs2 rs1 rd js h := by
   unfold mulwInstrEqSailStatement
+  -- Select Rust's no-op for x0; its full state agrees with a discarded write.
+  rw [NativeDispatch.pureWriteback_run_eq rd _ js (by
+    intro hx0
+    have hrd := JoltISA.eq_regidx_zero_of_isX0_eq_true hx0
+    subst rd
+    simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+      EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+      h.rs1_read, h.rs2_read, wX_bits_regidx_zero])]
   -- Sail side
   simp only [execute_MULW, EStateM.run, bind, EStateM.bind]
   simp only [h.rs1_read]

@@ -445,7 +445,7 @@ private theorem swWordMaskShiftStep (rest : JoltISA.Program) (js : SailJoltState
           jolt_virtual_pow2_value (js.vregs JoltISA.inlineTmp0)
         else js.vregs r }
   have hpow2 :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp0))).run js =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp0) (0 : BitVec 64))).run js =
         .ok RETIRE_SUCCESS js_pow2 := by
     simpa [js_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp0 js
@@ -1130,7 +1130,7 @@ theorem byteSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_lui.vregs JoltISA.inlineTmp3)
         else js_lui.vregs r }
   have hpow2_mask :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3))).run js_lui =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3) (0 : BitVec 64))).run js_lui =
         .ok RETIRE_SUCCESS js_mask_pow2 := by
     simpa [js_mask_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp3 js_lui
@@ -1167,7 +1167,7 @@ theorem byteSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp3)
         else js_mask.vregs r }
   have hpow2_value :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3))).run js_mask =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3) (0 : BitVec 64))).run js_mask =
         .ok RETIRE_SUCCESS js_shift_pow2 := by
     simpa [js_shift_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp3 js_mask
@@ -1394,7 +1394,7 @@ theorem halfwordSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_lui.vregs JoltISA.inlineTmp3)
         else js_lui.vregs r }
   have hpow2_mask :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3))).run js_lui =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3) (0 : BitVec 64))).run js_lui =
         .ok RETIRE_SUCCESS js_mask_pow2 := by
     simpa [js_mask_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp3 js_lui
@@ -1431,7 +1431,7 @@ theorem halfwordSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp3)
         else js_mask.vregs r }
   have hpow2_value :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3))).run js_mask =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3) (0 : BitVec 64))).run js_mask =
         .ok RETIRE_SUCCESS js_shift_pow2 := by
     simpa [js_shift_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp3 js_mask
@@ -1699,7 +1699,7 @@ theorem wordSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp0)
         else js_mask.vregs r }
   have hpow2_value :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp0))).run js_mask =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp0) (0 : BitVec 64))).run js_mask =
         .ok RETIRE_SUCCESS js_shift_pow2 := by
     simpa [js_shift_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp0 js_mask

@@ -90,13 +90,16 @@ def execInstr : Instr → JoltMonad ExecutionResult
       liftSail (Sail.writeReg Register.nextPC (instructionAddress + imm))
       pure RETIRE_SUCCESS
   | .JALR dst base imm => do
-      let link ← liftSail (get_next_pc ())
+      -- Rust: tracer/src/instruction/jalr.rs::JALR::exec.
+      -- nextPC represents the already advanced cpu.pc, as for JAL.
+      let rustPC ← liftSail (Sail.readReg Register.nextPC)
       let target ← readSrc base
-      match ← liftSail (jump_to (jolt_jalr_target64 target imm)) with
-      | .Retire_Success () =>
-          writeDst dst link
-          pure RETIRE_SUCCESS
-      | other => pure other
+      -- Rust reads rs1 before writing rd, including when rd and rs1 alias.
+      -- It clears target bit 0 and writes cpu.pc without Sail's alignment check.
+      liftSail (Sail.writeReg Register.nextPC (jolt_jalr_target64 target imm))
+      -- Rust writes the saved old cpu.pc to rd after updating cpu.pc.
+      writeDst dst rustPC
+      pure RETIRE_SUCCESS
   | .BEQ lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
@@ -446,19 +449,19 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .VirtualAdvice dst value _ => do
       writeDst dst value
       pure RETIRE_SUCCESS
-  | .VirtualAdviceLoad dst byteCount => fun state =>
-      match readAdviceTape state.adviceTape byteCount with
-      | none => .error (Error.Assertion "VirtualAdviceLoad: invalid width or exhausted advice tape") state
-      | some (value, tape) =>
+  | .VirtualAdviceLoad rd num_bytes => fun cpu =>
+      match readAdviceTape cpu.adviceTape num_bytes with
+      | none => .error (Error.Assertion "VirtualAdviceLoad: invalid width or exhausted advice tape") cpu
+      | some (advice_value, advice_tape) =>
           (do
-            writeDst dst value
-            pure RETIRE_SUCCESS) { state with adviceTape := tape }
+            writeDst rd advice_value
+            pure RETIRE_SUCCESS) { cpu with adviceTape := advice_tape }
   -- Rust: [VirtualAdviceLen::exec](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_advice_len.rs:18).
-  | .VirtualAdviceLen dst _ _ => do
-      let state ← get
+  | .VirtualAdviceLen rd _ _ => do
+      let cpu ← get
       let remaining :=
-        state.adviceTape.bytes.size - state.adviceTape.readPosition
-      writeDst dst (BitVec.ofNat 64 remaining)
+        cpu.adviceTape.bytes.size - cpu.adviceTape.readPosition
+      writeDst rd (BitVec.ofNat 64 remaining)
       pure RETIRE_SUCCESS
   | .VirtualHostIO _ _ _ =>
       pure RETIRE_SUCCESS

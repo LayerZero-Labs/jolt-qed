@@ -563,7 +563,7 @@ theorem amo_word_swap_shift_mask_prefix_run
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg JoltISA.amoWordSwapInlineTmpVReg)
-            (.vreg JoltISA.amoWordSwapShiftVReg)) <|
+            (.vreg JoltISA.amoWordSwapShiftVReg) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg JoltISA.amoWordSwapMaskVReg)
             (.vreg JoltISA.amoWordSwapMaskVReg)
             (.vreg JoltISA.amoWordSwapInlineTmpVReg)) tail)).run js =
@@ -609,7 +609,7 @@ theorem amo_word_swap_shift_mask_prefix_run_for
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg (JoltISA.amoWordSwapInlineTmpVRegFor rd))
-            (.vreg (JoltISA.amoWordSwapShiftVRegFor rd))) <|
+            (.vreg (JoltISA.amoWordSwapShiftVRegFor rd)) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg (JoltISA.amoWordSwapMaskVRegFor rd))
             (.vreg (JoltISA.amoWordSwapMaskVRegFor rd))
             (.vreg (JoltISA.amoWordSwapInlineTmpVRegFor rd))) tail)).run js =
@@ -693,7 +693,7 @@ theorem amo_word_swap_shift_new_prefix_run
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg JoltISA.amoWordSwapInlineTmpVReg)
-            (.vreg JoltISA.amoWordSwapShiftVReg)) <|
+            (.vreg JoltISA.amoWordSwapShiftVReg) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg JoltISA.amoWordSwapShiftVReg)
             (.xreg rs2) (.vreg JoltISA.amoWordSwapInlineTmpVReg)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
@@ -740,7 +740,7 @@ theorem amo_word_swap_shift_new_prefix_run_for
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg (JoltISA.amoWordSwapInlineTmpVRegFor rd))
-            (.vreg (JoltISA.amoWordSwapShiftVRegFor rd))) <|
+            (.vreg (JoltISA.amoWordSwapShiftVRegFor rd)) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg (JoltISA.amoWordSwapShiftVRegFor rd))
             (.xreg rs2) (.vreg (JoltISA.amoWordSwapInlineTmpVRegFor rd))) tail)).run js =
           (JoltISA.execProgram tail).run js' := by

@@ -408,9 +408,9 @@ theorem linkedCSRs_of_preservesSystemProjectRegs
   · exact ⟨by rw [hpres.mcause, hmcause.value_eq]⟩
   · exact ⟨by rw [hpres.mtval, hmtval.value_eq]⟩
 
-/-- 
+/--
 When the sail csrs start as equal to corresponding vregs in `js`
-(given by `hlinked`) and the sail csrs do not change between 
+(given by `hlinked`) and the sail csrs do not change between
 js.sail and new sail state s1 then Systen project is just project.:
 -/
 theorem systemProject_eq_sail_of_preservesSystemProjectRegs

@@ -261,11 +261,11 @@ def equivAssumptions : (instr : RiscvInstruction) → SailJoltState → Type
   | .LUI _rd _imm, js =>
       NoSourceReadWithLinkedCSRs js
   | .AUIPC _rd _imm, js =>
-      NoSourceReadWithLinkedCSRs js
+      AuipcInstrEqSailAssumptions js
   | .JAL _rd imm, js =>
       JalInstrEqSailAssumptions imm js
-  | .JALR _rd rs1 _imm, js =>
-      JalrInstrEqSailAssumptions rs1 js
+  | .JALR _rd rs1 imm, js =>
+      JalrInstrEqSailAssumptions imm rs1 js
   | .BEQ rs1 rs2 _imm, js =>
       BinarySourceReadWithLinkedCSRs rs2 rs1 js
   | .BNE rs1 rs2 _imm, js =>

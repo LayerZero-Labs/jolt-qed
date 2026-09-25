@@ -147,9 +147,9 @@ def amoPost64ProgramWithScratch
   let dst := amoDstFor rd
   .instr (JoltISA.Encoded.ORI (.vreg mask) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
   .instr (.VirtualSRLI (.vreg mask) (.vreg mask) (srliBitmask (32 : BitVec 6))) <|
-  .instr (.VirtualPow2 (.vreg inlineTmp) (.vreg shift)) <|
+  .instr (.VirtualPow2 (.vreg inlineTmp) (.vreg shift) (0 : BitVec 64)) <|
   .instr (.MUL (.vreg mask) (.vreg mask) (.vreg inlineTmp)) <|
-  .instr (.VirtualPow2 (.vreg inlineTmp) (.vreg shift)) <|
+  .instr (.VirtualPow2 (.vreg inlineTmp) (.vreg shift) (0 : BitVec 64)) <|
   .instr (.MUL (.vreg shift) newValue (.vreg inlineTmp)) <|
   .instr (.XOR (.vreg shift) (.vreg dword) (.vreg shift)) <|
   .instr (.AND (.vreg shift) (.vreg shift) (.vreg mask)) <|

@@ -3019,7 +3019,7 @@ theorem amo_word_shift_mask_prefix_run
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg JoltISA.amoInlineTmpVReg)
-            (.vreg JoltISA.amoShiftVReg)) <|
+            (.vreg JoltISA.amoShiftVReg) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg JoltISA.amoMaskVReg)
             (.vreg JoltISA.amoMaskVReg)
             (.vreg JoltISA.amoInlineTmpVReg)) tail)).run js =
@@ -3067,7 +3067,7 @@ theorem amo_word_shift_mask_prefix_run_for
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg (JoltISA.amoInlineTmpVRegFor rd))
-            (.vreg (JoltISA.amoShiftVRegFor rd))) <|
+            (.vreg (JoltISA.amoShiftVRegFor rd)) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg (JoltISA.amoMaskVRegFor rd))
             (.vreg (JoltISA.amoMaskVRegFor rd))
             (.vreg (JoltISA.amoInlineTmpVRegFor rd))) tail)).run js =
@@ -3159,7 +3159,7 @@ theorem amo_word_shift_new_prefix_run
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg JoltISA.amoInlineTmpVReg)
-            (.vreg JoltISA.amoShiftVReg)) <|
+            (.vreg JoltISA.amoShiftVReg) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg JoltISA.amoShiftVReg)
             (.xreg rs2) (.vreg JoltISA.amoInlineTmpVReg)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
@@ -3207,7 +3207,7 @@ theorem amo_word_shift_new_vreg_prefix_run
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg JoltISA.amoInlineTmpVReg)
-            (.vreg JoltISA.amoShiftVReg)) <|
+            (.vreg JoltISA.amoShiftVReg) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg JoltISA.amoShiftVReg)
             (.vreg new) (.vreg JoltISA.amoInlineTmpVReg)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
@@ -3250,7 +3250,7 @@ theorem amo_word_shift_new_vreg_prefix_run_for
       ∀ tail,
         (JoltISA.execProgram
           (.instr (.VirtualPow2 (.vreg (JoltISA.amoInlineTmpVRegFor rd))
-            (.vreg (JoltISA.amoShiftVRegFor rd))) <|
+            (.vreg (JoltISA.amoShiftVRegFor rd)) (0 : BitVec 64)) <|
            .instr (.MUL (.vreg (JoltISA.amoShiftVRegFor rd))
             (.vreg (JoltISA.amoNewVRegFor rd))
             (.vreg (JoltISA.amoInlineTmpVRegFor rd))) tail)).run js =
