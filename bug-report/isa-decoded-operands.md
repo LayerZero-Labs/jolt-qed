@@ -32,6 +32,15 @@ This port extracts its JoltBytecode changes, with the independent LD destination
 
 The implementation is in [Instruction.lean](../JoltBytecode/JoltISA/Instruction.lean), [Semantics.lean](../JoltBytecode/JoltISA/Semantics.lean), and [ExpansionsAutomated.lean](../JoltBytecode/JoltISA/ExpansionsAutomated.lean).
 
+## Remaining execution boundary
+
+The wider representation does not by itself prove execution correspondence for every possible final operand.
+In particular, [Rust's LD body](https://github.com/abiswas3/jolt/blob/7dfe8a0f829a4ab3e9126eb5ac5b5b15208cf5fc/tracer/src/instruction/ld.rs#L17-L22) casts the stored immediate through `i32`, while the ported Lean body adds the full decoded 64-bit immediate.
+An immediate of `2^32` therefore contributes zero to Rust's effective address but contributes `2^32` in the current Lean body.
+The migrated native LD theorem takes an encoded 12-bit immediate, for which this discrepancy does not arise.
+Matching arbitrary final LD operands requires a separate execution repair or a justified statement of the expansion boundary.
+This migration preserves the existing ISA changes and records that limitation for follow-up.
+
 ## Acceptance criteria
 
 - A final ADDI with source ten and immediate `4096` produces `4106`.
