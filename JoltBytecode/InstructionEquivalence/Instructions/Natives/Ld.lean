@@ -131,56 +131,15 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
   rw [JoltISA.readMemoryWord_ram _ h_ram]
   unfold liftSail
   simp only [hread, EStateM.bind]
-  by_cases hx0 : JoltISA.isX0 rd = true
-  · have hdst :
-        JoltISA.sideEffectingDst (JoltISA.Dst.xreg rd) =
-          JoltISA.Dst.vreg JoltISA.rdZeroRewriteVReg := by
-      simp [JoltISA.sideEffectingDst, JoltISA.sideEffectingRdZeroDst, hx0]
-    let js' : SailJoltState :=
-      { js with
-        vregs := fun r =>
-          if r = JoltISA.rdZeroRewriteVReg then loaded else js.vregs r }
-    have hprojected : Projection.ProjectedVRegsPreserved js js' := by
-      unfold Projection.ProjectedVRegsPreserved js'
-      simp [JoltISA.rdZeroRewriteVReg, JoltISA.inlineTmp,
-        JoltISA.inlineRegisterBase, JoltISA.riscvRegisterBase,
-        JoltISA.riscvRegisterCount, JoltISA.numReservedVirtualRegisters,
-        JoltISA.trapHandlerVReg, JoltISA.mscratchVReg, JoltISA.mepcVReg,
-        JoltISA.mcauseVReg, JoltISA.mtvalVReg, JoltISA.mstatusVReg]
-    have hproject : System.systemProject js' = js.sail := by
-      have hregs : js'.sail.regs = js.sail.regs := rfl
-      exact
-        Projection.systemProject_eq_sail_of_projected_vregs_preserved_of_sail_regs_eq
-          js js' hregs hprojected hlinked
-    have hwrite_vreg :
-        writeVReg JoltISA.rdZeroRewriteVReg loaded
-          ({ js with vregs := js.vregs } : SailJoltState) =
-        .ok () js' := by
-      unfold writeVReg js' JoltISA.rdZeroRewriteVReg JoltISA.inlineTmp
-        JoltISA.inlineRegisterBase JoltISA.riscvRegisterBase
-        JoltISA.riscvRegisterCount JoltISA.numReservedVirtualRegisters
-      simp [modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet]
-    simp only [hdst]
-    rw [hwrite_vreg]
-    simp only [EStateM.pure, System.systemProjectResult]
-    rw [hproject]
-    rw [JoltISA.stateAfterWrite_of_isX0_eq_true hx0 js.sail loaded]
-  · have hdst :
-        JoltISA.sideEffectingDst (JoltISA.Dst.xreg rd) =
-          JoltISA.Dst.xreg rd := by
-      have hx0_false : JoltISA.isX0 rd = false := by
-        cases hcase : JoltISA.isX0 rd <;> simp [hcase] at hx0 ⊢
-      simp [JoltISA.sideEffectingDst, JoltISA.sideEffectingRdZeroDst, hx0_false]
-    simp only [hdst]
-    obtain ⟨s', hwrite⟩ := wX_shape rd loaded js.sail
-    rw [hwrite]
-    simp only [EStateM.pure]
-    have hproject :=
-      Projection.systemProjectResult_pure_retire_after_xreg_write
-        rd js s' loaded hlinked hwrite
-    simp only [pure, EStateM.pure] at hproject
-    rw [hproject]
-    rw [wX_bits_eq_stateAfterWrite rd loaded js.sail s' hwrite]
+  obtain ⟨s', hwrite⟩ := wX_shape rd loaded js.sail
+  rw [hwrite]
+  simp only [EStateM.pure]
+  have hproject :=
+    Projection.systemProjectResult_pure_retire_after_xreg_write
+      rd js s' loaded hlinked hwrite
+  simp only [pure, EStateM.pure] at hproject
+  rw [hproject]
+  rw [wX_bits_eq_stateAfterWrite rd loaded js.sail s' hwrite]
 
 private theorem ldJolt_misaligned (imm : BitVec 12) (rs1 rd : regidx)
     (js : SailJoltState)

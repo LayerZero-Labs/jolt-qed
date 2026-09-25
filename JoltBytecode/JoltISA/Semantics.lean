@@ -418,7 +418,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       if addr &&& (7 : BitVec 64) = 0 then
         match ← readMemoryWord addr with
         | .Ok dword =>
-            writeDst (sideEffectingDst dst) dword
+            writeDst dst dword
             pure RETIRE_SUCCESS
         | .Err e => pure e
       else
