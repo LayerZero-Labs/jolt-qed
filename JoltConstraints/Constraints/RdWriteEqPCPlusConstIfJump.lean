@@ -18,8 +18,13 @@ def rdWriteEqPCPlusConstIfJump {F : Type} [Field F] {params : WitnessParams}
         2 * witness.OpFlags .IsCompressed t) = 0
 
 /-- Completeness target for the Rust witness extraction; proof pending.
-No destination, opcode, or nonwrapping-arithmetic restriction is imposed to make
-the equation hold. Any required input condition must be justified from Rust. -/
+FIXME (translation boundary): Lean's `JoltProgram` does not yet certify that
+each final row came from Rust's source-instruction expander. Rust's trace path
+routes a guest `JAL x0` through the same one-row destination rewrite as
+bytecode expansion; both execute and capture the temporary destination. A raw
+final `JAL x0` is still representable in Lean, but is not Rust's output for
+that guest instruction. Model this provenance before proving the unrestricted
+statement, without excluding any final row Rust actually produces. -/
 theorem honestWitness_rdWriteEqPCPlusConstIfJump
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)

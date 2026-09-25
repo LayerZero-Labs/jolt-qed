@@ -16,9 +16,10 @@ def ramValFinalEqInitialPlusRamInc {F : Type} [Field F] {params : WitnessParams}
       ∑ cycle : Fin params.traceLength, witness.RamRa address cycle * witness.RamInc cycle
 
 /-- Completeness target for the honest witness; proof pending.
-TODO: establish memory-history agreement and the terminal panic/termination
-write convention. The final snapshot is not just the last RamVal column.
-The statement remains provisional until these validity assumptions are explicit. -/
+FIXME (translation boundary): establish Rust's memory-history and terminal
+panic/termination write conventions, along with final-image validity. The final
+snapshot is not just the last RamVal column. Audit Rust-valid executions before
+adding assumptions or attempting this theorem. -/
 theorem honestWitness_ramValFinalEqInitialPlusRamInc
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)

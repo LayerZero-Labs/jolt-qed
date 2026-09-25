@@ -16,9 +16,10 @@ def ramOutputEqPublicIo {F : Type} [Field F] {params : WitnessParams}
       (witness.RamValFinal address - ((ramPublicIoWord io address.val).toNat : F)) = 0
 
 /-- Completeness target for the honest witness; proof pending.
-The honest public output is taken from the final recorded state. TODO: make valid,
-nonoverlapping layout and buffer bounds explicit. This statement is provisional
-until those admissibility assumptions are supplied. -/
+FIXME (translation boundary): the honest public output is taken from the final
+recorded state, but the Lean model does not yet enforce Rust's valid,
+nonoverlapping layout and buffer bounds. Audit that boundary before attempting
+this theorem; do not restrict Rust-valid executions to make it hold. -/
 theorem honestWitness_ramOutputEqPublicIo
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)

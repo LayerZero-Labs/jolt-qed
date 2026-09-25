@@ -17,9 +17,11 @@ def ramValEqInitialPlusPrefixRamInc {F : Type} [Field F] {params : WitnessParams
         if cycle.val < t.val then witness.RamRa address cycle * witness.RamInc cycle else 0
 
 /-- Completeness target for the honest witness; proof pending.
-TODO: relate captured read values to the initialized memory and preceding stores,
-including device I/O readback. Linked successful ISA rows alone do not provide
-this memory-history invariant; the theorem statement remains provisional. -/
+FIXME (translation boundary): relate captured read values to the initialized
+memory and preceding stores, including Rust's device I/O readback. Linked
+successful ISA rows alone do not provide this memory-history invariant. Check
+whether Rust-valid device reads satisfy the equation before strengthening the
+Lean trace model or attempting this theorem. -/
 theorem honestWitness_ramValEqInitialPlusPrefixRamInc
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
