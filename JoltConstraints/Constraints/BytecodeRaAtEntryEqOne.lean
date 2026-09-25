@@ -1,5 +1,6 @@
 import JoltConstraints.Constraints.BytecodeReadSelectors
 import JoltConstraints.honest_witness
+import JoltConstraints.ProgramLayout
 
 set_option autoImplicit false
 
@@ -36,5 +37,36 @@ theorem honestWitness_bytecodeRaAtEntryEqOne
     HonestWitness.addressChunkEntry, bytecodeAddressChunk,
     HonestWitness.addressChunk]
   simp [HonestWitness.bytecodePc, nonempty, startsAtEntry]
+
+/-- Constraint (53) from the public entry address, rather than an assumed
+equality with the first trace row's bytecode slot. An entry row at the initial
+PC is unique by the program's address/count layout. The witness slot is one
+greater than the program index because preprocessing prepends the no-op.
+
+Rust revision `3cb4e24361ae2006e9713ae65d58a3fa51fd0518`:
+`crates/jolt-program/src/preprocess/bytecode.rs::entry_bytecode_index` calls
+`BytecodePCMapper::get_first_pc(entry_address)` to select this row. -/
+theorem honestWitness_bytecodeRaAtEntryEqOne_of_address
+    {F : Type} [Field F] (params : WitnessParams)
+    {program : JoltProgram} (trace : JoltTrace program)
+    (ramFits : params.RamFits trace)
+    (traceFits : params.ProverPaddedFor trace.rows.size)
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (entry : Fin program.expandedBytecode.size)
+    (entryIsStart : program.expandedBytecode[entry].isEntry)
+    (entryAddress : program.initialState.sail.regs.get? Register.PC =
+      some program.expandedBytecode[entry].address)
+    (nonempty : 0 < trace.rows.size) :
+    bytecodeRaAtEntryEqOne
+      ⟨entry.val + 1, by have := bytecodeDomain.rowsFit; omega⟩
+      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+  have first := trace.startsAtEntry nonempty
+  have same := trace.sequenceLayout.entry_address_unique
+    (getElem trace.rows 0 nonempty).rowIndex entry first.1 entryIsStart
+    (Option.some.inj (first.2.symm.trans entryAddress))
+  apply honestWitness_bytecodeRaAtEntryEqOne params trace ramFits traceFits
+    bytecodeDomain _ nonempty
+  change (getElem trace.rows 0 nonempty).rowIndex.val + 1 = entry.val + 1
+  rw [same]
 
 end JoltConstraints
