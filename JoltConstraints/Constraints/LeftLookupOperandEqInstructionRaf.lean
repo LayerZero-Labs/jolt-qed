@@ -1,4 +1,5 @@
 import JoltConstraints.Constraints.LookupOperandData
+import JoltConstraints.Constraints.InstructionReadSelection
 
 set_option autoImplicit false
 
@@ -27,6 +28,17 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
     : leftLookupOperandEqInstructionRaf
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro t
+  simp only [mul_assoc]
+  rw [instructionRead_honest params trace ramFits traceFits bytecodeDomain
+    (fun address =>
+      (1 - (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).InstructionRafFlag t) *
+        lookupAddressLeft address) t]
+  by_cases inBounds : t.val < trace.rows.size
+  · -- The selected index must deinterleave to Rust's captured left operand.
+    sorry
+  · simp [JoltProgram.honestWitness, HonestWitness.LeftLookupOperand,
+      HonestWitness.InstructionRafFlag, HonestWitness.lookupIndex,
+      lookupAddressLeft, inBounds]
 
 end JoltConstraints

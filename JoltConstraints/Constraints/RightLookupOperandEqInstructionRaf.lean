@@ -1,4 +1,5 @@
 import JoltConstraints.Constraints.LookupOperandData
+import JoltConstraints.Constraints.InstructionReadSelection
 
 set_option autoImplicit false
 
@@ -28,6 +29,18 @@ theorem honestWitness_rightLookupOperandEqInstructionRaf
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
     : rightLookupOperandEqInstructionRaf
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro t
+  rw [instructionRead_honest params trace ramFits traceFits bytecodeDomain
+    (fun address =>
+      (1 - (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).InstructionRafFlag t) *
+          lookupAddressRight address +
+        (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).InstructionRafFlag t *
+          (address.val : F)) t]
+  by_cases inBounds : t.val < trace.rows.size
+  · -- Combined operands use the full index; ordinary operands deinterleave it.
+    sorry
+  · simp [JoltProgram.honestWitness, HonestWitness.RightLookupOperand,
+      HonestWitness.InstructionRafFlag, HonestWitness.lookupIndex,
+      lookupAddressRight, inBounds]
 
 end JoltConstraints
