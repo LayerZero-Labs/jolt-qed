@@ -74,13 +74,21 @@ def execInstr : Instr → JoltMonad ExecutionResult
       writeDst dst (BitVec.ofNat 64 (addWide pc off))
       pure RETIRE_SUCCESS
   | .JAL dst imm => do
-      let link ← liftSail (get_next_pc ())
-      let pc ← liftSail (Sail.readReg Register.PC)
-      match ← liftSail (jump_to (BitVec.ofNat 64 (addWide pc imm))) with
-      | .Retire_Success () =>
-          writeDst dst link
-          pure RETIRE_SUCCESS
-      | other => pure other
+      -- Rust: tracer/src/instruction/jal.rs::JAL::exec.
+      -- At the instruction-body boundary, Sail PC represents self.address
+      -- (the decoded instruction's address), and Sail nextPC represents cpu.pc
+      -- (already advanced by the source instruction's length before exec).
+      -- This is a state representation, not a claim that Rust has a nextPC field.
+      let rustPC ← liftSail (Sail.readReg Register.nextPC)
+      let instructionAddress ← liftSail (Sail.readReg Register.PC)
+      -- Rust writes the old cpu.pc to rd first; writeDst discards writes to x0.
+      -- Rust's diagnostic track_call bookkeeping is outside this architectural model.
+      writeDst dst rustPC
+      -- Rust: cpu.pc = self.address.wrapping_add(imm).
+      -- BitVec addition wraps at 64 bits; Rust performs no alignment check here.
+      -- Update nextPC, which represents cpu.pc, leaving the instruction address intact.
+      liftSail (Sail.writeReg Register.nextPC (instructionAddress + imm))
+      pure RETIRE_SUCCESS
   | .JALR dst base imm => do
       let link ← liftSail (get_next_pc ())
       let target ← readSrc base
