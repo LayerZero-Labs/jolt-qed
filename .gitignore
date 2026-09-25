@@ -6,3 +6,4 @@
 *.ilean
 *.trace
 lake-packages/
+/issues
