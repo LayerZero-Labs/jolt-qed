@@ -98,6 +98,9 @@ abbrev jolt_slt_value (x y : BitVec 64) : BitVec 64 :=
   zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y))
 
 -- Rust: [JALR target](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs:29).
+abbrev jolt_jalr_target64 (base : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
+  BitVec.update (BitVec.ofNat 64 (JoltISA.addWide base imm)) 0 0#1
+
 abbrev jolt_jalr_target (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   BitVec.update (BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))) 0 0#1
 
@@ -125,8 +128,21 @@ def jolt_sltu_value (x y : BitVec 64) : BitVec 64 :=
 
 /-- RV64 `ADDIW` value: add the sign-extended immediate, retain the low word,
 then sign-extend that word. -/
+abbrev jolt_addiw_value64 (x : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
+  ((BitVec.ofNat 64 (JoltISA.addWide x imm)).setWidth 32).signExtend 64
+
 def jolt_addiw_value (x : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   ((BitVec.ofNat 64 (JoltISA.addWide x (sign_extend (m := 64) imm))).setWidth 32).signExtend 64
+
+/-- Decode the source ADDIW immediate before using the final-row helper. -/
+@[simp] theorem jolt_addiw_value64_encoded (x : BitVec 64) (imm : BitVec 12) :
+    jolt_addiw_value64 x (sign_extend (m := 64) imm) = jolt_addiw_value x imm := rfl
+
+/-- Rust keeps a signed branch immediate in i128 and wraps its execution to RV64. -/
+@[simp] theorem encoded_branch_offset (imm : BitVec 13) :
+    (sign_extend (m := 128) imm).setWidth 64 = sign_extend (m := 64) imm := by
+  change (imm.signExtend 128).setWidth 64 = imm.signExtend 64
+  bv_decide
 
 /-- RV64 `ADDW` value. -/
 def jolt_addw_value (x y : BitVec 64) : BitVec 64 :=
@@ -260,10 +276,18 @@ def jolt_virtual_xorrotw_value (rot : Nat) (x y : BitVec 64) : BitVec 64 :=
 
 /-- RV64 `VirtualAlignAddr` value: align `base + sext(imm)` down to its
 containing doubleword. -/
+abbrev jolt_virtual_align_addr_value64 (base : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
+  (BitVec.ofNat 64 (JoltISA.addWide base imm)) &&& ~~~(7 : BitVec 64)
+
 def jolt_virtual_align_addr_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   (BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))) &&& ~~~(7 : BitVec 64)
 
 /-- RV64 `VirtualWindowMaskB` value. -/
+abbrev jolt_virtual_window_mask_b_value64 (base : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
+  let ea := BitVec.ofNat 64 (JoltISA.addWide base imm)
+  let offset := (ea &&& (7 : BitVec 64)).toNat
+  BitVec.ofNat 64 (0xFF <<< (8 * offset))
+
 def jolt_virtual_window_mask_b_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   let ea := BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))
   let offset := (ea &&& (7 : BitVec 64)).toNat
@@ -271,6 +295,11 @@ def jolt_virtual_window_mask_b_value (base : BitVec 64) (imm : BitVec 12) : BitV
 
 /-- RV64 `VirtualWindowMaskH` value. Bit zero of the effective address is
 ignored, matching the tracer's `ea & 6`. -/
+abbrev jolt_virtual_window_mask_h_value64 (base : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
+  let ea := BitVec.ofNat 64 (JoltISA.addWide base imm)
+  let offset := (ea &&& (6 : BitVec 64)).toNat
+  BitVec.ofNat 64 (0xFFFF <<< (8 * offset))
+
 def jolt_virtual_window_mask_h_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   let ea := BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))
   let offset := (ea &&& (6 : BitVec 64)).toNat
@@ -278,6 +307,11 @@ def jolt_virtual_window_mask_h_value (base : BitVec 64) (imm : BitVec 12) : BitV
 
 /-- RV64 `VirtualWindowMaskW` value. Only effective-address bit two selects
 the low or high word lane. -/
+abbrev jolt_virtual_window_mask_w_value64 (base : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
+  let ea := BitVec.ofNat 64 (JoltISA.addWide base imm)
+  let word := ((ea >>> 2) &&& (1 : BitVec 64)).toNat
+  BitVec.ofNat 64 (0xFFFF_FFFF <<< (32 * word))
+
 def jolt_virtual_window_mask_w_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   let ea := BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))
   let word := ((ea >>> 2) &&& (1 : BitVec 64)).toNat

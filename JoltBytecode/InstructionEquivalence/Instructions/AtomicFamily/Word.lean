@@ -142,7 +142,7 @@ theorem amo_word_virtual_assert_aligned_run
     (hrs1 : rX_bits rs1 js.sail = .ok addr js.sail)
     (h_align : addr &&& (3 : BitVec 64) = 0) :
     (JoltISA.execInstr
-      (.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
+      (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
         (ExceptionType.E_SAMO_Addr_Align ()))).run js =
       .ok RETIRE_SUCCESS js := by
   exact
@@ -157,7 +157,7 @@ theorem amo_word_virtual_assert_misaligned_run
     (hrs1 : rX_bits rs1 js.sail = .ok addr js.sail)
     (h_align : addr &&& (3 : BitVec 64) ≠ 0) :
     (JoltISA.execInstr
-      (.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
+      (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
         (ExceptionType.E_SAMO_Addr_Align ()))).run js =
       .ok (ExecutionResult.Memory_Exception
         (Virtaddr addr, ExceptionType.E_SAMO_Addr_Align ())) js := by
@@ -176,7 +176,7 @@ theorem amo_word_assert_prefix_misaligned_run
     (hrs1 : rX_bits rs1 js.sail = .ok addr js.sail)
     (h_align : addr &&& (3 : BitVec 64) ≠ 0) :
     (JoltISA.execProgram
-      (.instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
+      (.instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
         (ExceptionType.E_SAMO_Addr_Align ())) tail)).run js =
       .ok (ExecutionResult.Memory_Exception
         (Virtaddr addr, ExceptionType.E_SAMO_Addr_Align ())) js := by
@@ -185,7 +185,7 @@ theorem amo_word_assert_prefix_misaligned_run
     amo_word_virtual_assert_misaligned_run rs1 js addr hrs1 h_align
   exact
     JoltISA.execProgram_instr_run_memory_exception
-      (.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
+      (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
         (ExceptionType.E_SAMO_Addr_Align ()))
       tail js js e hassert
 
@@ -1155,7 +1155,7 @@ theorem amo_word_pre64_aligned_run
     exact hread_mmio
   have hld :
       (JoltISA.execInstr
-        (.LD .amo (.vreg JoltISA.amoDwordVReg)
+        (JoltISA.Encoded.LD .amo (.vreg JoltISA.amoDwordVReg)
           (.vreg JoltISA.amoShiftVReg) (0 : BitVec 12))).run js_base =
         .ok RETIRE_SUCCESS
           { js_base with
@@ -1181,7 +1181,7 @@ theorem amo_word_pre64_aligned_run
         else js_base.vregs r }
   have hld_named :
       (JoltISA.execInstr
-        (.LD .amo (.vreg JoltISA.amoDwordVReg)
+        (JoltISA.Encoded.LD .amo (.vreg JoltISA.amoDwordVReg)
           (.vreg JoltISA.amoShiftVReg) (0 : BitVec 12))).run js_base =
         .ok RETIRE_SUCCESS js_load := by
     exact hld
@@ -1466,7 +1466,7 @@ theorem amo_word_pre64_aligned_run_with
     exact hread_mmio
   have hld :
       (JoltISA.execInstr
-        (.LD .amo (.vreg dwordReg)
+        (JoltISA.Encoded.LD .amo (.vreg dwordReg)
           (.vreg shiftReg) (0 : BitVec 12))).run js_base =
         .ok RETIRE_SUCCESS
           { js_base with
@@ -1491,7 +1491,7 @@ theorem amo_word_pre64_aligned_run_with
         else js_base.vregs r }
   have hld_named :
       (JoltISA.execInstr
-        (.LD .amo (.vreg dwordReg)
+        (JoltISA.Encoded.LD .amo (.vreg dwordReg)
           (.vreg shiftReg) (0 : BitVec 12))).run js_base =
         .ok RETIRE_SUCCESS js_load := by
     exact hld
@@ -1801,7 +1801,7 @@ theorem amo_word_pre64_aligned_run_for
     exact hread_mmio
   have hld :
       (JoltISA.execInstr
-        (.LD .amo (.vreg dwordReg)
+        (JoltISA.Encoded.LD .amo (.vreg dwordReg)
           (.vreg shiftReg) (0 : BitVec 12))).run js_base =
         .ok RETIRE_SUCCESS
           { js_base with
@@ -1826,7 +1826,7 @@ theorem amo_word_pre64_aligned_run_for
         else js_base.vregs r }
   have hld_named :
       (JoltISA.execInstr
-        (.LD .amo (.vreg dwordReg)
+        (JoltISA.Encoded.LD .amo (.vreg dwordReg)
           (.vreg shiftReg) (0 : BitVec 12))).run js_base =
         .ok RETIRE_SUCCESS js_load := by
     exact hld
@@ -2852,7 +2852,7 @@ theorem amo_word_mask32_prefix_run
       js'.vregs JoltISA.amoNewVReg = js.vregs JoltISA.amoNewVReg ∧
       ∀ tail,
         (JoltISA.execProgram
-          (.instr (.ORI (.vreg JoltISA.amoMaskVReg)
+          (.instr (JoltISA.Encoded.ORI (.vreg JoltISA.amoMaskVReg)
             (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
            .instr (.VirtualSRLI (.vreg JoltISA.amoMaskVReg)
             (.vreg JoltISA.amoMaskVReg)
@@ -2923,7 +2923,7 @@ theorem amo_word_mask32_prefix_run_for
         js.vregs (JoltISA.amoNewVRegFor rd) ∧
       ∀ tail,
         (JoltISA.execProgram
-          (.instr (.ORI (.vreg (JoltISA.amoMaskVRegFor rd))
+          (.instr (JoltISA.Encoded.ORI (.vreg (JoltISA.amoMaskVRegFor rd))
             (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
            .instr (.VirtualSRLI (.vreg (JoltISA.amoMaskVRegFor rd))
             (.vreg (JoltISA.amoMaskVRegFor rd))
@@ -3539,7 +3539,7 @@ theorem amo_word_store_base_prefix_run
       js'.vregs JoltISA.amoOldVReg = old ∧
       ∀ tail,
         (JoltISA.execProgram
-          (.instr (.ANDI (.vreg JoltISA.amoMaskVReg)
+          (.instr (JoltISA.Encoded.ANDI (.vreg JoltISA.amoMaskVReg)
             (.xreg rs1) (-8 : BitVec 12)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
   obtain ⟨js', _hrs1, h_sail_raw, h_base_raw, h_preserves, hrun⟩ :=
@@ -3571,7 +3571,7 @@ theorem amo_word_store_base_prefix_run_for
       js'.vregs (JoltISA.amoOldVRegFor rd) = old ∧
       ∀ tail,
         (JoltISA.execProgram
-          (.instr (.ANDI (.vreg (JoltISA.amoMaskVRegFor rd))
+          (.instr (JoltISA.Encoded.ANDI (.vreg (JoltISA.amoMaskVRegFor rd))
             (.xreg rs1) (-8 : BitVec 12)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
   let maskReg := JoltISA.amoMaskVRegFor rd
@@ -3621,7 +3621,7 @@ theorem amo_word_sd_spliced_dword_run
       js'.vregs JoltISA.amoOldVReg = old ∧
       ∀ tail,
         (JoltISA.execProgram
-          (.instr (.SD (.vreg JoltISA.amoMaskVReg)
+          (.instr (JoltISA.Encoded.SD (.vreg JoltISA.amoMaskVReg)
             (.vreg JoltISA.amoDwordVReg) (0 : BitVec 12)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
   have hwrite_dword :
@@ -3650,7 +3650,7 @@ theorem amo_word_sd_spliced_dword_run
     exact amo_word_base_aligned addr
   have hsd :
       (JoltISA.execInstr
-        (.SD (.vreg JoltISA.amoMaskVReg)
+        (JoltISA.Encoded.SD (.vreg JoltISA.amoMaskVReg)
           (.vreg JoltISA.amoDwordVReg) (0 : BitVec 12))).run js =
         .ok RETIRE_SUCCESS js' :=
     JoltISA.execInstr_sd_vreg_run_of_write
@@ -3680,7 +3680,7 @@ theorem amo_word_sd_spliced_dword_run_for
       js'.vregs (JoltISA.amoOldVRegFor rd) = old ∧
       ∀ tail,
         (JoltISA.execProgram
-          (.instr (.SD (.vreg (JoltISA.amoMaskVRegFor rd))
+          (.instr (JoltISA.Encoded.SD (.vreg (JoltISA.amoMaskVRegFor rd))
             (.vreg (JoltISA.amoDwordVRegFor rd)) (0 : BitVec 12)) tail)).run js =
           (JoltISA.execProgram tail).run js' := by
   let maskReg := JoltISA.amoMaskVRegFor rd
@@ -3712,7 +3712,7 @@ theorem amo_word_sd_spliced_dword_run_for
     exact amo_word_base_aligned addr
   have hsd :
       (JoltISA.execInstr
-        (.SD (.vreg maskReg) (.vreg dwordReg) (0 : BitVec 12))).run js =
+        (JoltISA.Encoded.SD (.vreg maskReg) (.vreg dwordReg) (0 : BitVec 12))).run js =
         .ok RETIRE_SUCCESS js' :=
     JoltISA.execInstr_sd_vreg_run_of_write
       maskReg dwordReg (0 : BitVec 12)

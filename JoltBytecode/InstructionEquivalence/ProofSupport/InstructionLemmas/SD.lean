@@ -27,7 +27,7 @@ theorem execInstr_sd_vreg_run_of_write (base value : VReg) (imm : BitVec 12)
         (js.vregs value) (Store Data) false false false js.sail =
         .ok (Ok true) s')
     (h_ram : ramStartAddress ≤ (js.vregs base + sign_extend (m := 64) imm).toNat) :
-    (execInstr (.SD (.vreg base) (.vreg value) imm)).run js =
+    (execInstr (JoltISA.Encoded.SD (.vreg base) (.vreg value) imm)).run js =
       .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc readVReg liftSail
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
@@ -51,7 +51,7 @@ theorem execInstr_sd_xreg_xreg_run_of_write
         stored (Store Data) false false false js.sail =
         .ok (Ok true) s')
     (h_ram : ramStartAddress ≤ (baseValue + sign_extend (m := 64) imm).toNat) :
-    (execInstr (.SD (.xreg base) (.xreg value) imm)).run js =
+    (execInstr (JoltISA.Encoded.SD (.xreg base) (.xreg value) imm)).run js =
       .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc liftSail
   simp only [bind, EStateM.bind, pure, EStateM.run]

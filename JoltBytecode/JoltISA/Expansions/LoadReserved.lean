@@ -43,13 +43,13 @@ Faithful to `lrw.rs::inline_sequence_64`:
 2. clear `reservation_d`;
 3. emit the RV64 `LW` inline sequence at offset zero. -/
 def lrwProgram (rs1 rd : regidx) : Program :=
-  .instr (.ADDI (.vreg reservationWReg) (.xreg rs1) (0 : BitVec 12)) <|
-  .instr (.ADDI (.vreg reservationDReg) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
-  .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
+  .instr (JoltISA.Encoded.ADDI (.vreg reservationWReg) (.xreg rs1) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg reservationDReg) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12)
     (ExceptionType.E_Load_Addr_Align ())) <|
-  .instr (.ADDI (.vreg lrwAddrVReg) (.xreg rs1) (0 : BitVec 12)) <|
-  .instr (.ANDI (.vreg lrwDwordVReg) (.vreg lrwAddrVReg) (-8 : BitVec 12)) <|
-  .instr (.LD .normal (.vreg lrwDwordVReg) (.vreg lrwDwordVReg) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg lrwAddrVReg) (.xreg rs1) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ANDI (.vreg lrwDwordVReg) (.vreg lrwAddrVReg) (-8 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.LD .normal (.vreg lrwDwordVReg) (.vreg lrwDwordVReg) (0 : BitVec 12)) <|
   slliBlock (.vreg lrwAddrVReg) (.vreg lrwAddrVReg) (3 : BitVec 6) <|
   srlBlock (.vreg lrwDwordVReg) (.vreg lrwDwordVReg) (.vreg lrwAddrVReg)
     lrwShiftMaskVReg <|
@@ -65,9 +65,9 @@ Faithful to `lrd.rs::inline_sequence`:
    subsequent word stores at the same address;
 3. emit the final Jolt-ISA `LD` row. -/
 def lrdProgram (rs1 rd : regidx) : Program :=
-  .instr (.ADDI (.vreg reservationDReg) (.xreg rs1) (0 : BitVec 12)) <|
-  .instr (.ADDI (.vreg reservationWReg) (.xreg rs1) (0 : BitVec 12)) <|
-  .instr (.LD .normal (.xreg rd) (.xreg rs1) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg reservationDReg) (.xreg rs1) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg reservationWReg) (.xreg rs1) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.LD .normal (.xreg rd) (.xreg rs1) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 end JoltISA

@@ -122,7 +122,7 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
     (hlinked : LinkedCSRs js)
     (h_ram : JoltISA.ramStartAddress ≤ (load_effective_address val imm).toNat) :
     System.systemProjectResult
-      ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+      ((JoltISA.execInstr (JoltISA.Encoded.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
     .ok RETIRE_SUCCESS (stateAfterWrite js.sail rd loaded) := by
   unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst liftSail
   simp only [bind, EStateM.bind, pure, EStateM.run, hrx]
@@ -189,7 +189,7 @@ private theorem ldJolt_misaligned (imm : BitVec 12) (rs1 rd : regidx)
     (h_align : load_effective_address val imm &&& (7 : BitVec 64) ≠ 0)
     (hlinked : LinkedCSRs js) :
     System.systemProjectResult
-      ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+      ((JoltISA.execInstr (JoltISA.Encoded.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
     .ok (ExecutionResult.Memory_Exception
       (Virtaddr (load_effective_address val imm), ExceptionType.E_Load_Addr_Align ()))
       js.sail := by
@@ -208,7 +208,7 @@ def ldInstrEqSailStatement
     (js : SailJoltState)
     (_h : LoadProgramEqSailAssumptions imm rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
     ((execute_LOAD imm rs1 rd false 8).run js.sail)
 
 theorem ldInstr_eq_sail

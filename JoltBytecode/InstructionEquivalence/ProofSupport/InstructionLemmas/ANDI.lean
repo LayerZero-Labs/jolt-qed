@@ -18,7 +18,7 @@ namespace JoltISA
 value to the virtual destination, and leaves the Sail state unchanged. -/
 theorem andi_run_vreg_vreg (vd vs : VReg) (imm : BitVec 12)
     (js : SailJoltState) (hvd : WritableVReg vd) :
-    (execInstr (.ANDI (.vreg vd) (.vreg vs) imm)).run js =
+    (execInstr (JoltISA.Encoded.ANDI (.vreg vd) (.vreg vs) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r => if r = vd then js.vregs vs &&& sign_extend (m := 64) imm else js.vregs r } := by
@@ -38,7 +38,7 @@ theorem exists_state_after_andi_run_vreg_vreg
       js'.sail = js.sail ∧
       js'.vregs vd = x &&& sign_extend (m := 64) imm ∧
       (∀ r, r ≠ vd → js'.vregs r = js.vregs r) ∧
-      (execInstr (.ANDI (.vreg vd) (.vreg vs) imm)).run js =
+      (execInstr (JoltISA.Encoded.ANDI (.vreg vd) (.vreg vs) imm)).run js =
         .ok RETIRE_SUCCESS js' := by
   let js' : SailJoltState :=
     { js with
@@ -56,7 +56,7 @@ theorem andi_run_vreg_xreg (vd : VReg) (rs : regidx) (imm : BitVec 12)
     (js : SailJoltState) (x : BitVec 64)
     (h : rX_bits rs js.sail = .ok x js.sail)
     (hvd : WritableVReg vd) :
-    (execInstr (.ANDI (.vreg vd) (.xreg rs) imm)).run js =
+    (execInstr (JoltISA.Encoded.ANDI (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r => if r = vd then x &&& sign_extend (m := 64) imm else js.vregs r } := by
@@ -79,7 +79,7 @@ theorem exists_state_after_andi_run_vreg_xreg_of_sail_eq
       js'.sail = js.sail ∧
       js'.vregs vd = x &&& sign_extend (m := 64) imm ∧
       (∀ r, r ≠ vd → js'.vregs r = js.vregs r) ∧
-      (execInstr (.ANDI (.vreg vd) (.xreg rs) imm)).run js =
+      (execInstr (JoltISA.Encoded.ANDI (.vreg vd) (.xreg rs) imm)).run js =
         .ok RETIRE_SUCCESS js' := by
   have h_read_current : rX_bits rs js.sail = .ok x js.sail := by
     simpa only [h_sail] using h_read

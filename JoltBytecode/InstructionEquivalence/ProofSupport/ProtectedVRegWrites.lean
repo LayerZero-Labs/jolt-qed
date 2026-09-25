@@ -95,7 +95,7 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .VirtualAdviceLoad dst _
   | .VirtualAdviceLen dst _ _
   | .VirtualNegateIf dst _ _ => dst.WritesProtectedVReg
-  | .LD _ dst _ _ => (sideEffectingDst dst).WritesProtectedVReg
+  | .LD _ dst _ _ => dst.WritesProtectedVReg
   | .BEQ _ _ _
   | .BNE _ _ _
   | .BLT _ _ _

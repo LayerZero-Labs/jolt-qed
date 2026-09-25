@@ -19,7 +19,7 @@ def sdInstrEqSailStatement
     (js : SailJoltState)
     (_h : StoreProgramEqSailAssumptions imm rs2 rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.SD (.xreg rs1) (.xreg rs2) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) imm)).run js) =
     ((execute_STORE imm rs2 rs1 8).run js.sail)
 
 /-- The Jolt `SD` side reduces to the shared virtual-memory write spine. -/
@@ -29,7 +29,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
     (js : SailJoltState)
     (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) :
     System.systemProjectResult
-      ((JoltISA.execInstr (.SD (.xreg rs1) (.xreg rs2) imm)).run js) =
+      ((JoltISA.execInstr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) imm)).run js) =
     let ea := load_effective_address h.rs1_val imm
     match vmem_write_addr (Virtaddr ea) 8 h.rs2_val
         (Store Data) false false false js.sail with

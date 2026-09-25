@@ -29,7 +29,7 @@ theorem ld_run_vreg_vreg_from_memory_read {faultClass : LoadFaultClass}
         .ok (Ok value) js.sail)
     (hvd : WritableVReg vd)
     (h_ram : ramStartAddress ≤ (js.vregs base + sign_extend (m := 64) imm).toNat) :
-    (execInstr (.LD faultClass (.vreg vd) (.vreg base) imm)).run js =
+    (execInstr (JoltISA.Encoded.LD faultClass (.vreg vd) (.vreg base) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r => if r = vd then value else js.vregs r } := by
@@ -40,7 +40,7 @@ theorem ld_run_vreg_vreg_from_memory_read {faultClass : LoadFaultClass}
   rw [if_pos h_align]
   rw [readMemoryWord_ram _ h_ram]
   unfold liftSail
-  simp only [EStateM.bind, h, sideEffectingDst, writeVReg, hvd, ↓reduceIte,
+  simp only [EStateM.bind, h, writeVReg, hvd, ↓reduceIte,
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet, EStateM.pure]
 
 /-- Successful `LD` from an architectural-register base into a virtual
@@ -57,7 +57,7 @@ theorem ld_run_vreg_xreg_from_memory_read {faultClass : LoadFaultClass}
         .ok (Ok value) js.sail)
     (hvd : WritableVReg vd)
     (h_ram : ramStartAddress ≤ (baseValue + sign_extend (m := 64) imm).toNat) :
-    (execInstr (.LD faultClass (.vreg vd) (.xreg base) imm)).run js =
+    (execInstr (JoltISA.Encoded.LD faultClass (.vreg vd) (.xreg base) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r => if r = vd then value else js.vregs r } := by
@@ -69,7 +69,7 @@ theorem ld_run_vreg_xreg_from_memory_read {faultClass : LoadFaultClass}
   rw [if_pos h_align]
   rw [readMemoryWord_ram _ h_ram]
   unfold liftSail
-  simp only [EStateM.bind, hread, sideEffectingDst, writeVReg, hvd, ↓reduceIte,
+  simp only [EStateM.bind, hread, writeVReg, hvd, ↓reduceIte,
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet, EStateM.pure]
 
 end JoltISA

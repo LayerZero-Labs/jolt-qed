@@ -12,7 +12,7 @@ namespace JoltISA
 
 theorem virtual_window_mask_b_run_vreg_vreg (vd base : VReg)
     (imm : BitVec 12) (js : SailJoltState) (hvd : WritableVReg vd) :
-    (execInstr (.VirtualWindowMaskB (.vreg vd) (.vreg base) imm)).run js =
+    (execInstr (JoltISA.Encoded.VirtualWindowMaskB (.vreg vd) (.vreg base) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r =>
@@ -27,7 +27,7 @@ theorem virtual_window_mask_b_run_vreg_vreg (vd base : VReg)
 
 theorem virtual_window_mask_h_run_vreg_vreg (vd base : VReg)
     (imm : BitVec 12) (js : SailJoltState) (hvd : WritableVReg vd) :
-    (execInstr (.VirtualWindowMaskH (.vreg vd) (.vreg base) imm)).run js =
+    (execInstr (JoltISA.Encoded.VirtualWindowMaskH (.vreg vd) (.vreg base) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r =>
@@ -42,7 +42,7 @@ theorem virtual_window_mask_h_run_vreg_vreg (vd base : VReg)
 
 theorem virtual_window_mask_w_run_vreg_vreg (vd base : VReg)
     (imm : BitVec 12) (js : SailJoltState) (hvd : WritableVReg vd) :
-    (execInstr (.VirtualWindowMaskW (.vreg vd) (.vreg base) imm)).run js =
+    (execInstr (JoltISA.Encoded.VirtualWindowMaskW (.vreg vd) (.vreg base) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r =>
@@ -59,7 +59,7 @@ theorem virtual_window_mask_b_run_vreg_xreg (vd : VReg) (rs : regidx)
     (imm : BitVec 12) (js : SailJoltState) (x : BitVec 64)
     (hread : rX_bits rs js.sail = .ok x js.sail)
     (hvd : WritableVReg vd) :
-    (execInstr (.VirtualWindowMaskB (.vreg vd) (.xreg rs) imm)).run js =
+    (execInstr (JoltISA.Encoded.VirtualWindowMaskB (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r =>
@@ -72,7 +72,7 @@ theorem virtual_window_mask_h_run_vreg_xreg (vd : VReg) (rs : regidx)
     (imm : BitVec 12) (js : SailJoltState) (x : BitVec 64)
     (hread : rX_bits rs js.sail = .ok x js.sail)
     (hvd : WritableVReg vd) :
-    (execInstr (.VirtualWindowMaskH (.vreg vd) (.xreg rs) imm)).run js =
+    (execInstr (JoltISA.Encoded.VirtualWindowMaskH (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r =>
@@ -85,7 +85,7 @@ theorem virtual_window_mask_w_run_vreg_xreg (vd : VReg) (rs : regidx)
     (imm : BitVec 12) (js : SailJoltState) (x : BitVec 64)
     (hread : rX_bits rs js.sail = .ok x js.sail)
     (hvd : WritableVReg vd) :
-    (execInstr (.VirtualWindowMaskW (.vreg vd) (.xreg rs) imm)).run js =
+    (execInstr (JoltISA.Encoded.VirtualWindowMaskW (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
           vregs := fun r =>

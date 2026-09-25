@@ -47,7 +47,7 @@ def phase_remainder_bound (rs1 rs2 : regidx) : JoltISA.Program :=
   .done RETIRE_SUCCESS
 
 def phase_writeback (rd : regidx) : JoltISA.Program :=
-  .instr (.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 theorem phase_setup_run
@@ -302,7 +302,7 @@ theorem phase_writeback_run_sound
     rw [hz, BitVec.add_zero]
   obtain ⟨s', hw⟩ := wX_shape rd rem js.sail
   have hp_concrete :
-      (JoltISA.execInstr (.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12))).run js =
+      (JoltISA.execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12))).run js =
       .ok RETIRE_SUCCESS { js with sail := s' } :=
     JoltISA.addi_run_xreg_vreg rd v0VReg 0 js s' (by rw [hrem]; exact hw)
   rw [hp_concrete] at hrun

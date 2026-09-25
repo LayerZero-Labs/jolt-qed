@@ -19,7 +19,7 @@ def addiwInstrEqSailStatement
     (js : SailJoltState)
     (_h : UnarySourceReadWithLinkedCSRs rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.ADDIW (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.ADDIW (.xreg rd) (.xreg rs1) imm)).run js) =
     ((execute_ADDIW imm rs1 rd).run js.sail)
 
 private abbrev op (rs1_val : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
@@ -41,7 +41,7 @@ theorem addiwInstr_eq_sail
   obtain ⟨s', h_write⟩ := wX_shape rd (op h.rs1_val imm) js.sail
   simp only [h_write]
   -- Jolt side
-  simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+  simp only [JoltISA.execInstr, jolt_addiw_value64_encoded, JoltISA.readSrc, JoltISA.writeDst, liftSail,
     bind, EStateM.bind, h.rs1_read, h_write]
   simp only [pure, EStateM.pure]
   exact Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'

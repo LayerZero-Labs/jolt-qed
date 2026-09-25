@@ -55,24 +55,30 @@ def LoadFaultClass.alignFault : LoadFaultClass → ExceptionType
 -- still records them. Zero defaults describe the existing generated expansions;
 -- importing a Rust row must supply its actual immediate.
 -- Rust: [instruction formats](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format).
+-- Final immediates are already decoded; inline expansion may emit full u64
+-- operands (e.g. ADDI with 4096). Source encoding widths belong in Encoded below.
+-- Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/expand/inline.rs#L204-L245
+-- Rust formats: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_i.rs#L9-L14
+-- FormatB retains a signed i128; proof-trace conversion separately bounds its magnitude.
+-- Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_b.rs#L9-L14
 inductive Instr where
-  | ADDI (dst : Dst) (src : Src) (imm : BitVec 12)
-  | ADDIW (dst : Dst) (src : Src) (imm : BitVec 12)
-  | ANDI (dst : Dst) (src : Src) (imm : BitVec 12)
-  | ORI  (dst : Dst) (src : Src) (imm : BitVec 12)
-  | XORI (dst : Dst) (src : Src) (imm : BitVec 12)
-  | SLTI (dst : Dst) (src : Src) (imm : BitVec 12)
-  | SLTIU (dst : Dst) (src : Src) (imm : BitVec 12)
+  | ADDI (dst : Dst) (src : Src) (imm : BitVec 64)
+  | ADDIW (dst : Dst) (src : Src) (imm : BitVec 64)
+  | ANDI (dst : Dst) (src : Src) (imm : BitVec 64)
+  | ORI  (dst : Dst) (src : Src) (imm : BitVec 64)
+  | XORI (dst : Dst) (src : Src) (imm : BitVec 64)
+  | SLTI (dst : Dst) (src : Src) (imm : BitVec 64)
+  | SLTIU (dst : Dst) (src : Src) (imm : BitVec 64)
   | LUI  (dst : Dst) (imm : BitVec 64)
-  | AUIPC (dst : Dst) (imm : BitVec 20)
-  | JAL (dst : Dst) (imm : BitVec 21)
-  | JALR (dst : Dst) (base : Src) (imm : BitVec 12)
-  | BEQ (lhs rhs : Src) (imm : BitVec 13)
-  | BNE (lhs rhs : Src) (imm : BitVec 13)
-  | BLT (lhs rhs : Src) (imm : BitVec 13)
-  | BGE (lhs rhs : Src) (imm : BitVec 13)
-  | BLTU (lhs rhs : Src) (imm : BitVec 13)
-  | BGEU (lhs rhs : Src) (imm : BitVec 13)
+  | AUIPC (dst : Dst) (imm : BitVec 64)
+  | JAL (dst : Dst) (imm : BitVec 64)
+  | JALR (dst : Dst) (base : Src) (imm : BitVec 64)
+  | BEQ (lhs rhs : Src) (imm : BitVec 128)
+  | BNE (lhs rhs : Src) (imm : BitVec 128)
+  | BLT (lhs rhs : Src) (imm : BitVec 128)
+  | BGE (lhs rhs : Src) (imm : BitVec 128)
+  | BLTU (lhs rhs : Src) (imm : BitVec 128)
+  | BGEU (lhs rhs : Src) (imm : BitVec 128)
   | FENCE
   | ADD  (dst : Dst) (lhs rhs : Src)
   | ADDW (dst : Dst) (lhs rhs : Src)
@@ -119,10 +125,10 @@ inductive Instr where
   | AND  (dst : Dst) (lhs rhs : Src)
   | SLT  (dst : Dst) (lhs rhs : Src)
   | SLTU (dst : Dst) (lhs rhs : Src)
-  | VirtualAlignAddr (dst : Dst) (base : Src) (imm : BitVec 12)
-  | VirtualWindowMaskB (dst : Dst) (base : Src) (imm : BitVec 12)
-  | VirtualWindowMaskH (dst : Dst) (base : Src) (imm : BitVec 12)
-  | VirtualWindowMaskW (dst : Dst) (base : Src) (imm : BitVec 12)
+  | VirtualAlignAddr (dst : Dst) (base : Src) (imm : BitVec 64)
+  | VirtualWindowMaskB (dst : Dst) (base : Src) (imm : BitVec 64)
+  | VirtualWindowMaskH (dst : Dst) (base : Src) (imm : BitVec 64)
+  | VirtualWindowMaskW (dst : Dst) (base : Src) (imm : BitVec 64)
   | VirtualPext (dst : Dst) (value mask : Src)
   | VirtualPextSigned (dst : Dst) (value mask : Src)
   | VirtualShiftDataB (dst : Dst) (value address : Src)
@@ -131,10 +137,10 @@ inductive Instr where
   | VirtualSignExtendWord (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualZeroExtendWord (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualMovsign (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
-  | VirtualAssertHalfwordAlignment (base : regidx) (imm : BitVec 12) (fault : ExceptionType)
-  | VirtualAssertWordAlignment (base : regidx) (imm : BitVec 12) (fault : ExceptionType)
-  | LD (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 12)
-  | SD (base value : Src) (imm : BitVec 12)
+  | VirtualAssertHalfwordAlignment (base : Src) (imm : BitVec 64) (fault : ExceptionType)
+  | VirtualAssertWordAlignment (base : Src) (imm : BitVec 64) (fault : ExceptionType)
+  | LD (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 64)
+  | SD (base value : Src) (imm : BitVec 64)
   | VirtualAdvice (dst : Dst) (value : BitVec 64) (imm : BitVec 64 := 0)
   | VirtualAdviceLoad (dst : Dst) (byteCount : BitVec 64)
   -- Rust captures src even though computing the advice length ignores it.
@@ -145,13 +151,121 @@ inductive Instr where
   -- Rust: [VirtualHostIO format](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_host_io.rs:8).
   -- Rust: [FormatI capture](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_i.rs:72).
   | VirtualHostIO (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
-  | VirtualAssertEQ (lhs rhs : Src) (imm: BitVec 13)
+  | VirtualAssertEQ (lhs rhs : Src) (imm: BitVec 128)
   | VirtualAssertValidDiv0 (divisor quotient : Src) (imm : BitVec 128 := 0)
   | VirtualNegateIf (dst : Dst) (signSource value : Src)
   | VirtualAssertValidUnsignedRemainder (remainder divisor : Src) (imm : BitVec 128 := 0)
   | VirtualAssertMulUNoOverflow (lhs rhs : Src) (imm : BitVec 128 := 0)
   | VirtualAssertLTE (lhs rhs : Src) (imm : BitVec 128 := 0)
   deriving Repr
+
+/-! Decode source operands before constructing final rows. These are abbreviations,
+not extra execution rules: every resulting instruction runs through execInstr.
+AUIPC's encoded upper immediate is shifted once here, just as in Rust's decoder.
+Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/image/decode.rs#L471-L485
+-/
+namespace Encoded
+
+abbrev ADDI (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .ADDI dst src (sign_extend (m := 64) imm)
+
+abbrev ADDIW (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .ADDIW dst src (sign_extend (m := 64) imm)
+
+abbrev ANDI (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .ANDI dst src (sign_extend (m := 64) imm)
+
+abbrev ORI (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .ORI dst src (sign_extend (m := 64) imm)
+
+abbrev XORI (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .XORI dst src (sign_extend (m := 64) imm)
+
+abbrev SLTI (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .SLTI dst src (sign_extend (m := 64) imm)
+
+abbrev SLTIU (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .SLTIU dst src (sign_extend (m := 64) imm)
+
+abbrev JALR (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .JALR dst src (sign_extend (m := 64) imm)
+
+abbrev VirtualAlignAddr (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .VirtualAlignAddr dst src (sign_extend (m := 64) imm)
+
+abbrev VirtualWindowMaskB (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .VirtualWindowMaskB dst src (sign_extend (m := 64) imm)
+
+abbrev VirtualWindowMaskH (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .VirtualWindowMaskH dst src (sign_extend (m := 64) imm)
+
+abbrev VirtualWindowMaskW (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  .VirtualWindowMaskW dst src (sign_extend (m := 64) imm)
+
+abbrev LD (fault : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 12) : Instr :=
+  .LD fault dst base (sign_extend (m := 64) imm)
+
+abbrev SD (base value : Src) (imm : BitVec 12) : Instr :=
+  .SD base value (sign_extend (m := 64) imm)
+
+abbrev BEQ (lhs rhs : Src) (imm : BitVec 13) : Instr :=
+  .BEQ lhs rhs (sign_extend (m := 128) imm)
+
+abbrev BNE (lhs rhs : Src) (imm : BitVec 13) : Instr :=
+  .BNE lhs rhs (sign_extend (m := 128) imm)
+
+abbrev BLT (lhs rhs : Src) (imm : BitVec 13) : Instr :=
+  .BLT lhs rhs (sign_extend (m := 128) imm)
+
+abbrev BGE (lhs rhs : Src) (imm : BitVec 13) : Instr :=
+  .BGE lhs rhs (sign_extend (m := 128) imm)
+
+abbrev BLTU (lhs rhs : Src) (imm : BitVec 13) : Instr :=
+  .BLTU lhs rhs (sign_extend (m := 128) imm)
+
+abbrev BGEU (lhs rhs : Src) (imm : BitVec 13) : Instr :=
+  .BGEU lhs rhs (sign_extend (m := 128) imm)
+
+abbrev VirtualAssertEQ (lhs rhs : Src) (imm : BitVec 13) : Instr :=
+  .VirtualAssertEQ lhs rhs (sign_extend (m := 128) imm)
+
+abbrev VirtualAssertHalfwordAlignment (base : regidx) (imm : BitVec 12) (fault : ExceptionType) : Instr :=
+  .VirtualAssertHalfwordAlignment (.xreg base) (sign_extend (m := 64) imm) fault
+
+abbrev VirtualAssertWordAlignment (base : regidx) (imm : BitVec 12) (fault : ExceptionType) : Instr :=
+  .VirtualAssertWordAlignment (.xreg base) (sign_extend (m := 64) imm) fault
+
+abbrev AUIPC (dst : Dst) (imm : BitVec 20) : Instr :=
+  .AUIPC dst (sign_extend (m := 64) (imm +++ (0 : BitVec 12)))
+
+abbrev JAL (dst : Dst) (imm : BitVec 21) : Instr :=
+  .JAL dst (sign_extend (m := 64) imm)
+
+end Encoded
+
+/-- Nat-valued helper parameters denote Rust u64 immediates. Keep Nat for the
+arithmetic helper API, but reject values that Rust's final format cannot store.
+Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_virtual_right_shift_i.rs#L9-L14
+-/
+def Instr.OperandsRepresentable : Instr → Prop
+  | .VirtualPow2I _ imm | .VirtualPow2IW _ imm | .VirtualShiftRightBitmaskI _ imm
+  | .VirtualSRLI _ _ imm | .VirtualSRAI _ _ imm | .VirtualSRLIW _ _ imm
+  | .VirtualSRAIW _ _ imm | .VirtualROTRI _ _ imm | .VirtualROTRIW _ _ imm =>
+      imm < 2 ^ 64
+  | _ => True
+
+/-- FormatB carries i128, but successful proof-trace conversion requires a u64
+magnitude. Preserve the signed immediate, including values ignored by execution.
+Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-riscv/src/trace_row.rs#L279-L283
+-/
+def Instr.CompactImmediateFits : Instr → Prop
+  | .BEQ _ _ imm | .BNE _ _ imm | .BLT _ _ imm | .BGE _ _ imm
+  | .BLTU _ _ imm | .BGEU _ _ imm | .VirtualAssertEQ _ _ imm
+  | .VirtualAssertValidDiv0 _ _ imm | .VirtualAssertValidUnsignedRemainder _ _ imm
+  | .VirtualAssertMulUNoOverflow _ _ imm | .VirtualAssertLTE _ _ imm =>
+      imm.toInt.natAbs < 2 ^ 64
+  | _ => True
+
 
 /-- Source instructions that Rust expands before final Jolt bytecode.
 
@@ -246,7 +360,7 @@ def Program.append : Program → Program → Program
 /-- Rust's trace-dispatch replacement for pure writeback instructions whose
 destination is architectural `x0`: emit a single no-op `ADDI x0, x0, 0` row. -/
 def pureWritebackRdZeroProgram : Program :=
-  .instr (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 /-- Boolean test for architectural register `x0`. -/
