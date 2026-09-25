@@ -248,6 +248,11 @@ def jolt_virtual_rev8w_value (x : BitVec 64) : BitVec 64 :=
 def jolt_virtual_xorrot_value (rot : Nat) (x y : BitVec 64) : BitVec 64 :=
   rotater (x ^^^ y) rot
 
+/-- RV64 `VirtualXORROTL1`: xor the first operand with the second rotated left once.
+Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/instruction/virtual_xor_rotl1.rs -/
+def jolt_virtual_xorrotl1_value (x y : BitVec 64) : BitVec 64 :=
+  x ^^^ rotatel y 1
+
 /-- RV64 `VirtualXORROTW*` value: xor low words, rotate, then zero-extend. -/
 def jolt_virtual_xorrotw_value (rot : Nat) (x y : BitVec 64) : BitVec 64 :=
   zero_extend (m := 64)

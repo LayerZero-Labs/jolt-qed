@@ -106,6 +106,7 @@ inductive Instr where
   | VirtualXORROT24 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROT16 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROT63 (dst : Dst) (lhs rhs : Src)
+  | VirtualXORROTL1 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROTW16 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROTW12 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROTW8 (dst : Dst) (lhs rhs : Src)

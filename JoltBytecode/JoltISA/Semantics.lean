@@ -280,6 +280,11 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let y ← readSrc rhs
       writeDst dst (jolt_virtual_xorrot_value 63 x y)
       pure RETIRE_SUCCESS
+  | .VirtualXORROTL1 dst lhs rhs => do
+      let x ← readSrc lhs
+      let y ← readSrc rhs
+      writeDst dst (jolt_virtual_xorrotl1_value x y)
+      pure RETIRE_SUCCESS
   | .VirtualXORROTW16 dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs

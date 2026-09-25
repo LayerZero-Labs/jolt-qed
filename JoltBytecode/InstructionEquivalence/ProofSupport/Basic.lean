@@ -224,6 +224,7 @@ def InstrWritesNoProtectedVReg : Instr → Prop
   | .VirtualXORROT24 _ _ _ => False
   | .VirtualXORROT16 _ _ _ => False
   | .VirtualXORROT63 _ _ _ => False
+  | .VirtualXORROTL1 dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualXORROTW16 _ _ _ => False
   | .VirtualXORROTW12 _ _ _ => False
   | .VirtualXORROTW8 _ _ _ => False
@@ -811,6 +812,8 @@ theorem execInstr_preserves_protected
       cases hsafe
   | VirtualXORROT63 dst lhs rhs =>
       cases hsafe
+  | VirtualXORROTL1 dst lhs rhs =>
+      exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualXORROTW16 dst lhs rhs =>
       cases hsafe
   | VirtualXORROTW12 dst lhs rhs =>
