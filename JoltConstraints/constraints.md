@@ -1,17 +1,22 @@
 # Jolt constraints
 
-Source: the RV64 constraints in the [Rust checkout](/Users/ari.biswas/Work-with-A16z/jolt), commit `eae0574a20c2b6481828bcc743a1c8ba683072b2`.
+Source: the base RV64 relations at [Rust commit `e012da54`](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-r1cs/src/constraints/rv64.rs). The Rust files cited below are unchanged in the local checkout at `7dfe8a0f829a4ab3e9126eb5ac5b5b15208cf5fc`.
 
-A checked box means that the constraint predicate is modelled in Lean. It does
-not mean that its completeness theorem has been proved; proof placeholders use
-`sorry`. Some completeness statements still need additional program/trace validity
-assumptions, noted beside their theorem placeholders. The completeness theorem
-for constraint (22) explicitly requires at least one padding cycle, as Rust's
+A checked box means that the named Lean constraint predicate exists; it does
+not certify its supporting witness/table definitions or a completeness proof.
+Most completeness targets still use `sorry`. Constraint (12) has a proved
+conditional completeness theorem requiring equality-assertion operands to match;
+Rust's intentionally unsatisfiable spoil execution makes the unrestricted claim
+false. The unrestricted targets for (13) and (16) are proposition definitions,
+not proved or admitted theorems: the Rust behaviors recorded in
+[model_review.md](model_review.md) contradict those claims. Some other targets
+need additional program/trace validity conditions.
+The completeness theorem for constraint (22) explicitly requires at least one padding cycle, as Rust's
 trace-length calculation guarantees. The completeness theorem for (58) requires
 at least one RAM chunk. The register completeness targets require zero initial
 registers and still need admissible-register and history assumptions.
 
-Equations (43)–(47) were rechecked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`. Their completeness targets require a bytecode domain large enough for the expanded program plus its leading no-op slot.
+Equations (43)–(47) were rechecked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`. Their honest-witness targets now require the exact Rust bytecode domain, including the leading no-op and power-of-two padding.
 
 The remaining equations (23)–(26), (37)–(38), (40)–(41), (48)–(53), and (59)
 were also checked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`.
@@ -19,12 +24,15 @@ This checklist covers the base RV64 relations; optional `akita` relations,
 including its extra instruction-address canonicality condition, are outside it.
 The final RAM and public-I/O completeness targets still need memory-history,
 layout, and termination assumptions. Constraint (53) takes the public entry slot
-explicitly and requires the trace to start there. Constraint (50) requires load
-destinations to have already been normalized by bytecode expansion.
+explicitly and requires the trace to start there. Constraint (50) selects the
+destination recorded in the final bytecode row, including x0. The
+[`JoltTraceRow` load-capture condition](trace.lean) separately requires a load's
+captured RAM value to equal its captured destination value; it rejects a raw
+`LD x0` of a nonzero word without rewriting that destination.
 
 The current model audit and changes to previously accepted definitions are recorded in
-[model_review.md](model_review.md). In particular, matching constraint equations does
-not certify every current completeness statement.
+[model_review.md](model_review.md). Matching constraint equations does not
+certify every current completeness statement.
 
 ## Notation
 
@@ -64,7 +72,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (18) [Next expanded PC within a virtual sequence](Constraints/NextPCEqPCPlusOneIfInline.lean)
 - [x] (19) [Start virtual sequences at their beginning](Constraints/MustStartSequenceFromBeginning.lean)
 
-[Rust: the 19 equality-conditional rows](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-r1cs/src/constraints/rv64.rs:121).
+[Rust: the 19 equality-conditional rows](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-r1cs/src/constraints/rv64.rs#L121).
 
 ∀ t ∈ T; every column in this block is evaluated at t:
 
@@ -121,7 +129,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (21) [ShouldBranch product](Constraints/ShouldBranchEqLookupOutputMulBranch.lean)
 - [x] (22) [ShouldJump product](Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean)
 
-[Rust: the three product rows](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-r1cs/src/constraints/rv64.rs:367); [sumcheck](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/spartan/product_remainder.rs).
+[Rust: the three product rows](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-r1cs/src/constraints/rv64.rs#L367); [sumcheck](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/spartan/product_remainder.rs).
 
 ∀ t ∈ T:
 
@@ -138,7 +146,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (23) [RAM read-value selection](Constraints/RamReadValueEqRamRead.lean)
 - [x] (24) [RAM write-value selection](Constraints/RamWriteValueEqRamReadWrite.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs:89).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs#L89).
 
 ∀ t ∈ T:
 
@@ -152,7 +160,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 - [x] (25) [RAM address reconstruction](Constraints/RamAddressEqRamRaf.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs:133).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs#L133).
 
 `lowest_address` is the memory layout's lowest byte address; remapped word `a` has byte address `lowest_address + 8a`.
 
@@ -165,7 +173,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 - [x] (26) [Public RAM output](Constraints/RamOutputEqPublicIo.lean)
 
-[Rust: constraint](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs:115); [public arrays](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/preprocess/public_io.rs:20).
+[Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs#L115); [public arrays](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/preprocess/public_io.rs#L20).
 
 `IoMask(a) = [io_mask_start ≤ a < io_mask_end]`. `ValIo` contains the public input/output words, the panic word, and termination word 1 when not panicking; other entries are zero, exactly as in `PublicIoMemory::new`.
 
@@ -182,7 +190,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (30) [NextIsFirstInSequence shift](Constraints/NextIsFirstInSequenceEqShift.lean)
 - [x] (31) [NextIsNoop shift](Constraints/NextIsNoopEqShift.lean)
 
-[Rust: constraint](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs:103); [non-wrapping successor](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-poly/src/eq_plus_one.rs:1).
+[Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs#L103); [non-wrapping successor](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-poly/src/eq_plus_one.rs#L1).
 
 ∀ t ∈ T:
 
@@ -208,7 +216,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (32) [Left instruction-input selection](Constraints/LeftInstructionInputEqSelection.lean)
 - [x] (33) [Right instruction-input selection](Constraints/RightInstructionInputEqSelection.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs:102).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs#L102).
 
 ∀ t ∈ T:
 
@@ -228,7 +236,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (35) [First source register value selection](Constraints/Rs1ValueEqRegistersRead.lean)
 - [x] (36) [Second source register value selection](Constraints/Rs2ValueEqRegistersRead.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs:97).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs#L97).
 
 ∀ t ∈ T:
 
@@ -245,7 +253,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (37) [RAM value from preceding increments](Constraints/RamValEqInitialPlusPrefixRamInc.lean)
 - [x] (38) [Final RAM value from all increments](Constraints/RamValFinalEqInitialPlusRamInc.lean)
 
-[Rust: constraint](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs:135); [initial public RAM](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/preprocess/ram.rs:134).
+[Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135); [initial public RAM](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/preprocess/ram.rs#L134).
 
 `Init(a)` is the initial word array: the program image and public inputs, together with the trusted/untrusted advice words at their memory-layout addresses, zero elsewhere. Advice words are inputs to this array, not additional public constants.
 
@@ -263,9 +271,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (40) [Left lookup operand reconstruction](Constraints/LeftLookupOperandEqInstructionRaf.lean)
 - [x] (41) [Right lookup operand reconstruction](Constraints/RightLookupOperandEqInstructionRaf.lean)
 
-[Rust: constraint](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs:90); [operand coefficients](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs:180).
+[Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs#L90); [operand coefficients](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L180).
 
-Let `Q` be the variants of [`LookupTableKind<64>`](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/tables/mod.rs:137). The fixed array `Table_q(x)` is Rust's `q.evaluate_mle(bits(x))` at the 128-bit Boolean encoding of `x`.
+Let `Q` be the variants of [`LookupTableKind<64>`](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-lookup-tables/src/tables/mod.rs#L137). The fixed array `Table_q(x)` is Rust's `q.evaluate_mle(bits(x))` at the 128-bit Boolean encoding of `x`.
 
 For `x = Σ_{i=0}^{127} 2^(127−i) x_i`, define the two deinterleaved operands:
 
@@ -298,7 +306,7 @@ LookupRa(x,t) = ∏_{j=0}^{J−1} InstructionRa_j(v_j(x),t)
 
 - [x] (42) [Register value from preceding increments](Constraints/RegistersValEqPrefixRdInc.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs:69).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs#L69).
 
 ```text
 (42) ∀ r ∈ R, ∀ t ∈ T:
@@ -321,7 +329,7 @@ The empty sum at `t = 0` is zero.
 - [x] (52) [Instruction RAF flag from bytecode](Constraints/InstructionRafFlagEqBytecodeRead.lean)
 - [x] (53) [Entry bytecode row](Constraints/BytecodeRaAtEntryEqOne.lean)
 
-[Rust: row values](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs:533); [PC and entry](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs:358).
+[Rust: row values](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L533); [PC and entry](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L358).
 
 Abbreviate the full bytecode selector:
 
@@ -380,7 +388,7 @@ For the program's `entry_bytecode_index = e`:
 - [x] (55) [Bytecode chunk selector booleanity](Constraints/BytecodeRaChunkBooleanity.lean)
 - [x] (56) [RAM chunk selector booleanity](Constraints/RamRaChunkBooleanity.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs:25).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs#L25).
 
 ∀ t ∈ T, ∀ u ∈ U, and every chunk d in the respective family:
 
@@ -396,7 +404,7 @@ For the program's `entry_bytecode_index = e`:
 
 - [x] (57) [RAM hamming-weight booleanity](Constraints/RamHammingWeightBooleanity.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs:85).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs#L85).
 
 ```text
 (57) ∀ t ∈ T:
@@ -407,7 +415,7 @@ For the program's `entry_bytecode_index = e`:
 
 - [x] (58) [RAM address selector from chunks](Constraints/RamRaEqChunkProduct.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/ram/ra_virtualization.rs); [chunk product](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/ram.rs:163).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/ra_virtualization.rs); [chunk product](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/ram.rs#L163).
 
 ```text
 (58) ∀ a ∈ M, ∀ t ∈ T:
@@ -418,7 +426,7 @@ For the program's `entry_bytecode_index = e`:
 
 - [x] (59) [Virtual instruction selectors from small chunks](Constraints/InstructionRaEqChunkProduct.lean)
 
-[Rust](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/instruction/ra_virtualization.rs); [chunk grouping](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs:402).
+[Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/instruction/ra_virtualization.rs); [chunk grouping](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs#L402).
 
 ```text
 (59) ∀ t ∈ T, ∀ j ∈ {0, …, J−1}, ∀ v ∈ {0, …, 2^(nb)−1}:
@@ -434,7 +442,7 @@ Here `digit_h(v)` splits the `nb`-bit virtual chunk into its `n` small chunks.
 - [x] (61) [Bytecode chunk hamming weights](Constraints/BytecodeRaChunkHammingWeight.lean)
 - [x] (62) [RAM chunk hamming weights](Constraints/RamRaChunkHammingWeight.lean)
 
-[Rust: prescribed weights](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs:82); [sumcheck](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-claims/src/protocols/jolt/relations/claim_reductions/hamming_weight.rs:102).
+[Rust: prescribed weights](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs#L82); [sumcheck](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/claim_reductions/hamming_weight.rs#L102).
 
 ∀ t ∈ T, and every chunk d in the respective family:
 

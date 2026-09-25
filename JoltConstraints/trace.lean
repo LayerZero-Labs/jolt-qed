@@ -171,6 +171,21 @@ noncomputable def prepareSource (program : JoltProgram) (layout : program.Sequen
 
 end JoltProgram
 
+/-- Rust's proof-trace conversion accepts a load only when the RAM value read
+by the tracer equals the destination value captured after execution. In
+particular, a nonzero load into x0 executes but cannot be converted.
+Rust: tracer/src/trace_row.rs::captured_state. -/
+def JoltISA.Instr.LoadCaptureMatches (instruction : JoltISA.Instr)
+    (preState postState : SailJoltState) : Prop :=
+  match instruction with
+  | .LD _ dst base imm =>
+      let capturedDst := match dst with
+        | .xreg r => JoltISA.sourceValue (.xreg r) postState
+        | .vreg r => JoltISA.sourceValue (.vreg r) postState
+      JoltISA.memoryWord? preState (JoltISA.sourceValue base preState + imm) =
+        some capturedDst
+  | _ => True
+
 -- Rust: tracer/src/instruction/format/format_r.rs::{capture_pre_execution_state,
 -- capture_post_execution_state}; Lean retains full ISA states, not just captured operands.
 structure JoltTraceRow (program : JoltProgram) where
@@ -195,6 +210,11 @@ structure JoltTraceRow (program : JoltProgram) where
         (JoltISA.memoryWord? preState
           (((JoltISA.sourceValue base preState) + imm))).isSome = true
     | _ => True
+  -- The load's captured RAM value must agree with its captured destination.
+  -- A successful write to x0 alone does not establish this conversion check.
+  loadCaptureMatches :
+    program.expandedBytecode[rowIndex].instruction.LoadCaptureMatches preState postState := by
+      exact True.intro
 
 /-- Successful ISA rows with Rust's fetch and source-instruction boundaries.
 An expansion executes consecutively without incrementing the PC between its
