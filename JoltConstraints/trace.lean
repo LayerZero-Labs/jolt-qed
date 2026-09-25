@@ -108,6 +108,9 @@ Rust stores the [program image](/Users/ari.biswas/Work-with-A16z/jolt/crates/jol
 and [execution inputs](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/execution/trace.rs:129)
 separately; Lean packages the bytecode with the resulting initial ISA state.
 -/
+-- This packages bytecode with an execution's initial state.
+-- It does not establish that both were obtained from the same ELF
+-- through Rust's program construction and emulator initialization.
 structure JoltProgram where
   -- Rust: JoltProgram::expanded_bytecode.
   expandedBytecode : Array JoltProgramRow
@@ -128,13 +131,11 @@ end JoltProgramRow
 
 namespace JoltProgram
 
-/-- Position metadata produced by Rust's expansion pass. This describes static
+/-- Layout facts from Rust's expansion and bytecode preprocessing. These describe static
 rows, independently of the witness or its constraints.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-program/src/expand/metadata.rs#L25-L54 -/
--- MODEL GAP (trace review): this checks local sequence metadata only. It does
--- not enforce Rust BytecodePCMapper's unique address runs, address range, or
--- alignment. Two ordinary rows at the same address currently satisfy it.
--- See model_review.md, "Follow-up trace audit".
+-- MODEL GAP (trace review): address range/alignment, size limits, and complete
+-- source-expansion provenance are not established by this layout certificate.
 structure SequenceLayout (program : JoltProgram) : Prop where
   endInBounds : ∀ i : Fin program.expandedBytecode.size,
     i.val + (program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat <
@@ -149,6 +150,18 @@ structure SequenceLayout (program : JoltProgram) : Prop where
         some (program.expandedBytecode[i].virtualSequenceRemaining.getD 0 - 1) ∧
       program.expandedBytecode[j].isFirstInSequence = false ∧
       program.expandedBytecode[i].isCompressed = false
+  /-- Two different bytecode rows cannot have both the same instruction address
+  and the same remaining sequence count. Thus ordinary instructions cannot share
+  an address, while rows within one expansion can share it with different counts.
+  As in Rust, `none` uses count zero. This applies before sentinel insertion and
+  padding. Rust's `BytecodePCMapper::try_new` rejects repeated address runs, and
+  `validate_run` checks descending counts ending at zero:
+  https://github.com/abiswas3/jolt/blob/3cb4e24361ae2006e9713ae65d58a3fa51fd0518/crates/jolt-program/src/preprocess/bytecode.rs#L145-L215 -/
+  addressSequenceUnique : ∀ i j : Fin program.expandedBytecode.size,
+    program.expandedBytecode[i].address = program.expandedBytecode[j].address →
+    program.expandedBytecode[i].virtualSequenceRemaining.getD 0 =
+      program.expandedBytecode[j].virtualSequenceRemaining.getD 0 →
+    i = j
 
 /-- The source instruction's byte length is stamped on the last expanded row.
 Rust clears IsCompressed on every preceding row, even for a compressed source. -/

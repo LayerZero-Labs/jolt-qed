@@ -11,9 +11,9 @@ set_option autoImplicit false
 def WitnessParams.RamFits (p : WitnessParams) {program : JoltProgram}
     (trace : JoltTrace program) : Prop :=
   ∀ (i : Fin trace.rows.size),
-    let row := getElem trace.rows i.val i.isLt
+    let row := trace.rows[i.val]'i.isLt
     let instruction :=
-      (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+      (program.expandedBytecode[row.rowIndex.val]'row.rowIndex.isLt).instruction
     match HonestWitness.ramAccessAddress instruction row.preState with
     | none => True
     | some rawAddress =>
