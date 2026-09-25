@@ -117,6 +117,28 @@ def BinarySourceReadWithLinkedCSRs.linkedCSRs
 -- Native control-flow theorem bundles
 -- ============================================================================
 
+/-- Public assumptions for native JAL equivalence.
+
+`MepcReadAligned` is a predicate on any address: Sail's `align_pc` succeeds
+without changing that address or the state. Applied to the JAL target, it
+supplies both the alignment condition and the successful configuration read.
+The target is computed from the PC value supplied by `pc_readable`.
+-/
+structure JalInstrEqSailAssumptions (imm : BitVec 21) (js : SailJoltState)
+    extends NoSourceReadWithLinkedCSRs js where
+  -- We assume all Sail registers are readable in the modeled machine state.
+  -- Record the nextPC and PC instances explicitly for this proof.
+  nextPC_readable : Assumptions.SailRegReadable Register.nextPC js.sail
+  pc_readable : Assumptions.SailRegReadable Register.PC js.sail
+  target_aligned : Assumptions.MepcReadAligned
+    (pc_readable.exists_value.choose + sign_extend (m := 64) imm) js.sail
+
+def JalInstrEqSailAssumptions.linkedCSRs
+    {imm : BitVec 21} {js : SailJoltState}
+    (h : JalInstrEqSailAssumptions imm js) :
+    LinkedCSRs js :=
+  h.toNoSourceReadWithLinkedCSRs.linkedCSRs
+
 /-- Public assumptions for native JALR equivalence.
 
 Generated Sail runs `update_elp_state rs1` before the ordinary JALR body; Jolt
