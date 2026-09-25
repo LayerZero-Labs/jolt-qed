@@ -56,6 +56,16 @@ private theorem stateAfterWrite_of_beq_zreg_true {rd : regidx}
       rw [hBits]
       exact stateAfterWrite_regidx_zero s value
 
+private theorem stateAfterWrite_of_isX0_true {rd : regidx}
+    (h : JoltISA.isX0 rd = true) (s : SailState) (value : BitVec 64) :
+    stateAfterWrite s rd value = s := by
+  cases rd with
+  | Regidx bits =>
+      unfold JoltISA.isX0 at h
+      have hBits : bits = 0 := BitVec.eq_of_toNat_eq (of_decide_eq_true h)
+      rw [hBits]
+      exact stateAfterWrite_regidx_zero s value
+
 private theorem ne_of_sameXReg_eq_false {rd rs : regidx}
     (h : JoltISA.sameXReg rd rs = false) :
     rd ≠ rs := by
@@ -187,7 +197,7 @@ private theorem csrrsProgram_project_run
           (csrrsJoltFinal js csr rs1 rd rs1Val)) := by
   unfold JoltISA.csrrsProgram csrrsJoltFinal
   cases hRs1 : JoltISA.isX0 rs1
-  · simp only [Bool.false_eq_true, if_false]
+  · simp only [Bool.false_and, Bool.false_eq_true, if_false]
     cases hRd : JoltISA.isX0 rd
     · simp only [Bool.false_eq_true, if_false]
       cases hSame : JoltISA.sameXReg rd rs1
@@ -311,30 +321,37 @@ private theorem csrrsProgram_project_run
         (csrrsAfterCsrSet js csr rs1Val) hCsrRun]
       simp only [JoltISA.execProgram_done, EStateM.run, pure, EStateM.pure,
         systemProjectResult]
-  · simp only [if_true]
-    have hReadRun :
-        (JoltISA.execInstr
-            (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
-              (0 : BitVec 12))).run js =
-          .ok RETIRE_SUCCESS (csrrsAfterReadOnly js csr rd) := by
-      have hWrite :
-          wX_bits rd
-              (js.vregs (JoltISA.SystemCSR.vreg csr) +
-                sign_extend (m := 64) (0 : BitVec 12))
-              js.sail =
-            .ok () (stateAfterWrite js.sail (rd) (js.vregs (JoltISA.SystemCSR.vreg csr))) := by
-        rw [addi_zero_value]
-        exact wX_bits_stateAfterWrite rd (js.vregs (JoltISA.SystemCSR.vreg csr))
-          js.sail
-      simpa [csrrsAfterReadOnly] using
-        JoltISA.addi_run_xreg_vreg rd (JoltISA.SystemCSR.vreg csr)
-          (0 : BitVec 12) js
-          (stateAfterWrite js.sail rd (js.vregs (JoltISA.SystemCSR.vreg csr)))
-          hWrite
-    rw [JoltISA.execProgram_instr_run_retire _ _ js
-      (csrrsAfterReadOnly js csr rd) hReadRun]
-    simp only [JoltISA.execProgram_done, EStateM.run, pure, EStateM.pure,
-      systemProjectResult]
+  · cases hRd : JoltISA.isX0 rd
+    · simp only [Bool.true_and, Bool.false_eq_true, if_false, if_true]
+      have hReadRun :
+          (JoltISA.execInstr
+              (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
+                (0 : BitVec 12))).run js =
+            .ok RETIRE_SUCCESS (csrrsAfterReadOnly js csr rd) := by
+        have hWrite :
+            wX_bits rd
+                (js.vregs (JoltISA.SystemCSR.vreg csr) +
+                  sign_extend (m := 64) (0 : BitVec 12))
+                js.sail =
+              .ok () (stateAfterWrite js.sail (rd) (js.vregs (JoltISA.SystemCSR.vreg csr))) := by
+          rw [addi_zero_value]
+          exact wX_bits_stateAfterWrite rd (js.vregs (JoltISA.SystemCSR.vreg csr))
+            js.sail
+        simpa [csrrsAfterReadOnly] using
+          JoltISA.addi_run_xreg_vreg rd (JoltISA.SystemCSR.vreg csr)
+            (0 : BitVec 12) js
+            (stateAfterWrite js.sail rd (js.vregs (JoltISA.SystemCSR.vreg csr)))
+            hWrite
+      rw [JoltISA.execProgram_instr_run_retire _ _ js
+        (csrrsAfterReadOnly js csr rd) hReadRun]
+      simp only [JoltISA.execProgram_done, EStateM.run, pure, EStateM.pure,
+        systemProjectResult]
+    · -- Rust emits the canonical no-op when both registers are x0. The
+      -- read-only final state is unchanged because the write to x0 is discarded.
+      simp only [Bool.and_self, if_true]
+      rw [JoltISA.pureWritebackRdZeroProgram_run js]
+      simp only [csrrsAfterReadOnly, stateAfterWrite_of_isX0_true hRd,
+        systemProjectResult]
 
 /-! ## Sail-side generic CSRRS helpers -/
 

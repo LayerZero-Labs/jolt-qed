@@ -123,17 +123,21 @@ def csrrwProgram? (csr : BitVec 12) (rs1 rd : regidx) : Option Program :=
   | none => none
 
 /-- Rust `CSRRS::inline_sequence` for the supported virtual CSR whitelist.
+Rust: crates/jolt-program/src/expand/control_flow/csrrs.rs::expand_csrrs.
 
 Cases match Rust exactly:
 
-* `rs1 = x0`: read the CSR virtual register into `rd`.
+* `rs1 = x0`, `rd = x0`: the canonical no-op `ADDI x0, x0, 0`.
+* `rs1 = x0`, `rd != x0`: read the CSR virtual register into `rd`.
 * `rs1 != x0`, `rd = x0`: set the CSR virtual register with `OR`.
 * `rd = rs1`: preserve `rs1` in the first instruction-local scratch register,
   then read the old CSR and set using the preserved value.
 * otherwise: read the old CSR into `rd`, then set using `rs1`. -/
 def csrrsProgram (csr : SystemCSR) (rs1 rd : regidx) : Program :=
   let vr := SystemCSR.vreg csr
-  if isX0 rs1 then
+  if isX0 rs1 && isX0 rd then
+    pureWritebackRdZeroProgram
+  else if isX0 rs1 then
     .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else if isX0 rd then
