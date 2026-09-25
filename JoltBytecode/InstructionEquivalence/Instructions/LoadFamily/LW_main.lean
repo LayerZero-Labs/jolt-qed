@@ -60,7 +60,7 @@ theorem lw_virtual_assert_word_alignment_run
     (hAlign :
       load_effective_address h.rs1_val imm &&& (3 : BitVec 64) = 0) :
     (JoltISA.execInstr
-      (.VirtualAssertWordAlignment rs1 imm
+      (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm
         (ExceptionType.E_Load_Addr_Align ()))).run js =
       .ok RETIRE_SUCCESS js := by
   simpa only [load_effective_address] using
@@ -81,7 +81,7 @@ theorem lw_virtual_align_addr_run
     (imm : BitVec 12) (rs1 : regidx) (js : SailJoltState)
     (h : LoadProgramEqSailAssumptions imm rs1 js) :
     (JoltISA.execInstr
-      (.VirtualAlignAddr (.vreg addrVReg) (.xreg rs1) imm)).run js =
+      (JoltISA.Encoded.VirtualAlignAddr (.vreg addrVReg) (.xreg rs1) imm)).run js =
       .ok RETIRE_SUCCESS
         (stateAfterVRegWrite js addrVReg
           (jolt_virtual_align_addr_value h.rs1_val imm)) := by
@@ -109,12 +109,12 @@ theorem lw_ld_run
     let dval :=
       loaded_dword_at js.sail daddr facts.bytes facts.aligned.no_ovf
     (JoltISA.execInstr
-      (.LD .normal (.vreg dwordVReg) (.vreg dwordVReg)
+      (JoltISA.Encoded.LD .normal (.vreg dwordVReg) (.vreg dwordVReg)
         (0 : BitVec 12))).run jsAlign =
       .ok RETIRE_SUCCESS
         (stateAfterVRegWrite jsAlign dwordVReg dval) := by
   apply vreg_LD_run_of_aligned_dword_phys
-  · simp only [stateAfterVRegWrite, if_true, jolt_virtual_align_addr_value,
+  · simp only [stateAfterVRegWrite, if_true, jolt_virtual_align_addr_value, JoltISA.addWide_low,
       compute_aligned_dword_base_address, load_effective_address,
       Memory.effectiveAddr12,
       show ~~~(7 : BitVec 64) = (-8 : BitVec 64) by decide]
@@ -141,7 +141,7 @@ theorem lw_virtual_window_mask_w_run
     let jsLoad := stateAfterVRegWrite jsAlign dwordVReg dval
     let maskValue := jolt_virtual_window_mask_w_value h.rs1_val imm
     (JoltISA.execInstr
-      (.VirtualWindowMaskW (.vreg maskVReg) (.xreg rs1) imm)).run jsLoad =
+      (JoltISA.Encoded.VirtualWindowMaskW (.vreg maskVReg) (.xreg rs1) imm)).run jsLoad =
       .ok RETIRE_SUCCESS
         (stateAfterVRegWrite jsLoad maskVReg maskValue) := by
   apply JoltISA.virtual_window_mask_w_run_vreg_xreg
@@ -278,7 +278,7 @@ theorem lwProgramAuto_nonzero_run
     norm_num
 
   let assertInstr : JoltISA.Instr :=
-    .VirtualAssertWordAlignment rs1 imm
+    JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm
       (ExceptionType.E_Load_Addr_Align ())
   rw [JoltISA.execProgram_instr_run_retire
     (instr := assertInstr)
@@ -295,7 +295,7 @@ theorem lwProgramAuto_nonzero_run
   let jsAlign := stateAfterVRegWrite js (Vreg 41)
     (jolt_virtual_align_addr_value h.rs1_val imm)
   let alignInstr : JoltISA.Instr :=
-    .VirtualAlignAddr (.vreg (Vreg 41)) (.xreg rs1) imm
+    JoltISA.Encoded.VirtualAlignAddr (.vreg (Vreg 41)) (.xreg rs1) imm
   rw [JoltISA.execProgram_instr_run_retire
     (instr := alignInstr)
     (rest := _)
@@ -314,7 +314,7 @@ theorem lwProgramAuto_nonzero_run
   let dval := loaded_dword_at js.sail daddr facts.bytes facts.aligned.no_ovf
   let jsLoad := stateAfterVRegWrite jsAlign (Vreg 41) dval
   let ldInstr : JoltISA.Instr :=
-    .LD .normal (.vreg (Vreg 41)) (.vreg (Vreg 41)) (0 : BitVec 12)
+    JoltISA.Encoded.LD .normal (.vreg (Vreg 41)) (.vreg (Vreg 41)) (0 : BitVec 12)
   rw [JoltISA.execProgram_instr_run_retire
     (instr := ldInstr)
     (rest := _)
@@ -331,7 +331,7 @@ theorem lwProgramAuto_nonzero_run
   let maskValue := jolt_virtual_window_mask_w_value h.rs1_val imm
   let jsMask := stateAfterVRegWrite jsLoad (Vreg 40) maskValue
   let maskInstr : JoltISA.Instr :=
-    .VirtualWindowMaskW (.vreg (Vreg 40)) (.xreg rs1) imm
+    JoltISA.Encoded.VirtualWindowMaskW (.vreg (Vreg 40)) (.xreg rs1) imm
   rw [JoltISA.execProgram_instr_run_retire
     (instr := maskInstr)
     (rest := _)
@@ -550,7 +550,7 @@ theorem lwProgramAuto_x0_run
     norm_num
 
   let assertInstr : JoltISA.Instr :=
-    .VirtualAssertWordAlignment rs1 imm
+    JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm
       (ExceptionType.E_Load_Addr_Align ())
   rw [JoltISA.execProgram_instr_run_retire
     (instr := assertInstr)
@@ -567,7 +567,7 @@ theorem lwProgramAuto_x0_run
   let jsAlign := stateAfterVRegWrite js (Vreg 42)
     (jolt_virtual_align_addr_value h.rs1_val imm)
   let alignInstr : JoltISA.Instr :=
-    .VirtualAlignAddr (.vreg (Vreg 42)) (.xreg rs1) imm
+    JoltISA.Encoded.VirtualAlignAddr (.vreg (Vreg 42)) (.xreg rs1) imm
   rw [JoltISA.execProgram_instr_run_retire
     (instr := alignInstr)
     (rest := _)
@@ -586,7 +586,7 @@ theorem lwProgramAuto_x0_run
   let dval := loaded_dword_at js.sail daddr facts.bytes facts.aligned.no_ovf
   let jsLoad := stateAfterVRegWrite jsAlign (Vreg 42) dval
   let ldInstr : JoltISA.Instr :=
-    .LD .normal (.vreg (Vreg 42)) (.vreg (Vreg 42)) (0 : BitVec 12)
+    JoltISA.Encoded.LD .normal (.vreg (Vreg 42)) (.vreg (Vreg 42)) (0 : BitVec 12)
   rw [JoltISA.execProgram_instr_run_retire
     (instr := ldInstr)
     (rest := _)
@@ -603,7 +603,7 @@ theorem lwProgramAuto_x0_run
   let maskValue := jolt_virtual_window_mask_w_value h.rs1_val imm
   let jsMask := stateAfterVRegWrite jsLoad (Vreg 41) maskValue
   let maskInstr : JoltISA.Instr :=
-    .VirtualWindowMaskW (.vreg (Vreg 41)) (.xreg rs1) imm
+    JoltISA.Encoded.VirtualWindowMaskW (.vreg (Vreg 41)) (.xreg rs1) imm
   rw [JoltISA.execProgram_instr_run_retire
     (instr := maskInstr)
     (rest := _)

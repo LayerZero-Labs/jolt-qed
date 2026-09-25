@@ -79,7 +79,7 @@ def slliBlock (dst : Dst) (src : Src) (shamt : BitVec 6) (tail : Program) : Prog
 virtual register, then multiply the value by that power of two. -/
 def sllBlock (dst : Dst) (value shift : Src) (scratch : VReg)
     (tail : Program) : Program :=
-  .instr (.VirtualPow2 (.vreg scratch) shift) <|
+  .instr (.VirtualPow2 (.vreg scratch) shift (0 : BitVec 64)) <|
   .instr (.MUL dst value (.vreg scratch)) tail
 
 /-- Rust `SRAI::inline_sequence`: run `VirtualSRAI` with the encoded bitmask. -/

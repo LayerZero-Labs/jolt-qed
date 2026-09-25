@@ -1,5 +1,5 @@
 import JoltBytecode.Bundles
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
+import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 
 open Sail PreSail LeanRV64D.Functions
@@ -46,17 +46,17 @@ theorem addiInstr_preserves_projected_vregs
     {js js' : SailJoltState}
     {result : ExecutionResult}
     (hrun :
-      (JoltISA.execInstr (.ADDI (.xreg rd) (.xreg rs1) imm)).run js =
+      (JoltISA.execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm)).run js =
         .ok result js') :
     Projection.ProjectedVRegsPreserved js js' := by
   have hsafe :
       JoltISA.InstrWritesNoProtectedVReg
-        (.ADDI (.xreg rd) (.xreg rs1) imm) := by
+        (JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm) := by
     simp only [JoltISA.InstrWritesNoProtectedVReg,
       JoltISA.DstWritesNoProtectedVReg]
   have hprotected :=
     JoltISA.execInstr_preserves_protected
-      (instr := .ADDI (.xreg rd) (.xreg rs1) imm)
+      (instr := JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm)
       (js := js) (js' := js') (result := result) hsafe hrun
   exact ⟨
     hprotected JoltISA.trapHandlerVReg rfl,
@@ -73,7 +73,8 @@ def addiInstrEqSailStatement
     (js : SailJoltState)
     (_h : UnarySourceReadWithLinkedCSRs rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.ADDI (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.pureWritebackNativeInstr rd
+      (JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm))).run js) =
     ((execute_ITYPE imm rs1 rd iop.ADDI).run js.sail)
 
 private abbrev op (rs1_val : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
@@ -86,11 +87,19 @@ theorem addiInstr_eq_sail
     (h : UnarySourceReadWithLinkedCSRs rs1 js) :
     addiInstrEqSailStatement imm rs1 rd js h := by
   unfold addiInstrEqSailStatement
+  -- Select Rust's no-op for x0; its full state agrees with a discarded write.
+  rw [NativeDispatch.pureWriteback_run_eq rd _ js (by
+    intro hx0
+    have hrd := JoltISA.eq_regidx_zero_of_isX0_eq_true hx0
+    subst rd
+    simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+      EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+      h.rs1_read, wX_bits_regidx_zero])]
   simp only [execute_ITYPE, EStateM.run, bind, EStateM.bind]
   simp only [h.rs1_read]
   obtain ⟨s', h_write⟩ := wX_shape rd (op h.rs1_val imm) js.sail
   simp only [pure, EStateM.pure, h_write]
-  simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+  simp only [JoltISA.execInstr, JoltISA.addWide_low, JoltISA.readSrc, JoltISA.writeDst, liftSail,
     bind, EStateM.bind, h.rs1_read, h_write]
   exact Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'
     (op h.rs1_val imm)

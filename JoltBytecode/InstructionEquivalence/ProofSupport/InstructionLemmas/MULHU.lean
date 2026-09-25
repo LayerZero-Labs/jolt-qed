@@ -24,7 +24,7 @@ theorem mulhu_run_vreg_xreg_xreg (vd : VReg) (lhs rhs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.MULHU (.vreg vd) (.xreg lhs) (.xreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then jolt_mulhu_value x y else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail
   simp only [h₁, h₂, bind, EStateM.bind, EStateM.run]
@@ -53,7 +53,7 @@ theorem exists_state_after_mulhu_run_vreg_xreg_xreg
   have h_rhs_current : rX_bits rhs js.sail = .ok y js.sail := by
     simpa only [h_sail] using h_rhs
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then jolt_mulhu_value x y else js.vregs r }
   refine ⟨js', h_lhs_current, h_rhs_current, ?_, ?_, ?_, ?_⟩
   · exact h_sail
@@ -73,7 +73,7 @@ theorem mulhu_run_vreg_vreg_xreg (vd lhs : VReg) (rhs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.MULHU (.vreg vd) (.vreg lhs) (.xreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then jolt_mulhu_value (js.vregs lhs) y else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [h, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
@@ -99,7 +99,7 @@ theorem exists_state_after_mulhu_run_vreg_vreg_xreg
   have h_rhs_current : rX_bits rhs js.sail = .ok y js.sail := by
     simpa only [h_sail] using h_rhs
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then jolt_mulhu_value (js.vregs lhs) y else js.vregs r }
   refine ⟨js', h_rhs_current, ?_, ?_, ?_, ?_⟩
   · exact h_sail

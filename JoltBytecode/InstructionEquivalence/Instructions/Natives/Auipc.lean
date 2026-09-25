@@ -1,5 +1,5 @@
 import JoltBytecode.Bundles
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
+import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 
@@ -17,9 +17,10 @@ def auipcInstrEqSailStatement
     (imm : BitVec 20)
     (rd : regidx)
     (js : SailJoltState)
-    (_h : NoSourceReadWithLinkedCSRs js) : Prop :=
+    (_h : AuipcInstrEqSailAssumptions js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.AUIPC (.xreg rd) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.pureWritebackNativeInstr rd
+      (JoltISA.Encoded.AUIPC (.xreg rd) imm))).run js) =
     ((execute_UTYPE imm rd uop.AUIPC).run js.sail)
 
 private theorem getArchPC_preservesSystemProjectRegs
@@ -78,14 +79,24 @@ theorem auipcInstr_eq_sail
     (imm : BitVec 20)
     (rd : regidx)
     (js : SailJoltState)
-    (h : NoSourceReadWithLinkedCSRs js) :
+    (h : AuipcInstrEqSailAssumptions js) :
     auipcInstrEqSailStatement imm rd js h := by
   unfold auipcInstrEqSailStatement
+  -- Select Rust's no-op for x0; its full state agrees with a discarded write.
+  rw [NativeDispatch.pureWriteback_run_eq rd _ js (by
+    intro hx0
+    have hrd := JoltISA.eq_regidx_zero_of_isX0_eq_true hx0
+    subst rd
+    obtain ⟨pc, hPC⟩ := h.pc_readable.exists_value
+    simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+      EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+      readReg_eq_of_get? Register.PC js.sail pc hPC, get_arch_pc, wX_bits_regidx_zero])]
   have hExec :
-      JoltISA.execInstr (.AUIPC (.xreg rd) imm) =
+      JoltISA.execInstr (JoltISA.Encoded.AUIPC (.xreg rd) imm) =
         liftSail (execute_UTYPE imm rd uop.AUIPC) := by
     funext js
     unfold JoltISA.execInstr execute_UTYPE JoltISA.writeDst liftSail get_arch_pc
+    simp only [JoltISA.addWide_low]
     simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
     cases hpc : Sail.readReg Register.PC js.sail with
     | error e s1 =>

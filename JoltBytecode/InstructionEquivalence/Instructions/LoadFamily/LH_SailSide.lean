@@ -26,7 +26,7 @@ theorem assertHalfwordBlockMisaligned (tail : JoltISA.Program)
     (val : BitVec 64) (hrx : rX_bits rs1 js.sail = .ok val js.sail)
     (hmis : load_effective_address val imm &&& (1 : BitVec 64) ≠ 0) :
     (JoltISA.execProgram
-      (.instr (.VirtualAssertHalfwordAlignment rs1 imm
+      (.instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm
         (ExceptionType.E_Load_Addr_Align ())) tail)).run js =
       .ok (ExecutionResult.Memory_Exception
         (Virtaddr (load_effective_address val imm),
@@ -36,7 +36,7 @@ theorem assertHalfwordBlockMisaligned (tail : JoltISA.Program)
       ExceptionType.E_Load_Addr_Align ())
   have hassert :
       (JoltISA.execInstr
-        (.VirtualAssertHalfwordAlignment rs1 imm
+        (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm
           (ExceptionType.E_Load_Addr_Align ()))).run js =
         .ok (ExecutionResult.Memory_Exception e) js := by
     simpa [e, load_effective_address] using
@@ -50,7 +50,7 @@ theorem assertHalfwordBlockMisaligned (tail : JoltISA.Program)
         (h_misaligned := by simpa [load_effective_address] using hmis))
   simpa [e] using
     (JoltISA.execProgram_instr_run_memory_exception
-      (.VirtualAssertHalfwordAlignment rs1 imm
+      (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm
         (ExceptionType.E_Load_Addr_Align ()))
       tail js js e hassert)
 

@@ -121,9 +121,9 @@ inline expansion at that call site. -/
 def amoPre64ProgramWithScratch
     (rs1 : regidx) (old dword shift inlineTmp : VReg) (tail : Program) :
     Program :=
-  .instr (.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-  .instr (.ANDI (.vreg shift) (.xreg rs1) (-8 : BitVec 12)) <|
-  .instr (.LD .amo (.vreg dword) (.vreg shift) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+  .instr (JoltISA.Encoded.ANDI (.vreg shift) (.xreg rs1) (-8 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.LD .amo (.vreg dword) (.vreg shift) (0 : BitVec 12)) <|
   .instr (.VirtualMULI (.vreg shift) (.xreg rs1) (8 : BitVec 64)) <|
   .instr (.VirtualShiftRightBitmask (.vreg inlineTmp) (.vreg shift)) <|
   .instr (.VirtualSRL (.vreg old) (.vreg dword) (.vreg inlineTmp)) <|
@@ -145,17 +145,17 @@ def amoPost64ProgramWithScratch
     (rs1 rd : regidx) (newValue : Src) (dword shift mask old inlineTmp : VReg) :
     Program :=
   let dst := amoDstFor rd
-  .instr (.ORI (.vreg mask) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ORI (.vreg mask) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
   .instr (.VirtualSRLI (.vreg mask) (.vreg mask) (srliBitmask (32 : BitVec 6))) <|
-  .instr (.VirtualPow2 (.vreg inlineTmp) (.vreg shift)) <|
+  .instr (.VirtualPow2 (.vreg inlineTmp) (.vreg shift) (0 : BitVec 64)) <|
   .instr (.MUL (.vreg mask) (.vreg mask) (.vreg inlineTmp)) <|
-  .instr (.VirtualPow2 (.vreg inlineTmp) (.vreg shift)) <|
+  .instr (.VirtualPow2 (.vreg inlineTmp) (.vreg shift) (0 : BitVec 64)) <|
   .instr (.MUL (.vreg shift) newValue (.vreg inlineTmp)) <|
   .instr (.XOR (.vreg shift) (.vreg dword) (.vreg shift)) <|
   .instr (.AND (.vreg shift) (.vreg shift) (.vreg mask)) <|
   .instr (.XOR (.vreg dword) (.vreg dword) (.vreg shift)) <|
-  .instr (.ANDI (.vreg mask) (.xreg rs1) (-8 : BitVec 12)) <|
-  .instr (.SD (.vreg mask) (.vreg dword) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ANDI (.vreg mask) (.xreg rs1) (-8 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.SD (.vreg mask) (.vreg dword) (0 : BitVec 12)) <|
   .instr (.VirtualSignExtendWord dst (.vreg old)) <|
   .done RETIRE_SUCCESS
 
@@ -171,10 +171,10 @@ def amoDoubleBinopProgram
   let old := amoDoubleBinopOldVRegFor rd
   let new := amoDoubleBinopNewVRegFor rd
   let dst := amoDstFor rd
-  .instr (.LD .amo (.vreg old) (.xreg rs1) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.LD .amo (.vreg old) (.xreg rs1) (0 : BitVec 12)) <|
   .instr (op (.vreg new) (.vreg old) (.xreg rs2)) <|
-  .instr (.SD (.xreg rs1) (.vreg new) (0 : BitVec 12)) <|
-  .instr (.ADDI dst (.vreg old) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg new) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI dst (.vreg old) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 def amoDoubleSelectProgram
@@ -184,13 +184,13 @@ def amoDoubleSelectProgram
   let new := amoNewVRegFor rd
   let tmp := amoTmpVRegFor rd
   let dst := amoDstFor rd
-  .instr (.LD .amo (.vreg old) (.xreg rs1) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.LD .amo (.vreg old) (.xreg rs1) (0 : BitVec 12)) <|
   .instr (cmpInstr (.vreg new) cmpLhs cmpRhs) <|
   .instr (.SUB (.vreg tmp) (.xreg rs2) (.vreg old)) <|
   .instr (.MUL (.vreg tmp) (.vreg tmp) (.vreg new)) <|
   .instr (.ADD (.vreg new) (.vreg old) (.vreg tmp)) <|
-  .instr (.SD (.xreg rs1) (.vreg new) (0 : BitVec 12)) <|
-  .instr (.ADDI dst (.vreg old) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.SD (.xreg rs1) (.vreg new) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI dst (.vreg old) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 def amoWordBinopProgram

@@ -115,7 +115,7 @@ private theorem slli_block_run_vreg_xreg
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualMULI (.vreg vd) (.xreg rs) (slliMultiplier shamt))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then shift_bits_left x shamt else js.vregs r } := by
   have h_value :
       jolt_virtual_muli_value x (slliMultiplier shamt) = shift_bits_left x shamt :=
@@ -134,7 +134,7 @@ private theorem slli_block_run_xreg_xreg
     (h : rX_bits rs js.sail = .ok x js.sail)
     (hw : wX_bits rd (shift_bits_left x shamt) js.sail = .ok () s') :
     (execInstr (.VirtualMULI (.xreg rd) (.xreg rs) (slliMultiplier shamt))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   have h_value :
       jolt_virtual_muli_value x (slliMultiplier shamt) = shift_bits_left x shamt :=
     slli_block_value_eq x shamt
@@ -148,7 +148,7 @@ private theorem slli_block_run_vreg_vreg
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualMULI (.vreg vd) (.vreg vs) (slliMultiplier shamt))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then shift_bits_left (js.vregs vs) shamt else js.vregs r } := by
   have h_value :
       jolt_virtual_muli_value (js.vregs vs) (slliMultiplier shamt) =
@@ -179,7 +179,7 @@ theorem exists_state_after_slli_block_run_vreg_xreg
         (execProgram (slliBlock (.vreg vd) (.xreg rs) shamt tail)).run js =
           (execProgram tail).run js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then shift_bits_left x shamt else js.vregs r }
   refine ⟨js', h, rfl, ?_, ?_, ?_⟩
   · simp [js']
@@ -206,7 +206,7 @@ theorem exists_state_after_slli_block_run_xreg_xreg
         (execProgram (slliBlock (.xreg rd) (.xreg rs) shamt tail)).run js =
           (execProgram tail).run js' := by
   obtain ⟨s', h_write⟩ := wX_shape rd (shift_bits_left x shamt) js.sail
-  let js' : SailJoltState := { sail := s', vregs := js.vregs }
+  let js' : SailJoltState := { js with sail := s' }
   have h_sail_after_slli :
       s' = stateAfterWrite js.sail rd (shift_bits_left x shamt) :=
     wX_bits_eq_stateAfterWrite rd (shift_bits_left x shamt) js.sail s' h_write
@@ -231,7 +231,7 @@ theorem exists_state_after_slli_block_run_vreg_vreg
         (execProgram (slliBlock (.vreg vd) (.vreg vs) shamt tail)).run js =
           (execProgram tail).run js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then shift_bits_left (js.vregs vs) shamt else js.vregs r }
   refine ⟨js', rfl, ?_, ?_, ?_⟩
   · simp [js']
@@ -259,15 +259,15 @@ theorem exists_state_after_sll_block_run_vreg_vreg_vreg
           (sllBlock (.vreg vd) (.vreg value) (.vreg shift) scratch tail)).run js =
           (execProgram tail).run js' := by
   let js_pow2 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = scratch then jolt_virtual_pow2_value (js.vregs shift) else js.vregs r }
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = vd then js_pow2.vregs value * js_pow2.vregs scratch else js_pow2.vregs r }
   have hpow2 :
-      (execInstr (.VirtualPow2 (.vreg scratch) (.vreg shift))).run js =
+      (execInstr (.VirtualPow2 (.vreg scratch) (.vreg shift) (0 : BitVec 64))).run js =
         .ok RETIRE_SUCCESS js_pow2 := by
     simpa [js_pow2] using virtual_pow2_run_vreg_vreg scratch shift js hscratch
   have hmul :
@@ -313,15 +313,15 @@ theorem exists_state_after_sll_block_run_vreg_xreg_vreg
           (sllBlock (.vreg vd) (.xreg value) (.vreg shift) scratch tail)).run js =
           (execProgram tail).run js' := by
   let js_pow2 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = scratch then jolt_virtual_pow2_value (js.vregs shift) else js.vregs r }
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = vd then x * js_pow2.vregs scratch else js_pow2.vregs r }
   have hpow2 :
-      (execInstr (.VirtualPow2 (.vreg scratch) (.vreg shift))).run js =
+      (execInstr (.VirtualPow2 (.vreg scratch) (.vreg shift) (0 : BitVec 64))).run js =
         .ok RETIRE_SUCCESS js_pow2 := by
     simpa [js_pow2] using virtual_pow2_run_vreg_vreg scratch shift js hscratch
   have h_read_pow2 : rX_bits value js_pow2.sail = .ok x js_pow2.sail := by
@@ -355,7 +355,7 @@ private theorem srli_block_run_vreg_vreg
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualSRLI (.vreg vd) (.vreg vs) (srliBitmask shamt))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then shift_bits_right (js.vregs vs) shamt else js.vregs r } := by
   have h_value :
@@ -378,7 +378,7 @@ theorem exists_state_after_srli_block_run_vreg_vreg
         (execProgram (srliBlock (.vreg vd) (.vreg vs) shamt tail)).run js =
           (execProgram tail).run js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then shift_bits_right (js.vregs vs) shamt else js.vregs r }
   refine ⟨js', rfl, ?_, ?_, ?_⟩
   · simp [js']
@@ -406,12 +406,12 @@ theorem exists_state_after_srl_block_run_vreg_vreg_vreg
           (srlBlock (.vreg vd) (.vreg value) (.vreg shift) scratch tail)).run js =
           (execProgram tail).run js' := by
   let js_bitmask : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = scratch then jolt_virtual_shift_right_bitmask_value (js.vregs shift)
         else js.vregs r }
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = vd then jolt_virtual_srl_value (js_bitmask.vregs value) (js_bitmask.vregs scratch)
         else js_bitmask.vregs r }
@@ -451,7 +451,7 @@ private theorem srai_block_run_vreg_vreg
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualSRAI (.vreg vd) (.vreg vs) (sraiBitmask shamt))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then shift_bits_right_arith (js.vregs vs) shamt else js.vregs r } := by
   have h_value :
@@ -474,7 +474,7 @@ private theorem srai_block_run_vreg_xreg
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualSRAI (.vreg vd) (.xreg rs) (sraiBitmask shamt))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then shift_bits_right_arith x shamt else js.vregs r } := by
   have h_value :
@@ -500,7 +500,7 @@ theorem exists_state_after_srai_block_run_vreg_vreg
         (execProgram (sraiBlock (.vreg vd) (.vreg vs) shamt tail)).run js =
           (execProgram tail).run js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then shift_bits_right_arith (js.vregs vs) shamt else js.vregs r }
   refine ⟨js', rfl, ?_, ?_, ?_⟩
   · simp [js']
@@ -529,7 +529,7 @@ theorem exists_state_after_srai_block_run_vreg_xreg
         (execProgram (sraiBlock (.vreg vd) (.xreg rs) shamt tail)).run js =
           (execProgram tail).run js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then shift_bits_right_arith x shamt else js.vregs r }
   refine ⟨js', h, rfl, ?_, ?_, ?_⟩
   · simp [js']

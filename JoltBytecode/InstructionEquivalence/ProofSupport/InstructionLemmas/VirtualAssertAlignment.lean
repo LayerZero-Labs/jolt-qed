@@ -23,13 +23,13 @@ theorem virtual_assert_halfword_alignment_run_aligned
     (js : SailJoltState) (baseValue : BitVec 64)
     (h_read : rX_bits base js.sail = .ok baseValue js.sail)
     (h_aligned : (baseValue + sign_extend (m := 64) imm) &&& (1 : BitVec 64) = 0) :
-    (execInstr (.VirtualAssertHalfwordAlignment base imm fault)).run js =
+    (execInstr (JoltISA.Encoded.VirtualAssertHalfwordAlignment base imm fault)).run js =
       .ok RETIRE_SUCCESS js := by
   have h_condition :
       (baseValue + sign_extend (m := 64) imm) &&& (1#64) = 0#64 := by
     simpa using h_aligned
   cases js
-  unfold execInstr liftSail
+  unfold execInstr readSrc liftSail
   simp [h_read, h_condition, EStateM.run, bind, EStateM.bind, pure, EStateM.pure]
 
 /-- A halfword-alignment assertion returns the supplied memory exception when
@@ -39,14 +39,14 @@ theorem virtual_assert_halfword_alignment_run_misaligned
     (js : SailJoltState) (baseValue : BitVec 64)
     (h_read : rX_bits base js.sail = .ok baseValue js.sail)
     (h_misaligned : (baseValue + sign_extend (m := 64) imm) &&& (1 : BitVec 64) ≠ 0) :
-    (execInstr (.VirtualAssertHalfwordAlignment base imm fault)).run js =
+    (execInstr (JoltISA.Encoded.VirtualAssertHalfwordAlignment base imm fault)).run js =
       .ok (ExecutionResult.Memory_Exception
         (Virtaddr (baseValue + sign_extend (m := 64) imm), fault)) js := by
   have h_condition :
       (baseValue + sign_extend (m := 64) imm) &&& (1#64) ≠ 0#64 := by
     simpa using h_misaligned
   cases js
-  unfold execInstr liftSail
+  unfold execInstr readSrc liftSail
   simp [h_read, h_condition, EStateM.run, bind, EStateM.bind, pure, EStateM.pure]
 
 /-- A word-alignment assertion retires successfully when the effective address
@@ -56,13 +56,13 @@ theorem virtual_assert_word_alignment_run_aligned
     (js : SailJoltState) (baseValue : BitVec 64)
     (h_read : rX_bits base js.sail = .ok baseValue js.sail)
     (h_aligned : (baseValue + sign_extend (m := 64) imm) &&& (3 : BitVec 64) = 0) :
-    (execInstr (.VirtualAssertWordAlignment base imm fault)).run js =
+    (execInstr (JoltISA.Encoded.VirtualAssertWordAlignment base imm fault)).run js =
       .ok RETIRE_SUCCESS js := by
   have h_condition :
       (baseValue + sign_extend (m := 64) imm) &&& (3#64) = 0#64 := by
     simpa using h_aligned
   cases js
-  unfold execInstr liftSail
+  unfold execInstr readSrc liftSail
   simp [h_read, h_condition, EStateM.run, bind, EStateM.bind, pure, EStateM.pure]
 
 /-- A word-alignment assertion returns the supplied memory exception when the
@@ -72,14 +72,14 @@ theorem virtual_assert_word_alignment_run_misaligned
     (js : SailJoltState) (baseValue : BitVec 64)
     (h_read : rX_bits base js.sail = .ok baseValue js.sail)
     (h_misaligned : (baseValue + sign_extend (m := 64) imm) &&& (3 : BitVec 64) ≠ 0) :
-    (execInstr (.VirtualAssertWordAlignment base imm fault)).run js =
+    (execInstr (JoltISA.Encoded.VirtualAssertWordAlignment base imm fault)).run js =
       .ok (ExecutionResult.Memory_Exception
         (Virtaddr (baseValue + sign_extend (m := 64) imm), fault)) js := by
   have h_condition :
       (baseValue + sign_extend (m := 64) imm) &&& (3#64) ≠ 0#64 := by
     simpa using h_misaligned
   cases js
-  unfold execInstr liftSail
+  unfold execInstr readSrc liftSail
   simp [h_read, h_condition, EStateM.run, bind, EStateM.bind, pure, EStateM.pure]
 
 end JoltISA

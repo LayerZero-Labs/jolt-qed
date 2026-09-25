@@ -20,9 +20,9 @@ theorem virtual_pow2_run_vreg_xreg (vd : VReg) (rs : regidx)
     (js : SailJoltState) (x : BitVec 64)
     (h : rX_bits rs js.sail = .ok x js.sail)
     (hvd : WritableVReg vd) :
-    (execInstr (.VirtualPow2 (.vreg vd) (.xreg rs))).run js =
+    (execInstr (.VirtualPow2 (.vreg vd) (.xreg rs) (0 : BitVec 64))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then jolt_virtual_pow2_value x else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail
   simp only [h, bind, EStateM.bind, EStateM.run]
@@ -39,10 +39,10 @@ theorem exists_state_after_virtual_pow2_run_vreg_xreg
       js'.sail = js.sail ∧
       js'.vregs vd = jolt_virtual_pow2_value x ∧
       (∀ r, r ≠ vd → js'.vregs r = js.vregs r) ∧
-      (execInstr (.VirtualPow2 (.vreg vd) (.xreg rs))).run js =
+      (execInstr (.VirtualPow2 (.vreg vd) (.xreg rs) (0 : BitVec 64))).run js =
         .ok RETIRE_SUCCESS js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then jolt_virtual_pow2_value x else js.vregs r }
   refine ⟨js', h, rfl, ?_, ?_, ?_⟩
   · simp [js']
@@ -54,9 +54,9 @@ theorem exists_state_after_virtual_pow2_run_vreg_xreg
 `2 ^ source[5:0]` and leaves Sail unchanged. -/
 theorem virtual_pow2_run_vreg_vreg (vd vs : VReg)
     (js : SailJoltState) (hvd : WritableVReg vd) :
-    (execInstr (.VirtualPow2 (.vreg vd) (.vreg vs))).run js =
+    (execInstr (.VirtualPow2 (.vreg vd) (.vreg vs) (0 : BitVec 64))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_pow2_value (js.vregs vs) else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg

@@ -1,8 +1,7 @@
 import JoltBytecode.Bundles
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
+import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Add
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 open Sail PreSail LeanRV64D.Functions
 
 set_option autoImplicit true
@@ -18,7 +17,8 @@ def addInstrEqSailStatement
     (js : SailJoltState)
     (_h : BinarySourceReadWithLinkedCSRs rs2 rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.ADD (.xreg rd) (.xreg rs1) (.xreg rs2))).run js) =
+    ((JoltISA.execInstr (JoltISA.pureWritebackNativeInstr rd
+      (.ADD (.xreg rd) (.xreg rs1) (.xreg rs2)))).run js) =
     ((execute_RTYPE rs2 rs1 rd rop.ADD).run js.sail)
 
 private abbrev op (rs1_val rs2_val : BitVec 64): BitVec 64 :=
@@ -34,6 +34,14 @@ theorem addInstr_eq_sail
     (h : BinarySourceReadWithLinkedCSRs rs2 rs1 js) :
     addInstrEqSailStatement rs2 rs1 rd js h := by
   unfold addInstrEqSailStatement
+  -- Select Rust's no-op for x0; its full state agrees with a discarded write.
+  rw [NativeDispatch.pureWriteback_run_eq rd _ js (by
+    intro hx0
+    have hrd := JoltISA.eq_regidx_zero_of_isX0_eq_true hx0
+    subst rd
+    simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+      EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+      h.rs1_read, h.rs2_read, wX_bits_regidx_zero])]
   -- RHS 
   simp only [execute_RTYPE, EStateM.run, bind, EStateM.bind]
   simp only [h.rs1_read, h.rs2_read]
@@ -43,7 +51,7 @@ theorem addInstr_eq_sail
   simp only [h_write]  -- WE have RHS retires successfully.
  
  -- LHS 
-  simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+  simp only [JoltISA.execInstr, JoltISA.addWide_low, JoltISA.readSrc, JoltISA.writeDst, liftSail,
     bind, EStateM.bind, h.rs1_read, h.rs2_read, h_write]
   exact Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'
    (op h.rs1_val h.rs2_val)

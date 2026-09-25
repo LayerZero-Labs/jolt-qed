@@ -6,6 +6,9 @@ Authors: Ari
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.RegisterAccess
 import JoltBytecode.JoltISA.Values
+import JoltBytecode.JoltISA.semantic_helpers
+import JoltBytecode.JoltISA.DeviceMemory
+import JoltBytecode.JoltISA.AdviceTape
 
 /-!
 # Jolt ISA semantics
@@ -34,104 +37,115 @@ namespace JoltISA
 def execInstr : Instr → JoltMonad ExecutionResult
   | .ADDI dst src imm => do
       let x ← readSrc src
-      writeDst dst (x + sign_extend (m := 64) imm)
+      writeDst dst (BitVec.ofNat 64 (addWide x imm))
       pure RETIRE_SUCCESS
   | .ADDIW dst src imm => do
       let x ← readSrc src
-      writeDst dst (jolt_addiw_value x imm)
+      writeDst dst (jolt_addiw_value64 x imm)
       pure RETIRE_SUCCESS
   | .ANDI dst src imm => do
       let x ← readSrc src
-      writeDst dst (x &&& sign_extend (m := 64) imm)
+      writeDst dst (Riscv.andi x imm)
       pure RETIRE_SUCCESS
   | .ORI dst src imm => do
       let x ← readSrc src
-      writeDst dst (x ||| sign_extend (m := 64) imm)
+      writeDst dst (Riscv.ori x imm)
       pure RETIRE_SUCCESS
   | .XORI dst src imm => do
       let x ← readSrc src
-      writeDst dst (x ^^^ sign_extend (m := 64) imm)
+      writeDst dst (jolt_xor_value x imm)
       pure RETIRE_SUCCESS
   | .SLTI dst src imm => do
       let x ← readSrc src
-      let y : BitVec 64 := sign_extend (m := 64) imm
-      writeDst dst (zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y)))
+      let y := imm
+      writeDst dst (jolt_slt_value x y)
       pure RETIRE_SUCCESS
   | .SLTIU dst src imm => do
       let x ← readSrc src
-      let y : BitVec 64 := sign_extend (m := 64) imm
-      writeDst dst (zero_extend (m := 64) (bool_to_bit (zopz0zI_u x y)))
+      let y := imm
+      writeDst dst (jolt_sltu_value x y)
       pure RETIRE_SUCCESS
   | .LUI dst imm => do
       writeDst dst imm
       pure RETIRE_SUCCESS
   | .AUIPC dst imm => do
       let pc ← liftSail (get_arch_pc ())
-      let off : BitVec 64 := sign_extend (m := 64) (imm +++ 0x000#12)
-      writeDst dst (pc + off)
+      let off := imm
+      writeDst dst (BitVec.ofNat 64 (addWide pc off))
       pure RETIRE_SUCCESS
   | .JAL dst imm => do
-      let link ← liftSail (get_next_pc ())
-      let pc ← liftSail (Sail.readReg Register.PC)
-      match ← liftSail (jump_to (pc + sign_extend (m := 64) imm)) with
-      | .Retire_Success () =>
-          writeDst dst link
-          pure RETIRE_SUCCESS
-      | other => pure other
+      -- Rust: tracer/src/instruction/jal.rs::JAL::exec.
+      -- At the instruction-body boundary, Sail PC represents self.address
+      -- (the decoded instruction's address), and Sail nextPC represents cpu.pc
+      -- (already advanced by the source instruction's length before exec).
+      -- This is a state representation, not a claim that Rust has a nextPC field.
+      let rustPC ← liftSail (Sail.readReg Register.nextPC)
+      let instructionAddress ← liftSail (Sail.readReg Register.PC)
+      -- Rust writes the old cpu.pc to rd first; writeDst discards writes to x0.
+      -- Rust's diagnostic track_call bookkeeping is outside this architectural model.
+      writeDst dst rustPC
+      -- Rust: cpu.pc = self.address.wrapping_add(imm).
+      -- BitVec addition wraps at 64 bits; Rust performs no alignment check here.
+      -- Update nextPC, which represents cpu.pc, leaving the instruction address intact.
+      liftSail (Sail.writeReg Register.nextPC (instructionAddress + imm))
+      pure RETIRE_SUCCESS
   | .JALR dst base imm => do
-      let link ← liftSail (get_next_pc ())
+      -- Rust: tracer/src/instruction/jalr.rs::JALR::exec.
+      -- nextPC represents the already advanced cpu.pc, as for JAL.
+      let rustPC ← liftSail (Sail.readReg Register.nextPC)
       let target ← readSrc base
-      match ← liftSail (jump_to (BitVec.update (target + sign_extend (m := 64) imm) 0 0#1)) with
-      | .Retire_Success () =>
-          writeDst dst link
-          pure RETIRE_SUCCESS
-      | other => pure other
+      -- Rust reads rs1 before writing rd, including when rd and rs1 alias.
+      -- It clears target bit 0 and writes cpu.pc without Sail's alignment check.
+      liftSail (Sail.writeReg Register.nextPC (jolt_jalr_target64 target imm))
+      -- Rust writes the saved old cpu.pc to rd after updating cpu.pc.
+      writeDst dst rustPC
+      pure RETIRE_SUCCESS
   | .BEQ lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if x = y then
+      if branchDecisionPure (.BEQ lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
-        liftSail (jump_to (pc + sign_extend (m := 64) imm))
+        liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
   | .BNE lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if x ≠ y then
+      if branchDecisionPure (.BNE lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
-        liftSail (jump_to (pc + sign_extend (m := 64) imm))
+        liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
   | .BLT lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if zopz0zI_s x y then
+      if branchDecisionPure (.BLT lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
-        liftSail (jump_to (pc + sign_extend (m := 64) imm))
+        liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
   | .BGE lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if zopz0zKzJ_s x y then
+      if branchDecisionPure (.BGE lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
-        liftSail (jump_to (pc + sign_extend (m := 64) imm))
+        liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
   | .BLTU lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if zopz0zI_u x y then
+      if branchDecisionPure (.BLTU lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
-        liftSail (jump_to (pc + sign_extend (m := 64) imm))
+        liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
   | .BGEU lhs rhs imm => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if zopz0zKzJ_u x y then
+      if branchDecisionPure (.BGEU lhs rhs imm) x y then
         let pc ← liftSail (Sail.readReg Register.PC)
-        liftSail (jump_to (pc + sign_extend (m := 64) imm))
+        liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
   | .FENCE =>
@@ -139,7 +153,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .ADD dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      writeDst dst (x + y)
+      writeDst dst (BitVec.ofNat 64 (addWide x y))
       pure RETIRE_SUCCESS
   | .ADDW dst lhs rhs => do
       let x ← readSrc lhs
@@ -149,7 +163,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .SUB dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      writeDst dst (x - y)
+      writeDst dst (BitVec.ofNat 64 (subWide x y))
       pure RETIRE_SUCCESS
   | .SUBW dst lhs rhs => do
       let x ← readSrc lhs
@@ -159,7 +173,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .MUL dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      writeDst dst (x * y)
+      writeDst dst (BitVec.ofNat 64 (mulWide x y))
       pure RETIRE_SUCCESS
   | .MULW dst lhs rhs => do
       let x ← readSrc lhs
@@ -174,7 +188,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .ANDN dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      writeDst dst (x &&& Complement.complement y)
+      writeDst dst (jolt_andn_value x y)
       pure RETIRE_SUCCESS
   | .VirtualMULI dst src imm => do
       let x ← readSrc src
@@ -184,11 +198,11 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc src
       writeDst dst (jolt_virtual_muliw_value x imm)
       pure RETIRE_SUCCESS
-  | .VirtualPow2 dst src => do
+  | .VirtualPow2 dst src _ => do
       let x ← readSrc src
       writeDst dst (jolt_virtual_pow2_value x)
       pure RETIRE_SUCCESS
-  | .VirtualPow2W dst src => do
+  | .VirtualPow2W dst src _ => do
       let x ← readSrc src
       writeDst dst (jolt_virtual_pow2w_value x)
       pure RETIRE_SUCCESS
@@ -198,14 +212,14 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .VirtualPow2IW dst imm => do
       writeDst dst (jolt_virtual_pow2iw_value imm)
       pure RETIRE_SUCCESS
-  | .VirtualShiftRightBitmask dst src => do
+  | .VirtualShiftRightBitmask dst src _ => do
       let x ← readSrc src
       writeDst dst (jolt_virtual_shift_right_bitmask_value x)
       pure RETIRE_SUCCESS
   | .VirtualShiftRightBitmaskI dst imm => do
       writeDst dst (jolt_virtual_shift_right_bitmaski_value imm)
       pure RETIRE_SUCCESS
-  | .VirtualShiftRightBitmaskW dst src => do
+  | .VirtualShiftRightBitmaskW dst src _ => do
       let x ← readSrc src
       writeDst dst (jolt_virtual_shift_right_bitmaskw_value x)
       pure RETIRE_SUCCESS
@@ -253,7 +267,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc src
       writeDst dst (jolt_virtual_rotriw_value x bitmask)
       pure RETIRE_SUCCESS
-  | .VirtualRev8W dst src => do
+  | .VirtualRev8W dst src _ => do
       let x ← readSrc src
       writeDst dst (jolt_virtual_rev8w_value x)
       pure RETIRE_SUCCESS
@@ -276,6 +290,11 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc lhs
       let y ← readSrc rhs
       writeDst dst (jolt_virtual_xorrot_value 63 x y)
+      pure RETIRE_SUCCESS
+  | .VirtualXORROTL1 dst lhs rhs => do
+      let x ← readSrc lhs
+      let y ← readSrc rhs
+      writeDst dst (jolt_virtual_xorrotl1_value x y)
       pure RETIRE_SUCCESS
   | .VirtualXORROTW16 dst lhs rhs => do
       let x ← readSrc lhs
@@ -315,22 +334,22 @@ def execInstr : Instr → JoltMonad ExecutionResult
   | .OR dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      writeDst dst (x ||| y)
+      writeDst dst (Riscv.ori x y)
       pure RETIRE_SUCCESS
   | .XOR dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      writeDst dst (x ^^^ y)
+      writeDst dst (jolt_xor_value x y)
       pure RETIRE_SUCCESS
   | .AND dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      writeDst dst (x &&& y)
+      writeDst dst (Riscv.andi x y)
       pure RETIRE_SUCCESS
   | .SLT dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      writeDst dst (zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y)))
+      writeDst dst (jolt_slt_value x y)
       pure RETIRE_SUCCESS
   | .SLTU dst lhs rhs => do
       let x ← readSrc lhs
@@ -339,19 +358,19 @@ def execInstr : Instr → JoltMonad ExecutionResult
       pure RETIRE_SUCCESS
   | .VirtualAlignAddr dst base imm => do
       let baseValue ← readSrc base
-      writeDst dst (jolt_virtual_align_addr_value baseValue imm)
+      writeDst dst (jolt_virtual_align_addr_value64 baseValue imm)
       pure RETIRE_SUCCESS
   | .VirtualWindowMaskB dst base imm => do
       let baseValue ← readSrc base
-      writeDst dst (jolt_virtual_window_mask_b_value baseValue imm)
+      writeDst dst (jolt_virtual_window_mask_b_value64 baseValue imm)
       pure RETIRE_SUCCESS
   | .VirtualWindowMaskH dst base imm => do
       let baseValue ← readSrc base
-      writeDst dst (jolt_virtual_window_mask_h_value baseValue imm)
+      writeDst dst (jolt_virtual_window_mask_h_value64 baseValue imm)
       pure RETIRE_SUCCESS
   | .VirtualWindowMaskW dst base imm => do
       let baseValue ← readSrc base
-      writeDst dst (jolt_virtual_window_mask_w_value baseValue imm)
+      writeDst dst (jolt_virtual_window_mask_w_value64 baseValue imm)
       pure RETIRE_SUCCESS
   | .VirtualPext dst value mask => do
       let x ← readSrc value
@@ -378,39 +397,39 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let ea ← readSrc address
       writeDst dst (jolt_virtual_shift_data_w_value x ea)
       pure RETIRE_SUCCESS
-  | .VirtualSignExtendWord dst src => do
+  | .VirtualSignExtendWord dst src _ => do
       let x ← readSrc src
-      writeDst dst (sign_extend (m := 64) (Sail.BitVec.extractLsb x 31 0))
+      writeDst dst (jolt_virtual_sign_extend_word_value x)
       pure RETIRE_SUCCESS
-  | .VirtualZeroExtendWord dst src => do
+  | .VirtualZeroExtendWord dst src _ => do
       let x ← readSrc src
-      writeDst dst (zero_extend (m := 64) (Sail.BitVec.extractLsb x 31 0))
+      writeDst dst (jolt_virtual_zero_extend_word_value x)
       pure RETIRE_SUCCESS
-  | .VirtualMovsign dst src => do
+  | .VirtualMovsign dst src _ => do
       let x ← readSrc src
       writeDst dst (jolt_movsign_value x)
       pure RETIRE_SUCCESS
   | .VirtualAssertHalfwordAlignment base imm fault => do
-      let baseValue ← liftSail (rX_bits base)
-      let addr := baseValue + sign_extend (m := 64) imm
+      let baseValue ← readSrc base
+      let addr := BitVec.ofNat 64 (addWide baseValue imm)
       if addr &&& (1 : BitVec 64) = 0 then
         pure RETIRE_SUCCESS
       else
         pure (ExecutionResult.Memory_Exception (Virtaddr addr, fault))
   | .VirtualAssertWordAlignment base imm fault => do
-      let baseValue ← liftSail (rX_bits base)
-      let addr := baseValue + sign_extend (m := 64) imm
+      let baseValue ← readSrc base
+      let addr := BitVec.ofNat 64 (addWide baseValue imm)
       if addr &&& (3 : BitVec 64) = 0 then
         pure RETIRE_SUCCESS
       else
         pure (ExecutionResult.Memory_Exception (Virtaddr addr, fault))
   | .LD faultClass dst base imm => do
       let baseValue ← readSrc base
-      let addr := baseValue + sign_extend (m := 64) imm
+      let addr := (baseValue + imm)
       if addr &&& (7 : BitVec 64) = 0 then
-        match ← liftSail (vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false) with
+        match ← readMemoryWord addr with
         | .Ok dword =>
-            writeDst (sideEffectingDst dst) dword
+            writeDst dst dword
             pure RETIRE_SUCCESS
         | .Err e => pure e
       else
@@ -418,37 +437,45 @@ def execInstr : Instr → JoltMonad ExecutionResult
           (Virtaddr addr, LoadFaultClass.alignFault faultClass))
   | .SD base value imm => do
       let baseValue ← readSrc base
-      let addr := baseValue + sign_extend (m := 64) imm
+      let addr := (baseValue + imm)
       let stored ← readSrc value
       if addr &&& (7 : BitVec 64) = 0 then
-        match ← liftSail (vmem_write_addr (Virtaddr addr) 8 stored (Store Data) false false false) with
+        match ← writeMemoryWord addr stored with
         | .Ok _ => pure RETIRE_SUCCESS
         | .Err e => pure e
       else
         pure (ExecutionResult.Memory_Exception
           (Virtaddr addr, ExceptionType.E_SAMO_Addr_Align ()))
-  | .VirtualAdvice dst value => do
+  | .VirtualAdvice dst value _ => do
       writeDst dst value
       pure RETIRE_SUCCESS
-  | .VirtualAdviceLoad dst value => do
-      writeDst dst value
+  | .VirtualAdviceLoad rd num_bytes => fun cpu =>
+      match readAdviceTape cpu.adviceTape num_bytes with
+      | none => .error (Error.Assertion "VirtualAdviceLoad: invalid width or exhausted advice tape") cpu
+      | some (advice_value, advice_tape) =>
+          (do
+            writeDst rd advice_value
+            pure RETIRE_SUCCESS) { cpu with adviceTape := advice_tape }
+  -- Rust: [VirtualAdviceLen::exec](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_advice_len.rs:18).
+  | .VirtualAdviceLen rd _ _ => do
+      let cpu ← get
+      let remaining :=
+        cpu.adviceTape.bytes.size - cpu.adviceTape.readPosition
+      writeDst rd (BitVec.ofNat 64 remaining)
       pure RETIRE_SUCCESS
-  | .VirtualAdviceLen dst remaining => do
-      writeDst dst remaining
-      pure RETIRE_SUCCESS
-  | .VirtualHostIO =>
+  | .VirtualHostIO _ _ _ =>
       pure RETIRE_SUCCESS
   | .VirtualAssertEQ lhs rhs imm => do
-      if imm = 0#13 then
+      if imm = 0#128 then
         let x ← readSrc lhs
         let y ← readSrc rhs
-        if x = y then pure RETIRE_SUCCESS
+        if jolt_assert_eq x y then pure RETIRE_SUCCESS
         else throw (Error.Assertion "VirtualAssertEQ")
       else
         -- WARNING: Rust only logs a warning here; logs are not modeled in execution state.
         -- Unclear why Rust source does this, but this models the Rust code
         pure RETIRE_SUCCESS
-  | .VirtualAssertValidDiv0 divisor quotient => do
+  | .VirtualAssertValidDiv0 divisor quotient _ => do
       let d ← readSrc divisor
       let q ← readSrc quotient
       if d = 0#64 ∧ q ≠ (-1 : BitVec 64) then
@@ -460,21 +487,21 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc value
       writeDst dst (jolt_virtual_negate_if_value sign x)
       pure RETIRE_SUCCESS
-  | .VirtualAssertValidUnsignedRemainder remainder divisor => do
+  | .VirtualAssertValidUnsignedRemainder remainder divisor _ => do
       let r ← readSrc remainder
       let d ← readSrc divisor
       if d = 0#64 ∨ r.toNat < d.toNat then
         pure RETIRE_SUCCESS
       else
         throw (Error.Assertion "VirtualAssertValidUnsignedRemainder: r ≥ d ∧ d ≠ 0")
-  | .VirtualAssertMulUNoOverflow lhs rhs => do
+  | .VirtualAssertMulUNoOverflow lhs rhs _ => do
       let x ← readSrc lhs
       let y ← readSrc rhs
-      if x.toNat * y.toNat < 2^64 then
+      if mulWide x y < 2^64 then
         pure RETIRE_SUCCESS
       else
         throw (Error.Assertion "VirtualAssertMulUNoOverflow")
-  | .VirtualAssertLTE lhs rhs => do
+  | .VirtualAssertLTE lhs rhs _ => do
       let x ← readSrc lhs
       let y ← readSrc rhs
       if x.toNat ≤ y.toNat then

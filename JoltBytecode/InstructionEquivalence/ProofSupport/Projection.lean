@@ -16,6 +16,18 @@ noncomputable section
 
 namespace Projection
 
+/-- Running any Sail computation in the embedded state and projecting its result
+is exactly the same as running it directly. This holds for both success and error
+results: `liftSail` changes only `js.sail`, leaving all Jolt-only fields untouched.
+
+This is plain `projectResult`. For `System.systemProjectResult`, the CSR overlay
+also needs to agree with the final Sail state; see
+`systemProjectResult_liftSail_eq_of_preservesSystemProjectRegs` below. -/
+theorem projectResult_liftSail (m : SailM α) (js : SailJoltState) :
+    projectResult ((liftSail m) js) = m js.sail := by
+  unfold liftSail
+  cases m js.sail <;> rfl
+
 /-- The persistent CSR virtual registers materialized by `systemProject` are
 unchanged between two Jolt states. -/
 def ProjectedVRegsPreserved (before after : SailJoltState) : Prop :=
@@ -40,8 +52,7 @@ need to mention the legacy plain projection. -/
 theorem systemProject_eq_sail_of_compatible
     (js : SailJoltState)
     (h : LinkedCSRs js) :
-    System.systemProject js = js.sail :=
-  System.systemProject_eq_project_of_compatible js h
+    System.systemProject js = js.sail := System.systemProject_eq_project_of_compatible js h
 
 /-!
 ## System-Project Frame Lemmas
@@ -66,6 +77,10 @@ theorem systemProjectResult_pure_retire
     ((pure RETIRE_SUCCESS : SailM ExecutionResult) js.sail) := by
   simp only [pure, EStateM.pure, System.systemProjectResult]
   rw [systemProject_eq_sail_of_compatible js hlinked]
+
+/-- Lifting a pure Sail result leaves the Jolt state unchanged. -/
+theorem liftSail_pure (value : α) :
+    liftSail (pure value : SailM α) = (pure value : JoltMonad α) := rfl
 
 /-- `liftSail` distributes over bind. This lets instruction proofs rewrite a
 lifted Sail `do` block into one lifted monadic line at a time. -/
@@ -292,6 +307,87 @@ theorem jump_to_preservesSystemProjectRegs
       MonadExceptOf.throw, EStateM.throw, ResultPreservesSystemProjectRegs] using
       preservesSystemProjectRegs_refl s
 
+/-- Writing an integer register preserves the six CSRs overlaid by system projection. -/
+theorem stateAfterWrite_preservesSystemProjectRegs
+    (s : SailState)
+    (rd : regidx)
+    (value : BitVec 64) :
+    PreservesSystemProjectRegs s (stateAfterWrite s rd value) := by
+  refine
+    { mstatus := ?_
+      mtvec := ?_
+      mscratch := ?_
+      mepc := ?_
+      mcause := ?_
+      mtval := ?_ }
+  all_goals
+    reg_cases rd <;>
+      simp_all [stateAfterWrite, wX_update_regs, Std.ExtDHashMap.get?_insert]
+
+/-- Sail integer-register writes preserve the six CSRs overlaid by system projection. -/
+theorem wX_bits_preservesSystemProjectRegs
+    (rd : regidx)
+    (value : BitVec 64)
+    (s : SailState) :
+    ResultPreservesSystemProjectRegs s ((wX_bits rd value) s) := by
+  obtain ⟨s', hwrite⟩ := wX_shape rd value s
+  simp only [hwrite, ResultPreservesSystemProjectRegs]
+  rw [wX_bits_eq_stateAfterWrite rd value s s' hwrite]
+  exact stateAfterWrite_preservesSystemProjectRegs s rd value
+
+/-- If Sail's PC alignment operation accepts the target unchanged, `jump_to`
+succeeds and writes only `nextPC`. This includes successful configuration reads. -/
+theorem jump_to_of_aligned (target : BitVec 64) (s : SailState)
+    (haligned : Assumptions.MepcReadAligned target s) :
+    jump_to target s = .ok RETIRE_SUCCESS (System.setNextPCState s target) := by
+  have ha := haligned.value_eq
+  unfold align_pc at ha
+  cases hzca : currentlyEnabled extension.Ext_Zca s with
+  | error e s' =>
+      simp [hzca, bind, EStateM.bind] at ha
+  | ok zca s' =>
+      have hs : s' = s := by
+        cases zca <;> simp [hzca, bind, EStateM.bind, pure, EStateM.pure] at ha <;> exact ha.2
+      subst s'
+      have hbit0 : (BitVec.access target 0 == 0#1) = true := by
+        cases zca <;>
+          simp only [hzca, bind, EStateM.bind, pure, EStateM.pure,
+            Bool.false_eq_true, if_false, if_true,
+            EStateM.Result.ok.injEq, and_true] at ha
+        all_goals
+          rw [← ha]
+          simp [Sail.BitVec.access, Sail.BitVec.update, Sail.BitVec.updateSubrange,
+            Sail.BitVec.updateSubrange', zeros]
+      have hAlignOk :
+          (bit_to_bool (BitVec.access target 1) && LeanRV64D.Functions.not zca) = false := by
+        cases zca with
+        | true => simp [LeanRV64D.Functions.not]
+        | false =>
+            simp only [hzca, bind, EStateM.bind, pure, EStateM.pure,
+              Bool.false_eq_true, if_false, EStateM.Result.ok.injEq, and_true] at ha
+            rw [← ha]
+            simp [bit_to_bool, bool_bit_backwards, LeanRV64D.Functions.not,
+              Sail.BitVec.access, Sail.BitVec.updateSubrange,
+              Sail.BitVec.updateSubrange', zeros]
+      unfold jump_to ext_control_check_pc SailME.run PreSail.PreSailME.run
+      unfold set_next_pc System.setNextPCState redirect_callback
+      unfold Sail.assert PreSail.assert Sail.writeReg PreSail.writeReg
+      simp only [hbit0, hzca, hAlignOk, Bool.false_eq_true, if_true,
+        if_false, bind, EStateM.bind, pure, EStateM.pure,
+        ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
+        ExceptT.pure, ExceptT.lift, MonadLift.monadLift, monadLift, liftM,
+        EStateM.map, Functor.map, modify, modifyGet, MonadStateOf.modifyGet,
+        EStateM.modifyGet]
+
+/-- Writing an integer register commutes with writing `nextPC`. -/
+theorem stateAfterWrite_setNextPCState (s : SailState) (rd : regidx) (value target : BitVec 64) :
+    stateAfterWrite (System.setNextPCState s target) rd value =
+      System.setNextPCState (stateAfterWrite s rd value) target := by
+  unfold stateAfterWrite System.setNextPCState
+  congr 1
+  reg_cases rd <;>
+    simp_all [wX_update_regs, System.extDHashMap_insert_comm_of_ne]
+
 /- Projection bridge: preserving these six Sail registers is exactly what is
 needed to keep Jolt's linked CSR virtual registers linked after changing only
 the embedded Sail state. -/
@@ -312,6 +408,11 @@ theorem linkedCSRs_of_preservesSystemProjectRegs
   · exact ⟨by rw [hpres.mcause, hmcause.value_eq]⟩
   · exact ⟨by rw [hpres.mtval, hmtval.value_eq]⟩
 
+/--
+When the sail csrs start as equal to corresponding vregs in `js`
+(given by `hlinked`) and the sail csrs do not change between
+js.sail and new sail state s1 then Systen project is just project.:
+-/
 theorem systemProject_eq_sail_of_preservesSystemProjectRegs
     (js : SailJoltState)
     (s1 : SailState)
@@ -339,6 +440,20 @@ theorem systemProjectResult_liftSail_eq_of_preservesSystemProjectRegs
       simp only [hm] at hpres ⊢
       rw [systemProject_eq_sail_of_preservesSystemProjectRegs
         js s1 hlinked hpres]
+
+/-- Generic equivalence rule for a Jolt computation that runs a lifted Sail
+computation. Initial CSR agreement and preservation of the six overlaid Sail
+CSRs ensure that system projection returns the same result, including failures.
+The execution equality must be proved independently; this rule does not assume
+that an arbitrary Jolt instruction implements the corresponding Sail instruction. -/
+theorem systemProjectResult_eq_of_eq_liftSail
+    {j : JoltMonad α} {m : SailM α} {js : SailJoltState}
+    (hexec : j = liftSail m)
+    (hlinked : LinkedCSRs js)
+    (hpres : ResultPreservesSystemProjectRegs js.sail (m js.sail)) :
+    System.systemProjectResult (j js) = m js.sail := by
+  rw [hexec]
+  exact systemProjectResult_liftSail_eq_of_preservesSystemProjectRegs hlinked hpres
 
 /-- Projecting after an architectural x-register write is the same as writing
 that x-register after projecting. -/
@@ -436,24 +551,24 @@ theorem systemProjectResult_pure_retire_after_xreg_write
     (hlinked : LinkedCSRs js)
     (hwrite : wX_bits rd value js.sail = .ok () s') :
     System.systemProjectResult (
-     (pure RETIRE_SUCCESS : JoltMonad ExecutionResult) ({ sail := s', vregs := js.vregs } : SailJoltState)
+     (pure RETIRE_SUCCESS : JoltMonad ExecutionResult) ({ js with sail := s' } : SailJoltState)
      ) 
     =
     ((pure RETIRE_SUCCESS : SailM ExecutionResult) s') := by
   have h_project_initial : System.systemProject js = js.sail :=
     systemProject_eq_sail_of_compatible js hlinked
   have h_final_sail :
-      ({ sail := s', vregs := js.vregs } : SailJoltState).sail =
+      ({ js with sail := s' } : SailJoltState).sail =
         stateAfterWrite js.sail rd value :=
     wX_bits_eq_stateAfterWrite rd value js.sail s' hwrite
   have h_projected_vregs :
       ProjectedVRegsPreserved js
-        ({ sail := s', vregs := js.vregs } : SailJoltState) := by
+        ({ js with sail := s' } : SailJoltState) := by
     unfold ProjectedVRegsPreserved
     exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
   simp only [pure, EStateM.pure, System.systemProjectResult]
   rw [systemProject_stateAfterWrite_of_projected_vregs_preserved
-    js ({ sail := s', vregs := js.vregs } : SailJoltState) rd value
+    js ({ js with sail := s' } : SailJoltState) rd value
       h_final_sail h_projected_vregs]
   rw [h_project_initial]
   rw [← h_final_sail]

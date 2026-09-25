@@ -41,7 +41,7 @@ theorem vreg_MUL_from_real_vs2_run
     (hvd : WritableVReg vd) :
     (JoltISA.execInstr (.MUL (.vreg vd) (.vreg vs1) (.xreg rs2))).run js =
       .ok RETIRE_SUCCESS
-      { sail := js.sail
+      { js with
         vregs := fun r =>
           if r = vd then js.vregs vs1 * rs2_val
           else js.vregs r } :=
@@ -60,7 +60,7 @@ theorem vreg_MUL_from_real_vs2_run_ex
       (∀ k, k ≠ vd → js'.vregs k = js.vregs k) ∧
       js'.sail = js.sail := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then js.vregs vs1 * rs2_val else js.vregs r }
   refine ⟨js', ?_, ?_, ?_, rfl⟩
   · simpa only [js'] using vreg_MUL_from_real_vs2_run vd vs1 rs2 js rs2_val hrs2 hvd
@@ -78,7 +78,7 @@ theorem vreg_SUB_from_real_vs1_run
     (hvd : WritableVReg vd) :
     (JoltISA.execInstr (.SUB (.vreg vd) (.xreg rs1) (.vreg vs2))).run js =
       .ok RETIRE_SUCCESS
-      { sail := js.sail
+      { js with
         vregs := fun r =>
           if r = vd then rs1_val - js.vregs vs2
           else js.vregs r } :=
@@ -97,7 +97,7 @@ theorem vreg_SUB_from_real_vs1_run_ex
       (∀ k, k ≠ vd → js'.vregs k = js.vregs k) ∧
       js'.sail = js.sail := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then rs1_val - js.vregs vs2 else js.vregs r }
   refine ⟨js', ?_, ?_, ?_, rfl⟩
   · simpa only [js'] using vreg_SUB_from_real_vs1_run vd rs1 vs2 js rs1_val hrs1 hvd
@@ -210,7 +210,7 @@ def phase_remainder_bound (rs1 rs2 : regidx) : JoltISA.Program :=
 
 /-- Phase 5 — move the quotient advice from v0 into real register rd. -/
 def phase_writeback (rd : regidx) : JoltISA.Program :=
-  .instr (.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 theorem phase_setup_run
@@ -224,7 +224,7 @@ theorem phase_setup_run
       js'.sail = js.sail := by
   unfold phase_setup
   let s1 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = v0VReg then q else js.vregs r }
   have h1 : (JoltISA.execInstr (.VirtualAdvice (.vreg v0VReg) q)).run js =
       .ok RETIRE_SUCCESS s1 :=
@@ -340,9 +340,9 @@ theorem phase_writeback_run
     have hz : sign_extend (m := 64) (0 : BitVec 12) = 0#64 := by decide
     rw [hz, BitVec.add_zero]
   obtain ⟨s', hw⟩ := wX_shape rd q js.sail
-  refine ⟨{ sail := s', vregs := js.vregs }, ?_, ?_⟩
+  refine ⟨{ js with sail := s' }, ?_, ?_⟩
   · have hrun := JoltISA.addi_run_xreg_vreg rd v0VReg 0 js s' (by rw [hq]; exact hw)
-    rw [JoltISA.execProgram_instr_run_retire _ _ js { sail := s', vregs := js.vregs } hrun]
+    rw [JoltISA.execProgram_instr_run_retire _ _ js { js with sail := s' } hrun]
     rfl
   · show s' = stateAfterWrite js_ref rd q
     rw [← h_sail]
@@ -509,8 +509,8 @@ theorem phase_writeback_run_sound
     rw [hz, BitVec.add_zero]
   obtain ⟨s', hw⟩ := wX_shape rd q js.sail
   have hp_concrete :
-      (JoltISA.execInstr (.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } :=
+      (JoltISA.execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg v0VReg) (0 : BitVec 12))).run js =
+      .ok RETIRE_SUCCESS { js with sail := s' } :=
     JoltISA.addi_run_xreg_vreg rd v0VReg 0 js s' (by rw [hq]; exact hw)
   rw [hp_concrete] at hrun
   cases hrun

@@ -1,7 +1,7 @@
 import JoltBytecode.JoltISA.Core
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
+import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 
 open Sail PreSail LeanRV64D.Functions
 
@@ -17,7 +17,8 @@ def andnInstrEqSailStatement
     (js : SailJoltState)
     (_h : BinarySourceReadWithLinkedCSRs rs2 rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.ANDN (.xreg rd) (.xreg rs1) (.xreg rs2))).run js) =
+    ((JoltISA.execInstr (JoltISA.pureWritebackNativeInstr rd
+      (.ANDN (.xreg rd) (.xreg rs1) (.xreg rs2)))).run js) =
     ((execute_ZBB_RTYPE rs2 rs1 rd brop_zbb.ANDN).run js.sail)
 
 
@@ -30,7 +31,15 @@ theorem andnInstr_eq_sail
     (js : SailJoltState)
     (h : BinarySourceReadWithLinkedCSRs rs2 rs1 js) :
     andnInstrEqSailStatement rs2 rs1 rd js h := by
-  unfold andnInstrEqSailStatement 
+  unfold andnInstrEqSailStatement
+  -- Select Rust's no-op for x0; its full state agrees with a discarded write.
+  rw [NativeDispatch.pureWriteback_run_eq rd _ js (by
+    intro hx0
+    have hrd := JoltISA.eq_regidx_zero_of_isX0_eq_true hx0
+    subst rd
+    simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+      EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
+      h.rs1_read, h.rs2_read, wX_bits_regidx_zero])]
   -- parsing the RHS of the main theorem statement 
   simp only [execute_ZBB_RTYPE] -- Tell the giant match block we are doing ANDN
   simp only [EStateM.run_bind] -- Go from do notation to nested matches

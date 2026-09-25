@@ -273,7 +273,7 @@ theorem virtual_pext_run_vreg_vreg_vreg (vd value mask : VReg)
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualPext (.vreg vd) (.vreg value) (.vreg mask))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_pext_value (js.vregs value) (js.vregs mask)
             else js.vregs r } := by
@@ -288,7 +288,7 @@ theorem virtual_pext_signed_run_vreg_vreg_vreg (vd value mask : VReg)
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualPextSigned (.vreg vd) (.vreg value) (.vreg mask))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_pext_signed_value (js.vregs value) (js.vregs mask)
             else js.vregs r } := by
@@ -304,7 +304,7 @@ theorem virtual_pext_run_xreg_vreg_vreg (rd : regidx) (value mask : VReg)
     (hwrite : wX_bits rd (jolt_virtual_pext_value (js.vregs value) (js.vregs mask))
       js.sail = .ok () s') :
     (execInstr (.VirtualPext (.xreg rd) (.vreg value) (.vreg mask))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [hwrite, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
@@ -316,7 +316,7 @@ theorem virtual_pext_signed_run_xreg_vreg_vreg (rd : regidx) (value mask : VReg)
       (jolt_virtual_pext_signed_value (js.vregs value) (js.vregs mask))
       js.sail = .ok () s') :
     (execInstr (.VirtualPextSigned (.xreg rd) (.vreg value) (.vreg mask))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [hwrite, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]

@@ -333,28 +333,28 @@ that is hard for Lean to elaborate.
 -/
 
 private def swWordShiftState (js : SailJoltState) : SailJoltState :=
-  { sail := js.sail
+  { js with
     vregs := fun r =>
       if r = JoltISA.inlineTmp0 then
         shift_bits_left (js.vregs JoltISA.inlineTmp0) (3 : BitVec 6)
       else js.vregs r }
 
 private def swWordOnesState (js : SailJoltState) : SailJoltState :=
-  { sail := js.sail
+  { js with
     vregs := fun r =>
       if r = JoltISA.inlineTmp3 then
         (0#64) ||| sign_extend (m := 64) (-1 : BitVec 12)
       else js.vregs r }
 
 private def swWordBaseMaskState (js : SailJoltState) : SailJoltState :=
-  { sail := js.sail
+  { js with
     vregs := fun r =>
       if r = JoltISA.inlineTmp3 then
         shift_bits_right (js.vregs JoltISA.inlineTmp3) (32 : BitVec 6)
       else js.vregs r }
 
 private def swWordMaskState (js : SailJoltState) : SailJoltState :=
-  { sail := js.sail
+  { js with
     vregs := fun r =>
       if r = JoltISA.inlineTmp3 then
         shift_bits_left (js.vregs JoltISA.inlineTmp3)
@@ -395,10 +395,10 @@ materializing all ones in `v3`. -/
 private theorem swWordOnesStep (rest : JoltISA.Program) (js : SailJoltState)
     (hx0 : rX_bits (regidx.Regidx 0) js.sail = .ok 0#64 js.sail) :
     (JoltISA.execProgram
-      (.instr (.ORI (.vreg JoltISA.inlineTmp3) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) rest)).run js =
+      (.instr (JoltISA.Encoded.ORI (.vreg JoltISA.inlineTmp3) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) rest)).run js =
       (JoltISA.execProgram rest).run (swWordOnesState js) := by
   have h :
-      (JoltISA.execInstr (.ORI (.vreg JoltISA.inlineTmp3) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12))).run js =
+      (JoltISA.execInstr (JoltISA.Encoded.ORI (.vreg JoltISA.inlineTmp3) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12))).run js =
         .ok RETIRE_SUCCESS (swWordOnesState js) := by
     simpa [swWordOnesState] using
       (JoltISA.ori_run_vreg_xreg JoltISA.inlineTmp3 (regidx.Regidx 0)
@@ -439,13 +439,13 @@ private theorem swWordMaskShiftStep (rest : JoltISA.Program) (js : SailJoltState
       (JoltISA.sllBlock (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) JoltISA.inlineTmp4 rest)).run js =
       (JoltISA.execProgram rest).run (swWordMaskState js) := by
   let js_pow2 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.inlineTmp4 then
           jolt_virtual_pow2_value (js.vregs JoltISA.inlineTmp0)
         else js.vregs r }
   have hpow2 :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp0))).run js =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp0) (0 : BitVec 64))).run js =
         .ok RETIRE_SUCCESS js_pow2 := by
     simpa [js_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp0 js
@@ -514,9 +514,9 @@ theorem setupBlock (rest : JoltISA.Program)
       Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail) :
     ∃ js_load : SailJoltState,
       (JoltISA.execProgram
-        (.instr (.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
-         .instr (.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
-         .instr (.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) rest)).run js =
+        (.instr (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
+         .instr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
+         .instr (JoltISA.Encoded.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) rest)).run js =
         (JoltISA.execProgram rest).run js_load ∧
       js_load.sail = js.sail ∧
       js_load.vregs JoltISA.inlineTmp0 = load_effective_address val imm ∧
@@ -529,23 +529,23 @@ theorem setupBlock (rest : JoltISA.Program)
   let dword := loaded_dword_at js.sail base (by simpa [base] using hbytes)
     (by simpa [base] using h_base_aligned.no_ovf)
   let js0 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = JoltISA.inlineTmp0 then ea else js.vregs r }
   let js1 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = JoltISA.inlineTmp1 then base else js0.vregs r }
   let js_load : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = JoltISA.inlineTmp2 then dword else js1.vregs r }
   have haddi :
-      (JoltISA.execInstr (.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm)).run js =
+      (JoltISA.execInstr (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm)).run js =
         .ok RETIRE_SUCCESS js0 := by
     simpa [js0, ea, load_effective_address] using
       (JoltISA.addi_run_vreg_xreg JoltISA.inlineTmp0 rs1 imm js val hrx
         (by unfold WritableVReg; decide))
   have h8 : sign_extend (m := 64) (-8 : BitVec 12) = (-8 : BitVec 64) := by decide
   have handi :
-      (JoltISA.execInstr (.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12))).run js0 =
+      (JoltISA.execInstr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12))).run js0 =
         .ok RETIRE_SUCCESS js1 := by
     simpa [js0, js1, ea, base, compute_aligned_dword_base_address,
       load_effective_address, h8] using
@@ -572,7 +572,7 @@ theorem setupBlock (rest : JoltISA.Program)
     rw [hv1, haddr0]
     simpa [dword] using hread
   have hld :
-      (JoltISA.execInstr (.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0)).run js1 =
+      (JoltISA.execInstr (JoltISA.Encoded.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0)).run js1 =
         .ok RETIRE_SUCCESS js_load := by
     have hld_align :
         (js1.vregs JoltISA.inlineTmp1 + sign_extend (m := 64) (0 : BitVec 12)) &&&
@@ -589,7 +589,8 @@ theorem setupBlock (rest : JoltISA.Program)
     simpa [js_load, dword] using
       (JoltISA.ld_run_vreg_vreg_from_memory_read JoltISA.inlineTmp2 JoltISA.inlineTmp1
         (0 : BitVec 12) js1 dword hld_align hld_read
-        (by unfold WritableVReg; decide))
+        (by unfold WritableVReg; decide)
+        (by simpa [js1, base, sign_extend, Sail.BitVec.signExtend] using hmmio.ram))
   refine ⟨js_load, ?_, rfl, ?_, ?_, ?_⟩
   · rw [JoltISA.execProgram_instr_run_retire _ _ js js0 haddi]
     rw [JoltISA.execProgram_instr_run_retire _ _ js0 js1 handi]
@@ -617,10 +618,10 @@ theorem assertHalfwordSetupBlockAligned (rest : JoltISA.Program)
       Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail) :
     ∃ js_load : SailJoltState,
       (JoltISA.execProgram
-        (.instr (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
-         .instr (.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
-         .instr (.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
-         .instr (.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) rest)).run js =
+        (.instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
+         .instr (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
+         .instr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
+         .instr (JoltISA.Encoded.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) rest)).run js =
         (JoltISA.execProgram rest).run js_load ∧
       js_load.sail = js.sail ∧
       js_load.vregs JoltISA.inlineTmp0 = load_effective_address val imm ∧
@@ -630,7 +631,7 @@ theorem assertHalfwordSetupBlockAligned (rest : JoltISA.Program)
           hbytes h_base_aligned.no_ovf := by
   have hassert :
       (JoltISA.execInstr
-        (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
+        (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
         .ok RETIRE_SUCCESS js := by
     exact JoltISA.virtual_assert_halfword_alignment_run_aligned rs1 imm
       (ExceptionType.E_SAMO_Addr_Align ())
@@ -660,10 +661,10 @@ theorem assertWordSetupBlockAligned (rest : JoltISA.Program)
       Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail) :
     ∃ js_load : SailJoltState,
       (JoltISA.execProgram
-        (.instr (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
-         .instr (.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
-         .instr (.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
-         .instr (.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) rest)).run js =
+        (.instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
+         .instr (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
+         .instr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
+         .instr (JoltISA.Encoded.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) rest)).run js =
         (JoltISA.execProgram rest).run js_load ∧
       js_load.sail = js.sail ∧
       js_load.vregs JoltISA.inlineTmp0 = load_effective_address val imm ∧
@@ -673,7 +674,7 @@ theorem assertWordSetupBlockAligned (rest : JoltISA.Program)
           hbytes h_base_aligned.no_ovf := by
   have hassert :
       (JoltISA.execInstr
-        (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
+        (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
         .ok RETIRE_SUCCESS js := by
     exact JoltISA.virtual_assert_word_alignment_run_aligned rs1 imm
       (ExceptionType.E_SAMO_Addr_Align ())
@@ -692,7 +693,7 @@ theorem assertHalfwordBlockMisaligned (tail : JoltISA.Program)
     (val : BitVec 64) (hrx : rX_bits rs1 js.sail = .ok val js.sail)
     (hmis : load_effective_address val imm &&& (1 : BitVec 64) ≠ 0) :
     (JoltISA.execProgram
-      (.instr (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
+      (.instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
         tail)).run js =
       .ok (ExecutionResult.Memory_Exception
         (Virtaddr (load_effective_address val imm), ExceptionType.E_SAMO_Addr_Align ())) js := by
@@ -700,7 +701,7 @@ theorem assertHalfwordBlockMisaligned (tail : JoltISA.Program)
     (Virtaddr (load_effective_address val imm), ExceptionType.E_SAMO_Addr_Align ())
   have hassert :
       (JoltISA.execInstr
-        (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
+        (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
         .ok (ExecutionResult.Memory_Exception e) js := by
     simpa [e, load_effective_address] using
       (JoltISA.virtual_assert_halfword_alignment_run_misaligned rs1 imm
@@ -708,7 +709,7 @@ theorem assertHalfwordBlockMisaligned (tail : JoltISA.Program)
         js val hrx (by simpa [load_effective_address] using hmis))
   simpa [e] using
     (JoltISA.execProgram_instr_run_memory_exception
-      (.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
+      (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
       tail js js e hassert)
 
 /-- A failed word store-alignment assertion stops the structured program before
@@ -719,7 +720,7 @@ theorem assertWordBlockMisaligned (tail : JoltISA.Program)
     (val : BitVec 64) (hrx : rX_bits rs1 js.sail = .ok val js.sail)
     (hmis : load_effective_address val imm &&& (3 : BitVec 64) ≠ 0) :
     (JoltISA.execProgram
-      (.instr (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
+      (.instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
         tail)).run js =
       .ok (ExecutionResult.Memory_Exception
         (Virtaddr (load_effective_address val imm), ExceptionType.E_SAMO_Addr_Align ())) js := by
@@ -727,7 +728,7 @@ theorem assertWordBlockMisaligned (tail : JoltISA.Program)
     (Virtaddr (load_effective_address val imm), ExceptionType.E_SAMO_Addr_Align ())
   have hassert :
       (JoltISA.execInstr
-        (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
+        (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
         .ok (ExecutionResult.Memory_Exception e) js := by
     simpa [e, load_effective_address] using
       (JoltISA.virtual_assert_word_alignment_run_misaligned rs1 imm
@@ -735,7 +736,7 @@ theorem assertWordBlockMisaligned (tail : JoltISA.Program)
         js val hrx (by simpa [load_effective_address] using hmis))
   simpa [e] using
     (JoltISA.execProgram_instr_run_memory_exception
-      (.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
+      (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
       tail js js e hassert)
 
 private inductive FusedStoreWidth where
@@ -793,19 +794,19 @@ private theorem fusedSpliceBlock (rest : JoltISA.Program)
   let mask := fusedWindowValue width ea
   let shifted := fusedShiftValue width rs2_val ea
   let js_mask : SailJoltState :=
-    { sail := js_load.sail
+    { js_load with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then mask else js_load.vregs r }
   let js_clear : SailJoltState :=
-    { sail := js_mask.sail
+    { js_mask with
       vregs := fun r =>
         if r = JoltISA.inlineTmp2 then dword &&& ~~~mask else js_mask.vregs r }
   let js_shift : SailJoltState :=
-    { sail := js_clear.sail
+    { js_clear with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then shifted else js_clear.vregs r }
   let js_splice : SailJoltState :=
-    { sail := js_shift.sail
+    { js_shift with
       vregs := fun r =>
         if r = JoltISA.inlineTmp2 then (dword &&& ~~~mask) + shifted
         else js_shift.vregs r }
@@ -894,7 +895,7 @@ theorem fusedByteSpliceBlock (rest : JoltISA.Program)
     (hrs2 : rX_bits rs2 js.sail = .ok rs2_val js.sail) :
     ∃ js_splice : SailJoltState,
       (JoltISA.execProgram
-        (.instr (.VirtualWindowMaskB (.vreg JoltISA.inlineTmp3)
+        (.instr (JoltISA.Encoded.VirtualWindowMaskB (.vreg JoltISA.inlineTmp3)
           (.vreg JoltISA.inlineTmp0) 0) <|
          .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
            (.vreg JoltISA.inlineTmp3)) <|
@@ -933,7 +934,7 @@ theorem fusedHalfwordSpliceBlock (rest : JoltISA.Program)
     (hrs2 : rX_bits rs2 js.sail = .ok rs2_val js.sail) :
     ∃ js_splice : SailJoltState,
       (JoltISA.execProgram
-        (.instr (.VirtualWindowMaskH (.vreg JoltISA.inlineTmp3)
+        (.instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg JoltISA.inlineTmp3)
           (.vreg JoltISA.inlineTmp0) 0) <|
          .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
            (.vreg JoltISA.inlineTmp3)) <|
@@ -972,7 +973,7 @@ theorem fusedWordSpliceBlock (rest : JoltISA.Program)
     (hrs2 : rX_bits rs2 js.sail = .ok rs2_val js.sail) :
     ∃ js_splice : SailJoltState,
       (JoltISA.execProgram
-        (.instr (.VirtualWindowMaskW (.vreg JoltISA.inlineTmp3)
+        (.instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg JoltISA.inlineTmp3)
           (.vreg JoltISA.inlineTmp0) 0) <|
          .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
            (.vreg JoltISA.inlineTmp3)) <|
@@ -1041,16 +1042,16 @@ theorem byteSpliceBlock (rest : JoltISA.Program)
   let spliced :=
     StoreSplice.byteSplice dword (Sail.BitVec.extractLsb rs2_val 7 0) (((ea - base).toNat) * 8)
   let js_slli : SailJoltState :=
-    { sail := js_load.sail
+    { js_load with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then
           shift_bits_left (js_load.vregs JoltISA.inlineTmp0) (3 : BitVec 6)
         else js_load.vregs r }
   let js_lui : SailJoltState :=
-    { sail := js_slli.sail
+    { js_slli with
       vregs := fun r => if r = JoltISA.inlineTmp0 then (0xff : BitVec 64) else js_slli.vregs r }
   let js_mask : SailJoltState :=
-    { sail := js_lui.sail
+    { js_lui with
       vregs := fun r =>
         if r = JoltISA.inlineTmp0 then
           shift_bits_left (js_lui.vregs JoltISA.inlineTmp0)
@@ -1059,7 +1060,7 @@ theorem byteSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_lui.vregs JoltISA.inlineTmp3)
         else js_lui.vregs r }
   let js_shift : SailJoltState :=
-    { sail := js_mask.sail
+    { js_mask with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then
           shift_bits_left rs2_val
@@ -1068,19 +1069,19 @@ theorem byteSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp3)
         else js_mask.vregs r }
   let js_xor : SailJoltState :=
-    { sail := js_shift.sail
+    { js_shift with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then
           js_shift.vregs JoltISA.inlineTmp2 ^^^ js_shift.vregs JoltISA.inlineTmp3
         else js_shift.vregs r }
   let js_and : SailJoltState :=
-    { sail := js_xor.sail
+    { js_xor with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then
           js_xor.vregs JoltISA.inlineTmp3 &&& js_xor.vregs JoltISA.inlineTmp0
         else js_xor.vregs r }
   let js_splice : SailJoltState :=
-    { sail := js_and.sail
+    { js_and with
       vregs := fun r =>
         if r = JoltISA.inlineTmp2 then
           js_and.vregs JoltISA.inlineTmp2 ^^^ js_and.vregs JoltISA.inlineTmp3
@@ -1123,13 +1124,13 @@ theorem byteSpliceBlock (rest : JoltISA.Program)
     change js_slli.vregs JoltISA.inlineTmp3 = shift64
     exact hslli_v3
   let js_mask_pow2 : SailJoltState :=
-    { sail := js_lui.sail
+    { js_lui with
       vregs := fun r =>
         if r = JoltISA.inlineTmp4 then
           jolt_virtual_pow2_value (js_lui.vregs JoltISA.inlineTmp3)
         else js_lui.vregs r }
   have hpow2_mask :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3))).run js_lui =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3) (0 : BitVec 64))).run js_lui =
         .ok RETIRE_SUCCESS js_mask_pow2 := by
     simpa [js_mask_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp3 js_lui
@@ -1160,13 +1161,13 @@ theorem byteSpliceBlock (rest : JoltISA.Program)
   have hrs2_mask : rX_bits rs2 js_mask.sail = .ok rs2_val js_mask.sail := by
     simpa [js_mask, js_lui, js_slli, hload_sail] using hrs2
   let js_shift_pow2 : SailJoltState :=
-    { sail := js_mask.sail
+    { js_mask with
       vregs := fun r =>
         if r = JoltISA.inlineTmp4 then
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp3)
         else js_mask.vregs r }
   have hpow2_value :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3))).run js_mask =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3) (0 : BitVec 64))).run js_mask =
         .ok RETIRE_SUCCESS js_shift_pow2 := by
     simpa [js_shift_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp3 js_mask
@@ -1305,16 +1306,16 @@ theorem halfwordSpliceBlock (rest : JoltISA.Program)
     StoreSplice.halfwordSplice dword (Sail.BitVec.extractLsb rs2_val 15 0)
       (((ea - base).toNat) * 8)
   let js_slli : SailJoltState :=
-    { sail := js_load.sail
+    { js_load with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then
           shift_bits_left (js_load.vregs JoltISA.inlineTmp0) (3 : BitVec 6)
         else js_load.vregs r }
   let js_lui : SailJoltState :=
-    { sail := js_slli.sail
+    { js_slli with
       vregs := fun r => if r = JoltISA.inlineTmp0 then (0xffff : BitVec 64) else js_slli.vregs r }
   let js_mask : SailJoltState :=
-    { sail := js_lui.sail
+    { js_lui with
       vregs := fun r =>
         if r = JoltISA.inlineTmp0 then
           shift_bits_left (js_lui.vregs JoltISA.inlineTmp0)
@@ -1323,7 +1324,7 @@ theorem halfwordSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_lui.vregs JoltISA.inlineTmp3)
         else js_lui.vregs r }
   let js_shift : SailJoltState :=
-    { sail := js_mask.sail
+    { js_mask with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then
           shift_bits_left rs2_val
@@ -1332,19 +1333,19 @@ theorem halfwordSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp3)
         else js_mask.vregs r }
   let js_xor : SailJoltState :=
-    { sail := js_shift.sail
+    { js_shift with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then
           js_shift.vregs JoltISA.inlineTmp2 ^^^ js_shift.vregs JoltISA.inlineTmp3
         else js_shift.vregs r }
   let js_and : SailJoltState :=
-    { sail := js_xor.sail
+    { js_xor with
       vregs := fun r =>
         if r = JoltISA.inlineTmp3 then
           js_xor.vregs JoltISA.inlineTmp3 &&& js_xor.vregs JoltISA.inlineTmp0
         else js_xor.vregs r }
   let js_splice : SailJoltState :=
-    { sail := js_and.sail
+    { js_and with
       vregs := fun r =>
         if r = JoltISA.inlineTmp2 then
           js_and.vregs JoltISA.inlineTmp2 ^^^ js_and.vregs JoltISA.inlineTmp3
@@ -1387,13 +1388,13 @@ theorem halfwordSpliceBlock (rest : JoltISA.Program)
     change js_slli.vregs JoltISA.inlineTmp3 = shift64
     exact hslli_v3
   let js_mask_pow2 : SailJoltState :=
-    { sail := js_lui.sail
+    { js_lui with
       vregs := fun r =>
         if r = JoltISA.inlineTmp4 then
           jolt_virtual_pow2_value (js_lui.vregs JoltISA.inlineTmp3)
         else js_lui.vregs r }
   have hpow2_mask :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3))).run js_lui =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3) (0 : BitVec 64))).run js_lui =
         .ok RETIRE_SUCCESS js_mask_pow2 := by
     simpa [js_mask_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp3 js_lui
@@ -1424,13 +1425,13 @@ theorem halfwordSpliceBlock (rest : JoltISA.Program)
   have hrs2_mask : rX_bits rs2 js_mask.sail = .ok rs2_val js_mask.sail := by
     simpa [js_mask, js_lui, js_slli, hload_sail] using hrs2
   let js_shift_pow2 : SailJoltState :=
-    { sail := js_mask.sail
+    { js_mask with
       vregs := fun r =>
         if r = JoltISA.inlineTmp4 then
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp3)
         else js_mask.vregs r }
   have hpow2_value :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3))).run js_mask =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp3) (0 : BitVec 64))).run js_mask =
         .ok RETIRE_SUCCESS js_shift_pow2 := by
     simpa [js_shift_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp3 js_mask
@@ -1542,7 +1543,7 @@ theorem wordMaskBlock (rest : JoltISA.Program)
     ∃ js_mask : SailJoltState,
       (JoltISA.execProgram
         (JoltISA.slliBlock (.vreg JoltISA.inlineTmp0) (.vreg JoltISA.inlineTmp0) (3 : BitVec 6) <|
-         .instr (.ORI (.vreg JoltISA.inlineTmp3) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
+         .instr (JoltISA.Encoded.ORI (.vreg JoltISA.inlineTmp3) (.xreg (regidx.Regidx 0)) (-1 : BitVec 12)) <|
          JoltISA.srliBlock (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp3) (32 : BitVec 6) <|
          JoltISA.sllBlock (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) JoltISA.inlineTmp4 rest)).run js_load =
         (JoltISA.execProgram rest).run js_mask ∧
@@ -1663,7 +1664,7 @@ theorem wordSpliceBlock (rest : JoltISA.Program)
   let spliced :=
     StoreSplice.wordSplice dword (Sail.BitVec.extractLsb rs2_val 31 0) (((ea - base).toNat) * 8)
   let js_shift : SailJoltState :=
-    { sail := js_mask.sail
+    { js_mask with
       vregs := fun r =>
         if r = JoltISA.inlineTmp0 then
           shift_bits_left rs2_val
@@ -1672,19 +1673,19 @@ theorem wordSpliceBlock (rest : JoltISA.Program)
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp0)
         else js_mask.vregs r }
   let js_xor : SailJoltState :=
-    { sail := js_shift.sail
+    { js_shift with
       vregs := fun r =>
         if r = JoltISA.inlineTmp0 then
           js_shift.vregs JoltISA.inlineTmp2 ^^^ js_shift.vregs JoltISA.inlineTmp0
         else js_shift.vregs r }
   let js_and : SailJoltState :=
-    { sail := js_xor.sail
+    { js_xor with
       vregs := fun r =>
         if r = JoltISA.inlineTmp0 then
           js_xor.vregs JoltISA.inlineTmp0 &&& js_xor.vregs JoltISA.inlineTmp3
         else js_xor.vregs r }
   let js_splice : SailJoltState :=
-    { sail := js_and.sail
+    { js_and with
       vregs := fun r =>
         if r = JoltISA.inlineTmp2 then
           js_and.vregs JoltISA.inlineTmp2 ^^^ js_and.vregs JoltISA.inlineTmp0
@@ -1692,13 +1693,13 @@ theorem wordSpliceBlock (rest : JoltISA.Program)
   have hrs2_mask : rX_bits rs2 js_mask.sail = .ok rs2_val js_mask.sail := by
     simpa [hmask_sail] using hrs2
   let js_shift_pow2 : SailJoltState :=
-    { sail := js_mask.sail
+    { js_mask with
       vregs := fun r =>
         if r = JoltISA.inlineTmp4 then
           jolt_virtual_pow2_value (js_mask.vregs JoltISA.inlineTmp0)
         else js_mask.vregs r }
   have hpow2_value :
-      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp0))).run js_mask =
+      (JoltISA.execInstr (.VirtualPow2 (.vreg JoltISA.inlineTmp4) (.vreg JoltISA.inlineTmp0) (0 : BitVec 64))).run js_mask =
         .ok RETIRE_SUCCESS js_shift_pow2 := by
     simpa [js_shift_pow2] using
       (JoltISA.virtual_pow2_run_vreg_vreg JoltISA.inlineTmp4 JoltISA.inlineTmp0 js_mask
@@ -1798,13 +1799,14 @@ theorem sdWriteBlock (rest : JoltISA.Program)
     (hwrite :
       vmem_write_addr (Virtaddr base) 8 dword_new
         (Store Data) false false false js_store.sail =
-      .ok (Ok true) s') :
+      .ok (Ok true) s')
+    (h_ram : JoltISA.ramStartAddress ≤ base.toNat) :
     ∃ js_write : SailJoltState,
-      (JoltISA.execProgram (.instr (.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0) rest)).run js_store =
+      (JoltISA.execProgram (.instr (JoltISA.Encoded.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0) rest)).run js_store =
         (JoltISA.execProgram rest).run js_write ∧
       js_write.sail = s' ∧
       js_write.vregs = js_store.vregs := by
-  let js_write : SailJoltState := { sail := s', vregs := js_store.vregs }
+  let js_write : SailJoltState := { js_store with sail := s' }
   have hzero : sign_extend (m := 64) (0 : BitVec 12) = (0 : BitVec 64) := by decide
   have haddr : js_store.vregs JoltISA.inlineTmp1 + sign_extend (m := 64) (0 : BitVec 12) = base := by
     rw [hzero, hbase]
@@ -1824,11 +1826,12 @@ theorem sdWriteBlock (rest : JoltISA.Program)
     rw [haddr]
     exact h_align
   have hsd :
-      (JoltISA.execInstr (.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0)).run js_store =
+      (JoltISA.execInstr (JoltISA.Encoded.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0)).run js_store =
         .ok RETIRE_SUCCESS js_write := by
     simpa [js_write] using
       (JoltISA.execInstr_sd_vreg_run_of_write
-        JoltISA.inlineTmp1 JoltISA.inlineTmp2 (0 : BitVec 12) js_store s' hsd_align hwrite')
+        JoltISA.inlineTmp1 JoltISA.inlineTmp2 (0 : BitVec 12) js_store s' hsd_align hwrite'
+        (by simpa only [haddr] using h_ram))
   refine ⟨js_write, ?_, rfl, rfl⟩
   rw [JoltISA.execProgram_instr_run_retire _ _ js_store js_write hsd]
 

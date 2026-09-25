@@ -19,7 +19,7 @@ def sdInstrEqSailStatement
     (js : SailJoltState)
     (_h : StoreProgramEqSailAssumptions imm rs2 rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.SD (.xreg rs1) (.xreg rs2) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) imm)).run js) =
     ((execute_STORE imm rs2 rs1 8).run js.sail)
 
 /-- The Jolt `SD` side reduces to the shared virtual-memory write spine. -/
@@ -29,7 +29,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
     (js : SailJoltState)
     (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) :
     System.systemProjectResult
-      ((JoltISA.execInstr (.SD (.xreg rs1) (.xreg rs2) imm)).run js) =
+      ((JoltISA.execInstr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) imm)).run js) =
     let ea := load_effective_address h.rs1_val imm
     match vmem_write_addr (Virtaddr ea) 8 h.rs2_val
         (Store Data) false false false js.sail with
@@ -62,8 +62,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
         h.cur_privilege h.mstatus_mprv haligned_access
         hstore_access.store_pmp hstore_access.write_mmio
     let js' : SailJoltState :=
-      { sail := state_after_dword_store js.sail ea h.rs2_val
-        vregs := js.vregs }
+      { js with sail := state_after_dword_store js.sail ea h.rs2_val }
     have h_project_final :
         System.systemProject js' = state_after_dword_store js.sail ea h.rs2_val := by
       have hregs : js'.sail.regs = js.sail.regs := by
@@ -80,6 +79,8 @@ theorem sdJolt_reduces_to_vmem_write_addr
         .ok (Ok true) (state_after_dword_store js.sail ea h.rs2_val) := by
       simpa [ea, load_effective_address, Memory.effectiveAddr12] using hwrite
     simp only [halign, if_true]
+    rw [JoltISA.writeMemoryWord_ram _ _ hstore_access.write_mmio.ram]
+    unfold liftSail
     unfold System.systemProjectResult
     simp only [hwrite_raw, EStateM.bind, EStateM.pure]
     rw [h_project_final]
@@ -106,7 +107,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
     rw [hwrite]
     unfold System.systemProjectResult
     simp only [EStateM.pure]
-    rw [show System.systemProject { sail := js.sail, vregs := js.vregs } = js.sail by
+    rw [show System.systemProject { js with vregs := js.vregs } = js.sail by
       simpa using Projection.systemProject_eq_sail_of_compatible js h.linkedCSRs]
 
 /-- The Sail `execute_STORE ... 8` side reduces to the same virtual-memory

@@ -101,7 +101,7 @@ private theorem or_run_vreg_vreg_xreg
     (hvd : WritableVReg vd) :
     (JoltISA.execInstr (.OR (.vreg vd) (.vreg lhs) (.xreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then js.vregs lhs ||| rhsVal else js.vregs r } := by
   unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst readVReg liftSail
@@ -115,7 +115,7 @@ private theorem or_run_vreg_vreg_vreg
     (hvd : WritableVReg vd) :
     (JoltISA.execInstr (.OR (.vreg vd) (.vreg lhs) (.vreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then js.vregs lhs ||| js.vregs rhs else js.vregs r } := by
   unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst readVReg
@@ -194,10 +194,10 @@ private theorem csrrsProgram_project_run
       · simp only [Bool.false_eq_true, if_false]
         let oldCsr := js.vregs (JoltISA.SystemCSR.vreg csr)
         let jsAfterRd : SailJoltState :=
-          { sail := stateAfterWrite js.sail rd oldCsr, vregs := js.vregs }
+          { js with sail := stateAfterWrite js.sail rd oldCsr }
         have hRdRun :
             (JoltISA.execInstr
-                (.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
+                (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
                   (0 : BitVec 12))).run js =
               .ok RETIRE_SUCCESS jsAfterRd := by
           have hWrite :
@@ -238,11 +238,10 @@ private theorem csrrsProgram_project_run
         let jsScratch : SailJoltState :=
           joltSetVReg js JoltISA.systemScratchVReg rs1Val
         let jsAfterRd : SailJoltState :=
-          { sail := stateAfterWrite jsScratch.sail rd oldCsr
-            vregs := jsScratch.vregs }
+          { jsScratch with sail := stateAfterWrite jsScratch.sail rd oldCsr }
         have hScratchRun :
             (JoltISA.execInstr
-                (.ADDI (.vreg JoltISA.systemScratchVReg) (.xreg rs1)
+                (JoltISA.Encoded.ADDI (.vreg JoltISA.systemScratchVReg) (.xreg rs1)
                   (0 : BitVec 12))).run js =
               .ok RETIRE_SUCCESS jsScratch := by
           have hRun :=
@@ -258,7 +257,7 @@ private theorem csrrsProgram_project_run
               (systemCSR_vreg_ne_scratch csr)
         have hRdRun :
             (JoltISA.execInstr
-                (.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
+                (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
                   (0 : BitVec 12))).run jsScratch =
               .ok RETIRE_SUCCESS jsAfterRd := by
           have hWrite :
@@ -315,7 +314,7 @@ private theorem csrrsProgram_project_run
   · simp only [if_true]
     have hReadRun :
         (JoltISA.execInstr
-            (.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
+            (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
               (0 : BitVec 12))).run js =
           .ok RETIRE_SUCCESS (csrrsAfterReadOnly js csr rd) := by
       have hWrite :

@@ -16,9 +16,9 @@ theorem virtual_align_addr_run_vreg_xreg (vd : VReg) (rs : regidx)
     (imm : BitVec 12) (js : SailJoltState) (x : BitVec 64)
     (hread : rX_bits rs js.sail = .ok x js.sail)
     (hvd : WritableVReg vd) :
-    (execInstr (.VirtualAlignAddr (.vreg vd) (.xreg rs) imm)).run js =
+    (execInstr (JoltISA.Encoded.VirtualAlignAddr (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_align_addr_value x imm else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail

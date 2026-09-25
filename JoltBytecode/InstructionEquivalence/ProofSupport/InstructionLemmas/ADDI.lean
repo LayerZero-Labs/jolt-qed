@@ -21,14 +21,14 @@ theorem addi_run_vreg_xreg (vd : VReg) (rs : regidx)
     (imm : BitVec 12) (js : SailJoltState) (x : BitVec 64)
     (h : rX_bits rs js.sail = .ok x js.sail)
     (hvd : WritableVReg vd) :
-    (execInstr (.ADDI (.vreg vd) (.xreg rs) imm)).run js =
+    (execInstr (JoltISA.Encoded.ADDI (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then x + sign_extend (m := 64) imm else js.vregs r } := by
   unfold WritableVReg at hvd
   unfold execInstr readSrc writeDst liftSail writeVReg
-  simp only [h, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [addWide_low, h, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     hvd, ↓reduceIte, modify, modifyGet, MonadStateOf.modifyGet,
     EStateM.modifyGet]
 
@@ -37,15 +37,15 @@ and writes the immediate sum to the virtual destination. -/
 theorem addi_run_vreg_vreg (vd vs : VReg)
     (imm : BitVec 12) (js : SailJoltState)
     (hvd : WritableVReg vd) :
-    (execInstr (.ADDI (.vreg vd) (.vreg vs) imm)).run js =
+    (execInstr (JoltISA.Encoded.ADDI (.vreg vd) (.vreg vs) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then js.vregs vs + sign_extend (m := 64) imm
               else js.vregs r } := by
   unfold WritableVReg at hvd
   unfold execInstr readSrc writeDst readVReg writeVReg
-  simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [addWide_low, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get, hvd, ↓reduceIte,
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet]
 
@@ -53,10 +53,10 @@ theorem addi_run_vreg_vreg (vd vs : VReg)
 theorem addi_run_xreg_vreg (rd : regidx) (vs : VReg) (imm : BitVec 12)
     (js : SailJoltState) (s' : SailState)
     (hw : wX_bits rd (js.vregs vs + sign_extend (m := 64) imm) js.sail = .ok () s') :
-    (execInstr (.ADDI (.xreg rd) (.vreg vs) imm)).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+    (execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vs) imm)).run js =
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst readVReg liftSail
-  simp only [hw, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [addWide_low, hw, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
 
 /-- `ADDI` from a real source to a real destination reads the source through
@@ -65,10 +65,10 @@ theorem addi_run_xreg_xreg (rd rs1 : regidx) (imm : BitVec 12)
     (js : SailJoltState) (x : BitVec 64) (s' : SailState)
     (h : rX_bits rs1 js.sail = .ok x js.sail)
     (hw : wX_bits rd (x + sign_extend (m := 64) imm) js.sail = .ok () s') :
-    (execInstr (.ADDI (.xreg rd) (.xreg rs1) imm)).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+    (execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.xreg rs1) imm)).run js =
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst liftSail
-  simp only [h, hw, bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
+  simp only [addWide_low, h, hw, bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
 
 
 /-- Rust's pure-writeback `rd = x0` no-op replacement retires successfully and
@@ -78,7 +78,7 @@ theorem pureWritebackRdZeroProgram_run (js : SailJoltState) :
       .ok RETIRE_SUCCESS js := by
   have h_addi_succeeds :
       (execInstr
-        (.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12))).run js =
+        (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12))).run js =
         .ok RETIRE_SUCCESS js := by
     simpa using
       addi_run_xreg_xreg

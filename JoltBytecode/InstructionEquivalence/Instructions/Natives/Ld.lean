@@ -15,6 +15,27 @@ noncomputable section
 
 namespace Natives
 
+/-- A successful native source `LD x0` writes the loaded word into Rust's
+temporary register 40.
+This records the full Jolt state, before projection can hide that write. -/
+theorem ldNative_x0_run_from_memory_read
+    (rs1 : regidx) (imm : BitVec 12) (js : SailJoltState)
+    (baseValue loaded : BitVec 64)
+    (hbase : rX_bits rs1 js.sail = .ok baseValue js.sail)
+    (h_align : (baseValue + sign_extend (m := 64) imm) &&& (7 : BitVec 64) = 0)
+    (hread :
+      vmem_read_addr (Virtaddr (baseValue + sign_extend (m := 64) imm)) 0 8
+        (Load Data) false false false js.sail = .ok (Ok loaded) js.sail)
+    (h_ram : JoltISA.ramStartAddress ≤
+      (baseValue + sign_extend (m := 64) imm).toNat) :
+    (JoltISA.execInstr (JoltISA.ldNativeInstr (regidx.Regidx 0) rs1 imm)).run js =
+      .ok RETIRE_SUCCESS
+        { js with vregs := fun r =>
+            if r = JoltISA.rdZeroRewriteVReg then loaded else js.vregs r } := by
+  exact JoltISA.ld_run_vreg_xreg_from_memory_read
+    JoltISA.rdZeroRewriteVReg rs1 imm js baseValue loaded hbase h_align hread
+    (by unfold WritableVReg JoltISA.rdZeroRewriteVReg; decide) h_ram
+
 private theorem sign_extend_64_eq_self (value : BitVec 64) :
     sign_extend (m := 64) value = value := by
   unfold sign_extend Sail.BitVec.signExtend
@@ -119,22 +140,25 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
       vmem_read_addr (Virtaddr (load_effective_address val imm)) 0 8
         (Load Data) false false false js.sail =
         .ok (Ok loaded) js.sail)
-    (hlinked : LinkedCSRs js) :
+    (hlinked : LinkedCSRs js)
+    (h_ram : JoltISA.ramStartAddress ≤ (load_effective_address val imm).toNat) :
     System.systemProjectResult
-      ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+      ((JoltISA.execInstr (JoltISA.ldNativeInstr rd rs1 imm)).run js) =
     .ok RETIRE_SUCCESS (stateAfterWrite js.sail rd loaded) := by
-  unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst liftSail
+  unfold JoltISA.ldNativeInstr JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst liftSail
   simp only [bind, EStateM.bind, pure, EStateM.run, hrx]
   rw [if_pos (by
     simpa [load_effective_address, Memory.effectiveAddr12] using h_align)]
+  rw [JoltISA.readMemoryWord_ram _ h_ram]
+  unfold liftSail
   simp only [hread, EStateM.bind]
   by_cases hx0 : JoltISA.isX0 rd = true
   · have hdst :
-        JoltISA.sideEffectingDst (JoltISA.Dst.xreg rd) =
+        JoltISA.sideEffectingRdZeroDst rd =
           JoltISA.Dst.vreg JoltISA.rdZeroRewriteVReg := by
-      simp [JoltISA.sideEffectingDst, JoltISA.sideEffectingRdZeroDst, hx0]
+      simp [JoltISA.sideEffectingRdZeroDst, hx0]
     let js' : SailJoltState :=
-      { sail := js.sail
+      { js with
         vregs := fun r =>
           if r = JoltISA.rdZeroRewriteVReg then loaded else js.vregs r }
     have hprojected : Projection.ProjectedVRegsPreserved js js' := by
@@ -151,7 +175,7 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
           js js' hregs hprojected hlinked
     have hwrite_vreg :
         writeVReg JoltISA.rdZeroRewriteVReg loaded
-          ({ sail := js.sail, vregs := js.vregs } : SailJoltState) =
+          ({ js with vregs := js.vregs } : SailJoltState) =
         .ok () js' := by
       unfold writeVReg js' JoltISA.rdZeroRewriteVReg JoltISA.inlineTmp
         JoltISA.inlineRegisterBase JoltISA.riscvRegisterBase
@@ -163,11 +187,11 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
     rw [hproject]
     rw [JoltISA.stateAfterWrite_of_isX0_eq_true hx0 js.sail loaded]
   · have hdst :
-        JoltISA.sideEffectingDst (JoltISA.Dst.xreg rd) =
+        JoltISA.sideEffectingRdZeroDst rd =
           JoltISA.Dst.xreg rd := by
       have hx0_false : JoltISA.isX0 rd = false := by
         cases hcase : JoltISA.isX0 rd <;> simp [hcase] at hx0 ⊢
-      simp [JoltISA.sideEffectingDst, JoltISA.sideEffectingRdZeroDst, hx0_false]
+      simp [JoltISA.sideEffectingRdZeroDst, hx0_false]
     simp only [hdst]
     obtain ⟨s', hwrite⟩ := wX_shape rd loaded js.sail
     rw [hwrite]
@@ -186,11 +210,11 @@ private theorem ldJolt_misaligned (imm : BitVec 12) (rs1 rd : regidx)
     (h_align : load_effective_address val imm &&& (7 : BitVec 64) ≠ 0)
     (hlinked : LinkedCSRs js) :
     System.systemProjectResult
-      ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+      ((JoltISA.execInstr (JoltISA.ldNativeInstr rd rs1 imm)).run js) =
     .ok (ExecutionResult.Memory_Exception
       (Virtaddr (load_effective_address val imm), ExceptionType.E_Load_Addr_Align ()))
       js.sail := by
-  unfold JoltISA.execInstr JoltISA.readSrc liftSail
+  unfold JoltISA.ldNativeInstr JoltISA.execInstr JoltISA.readSrc liftSail
   simp only [bind, EStateM.bind, pure, EStateM.run, hrx]
   rw [if_neg (by
     simpa [load_effective_address, Memory.effectiveAddr12] using h_align)]
@@ -198,14 +222,14 @@ private theorem ldJolt_misaligned (imm : BitVec 12) (rs1 rd : regidx)
     System.systemProjectResult]
   rw [Projection.systemProject_eq_sail_of_compatible js hlinked]
 
-/-- Main native `LD` equivalence statement. -/
+/-- Native source `LD` equivalence, including Rust's `rd = x0` dispatch rewrite. -/
 def ldInstrEqSailStatement
     (imm : BitVec 12)
     (rs1 rd : regidx)
     (js : SailJoltState)
     (_h : LoadProgramEqSailAssumptions imm rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (.LD .normal (.xreg rd) (.xreg rs1) imm)).run js) =
+    ((JoltISA.execInstr (JoltISA.ldNativeInstr rd rs1 imm)).run js) =
     ((execute_LOAD imm rs1 rd false 8).run js.sail)
 
 theorem ldInstr_eq_sail
@@ -261,7 +285,7 @@ theorem ldInstr_eq_sail
     rw [ldJolt_aligned_reduces imm rs1 rd js h.rs1_val
       (loaded_dword_at js.sail ea hbytes haligned.no_ovf)
       h.rs1_read (by simpa [ea] using h_align)
-      (by simpa [ea] using hread) h.linkedCSRs]
+      (by simpa [ea] using hread) h.linkedCSRs hread_mmio.ram]
     rw [execute_LD_reduces imm rs1 rd js h.cur_privilege h.mstatus_mprv
       h.rs1_val h.rs1_read (by simpa [ea] using haligned)
       (by simpa [ea] using hbytes)

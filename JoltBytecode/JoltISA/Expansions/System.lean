@@ -58,30 +58,30 @@ def sameXReg (lhs rhs : regidx) : Bool :=
 def ecallProgram : Program :=
   -- Rust: `AUIPC ecall_addr, 0`.
   -- Jolt: `ecall_addr` is the first instruction-local scratch register, v40.
-  .instr (.AUIPC (.vreg systemScratchVReg) (0 : BitVec 20)) <|
+  .instr (JoltISA.Encoded.AUIPC (.vreg systemScratchVReg) (0 : BitVec 20)) <|
   -- Rust: `ADDI mepc, ecall_addr, 0`.
   -- Jolt: write the current PC into the virtual `mepc` CSR, v36.
-  .instr (.ADDI (.vreg mepcVReg) (.vreg systemScratchVReg) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg mepcVReg) (.vreg systemScratchVReg) (0 : BitVec 12)) <|
   -- Rust: `ADDI mcause, x0, MCAUSE_ECALL_FROM_MMODE`.
   -- Jolt: write machine-mode ECALL cause 11 into virtual `mcause`, v37.
-  .instr (.ADDI (.vreg mcauseVReg) (.xreg (regidx.Regidx 0)) (11 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg mcauseVReg) (.xreg (regidx.Regidx 0)) (11 : BitVec 12)) <|
   -- Rust: `ADDI mtval, x0, 0`.
   -- Jolt: machine-mode ECALL has no trap value, so virtual `mtval`, v38, is 0.
-  .instr (.ADDI (.vreg mtvalVReg) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg mtvalVReg) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
   -- Rust: `ADDI three, x0, 3`.
   -- Jolt: reuse v40 after `ecall_addr` is dropped.
-  .instr (.ADDI (.vreg systemScratchVReg) (.xreg (regidx.Regidx 0)) (3 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg systemScratchVReg) (.xreg (regidx.Regidx 0)) (3 : BitVec 12)) <|
   -- Rust source row: `SLLI mstatus, three, 11`.
   -- Jolt final row: `SLLI` lowers to `VirtualMULI` by `2^11 = 2048`.
   .instr (.VirtualMULI (.vreg mstatusVReg) (.vreg systemScratchVReg) (2048 : BitVec 64)) <|
   -- Rust: `JALR jalr_rd, trap_handler, 0`.
   -- Jolt: jump through virtual `mtvec`, v34, and discard the link in v40.
-  .instr (.JALR (.vreg systemScratchVReg) (.vreg trapHandlerVReg) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.JALR (.vreg systemScratchVReg) (.vreg trapHandlerVReg) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 /-- Rust `expand_ebreak`: emit `JAL scratch, 0`, a self-loop termination marker. -/
 def ebreakProgram : Program :=
-  .instr (.JAL (.vreg systemScratchVReg) (0 : BitVec 21)) <|
+  .instr (JoltISA.Encoded.JAL (.vreg systemScratchVReg) (0 : BitVec 21)) <|
   .done RETIRE_SUCCESS
 
 /-- Rust `MRET::inline_sequence`: jump through virtual `mepc`.
@@ -90,7 +90,7 @@ Rust allocates one instruction-local scratch register for the `JALR` destination
 and discards the link value. The architectural return target is read directly
 from the reserved virtual `mepc` register, v36. -/
 def mretProgram : Program :=
-  .instr (.JALR (.vreg systemScratchVReg) (.vreg mepcVReg) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.JALR (.vreg systemScratchVReg) (.vreg mepcVReg) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
 /-- Rust `CSRRW::inline_sequence` for the supported virtual CSR whitelist.
@@ -104,16 +104,16 @@ Cases match Rust exactly:
 def csrrwProgram (csr : SystemCSR) (rs1 rd : regidx) : Program :=
   let vr := SystemCSR.vreg csr
   if isX0 rd then
-    .instr (.ADDI (.vreg vr) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg vr) (.xreg rs1) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else if sameXReg rd rs1 then
-    .instr (.ADDI (.vreg systemScratchVReg) (.xreg rs1) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg vr) (.vreg systemScratchVReg) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg systemScratchVReg) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg vr) (.vreg systemScratchVReg) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
-    .instr (.ADDI (.vreg vr) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg vr) (.xreg rs1) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
 
 /-- Rust `CSRRW::inline_sequence` after decoding a supported raw CSR immediate. -/
@@ -134,18 +134,18 @@ Cases match Rust exactly:
 def csrrsProgram (csr : SystemCSR) (rs1 rd : regidx) : Program :=
   let vr := SystemCSR.vreg csr
   if isX0 rs1 then
-    .instr (.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
   else if isX0 rd then
     .instr (.OR (.vreg vr) (.vreg vr) (.xreg rs1)) <|
     .done RETIRE_SUCCESS
   else if sameXReg rd rs1 then
-    .instr (.ADDI (.vreg systemScratchVReg) (.xreg rs1) (0 : BitVec 12)) <|
-    .instr (.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.vreg systemScratchVReg) (.xreg rs1) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
     .instr (.OR (.vreg vr) (.vreg vr) (.vreg systemScratchVReg)) <|
     .done RETIRE_SUCCESS
   else
-    .instr (.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
+    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
     .instr (.OR (.vreg vr) (.vreg vr) (.xreg rs1)) <|
     .done RETIRE_SUCCESS
 

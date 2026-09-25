@@ -21,7 +21,7 @@ theorem virtual_advice_run (vd : VReg) (advice : BitVec 64) (js : SailJoltState)
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualAdvice (.vreg vd) advice)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then advice else js.vregs r } := by
   unfold execInstr
   exact writeVReg_retire_run_of_writable vd advice js hvd

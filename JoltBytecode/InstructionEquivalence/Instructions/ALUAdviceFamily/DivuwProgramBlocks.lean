@@ -85,7 +85,7 @@ def phase_div0_check : JoltISA.Program :=
 
 /-- Phase 5 — writeback `rd := v3` (the sign-extended quotient). -/
 def phase_writeback (rd : regidx) : JoltISA.Program :=
-  .instr (.ADDI (.xreg rd) (.vreg tempVReg) 0) <|
+  .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg tempVReg) 0) <|
   .done RETIRE_SUCCESS
 
 -- ----------------------------------------------------------------------------
@@ -233,11 +233,11 @@ theorem phase_writeback_run
     have hz : sign_extend (m := 64) (0 : BitVec 12) = 0#64 := by decide
     rw [hz, BitVec.add_zero]
   obtain ⟨s', hw⟩ := wX_shape rd sext_q js.sail
-  refine ⟨{ sail := s', vregs := js.vregs }, ?_, ?_⟩
-  · have h1 : (JoltISA.execInstr (.ADDI (.xreg rd) (.vreg tempVReg) 0)).run js =
-        .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } :=
+  refine ⟨{ js with sail := s' }, ?_, ?_⟩
+  · have h1 : (JoltISA.execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg tempVReg) 0)).run js =
+        .ok RETIRE_SUCCESS { js with sail := s' } :=
       JoltISA.addi_run_xreg_vreg rd tempVReg 0 js s' (by rw [hq]; exact hw)
-    rw [JoltISA.execProgram_instr_run_retire _ _ js { sail := s', vregs := js.vregs } h1]
+    rw [JoltISA.execProgram_instr_run_retire _ _ js { js with sail := s' } h1]
     rfl
   · show s' = stateAfterWrite js_ref rd sext_q
     rw [← h_sail]
@@ -423,10 +423,10 @@ theorem phase_writeback_run_sound
     rw [hz, BitVec.add_zero]
   obtain ⟨s', hw⟩ := wX_shape rd sext_q js.sail
   have hp_concrete :
-      (JoltISA.execInstr (.ADDI (.xreg rd) (.vreg tempVReg) 0)).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } :=
+      (JoltISA.execInstr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg tempVReg) 0)).run js =
+      .ok RETIRE_SUCCESS { js with sail := s' } :=
     JoltISA.addi_run_xreg_vreg rd tempVReg 0 js s' (by rw [hq]; exact hw)
-  rw [JoltISA.execProgram_instr_run_retire _ _ js { sail := s', vregs := js.vregs }
+  rw [JoltISA.execProgram_instr_run_retire _ _ js { js with sail := s' }
     hp_concrete] at hp
   cases hp
   show s' = stateAfterWrite js_ref rd sext_q

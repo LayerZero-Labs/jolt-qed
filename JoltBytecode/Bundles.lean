@@ -117,19 +117,56 @@ def BinarySourceReadWithLinkedCSRs.linkedCSRs
 -- Native control-flow theorem bundles
 -- ============================================================================
 
+/-- AUIPC reads PC in Sail even when Rust replaces destination x0 with a no-op. -/
+structure AuipcInstrEqSailAssumptions (js : SailJoltState)
+    extends NoSourceReadWithLinkedCSRs js where
+  pc_readable : Assumptions.SailRegReadable Register.PC js.sail
+
+def AuipcInstrEqSailAssumptions.linkedCSRs
+    {js : SailJoltState} (h : AuipcInstrEqSailAssumptions js) : LinkedCSRs js :=
+  h.toNoSourceReadWithLinkedCSRs.linkedCSRs
+
+/-- Public assumptions for native JAL equivalence.
+
+`MepcReadAligned` is a predicate on any address: Sail's `align_pc` succeeds
+without changing that address or the state. Applied to the JAL target, it
+supplies both the alignment condition and the successful configuration read.
+The target is computed from the PC value supplied by `pc_readable`.
+-/
+structure JalInstrEqSailAssumptions (imm : BitVec 21) (js : SailJoltState)
+    extends NoSourceReadWithLinkedCSRs js where
+  -- We assume all Sail registers are readable in the modeled machine state.
+  -- Record the nextPC and PC instances explicitly for this proof.
+  nextPC_readable : Assumptions.SailRegReadable Register.nextPC js.sail
+  pc_readable : Assumptions.SailRegReadable Register.PC js.sail
+  target_aligned : Assumptions.MepcReadAligned
+    (pc_readable.exists_value.choose + sign_extend (m := 64) imm) js.sail
+
+def JalInstrEqSailAssumptions.linkedCSRs
+    {imm : BitVec 21} {js : SailJoltState}
+    (h : JalInstrEqSailAssumptions imm js) :
+    LinkedCSRs js :=
+  h.toNoSourceReadWithLinkedCSRs.linkedCSRs
+
 /-- Public assumptions for native JALR equivalence.
 
 Generated Sail runs `update_elp_state rs1` before the ordinary JALR body; Jolt
 does not model Zicfilp/ELP state, so this bundle records that the generated
 Zicfilp hook is disabled in the Jolt profile.
+Rust reads the old cpu.pc and writes the target without an alignment check.
+The existing readability and alignment predicates ensure Sail can match this.
 -/
-structure JalrInstrEqSailAssumptions (rs1 : regidx) (js : SailJoltState)
+structure JalrInstrEqSailAssumptions (imm : BitVec 12) (rs1 : regidx) (js : SailJoltState)
     extends UnarySourceReadWithLinkedCSRs rs1 js where
   zicfilp_disabled : Assumptions.ZicfilpDisabled js.sail
+  nextPC_readable : Assumptions.SailRegReadable Register.nextPC js.sail
+  -- Rust clears bit 0 but does not check Sail's remaining alignment requirement.
+  target_aligned : Assumptions.MepcReadAligned
+    (BitVec.update (rs1_val + sign_extend (m := 64) imm) 0 0#1) js.sail
 
 def JalrInstrEqSailAssumptions.linkedCSRs
-    {rs1 : regidx} {js : SailJoltState}
-    (h : JalrInstrEqSailAssumptions rs1 js) :
+    {imm : BitVec 12} {rs1 : regidx} {js : SailJoltState}
+    (h : JalrInstrEqSailAssumptions imm rs1 js) :
     LinkedCSRs js :=
   h.toUnarySourceReadWithLinkedCSRs.linkedCSRs
 

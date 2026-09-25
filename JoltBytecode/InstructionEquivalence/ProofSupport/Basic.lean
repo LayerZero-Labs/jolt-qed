@@ -202,13 +202,13 @@ def InstrWritesNoProtectedVReg : Instr → Prop
   | .SLTU dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualMULI dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualMULIW dst _ _ => DstWritesNoProtectedVReg dst
-  | .VirtualPow2 dst _ => DstWritesNoProtectedVReg dst
-  | .VirtualPow2W dst _ => DstWritesNoProtectedVReg dst
+  | .VirtualPow2 dst _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualPow2W dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualPow2I _ _ => False
   | .VirtualPow2IW _ _ => False
-  | .VirtualShiftRightBitmask dst _ => DstWritesNoProtectedVReg dst
+  | .VirtualShiftRightBitmask dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualShiftRightBitmaskI _ _ => False
-  | .VirtualShiftRightBitmaskW dst _ => DstWritesNoProtectedVReg dst
+  | .VirtualShiftRightBitmaskW dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualSRLI dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualSRAI dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualSRLIW dst _ _ => DstWritesNoProtectedVReg dst
@@ -219,11 +219,12 @@ def InstrWritesNoProtectedVReg : Instr → Prop
   | .VirtualSRAW dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualROTRI _ _ _ => False
   | .VirtualROTRIW _ _ _ => False
-  | .VirtualRev8W _ _ => False
+  | .VirtualRev8W _ _ _ => False
   | .VirtualXORROT32 _ _ _ => False
   | .VirtualXORROT24 _ _ _ => False
   | .VirtualXORROT16 _ _ _ => False
   | .VirtualXORROT63 _ _ _ => False
+  | .VirtualXORROTL1 dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualXORROTW16 _ _ _ => False
   | .VirtualXORROTW12 _ _ _ => False
   | .VirtualXORROTW8 _ _ _ => False
@@ -240,23 +241,23 @@ def InstrWritesNoProtectedVReg : Instr → Prop
   | .VirtualShiftDataW dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualPext dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualPextSigned dst _ _ => DstWritesNoProtectedVReg dst
-  | .VirtualSignExtendWord dst _ => DstWritesNoProtectedVReg dst
-  | .VirtualZeroExtendWord dst _ => DstWritesNoProtectedVReg dst
-  | .VirtualMovsign dst _ => DstWritesNoProtectedVReg dst
+  | .VirtualSignExtendWord dst _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualZeroExtendWord dst _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualMovsign dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualAssertHalfwordAlignment _ _ _ => True
   | .VirtualAssertWordAlignment _ _ _ => True
-  | .LD _ dst _ _ => DstWritesNoProtectedVReg (sideEffectingDst dst)
+  | .LD _ dst _ _ => DstWritesNoProtectedVReg dst
   | .SD _ _ _ => True
-  | .VirtualAdvice dst _ => DstWritesNoProtectedVReg dst
+  | .VirtualAdvice dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualAdviceLoad dst _ => DstWritesNoProtectedVReg dst
-  | .VirtualAdviceLen _ _ => False
-  | .VirtualHostIO => False
+  | .VirtualAdviceLen _ _ _ => False
+  | .VirtualHostIO _ _ _ => False
   | .VirtualAssertEQ _ _ _ => True
-  | .VirtualAssertValidDiv0 _ _ => True
+  | .VirtualAssertValidDiv0 _ _ _ => True
   | .VirtualNegateIf dst _ _ => DstWritesNoProtectedVReg dst
-  | .VirtualAssertValidUnsignedRemainder _ _ => True
-  | .VirtualAssertMulUNoOverflow _ _ => True
-  | .VirtualAssertLTE _ _ => True
+  | .VirtualAssertValidUnsignedRemainder _ _ _ => True
+  | .VirtualAssertMulUNoOverflow _ _ _ => True
+  | .VirtualAssertLTE _ _ _ => True
 
 def ProgramWritesNoProtectedVReg : Program → Prop
   | .done _ => True
@@ -299,6 +300,26 @@ private theorem liftSail_preserves_vregs
   | error e sail' =>
       rw [hm] at hrun
       cases hrun
+
+private theorem readMemoryWord_preserves_vregs
+    {address : BitVec 64} {js js' : SailJoltState}
+    {value : Result (BitVec 64) ExecutionResult}
+    (hrun : (readMemoryWord address).run js = .ok value js') :
+    js'.vregs = js.vregs := by
+  simp only [EStateM.run, readMemoryWord] at hrun
+  split at hrun
+  · split at hrun <;> cases hrun <;> rfl
+  · exact liftSail_preserves_vregs hrun
+
+private theorem writeMemoryWord_preserves_vregs
+    {address value : BitVec 64} {js js' : SailJoltState}
+    {result : Result Bool ExecutionResult}
+    (hrun : (writeMemoryWord address value).run js = .ok result js') :
+    js'.vregs = js.vregs := by
+  simp only [EStateM.run, writeMemoryWord] at hrun
+  split at hrun
+  · split at hrun <;> cases hrun <;> rfl
+  · exact liftSail_preserves_vregs hrun
 
 private theorem writeDst_preserves_protected
     {dst : Dst} {js js' : SailJoltState} {value : BitVec 64}
@@ -359,12 +380,12 @@ private theorem dstWrite_preserves_protected
       cases hrun
 
 private theorem alignmentAssert_preserves_protected
-    {base : regidx} {imm : BitVec 12} {fault : ExceptionType}
+    {base : Src} {imm : BitVec 64} {fault : ExceptionType}
     {mask : BitVec 64}
     {js js' : SailJoltState} {result : ExecutionResult}
     (hrun : (do
-        let baseValue ← liftSail (rX_bits base)
-        let addr := baseValue + sign_extend (m := 64) imm
+        let baseValue ← readSrc base
+        let addr := baseValue + imm
         if addr &&& mask = 0 then
           pure RETIRE_SUCCESS
         else
@@ -372,24 +393,24 @@ private theorem alignmentAssert_preserves_protected
         JoltMonad ExecutionResult).run js = .ok result js') :
     ∀ vr, IsProtectedJoltRegister vr → js'.vregs vr = js.vregs vr := by
   simp only [EStateM.run, bind, EStateM.bind] at hrun
-  cases hread : (liftSail (rX_bits base)).run js with
+  cases hread : (readSrc base).run js with
   | ok baseValue js_afterRead =>
-      change liftSail (rX_bits base) js = .ok baseValue js_afterRead at hread
+      change readSrc base js = .ok baseValue js_afterRead at hread
       rw [hread] at hrun
-      let addr := baseValue + sign_extend (m := 64) imm
+      let addr := baseValue + imm
       by_cases halign : addr &&& mask = 0
       · simp only [addr, halign, ↓reduceIte, pure, EStateM.pure] at hrun
         cases hrun
-        have hread_frame := liftSail_preserves_vregs hread
+        have hread_frame := readSrc_preserves_vregs hread
         intro vr hprotected
         rw [hread_frame]
       · simp only [addr, halign, ↓reduceIte, pure, EStateM.pure] at hrun
         cases hrun
-        have hread_frame := liftSail_preserves_vregs hread
+        have hread_frame := readSrc_preserves_vregs hread
         intro vr hprotected
         rw [hread_frame]
   | error e js_error =>
-      change liftSail (rX_bits base) js = .error e js_error at hread
+      change readSrc base js = .error e js_error at hread
       rw [hread] at hrun
       simp only at hrun
       cases hrun
@@ -571,17 +592,16 @@ private theorem binaryReadIfThrowElsePure_preserves_protected
       cases hrun
 
 private theorem ld_preserves_protected
-    {faultClass : LoadFaultClass} {dst : Dst} {base : Src} {imm : BitVec 12}
+    {faultClass : LoadFaultClass} {dst : Dst} {base : Src} {imm : BitVec 64}
     {js js' : SailJoltState} {result : ExecutionResult}
-    (hsafe : DstWritesNoProtectedVReg (sideEffectingDst dst))
+    (hsafe : DstWritesNoProtectedVReg dst)
     (hrun : (do
         let baseValue ← readSrc base
-        let addr := baseValue + sign_extend (m := 64) imm
+        let addr := baseValue + imm
         if addr &&& (7 : BitVec 64) = 0 then
-          match ← liftSail
-              (vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false) with
+          match ← readMemoryWord addr with
           | .Ok dword =>
-              writeDst (sideEffectingDst dst) dword
+              writeDst dst dword
               pure RETIRE_SUCCESS
           | .Err e => pure e
         else
@@ -595,36 +615,33 @@ private theorem ld_preserves_protected
       change readSrc base js = .ok baseValue js_afterBase at hbase
       rw [hbase] at hrun
       simp only at hrun
-      let addr := baseValue + sign_extend (m := 64) imm
+      let addr := baseValue + imm
       by_cases halign : addr &&& (7 : BitVec 64) = 0
       · simp only [addr, halign, ↓reduceIte] at hrun
         cases hmem :
-            (liftSail
-              (vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false)).run
+            (readMemoryWord addr).run
                 js_afterBase with
         | ok memResult js_afterMem =>
-            change liftSail
-              (vmem_read_addr (Virtaddr (baseValue + sign_extend (m := 64) imm))
-                0 8 (Load Data) false false false)
+            change readMemoryWord (baseValue + imm)
                 js_afterBase = .ok memResult js_afterMem at hmem
             simp only [EStateM.bind, hmem] at hrun
             cases memResult with
             | Ok dword =>
                 simp only at hrun
-                cases hwrite : (writeDst (sideEffectingDst dst) dword).run js_afterMem with
+                cases hwrite : (writeDst dst dword).run js_afterMem with
                 | ok u js_afterWrite =>
-                    change writeDst (sideEffectingDst dst) dword js_afterMem =
+                    change writeDst dst dword js_afterMem =
                       .ok u js_afterWrite at hwrite
                     simp only [EStateM.bind, hwrite] at hrun
                     simp only [pure, EStateM.pure] at hrun
                     cases hrun
                     have hbase_frame := readSrc_preserves_vregs hbase
-                    have hmem_frame := liftSail_preserves_vregs hmem
+                    have hmem_frame := readMemoryWord_preserves_vregs hmem
                     have hwrite_frame := writeDst_preserves_protected hsafe hwrite
                     intro vr hprotected
                     rw [hwrite_frame vr hprotected, hmem_frame, hbase_frame]
                 | error e js_error =>
-                    change writeDst (sideEffectingDst dst) dword js_afterMem =
+                    change writeDst dst dword js_afterMem =
                       .error e js_error at hwrite
                     simp only [EStateM.bind, hwrite] at hrun
                     cases hrun
@@ -632,13 +649,11 @@ private theorem ld_preserves_protected
                 simp only [pure, EStateM.pure] at hrun
                 cases hrun
                 have hbase_frame := readSrc_preserves_vregs hbase
-                have hmem_frame := liftSail_preserves_vregs hmem
+                have hmem_frame := readMemoryWord_preserves_vregs hmem
                 intro vr hprotected
                 rw [hmem_frame, hbase_frame]
         | error e js_error =>
-            change liftSail
-              (vmem_read_addr (Virtaddr (baseValue + sign_extend (m := 64) imm))
-                0 8 (Load Data) false false false)
+            change readMemoryWord (baseValue + imm)
                 js_afterBase = .error e js_error at hmem
             simp only [EStateM.bind, hmem] at hrun
             cases hrun
@@ -654,15 +669,14 @@ private theorem ld_preserves_protected
       cases hrun
 
 private theorem sd_preserves_protected
-    {base value : Src} {imm : BitVec 12}
+    {base value : Src} {imm : BitVec 64}
     {js js' : SailJoltState} {result : ExecutionResult}
     (hrun : (do
         let baseValue ← readSrc base
-        let addr := baseValue + sign_extend (m := 64) imm
+        let addr := baseValue + imm
         let stored ← readSrc value
         if addr &&& (7 : BitVec 64) = 0 then
-          match ← liftSail
-              (vmem_write_addr (Virtaddr addr) 8 stored (Store Data) false false false) with
+          match ← writeMemoryWord addr stored with
           | .Ok _ => pure RETIRE_SUCCESS
           | .Err e => pure e
         else
@@ -676,7 +690,7 @@ private theorem sd_preserves_protected
       change readSrc base js = .ok baseValue js_afterBase at hbase
       rw [hbase] at hrun
       simp only at hrun
-      let addr := baseValue + sign_extend (m := 64) imm
+      let addr := baseValue + imm
       cases hvalue : (readSrc value).run js_afterBase with
       | ok stored js_afterValue =>
           change readSrc value js_afterBase = .ok stored js_afterValue at hvalue
@@ -684,14 +698,10 @@ private theorem sd_preserves_protected
           by_cases halign : addr &&& (7 : BitVec 64) = 0
           · simp only [addr, halign, ↓reduceIte] at hrun
             cases hmem :
-                (liftSail
-                  (vmem_write_addr (Virtaddr addr) 8 stored (Store Data) false false false)).run
+                (writeMemoryWord addr stored).run
                     js_afterValue with
             | ok memResult js_afterMem =>
-                change liftSail
-                  (vmem_write_addr
-                    (Virtaddr (baseValue + sign_extend (m := 64) imm))
-                    8 stored (Store Data) false false false)
+                change writeMemoryWord (baseValue + imm) stored
                     js_afterValue = .ok memResult js_afterMem at hmem
                 simp only [EStateM.bind, hmem] at hrun
                 cases memResult <;> simp only [pure, EStateM.pure] at hrun <;>
@@ -699,14 +709,11 @@ private theorem sd_preserves_protected
                 all_goals
                   have hbase_frame := readSrc_preserves_vregs hbase
                   have hvalue_frame := readSrc_preserves_vregs hvalue
-                  have hmem_frame := liftSail_preserves_vregs hmem
+                  have hmem_frame := writeMemoryWord_preserves_vregs hmem
                   intro vr hprotected
                   rw [hmem_frame, hvalue_frame, hbase_frame]
             | error e js_error =>
-                change liftSail
-                  (vmem_write_addr
-                    (Virtaddr (baseValue + sign_extend (m := 64) imm))
-                    8 stored (Store Data) false false false)
+                change writeMemoryWord (baseValue + imm) stored
                     js_afterValue = .error e js_error at hmem
                 simp only [EStateM.bind, hmem] at hrun
                 cases hrun
@@ -795,7 +802,7 @@ theorem execInstr_preserves_protected
       cases hsafe
   | VirtualROTRIW dst src bitmask =>
       cases hsafe
-  | VirtualRev8W dst src =>
+  | VirtualRev8W dst src _ =>
       cases hsafe
   | VirtualXORROT32 dst lhs rhs =>
       cases hsafe
@@ -805,6 +812,8 @@ theorem execInstr_preserves_protected
       cases hsafe
   | VirtualXORROT63 dst lhs rhs =>
       cases hsafe
+  | VirtualXORROTL1 dst lhs rhs =>
+      exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualXORROTW16 dst lhs rhs =>
       cases hsafe
   | VirtualXORROTW12 dst lhs rhs =>
@@ -833,13 +842,13 @@ theorem execInstr_preserves_protected
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualMULIW dst src imm =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualPow2 dst src =>
+  | VirtualPow2 dst src _ =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualPow2W dst src =>
+  | VirtualPow2W dst src _ =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualShiftRightBitmask dst src =>
+  | VirtualShiftRightBitmask dst src _ =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualShiftRightBitmaskW dst src =>
+  | VirtualShiftRightBitmaskW dst src _ =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualSRLI dst src bitmask =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
@@ -875,11 +884,11 @@ theorem execInstr_preserves_protected
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualPextSigned dst value mask =>
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualSignExtendWord dst src =>
+  | VirtualSignExtendWord dst src _ =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualZeroExtendWord dst src =>
+  | VirtualZeroExtendWord dst src _ =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualMovsign dst src =>
+  | VirtualMovsign dst src _ =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualAssertHalfwordAlignment base imm fault =>
       exact alignmentAssert_preserves_protected
@@ -891,16 +900,21 @@ theorem execInstr_preserves_protected
       exact ld_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | SD base value imm =>
       exact sd_preserves_protected (by simpa [execInstr] using hrun)
-  | VirtualAdvice dst value =>
+  | VirtualAdvice dst value _ =>
       exact dstWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualAdviceLoad dst value =>
-      exact dstWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualAdviceLen dst remaining =>
+  | VirtualAdviceLoad dst byteCount =>
+      cases hread : readAdviceTape js.adviceTape byteCount with
+      | none => simp [execInstr, EStateM.run, hread] at hrun
+      | some result =>
+          rcases result with ⟨value, tape⟩
+          exact dstWrite_preserves_protected (js := { js with adviceTape := tape }) hsafe
+            (by simpa [execInstr, EStateM.run, hread] using hrun)
+  | VirtualAdviceLen dst src _ =>
       cases hsafe
-  | VirtualHostIO =>
+  | VirtualHostIO dst src _ =>
       cases hsafe
   | VirtualAssertEQ lhs rhs imm =>
-      by_cases himm : imm = 0#13
+      by_cases himm : imm = 0#128
       · exact binaryReadIfPureElseThrow_preserves_protected
           (p := fun x y => x = y)
           (msg := "VirtualAssertEQ")
@@ -909,24 +923,24 @@ theorem execInstr_preserves_protected
         cases hrun
         intro vr hprotected
         rfl
-  | VirtualAssertValidDiv0 divisor quotient =>
+  | VirtualAssertValidDiv0 divisor quotient _ =>
       exact binaryReadIfThrowElsePure_preserves_protected
         (p := fun d q => d = 0#64 ∧ q ≠ (-1 : BitVec 64))
         (msg := "VirtualAssertValidDiv0: divisor = 0 but quotient ≠ -1")
         (by simpa [execInstr] using hrun)
   | VirtualNegateIf dst signSource value =>
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualAssertValidUnsignedRemainder remainder divisor =>
+  | VirtualAssertValidUnsignedRemainder remainder divisor _ =>
       exact binaryReadIfPureElseThrow_preserves_protected
         (p := fun r d => d = 0#64 ∨ r.toNat < d.toNat)
         (msg := "VirtualAssertValidUnsignedRemainder: r ≥ d ∧ d ≠ 0")
         (by simpa [execInstr] using hrun)
-  | VirtualAssertMulUNoOverflow lhs rhs =>
+  | VirtualAssertMulUNoOverflow lhs rhs _ =>
       exact binaryReadIfPureElseThrow_preserves_protected
         (p := fun x y => x.toNat * y.toNat < 2 ^ 64)
         (msg := "VirtualAssertMulUNoOverflow")
         (by simpa [execInstr] using hrun)
-  | VirtualAssertLTE lhs rhs =>
+  | VirtualAssertLTE lhs rhs _ =>
       exact binaryReadIfPureElseThrow_preserves_protected
         (p := fun x y => x.toNat ≤ y.toNat)
         (msg := "VirtualAssertLTE")
