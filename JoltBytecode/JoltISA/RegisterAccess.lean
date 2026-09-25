@@ -49,6 +49,48 @@ def writeVReg (vr : VReg) (val : BitVec 64) : JoltMonad Unit :=
 
 namespace JoltISA
 
+/-- Read an operand value directly from a state. Missing architectural registers
+default to zero; instruction execution still uses `readSrc` to reject missing operands.
+On a successful operand read, this returns exactly the value read by execution. -/
+-- WARNING: (ari) maybe put a guard or proof around the range of src
+def sourceValue (src : Src) (state : SailJoltState) : BitVec 64 :=
+  match src with
+  | .vreg vr => state.vregs vr
+  | .xreg (.Regidx rs) =>
+      match rs.toNat with
+      | 0 => 0
+      | 1 => (state.sail.regs.get? Register.x1).getD 0
+      | 2 => (state.sail.regs.get? Register.x2).getD 0
+      | 3 => (state.sail.regs.get? Register.x3).getD 0
+      | 4 => (state.sail.regs.get? Register.x4).getD 0
+      | 5 => (state.sail.regs.get? Register.x5).getD 0
+      | 6 => (state.sail.regs.get? Register.x6).getD 0
+      | 7 => (state.sail.regs.get? Register.x7).getD 0
+      | 8 => (state.sail.regs.get? Register.x8).getD 0
+      | 9 => (state.sail.regs.get? Register.x9).getD 0
+      | 10 => (state.sail.regs.get? Register.x10).getD 0
+      | 11 => (state.sail.regs.get? Register.x11).getD 0
+      | 12 => (state.sail.regs.get? Register.x12).getD 0
+      | 13 => (state.sail.regs.get? Register.x13).getD 0
+      | 14 => (state.sail.regs.get? Register.x14).getD 0
+      | 15 => (state.sail.regs.get? Register.x15).getD 0
+      | 16 => (state.sail.regs.get? Register.x16).getD 0
+      | 17 => (state.sail.regs.get? Register.x17).getD 0
+      | 18 => (state.sail.regs.get? Register.x18).getD 0
+      | 19 => (state.sail.regs.get? Register.x19).getD 0
+      | 20 => (state.sail.regs.get? Register.x20).getD 0
+      | 21 => (state.sail.regs.get? Register.x21).getD 0
+      | 22 => (state.sail.regs.get? Register.x22).getD 0
+      | 23 => (state.sail.regs.get? Register.x23).getD 0
+      | 24 => (state.sail.regs.get? Register.x24).getD 0
+      | 25 => (state.sail.regs.get? Register.x25).getD 0
+      | 26 => (state.sail.regs.get? Register.x26).getD 0
+      | 27 => (state.sail.regs.get? Register.x27).getD 0
+      | 28 => (state.sail.regs.get? Register.x28).getD 0
+      | 29 => (state.sail.regs.get? Register.x29).getD 0
+      | 30 => (state.sail.regs.get? Register.x30).getD 0
+      | _ => (state.sail.regs.get? Register.x31).getD 0
+
 def readSrc : Src → JoltMonad (BitVec 64)
   | .vreg vr => readVReg vr
   | .xreg rs => liftSail (rX_bits rs)

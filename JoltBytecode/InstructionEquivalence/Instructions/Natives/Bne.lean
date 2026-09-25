@@ -35,7 +35,8 @@ theorem bneInstr_eq_sail
   simp only [h.rs1_read, h.rs2_read]
   simp only [pure, EStateM.pure]
   -- LHS
-  simp only [JoltISA.execInstr, bind, EStateM.bind,
+  simp only [JoltISA.execInstr, JoltISA.branchDecisionPure,
+    bind, EStateM.bind, pure,
     JoltISA.readSrc_xreg_run_of_read rs1 js h.rs1_val h.rs1_read,
     JoltISA.readSrc_xreg_run_of_read rs2 js h.rs2_val h.rs2_read]
   by_cases h_eq : h.rs1_val = h.rs2_val
