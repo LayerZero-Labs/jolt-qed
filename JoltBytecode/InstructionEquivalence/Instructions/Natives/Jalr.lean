@@ -230,6 +230,7 @@ theorem jalrInstr_eq_sail
       (JoltISA.execInstr (.JALR (.xreg rd) (.xreg rs1) imm)).run js =
     (liftSail (execute_JALR imm rs1 rd)) js := by
     unfold JoltISA.execInstr execute_JALR JoltISA.readSrc JoltISA.writeDst liftSail
+    simp only [jolt_jalr_target, JoltISA.addWide_low]
     simp only [hUpdate, bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
     cases hlink : (get_next_pc ()) js.sail with
     | error e s1 =>

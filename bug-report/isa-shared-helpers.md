@@ -23,6 +23,11 @@ The implementation is in [RegisterAccess.lean](../JoltBytecode/JoltISA/RegisterA
 This port includes the six affected native branch proofs.
 It introduces no witness or constraint modules.
 
+The follow-up port from [907d734](https://github.com/LayerZero-Labs/jolt-qed/commit/907d7346352ec800578e4ed6fd52cabca64155d5) also shares the arithmetic and bitwise calculations.
+`addWide`, `subWide`, and `mulWide` retain full arithmetic values until the caller selects the output width.
+For example, adding one to `2^64 - 1` produces the full value `2^64`, while the instruction writes its low 64 bits, zero.
+The `addWide_low`, `subWide_low`, and `mulWide_low` lemmas prove that the execution results retain their previous wrapping behavior.
+
 ## Acceptance criteria
 
 - All six branch bodies use the shared decision helper.

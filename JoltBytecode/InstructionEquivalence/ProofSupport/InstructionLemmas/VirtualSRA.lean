@@ -22,7 +22,7 @@ theorem virtual_sra_run_xreg_xreg_vreg (rd rs : regidx) (vbitmask : VReg)
     (h : rX_bits rs js.sail = .ok x js.sail)
     (hw : wX_bits rd (jolt_virtual_sra_value x (js.vregs vbitmask)) js.sail = .ok () s') :
     (execInstr (.VirtualSRA (.xreg rd) (.xreg rs) (.vreg vbitmask))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [h, hw, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
@@ -34,7 +34,7 @@ theorem exists_sail_state_after_virtual_sra_run_xreg_xreg_vreg
     (h : rX_bits rs js.sail = .ok x js.sail) :
     ∃ s',
       (execInstr (.VirtualSRA (.xreg rd) (.xreg rs) (.vreg vbitmask))).run js =
-        .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } ∧
+        .ok RETIRE_SUCCESS { js with sail := s' } ∧
       wX_bits rd (jolt_virtual_sra_value x (js.vregs vbitmask)) js.sail = .ok () s' := by
   obtain ⟨s', hw⟩ := wX_shape rd (jolt_virtual_sra_value x (js.vregs vbitmask)) js.sail
   exact ⟨s', virtual_sra_run_xreg_xreg_vreg rd rs vbitmask js x s' h hw, hw⟩
@@ -56,7 +56,7 @@ theorem exists_state_after_virtual_sra_run_xreg_xreg_vreg
       s' = stateAfterWrite js.sail rd (jolt_virtual_sra_value x (js.vregs vbitmask)) :=
     wX_bits_eq_stateAfterWrite rd (jolt_virtual_sra_value x (js.vregs vbitmask))
       js.sail s' h_write
-  exact ⟨{ sail := s', vregs := js.vregs }, h, h_sail_after_sra, h_run⟩
+  exact ⟨{ js with sail := s' }, h, h_sail_after_sra, h_run⟩
 
 /-- `VirtualSRA` from a real source and a virtual bitmask to a real
 destination, packaged from the known bitmask value and base Sail state. -/

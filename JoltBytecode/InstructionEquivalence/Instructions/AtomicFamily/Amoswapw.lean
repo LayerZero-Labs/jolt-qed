@@ -86,7 +86,7 @@ theorem amo_word_swap_pre64_aligned_run
         (.LD .amo (.vreg JoltISA.amoWordSwapDwordVReg)
           (.vreg JoltISA.amoWordSwapShiftVReg) (0 : BitVec 12))).run js_base =
         .ok RETIRE_SUCCESS
-          { sail := js_base.sail
+          { js_base with
             vregs := fun r =>
               if r = JoltISA.amoWordSwapDwordVReg then
                 loaded_dword_at js_base.sail (amoWordBase addr)
@@ -101,7 +101,7 @@ theorem amo_word_swap_pre64_aligned_run
         hbytes_base hload_pmp_base hread_mmio_base
         (by unfold WritableVReg; decide)
   let js_load : SailJoltState :=
-    { sail := js_base.sail
+    { js_base with
       vregs := fun r =>
         if r = JoltISA.amoWordSwapDwordVReg then
           loaded_dword_at js_base.sail (amoWordBase addr)
@@ -146,7 +146,7 @@ theorem amo_word_swap_pre64_aligned_run
         (.VirtualMULI (.vreg JoltISA.amoWordSwapShiftVReg)
           (.xreg rs1) (8 : BitVec 64))).run js_load =
       .ok RETIRE_SUCCESS
-        { sail := js_load.sail
+        { js_load with
           vregs := fun r =>
             if r = JoltISA.amoWordSwapShiftVReg then
               jolt_virtual_muli_value addr (8 : BitVec 64)
@@ -155,7 +155,7 @@ theorem amo_word_swap_pre64_aligned_run
       JoltISA.amoWordSwapShiftVReg rs1 (8 : BitVec 64) js_load addr hrs1_load
       (by unfold WritableVReg; decide)
   let js_shift : SailJoltState :=
-    { sail := js_load.sail
+    { js_load with
       vregs := fun r =>
         if r = JoltISA.amoWordSwapShiftVReg then
           jolt_virtual_muli_value addr (8 : BitVec 64)
@@ -193,7 +193,7 @@ theorem amo_word_swap_pre64_aligned_run
         (.VirtualShiftRightBitmask (.vreg JoltISA.amoWordSwapInlineTmpVReg)
           (.vreg JoltISA.amoWordSwapShiftVReg))).run js_shift =
       .ok RETIRE_SUCCESS
-        { sail := js_shift.sail
+        { js_shift with
           vregs := fun r =>
             if r = JoltISA.amoWordSwapInlineTmpVReg then
               jolt_virtual_shift_right_bitmask_value
@@ -203,7 +203,7 @@ theorem amo_word_swap_pre64_aligned_run
       JoltISA.amoWordSwapInlineTmpVReg JoltISA.amoWordSwapShiftVReg js_shift
       (by unfold WritableVReg; decide)
   let js_bitmask : SailJoltState :=
-    { sail := js_shift.sail
+    { js_shift with
       vregs := fun r =>
         if r = JoltISA.amoWordSwapInlineTmpVReg then
           jolt_virtual_shift_right_bitmask_value
@@ -257,7 +257,7 @@ theorem amo_word_swap_pre64_aligned_run
           (.vreg JoltISA.amoWordSwapDwordVReg)
           (.vreg JoltISA.amoWordSwapInlineTmpVReg))).run js_bitmask =
       .ok RETIRE_SUCCESS
-        { sail := js_bitmask.sail
+        { js_bitmask with
           vregs := fun r =>
             if r = JoltISA.amoWordSwapOldVReg then
               jolt_virtual_srl_value
@@ -269,7 +269,7 @@ theorem amo_word_swap_pre64_aligned_run
       JoltISA.amoWordSwapInlineTmpVReg js_bitmask
       (by unfold WritableVReg; decide)
   let js_pre : SailJoltState :=
-    { sail := js_bitmask.sail
+    { js_bitmask with
       vregs := fun r =>
         if r = JoltISA.amoWordSwapOldVReg then
           jolt_virtual_srl_value
@@ -1143,8 +1143,7 @@ theorem amo_word_swap_sd_spliced_dword_run
     rw [h_sail, h_base, h_dword, amo_word_zero_offset_addr (amoWordBase addr)]
     exact hwrite_dword
   let js' : SailJoltState :=
-    { sail := state_after_dword_store s (amoWordBase addr) dwordNew
-      vregs := js.vregs }
+    { js with sail := state_after_dword_store s (amoWordBase addr) dwordNew }
   have hsd_align :
       (js.vregs JoltISA.amoWordSwapMaskVReg +
           sign_extend (m := 64) (0 : BitVec 12)) &&& (7 : BitVec 64) = 0 := by
@@ -1159,6 +1158,7 @@ theorem amo_word_swap_sd_spliced_dword_run
       JoltISA.amoWordSwapMaskVReg JoltISA.amoWordSwapDwordVReg (0 : BitVec 12)
       js (state_after_dword_store s (amoWordBase addr) dwordNew)
       hsd_align hwrite_current
+      (by rw [h_base, amo_word_zero_offset_addr]; exact hwrite_mmio.ram)
   refine ⟨js', rfl, ?_, ?_⟩
   · exact h_old
   · intro tail
@@ -1205,8 +1205,7 @@ theorem amo_word_swap_sd_spliced_dword_run_for
     rw [h_sail, h_base, h_dword, amo_word_zero_offset_addr (amoWordBase addr)]
     exact hwrite_dword
   let js' : SailJoltState :=
-    { sail := state_after_dword_store s (amoWordBase addr) dwordNew
-      vregs := js.vregs }
+    { js with sail := state_after_dword_store s (amoWordBase addr) dwordNew }
   have hsd_align :
       (js.vregs maskReg + sign_extend (m := 64) (0 : BitVec 12)) &&&
           (7 : BitVec 64) =
@@ -1221,6 +1220,7 @@ theorem amo_word_swap_sd_spliced_dword_run_for
       maskReg dwordReg (0 : BitVec 12)
       js (state_after_dword_store s (amoWordBase addr) dwordNew)
       hsd_align hwrite_current
+      (by rw [h_base, amo_word_zero_offset_addr]; exact hwrite_mmio.ram)
   refine ⟨js', rfl, ?_, ?_⟩
   · exact h_old
   · intro tail

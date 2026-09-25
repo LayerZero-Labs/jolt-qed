@@ -309,7 +309,7 @@ private theorem csrrwProgram_project_run
     · simp only [Bool.false_eq_true, if_false]
       let oldCsr := js.vregs (JoltISA.SystemCSR.vreg csr)
       let jsAfterRd : SailJoltState :=
-        { sail := stateAfterWrite js.sail rd oldCsr, vregs := js.vregs }
+        { js with sail := stateAfterWrite js.sail rd oldCsr }
       have hRdRun :
           (JoltISA.execInstr
               (.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
@@ -353,8 +353,7 @@ private theorem csrrwProgram_project_run
       let jsScratch : SailJoltState :=
         joltSetVReg js JoltISA.systemScratchVReg rs1Val
       let jsAfterRd : SailJoltState :=
-        { sail := stateAfterWrite jsScratch.sail rd oldCsr
-          vregs := jsScratch.vregs }
+        { jsScratch with sail := stateAfterWrite jsScratch.sail rd oldCsr }
       have hScratchRun :
           (JoltISA.execInstr
               (.ADDI (.vreg JoltISA.systemScratchVReg) (.xreg rs1)

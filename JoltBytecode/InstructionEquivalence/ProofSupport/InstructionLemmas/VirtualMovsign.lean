@@ -23,7 +23,7 @@ theorem movsign_run_vreg_xreg (vd : VReg) (rs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualMovsign (.vreg vd) (.xreg rs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then jolt_movsign_value x else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail
   simp only [h, bind, EStateM.bind, EStateM.run]
@@ -48,7 +48,7 @@ theorem exists_state_after_movsign_run_vreg_xreg
   have h_read_current : rX_bits rs js.sail = .ok x js.sail := by
     simpa only [h_sail] using h_read
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then jolt_movsign_value x else js.vregs r }
   refine ⟨js', h_read_current, ?_, ?_, ?_, ?_⟩
   · exact h_sail

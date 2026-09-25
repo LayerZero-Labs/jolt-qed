@@ -104,7 +104,7 @@ theorem lb_ld_run
       .ok RETIRE_SUCCESS
         (stateAfterVRegWrite jsAlign dwordVReg dval) := by
   apply vreg_LD_run_of_aligned_dword_phys
-  · simp only [stateAfterVRegWrite, if_true, jolt_virtual_align_addr_value,
+  · simp only [stateAfterVRegWrite, if_true, jolt_virtual_align_addr_value, JoltISA.addWide_low,
       compute_aligned_dword_base_address, load_effective_address,
       Memory.effectiveAddr12,
       show ~~~(7 : BitVec 64) = (-8 : BitVec 64) by decide]

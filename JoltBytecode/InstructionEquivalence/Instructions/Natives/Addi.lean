@@ -90,7 +90,7 @@ theorem addiInstr_eq_sail
   simp only [h.rs1_read]
   obtain ⟨s', h_write⟩ := wX_shape rd (op h.rs1_val imm) js.sail
   simp only [pure, EStateM.pure, h_write]
-  simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+  simp only [JoltISA.execInstr, JoltISA.addWide_low, JoltISA.readSrc, JoltISA.writeDst, liftSail,
     bind, EStateM.bind, h.rs1_read, h_write]
   exact Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'
     (op h.rs1_val imm)

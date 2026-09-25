@@ -436,24 +436,24 @@ theorem systemProjectResult_pure_retire_after_xreg_write
     (hlinked : LinkedCSRs js)
     (hwrite : wX_bits rd value js.sail = .ok () s') :
     System.systemProjectResult (
-     (pure RETIRE_SUCCESS : JoltMonad ExecutionResult) ({ sail := s', vregs := js.vregs } : SailJoltState)
+     (pure RETIRE_SUCCESS : JoltMonad ExecutionResult) ({ js with sail := s' } : SailJoltState)
      ) 
     =
     ((pure RETIRE_SUCCESS : SailM ExecutionResult) s') := by
   have h_project_initial : System.systemProject js = js.sail :=
     systemProject_eq_sail_of_compatible js hlinked
   have h_final_sail :
-      ({ sail := s', vregs := js.vregs } : SailJoltState).sail =
+      ({ js with sail := s' } : SailJoltState).sail =
         stateAfterWrite js.sail rd value :=
     wX_bits_eq_stateAfterWrite rd value js.sail s' hwrite
   have h_projected_vregs :
       ProjectedVRegsPreserved js
-        ({ sail := s', vregs := js.vregs } : SailJoltState) := by
+        ({ js with sail := s' } : SailJoltState) := by
     unfold ProjectedVRegsPreserved
     exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
   simp only [pure, EStateM.pure, System.systemProjectResult]
   rw [systemProject_stateAfterWrite_of_projected_vregs_preserved
-    js ({ sail := s', vregs := js.vregs } : SailJoltState) rd value
+    js ({ js with sail := s' } : SailJoltState) rd value
       h_final_sail h_projected_vregs]
   rw [h_project_initial]
   rw [← h_final_sail]

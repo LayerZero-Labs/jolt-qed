@@ -44,13 +44,13 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .ANDN dst _ _
   | .VirtualMULI dst _ _
   | .VirtualMULIW dst _ _
-  | .VirtualPow2 dst _
-  | .VirtualPow2W dst _
+  | .VirtualPow2 dst _ _
+  | .VirtualPow2W dst _ _
   | .VirtualPow2I dst _
   | .VirtualPow2IW dst _
-  | .VirtualShiftRightBitmask dst _
+  | .VirtualShiftRightBitmask dst _ _
   | .VirtualShiftRightBitmaskI dst _
-  | .VirtualShiftRightBitmaskW dst _
+  | .VirtualShiftRightBitmaskW dst _ _
   | .VirtualSRLI dst _ _
   | .VirtualSRAI dst _ _
   | .VirtualSRLIW dst _ _
@@ -61,7 +61,7 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .VirtualSRAW dst _ _
   | .VirtualROTRI dst _ _
   | .VirtualROTRIW dst _ _
-  | .VirtualRev8W dst _
+  | .VirtualRev8W dst _ _
   | .VirtualXORROT32 dst _ _
   | .VirtualXORROT24 dst _ _
   | .VirtualXORROT16 dst _ _
@@ -87,12 +87,12 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .VirtualShiftDataB dst _ _
   | .VirtualShiftDataH dst _ _
   | .VirtualShiftDataW dst _ _
-  | .VirtualSignExtendWord dst _
-  | .VirtualZeroExtendWord dst _
-  | .VirtualMovsign dst _
-  | .VirtualAdvice dst _
+  | .VirtualSignExtendWord dst _ _
+  | .VirtualZeroExtendWord dst _ _
+  | .VirtualMovsign dst _ _
+  | .VirtualAdvice dst _ _
   | .VirtualAdviceLoad dst _
-  | .VirtualAdviceLen dst _
+  | .VirtualAdviceLen dst _ _
   | .VirtualNegateIf dst _ _ => dst.WritesProtectedVReg
   | .LD _ dst _ _ => (sideEffectingDst dst).WritesProtectedVReg
   | .BEQ _ _ _
@@ -105,12 +105,12 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .VirtualAssertHalfwordAlignment _ _ _
   | .VirtualAssertWordAlignment _ _ _
   | .SD _ _ _
-  | .VirtualHostIO
+  | .VirtualHostIO _ _ _
   | .VirtualAssertEQ _ _ _
-  | .VirtualAssertValidDiv0 _ _
-  | .VirtualAssertValidUnsignedRemainder _ _
-  | .VirtualAssertMulUNoOverflow _ _
-  | .VirtualAssertLTE _ _ => False
+  | .VirtualAssertValidDiv0 _ _ _
+  | .VirtualAssertValidUnsignedRemainder _ _ _
+  | .VirtualAssertMulUNoOverflow _ _ _
+  | .VirtualAssertLTE _ _ _ => False
 
 /-- A program writes a protected virtual register when one of its instructions
 does. -/

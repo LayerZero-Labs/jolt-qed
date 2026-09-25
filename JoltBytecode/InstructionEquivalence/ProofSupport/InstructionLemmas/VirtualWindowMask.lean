@@ -14,7 +14,7 @@ theorem virtual_window_mask_b_run_vreg_vreg (vd base : VReg)
     (imm : BitVec 12) (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualWindowMaskB (.vreg vd) (.vreg base) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then
               jolt_virtual_window_mask_b_value (js.vregs base) imm
@@ -29,7 +29,7 @@ theorem virtual_window_mask_h_run_vreg_vreg (vd base : VReg)
     (imm : BitVec 12) (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualWindowMaskH (.vreg vd) (.vreg base) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then
               jolt_virtual_window_mask_h_value (js.vregs base) imm
@@ -44,7 +44,7 @@ theorem virtual_window_mask_w_run_vreg_vreg (vd base : VReg)
     (imm : BitVec 12) (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.VirtualWindowMaskW (.vreg vd) (.vreg base) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then
               jolt_virtual_window_mask_w_value (js.vregs base) imm
@@ -61,7 +61,7 @@ theorem virtual_window_mask_b_run_vreg_xreg (vd : VReg) (rs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualWindowMaskB (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_window_mask_b_value x imm else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail
@@ -74,7 +74,7 @@ theorem virtual_window_mask_h_run_vreg_xreg (vd : VReg) (rs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualWindowMaskH (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_window_mask_h_value x imm else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail
@@ -87,7 +87,7 @@ theorem virtual_window_mask_w_run_vreg_xreg (vd : VReg) (rs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.VirtualWindowMaskW (.vreg vd) (.xreg rs) imm)).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r =>
             if r = vd then jolt_virtual_window_mask_w_value x imm else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail

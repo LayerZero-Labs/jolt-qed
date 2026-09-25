@@ -23,7 +23,7 @@ theorem xor_run_vreg_xreg_xreg (vd : VReg) (lhs rhs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.XOR (.vreg vd) (.xreg lhs) (.xreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then x ^^^ y else js.vregs r } := by
   unfold execInstr readSrc writeDst liftSail
   simp only [hlhs, hrhs, bind, EStateM.bind, EStateM.run]
@@ -51,7 +51,7 @@ theorem xor_run_vreg_xreg_vreg (vd : VReg) (lhs : regidx) (rhs : VReg)
     (hvd : WritableVReg vd) :
     (execInstr (.XOR (.vreg vd) (.xreg lhs) (.vreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then x ^^^ js.vregs rhs else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [h, bind, EStateM.bind, EStateM.run,
@@ -77,7 +77,7 @@ theorem exists_state_after_xor_run_vreg_xreg_vreg
   have h_lhs_current : rX_bits lhs js.sail = .ok x js.sail := by
     simpa only [h_sail] using h_lhs
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then x ^^^ js.vregs rhs else js.vregs r }
   refine ⟨js', h_lhs_current, ?_, ?_, ?_, ?_⟩
   · exact h_sail
@@ -92,7 +92,7 @@ theorem xor_run_vreg_vreg_vreg (vd lhs rhs : VReg)
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.XOR (.vreg vd) (.vreg lhs) (.vreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then js.vregs lhs ^^^ js.vregs rhs else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
@@ -113,7 +113,7 @@ theorem exists_state_after_xor_run_vreg_vreg_vreg
       (execInstr (.XOR (.vreg vd) (.vreg lhs) (.vreg rhs))).run js =
         .ok RETIRE_SUCCESS js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then js.vregs lhs ^^^ js.vregs rhs else js.vregs r }
   refine ⟨js', rfl, ?_, ?_, ?_⟩
   · simp [js', h_lhs, h_rhs]

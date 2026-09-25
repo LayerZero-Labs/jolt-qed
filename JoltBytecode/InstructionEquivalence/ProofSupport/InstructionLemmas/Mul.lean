@@ -21,7 +21,7 @@ theorem mul_run_vreg_vreg_vreg (vd lhs rhs : VReg) (js : SailJoltState)
     (hvd : WritableVReg vd) :
     (execInstr (.MUL (.vreg vd) (.vreg lhs) (.vreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then js.vregs lhs * js.vregs rhs
             else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg
@@ -39,7 +39,7 @@ theorem mul_run_vreg_vreg_xreg (vd lhs : VReg) (rhs : regidx)
     (hvd : WritableVReg vd) :
     (execInstr (.MUL (.vreg vd) (.vreg lhs) (.xreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then js.vregs lhs * y else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [h, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
@@ -55,7 +55,7 @@ theorem mul_run_vreg_xreg_vreg (vd : VReg) (lhs : regidx) (rhs : VReg)
     (hvd : WritableVReg vd) :
     (execInstr (.MUL (.vreg vd) (.xreg lhs) (.vreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then x * js.vregs rhs else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg liftSail
   simp only [h, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
@@ -81,7 +81,7 @@ theorem exists_state_after_mul_run_vreg_vreg_xreg
   have h_read_current : rX_bits rhs js.sail = .ok y js.sail := by
     simpa only [h_sail] using h_read
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then js.vregs lhs * y else js.vregs r }
   refine ⟨js', h_read_current, ?_, ?_, ?_, ?_⟩
   · exact h_sail
@@ -97,9 +97,9 @@ theorem mul_run_xreg_xreg_vreg (rd rs1 : regidx) (vs2 : VReg)
     (h : rX_bits rs1 js.sail = .ok x js.sail)
     (hw : wX_bits rd (x * js.vregs vs2) js.sail = .ok () s') :
     (execInstr (.MUL (.xreg rd) (.xreg rs1) (.vreg vs2))).run js =
-      .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } := by
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold execInstr readSrc writeDst readVReg liftSail
-  simp only [h, hw, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [mulWide_low, h, hw, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
 
 /-- `MUL` from a real source and a virtual source to a real destination, with
@@ -109,7 +109,7 @@ theorem exists_sail_state_after_mul_run_xreg_xreg_vreg (rd rs1 : regidx) (vs2 : 
     (h : rX_bits rs1 js.sail = .ok x js.sail) :
     ∃ s',
       (execInstr (.MUL (.xreg rd) (.xreg rs1) (.vreg vs2))).run js =
-        .ok RETIRE_SUCCESS { sail := s', vregs := js.vregs } ∧
+        .ok RETIRE_SUCCESS { js with sail := s' } ∧
       wX_bits rd (x * js.vregs vs2) js.sail = .ok () s' := by
   obtain ⟨s', hw⟩ := wX_shape rd (x * js.vregs vs2) js.sail
   exact ⟨s', mul_run_xreg_xreg_vreg rd rs1 vs2 js x s' h hw, hw⟩
@@ -130,7 +130,7 @@ theorem exists_state_after_mul_run_xreg_xreg_vreg (rd rs1 : regidx) (vs2 : VReg)
   have h_sail_after_mul :
       s' = stateAfterWrite js.sail rd (x * js.vregs vs2) :=
     wX_bits_eq_stateAfterWrite rd (x * js.vregs vs2) js.sail s' h_write
-  exact ⟨{ sail := s', vregs := js.vregs }, h, h_sail_after_mul, h_run⟩
+  exact ⟨{ js with sail := s' }, h, h_sail_after_mul, h_run⟩
 
 /-- `MUL` from a real source and a virtual source to a real destination,
 packaged from the known virtual-register value and base Sail state. -/

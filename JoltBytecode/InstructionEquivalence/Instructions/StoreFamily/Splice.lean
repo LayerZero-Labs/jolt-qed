@@ -273,7 +273,7 @@ theorem fusedByteSplice_eq (dword value ea base : BitVec 64)
       rw [show sign_extend (m := 64) (0 : BitVec 12) = 0 by decide]
       exact BitVec.add_zero ea
     unfold jolt_virtual_window_mask_b_value
-    rw [hea0]
+    rw [JoltISA.addWide_low, hea0]
     dsimp only
     rw [← hoff, Nat.mul_comm]
     exact ofNat_shift_mask 0xff (off * 8)
@@ -312,7 +312,7 @@ theorem fusedHalfwordSplice_eq (dword value ea base : BitVec 64)
       rw [show sign_extend (m := 64) (0 : BitVec 12) = 0 by decide]
       exact BitVec.add_zero ea
     unfold jolt_virtual_window_mask_h_value
-    rw [hea0]
+    rw [JoltISA.addWide_low, hea0]
     dsimp only
     rw [← hoff, Nat.mul_comm]
     exact ofNat_shift_mask 0xffff (off * 8)
@@ -366,7 +366,7 @@ theorem fusedWordSplice_eq (dword value ea base : BitVec 64)
       rw [show sign_extend (m := 64) (0 : BitVec 12) = 0 by decide]
       exact BitVec.add_zero ea
     unfold jolt_virtual_window_mask_w_value
-    rw [hea0]
+    rw [JoltISA.addWide_low, hea0]
     dsimp only
     rw [show ((ea >>> 2) &&& (1 : BitVec 64)).toNat = word by rfl]
     rw [hwordShift]

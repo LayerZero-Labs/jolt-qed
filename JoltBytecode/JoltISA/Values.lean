@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Ari 
 -/
 import JoltBytecode.JoltISA.Core
+import JoltBytecode.JoltISA.semantic_helpers
 import Mathlib.Tactic
 import Mathlib.Data.BitVec
 
@@ -86,6 +87,28 @@ end Riscv
 -- Jolt-side value helpers
 -- ============================================================================
 
+-- Rust: [bitwise and comparison lookup outputs](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv).
+-- Transparent pure calculations shared by execInstr and witness extraction.
+-- Keeping these transparent preserves the existing execution proof reductions.
+abbrev jolt_xor_value (x y : BitVec 64) : BitVec 64 := x ^^^ y
+
+abbrev jolt_andn_value (x y : BitVec 64) : BitVec 64 := x &&& Complement.complement y
+
+abbrev jolt_slt_value (x y : BitVec 64) : BitVec 64 :=
+  zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y))
+
+-- Rust: [JALR target](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs:29).
+abbrev jolt_jalr_target (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
+  BitVec.update (BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))) 0 0#1
+
+-- Rust: [AssertEq output](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs:17).
+-- Equality is still the lookup predicate when a nonzero immediate suppresses
+-- the execution assertion; successful retirement alone does not imply equality.
+abbrev jolt_assert_eq (x y : BitVec 64) : Prop := x = y
+
+abbrev jolt_virtual_zero_extend_word_value (x : BitVec 64) : BitVec 64 :=
+  zero_extend (m := 64) (Sail.BitVec.extractLsb x 31 0)
+
 /-- RV64 `VirtualMovsign` value: all ones if the source sign bit is set,
 otherwise zero. -/
 def jolt_movsign_value (x : BitVec 64) : BitVec 64 :=
@@ -93,7 +116,7 @@ def jolt_movsign_value (x : BitVec 64) : BitVec 64 :=
 
 /-- RV64 `MULHU` value: high 64 bits of the unsigned 64x64 product. -/
 def jolt_mulhu_value (x y : BitVec 64) : BitVec 64 :=
-  BitVec.ofNat 64 (x.toNat * y.toNat / 2^64)
+  BitVec.ofNat 64 (JoltISA.mulWide x y / 2^64)
 
 /-- RV64 `SLTU` value: one if `x < y` as unsigned 64-bit integers,
 otherwise zero. -/
@@ -103,32 +126,32 @@ def jolt_sltu_value (x y : BitVec 64) : BitVec 64 :=
 /-- RV64 `ADDIW` value: add the sign-extended immediate, retain the low word,
 then sign-extend that word. -/
 def jolt_addiw_value (x : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
-  ((x + sign_extend (m := 64) imm).setWidth 32).signExtend 64
+  ((BitVec.ofNat 64 (JoltISA.addWide x (sign_extend (m := 64) imm))).setWidth 32).signExtend 64
 
 /-- RV64 `ADDW` value. -/
 def jolt_addw_value (x y : BitVec 64) : BitVec 64 :=
-  ((x + y).setWidth 32).signExtend 64
+  ((BitVec.ofNat 64 (JoltISA.addWide x y)).setWidth 32).signExtend 64
 
 /-- RV64 `SUBW` value. -/
 def jolt_subw_value (x y : BitVec 64) : BitVec 64 :=
-  ((x - y).setWidth 32).signExtend 64
+  ((BitVec.ofNat 64 (JoltISA.subWide x y)).setWidth 32).signExtend 64
 
 /-- RV64 `MULW` value. Signed and unsigned multiplication have the same low
 32-bit product, which is then sign-extended. -/
 def jolt_mulw_value (x y : BitVec 64) : BitVec 64 :=
-  ((x * y).setWidth 32).signExtend 64
+  ((BitVec.ofNat 64 (JoltISA.mulWide x y)).setWidth 32).signExtend 64
 
 /-- RV64 `VirtualMULI` value: multiply by the immediate in the 64-bit word
 ring.  In the Rust tracer this instruction writes the sign-extended machine
 word after a wrapping multiply; for RV64 that is exactly the resulting
 64-bit bit pattern. -/
 def jolt_virtual_muli_value (x imm : BitVec 64) : BitVec 64 :=
-  x * imm
+  BitVec.ofNat 64 (JoltISA.mulWide x imm)
 
 /-- RV64 `VirtualMULIW` value: wrapping multiplication followed by low-word
 sign extension. -/
 def jolt_virtual_muliw_value (x imm : BitVec 64) : BitVec 64 :=
-  ((x * imm).setWidth 32).signExtend 64
+  ((BitVec.ofNat 64 (JoltISA.mulWide x imm)).setWidth 32).signExtend 64
 
 /-- RV64 `VirtualPow2` value: `2 ^ (x[5:0])`, used by `SLL`. -/
 def jolt_virtual_pow2_value (x : BitVec 64) : BitVec 64 :=
@@ -233,25 +256,25 @@ def jolt_virtual_xorrotw_value (rot : Nat) (x y : BitVec 64) : BitVec 64 :=
 /-- RV64 `VirtualAlignAddr` value: align `base + sext(imm)` down to its
 containing doubleword. -/
 def jolt_virtual_align_addr_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
-  (base + sign_extend (m := 64) imm) &&& ~~~(7 : BitVec 64)
+  (BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))) &&& ~~~(7 : BitVec 64)
 
 /-- RV64 `VirtualWindowMaskB` value. -/
 def jolt_virtual_window_mask_b_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
-  let ea := base + sign_extend (m := 64) imm
+  let ea := BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))
   let offset := (ea &&& (7 : BitVec 64)).toNat
   BitVec.ofNat 64 (0xFF <<< (8 * offset))
 
 /-- RV64 `VirtualWindowMaskH` value. Bit zero of the effective address is
 ignored, matching the tracer's `ea & 6`. -/
 def jolt_virtual_window_mask_h_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
-  let ea := base + sign_extend (m := 64) imm
+  let ea := BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))
   let offset := (ea &&& (6 : BitVec 64)).toNat
   BitVec.ofNat 64 (0xFFFF <<< (8 * offset))
 
 /-- RV64 `VirtualWindowMaskW` value. Only effective-address bit two selects
 the low or high word lane. -/
 def jolt_virtual_window_mask_w_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
-  let ea := base + sign_extend (m := 64) imm
+  let ea := BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))
   let word := ((ea >>> 2) &&& (1 : BitVec 64)).toNat
   BitVec.ofNat 64 (0xFFFF_FFFF <<< (32 * word))
 

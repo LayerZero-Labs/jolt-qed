@@ -141,14 +141,15 @@ succeeds and updates only the virtual-register file. -/
 private theorem writeDst_systemScratchVReg_run
     (js : SailJoltState) (nextPC target : BitVec 64) :
     JoltISA.writeDst (JoltISA.Dst.vreg JoltISA.systemScratchVReg) nextPC
-        { sail := setNextPCState js.sail target, vregs := js.vregs } =
+        { js with sail := setNextPCState js.sail target } =
       .ok ()
-        { sail := setNextPCState js.sail target,
+        { js with
+          sail := setNextPCState js.sail target,
           vregs := fun r =>
             if r = JoltISA.systemScratchVReg then nextPC else js.vregs r } := by
   unfold JoltISA.writeDst
   exact writeVReg_run_of_writable JoltISA.systemScratchVReg nextPC
-    { sail := setNextPCState js.sail target, vregs := js.vregs }
+    { js with sail := setNextPCState js.sail target }
     (by
       unfold JoltISA.systemScratchVReg JoltISA.inlineTmp0 JoltISA.inlineTmp
         WritableVReg JoltISA.inlineRegisterBase JoltISA.riscvRegisterBase
@@ -165,7 +166,8 @@ private theorem mretProgram_jolt_run
         some (nextPC : RegisterType Register.nextPC)) :
     (JoltISA.execProgram JoltISA.mretProgram).run js =
       .ok RETIRE_SUCCESS
-        { sail := setNextPCState js.sail
+        { js with
+          sail := setNextPCState js.sail
             (BitVec.update
               (js.vregs JoltISA.mepcVReg + sign_extend (m := 64) (0 : BitVec 12))
               0 0#1),
@@ -182,7 +184,7 @@ private theorem mretProgram_jolt_run
   have hReadMepc : JoltISA.readSrc (JoltISA.Src.vreg JoltISA.mepcVReg) js =
         .ok (js.vregs JoltISA.mepcVReg) js := by
     simp only [JoltISA.readSrc_vreg, readVReg_run]
-  simp only [hReadMepc]
+  simp only [hReadMepc, jolt_jalr_target, JoltISA.addWide_low]
   -- The next instruction is to jump_to mepc value roughly cos we are adding 0 and we want to show that succeeds.
   have hJump := jump_to_mret_vreg_run js h
   simp only [hJump]
@@ -200,7 +202,8 @@ embedded Sail `nextPC` write is projected. -/
 private theorem systemProject_mretJoltFinal
     (js : SailJoltState) (nextPC target : BitVec 64) :
     systemProject
-        { sail := setNextPCState js.sail target,
+        { js with
+          sail := setNextPCState js.sail target,
           vregs := fun r =>
             if r = JoltISA.systemScratchVReg then nextPC else js.vregs r } =
       { systemProject js with
@@ -219,7 +222,8 @@ private theorem systemProject_mretJoltFinal
     decide
   have hScratchIgnored :
       systemProject
-          { sail := setNextPCState js.sail target,
+          { js with
+            sail := setNextPCState js.sail target,
             vregs := fun r =>
               if r = JoltISA.systemScratchVReg then nextPC else js.vregs r } =
         systemProject { js with sail := setNextPCState js.sail target } := by

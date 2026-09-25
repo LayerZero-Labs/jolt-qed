@@ -90,7 +90,7 @@ theorem amo_word_rust_select_pre64_aligned_run
         (.LD .amo (.vreg JoltISA.amoWordSelectDwordVReg)
           (.vreg JoltISA.amoWordSelectShiftVReg) (0 : BitVec 12))).run js_base =
         .ok RETIRE_SUCCESS
-          { sail := js_base.sail
+          { js_base with
             vregs := fun r =>
               if r = JoltISA.amoWordSelectDwordVReg then
                 loaded_dword_at js_base.sail (amoWordBase addr)
@@ -105,7 +105,7 @@ theorem amo_word_rust_select_pre64_aligned_run
         hbytes_base hload_pmp_base hread_mmio_base
         (by unfold WritableVReg; decide)
   let js_load : SailJoltState :=
-    { sail := js_base.sail
+    { js_base with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectDwordVReg then
           loaded_dword_at js_base.sail (amoWordBase addr)
@@ -150,7 +150,7 @@ theorem amo_word_rust_select_pre64_aligned_run
         (.VirtualMULI (.vreg JoltISA.amoWordSelectShiftVReg)
           (.xreg rs1) (8 : BitVec 64))).run js_load =
       .ok RETIRE_SUCCESS
-        { sail := js_load.sail
+        { js_load with
           vregs := fun r =>
             if r = JoltISA.amoWordSelectShiftVReg then
               jolt_virtual_muli_value addr (8 : BitVec 64)
@@ -159,7 +159,7 @@ theorem amo_word_rust_select_pre64_aligned_run
       JoltISA.amoWordSelectShiftVReg rs1 (8 : BitVec 64) js_load addr hrs1_load
       (by unfold WritableVReg; decide)
   let js_shift : SailJoltState :=
-    { sail := js_load.sail
+    { js_load with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectShiftVReg then
           jolt_virtual_muli_value addr (8 : BitVec 64)
@@ -197,7 +197,7 @@ theorem amo_word_rust_select_pre64_aligned_run
         (.VirtualShiftRightBitmask (.vreg JoltISA.amoWordSelectNewVReg)
           (.vreg JoltISA.amoWordSelectShiftVReg))).run js_shift =
       .ok RETIRE_SUCCESS
-        { sail := js_shift.sail
+        { js_shift with
           vregs := fun r =>
             if r = JoltISA.amoWordSelectNewVReg then
               jolt_virtual_shift_right_bitmask_value
@@ -207,7 +207,7 @@ theorem amo_word_rust_select_pre64_aligned_run
       JoltISA.amoWordSelectNewVReg JoltISA.amoWordSelectShiftVReg js_shift
       (by unfold WritableVReg; decide)
   let js_bitmask : SailJoltState :=
-    { sail := js_shift.sail
+    { js_shift with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectNewVReg then
           jolt_virtual_shift_right_bitmask_value
@@ -261,7 +261,7 @@ theorem amo_word_rust_select_pre64_aligned_run
           (.vreg JoltISA.amoWordSelectDwordVReg)
           (.vreg JoltISA.amoWordSelectNewVReg))).run js_bitmask =
       .ok RETIRE_SUCCESS
-        { sail := js_bitmask.sail
+        { js_bitmask with
           vregs := fun r =>
             if r = JoltISA.amoWordSelectOldVReg then
               jolt_virtual_srl_value
@@ -273,7 +273,7 @@ theorem amo_word_rust_select_pre64_aligned_run
       JoltISA.amoWordSelectNewVReg js_bitmask
       (by unfold WritableVReg; decide)
   let js_pre : SailJoltState :=
-    { sail := js_bitmask.sail
+    { js_bitmask with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectOldVReg then
           jolt_virtual_srl_value
@@ -699,8 +699,7 @@ theorem amo_word_rust_select_sd_spliced_dword_run
     rw [h_sail, h_base, h_dword, amo_word_zero_offset_addr (amoWordBase addr)]
     exact hwrite_dword
   let js' : SailJoltState :=
-    { sail := state_after_dword_store s (amoWordBase addr) dwordNew
-      vregs := js.vregs }
+    { js with sail := state_after_dword_store s (amoWordBase addr) dwordNew }
   have hsd_align :
       (js.vregs JoltISA.amoWordSelectMaskVReg + sign_extend (m := 64) (0 : BitVec 12)) &&&
           (7 : BitVec 64) =
@@ -715,6 +714,7 @@ theorem amo_word_rust_select_sd_spliced_dword_run
     JoltISA.execInstr_sd_vreg_run_of_write
       JoltISA.amoWordSelectMaskVReg JoltISA.amoWordSelectDwordVReg (0 : BitVec 12)
       js (state_after_dword_store s (amoWordBase addr) dwordNew) hsd_align hwrite_current
+      (by rw [h_base, amo_word_zero_offset_addr]; exact hwrite_mmio.ram)
   refine ⟨js', rfl, ?_, ?_⟩
   · exact h_old
   · intro tail
@@ -1346,8 +1346,7 @@ theorem amo_word_rust_select_sd_spliced_dword_run_for
     rw [h_sail, h_base, h_dword, amo_word_zero_offset_addr (amoWordBase addr)]
     exact hwrite_dword
   let js' : SailJoltState :=
-    { sail := state_after_dword_store s (amoWordBase addr) dwordNew
-      vregs := js.vregs }
+    { js with sail := state_after_dword_store s (amoWordBase addr) dwordNew }
   have hsd_align :
       (js.vregs maskReg + sign_extend (m := 64) (0 : BitVec 12)) &&&
           (7 : BitVec 64) =
@@ -1362,6 +1361,7 @@ theorem amo_word_rust_select_sd_spliced_dword_run_for
       maskReg dwordReg (0 : BitVec 12)
       js (state_after_dword_store s (amoWordBase addr) dwordNew)
       hsd_align hwrite_current
+      (by rw [h_base, amo_word_zero_offset_addr]; exact hwrite_mmio.ram)
   refine ⟨js', rfl, ?_, ?_⟩
   · exact h_old
   · intro tail
@@ -1764,11 +1764,11 @@ theorem amo_word_rust_select_signed_extend_phase_run
     sign_extend (m := 64)
       (Sail.BitVec.extractLsb old 31 0 : BitVec 32)
   let js_afterRs2 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectNewVReg then rs2Ext else js.vregs r }
   let js_afterExt : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectMaskVReg then oldExt else js_afterRs2.vregs r }
   have hrs2_run :
@@ -1861,11 +1861,11 @@ theorem amo_word_rust_select_unsigned_extend_phase_run
     zero_extend (m := 64)
       (Sail.BitVec.extractLsb old 31 0 : BitVec 32)
   let js_afterRs2 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectNewVReg then rs2Ext else js.vregs r }
   let js_afterExt : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectMaskVReg then oldExt else js_afterRs2.vregs r }
   have hrs2_run :
@@ -1952,7 +1952,7 @@ theorem amo_word_rust_select_slt_compare_phase_run_vreg_vreg
   let flag : BitVec 64 :=
     zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y))
   let js_afterCmp : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectMaskVReg then flag else js.vregs r }
   have hcmp_run :
@@ -2003,7 +2003,7 @@ theorem amo_word_rust_select_sltu_compare_phase_run_vreg_vreg
         old dword shift (jolt_sltu_value x y) js js_afterCmp := by
   let flag : BitVec 64 := jolt_sltu_value x y
   let js_afterCmp : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectMaskVReg then flag else js.vregs r }
   have hcmp_run :
@@ -2053,15 +2053,15 @@ theorem amo_word_rust_select_tail_phase_run
   let delta : BitVec 64 := rs2Val - old
   let scaled : BitVec 64 := delta * flag
   let js_afterSub : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectNewVReg then delta else js.vregs r }
   let js_afterMul : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectNewVReg then scaled else js_afterSub.vregs r }
   let js_afterAdd : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r =>
         if r = JoltISA.amoWordSelectNewVReg then scaled + old else js_afterMul.vregs r }
   have hsub_new : js_afterSub.vregs JoltISA.amoWordSelectNewVReg = delta := by
@@ -2288,10 +2288,10 @@ theorem amo_word_rust_select_signed_extend_phase_run_for
       JoltISA.amoWordSelectMaskVRegFor JoltISA.amoVRegFor
     split <;> decide
   let js_afterRs2 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = newReg then rs2Ext else js.vregs r }
   let js_afterExt : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = maskReg then oldExt else js_afterRs2.vregs r }
   have hrs2_run :
       (JoltISA.execInstr
@@ -2406,10 +2406,10 @@ theorem amo_word_rust_select_unsigned_extend_phase_run_for
       JoltISA.amoWordSelectMaskVRegFor JoltISA.amoVRegFor
     split <;> decide
   let js_afterRs2 : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = newReg then rs2Ext else js.vregs r }
   let js_afterExt : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = maskReg then oldExt else js_afterRs2.vregs r }
   have hrs2_run :
       (JoltISA.execInstr
@@ -2481,7 +2481,7 @@ theorem amo_word_rust_select_slt_compare_phase_run_vreg_vreg_for
   let flag : BitVec 64 :=
     zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y))
   let js_afterCmp : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = maskReg then flag else js.vregs r }
   have hmask_w : WritableVReg maskReg := by
     unfold maskReg JoltISA.amoWordSelectMaskVRegFor JoltISA.amoVRegFor
@@ -2540,7 +2540,7 @@ theorem amo_word_rust_select_sltu_compare_phase_run_vreg_vreg_for
   let shiftReg := JoltISA.amoWordSelectShiftVRegFor rd
   let flag : BitVec 64 := jolt_sltu_value x y
   let js_afterCmp : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = maskReg then flag else js.vregs r }
   have hmask_w : WritableVReg maskReg := by
     unfold maskReg JoltISA.amoWordSelectMaskVRegFor JoltISA.amoVRegFor
@@ -2600,13 +2600,13 @@ theorem amo_word_rust_select_tail_phase_run_for
   let delta : BitVec 64 := rs2Val - old
   let scaled : BitVec 64 := delta * flag
   let js_afterSub : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = newReg then delta else js.vregs r }
   let js_afterMul : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = newReg then scaled else js_afterSub.vregs r }
   let js_afterAdd : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = newReg then scaled + old else js_afterMul.vregs r }
   have hnew_w : WritableVReg newReg := by
     unfold newReg JoltISA.amoWordSelectNewVRegFor JoltISA.amoVRegFor

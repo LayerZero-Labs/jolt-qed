@@ -86,6 +86,7 @@ theorem auipcInstr_eq_sail
         liftSail (execute_UTYPE imm rd uop.AUIPC) := by
     funext js
     unfold JoltISA.execInstr execute_UTYPE JoltISA.writeDst liftSail get_arch_pc
+    simp only [JoltISA.addWide_low]
     simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
     cases hpc : Sail.readReg Register.PC js.sail with
     | error e s1 =>

@@ -21,7 +21,7 @@ theorem sltu_run_vreg_vreg_vreg (vd lhs rhs : VReg)
     (js : SailJoltState) (hvd : WritableVReg vd) :
     (execInstr (.SLTU (.vreg vd) (.vreg lhs) (.vreg rhs))).run js =
       .ok RETIRE_SUCCESS
-        { sail := js.sail
+        { js with
           vregs := fun r => if r = vd then jolt_sltu_value (js.vregs lhs) (js.vregs rhs) else js.vregs r } := by
   unfold execInstr readSrc writeDst readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
@@ -44,7 +44,7 @@ theorem exists_state_after_sltu_run_vreg_vreg_vreg
       (execInstr (.SLTU (.vreg vd) (.vreg lhs) (.vreg rhs))).run js =
         .ok RETIRE_SUCCESS js' := by
   let js' : SailJoltState :=
-    { sail := js.sail
+    { js with
       vregs := fun r => if r = vd then jolt_sltu_value (js.vregs lhs) (js.vregs rhs)
         else js.vregs r }
   refine ⟨js', rfl, ?_, ?_, ?_⟩
