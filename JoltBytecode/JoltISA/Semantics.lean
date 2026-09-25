@@ -9,6 +9,7 @@ import JoltBytecode.JoltISA.Values
 import JoltBytecode.JoltISA.semantic_helpers
 import JoltBytecode.JoltISA.DeviceMemory
 import JoltBytecode.JoltISA.AdviceTape
+import JoltBytecode.JoltISA.HostIO
 
 /-!
 # Jolt ISA semantics
@@ -464,7 +465,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       writeDst rd (BitVec.ofNat 64 remaining)
       pure RETIRE_SUCCESS
   | .VirtualHostIO _ _ _ =>
-      pure RETIRE_SUCCESS
+      execHostIO
   | .VirtualAssertEQ lhs rhs imm => do
       if imm = 0#128 then
         let x ← readSrc lhs

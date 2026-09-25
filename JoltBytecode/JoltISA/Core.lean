@@ -52,11 +52,24 @@ structure JoltAdviceTape where
   bytes : Array (BitVec 8)
   readPosition : Nat
 
+/-- Rust `tracer::emulator::cpu::HostIo`: replay suppresses host effects. -/
+inductive JoltHostIOMode where
+  | live
+  | replay
+  deriving DecidableEq, Repr
+
+/-- Host execution settings. Unchecked arithmetic matches Rust's release
+profile; test/build-fast profiles enable overflow checks. -/
+structure JoltHostIOConfig where
+  mode : JoltHostIOMode := .live
+  overflowChecks : Bool := false
+
 structure SailJoltState where
   sail : SailState
   vregs : BitVec 7 → BitVec 64 := fun _ => 0
   io : JoltIOState
   adviceTape : JoltAdviceTape
+  hostIO : JoltHostIOConfig := {}
 
 abbrev JoltMonad (α : Type) := EStateM (Error exception) SailJoltState α
 

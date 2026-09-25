@@ -42,7 +42,7 @@ The Sail bookkeeping fields below have no Rust architectural counterpart.
 -/
 noncomputable def init_state (entryAddress : BitVec 64)
     (ram : Array (BitVec 8)) (io : JoltIOState)
-    (adviceTape : JoltAdviceTape) : SailJoltState :=
+    (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig := {}) : SailJoltState :=
   { sail :=
       { regs := (Finset.univ.toList : List Register).foldl
           (fun regs r => regs.insert r (initialRegisterValue entryAddress r)) {}
@@ -54,7 +54,8 @@ noncomputable def init_state (entryAddress : BitVec 64)
         sailOutput := #[] }
     vregs := fun _ => 0
     io := io
-    adviceTape := adviceTape }
+    adviceTape := adviceTape
+    hostIO := hostIO }
 
 namespace JoltISA.Instr
 
