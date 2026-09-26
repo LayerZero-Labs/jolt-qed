@@ -281,6 +281,71 @@ noncomputable def validUnsignedRemainderTableEntry {F : Type} [Field F]
   let (remainder, divisor) := uninterleave address
   if divisor = 0 ∨ remainder < divisor then 1 else 0
 
+/-- The VIRTUAL_NEGATE_IF table: `value`, negated (mod 2⁶⁴) when the sign bit
+of `signSource` is set.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_negate_if.rs. -/
+noncomputable def virtualNegateIfTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (signSource, value) := uninterleave address
+  let mask := ((1#128 <<< 64) - 1).setWidth 64
+  let value := value &&& mask
+  if signSource &&& (1#64 <<< 63) = 0 then
+    (value.toNat : F)
+  else
+    ((-value &&& mask).toNat : F)
+
+/-- The VIRTUAL_XOR_ROT tables: `x ^ y` rotated right by `rotation` bits.
+`VirtualXORROT32`, `24`, `16` and `63` are this table at those rotations.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_xor_rot.rs::VirtualXORROTTable. -/
+noncomputable def virtualXorRotTableEntry {F : Type} [Field F]
+    (rotation : Nat) (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let xorResult := x ^^^ y
+  let r := rotation % 64
+  let mask := ((1#128 <<< 64) - 1).setWidth 64
+  let v := (xorResult &&& mask).setWidth 128
+  ((((v >>> r) ||| (v <<< (64 - r))).setWidth 64 &&& mask).toNat : F)
+
+/-- The VIRTUAL_XOR_ROTW tables: the low 32 bits of `x ^ y`, rotated right
+within 32 bits by `rotation`. `VirtualXORROTW16`, `12`, `8`, `7`, `22`, `19`
+and `6` are this table at those rotations.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_xor_rotw.rs::VirtualXORROTWTable. -/
+noncomputable def virtualXorRotWTableEntry {F : Type} [Field F]
+    (rotation : Nat) (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let r := rotation % 32
+  let halfMask := ((1#128 <<< 32) - 1).setWidth 64
+  let xorResult := ((x.setWidth 128 ^^^ y.setWidth 128) &&& halfMask.setWidth 128).setWidth 64
+  let v := xorResult.setWidth 128
+  ((((v >>> r) ||| (v <<< (32 - r))).setWidth 64 &&& halfMask).toNat : F)
+
+/-- The SHIFT_DATA_B table: the low byte of `x`, shifted left by
+`8 * (y & 7)` bits.
+Rust: crates/jolt-lookup-tables/src/tables/shift_data_b.rs. -/
+noncomputable def shiftDataBTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let lane := x &&& ((1#128 <<< 8) - 1).setWidth 64
+  ((lane <<< (8 * (y &&& 7).toNat)).toNat : F)
+
+/-- The SHIFT_DATA_H table: the low halfword of `x`, shifted left by
+`8 * (y & 6)` bits.
+Rust: crates/jolt-lookup-tables/src/tables/shift_data_h.rs. -/
+noncomputable def shiftDataHTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let lane := x &&& ((1#128 <<< 16) - 1).setWidth 64
+  ((lane <<< (8 * (y &&& 6).toNat)).toNat : F)
+
+/-- The SHIFT_DATA_W table: the low word of `x`, shifted left by
+`8 * (y & 4)` bits.
+Rust: crates/jolt-lookup-tables/src/tables/shift_data_w.rs. -/
+noncomputable def shiftDataWTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let lane := x &&& ((1#128 <<< 32) - 1).setWidth 64
+  ((lane <<< (8 * (y &&& 4).toNat)).toNat : F)
+
 /-- `Table_q(x)` from constraint (39) in `constraints.md`: the fixed table's
 field value at the 128-bit Boolean address `x`. Tables not implemented yet
 fall through to the placeholder. -/
@@ -312,9 +377,24 @@ noncomputable def lookupTableEntry {F : Type} [Field F]
   | .Pow2 => pow2TableEntry address
   | .Pow2W => pow2WTableEntry address
   | .ShiftRightBitmask => shiftRightBitmaskTableEntry address
+  | .VirtualNegateIf => virtualNegateIfTableEntry address
   | .MulUNoOverflow => mulUNoOverflowTableEntry address
+  | .VirtualXORROT32 => virtualXorRotTableEntry 32 address
+  | .VirtualXORROT24 => virtualXorRotTableEntry 24 address
+  | .VirtualXORROT16 => virtualXorRotTableEntry 16 address
+  | .VirtualXORROT63 => virtualXorRotTableEntry 63 address
+  | .VirtualXORROTW16 => virtualXorRotWTableEntry 16 address
+  | .VirtualXORROTW12 => virtualXorRotWTableEntry 12 address
+  | .VirtualXORROTW8 => virtualXorRotWTableEntry 8 address
+  | .VirtualXORROTW7 => virtualXorRotWTableEntry 7 address
+  | .VirtualXORROTW22 => virtualXorRotWTableEntry 22 address
+  | .VirtualXORROTW19 => virtualXorRotWTableEntry 19 address
+  | .VirtualXORROTW6 => virtualXorRotWTableEntry 6 address
   | .ShiftRightBitmaskW => shiftRightBitmaskWTableEntry address
   | .AlignAddr => alignAddrTableEntry address
+  | .ShiftDataB => shiftDataBTableEntry address
+  | .ShiftDataH => shiftDataHTableEntry address
+  | .ShiftDataW => shiftDataWTableEntry address
   | _ => by sorry
 
 end JoltConstraints
