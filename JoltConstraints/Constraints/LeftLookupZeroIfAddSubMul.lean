@@ -38,7 +38,7 @@ theorem honestWitness_leftLookupZeroIfAddSubMul
   · simpa [JoltProgram.honestWitness, HonestWitness.OpFlags,
       HonestWitness.LeftLookupOperand, JoltMetadata.circuitFlag, inBounds] using
         (arithmeticLeftLookupIsZero (F := F)
-          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
+          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
           (HonestWitness.LeftInstructionInput params trace t))
   · simp [JoltProgram.honestWitness, HonestWitness.OpFlags,
       HonestWitness.LeftLookupOperand, inBounds]

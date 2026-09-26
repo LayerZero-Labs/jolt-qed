@@ -49,7 +49,7 @@ theorem honestWitness_ramAddressEqRamRaf
       by_cases ht : t.val < trace.rows.size
       · cases ha : HonestWitness.ramAccessAddress
           (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-            (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+            (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
           (getElem trace.rows t.val ht).preState with
         | none => simp [HonestWitness.RamAddress, ht, ha]
         | some raw =>
@@ -63,7 +63,7 @@ theorem honestWitness_ramAddressEqRamRaf
       by_cases ht : t.val < trace.rows.size
       · cases ha : HonestWitness.ramAccessAddress
           (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-            (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+            (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
           (getElem trace.rows t.val ht).preState with
         | none =>
             simp [HonestWitness.remappedRamAddress, ht, ha] at hr
@@ -74,7 +74,7 @@ theorem honestWitness_ramAddressEqRamRaf
             have hv := validAccesses ⟨t.val, ht⟩
             change (match HonestWitness.ramAccessAddress
               (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-                (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+                (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
               (getElem trace.rows t.val ht).preState with
               | none => True
               | some address => address.toNat ≠ 0 ∧

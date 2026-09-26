@@ -82,7 +82,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       -- This is a state representation, not a claim that Rust has a nextPC field.
       let rustPC ← liftSail (Sail.readReg Register.nextPC)
       let instructionAddress ← liftSail (Sail.readReg Register.PC)
-      -- Rust writes the old cpu.pc to rd first; writeDst discards writes to x0.
+      -- Rust writes the old cpu.pc to the expanded destination first.
       -- Rust's diagnostic track_call bookkeeping is outside this architectural model.
       writeDst dst rustPC
       -- Rust: cpu.pc = self.address.wrapping_add(imm).

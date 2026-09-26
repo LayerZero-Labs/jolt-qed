@@ -36,6 +36,63 @@ set_option autoImplicit true
 
 noncomputable section
 
+/-- Operand domains for the parameterized primitive assumptions. Memory windows
+are ordinary RAM dwords; CSR domains contain the values used by the relevant
+reads and writes. Keeping these domains explicit avoids asserting, for example,
+that device addresses are RAM or that every possible CSR write is legal. -/
+structure AssumptionOperands where
+  memoryWindows : BitVec 64 → Prop
+  mtvecWrites : BitVec 64 → Prop
+  mepcReads : BitVec 64 → Prop
+  mepcWrites : BitVec 64 → Prop
+  mstatusWrites : BitVec 64 → BitVec 64 → Prop
+
+/-- The conjunction of every primitive assumption in `Assumptions.lean`.
+The source-read carriers live in `Type`, so their propositional assertions use
+`Nonempty`. Address- and value-dependent assumptions retain their operand scope.
+-/
+def all_assumptions (js : SailJoltState) (operands : AssumptionOperands) : Prop :=
+  (∀ r, Assumptions.SailRegReadable r js.sail) ∧
+  (∀ r, Assumptions.XRegReadable r js.sail) ∧
+  (∀ r, Nonempty (Assumptions.UnarySourceReadAssumptions r js.sail)) ∧
+  (∀ r₂ r₁, Nonempty (Assumptions.BinarySourceReadAssumptions r₂ r₁ js.sail)) ∧
+  (∀ addr, operands.memoryWindows addr →
+    Assumptions.DwordPresent addr js.sail ∧
+    Assumptions.LoadPmpOk addr 8 js.sail ∧
+    Assumptions.LoadPmpOkWindow addr 8 js.sail ∧
+    Assumptions.StorePmpOk addr 8 js.sail ∧
+    Assumptions.StorePmpOkWindow addr 8 js.sail ∧
+    (∀ op, Assumptions.AtomicPmpOk op addr 8 js.sail) ∧
+    (∀ op, Assumptions.AtomicPmpOkWindow op addr 8 js.sail) ∧
+    Assumptions.NotReadableMmio addr 8 js.sail ∧
+    Assumptions.NotReadableMmioWindow addr 8 js.sail ∧
+    Assumptions.NotWritableMmio addr 8 js.sail ∧
+    Assumptions.NotWritableMmioWindow addr 8 js.sail) ∧
+  Assumptions.CurPrivilegeMachine js.sail ∧
+  Assumptions.MisaUserEnabled js.sail ∧
+  Assumptions.MstatusMprvZero js.sail ∧
+  Assumptions.ZicfilpDisabled js.sail ∧
+  Assumptions.MstatusVRegMatchesSail js ∧
+  Assumptions.MtvecVRegMatchesSail js ∧
+  Assumptions.MscratchVRegMatchesSail js ∧
+  Assumptions.MepcVRegMatchesSail js ∧
+  Assumptions.McauseVRegMatchesSail js ∧
+  Assumptions.MtvalVRegMatchesSail js ∧
+  (∀ value, operands.mtvecWrites value → Assumptions.MtvecWriteDirectMode value) ∧
+  (∀ value, operands.mepcReads value → Assumptions.MepcReadAligned value js.sail) ∧
+  (∀ value, operands.mepcWrites value → Assumptions.MepcWriteLegalized value) ∧
+  (∀ old value, operands.mstatusWrites old value →
+    Assumptions.MstatusWriteLegalized old value js.sail) ∧
+  Assumptions.MstatusMppMachine js
+
+theorem all_assumptions.curPrivilege {js : SailJoltState} {ops : AssumptionOperands}
+    (h : all_assumptions js ops) : Assumptions.CurPrivilegeMachine js.sail :=
+  h.2.2.2.2.2.1
+
+theorem all_assumptions.mstatusMprv {js : SailJoltState} {ops : AssumptionOperands}
+    (h : all_assumptions js ops) : Assumptions.MstatusMprvZero js.sail :=
+  h.2.2.2.2.2.2.2.1
+
 -- ============================================================================
 -- Source-register bundles
 -- ============================================================================

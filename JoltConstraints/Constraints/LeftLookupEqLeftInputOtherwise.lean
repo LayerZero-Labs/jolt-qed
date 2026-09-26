@@ -43,7 +43,7 @@ theorem honestWitness_leftLookupEqLeftInputOtherwise
       HonestWitness.LeftLookupOperand, HonestWitness.LeftInstructionInput,
       JoltMetadata.circuitFlag, inBounds] using
         (leftLookupOtherwiseForOpcode (F := F)
-          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
+          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
           (HonestWitness.UnexpandedPC params trace t)
           (HonestWitness.Rs1Value params trace t))
   · simp [JoltProgram.honestWitness, HonestWitness.OpFlags,

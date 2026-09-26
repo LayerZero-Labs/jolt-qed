@@ -48,10 +48,10 @@ theorem honestWitness_rightLookupEqProductIfMul
   by_cases h : t.val < trace.rows.size
   · let row := getElem trace.rows t.val h
     let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-    by_cases hm : JoltMetadata.opcodeFlag bytecodeRow.instruction .MultiplyOperands = true
+    by_cases hm : JoltMetadata.opcodeFlag bytecodeRow.expandedInstruction .MultiplyOperands = true
     · have heq : HonestWitness.RightLookupOperand (F := F) params trace t =
           HonestWitness.Product (F := F) params trace t := by
-        cases hi : bytecodeRow.instruction
+        cases hi : bytecodeRow.expandedInstruction
         all_goals simp [JoltMetadata.opcodeFlag, hi] at hm
         all_goals simp only [bytecodeRow, row] at hi
         all_goals

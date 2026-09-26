@@ -28,7 +28,7 @@ theorem honestWitness_ramReadEqRamWriteIfLoad
     (HonestWitness.RamReadValue params trace t -
       HonestWitness.RamWriteValue params trace t) = 0
   by_cases inBounds : t.val < trace.rows.size
-  · let instruction := (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
+  · let instruction := (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
     by_cases hLoad : JoltMetadata.opcodeFlag instruction .Load = true
     · obtain ⟨faultClass, dst, base, imm, hInstr⟩ :=
         JoltMetadata.opcodeFlag_load_requiresLD instruction hLoad

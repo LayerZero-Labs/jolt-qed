@@ -45,7 +45,7 @@ theorem ramAccess_remapped_some (params : WitnessParams)
     (raw : BitVec 64)
     (hraw : HonestWitness.ramAccessAddress
       (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-        (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+        (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
       (getElem trace.rows t.val ht).preState = some raw) :
     ∃ b, HonestWitness.remappedRamAddress trace t.val = some b := by
   have hf := ramFits ⟨t.val, ht⟩
@@ -58,7 +58,7 @@ theorem ramAccess_remapped_some (params : WitnessParams)
       (raw.toNat - ramLowestAddress program.initialState.io.layout) % 8 = 0 := by
     change (match HonestWitness.ramAccessAddress
       (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-        (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+        (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
       (getElem trace.rows t.val ht).preState with
       | none => True
       | some address => address.toNat ≠ 0 ∧
@@ -75,11 +75,11 @@ theorem ramReadValue_zero_of_noaccess {F : Type} [Field F]
     (ht : t.val < trace.rows.size)
     (hnoaccess : HonestWitness.ramAccessAddress
       (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-        (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+        (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
       (getElem trace.rows t.val ht).preState = none) :
     HonestWitness.RamReadValue (F := F) params trace t = 0 := by
   cases hi : (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-    (getElem trace.rows t.val ht).rowIndex.isLt).instruction <;>
+    (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction <;>
     simp [HonestWitness.ramAccessAddress, hi] at hnoaccess
   all_goals simp [HonestWitness.RamReadValue, ht, hi]
 
@@ -89,11 +89,11 @@ theorem ramWriteValue_zero_of_noaccess {F : Type} [Field F]
     (ht : t.val < trace.rows.size)
     (hnoaccess : HonestWitness.ramAccessAddress
       (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-        (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+        (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
       (getElem trace.rows t.val ht).preState = none) :
     HonestWitness.RamWriteValue (F := F) params trace t = 0 := by
   cases hi : (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-    (getElem trace.rows t.val ht).rowIndex.isLt).instruction <;>
+    (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction <;>
     simp [HonestWitness.ramAccessAddress, hi] at hnoaccess
   all_goals simp [HonestWitness.RamWriteValue, ht, hi]
 
@@ -106,7 +106,7 @@ theorem ramReadValue_zero_of_remapped_none {F : Type} [Field F]
   by_cases ht : t.val < trace.rows.size
   · cases ha : HonestWitness.ramAccessAddress
       (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-        (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+        (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
       (getElem trace.rows t.val ht).preState with
     | none => exact ramReadValue_zero_of_noaccess params trace t ht ha
     | some raw =>
@@ -125,7 +125,7 @@ theorem ramWriteValue_zero_of_remapped_none {F : Type} [Field F]
   by_cases ht : t.val < trace.rows.size
   · cases ha : HonestWitness.ramAccessAddress
       (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-        (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+        (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
       (getElem trace.rows t.val ht).preState with
     | none => exact ramWriteValue_zero_of_noaccess params trace t ht ha
     | some raw =>
@@ -144,7 +144,7 @@ theorem ramWriteValue_eq_read_add_inc {F : Type} [Field F]
         HonestWitness.RamInc params trace t := by
   by_cases ht : t.val < trace.rows.size
   · cases hi : (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-      (getElem trace.rows t.val ht).rowIndex.isLt).instruction
+      (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
     all_goals simp [HonestWitness.RamWriteValue, HonestWitness.RamReadValue,
       HonestWitness.RamInc, JoltMetadata.circuitFlag, hi, ht]
     all_goals split <;> simp_all [JoltMetadata.opcodeFlag]

@@ -15,7 +15,7 @@ crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs. -/
 def assertEqPasses {program : JoltProgram} (trace : JoltTrace program) : Prop :=
   ∀ t : Fin trace.rows.size,
     let row := trace.rows[t]
-    match (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction with
+    match (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction with
     | .VirtualAssertEQ lhs rhs _ =>
         JoltISA.sourceValue lhs row.preState = JoltISA.sourceValue rhs row.preState
     | _ => True
@@ -44,7 +44,7 @@ theorem honestWitness_assertLookupOne
   by_cases inBounds : t.val < trace.rows.size
   · let row := trace.rows[t.val]'inBounds
     let instruction :=
-      (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+      (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
     have hPass :
         match instruction with
         | .VirtualAssertEQ lhs rhs _ =>
@@ -65,13 +65,13 @@ theorem honestWitness_assertLookupOne
     · have hLookup : HonestWitness.rowLookupOutput row = 1 := by
         dsimp [instruction] at hAssert hPass
         change JoltMetadata.opcodeFlag
-          (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+          (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
           .Assert = true at hAssert
-        change (match (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction with
+        change (match (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction with
           | .VirtualAssertEQ lhs rhs _ =>
               JoltISA.sourceValue lhs row.preState = JoltISA.sourceValue rhs row.preState
           | _ => True) at hPass
-        cases hInstr : (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction <;>
+        cases hInstr : (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction <;>
           (rw [hInstr] at hAssert hPass
            simp [JoltMetadata.opcodeFlag] at hAssert)
         all_goals simp [HonestWitness.rowLookupOutput, hInstr, hPass, jolt_assert_eq]

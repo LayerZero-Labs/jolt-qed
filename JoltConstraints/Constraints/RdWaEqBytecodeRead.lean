@@ -37,7 +37,7 @@ theorem honestWitness_rdWaEqBytecodeRead
   · simp [JoltProgram.honestWitness, HonestWitness.RdWa,
       HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
     cases hinst :
-      program.expandedBytecode[↑(trace.rows[↑t].rowIndex)].instruction <;>
+      program.expandedBytecode[↑(trace.rows[↑t].rowIndex)].expandedInstruction <;>
       simp [bytecodeRdRegister, eq_comm]
   · simp [JoltProgram.honestWitness, HonestWitness.RdWa,
       HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]

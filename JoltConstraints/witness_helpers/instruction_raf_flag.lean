@@ -21,7 +21,7 @@ noncomputable def InstructionRafFlag [Field F] {program : JoltProgram}
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       if JoltMetadata.instructionRafFlag instruction then
         1
       else 0

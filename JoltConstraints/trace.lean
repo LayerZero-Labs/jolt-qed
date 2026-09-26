@@ -1,269 +1,67 @@
-import JoltBytecode.JoltISA.Instruction
-import JoltConstraints.register_encoding
-import JoltBytecode.JoltISA.Semantics
-import JoltBytecode.JoltISA.DeviceMemory
-import Mathlib.Tactic.DeriveFintype
+import JoltConstraints.program
+import JoltConstraints.witness_helpers.destination_capture
+import JoltBytecode.Bundles
 
 set_option autoImplicit false
 
--- Rust paths are relative to /Users/ari.biswas/Work-with-A16z/jolt.
-
--- Derive the enumeration of all Sail registers and its completeness proofs.
--- Generating these proofs exceeds Lean's default elaboration recursion depth.
--- `in` raises the depth limit only for this declaration; runtime execution and
--- proof checking are unchanged, and the heartbeat limit still applies.
-set_option maxRecDepth 4096 in
-deriving instance Fintype for Register
-
--- Rust: [Cpu::new](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/cpu.rs:516).
--- Integer/FP registers and CSRs start at zero, except misa; privilege is Machine.
--- Sail-only registers use their type's default (zero, false, empty, or inactive).
-private def initialRegisterValue (entryAddress : BitVec 64)
-    (r : Register) : RegisterType r :=
-  match r with
-  | .PC | .nextPC => entryAddress
-  | .misa => 0x800000008014312f
-  | .cur_privilege => .Machine
-  | .hart_state => .HART_ACTIVE ()
-  | r => by cases r <;> exact default
-
-/-- Assemble the initial ISA state from Rust's loaded RAM, entry address, device
-and advice tape. `ram` includes every allocated byte, including zero-filled bytes.
-
-Rust sources:
-* [loaded RAM and entry PC](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/mod.rs:219)
-* [RAM base](/Users/ari.biswas/Work-with-A16z/jolt/common/src/constants.rs:21)
-* [device inputs and advice](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/lib.rs:366)
-* [initial device](/Users/ari.biswas/Work-with-A16z/jolt/common/src/jolt_device.rs:110)
-* [advice tape and cursor](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/cpu.rs:20)
-
-Sail's `nextPC` has no separate Rust field; it starts at the entry address here.
-The Sail bookkeeping fields below have no Rust architectural counterpart.
--/
-noncomputable def init_state (entryAddress : BitVec 64)
-    (ram : Array (BitVec 8)) (io : JoltIOState)
-    (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig := {}) : SailJoltState :=
-  { sail :=
-      { regs := (Finset.univ.toList : List Register).foldl
-          (fun regs r => regs.insert r (initialRegisterValue entryAddress r)) {}
-        mem := ram.toList.zipIdx.foldl
-          (fun mem (byte, offset) => mem.insert (0x80000000 + offset) byte) {}
-        choiceState := ()
-        tags := ()
-        cycleCount := 0
-        sailOutput := #[] }
-    vregs := fun _ => 0
-    io := io
-    adviceTape := adviceTape
-    hostIO := hostIO }
-
-private theorem initialRegisters_fold_get
-    (entry : BitVec 64) (registers : List Register)
-    (initial : Std.ExtDHashMap Register RegisterType) (r : Register) :
-    (registers.foldl (fun regs k => regs.insert k (initialRegisterValue entry k)) initial).get? r =
-      if r ∈ registers then some (initialRegisterValue entry r) else initial.get? r := by
-  induction registers generalizing initial with
-  | nil => simp
-  | cons head tail ih =>
-      simp only [List.foldl_cons, ih]
-      by_cases hmem : r ∈ tail
-      · simp [hmem]
-      · by_cases heq : head = r
-        · subst head
-          simp [hmem]
-        · simp [hmem, heq, Ne.symm heq, Std.ExtDHashMap.get?_insert]
-
-theorem init_state_register (entry : BitVec 64) (ram : Array (BitVec 8))
-    (io : JoltIOState) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
-    (r : Register) :
-    (init_state entry ram io tape hostIO).sail.regs.get? r =
-      some (initialRegisterValue entry r) := by
-  simp [init_state, initialRegisters_fold_get]
-
-/-- Rust initializes both the architectural integer and virtual register banks
-to zero. This follows from the initializer, independently of the program. -/
-theorem sourceValue_init_state (entry : BitVec 64) (ram : Array (BitVec 8))
-    (io : JoltIOState) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
-    (src : JoltISA.Src) :
-    JoltISA.sourceValue src (init_state entry ram io tape hostIO) = 0 := by
-  cases src with
-  | vreg r => rfl
-  | xreg r =>
-      cases r
-      simp only [JoltISA.sourceValue]
-      split <;> simp [init_state_register, initialRegisterValue] <;> rfl
-
-namespace JoltISA.Instr
-
-/-- Only VirtualAdvice receives a per-execution payload. Other instructions
-carry no extra input; their operands and immediates come entirely from bytecode.
-Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/instruction/mod.rs#L207-L233 -/
-def RuntimeAdvice : JoltISA.Instr → Type
-  | .VirtualAdvice .. => BitVec 64
-  | _ => Unit
-
-/-- Fill a copy of the bytecode template with this execution's advice value.
-This only assembles an instruction; execInstr remains the instruction interpreter.
-The destination and immediate are preserved, as are all non-advice instructions. -/
-def withRuntimeAdvice (instruction : JoltISA.Instr)
-    (advice : instruction.RuntimeAdvice) : JoltISA.Instr :=
-  match instruction with
-  | .VirtualAdvice dst _ imm => .VirtualAdvice dst advice imm
-  | instruction => instruction
-
-/-- Rust initializes the advice slot to zero when converting fixed bytecode
-into an executable template. The actual payload belongs to a trace row.
-Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/instruction/virtual_advice.rs#L79-L89 -/
-def IsBytecodeTemplate : JoltISA.Instr → Prop
-  | .VirtualAdvice _ value _ => value = 0
-  | _ => True
-
-end JoltISA.Instr
-
--- Rust: crates/jolt-riscv/src/row.rs::JoltInstructionRow.
-structure JoltProgramRow where
-  -- Rust: JoltInstructionRow::instruction_kind and operands; ISA: JoltBytecode/JoltISA/Instruction.lean::Instr.
-  instruction : JoltISA.Instr
-  -- Register constructors must follow the ISA's existing Rust address map.
-  -- This prevents a raw .vreg 0..31 from bypassing the architectural register file.
-  registerOperandsCanonical : JoltRegisterEncoding.instructionIsCanonical instruction = true
-  -- A VirtualAdvice template contains no execution-specific value.
-  isBytecodeTemplate : instruction.IsBytecodeTemplate
-  -- Final helper operands must fit Rust's runtime instruction format.
-  operandsRepresentable : instruction.OperandsRepresentable := by exact True.intro
-  -- Rust: JoltInstructionRow::address (RV64 instruction byte address).
-  address : BitVec 64
-  -- Rust: JoltInstructionRow::virtual_sequence_remaining.
-  virtualSequenceRemaining : Option (BitVec 16)
-  -- Rust: JoltInstructionRow::is_first_in_sequence.
-  isFirstInSequence : Bool
-  -- Rust: JoltInstructionRow::is_compressed.
-  isCompressed : Bool
-
-/-- Static bytecode and the complete initial state for one execution.
-Rust stores the [program image](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/execution/trace.rs:17)
-and [execution inputs](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/execution/trace.rs:129)
-separately; Lean packages the bytecode with the resulting initial ISA state.
--/
--- This packages bytecode with an execution's initial state.
--- It does not establish that both were obtained from the same ELF
--- through Rust's program construction and emulator initialization.
-structure JoltProgram where
-  -- Rust: JoltProgram::expanded_bytecode.
-  expandedBytecode : Array JoltProgramRow
-  -- Rust: [create_emulator](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/lib.rs:366).
-  initialState : SailJoltState
-
-namespace JoltProgramRow
-
-/-- A row followed by another row in the same source-instruction expansion. -/
-def continues (row : JoltProgramRow) : Bool :=
-  row.virtualSequenceRemaining.getD 0 != 0
-
-/-- Rust fetches an ordinary instruction or the first row of its expansion. -/
-def isEntry (row : JoltProgramRow) : Prop :=
-  row.virtualSequenceRemaining = none ∨ row.isFirstInSequence = true
-
-end JoltProgramRow
-
-namespace JoltProgram
-
-/-- Layout facts from Rust's expansion and bytecode preprocessing. These describe static
-rows, independently of the witness or its constraints.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-program/src/expand/metadata.rs#L25-L54 -/
--- MODEL GAP (trace review): address range/alignment, size limits, and complete
--- source-expansion provenance are not established by this layout certificate.
-structure SequenceLayout (program : JoltProgram) : Prop where
-  endInBounds : ∀ i : Fin program.expandedBytecode.size,
-    i.val + (program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat <
-      program.expandedBytecode.size
-  ordinary : ∀ i : Fin program.expandedBytecode.size,
-    program.expandedBytecode[i].virtualSequenceRemaining = none →
-      program.expandedBytecode[i].isFirstInSequence = false
-  next : ∀ i j : Fin program.expandedBytecode.size,
-    j.val = i.val + 1 → program.expandedBytecode[i].continues = true →
-      program.expandedBytecode[j].address = program.expandedBytecode[i].address ∧
-      program.expandedBytecode[j].virtualSequenceRemaining =
-        some (program.expandedBytecode[i].virtualSequenceRemaining.getD 0 - 1) ∧
-      program.expandedBytecode[j].isFirstInSequence = false ∧
-      program.expandedBytecode[i].isCompressed = false
-  /-- Two different bytecode rows cannot have both the same instruction address
-  and the same remaining sequence count. Thus ordinary instructions cannot share
-  an address, while rows within one expansion can share it with different counts.
-  As in Rust, `none` uses count zero. This applies before sentinel insertion and
-  padding. Rust's `BytecodePCMapper::try_new` rejects repeated address runs, and
-  `validate_run` checks descending counts ending at zero:
-  https://github.com/abiswas3/jolt/blob/3cb4e24361ae2006e9713ae65d58a3fa51fd0518/crates/jolt-program/src/preprocess/bytecode.rs#L145-L215 -/
-  addressSequenceUnique : ∀ i j : Fin program.expandedBytecode.size,
-    program.expandedBytecode[i].address = program.expandedBytecode[j].address →
-    program.expandedBytecode[i].virtualSequenceRemaining.getD 0 =
-      program.expandedBytecode[j].virtualSequenceRemaining.getD 0 →
-    i = j
-
-/-- The source instruction's byte length is stamped on the last expanded row.
-Rust clears IsCompressed on every preceding row, even for a compressed source. -/
-def sourceLength (program : JoltProgram) (layout : program.SequenceLayout)
-    (i : Fin program.expandedBytecode.size) : Nat :=
-  let last := i.val + (program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat
-  if (program.expandedBytecode[last]'(layout.endInBounds i)).isCompressed then 2 else 4
-
-/-- Prepare Sail's two PC registers at a source-instruction boundary.
-PC holds the instruction address; nextPC holds Rust's pre-incremented cpu.pc.
-Within an expansion the post-state is passed through unchanged. Branches and
-jumps still execute exclusively through JoltISA.execInstr, which updates nextPC.
-Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/emulator/cpu.rs#L654-L692 -/
-noncomputable def prepareSource (program : JoltProgram) (layout : program.SequenceLayout)
-    (i : Fin program.expandedBytecode.size) (state : SailJoltState) : SailJoltState :=
-  let address := program.expandedBytecode[i].address
-  let regs := (state.sail.regs.insert Register.PC address).insert Register.nextPC
-    (address + BitVec.ofNat 64 (program.sourceLength layout i))
-  { state with sail := { state.sail with regs := regs } }
-
-end JoltProgram
-
 /-- Rust's proof-trace conversion accepts a load only when the RAM value read
-by the tracer equals the destination value captured after execution. In
-particular, a nonzero load into x0 executes but cannot be converted.
+by the tracer equals the destination value captured after execution. A load
+into x0 captures the rewritten temporary destination.
 Rust: tracer/src/trace_row.rs::captured_state. -/
 def JoltISA.Instr.LoadCaptureMatches (instruction : JoltISA.Instr)
     (preState postState : SailJoltState) : Prop :=
   match instruction with
   | .LD _ dst base imm =>
-      let capturedDst := match dst with
-        | .xreg r => JoltISA.sourceValue (.xreg r) postState
-        | .vreg r => JoltISA.sourceValue (.vreg r) postState
+      let capturedDst := HonestWitness.capturedDestinationValue instruction dst postState
       JoltISA.memoryWord? preState (JoltISA.sourceValue base preState + imm) =
         some capturedDst
+  | _ => True
+
+/-- A live HostIO row may read memory and append advice, but it leaves the
+instruction address unchanged. Keep this frame fact explicit on trace rows
+until the Sail byte-read frame theorem discharges it from `execInstr`. -/
+def JoltISA.Instr.HostIOPCFrame (instruction : JoltISA.Instr)
+    (preState postState : SailJoltState) : Prop :=
+  match instruction with
+  | .VirtualHostIO .. =>
+      postState.sail.regs.get? Register.PC = preState.sail.regs.get? Register.PC
   | _ => True
 
 -- Rust: tracer/src/instruction/format/format_r.rs::{capture_pre_execution_state,
 -- capture_post_execution_state}; Lean retains full ISA states, not just captured operands.
 structure JoltTraceRow (program : JoltProgram) where
   rowIndex : Fin program.expandedBytecode.size
+  validProgramRow : program.expandedBytecode[rowIndex].Valid :=
+    program.rowValid rowIndex
   -- Rust patches VirtualAdvice.advice on a per-execution copy of the row.
   -- Repeated visits to this bytecode slot may supply different values.
-  runtimeAdvice : program.expandedBytecode[rowIndex].instruction.RuntimeAdvice
+  runtimeAdvice : program.expandedBytecode[rowIndex].expandedInstruction.RuntimeAdvice
   -- Rust checks the signed immediate's magnitude during proof-trace conversion.
-  compactImmediateFits : program.expandedBytecode[rowIndex].instruction.CompactImmediateFits := by exact True.intro
+  compactImmediateFits : program.expandedBytecode[rowIndex].expandedInstruction.CompactImmediateFits := by exact True.intro
   preState : SailJoltState
   postState : SailJoltState
   -- Execute the bytecode instruction with this row's runtime payload.
   -- ISA: JoltBytecode/JoltISA/Semantics.lean::execInstr; this certificate is Lean-only.
+  -- NOTE: Trace execution uses expanded instructions, including rewritten native instructions.
   executes : JoltISA.execInstr
-      (program.expandedBytecode[rowIndex].instruction.withRuntimeAdvice runtimeAdvice) preState =
+      (program.expandedBytecode[rowIndex].expandedInstruction.withRuntimeAdvice runtimeAdvice) preState =
     .ok (.Retire_Success ()) postState
+  -- FIXME: Derive this from `executes` after proving that Sail byte reads
+  -- preserve PC. Live HostIO remains fully modeled by `execInstr`.
+  hostIOPreservesPC :
+    program.expandedBytecode[rowIndex].expandedInstruction.HostIOPCFrame preState postState := by
+      exact True.intro
   -- Rust reads the old word before every store; successful Sail writes alone
   -- do not certify that all eight pre-access bytes are present.
   storeMemoryPresent :
-    match program.expandedBytecode[rowIndex].instruction with
+    match program.expandedBytecode[rowIndex].expandedInstruction with
     | .SD base _ imm =>
         (JoltISA.memoryWord? preState
           (((JoltISA.sourceValue base preState) + imm))).isSome = true
     | _ => True
   -- The load's captured RAM value must agree with its captured destination.
-  -- A successful write to x0 alone does not establish this conversion check.
   loadCaptureMatches :
-    program.expandedBytecode[rowIndex].instruction.LoadCaptureMatches preState postState := by
+    program.expandedBytecode[rowIndex].expandedInstruction.LoadCaptureMatches preState postState := by
       exact True.intro
 
 /-- Successful ISA rows with Rust's fetch and source-instruction boundaries.
@@ -273,9 +71,25 @@ The trace may be a prefix; completeness claims needing termination must say so.
 Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/emulator/cpu.rs#L654-L692 -/
 structure JoltTrace (program : JoltProgram) where
   rows : Array (JoltTraceRow program)
+  assumptionOperands : Fin rows.size → AssumptionOperands
+  allAssumptions : ∀ i : Fin rows.size,
+    all_assumptions rows[i].preState (assumptionOperands i)
+  /-- Every ordinary RAM access uses a window covered by the assumption bundle.
+  Device accesses use the separate Jolt I/O semantics. -/
+  ramAccessAssumed : ∀ i : Fin rows.size,
+    match program.expandedBytecode[rows[i].rowIndex].expandedInstruction with
+    | .LD _ _ base imm | .SD base _ imm =>
+      let addr := JoltISA.sourceValue base rows[i].preState + imm
+      JoltISA.ramStartAddress ≤ addr.toNat →
+        (assumptionOperands i).memoryWindows addr
+    | _ => True
   sequenceLayout : program.SequenceLayout
   initialized : ∃ entry ram io tape hostIO,
     program.initialState = init_state entry ram io tape hostIO
+  noEarlyNextPCChange : program.NoEarlyNextPCChange :=
+    JoltProgram.noEarlyNextPCChange program
+  jumpAtSourceEnd : program.JumpAtSourceEnd :=
+    JoltProgram.jumpAtSourceEnd program
   startsAtEntry : ∀ h : 0 < rows.size,
     let first := getElem rows 0 h
     program.expandedBytecode[first.rowIndex].isEntry ∧

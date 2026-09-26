@@ -17,7 +17,7 @@ noncomputable def RdWriteValue [Field F] {program : JoltProgram}
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       rdValue instruction row.postState
     else 0
 

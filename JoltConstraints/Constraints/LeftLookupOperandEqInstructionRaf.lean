@@ -43,7 +43,7 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
       HonestWitness.LeftInstructionInput, HonestWitness.Rs1Value, lookupAddressLeft,
       inBounds, dite_true]
     generalize (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex.val]'
-      (trace.rows[t.val]'inBounds).rowIndex.isLt).instruction = instruction
+      (trace.rows[t.val]'inBounds).rowIndex.isLt).expandedInstruction = instruction
     -- RAF rows are zero on both sides. Interleaved rows recover rs1, while
     -- FENCE, LD, SD, and HostIO have a zero left input and a zero index.
     cases instruction <;>

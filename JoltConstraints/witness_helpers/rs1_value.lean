@@ -20,7 +20,7 @@ noncomputable def Rs1Value [Field F] {program : JoltProgram}
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       match instruction with
       | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _ | .XORI _ src _
       | .SLTI _ src _ | .SLTIU _ src _ | .JALR _ src _ | .BEQ src _ _ | .BNE src _ _

@@ -40,7 +40,7 @@ theorem honestWitness_rightLookupEqRightInputOtherwise
   · simpa [JoltProgram.honestWitness, HonestWitness.OpFlags,
       HonestWitness.RightLookupOperand, JoltMetadata.circuitFlag, inBounds] using
         (rightLookupOtherwiseForOpcode (F := F)
-          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
+          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
           ((HonestWitness.lookupIndex trace t.val).toNat : F)
           (HonestWitness.RightInstructionInput params trace t))
   · simp [JoltProgram.honestWitness, HonestWitness.OpFlags,

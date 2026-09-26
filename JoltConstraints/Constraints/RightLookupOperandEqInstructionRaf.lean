@@ -45,7 +45,7 @@ theorem honestWitness_rightLookupOperandEqInstructionRaf
       HonestWitness.RightInstructionInput, HonestWitness.Imm, HonestWitness.Rs2Value,
       lookupAddressRight, inBounds, dite_true]
     generalize (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex.val]'
-      (trace.rows[t.val]'inBounds).rowIndex.isLt).instruction = instruction
+      (trace.rows[t.val]'inBounds).rowIndex.isLt).expandedInstruction = instruction
     -- RAF rows keep the full index on both sides. Interleaved rows recover the
     -- immediate or rs2, while FENCE, LD, SD, and HostIO have zero input and index.
     cases instruction <;>

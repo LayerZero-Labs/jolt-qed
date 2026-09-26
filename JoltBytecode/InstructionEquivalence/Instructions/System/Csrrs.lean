@@ -1,5 +1,6 @@
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.Instructions.System.Common
+import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 
 open Sail PreSail LeanRV64D.Functions
 
@@ -53,16 +54,6 @@ private theorem stateAfterWrite_of_beq_zreg_true {rd : regidx}
       unfold zreg at h
       change (bits == zero_extend (m := 5) 0b00#2) = true at h
       have hBits : bits = zero_extend (m := 5) 0b00#2 := LawfulBEq.eq_of_beq h
-      rw [hBits]
-      exact stateAfterWrite_regidx_zero s value
-
-private theorem stateAfterWrite_of_isX0_true {rd : regidx}
-    (h : JoltISA.isX0 rd = true) (s : SailState) (value : BitVec 64) :
-    stateAfterWrite s rd value = s := by
-  cases rd with
-  | Regidx bits =>
-      unfold JoltISA.isX0 at h
-      have hBits : bits = 0 := BitVec.eq_of_toNat_eq (of_decide_eq_true h)
       rw [hBits]
       exact stateAfterWrite_regidx_zero s value
 
@@ -197,7 +188,7 @@ private theorem csrrsProgram_project_run
           (csrrsJoltFinal js csr rs1 rd rs1Val)) := by
   unfold JoltISA.csrrsProgram csrrsJoltFinal
   cases hRs1 : JoltISA.isX0 rs1
-  · simp only [Bool.false_and, Bool.false_eq_true, if_false]
+  · simp only [Bool.false_eq_true, if_false]
     cases hRd : JoltISA.isX0 rd
     · simp only [Bool.false_eq_true, if_false]
       cases hSame : JoltISA.sameXReg rd rs1
@@ -322,7 +313,7 @@ private theorem csrrsProgram_project_run
       simp only [JoltISA.execProgram_done, EStateM.run, pure, EStateM.pure,
         systemProjectResult]
   · cases hRd : JoltISA.isX0 rd
-    · simp only [Bool.true_and, Bool.false_eq_true, if_false, if_true]
+    · simp only [if_true, Bool.false_eq_true, if_false]
       have hReadRun :
           (JoltISA.execInstr
               (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
@@ -346,12 +337,10 @@ private theorem csrrsProgram_project_run
         (csrrsAfterReadOnly js csr rd) hReadRun]
       simp only [JoltISA.execProgram_done, EStateM.run, pure, EStateM.pure,
         systemProjectResult]
-    · -- Rust emits the canonical no-op when both registers are x0. The
-      -- read-only final state is unchanged because the write to x0 is discarded.
-      simp only [Bool.and_self, if_true]
+    · simp only [if_true]
       rw [JoltISA.pureWritebackRdZeroProgram_run js]
-      simp only [csrrsAfterReadOnly, stateAfterWrite_of_isX0_true hRd,
-        systemProjectResult]
+      simp only [csrrsAfterReadOnly,
+        JoltISA.stateAfterWrite_of_isX0_eq_true hRd, systemProjectResult]
 
 /-! ## Sail-side generic CSRRS helpers -/
 

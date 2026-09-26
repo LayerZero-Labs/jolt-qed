@@ -897,7 +897,8 @@ theorem execInstr_preserves_protected
       exact alignmentAssert_preserves_protected
         (mask := (3 : BitVec 64)) (by simpa [execInstr] using hrun)
   | LD faultClass dst base imm =>
-      exact ld_preserves_protected hsafe (by simpa [execInstr] using hrun)
+      exact ld_preserves_protected hsafe
+        (by simpa [execInstr] using hrun)
   | SD base value imm =>
       exact sd_preserves_protected (by simpa [execInstr] using hrun)
   | VirtualAdvice dst value _ =>
@@ -907,7 +908,8 @@ theorem execInstr_preserves_protected
       | none => simp [execInstr, EStateM.run, hread] at hrun
       | some result =>
           rcases result with ⟨value, tape⟩
-          exact dstWrite_preserves_protected (js := { js with adviceTape := tape }) hsafe
+          exact dstWrite_preserves_protected (js := { js with adviceTape := tape })
+            hsafe
             (by simpa [execInstr, EStateM.run, hread] using hrun)
   | VirtualAdviceLen dst src _ =>
       cases hsafe

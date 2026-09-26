@@ -14,7 +14,7 @@ noncomputable def RightLookupOperand {F : Type} [Field F] (p : WitnessParams)
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       if JoltMetadata.hasCombinedLookupOperands instruction then
         ((lookupIndex trace t.val).toNat : F)
       else RightInstructionInput p trace t

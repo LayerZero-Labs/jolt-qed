@@ -1,5 +1,6 @@
 import JoltConstraints.Constraints.BytecodeReadData
 import JoltConstraints.witness_helpers.register_address
+import JoltConstraints.witness_helpers.destination_capture
 
 set_option autoImplicit false
 
@@ -97,11 +98,11 @@ def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
   | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
-      some (HonestWitness.destinationRegisterAddress dst)
-  -- The fixed table reads the already-normalized destination in the row.
-  -- Rust rewrites side-effecting x0 destinations during bytecode expansion.
+      some (HonestWitness.destinationRegisterAddress
+        (HonestWitness.capturedDestination instruction dst))
   | .LD _ dst _ _ =>
-      some (HonestWitness.destinationRegisterAddress dst)
+      some (HonestWitness.destinationRegisterAddress
+        (HonestWitness.capturedDestination instruction dst))
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
   | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _
@@ -113,7 +114,7 @@ from an absent operand; leading and trailing padding have no operands. -/
 def bytecodeRegisterSelector {F : Type} [Field F] (program : JoltProgram)
     (operand : JoltISA.Instr → Option (Fin 128)) (register : Fin 128) (address : Nat) : F :=
   match bytecodeRow program address with
-  | some row => if operand row.instruction = some register then 1 else 0
+  | some row => if operand row.expandedInstruction = some register then 1 else 0
   | none => 0
 
 /-- Fixed lookup-table flags; a padding no-op selects no lookup table.
@@ -121,14 +122,14 @@ Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocol
 def bytecodeLookupTableFlag {F : Type} [Field F] (program : JoltProgram)
     (table : LookupTableKind) (address : Nat) : F :=
   match bytecodeRow program address with
-  | some row => if JoltMetadata.lookupTableFlag row.instruction table then 1 else 0
+  | some row => if JoltMetadata.lookupTableFlag row.expandedInstruction table then 1 else 0
   | none => 0
 
 /-- Fixed RAF flag: one for combined lookup operands; padding contributes zero.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L603-L609 -/
 def bytecodeRafFlag {F : Type} [Field F] (program : JoltProgram) (address : Nat) : F :=
   match bytecodeRow program address with
-  | some row => if JoltMetadata.instructionRafFlag row.instruction then 1 else 0
+  | some row => if JoltMetadata.instructionRafFlag row.expandedInstruction then 1 else 0
   | none => 0
 
 end JoltConstraints

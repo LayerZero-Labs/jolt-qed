@@ -52,11 +52,11 @@ theorem honestWitness_rightLookupAdd
   by_cases h : t.val < trace.rows.size
   · let row := getElem trace.rows t.val h
     let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-    by_cases ha : JoltMetadata.opcodeFlag bytecodeRow.instruction .AddOperands = true
+    by_cases ha : JoltMetadata.opcodeFlag bytecodeRow.expandedInstruction .AddOperands = true
     · have heq : HonestWitness.RightLookupOperand (F := F) params trace t =
           HonestWitness.LeftInstructionInput (F := F) params trace t +
           HonestWitness.RightInstructionInput (F := F) params trace t := by
-        cases hi : bytecodeRow.instruction
+        cases hi : bytecodeRow.expandedInstruction
         all_goals simp [JoltMetadata.opcodeFlag, hi] at ha
         all_goals simp only [bytecodeRow, row] at hi
         all_goals

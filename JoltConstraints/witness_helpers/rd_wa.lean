@@ -2,6 +2,7 @@ import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.trace
 import JoltConstraints.witness_helpers.register_address
+import JoltConstraints.witness_helpers.destination_capture
 
 set_option autoImplicit false
 
@@ -17,7 +18,7 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       match instruction with
       | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
       | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
@@ -40,10 +41,9 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
       | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
       | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
-          if address = destinationRegisterAddress dst then 1 else 0
-      -- Rust captures the destination in the final row without rewriting it.
+          if address = destinationRegisterAddress (capturedDestination instruction dst) then 1 else 0
       | .LD _ dst _ _ =>
-          if address = destinationRegisterAddress dst then 1 else 0
+          if address = destinationRegisterAddress (capturedDestination instruction dst) then 1 else 0
       | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
       | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
       | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _

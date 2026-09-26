@@ -28,7 +28,7 @@ theorem honestWitness_rs2EqRamWriteIfStore
     (HonestWitness.Rs2Value params trace t -
       HonestWitness.RamWriteValue params trace t) = 0
   by_cases inBounds : t.val < trace.rows.size
-  · let instruction := (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
+  · let instruction := (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
     by_cases hStore : JoltMetadata.opcodeFlag instruction .Store = true
     · obtain ⟨base, value, imm, hInstr⟩ :=
         JoltMetadata.opcodeFlag_store_requiresSD instruction hStore

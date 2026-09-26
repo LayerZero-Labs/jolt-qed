@@ -31,7 +31,7 @@ theorem honestWitness_shouldBranchEqLookupOutputMulBranch
       HonestWitness.ShouldBranch, HonestWitness.LookupOutput,
       HonestWitness.InstructionFlags]
     simp only [dif_pos h]
-    cases hi : bytecodeRow.instruction
+    cases hi : bytecodeRow.expandedInstruction
     all_goals simp only [bytecodeRow, row] at hi
     all_goals simp [JoltMetadata.instructionFlag]
     all_goals

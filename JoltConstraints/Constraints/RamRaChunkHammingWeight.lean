@@ -33,7 +33,7 @@ theorem honestWitness_ramRaChunkHammingWeight
   by_cases h : t.val < trace.rows.size
   · let row := getElem trace.rows t.val h
     let instruction :=
-      (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+      (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
     have fits := ramFits ⟨t.val, h⟩
     dsimp [WitnessParams.RamFits] at fits
     dsimp [ramRaChunkHammingWeight, JoltProgram.honestWitness,

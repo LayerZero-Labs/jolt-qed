@@ -21,7 +21,7 @@ noncomputable def RamReadValue [Field F] {program : JoltProgram}
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       match hInstr : instruction with
       | .LD _ _ _ _ => rdValue instruction row.postState
       | .SD base value imm =>
@@ -35,7 +35,7 @@ noncomputable def RamReadValue [Field F] {program : JoltProgram}
               -- The match above gives hInstr : instruction = .SD base value imm.
               -- Restate it using the bytecode entry so we can select the SD
               -- case of storeMemoryPresent.
-              have stored : program.expandedBytecode[row.rowIndex].instruction = .SD base value imm := hInstr
+              have stored : program.expandedBytecode[row.rowIndex].expandedInstruction = .SD base value imm := hInstr
               simpa only [stored] using row.storeMemoryPresent)
           (word.toNat : F)
       | _ => 0

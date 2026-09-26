@@ -21,7 +21,7 @@ noncomputable def RamWriteValue [Field F] {program : JoltProgram}
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       match instruction with
       | .LD _ _ _ _ => rdValue instruction row.postState
       | .SD _ value _ => ((JoltISA.sourceValue value row.preState).toNat : F)

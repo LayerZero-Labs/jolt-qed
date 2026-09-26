@@ -14,7 +14,7 @@ namespace HonestWitness
 noncomputable def rowLookupOutput {program : JoltProgram}
     (row : JoltTraceRow program) : BitVec 64 :=
   let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-  let instruction := bytecodeRow.instruction
+  let instruction := bytecodeRow.expandedInstruction
   let source := fun src => JoltISA.sourceValue src row.preState
   match instruction with
   | .ADDI _ src imm => BitVec.ofNat 64 (JoltISA.addWide (source src) imm)
@@ -91,10 +91,7 @@ noncomputable def rowLookupOutput {program : JoltProgram}
   | .VirtualMovsign _ src _ => jolt_movsign_value (source src)
   | .VirtualNegateIf _ sign src => jolt_virtual_negate_if_value (source sign) (source src)
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ | .VirtualAdviceLen dst _ _ =>
-      let register : JoltISA.Src := match dst with
-        | .xreg r => .xreg r
-        | .vreg r => .vreg r
-      JoltISA.sourceValue register row.postState
+      HonestWitness.capturedDestinationValue bytecodeRow.expandedInstruction dst row.postState
   -- row.executes certifies success, so these enforced assertions hold.
   | .VirtualAssertHalfwordAlignment .. | .VirtualAssertWordAlignment ..
   | .VirtualAssertValidDiv0 .. | .VirtualAssertValidUnsignedRemainder ..

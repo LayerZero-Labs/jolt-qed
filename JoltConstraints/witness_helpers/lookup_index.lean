@@ -80,10 +80,7 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
       (BitVec.ofNat 64 imm).setWidth 128
   | .VirtualMovsign _ src imm => interleaveLookupOperands (source src) imm
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ | .VirtualAdviceLen dst _ _ =>
-      let src : JoltISA.Src := match dst with
-        | .xreg r => .xreg r
-        | .vreg r => .vreg r
-      (JoltISA.sourceValue src postState).setWidth 128
+      (capturedDestinationValue instruction dst postState).setWidth 128
   | .FENCE | .LD _ _ _ _ | .SD _ _ _ | .VirtualHostIO _ _ _ => 0
 
 -- Rust: [LookupIndex](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:45).
@@ -94,7 +91,7 @@ noncomputable def lookupIndex {program : JoltProgram}
   if inBounds : t < trace.rows.size then
     let row := getElem trace.rows t inBounds
     let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-    instructionLookupIndex bytecodeRow.instruction bytecodeRow.address row.preState row.postState
+    instructionLookupIndex bytecodeRow.expandedInstruction bytecodeRow.address row.preState row.postState
   else 0
 
 end HonestWitness

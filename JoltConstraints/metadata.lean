@@ -207,7 +207,7 @@ def circuitFlag (row : JoltProgramRow) (flag : CircuitFlags) : Bool :=
   | .DoNotUpdateUnexpandedPC => row.virtualSequenceRemaining.getD 0 != 0
   | .IsCompressed => row.isCompressed
   | .IsFirstInSequence => row.isFirstInSequence
-  | _ => opcodeFlag row.instruction flag
+  | _ => opcodeFlag row.expandedInstruction flag
 
 theorem opcodeFlag_load_requiresLD (instruction : JoltISA.Instr)
     (h : opcodeFlag instruction .Load = true) :

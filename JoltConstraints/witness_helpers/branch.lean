@@ -20,7 +20,7 @@ noncomputable def ShouldBranch [Field F] {program : JoltProgram}
     if inBounds : t.val < trace.rows.size then
       let row : JoltTraceRow program := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       match instruction with
       | .BEQ lhs rhs _ | .BNE lhs rhs _ | .BLT lhs rhs _
       | .BGE lhs rhs _ | .BLTU lhs rhs _ | .BGEU lhs rhs _ =>

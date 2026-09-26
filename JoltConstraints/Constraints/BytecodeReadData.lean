@@ -47,7 +47,7 @@ Use the shared metadata normalization, including signed load/store offsets.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L551-L574 -/
 def bytecodeImmediate {F : Type} [Field F] (program : JoltProgram) (address : Nat) : F :=
   match bytecodeRow program address with
-  | some row => (JoltMetadata.immediate row.instruction : F)
+  | some row => (JoltMetadata.immediate row.expandedInstruction : F)
   | none => 0
 
 /-- Fixed circuit flags. A padding no-op sets only DoNotUpdateUnexpandedPC.
@@ -63,7 +63,7 @@ Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-riscv/src/instructi
 def bytecodeInstructionFlag {F : Type} [Field F] (program : JoltProgram)
     (flag : InstructionFlags) (address : Nat) : F :=
   match bytecodeRow program address with
-  | some row => if JoltMetadata.instructionFlag row.instruction flag then 1 else 0
+  | some row => if JoltMetadata.instructionFlag row.expandedInstruction flag then 1 else 0
   | none => if flag = .IsNoop then 1 else 0
 
 end JoltConstraints

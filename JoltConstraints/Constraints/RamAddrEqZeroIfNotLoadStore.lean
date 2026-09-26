@@ -38,7 +38,7 @@ theorem honestWitness_ramAddrEqZeroIfNotLoadStore
   · simpa [JoltProgram.honestWitness, HonestWitness.OpFlags,
       HonestWitness.RamAddress, JoltMetadata.circuitFlag, inBounds] using
         (ramAddressZeroWhenNotMemory (F := F)
-          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
+          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
           (trace.rows[t.val]'inBounds).preState)
   · simp [JoltProgram.honestWitness, HonestWitness.OpFlags,
       HonestWitness.RamAddress, inBounds]

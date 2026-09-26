@@ -18,7 +18,7 @@ noncomputable def LookupTableFlag {F : Type} [Field F] (p : WitnessParams)
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       if JoltMetadata.lookupTableFlag instruction table then 1 else 0
     else 0
 

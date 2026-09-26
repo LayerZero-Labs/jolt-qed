@@ -15,7 +15,7 @@ noncomputable def RamHammingWeight {F : Type} [Field F] (p : WitnessParams)
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
       match ramAccessAddress instruction row.preState with
       | some address => if address = 0 then 0 else 1
       | none => 0

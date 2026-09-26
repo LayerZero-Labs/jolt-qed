@@ -35,7 +35,7 @@ theorem honestWitness_rightInstructionInputEqSelection
   · let instruction :=
       (getElem program.expandedBytecode
         (getElem trace.rows t.val h).rowIndex.val
-        (getElem trace.rows t.val h).rowIndex.isLt).instruction
+        (getElem trace.rows t.val h).rowIndex.isLt).expandedInstruction
     have hex := rightOperandFlagsExclusive instruction
     dsimp [rightInstructionInputEqSelection, JoltProgram.honestWitness,
       HonestWitness.RightInstructionInput, HonestWitness.InstructionFlags]

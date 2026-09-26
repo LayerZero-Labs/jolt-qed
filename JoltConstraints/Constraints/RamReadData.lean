@@ -50,7 +50,7 @@ This is a condition on the recorded accesses, not an ISA execution rule. -/
 def ramAccessesValid {program : JoltProgram} (trace : JoltTrace program) : Prop :=
   ∀ i : Fin trace.rows.size,
     let row := getElem trace.rows i.val i.isLt
-    let instruction := program.expandedBytecode[row.rowIndex].instruction
+    let instruction := program.expandedBytecode[row.rowIndex].expandedInstruction
     match HonestWitness.ramAccessAddress instruction row.preState with
     | none => True
     | some address => address.toNat ≠ 0 ∧

@@ -1,5 +1,5 @@
 import Mathlib.Algebra.Field.Defs
-import JoltBytecode.JoltISA.RegisterAccess
+import JoltConstraints.witness_helpers.destination_capture
 
 set_option autoImplicit false
 
@@ -12,13 +12,8 @@ namespace HonestWitness
 -- HOST_IO still has a captured rd even though it does not write it.
 noncomputable def rdValue {F : Type} [Field F]
     (instruction : JoltISA.Instr) (state : SailJoltState) : F :=
-  -- Src and Dst name the same register banks; reuse the pure ISA accessor.
   let destinationValue (dst : JoltISA.Dst) : F :=
-    let register : JoltISA.Src :=
-      match dst with
-      | .xreg r => .xreg r
-      | .vreg r => .vreg r
-    ((JoltISA.sourceValue register state).toNat : F)
+    ((capturedDestinationValue instruction dst state).toNat : F)
   match instruction with
   | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
   | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
@@ -42,7 +37,6 @@ noncomputable def rdValue {F : Type} [Field F]
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
   | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
       destinationValue dst
-  -- Rust captures the destination in the final row without rewriting it.
   | .LD _ dst _ _ => destinationValue dst
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _

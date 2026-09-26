@@ -23,7 +23,7 @@ noncomputable def remappedRamAddress {program : JoltProgram}
   if inBounds : t < trace.rows.size then
     let row := getElem trace.rows t inBounds
     let instruction :=
-      (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).instruction
+      (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
     (ramAccessAddress instruction row.preState).bind
       (remapRamAddress program.initialState.io.layout)
   else none

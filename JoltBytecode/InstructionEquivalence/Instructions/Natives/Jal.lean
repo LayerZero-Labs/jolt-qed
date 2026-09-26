@@ -7,6 +7,13 @@ noncomputable section
 
 namespace Natives
 
+/-- The proof's native JAL abbreviation is exactly the instruction selected by
+the program-row rewrite. Destination normalization happens before execution. -/
+private theorem jalNativeInstr_eq_rewrite (imm : BitVec 21) (rd : regidx) :
+    (JoltISA.Encoded.JAL (.xreg rd) imm).rewriteNative =
+      JoltISA.jalNativeInstr rd imm := by
+  rfl
+
 /-- Full native JAL execution, including the temporary write when rd is x0.
 No target-alignment assumption is needed to execute Rust's instruction body. -/
 theorem jalNative_run (imm : BitVec 21) (rd : regidx) (js : SailJoltState)
@@ -44,7 +51,8 @@ def jalInstrEqSailStatement
     (imm : BitVec 21) (rd : regidx) (js : SailJoltState)
     (_h : JalInstrEqSailAssumptions imm js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (JoltISA.jalNativeInstr rd imm)).run js) =
+    ((JoltISA.execInstr
+      ((JoltISA.Encoded.JAL (.xreg rd) imm).rewriteNative)).run js) =
     ((execute_JAL imm rd).run js.sail)
 
 theorem jalInstr_eq_sail
@@ -52,6 +60,7 @@ theorem jalInstr_eq_sail
     (h : JalInstrEqSailAssumptions imm js) :
     jalInstrEqSailStatement imm rd js h := by
   unfold jalInstrEqSailStatement
+  rw [jalNativeInstr_eq_rewrite]
   obtain ⟨rustPC, hNextPC⟩ := h.nextPC_readable.exists_value
   obtain ⟨instructionAddress, hPC⟩ := h.pc_readable.exists_value
   -- First establish the full Jolt state, including the native destination write.
