@@ -346,9 +346,227 @@ noncomputable def shiftDataWTableEntry {F : Type} [Field F]
   let lane := x &&& ((1#128 <<< 32) - 1).setWidth 64
   ((lane <<< (8 * (y &&& 4).toNat)).toNat : F)
 
+/-- The WINDOW_MASK_B table: a one-byte mask shifted left by
+`8 * (index & 7)` bits.
+Rust: crates/jolt-lookup-tables/src/tables/window_mask_b.rs. -/
+noncomputable def windowMaskBTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let index := BitVec.ofFin address
+  let mask := ((1#128 <<< 8) - 1).setWidth 64
+  let offset := (index &&& 7).toNat
+  ((mask <<< (8 * offset)).toNat : F)
+
+/-- The WINDOW_MASK_H table: a two-byte mask shifted left by
+`8 * (index & 6)` bits.
+Rust: crates/jolt-lookup-tables/src/tables/window_mask_h.rs. -/
+noncomputable def windowMaskHTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let index := BitVec.ofFin address
+  let mask := ((1#128 <<< 16) - 1).setWidth 64
+  let offset := (index &&& 6).toNat
+  ((mask <<< (8 * offset)).toNat : F)
+
+/-- The WINDOW_MASK_W table: a four-byte mask, shifted left by 32 bits when
+address bit 2 is set.
+Rust: crates/jolt-lookup-tables/src/tables/window_mask_w.rs. -/
+noncomputable def windowMaskWTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let index := BitVec.ofFin address
+  let mask := ((1#128 <<< 32) - 1).setWidth 64
+  let bit2 := ((index >>> 2) &&& 1).toNat
+  ((mask <<< (32 * bit2)).toNat : F)
+
+/-- Rust's `u32::swap_bytes`: reverse the byte order of a 32-bit word. -/
+def swapBytes32 (w : BitVec 32) : BitVec 32 :=
+  ((w &&& 0xFF) <<< 24) ||| ((w &&& 0xFF00) <<< 8) ||| ((w >>> 8) &&& 0xFF00) ||| (w >>> 24)
+
+/-- Reverse the bytes within each 32-bit half of a 64-bit word.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_rev8w.rs::rev8w. -/
+def rev8w (v : BitVec 64) : BitVec 64 :=
+  let lo := swapBytes32 (v.setWidth 32)
+  let hi := swapBytes32 ((v >>> 32).setWidth 32)
+  lo.setWidth 64 + (hi.setWidth 64 <<< 32)
+
+/-- The VIRTUAL_REV8W table: `rev8w` of the low 64 bits of the address.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_rev8w.rs. -/
+noncomputable def virtualRev8WTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let index := BitVec.ofFin address
+  ((rev8w (index.setWidth 64)).toNat : F)
+
+/-- The VIRTUAL_SRL table. Rust reads each operand most significant bit first
+with `LookupBits::pop_msb`, which here is bit `i` for `i = 63, …, 0`.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_srl.rs. -/
+noncomputable def virtualSRLTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let entry := Id.run do
+    let mut entry : BitVec 64 := 0
+    for i in (List.range 64).reverse do
+      let xI := (x >>> i) &&& 1
+      let yI := (y >>> i) &&& 1
+      entry := entry * (1 + yI)
+      entry := entry + xI * yI
+    return entry
+  (entry.toNat : F)
+
+/-- The VIRTUAL_SRA table. The loop's `i`-th `pop_msb` reads bit `63 - i`, and
+Rust's `leading_ones() != 0` holds exactly when the top bit of `x` is set.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_sra.rs. -/
+noncomputable def virtualSRATableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let signBit : BitVec 64 := if x.msb then 1 else 0
+  let (entry, signExtension) := Id.run do
+    let mut entry : BitVec 64 := 0
+    let mut signExtension : BitVec 64 := 0
+    for i in List.range 64 do
+      let xI := (x >>> (63 - i)) &&& 1
+      let yI := (y >>> (63 - i)) &&& 1
+      entry := entry * (1 + yI)
+      entry := entry + xI * yI
+      if i ≠ 0 then
+        signExtension := signExtension + (1#64 <<< i) * (1 - yI)
+    return (entry, signExtension)
+  ((entry + signBit * signExtension).toNat : F)
+
+/-- The VIRTUAL_SRLW table. Rust first pops and discards the top 32 bits of
+each operand, so the loop reads bits 31, …, 0 and the sign bit is bit 31.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_srlw.rs. -/
+noncomputable def virtualSRLWTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let signBit : BitVec 64 := if x.getLsbD 31 then 1 else 0
+  let (entry, y0) := Id.run do
+    let mut entry : BitVec 64 := 0
+    let mut y0 : BitVec 64 := 0
+    for i in (List.range 32).reverse do
+      let xI := (x >>> i) &&& 1
+      let yI := (y >>> i) &&& 1
+      entry := entry * (1 + yI) + xI * yI
+      y0 := yI
+    return (entry, y0)
+  let extension := ((1#128 <<< 64) - (1#128 <<< 32)).setWidth 64
+  ((entry + signBit * y0 * extension).toNat : F)
+
+/-- The VIRTUAL_SRAW table. As in `virtualSRLWTableEntry` the top 32 bits are
+discarded first; the loop's `i`-th `pop_msb` then reads bit `31 - i`.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_sraw.rs. -/
+noncomputable def virtualSRAWTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  let signBit : BitVec 64 := if x.getLsbD 31 then 1 else 0
+  let (entry, signExtension) := Id.run do
+    let mut entry : BitVec 64 := 0
+    let mut signExtension : BitVec 64 := ((1#128 <<< 64) - (1#128 <<< 32)).setWidth 64
+    for i in List.range 32 do
+      let xI := (x >>> (31 - i)) &&& 1
+      let yI := (y >>> (31 - i)) &&& 1
+      entry := entry * (1 + yI) + xI * yI
+      if i ≠ 0 then
+        signExtension := signExtension + (1#64 <<< i) * (1 - yI)
+    return (entry, signExtension)
+  ((entry + signBit * signExtension).toNat : F)
+
+/-- The VIRTUAL_ROTR table. `prodOnePlusY` is a `u128` in Rust and is
+truncated to 64 bits where it is used.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_rotr.rs. -/
+noncomputable def virtualROTRTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (xBits, yBits) := uninterleave address
+  let (firstSum, secondSum) := Id.run do
+    let mut prodOnePlusY : BitVec 128 := 1
+    let mut firstSum : BitVec 64 := 0
+    let mut secondSum : BitVec 64 := 0
+    for i in (List.range 64).reverse do
+      let x := (xBits >>> i) &&& 1
+      let y := (yBits >>> i) &&& 1
+      firstSum := firstSum * (1 + y)
+      firstSum := firstSum + x * y
+      secondSum :=
+        secondSum + x * ((1 - y.setWidth 128) * prodOnePlusY).setWidth 64 * (1#64 <<< i)
+      prodOnePlusY := prodOnePlusY * (1 + y.setWidth 128)
+    return (firstSum, secondSum)
+  ((firstSum + secondSum).toNat : F)
+
+/-- The VIRTUAL_ROTRW table: the `virtualROTRTableEntry` loop over bits
+31, …, 0 only (Rust's `(0..XLEN).rev().skip(XLEN / 2)`), with every
+accumulator a `u64`.
+Rust: crates/jolt-lookup-tables/src/tables/virtual_rotrw.rs. -/
+noncomputable def virtualROTRWTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (xBits, yBits) := uninterleave address
+  let (firstSum, secondSum) := Id.run do
+    let mut prodOnePlusY : BitVec 64 := 1
+    let mut firstSum : BitVec 64 := 0
+    let mut secondSum : BitVec 64 := 0
+    for i in (List.range 64).reverse.drop 32 do
+      let x := (xBits >>> i) &&& 1
+      let y := (yBits >>> i) &&& 1
+      firstSum := firstSum * (1 + y)
+      firstSum := firstSum + x * y
+      secondSum := secondSum + x * (1 - y) * prodOnePlusY * (1#64 <<< i)
+      prodOnePlusY := prodOnePlusY * (1 + y)
+    return (firstSum, secondSum)
+  ((firstSum + secondSum).toNat : F)
+
+/-- Parallel bit extract: pack `x`'s bits at `y`'s set positions toward bit 0,
+preserving their order.
+Rust: crates/jolt-lookup-tables/src/tables/suffixes/pext.rs::pext. -/
+def pext (x y : BitVec 64) : BitVec 64 := Id.run do
+  if y = 0 then
+    return 0
+  let tz := y.ctz.toNat
+  let normalized := y >>> tz
+  if normalized &&& (normalized + 1) = 0 then
+    -- Contiguous mask: extract is a shift plus truncate.
+    return (x >>> tz) &&& normalized
+  -- General mask: gather one bit per set position, lowest first. Rust loops
+  -- `while bits != 0`; each pass clears one set bit, so 64 passes suffice.
+  let mut bits := y
+  let mut out : BitVec 64 := 0
+  let mut k := 0
+  for _ in List.range 64 do
+    if bits ≠ 0 then
+      out := out ||| (((x >>> bits.ctz.toNat) &&& 1) <<< k)
+      k := k + 1
+      bits := bits &&& (bits - 1)
+  return out
+
+/-- `x`'s bit at `y`'s most significant set bit, or `0` if `y` is zero.
+Rust: crates/jolt-lookup-tables/src/tables/suffixes/window_sign.rs::window_sign_bit. -/
+def windowSignBit (x y : BitVec 64) : BitVec 64 :=
+  if y = 0 then 0 else (x >>> y.toNat.log2) &&& 1
+
+/-- `pext x y`, sign-extended above bit `popcount y - 1` by `windowSignBit`.
+Rust: crates/jolt-lookup-tables/src/tables/pext_signed.rs::pext_signed. -/
+def pextSigned (x y : BitVec 64) : BitVec 64 :=
+  let pc := y.cpop.toNat
+  if pc = 0 then
+    0
+  else
+    let pext := pext x y
+    let sign := windowSignBit x y
+    let ext := if sign = 1 then ((1#128 <<< 64) - (1#128 <<< pc)).setWidth 64 else 0
+    pext + ext
+
+/-- The PEXT table. Rust's `LookupBits::new(_, 64)` keeps all 64 bits of each
+operand, so the operands reach `pext` unchanged.
+Rust: crates/jolt-lookup-tables/src/tables/pext.rs. -/
+noncomputable def pextTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  ((pext x y).toNat : F)
+
+/-- The PEXT_SIGNED table, with the same operand handling as `pextTableEntry`.
+Rust: crates/jolt-lookup-tables/src/tables/pext_signed.rs. -/
+noncomputable def pextSignedTableEntry {F : Type} [Field F]
+    (address : Fin (2 ^ 128)) : F :=
+  let (x, y) := uninterleave address
+  ((pextSigned x y).toNat : F)
+
 /-- `Table_q(x)` from constraint (39) in `constraints.md`: the fixed table's
-field value at the 128-bit Boolean address `x`. Tables not implemented yet
-fall through to the placeholder. -/
+field value at the 128-bit Boolean address `x`. -/
 noncomputable def lookupTableEntry {F : Type} [Field F]
     (table : LookupTableKind) (address : Fin (2 ^ 128)) : F :=
   match table with
@@ -377,6 +595,11 @@ noncomputable def lookupTableEntry {F : Type} [Field F]
   | .Pow2 => pow2TableEntry address
   | .Pow2W => pow2WTableEntry address
   | .ShiftRightBitmask => shiftRightBitmaskTableEntry address
+  | .VirtualRev8W => virtualRev8WTableEntry address
+  | .VirtualSRL => virtualSRLTableEntry address
+  | .VirtualSRA => virtualSRATableEntry address
+  | .VirtualROTR => virtualROTRTableEntry address
+  | .VirtualROTRW => virtualROTRWTableEntry address
   | .VirtualNegateIf => virtualNegateIfTableEntry address
   | .MulUNoOverflow => mulUNoOverflowTableEntry address
   | .VirtualXORROT32 => virtualXorRotTableEntry 32 address
@@ -387,14 +610,20 @@ noncomputable def lookupTableEntry {F : Type} [Field F]
   | .VirtualXORROTW12 => virtualXorRotWTableEntry 12 address
   | .VirtualXORROTW8 => virtualXorRotWTableEntry 8 address
   | .VirtualXORROTW7 => virtualXorRotWTableEntry 7 address
+  | .WindowMaskW => windowMaskWTableEntry address
+  | .PextSigned => pextSignedTableEntry address
   | .VirtualXORROTW22 => virtualXorRotWTableEntry 22 address
   | .VirtualXORROTW19 => virtualXorRotWTableEntry 19 address
   | .VirtualXORROTW6 => virtualXorRotWTableEntry 6 address
   | .ShiftRightBitmaskW => shiftRightBitmaskWTableEntry address
+  | .VirtualSRLW => virtualSRLWTableEntry address
+  | .VirtualSRAW => virtualSRAWTableEntry address
+  | .Pext => pextTableEntry address
+  | .WindowMaskB => windowMaskBTableEntry address
+  | .WindowMaskH => windowMaskHTableEntry address
   | .AlignAddr => alignAddrTableEntry address
   | .ShiftDataB => shiftDataBTableEntry address
   | .ShiftDataH => shiftDataHTableEntry address
   | .ShiftDataW => shiftDataWTableEntry address
-  | _ => by sorry
 
 end JoltConstraints
