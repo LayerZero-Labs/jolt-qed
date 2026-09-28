@@ -97,8 +97,8 @@ For the whole trace, use these fields before introducing any new condition:
 
 | Trace field | Available fact |
 | --- | --- |
-| `rows`, `assumptionOperands`, `allAssumptions` | The execution rows and each row's existing assumption bundle at `preState`. Check the exact conjunct and its operand domain in [`Bundles.lean`](../JoltBytecode/Bundles.lean). |
-| `ramAccessAssumed` | Connects the bundle's `memoryWindows` to an `LD` or `SD` effective RAM address. It does **not** cover arbitrary HostIO byte addresses; the bundle's memory-window facts concern 8-byte accesses. |
+| `rows`, `assumptionOperands`, `rowAssumptions` | The execution rows and each row's `TraceAssumptions` at `preState`: architectural register readability, `CurPrivilegeMachine`, `MstatusMprvZero`, and the `RamWindowAssumptions` facts for each address in `memoryWindows`. See [`trace.lean`](../JoltConstraints/trace.lean). A new field must hold at every Rust-reachable pre-state, not just be convenient; [TraceNonempty](../JoltConstraints/Tests/TraceNonempty.lean) fails if the bundle stops holding at `init_state`. |
+| `ramAccessAssumed` | Connects `memoryWindows` to an `LD` or `SD` effective RAM address. It does **not** cover arbitrary HostIO byte addresses; the memory-window facts concern 8-byte accesses. |
 | `sequenceLayout` | Source/expansion layout, including the current `addressAdvanceNoWrap` assumption. Check which property is actually needed. |
 | `initialized`, `startsAtEntry`, `startsAtInitial` | Initial-state shape, first bytecode entry, and first row's prepared state. |
 | `noEarlyNextPCChange` | The nextPC frame for a nonfinal expansion row. Its source-to-row justification is separate work. |

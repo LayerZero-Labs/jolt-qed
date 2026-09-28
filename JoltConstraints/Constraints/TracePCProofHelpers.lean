@@ -187,14 +187,14 @@ theorem aligned_access (addr : BitVec 64) (h : addr &&& 7 = 0) :
     no_ovf := aligned_addr_no_ovf_of_align addr h }
 
 theorem memory_read (s : SailJoltState) (ops : AssumptionOperands)
-    (ha : all_assumptions s ops) (addr : BitVec 64)
+    (ha : TraceAssumptions s ops) (addr : BitVec 64)
     (halign : addr &&& 7 = 0)
     (hwindow : ramStartAddress ≤ addr.toNat → ops.memoryWindows addr)
     (t : SailJoltState) (v : Result (BitVec 64) ExecutionResult)
     (hr : readMemoryWord addr s = .ok v t) : t = s := by
   by_cases hram : ramStartAddress ≤ addr.toNat
-  · obtain ⟨hbytes, hpmp, _, _, _, _, _, hmmio, _⟩ :=
-      ha.2.2.2.2.1 addr (hwindow hram)
+  · obtain ⟨hbytes, hpmp, _, hmmio, _⟩ :=
+      ha.ramWindow addr (hwindow hram)
     have hread := vmem_read_addr_dword_reduces addr s.sail
       ha.curPrivilege ha.mstatusMprv (aligned_access addr halign)
       hbytes.memBytesPresentAt hpmp hmmio
@@ -206,15 +206,15 @@ theorem memory_read (s : SailJoltState) (ops : AssumptionOperands)
     split at hr <;> cases hr <;> rfl
 
 theorem memory_write (s : SailJoltState) (ops : AssumptionOperands)
-    (ha : all_assumptions s ops) (addr data : BitVec 64)
+    (ha : TraceAssumptions s ops) (addr data : BitVec 64)
     (halign : addr &&& 7 = 0)
     (hwindow : ramStartAddress ≤ addr.toNat → ops.memoryWindows addr)
     (t : SailJoltState) (v : Result Bool ExecutionResult)
     (hr : writeMemoryWord addr data s = .ok v t) :
     t.sail.regs.get? Register.PC = s.sail.regs.get? Register.PC := by
   by_cases hram : ramStartAddress ≤ addr.toNat
-  · obtain ⟨_, _, _, hpmp, _, _, _, _, _, hmmio, _⟩ :=
-      ha.2.2.2.2.1 addr (hwindow hram)
+  · obtain ⟨_, _, hpmp, _, hmmio⟩ :=
+      ha.ramWindow addr (hwindow hram)
     have hwrite := vmem_write_addr_dword_store_reduces addr data s.sail
       ha.curPrivilege ha.mstatusMprv (aligned_access addr halign).toAlignedAccess
       hpmp hmmio
@@ -227,7 +227,7 @@ theorem memory_write (s : SailJoltState) (ops : AssumptionOperands)
 
 theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
     (imm : BitVec 64) (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : all_assumptions s ops)
+    (ha : TraceAssumptions s ops)
     (hwindow : ramStartAddress ≤ (sourceValue base s + imm).toNat →
       ops.memoryWindows (sourceValue base s + imm))
     (hexec : execInstr (.LD fault dst base imm) s = .ok (.Retire_Success ()) t) :
@@ -250,7 +250,7 @@ theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
 
 theorem store_instruction (base value : Src) (imm : BitVec 64)
     (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : all_assumptions s ops)
+    (ha : TraceAssumptions s ops)
     (hwindow : ramStartAddress ≤ (sourceValue base s + imm).toNat →
       ops.memoryWindows (sourceValue base s + imm))
     (hexec : execInstr (.SD base value imm) s = .ok (.Retire_Success ()) t) :
@@ -282,7 +282,7 @@ def MemoryWindowsCovered (instr : Instr) (s : SailJoltState)
   | _ => True
 
 theorem instruction (instr : Instr) (s t : SailJoltState)
-    (ops : AssumptionOperands) (ha : all_assumptions s ops)
+    (ops : AssumptionOperands) (ha : TraceAssumptions s ops)
     (hwindow : MemoryWindowsCovered instr s ops)
     (hhost : instr.HostIOPCFrame s t)
     (hexec : execInstr instr s = .ok (.Retire_Success ()) t) :
@@ -311,7 +311,7 @@ theorem row {program : JoltProgram} (trace : JoltTrace program)
     (i : Fin trace.rows.size) :
     trace.rows[i].postState.sail.regs.get? Register.PC =
       trace.rows[i].preState.sail.regs.get? Register.PC := by
-  apply instruction _ _ _ (trace.assumptionOperands i) (trace.allAssumptions i)
+  apply instruction _ _ _ (trace.assumptionOperands i) (trace.rowAssumptions i)
     _ _ trace.rows[i].executes
   · rw [memoryWindows_withRuntimeAdvice]
     exact trace.ramAccessAssumed i

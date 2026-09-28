@@ -14,6 +14,25 @@ The prior branch's longer review is preserved in
 It records historical findings and older validation, not the current status.
 Recheck its claims against the local Rust source before relying on them.
 
+## Trace row assumptions
+
+`JoltTrace` previously required the full `all_assumptions` bundle at every
+row's pre-state. Its last conjunct, `MstatusMppMachine`, requires MPP = Machine
+in the virtual `mstatus` register, but `init_state` sets every virtual register
+to zero, as Rust's `Cpu::new` does. No trace could have a first row, so every
+`JoltTrace` was empty and every constraint theorem quantified over traces held
+vacuously. The bundle's `*VRegMatchesSail` conjuncts would also fail after any
+CSR write, since Jolt rows update only the virtual CSR registers.
+
+`JoltTrace.rowAssumptions` now requires `TraceAssumptions` in
+[trace.lean](trace.lean). It keeps what the constraint proofs use:
+architectural register readability, `CurPrivilegeMachine`, `MstatusMprvZero`,
+and the LD/SD memory-window facts. `TraceAssumptions.of_all_assumptions` shows
+it is weaker. [TraceNonempty checks](Tests/TraceNonempty.lean) build a
+complete one-row trace for `jal x0, 0` from `init_state`, prove it
+`Terminated`, pin its axioms with no `sorryAx`, and show `all_assumptions`
+fails at its pre-state.
+
 ## Constraint (01): wrapping load address
 
 Confirmed with a valid RV64 ELF accepted by Jolt's program builder, normal
