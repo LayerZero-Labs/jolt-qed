@@ -1,5 +1,6 @@
 import JoltConstraints.Constraints.LookupOperandData
 import JoltConstraints.Constraints.LookupWriteProofHelpers
+import JoltConstraints.Constraints.LookupPextProofHelpers
 
 /-!
 # Per-table obligations for constraint (39)
@@ -787,8 +788,7 @@ theorem lookupEntryCorrect_VirtualRev8W (row : JoltTraceRow program)
 -- mask immediate `2` (or a `VirtualSRL` row whose mask register holds `2`) is
 -- accepted, and its entry differs from its output. Rust's expander only emits
 -- right-shift bitmasks here. Once `JoltProgram` records that construction,
--- prove these for bitmask-shaped masks. `Pext`/`PextSigned` are open (no
--- counterexample known).
+-- prove these for bitmask-shaped masks.
 /-- FALSE for arbitrary programs; left as `sorry`.
 The table reads the right operand as a right-shift bitmask (ones from bit
 `s` upward) and is correct only for such masks, while the honest output of
@@ -867,20 +867,18 @@ theorem lookupEntryCorrect_VirtualROTRW (row : JoltTraceRow program)
     LookupEntryCorrect F .VirtualROTRW row := by
   sorry
 
-/-- Open: the table's `pext` (contiguous fast path plus a clear-lowest-bit
-loop) against `jolt_pext_nat 64`. They agree on 20000 random operand pairs
-(`JoltConstraints/Tests/LookupShiftMask.lean`), but no proof yet. -/
 theorem lookupEntryCorrect_Pext (row : JoltTraceRow program)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Pext) :
     LookupEntryCorrect F .Pext row := by
-  sorry
+  lookup_cases
+  all_goals simp only [pextTableEntry, uninterleave_interleave, pext_eq_jolt_virtual_pext_value]
 
-/-- Open: as `lookupEntryCorrect_Pext`, plus the sign-extension step
-(`windowSignBit` versus bit `popcount - 1` of the extracted value). -/
 theorem lookupEntryCorrect_PextSigned (row : JoltTraceRow program)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .PextSigned) :
     LookupEntryCorrect F .PextSigned row := by
-  sorry
+  lookup_cases
+  all_goals simp only [pextSignedTableEntry, uninterleave_interleave,
+    pextSigned_eq_jolt_virtual_pext_signed_value]
 
 theorem lookupEntryCorrect_UnsignedLessThanEqual (row : JoltTraceRow program)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .UnsignedLessThanEqual) :
@@ -986,7 +984,7 @@ theorem rowLookupOutput_eq_zero_of_lookupTable_none (row : JoltTraceRow program)
 /-- Dispatcher: the honest entry of the row's lookup table equals the honest
 lookup output. Depends on every `lookupEntryCorrect_*` lemma, including the
 ones left as `sorry` (`VirtualSRL`, `VirtualSRA`, `VirtualSRLW`, `VirtualSRAW`,
-`VirtualROTR`, `VirtualROTRW`, `Pext`, `PextSigned`). -/
+`VirtualROTR`, `VirtualROTRW`). -/
 theorem lookupEntryCorrect_of_lookupTable (row : JoltTraceRow program) (k : LookupTableKind)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some k) :
     LookupEntryCorrect F k row :=

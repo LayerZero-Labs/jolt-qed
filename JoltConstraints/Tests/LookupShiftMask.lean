@@ -97,34 +97,3 @@ theorem not_lookupEntryCorrect (state : SailJoltState) (h : state.vregs 33 = 4) 
   simp
 
 end SRLICounterexample
-
-/-! `Pext` / `PextSigned`: randomized comparison of the table functions with the
-honest values. Expected result: `(0, 0, [])`. -/
-
-def lcg (s : Nat) : Nat := (s * 6364136223846793005 + 1442695040888963407) % 2^64
-
-def checkPext (n : Nat) : Nat × Nat × List (Nat × Nat) := Id.run do
-  let mut s := 12345
-  let mut bad : List (Nat × Nat) := []
-  let mut badS : List (Nat × Nat) := []
-  let mut cnt := 0
-  let mut cntS := 0
-  for _ in List.range n do
-    s := lcg s
-    let x := BitVec.ofNat 64 s
-    s := lcg s
-    -- sparse and dense masks
-    let y0 := BitVec.ofNat 64 s
-    s := lcg s
-    let y := if s % 3 = 0 then y0 &&& BitVec.ofNat 64 (lcg s) else if s % 3 = 1 then y0 else (y0 >>> (s % 64))
-    if pext x y != jolt_virtual_pext_value x y then
-      cnt := cnt + 1
-      bad := (x.toNat, y.toNat) :: bad
-    if pextSigned x y != jolt_virtual_pext_signed_value x y then
-      cntS := cntS + 1
-      badS := (x.toNat, y.toNat) :: badS
-  return (cnt, cntS, (bad.take 3) ++ (badS.take 3))
-
-#eval checkPext 20000
-#eval (pext 0xF0 0xFF, jolt_virtual_pext_value 0xF0 0xFF, pextSigned 0x80 0xF0, jolt_virtual_pext_signed_value 0x80 0xF0, pextSigned 0x80 0x80, jolt_virtual_pext_signed_value 0x80 0x80)
-#eval (pextSigned 5 0, jolt_virtual_pext_signed_value 5 0, pextSigned (-1) (-1), jolt_virtual_pext_signed_value (-1) (-1))
