@@ -57,6 +57,42 @@ noncomputable def init_state (entryAddress : BitVec 64)
     adviceTape := adviceTape
     hostIO := hostIO }
 
+private theorem initialRegisters_fold_get
+    (entry : BitVec 64) (registers : List Register)
+    (initial : Std.ExtDHashMap Register RegisterType) (r : Register) :
+    (registers.foldl (fun regs k => regs.insert k (initialRegisterValue entry k)) initial).get? r =
+      if r ∈ registers then some (initialRegisterValue entry r) else initial.get? r := by
+  induction registers generalizing initial with
+  | nil => simp
+  | cons head tail ih =>
+      simp only [List.foldl_cons, ih]
+      by_cases hmem : r ∈ tail
+      · simp [hmem]
+      · by_cases heq : head = r
+        · subst head
+          simp [hmem]
+        · simp [hmem, heq, Ne.symm heq, Std.ExtDHashMap.get?_insert]
+
+theorem init_state_register (entry : BitVec 64) (ram : Array (BitVec 8))
+    (io : JoltIOState) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
+    (r : Register) :
+    (init_state entry ram io tape hostIO).sail.regs.get? r =
+      some (initialRegisterValue entry r) := by
+  simp [init_state, initialRegisters_fold_get]
+
+/-- Rust initializes both the architectural integer and virtual register banks
+to zero. This follows from the initializer, independently of the program. -/
+theorem sourceValue_init_state (entry : BitVec 64) (ram : Array (BitVec 8))
+    (io : JoltIOState) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
+    (src : JoltISA.Src) :
+    JoltISA.sourceValue src (init_state entry ram io tape hostIO) = 0 := by
+  cases src with
+  | vreg r => rfl
+  | xreg r =>
+      cases r
+      simp only [JoltISA.sourceValue]
+      split <;> simp [init_state_register, initialRegisterValue] <;> rfl
+
 namespace JoltISA.Instr
 
 /-- Only VirtualAdvice receives a per-execution payload. Other instructions
@@ -238,6 +274,8 @@ Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/emulator/cpu.rs#L654
 structure JoltTrace (program : JoltProgram) where
   rows : Array (JoltTraceRow program)
   sequenceLayout : program.SequenceLayout
+  initialized : ∃ entry ram io tape hostIO,
+    program.initialState = init_state entry ram io tape hostIO
   startsAtEntry : ∀ h : 0 < rows.size,
     let first := getElem rows 0 h
     program.expandedBytecode[first.rowIndex].isEntry ∧
@@ -266,3 +304,12 @@ structure JoltTrace (program : JoltProgram) where
       -- Rust stops when a source instruction jumps to its own address.
       program.expandedBytecode[next.rowIndex].address ≠
         program.expandedBytecode[current.rowIndex].address
+
+/-- Every trace carries the initializer requirement, so register completeness
+does not need a separate zero-register assumption. -/
+theorem JoltTrace.initialRegistersZero {program : JoltProgram}
+    (trace : JoltTrace program) (src : JoltISA.Src) :
+    JoltISA.sourceValue src program.initialState = 0 := by
+  obtain ⟨entry, ram, io, tape, hostIO, h⟩ := trace.initialized
+  rw [h]
+  exact sourceValue_init_state entry ram io tape hostIO src
