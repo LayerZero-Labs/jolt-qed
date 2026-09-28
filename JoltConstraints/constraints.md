@@ -7,16 +7,19 @@ A checked box means the stated honest-witness theorem is proved in Lean without
 unfinished proof or correspondence work, and `FIXME:` for a confirmed issue.
 This tracks proof status under each theorem's stated premises; it does not by
 itself establish that all Rust executions satisfy those premises. The Lean
-source and `#print axioms` were checked for all 62 numbered targets: 52 are
-`DONE:`, eight are `TODO:`, and two are `FIXME:`.
+source and `#print axioms` were checked for the original 62 numbered targets.
+The current checklist has 53 proved targets, six `TODO:` targets, and three
+`FIXME:` targets.
 
 The `FIXME:` targets are (01), blocked by the confirmed
-[wrapping-load completeness bug](../bug-report/ram-address-wrap.md), and (16),
+[wrapping-load completeness bug](../bug-report/ram-address-wrap.md); (16),
 whose [taken self-branch counterexample](../bug-report/self-branch.md) leaves
-its unrestricted target as a statement rather than a theorem. The eight `TODO:`
-targets are (26), (34)–(39), and (42); none is classified as a confirmed
-Jolt bug. Among them, (26), (37)–(39) still need Rust–Lean correspondence
-checks, while the others need proof and trace-invariant work.
+its unrestricted target as a statement rather than a theorem; and (37),
+blocked by the confirmed
+[termination-word RAM history bug](../bug-report/ram-val-termination/README.md).
+The six `TODO:` targets are (26), (34)–(36), (38), and (39). Among them,
+(26), (38), and (39) still need Rust–Lean correspondence checks, while the
+others need proof and trace-invariant work.
 
 Constraint (12) has a proved conditional completeness theorem requiring
 equality-assertion operands to match;
@@ -30,8 +33,8 @@ has a proved honest-witness theorem for padded traces; its proof has no
 validity conditions.
 The completeness theorem for constraint (22) explicitly requires at least one padding cycle, as Rust's
 trace-length calculation guarantees. The completeness theorem for (58) requires
-at least one RAM chunk. The register completeness targets require zero initial
-registers and still need admissible-register and history assumptions.
+at least one RAM chunk. The remaining register selection targets require zero
+initial registers and still need their completeness proofs.
 
 Equations (43)–(47) were rechecked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`. Their honest-witness targets now require the exact Rust bytecode domain, including the leading no-op and power-of-two padding.
 
@@ -267,7 +270,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamValCheck — stage 4
 
-- [ ] (37) TODO: [RAM value from preceding increments](Constraints/RamValEqInitialPlusPrefixRamInc.lean)
+- [ ] (37) FIXME: [RAM value from preceding increments](Constraints/RamValEqInitialPlusPrefixRamInc.lean) — [Rust-accepted termination-word counterexample](../bug-report/ram-val-termination/README.md)
 - [ ] (38) TODO: [Final RAM value from all increments](Constraints/RamValFinalEqInitialPlusRamInc.lean)
 
 [Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135); [initial public RAM](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/preprocess/ram.rs#L134).
@@ -321,7 +324,7 @@ LookupRa(x,t) = ∏_{j=0}^{J−1} InstructionRa_j(v_j(x),t)
 
 ## RegistersValEvaluation — stage 5
 
-- [ ] (42) TODO: [Register value from preceding increments](Constraints/RegistersValEqPrefixRdInc.lean)
+- [x] (42) DONE: [Register value from preceding increments](Constraints/RegistersValEqPrefixRdInc.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs#L69).
 

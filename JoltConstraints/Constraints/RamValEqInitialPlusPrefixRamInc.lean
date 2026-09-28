@@ -16,12 +16,12 @@ def ramValEqInitialPlusPrefixRamInc {F : Type} [Field F] {params : WitnessParams
       ∑ cycle : Fin params.traceLength,
         if cycle.val < t.val then witness.RamRa address cycle * witness.RamInc cycle else 0
 
-/-- Completeness target for the honest witness; proof pending.
-FIXME (translation boundary): relate captured read values to the initialized
-memory and preceding stores, including Rust's device I/O readback. Linked
-successful ISA rows alone do not provide this memory-history invariant. Check
-whether Rust-valid device reads satisfy the equation before strengthening the
-Lean trace model or attempting this theorem. -/
+/-- Completeness target for the honest witness; blocked by a Rust completeness
+counterexample. A store to the termination word records an increment of one,
+but the device ignores that write and a later load reads zero. The Rust witness
+sets `RamVal` to that captured zero, violating the strict prefix sum. See
+`bug-report/ram-val-termination/README.md`. The Lean model preserves the same
+device behavior; do not narrow the theorem to exclude this Rust-accepted trace. -/
 theorem honestWitness_ramValEqInitialPlusPrefixRamInc
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)

@@ -72,6 +72,60 @@ wraparound, as tracked by [Jolt issue #1949](https://github.com/a16z/jolt/issues
 Therefore this proof under the current Lean trace type does not by itself
 establish unrestricted completeness for every Rust-accepted execution.
 
+## Constraint (37): termination-word RAM history
+
+Status: **Rust completeness issue**, reproduced at local Rust revision
+`3cb4e24361ae2006e9713ae65d58a3fa51fd0518` (clean tracked worktree;
+unrelated untracked `nvim.log`). See the
+[reproducer and values](../bug-report/ram-val-termination/README.md). A valid
+six-instruction ELF passes the Rust program builder, ordinary tracer,
+preprocessing, and compact proof-trace conversion. Its `SD` to the termination
+word captures old value zero and requested new value one; the following `LD`
+captures zero because the device ignores termination writes and always reads
+zero there. The Rust witness oracle gives `RamRa = 1`, `RamInc = 1` at the
+store, but `RamVal = 0` at the later load. Constraint (37)'s preceding sum is
+one. The concrete `RamValCheck` combination at `gamma = 7` has sides 7 and 8
+for that address and cycle. No full prover/verifier run was performed.
+
+The source inconsistency is between `Mmu::trace_store` recording the requested
+device-store value as its post-value, `JoltDevice::store` ignoring that write,
+and `TraceBackend::materialize_ram_val` advancing its accumulated image from
+the captured post-value before overriding a later load with its real read.
+Lean's device execution and RAM witness definitions agree with those Rust
+behaviors on this case, so this is not an observed translation mismatch.
+`ramAccessesValid` checks address alignment and nonzero access, not readback
+coherence. Do not add a premise that excludes this accepted execution merely
+to close the theorem. Keep (37) open while the Rust model and relation are
+reconciled; rerun the reproducer after a fix.
+
+## Constraint (42): register value from preceding increments
+
+Local Rust revision reviewed: `3cb4e24361ae2006e9713ae65d58a3fa51fd0518`
+(no tracked worktree changes; unrelated untracked `nvim.log`). In
+`crates/jolt-witness/src/backend/trace/registers.rs`, the register witness
+starts at zero, records the value before each row, and applies that row's
+captured destination write afterward. Padding retains the final value.
+`RdWa` selects the captured destination, and `RdInc` is the field difference
+between the post-state and pre-state destination values. The Rust relation
+adds selected increments from strictly earlier cycles.
+
+The honest-witness theorem is proved with its existing premises. The
+[instruction frame](Constraints/RegistersValProofHelpers.lean) shows that each
+final instruction preserves every other register, including JALR's PC update,
+memory operations, and live HostIO. The
+[history proof](Constraints/RegistersValHistoryProofHelpers.lean) connects the
+folded witness to the trace pre-state, uses row execution and trace linking to
+advance it, then proves that padding adds zero. A separate finite-sum lemma
+gives the same recurrence for the strict prefix sum. HostIO captures a
+destination without writing it, so its selected `RdInc` is zero. No new trace
+premise or heartbeat increase was introduced. The theorem's module and both
+helper modules build without `sorry`. Validation: `lake build JoltConstraints`
+passed (3,562 jobs), and a final targeted build of the theorem and helpers
+passed (3,489 jobs). `#print axioms` for the theorem reports no `sorryAx`;
+it lists the existing Sail platform axioms `load_reservation`,
+`match_reservation`, `plat_term_write`, and
+`sys_enable_experimental_extensions`, plus Lean's usual logical axioms.
+
 ## Fork replay and Rust correspondence — 28 September 2026
 
 This branch retains the fork's [native row rewrite](../JoltBytecode/JoltISA/Instruction.lean),
