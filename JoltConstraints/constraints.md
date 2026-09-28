@@ -8,7 +8,7 @@ unfinished proof or correspondence work, and `FIXME:` for a confirmed issue.
 This tracks proof status under each theorem's stated premises; it does not by
 itself establish that all Rust executions satisfy those premises. The Lean
 source and `#print axioms` were checked for the original 62 numbered targets.
-The current checklist has 53 proved targets, six `TODO:` targets, and three
+The current checklist has 56 proved targets, three `TODO:` targets, and three
 `FIXME:` targets.
 
 The `FIXME:` targets are (01), blocked by the confirmed
@@ -17,9 +17,8 @@ whose [taken self-branch counterexample](../bug-report/self-branch.md) leaves
 its unrestricted target as a statement rather than a theorem; and (37),
 blocked by the confirmed
 [termination-word RAM history bug](../bug-report/ram-val-termination/README.md).
-The six `TODO:` targets are (26), (34)–(36), (38), and (39). Among them,
-(26), (38), and (39) still need Rust–Lean correspondence checks, while the
-others need proof and trace-invariant work.
+The three `TODO:` targets are (26), (38), and (39); they still need Rust–Lean
+correspondence checks.
 
 Constraint (12) has a proved conditional completeness theorem requiring
 equality-assertion operands to match;
@@ -33,8 +32,8 @@ has a proved honest-witness theorem for padded traces; its proof has no
 validity conditions.
 The completeness theorem for constraint (22) explicitly requires at least one padding cycle, as Rust's
 trace-length calculation guarantees. The completeness theorem for (58) requires
-at least one RAM chunk. The remaining register selection targets require zero
-initial registers and still need their completeness proofs.
+at least one RAM chunk. The register targets (34)–(36) and (42) require zero
+initial registers.
 
 Equations (43)–(47) were rechecked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`. Their honest-witness targets now require the exact Rust bytecode domain, including the leading no-op and power-of-two padding.
 
@@ -252,9 +251,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RegistersReadWriteChecking — stage 4
 
-- [ ] (34) TODO: [Destination register write-value selection](Constraints/RdWriteValueEqRegistersReadWrite.lean)
-- [ ] (35) TODO: [First source register value selection](Constraints/Rs1ValueEqRegistersRead.lean)
-- [ ] (36) TODO: [Second source register value selection](Constraints/Rs2ValueEqRegistersRead.lean)
+- [x] (34) DONE: [Destination register write-value selection](Constraints/RdWriteValueEqRegistersReadWrite.lean)
+- [x] (35) DONE: [First source register value selection](Constraints/Rs1ValueEqRegistersRead.lean)
+- [x] (36) DONE: [Second source register value selection](Constraints/Rs2ValueEqRegistersRead.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs#L97).
 
