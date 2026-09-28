@@ -1,8 +1,29 @@
-# CSRRS: the honest witness fails the writeback constraint
+# CSRRS writeback completeness bug (fixed)
 
-Confirmed in [abiswas3/jolt, commit `e012da54`](https://github.com/abiswas3/jolt/commit/e012da54c3bb26a6436b5ca74e86c19bb39695ad), the remote `main` checked on 23 September 2026.
+> [!NOTE]
+> **Historical report; fixed in Jolt.** This counterexample was confirmed at
+> [commit `e012da54`](https://github.com/abiswas3/jolt/commit/e012da54c3bb26a6436b5ca74e86c19bb39695ad)
+> on 23 September 2026. Jolt fixed the `CSRRS x0, csr, x0` expansion in
+> [commit `f012bfb1`](https://github.com/abiswas3/jolt/commit/f012bfb17104b28b4e40aae57dbcd6030d9bce3e).
+> The counterexample below describes the old revision, not the current bug status.
 
-## Counterexample
+## Resolution in the local checkout
+
+At local Rust revision `922af71c7d7f646a336ff69dc386439b12ee0d0f`,
+`crates/jolt-program/src/expand/control_flow/csrrs.rs` checks `rs1 = x0` and
+`rd = x0` together and emits the canonical `ADDI x0, x0, 0`. The old row
+`ADDI x0, v39, 0` is no longer emitted for this source instruction. The fix
+includes the `csrrs_rd_zero_rs1_zero_becomes_noop_addi` regression test in
+`crates/jolt-program/src/expand/tests.rs`. This status update inspected the
+local source and test; it did not rerun the historical end-to-end reproducer.
+
+The matching Lean [constraint (13) theorem](../JoltConstraints/Constraints/RdWriteEqLookupIfWriteLookupToRd.lean)
+now has a proof for a valid Lean trace row. Its `#print axioms` output contains
+no `sorryAx`. Establishing that every Rust-expanded row satisfies the Lean
+program-row validity certificate remains separate work; this report does not
+claim that full source-to-row correspondence has been proved.
+
+## Counterexample at the tested revision
 
 Start with Rust’s `Cpu::new`, allocate 4096 bytes of RAM, place these four instructions consecutively starting at `0x80000000`, and set `PC = 0x80000000` (the address of the first `addi` instruction). After each `Cpu::tick`, compare the PC with its value immediately before that tick. Stop if the two values are equal. Witness construction supplies padding after execution ends.
 
@@ -64,11 +85,11 @@ This is part of **stage 1, `SpartanOuter`**. Its [first-round sumcheck starts wi
 
 For this constraint and execution row, the R1CS factors are `Az = 1`, `Bz = 0 − 9`, and `Cz = 0`. Thus its local R1CS residual is `−9`. This is the individual constraint failure being reported, not a claim that the full, challenge-weighted sumcheck value equals `−9`.
 
-## Why this is a completeness bug
+## Why this was a completeness bug at the tested revision
 
 Completeness requires that the witness produced honestly from an allowed execution satisfy the constraints. In this example, Rust accepts the execution and proof-trace conversion, but the generated row fails this constraint. Changing the captured destination to `9` would misrepresent x0; changing the lookup output to `0` would misrepresent the addition.
 
-The check ran the Rust CPU, `build_trace_rows`, the actual witness extractors, and row 12 of `rv64_spartan_outer_constraints::<Fr>()`. It used the emitted final instructions for bytecode preprocessing. An end-to-end prover/verifier run was not performed. The established bug is the honest-witness/constraint inconsistency; this is not evidence that an invalid proof can be accepted.
+The historical check ran the Rust CPU, `build_trace_rows`, the actual witness extractors, and row 12 of `rv64_spartan_outer_constraints::<Fr>()`. It used the emitted final instructions for bytecode preprocessing. An end-to-end prover/verifier run was not performed. The bug at that revision was the honest-witness/constraint inconsistency; this is not evidence that an invalid proof can be accepted.
 
 The Lean CSRRS execution-equivalence theorem can still hold: both executions correctly discard the write to x0. That theorem does not establish witness constraint satisfaction.
 
