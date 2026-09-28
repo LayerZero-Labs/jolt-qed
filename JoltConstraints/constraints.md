@@ -8,7 +8,7 @@ unfinished proof or correspondence work, and `FIXME:` for a confirmed issue.
 This tracks proof status under each theorem's stated premises; it does not by
 itself establish that all Rust executions satisfy those premises. The Lean
 source and `#print axioms` were checked for the original 62 numbered targets.
-The current checklist has 56 proved targets, three `TODO:` targets, and three
+The current checklist has 57 proved targets, two `TODO:` targets, and three
 `FIXME:` targets.
 
 The `FIXME:` targets are (01), blocked by the confirmed
@@ -17,7 +17,7 @@ whose [taken self-branch counterexample](../bug-report/self-branch.md) leaves
 its unrestricted target as a statement rather than a theorem; and (37),
 blocked by the confirmed
 [termination-word RAM history bug](../bug-report/ram-val-termination/README.md).
-The three `TODO:` targets are (26), (38), and (39); they still need Rust–Lean
+The two `TODO:` targets are (38) and (39); they still need Rust–Lean
 correspondence checks.
 
 Constraint (12) has a proved conditional completeness theorem requiring
@@ -33,7 +33,10 @@ validity conditions.
 The completeness theorem for constraint (22) explicitly requires at least one padding cycle, as Rust's
 trace-length calculation guarantees. The completeness theorem for (58) requires
 at least one RAM chunk. The register targets (34)–(36) and (42) require zero
-initial registers.
+initial registers. Constraint (26) requires the initial device to satisfy
+`JoltIOLayout.Valid` (aligned advice regions ending at or below `input_start`)
+and `JoltIOState.AdviceFits` (each advice buffer fits its region); Rust's
+`MemoryLayout::new` and `create_emulator` enforce both.
 
 Equations (43)–(47) were rechecked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`. Their honest-witness targets now require the exact Rust bytecode domain, including the leading no-op and power-of-two padding.
 
@@ -41,8 +44,8 @@ The remaining equations (23)–(26), (37)–(38), (40)–(41), (48)–(53), and 
 were also checked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`.
 This checklist covers the base RV64 relations; optional `akita` relations,
 including its extra instruction-address canonicality condition, are outside it.
-The final RAM and public-I/O completeness targets still need memory-history,
-layout, and termination assumptions. Constraint (53) takes the public entry slot
+The final-RAM completeness target (38) still needs memory-history and
+termination assumptions. Constraint (53) takes the public entry slot
 explicitly and requires the trace to start there. Constraint (50) selects the
 destination recorded in the final bytecode row, including x0. The
 [`JoltTraceRow` load-capture condition](trace.lean) separately requires a load's
@@ -190,7 +193,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamOutputCheck — stage 2
 
-- [ ] (26) TODO: [Public RAM output](Constraints/RamOutputEqPublicIo.lean)
+- [x] (26) DONE: [Public RAM output](Constraints/RamOutputEqPublicIo.lean)
 
 [Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs#L115); [public arrays](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/preprocess/public_io.rs#L20).
 

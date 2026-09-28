@@ -12,6 +12,38 @@ Rust: https://github.com/abiswas3/jolt/tree/main/common/src/jolt_device.rs#L491-
 def ramLowestAddress (layout : JoltIOLayout) : Nat :=
   min layout.trustedAdvice.1.toNat layout.untrustedAdvice.1.toNat
 
+/-- The part of Rust's memory-layout invariant used so far: both advice regions
+are well formed and end at or below `input_start`, and the advice and input
+starts are 8-byte aligned. Extend this structure with further Rust-enforced
+layout facts as later theorems need them.
+
+Rust constructs every layout with `MemoryLayout::new`: the advice sizes are
+rounded up to multiples of 8; the lower advice region starts at
+`RAM_START_ADDRESS - io_bytes`, where `io_bytes` is a multiple of 8; the other
+advice region starts at the first one's end; and `input_start` is the larger
+advice end. Every addition is checked, so each end is at least its start.
+Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/common/src/jolt_device.rs#L370-L438 -/
+structure _root_.JoltIOLayout.Valid (layout : JoltIOLayout) : Prop where
+  trustedAdviceAligned : layout.trustedAdvice.1.toNat % 8 = 0
+  untrustedAdviceAligned : layout.untrustedAdvice.1.toNat % 8 = 0
+  inputAligned : layout.input.1.toNat % 8 = 0
+  trustedAdviceOrdered : layout.trustedAdvice.1.toNat ≤ layout.trustedAdvice.2.toNat
+  untrustedAdviceOrdered : layout.untrustedAdvice.1.toNat ≤ layout.untrustedAdvice.2.toNat
+  trustedAdviceBelowInput : layout.trustedAdvice.2.toNat ≤ layout.input.1.toNat
+  untrustedAdviceBelowInput : layout.untrustedAdvice.2.toNat ≤ layout.input.1.toNat
+
+/-- Each advice buffer fits its layout region. Rust's `create_emulator` rejects
+longer advice before building the device, and `MemoryLayout::new` sizes each
+region to the configured maximum rounded up to a multiple of 8.
+Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/tracer/src/lib.rs#L382-L393
+and https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/common/src/jolt_device.rs#L370-L371 -/
+structure _root_.JoltIOState.AdviceFits (io : JoltIOState) : Prop where
+  trustedAdvice :
+    io.trustedAdvice.size ≤ io.layout.trustedAdvice.2.toNat - io.layout.trustedAdvice.1.toNat
+  untrustedAdvice :
+    io.untrustedAdvice.size ≤
+      io.layout.untrustedAdvice.2.toNat - io.layout.untrustedAdvice.1.toNat
+
 /-- The initial RAM image, including public inputs and both advice buffers.
 Advice words are execution inputs, not additional public constants. Reuse the
 existing image encoding; this function does not execute instructions.
@@ -22,7 +54,7 @@ noncomputable def ramInitialValue {F : Type} [Field F]
 
 /-- Public I/O mask: remapped words from input_start up to RAM_START_ADDRESS,
 excluding RAM_START_ADDRESS. As in Rust preprocessing, the layout must be valid;
-layout admissibility is a separate completeness obligation.
+completeness theorems assume the relevant part as `JoltIOLayout.Valid`.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-program/src/preprocess/public_io.rs#L20-L25 -/
 def ramPublicIoMask {F : Type} [Field F] (io : JoltIOState) (address : Nat) : F :=
   let lowest := ramLowestAddress io.layout
