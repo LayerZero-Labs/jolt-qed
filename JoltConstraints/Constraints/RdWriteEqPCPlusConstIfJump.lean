@@ -58,8 +58,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           rw [hinst]
           exact jump_jal_link dst imm _ row.preState row.postState hwritable hnext hexec
         have hend : bc.continues = false := by
-          simpa [JoltProgram.JumpAtSourceEnd, hinstNat] using
-            trace.jumpAtSourceEnd row.rowIndex
+          simpa [hinstNat] using row.validProgramRow.jumpAtSourceEnd
         have hlen := jump_sourceLength_at_end program trace.sequenceLayout
           row.rowIndex hend
         have hnoWrap : bc.address.toNat + (if bc.isCompressed then 2 else 4) < 2 ^ 64 := by
@@ -120,8 +119,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           rw [hinst]
           exact jump_jalr_link dst base imm _ row.preState row.postState hwritable hnext hexec
         have hend : bc.continues = false := by
-          simpa [JoltProgram.JumpAtSourceEnd, hinstNat] using
-            trace.jumpAtSourceEnd row.rowIndex
+          simpa [hinstNat] using row.validProgramRow.jumpAtSourceEnd
         have hlen := jump_sourceLength_at_end program trace.sequenceLayout
           row.rowIndex hend
         have hnoWrap : bc.address.toNat + (if bc.isCompressed then 2 else 4) < 2 ^ 64 := by

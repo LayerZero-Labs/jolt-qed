@@ -31,6 +31,8 @@ def JoltISA.Instr.HostIOPCFrame (instruction : JoltISA.Instr)
 -- capture_post_execution_state}; Lean retains full ISA states, not just captured operands.
 structure JoltTraceRow (program : JoltProgram) where
   rowIndex : Fin program.expandedBytecode.size
+  -- Includes the requirement that a JAL/JALR inside an expansion is its last row.
+  -- The deferred source-to-row proof is `JoltProgram.rowValid` in `JoltConstraints/program.lean`.
   validProgramRow : program.expandedBytecode[rowIndex].Valid :=
     program.rowValid rowIndex
   -- Rust patches VirtualAdvice.advice on a per-execution copy of the row.
@@ -88,8 +90,6 @@ structure JoltTrace (program : JoltProgram) where
     program.initialState = init_state entry ram io tape hostIO
   noEarlyNextPCChange : program.NoEarlyNextPCChange :=
     JoltProgram.noEarlyNextPCChange program
-  jumpAtSourceEnd : program.JumpAtSourceEnd :=
-    JoltProgram.jumpAtSourceEnd program
   startsAtEntry : ∀ h : 0 < rows.size,
     let first := getElem rows 0 h
     program.expandedBytecode[first.rowIndex].isEntry ∧

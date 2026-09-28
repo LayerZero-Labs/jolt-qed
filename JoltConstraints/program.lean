@@ -114,16 +114,27 @@ structure JoltProgramRow where
 def JoltProgramRow.expandedInstruction (row : JoltProgramRow) : JoltISA.Instr :=
   finalProgramRowInstruction row.inputInstruction row.virtualSequenceRemaining
 
+def JoltProgramRow.continues (row : JoltProgramRow) : Bool :=
+  row.virtualSequenceRemaining.getD 0 != 0
+
 def JoltISA.Dst.NotX0 : JoltISA.Dst → Prop
   | .xreg rd => JoltISA.isX0 rd = false
   | .vreg _ => True
 
--- TODO: We have to show this is true. In Jolt JAL can never
+/-- Row-local conditions for final Jolt bytecode. A jump must have a writable
+destination and, when emitted inside an expansion, be its last row. A rewritten
+native jump has only one row, so the latter condition is automatic there.
+A write to x0 must be the canonical no-op. The deferred source-to-row proof
+is `JoltProgram.rowValid` below in `JoltConstraints/program.lean`. -/
 structure JoltProgramRow.Valid (row : JoltProgramRow) : Prop where
   jumpDestinationWritable :
     match row.expandedInstruction with
     | .JAL dst _ => dst.NotX0
     | .JALR dst _ _ => dst.NotX0
+    | _ => True
+  jumpAtSourceEnd :
+    match row.expandedInstruction with
+    | .JAL .. | .JALR .. => row.continues = false
     | _ => True
   x0DestinationIsNoOp :
     ∀ rd, row.expandedInstruction.destination? = some (.xreg rd) →
@@ -152,9 +163,6 @@ structure JoltProgram where
 
 namespace JoltProgramRow
 
-def continues (row : JoltProgramRow) : Bool :=
-  row.virtualSequenceRemaining.getD 0 != 0
-
 def isEntry (row : JoltProgramRow) : Prop :=
   row.virtualSequenceRemaining = none ∨ row.isFirstInSequence = true
 
@@ -162,13 +170,21 @@ end JoltProgramRow
 
 namespace JoltProgram
 
--- FIXME: This is false for arbitrary JoltProgram arrays. Link program rows to
--- their source-instruction translation, then prove validity for its output.
+-- FIXME: `expandedBytecode` is currently an arbitrary array of final rows.
+-- Model in detail the Rust pipeline that rewrites native source instructions,
+-- expands unsupported ones, and supplies those generated rows to the tracer.
+-- Then make `JoltProgram` record that construction and prove validity for its
+-- output. In particular, an expansion must emit JAL/JALR only as its last row;
+-- a rewritten native jump is already a single row.
 theorem rowValid (program : JoltProgram)
     (i : Fin program.expandedBytecode.size) :
     program.expandedBytecode[i].Valid := by
   sorry
 
+/-- Executing a non-final row of an expansion does not change the pending
+`nextPC`; the next row still belongs to the same source instruction. The
+deferred proof from source translation is `JoltProgram.noEarlyNextPCChange`
+below. -/
 def NoEarlyNextPCChange (program : JoltProgram) : Prop :=
   ∀ i : Fin program.expandedBytecode.size,
     program.expandedBytecode[i].continues = true →
@@ -187,23 +203,19 @@ theorem noEarlyNextPCChange (program : JoltProgram) :
     program.NoEarlyNextPCChange := by
   sorry
 
-def JumpAtSourceEnd (program : JoltProgram) : Prop :=
-  ∀ i : Fin program.expandedBytecode.size,
-    match program.expandedBytecode[i].expandedInstruction with
-    | .JAL .. | .JALR .. => program.expandedBytecode[i].continues = false
-    | _ => True
-
--- TODO: Prove this for translated JoltProgram values once their source-to-Jolt-ISA
--- structure is modeled.
-theorem jumpAtSourceEnd (program : JoltProgram) :
-    program.JumpAtSourceEnd := by
-  sorry
-
+/-- Layout of final rows produced by Rust's expander and used by its tracer.
+TODO: Once `JoltProgram` records the source-to-row construction and accepted
+bytecode, derive these layout properties from it instead of assuming them for
+an arbitrary array. `addressAdvanceNoWrap` remains a separate temporary
+assumption pending the upstream fix noted below. -/
 structure SequenceLayout (program : JoltProgram) : Prop where
   endInBounds : ∀ i : Fin program.expandedBytecode.size,
     i.val + (program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat <
       program.expandedBytecode.size
-  -- WARNING: Check whether Rust accepts a program whose source PC advance wraps past u64::MAX.
+  -- WARNING: Rust currently allows the source PC advance to wrap past u64::MAX,
+  -- while this predicate assumes that it does not wrap. The mismatch is tracked
+  -- in https://github.com/a16z/jolt/issues/1949. We retain this assumption
+  -- for now, anticipating that Jolt will fix the wraparound behavior.
   addressAdvanceNoWrap : ∀ i : Fin program.expandedBytecode.size,
     let last := i.val + (program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat
     program.expandedBytecode[i].address.toNat +
