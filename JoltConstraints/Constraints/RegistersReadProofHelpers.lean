@@ -16,7 +16,7 @@ namespace JoltConstraints
 
 /-- First source register read by an instruction, matching `HonestWitness.Rs1Ra`.
 Alignment assertions read their base register through this operand. -/
-def register35_rs1? : JoltISA.Instr → Option JoltISA.Src
+def rs1Operand? : JoltISA.Instr → Option JoltISA.Src
   | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _ | .XORI _ src _
   | .SLTI _ src _ | .SLTIU _ src _ | .JALR _ src _ | .BEQ src _ _ | .BNE src _ _
   | .BLT src _ _ | .BGE src _ _ | .BLTU src _ _ | .BGEU src _ _ | .ADD _ src _
@@ -45,7 +45,7 @@ def register35_rs1? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
 /-- Second source register read by an instruction, matching `HonestWitness.Rs2Ra`. -/
-def register36_rs2? : JoltISA.Instr → Option JoltISA.Src
+def rs2Operand? : JoltISA.Instr → Option JoltISA.Src
   | .BEQ _ src _ | .BNE _ src _ | .BLT _ src _ | .BGE _ src _ | .BLTU _ src _ | .BGEU _ src _
   | .ADD _ _ src | .ADDW _ _ src | .SUB _ _ src | .SUBW _ _ src | .MUL _ _ src
   | .MULW _ _ src | .MULHU _ _ src | .ANDN _ _ src | .VirtualSRL _ _ src
@@ -74,23 +74,23 @@ def register36_rs2? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ | .VirtualAdviceLen _ _ _
   | .VirtualHostIO _ _ _ => none
 
-theorem register35_rs1_canonical
+theorem rs1Operand_canonical
     (instr : JoltISA.Instr) (src : JoltISA.Src)
     (hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true)
-    (hsrc : register35_rs1? instr = some src) :
+    (hsrc : rs1Operand? instr = some src) :
     JoltRegisterEncoding.sourceIsCanonical src = true := by
   cases instr <;>
-    simp_all [register35_rs1?, JoltRegisterEncoding.instructionIsCanonical]
+    simp_all [rs1Operand?, JoltRegisterEncoding.instructionIsCanonical]
 
-theorem register36_rs2_canonical
+theorem rs2Operand_canonical
     (instr : JoltISA.Instr) (src : JoltISA.Src)
     (hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true)
-    (hsrc : register36_rs2? instr = some src) :
+    (hsrc : rs2Operand? instr = some src) :
     JoltRegisterEncoding.sourceIsCanonical src = true := by
   cases instr <;>
-    simp_all [register36_rs2?, JoltRegisterEncoding.instructionIsCanonical]
+    simp_all [rs2Operand?, JoltRegisterEncoding.instructionIsCanonical]
 
-theorem register35_canonical_source_vreg_ge32 (vr : JoltISA.VReg)
+theorem canonicalSource_vreg_ge32 (vr : JoltISA.VReg)
     (hcanon : JoltRegisterEncoding.sourceIsCanonical (.vreg vr) = true) :
     32 ≤ vr.toNat := by
   by_contra hlt
@@ -101,7 +101,7 @@ theorem register35_canonical_source_vreg_ge32 (vr : JoltISA.VReg)
 
 /-- A canonical source is recovered from its witness address.
 Architectural registers use addresses below 32; canonical virtual ones do not. -/
-theorem register35_srcOfSourceAddress (src : JoltISA.Src)
+theorem srcOfAddress_sourceRegisterAddress (src : JoltISA.Src)
     (hcanon : JoltRegisterEncoding.sourceIsCanonical src = true) :
     register42_srcOfAddress (HonestWitness.sourceRegisterAddress src) = src := by
   cases src with
@@ -119,17 +119,17 @@ theorem register35_srcOfSourceAddress (src : JoltISA.Src)
           simp [register42_srcOfAddress, haddr, hlt]
           exact hlt
   | vreg vr =>
-      have hge := register35_canonical_source_vreg_ge32 vr hcanon
+      have hge := canonicalSource_vreg_ge32 vr hcanon
       simp [register42_srcOfAddress,
         HonestWitness.sourceRegisterAddress, hge]
 
-theorem register35_Rs1Ra_real
+theorem rs1Ra_real
     {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size)
     (register : Fin 128) :
     HonestWitness.Rs1Ra (F := F) p trace register t =
-      match register35_rs1?
+      match rs1Operand?
           program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction with
       | some src =>
           if register = HonestWitness.sourceRegisterAddress src then 1 else 0
@@ -138,14 +138,14 @@ theorem register35_Rs1Ra_real
   simp only [dif_pos hb]
   cases instr :
       program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
-    simp [register35_rs1?]
+    simp [rs1Operand?]
 
-theorem register35_Rs1Value_real
+theorem rs1Value_real
     {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size) :
     HonestWitness.Rs1Value (F := F) p trace t =
-      match register35_rs1?
+      match rs1Operand?
           program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction with
       | some src => ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F)
       | none => 0 := by
@@ -153,15 +153,15 @@ theorem register35_Rs1Value_real
   simp only [dif_pos hb]
   cases instr :
       program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
-    simp [register35_rs1?]
+    simp [rs1Operand?]
 
-theorem register36_Rs2Ra_real
+theorem rs2Ra_real
     {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size)
     (register : Fin 128) :
     HonestWitness.Rs2Ra (F := F) p trace register t =
-      match register36_rs2?
+      match rs2Operand?
           program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction with
       | some src =>
           if register = HonestWitness.sourceRegisterAddress src then 1 else 0
@@ -170,14 +170,14 @@ theorem register36_Rs2Ra_real
   simp only [dif_pos hb]
   cases instr :
       program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
-    simp [register36_rs2?]
+    simp [rs2Operand?]
 
-theorem register36_Rs2Value_real
+theorem rs2Value_real
     {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size) :
     HonestWitness.Rs2Value (F := F) p trace t =
-      match register36_rs2?
+      match rs2Operand?
           program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction with
       | some src => ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F)
       | none => 0 := by
@@ -185,11 +185,11 @@ theorem register36_Rs2Value_real
   simp only [dif_pos hb]
   cases instr :
       program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
-    simp [register36_rs2?]
+    simp [rs2Operand?]
 
 /-- On a real row, the replayed history of a canonical source register is the
 source value in the row's pre-state. -/
-theorem register35_registersVal_source
+theorem registersVal_source_eq_preState
     {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (traceFits : p.ProverPaddedFor trace.rows.size)
@@ -201,7 +201,7 @@ theorem register35_registersVal_source
       ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F) := by
   have h := register42_registersVal_preState (F := F) p trace traceFits
     initialRegistersZero (HonestWitness.sourceRegisterAddress src) t.val hb
-  rw [register35_srcOfSourceAddress src hcanon] at h
+  rw [srcOfAddress_sourceRegisterAddress src hcanon] at h
   exact h
 
 end JoltConstraints

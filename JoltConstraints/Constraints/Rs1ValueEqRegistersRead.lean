@@ -42,24 +42,24 @@ theorem honestWitness_rs1ValueEqRegistersRead
   · let instr := program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction
     have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
       program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].registerOperandsCanonical
-    have hra := register35_Rs1Ra_real (F := F) params trace t hb
-    rw [register35_Rs1Value_real (F := F) params trace t hb]
-    change (match register35_rs1? instr with
+    have hra := rs1Ra_real (F := F) params trace t hb
+    rw [rs1Value_real (F := F) params trace t hb]
+    change (match rs1Operand? instr with
       | some src => ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F)
       | none => 0) = _
     change ∀ register, HonestWitness.Rs1Ra (F := F) params trace register t =
-      match register35_rs1? instr with
+      match rs1Operand? instr with
       | some src => if register = HonestWitness.sourceRegisterAddress src then 1 else 0
       | none => 0 at hra
     simp only [hra]
-    cases hs : register35_rs1? instr with
+    cases hs : rs1Operand? instr with
     | none => simp
     | some src =>
         simp only [ite_mul, one_mul, zero_mul]
         rw [Finset.sum_ite_eq' Finset.univ (HonestWitness.sourceRegisterAddress src)]
         simp only [Finset.mem_univ, ↓reduceIte]
-        rw [register35_registersVal_source (F := F) params trace traceFits
-          initialRegistersZero t hb src (register35_rs1_canonical instr src hcanon hs)]
+        rw [registersVal_source_eq_preState (F := F) params trace traceFits
+          initialRegistersZero t hb src (rs1Operand_canonical instr src hcanon hs)]
   · simp [HonestWitness.Rs1Value, HonestWitness.Rs1Ra, hb]
 
 end JoltConstraints
