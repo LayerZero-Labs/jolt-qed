@@ -2,7 +2,7 @@
 
 ## Source of truth for Rust comparisons
 
-Scan the local Jolt checkout at `/Users/ari.biswas/Work-with-A16z/jolt` when
+Scan the local Jolt checkout at `/Users/francis/Work-With-A16z/jolt` when
 reviewing a constraint or its witness and trace definitions. GitHub links in
 `constraints.md` and Lean comments are documentation pointers; they are not a
 substitute for inspecting the corresponding local Rust files. Record the local
@@ -44,6 +44,33 @@ would exclude this accepted Rust execution, so it should not be added merely
 to discharge the theorem. Resolve the Rust behavior or circuit relation before
 marking (01) closed. This is a proof-completeness issue: a trace admitted by
 the emulator cannot satisfy this constraint with its honest witness.
+
+## Constraint (17): next source address on other rows
+
+Local Rust revision reviewed: `922af71c7d7f646a336ff69dc386439b12ee0d0f`
+(no tracked worktree changes; unrelated untracked `nvim.log`). The stage-1 row
+in `crates/jolt-r1cs/src/constraints/rv64.rs` agrees with Lean's
+`nextUnexpandedPCUpdateOtherwise`: the guard is `1 − ShouldBranch − Jump`,
+and the expected next address is `UnexpandedPC + 4 − 4·DoNotUpdateUnexpandedPC
+− 2·IsCompressed`. The Rust and Lean witness definitions both use the next
+trace row's source address, or zero at padding. Rust's padding no-op and Lean's
+padding flags both set only `DoNotUpdateUnexpandedPC` among these terms.
+
+The honest-witness theorem is proved from the existing trace premises. Padding
+and nonfinal expansion rows satisfy the equation directly. On a final row that
+is neither a jump nor a taken branch, `row.executes` gives the nextPC frame:
+ordinary instructions, loads, stores, and live HostIO are covered. The reusable
+Sail byte-read helpers prove that a successful HostIO byte read leaves the Sail
+state unchanged even when it returns a memory fault. Trace successor/layout
+then identifies the next source address. For the last execution row, the
+nextPC frame contradicts the tracer's repeated-PC termination condition, so
+an ordinary final row cannot be last. The theorem statement has no new premise.
+
+The trace's `SequenceLayout.addressAdvanceNoWrap` is a temporary assumption
+already present in the theorem through `JoltTrace`. Rust still allows source-PC
+wraparound, as tracked by [Jolt issue #1949](https://github.com/a16z/jolt/issues/1949).
+Therefore this proof under the current Lean trace type does not by itself
+establish unrestricted completeness for every Rust-accepted execution.
 
 ## Fork replay and Rust correspondence — 28 September 2026
 
@@ -112,8 +139,8 @@ are **deferred work or documented modeling choices**, not established proofs.
 
 | Site | Deferred work or decision |
 | --- | --- |
-| [program.lean](program.lean), two `FIXME`s | `rowValid` and `noEarlyNextPCChange` use `sorry` and are false for arbitrary arrays. Connect rows to Rust source expansion, then prove the claims for those outputs. |
-| [program.lean](program.lean), `WARNING` | Check whether Rust accepts a source PC advance wrapping past `u64::MAX`; align the source-length boundary if needed. |
+| [program.lean](program.lean), two `FIXME`s | `rowValid` (including writable jump destinations, canonical x0 writes, and jumps at the end of expansions) and `noEarlyNextPCChange` use `sorry` and are false for arbitrary arrays. Connect rows to Rust source expansion and native rewrites, then prove the claims for those outputs. |
+| [program.lean](program.lean), `WARNING` | Rust currently permits source-PC wraparound; `SequenceLayout.addressAdvanceNoWrap` is a temporary assumption pending the fix tracked by [Jolt issue #1949](https://github.com/a16z/jolt/issues/1949). |
 | [trace.lean](trace.lean), `FIXME` | Derive `hostIOPreservesPC` from live `execInstr` by proving Sail byte reads preserve `PC`; it is currently an explicit trace-row obligation. |
 | [LookupOutputEqInstructionReadRaf.lean](Constraints/LookupOutputEqInstructionReadRaf.lean), `FIXME` | Connect each now-defined fixed table entry to `HonestWitness.rowLookupOutput` for execution rows. |
 | [RamValEqInitialPlusPrefixRamInc.lean](Constraints/RamValEqInitialPlusPrefixRamInc.lean), `FIXME` | Relate captured RAM reads to initialized memory and prefix RAM history. |

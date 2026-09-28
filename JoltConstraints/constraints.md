@@ -1,16 +1,33 @@
 # Jolt constraints
 
-Source: the base RV64 relations at [Rust commit `e012da54`](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-r1cs/src/constraints/rv64.rs). The Rust files cited below are unchanged in the local checkout at `7dfe8a0f829a4ab3e9126eb5ac5b5b15208cf5fc`.
+Source: the base RV64 relations at [Rust commit `e012da54`](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-r1cs/src/constraints/rv64.rs). GitHub links are documentation pointers; reviews of current behavior must scan the local Jolt checkout.
 
-A checked box means that the named Lean constraint predicate exists; it does
-not certify its supporting witness/table definitions or a completeness proof.
-Most completeness targets still use `sorry`. Constraint (12) has a proved
-conditional completeness theorem requiring equality-assertion operands to match;
+A checked box means the stated honest-witness theorem is proved in Lean without
+`sorryAx`. The status labels are `DONE:` for a checked proof, `TODO:` for
+unfinished proof or correspondence work, and `FIXME:` for a confirmed issue.
+This tracks proof status under each theorem's stated premises; it does not by
+itself establish that all Rust executions satisfy those premises. The Lean
+source and `#print axioms` were checked for all 62 numbered targets: 52 are
+`DONE:`, eight are `TODO:`, and two are `FIXME:`.
+
+The `FIXME:` targets are (01), blocked by the confirmed
+[wrapping-load completeness bug](../bug-report/ram-address-wrap.md), and (16),
+whose [taken self-branch counterexample](../bug-report/self-branch.md) leaves
+its unrestricted target as a statement rather than a theorem. The eight `TODO:`
+targets are (26), (34)–(39), and (42); none is classified as a confirmed
+Jolt bug. Among them, (26), (37)–(39) still need Rust–Lean correspondence
+checks, while the others need proof and trace-invariant work.
+
+Constraint (12) has a proved conditional completeness theorem requiring
+equality-assertion operands to match;
 Rust's intentionally unsatisfiable spoil execution makes the unrestricted claim
-false. The unrestricted targets for (13) and (16) are proposition definitions,
-not proved or admitted theorems: the Rust behaviors recorded in
-[model_review.md](model_review.md) contradict those claims. Some other targets
-need additional program/trace validity conditions.
+false. Constraint (13) has a proved theorem for valid Lean trace rows; the
+historical Rust counterexample was fixed in Jolt, as recorded in the
+[CSRRS report](../bug-report/issue.md). Deriving Lean's program-row validity
+certificate from every Rust expansion remains separate work. Constraint (15)
+has a proved honest-witness theorem for padded traces; its proof has no
+`sorryAx` dependency. Some other targets need additional program/trace
+validity conditions.
 The completeness theorem for constraint (22) explicitly requires at least one padding cycle, as Rust's
 trace-length calculation guarantees. The completeness theorem for (58) requires
 at least one RAM chunk. The register completeness targets require zero initial
@@ -52,25 +69,25 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanOuter — stage 1
 
-- [x] (01) [RAM address for loads and stores](Constraints/RamAddrEqRs1PlusImmIfLoadStore.lean)
-- [x] (02) [Zero RAM address for other instructions](Constraints/RamAddrEqZeroIfNotLoadStore.lean)
-- [x] (03) [Loads preserve RAM](Constraints/RamReadEqRamWriteIfLoad.lean)
-- [x] (04) [Loads copy RAM to the destination](Constraints/RamReadEqRdWriteIfLoad.lean)
-- [x] (05) [Stores copy the second source to RAM](Constraints/Rs2EqRamWriteIfStore.lean)
-- [x] (06) [Zero left lookup operand for add/subtract/multiply](Constraints/LeftLookupZeroIfAddSubMul.lean)
-- [x] (07) [Left lookup operand for other modes](Constraints/LeftLookupEqLeftInputOtherwise.lean)
-- [x] (08) [Addition lookup operand](Constraints/RightLookupAdd.lean)
-- [x] (09) [Subtraction lookup operand](Constraints/RightLookupSub.lean)
-- [x] (10) [Multiplication lookup operand](Constraints/RightLookupEqProductIfMul.lean)
-- [x] (11) [Right lookup operand for other modes](Constraints/RightLookupEqRightInputOtherwise.lean)
-- [x] (12) [Assertion lookup output](Constraints/AssertLookupOne.lean)
-- [x] (13) [Write lookup output to the destination](Constraints/RdWriteEqLookupIfWriteLookupToRd.lean)
-- [x] (14) [Jump return address](Constraints/RdWriteEqPCPlusConstIfJump.lean)
-- [x] (15) [Next address after a jump](Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean)
-- [x] (16) [Next address after a taken branch](Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean)
-- [x] (17) [Next address for other rows](Constraints/NextUnexpandedPCUpdateOtherwise.lean)
-- [x] (18) [Next expanded PC within a virtual sequence](Constraints/NextPCEqPCPlusOneIfInline.lean)
-- [x] (19) [Start virtual sequences at their beginning](Constraints/MustStartSequenceFromBeginning.lean)
+- [ ] (01) FIXME: [RAM address for loads and stores](Constraints/RamAddrEqRs1PlusImmIfLoadStore.lean)
+- [x] (02) DONE: [Zero RAM address for other instructions](Constraints/RamAddrEqZeroIfNotLoadStore.lean)
+- [x] (03) DONE: [Loads preserve RAM](Constraints/RamReadEqRamWriteIfLoad.lean)
+- [x] (04) DONE: [Loads copy RAM to the destination](Constraints/RamReadEqRdWriteIfLoad.lean)
+- [x] (05) DONE: [Stores copy the second source to RAM](Constraints/Rs2EqRamWriteIfStore.lean)
+- [x] (06) DONE: [Zero left lookup operand for add/subtract/multiply](Constraints/LeftLookupZeroIfAddSubMul.lean)
+- [x] (07) DONE: [Left lookup operand for other modes](Constraints/LeftLookupEqLeftInputOtherwise.lean)
+- [x] (08) DONE: [Addition lookup operand](Constraints/RightLookupAdd.lean)
+- [x] (09) DONE: [Subtraction lookup operand](Constraints/RightLookupSub.lean)
+- [x] (10) DONE: [Multiplication lookup operand](Constraints/RightLookupEqProductIfMul.lean)
+- [x] (11) DONE: [Right lookup operand for other modes](Constraints/RightLookupEqRightInputOtherwise.lean)
+- [x] (12) DONE: [Assertion lookup output](Constraints/AssertLookupOne.lean)
+- [x] (13) DONE: [Write lookup output to the destination](Constraints/RdWriteEqLookupIfWriteLookupToRd.lean)
+- [x] (14) DONE: [Jump return address](Constraints/RdWriteEqPCPlusConstIfJump.lean)
+- [x] (15) DONE: [Next address after a jump](Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean)
+- [ ] (16) FIXME: [Next address after a taken branch](Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean)
+- [x] (17) DONE: [Next address for other rows](Constraints/NextUnexpandedPCUpdateOtherwise.lean)
+- [x] (18) DONE: [Next expanded PC within a virtual sequence](Constraints/NextPCEqPCPlusOneIfInline.lean)
+- [x] (19) DONE: [Start virtual sequences at their beginning](Constraints/MustStartSequenceFromBeginning.lean)
 
 [Rust: the 19 equality-conditional rows](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-r1cs/src/constraints/rv64.rs#L121).
 
@@ -125,9 +142,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanProductVirtualization — stage 2
 
-- [x] (20) [Product of instruction inputs](Constraints/ProductEqLeftInputMulRightInput.lean)
-- [x] (21) [ShouldBranch product](Constraints/ShouldBranchEqLookupOutputMulBranch.lean)
-- [x] (22) [ShouldJump product](Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean)
+- [x] (20) DONE: [Product of instruction inputs](Constraints/ProductEqLeftInputMulRightInput.lean)
+- [x] (21) DONE: [ShouldBranch product](Constraints/ShouldBranchEqLookupOutputMulBranch.lean)
+- [x] (22) DONE: [ShouldJump product](Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean)
 
 [Rust: the three product rows](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-r1cs/src/constraints/rv64.rs#L367); [sumcheck](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/spartan/product_remainder.rs).
 
@@ -143,8 +160,8 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamReadWriteChecking — stage 2
 
-- [x] (23) [RAM read-value selection](Constraints/RamReadValueEqRamRead.lean)
-- [x] (24) [RAM write-value selection](Constraints/RamWriteValueEqRamReadWrite.lean)
+- [x] (23) DONE: [RAM read-value selection](Constraints/RamReadValueEqRamRead.lean)
+- [x] (24) DONE: [RAM write-value selection](Constraints/RamWriteValueEqRamReadWrite.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs#L89).
 
@@ -158,7 +175,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamRafEvaluation — stage 2
 
-- [x] (25) [RAM address reconstruction](Constraints/RamAddressEqRamRaf.lean)
+- [x] (25) DONE: [RAM address reconstruction](Constraints/RamAddressEqRamRaf.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs#L133).
 
@@ -171,7 +188,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamOutputCheck — stage 2
 
-- [x] (26) [Public RAM output](Constraints/RamOutputEqPublicIo.lean)
+- [ ] (26) TODO: [Public RAM output](Constraints/RamOutputEqPublicIo.lean)
 
 [Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs#L115); [public arrays](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/preprocess/public_io.rs#L20).
 
@@ -184,11 +201,11 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanShift — stage 3
 
-- [x] (27) [NextUnexpandedPC shift](Constraints/NextUnexpandedPCEqShift.lean)
-- [x] (28) [NextPC shift](Constraints/NextPCEqShift.lean)
-- [x] (29) [NextIsVirtual shift](Constraints/NextIsVirtualEqShift.lean)
-- [x] (30) [NextIsFirstInSequence shift](Constraints/NextIsFirstInSequenceEqShift.lean)
-- [x] (31) [NextIsNoop shift](Constraints/NextIsNoopEqShift.lean)
+- [x] (27) DONE: [NextUnexpandedPC shift](Constraints/NextUnexpandedPCEqShift.lean)
+- [x] (28) DONE: [NextPC shift](Constraints/NextPCEqShift.lean)
+- [x] (29) DONE: [NextIsVirtual shift](Constraints/NextIsVirtualEqShift.lean)
+- [x] (30) DONE: [NextIsFirstInSequence shift](Constraints/NextIsFirstInSequenceEqShift.lean)
+- [x] (31) DONE: [NextIsNoop shift](Constraints/NextIsNoopEqShift.lean)
 
 [Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs#L103); [non-wrapping successor](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-poly/src/eq_plus_one.rs#L1).
 
@@ -213,8 +230,8 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## InstructionInputVirtualization — stage 3
 
-- [x] (32) [Left instruction-input selection](Constraints/LeftInstructionInputEqSelection.lean)
-- [x] (33) [Right instruction-input selection](Constraints/RightInstructionInputEqSelection.lean)
+- [x] (32) DONE: [Left instruction-input selection](Constraints/LeftInstructionInputEqSelection.lean)
+- [x] (33) DONE: [Right instruction-input selection](Constraints/RightInstructionInputEqSelection.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs#L102).
 
@@ -232,9 +249,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RegistersReadWriteChecking — stage 4
 
-- [x] (34) [Destination register write-value selection](Constraints/RdWriteValueEqRegistersReadWrite.lean)
-- [x] (35) [First source register value selection](Constraints/Rs1ValueEqRegistersRead.lean)
-- [x] (36) [Second source register value selection](Constraints/Rs2ValueEqRegistersRead.lean)
+- [ ] (34) TODO: [Destination register write-value selection](Constraints/RdWriteValueEqRegistersReadWrite.lean)
+- [ ] (35) TODO: [First source register value selection](Constraints/Rs1ValueEqRegistersRead.lean)
+- [ ] (36) TODO: [Second source register value selection](Constraints/Rs2ValueEqRegistersRead.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs#L97).
 
@@ -250,8 +267,8 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamValCheck — stage 4
 
-- [x] (37) [RAM value from preceding increments](Constraints/RamValEqInitialPlusPrefixRamInc.lean)
-- [x] (38) [Final RAM value from all increments](Constraints/RamValFinalEqInitialPlusRamInc.lean)
+- [ ] (37) TODO: [RAM value from preceding increments](Constraints/RamValEqInitialPlusPrefixRamInc.lean)
+- [ ] (38) TODO: [Final RAM value from all increments](Constraints/RamValFinalEqInitialPlusRamInc.lean)
 
 [Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135); [initial public RAM](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/preprocess/ram.rs#L134).
 
@@ -267,9 +284,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## InstructionReadRaf — stage 5
 
-- [x] (39) [Lookup output from the selected table](Constraints/LookupOutputEqInstructionReadRaf.lean)
-- [x] (40) [Left lookup operand reconstruction](Constraints/LeftLookupOperandEqInstructionRaf.lean)
-- [x] (41) [Right lookup operand reconstruction](Constraints/RightLookupOperandEqInstructionRaf.lean)
+- [ ] (39) TODO: [Lookup output from the selected table](Constraints/LookupOutputEqInstructionReadRaf.lean)
+- [x] (40) DONE: [Left lookup operand reconstruction](Constraints/LeftLookupOperandEqInstructionRaf.lean)
+- [x] (41) DONE: [Right lookup operand reconstruction](Constraints/RightLookupOperandEqInstructionRaf.lean)
 
 [Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs#L90); [operand coefficients](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L180).
 
@@ -304,7 +321,7 @@ LookupRa(x,t) = ∏_{j=0}^{J−1} InstructionRa_j(v_j(x),t)
 
 ## RegistersValEvaluation — stage 5
 
-- [x] (42) [Register value from preceding increments](Constraints/RegistersValEqPrefixRdInc.lean)
+- [ ] (42) TODO: [Register value from preceding increments](Constraints/RegistersValEqPrefixRdInc.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs#L69).
 
@@ -317,17 +334,17 @@ The empty sum at `t = 0` is zero.
 
 ## BytecodeReadRaf — stages 6a–6b
 
-- [x] (43) [Expanded PC from bytecode](Constraints/PCEqBytecodeRead.lean)
-- [x] (44) [Unexpanded PC from bytecode](Constraints/UnexpandedPCEqBytecodeRead.lean)
-- [x] (45) [Immediate from bytecode](Constraints/ImmEqBytecodeRead.lean)
-- [x] (46) [Circuit flags from bytecode](Constraints/OpFlagsEqBytecodeRead.lean)
-- [x] (47) [Instruction flags from bytecode](Constraints/InstructionFlagsEqBytecodeRead.lean)
-- [x] (48) [First source selector from bytecode](Constraints/Rs1RaEqBytecodeRead.lean)
-- [x] (49) [Second source selector from bytecode](Constraints/Rs2RaEqBytecodeRead.lean)
-- [x] (50) [Destination selector from bytecode](Constraints/RdWaEqBytecodeRead.lean)
-- [x] (51) [Lookup-table flags from bytecode](Constraints/LookupTableFlagEqBytecodeRead.lean)
-- [x] (52) [Instruction RAF flag from bytecode](Constraints/InstructionRafFlagEqBytecodeRead.lean)
-- [x] (53) [Entry bytecode row](Constraints/BytecodeRaAtEntryEqOne.lean)
+- [x] (43) DONE: [Expanded PC from bytecode](Constraints/PCEqBytecodeRead.lean)
+- [x] (44) DONE: [Unexpanded PC from bytecode](Constraints/UnexpandedPCEqBytecodeRead.lean)
+- [x] (45) DONE: [Immediate from bytecode](Constraints/ImmEqBytecodeRead.lean)
+- [x] (46) DONE: [Circuit flags from bytecode](Constraints/OpFlagsEqBytecodeRead.lean)
+- [x] (47) DONE: [Instruction flags from bytecode](Constraints/InstructionFlagsEqBytecodeRead.lean)
+- [x] (48) DONE: [First source selector from bytecode](Constraints/Rs1RaEqBytecodeRead.lean)
+- [x] (49) DONE: [Second source selector from bytecode](Constraints/Rs2RaEqBytecodeRead.lean)
+- [x] (50) DONE: [Destination selector from bytecode](Constraints/RdWaEqBytecodeRead.lean)
+- [x] (51) DONE: [Lookup-table flags from bytecode](Constraints/LookupTableFlagEqBytecodeRead.lean)
+- [x] (52) DONE: [Instruction RAF flag from bytecode](Constraints/InstructionRafFlagEqBytecodeRead.lean)
+- [x] (53) DONE: [Entry bytecode row](Constraints/BytecodeRaAtEntryEqOne.lean)
 
 [Rust: row values](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L533); [PC and entry](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L358).
 
@@ -384,9 +401,9 @@ For the program's `entry_bytecode_index = e`:
 
 ## Booleanity — stages 6a–6b
 
-- [x] (54) [Instruction chunk selector booleanity](Constraints/InstructionRaChunkBooleanity.lean)
-- [x] (55) [Bytecode chunk selector booleanity](Constraints/BytecodeRaChunkBooleanity.lean)
-- [x] (56) [RAM chunk selector booleanity](Constraints/RamRaChunkBooleanity.lean)
+- [x] (54) DONE: [Instruction chunk selector booleanity](Constraints/InstructionRaChunkBooleanity.lean)
+- [x] (55) DONE: [Bytecode chunk selector booleanity](Constraints/BytecodeRaChunkBooleanity.lean)
+- [x] (56) DONE: [RAM chunk selector booleanity](Constraints/RamRaChunkBooleanity.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs#L25).
 
@@ -402,7 +419,7 @@ For the program's `entry_bytecode_index = e`:
 
 ## RamHammingBooleanity — stage 6b
 
-- [x] (57) [RAM hamming-weight booleanity](Constraints/RamHammingWeightBooleanity.lean)
+- [x] (57) DONE: [RAM hamming-weight booleanity](Constraints/RamHammingWeightBooleanity.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs#L85).
 
@@ -413,7 +430,7 @@ For the program's `entry_bytecode_index = e`:
 
 ## RamRaVirtualization — stage 6b
 
-- [x] (58) [RAM address selector from chunks](Constraints/RamRaEqChunkProduct.lean)
+- [x] (58) DONE: [RAM address selector from chunks](Constraints/RamRaEqChunkProduct.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/ra_virtualization.rs); [chunk product](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/ram.rs#L163).
 
@@ -424,7 +441,7 @@ For the program's `entry_bytecode_index = e`:
 
 ## InstructionRaVirtualization — stage 6b
 
-- [x] (59) [Virtual instruction selectors from small chunks](Constraints/InstructionRaEqChunkProduct.lean)
+- [x] (59) DONE: [Virtual instruction selectors from small chunks](Constraints/InstructionRaEqChunkProduct.lean)
 
 [Rust](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/instruction/ra_virtualization.rs); [chunk grouping](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs#L402).
 
@@ -438,9 +455,9 @@ Here `digit_h(v)` splits the `nb`-bit virtual chunk into its `n` small chunks.
 
 ## Hamming weights — HammingWeightClaimReduction, stage 7
 
-- [x] (60) [Instruction chunk hamming weights](Constraints/InstructionRaChunkHammingWeight.lean)
-- [x] (61) [Bytecode chunk hamming weights](Constraints/BytecodeRaChunkHammingWeight.lean)
-- [x] (62) [RAM chunk hamming weights](Constraints/RamRaChunkHammingWeight.lean)
+- [x] (60) DONE: [Instruction chunk hamming weights](Constraints/InstructionRaChunkHammingWeight.lean)
+- [x] (61) DONE: [Bytecode chunk hamming weights](Constraints/BytecodeRaChunkHammingWeight.lean)
+- [x] (62) DONE: [RAM chunk hamming weights](Constraints/RamRaChunkHammingWeight.lean)
 
 [Rust: prescribed weights](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs#L82); [sumcheck](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/claim_reductions/hamming_weight.rs#L102).
 
