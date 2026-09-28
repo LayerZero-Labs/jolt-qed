@@ -34,9 +34,11 @@ The completeness theorem for constraint (22) explicitly requires at least one pa
 trace-length calculation guarantees. The completeness theorem for (58) requires
 at least one RAM chunk. The register targets (34)–(36) and (42) require zero
 initial registers. Constraint (26) requires the initial device to satisfy
-`JoltIOLayout.Valid` (aligned advice regions ending at or below `input_start`)
-and `JoltIOState.AdviceFits` (each advice buffer fits its region); Rust's
-`MemoryLayout::new` and `create_emulator` enforce both.
+`JoltIOState.AdviceBelowInput`: both advice buffers end at or below
+`input_start`, which is a whole number of words above the lowest RAM address.
+`JoltIOState.AdviceBelowInput.of_memoryLayout` proves this for every device
+laid out by Rust's `MemoryLayout::new` whose advice passes `create_emulator`'s
+length checks.
 
 Equations (43)–(47) were rechecked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`. Their honest-witness targets now require the exact Rust bytecode domain, including the leading no-op and power-of-two padding.
 
