@@ -48,7 +48,7 @@ def lookupOutputEqInstructionReadRaf {F : Type} [Field F] {params : WitnessParam
         ∑ table : LookupTableKind, witness.LookupTableFlag table t * lookupTableEntry table address
 
 /-- Completeness of the lookup-output constraint. The execution-row case is
-pending the fixed table definitions and their correspondence with ISA outputs. -/
+pending the correspondence of the fixed table definitions with ISA outputs. -/
 theorem honestWitness_lookupOutputEqInstructionReadRaf
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
@@ -59,11 +59,10 @@ theorem honestWitness_lookupOutputEqInstructionReadRaf
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
-  · -- FIXME (translation): `lookup_table.lean` implements only And, Or, Xor,
-    -- and VirtualXORROTL1; the other fixed-table entries still use `sorry`.
-    -- The honest address selection is proved in `InstructionReadSelection.lean`.
-    -- Complete the remaining tables and relate each selected entry to
-    -- `HonestWitness.rowLookupOutput` before closing this target.
+  · -- FIXME (translation): all lookup-table entries are now defined, and
+    -- honest address selection is proved in `InstructionReadSelection.lean`.
+    -- Relate each selected entry to `HonestWitness.rowLookupOutput` before
+    -- closing this target.
     sorry
   · -- Padding has zero output and every table flag is zero.
     simp [JoltProgram.honestWitness, HonestWitness.LookupOutput,
