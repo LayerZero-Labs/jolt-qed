@@ -2,7 +2,7 @@
 
 ## Source of truth for Rust comparisons
 
-Scan the local Jolt checkout at `/Users/francis/Work-With-A16z/jolt` when
+Scan the local Jolt checkout at `$HOME/Work-with-A16z/jolt` when
 reviewing a constraint or its witness and trace definitions. GitHub links in
 `constraints.md` and Lean comments are documentation pointers; they are not a
 substitute for inspecting the corresponding local Rust files. Record the local
@@ -114,9 +114,11 @@ live calls read ABI registers x10–x13 and can append advice or inspect memory;
 replay suppresses those effects. The fork's `VirtualHostIO => pure
 RETIRE_SUCCESS` branch would omit live Rust behavior. The fork's row rewrite
 still retains HostIO and normalizes a destination-zero source before execution.
-The PC proof now uses an explicit `JoltTraceRow.hostIOPreservesPC` certificate.
-Deriving it from `execInstr` needs a Sail byte-read frame proof and is deferred;
-the live HostIO transition itself remains modeled.
+The source-PC proof still uses an explicit `JoltTraceRow.hostIOPreservesPC`
+certificate. The new Sail byte-read frame proves the live HostIO `nextPC`
+property used by constraint (17), but it has not yet been wired to discharge
+this separate `PC` certificate from `execInstr`. The live HostIO transition
+itself remains modeled.
 
 The three fork lookup-table commits are included. The dispatch in
 [lookup_table.lean](lookup_table.lean) now defines every `LookupTableKind` entry
@@ -125,11 +127,12 @@ output remains separate deferred work. The fork's constraint (13)/(14) proofs
 for lookup-result and jump-return destination writeback are also included;
 their JALR proof helper was adapted to the direct Rust-style PC update.
 
-Validation: `lake build JoltBytecode JoltConstraints` passed; all 14
-`JoltConstraints/Tests/*.lean` files passed with `lake env lean`, including
-native rewrite, load capture, trace boundaries, VirtualXORROTL1, and live and
-replay HostIO checks. These checks do not close the explicit source-to-row and
-memory-model obligations below.
+Validation: after the six-commit fast-forward to `155ca07`,
+`lake build JoltBytecode JoltConstraints` passed (8,584 jobs), and all 14
+`JoltConstraints.Tests.*` modules passed as explicit Lake build targets (3,496
+jobs), including native rewrite, load capture, trace boundaries,
+VirtualXORROTL1, and live and replay HostIO checks. These checks do not close
+the explicit source-to-row and memory-model obligations below.
 
 ## Deferred FIXME and WARNING inventory
 
@@ -141,7 +144,7 @@ are **deferred work or documented modeling choices**, not established proofs.
 | --- | --- |
 | [program.lean](program.lean), two `FIXME`s | `rowValid` (including writable jump destinations, canonical x0 writes, and jumps at the end of expansions) and `noEarlyNextPCChange` use `sorry` and are false for arbitrary arrays. Connect rows to Rust source expansion and native rewrites, then prove the claims for those outputs. |
 | [program.lean](program.lean), `WARNING` | Rust currently permits source-PC wraparound; `SequenceLayout.addressAdvanceNoWrap` is a temporary assumption pending the fix tracked by [Jolt issue #1949](https://github.com/a16z/jolt/issues/1949). |
-| [trace.lean](trace.lean), `FIXME` | Derive `hostIOPreservesPC` from live `execInstr` by proving Sail byte reads preserve `PC`; it is currently an explicit trace-row obligation. |
+| [trace.lean](trace.lean), `FIXME` | Derive `hostIOPreservesPC` from live `execInstr` using the new Sail byte-read frame; it is still an explicit trace-row obligation. |
 | [LookupOutputEqInstructionReadRaf.lean](Constraints/LookupOutputEqInstructionReadRaf.lean), `FIXME` | Connect each now-defined fixed table entry to `HonestWitness.rowLookupOutput` for execution rows. |
 | [RamValEqInitialPlusPrefixRamInc.lean](Constraints/RamValEqInitialPlusPrefixRamInc.lean), `FIXME` | Relate captured RAM reads to initialized memory and prefix RAM history. |
 | [RamValFinalEqInitialPlusRamInc.lean](Constraints/RamValFinalEqInitialPlusRamInc.lean), `FIXME` | Establish Rust memory-history and terminal-state correspondence. |

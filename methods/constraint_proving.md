@@ -51,7 +51,7 @@ and what is already proved or admitted; do not count a theorem containing
 ## 2. Audit the Rust-to-Lean correspondence first
 
 Inspect the **local Rust checkout** supplied by the user, currently
-`/Users/francis/Work-With-A16z/jolt`. GitHub links are documentation pointers,
+`$HOME/Work-with-A16z/jolt`. GitHub links are documentation pointers,
 not the source scan. Record the local Rust commit and relevant worktree changes
 so the comparison is reproducible.
 
