@@ -2,6 +2,7 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_witness
+import JoltConstraints.Constraints.RegistersValHistoryProofHelpers
 
 set_option autoImplicit false
 
@@ -19,7 +20,7 @@ def registersValEqPrefixRdInc {F : Type} [Field F] {params : WitnessParams}
       ∑ cycle : Fin params.traceLength,
         if cycle.val < t.val then witness.RdWa register cycle * witness.RdInc cycle else 0
 
-/-- Completeness target for the honest witness; proof pending.
+/-- Completeness target for the honest witness.
 Initial register contents must agree with the zero-initialized Rust witness array.
 Each bytecode row certifies that its register operands follow the ISA address map.
 The proof must relate the replayed register history to the captured ISA values. -/
@@ -33,6 +34,7 @@ theorem honestWitness_registersValEqPrefixRdInc
       JoltISA.sourceValue src program.initialState = 0) :
     registersValEqPrefixRdInc
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  sorry
+  intro register t
+  exact honestRegistersVal_eq_prefixRdInc params trace traceFits initialRegistersZero register t
 
 end JoltConstraints
