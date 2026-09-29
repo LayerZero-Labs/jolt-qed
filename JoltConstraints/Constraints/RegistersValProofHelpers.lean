@@ -458,15 +458,15 @@ theorem register42_branch_preserves_sourceValue
 
 theorem register42_memory_write_preserves_sourceValue
     (src : JoltISA.Src) (s : SailJoltState) (ops : AssumptionOperands)
-    (ha : all_assumptions s ops) (addr data : BitVec 64)
+    (ha : TraceAssumptions s ops) (addr data : BitVec 64)
     (halign : addr &&& 7 = 0)
     (hwindow : JoltISA.ramStartAddress ≤ addr.toNat → ops.memoryWindows addr)
     (t : SailJoltState) (v : Result Bool ExecutionResult)
     (hr : JoltISA.writeMemoryWord addr data s = .ok v t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
   by_cases hram : JoltISA.ramStartAddress ≤ addr.toNat
-  · obtain ⟨_, _, _, hpmp, _, _, _, _, _, hmmio, _⟩ :=
-      ha.2.2.2.2.1 addr (hwindow hram)
+  · obtain ⟨_, _, hpmp, _, hmmio⟩ :=
+      ha.ramWindow addr (hwindow hram)
     have hwrite := vmem_write_addr_dword_store_reduces addr data s.sail
       ha.curPrivilege ha.mstatusMprv
       (JoltPCFrame.aligned_access addr halign).toAlignedAccess hpmp hmmio
@@ -482,7 +482,7 @@ theorem register42_load_preserves_other
     (fault : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
     (base src : JoltISA.Src) (imm : BitVec 64)
     (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : all_assumptions s ops)
+    (ha : TraceAssumptions s ops)
     (hwindow : JoltISA.ramStartAddress ≤
       (JoltISA.sourceValue base s + imm).toNat →
       ops.memoryWindows (JoltISA.sourceValue base s + imm))
@@ -511,7 +511,7 @@ theorem register42_load_preserves_other
 theorem register42_store_preserves_sourceValue
     (base stored src : JoltISA.Src) (imm : BitVec 64)
     (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : all_assumptions s ops)
+    (ha : TraceAssumptions s ops)
     (hwindow : JoltISA.ramStartAddress ≤
       (JoltISA.sourceValue base s + imm).toNat →
       ops.memoryWindows (JoltISA.sourceValue base s + imm))
@@ -631,7 +631,7 @@ end Register42VRegs
 theorem register42_instruction_preserves_other
     (instr : JoltISA.Instr) (src : JoltISA.Src)
     (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : all_assumptions s ops)
+    (ha : TraceAssumptions s ops)
     (hwindow : JoltPCFrame.MemoryWindowsCovered instr s ops)
     (hne : ∀ dst, instr.destination? = some dst →
       src ≠ register42_dstAsSrc dst)
@@ -816,8 +816,8 @@ theorem register42_row_step
   let row := trace.rows[i]
   let instr := program.expandedBytecode[row.rowIndex].expandedInstruction
   let src := register42_srcOfAddress register
-  have ha := trace.allAssumptions i
-  have hready : ∀ rd, Assumptions.XRegReadable rd row.preState.sail := ha.2.1
+  have ha := trace.rowAssumptions i
+  have hready : ∀ rd, Assumptions.XRegReadable rd row.preState.sail := ha.xRegReadable
   have hwindow : JoltPCFrame.MemoryWindowsCovered
       (instr.withRuntimeAdvice row.runtimeAdvice) row.preState
       (trace.assumptionOperands i) := by

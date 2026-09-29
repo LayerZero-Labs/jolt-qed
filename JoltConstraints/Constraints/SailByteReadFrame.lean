@@ -572,7 +572,7 @@ end JoltHostFrame
 namespace JoltNextPCFrame
 
 theorem hostIOFrame_of_exec (instr : JoltISA.Instr) (s t : SailJoltState)
-    (ops : AssumptionOperands) (ha : all_assumptions s ops)
+    (ops : AssumptionOperands) (ha : TraceAssumptions s ops)
     (hexec : JoltISA.execInstr instr s = .ok (.Retire_Success ()) t) :
     HostIOFrame instr s t := by
   cases instr with
@@ -593,10 +593,10 @@ theorem row {program : JoltProgram} (trace : JoltTrace program)
         trace.rows[i].runtimeAdvice) trace.rows[i].preState = false) :
     trace.rows[i].postState.sail.regs.get? Register.nextPC =
       trace.rows[i].preState.sail.regs.get? Register.nextPC := by
-  apply instruction _ _ _ (trace.assumptionOperands i) (trace.allAssumptions i)
+  apply instruction _ _ _ (trace.assumptionOperands i) (trace.rowAssumptions i)
     _ hjump hnot _ trace.rows[i].executes
   · rw [JoltPCFrame.memoryWindows_withRuntimeAdvice]
     exact trace.ramAccessAssumed i
-  · exact hostIOFrame_of_exec _ _ _ _ (trace.allAssumptions i) trace.rows[i].executes
+  · exact hostIOFrame_of_exec _ _ _ _ (trace.rowAssumptions i) trace.rows[i].executes
 
 end JoltNextPCFrame
