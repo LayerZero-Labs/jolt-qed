@@ -1,30 +1,12 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Field.Defs
-import JoltConstraints.witness
-import JoltConstraints.lookup_table
-import JoltConstraints.honest_witness
+import JoltConstraints.Constraints.InstructionLookupRa
+import JoltConstraints.Constraints.InstructionReadSelection
+import JoltConstraints.Constraints.LookupEntryProofHelpers
 
 set_option autoImplicit false
 
 namespace JoltConstraints
 
 open scoped BigOperators
-
-/-- The `chunk`th virtual chunk of a 128-bit lookup address, most significant first. -/
-def instructionLookupChunk (params : WitnessParams) (address : Fin (2 ^ 128))
-    (chunk : Fin params.virtualInstructionChunks) : Fin (2 ^ params.virtualChunkBits) :=
-  ⟨(address.val /
-      2 ^ ((params.virtualInstructionChunks - 1 - chunk.val) * params.virtualChunkBits)) %
-      2 ^ params.virtualChunkBits,
-    Nat.mod_lt _ (pow_pos (by decide : 0 < (2 : Nat)) _)⟩
-
-/-- `LookupRa(x,t)` in `constraints.md`: multiply the virtual instruction-address
-entries selected by the chunks of `x`. -/
-noncomputable def instructionLookupRa {F : Type} [Field F] {params : WitnessParams}
-    (witness : WitnessType F params) (address : Fin (2 ^ 128))
-    (t : Fin params.traceLength) : F :=
-  ∏ chunk : Fin params.virtualInstructionChunks,
-    witness.InstructionRa chunk (instructionLookupChunk params address chunk) t
 
 /-
 For every padded trace index t ∈ T:
@@ -47,8 +29,9 @@ def lookupOutputEqInstructionReadRaf {F : Type} [Field F] {params : WitnessParam
       ∑ address : Fin (2 ^ 128), instructionLookupRa witness address t *
         ∑ table : LookupTableKind, witness.LookupTableFlag table t * lookupTableEntry table address
 
-/-- Completeness of the lookup-output constraint. The execution-row case is
-pending the correspondence of the fixed table definitions with ISA outputs. -/
+/-- Completeness of the lookup-output constraint. The execution-row case
+reduces to `lookupEntryCorrect_of_lookupTable` (one lemma per lookup table in
+`LookupEntryProofHelpers.lean`); some of those remain `sorry`, see there. -/
 theorem honestWitness_lookupOutputEqInstructionReadRaf
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
@@ -59,11 +42,35 @@ theorem honestWitness_lookupOutputEqInstructionReadRaf
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
-  · -- FIXME (translation): all lookup-table entries are now defined, and
-    -- honest address selection is proved in `InstructionReadSelection.lean`.
-    -- Relate each selected entry to `HonestWitness.rowLookupOutput` before
-    -- closing this target.
-    sorry
+  · -- Execution row: collapse the address sum to the honest index, the table
+    -- sum to the flagged table, and apply the per-table entry lemmas.
+    set row := getElem trace.rows t.val inBounds with hrow
+    rw [instructionRead_honest params trace ramFits traceFits bytecodeDomain
+      (fun a => ∑ table : LookupTableKind,
+        (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).LookupTableFlag
+          table t * lookupTableEntry table a) t]
+    have hidx : (⟨(HonestWitness.lookupIndex trace t.val).toNat,
+        (HonestWitness.lookupIndex trace t.val).isLt⟩ : Fin (2 ^ 128)) = rowLookupAddress row := by
+      simp only [HonestWitness.lookupIndex, dif_pos inBounds, rowLookupAddress, rowLookupIndex, hrow]
+      rfl
+    rw [hidx]
+    have hflag : ∀ table : LookupTableKind,
+        (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).LookupTableFlag
+          table t = if JoltMetadata.lookupTable (rowInstruction row) = some table then 1 else 0 := by
+      intro table
+      simp only [JoltProgram.honestWitness, HonestWitness.LookupTableFlag, dif_pos inBounds,
+        JoltMetadata.lookupTableFlag, beq_iff_eq, rowInstruction, hrow]
+    have hout : (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).LookupOutput t
+        = ((HonestWitness.rowLookupOutput row).toNat : F) := by
+      simp only [JoltProgram.honestWitness, HonestWitness.LookupOutput, dif_pos inBounds]
+      rfl
+    simp only [hflag, hout, ite_mul, one_mul, zero_mul]
+    cases hk : JoltMetadata.lookupTable (rowInstruction row) with
+    | none =>
+      simp [rowLookupOutput_eq_zero_of_lookupTable_none row hk]
+    | some k =>
+      simp only [Option.some.injEq, Finset.sum_ite_eq, Finset.mem_univ, if_true]
+      exact (lookupEntryCorrect_of_lookupTable row k hk).symm
   · -- Padding has zero output and every table flag is zero.
     simp [JoltProgram.honestWitness, HonestWitness.LookupOutput,
       HonestWitness.LookupTableFlag, inBounds]

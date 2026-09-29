@@ -12,6 +12,21 @@ Rust: https://github.com/abiswas3/jolt/tree/main/common/src/jolt_device.rs#L491-
 def ramLowestAddress (layout : JoltIOLayout) : Nat :=
   min layout.trustedAdvice.1.toNat layout.untrustedAdvice.1.toNat
 
+/-- Both advice buffers of a device lie below `input_start`, and `input_start`
+is a whole number of words above the lowest RAM address. These are the only
+layout facts the public-output constraint (26) needs: together they keep every
+advice byte out of the public I/O interval.
+
+Rust establishes them before execution starts:
+`JoltIOState.AdviceBelowInput.of_memoryLayout` derives them from Rust's
+`MemoryLayout::new` and the advice-length checks in `create_emulator`. -/
+structure _root_.JoltIOState.AdviceBelowInput (io : JoltIOState) : Prop where
+  inputWordAligned : (io.layout.input.1.toNat - ramLowestAddress io.layout) % 8 = 0
+  trustedAdviceBelowInput :
+    io.layout.trustedAdvice.1.toNat + io.trustedAdvice.size ≤ io.layout.input.1.toNat
+  untrustedAdviceBelowInput :
+    io.layout.untrustedAdvice.1.toNat + io.untrustedAdvice.size ≤ io.layout.input.1.toNat
+
 /-- The initial RAM image, including public inputs and both advice buffers.
 Advice words are execution inputs, not additional public constants. Reuse the
 existing image encoding; this function does not execute instructions.
@@ -22,7 +37,7 @@ noncomputable def ramInitialValue {F : Type} [Field F]
 
 /-- Public I/O mask: remapped words from input_start up to RAM_START_ADDRESS,
 excluding RAM_START_ADDRESS. As in Rust preprocessing, the layout must be valid;
-layout admissibility is a separate completeness obligation.
+completeness theorems assume the relevant part as `JoltIOState.AdviceBelowInput`.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-program/src/preprocess/public_io.rs#L20-L25 -/
 def ramPublicIoMask {F : Type} [Field F] (io : JoltIOState) (address : Nat) : F :=
   let lowest := ramLowestAddress io.layout

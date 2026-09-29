@@ -134,7 +134,7 @@ private theorem register42_registersVal_real_step
   rw [hstep, hpre, hdelta]
   exact hrow.symm
 
-private theorem register42_registersVal_preState
+theorem register42_registersVal_preState
     {F : Type} [Field F] (p : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (traceFits : p.ProverPaddedFor trace.rows.size)
