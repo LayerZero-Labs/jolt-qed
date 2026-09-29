@@ -83,6 +83,26 @@ noncomputable def readMemoryWord (address : BitVec 64) :
         (Virtaddr address, .E_Load_Access_Fault ()))) state
   else liftSail (vmem_read_addr (Virtaddr address) 0 8 (Load Data) false false false) state
 
+/-- Byte access for host calls. Like `readMemoryWord`, RAM uses the existing
+Sail memory interface and device bytes use `deviceByte?`. Rust's byte-load
+path rejects the unsupported peripheral mappings below with a panic, not a
+returned translation trap. Heap bounds and full MMU/capture correspondence
+remain the shared memory-model obligations (model-review #15).
+Rust: tracer/src/emulator/mmu.rs::load and load_raw. -/
+noncomputable def readMemoryByte (address : BitVec 64) :
+    JoltMonad (Result (BitVec 8) ExecutionResult) := fun state =>
+  let a := address.toNat
+  if (0x1020 ≤ a && a ≤ 0x1fff) || (0x02000000 ≤ a && a ≤ 0x0200ffff) ||
+      (0x0c000000 ≤ a && a ≤ 0x0fffffff) ||
+      (0x10000000 ≤ a && a ≤ 0x100000ff) ||
+      (0x10001000 ≤ a && a ≤ 0x10001fff) then
+    .error (Error.Assertion "VirtualHostIO: unsupported peripheral read") state
+  else if a < ramStartAddress then
+    match deviceByte? state.io a with
+    | some value => .ok (.Ok value) state
+    | none => .error (Error.Assertion "VirtualHostIO: unknown memory mapping") state
+  else liftSail (vmem_read_addr (Virtaddr address) 0 1 (Load Data) false false false) state
+
 -- Rust: [Mmu::store_doubleword](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/mmu.rs:473).
 -- Device stores update the device in the full ISA state. Their stored word may
 -- differ from a subsequent read (for example, termination ignores writes).

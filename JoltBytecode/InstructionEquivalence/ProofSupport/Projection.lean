@@ -38,6 +38,19 @@ def ProjectedVRegsPreserved (before after : SailJoltState) : Prop :=
   after.vregs JoltISA.mtvalVReg = before.vregs JoltISA.mtvalVReg ∧
   after.vregs JoltISA.mstatusVReg = before.vregs JoltISA.mstatusVReg
 
+theorem systemProject_rdZeroRewriteVReg (js : SailJoltState) (value : BitVec 64) :
+    System.systemProject
+      { js with vregs := fun r =>
+          if r = JoltISA.rdZeroRewriteVReg then value else js.vregs r } =
+      System.systemProject js := by
+  unfold System.systemProject
+  simp only [if_neg (show JoltISA.trapHandlerVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    if_neg (show JoltISA.mscratchVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    if_neg (show JoltISA.mepcVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    if_neg (show JoltISA.mcauseVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    if_neg (show JoltISA.mtvalVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    if_neg (show JoltISA.mstatusVReg ≠ JoltISA.rdZeroRewriteVReg by decide)]
+
 /-- Under the linked-CSR invariant, `systemProject` agrees with the old plain
 projection on the initial state. -/
 theorem systemProject_eq_project_of_compatible

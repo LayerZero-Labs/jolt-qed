@@ -7,6 +7,13 @@ noncomputable section
 
 namespace Natives
 
+/-- The proof's native JALR abbreviation is exactly the instruction selected by
+the program-row rewrite. Destination normalization happens before execution. -/
+private theorem jalrNativeInstr_eq_rewrite (imm : BitVec 12) (rs1 rd : regidx) :
+    (JoltISA.Encoded.JALR (.xreg rd) (.xreg rs1) imm).rewriteNative =
+      JoltISA.jalrNativeInstr rd rs1 imm := by
+  rfl
+
 /-- Full native JALR execution, including the temporary write when rd is x0.
 The target uses the original rs1 value even when rd and rs1 are equal. -/
 theorem jalrNative_run (imm : BitVec 12) (rs1 rd : regidx) (js : SailJoltState)
@@ -45,7 +52,8 @@ def jalrInstrEqSailStatement
     (imm : BitVec 12) (rs1 rd : regidx) (js : SailJoltState)
     (_h : JalrInstrEqSailAssumptions imm rs1 js) : Prop :=
   System.systemProjectResult
-    ((JoltISA.execInstr (JoltISA.jalrNativeInstr rd rs1 imm)).run js) =
+    ((JoltISA.execInstr
+      ((JoltISA.Encoded.JALR (.xreg rd) (.xreg rs1) imm).rewriteNative)).run js) =
     ((execute_JALR imm rs1 rd).run js.sail)
 
 theorem jalrInstr_eq_sail
@@ -53,6 +61,7 @@ theorem jalrInstr_eq_sail
     (h : JalrInstrEqSailAssumptions imm rs1 js) :
     jalrInstrEqSailStatement imm rs1 rd js h := by
   unfold jalrInstrEqSailStatement
+  rw [jalrNativeInstr_eq_rewrite]
   obtain ⟨rustPC, hNextPC⟩ := h.nextPC_readable.exists_value
   -- Establish Rust's full state update before applying the Sail projection.
   rw [jalrNative_run imm rs1 rd js rustPC h.rs1_val hNextPC h.rs1_read]

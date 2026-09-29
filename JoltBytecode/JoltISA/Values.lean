@@ -218,9 +218,13 @@ def jolt_virtual_srai_value (x : BitVec 64) (bitmask : Nat) : BitVec 64 :=
   x.sshiftRight (ctz bitmask)
 
 /-- RV64 `VirtualSRLIW` value: logically shift the low word by the encoded
-mask's trailing-zero count, then sign-extend the word result. -/
+mask's trailing-zero count, then sign-extend the word result.
+A zero mask gives zero: Rust's `trailing_zeros` returns 64, and `checked_shr`
+then yields 0, whereas `ctz 0 = 0` would leave the word unshifted.
+Rust: tracer/src/instruction/virtual_srliw.rs::VirtualSRLIW::exec. -/
 def jolt_virtual_srliw_value (x : BitVec 64) (bitmask : Nat) : BitVec 64 :=
-  ((x.setWidth 32) >>> ctz bitmask).signExtend 64
+  if bitmask = 0 then 0
+  else ((x.setWidth 32) >>> ctz bitmask).signExtend 64
 
 /-- RV64 `VirtualSRAIW` value: arithmetically shift the low word by the
 encoded mask's trailing-zero count, then sign-extend it. -/

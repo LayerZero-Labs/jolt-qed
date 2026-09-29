@@ -7,3 +7,5 @@
 *.trace
 lake-packages/
 /issues
+/notes/shift.md
+/JoltConstraints/Tests

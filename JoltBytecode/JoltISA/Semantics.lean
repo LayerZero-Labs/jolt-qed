@@ -9,6 +9,7 @@ import JoltBytecode.JoltISA.Values
 import JoltBytecode.JoltISA.semantic_helpers
 import JoltBytecode.JoltISA.DeviceMemory
 import JoltBytecode.JoltISA.AdviceTape
+import JoltBytecode.JoltISA.HostIO
 
 /-!
 # Jolt ISA semantics
@@ -81,7 +82,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       -- This is a state representation, not a claim that Rust has a nextPC field.
       let rustPC ← liftSail (Sail.readReg Register.nextPC)
       let instructionAddress ← liftSail (Sail.readReg Register.PC)
-      -- Rust writes the old cpu.pc to rd first; writeDst discards writes to x0.
+      -- Rust writes the old cpu.pc to the expanded destination first.
       -- Rust's diagnostic track_call bookkeeping is outside this architectural model.
       writeDst dst rustPC
       -- Rust: cpu.pc = self.address.wrapping_add(imm).
@@ -464,7 +465,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       writeDst rd (BitVec.ofNat 64 remaining)
       pure RETIRE_SUCCESS
   | .VirtualHostIO _ _ _ =>
-      pure RETIRE_SUCCESS
+      execHostIO
   | .VirtualAssertEQ lhs rhs imm => do
       if imm = 0#128 then
         let x ← readSrc lhs

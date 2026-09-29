@@ -1,5 +1,5 @@
 name = "JoltBytecode"
-defaultTargets = ["JoltBytecode"]
+defaultTargets = ["JoltBytecode", "JoltConstraints"]
 moreLeanArgs = ["--tstack=400000"]
 
 [leanOptions]
@@ -17,6 +17,10 @@ rev = "v3"
 
 [[lean_lib]]
 name = "JoltBytecode"
+leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+[[lean_lib]]
+name = "JoltConstraints"
 leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
 
 # Trusted generated layer: not a default target. Lake rebuilds imported modules

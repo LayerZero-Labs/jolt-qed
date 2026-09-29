@@ -413,4 +413,54 @@ def sideEffectingDst : Dst → Dst
 @[simp] theorem sideEffectingDst_vreg (v : VReg) :
     sideEffectingDst (.vreg v) = .vreg v := rfl
 
+def Instr.destination? : Instr → Option Dst
+  | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
+  | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
+  | .ADD dst _ _ | .ADDW dst _ _ | .SUB dst _ _ | .SUBW dst _ _ | .MUL dst _ _
+  | .MULW dst _ _ | .MULHU dst _ _ | .ANDN dst _ _ | .VirtualMULI dst _ _
+  | .VirtualMULIW dst _ _ | .VirtualPow2 dst _ _ | .VirtualPow2W dst _ _
+  | .VirtualPow2I dst _ | .VirtualPow2IW dst _
+  | .VirtualShiftRightBitmask dst _ _ | .VirtualShiftRightBitmaskI dst _
+  | .VirtualShiftRightBitmaskW dst _ _ | .VirtualSRLI dst _ _ | .VirtualSRAI dst _ _
+  | .VirtualSRLIW dst _ _ | .VirtualSRAIW dst _ _ | .VirtualSRL dst _ _
+  | .VirtualSRA dst _ _ | .VirtualSRLW dst _ _ | .VirtualSRAW dst _ _
+  | .VirtualROTRI dst _ _ | .VirtualROTRIW dst _ _ | .VirtualRev8W dst _ _
+  | .VirtualXORROT32 dst _ _ | .VirtualXORROT24 dst _ _ | .VirtualXORROT16 dst _ _
+  | .VirtualXORROT63 dst _ _ | .VirtualXORROTL1 dst _ _
+  | .VirtualXORROTW16 dst _ _ | .VirtualXORROTW12 dst _ _ | .VirtualXORROTW8 dst _ _
+  | .VirtualXORROTW7 dst _ _ | .VirtualXORROTW22 dst _ _ | .VirtualXORROTW19 dst _ _
+  | .VirtualXORROTW6 dst _ _ | .OR dst _ _ | .XOR dst _ _ | .AND dst _ _
+  | .SLT dst _ _ | .SLTU dst _ _ | .VirtualAlignAddr dst _ _
+  | .VirtualWindowMaskB dst _ _ | .VirtualWindowMaskH dst _ _
+  | .VirtualWindowMaskW dst _ _ | .VirtualPext dst _ _ | .VirtualPextSigned dst _ _
+  | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _ | .VirtualShiftDataW dst _ _
+  | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
+  | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
+  | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+      some dst
+  | .LD _ dst _ _ => some dst
+  | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _
+  | .BGEU _ _ _ | .FENCE | .VirtualAssertHalfwordAlignment _ _ _
+  | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _ | .VirtualAssertEQ _ _ _
+  | .VirtualAssertValidDiv0 _ _ _ | .VirtualAssertValidUnsignedRemainder _ _ _
+  | .VirtualAssertMulUNoOverflow _ _ _ | .VirtualAssertLTE _ _ _ => none
+
+def Instr.canonicalNoOp : Instr :=
+  .ADDI (.xreg (.Regidx 0)) (.xreg (.Regidx 0)) 0
+
+def Instr.rewriteNative (instruction : Instr) : Instr :=
+  match instruction with
+  | .JAL dst imm => .JAL (sideEffectingDst dst) imm
+  | .JALR dst base imm => .JALR (sideEffectingDst dst) base imm
+  | .LD fault dst base imm => .LD fault (sideEffectingDst dst) base imm
+  | .VirtualAdviceLoad dst byteCount =>
+      .VirtualAdviceLoad (sideEffectingDst dst) byteCount
+  | .VirtualHostIO dst src imm =>
+      .VirtualHostIO (sideEffectingDst dst) src imm
+  | instruction =>
+      match instruction.destination? with
+      | some (.xreg rd) =>
+          if isX0 rd then Instr.canonicalNoOp else instruction
+      | _ => instruction
+
 end JoltISA

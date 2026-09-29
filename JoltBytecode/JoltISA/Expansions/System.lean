@@ -126,7 +126,8 @@ def csrrwProgram? (csr : BitVec 12) (rs1 rd : regidx) : Option Program :=
 
 Cases match Rust exactly:
 
-* `rs1 = x0`: read the CSR virtual register into `rd`.
+* `rs1 = x0`, `rd = x0`: emit the canonical no-op.
+* `rs1 = x0`, `rd != x0`: read the CSR virtual register into `rd`.
 * `rs1 != x0`, `rd = x0`: set the CSR virtual register with `OR`.
 * `rd = rs1`: preserve `rs1` in the first instruction-local scratch register,
   then read the old CSR and set using the preserved value.
@@ -134,8 +135,11 @@ Cases match Rust exactly:
 def csrrsProgram (csr : SystemCSR) (rs1 rd : regidx) : Program :=
   let vr := SystemCSR.vreg csr
   if isX0 rs1 then
-    .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
-    .done RETIRE_SUCCESS
+    if isX0 rd then
+      pureWritebackRdZeroProgram
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg vr) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
   else if isX0 rd then
     .instr (.OR (.vreg vr) (.vreg vr) (.xreg rs1)) <|
     .done RETIRE_SUCCESS
