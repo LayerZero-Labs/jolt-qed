@@ -221,7 +221,6 @@ are **deferred work or documented modeling choices**, not established proofs.
 | [LookupOutputEqInstructionReadRaf.lean](Constraints/LookupOutputEqInstructionReadRaf.lean), `FIXME` | Connect each now-defined fixed table entry to `HonestWitness.rowLookupOutput` for execution rows. |
 | [RamValEqInitialPlusPrefixRamInc.lean](Constraints/RamValEqInitialPlusPrefixRamInc.lean), `FIXME` | Relate captured RAM reads to initialized memory and prefix RAM history. |
 | [RamValFinalEqInitialPlusRamInc.lean](Constraints/RamValFinalEqInitialPlusRamInc.lean), `FIXME` | Establish Rust memory-history and terminal-state correspondence. |
-| [RamOutputEqPublicIo.lean](Constraints/RamOutputEqPublicIo.lean), `FIXME` | Relate Rust's final public output to the Lean witness. |
 | [RegisterAccess.lean](../JoltBytecode/JoltISA/RegisterAccess.lean), `WARNING` | Establish the source register range guard or proof noted by the existing comment. |
 | [RiscvInstruction.lean](../JoltBytecode/RiscvInstruction.lean), six `WARNING`s | Wire equivalence for ECALL, EBREAK, LR_W, SC_W, LR_D, and SC_D; their current statement branches are `False`. |
 | [Semantics.lean](../JoltBytecode/JoltISA/Semantics.lean), `WARNING` | Rust logs a warning at this execution path; logs are absent from Lean state. Revisit if logs become observable in the claimed correspondence. |
