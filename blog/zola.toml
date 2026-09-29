@@ -1,0 +1,5 @@
+base_url = "https://layerzero-labs.github.io/jolt-qed"
+title = "Jolt QED"
+description = "Notes on formally verifying the Jolt zk-VM in Lean"
+
+generate_feeds = true
