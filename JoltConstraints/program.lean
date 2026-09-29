@@ -9,6 +9,17 @@ set_option autoImplicit false
 set_option maxRecDepth 4096 in
 deriving instance Fintype for Register
 
+/-
+This models a guest program sent to Jolt
+written in the Jolt ISA. 
+We are assuming the expansion has been done. 
+TODO: (ari) We need to put in more constraints about how expansion is done, 
+as expansion is only done by the rust expander. 
+We have expansions, but this is not carefully modlled in lean.
+--/ 
+
+-- This is how the rust Jolt code sets all initial values
+-- default will be 0 for this case for registers
 private def initialRegisterValue (entryAddress : BitVec 64)
     (r : Register) : RegisterType r :=
   match r with
@@ -18,6 +29,10 @@ private def initialRegisterValue (entryAddress : BitVec 64)
   | .hart_state => .HART_ACTIVE ()
   | r => by cases r <;> exact default
 
+-- This is meant to be a faithful translation of how rust sets initial state.
+-- In Lean we also need to model that change into Sail, as that is where the RISC-V 
+-- components of Jolt as modelled in Lean exists. 
+-- Remember we needed to do that for proving bytecode expansions.
 noncomputable def init_state (entryAddress : BitVec 64)
     (ram : Array (BitVec 8)) (io : JoltIOState)
     (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig := {}) : SailJoltState :=
