@@ -1,4 +1,4 @@
-import JoltConstraints.Constraints.LookupOutputEqInstructionReadRaf
+import JoltConstraints.Constraints.InstructionLookupRa
 
 set_option autoImplicit false
 
