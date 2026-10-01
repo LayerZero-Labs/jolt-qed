@@ -203,7 +203,7 @@ theorem lbProgramAuto_preserves_projected_vregs
     split <;>
       simp only [JoltISA.ProgramWritesNoProtectedVReg,
         JoltISA.InstrWritesNoProtectedVReg, JoltISA.DstWritesNoProtectedVReg,
-        JoltISA.sideEffectingDst, and_true] <;>
+        and_true] <;>
       norm_num [JoltISA.IsProtectedJoltRegister, JoltISA.joltRegisterSlot,
         JoltISA.JoltRegisterSlot.isProtected]
   exact Projection.execProgram_preserves_projected_vregs_of_no_protected_writes

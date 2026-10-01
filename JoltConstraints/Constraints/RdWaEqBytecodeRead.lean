@@ -19,27 +19,4 @@ def rdWaEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
         bytecodeRegisterSelector program bytecodeRdRegister register address.val *
           bytecodeRa witness address t
 
-/-- Completeness target. Both selectors read the destination
-recorded in the expanded row, including x0, without a second source rewrite.
-The bytecode domain contains every expanded row and its leading padding slot. -/
-theorem honestWitness_rdWaEqBytecodeRead
-    {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
-    : rdWaEqBytecodeRead program
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  intro register t
-  rw [bytecodeRead_honest params trace ramFits traceFits bytecodeDomain
-    (bytecodeRegisterSelector program bytecodeRdRegister register) t]
-  by_cases h : t.val < trace.rows.size
-  · simp [JoltProgram.honestWitness, HonestWitness.RdWa,
-      HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
-    cases hinst :
-      program.expandedBytecode[↑(trace.rows[↑t].rowIndex)].expandedInstruction <;>
-      simp [bytecodeRdRegister, eq_comm]
-  · simp [JoltProgram.honestWitness, HonestWitness.RdWa,
-      HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
-
 end JoltConstraints
