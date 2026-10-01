@@ -91,7 +91,7 @@ noncomputable def rowLookupOutput {program : JoltProgram}
   | .VirtualMovsign _ src _ => jolt_movsign_value (source src)
   | .VirtualNegateIf _ sign src => jolt_virtual_negate_if_value (source sign) (source src)
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ | .VirtualAdviceLen dst _ _ =>
-      HonestWitness.capturedDestinationValue bytecodeRow.expandedInstruction dst row.postState
+      HonestWitness.capturedDestinationValue dst row.postState
   -- row.executes certifies success, so these enforced assertions hold.
   | .VirtualAssertHalfwordAlignment .. | .VirtualAssertWordAlignment ..
   | .VirtualAssertValidDiv0 .. | .VirtualAssertValidUnsignedRemainder ..

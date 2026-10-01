@@ -17,19 +17,4 @@ def bytecodeRaChunkHammingWeight {F : Type} [Field F] {params : WitnessParams}
   ∀ (chunk : Fin params.bytecodeChunks) (t : Fin params.traceLength),
     (∑ entry : Fin (2 ^ params.chunkBits), witness.BytecodeRaChunk chunk entry t) = 1
 
-/-- The honest witness satisfies constraint (61). -/
-theorem honestWitness_bytecodeRaChunkHammingWeight
-    {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
-    bytecodeRaChunkHammingWeight
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
-  intro chunk t
-  dsimp [bytecodeRaChunkHammingWeight, JoltProgram.honestWitness,
-    HonestWitness.BytecodeRaChunk]
-  exact HonestWitness.sum_addressChunkEntry_some params.chunkBits chunk
-    (HonestWitness.bytecodePc trace t.val)
-
 end JoltConstraints

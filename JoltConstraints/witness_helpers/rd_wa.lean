@@ -41,9 +41,9 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
       | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
       | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
-          if address = destinationRegisterAddress (capturedDestination instruction dst) then 1 else 0
+          if address = destinationRegisterAddress (capturedDestination dst) then 1 else 0
       | .LD _ dst _ _ =>
-          if address = destinationRegisterAddress (capturedDestination instruction dst) then 1 else 0
+          if address = destinationRegisterAddress (capturedDestination dst) then 1 else 0
       | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
       | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
       | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _

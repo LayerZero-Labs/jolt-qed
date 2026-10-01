@@ -285,7 +285,3 @@ structure WitnessType (Value : Type) (p : WitnessParams) where
   RamRaChunk : Fin p.ramChunks → Fin (2 ^ p.chunkBits) → Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/backend/trace/oracle.rs::oracle_table (InstructionRa).
   InstructionRa : Fin p.virtualInstructionChunks → Fin (2 ^ p.virtualChunkBits) → Fin p.traceLength → Value
-
--- TODO: Honest filling must use JoltBytecode/JoltISA/Semantics.lean::execInstr.
--- TODO: Reuse JoltBytecode/JoltISA/Instruction.lean and Core.lean; do not invent Program or State.
--- Rust extraction: crates/jolt-witness/src/witnesses/ and crates/jolt-witness/src/backend/trace/.

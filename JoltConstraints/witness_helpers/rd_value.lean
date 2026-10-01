@@ -13,7 +13,7 @@ namespace HonestWitness
 noncomputable def rdValue {F : Type} [Field F]
     (instruction : JoltISA.Instr) (state : SailJoltState) : F :=
   let destinationValue (dst : JoltISA.Dst) : F :=
-    ((capturedDestinationValue instruction dst state).toNat : F)
+    ((capturedDestinationValue dst state).toNat : F)
   match instruction with
   | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
   | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
