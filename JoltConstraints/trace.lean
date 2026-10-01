@@ -4,15 +4,13 @@ import JoltBytecode.Bundles
 
 set_option autoImplicit false
 
-/-- Rust's proof-trace conversion accepts a load only when the RAM value read
-by the tracer equals the destination value captured after execution. A load
-into x0 captures the rewritten temporary destination.
+/--
 Rust: tracer/src/trace_row.rs::captured_state. -/
 def JoltISA.Instr.LoadCaptureMatches (instruction : JoltISA.Instr)
     (preState postState : SailJoltState) : Prop :=
   match instruction with
   | .LD _ dst base imm =>
-      let capturedDst := HonestWitness.capturedDestinationValue instruction dst postState
+      let capturedDst := HonestWitness.capturedDestinationValue dst postState
       JoltISA.memoryWord? preState (JoltISA.sourceValue base preState + imm) =
         some capturedDst
   | _ => True
@@ -81,12 +79,13 @@ structure RamWindowAssumptions (addr : BitVec 64) (s : SailState) : Prop where
 completeness proofs use.
 
 This is deliberately not `all_assumptions`, the conjunction of every primitive
-assumption in `Assumptions.lean`. Two of its parts exclude real traces:
-`MstatusMppMachine` is false at `init_state`, whose virtual registers are all
+assumption in `Assumptions.lean`.
+FIXME: (ari) if the assumptions exlcude real traces Jolt accepts, then the assumptions MUST be changed.
+Two of its parts exclude real traces: `MstatusMppMachine` is false at `init_state`, whose virtual registers are all
 zero as in Rust's `Cpu::new`, so requiring it made every `JoltTrace` empty; and
 the `*VRegMatchesSail` links fail after the first CSR write, because Jolt rows
-update only the virtual CSR registers. `TraceAssumptions.of_all_assumptions`
-shows this bundle is weaker, and `Tests/TraceNonempty.lean` checks that it
+update only the virtual CSR registers.
+`TraceAssumptions.of_all_assumptions` shows this bundle is weaker, and `Tests/TraceNonempty.lean` checks that it
 holds on a concrete trace. -/
 structure TraceAssumptions (js : SailJoltState) (operands : AssumptionOperands) : Prop where
   xRegReadable : ∀ r, Assumptions.XRegReadable r js.sail
@@ -108,11 +107,12 @@ An expansion executes consecutively without incrementing the PC between its
 rows. At its end, the next source is fetched at the ISA-produced nextPC.
 The trace may be a prefix; completeness claims needing termination must say so.
 Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/emulator/cpu.rs#L654-L692 -/
+-- WARNING: (ari) These assumptions must be AI + Human audited multiple times.
+-- WARNING: (ari) NO theorem statement about constraints is valid if we do not have these justified
 structure JoltTrace (program : JoltProgram) where
   rows : Array (JoltTraceRow program)
   assumptionOperands : Fin rows.size → AssumptionOperands
-  rowAssumptions : ∀ i : Fin rows.size,
-    TraceAssumptions rows[i].preState (assumptionOperands i)
+  rowAssumptions : ∀ i : Fin rows.size, TraceAssumptions rows[i].preState (assumptionOperands i)
   /-- Every ordinary RAM access uses a window covered by `rowAssumptions`.
   Device accesses use the separate Jolt I/O semantics. -/
   ramAccessAssumed : ∀ i : Fin rows.size,

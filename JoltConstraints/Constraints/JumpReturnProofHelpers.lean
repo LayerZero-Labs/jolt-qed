@@ -98,12 +98,12 @@ theorem jump_sourceValue_after_write (rd : regidx) (value : BitVec 64)
     simp_all [JoltISA.sourceValue, JoltISA.isX0, stateAfterWrite,
       wX_update_regs, regval_into_reg]
 
-theorem jump_write_capture (dst : JoltISA.Dst) (imm : BitVec 21)
+theorem jump_write_capture (dst : JoltISA.Dst)
     (value : BitVec 64) (preState postState : SailJoltState)
     (hwritable : dst.NotX0)
     (hwrite : JoltISA.writeDst dst value preState =
       .ok () postState) :
-    HonestWitness.capturedDestinationValue (.JAL dst imm) dst postState = value := by
+    HonestWitness.capturedDestinationValue dst postState = value := by
   cases dst with
   | vreg vr =>
     by_cases hw : vr.toNat < 32
@@ -123,14 +123,14 @@ theorem jump_write_capture (dst : JoltISA.Dst) (imm : BitVec 21)
       HonestWitness.capturedDestination] using
       jump_sourceValue_after_write rd value preState hwritable
 
-theorem jump_capture_after_nextPC (instruction : JoltISA.Instr) (dst : JoltISA.Dst)
+theorem jump_capture_after_nextPC (dst : JoltISA.Dst)
     (state : SailJoltState) (target : BitVec 64) :
-    HonestWitness.capturedDestinationValue instruction dst
+    HonestWitness.capturedDestinationValue dst
       { state with sail := { state.sail with
         regs := state.sail.regs.insert Register.nextPC target } } =
-    HonestWitness.capturedDestinationValue instruction dst state := by
+    HonestWitness.capturedDestinationValue dst state := by
   unfold HonestWitness.capturedDestinationValue
-  cases HonestWitness.capturedDestination instruction dst with
+  cases HonestWitness.capturedDestination  dst with
   | vreg vr => rfl
   | xreg rd =>
     reg_cases rd <;> simp_all [JoltISA.sourceValue, Std.ExtDHashMap.get?_insert]
@@ -141,7 +141,7 @@ theorem jump_jal_link (dst : JoltISA.Dst) (imm : BitVec 64)
     (hnext : preState.sail.regs.get? Register.nextPC = some link)
     (hexec : JoltISA.execInstr (.JAL dst imm) preState =
       .ok (.Retire_Success ()) postState) :
-    HonestWitness.capturedDestinationValue (.JAL dst imm) dst postState = link := by
+    HonestWitness.capturedDestinationValue dst postState = link := by
   have hread : liftSail (Sail.readReg Register.nextPC) preState =
       .ok link preState := by
     unfold liftSail
@@ -175,7 +175,7 @@ theorem jump_jal_link (dst : JoltISA.Dst) (imm : BitVec 64)
       simp only [hwrite, hpcWrite, pure, EStateM.pure] at hexec
       cases hexec
       rw [jump_capture_after_nextPC]
-      exact jump_write_capture dst (0#21) link preState mid hwritable hwrite
+      exact jump_write_capture dst link preState mid hwritable hwrite
 
 theorem jump_jalr_link (dst : JoltISA.Dst) (base : JoltISA.Src)
     (imm : BitVec 64) (link : BitVec 64) (preState postState : SailJoltState)
@@ -183,7 +183,7 @@ theorem jump_jalr_link (dst : JoltISA.Dst) (base : JoltISA.Src)
     (hnext : preState.sail.regs.get? Register.nextPC = some link)
     (hexec : JoltISA.execInstr (.JALR dst base imm) preState =
       .ok (.Retire_Success ()) postState) :
-    HonestWitness.capturedDestinationValue (.JALR dst base imm) dst postState = link := by
+    HonestWitness.capturedDestinationValue dst postState = link := by
   have hread : liftSail (Sail.readReg Register.nextPC) preState =
       .ok link preState := by
     unfold liftSail
@@ -211,7 +211,7 @@ theorem jump_jalr_link (dst : JoltISA.Dst) (base : JoltISA.Src)
       cases writeUnit
       simp only [hwrite, pure, EStateM.pure] at hexec
       cases hexec
-      exact jump_write_capture dst (0#21) link afterPC postState hwritable hwrite
+      exact jump_write_capture dst link afterPC postState hwritable hwrite
 
 theorem jump_jump_field {F : Type} [Field F] (address link : BitVec 64)
     (compressed : Bool)
@@ -225,4 +225,6 @@ theorem jump_jump_field {F : Type} [Field F] (address link : BitVec 64)
   have hsum : link.toNat = address.toNat + (if compressed then 2 else 4) := by
     rw [hlink, BitVec.toNat_add_of_lt (by simpa only [hnat] using hnoWrap), hnat]
   rw [hsum]
-  cases compressed <;> simp <;> ring
+  cases compressed with
+  | false => simp
+  | true => simp; ring

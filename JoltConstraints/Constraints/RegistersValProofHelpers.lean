@@ -589,7 +589,8 @@ theorem loadByte_rule (addr : BitVec 64) :
   split at h
   · cases h
   · split at h
-    · split at h <;> cases h <;> rfl
+    · split at h <;> cases h
+      all_goals rfl
     · exact lift_rule _ s t v h
 
 theorem readHostBytes_frame
@@ -766,8 +767,8 @@ theorem register42_instruction_destination_canonical
       JoltRegisterEncoding.instructionIsCanonical]
 
 theorem register42_capturedDestinationValue
-    (instr : JoltISA.Instr) (dst : JoltISA.Dst) (s : SailJoltState) :
-    HonestWitness.capturedDestinationValue instr dst s =
+    (dst : JoltISA.Dst) (s : SailJoltState) :
+    HonestWitness.capturedDestinationValue dst s =
       JoltISA.sourceValue (register42_dstAsSrc dst) s := by
   cases dst <;> rfl
 

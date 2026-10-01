@@ -52,7 +52,7 @@ def DstWritesNoProtectedVReg : Dst → Prop
 private theorem inlineTmp_le6_not_protected (n : Nat) (h : n ≤ 6) :
     ¬ IsProtectedJoltRegister (inlineTmp n) := by
   interval_cases n
-  · simpa [inlineTmp0] using inlineTmp0_not_protected
+  · simp
   · simpa [inlineTmp1] using inlineTmp1_not_protected
   · simpa [inlineTmp2] using inlineTmp2_not_protected
   · simpa [inlineTmp3] using inlineTmp3_not_protected

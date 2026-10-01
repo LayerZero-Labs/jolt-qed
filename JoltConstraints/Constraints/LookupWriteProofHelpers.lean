@@ -70,11 +70,11 @@ theorem lookup_read_bind {α : Type} (src : JoltISA.Src)
     simpa only [bind, EStateM.bind, hr] using hexec
 
 /-- A destination write followed by retirement captures the value written. -/
-theorem lookup_write_retire (instruction : JoltISA.Instr) (dst : JoltISA.Dst)
+theorem lookup_write_retire (dst : JoltISA.Dst)
     (value : BitVec 64) (pre post : SailJoltState) (hw : dst.NotX0)
     (hexec : (do JoltISA.writeDst dst value; pure RETIRE_SUCCESS) pre =
       .ok (.Retire_Success ()) post) :
-    HonestWitness.capturedDestinationValue instruction dst post = value := by
+    HonestWitness.capturedDestinationValue dst post = value := by
   cases hr : JoltISA.writeDst dst value pre with
   | error e s => simp only [bind, EStateM.bind, hr] at hexec; cases hexec
   | ok u s =>
@@ -82,7 +82,7 @@ theorem lookup_write_retire (instruction : JoltISA.Instr) (dst : JoltISA.Dst)
     simp only [bind, EStateM.bind, hr, pure, EStateM.pure,
       EStateM.Result.ok.injEq, true_and] at hexec
     cases hexec.2
-    exact jump_write_capture dst 0 value pre post hw hr
+    exact jump_write_capture dst value pre post hw hr
 
 /-- Valid rows either have a writable destination or are the canonical no-op. -/
 theorem lookup_destination_writable (bc : JoltProgramRow) (valid : bc.Valid)
@@ -141,7 +141,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.ADDI dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | ADDIW dst src imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -152,7 +152,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.ADDIW dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | ANDI dst src imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -163,7 +163,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.ANDI dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | ORI dst src imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -174,7 +174,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.ORI dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | XORI dst src imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -185,7 +185,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.XORI dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | SLTI dst src imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -196,7 +196,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.SLTI dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | SLTIU dst src imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -207,7 +207,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.SLTIU dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | LUI dst imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -217,7 +217,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
         hi, HonestWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.LUI dst imm) dst _ _ _ (hw dst rfl) hexec)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
     | AUIPC dst imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -228,7 +228,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       simp only [bind, EStateM.bind, hreadpc] at hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.AUIPC dst imm) dst _ _ _ (hw dst rfl) hexec)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
     | ADDW dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -240,7 +240,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.ADDW dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | ADD dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -252,7 +252,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.ADD dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | SUB dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -264,7 +264,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.SUB dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | SUBW dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -276,7 +276,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.SUBW dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | MUL dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -288,7 +288,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.MUL dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | MULW dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -300,7 +300,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.MULW dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | MULHU dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -312,7 +312,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.MULHU dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | ANDN dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -324,7 +324,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.ANDN dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualMULI dst src imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -335,7 +335,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualMULI dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualMULIW dst src imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -346,7 +346,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualMULIW dst src imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualPow2 dst src unused =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -357,7 +357,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualPow2 dst src unused) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualPow2W dst src unused =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -368,7 +368,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualPow2W dst src unused) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualPow2I dst imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -378,7 +378,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
         hi, HonestWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualPow2I dst imm) dst _ _ _ (hw dst rfl) hexec)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
     | VirtualPow2IW dst imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -388,7 +388,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
         hi, HonestWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualPow2IW dst imm) dst _ _ _ (hw dst rfl) hexec)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
     | VirtualShiftRightBitmask dst src unused =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -399,7 +399,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualShiftRightBitmask dst src unused) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualShiftRightBitmaskI dst imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -409,7 +409,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
         hi, HonestWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualShiftRightBitmaskI dst imm) dst _ _ _ (hw dst rfl) hexec)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
     | VirtualShiftRightBitmaskW dst src unused =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -420,7 +420,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualShiftRightBitmaskW dst src unused) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualSRLI dst src bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -431,7 +431,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSRLI dst src bitmask) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualSRAI dst src bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -442,7 +442,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSRAI dst src bitmask) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualSRLIW dst src bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -453,7 +453,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSRLIW dst src bitmask) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualSRAIW dst src bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -464,7 +464,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSRAIW dst src bitmask) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualSRL dst value bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -476,7 +476,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind bitmask _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSRL dst value bitmask) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualSRA dst value bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -488,7 +488,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind bitmask _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSRA dst value bitmask) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualSRLW dst value bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -500,7 +500,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind bitmask _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSRLW dst value bitmask) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualSRAW dst value bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -512,7 +512,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind bitmask _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSRAW dst value bitmask) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualROTRI dst src bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -523,7 +523,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualROTRI dst src bitmask) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualROTRIW dst src bitmask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -534,7 +534,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualROTRIW dst src bitmask) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualRev8W dst src unused =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -545,7 +545,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualRev8W dst src unused) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualXORROT32 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -557,7 +557,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROT32 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROT24 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -569,7 +569,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROT24 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROT16 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -581,7 +581,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROT16 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROT63 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -593,7 +593,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROT63 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROTL1 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -605,7 +605,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROTL1 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROTW16 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -617,7 +617,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROTW16 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROTW12 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -629,7 +629,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROTW12 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROTW8 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -641,7 +641,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROTW8 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROTW7 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -653,7 +653,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROTW7 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROTW22 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -665,7 +665,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROTW22 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROTW19 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -677,7 +677,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROTW19 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualXORROTW6 dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -689,7 +689,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualXORROTW6 dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | OR dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -701,7 +701,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.OR dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | XOR dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -713,7 +713,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.XOR dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | AND dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -725,7 +725,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.AND dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | SLT dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -737,7 +737,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.SLT dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | SLTU dst lhs rhs =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -749,7 +749,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.SLTU dst lhs rhs) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualAlignAddr dst base imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -760,7 +760,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind base _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualAlignAddr dst base imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualWindowMaskB dst base imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -771,7 +771,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind base _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualWindowMaskB dst base imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualWindowMaskH dst base imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -782,7 +782,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind base _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualWindowMaskH dst base imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualWindowMaskW dst base imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -793,7 +793,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind base _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualWindowMaskW dst base imm) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualPext dst value mask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -805,7 +805,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind mask _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualPext dst value mask) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualPextSigned dst value mask =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -817,7 +817,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind mask _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualPextSigned dst value mask) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualShiftDataB dst value address =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -829,7 +829,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind address _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualShiftDataB dst value address) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualShiftDataH dst value address =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -841,7 +841,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind address _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualShiftDataH dst value address) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualShiftDataW dst value address =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -853,7 +853,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind address _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualShiftDataW dst value address) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | VirtualSignExtendWord dst src unused =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -864,7 +864,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualSignExtendWord dst src unused) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualZeroExtendWord dst src unused =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -875,7 +875,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualZeroExtendWord dst src unused) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualMovsign dst src unused =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
@@ -886,7 +886,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualMovsign dst src unused) dst _ _ _ (hw dst rfl) hread)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualAdvice =>
       simp only [HonestWitness.rowLookupOutput, show
         program.expandedBytecode[row.rowIndex.val].expandedInstruction = _ from hi,
@@ -910,7 +910,7 @@ theorem lookup_row_write {F : Type} [Field F] {program : JoltProgram}
       have hread := lookup_read_bind signSource _ _ _ _ hexec
       have hread2 := lookup_read_bind value _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire (.VirtualNegateIf dst signSource value) dst _ _ _ (hw dst rfl) hread2)
+        (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
     | _ =>
       simp only [JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag, hi,
         Bool.false_eq_true] at hflag

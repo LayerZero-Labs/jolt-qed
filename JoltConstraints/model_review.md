@@ -219,8 +219,8 @@ are **deferred work or documented modeling choices**, not established proofs.
 | [program.lean](program.lean), `WARNING` | Rust currently permits source-PC wraparound; `SequenceLayout.addressAdvanceNoWrap` is a temporary assumption pending the fix tracked by [Jolt issue #1949](https://github.com/a16z/jolt/issues/1949). |
 | [trace.lean](trace.lean), `FIXME` | Derive `hostIOPreservesPC` from live `execInstr` using the new Sail byte-read frame; it is still an explicit trace-row obligation. |
 | [LookupEntryProofHelpers.lean](Constraints/LookupEntryProofHelpers.lean), `FIXME` | Constraint (39) is proved modulo six per-table `sorry`s. `lookupEntryCorrect_{VirtualSRL,VirtualSRA,VirtualSRLW,VirtualSRAW,VirtualROTR,VirtualROTRW}` are false for arbitrary bytecode (non-bitmask mask operand; see `JoltConstraints/Tests/LookupShiftMask.lean`) and need the expander's bitmask invariant. |
-| [RamValEqInitialPlusPrefixRamInc.lean](Constraints/RamValEqInitialPlusPrefixRamInc.lean), `FIXME` | Relate captured RAM reads to initialized memory and prefix RAM history. |
-| [RamValFinalEqInitialPlusRamInc.lean](Constraints/RamValFinalEqInitialPlusRamInc.lean), `FIXME` | Establish Rust memory-history and terminal-state correspondence. |
+| [RamValEqInitialPlusPrefixRamInc.lean](Completeness/RamValEqInitialPlusPrefixRamInc.lean), `FIXME` | Relate captured RAM reads to initialized memory and prefix RAM history. |
+| [RamValFinalEqInitialPlusRamInc.lean](Completeness/RamValFinalEqInitialPlusRamInc.lean), `FIXME` | Establish Rust memory-history and terminal-state correspondence. |
 | [RegisterAccess.lean](../JoltBytecode/JoltISA/RegisterAccess.lean), `WARNING` | Establish the source register range guard or proof noted by the existing comment. |
 | [RiscvInstruction.lean](../JoltBytecode/RiscvInstruction.lean), six `WARNING`s | Wire equivalence for ECALL, EBREAK, LR_W, SC_W, LR_D, and SC_D; their current statement branches are `False`. |
 | [Semantics.lean](../JoltBytecode/JoltISA/Semantics.lean), `WARNING` | Rust logs a warning at this execution path; logs are absent from Lean state. Revisit if logs become observable in the claimed correspondence. |
