@@ -11,12 +11,12 @@ deriving instance Fintype for Register
 
 /-
 This models a guest program sent to Jolt
-written in the Jolt ISA. 
-We are assuming the expansion has been done. 
-TODO: (ari) We need to put in more constraints about how expansion is done, 
-as expansion is only done by the rust expander. 
+written in the Jolt ISA.
+We are assuming the expansion has been done.
+TODO: (ari) We need to put in more constraints about how expansion is done,
+as expansion is only done by the rust expander.
 We have expansions, but this is not carefully modlled in lean.
---/ 
+--/
 
 -- This is how the rust Jolt code sets all initial values
 -- default will be 0 for this case for registers
@@ -30,8 +30,8 @@ private def initialRegisterValue (entryAddress : BitVec 64)
   | r => by cases r <;> exact default
 
 -- This is meant to be a faithful translation of how rust sets initial state.
--- In Lean we also need to model that change into Sail, as that is where the RISC-V 
--- components of Jolt as modelled in Lean exists. 
+-- In Lean we also need to model that change into Sail, as that is where the RISC-V
+-- components of Jolt as modelled in Lean exists.
 -- Remember we needed to do that for proving bytecode expansions.
 noncomputable def init_state (entryAddress : BitVec 64)
     (ram : Array (BitVec 8)) (io : JoltIOState)
@@ -50,11 +50,12 @@ noncomputable def init_state (entryAddress : BitVec 64)
     adviceTape := adviceTape
     hostIO := hostIO }
 
+-- TODO: (ari) document what this theorem means
 private theorem initialRegisters_fold_get
-    (entry : BitVec 64) (registers : List Register)
+    (entryAddress : BitVec 64) (registers : List Register)
     (initial : Std.ExtDHashMap Register RegisterType) (r : Register) :
-    (registers.foldl (fun regs k => regs.insert k (initialRegisterValue entry k)) initial).get? r =
-      if r ∈ registers then some (initialRegisterValue entry r) else initial.get? r := by
+    (registers.foldl (fun regs k => regs.insert k (initialRegisterValue entryAddress k)) initial).get? r =
+      if r ∈ registers then some (initialRegisterValue entryAddress r) else initial.get? r := by
   induction registers generalizing initial with
   | nil => simp
   | cons head tail ih =>
@@ -66,12 +67,16 @@ private theorem initialRegisters_fold_get
           simp [hmem]
         · simp [hmem, heq, Ne.symm heq, Std.ExtDHashMap.get?_insert]
 
+-- If you intialialise `SailJoltState` with our `init_state` then
+-- the registers will return values given by the `initialRegisterValue` pure function
+-- we also defined
+-- Type: Plumbing Lemma
 theorem init_state_register (entry : BitVec 64) (ram : Array (BitVec 8))
     (io : JoltIOState) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
     (r : Register) :
-    (init_state entry ram io tape hostIO).sail.regs.get? r =
-      some (initialRegisterValue entry r) := by
-  simp [init_state, initialRegisters_fold_get]
+    (init_state entry ram io tape hostIO).sail.regs.get? r = some (initialRegisterValue entry r) := by
+  simp only [init_state, initialRegisters_fold_get]
+  simp only [Finset.mem_toList, Finset.mem_univ, ↓reduceIte]
 
 /-- Rust initializes both the architectural integer and virtual register banks
 to zero. This follows from the initializer, independently of the program. -/
@@ -86,8 +91,12 @@ theorem sourceValue_init_state (entry : BitVec 64) (ram : Array (BitVec 8))
       simp only [JoltISA.sourceValue]
       split <;> simp [init_state_register, initialRegisterValue] <;> rfl
 
+-- TODO: (ari) I do not like the name spaces spread out so much,
+-- I know it's already happened but it's
 namespace JoltISA.Instr
 
+-- Some Jult Instructions generate advice
+-- The remaining just return ()
 def RuntimeAdvice : JoltISA.Instr → Type
   | .VirtualAdvice .. => BitVec 64
   | _ => Unit
@@ -98,17 +107,32 @@ def withRuntimeAdvice (instruction : JoltISA.Instr)
   | .VirtualAdvice dst _ imm => .VirtualAdvice dst advice imm
   | instruction => instruction
 
+-- TODO: (ari) Poorly named
 def IsBytecodeTemplate : JoltISA.Instr → Prop
   | .VirtualAdvice _ value _ => value = 0
   | _ => True
 
 end JoltISA.Instr
 
+/- Native instructions common to both RISC-V and Jolt ISA's
+also go through the Rust bytecode expander.
+Most of the time they pass through unchanged, but under special
+circumstances when `rd=x0`, the expander re-writest the operand sources.
+`JoltISA.Instr.rewriteNative` models that re-write operation.
+
+The non-native instruction expansion is already modelled via the rust expander.
+So its handled upstream.
+--/
 def finalProgramRowInstruction (inputInstruction : JoltISA.Instr)
     (virtualSequenceRemaining : Option (BitVec 16)) : JoltISA.Instr :=
   if virtualSequenceRemaining.isNone then inputInstruction.rewriteNative
   else inputInstruction
 
+/-
+A Single JoltProgramRow matching the corresponding rust data structure
+TODO: (ari) add in a link to rust struct
++ some extra fields as justified below
+--/
 structure JoltProgramRow where
   inputInstruction : JoltISA.Instr
   address : BitVec 64
@@ -116,23 +140,32 @@ structure JoltProgramRow where
   isFirstInSequence : Bool
   isCompressed : Bool
   -- Use `.xreg` for Sail registers and `.vreg` for virtual registers.
+  -- TODO: (ari) Unclear why this is needed? Or where it's being used.
   registerOperandsCanonical :
     JoltRegisterEncoding.instructionIsCanonical
       (finalProgramRowInstruction inputInstruction virtualSequenceRemaining) = true
   -- Store zero for VirtualAdvice; each trace visit supplies its runtime value.
   isBytecodeTemplate :
     (finalProgramRowInstruction inputInstruction virtualSequenceRemaining).IsBytecodeTemplate
+  -- All immedaite values are less than 2^{64} for immedate values (this might be obvious
+  -- if the type of imm was BitVec 64, but sometimes we store the imm's as Nat, so this proof
+  -- is needed)
+  -- TODO: (ari) If I want to keep it this way
   operandsRepresentable :
     (finalProgramRowInstruction inputInstruction virtualSequenceRemaining).OperandsRepresentable := by
       exact True.intro
 
+-- TODO: (ari) this is an alias, where is it being used, can we just remove it?
 def JoltProgramRow.expandedInstruction (row : JoltProgramRow) : JoltISA.Instr :=
   finalProgramRowInstruction row.inputInstruction row.virtualSequenceRemaining
 
+-- This JoltProgram Row is in the middle of a bytecode expansion sequence
 def JoltProgramRow.continues (row : JoltProgramRow) : Bool :=
   row.virtualSequenceRemaining.getD 0 != 0
 
-def JoltISA.Dst.NotX0 : JoltISA.Dst → Prop
+-- The statement that dst is not x0
+def JoltISA.Dst.NotX0 (dst : JoltISA.Dst) : Prop :=
+  match dst with
   | .xreg rd => JoltISA.isX0 rd = false
   | .vreg _ => True
 

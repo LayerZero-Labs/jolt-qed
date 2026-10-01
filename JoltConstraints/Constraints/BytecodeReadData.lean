@@ -22,8 +22,7 @@ This is an abbreviation, not an additional witness column.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L724-L733 -/
 noncomputable def bytecodeRa {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) (address : Fin (2 ^ params.logBytecodeK))
-    (t : Fin params.traceLength) : F :=
-  ∏ chunk : Fin params.bytecodeChunks,
+    (t : Fin params.traceLength) : F := ∏ chunk : Fin params.bytecodeChunks,
     witness.BytecodeRaChunk chunk (bytecodeAddressChunk params address chunk) t
 
 /-- The fixed expanded program at its padded bytecode slot. Slot 0 and slots

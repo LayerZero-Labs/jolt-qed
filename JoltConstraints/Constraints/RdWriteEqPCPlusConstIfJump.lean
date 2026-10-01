@@ -52,10 +52,8 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
         have hexec : JoltISA.execInstr (.JAL dst imm) row.preState =
             .ok (.Retire_Success ()) row.postState := by
           simpa [JoltISA.Instr.withRuntimeAdvice, hinstNat] using row.executes
-        have hcap : HonestWitness.capturedDestinationValue bc.expandedInstruction dst row.postState =
-            bc.address + BitVec.ofNat 64
+        have hcap : HonestWitness.capturedDestinationValue dst row.postState = bc.address + BitVec.ofNat 64
               (program.sourceLength trace.sequenceLayout row.rowIndex) := by
-          rw [hinst]
           exact jump_jal_link dst imm _ row.preState row.postState hwritable hnext hexec
         have hend : bc.continues = false := by
           simpa [hinstNat] using row.validProgramRow.jumpAtSourceEnd
@@ -71,10 +69,10 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           (bc.address + BitVec.ofNat 64
             (program.sourceLength trace.sequenceLayout row.rowIndex)) bc.isCompressed
           (by rw [hlen]) hnoWrap
-        have hcapNat : HonestWitness.capturedDestinationValue (.JAL dst imm) dst
+        have hcapNat : HonestWitness.capturedDestinationValue dst
             row.postState = bc.address + BitVec.ofNat 64
               (program.sourceLength trace.sequenceLayout row.rowIndex) := by
-          simpa only [hinst] using hcap
+          exact hcap
         have hrd : HonestWitness.RdWriteValue (F := F) params trace t =
             ((bc.address + BitVec.ofNat 64
               (program.sourceLength trace.sequenceLayout row.rowIndex)).toNat : F) := by
@@ -83,8 +81,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           change HonestWitness.rdValue (F := F)
             program.expandedBytecode[row.rowIndex.val].expandedInstruction row.postState = _
           rw [hinstNat]
-          change ((HonestWitness.capturedDestinationValue (.JAL dst imm) dst
-            row.postState).toNat : F) = _
+          change ((HonestWitness.capturedDestinationValue dst row.postState).toNat : F) = _
           rw [hcapNat]
         have hpc : HonestWitness.UnexpandedPC (F := F) params trace t =
             (bc.address.toNat : F) := by
@@ -113,10 +110,9 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
         have hexec : JoltISA.execInstr (.JALR dst base imm) row.preState =
             .ok (.Retire_Success ()) row.postState := by
           simpa [JoltISA.Instr.withRuntimeAdvice, hinstNat] using row.executes
-        have hcap : HonestWitness.capturedDestinationValue bc.expandedInstruction dst row.postState =
+        have hcap : HonestWitness.capturedDestinationValue dst row.postState =
             bc.address + BitVec.ofNat 64
               (program.sourceLength trace.sequenceLayout row.rowIndex) := by
-          rw [hinst]
           exact jump_jalr_link dst base imm _ row.preState row.postState hwritable hnext hexec
         have hend : bc.continues = false := by
           simpa [hinstNat] using row.validProgramRow.jumpAtSourceEnd
@@ -132,10 +128,10 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           (bc.address + BitVec.ofNat 64
             (program.sourceLength trace.sequenceLayout row.rowIndex)) bc.isCompressed
           (by rw [hlen]) hnoWrap
-        have hcapNat : HonestWitness.capturedDestinationValue (.JALR dst base imm) dst
+        have hcapNat : HonestWitness.capturedDestinationValue dst
             row.postState = bc.address + BitVec.ofNat 64
               (program.sourceLength trace.sequenceLayout row.rowIndex) := by
-          simpa only [hinst] using hcap
+          exact hcap
         have hrd : HonestWitness.RdWriteValue (F := F) params trace t =
             ((bc.address + BitVec.ofNat 64
               (program.sourceLength trace.sequenceLayout row.rowIndex)).toNat : F) := by
@@ -144,8 +140,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           change HonestWitness.rdValue (F := F)
             program.expandedBytecode[row.rowIndex.val].expandedInstruction row.postState = _
           rw [hinstNat]
-          change ((HonestWitness.capturedDestinationValue (.JALR dst base imm) dst
-            row.postState).toNat : F) = _
+          change ((HonestWitness.capturedDestinationValue dst row.postState).toNat : F) = _
           rw [hcapNat]
         have hpc : HonestWitness.UnexpandedPC (F := F) params trace t =
             (bc.address.toNat : F) := by
