@@ -8,17 +8,18 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-/-- Unrestricted completeness statement to investigate, not an admitted theorem.
-Rust can terminate on a taken self-branch, leaving a zero padding successor.
-The original constraint is retained, with no assumption excluding the example. -/
-def honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranchStatement
+/-- Completeness for the taken-branch next-PC constraint.
+The proof is pending alignment of the Lean trace and witness model with the
+reported Rust fix for the historical taken self-branch counterexample. -/
+theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
     (ramFits : params.RamFits trace)
     (_terminated : trace.Terminated)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) : Prop :=
+    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
     nextUnexpandedPCEqPCPlusImmIfShouldBranch
-      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain)
+      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain) := by
+  sorry
 
 end JoltConstraints

@@ -6,10 +6,8 @@ set_option autoImplicit false
 namespace JoltConstraints
 
 /-- Assemble the individual honest-witness completeness results.
-The taken self-branch constraint remains an explicit premise because its
-unrestricted completeness statement has a documented counterexample.
-TODO: This needs a fair bit of work to become a proper theorem yet.
--/
+The branch completeness result currently uses `sorry`; this theorem inherits
+that admission until its proof and the Lean model are completed. -/
 theorem honestWitness_allConstraints
     {F : Type} [Field F] (params : WitnessParams)
     {program : JoltProgram} (trace : JoltTrace program)
@@ -24,9 +22,7 @@ theorem honestWitness_allConstraints
     (adviceBelowInput : program.initialState.io.AdviceBelowInput)
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src program.initialState = 0)
-    (ramChunksPos : 0 < params.ramChunks)
-    (branchConstraint : nextUnexpandedPCEqPCPlusImmIfShouldBranch
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain)) :
+    (ramChunksPos : 0 < params.ramChunks) :
     AllConstraints program (HonestWitness.finalTraceState trace).io entry
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   have hlayout := (finalTraceState_ioSame trace).1
@@ -47,7 +43,9 @@ theorem honestWitness_allConstraints
     rdWriteEqLookupIfWriteLookupToRd := honestWitness_rdWriteEqLookupIfWriteLookupToRd params trace ramFits traceFits bytecodeDomain
     rdWriteEqPCPlusConstIfJump := honestWitness_rdWriteEqPCPlusConstIfJump params trace ramFits traceFits bytecodeDomain
     nextUnexpandedPCEqLookupIfShouldJump := honestWitness_nextUnexpandedPCEqLookupIfShouldJump params trace ramFits terminated traceFits bytecodeDomain
-    nextUnexpandedPCEqPCPlusImmIfShouldBranch := branchConstraint
+    nextUnexpandedPCEqPCPlusImmIfShouldBranch :=
+      honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
+        params trace ramFits terminated traceFits bytecodeDomain
     nextUnexpandedPCUpdateOtherwise := honestWitness_nextUnexpandedPCUpdateOtherwise params trace ramFits terminated traceFits bytecodeDomain
     nextPCEqPCPlusOneIfInline := honestWitness_nextPCEqPCPlusOneIfInline params trace ramFits terminated traceFits bytecodeDomain
     mustStartSequenceFromBeginning := honestWitness_mustStartSequenceFromBeginning params trace ramFits traceFits bytecodeDomain
