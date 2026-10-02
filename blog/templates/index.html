@@ -1,13 +1,24 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <h1>{{ config.title }}</h1>
-  <p>{{ config.description }}</p>
+  <section class="intro">
+    <p class="eyebrow">Formal verification notes</p>
+    <h1>{{ config.title }}</h1>
+    <p class="lede">This is documentation for jolt-qed. We will update it soon.</p>
+  </section>
   {% set blog = get_section(path="blog/_index.md") %}
-  <h2>Posts</h2>
-  <ul>
+  <section aria-labelledby="recent-posts">
+    <div class="section-heading">
+      <h2 id="recent-posts">Recent posts</h2>
+      <a href="{{ blog.permalink }}">All posts <span aria-hidden="true">→</span></a>
+    </div>
+    <ul class="post-list">
     {% for post in blog.pages %}
-      <li><a href="{{ post.permalink }}">{{ post.title }}</a></li>
+      <li class="post-item">
+        <a class="post-title" href="{{ post.permalink }}">{{ post.title }}</a>
+        {% if post.date %}<time datetime="{{ post.date }}">{{ post.date | date(format="%B %e, %Y") }}</time>{% endif %}
+      </li>
     {% endfor %}
-  </ul>
+    </ul>
+  </section>
 {% endblock content %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}{{ term.name }} | Tutorials | {{ config.title }}{% endblock title %}
+{% block content %}
+  <header class="page-heading">
+    <p class="eyebrow"><a href="{{ get_url(path='@/tutorials/_index.md') }}">Tutorials</a></p>
+    <h1>{{ term.name }}</h1>
+  </header>
+  <ul class="post-list">
+    {% for post in term.pages %}
+      <li class="post-item">
+        <a class="post-title" href="{{ post.permalink }}">{{ post.title }}</a>
+        {% if post.date %}<time class="post-meta" datetime="{{ post.date }}">{{ post.date | date(format="%B %e, %Y") }}</time>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% endblock content %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Tags | {{ config.title }}{% endblock title %}
+{% block content %}
+  <header class="page-heading"><p class="eyebrow">Browse by topic</p><h1>Tags</h1></header>
+  <ul class="taxonomy-list">
+    {% for term in terms %}
+      <li class="taxonomy-card"><h2><a href="{{ term.permalink }}">{{ term.name }}</a></h2><p>{{ term.page_count }} {% if term.page_count == 1 %}post{% else %}posts{% endif %}</p></li>
+    {% endfor %}
+  </ul>
+{% endblock content %}

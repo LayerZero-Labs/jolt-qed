@@ -4,17 +4,36 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ config.title }}{% endblock title %}</title>
-    <meta name="description" content="{% block description %}{{ config.description }}{% endblock description %}">
+    <meta name="theme-color" content="#111318">
+    <link rel="stylesheet" href="{{ get_url(path='site.css') }}">
     {% if config.generate_feeds %}<link rel="alternate" type="application/atom+xml" href="{{ get_url(path='atom.xml') }}" title="{{ config.title }} feed">{% endif %}
+    {% block head %}{% endblock head %}
+    {% if config.extra.mathjax %}
+      <script>
+        window.MathJax = {
+          tex: {
+            inlineMath: [['$', '$'], ['\\(', '\\)']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']],
+            processEscapes: true
+          }
+        };
+      </script>
+      <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    {% endif %}
+    <script defer src="{{ get_url(path='site.js') }}"></script>
   </head>
   <body>
-    <header>
-      <a href="{{ get_url(path='') }}">{{ config.title }}</a>
-      <nav aria-label="Main navigation">
-        <a href="{{ get_url(path='blog') }}">Blog</a>
-        <a href="https://github.com/LayerZero-Labs/jolt-qed">Source code</a>
-      </nav>
-    </header>
-    <main>{% block content %}{% endblock content %}</main>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="site-shell">
+      <header class="site-header">
+        <a class="site-title" href="{{ get_url(path='') }}">{{ config.title }}</a>
+        <nav aria-label="Main navigation">
+          <a href="{{ get_url(path='@/blog/_index.md') }}">Posts</a>
+          <a href="{{ get_url(path='@/tutorials/_index.md') }}">Tutorials</a>
+          <a href="https://github.com/LayerZero-Labs/jolt-qed">Source code</a>
+        </nav>
+      </header>
+      <main id="main-content">{% block content %}{% endblock content %}</main>
+    </div>
   </body>
 </html>

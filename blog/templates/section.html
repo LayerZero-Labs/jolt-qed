@@ -2,10 +2,20 @@
 
 {% block title %}{{ section.title }} | {{ config.title }}{% endblock title %}
 {% block content %}
-  <h1>{{ section.title }}</h1>
-  <ul>
+  <header class="page-heading">
+    <p class="eyebrow">Jolt QED</p>
+    <h1>{{ section.title }}</h1>
+  </header>
+  {{ section.content | safe }}
+  <ul class="post-list">
     {% for post in section.pages %}
-      <li><a href="{{ post.permalink }}">{{ post.title }}</a></li>
+      <li class="post-item">
+        <a class="post-title" href="{{ post.permalink }}">{{ post.title }}</a>
+        <div class="post-meta">
+          {% if post.date %}<time datetime="{{ post.date }}">{{ post.date | date(format="%B %e, %Y") }}</time>{% endif %}
+          {% if post.taxonomies.tutorials %}<span>Tutorial: {% for tutorial in post.taxonomies.tutorials %}<a href="{{ get_taxonomy_url(kind='tutorials', term=tutorial) }}">{{ tutorial }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+        </div>
+      </li>
     {% endfor %}
   </ul>
 {% endblock content %}

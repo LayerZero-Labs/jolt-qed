@@ -1,11 +1,64 @@
 {% extends "base.html" %}
 
 {% block title %}{{ page.title }} | {{ config.title }}{% endblock title %}
-{% block description %}{{ page.description | default(value=config.description) }}{% endblock description %}
 {% block content %}
-  <article>
-    <h1>{{ page.title }}</h1>
-    {% if page.date %}<p><time datetime="{{ page.date }}">{{ page.date }}</time></p>{% endif %}
-    {{ page.content | safe }}
-  </article>
+  <div class="article-layout">
+    {% if page.toc | length > 0 %}
+      <nav class="toc" aria-label="On this page">
+        <p class="toc-title">Contents</p>
+        <ul>
+          {% for header in page.toc %}
+            <li class="toc-level-{{ header.level }}">
+              <a href="{{ header.permalink | safe }}">{{ header.title }}</a>
+              {% if header.children %}
+                <ul>
+                  {% for child in header.children %}
+                    <li class="toc-level-{{ child.level }}">
+                      <a href="{{ child.permalink | safe }}">{{ child.title }}</a>
+                      {% if child.children %}
+                        <ul>{% for grandchild in child.children %}<li><a href="{{ grandchild.permalink | safe }}">{{ grandchild.title }}</a></li>{% endfor %}</ul>
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </nav>
+    {% else %}
+      <div class="toc-spacer" aria-hidden="true"></div>
+    {% endif %}
+    <article>
+      <header class="article-heading">
+        <p class="eyebrow">Jolt QED / Notes</p>
+        <h1>{{ page.title }}</h1>
+        <div class="post-meta">
+          {% if page.date %}<time datetime="{{ page.date }}">{{ page.date | date(format="%B %e, %Y") }}</time>{% endif %}
+          {% if page.reading_time %}<span>{{ page.reading_time }} min read</span>{% endif %}
+        </div>
+        {% if page.taxonomies.tutorials %}
+          <p class="tutorial-note">Tutorial: {% for tutorial in page.taxonomies.tutorials %}<a href="{{ get_taxonomy_url(kind='tutorials', term=tutorial) }}">{{ tutorial }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+        {% endif %}
+      </header>
+      {{ page.content | safe }}
+      {% if page.taxonomies.tutorials %}
+        <nav class="tutorial-pagination" aria-label="Tutorial document navigation">
+          {% if page.lower and page.lower.taxonomies.tutorials and page.lower.taxonomies.tutorials[0] == page.taxonomies.tutorials[0] %}
+            <a class="tutorial-pagination-link tutorial-previous" href="{{ page.lower.permalink }}">
+              <span>← Previous</span>
+              <strong>{{ page.lower.title }}</strong>
+            </a>
+          {% else %}<span></span>{% endif %}
+          {% if page.higher and page.higher.taxonomies.tutorials and page.higher.taxonomies.tutorials[0] == page.taxonomies.tutorials[0] %}
+            <a class="tutorial-pagination-link tutorial-next" href="{{ page.higher.permalink }}">
+              <span>Next →</span>
+              <strong>{{ page.higher.title }}</strong>
+            </a>
+          {% endif %}
+        </nav>
+      {% endif %}
+    </article>
+    <div class="right-margin" aria-hidden="true"></div>
+  </div>
 {% endblock content %}

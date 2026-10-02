@@ -1,0 +1,13 @@
+{% component callout(title: string, message: string) %}
+<aside class="callout" role="note">
+  {% if title %}<p class="callout-title">{{ title }}</p>{% endif %}
+  {% if message %}<p class="callout-body">{{ message }}</p>{% endif %}
+</aside>
+{% endcomponent callout %}
+
+{% component figure(src: string, alt: string, caption: string = "") %}
+<figure>
+  <img src="{{ src }}" alt="{{ alt }}" loading="lazy">
+  {% if caption %}<figcaption>{{ caption }}</figcaption>{% endif %}
+</figure>
+{% endcomponent figure %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Tutorials | {{ config.title }}{% endblock title %}
+{% block content %}
+  <header class="page-heading">
+    <p class="eyebrow">Learn by example</p>
+    <h1>Tutorials</h1>
+    <p class="lede">Guided walkthroughs of the ideas and proofs behind Jolt QED.</p>
+  </header>
+  {% if terms | length > 0 %}
+    <ul class="taxonomy-list">
+      {% for term in terms %}
+        <li class="taxonomy-card">
+          <h2><a href="{{ term.permalink }}">{{ term.name }}</a></h2>
+          <p>{{ term.page_count }} {% if term.page_count == 1 %}document{% else %}documents{% endif %}</p>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No tutorials have been published yet.</p>
+  {% endif %}
+{% endblock content %}

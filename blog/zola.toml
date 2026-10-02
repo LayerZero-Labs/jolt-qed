@@ -1,5 +1,22 @@
 base_url = "https://layerzero-labs.github.io/jolt-qed"
 title = "Jolt QED"
-description = "Notes on formally verifying the Jolt zk-VM in Lean"
 
 generate_feeds = true
+
+# A post can be part of one or more tutorials, or stand on its own.
+taxonomies = [
+  { name = "tutorials", feed = true },
+  { name = "tags", feed = true },
+]
+taxonomy_root = "collections"
+
+[markdown]
+insert_anchor_links = "heading"
+bottom_footnotes = true
+
+[markdown.highlighting]
+theme = "catppuccin-mocha"
+style = "inline"
+
+[extra]
+mathjax = true
