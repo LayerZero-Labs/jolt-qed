@@ -87,3 +87,44 @@ theorem HonestTrace.store_offset_aligned {joltInstance : JoltInstance SourceInst
   have lowest := initial_state_lowest_address_aligned joltInstance privateInputs
     trace.initialState trace.initialized
   omega
+
+-- Rust's padded length is a power of two, at least 256, and larger than the run, so
+-- the witness always ends with at least one padding row.
+-- See : jolt/crates/jolt-prover/src/config.rs:118-122
+theorem padded_trace_length_spec (rows : Nat) :
+    rows < padded_trace_length rows ∧ 256 ≤ padded_trace_length rows ∧
+    ∃ log, padded_trace_length rows = 2 ^ log := by
+  unfold padded_trace_length
+  split
+  · -- a short run pads to 256 = 2^8
+    exact ⟨by omega, Nat.le_refl _, 8, rfl⟩
+  · -- a longer run pads to the power of two that holds it plus one
+    have holds := Nat.le_pow_clog (by decide : 1 < 2) (rows + 1)
+    exact ⟨by omega, by omega, _, rfl⟩
+
+-- A guard that passes had a true condition.
+theorem guard_some {condition : Prop} [Decidable condition] {passed : Unit}
+    (checked : (guard condition : Option Unit) = some passed) : condition := by
+  unfold guard at checked
+  split at checked
+  · assumption
+  · cases checked
+
+-- When Rust's prover accepts a run, its trace length is the padded length, and that
+-- length is within the instance's maximum.
+-- See : jolt/crates/jolt-prover/src/config.rs:118-128
+theorem HonestTrace.prover_config_trace_length {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    config.trace_length = padded_trace_length trace.rows.size ∧
+    config.trace_length ≤ joltInstance.max_padded_trace_length := by
+  unfold HonestTrace.prover_config at accepted
+  -- the length check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, lengthChecked, accepted⟩ := accepted
+  -- the address check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
+  -- the config itself
+  cases accepted
+  exact ⟨rfl, guard_some lengthChecked⟩
