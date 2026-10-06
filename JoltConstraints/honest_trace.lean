@@ -69,6 +69,12 @@ def source_is_compressed (bytecode : Array JoltInstructionRow)
 
 -- The rows Rust's tracer records when it runs the instance's program on these
 -- private inputs.
+-- WARNING: every row here runs a row of the decoded bytecode, as the proof does.
+-- Rust's emulator instead fetches each instruction from memory, so the two differ
+-- when a program rewrites its own code, jumps into a section that is not
+-- executable, or jumps into the middle of an instruction; Rust cannot prove such
+-- runs either. This model leaves them out. Reported upstream as a16z/jolt#1952
+-- (model_review.md, Upstream issues).
 -- See : jolt/tracer/src/lib.rs:74-131 (trace)
 structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) where

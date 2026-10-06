@@ -24,10 +24,13 @@ sources. They are leads to recheck, not settled findings.
   is not in this checkout. Its two Jolt fixes, `f012bfb1` (CSRRS `x0` lowering)
   and `66f35559` (VirtualSRLIW zero mask), are present at HEAD.
 - None of the known open issues is fixed at `8e536f19`: the (01) load/store
-  address wrap, the (16) self-branch with a padding successor, the (37)
-  termination-word store, source-PC wraparound
-  ([#1949](https://github.com/a16z/jolt/issues/1949)), `ram_k = 1` giving zero
-  RAM chunks, zero-mask shifts, and heap-end/stack-canary checks.
+  address wrap ([#1949](https://github.com/a16z/jolt/issues/1949)), the (16)
+  self-branch with a padding successor, the (37) termination-word store,
+  source-PC wraparound, `ram_k = 1` giving zero RAM chunks, zero-mask shifts,
+  and heap-end/stack-canary checks. Correction (2026-10-06): #1949 is the
+  wrapping LD address only; no upstream issue tracks source-PC wraparound, so
+  the old `program.lean` WARNING on `addressAdvanceNoWrap` cites the wrong issue.
+  See "Upstream issues" below for the current status of each.
 - Changes since `922af71c` that touch modeled behavior:
   - #1902 and #1958: the decoder now rejects MISC-MEM words with funct3 ≠ 000
     and LR.W/LR.D with rs2 ≠ 0.
@@ -196,3 +199,25 @@ Derived from the trace with Rust's `ProverConfig::derive_from_rows`
 `bytecodeDomain` and `ramChunksPos`. The derived `ram_K` is at least 2, since the
 program image ends at slot 2 or later, so archive item #13 (`ram_k = 1`) cannot
 arise from a derived configuration.
+
+## Upstream issues
+
+Every Jolt issue that stops a completeness proof, where we mark it, and what we
+do about it. Checked against a16z/jolt on 2026-10-06; our Rust checkout is
+`8e536f19` (2026-10-05). If an open item is still open when the main proofs
+pass, escalate it.
+
+| Issue | What breaks | Status | In our model |
+|---|---|---|---|
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the prover panics | open | condition: `HonestTrace.prover_config` (WARNING) |
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` one slot too small when the highest touched slot is a power of two | open; reproduced at `8e536f19` (`bug-report/ram-k-off-by-one/`) | modeled as fixed: `HonestTrace.prover_config` (FIXME) |
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 5 | The emulator and preprocessing load different ELF sections | open | assumed equal: `initialRam` TODO in `program_fresh.lean`; note above |
+| [#1951](https://github.com/a16z/jolt/issues/1951) items 1-2, [#1950](https://github.com/a16z/jolt/issues/1950) | Termination and panic words: the device treats them as flags, the proof as memory | open | `HonestTrace.matches_outputs` leaves the termination word out; (37) stays `sorry` |
+| [#1949](https://github.com/a16z/jolt/issues/1949) | A load/store address that wraps past 2^64 breaks the RAM-address constraint | open; a fix PR is announced in its comments | (01) stays `sorry` |
+| [#1916](https://github.com/a16z/jolt/issues/1916) | A trace that ends on a taken self-branch breaks the next-PC constraint | open; PR [#1968](https://github.com/a16z/jolt/pull/1968) merged 2026-10-06, after our checkout: the prover now refuses traces whose last row is not a jump | (16) stays `sorry`; `prover_config` does not have #1968's check yet |
+| [#1952](https://github.com/a16z/jolt/issues/1952) | The emulator fetches instructions from memory, the proof uses the decoded bytecode | open | left out: `HonestTrace` runs bytecode rows (WARNING) |
+| none | The source PC wraps past 2^64 | not reported; may be impossible (see Completeness conditions) | old assumption `addressAdvanceNoWrap`; to be checked |
+| [#1914](https://github.com/a16z/jolt/issues/1914) | CSRRS writeback | closed, fixed (`f012bfb1`) | (13) proved |
+
+Not issues, by design: spoil asserts (`HonestTrace.SpoilAssertsPass`) and runs
+longer than the instance's limit (`HonestTrace.prover_config`).
