@@ -79,7 +79,9 @@ sources. They are leads to recheck, not settled findings.
   start-only check as Rust has it.
 - Misaligned LD/SD: Lean traps (the alignment check in `Semantics.lean`), Rust
   panics (`mmu.rs:331`, `mmu.rs:437-443`). Decided 2026-10-06: assume it never
-  happens.
+  happens. No longer assumed: every row of an honest trace retires, so its LD/SD
+  address is a multiple of 8 (`HonestTraceRow.load_aligned` and `store_aligned`
+  in `execution_facts.lean`).
 - HostIO pointers: the constraints never check HostIO byte reads, but Rust
   panics on a bad pointer. So the verifier can accept runs that Rust rejects; a
   soundness theorem stated against Rust's semantics must exclude them. Harmless
@@ -139,3 +141,45 @@ Audit IDs are those of the 2026-09-25 archive.
   program commitments (BytecodeChunk, ProgramImageInit).
 - **Process** Every modeling-code change needs explicit approval, presented
   with Rust evidence, the proposed Lean code and a justification.
+
+## Completeness conditions
+
+Decided 2026-10-06. The final completeness theorem covers every honest trace
+that fits, except the runs below, which Rust's own prover does not prove. Every
+other assumption of the old theorem is proved or derived from the trace.
+
+Assumed (Rust does not prove these runs):
+
+- **Loads below the lowest address.** WARNING: Rust's tracer and prover disagree.
+  The tracer lets a program read any nonzero address at most
+  `RAM_START_ADDRESS - 8`, so also below the lowest address, and returns 0
+  (`mmu.rs:139, 154`, `jolt_device.rs:144-147`). This was added with ZeroOS
+  (#1229); before it the tracer rejected such reads as "I/O underflow". The
+  prover panics on them (`jolt-prover/src/config.rs:183-195`: "a malformed
+  trace, failed loudly here"), and the verifier can only rebuild addresses of
+  the form `8k + lowest` (`ram_raf_evaluation.rs:136-149`). We follow the
+  prover. Not reproduced yet: build such an ELF, run it through Rust, then raise
+  an issue with a16z.
+- **Spoil asserts.** `VirtualAssertEQ` with imm ≠ 0 and unequal sides: Rust warns
+  "proof will be unsatisfiable" and continues (`virtual_assert_eq.rs:24-31`);
+  the failing proof is intended. Asserts with imm = 0 are proved to hold
+  (`assert_eq_holds`).
+
+To prove, not assume:
+
+- **Address-0 loads.** Rust treats address 0 as "no RAM access"
+  (`jolt_device.rs:491-492`, `verifier.rs:986-990`). An LD at 0 reads 0 (no
+  device region starts below 8, by `validate_inputs`), and an SD at 0 never
+  retires (`mmu.rs:142-145`). Fix the one step in
+  `Constraints/RamReadSelection.lean` that uses "address ≠ 0" during the
+  rewiring. An address that wraps to 0 stays bug (01).
+- **Entry address 0.** The trace is empty (a first row would sit at address 0,
+  below every bytecode address). Constraint (53) still holds: Rust's padding row
+  is a NoOp in slot 0 (`preprocess/bytecode.rs:65-68`), the entry slot is 0
+  (`bytecode.rs:121-123, 218-226`), and Lean's `bytecodePc` gives padding 0.
+
+Derived from the trace with Rust's `ProverConfig::derive_from_rows`
+(`jolt-prover/src/config.rs:110-152`): `traceFits`, the bound in `ramFits`,
+`bytecodeDomain` and `ramChunksPos`. The derived `ram_K` is at least 2, since the
+program image ends at slot 2 or later, so archive item #13 (`ram_k = 1`) cannot
+arise from a derived configuration.

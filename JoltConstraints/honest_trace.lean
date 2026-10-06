@@ -33,6 +33,21 @@ structure HonestTraceRow (bytecode : Array JoltInstructionRow) where
   executes : JoltISA.execInstr (bytecode[rowIndex].instruction.withRuntimeAdvice runtimeAdvice)
     preState = .ok (.Retire_Success ()) postState
 
+-- The memory address one Jolt row reads or writes. For an LD or SD row it is the
+-- value in the base register before the row runs, plus the immediate (wrapping at
+-- 64 bits). Any other row does not read or write memory: none. After expansion,
+-- LD and SD are the only rows that touch memory (LB, SB, ... become sequences
+-- around them).
+-- See : jolt/crates/jolt-prover/src/config.rs:91-98 (derive_compact)
+--       jolt/tracer/src/instruction/ld.rs:16-30 (wrapping_add)
+--       jolt/crates/jolt-program/src/expand/memory/shared.rs:36-58, 481-518
+def HonestTraceRow.ram_address {bytecode : Array JoltInstructionRow}
+    (row : HonestTraceRow bytecode) : Option Nat :=
+  match bytecode[row.rowIndex].instruction with
+  | .LD _ _ base imm | .SD base _ imm =>
+      some (JoltISA.sourceValue base row.preState + imm).toNat
+  | _ => none
+
 -- Before a source instruction's rows run, Rust has already advanced the PC past it:
 -- PC is the instruction's address, nextPC is 2 bytes on if compressed, else 4.
 -- Sail PC stands for Rust's self.address and Sail nextPC for cpu.pc (Semantics.lean:77-82).
