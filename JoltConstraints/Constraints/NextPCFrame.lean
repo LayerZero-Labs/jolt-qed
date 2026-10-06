@@ -3,8 +3,8 @@ import JoltConstraints.metadata
 
 /-!
 Instruction-level nextPC frames. Ordinary instructions, untaken branches, and
-word memory operations preserve nextPC. HostIO's byte-read frame is proved in
-`SailByteReadFrame.lean` and supplies the remaining case.
+word memory operations preserve nextPC. HostIO's frame is proved in
+`HostIOFrame.lean` and supplies the remaining case.
 -/
 
 set_option autoImplicit false

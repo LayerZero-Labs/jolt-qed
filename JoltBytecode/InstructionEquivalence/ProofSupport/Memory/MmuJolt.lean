@@ -75,6 +75,14 @@ theorem store_doubleword_ram (js : SailJoltState) (addr value : BitVec 64)
   have hmod := toNat_mod_eight_of_align halign
   simp [store_doubleword, hmod, hram, hlegal]
 
+-- A one-byte load changes no state.
+theorem load_state {address : BitVec 64} {s t : SailJoltState}
+    {v : Result (BitVec 8) ExecutionResult}
+    (h : load address s = .ok v t) : t = s := by
+  simp only [load] at h
+  split at h
+  all_goals first | (cases h; rfl) | cases h
+
 -- A load changes no state.
 theorem load_doubleword_state {address : BitVec 64} {s t : SailJoltState}
     {v : Result (BitVec 64) ExecutionResult}

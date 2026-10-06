@@ -145,26 +145,21 @@ theorem store_doubleword_rule (address value : BitVec 64) :
          (fun s1 hs1 => by cases hs1; exact Same.refl _) _ heq)
     | cases h
 
-theorem readMemoryByte_rule (address : BitVec 64) :
-    Preserves (readMemoryByte address) := by
+theorem load_rule (address : BitVec 64) : Preserves (Mmu.load address) := by
   intro s t v h
-  unfold readMemoryByte at h
-  dsimp only at h
-  split_ifs at h
-  · cases hb : JoltDevice.load? s.jolt_device address.toNat with
-    | none => simp only [hb] at h; cases h
-    | some byte => simp only [hb] at h; cases h; exact Same.refl _
-  · exact lift_rule _ s t v h
+  simp only [Mmu.load] at h
+  split at h
+  all_goals first | (cases h; exact Same.refl _) | cases h
 
 theorem readHostBytes_rule
     (overflowChecks incrementAfterLast : Bool) {width : Nat}
     (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (readHostBytes readMemoryByte overflowChecks incrementAfterLast pointer n bytes) := by
+    Preserves (readHostBytes Mmu.load overflowChecks incrementAfterLast pointer n bytes) := by
   induction n generalizing pointer bytes with
   | zero => exact pure_rule _
   | succ n ih =>
     dsimp only [readHostBytes]
-    refine bind_rule (readMemoryByte_rule _) (fun result => ?_)
+    refine bind_rule (load_rule _) (fun result => ?_)
     cases result with
     | Err e => exact pure_rule _
     | Ok byte =>

@@ -29,26 +29,6 @@ noncomputable def trace_doubleword? (state : SailJoltState) (address : BitVec 64
     read_doubleword? (JoltDevice.load? state.jolt_device) address.toNat
   else read_doubleword? state.sail.mem.get? address.toNat
 
-/-- Byte access for host calls. RAM uses the existing Sail memory interface
-and device bytes use `JoltDevice.load?`. Rust's byte-load path rejects the
-unsupported peripheral mappings below with a panic, not a returned translation
-trap. Heap bounds and full MMU/capture correspondence
-remain the shared memory-model obligations (model-review #15).
-Rust: tracer/src/emulator/mmu.rs::load and load_raw. -/
-noncomputable def readMemoryByte (address : BitVec 64) :
-    JoltMonad (Result (BitVec 8) ExecutionResult) := fun state =>
-  let a := address.toNat
-  if (0x1020 ≤ a && a ≤ 0x1fff) || (0x02000000 ≤ a && a ≤ 0x0200ffff) ||
-      (0x0c000000 ≤ a && a ≤ 0x0fffffff) ||
-      (0x10000000 ≤ a && a ≤ 0x100000ff) ||
-      (0x10001000 ≤ a && a ≤ 0x10001fff) then
-    .error (Error.Assertion "VirtualHostIO: unsupported peripheral read") state
-  else if a < RAM_START_ADDRESS then
-    match JoltDevice.load? state.jolt_device a with
-    | some value => .ok (.Ok value) state
-    | none => .error (Error.Assertion "VirtualHostIO: unknown memory mapping") state
-  else liftSail (vmem_read_addr (Virtaddr address) 0 1 (Load Data) false false false) state
-
 /-
 Jolt's own memory access, following Rust's Mmu directly.
 Every Rust panic is an error. Address translation is the identity: Jolt never
@@ -116,6 +96,32 @@ def store_raw? (state : SailJoltState) (ea : Nat) (value : BitVec 8) : Option Sa
       (0x10000000 ≤ ea && ea ≤ 0x100000ff) || (0x10001000 ≤ ea && ea ≤ 0x10001fff) then none
   else if !effective_address_ok state.jolt_device ea true then none
   else (state.jolt_device.store? ea value).map fun device => { state with jolt_device := device }
+
+-- Rust backs RAM with whole 64-bit units: the total memory size rounded up to a
+-- multiple of 8. Reading past them panics.
+-- See : jolt/tracer/src/emulator/mod.rs:242-248 (init_memory)
+--       jolt/tracer/src/emulator/memory.rs:49-51, 64-69 (init_with_capacity, access_u64)
+def ram_backing_end (device : JoltDevice) : Nat :=
+  RAM_START_ADDRESS + 8 * ((device.memory_layout.get_total_memory_size.toNat + 7) / 8)
+
+-- true exactly when Rust's trace_load does not panic. It reads 64 bits starting at
+-- `ea` rounded down to a multiple of 4, from the device or from RAM.
+-- See : jolt/tracer/src/emulator/mmu.rs:480-504 (trace_load, device_doubleword)
+def trace_load_ok (device : JoltDevice) (ea : Nat) : Bool :=
+  let word_address := ea / 4 * 4
+  if word_address < RAM_START_ADDRESS then
+    (read_doubleword? device.load? word_address).isSome
+  else word_address + 8 ≤ ram_backing_end device
+
+-- One byte, as Rust's load: trace_load, then load_raw. None where Rust panics.
+-- See : jolt/tracer/src/emulator/mmu.rs:237-247 (load)
+def load? (state : SailJoltState) (ea : Nat) : Option (BitVec 8) :=
+  if trace_load_ok state.jolt_device ea then load_raw? state ea else none
+
+def load (address : BitVec 64) : JoltMonad (Result (BitVec 8) ExecutionResult) := fun state =>
+  match load? state address.toNat with
+  | some value => .ok (.Ok value) state
+  | none => .error (Error.Assertion "Load Failed") state
 
 -- RAM: Rust checks only the start address, then reads 64 bits.
 -- Device: Rust reads 8 addresses one at a time through load_raw.

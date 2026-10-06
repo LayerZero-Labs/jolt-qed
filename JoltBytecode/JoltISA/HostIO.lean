@@ -72,6 +72,6 @@ noncomputable def execHostIOWith
   pure RETIRE_SUCCESS
 
 noncomputable def execHostIO : JoltMonad ExecutionResult :=
-  execHostIOWith readMemoryByte
+  execHostIOWith Mmu.load
 
 end JoltISA

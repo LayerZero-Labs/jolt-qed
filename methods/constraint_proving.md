@@ -97,8 +97,7 @@ For the whole trace, use these fields before introducing any new condition:
 
 | Trace field | Available fact |
 | --- | --- |
-| `rows`, `assumptionOperands`, `rowAssumptions` | The execution rows and each row's `TraceAssumptions` at `preState`: architectural register readability, `CurPrivilegeMachine`, `MstatusMprvZero`, and the `RamWindowAssumptions` facts for each address in `memoryWindows`. See [`trace.lean`](../JoltConstraints/trace.lean). A new field must hold at every Rust-reachable pre-state, not just be convenient; [TraceNonempty](../JoltConstraints/Tests/TraceNonempty.lean) fails if the bundle stops holding at `init_state`. |
-| `ramAccessAssumed` | Connects `memoryWindows` to an `LD` or `SD` effective RAM address. It does **not** cover arbitrary HostIO byte addresses; the memory-window facts concern 8-byte accesses. |
+| `rows`, `rowAssumptions` | The execution rows and each row's `TraceAssumptions` at `preState`: architectural register readability. See [`trace.lean`](../JoltConstraints/trace.lean). A new field must hold at every Rust-reachable pre-state, not just be convenient; [TraceNonempty](../JoltConstraints/Tests/TraceNonempty.lean) fails if the bundle stops holding at `init_state`. |
 | `sequenceLayout` | Source/expansion layout, including the current `addressAdvanceNoWrap` assumption. Check which property is actually needed. |
 | `initialized`, `startsAtEntry`, `startsAtInitial` | Initial-state shape, first bytecode entry, and first row's prepared state. |
 | `noEarlyNextPCChange` | The nextPC frame for a nonfinal expansion row. Its source-to-row justification is separate work. |
@@ -116,18 +115,14 @@ assumption or re-proving ISA facts. Useful starting points are
 [`Bundles.lean`](../JoltBytecode/Bundles.lean), and the
 [`InstructionEquivalence/ProofSupport`](../JoltBytecode/InstructionEquivalence/ProofSupport/)
 lemmas for registers, translation, and memory. Match every helper's exact
-premises to the trace: for example, the successful byte-load lemmas in
-[`Memory/Read.lean`](../JoltBytecode/InstructionEquivalence/ProofSupport/Memory/Read.lean)
-need byte presence and 1-byte PMP/MMIO facts, which an `LD`/`SD` 8-byte
-memory window does not supply for HostIO pointers.
+premises to the trace.
 
 For reusable frame facts, check
 [`NextPCFrame.lean`](../JoltConstraints/Constraints/NextPCFrame.lean) and
-[`SailByteReadFrame.lean`](../JoltConstraints/Constraints/SailByteReadFrame.lean).
-The latter proves that Sail's successful byte-read pipeline leaves Sail state
-unchanged under the existing machine-mode/MPRV assumptions, including when it
-returns a memory fault. It carries those assumptions across all bytes of a
-live HostIO call and derives the HostIO nextPC frame from `executes`. Constraint
+[`HostIOFrame.lean`](../JoltConstraints/Constraints/HostIOFrame.lean).
+The latter proves that a HostIO call leaves Sail state unchanged (its byte reads
+go through `JoltISA.Mmu.load`, which changes no state) and derives the HostIO
+nextPC frame from `executes`. Constraint
 (17) is the worked example in
 [`NextUnexpandedPCUpdateOtherwise.lean`](../JoltConstraints/Constraints/NextUnexpandedPCUpdateOtherwise.lean).
 

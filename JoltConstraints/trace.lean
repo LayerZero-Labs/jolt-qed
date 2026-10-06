@@ -64,17 +64,6 @@ structure JoltTraceRow (program : JoltProgram) where
     program.expandedBytecode[rowIndex].expandedInstruction.LoadCaptureMatches preState postState := by
       exact True.intro
 
-/-- Sail facts about an ordinary RAM dword that the constraint proofs use to
-evaluate LD and SD rows: its bytes are present, PMP permits the access, and it
-is not MMIO. These are the parts of the memory-window conjunct of
-`all_assumptions` that the proofs consume. -/
-structure RamWindowAssumptions (addr : BitVec 64) (s : SailState) : Prop where
-  dwordPresent : Assumptions.DwordPresent addr s
-  loadPmpOk : Assumptions.LoadPmpOk addr 8 s
-  storePmpOk : Assumptions.StorePmpOk addr 8 s
-  notReadableMmio : Assumptions.NotReadableMmio addr 8 s
-  notWritableMmio : Assumptions.NotWritableMmio addr 8 s
-
 /-- Sail facts that hold at each row's pre-state and that the constraint
 completeness proofs use.
 
@@ -87,20 +76,12 @@ the `*VRegMatchesSail` links fail after the first CSR write, because Jolt rows
 update only the virtual CSR registers.
 `TraceAssumptions.of_all_assumptions` shows this bundle is weaker, and `Tests/TraceNonempty.lean` checks that it
 holds on a concrete trace. -/
-structure TraceAssumptions (js : SailJoltState) (operands : AssumptionOperands) : Prop where
+structure TraceAssumptions (js : SailJoltState) : Prop where
   xRegReadable : ∀ r, Assumptions.XRegReadable r js.sail
-  ramWindow : ∀ addr, operands.memoryWindows addr → RamWindowAssumptions addr js.sail
-  curPrivilege : Assumptions.CurPrivilegeMachine js.sail
-  mstatusMprv : Assumptions.MstatusMprvZero js.sail
 
 theorem TraceAssumptions.of_all_assumptions {js : SailJoltState} {operands : AssumptionOperands}
-    (h : all_assumptions js operands) : TraceAssumptions js operands where
+    (h : all_assumptions js operands) : TraceAssumptions js where
   xRegReadable := h.2.1
-  ramWindow addr hwindow := by
-    obtain ⟨hbytes, hload, _, hstore, _, _, _, hread, _, hwrite, _⟩ := h.2.2.2.2.1 addr hwindow
-    exact ⟨hbytes, hload, hstore, hread, hwrite⟩
-  curPrivilege := h.curPrivilege
-  mstatusMprv := h.mstatusMprv
 
 /-- Successful ISA rows with Rust's fetch and source-instruction boundaries.
 An expansion executes consecutively without incrementing the PC between its
@@ -111,17 +92,7 @@ Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/emulator/cpu.rs#L654
 -- WARNING: (ari) NO theorem statement about constraints is valid if we do not have these justified
 structure JoltTrace (program : JoltProgram) where
   rows : Array (JoltTraceRow program)
-  assumptionOperands : Fin rows.size → AssumptionOperands
-  rowAssumptions : ∀ i : Fin rows.size, TraceAssumptions rows[i].preState (assumptionOperands i)
-  /-- Every ordinary RAM access uses a window covered by `rowAssumptions`.
-  Device accesses use the separate Jolt I/O semantics. -/
-  ramAccessAssumed : ∀ i : Fin rows.size,
-    match program.expandedBytecode[rows[i].rowIndex].expandedInstruction with
-    | .LD _ _ base imm | .SD base _ imm =>
-      let addr := JoltISA.sourceValue base rows[i].preState + imm
-      JoltISA.RAM_START_ADDRESS ≤ addr.toNat →
-        (assumptionOperands i).memoryWindows addr
-    | _ => True
+  rowAssumptions : ∀ i : Fin rows.size, TraceAssumptions rows[i].preState
   sequenceLayout : program.SequenceLayout
   initialized : ∃ entry ram io tape hostIO,
     program.initialState = init_state entry ram io tape hostIO

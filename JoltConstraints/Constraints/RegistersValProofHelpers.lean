@@ -1,6 +1,6 @@
 import JoltConstraints.Constraints.LookupWriteProofHelpers
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
-import JoltConstraints.Constraints.SailByteReadFrame
+import JoltConstraints.Constraints.HostIOFrame
 
 /-!
 Instruction-level register frames for the honest register-history witness.
@@ -328,6 +328,32 @@ theorem register42_jalr_preserves_other
   exact register42_nextPC_then_writeDst_preserves_other dst src rustPC
     (jolt_jalr_target64 (JoltISA.sourceValue base s) imm) s t hne hready h
 
+namespace SailReadOnly
+
+def Preserves {α : Type} (m : SailM α) : Prop :=
+  ∀ (s t : SailState) (v : α), m s = .ok v t → t = s
+
+theorem pure_rule {α : Type} (v : α) : Preserves (pure v) := by
+  intro s t x h
+  cases h
+  rfl
+
+theorem bind_rule {α β : Type} {m : SailM α} {f : α → SailM β}
+    (hm : Preserves m) (hf : ∀ x, Preserves (f x)) : Preserves (m >>= f) := by
+  intro s t v h
+  cases hr : m s with
+  | error e s' => simp only [bind, EStateM.bind, hr] at h; cases h
+  | ok x s' =>
+    simp only [bind, EStateM.bind, hr] at h
+    exact (hf x s' t v h).trans (hm s s' x hr)
+
+theorem read_rule (r : Register) : Preserves (Sail.readReg r) := by
+  intro s t v h
+  cases readReg_pure r s v t h
+  rfl
+
+end SailReadOnly
+
 namespace Register42ReadOnly
 
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
@@ -547,28 +573,14 @@ theorem modifyAdvice_rule (f : SailJoltState → SailJoltState)
   cases h
   exact hf s
 
-theorem lift_rule {α : Type} (m : SailM α) : Preserves (liftSail m) := by
+theorem loadByte_rule (addr : BitVec 64) : Preserves (JoltISA.Mmu.load addr) := by
   intro s t v h
-  cases hr : m s.sail with
-  | error e sail => simp only [liftSail, hr] at h; cases h
-  | ok result sail => simp only [liftSail, hr] at h; cases h; rfl
-
-theorem loadByte_rule (addr : BitVec 64) :
-    Preserves (JoltISA.readMemoryByte addr) := by
-  intro s t v h
-  unfold JoltISA.readMemoryByte at h
-  dsimp only at h
-  split at h
-  · cases h
-  · split at h
-    · split at h <;> cases h
-      all_goals rfl
-    · exact lift_rule _ s t v h
+  rw [JoltISA.Mmu.load_state h]
 
 theorem readHostBytes_frame
     (overflowChecks incrementAfterLast : Bool) {width : Nat}
     (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (JoltISA.readHostBytes JoltISA.readMemoryByte
+    Preserves (JoltISA.readHostBytes JoltISA.Mmu.load
       overflowChecks incrementAfterLast pointer n bytes) := by
   induction n generalizing pointer bytes with
   | zero => exact pure_rule _
@@ -603,8 +615,7 @@ end Register42VRegs
 
 theorem register42_instruction_preserves_other
     (instr : JoltISA.Instr) (src : JoltISA.Src)
-    (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops)
+    (s t : SailJoltState)
     (hne : ∀ dst, instr.destination? = some dst →
       src ≠ register42_dstAsSrc dst)
     (hready : ∀ rd, Assumptions.XRegReadable rd s.sail)
@@ -631,8 +642,7 @@ theorem register42_instruction_preserves_other
   case VirtualHostIO dst operand imm =>
     have hrun : JoltISA.execHostIO s = .ok (.Retire_Success ()) t := by
       simpa only [JoltISA.execInstr] using hexec
-    have hsail := JoltHostFrame.execHostIO_frame s t (.Retire_Success ())
-      ⟨ha.curPrivilege, ha.mstatusMprv⟩ hrun
+    have hsail := JoltHostFrame.execHostIO_frame s t (.Retire_Success ()) hrun
     have hvregs := Register42VRegs.execHostIO_frame s t (.Retire_Success ()) hrun
     cases src with
     | xreg rd => simp only [JoltISA.sourceValue, hsail]
@@ -808,7 +818,6 @@ theorem register42_row_step
         JoltISA.sourceValue src row.preState := by
     apply register42_instruction_preserves_other
       (instr.withRuntimeAdvice row.runtimeAdvice) src row.preState row.postState
-      (trace.assumptionOperands i) ha
     · intro dst hdst
       rw [register42_destination_withRuntimeAdvice] at hdst
       exact hneq dst hdst

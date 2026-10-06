@@ -122,6 +122,11 @@ theorem jalPre_present (r : Register) :
   rw [jalPre_get?_of_ne io tape r hPC hnext, init_state_register]
   exact ⟨_, rfl⟩
 
+theorem jalPre_assumptions : TraceAssumptions (jalPre io tape) where
+  xRegReadable :=
+    xRegReadable_of_present (fun r => (jalPre_present io tape r).choose)
+      (fun r => (jalPre_present io tape r).choose_spec)
+
 /-- No memory windows: the row does not access RAM. -/
 def noOperands : AssumptionOperands :=
   { memoryWindows := fun _ => False
@@ -129,20 +134,6 @@ def noOperands : AssumptionOperands :=
     mepcReads := fun _ => False
     mepcWrites := fun _ => False
     mstatusWrites := fun _ _ => False }
-
-theorem jalPre_assumptions : TraceAssumptions (jalPre io tape) noOperands where
-  xRegReadable :=
-    xRegReadable_of_present (fun r => (jalPre_present io tape r).choose)
-      (fun r => (jalPre_present io tape r).choose_spec)
-  ramWindow _ hwindow := hwindow.elim
-  curPrivilege := by
-    constructor
-    rw [jalPre_get?_of_ne io tape _ (by decide) (by decide), init_state_register]
-    rfl
-  mstatusMprv := by
-    refine ⟨_, (jalPre_get?_of_ne io tape _ (by decide) (by decide)).trans
-      (init_state_register _ _ _ _ _ _), ?_⟩
-    rfl
 
 /-- The source-equivalence bundle `all_assumptions` fails at this pre-state.
 Its `MstatusMppMachine` conjunct needs MPP = Machine in the virtual `mstatus`
@@ -199,13 +190,9 @@ noncomputable def jalTraceRow : JoltTraceRow (jalProgram io tape) where
 
 noncomputable def jalTrace : JoltTrace (jalProgram io tape) where
   rows := #[jalTraceRow io tape]
-  assumptionOperands _ := noOperands
   rowAssumptions i := by
     obtain rfl : i = ⟨0, Nat.one_pos⟩ := Fin.ext (Nat.lt_one_iff.mp i.isLt)
     exact jalPre_assumptions io tape
-  ramAccessAssumed i := by
-    obtain rfl : i = ⟨0, Nat.one_pos⟩ := Fin.ext (Nat.lt_one_iff.mp i.isLt)
-    exact True.intro
   sequenceLayout := jalLayout io tape
   initialized := ⟨_, _, _, _, _, rfl⟩
   noEarlyNextPCChange i hcontinues := by
@@ -234,9 +221,7 @@ end
 -- `noEarlyNextPCChange` instead of the `sorry` defaults. The Sail axioms come
 -- from `execInstr`, as in the constraint theorems.
 /--
-info: 'TraceNonemptyChecks.jalTrace_terminated' depends on axioms: [load_reservation,
- plat_term_write,
- propext,
+info: 'TraceNonemptyChecks.jalTrace_terminated' depends on axioms: [propext,
  sys_enable_experimental_extensions,
  Classical.choice,
  Quot.sound]
