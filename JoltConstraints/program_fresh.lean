@@ -354,9 +354,10 @@ structure JoltInstance (Source : Type) where
   outputs : Array (BitVec 8)
   panic : Bool
   -- Part of the verifier's preprocessing; the padded trace length may not exceed it.
+  -- A usize in Rust, so 64 bits.
   -- See : jolt/crates/jolt-program/src/preprocess/program.rs:17
   --       jolt/crates/jolt-verifier/src/verifier.rs:378-383
-  max_padded_trace_length : Nat
+  max_padded_trace_length : BitVec 64
 
 -- The pure RISC-V instance seen as a Jolt instance.
 def JoltInstance.toJolt (joltInstance : JoltInstance RiscvInstruction) :

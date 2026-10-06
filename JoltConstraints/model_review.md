@@ -221,3 +221,15 @@ pass, escalate it.
 
 Not issues, by design: spoil asserts (`HonestTrace.SpoilAssertsPass`) and runs
 longer than the instance's limit (`HonestTrace.prover_config`).
+
+## Proofs owed
+
+Sorried theorems in the new pipeline. `#print axioms` shows `sorryAx` on every
+theorem that uses one of them; nothing else in the new files is sorried
+(`SourceInstruction.expand` is `opaque`, which adds no axiom).
+
+| Theorem | File | What it needs |
+|---|---|---|
+| `pc_map_ok_iff` | `program_fresh.lean` | the shape of `expand_instruction`'s output; unused so far |
+| `HonestTrace.prover_config_log_ram_K_lt` | `witness_params.lean` | every touched address is below `heap_end` (MMU), so `ram_K ≤ 2^61` |
+

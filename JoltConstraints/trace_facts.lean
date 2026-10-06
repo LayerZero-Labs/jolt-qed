@@ -117,7 +117,7 @@ theorem HonestTrace.prover_config_trace_length {joltInstance : JoltInstance Sour
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (accepted : trace.prover_config = some config) :
     config.trace_length = padded_trace_length trace.rows.size ∧
-    config.trace_length ≤ joltInstance.max_padded_trace_length := by
+    config.trace_length ≤ joltInstance.max_padded_trace_length.toNat := by
   unfold HonestTrace.prover_config at accepted
   -- the jump check
   rw [bind_some_iff] at accepted

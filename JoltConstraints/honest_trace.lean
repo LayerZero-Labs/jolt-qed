@@ -185,7 +185,7 @@ def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
   guard (trace.rows.back?.all fun last => trace.bytecode[last.rowIndex].instruction.is_jump)
   let layout := trace.initialState.jolt_device.memory_layout
   let trace_length := padded_trace_length trace.rows.size
-  guard (trace_length ≤ joltInstance.max_padded_trace_length)
+  guard (trace_length ≤ joltInstance.max_padded_trace_length.toNat)
   let addresses := trace.rows.toList.filterMap (·.ram_address)
   guard (addresses.all fun address => address == 0 || layout.get_lowest_address.toNat ≤ address)
   let touched := ((addresses.filterMap (remap_address layout)).max?).getD 0

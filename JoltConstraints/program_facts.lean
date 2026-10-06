@@ -863,3 +863,12 @@ theorem pc_map_ok_addresses (rows : Array JoltInstructionRow) (accepted : pc_map
     exact Array.getElem_mem_toList inRange
   obtain ⟨run, inRuns, inRun⟩ := List.mem_flatten.mp member
   exact (allRuns run inRuns).1 _ inRun
+
+-- Rows the PC map accepts number fewer than 2^32.
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-164 (try_new)
+theorem pc_map_ok_size (rows : Array JoltInstructionRow) (accepted : pc_map_ok rows = true) :
+    rows.size < 2 ^ 32 := by
+  unfold pc_map_ok at accepted
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at accepted
+  exact accepted.2
+
