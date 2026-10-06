@@ -299,6 +299,19 @@ def get_first_pc (bytecode : Array BytecodeSlot) (address : BitVec 64) : Option 
     | .row row => row.address == address
     | .noop => false
 
+-- The lowest address of the program image; 0 if the image is empty.
+-- See : jolt/crates/jolt-program/src/preprocess/ram.rs:46-50
+def min_bytecode_address (memory_init : List (BitVec 64 × BitVec 8)) : Nat :=
+  ((memory_init.map (·.1.toNat)).min?).getD 0
+
+-- The number of 64-bit slots the program image spans: from the slot of its lowest
+-- byte to the slot of its highest byte plus 3 (the rest of a 4-byte instruction).
+-- See : jolt/crates/jolt-program/src/preprocess/ram.rs:52-59
+--       jolt/common/src/constants.rs:6 (BYTES_PER_INSTRUCTION = 4)
+def program_image_len_words (memory_init : List (BitVec 64 × BitVec 8)) : Nat :=
+  let highest := ((memory_init.map (·.1.toNat)).max?).getD 0 + 3
+  (highest + 7) / 8 - min_bytecode_address memory_init / 8 + 1
+
 -- Jolt RAM before the first instruction: zeros for Rust's whole RAM, with the ELF
 -- bytes written over them in order. Rust allocates RAM in whole 64-bit units, so
 -- its size is the total memory size rounded up to a multiple of 8.

@@ -126,18 +126,50 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   -- starting value of 0 and stops before running anything.
   nonempty : joltInstance.program.entry_address ≠ 0 → 0 < rows.size
 
+-- The slot in Rust's RAM table that holds a memory address: the number of 64-bit
+-- steps from the lowest address. Address 0 has no slot: it means the row does not
+-- touch memory. Rust panics on an address below the lowest address; the prover
+-- config checks for that before using this.
+-- See : jolt/crates/jolt-prover/src/config.rs:183-195 (remap_address)
+def remap_address (layout : MemoryLayout) (address : Nat) : Option Nat :=
+  if address = 0 then none
+  else some ((address - layout.get_lowest_address.toNat) / 8)
+
 -- The witness length Rust's prover pads a run to: the smallest power of two that
 -- is larger than the run, and at least 256.
 -- See : jolt/crates/jolt-prover/src/config.rs:30, 113-118
 def padded_trace_length (rows : Nat) : Nat :=
   if rows < 256 then 256 else 2 ^ Nat.clog 2 (rows + 1)
 
--- Rust only proves a run whose padded length fits the instance's bound.
--- See : jolt/crates/jolt-prover/src/config.rs:119-123
---       jolt/crates/jolt-verifier/src/verifier.rs:378-383
-def HonestTrace.fits {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Prop :=
-  padded_trace_length trace.rows.size ≤ joltInstance.max_padded_trace_length
+-- The two sizes Rust's prover picks from a run before it builds the witness.
+-- See : jolt/crates/jolt-prover/src/config.rs:34-40 (ProverConfig)
+structure ProverConfig where
+  trace_length : Nat
+  ram_K : Nat
+
+-- How Rust's prover sizes the proof from a run; none where it refuses or panics.
+-- It refuses a run whose padded length passes the instance's maximum, and panics
+-- if a row touches an address below the lowest address. ram_K is the smallest
+-- power of two at least every touched slot and the end of the program image.
+-- WARNING: Rust's tracer lets a program read below the lowest address (allowed
+-- since ZeroOS, #1229; mmu.rs:139, 154), but the prover panics on it
+-- (config.rs:193). We follow the prover, so such runs have no config. Raise an
+-- issue with a16z once reproduced (model_review.md, Completeness conditions).
+-- See : jolt/crates/jolt-prover/src/config.rs:103-152 (derive_from_rows)
+--       jolt/crates/jolt-verifier/src/verifier.rs:378-383 (the length bound)
+def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
+    Option ProverConfig := do
+  let layout := trace.initialState.jolt_device.memory_layout
+  let trace_length := padded_trace_length trace.rows.size
+  guard (trace_length ≤ joltInstance.max_padded_trace_length)
+  let addresses := trace.rows.toList.filterMap (·.ram_address)
+  guard (addresses.all fun address => address == 0 || layout.get_lowest_address.toNat ≤ address)
+  let touched := ((addresses.filterMap (remap_address layout)).max?).getD 0
+  let image := joltInstance.program.memory_init
+  let image_end := (remap_address layout (min_bytecode_address image)).getD 0 +
+    program_image_len_words image + 1
+  pure { trace_length := trace_length, ram_K := 2 ^ Nat.clog 2 (max touched image_end) }
 
 -- The run's outputs are the ones the instance claims: the same bytes once trailing
 -- zero bytes are dropped, and the same panic flag. The termination word is left out
