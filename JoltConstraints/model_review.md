@@ -232,4 +232,5 @@ theorem that uses one of them; nothing else in the new files is sorried
 |---|---|---|
 | `pc_map_ok_iff` | `program_fresh.lean` | the shape of `expand_instruction`'s output; unused so far |
 | `HonestTrace.prover_config_log_ram_K_lt` | `witness_params.lean` | every touched address is below `heap_end` (MMU), so `ram_K ≤ 2^61` |
+| `HonestTraceRow.store_word_present` | `execution_facts.lean` | an SD stores over bytes that are present: RAM below `heap_end` (all put in memory by `initialRam`, stores only add) or the device's output/panic/termination words; used by `RamReadValue` |
 
