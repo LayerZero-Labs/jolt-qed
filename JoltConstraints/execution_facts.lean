@@ -508,3 +508,176 @@ theorem HonestTrace.registers_present {joltInstance : JoltInstance SourceInstruc
       obtain ⟨_, _, _, _, startState⟩ := link
       rw [startState]
       exact advance_pc_keeps_registers _ _ _ previousEnd
+
+-- A successful Sail register read returns the value stored for that register.
+private theorem readReg_value (register : Register) (sail after : SailState)
+    (value : RegisterType register)
+    (runs : (Sail.readReg register : SailM (RegisterType register)) sail = .ok value after) :
+    sail.regs.get? register = some value := by
+  unfold Sail.readReg PreSail.readReg at runs
+  simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get, pure] at runs
+  generalize lookup : sail.regs.get? register = stored at runs
+  cases stored with
+  | some storedValue =>
+    cases runs
+    rfl
+  | none =>
+    simp only [throw, throwThe, MonadExceptOf.throw, EStateM.throw] at runs
+    cases runs
+
+-- Reading a source gives its value in the state and changes nothing.
+theorem readSrc_value (source : JoltISA.Src) (state after : SailJoltState) (value : BitVec 64)
+    (runs : JoltISA.readSrc source state = .ok value after) :
+    after = state ∧ value = JoltISA.sourceValue source state := by
+  cases source with
+  | vreg register =>
+    simp only [JoltISA.readSrc_vreg, readVReg_run] at runs
+    cases runs
+    exact ⟨rfl, rfl⟩
+  | xreg register =>
+    simp only [JoltISA.readSrc_xreg] at runs
+    unfold liftSail at runs
+    cases readResult : rX_bits register state.sail with
+    | error failure sail =>
+      rw [readResult] at runs
+      cases runs
+    | ok readValue sail =>
+      have same := rX_bits_pure register state.sail readValue sail readResult
+      subst same
+      rw [readResult] at runs
+      cases runs
+      refine ⟨rfl, ?_⟩
+      -- the value read is the value stored for the register (x0 reads as 0)
+      obtain ⟨index⟩ := register
+      unfold rX_bits rX regval_from_reg at readResult
+      simp only [Sail.BitVec.toNatInt, Int.ofNat_eq_natCast, Int.toNat_natCast,
+        bind, EStateM.bind, pure, EStateM.pure] at readResult
+      unfold JoltISA.sourceValue
+      have small : index.toNat < 32 := index.isLt
+      generalize registerNumber : index.toNat = number at small readResult
+      simp only [registerNumber]
+      interval_cases number
+      all_goals dsimp only at readResult ⊢
+      · cases readResult
+        rfl
+      all_goals
+        split at readResult
+        · rename_i storedValue _ readStored
+          cases readResult
+          rw [readReg_value _ _ _ _ readStored]
+          rfl
+        · cases readResult
+
+-- An ordinary assert (imm = 0) that executes had equal sides: Rust's assert_eq!
+-- panics otherwise. (A spoil assert, imm ≠ 0, only warns in Rust; see model_review.md.)
+-- See : jolt/tracer/src/instruction/virtual_assert_eq.rs:18-23
+theorem assert_eq_holds (lhs rhs : JoltISA.Src) (state after : SailJoltState)
+    (result : ExecutionResult)
+    (runs : JoltISA.execInstr (.VirtualAssertEQ lhs rhs 0) state = .ok result after) :
+    JoltISA.sourceValue lhs state = JoltISA.sourceValue rhs state := by
+  simp only [JoltISA.execInstr] at runs
+  split at runs
+  · cases leftRead : JoltISA.readSrc lhs state with
+    | error failure middle =>
+      simp only [bind, EStateM.bind, leftRead] at runs
+      cases runs
+    | ok leftValue middle =>
+      obtain ⟨middleSame, leftIs⟩ := readSrc_value lhs state middle leftValue leftRead
+      simp only [bind, EStateM.bind, leftRead] at runs
+      rw [middleSame] at runs
+      cases rightRead : JoltISA.readSrc rhs state with
+      | error failure middle =>
+        rw [rightRead] at runs
+        cases runs
+      | ok rightValue middle =>
+        obtain ⟨_, rightIs⟩ := readSrc_value rhs state middle rightValue rightRead
+        rw [rightRead] at runs
+        dsimp only at runs
+        split at runs
+        · rename_i equal
+          rw [← leftIs, ← rightIs]
+          exact equal
+        · cases runs
+  · -- the immediate is 0, so this is not a spoil assert
+    rename_i notZero
+    exact absurd (by decide) notZero
+
+-- After inserting a value for every register in a list, a listed register holds its
+-- value and any other register keeps what it had.
+private theorem fold_insert_get (value : (register : Register) → RegisterType register) :
+    ∀ (registers : List Register) (start : Std.ExtDHashMap Register RegisterType)
+      (register : Register),
+      (registers.foldl (fun map next => map.insert next (value next)) start).get? register =
+        if register ∈ registers then some (value register) else start.get? register := by
+  intro registers
+  induction registers with
+  | nil =>
+    intro start register
+    rw [if_neg List.not_mem_nil]
+    rfl
+  | cons head tail ih =>
+    intro start register
+    rw [List.foldl_cons, ih]
+    by_cases inTail : register ∈ tail
+    · rw [if_pos inTail, if_pos (List.mem_cons_of_mem _ inTail)]
+    · rw [if_neg inTail]
+      by_cases isHead : head = register
+      · subst isHead
+        rw [Std.ExtDHashMap.get?_insert_self, if_pos List.mem_cons_self]
+      · rw [Std.ExtDHashMap.get?_insert, dif_neg (by rw [beq_iff_eq]; exact isHead)]
+        rw [if_neg (fun member => by
+          rcases List.mem_cons.mp member with same | later
+          · exact isHead same.symm
+          · exact inTail later)]
+
+-- The initial state holds each register's initial value.
+theorem init_state_register (entryAddress : BitVec 64) (ram : Array (BitVec 8))
+    (device : JoltDevice) (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
+    (register : Register) :
+    (init_state entryAddress ram device adviceTape hostIO).sail.regs.get? register =
+      some (initialRegisterValue entryAddress ram.size register) := by
+  unfold init_state
+  dsimp only
+  rw [fold_insert_get, if_pos (Finset.mem_toList.mpr (Finset.mem_univ register))]
+
+-- Every register, real or virtual, starts at 0.
+theorem init_state_sourceValue (entryAddress : BitVec 64) (ram : Array (BitVec 8))
+    (device : JoltDevice) (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
+    (source : JoltISA.Src) :
+    JoltISA.sourceValue source (init_state entryAddress ram device adviceTape hostIO) = 0 := by
+  cases source with
+  | vreg register => rfl
+  | xreg register =>
+    obtain ⟨index⟩ := register
+    unfold JoltISA.sourceValue
+    have small : index.toNat < 32 := index.isLt
+    generalize registerNumber : index.toNat = number at small
+    simp only [registerNumber]
+    interval_cases number
+    -- x0 reads as 0 directly; every other register holds its initial value, 0
+    all_goals dsimp only
+    all_goals
+      rw [init_state_register]
+      rfl
+
+-- The instance's initial state has every register, real or virtual, at 0, as Rust's
+-- Cpu::new sets them.
+-- See : jolt/tracer/src/emulator/cpu.rs:504 (x: [0; REGISTER_COUNT])
+theorem initial_state_sourceValue {Source : Type} (joltInstance : JoltInstance Source)
+    (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
+    (built : joltInstance.initial_state privateInputs = some initialState)
+    (source : JoltISA.Src) :
+    JoltISA.sourceValue source initialState = 0 := by
+  unfold JoltInstance.initial_state at built
+  cases layoutResult : joltInstance.memory_layout with
+  | none =>
+    simp only [layoutResult, bind, Option.bind] at built
+    cases built
+  | some layout =>
+    simp only [layoutResult, bind, Option.bind] at built
+    repeat' split at built
+    all_goals first
+      | exact init_state_sourceValue _ _ _ _ _ source
+      | (cases built
+         exact init_state_sourceValue _ _ _ _ _ source)
+      | cases built

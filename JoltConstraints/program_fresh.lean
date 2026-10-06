@@ -40,7 +40,7 @@ Jolt initialises its register file according to this rule.
 See : jolt/tracer/src/emulator/cpu.rs:499-528 (Cpu::new)
       jolt/tracer/src/emulator/mod.rs:285 (setup_program sets the PC to the ELF entry)
 -/
-private def initialRegisterValue (entryAddress : BitVec 64) (ramSize : Nat)
+def initialRegisterValue (entryAddress : BitVec 64) (ramSize : Nat)
     (register : Register) : RegisterType register :=
   match register with
   | .PC | .nextPC => entryAddress
@@ -299,14 +299,16 @@ def get_first_pc (bytecode : Array BytecodeSlot) (address : BitVec 64) : Option 
     | .row row => row.address == address
     | .noop => false
 
--- Jolt RAM before the first instruction: zeros from RAM_START_ADDRESS up to
--- heap_end, with the ELF bytes written over them in order.
+-- Jolt RAM before the first instruction: zeros for Rust's whole RAM, with the ELF
+-- bytes written over them in order. Rust allocates RAM in whole 64-bit units, so
+-- its size is the total memory size rounded up to a multiple of 8.
 -- See : jolt/tracer/src/emulator/mod.rs:242-261
+--       jolt/tracer/src/emulator/memory.rs:49-51 (init_with_capacity)
 -- TODO: (claude) the tracer loads RAM from the ELF section headers, while
 -- preprocessing uses decode_elf's memory_init; check that they always agree.
 def initialRam (layout : MemoryLayout) (memory_init : List (BitVec 64 × BitVec 8)) :
     Array (BitVec 8) :=
-  let zeros := Array.replicate (layout.heap_end.toNat - JoltISA.RAM_START_ADDRESS) 0
+  let zeros := Array.replicate (8 * ((layout.get_total_memory_size.toNat + 7) / 8)) 0
   memory_init.foldl
     (fun ram (address, byte) =>
       if JoltISA.RAM_START_ADDRESS ≤ address.toNat then
