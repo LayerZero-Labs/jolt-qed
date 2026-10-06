@@ -129,7 +129,7 @@ def AllRegistersPresent (sail : SailState) : Prop :=
 
 -- Inserting a value for every register in a list leaves each of them in the map,
 -- along with whatever was there before.
-private theorem fold_insert_contains (value : (register : Register) → RegisterType register) :
+theorem fold_insert_contains (value : (register : Register) → RegisterType register) :
     ∀ (registers : List Register) (start : Std.ExtDHashMap Register RegisterType)
       (register : Register),
       register ∈ registers ∨ start.contains register = true →
@@ -167,7 +167,7 @@ theorem init_state_registers_present (entryAddress : BitVec 64) (ram : Array (Bi
     (Or.inl (Finset.mem_toList.mpr (Finset.mem_univ register)))
 
 -- Overwriting one register keeps every register present.
-private theorem insert_keeps_present (regs : Std.ExtDHashMap Register RegisterType)
+theorem insert_keeps_present (regs : Std.ExtDHashMap Register RegisterType)
     (written : Register) (value : RegisterType written)
     (present : ∀ register, (regs.get? register).isSome) :
     ∀ register, ((regs.insert written value).get? register).isSome := by
@@ -176,7 +176,7 @@ private theorem insert_keeps_present (regs : Std.ExtDHashMap Register RegisterTy
     ← Std.ExtDHashMap.isSome_get?_eq_contains, present register, Bool.or_true]
 
 -- Sail's write to an integer register keeps every register present.
-private theorem wX_update_regs_keeps_present (destination : regidx) (value : BitVec 64)
+theorem wX_update_regs_keeps_present (destination : regidx) (value : BitVec 64)
     (regs : Std.ExtDHashMap Register RegisterType)
     (present : ∀ register, (regs.get? register).isSome) :
     ∀ register, ((wX_update_regs destination value regs).get? register).isSome := by
@@ -221,7 +221,7 @@ theorem read_rule (register : Register) : Preserves (Sail.readReg register) := b
 end SailStateUnchanged
 
 -- Checking whether compressed instructions are enabled only reads `misa`.
-private theorem zca_enabled_unchanged :
+theorem zca_enabled_unchanged :
     SailStateUnchanged.Preserves (currentlyEnabled extension.Ext_Zca) := by
   unfold currentlyEnabled
   apply SailStateUnchanged.bind_rule
@@ -232,7 +232,7 @@ private theorem zca_enabled_unchanged :
     exact SailStateUnchanged.pure_rule _
 
 -- A jump either changes nothing or writes the target into nextPC.
-private theorem jump_to_shape (target : BitVec 64) (sail after : SailState)
+theorem jump_to_shape (target : BitVec 64) (sail after : SailState)
     (result : ExecutionResult) (runs : jump_to target sail = .ok result after) :
     after = sail ∨ after = { sail with regs := sail.regs.insert Register.nextPC target } := by
   unfold jump_to ext_control_check_pc at runs
@@ -510,7 +510,7 @@ theorem HonestTrace.registers_present {joltInstance : JoltInstance SourceInstruc
       exact advance_pc_keeps_registers _ _ _ previousEnd
 
 -- A successful Sail register read returns the value stored for that register.
-private theorem readReg_value (register : Register) (sail after : SailState)
+theorem readReg_value (register : Register) (sail after : SailState)
     (value : RegisterType register)
     (runs : (Sail.readReg register : SailM (RegisterType register)) sail = .ok value after) :
     sail.regs.get? register = some value := by
@@ -604,7 +604,7 @@ theorem assert_eq_holds (lhs rhs : JoltISA.Src) (state after : SailJoltState)
 
 -- After inserting a value for every register in a list, a listed register holds its
 -- value and any other register keeps what it had.
-private theorem fold_insert_get (value : (register : Register) → RegisterType register) :
+theorem fold_insert_get (value : (register : Register) → RegisterType register) :
     ∀ (registers : List Register) (start : Std.ExtDHashMap Register RegisterType)
       (register : Register),
       (registers.foldl (fun map next => map.insert next (value next)) start).get? register =

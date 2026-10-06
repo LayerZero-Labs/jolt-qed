@@ -286,7 +286,7 @@ theorem rows_end_in_bounds (instructions : List (List JoltInstructionRow))
 
 -- When an Option-valued map over a list succeeds, the results line up one to one
 -- with the inputs.
-private theorem option_mapM_results {Input Output : Type} (step : Input → Option Output) :
+theorem option_mapM_results {Input Output : Type} (step : Input → Option Output) :
     ∀ (inputs : List Input) (outputs : List Output), inputs.mapM step = some outputs →
       outputs.length = inputs.length ∧
       ∀ (index : Nat) (inInputs : index < inputs.length) (inOutputs : index < outputs.length),
@@ -352,7 +352,7 @@ theorem expand_program_rows (image : Rv64ProgramImage SourceInstruction)
       exact expand_instruction_expandedRows _ _ step
 
 -- A run Rust's PC map accepts counts down to 0: row k of n has count n - 1 - k.
-private theorem valid_run_countdown (run : List JoltInstructionRow)
+theorem valid_run_countdown (run : List JoltInstructionRow)
     (valid : valid_run run = true) (position : Nat) (inRange : position < run.length) :
     (run[position].virtual_sequence_remaining.getD 0).toNat = run.length - 1 - position := by
   unfold valid_run at valid
@@ -364,7 +364,7 @@ private theorem valid_run_countdown (run : List JoltInstructionRow)
 
 -- In runs laid end to end, where each run counts down to 0 and neighbouring runs
 -- differ in address, a row with count 0 is followed by a row at a different address.
-private theorem runs_zero_then_new_address (runs : List (List JoltInstructionRow))
+theorem runs_zero_then_new_address (runs : List (List JoltInstructionRow))
     (countdown : ∀ run ∈ runs, ∀ (position : Nat) (inRange : position < run.length),
       (run[position].virtual_sequence_remaining.getD 0).toNat = run.length - 1 - position)
     (nonempty : [] ∉ runs)
@@ -422,7 +422,7 @@ private theorem runs_zero_then_new_address (runs : List (List JoltInstructionRow
 
 -- If every row with count 0 is followed by a row at a different address, then
 -- neighbouring instructions differ in address.
-private theorem instructions_boundaries (instructions : List (List JoltInstructionRow))
+theorem instructions_boundaries (instructions : List (List JoltInstructionRow))
     (valid : ∀ rows ∈ instructions, ∃ address is_compressed,
       ExpandedRows address is_compressed rows)
     (newAddress : ∀ (position : Nat) (inRange : position + 1 < instructions.flatten.length),
@@ -481,7 +481,7 @@ private theorem instructions_boundaries (instructions : List (List JoltInstructi
       exact fun equal => differ equal.symm
 
 -- One instruction's rows all share an address, so Rust's split keeps them together.
-private theorem same_address_chain (rows : List JoltInstructionRow) (address : BitVec 64)
+theorem same_address_chain (rows : List JoltInstructionRow) (address : BitVec 64)
     (same : ∀ row ∈ rows, row.address = address) :
     rows.IsChain fun a b : JoltInstructionRow => (a.address == b.address) = true := by
   induction rows with
@@ -496,7 +496,7 @@ private theorem same_address_chain (rows : List JoltInstructionRow) (address : B
         same second (List.mem_cons_of_mem _ List.mem_cons_self), beq_self_eq_true]
 
 -- The address each instruction's rows start at is that instruction's address.
-private theorem run_addresses (instructions : List (List JoltInstructionRow))
+theorem run_addresses (instructions : List (List JoltInstructionRow))
     (sources : List (SourceInstructionRow SourceInstruction))
     (lengths : instructions.length = sources.length)
     (each : ∀ (position : Nat) (inSources : position < sources.length)
@@ -587,7 +587,7 @@ theorem pc_map_ok_distinct_addresses (image : Rv64ProgramImage SourceInstruction
 
 -- In rows laid end to end, a row of a later instruction has one of the later
 -- instructions' addresses.
-private theorem later_row_address (rest : List (List JoltInstructionRow))
+theorem later_row_address (rest : List (List JoltInstructionRow))
     (moreSources : List (SourceInstructionRow SourceInstruction))
     (each : ∀ (position : Nat) (inSources : position < moreSources.length)
       (inRows : position < rest.length),

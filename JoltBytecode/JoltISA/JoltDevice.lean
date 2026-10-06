@@ -50,21 +50,36 @@ namespace MemoryLayout
 -- Arithmetic is on Nat. Every Rust `checked_*(..).expect(..)` and `assert!`
 -- becomes `none`, so `new` returns `none` exactly where Rust panics.
 
-private def checkedAdd (a b : Nat) : Option Nat :=
+def checkedAdd (a b : Nat) : Option Nat :=
   if a + b < 2 ^ 64 then some (a + b) else none
 
-private def checkedSub (a b : Nat) : Option Nat :=
+def checkedSub (a b : Nat) : Option Nat :=
   if b ≤ a then some (a - b) else none
 
-private def checkedMul (a b : Nat) : Option Nat :=
+def checkedMul (a b : Nat) : Option Nat :=
   if a * b < 2 ^ 64 then some (a * b) else none
 
 -- Rust: align_up(val, 8), local to MemoryLayout::new
-private def alignUp8 (val : Nat) : Option Nat :=
+def alignUp8 (val : Nat) : Option Nat :=
   if val % 8 = 0 then some val else checkedAdd val (8 - val % 8)
 
-private def powerOfTwoOrZero (n : Nat) : Bool :=
+def powerOfTwoOrZero (n : Nat) : Bool :=
   n == 0 || n.nextPowerOfTwo == n
+
+-- The larger advice region (trusted on a tie) starts io_bytes below RAM; the other
+-- starts where it ends. Gives (trusted start, trusted end, untrusted start, untrusted end).
+-- Rust: jolt/common/src/jolt_device.rs:402-429 (inside MemoryLayout::new)
+def adviceRegions (trusted_size untrusted_size io_bytes : Nat) : Option (Nat × Nat × Nat × Nat) :=
+  if untrusted_size ≤ trusted_size then do
+    let trusted_start ← checkedSub JoltISA.RAM_START_ADDRESS io_bytes
+    let trusted_end ← checkedAdd trusted_start trusted_size
+    let untrusted_end ← checkedAdd trusted_end untrusted_size
+    pure (trusted_start, trusted_end, trusted_end, untrusted_end)
+  else do
+    let untrusted_start ← checkedSub JoltISA.RAM_START_ADDRESS io_bytes
+    let untrusted_end ← checkedAdd untrusted_start untrusted_size
+    let trusted_end ← checkedAdd untrusted_end trusted_size
+    pure (untrusted_end, trusted_end, untrusted_start, untrusted_end)
 
 -- Rust: jolt/common/src/jolt_device.rs:348-484 (MemoryLayout::new)
 def new (config : MemoryConfig) : Option MemoryLayout := do
@@ -75,8 +90,8 @@ def new (config : MemoryConfig) : Option MemoryLayout := do
   let max_output_size ← alignUp8 config.max_output_size.toNat
   let stack_size ← alignUp8 config.stack_size.toNat
   let heap_size ← alignUp8 config.heap_size.toNat
-  if !powerOfTwoOrZero max_trusted_advice_size then none
-  if !powerOfTwoOrZero max_untrusted_advice_size then none
+  guard (powerOfTwoOrZero max_trusted_advice_size)
+  guard (powerOfTwoOrZero max_untrusted_advice_size)
 
   -- 16 bytes for the panic word and the termination word.
   let io_region_bytes ← (checkedAdd max_input_size max_trusted_advice_size)
@@ -86,18 +101,8 @@ def new (config : MemoryConfig) : Option MemoryLayout := do
   let io_region_words := (io_region_bytes / 8).nextPowerOfTwo
   let io_bytes ← checkedMul io_region_words 8
 
-  -- The larger advice region (trusted on a tie) starts at the bottom.
   let (trusted_advice_start, trusted_advice_end, untrusted_advice_start, untrusted_advice_end) ←
-    if max_untrusted_advice_size ≤ max_trusted_advice_size then do
-      let trusted_start ← checkedSub JoltISA.RAM_START_ADDRESS io_bytes
-      let trusted_end ← checkedAdd trusted_start max_trusted_advice_size
-      let untrusted_end ← checkedAdd trusted_end max_untrusted_advice_size
-      pure (trusted_start, trusted_end, trusted_end, untrusted_end)
-    else do
-      let untrusted_start ← checkedSub JoltISA.RAM_START_ADDRESS io_bytes
-      let untrusted_end ← checkedAdd untrusted_start max_untrusted_advice_size
-      let trusted_end ← checkedAdd untrusted_end max_trusted_advice_size
-      pure (untrusted_end, trusted_end, untrusted_start, untrusted_end)
+    adviceRegions max_trusted_advice_size max_untrusted_advice_size io_bytes
 
   let input_start := max untrusted_advice_end trusted_advice_end
   let input_end ← checkedAdd input_start max_input_size
