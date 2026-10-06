@@ -14,14 +14,14 @@ namespace HonestWitness
 -- matters for device words whose readback differs from their last stored value.
 -- Loads do not change the accumulated array; padding keeps its last contents.
 noncomputable def RamVal {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) (ramFits : p.RamFits trace) :
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Fin p.ramSize → Fin p.traceLength → F :=
   fun address t =>
     let before := (List.finRange t.val).foldl (fun value i =>
       let cycle : Fin p.traceLength := ⟨i.val, Nat.lt_trans i.isLt t.isLt⟩
-      let writes := OpFlags p trace .Store cycle * RamRa p trace ramFits address cycle
+      let writes := OpFlags p trace .Store cycle * RamRa p trace address cycle
       value + writes * (RamWriteValue p trace cycle - value))
-      ((initialRamWord program address.val).toNat : F)
-    before + RamRa p trace ramFits address t * (RamReadValue p trace t - before)
+      ((initialRamWord trace address.val).toNat : F)
+    before + RamRa p trace address t * (RamReadValue p trace t - before)
 
 end HonestWitness

@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
 import JoltConstraints.metadata
 import JoltConstraints.witness_helpers.branch
 import JoltConstraints.witness_helpers.op_flags

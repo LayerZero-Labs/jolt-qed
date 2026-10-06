@@ -12,7 +12,7 @@ namespace HonestWitness
 -- unsigned 128-bit magnitude, even above i128::MAX, so field multiplication is
 -- exactly the cast of Rust's S128 product. No 64-bit truncation; padding is zero.
 noncomputable def Product {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t => LeftInstructionInput p trace t * RightInstructionInput p trace t
 
 end HonestWitness

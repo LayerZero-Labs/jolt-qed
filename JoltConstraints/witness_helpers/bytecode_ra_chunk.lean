@@ -9,7 +9,7 @@ namespace HonestWitness
 -- Encode the static bytecode slot, not the trace position: executing the same
 -- instruction twice selects the same address. Padding selects slot 0.
 noncomputable def BytecodeRaChunk {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) :
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Fin p.bytecodeChunks → Fin (2 ^ p.chunkBits) → Fin p.traceLength → F :=
   fun chunk entry t =>
     addressChunkEntry p.chunkBits chunk (some (bytecodePc trace t.val)) entry

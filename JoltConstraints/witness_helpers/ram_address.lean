@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
 
 set_option autoImplicit false
 
@@ -21,12 +21,12 @@ noncomputable def ramAccessAddress (instruction : JoltISA.Instr)
 -- the pre-state, including when a load overwrites that same register.
 -- Instructions without a memory access and padding positions contribute zero.
 noncomputable def RamAddress {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       match ramAccessAddress instruction row.preState with
       | some address => (address.toNat : F)
       | none => 0

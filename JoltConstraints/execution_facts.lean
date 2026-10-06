@@ -773,3 +773,17 @@ theorem HonestTraceRow.store_aligned {bytecode : Array JoltInstructionRow}
   have runs := row.executes
   rw [withRuntimeAdvice_store row.runtimeAdvice base value imm isStore] at runs
   exact execInstr_store_aligned base value imm row.preState row.postState runs
+
+-- An SD row that retires stores over a 64-bit word that is present in memory, so the
+-- witness can record the old value, as Rust's tracer does.
+-- See : jolt/tracer/src/emulator/mmu.rs:556 (trace_store reads the old word)
+-- TODO: prove: the address is in RAM below heap_end, every byte of which initialRam
+-- puts in memory and stores only add to, or in the device's output, panic or
+-- termination words, which always read some byte.
+theorem HonestTraceRow.store_word_present {bytecode : Array JoltInstructionRow}
+    (row : HonestTraceRow bytecode) (base value : JoltISA.Src) (imm : BitVec 64)
+    (isStore : bytecode[row.rowIndex].instruction = .SD base value imm) :
+    (JoltISA.trace_doubleword? row.preState
+      (JoltISA.sourceValue base row.preState + imm)).isSome = true := by
+  sorry
+

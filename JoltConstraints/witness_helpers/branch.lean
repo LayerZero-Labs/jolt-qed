@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
 import JoltBytecode.JoltISA.semantic_helpers
 
 set_option autoImplicit false
@@ -13,14 +13,14 @@ variable {F : Type} (p : WitnessParams)
 
 -- Rust: crates/jolt-witness/src/witnesses/flags.rs::ShouldBranch::{extract, to_field}.
 -- Branch-taken bit for each padded witness position; padding contributes zero.
-noncomputable def ShouldBranch [Field F] {program : JoltProgram}
-    (trace : JoltTrace program) : Fin p.traceLength → F :=
+noncomputable def ShouldBranch [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     -- A witness index may point past the execution rows, into padding.
     if inBounds : t.val < trace.rows.size then
-      let row : JoltTraceRow program := getElem trace.rows t.val inBounds
+      let row : HonestTraceRow trace.bytecode := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       match instruction with
       | .BEQ lhs rhs _ | .BNE lhs rhs _ | .BLT lhs rhs _
       | .BGE lhs rhs _ | .BLTU lhs rhs _ | .BGEU lhs rhs _ =>

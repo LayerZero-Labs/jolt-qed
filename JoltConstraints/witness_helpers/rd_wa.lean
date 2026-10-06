@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
 import JoltConstraints.witness_helpers.register_address
 import JoltConstraints.witness_helpers.destination_capture
 
@@ -12,13 +12,13 @@ namespace HonestWitness
 -- Select the captured destination register. HOST_IO has a captured rd even though
 -- it does not write it. Absent destinations and padding select no register.
 noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) :
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Fin 128 → Fin p.traceLength → F :=
   fun address t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       match instruction with
       | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
       | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _

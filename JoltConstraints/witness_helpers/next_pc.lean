@@ -10,8 +10,8 @@ variable {F : Type} (p : WitnessParams)
 -- Expanded PC of the next execution row, which can revisit or skip bytecode slots.
 -- PC supplies zero for padding; the final witness position also has successor value zero.
 -- Rust: [successor window](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/cycle.rs:111).
-noncomputable def NextPC [Field F] {program : JoltProgram}
-    (trace : JoltTrace program) : Fin p.traceLength → F :=
+noncomputable def NextPC [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if nextInBounds : t.val + 1 < p.traceLength then
       PC p trace ⟨t.val + 1, nextInBounds⟩

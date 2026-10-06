@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
 
 set_option autoImplicit false
 
@@ -12,12 +12,12 @@ variable {F : Type} (p : WitnessParams)
 -- The source instruction's memory address, taken from the selected bytecode row.
 -- Rows in one virtual sequence share this address, even though their expanded PCs differ.
 -- Padding contributes zero, as in Rust's default trace row.
-noncomputable def UnexpandedPC [Field F] {program : JoltProgram}
-    (trace : JoltTrace program) : Fin p.traceLength → F :=
+noncomputable def UnexpandedPC [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
-      let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
+      let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
       (bytecodeRow.address.toNat : F)
     else 0
 

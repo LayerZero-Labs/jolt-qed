@@ -1,6 +1,7 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
+import JoltConstraints.witness_helpers.destination_capture
 import JoltBytecode.JoltISA.Values
 
 set_option autoImplicit false
@@ -11,10 +12,10 @@ namespace HonestWitness
 -- Reuse the pure calculations called by execInstr, including when rd = x0
 -- discards the computed value. Jumps output their target, not their link value.
 -- Advice is the exception: Rust explicitly reads the captured post-state rd.
-noncomputable def rowLookupOutput {program : JoltProgram}
-    (row : JoltTraceRow program) : BitVec 64 :=
-  let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-  let instruction := bytecodeRow.expandedInstruction
+noncomputable def rowLookupOutput {bytecode : Array JoltInstructionRow}
+    (row : HonestTraceRow bytecode) : BitVec 64 :=
+  let bytecodeRow := getElem bytecode row.rowIndex.val row.rowIndex.isLt
+  let instruction := bytecodeRow.instruction
   let source := fun src => JoltISA.sourceValue src row.preState
   match instruction with
   | .ADDI _ src imm => BitVec.ofNat 64 (JoltISA.addWide (source src) imm)
@@ -104,7 +105,7 @@ noncomputable def rowLookupOutput {program : JoltProgram}
 -- Rust: [LookupOutput](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:23).
 -- Cast the unsigned 64-bit result into F. The no-op padding output is zero.
 noncomputable def LookupOutput {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       ((rowLookupOutput (getElem trace.rows t.val inBounds)).toNat : F)

@@ -11,7 +11,7 @@ namespace HonestWitness
 -- Apply only preceding writes; padding retains the last accumulated value.
 -- A one-hot write bit replaces value by RdWriteValue; a zero bit preserves it.
 noncomputable def RegistersVal {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) :
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Fin 128 → Fin p.traceLength → F :=
   fun register t =>
     -- RegVal[reg. t] = RegVal[reg, t -1] + RdWa[reg,

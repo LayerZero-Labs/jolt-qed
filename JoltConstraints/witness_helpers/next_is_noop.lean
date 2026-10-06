@@ -10,7 +10,7 @@ namespace HonestWitness
 -- position as a no-op, so both cases give one.
 -- Rust: [successor window](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/cycle.rs:111).
 noncomputable def NextIsNoop {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if nextInBounds : t.val + 1 < p.traceLength then
       InstructionFlags p trace .IsNoop ⟨t.val + 1, nextInBounds⟩

@@ -11,7 +11,7 @@ namespace HonestWitness
 -- of witness padding and need not equal the last RamVal column: Rust rebuilds it
 -- from the final snapshot, including its special panic/termination words.
 noncomputable def RamValFinal {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.ramSize → F :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.ramSize → F :=
   fun address => ((finalRamWord trace address.val).toNat : F)
 
 end HonestWitness

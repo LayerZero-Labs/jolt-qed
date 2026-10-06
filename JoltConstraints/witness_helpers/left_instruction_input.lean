@@ -11,12 +11,12 @@ namespace HonestWitness
 -- Loads, stores, advice, HOST_IO, and other instructions with neither flag use
 -- zero, even if their trace row has a captured source register. Padding is zero.
 noncomputable def LeftInstructionInput {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       if JoltMetadata.instructionFlag instruction .LeftOperandIsPC then
         UnexpandedPC p trace t
       else if JoltMetadata.instructionFlag instruction .LeftOperandIsRs1Value then

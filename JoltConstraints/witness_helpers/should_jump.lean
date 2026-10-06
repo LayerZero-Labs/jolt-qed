@@ -11,7 +11,7 @@ namespace HonestWitness
 -- is retained there. This differs from NextIsNoop's missing-successor rule.
 -- Padding itself has Jump = 0, including the final row of a padded trace.
 noncomputable def ShouldJump {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     OpFlags p trace .Jump t *
       (if nextInBounds : t.val + 1 < p.traceLength then

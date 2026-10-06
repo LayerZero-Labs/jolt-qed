@@ -10,8 +10,8 @@ variable {F : Type} (p : WitnessParams)
 -- Source instruction address of the next execution row, taken from UnexpandedPC.
 -- The value is zero for a padding successor and at the final witness position.
 -- Rust: [successor window](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/cycle.rs:111).
-noncomputable def NextUnexpandedPC [Field F] {program : JoltProgram}
-    (trace : JoltTrace program) : Fin p.traceLength → F :=
+noncomputable def NextUnexpandedPC [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if nextInBounds : t.val + 1 < p.traceLength then
       UnexpandedPC p trace ⟨t.val + 1, nextInBounds⟩

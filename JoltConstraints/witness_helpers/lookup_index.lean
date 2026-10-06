@@ -1,4 +1,5 @@
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
+import JoltConstraints.witness_helpers.destination_capture
 import JoltBytecode.JoltISA.semantic_helpers
 
 set_option autoImplicit false
@@ -86,12 +87,12 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
 -- Rust: [LookupIndex](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:45).
 -- Both committed and virtual instruction address chunks use this same index.
 -- Padding is the no-op lookup at address 0.
-noncomputable def lookupIndex {program : JoltProgram}
-    (trace : JoltTrace program) (t : Nat) : BitVec 128 :=
+noncomputable def lookupIndex {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (t : Nat) : BitVec 128 :=
   if inBounds : t < trace.rows.size then
     let row := getElem trace.rows t inBounds
-    let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-    instructionLookupIndex bytecodeRow.expandedInstruction bytecodeRow.address row.preState row.postState
+    let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
+    instructionLookupIndex bytecodeRow.instruction bytecodeRow.address row.preState row.postState
   else 0
 
 end HonestWitness

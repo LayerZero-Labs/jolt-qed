@@ -10,7 +10,7 @@ namespace HonestWitness
 -- The same lookup address as InstructionRaChunk, split into wider virtual
 -- chunks. "Virtual" refers to a witness family, not to virtual ISA instructions.
 noncomputable def InstructionRa {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) :
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Fin p.virtualInstructionChunks → Fin (2 ^ p.virtualChunkBits) → Fin p.traceLength → F :=
   fun chunk entry t =>
     addressChunkEntry p.virtualChunkBits chunk (some (lookupIndex trace t.val).toNat) entry

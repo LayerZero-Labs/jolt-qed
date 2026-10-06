@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
 import JoltConstraints.witness_helpers.rd_value
 
 set_option autoImplicit false
@@ -15,13 +15,13 @@ variable {F : Type} (p : WitnessParams)
 -- A store supplies its source value from the pre-state, including for device stores
 -- whose effects are not an ordinary RAM overwrite. Other instructions and padding
 -- contribute zero. Encode the unsigned word in F without executing the instruction.
-noncomputable def RamWriteValue [Field F] {program : JoltProgram}
-    (trace : JoltTrace program) : Fin p.traceLength → F :=
+noncomputable def RamWriteValue [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       match instruction with
       | .LD _ _ _ _ => rdValue instruction row.postState
       | .SD _ value _ => ((JoltISA.sourceValue value row.preState).toNat : F)

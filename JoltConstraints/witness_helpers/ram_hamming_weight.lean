@@ -10,12 +10,12 @@ namespace HonestWitness
 -- independently of whether RAM word remapping accepts it.
 -- Accesses at address zero, other instructions, and padding contribute zero.
 noncomputable def RamHammingWeight {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       match ramAccessAddress instruction row.preState with
       | some address => if address = 0 then 0 else 1
       | none => 0

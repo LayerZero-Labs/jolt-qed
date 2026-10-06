@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
 import JoltConstraints.witness_helpers.register_address
 
 set_option autoImplicit false
@@ -12,14 +12,14 @@ variable {F : Type} (p : WitnessParams)
 -- Rust: [materialize_register_read_write_virtual](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/registers.rs:47).
 -- Select the instruction's second source register, including an explicit x0.
 -- An absent operand and a padding position select no register.
-noncomputable def Rs2Ra [Field F] {program : JoltProgram}
-    (trace : JoltTrace program) : Fin 128 → Fin p.traceLength → F :=
+noncomputable def Rs2Ra [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) : Fin 128 → Fin p.traceLength → F :=
   fun address t =>
     -- The witness includes padding beyond the actual execution rows.
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       match instruction with
       | .BEQ _ src _ | .BNE _ src _ | .BLT _ src _ | .BGE _ src _ | .BLTU _ src _ | .BGEU _ src _
       | .ADD _ _ src | .ADDW _ _ src | .SUB _ _ src | .SUBW _ _ src | .MUL _ _ src

@@ -10,7 +10,7 @@ namespace HonestWitness
 -- Committed chunks of the full 128-bit lookup address. Every cycle selects one
 -- entry per chunk; padding selects entry 0 rather than an entirely zero column.
 noncomputable def InstructionRaChunk {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) :
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Fin p.instructionChunks → Fin (2 ^ p.chunkBits) → Fin p.traceLength → F :=
   fun chunk entry t =>
     addressChunkEntry p.chunkBits chunk (some (lookupIndex trace t.val).toNat) entry
