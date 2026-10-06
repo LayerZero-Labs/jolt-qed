@@ -96,6 +96,7 @@ sources. They are leads to recheck, not settled findings.
   kind of section in RAM. `program_fresh.lean` assumes they agree and uses
   `memory_init` for both; Jolt's linker script (`src/linker.ld.template`) only
   places those kinds and NOBITS in RAM. Revisit once the main proofs pass.
+  Reported upstream as a16z/jolt#1951 item 5 (open).
 - Termination word (archive item (37)): the verifier expects the final I/O region
   to hold termination word 1 when the run did not panic and 0 when it did
   (`jolt-program/src/preprocess/public_io.rs:47-52`; on panic the segment is
@@ -104,7 +105,8 @@ sources. They are leads to recheck, not settled findings.
   `JoltDevice.store?` copies that. So nothing in the run itself records
   termination. `HonestTrace.matches_outputs` in `honest_trace.lean` checks only
   the outputs and the panic flag; settle where the 1 comes from before the
-  witness's final RAM is wired in.
+  witness's final RAM is wired in. Related upstream: a16z/jolt#1951 items 1-2
+  and #1950 (open).
 - An entry address of 0 passes Rust's entry check: `get_first_pc(0)` returns slot
   0, the leading NoOp (`preprocess/bytecode.rs:218-226`). `JoltInstance.bytecode`
   in `program_fresh.lean` copies this.
@@ -158,8 +160,8 @@ Assumed (Rust does not prove these runs):
   prover panics on them (`jolt-prover/src/config.rs:183-195`: "a malformed
   trace, failed loudly here"), and the verifier can only rebuild addresses of
   the form `8k + lowest` (`ram_raf_evaluation.rs:136-149`). We follow the
-  prover. Not reproduced yet: build such an ELF, run it through Rust, then raise
-  an issue with a16z.
+  prover. Already reported upstream: a16z/jolt#1951 item 3 (open), whose
+  proposed fix makes the tracer reject these reads.
 - **Spoil asserts.** `VirtualAssertEQ` with imm ≠ 0 and unequal sides: Rust warns
   "proof will be unsatisfiable" and continues (`virtual_assert_eq.rs:24-31`);
   the failing proof is intended. Asserts with imm = 0 are proved to hold
@@ -177,6 +179,17 @@ To prove, not assume:
   below every bytecode address). Constraint (53) still holds: Rust's padding row
   is a NoOp in slot 0 (`preprocess/bytecode.rs:65-68`), the entry slot is 0
   (`bytecode.rs:121-123, 218-226`), and Lean's `bytecodePc` gives padding 0.
+
+FIXME (modeled as it should be, not as Rust is):
+
+- **`ram_K` one slot too small.** Rust rounds up the highest touched slot instead
+  of that slot plus one (`jolt-prover/src/config.rs:143`). When the highest slot
+  is a power of two, the RAM table is one slot too small and Rust's witness
+  rejects the run ("RAM access address remapped to 1024, beyond ram_k 1024").
+  Reported as a16z/jolt#1951 item 4 (open), with the fix `(touched + 1)`.
+  Reproduced at `8e536f19` with `bug-report/ram-k-off-by-one/run.sh`.
+  `HonestTrace.prover_config` uses the fixed formula; rerun the repro to check
+  when Rust changes.
 
 Derived from the trace with Rust's `ProverConfig::derive_from_rows`
 (`jolt-prover/src/config.rs:110-152`): `traceFits`, the bound in `ramFits`,

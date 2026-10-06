@@ -153,8 +153,8 @@ structure ProverConfig where
 -- power of two at least every touched slot and the end of the program image.
 -- WARNING: Rust's tracer lets a program read below the lowest address (allowed
 -- since ZeroOS, #1229; mmu.rs:139, 154), but the prover panics on it
--- (config.rs:193). We follow the prover, so such runs have no config. Raise an
--- issue with a16z once reproduced (model_review.md, Completeness conditions).
+-- (config.rs:193). We follow the prover, so such runs have no config. Reported
+-- upstream as a16z/jolt#1951 item 3 (model_review.md, Completeness conditions).
 -- See : jolt/crates/jolt-prover/src/config.rs:103-152 (derive_from_rows)
 --       jolt/crates/jolt-verifier/src/verifier.rs:378-383 (the length bound)
 def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
@@ -169,7 +169,13 @@ def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
   let image := joltInstance.program.memory_init
   let image_end := (remap_address layout (min_bytecode_address image)).getD 0 +
     program_image_len_words image + 1
-  pure { trace_length := trace_length, ram_K := 2 ^ Nat.clog 2 (max touched image_end) }
+  -- FIXME: this is what ram_K should be, not what Rust computes today. Rust rounds
+  -- up `touched` instead of `touched + 1` (config.rs:143), so when the highest
+  -- touched slot is a power of two its RAM table is one slot too small and its
+  -- witness rejects the run. Reported as a16z/jolt#1951 item 4, with this fix;
+  -- still present at 8e536f19 (bug-report/ram-k-off-by-one/run.sh). Recheck once
+  -- Rust is fixed.
+  pure { trace_length := trace_length, ram_K := 2 ^ Nat.clog 2 (max (touched + 1) image_end) }
 
 -- The run's outputs are the ones the instance claims: the same bytes once trailing
 -- zero bytes are dropped, and the same panic flag. The termination word is left out

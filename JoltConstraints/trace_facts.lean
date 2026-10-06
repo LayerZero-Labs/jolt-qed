@@ -128,3 +128,79 @@ theorem HonestTrace.prover_config_trace_length {joltInstance : JoltInstance Sour
   -- the config itself
   cases accepted
   exact ⟨rfl, guard_some lengthChecked⟩
+
+-- A slot at most the highest touched slot is below ram_K: rounding up a number past
+-- the highest slot gives a power of two above it.
+theorem slot_below_ram_K (slot touched imageEnd : Nat) (atMost : slot ≤ touched) :
+    slot < 2 ^ Nat.clog 2 (max (touched + 1) imageEnd) := by
+  have roundedUp := Nat.le_pow_clog (by decide : 1 < 2) (max (touched + 1) imageEnd)
+  omega
+
+-- When Rust's prover accepts a run, every memory address a row touches is 0 (no
+-- access), or is at or above the lowest address and has a slot below ram_K.
+-- See : jolt/crates/jolt-prover/src/config.rs:125-143, 183-195
+--       jolt/crates/jolt-witness/src/backend/trace/ram.rs:260-283 (the slot must be below ram_K)
+theorem HonestTrace.prover_config_ram_fits {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config)
+    (row : HonestTraceRow trace.bytecode) (inTrace : row ∈ trace.rows) (address : Nat)
+    (touches : row.ram_address = some address) :
+    address = 0 ∨
+      (trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address ∧
+        ∃ slot, remap_address trace.initialState.jolt_device.memory_layout address = some slot ∧
+          slot < config.ram_K) := by
+  unfold HonestTrace.prover_config at accepted
+  -- the length check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
+  -- the address check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, addressesChecked, accepted⟩ := accepted
+  -- the config itself
+  cases accepted
+  dsimp only
+  -- the address is one of the run's addresses, so it passed the address check
+  have member : address ∈ trace.rows.toList.filterMap (·.ram_address) :=
+    List.mem_filterMap.mpr ⟨row, Array.mem_toList_iff.mpr inTrace, touches⟩
+  have checked := List.all_eq_true.mp (guard_some addressesChecked) address member
+  simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] at checked
+  by_cases zero : address = 0
+  · exact Or.inl zero
+  · obtain zero' | above := checked
+    · exact absurd zero' zero
+    -- its slot is at most the highest touched slot, which is below ram_K
+    have slotIs : remap_address trace.initialState.jolt_device.memory_layout address =
+        some ((address - trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat) / 8) := by
+      unfold remap_address
+      rw [if_neg zero]
+    have atMost := List.le_max?_getD_of_mem (k := 0)
+      (List.mem_filterMap.mpr ⟨address, member, slotIs⟩)
+    exact Or.inr ⟨above, _, slotIs, slot_below_ram_K _ _ _ atMost⟩
+
+-- The program image spans at least one 64-bit slot.
+theorem program_image_len_words_pos (memory_init : List (BitVec 64 × BitVec 8)) :
+    1 ≤ program_image_len_words memory_init := by
+  unfold program_image_len_words
+  dsimp only
+  omega
+
+-- When Rust's prover accepts a run, its RAM table has at least 2 slots, since the
+-- program image ends at slot 2 or later. So a RAM slot number splits into at least
+-- one chunk.
+-- See : jolt/crates/jolt-prover/src/config.rs:140-143
+theorem HonestTrace.prover_config_ram_K_ge_two {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    2 ≤ config.ram_K := by
+  unfold HonestTrace.prover_config at accepted
+  -- the length check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
+  -- the address check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
+  -- the config itself
+  cases accepted
+  dsimp only
+  have imageWords := program_image_len_words_pos joltInstance.program.memory_init
+  exact (by omega : 2 ≤ max _ _).trans (Nat.le_pow_clog (by decide : 1 < 2) _)
