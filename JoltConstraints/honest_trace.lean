@@ -147,6 +147,12 @@ def remap_address (layout : MemoryLayout) (address : Nat) : Option Nat :=
 def padded_trace_length (rows : Nat) : Nat :=
   if rows < 256 then 256 else 2 ^ Nat.clog 2 (rows + 1)
 
+-- The rows that carry Rust's Jump circuit flag: JAL and JALR.
+-- See : jolt/crates/jolt-riscv/src/instructions/i/jal.rs:6, jalr.rs:6
+def JoltISA.Instr.is_jump : JoltISA.Instr → Bool
+  | .JAL .. | .JALR .. => true
+  | _ => false
+
 -- The two sizes Rust's prover picks from a run before it builds the witness.
 -- See : jolt/crates/jolt-prover/src/config.rs:34-40 (ProverConfig)
 structure ProverConfig where
@@ -154,18 +160,23 @@ structure ProverConfig where
   ram_K : Nat
 
 -- How Rust's prover sizes the proof from a run; none where it refuses or panics.
--- It refuses a run whose padded length passes the instance's maximum, and panics
--- if a row touches an address below the lowest address. ram_K is the smallest
--- power of two at least every touched slot and the end of the program image.
+-- It refuses a run whose last row is not a jump (an empty run passes), and a run
+-- whose padded length passes the instance's maximum; it panics if a row touches an
+-- address below the lowest address. ram_K is the smallest power of two at least
+-- every touched slot and the end of the program image.
+-- The jump check came with a16z/jolt#1968 (merged 2026-10-06, upstream 00508a09),
+-- which fixed #1916: a trace ending on a taken self-branch cannot be proved.
 -- WARNING: Rust's tracer lets a program read below the lowest address (allowed
 -- since ZeroOS, #1229; mmu.rs:139, 154), but the prover panics on it
 -- (config.rs:193). We follow the prover, so such runs have no config. Reported
 -- upstream as a16z/jolt#1951 item 3 (model_review.md, Completeness conditions).
 -- See : jolt/crates/jolt-prover/src/config.rs:103-152 (derive_from_rows)
+--       jolt/crates/jolt-prover/src/config.rs:122-126 at upstream 629ed77b (the jump check)
 --       jolt/crates/jolt-verifier/src/verifier.rs:378-383 (the length bound)
 def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Option ProverConfig := do
+  guard (trace.rows.back?.all fun last => trace.bytecode[last.rowIndex].instruction.is_jump)
   let layout := trace.initialState.jolt_device.memory_layout
   let trace_length := padded_trace_length trace.rows.size
   guard (trace_length ≤ joltInstance.max_padded_trace_length)
@@ -179,8 +190,8 @@ def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
   -- up `touched` instead of `touched + 1` (config.rs:143), so when the highest
   -- touched slot is a power of two its RAM table is one slot too small and its
   -- witness rejects the run. Reported as a16z/jolt#1951 item 4, with this fix;
-  -- still present at 8e536f19 (bug-report/ram-k-off-by-one/run.sh). Recheck once
-  -- Rust is fixed.
+  -- reproduced at 8e536f19 (bug-report/ram-k-off-by-one/run.sh), and the formula is
+  -- unchanged at upstream 629ed77b (config.rs:159). Recheck once Rust is fixed.
   pure { trace_length := trace_length, ram_K := 2 ^ Nat.clog 2 (max (touched + 1) image_end) }
 
 -- Rust only proves a run in which every spoil assert that runs has equal sides. A

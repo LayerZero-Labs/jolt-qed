@@ -119,6 +119,9 @@ theorem HonestTrace.prover_config_trace_length {joltInstance : JoltInstance Sour
     config.trace_length = padded_trace_length trace.rows.size ∧
     config.trace_length ≤ joltInstance.max_padded_trace_length := by
   unfold HonestTrace.prover_config at accepted
+  -- the jump check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
   -- the length check
   rw [bind_some_iff] at accepted
   obtain ⟨_, lengthChecked, accepted⟩ := accepted
@@ -150,6 +153,9 @@ theorem HonestTrace.prover_config_ram_fits {joltInstance : JoltInstance SourceIn
         ∃ slot, remap_address trace.initialState.jolt_device.memory_layout address = some slot ∧
           slot < config.ram_K) := by
   unfold HonestTrace.prover_config at accepted
+  -- the jump check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
   -- the length check
   rw [bind_some_iff] at accepted
   obtain ⟨_, _, accepted⟩ := accepted
@@ -193,6 +199,9 @@ theorem HonestTrace.prover_config_ram_K_ge_two {joltInstance : JoltInstance Sour
     (config : ProverConfig) (accepted : trace.prover_config = some config) :
     2 ≤ config.ram_K := by
   unfold HonestTrace.prover_config at accepted
+  -- the jump check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
   -- the length check
   rw [bind_some_iff] at accepted
   obtain ⟨_, _, accepted⟩ := accepted
