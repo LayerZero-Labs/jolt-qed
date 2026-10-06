@@ -6,13 +6,13 @@ namespace LoadCaptureChecks
 
 -- A load to x0 captures its result in the rewritten virtual destination.
 example (preState postState : SailJoltState)
-    (readNine : JoltISA.memoryWord? preState
+    (readNine : JoltISA.trace_doubleword? preState
       (JoltISA.sourceValue (.vreg 41) preState) = some 9)
     (capturedZero : postState.vregs JoltISA.rdZeroRewriteVReg = 0) :
     ¬ ((JoltISA.Instr.LD .normal (.xreg (.Regidx 0)) (.vreg 41) 0).rewriteNative).LoadCaptureMatches
       preState postState := by
   intro hMatches
-  have hRead : JoltISA.memoryWord? preState (preState.vregs (41#7)) =
+  have hRead : JoltISA.trace_doubleword? preState (preState.vregs (41#7)) =
       some (9#64) := by
     simpa [JoltISA.sourceValue] using readNine
   simp [JoltISA.Instr.rewriteNative, JoltISA.Instr.LoadCaptureMatches,
@@ -24,12 +24,12 @@ example (preState postState : SailJoltState)
 example {program : JoltProgram} (row : JoltTraceRow program)
     (isLoad : program.expandedBytecode[row.rowIndex].expandedInstruction =
       .LD .normal (.vreg JoltISA.rdZeroRewriteVReg) (.vreg 41) 0)
-    (readNine : JoltISA.memoryWord? row.preState
+    (readNine : JoltISA.trace_doubleword? row.preState
       (JoltISA.sourceValue (.vreg 41) row.preState) = some 9) :
     row.postState.vregs JoltISA.rdZeroRewriteVReg = 9 := by
   have captured := row.loadCaptureMatches
   rw [isLoad] at captured
-  have hRead : JoltISA.memoryWord? row.preState
+  have hRead : JoltISA.trace_doubleword? row.preState
       (row.preState.vregs (41#7)) = some (9#64) := by
     simpa [JoltISA.sourceValue] using readNine
   simp [JoltISA.Instr.LoadCaptureMatches, JoltISA.sourceValue,
@@ -39,7 +39,7 @@ example {program : JoltProgram} (row : JoltTraceRow program)
 
 -- A virtual destination with the captured word is accepted.
 example (preState postState : SailJoltState)
-    (readNine : JoltISA.memoryWord? preState
+    (readNine : JoltISA.trace_doubleword? preState
       (JoltISA.sourceValue (.vreg 41) preState) = some 9)
     (writtenNine : postState.vregs 40 = 9) :
     (JoltISA.Instr.LD .normal (.vreg 40) (.vreg 41) 0).LoadCaptureMatches
@@ -49,7 +49,7 @@ example (preState postState : SailJoltState)
 
 -- Loading zero into x0 passes when the virtual destination also holds zero.
 example (preState postState : SailJoltState)
-    (readZero : JoltISA.memoryWord? preState
+    (readZero : JoltISA.trace_doubleword? preState
       (JoltISA.sourceValue (.vreg 41) preState) = some 0)
     (capturedZero : postState.vregs JoltISA.rdZeroRewriteVReg = 0) :
     ((JoltISA.Instr.LD .normal (.xreg (.Regidx 0)) (.vreg 41) 0).rewriteNative).LoadCaptureMatches

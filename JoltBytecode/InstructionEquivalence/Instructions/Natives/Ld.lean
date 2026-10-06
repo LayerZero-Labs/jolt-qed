@@ -27,7 +27,13 @@ theorem ldNative_x0_run_from_memory_read
       vmem_read_addr (Virtaddr (baseValue + sign_extend (m := 64) imm)) 0 8
         (Load Data) false false false js.sail = .ok (Ok loaded) js.sail)
     (h_ram : JoltISA.RAM_START_ADDRESS ≤
-      (baseValue + sign_extend (m := 64) imm).toNat) :
+      (baseValue + sign_extend (m := 64) imm).toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hbytes : MemBytesPresentAt js.sail (baseValue + sign_extend (m := 64) imm) 8)
+    (hpmp : Assumptions.LoadPmpOk (baseValue + sign_extend (m := 64) imm) 8 js.sail)
+    (hmmio : Assumptions.NotReadableMmio (baseValue + sign_extend (m := 64) imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk (baseValue + sign_extend (m := 64) imm) js) :
     (JoltISA.execInstr (JoltISA.ldNativeInstr (regidx.Regidx 0) rs1 imm)).run js =
       .ok RETIRE_SUCCESS
         { js with vregs := fun r =>
@@ -35,6 +41,7 @@ theorem ldNative_x0_run_from_memory_read
   exact JoltISA.ld_run_vreg_xreg_from_memory_read
     JoltISA.rdZeroRewriteVReg rs1 imm js baseValue loaded hbase h_align hread
     (by unfold WritableVReg JoltISA.rdZeroRewriteVReg; decide) h_ram
+    hpriv hmprv hbytes hpmp hmmio hjolt
 
 private theorem sign_extend_64_eq_self (value : BitVec 64) :
     sign_extend (m := 64) value = value := by
@@ -141,7 +148,13 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
         (Load Data) false false false js.sail =
         .ok (Ok loaded) js.sail)
     (hlinked : LinkedCSRs js)
-    (h_ram : JoltISA.RAM_START_ADDRESS ≤ (load_effective_address val imm).toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ (load_effective_address val imm).toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hbytes : MemBytesPresentAt js.sail (load_effective_address val imm) 8)
+    (hpmp : Assumptions.LoadPmpOk (load_effective_address val imm) 8 js.sail)
+    (hmmio : Assumptions.NotReadableMmio (load_effective_address val imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk (load_effective_address val imm) js) :
     System.systemProjectResult
       ((JoltISA.execInstr (JoltISA.ldNativeInstr rd rs1 imm)).run js) =
     .ok RETIRE_SUCCESS (stateAfterWrite js.sail rd loaded) := by
@@ -149,7 +162,10 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
   simp only [bind, EStateM.bind, pure, EStateM.run, hrx]
   rw [if_pos (by
     simpa [load_effective_address, Memory.effectiveAddr12] using h_align)]
-  rw [JoltISA.readMemoryWord_ram _ h_ram]
+  simp only [EStateM.bind]
+  rw [JoltISA.Mmu.load_doubleword_eq_sail js _ hpriv hmprv
+    (aligned_dword_access_of_align _ h_align) hbytes hpmp hmmio
+    (JoltISA.Mmu.effective_address_ok_of_load h_ram hjolt)]
   unfold liftSail
   simp only [hread, EStateM.bind]
   by_cases hx0 : JoltISA.isX0 rd = true
@@ -285,7 +301,11 @@ theorem ldInstr_eq_sail
     rw [ldJolt_aligned_reduces imm rs1 rd js h.rs1_val
       (loaded_dword_at js.sail ea hbytes haligned.no_ovf)
       h.rs1_read (by simpa [ea] using h_align)
-      (by simpa [ea] using hread) h.linkedCSRs hread_mmio.ram]
+      (by simpa [ea] using hread) h.linkedCSRs hread_mmio.ram
+      h.cur_privilege h.mstatus_mprv hbytes hload_pmp hread_mmio
+      (by
+        have hbase_eq : base = ea := by simpa [hoff_eq] using haddr
+        simpa [hbase_eq, base] using h.jolt_ram)]
     rw [execute_LD_reduces imm rs1 rd js h.cur_privilege h.mstatus_mprv
       h.rs1_val h.rs1_read (by simpa [ea] using haligned)
       (by simpa [ea] using hbytes)

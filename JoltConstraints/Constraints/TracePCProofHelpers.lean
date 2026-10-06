@@ -186,44 +186,11 @@ theorem aligned_access (addr : BitVec 64) (h : addr &&& 7 = 0) :
     align := h
     no_ovf := aligned_addr_no_ovf_of_align addr h }
 
-theorem memory_read (s : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops) (addr : BitVec 64)
-    (halign : addr &&& 7 = 0)
-    (hwindow : RAM_START_ADDRESS ≤ addr.toNat → ops.memoryWindows addr)
-    (t : SailJoltState) (v : Result (BitVec 64) ExecutionResult)
-    (hr : readMemoryWord addr s = .ok v t) : t = s := by
-  by_cases hram : RAM_START_ADDRESS ≤ addr.toNat
-  · obtain ⟨hbytes, hpmp, _, hmmio, _⟩ :=
-      ha.ramWindow addr (hwindow hram)
-    have hread := vmem_read_addr_dword_reduces addr s.sail
-      ha.curPrivilege ha.mstatusMprv (aligned_access addr halign)
-      hbytes.memBytesPresentAt hpmp hmmio
-    rw [readMemoryWord_ram addr hram] at hr
-    simp only [liftSail, hread] at hr
-    cases hr
-    rfl
-  · simp only [readMemoryWord, Nat.lt_of_not_ge hram, ↓reduceIte] at hr
-    split at hr <;> cases hr <;> rfl
-
-theorem memory_write (s : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops) (addr data : BitVec 64)
-    (halign : addr &&& 7 = 0)
-    (hwindow : RAM_START_ADDRESS ≤ addr.toNat → ops.memoryWindows addr)
-    (t : SailJoltState) (v : Result Bool ExecutionResult)
-    (hr : writeMemoryWord addr data s = .ok v t) :
+theorem memory_write {addr data : BitVec 64} {s t : SailJoltState}
+    {v : Result Bool ExecutionResult}
+    (hr : Mmu.store_doubleword addr data s = .ok v t) :
     t.sail.regs.get? Register.PC = s.sail.regs.get? Register.PC := by
-  by_cases hram : RAM_START_ADDRESS ≤ addr.toNat
-  · obtain ⟨_, _, hpmp, _, hmmio⟩ :=
-      ha.ramWindow addr (hwindow hram)
-    have hwrite := vmem_write_addr_dword_store_reduces addr data s.sail
-      ha.curPrivilege ha.mstatusMprv (aligned_access addr halign).toAlignedAccess
-      hpmp hmmio
-    rw [writeMemoryWord_ram addr data hram] at hr
-    simp only [liftSail, hwrite] at hr
-    cases hr
-    rfl
-  · simp only [writeMemoryWord, Nat.lt_of_not_ge hram, ↓reduceIte] at hr
-    split at hr <;> cases hr <;> rfl
+  rw [(Mmu.store_doubleword_regs hr).1]
 
 theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
     (imm : BitVec 64) (s t : SailJoltState) (ops : AssumptionOperands)
@@ -235,10 +202,10 @@ theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
   have hx := lookup_read_bind base _ _ _ _ hexec
   by_cases halign : (sourceValue base s + imm) &&& 7 = 0
   · simp only [halign, ↓reduceIte] at hx
-    cases hr : readMemoryWord (sourceValue base s + imm) s with
+    cases hr : Mmu.load_doubleword (sourceValue base s + imm) s with
     | error e s' => simp only [bind, EStateM.bind, hr] at hx; cases hx
     | ok v s' =>
-      have hstate := memory_read s ops ha _ halign hwindow s' v hr
+      have hstate := Mmu.load_doubleword_state hr
       subst s'
       simp only [bind, EStateM.bind, hr] at hx
       cases v with
@@ -259,10 +226,10 @@ theorem store_instruction (base value : Src) (imm : BitVec 64)
   have hx := lookup_read_bind value _ _ _ _ hx
   by_cases halign : (sourceValue base s + imm) &&& 7 = 0
   · simp only [halign, ↓reduceIte] at hx
-    cases hr : writeMemoryWord (sourceValue base s + imm) (sourceValue value s) s with
+    cases hr : Mmu.store_doubleword (sourceValue base s + imm) (sourceValue value s) s with
     | error e s' => simp only [bind, EStateM.bind, hr] at hx; cases hx
     | ok v s' =>
-      have hp := memory_write s ops ha _ _ halign hwindow s' v hr
+      have hp := memory_write hr
       simp only [bind, EStateM.bind, hr] at hx
       cases v <;> cases hx <;> exact hp
   · simp only [halign, ↓reduceIte, pure, EStateM.pure] at hx

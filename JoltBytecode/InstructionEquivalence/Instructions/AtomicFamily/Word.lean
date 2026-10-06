@@ -24,6 +24,7 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Virtua
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.XOR
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.AND
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
+import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 set_option linter.unusedVariables false
 
@@ -1110,7 +1111,8 @@ theorem amo_word_pre64_aligned_run
     (hload_pmp : Assumptions.LoadPmpOk (amoWordBase addr) 8 js.sail)
     (hread_mmio : Assumptions.NotReadableMmio (amoWordBase addr) 8 js.sail)
     (h_no_ovf : (amoWordBase addr).toNat + 7 < 2 ^ 64)
-    (h_align : addr &&& (3 : BitVec 64) = 0) :
+    (h_align : addr &&& (3 : BitVec 64) = 0)
+    (hjolt : Assumptions.JoltRamLoadOk (amoWordBase addr) js) :
     ∃ js_pre : SailJoltState,
       (JoltISA.execProgram
         (JoltISA.amoPre64Program rs1 JoltISA.amoOldVReg
@@ -1125,7 +1127,8 @@ theorem amo_word_pre64_aligned_run
         shift_bits_right
           (loaded_dword_at js.sail (amoWordBase addr) hbytes h_no_ovf)
           (Sail.BitVec.extractLsb
-            (shift_bits_left addr (3 : BitVec 6)) 5 0) := by
+            (shift_bits_left addr (3 : BitVec 6)) 5 0) ∧
+      js_pre.jolt_device.memory_layout = js.jolt_device.memory_layout := by
   have hassert :=
     amo_word_virtual_assert_aligned_run rs1 js addr hrs1 h_align
   obtain ⟨js_base, _hrs1_base, hbase_sail, hbase_shift_raw,
@@ -1136,6 +1139,11 @@ theorem amo_word_pre64_aligned_run
       js_base.vregs JoltISA.amoShiftVReg = amoWordBase addr := by
     rw [hbase_shift_raw]
     exact amo_word_base_mask addr
+  have hbase_layout :
+      js_base.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    JoltIOSetupFrame.layout_of_instr_run hbase_run
+  have hjolt_base : Assumptions.JoltRamLoadOk (amoWordBase addr) js_base :=
+    ⟨by rw [hbase_layout]; exact hjolt.below_heap_end⟩
   have hpriv_base : Assumptions.CurPrivilegeMachine js_base.sail := by
     rw [hbase_sail]
     exact hpriv
@@ -1171,7 +1179,7 @@ theorem amo_word_pre64_aligned_run
         hpriv_base hmprv_base
         (amo_word_base_aligned_access addr h_no_ovf)
         hbytes_base hload_pmp_base hread_mmio_base
-        (by unfold WritableVReg; decide)
+        (by unfold WritableVReg; decide) hjolt_base
   let js_load : SailJoltState :=
     { js_base with
       vregs := fun r =>
@@ -1355,7 +1363,7 @@ theorem amo_word_pre64_aligned_run
           (.vreg JoltISA.amoInlineTmpVReg))).run js_bitmask =
       .ok RETIRE_SUCCESS js_pre := by
     exact hsrl
-  refine ⟨js_pre, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨js_pre, ?_, ?_, ?_, ?_, ?_, hbase_layout⟩
   · unfold JoltISA.amoPre64Program JoltISA.amoPre64ProgramWithScratch
     rw [JoltISA.execProgram_instr_run_retire _ _ js js hassert]
     rw [JoltISA.execProgram_instr_run_retire _ _ js js_base hbase_run]
@@ -1420,7 +1428,8 @@ theorem amo_word_pre64_aligned_run_with
     (hdword_ne_tmp : dwordReg ≠ tmpReg)
     (hshift_ne_tmp : shiftReg ≠ tmpReg)
     (hdword_ne_old : dwordReg ≠ oldReg)
-    (hshift_ne_old : shiftReg ≠ oldReg) :
+    (hshift_ne_old : shiftReg ≠ oldReg)
+    (hjolt : Assumptions.JoltRamLoadOk (amoWordBase addr) js) :
     ∃ js_pre : SailJoltState,
       (JoltISA.execProgram
         (JoltISA.amoPre64ProgramWithScratch rs1
@@ -1435,7 +1444,8 @@ theorem amo_word_pre64_aligned_run_with
         shift_bits_right
           (loaded_dword_at js.sail (amoWordBase addr) hbytes h_no_ovf)
           (Sail.BitVec.extractLsb
-            (shift_bits_left addr (3 : BitVec 6)) 5 0) := by
+            (shift_bits_left addr (3 : BitVec 6)) 5 0) ∧
+      js_pre.jolt_device.memory_layout = js.jolt_device.memory_layout := by
   have hdword_ne_shift : dwordReg ≠ shiftReg := Ne.symm hshift_ne_dword
   have hassert :=
     amo_word_virtual_assert_aligned_run rs1 js addr hrs1 h_align
@@ -1447,6 +1457,11 @@ theorem amo_word_pre64_aligned_run_with
       js_base.vregs shiftReg = amoWordBase addr := by
     rw [hbase_shift_raw]
     exact amo_word_base_mask addr
+  have hbase_layout :
+      js_base.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    JoltIOSetupFrame.layout_of_instr_run hbase_run
+  have hjolt_base : Assumptions.JoltRamLoadOk (amoWordBase addr) js_base :=
+    ⟨by rw [hbase_layout]; exact hjolt.below_heap_end⟩
   have hpriv_base : Assumptions.CurPrivilegeMachine js_base.sail := by
     rw [hbase_sail]
     exact hpriv
@@ -1481,7 +1496,7 @@ theorem amo_word_pre64_aligned_run_with
         (amoWordBase addr) hbase_shift
         hpriv_base hmprv_base
         (amo_word_base_aligned_access addr h_no_ovf)
-        hbytes_base hload_pmp_base hread_mmio_base hdword_w
+        hbytes_base hload_pmp_base hread_mmio_base hdword_w hjolt_base
   let js_load : SailJoltState :=
     { js_base with
       vregs := fun r =>
@@ -1661,7 +1676,7 @@ theorem amo_word_pre64_aligned_run_with
           (.vreg tmpReg))).run js_bitmask =
       .ok RETIRE_SUCCESS js_pre := by
     exact hsrl
-  refine ⟨js_pre, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨js_pre, ?_, ?_, ?_, ?_, ?_, hbase_layout⟩
   · unfold JoltISA.amoPre64ProgramWithScratch
     rw [JoltISA.execProgram_instr_run_retire _ _ js js hassert]
     rw [JoltISA.execProgram_instr_run_retire _ _ js js_base hbase_run]
@@ -1717,7 +1732,8 @@ theorem amo_word_pre64_aligned_run_for
     (hload_pmp : Assumptions.LoadPmpOk (amoWordBase addr) 8 js.sail)
     (hread_mmio : Assumptions.NotReadableMmio (amoWordBase addr) 8 js.sail)
     (h_no_ovf : (amoWordBase addr).toNat + 7 < 2 ^ 64)
-    (h_align : addr &&& (3 : BitVec 64) = 0) :
+    (h_align : addr &&& (3 : BitVec 64) = 0)
+    (hjolt : Assumptions.JoltRamLoadOk (amoWordBase addr) js) :
     ∃ js_pre : SailJoltState,
       (JoltISA.execProgram
         (JoltISA.amoPre64ProgramWithScratch rs1
@@ -1734,7 +1750,8 @@ theorem amo_word_pre64_aligned_run_for
         shift_bits_right
           (loaded_dword_at js.sail (amoWordBase addr) hbytes h_no_ovf)
           (Sail.BitVec.extractLsb
-            (shift_bits_left addr (3 : BitVec 6)) 5 0) := by
+            (shift_bits_left addr (3 : BitVec 6)) 5 0) ∧
+      js_pre.jolt_device.memory_layout = js.jolt_device.memory_layout := by
   let oldReg := JoltISA.amoOldVRegFor rd
   let dwordReg := JoltISA.amoDwordVRegFor rd
   let shiftReg := JoltISA.amoShiftVRegFor rd
@@ -1782,6 +1799,11 @@ theorem amo_word_pre64_aligned_run_for
       js_base.vregs shiftReg = amoWordBase addr := by
     rw [hbase_shift_raw]
     exact amo_word_base_mask addr
+  have hbase_layout :
+      js_base.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    JoltIOSetupFrame.layout_of_instr_run hbase_run
+  have hjolt_base : Assumptions.JoltRamLoadOk (amoWordBase addr) js_base :=
+    ⟨by rw [hbase_layout]; exact hjolt.below_heap_end⟩
   have hpriv_base : Assumptions.CurPrivilegeMachine js_base.sail := by
     rw [hbase_sail]
     exact hpriv
@@ -1816,7 +1838,7 @@ theorem amo_word_pre64_aligned_run_for
         (amoWordBase addr) hbase_shift
         hpriv_base hmprv_base
         (amo_word_base_aligned_access addr h_no_ovf)
-        hbytes_base hload_pmp_base hread_mmio_base hdword_w
+        hbytes_base hload_pmp_base hread_mmio_base hdword_w hjolt_base
   let js_load : SailJoltState :=
     { js_base with
       vregs := fun r =>
@@ -1996,7 +2018,7 @@ theorem amo_word_pre64_aligned_run_for
           (.vreg tmpReg))).run js_bitmask =
       .ok RETIRE_SUCCESS js_pre := by
     exact hsrl
-  refine ⟨js_pre, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨js_pre, ?_, ?_, ?_, ?_, ?_, hbase_layout⟩
   · unfold JoltISA.amoPre64ProgramWithScratch
     rw [JoltISA.execProgram_instr_run_retire _ _ js js hassert]
     rw [JoltISA.execProgram_instr_run_retire _ _ js js_base hbase_run]
@@ -3615,7 +3637,8 @@ theorem amo_word_sd_spliced_dword_run
     (h_sail : js.sail = s)
     (h_base : js.vregs JoltISA.amoMaskVReg = amoWordBase addr)
     (h_dword : js.vregs JoltISA.amoDwordVReg = dwordNew)
-    (h_old : js.vregs JoltISA.amoOldVReg = old) :
+    (h_old : js.vregs JoltISA.amoOldVReg = old)
+    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
     ∃ js',
       js'.sail = state_after_dword_store s (amoWordBase addr) dwordNew ∧
       js'.vregs JoltISA.amoOldVReg = old ∧
@@ -3657,6 +3680,10 @@ theorem amo_word_sd_spliced_dword_run
       JoltISA.amoMaskVReg JoltISA.amoDwordVReg (0 : BitVec 12)
       js (state_after_dword_store s (amoWordBase addr) dwordNew) hsd_align hwrite_current
       (by rw [h_base, amo_word_zero_offset_addr]; exact hwrite_mmio.ram)
+      (by rw [h_sail]; exact hpriv) (by rw [h_sail]; exact hmprv)
+      (by rw [h_sail, h_base, amo_word_zero_offset_addr]; exact hstore_pmp)
+      (by rw [h_sail, h_base, amo_word_zero_offset_addr]; exact hwrite_mmio)
+      (by rw [h_base, amo_word_zero_offset_addr]; exact hjolt)
   refine ⟨js', rfl, ?_, ?_⟩
   · exact h_old
   · intro tail
@@ -3674,7 +3701,8 @@ theorem amo_word_sd_spliced_dword_run_for
     (h_sail : js.sail = s)
     (h_base : js.vregs (JoltISA.amoMaskVRegFor rd) = amoWordBase addr)
     (h_dword : js.vregs (JoltISA.amoDwordVRegFor rd) = dwordNew)
-    (h_old : js.vregs (JoltISA.amoOldVRegFor rd) = old) :
+    (h_old : js.vregs (JoltISA.amoOldVRegFor rd) = old)
+    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
     ∃ js',
       js'.sail = state_after_dword_store s (amoWordBase addr) dwordNew ∧
       js'.vregs (JoltISA.amoOldVRegFor rd) = old ∧
@@ -3719,6 +3747,10 @@ theorem amo_word_sd_spliced_dword_run_for
       js (state_after_dword_store s (amoWordBase addr) dwordNew)
       hsd_align hwrite_current
       (by rw [h_base, amo_word_zero_offset_addr]; exact hwrite_mmio.ram)
+      (by rw [h_sail]; exact hpriv) (by rw [h_sail]; exact hmprv)
+      (by rw [h_sail, h_base, amo_word_zero_offset_addr]; exact hstore_pmp)
+      (by rw [h_sail, h_base, amo_word_zero_offset_addr]; exact hwrite_mmio)
+      (by rw [h_base, amo_word_zero_offset_addr]; exact hjolt)
   refine ⟨js', rfl, ?_, ?_⟩
   · exact h_old
   · intro tail
@@ -3843,7 +3875,9 @@ theorem amo_word_post64_vreg_aligned_run
         amoWordShiftedOld addr dword)
     (hold :
       (Sail.BitVec.extractLsb (amoWordShiftedOld addr dword) 31 0 :
-        BitVec 32) = oldWord) :
+        BitVec 32) = oldWord)
+    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js)
+    (hpre_layout : js_pre.jolt_device.memory_layout = js.jolt_device.memory_layout) :
     ∃ jsf : SailJoltState,
       (JoltISA.execProgram
         (JoltISA.amoPost64Program rs1 rd (.vreg JoltISA.amoNewVReg)
@@ -3894,10 +3928,19 @@ theorem amo_word_post64_vreg_aligned_run
       hstore_base_old, hstore_base_tail⟩ :=
     amo_word_store_base_prefix_run rs1 js_splice js.sail addr dwordNew old
       hsplice_sail hrs1 hsplice_dword hsplice_old
+  have hstore_base_layout :
+      js_store_base.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.layout_of_tail_run hstore_base_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hsplice_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hshift_new_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hshift_mask_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hmask_tail).trans hpre_layout
   obtain ⟨js_store, hstore_sail, hstore_old, hstore_tail⟩ :=
     amo_word_sd_spliced_dword_run (op := op) js_store_base js.sail addr dwordNew old
       hpriv hmprv hstore_pmp hwrite_mmio h_no_ovf hstore_base_sail
       hstore_base hstore_base_dword hstore_base_old
+      ⟨by rw [hstore_base_layout]; exact hjolt_store.below_heap_end,
+       by rw [hstore_base_layout]; exact hjolt_store.outside_canary⟩
   have hword_store :
       state_after_dword_store js.sail (amoWordBase addr) dwordNew =
         state_after_word_store js.sail addr wordResult :=
@@ -3958,7 +4001,9 @@ theorem amo_word_post64_vreg_aligned_run_for
         amoWordShiftedOld addr dword)
     (hold :
       (Sail.BitVec.extractLsb (amoWordShiftedOld addr dword) 31 0 :
-        BitVec 32) = oldWord) :
+        BitVec 32) = oldWord)
+    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js)
+    (hpre_layout : js_pre.jolt_device.memory_layout = js.jolt_device.memory_layout) :
     ∃ jsf : SailJoltState,
       (JoltISA.execProgram
         (JoltISA.amoPost64ProgramWithScratch rs1 rd
@@ -4012,11 +4057,20 @@ theorem amo_word_post64_vreg_aligned_run_for
       hstore_base_old, hstore_base_tail⟩ :=
     amo_word_store_base_prefix_run_for rd rs1 js_splice js.sail addr dwordNew old
       hsplice_sail hrs1 hsplice_dword hsplice_old
+  have hstore_base_layout :
+      js_store_base.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.layout_of_tail_run hstore_base_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hsplice_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hshift_new_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hshift_mask_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hmask_tail).trans hpre_layout
   obtain ⟨js_store, hstore_sail, hstore_old, hstore_tail⟩ :=
     amo_word_sd_spliced_dword_run_for (op := op) rd
       js_store_base js.sail addr dwordNew old
       hpriv hmprv hstore_pmp hwrite_mmio h_no_ovf hstore_base_sail
       hstore_base hstore_base_dword hstore_base_old
+      ⟨by rw [hstore_base_layout]; exact hjolt_store.below_heap_end,
+       by rw [hstore_base_layout]; exact hjolt_store.outside_canary⟩
   have hword_store :
       state_after_dword_store js.sail (amoWordBase addr) dwordNew =
         state_after_word_store js.sail addr wordResult :=
@@ -4069,6 +4123,8 @@ theorem amo_word_binop_program_concrete_aligned
     (hstore_pmp : Assumptions.StorePmpOk (amoWordBase addr) 8 js.sail)
     (hwrite_mmio : Assumptions.NotWritableMmio (amoWordBase addr) 8 js.sail)
     (h_align : addr &&& (3 : BitVec 64) = 0)
+    (hjolt_load : Assumptions.JoltRamLoadOk (amoWordBase addr) js)
+    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js)
     (hresult : (Sail.BitVec.extractLsb result64 31 0 : BitVec 32) = result)
     (hmiddle :
       ∀ js_pre : SailJoltState,
@@ -4132,20 +4188,23 @@ theorem amo_word_binop_program_concrete_aligned
       (Sail.BitVec.extractLsb (amoWordShiftedOld addr dword) 31 0 :
         BitVec 32) = oldWord := by
     rfl
-  obtain ⟨js_pre, hpre_run, hpre_sail, hpre_dword, hpre_shift, hpre_old⟩ :=
+  obtain ⟨js_pre, hpre_run, hpre_sail, hpre_dword, hpre_shift, hpre_old, hpre_layout⟩ :=
     amo_word_pre64_aligned_run_for (op := op) rd post rs1 js hpriv hmprv addr
-      hrs1 hbytes_base hload_pmp hread_mmio h_no_ovf h_align
+      hrs1 hbytes_base hload_pmp hread_mmio h_no_ovf h_align hjolt_load
   obtain ⟨js_afterMiddle, hmiddle_step⟩ :=
     hmiddle js_pre hpre_sail hpre_dword hpre_shift hpre_old
   have hmiddle_sail : js_afterMiddle.sail = js.sail := by
     rw [hmiddle_step.sail, hpre_sail]
+  have hmiddle_layout :
+      js_afterMiddle.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.layout_of_instr_run hmiddle_step.run).trans hpre_layout
   obtain ⟨jsf, hpost_run, hpost_sail⟩ :=
     amo_word_post64_vreg_aligned_run_for (op := op) rs1 rd
       js js_afterMiddle hpriv hmprv addr result64 dword oldWord hrs1
       hbytes_base hstore_pmp hwrite_mmio h_no_ovf h_align hdword
       hmiddle_sail hmiddle_step.result_vreg
       hmiddle_step.dword_vreg hmiddle_step.shift_vreg hmiddle_step.old_vreg
-      hold
+      hold hjolt_store hmiddle_layout
   refine ⟨jsf, ?_, ?_⟩
   · unfold JoltISA.amoWordBinopProgram
     rw [hpre_run]

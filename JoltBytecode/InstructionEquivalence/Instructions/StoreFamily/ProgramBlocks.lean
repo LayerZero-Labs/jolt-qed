@@ -511,7 +511,8 @@ theorem setupBlock (rest : JoltISA.Program)
     (hpmp :
       Assumptions.LoadPmpOk (compute_aligned_dword_base_address val imm) 8 js.sail)
     (hmmio :
-      Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail) :
+      Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address val imm) js) :
     ∃ js_load : SailJoltState,
       (JoltISA.execProgram
         (.instr (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
@@ -523,7 +524,8 @@ theorem setupBlock (rest : JoltISA.Program)
       js_load.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm ∧
       js_load.vregs JoltISA.inlineTmp2 =
         loaded_dword_at js.sail (compute_aligned_dword_base_address val imm)
-          hbytes h_base_aligned.no_ovf := by
+          hbytes h_base_aligned.no_ovf ∧
+      js_load.jolt_device = js.jolt_device := by
   let ea := load_effective_address val imm
   let base := compute_aligned_dword_base_address val imm
   let dword := loaded_dword_at js.sail base (by simpa [base] using hbytes)
@@ -586,12 +588,23 @@ theorem setupBlock (rest : JoltISA.Program)
         norm_num
       rw [hv1, h0, haddr0]
       exact h_base_aligned.align
+    have haddr_ld :
+        js1.vregs JoltISA.inlineTmp1 + sign_extend (m := 64) (0 : BitVec 12) = base := by
+      have h0 : sign_extend (m := 64) (0 : BitVec 12) = (0 : BitVec 64) := by decide
+      have hv1 : js1.vregs JoltISA.inlineTmp1 = base := by simp [js1]
+      rw [hv1, h0]
+      norm_num
     simpa [js_load, dword] using
       (JoltISA.ld_run_vreg_vreg_from_memory_read JoltISA.inlineTmp2 JoltISA.inlineTmp1
         (0 : BitVec 12) js1 dword hld_align hld_read
         (by unfold WritableVReg; decide)
-        (by simpa [js1, base, sign_extend, Sail.BitVec.signExtend] using hmmio.ram))
-  refine ⟨js_load, ?_, rfl, ?_, ?_, ?_⟩
+        (by simpa [js1, base, sign_extend, Sail.BitVec.signExtend] using hmmio.ram)
+        hpriv hmprv
+        (by rw [haddr_ld]; exact hbytes)
+        (by rw [haddr_ld]; exact hpmp)
+        (by rw [haddr_ld]; exact hmmio)
+        (by rw [haddr_ld]; exact ⟨hjolt.below_heap_end⟩))
+  refine ⟨js_load, ?_, rfl, ?_, ?_, ?_, rfl⟩
   · rw [JoltISA.execProgram_instr_run_retire _ _ js js0 haddi]
     rw [JoltISA.execProgram_instr_run_retire _ _ js0 js1 handi]
     rw [JoltISA.execProgram_instr_run_retire _ _ js1 js_load hld]
@@ -615,7 +628,8 @@ theorem assertHalfwordSetupBlockAligned (rest : JoltISA.Program)
     (hpmp :
       Assumptions.LoadPmpOk (compute_aligned_dword_base_address val imm) 8 js.sail)
     (hmmio :
-      Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail) :
+      Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address val imm) js) :
     ∃ js_load : SailJoltState,
       (JoltISA.execProgram
         (.instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
@@ -628,7 +642,8 @@ theorem assertHalfwordSetupBlockAligned (rest : JoltISA.Program)
       js_load.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm ∧
       js_load.vregs JoltISA.inlineTmp2 =
         loaded_dword_at js.sail (compute_aligned_dword_base_address val imm)
-          hbytes h_base_aligned.no_ovf := by
+          hbytes h_base_aligned.no_ovf ∧
+      js_load.jolt_device = js.jolt_device := by
   have hassert :
       (JoltISA.execInstr
         (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
@@ -636,9 +651,9 @@ theorem assertHalfwordSetupBlockAligned (rest : JoltISA.Program)
     exact JoltISA.virtual_assert_halfword_alignment_run_aligned rs1 imm
       (ExceptionType.E_SAMO_Addr_Align ())
       js val hrx (by simpa [load_effective_address] using halign)
-  rcases setupBlock rest imm rs1 js hpriv hmprv val hrx h_base_aligned hbytes hpmp hmmio with
-    ⟨js_load, hrun, hsail, hv0, hv1, hv2⟩
-  refine ⟨js_load, ?_, hsail, hv0, hv1, hv2⟩
+  rcases setupBlock rest imm rs1 js hpriv hmprv val hrx h_base_aligned hbytes hpmp hmmio hjolt with
+    ⟨js_load, hrun, hsail, hv0, hv1, hv2, hdev⟩
+  refine ⟨js_load, ?_, hsail, hv0, hv1, hv2, hdev⟩
   rw [JoltISA.execProgram_instr_run_retire _ _ js js hassert]
   exact hrun
 
@@ -658,7 +673,8 @@ theorem assertWordSetupBlockAligned (rest : JoltISA.Program)
     (hpmp :
       Assumptions.LoadPmpOk (compute_aligned_dword_base_address val imm) 8 js.sail)
     (hmmio :
-      Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail) :
+      Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address val imm) js) :
     ∃ js_load : SailJoltState,
       (JoltISA.execProgram
         (.instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
@@ -671,7 +687,8 @@ theorem assertWordSetupBlockAligned (rest : JoltISA.Program)
       js_load.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm ∧
       js_load.vregs JoltISA.inlineTmp2 =
         loaded_dword_at js.sail (compute_aligned_dword_base_address val imm)
-          hbytes h_base_aligned.no_ovf := by
+          hbytes h_base_aligned.no_ovf ∧
+      js_load.jolt_device = js.jolt_device := by
   have hassert :
       (JoltISA.execInstr
         (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
@@ -679,9 +696,9 @@ theorem assertWordSetupBlockAligned (rest : JoltISA.Program)
     exact JoltISA.virtual_assert_word_alignment_run_aligned rs1 imm
       (ExceptionType.E_SAMO_Addr_Align ())
       js val hrx (by simpa [load_effective_address] using halign)
-  rcases setupBlock rest imm rs1 js hpriv hmprv val hrx h_base_aligned hbytes hpmp hmmio with
-    ⟨js_load, hrun, hsail, hv0, hv1, hv2⟩
-  refine ⟨js_load, ?_, hsail, hv0, hv1, hv2⟩
+  rcases setupBlock rest imm rs1 js hpriv hmprv val hrx h_base_aligned hbytes hpmp hmmio hjolt with
+    ⟨js_load, hrun, hsail, hv0, hv1, hv2, hdev⟩
+  refine ⟨js_load, ?_, hsail, hv0, hv1, hv2, hdev⟩
   rw [JoltISA.execProgram_instr_run_retire _ _ js js hassert]
   exact hrun
 
@@ -790,7 +807,8 @@ private theorem fusedSpliceBlock (rest : JoltISA.Program)
       js_splice.vregs JoltISA.inlineTmp1 = base ∧
       js_splice.vregs JoltISA.inlineTmp2 =
         (dword &&& ~~~(fusedWindowValue width ea)) +
-          fusedShiftValue width rs2_val ea := by
+          fusedShiftValue width rs2_val ea ∧
+      js_splice.jolt_device = js_load.jolt_device := by
   let mask := fusedWindowValue width ea
   let shifted := fusedShiftValue width rs2_val ea
   let js_mask : SailJoltState :=
@@ -872,7 +890,7 @@ private theorem fusedSpliceBlock (rest : JoltISA.Program)
       (JoltISA.add_run_vreg_vreg_vreg JoltISA.inlineTmp2
         JoltISA.inlineTmp2 JoltISA.inlineTmp3 js_shift
         (by unfold WritableVReg; decide))
-  refine ⟨js_splice, ?_, ?_, ?_, ?_⟩
+  refine ⟨js_splice, ?_, ?_, ?_, ?_, rfl⟩
   · rw [JoltISA.execProgram_instr_run_retire _ _ js_load js_mask hwindow]
     rw [JoltISA.execProgram_instr_run_retire _ _ js_mask js_clear handn]
     rw [JoltISA.execProgram_instr_run_retire _ _ js_clear js_shift hshift]
@@ -909,13 +927,14 @@ theorem fusedByteSpliceBlock (rest : JoltISA.Program)
       js_splice.vregs JoltISA.inlineTmp2 =
         StoreSplice.byteSplice dword (Sail.BitVec.extractLsb rs2_val 7 0)
           (((load_effective_address val imm -
-            compute_aligned_dword_base_address val imm).toNat) * 8) := by
+            compute_aligned_dword_base_address val imm).toNat) * 8) ∧
+      js_splice.jolt_device = js_load.jolt_device := by
   rcases fusedSpliceBlock rest .byte rs2 js js_load
       (load_effective_address val imm) (compute_aligned_dword_base_address val imm)
       dword rs2_val hload_sail hload_v0 hload_v1 hload_v2 hrs2 with
-    ⟨js_splice, hrun, hsail, hv1, hv2⟩
+    ⟨js_splice, hrun, hsail, hv1, hv2, hdev⟩
   refine ⟨js_splice, by simpa [fusedWindowInstr, fusedShiftInstr] using hrun,
-    hsail, hv1, ?_⟩
+    hsail, hv1, ?_, hdev⟩
   rw [hv2]
   exact StoreSplice.fusedByteSplice_eq dword rs2_val
     (load_effective_address val imm) (compute_aligned_dword_base_address val imm) hsetup
@@ -948,13 +967,14 @@ theorem fusedHalfwordSpliceBlock (rest : JoltISA.Program)
       js_splice.vregs JoltISA.inlineTmp2 =
         StoreSplice.halfwordSplice dword (Sail.BitVec.extractLsb rs2_val 15 0)
           (((load_effective_address val imm -
-            compute_aligned_dword_base_address val imm).toNat) * 8) := by
+            compute_aligned_dword_base_address val imm).toNat) * 8) ∧
+      js_splice.jolt_device = js_load.jolt_device := by
   rcases fusedSpliceBlock rest .halfword rs2 js js_load
       (load_effective_address val imm) (compute_aligned_dword_base_address val imm)
       dword rs2_val hload_sail hload_v0 hload_v1 hload_v2 hrs2 with
-    ⟨js_splice, hrun, hsail, hv1, hv2⟩
+    ⟨js_splice, hrun, hsail, hv1, hv2, hdev⟩
   refine ⟨js_splice, by simpa [fusedWindowInstr, fusedShiftInstr] using hrun,
-    hsail, hv1, ?_⟩
+    hsail, hv1, ?_, hdev⟩
   rw [hv2]
   exact StoreSplice.fusedHalfwordSplice_eq dword rs2_val
     (load_effective_address val imm) (compute_aligned_dword_base_address val imm) hsetup
@@ -987,13 +1007,14 @@ theorem fusedWordSpliceBlock (rest : JoltISA.Program)
       js_splice.vregs JoltISA.inlineTmp2 =
         StoreSplice.wordSplice dword (Sail.BitVec.extractLsb rs2_val 31 0)
           (((load_effective_address val imm -
-            compute_aligned_dword_base_address val imm).toNat) * 8) := by
+            compute_aligned_dword_base_address val imm).toNat) * 8) ∧
+      js_splice.jolt_device = js_load.jolt_device := by
   rcases fusedSpliceBlock rest .word rs2 js js_load
       (load_effective_address val imm) (compute_aligned_dword_base_address val imm)
       dword rs2_val hload_sail hload_v0 hload_v1 hload_v2 hrs2 with
-    ⟨js_splice, hrun, hsail, hv1, hv2⟩
+    ⟨js_splice, hrun, hsail, hv1, hv2, hdev⟩
   refine ⟨js_splice, by simpa [fusedWindowInstr, fusedShiftInstr] using hrun,
-    hsail, hv1, ?_⟩
+    hsail, hv1, ?_, hdev⟩
   rw [hv2]
   exact StoreSplice.fusedWordSplice_eq dword rs2_val
     (load_effective_address val imm) (compute_aligned_dword_base_address val imm) hsetup
@@ -1800,7 +1821,12 @@ theorem sdWriteBlock (rest : JoltISA.Program)
       vmem_write_addr (Virtaddr base) 8 dword_new
         (Store Data) false false false js_store.sail =
       .ok (Ok true) s')
-    (h_ram : JoltISA.RAM_START_ADDRESS ≤ base.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ base.toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js_store.sail)
+    (hmprv : Assumptions.MstatusMprvZero js_store.sail)
+    (hpmp : Assumptions.StorePmpOk base 8 js_store.sail)
+    (hmmio : Assumptions.NotWritableMmio base 8 js_store.sail)
+    (hjolt : Assumptions.JoltRamStoreOk base js_store) :
     ∃ js_write : SailJoltState,
       (JoltISA.execProgram (.instr (JoltISA.Encoded.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0) rest)).run js_store =
         (JoltISA.execProgram rest).run js_write ∧
@@ -1831,7 +1857,11 @@ theorem sdWriteBlock (rest : JoltISA.Program)
     simpa [js_write] using
       (JoltISA.execInstr_sd_vreg_run_of_write
         JoltISA.inlineTmp1 JoltISA.inlineTmp2 (0 : BitVec 12) js_store s' hsd_align hwrite'
-        (by simpa only [haddr] using h_ram))
+        (by simpa only [haddr] using h_ram)
+        hpriv hmprv
+        (by rw [haddr]; exact hpmp)
+        (by rw [haddr]; exact hmmio)
+        (by rw [haddr]; exact hjolt))
   refine ⟨js_write, ?_, rfl, rfl⟩
   rw [JoltISA.execProgram_instr_run_retire _ _ js_store js_write hsd]
 

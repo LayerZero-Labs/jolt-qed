@@ -456,28 +456,6 @@ theorem register42_branch_preserves_sourceValue
   · cases h
     rfl
 
-theorem register42_memory_write_preserves_sourceValue
-    (src : JoltISA.Src) (s : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops) (addr data : BitVec 64)
-    (halign : addr &&& 7 = 0)
-    (hwindow : JoltISA.RAM_START_ADDRESS ≤ addr.toNat → ops.memoryWindows addr)
-    (t : SailJoltState) (v : Result Bool ExecutionResult)
-    (hr : JoltISA.writeMemoryWord addr data s = .ok v t) :
-    JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
-  by_cases hram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
-  · obtain ⟨_, _, hpmp, _, hmmio⟩ :=
-      ha.ramWindow addr (hwindow hram)
-    have hwrite := vmem_write_addr_dword_store_reduces addr data s.sail
-      ha.curPrivilege ha.mstatusMprv
-      (JoltPCFrame.aligned_access addr halign).toAlignedAccess hpmp hmmio
-    rw [JoltISA.writeMemoryWord_ram addr data hram] at hr
-    simp only [liftSail, hwrite] at hr
-    cases hr
-    cases src <;> rfl
-  · simp only [JoltISA.writeMemoryWord, Nat.lt_of_not_ge hram,
-      ↓reduceIte] at hr
-    split at hr <;> cases hr <;> rfl
-
 theorem register42_load_preserves_other
     (fault : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
     (base src : JoltISA.Src) (imm : BitVec 64)
@@ -494,10 +472,10 @@ theorem register42_load_preserves_other
   have h := lookup_read_bind base _ s t _ hexec
   by_cases halign : (JoltISA.sourceValue base s + imm) &&& 7 = 0
   · simp only [halign, ↓reduceIte] at h
-    cases hr : JoltISA.readMemoryWord (JoltISA.sourceValue base s + imm) s with
+    cases hr : JoltISA.Mmu.load_doubleword (JoltISA.sourceValue base s + imm) s with
     | error e state => simp only [bind, EStateM.bind, hr] at h; cases h
     | ok v state =>
-        have hstate := JoltPCFrame.memory_read s ops ha _ halign hwindow state v hr
+        have hstate := JoltISA.Mmu.load_doubleword_state hr
         subst state
         simp only [bind, EStateM.bind, hr] at h
         cases v with
@@ -522,12 +500,14 @@ theorem register42_store_preserves_sourceValue
   have h := lookup_read_bind stored _ s t _ h
   by_cases halign : (JoltISA.sourceValue base s + imm) &&& 7 = 0
   · simp only [halign, ↓reduceIte] at h
-    cases hr : JoltISA.writeMemoryWord (JoltISA.sourceValue base s + imm)
+    cases hr : JoltISA.Mmu.store_doubleword (JoltISA.sourceValue base s + imm)
         (JoltISA.sourceValue stored s) s with
     | error e state => simp only [bind, EStateM.bind, hr] at h; cases h
     | ok v state =>
-        have hframe := register42_memory_write_preserves_sourceValue src s ops
-          ha _ _ halign hwindow state v hr
+        have hframe :
+            JoltISA.sourceValue src state = JoltISA.sourceValue src s := by
+          obtain ⟨hregs, hvregs⟩ := JoltISA.Mmu.store_doubleword_regs hr
+          simp only [JoltISA.sourceValue, hregs, hvregs]
         simp only [bind, EStateM.bind, hr] at h
         cases v <;> cases h <;> exact hframe
   · simp only [halign, ↓reduceIte, pure, EStateM.pure] at h

@@ -5,6 +5,7 @@ Authors: Ari
 -/
 
 import LeanRV64D
+import JoltBytecode.JoltISA.JoltDevice
 
 /-!
 # Jolt ISA core state
@@ -30,38 +31,6 @@ set_option autoImplicit true
 noncomputable section
 
 abbrev SailState := SequentialState RegisterType trivialChoiceSource
-
--- Rust: jolt/common/src/jolt_device.rs:277-301 (MemoryLayout)
-structure MemoryLayout where
-  program_size : BitVec 64
-  max_trusted_advice_size : BitVec 64
-  trusted_advice_start : BitVec 64
-  trusted_advice_end : BitVec 64
-  max_untrusted_advice_size : BitVec 64
-  untrusted_advice_start : BitVec 64
-  untrusted_advice_end : BitVec 64
-  max_input_size : BitVec 64
-  max_output_size : BitVec 64
-  input_start : BitVec 64
-  input_end : BitVec 64
-  output_start : BitVec 64
-  output_end : BitVec 64
-  stack_size : BitVec 64
-  stack_end : BitVec 64
-  heap_size : BitVec 64
-  heap_end : BitVec 64
-  panic : BitVec 64
-  termination : BitVec 64
-  io_end : BitVec 64
-
--- Rust: jolt/common/src/jolt_device.rs:57-68 (JoltDevice)
-structure JoltDevice where
-  inputs : Array (BitVec 8)
-  trusted_advice : Array (BitVec 8)
-  untrusted_advice : Array (BitVec 8)
-  outputs : Array (BitVec 8)
-  panic : Bool
-  memory_layout : MemoryLayout
 
 structure JoltAdviceTape where
   bytes : Array (BitVec 8)

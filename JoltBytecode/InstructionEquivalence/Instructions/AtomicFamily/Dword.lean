@@ -15,6 +15,7 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.ProgramComposition
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
+import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 set_option linter.unusedVariables false
 
@@ -153,7 +154,13 @@ theorem amo_dword_ld_old_run_into
       vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false js.sail =
         .ok (Ok oldVal) js.sail)
     (holdReg : WritableVReg oldReg)
-    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hbytes : MemBytesPresentAt js.sail addr 8)
+    (hpmp : Assumptions.LoadPmpOk addr 8 js.sail)
+    (hmmio : Assumptions.NotReadableMmio addr 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk addr js) :
     ∃ js_afterLoad : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.LD .amo (.vreg oldReg) (.xreg rs1) (0 : BitVec 12))).run js =
@@ -187,6 +194,8 @@ theorem amo_dword_ld_old_run_into
       JoltISA.ld_run_vreg_xreg_from_memory_read
         oldReg rs1 (0 : BitVec 12) js addr oldVal hrs1 hld_align hread
         holdReg (by simpa only [haddr0] using h_ram)
+        hpriv hmprv (by rw [haddr0]; exact hbytes) (by rw [haddr0]; exact hpmp)
+        (by rw [haddr0]; exact hmmio) (by rw [haddr0]; exact hjolt)
   · rfl
   · change (if oldReg = oldReg then oldVal else js.vregs oldReg) = oldVal
     rw [if_pos rfl]
@@ -200,7 +209,13 @@ theorem amo_dword_ld_old_run
     (hload :
       vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false js.sail =
         .ok (Ok oldVal) js.sail)
-    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hbytes : MemBytesPresentAt js.sail addr 8)
+    (hpmp : Assumptions.LoadPmpOk addr 8 js.sail)
+    (hmmio : Assumptions.NotReadableMmio addr 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk addr js) :
     ∃ js_afterLoad : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.LD .amo (.vreg JoltISA.amoOldVReg) (.xreg rs1) (0 : BitVec 12))).run js =
@@ -209,7 +224,7 @@ theorem amo_dword_ld_old_run
       js_afterLoad.vregs JoltISA.amoOldVReg = oldVal := by
   exact amo_dword_ld_old_run_into JoltISA.amoOldVReg
     rs1 js addr oldVal hrs1 h_align hload
-    (by unfold WritableVReg; decide) h_ram
+    (by unfold WritableVReg; decide) h_ram hpriv hmprv hbytes hpmp hmmio hjolt
 
 /-- `SD rs2, 0(rs1)` writes the AMO result dword and preserves virtual
 registers. -/
@@ -224,7 +239,12 @@ theorem amo_dword_sd_result_run
         (Store Data) false false false js_afterLoad.sail =
         .ok (Ok true)
           (state_after_dword_store js_afterLoad.sail addr result))
-    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js_afterLoad.sail)
+    (hmprv : Assumptions.MstatusMprvZero js_afterLoad.sail)
+    (hpmp : Assumptions.StorePmpOk addr 8 js_afterLoad.sail)
+    (hmmio : Assumptions.NotWritableMmio addr 8 js_afterLoad.sail)
+    (hjolt : Assumptions.JoltRamStoreOk addr js_afterLoad) :
     ∃ js_afterStore : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12))).run js_afterLoad =
@@ -259,6 +279,8 @@ theorem amo_dword_sd_result_run
         rs1 rs2 (0 : BitVec 12) js_afterLoad addr result
         (state_after_dword_store js_afterLoad.sail addr result)
         hrs1 hrs2 hsd_align hwrite' (by simpa only [haddr0] using h_ram)
+        hpriv hmprv (by rw [haddr0]; exact hpmp) (by rw [haddr0]; exact hmmio)
+        (by rw [haddr0]; exact hjolt)
   · rfl
   · rfl
 
@@ -275,13 +297,22 @@ theorem amo_dword_sd_xreg_vreg_run_of_write
       vmem_write_addr (Virtaddr (baseValue + sign_extend (m := 64) imm)) 8
         stored (Store Data) false false false js.sail =
         .ok (Ok true) s')
-    (h_ram : JoltISA.RAM_START_ADDRESS ≤ (baseValue + sign_extend (m := 64) imm).toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ (baseValue + sign_extend (m := 64) imm).toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hpmp : Assumptions.StorePmpOk (baseValue + sign_extend (m := 64) imm) 8 js.sail)
+    (hmmio : Assumptions.NotWritableMmio (baseValue + sign_extend (m := 64) imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamStoreOk (baseValue + sign_extend (m := 64) imm) js) :
     (JoltISA.execInstr (JoltISA.Encoded.SD (.xreg base) (.vreg value) imm)).run js =
       .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst readVReg liftSail
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get, hbase, hvalue]
-  rw [if_pos h_align, JoltISA.writeMemoryWord_ram _ _ h_ram]
+  rw [if_pos h_align]
+  simp only [EStateM.bind]
+  rw [JoltISA.Mmu.store_doubleword_eq_sail js _ _ hpriv hmprv
+    (aligned_dword_access_of_align _ h_align) hpmp hmmio
+    (JoltISA.Mmu.effective_address_ok_of_store h_ram hjolt)]
   unfold liftSail
   simp [EStateM.bind, hwrite]
   rfl
@@ -299,7 +330,12 @@ theorem amo_dword_sd_vreg_result_run
         (Store Data) false false false js.sail =
         .ok (Ok true)
           (state_after_dword_store js.sail addr result))
-    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hpmp : Assumptions.StorePmpOk addr 8 js.sail)
+    (hmmio : Assumptions.NotWritableMmio addr 8 js.sail)
+    (hjolt : Assumptions.JoltRamStoreOk addr js) :
     ∃ js_afterStore : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.SD (.xreg rs1) (.vreg valueReg) (0 : BitVec 12))).run js =
@@ -334,6 +370,8 @@ theorem amo_dword_sd_vreg_result_run
         rs1 valueReg (0 : BitVec 12) js addr result
         (state_after_dword_store js.sail addr result)
         hrs1 hvalue hsd_align hwrite' (by simpa only [haddr0] using h_ram)
+        hpriv hmprv (by rw [haddr0]; exact hpmp) (by rw [haddr0]; exact hmmio)
+        (by rw [haddr0]; exact hjolt)
   · rfl
   · rfl
 
@@ -416,7 +454,8 @@ theorem amo_dword_load_old_aligned_run_into
     (hload_pmp : Assumptions.LoadPmpOk addr 8 js.sail)
     (hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail)
     (h_align : addr &&& (7 : BitVec 64) = 0)
-    (holdReg : WritableVReg oldReg) :
+    (holdReg : WritableVReg oldReg)
+    (hjolt : Assumptions.JoltRamLoadOk addr js) :
     ∃ js_afterLoad : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.LD .amo (.vreg oldReg) (.xreg rs1) (0 : BitVec 12))).run js =
@@ -438,6 +477,7 @@ theorem amo_dword_load_old_aligned_run_into
     amo_dword_ld_old_run_into oldReg rs1 js addr
       (loaded_dword_at js.sail addr hbytes haligned.no_ovf)
       hrs1 h_align hload holdReg hread_mmio.ram
+      hpriv hmprv hbytes hload_pmp hread_mmio hjolt
 
 /-- The aligned AMO expansion load reads the old dword into `amoOldVReg`. -/
 theorem amo_dword_load_old_aligned_run
@@ -449,7 +489,8 @@ theorem amo_dword_load_old_aligned_run
     (hbytes : MemBytesPresentAt js.sail addr 8)
     (hload_pmp : Assumptions.LoadPmpOk addr 8 js.sail)
     (hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail)
-    (h_align : addr &&& (7 : BitVec 64) = 0) :
+    (h_align : addr &&& (7 : BitVec 64) = 0)
+    (hjolt : Assumptions.JoltRamLoadOk addr js) :
     ∃ js_afterLoad : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.LD .amo (.vreg JoltISA.amoOldVReg) (.xreg rs1) (0 : BitVec 12))).run js =
@@ -461,7 +502,7 @@ theorem amo_dword_load_old_aligned_run
   exact
     amo_dword_load_old_aligned_run_into JoltISA.amoOldVReg
       rs1 js hpriv hmprv addr hrs1 hbytes hload_pmp hread_mmio h_align
-      (by unfold WritableVReg; decide)
+      (by unfold WritableVReg; decide) hjolt
 
 /-- After the old-value load, `SD rs2, 0(rs1)` writes the AMO result dword from
 the source register. -/
@@ -475,7 +516,9 @@ theorem amo_dword_store_xreg_result_after_load_aligned_run
     (hstore_pmp : Assumptions.StorePmpOk addr 8 js.sail)
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
     (h_align : addr &&& (7 : BitVec 64) = 0)
-    (hld_sail : js_afterLoad.sail = js.sail) :
+    (hld_sail : js_afterLoad.sail = js.sail)
+    (hjolt : Assumptions.JoltRamStoreOk addr js)
+    (hld_layout : js_afterLoad.jolt_device.memory_layout = js.jolt_device.memory_layout) :
     ∃ js_afterStore : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12))).run js_afterLoad =
@@ -508,6 +551,10 @@ theorem amo_dword_store_xreg_result_after_load_aligned_run
   exact
     amo_dword_sd_result_run rs2 rs1 js_afterLoad addr result
       hrs1_afterLoad hrs2_afterLoad h_align hwrite_afterLoad hwrite_mmio.ram
+      (by rw [hld_sail]; exact hpriv) (by rw [hld_sail]; exact hmprv)
+      (by rw [hld_sail]; exact hstore_pmp) (by rw [hld_sail]; exact hwrite_mmio)
+      ⟨by rw [hld_layout]; exact hjolt.below_heap_end,
+       by rw [hld_layout]; exact hjolt.outside_canary⟩
 
 /-- Shape produced by the pure middle instruction in a dword AMO binop
 expansion.
@@ -2538,7 +2585,9 @@ theorem amo_dword_store_vreg_result_after_middle_aligned_run_from
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
     (h_align : addr &&& (7 : BitVec 64) = 0)
     (hmiddle_sail : js_afterMiddle.sail = js.sail)
-    (hmiddle_result : js_afterMiddle.vregs valueReg = result) :
+    (hmiddle_result : js_afterMiddle.vregs valueReg = result)
+    (hjolt : Assumptions.JoltRamStoreOk addr js)
+    (hmiddle_layout : js_afterMiddle.jolt_device.memory_layout = js.jolt_device.memory_layout) :
     ∃ js_afterStore : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.SD (.xreg rs1) (.vreg valueReg) (0 : BitVec 12))).run
@@ -2569,6 +2618,10 @@ theorem amo_dword_store_vreg_result_after_middle_aligned_run_from
   exact
     amo_dword_sd_vreg_result_run rs1 valueReg js_afterMiddle
       addr result hrs1_afterMiddle hmiddle_result h_align hwrite_afterMiddle hwrite_mmio.ram
+      (by rw [hmiddle_sail]; exact hpriv) (by rw [hmiddle_sail]; exact hmprv)
+      (by rw [hmiddle_sail]; exact hstore_pmp) (by rw [hmiddle_sail]; exact hwrite_mmio)
+      ⟨by rw [hmiddle_layout]; exact hjolt.below_heap_end,
+       by rw [hmiddle_layout]; exact hjolt.outside_canary⟩
 
 /-- After a pure AMO middle instruction, `SD amoNewVReg, 0(rs1)` writes the
 computed dword result. -/
@@ -2582,7 +2635,9 @@ theorem amo_dword_store_vreg_result_after_middle_aligned_run
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
     (h_align : addr &&& (7 : BitVec 64) = 0)
     (hmiddle_sail : js_afterMiddle.sail = js.sail)
-    (hmiddle_result : js_afterMiddle.vregs JoltISA.amoNewVReg = result) :
+    (hmiddle_result : js_afterMiddle.vregs JoltISA.amoNewVReg = result)
+    (hjolt : Assumptions.JoltRamStoreOk addr js)
+    (hmiddle_layout : js_afterMiddle.jolt_device.memory_layout = js.jolt_device.memory_layout) :
     ∃ js_afterStore : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.SD (.xreg rs1) (.vreg JoltISA.amoNewVReg) (0 : BitVec 12))).run
@@ -2594,7 +2649,7 @@ theorem amo_dword_store_vreg_result_after_middle_aligned_run
   exact
     amo_dword_store_vreg_result_after_middle_aligned_run_from
       JoltISA.amoNewVReg rs1 js js_afterMiddle hpriv hmprv addr result hrs1
-      hstore_pmp hwrite_mmio h_align hmiddle_sail hmiddle_result
+      hstore_pmp hwrite_mmio h_align hmiddle_sail hmiddle_result hjolt hmiddle_layout
 
 /-- After the AMO store, the final `ADDI rd, old, 0` writes the loaded old
 dword from the chosen old-value scratch register through Rust's side-effecting
@@ -2654,6 +2709,8 @@ theorem amo_dword_double_binop_program_concrete_aligned
     (hstore_pmp : Assumptions.StorePmpOk addr 8 js.sail)
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
     (h_align : addr &&& (7 : BitVec 64) = 0)
+    (hjolt_load : Assumptions.JoltRamLoadOk addr js)
+    (hjolt_store : Assumptions.JoltRamStoreOk addr js)
     (hmiddle :
       ∀ oldReg newReg : JoltISA.VReg,
       WritableVReg newReg →
@@ -2693,18 +2750,25 @@ theorem amo_dword_double_binop_program_concrete_aligned
     amo_dword_load_old_aligned_run_into
       oldReg rs1 js hpriv hmprv addr hrs1
       hbytes hload_pmp hread_mmio h_align
-      holdWritable
+      holdWritable hjolt_load
   obtain ⟨js_afterMiddle, hmiddle_step⟩ :=
     hmiddle oldReg newReg hnewWritable hne_old_new
       js_afterLoad hld_sail hld_old
   have hmiddle_sail : js_afterMiddle.sail = js.sail := by
     rw [hmiddle_step.sail, hld_sail]
+  have hld_layout :
+      js_afterLoad.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.execInstr_rule _ js js_afterLoad _ hld).1
+  have hmiddle_layout :
+      js_afterMiddle.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.execInstr_rule _ js_afterLoad js_afterMiddle _
+      hmiddle_step.run).1.trans hld_layout
   obtain ⟨js_afterStore, hsd, hsd_sail, hsd_vregs⟩ :=
     amo_dword_store_vreg_result_after_middle_aligned_run_from
       newReg
       rs1 js js_afterMiddle hpriv hmprv addr result hrs1
       hstore_pmp hwrite_mmio h_align
-      hmiddle_sail hmiddle_step.result_vreg
+      hmiddle_sail hmiddle_step.result_vreg hjolt_store hmiddle_layout
   obtain ⟨js_afterWrite, haddi, haddi_sail⟩ :=
     amo_dword_writeback_after_store_run_from oldReg
       rd js_afterMiddle js_afterStore addr
@@ -3189,6 +3253,8 @@ theorem amo_dword_double_binop_program_eq_sail_aligned
     (hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail)
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
     (h_align : addr &&& (7 : BitVec 64) = 0)
+    (hjolt_load : Assumptions.JoltRamLoadOk addr js)
+    (hjolt_store : Assumptions.JoltRamStoreOk addr js)
     (hnot_cas : (op == amoop.AMOCAS) = false)
     (hlinked : LinkedCSRs js)
     (hsafe : JoltISA.ProgramWritesNoProtectedVReg
@@ -3221,7 +3287,7 @@ theorem amo_dword_double_binop_program_eq_sail_aligned
       (execute_AMO op false false rs2 rs1 8 rd).run js.sail := by
   rcases amo_dword_double_binop_program_concrete_aligned
       op binop rs2 rs1 rd js hpriv hmprv addr result hrs1 hbytes
-      hload_pmp hread_mmio hstore_pmp hwrite_mmio h_align hmiddle with
+      hload_pmp hread_mmio hstore_pmp hwrite_mmio h_align hjolt_load hjolt_store hmiddle with
     ⟨jsf, hjolt, hjolt_sail⟩
   have hsail :=
     execute_AMO_dword_non_cas_aligned
@@ -3316,6 +3382,8 @@ theorem amo_dword_double_binop_program_project_eq_sail
     (hatomic_pmp : Assumptions.AtomicPmpOk op addr 8 js.sail)
     (hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail)
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
+    (hjolt_load : Assumptions.JoltRamLoadOk addr js)
+    (hjolt_store : Assumptions.JoltRamStoreOk addr js)
     (hnot_cas : (op == amoop.AMOCAS) = false)
     (hlinked : LinkedCSRs js)
     (hsafe : JoltISA.ProgramWritesNoProtectedVReg
@@ -3353,7 +3421,7 @@ theorem amo_dword_double_binop_program_project_eq_sail
       amo_dword_double_binop_program_eq_sail_aligned
         op binop rs2 rs1 rd js hpriv hmprv addr rs2Val result
         hrs1 hrs2 hrd hbytes hload_pmp hstore_pmp hatomic_pmp
-        hread_mmio hwrite_mmio h_align hnot_cas hlinked hsafe (hmiddle h_align)
+        hread_mmio hwrite_mmio h_align hjolt_load hjolt_store hnot_cas hlinked hsafe (hmiddle h_align)
         (hresult h_align)
   · exact
       amo_dword_double_binop_program_eq_sail_misaligned
@@ -3378,6 +3446,8 @@ theorem amo_dword_double_select_program_concrete_aligned
     (hstore_pmp : Assumptions.StorePmpOk addr 8 js.sail)
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
     (h_align : addr &&& (7 : BitVec 64) = 0)
+    (hjolt_load : Assumptions.JoltRamLoadOk addr js)
+    (hjolt_store : Assumptions.JoltRamStoreOk addr js)
     (hmiddle :
       ∀ js_afterLoad : SailJoltState,
         js_afterLoad.sail = js.sail →
@@ -3429,16 +3499,23 @@ theorem amo_dword_double_select_program_concrete_aligned
     split <;> decide
   obtain ⟨js_afterLoad, hld, hld_sail, hld_old⟩ :=
     amo_dword_load_old_aligned_run_into oldReg rs1 js hpriv hmprv addr hrs1
-      hbytes hload_pmp hread_mmio h_align holdWritable
+      hbytes hload_pmp hread_mmio h_align holdWritable hjolt_load
   obtain ⟨js_afterMiddle, hmiddle_step⟩ :=
     hmiddle js_afterLoad hld_sail hld_old
   have hmiddle_sail : js_afterMiddle.sail = js.sail := by
     rw [hmiddle_step.sail, hld_sail]
+  have hld_layout :
+      js_afterLoad.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.execInstr_rule _ js js_afterLoad _ hld).1
+  have hmiddle_layout :
+      js_afterMiddle.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.execProgram_rule _ js_afterLoad js_afterMiddle _
+      (hmiddle_step.run (.done RETIRE_SUCCESS))).1.trans hld_layout
   obtain ⟨js_afterStore, hsd, hsd_sail, hsd_vregs⟩ :=
     amo_dword_store_vreg_result_after_middle_aligned_run_from
       newReg rs1 js js_afterMiddle hpriv hmprv addr result hrs1
       hstore_pmp hwrite_mmio h_align
-      hmiddle_sail hmiddle_step.result_vreg
+      hmiddle_sail hmiddle_step.result_vreg hjolt_store hmiddle_layout
   obtain ⟨js_afterWrite, haddi, haddi_sail⟩ :=
     amo_dword_writeback_after_store_run_from oldReg
       rd js_afterMiddle js_afterStore addr
@@ -3527,6 +3604,8 @@ theorem amo_dword_double_select_program_eq_sail_aligned
     (hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail)
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
     (h_align : addr &&& (7 : BitVec 64) = 0)
+    (hjolt_load : Assumptions.JoltRamLoadOk addr js)
+    (hjolt_store : Assumptions.JoltRamStoreOk addr js)
     (hnot_cas : (op == amoop.AMOCAS) = false)
     (hlinked : LinkedCSRs js)
     (hsafe : JoltISA.ProgramWritesNoProtectedVReg
@@ -3559,7 +3638,7 @@ theorem amo_dword_double_select_program_eq_sail_aligned
   rcases amo_dword_double_select_program_concrete_aligned
       op cmpInstr cmpLhs cmpRhs rs2 rs1 rd js hpriv hmprv addr result
       hrs1 hbytes hload_pmp hread_mmio hstore_pmp hwrite_mmio
-      h_align hmiddle with
+      h_align hjolt_load hjolt_store hmiddle with
     ⟨jsf, hjolt, hjolt_sail⟩
   have hsail :=
     execute_AMO_dword_non_cas_aligned
@@ -3624,6 +3703,8 @@ theorem amo_dword_double_select_program_project_eq_sail
     (hatomic_pmp : Assumptions.AtomicPmpOk op addr 8 js.sail)
     (hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail)
     (hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail)
+    (hjolt_load : Assumptions.JoltRamLoadOk addr js)
+    (hjolt_store : Assumptions.JoltRamStoreOk addr js)
     (hnot_cas : (op == amoop.AMOCAS) = false)
     (hlinked : LinkedCSRs js)
     (hsafe : JoltISA.ProgramWritesNoProtectedVReg
@@ -3661,7 +3742,7 @@ theorem amo_dword_double_select_program_project_eq_sail
         op cmpInstr cmpLhs cmpRhs rs2 rs1 rd js hpriv hmprv
         addr rs2Val result hrs1 hrs2 hrd hbytes hload_pmp
         hstore_pmp hatomic_pmp hread_mmio hwrite_mmio h_align
-        hnot_cas hlinked hsafe (hmiddle h_align) (hresult h_align)
+        hjolt_load hjolt_store hnot_cas hlinked hsafe (hmiddle h_align) (hresult h_align)
   · exact
       amo_dword_double_select_program_eq_sail_misaligned
         op cmpInstr cmpLhs cmpRhs rs2 rs1 rd js addr rs2Val hrs1 hrs2 hlinked h_align

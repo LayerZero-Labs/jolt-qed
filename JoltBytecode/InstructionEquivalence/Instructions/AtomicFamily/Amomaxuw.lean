@@ -177,6 +177,7 @@ private theorem amomaxuwProgram_core_eq_sail
           oldWord
           h.rs1_read hbytes_base hload_pmp_base hread_mmio_base
           hstore_pmp_base hwrite_mmio_base h_align
+          h.jolt_ram_load h.jolt_ram_store
           (amo_word_maxu_result_extract_eq rs2Val (amoWordShiftedOld addr dword)
             oldWord hold)
           (by simpa [dword] using hold)

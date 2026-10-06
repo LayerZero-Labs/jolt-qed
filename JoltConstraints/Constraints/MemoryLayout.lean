@@ -122,7 +122,7 @@ open JoltConstraints JoltConstraints.RustMemoryLayout in
 configured maximum before execution starts.
 Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/tracer/src/lib.rs#L382-L393 -/
 theorem JoltDevice.AdviceBelowInput.of_memoryLayout
-    (io : JoltDevice) (config : MemoryConfig) (layout : AdviceInputLayout)
+    (io : JoltDevice) (config : JoltConstraints.RustMemoryLayout.MemoryConfig) (layout : AdviceInputLayout)
     (built : adviceInputLayout config = some layout)
     (trustedStart : io.memory_layout.trusted_advice_start.toNat = layout.trustedAdviceStart)
     (untrustedStart : io.memory_layout.untrusted_advice_start.toNat = layout.untrustedAdviceStart)

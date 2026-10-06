@@ -26,7 +26,7 @@ noncomputable def RamReadValue [Field F] {program : JoltProgram}
       | .LD _ _ _ _ => rdValue instruction row.postState
       | .SD base value imm =>
           let address := ((JoltISA.sourceValue base row.preState) + imm)
-          let word := (JoltISA.memoryWord? row.preState address).get
+          let word := (JoltISA.trace_doubleword? row.preState address).get
              -- This is why SD assumption exists in tracerow
              -- It guarantees that the old memory word exists before the store,
              -- so .get can read it. A successful store alone does not guarantee

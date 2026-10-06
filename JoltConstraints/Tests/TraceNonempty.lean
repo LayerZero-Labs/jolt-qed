@@ -235,7 +235,6 @@ end
 -- from `execInstr`, as in the constraint theorems.
 /--
 info: 'TraceNonemptyChecks.jalTrace_terminated' depends on axioms: [load_reservation,
- match_reservation,
  plat_term_write,
  propext,
  sys_enable_experimental_extensions,

@@ -1,0 +1,287 @@
+import JoltBytecode.JoltISA.Semantics
+
+/-
+Every Jolt ISA instruction leaves the device's memory layout and advice buffers
+unchanged; Rust fixes them in `create_emulator` and never updates them.
+-/
+
+set_option autoImplicit false
+
+open Sail PreSail LeanRV64D.Functions
+
+namespace JoltIOSetupFrame
+
+open JoltISA
+
+/-- The device fields that Rust fixes in `create_emulator` and never updates.
+Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/tracer/src/lib.rs#L401-L404 -/
+def Same (a b : JoltDevice) : Prop :=
+  b.memory_layout = a.memory_layout ∧ b.trusted_advice = a.trusted_advice ∧
+    b.untrusted_advice = a.untrusted_advice
+
+theorem Same.refl (a : JoltDevice) : Same a a := ⟨rfl, rfl, rfl⟩
+
+theorem Same.trans {a b c : JoltDevice} (hab : Same a b) (hbc : Same b c) : Same a c :=
+  ⟨hbc.1.trans hab.1, hbc.2.1.trans hab.2.1, hbc.2.2.trans hab.2.2⟩
+
+def Preserves {α : Type} (m : JoltMonad α) : Prop :=
+  ∀ (s t : SailJoltState) (v : α), m s = .ok v t → Same s.jolt_device t.jolt_device
+
+theorem pure_rule {α : Type} (v : α) : Preserves (pure v) := by
+  intro s t x h
+  cases h
+  exact Same.refl _
+
+theorem bind_rule {α β : Type} {m : JoltMonad α} {f : α → JoltMonad β}
+    (hm : Preserves m) (hf : ∀ x, Preserves (f x)) : Preserves (m >>= f) := by
+  intro s t v h
+  cases hr : m s with
+  | error e s' => simp only [bind, EStateM.bind, hr] at h; cases h
+  | ok x s' =>
+    simp only [bind, EStateM.bind, hr] at h
+    exact (hm s s' x hr).trans (hf x s' t v h)
+
+theorem lift_rule {α : Type} (m : SailM α) : Preserves (liftSail m) := by
+  intro s t v h
+  cases hr : m s.sail with
+  | error e s' => simp only [liftSail, hr] at h; cases h
+  | ok x s' =>
+    simp only [liftSail, hr] at h
+    cases h
+    exact Same.refl _
+
+theorem throw_rule {α : Type} (e : Error exception) :
+    Preserves (throw e : JoltMonad α) := by
+  intro s t x h
+  cases h
+
+theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
+  intro s t x h
+  cases h
+  exact Same.refl _
+
+theorem modify_rule (f : SailJoltState → SailJoltState)
+    (hf : ∀ s, (f s).jolt_device = s.jolt_device) : Preserves (modify f : JoltMonad Unit) := by
+  intro s t x h
+  cases h
+  rw [hf s]
+  exact Same.refl _
+
+theorem read_rule (src : Src) : Preserves (readSrc src) := by
+  cases src with
+  | vreg vr =>
+    intro s t v h
+    simp only [readSrc, readVReg, bind, EStateM.bind, get, getThe, MonadStateOf.get,
+      EStateM.get, pure, EStateM.pure] at h
+    cases h
+    exact Same.refl _
+  | xreg rs => exact lift_rule _
+
+theorem write_rule (dst : Dst) (value : BitVec 64) : Preserves (writeDst dst value) := by
+  cases dst with
+  | vreg vr =>
+    by_cases hw : vr.toNat < 32
+    · simp only [writeDst, writeVReg, hw, ↓reduceIte]
+      exact throw_rule _
+    · simp only [writeDst, writeVReg, hw, ↓reduceIte]
+      exact modify_rule _ (fun _ => rfl)
+  | xreg rd => exact lift_rule _
+
+theorem storeDeviceByte_same (io io' : JoltDevice) (address : Nat) (value : BitVec 8)
+    (h : JoltDevice.store? io address value = some io') : Same io io' := by
+  unfold JoltDevice.store? at h
+  split_ifs at h <;> cases h <;> exact ⟨rfl, rfl, rfl⟩
+
+theorem store_doubleword_same (io io' : JoltDevice) (address value : BitVec 64)
+    (h : JoltDevice.store_doubleword? io address value = some io') : Same io io' := by
+  unfold JoltDevice.store_doubleword? at h
+  suffices hfold : ∀ (l : List Nat) (start : Option JoltDevice),
+      (∀ d, start = some d → Same io d) →
+      ∀ d, l.foldl (fun current k => current.bind fun device =>
+        JoltDevice.store? device (address.toNat + k) (value.extractLsb' (8 * k) 8)) start =
+          some d → Same io d from
+    hfold _ _ (fun d hd => by cases hd; exact Same.refl _) _ h
+  intro l
+  induction l with
+  | nil => intro start hstart d hd; exact hstart d hd
+  | cons k l ih =>
+    intro start hstart d hd
+    refine ih _ ?_ d hd
+    intro d' hd'
+    cases hs : start with
+    | none => rw [hs] at hd'; cases hd'
+    | some e =>
+      rw [hs] at hd'
+      exact (hstart e hs).trans (storeDeviceByte_same _ _ _ _ hd')
+
+theorem readMemoryWord_rule (address : BitVec 64) :
+    Preserves (readMemoryWord address) := by
+  intro s t v h
+  unfold readMemoryWord at h
+  split_ifs at h
+  · split at h <;> (cases h; exact Same.refl _)
+  · exact lift_rule _ s t v h
+
+theorem store_doubleword_rule (address value : BitVec 64) :
+    Preserves (store_doubleword address value) := by
+  intro s t v h
+  unfold store_doubleword at h
+  split_ifs at h
+  · split at h
+    · rename_i io hio
+      cases h
+      exact store_doubleword_same _ _ _ _ hio
+    · cases h
+      exact Same.refl _
+  · exact lift_rule _ s t v h
+
+theorem store_raw_same (s s' : SailJoltState) (ea : Nat) (value : BitVec 8)
+    (h : Mmu.store_raw? s ea value = some s') : Same s.jolt_device s'.jolt_device := by
+  simp only [Mmu.store_raw?] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; exact Same.refl _)
+    | cases h
+    | (cases hst : s.jolt_device.store? ea value with
+        | none => simp [hst] at h
+        | some d =>
+            simp only [hst, Option.map_some] at h
+            cases h
+            exact storeDeviceByte_same _ _ _ _ hst)
+
+theorem store_raw_fold_same (ea : Nat) (value : BitVec 64) (s0 : SailJoltState) :
+    ∀ (l : List Nat) (start : Option SailJoltState),
+      (∀ s, start = some s → Same s0.jolt_device s.jolt_device) →
+      ∀ s', l.foldl (fun current k => current.bind fun s =>
+        Mmu.store_raw? s (ea + k) (value.extractLsb' (8 * k) 8)) start = some s' →
+      Same s0.jolt_device s'.jolt_device := by
+  intro l
+  induction l with
+  | nil => intro start hstart s' hs'; exact hstart s' hs'
+  | cons k l ih =>
+    intro start hstart s' hs'
+    refine ih _ ?_ s' hs'
+    intro s hs
+    cases hst : start with
+    | none => rw [hst] at hs; cases hs
+    | some e =>
+      rw [hst] at hs
+      exact (hstart e hst).trans (store_raw_same _ _ _ _ hs)
+
+theorem load_doubleword_rule (address : BitVec 64) :
+    Preserves (Mmu.load_doubleword address) := by
+  intro s t v h
+  simp only [Mmu.load_doubleword] at h
+  repeat' split at h
+  all_goals first | (cases h; exact Same.refl _) | cases h
+
+theorem mmu_store_doubleword_rule (address value : BitVec 64) :
+    Preserves (Mmu.store_doubleword address value) := by
+  intro s t v h
+  simp only [Mmu.store_doubleword] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; exact Same.refl _)
+    | (rename_i heq
+       cases h
+       exact store_raw_fold_same _ value s _ (some s)
+         (fun s1 hs1 => by cases hs1; exact Same.refl _) _ heq)
+    | cases h
+
+theorem readMemoryByte_rule (address : BitVec 64) :
+    Preserves (readMemoryByte address) := by
+  intro s t v h
+  unfold readMemoryByte at h
+  dsimp only at h
+  split_ifs at h
+  · cases hb : JoltDevice.load? s.jolt_device address.toNat with
+    | none => simp only [hb] at h; cases h
+    | some byte => simp only [hb] at h; cases h; exact Same.refl _
+  · exact lift_rule _ s t v h
+
+theorem readHostBytes_rule
+    (overflowChecks incrementAfterLast : Bool) {width : Nat}
+    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
+    Preserves (readHostBytes readMemoryByte overflowChecks incrementAfterLast pointer n bytes) := by
+  induction n generalizing pointer bytes with
+  | zero => exact pure_rule _
+  | succ n ih =>
+    dsimp only [readHostBytes]
+    refine bind_rule (readMemoryByte_rule _) (fun result => ?_)
+    cases result with
+    | Err e => exact pure_rule _
+    | Ok byte =>
+      split_ifs with h
+      · exact bind_rule (throw_rule _) (fun _ => ih _ _)
+      · exact bind_rule (pure_rule _) (fun _ => ih _ _)
+
+theorem execHostIO_rule : Preserves execHostIO := by
+  unfold execHostIO execHostIOWith
+  refine bind_rule get_rule (fun config => ?_)
+  dsimp only
+  split
+  · exact pure_rule _
+  · refine bind_rule (pure_rule _) (fun _ => ?_)
+    refine bind_rule (read_rule _) (fun callId => ?_)
+    repeat' first
+      | exact readHostBytes_rule _ _ _ _ _
+      | exact read_rule _
+      | exact pure_rule _
+      | exact throw_rule _
+      | exact modify_rule _ (fun _ => rfl)
+      | split
+      | refine bind_rule ?_ (fun x => ?_)
+
+macro "jolt_io_setup_auto" : tactic => `(tactic|
+  repeat' first
+  | exact read_rule _
+  | exact write_rule _ _
+  | exact pure_rule _
+  | exact throw_rule _
+  | exact get_rule
+  | exact lift_rule _
+  | exact load_doubleword_rule _
+  | exact mmu_store_doubleword_rule _ _
+  | exact execHostIO_rule
+  | split
+  | refine bind_rule ?_ (fun x => ?_))
+
+/-- Every Jolt ISA instruction preserves the device setup fields. -/
+theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) := by
+  cases instr
+  case VirtualAdviceLoad dst byteCount =>
+    intro s t v h
+    simp only [execInstr] at h
+    cases hr : readAdviceTape s.adviceTape byteCount with
+    | none => simp only [hr] at h; cases h
+    | some pair =>
+      obtain ⟨value, tape⟩ := pair
+      simp only [hr] at h
+      exact (bind_rule (write_rule dst value) (fun _ => pure_rule _))
+        { s with adviceTape := tape } t v h
+  all_goals simp only [execInstr]
+  all_goals jolt_io_setup_auto
+
+theorem execProgram_rule (program : Program) : Preserves (execProgram program) := by
+  induction program with
+  | done result => exact pure_rule _
+  | instr instr rest ih =>
+    simp only [execProgram]
+    refine bind_rule (execInstr_rule instr) (fun result => ?_)
+    split
+    · exact ih
+    · exact pure_rule _
+
+-- A step that runs any tail program after it keeps the memory layout.
+theorem layout_of_tail_run {step : Program → Program} {s t : SailJoltState}
+    (h : ∀ tail, (execProgram (step tail)).run s = (execProgram tail).run t) :
+    t.jolt_device.memory_layout = s.jolt_device.memory_layout :=
+  (execProgram_rule _ s t _ (h (.done RETIRE_SUCCESS))).1
+
+-- A single instruction keeps the memory layout.
+theorem layout_of_instr_run {instr : Instr} {s t : SailJoltState} {r : ExecutionResult}
+    (h : (execInstr instr).run s = .ok r t) :
+    t.jolt_device.memory_layout = s.jolt_device.memory_layout :=
+  (execInstr_rule instr s t r h).1
+
+end JoltIOSetupFrame

@@ -11,7 +11,7 @@ def JoltISA.Instr.LoadCaptureMatches (instruction : JoltISA.Instr)
   match instruction with
   | .LD _ dst base imm =>
       let capturedDst := HonestWitness.capturedDestinationValue dst postState
-      JoltISA.memoryWord? preState (JoltISA.sourceValue base preState + imm) =
+      JoltISA.trace_doubleword? preState (JoltISA.sourceValue base preState + imm) =
         some capturedDst
   | _ => True
 
@@ -56,7 +56,7 @@ structure JoltTraceRow (program : JoltProgram) where
   storeMemoryPresent :
     match program.expandedBytecode[rowIndex].expandedInstruction with
     | .SD base _ imm =>
-        (JoltISA.memoryWord? preState
+        (JoltISA.trace_doubleword? preState
           (((JoltISA.sourceValue base preState) + imm))).isSome = true
     | _ => True
   -- The load's captured RAM value must agree with its captured destination.
