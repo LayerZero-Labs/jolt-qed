@@ -52,11 +52,6 @@ def source_is_compressed (bytecode : Array JoltInstructionRow)
   let last := start.val + (bytecode[start].virtual_sequence_remaining.getD 0).toNat
   (bytecode[last]?.map (·.is_compressed)).getD false
 
--- A row where a source instruction's rows begin: a native row, or the first row
--- of a sequence.
-def JoltInstructionRow.starts_source (row : JoltInstructionRow) : Bool :=
-  row.virtual_sequence_remaining.isNone || row.is_first_in_sequence
-
 -- The rows Rust's tracer records when it runs the instance's program on these
 -- private inputs.
 -- See : jolt/tracer/src/lib.rs:74-131 (trace)
@@ -64,6 +59,13 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) where
   bytecode : Array JoltInstructionRow
   expands : expand_program joltInstance.program = some bytecode
+  -- Rust only proves programs it accepts: the PC map checks and the entry check
+  -- pass during preprocessing, before any tracing.
+  -- See : jolt/crates/jolt-prover/src/preprocessing.rs:43-50
+  accepted : joltInstance.bytecode.isSome
+  -- Rust's verifier rejects an instance whose inputs or layout fail its checks.
+  -- See : jolt/crates/jolt-verifier/src/verifier.rs:356-383
+  valid_inputs : joltInstance.validate_inputs = true
   rows : Array (HonestTraceRow bytecode)
   -- Rust starts from the emulator create_emulator builds.
   -- See : jolt/tracer/src/lib.rs:89-97, 364-408 (create_emulator)

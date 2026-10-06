@@ -150,6 +150,11 @@ structure JoltInstructionRow where
   is_first_in_sequence : Bool
   is_compressed : Bool
 
+-- A row where a source instruction's rows begin: a native row, or the first row
+-- of a sequence.
+def JoltInstructionRow.starts_source (row : JoltInstructionRow) : Bool :=
+  row.virtual_sequence_remaining.isNone || row.is_first_in_sequence
+
 -- See : jolt/crates/jolt-program/src/expand/metadata.rs:25-53 (stamp_sequence_metadata)
 def stamp_sequence (address : BitVec 64) (is_compressed : Bool)
     (instructions : List JoltISA.Instr) : List JoltInstructionRow :=
