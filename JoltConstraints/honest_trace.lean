@@ -183,11 +183,14 @@ def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
 -- In practice our understanding is: spoil asserts come only from a guest calling
 -- jolt::spoil_proof() (directly or through unwrap_or_spoil_proof), which compares 0
 -- with 1 and so always fails. Rust's expansions emit only asserts with immediate 0,
--- and those always pass (assert_eq_holds in execution_facts.lean). So this condition
--- says the guest never calls spoil_proof(); Rust means such runs to have no proof.
+-- and those always pass (assert_eq_holds in execution_facts.lean). A guest reaches
+-- spoil_proof() only when values the prover supplied fail its checks, e.g. the
+-- curve points in Jolt's P-256 ECDSA check: a cheating prover then gets no proof
+-- at all. An honest prover never reaches it, so this condition is very mild.
 -- See : jolt/tracer/src/instruction/virtual_assert_eq.rs:18-32
---       jolt/jolt-platform/src/spoil.rs:1-20
+--       jolt/jolt-platform/src/spoil.rs:1-26
 --       jolt/crates/jolt-program/src/expand/memory/scw.rs:54-59 (and scd.rs: immediate 0)
+--       jolt/jolt-inlines/p256/src/sdk.rs:768-787, 853-858 (ECDSA advice checks)
 def HonestTrace.SpoilAssertsPass {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Prop :=
   ∀ row ∈ trace.rows, ∀ (lhs rhs : JoltISA.Src) (imm : BitVec 128),
