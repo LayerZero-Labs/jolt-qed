@@ -179,13 +179,6 @@ end JoltPCFrame
 namespace JoltPCFrame
 open JoltISA
 
-theorem aligned_access (addr : BitVec 64) (h : addr &&& 7 = 0) :
-    AlignedDwordAccess addr :=
-  { misalign := access_misaligned_8_aligned_false addr h
-    split := split_misaligned_aligned_8 addr h
-    align := h
-    no_ovf := aligned_addr_no_ovf_of_align addr h }
-
 theorem memory_write {addr data : BitVec 64} {s t : SailJoltState}
     {v : Result Bool ExecutionResult}
     (hr : Mmu.store_doubleword addr data s = .ok v t) :
@@ -193,10 +186,7 @@ theorem memory_write {addr data : BitVec 64} {s t : SailJoltState}
   rw [(Mmu.store_doubleword_regs hr).1]
 
 theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
-    (imm : BitVec 64) (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops)
-    (hwindow : RAM_START_ADDRESS ≤ (sourceValue base s + imm).toNat →
-      ops.memoryWindows (sourceValue base s + imm))
+    (imm : BitVec 64) (s t : SailJoltState)
     (hexec : execInstr (.LD fault dst base imm) s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.PC = s.sail.regs.get? Register.PC := by
   have hx := lookup_read_bind base _ _ _ _ hexec
@@ -216,10 +206,7 @@ theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
     cases hx
 
 theorem store_instruction (base value : Src) (imm : BitVec 64)
-    (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops)
-    (hwindow : RAM_START_ADDRESS ≤ (sourceValue base s + imm).toNat →
-      ops.memoryWindows (sourceValue base s + imm))
+    (s t : SailJoltState)
     (hexec : execInstr (.SD base value imm) s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.PC = s.sail.regs.get? Register.PC := by
   have hx := lookup_read_bind base _ _ _ _ hexec
@@ -240,23 +227,13 @@ end JoltPCFrame
 namespace JoltPCFrame
 open JoltISA
 
-def MemoryWindowsCovered (instr : Instr) (s : SailJoltState)
-    (ops : AssumptionOperands) : Prop :=
-  match instr with
-  | .LD _ _ base imm | .SD base _ imm =>
-    RAM_START_ADDRESS ≤ (sourceValue base s + imm).toNat →
-      ops.memoryWindows (sourceValue base s + imm)
-  | _ => True
-
 theorem instruction (instr : Instr) (s t : SailJoltState)
-    (ops : AssumptionOperands) (ha : TraceAssumptions s ops)
-    (hwindow : MemoryWindowsCovered instr s ops)
     (hhost : instr.HostIOPCFrame s t)
     (hexec : execInstr instr s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.PC = s.sail.regs.get? Register.PC := by
   cases instr with
-  | LD fault dst base imm => exact load_instruction fault dst base imm s t ops ha hwindow hexec
-  | SD base value imm => exact store_instruction base value imm s t ops ha hwindow hexec
+  | LD fault dst base imm => exact load_instruction fault dst base imm s t hexec
+  | SD base value imm => exact store_instruction base value imm s t hexec
   | VirtualHostIO _ _ _ => exact hhost
   | _ =>
     exact ordinary_instruction _
@@ -268,22 +245,13 @@ theorem hostIOPCFrame_withRuntimeAdvice (instr : Instr) (advice : instr.RuntimeA
     (instr.withRuntimeAdvice advice).HostIOPCFrame s t = instr.HostIOPCFrame s t := by
   cases instr <;> rfl
 
-theorem memoryWindows_withRuntimeAdvice (instr : Instr) (advice : instr.RuntimeAdvice)
-    (s : SailJoltState) (ops : AssumptionOperands) :
-    MemoryWindowsCovered (instr.withRuntimeAdvice advice) s ops =
-      MemoryWindowsCovered instr s ops := by
-  cases instr <;> rfl
-
 theorem row {program : JoltProgram} (trace : JoltTrace program)
     (i : Fin trace.rows.size) :
     trace.rows[i].postState.sail.regs.get? Register.PC =
       trace.rows[i].preState.sail.regs.get? Register.PC := by
-  apply instruction _ _ _ (trace.assumptionOperands i) (trace.rowAssumptions i)
-    _ _ trace.rows[i].executes
-  · rw [memoryWindows_withRuntimeAdvice]
-    exact trace.ramAccessAssumed i
-  · rw [hostIOPCFrame_withRuntimeAdvice]
-    exact trace.rows[i].hostIOPreservesPC
+  apply instruction _ _ _ _ trace.rows[i].executes
+  rw [hostIOPCFrame_withRuntimeAdvice]
+  exact trace.rows[i].hostIOPreservesPC
 
 end JoltPCFrame
 

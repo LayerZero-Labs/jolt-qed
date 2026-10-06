@@ -593,10 +593,7 @@ theorem row {program : JoltProgram} (trace : JoltTrace program)
         trace.rows[i].runtimeAdvice) trace.rows[i].preState = false) :
     trace.rows[i].postState.sail.regs.get? Register.nextPC =
       trace.rows[i].preState.sail.regs.get? Register.nextPC := by
-  apply instruction _ _ _ (trace.assumptionOperands i) (trace.rowAssumptions i)
-    _ hjump hnot _ trace.rows[i].executes
-  · rw [JoltPCFrame.memoryWindows_withRuntimeAdvice]
-    exact trace.ramAccessAssumed i
-  · exact hostIOFrame_of_exec _ _ _ _ (trace.rowAssumptions i) trace.rows[i].executes
+  apply instruction _ _ _ hjump hnot _ trace.rows[i].executes
+  exact hostIOFrame_of_exec _ _ _ _ (trace.rowAssumptions i) trace.rows[i].executes
 
 end JoltNextPCFrame

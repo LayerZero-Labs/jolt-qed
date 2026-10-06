@@ -29,33 +29,10 @@ noncomputable def trace_doubleword? (state : SailJoltState) (address : BitVec 64
     read_doubleword? (JoltDevice.load? state.jolt_device) address.toNat
   else read_doubleword? state.sail.mem.get? address.toNat
 
--- Writes 64 bits to the 8 device addresses starting at `address`, lowest 8 bits
--- first, each through JoltDevice.store?; none if any of them is not writable.
--- Needed because the Jolt device is not in Sail, so device writes cannot use
--- Sail's own write.
--- See : jolt/tracer/src/emulator/mmu.rs:739-745 (store_doubleword_raw, device branch)
-def _root_.JoltDevice.store_doubleword? (io : JoltDevice) (address : BitVec 64) (value : BitVec 64) :
-    Option JoltDevice :=
-  (List.range 8).foldl (fun current k =>
-    current.bind fun device =>
-      JoltDevice.store? device (address.toNat + k) (value.extractLsb' (8 * k) 8)) (some io)
-
--- Rust: [Mmu::load_doubleword](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/mmu.rs).
--- Ordinary RAM retains Sail's access checks. Device reads use the same pure byte
--- reader as trace_doubleword?, so trace extraction and execution agree on device data.
-noncomputable def readMemoryWord (address : BitVec 64) :
-    JoltMonad (Result (BitVec 64) ExecutionResult) := fun state =>
-  if address.toNat < RAM_START_ADDRESS then
-    match read_doubleword? (JoltDevice.load? state.jolt_device) address.toNat with
-    | some value => .ok (.Ok value) state
-    | none => .ok (.Err (.Memory_Exception
-        (Virtaddr address, .E_Load_Access_Fault ()))) state
-  else liftSail (vmem_read_addr (Virtaddr address) 0 8 (Load Data) false false false) state
-
-/-- Byte access for host calls. Like `readMemoryWord`, RAM uses the existing
-Sail memory interface and device bytes use `JoltDevice.load?`. Rust's byte-load
-path rejects the unsupported peripheral mappings below with a panic, not a
-returned translation trap. Heap bounds and full MMU/capture correspondence
+/-- Byte access for host calls. RAM uses the existing Sail memory interface
+and device bytes use `JoltDevice.load?`. Rust's byte-load path rejects the
+unsupported peripheral mappings below with a panic, not a returned translation
+trap. Heap bounds and full MMU/capture correspondence
 remain the shared memory-model obligations (model-review #15).
 Rust: tracer/src/emulator/mmu.rs::load and load_raw. -/
 noncomputable def readMemoryByte (address : BitVec 64) :
@@ -72,22 +49,8 @@ noncomputable def readMemoryByte (address : BitVec 64) :
     | none => .error (Error.Assertion "VirtualHostIO: unknown memory mapping") state
   else liftSail (vmem_read_addr (Virtaddr address) 0 1 (Load Data) false false false) state
 
--- Executes a 64-bit store. Below RAM_START_ADDRESS it writes the Jolt device;
--- at or above, it runs Sail's store, with Sail's checks. A device store may
--- differ from what a later read returns (termination ignores writes).
--- See : jolt/tracer/src/emulator/mmu.rs:437 (store_doubleword)
-noncomputable def store_doubleword (address value : BitVec 64) :
-    JoltMonad (Result Bool ExecutionResult) := fun state =>
-  if address.toNat < RAM_START_ADDRESS then
-    match JoltDevice.store_doubleword? state.jolt_device address value with
-    | some io => .ok (.Ok true) { state with jolt_device := io }
-    | none => .ok (.Err (.Memory_Exception
-        (Virtaddr address, .E_SAMO_Access_Fault ()))) state
-  else liftSail (vmem_write_addr (Virtaddr address) 8 value (Store Data) false false false) state
-
 /-
-DRAFT (S1): Jolt's own memory access, following Rust's Mmu directly. Nothing
-uses these yet; they sit beside the Sail-based functions above until the switch.
+Jolt's own memory access, following Rust's Mmu directly.
 Every Rust panic is an error. Address translation is the identity: Jolt never
 leaves AddressingMode::None (mmu.rs:105, 750-757).
 -/
@@ -193,19 +156,5 @@ noncomputable def store_doubleword (address value : BitVec 64) :
     | none => .error (Error.Assertion "Store Failed") state
 
 end Mmu
-
-@[simp] theorem readMemoryWord_ram (address : BitVec 64)
-    (h : RAM_START_ADDRESS ≤ address.toNat) :
-    readMemoryWord address =
-      liftSail (vmem_read_addr (Virtaddr address) 0 8 (Load Data) false false false) := by
-  funext state
-  simp [readMemoryWord, Nat.not_lt.mpr h]
-
-@[simp] theorem store_doubleword_ram (address value : BitVec 64)
-    (h : RAM_START_ADDRESS ≤ address.toNat) :
-    store_doubleword address value =
-      liftSail (vmem_write_addr (Virtaddr address) 8 value (Store Data) false false false) := by
-  funext state
-  simp [store_doubleword, Nat.not_lt.mpr h]
 
 end JoltISA

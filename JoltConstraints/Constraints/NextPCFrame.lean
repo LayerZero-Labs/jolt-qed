@@ -222,10 +222,7 @@ theorem memory_write {addr data : BitVec 64} {s t : SailJoltState}
   rw [(Mmu.store_doubleword_regs hr).1]
 
 theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
-    (imm : BitVec 64) (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops)
-    (hwindow : RAM_START_ADDRESS ≤ (sourceValue base s + imm).toNat →
-      ops.memoryWindows (sourceValue base s + imm))
+    (imm : BitVec 64) (s t : SailJoltState)
     (hexec : execInstr (.LD fault dst base imm) s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
   have hx := lookup_read_bind base _ _ _ _ hexec
@@ -245,10 +242,7 @@ theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
     cases hx
 
 theorem store_instruction (base value : Src) (imm : BitVec 64)
-    (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops)
-    (hwindow : RAM_START_ADDRESS ≤ (sourceValue base s + imm).toNat →
-      ops.memoryWindows (sourceValue base s + imm))
+    (s t : SailJoltState)
     (hexec : execInstr (.SD base value imm) s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
   have hx := lookup_read_bind base _ _ _ _ hexec
@@ -271,8 +265,6 @@ def HostIOFrame (instr : Instr) (s t : SailJoltState) : Prop :=
   | _ => True
 
 theorem instruction (instr : Instr) (s t : SailJoltState)
-    (ops : AssumptionOperands) (ha : TraceAssumptions s ops)
-    (hwindow : JoltPCFrame.MemoryWindowsCovered instr s ops)
     (hjump : JoltMetadata.opcodeFlag instr .Jump = false)
     (hnot : BranchTaken instr s = false)
     (hhost : HostIOFrame instr s t)
@@ -280,9 +272,9 @@ theorem instruction (instr : Instr) (s t : SailJoltState)
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
   cases instr
   case LD fault dst base imm =>
-    exact load_instruction fault dst base imm s t ops ha hwindow hexec
+    exact load_instruction fault dst base imm s t hexec
   case SD base value imm =>
-    exact store_instruction base value imm s t ops ha hwindow hexec
+    exact store_instruction base value imm s t hexec
   case VirtualHostIO dst src imm =>
     exact hhost
   all_goals try (simp [JoltMetadata.opcodeFlag] at hjump)

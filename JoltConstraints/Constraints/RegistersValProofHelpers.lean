@@ -459,11 +459,7 @@ theorem register42_branch_preserves_sourceValue
 theorem register42_load_preserves_other
     (fault : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
     (base src : JoltISA.Src) (imm : BitVec 64)
-    (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops)
-    (hwindow : JoltISA.RAM_START_ADDRESS ≤
-      (JoltISA.sourceValue base s + imm).toNat →
-      ops.memoryWindows (JoltISA.sourceValue base s + imm))
+    (s t : SailJoltState)
     (hne : src ≠ register42_dstAsSrc dst)
     (hready : ∀ rd, Assumptions.XRegReadable rd s.sail)
     (hexec : JoltISA.execInstr (.LD fault dst base imm) s =
@@ -488,11 +484,7 @@ theorem register42_load_preserves_other
 
 theorem register42_store_preserves_sourceValue
     (base stored src : JoltISA.Src) (imm : BitVec 64)
-    (s t : SailJoltState) (ops : AssumptionOperands)
-    (ha : TraceAssumptions s ops)
-    (hwindow : JoltISA.RAM_START_ADDRESS ≤
-      (JoltISA.sourceValue base s + imm).toNat →
-      ops.memoryWindows (JoltISA.sourceValue base s + imm))
+    (s t : SailJoltState)
     (hexec : JoltISA.execInstr (.SD base stored imm) s =
       .ok (.Retire_Success ()) t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
@@ -613,7 +605,6 @@ theorem register42_instruction_preserves_other
     (instr : JoltISA.Instr) (src : JoltISA.Src)
     (s t : SailJoltState) (ops : AssumptionOperands)
     (ha : TraceAssumptions s ops)
-    (hwindow : JoltPCFrame.MemoryWindowsCovered instr s ops)
     (hne : ∀ dst, instr.destination? = some dst →
       src ≠ register42_dstAsSrc dst)
     (hready : ∀ rd, Assumptions.XRegReadable rd s.sail)
@@ -622,11 +613,10 @@ theorem register42_instruction_preserves_other
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
   cases instr
   case LD fault dst base imm =>
-    exact register42_load_preserves_other fault dst base src imm s t ops
-      ha hwindow (hne dst rfl) hready hexec
+    exact register42_load_preserves_other fault dst base src imm s t
+      (hne dst rfl) hready hexec
   case SD base stored imm =>
-    exact register42_store_preserves_sourceValue base stored src imm s t ops
-      ha hwindow hexec
+    exact register42_store_preserves_sourceValue base stored src imm s t hexec
   case VirtualAdviceLoad dst byteCount =>
     cases hr : JoltISA.readAdviceTape s.adviceTape byteCount with
     | none => simp only [JoltISA.execInstr, hr] at hexec; cases hexec
@@ -799,11 +789,6 @@ theorem register42_row_step
   let src := register42_srcOfAddress register
   have ha := trace.rowAssumptions i
   have hready : ∀ rd, Assumptions.XRegReadable rd row.preState.sail := ha.xRegReadable
-  have hwindow : JoltPCFrame.MemoryWindowsCovered
-      (instr.withRuntimeAdvice row.runtimeAdvice) row.preState
-      (trace.assumptionOperands i) := by
-    rw [JoltPCFrame.memoryWindows_withRuntimeAdvice]
-    exact trace.ramAccessAssumed i
   have hwa := register42_RdWa_real (F := F) p trace t hb register
   change HonestWitness.RdWa (F := F) p trace register t =
     match instr.destination? with
@@ -823,7 +808,7 @@ theorem register42_row_step
         JoltISA.sourceValue src row.preState := by
     apply register42_instruction_preserves_other
       (instr.withRuntimeAdvice row.runtimeAdvice) src row.preState row.postState
-      (trace.assumptionOperands i) ha hwindow
+      (trace.assumptionOperands i) ha
     · intro dst hdst
       rw [register42_destination_withRuntimeAdvice] at hdst
       exact hneq dst hdst

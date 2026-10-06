@@ -92,49 +92,6 @@ theorem storeDeviceByte_same (io io' : JoltDevice) (address : Nat) (value : BitV
   unfold JoltDevice.store? at h
   split_ifs at h <;> cases h <;> exact ⟨rfl, rfl, rfl⟩
 
-theorem store_doubleword_same (io io' : JoltDevice) (address value : BitVec 64)
-    (h : JoltDevice.store_doubleword? io address value = some io') : Same io io' := by
-  unfold JoltDevice.store_doubleword? at h
-  suffices hfold : ∀ (l : List Nat) (start : Option JoltDevice),
-      (∀ d, start = some d → Same io d) →
-      ∀ d, l.foldl (fun current k => current.bind fun device =>
-        JoltDevice.store? device (address.toNat + k) (value.extractLsb' (8 * k) 8)) start =
-          some d → Same io d from
-    hfold _ _ (fun d hd => by cases hd; exact Same.refl _) _ h
-  intro l
-  induction l with
-  | nil => intro start hstart d hd; exact hstart d hd
-  | cons k l ih =>
-    intro start hstart d hd
-    refine ih _ ?_ d hd
-    intro d' hd'
-    cases hs : start with
-    | none => rw [hs] at hd'; cases hd'
-    | some e =>
-      rw [hs] at hd'
-      exact (hstart e hs).trans (storeDeviceByte_same _ _ _ _ hd')
-
-theorem readMemoryWord_rule (address : BitVec 64) :
-    Preserves (readMemoryWord address) := by
-  intro s t v h
-  unfold readMemoryWord at h
-  split_ifs at h
-  · split at h <;> (cases h; exact Same.refl _)
-  · exact lift_rule _ s t v h
-
-theorem store_doubleword_rule (address value : BitVec 64) :
-    Preserves (store_doubleword address value) := by
-  intro s t v h
-  unfold store_doubleword at h
-  split_ifs at h
-  · split at h
-    · rename_i io hio
-      cases h
-      exact store_doubleword_same _ _ _ _ hio
-    · cases h
-      exact Same.refl _
-  · exact lift_rule _ s t v h
-
 theorem store_raw_same (s s' : SailJoltState) (ea : Nat) (value : BitVec 8)
     (h : Mmu.store_raw? s ea value = some s') : Same s.jolt_device s'.jolt_device := by
   simp only [Mmu.store_raw?] at h
@@ -175,7 +132,7 @@ theorem load_doubleword_rule (address : BitVec 64) :
   repeat' split at h
   all_goals first | (cases h; exact Same.refl _) | cases h
 
-theorem mmu_store_doubleword_rule (address value : BitVec 64) :
+theorem store_doubleword_rule (address value : BitVec 64) :
     Preserves (Mmu.store_doubleword address value) := by
   intro s t v h
   simp only [Mmu.store_doubleword] at h
@@ -241,7 +198,7 @@ macro "jolt_io_setup_auto" : tactic => `(tactic|
   | exact get_rule
   | exact lift_rule _
   | exact load_doubleword_rule _
-  | exact mmu_store_doubleword_rule _ _
+  | exact store_doubleword_rule _ _
   | exact execHostIO_rule
   | split
   | refine bind_rule ?_ (fun x => ?_))
