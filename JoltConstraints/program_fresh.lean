@@ -135,13 +135,13 @@ inductive ExpandedSource where
 
 -- A source instruction's final Jolt rows; none where Lean has no expansion yet.
 -- TODO: SC.W and SC.D (Rust expand_scw, expand_scd).
--- TODO: (claude) define from the existing expansions; sorry so the rest typechecks.
+-- TODO: (claude) define from the existing expansions. Until then it is opaque: no proof
+-- looks inside it, and an opaque function adds no axiom, unlike `sorry`.
 -- The native case is `.native instruction.rewriteNative` (Instruction.lean:451), which
 -- already applies Rust's rd = x0 rule; the rd = x0 no-op must be `.native`, not a
 -- one-row `.sequence`.
 -- See : jolt/crates/jolt-program/src/expand/mod.rs:126-170
-def SourceInstruction.expand : SourceInstruction → Option ExpandedSource :=
-  sorry
+opaque SourceInstruction.expand : SourceInstruction → Option ExpandedSource
 
 -- See : jolt/crates/jolt-riscv/src/row.rs:74-82 (JoltInstructionRow)
 structure JoltInstructionRow where
@@ -213,6 +213,14 @@ structure Rv64ProgramImage (Source : Type) where
   -- See : jolt/crates/jolt-program/src/image/elf.rs:45-66
   memory_init_in_program : ∀ entry ∈ memory_init,
     JoltISA.RAM_START_ADDRESS ≤ entry.1.toNat ∧ entry.1.toNat < program_end.toNat
+
+-- No instruction's next PC, its address plus its length (2 if compressed, else 4),
+-- passes 2^64.
+-- WARNING: assumed. Asked a16z on 2026-10-07, no answer yet: can an ELF that Jolt
+-- accepts contain an instruction whose next PC, its address plus its length (2 or 4),
+-- passes 2^64 and wraps around to 0? (model_review.md, Upstream issues)
+def Rv64ProgramImage.NextPCNoWrap {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
+  ∀ row ∈ image.instructions, row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 
 -- The host sets the program size from the image.
 -- See : jolt/crates/jolt-host/src/program.rs:319
