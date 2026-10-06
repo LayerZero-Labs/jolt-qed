@@ -177,6 +177,23 @@ def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
   -- Rust is fixed.
   pure { trace_length := trace_length, ram_K := 2 ^ Nat.clog 2 (max (touched + 1) image_end) }
 
+-- Rust only proves a run in which every spoil assert that runs has equal sides. A
+-- spoil assert is a VirtualAssertEQ with a nonzero immediate; when its sides differ,
+-- Rust warns "proof will be unsatisfiable" and keeps going, so no proof exists.
+-- In practice our understanding is: spoil asserts come only from a guest calling
+-- jolt::spoil_proof() (directly or through unwrap_or_spoil_proof), which compares 0
+-- with 1 and so always fails. Rust's expansions emit only asserts with immediate 0,
+-- and those always pass (assert_eq_holds in execution_facts.lean). So this condition
+-- says the guest never calls spoil_proof(); Rust means such runs to have no proof.
+-- See : jolt/tracer/src/instruction/virtual_assert_eq.rs:18-32
+--       jolt/jolt-platform/src/spoil.rs:1-20
+--       jolt/crates/jolt-program/src/expand/memory/scw.rs:54-59 (and scd.rs: immediate 0)
+def HonestTrace.SpoilAssertsPass {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Prop :=
+  ∀ row ∈ trace.rows, ∀ (lhs rhs : JoltISA.Src) (imm : BitVec 128),
+    trace.bytecode[row.rowIndex].instruction = .VirtualAssertEQ lhs rhs imm → imm ≠ 0 →
+    JoltISA.sourceValue lhs row.preState = JoltISA.sourceValue rhs row.preState
+
 -- The run's outputs are the ones the instance claims: the same bytes once trailing
 -- zero bytes are dropped, and the same panic flag. The termination word is left out
 -- for now (model_review.md).
