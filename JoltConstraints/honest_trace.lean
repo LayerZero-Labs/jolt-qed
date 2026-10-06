@@ -115,7 +115,7 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
 -- is larger than the run, and at least 256.
 -- See : jolt/crates/jolt-prover/src/config.rs:30, 113-118
 def padded_trace_length (rows : Nat) : Nat :=
-  if rows < 256 then 256 else (rows + 1).nextPowerOfTwo
+  if rows < 256 then 256 else 2 ^ Nat.clog 2 (rows + 1)
 
 -- Rust only proves a run whose padded length fits the instance's bound.
 -- See : jolt/crates/jolt-prover/src/config.rs:119-123

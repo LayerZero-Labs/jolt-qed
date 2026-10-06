@@ -9,6 +9,7 @@ import JoltBytecode.JoltISA.DeviceMemory
 import JoltBytecode.JoltISA.JoltDevice
 import JoltBytecode.RiscvInstruction
 import Mathlib.Tactic.DeriveFintype
+import Mathlib.Data.Nat.Log
 
 set_option autoImplicit false
 
@@ -286,7 +287,7 @@ theorem pc_map_ok_iff (image : Rv64ProgramImage SourceInstruction)
 def preprocess (rows : Array JoltInstructionRow) : Option (Array BytecodeSlot) :=
   if pc_map_ok rows then
     let slots : Array BytecodeSlot := #[.noop] ++ rows.map .row
-    some (slots ++ Array.replicate (max 2 slots.size.nextPowerOfTwo - slots.size) .noop)
+    some (slots ++ Array.replicate (max 2 (2 ^ Nat.clog 2 slots.size) - slots.size) .noop)
   else none
 
 -- The slot where the source instruction at `address` starts; address 0 is the

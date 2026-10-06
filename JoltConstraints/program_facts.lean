@@ -584,3 +584,180 @@ theorem pc_map_ok_distinct_addresses (image : Rv64ProgramImage SourceInstruction
       exact each position (by rw [Array.length_toList] at inSources; exact inSources) inRows)]
     at distinct
   exact distinct
+
+-- In rows laid end to end, a row of a later instruction has one of the later
+-- instructions' addresses.
+private theorem later_row_address (rest : List (List JoltInstructionRow))
+    (moreSources : List (SourceInstructionRow SourceInstruction))
+    (each : ∀ (position : Nat) (inSources : position < moreSources.length)
+      (inRows : position < rest.length),
+      ExpandedRows moreSources[position].address moreSources[position].is_compressed
+        rest[position])
+    (lengths : rest.length = moreSources.length)
+    (row : JoltInstructionRow) (member : row ∈ rest.flatten) :
+    row.address ∈ moreSources.map (·.address) := by
+  obtain ⟨rows, inRest, inRows⟩ := List.mem_flatten.mp member
+  obtain ⟨position, inRange, atPosition⟩ := List.mem_iff_getElem.mp inRest
+  have expandedRows := each position (by omega) inRange
+  rw [atPosition] at expandedRows
+  rw [expandedRows.same_address row inRows]
+  exact List.mem_map_of_mem (List.getElem_mem _)
+
+-- In rows laid end to end, where different instructions have different addresses,
+-- no two rows share both an address and a countdown.
+theorem rows_unique (instructions : List (List JoltInstructionRow))
+    (sources : List (SourceInstructionRow SourceInstruction))
+    (lengths : instructions.length = sources.length)
+    (each : ∀ (position : Nat) (inSources : position < sources.length)
+      (inRows : position < instructions.length),
+      ExpandedRows sources[position].address sources[position].is_compressed
+        instructions[position])
+    (distinct : (sources.map (·.address)).Nodup)
+    (first second : Nat) (inFirst : first < instructions.flatten.length)
+    (inSecond : second < instructions.flatten.length)
+    (sameAddress : instructions.flatten[first].address = instructions.flatten[second].address)
+    (sameCount : instructions.flatten[first].virtual_sequence_remaining.getD 0 =
+      instructions.flatten[second].virtual_sequence_remaining.getD 0) :
+    first = second := by
+  induction instructions generalizing sources first second with
+  | nil =>
+    simp only [List.flatten_nil, List.length_nil] at inFirst
+    omega
+  | cons rows rest ih =>
+    cases sources with
+    | nil =>
+      simp only [List.length_nil, List.length_cons] at lengths
+      omega
+    | cons source moreSources =>
+      have firstRows := each 0 (by simp only [List.length_cons]; omega)
+        (by simp only [List.length_cons]; omega)
+      simp only [List.getElem_cons_zero] at firstRows
+      have eachRest : ∀ (position : Nat) (inSources : position < moreSources.length)
+          (inRows : position < rest.length),
+          ExpandedRows moreSources[position].address moreSources[position].is_compressed
+            rest[position] := fun position inSources inRows => by
+        have shifted := each (position + 1) (by simp only [List.length_cons]; omega)
+          (by simp only [List.length_cons]; omega)
+        simp only [List.getElem_cons_succ] at shifted
+        exact shifted
+      have lengthsRest : rest.length = moreSources.length := by
+        simp only [List.length_cons] at lengths
+        omega
+      simp only [List.map_cons, List.nodup_cons] at distinct
+      obtain ⟨notLater, distinctRest⟩ := distinct
+      -- a row of a later instruction never has this instruction's address
+      have laterAddress : ∀ position (inRange : position < rest.flatten.length),
+          rest.flatten[position].address ≠ source.address := fun position inRange equal =>
+        notLater (equal ▸ later_row_address rest moreSources eachRest lengthsRest _
+          (List.getElem_mem inRange))
+      simp only [List.flatten_cons, List.length_append] at inFirst inSecond sameAddress sameCount
+      by_cases firstInside : first < rows.length
+      · by_cases secondInside : second < rows.length
+        · -- both rows belong to this instruction: equal countdowns mean the same row
+          rw [List.getElem_append_left firstInside, List.getElem_append_left secondInside]
+            at sameCount
+          have counts := congrArg BitVec.toNat sameCount
+          rw [firstRows.countdown first firstInside, firstRows.countdown second secondInside]
+            at counts
+          omega
+        · -- the second row belongs to a later instruction: the addresses differ
+          rw [List.getElem_append_left firstInside,
+            List.getElem_append_right (show rows.length ≤ second by omega),
+            firstRows.same_address _ (List.getElem_mem _)] at sameAddress
+          exact absurd sameAddress.symm (laterAddress _ (by omega))
+      · by_cases secondInside : second < rows.length
+        · -- the first row belongs to a later instruction: the addresses differ
+          rw [List.getElem_append_right (show rows.length ≤ first by omega),
+            List.getElem_append_left secondInside,
+            firstRows.same_address _ (List.getElem_mem _)] at sameAddress
+          exact absurd sameAddress (laterAddress _ (by omega))
+        · -- both rows belong to later instructions: use the same fact for the rest
+          rw [List.getElem_append_right (show rows.length ≤ first by omega),
+            List.getElem_append_right (show rows.length ≤ second by omega)]
+            at sameAddress sameCount
+          have shifted := ih moreSources lengthsRest eachRest distinctRest
+            (first - rows.length) (second - rows.length) (by omega) (by omega)
+            sameAddress sameCount
+          omega
+
+-- In an accepted program, no two rows share both an address and a countdown.
+theorem expand_program_unique (image : Rv64ProgramImage SourceInstruction)
+    (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode)
+    (accepted : pc_map_ok bytecode = true)
+    (first second : Nat) (inFirst : first < bytecode.size) (inSecond : second < bytecode.size)
+    (sameAddress : bytecode[first].address = bytecode[second].address)
+    (sameCount : bytecode[first].virtual_sequence_remaining.getD 0 =
+      bytecode[second].virtual_sequence_remaining.getD 0) :
+    first = second := by
+  have distinct := pc_map_ok_distinct_addresses image bytecode expanded accepted
+  obtain ⟨instructions, isFlatten, lengths, each⟩ := expand_program_rows image bytecode expanded
+  subst isFlatten
+  simp only [List.getElem_toArray] at sameAddress sameCount
+  simp only [List.size_toArray] at inFirst inSecond
+  exact rows_unique instructions image.instructions.toList
+    (by rw [lengths, Array.length_toList])
+    (fun position inSources inRows => by
+      rw [Array.getElem_toList (by rw [Array.length_toList] at inSources; exact inSources)]
+      exact each position (by rw [Array.length_toList] at inSources; exact inSources) inRows)
+    distinct first second inFirst inSecond sameAddress sameCount
+
+-- If Rust accepts the instance's program, its expanded rows pass the PC map checks.
+theorem accepted_pc_map_ok (joltInstance : JoltInstance SourceInstruction)
+    (bytecode : Array JoltInstructionRow)
+    (expanded : expand_program joltInstance.program = some bytecode)
+    (accepted : joltInstance.bytecode.isSome = true) :
+    pc_map_ok bytecode = true := by
+  by_contra rejected
+  -- preprocessing rejects rows that fail the PC map checks, so Rust rejects the program
+  have noSlots : preprocess bytecode = none := by
+    unfold preprocess
+    rw [if_neg rejected]
+  have rejectedProgram : joltInstance.bytecode = none := by
+    unfold JoltInstance.bytecode
+    rw [expanded]
+    simp only [bind, Option.bind, noSlots]
+  rw [rejectedProgram, Option.isSome_none] at accepted
+  exact Bool.false_ne_true accepted
+
+-- Rust's preprocessed bytecode: the NoOp at slot 0, row k at slot k + 1, NoOps after
+-- the rows, and a power-of-two number of slots, at least 2.
+theorem preprocess_slots (rows : Array JoltInstructionRow) (slots : Array BytecodeSlot)
+    (preprocessed : preprocess rows = some slots) :
+    slots[0]? = some .noop ∧
+    (∀ (position : Nat) (inRows : position < rows.size),
+      slots[position + 1]? = some (.row rows[position])) ∧
+    (∀ (position : Nat), rows.size < position → position < slots.size →
+      slots[position]? = some .noop) ∧
+    slots.size = max 2 (2 ^ Nat.clog 2 (rows.size + 1)) := by
+  unfold preprocess at preprocessed
+  split at preprocessed
+  · simp only [Option.some.injEq] at preprocessed
+    subst preprocessed
+    -- the NoOp and the rows come first, then the padding
+    have baseSize : (#[BytecodeSlot.noop] ++ rows.map BytecodeSlot.row).size = rows.size + 1 := by
+      simp only [Array.size_append, Array.size_map, List.size_toArray, List.length_singleton]
+      omega
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · -- slot 0 is the NoOp
+      rw [Array.getElem?_append_left (by rw [baseSize]; omega),
+        Array.getElem?_append_left (by simp only [List.size_toArray, List.length_singleton]; omega)]
+      rfl
+    · -- row k sits at slot k + 1
+      intro position inRows
+      rw [Array.getElem?_append_left (by rw [baseSize]; omega),
+        Array.getElem?_append_right (by simp only [List.size_toArray, List.length_singleton]; omega),
+        Array.getElem?_map]
+      simp only [List.size_toArray, List.length_singleton, Nat.add_sub_cancel,
+        Array.getElem?_eq_getElem inRows, Option.map_some]
+    · -- every slot after the rows is padding
+      intro position after inSlots
+      rw [Array.getElem?_append_right (by rw [baseSize]; omega), Array.getElem?_replicate]
+      rw [if_pos (by
+        simp only [Array.size_append, Array.size_replicate, baseSize] at inSlots
+        rw [baseSize]
+        omega)]
+    · -- the slots fill exactly a power of two, at least 2
+      simp only [Array.size_append, Array.size_replicate, baseSize]
+      have fits := Nat.le_pow_clog (by decide : 1 < 2) (rows.size + 1)
+      omega
+  · cases preprocessed
