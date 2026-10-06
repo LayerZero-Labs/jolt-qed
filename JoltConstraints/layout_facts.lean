@@ -1,8 +1,9 @@
 /-
 Facts about the memory layout: where Rust's MemoryLayout::new puts the advice regions
-and the inputs. Each one is proved from MemoryLayout.new in JoltDevice.lean.
+and the inputs. Each one is proved from MemoryLayout.new in JoltDevice.lean and the
+instance's initial state in program_fresh.lean.
 -/
-import JoltBytecode.JoltISA.JoltDevice
+import JoltConstraints.program_fresh
 
 set_option autoImplicit false
 
@@ -35,6 +36,16 @@ theorem checkedSub_some {first second total : Nat}
     exact ⟨rfl, fits⟩
   · cases subtracted
 
+-- A checked multiplication that succeeds gives the product.
+theorem checkedMul_some {first second total : Nat}
+    (multiplied : MemoryLayout.checkedMul first second = some total) :
+    total = first * second := by
+  unfold MemoryLayout.checkedMul at multiplied
+  split at multiplied
+  · cases multiplied
+    rfl
+  · cases multiplied
+
 -- Rounding up to a multiple of 8 gives a multiple of 8, never smaller than the start.
 theorem alignUp8_some {value aligned : Nat}
     (rounded : MemoryLayout.alignUp8 value = some aligned) :
@@ -47,8 +58,8 @@ theorem alignUp8_some {value aligned : Nat}
   · obtain ⟨total, _⟩ := checkedAdd_some rounded
     omega
 
--- Each advice region is as long as its size, the two sit next to each other, and both
--- end below 2^64.
+-- Each advice region is as long as its size, the two sit next to each other, the first
+-- starts io_bytes below RAM, and both end below 2^64.
 -- See : jolt/common/src/jolt_device.rs:402-429
 theorem adviceRegions_some {trustedSize untrustedSize ioBytes : Nat}
     {trustedStart trustedEnd untrustedStart untrustedEnd : Nat}
@@ -57,12 +68,14 @@ theorem adviceRegions_some {trustedSize untrustedSize ioBytes : Nat}
     trustedEnd = trustedStart + trustedSize ∧
     untrustedEnd = untrustedStart + untrustedSize ∧
     (untrustedStart = trustedEnd ∨ trustedStart = untrustedEnd) ∧
+    (trustedStart = JoltISA.RAM_START_ADDRESS - ioBytes ∨
+      untrustedStart = JoltISA.RAM_START_ADDRESS - ioBytes) ∧
     trustedEnd < 2 ^ 64 ∧ untrustedEnd < 2 ^ 64 := by
   unfold MemoryLayout.adviceRegions at placed
   split at placed
   · -- trusted goes first, untrusted starts where it ends
     rw [bind_some_iff] at placed
-    obtain ⟨start, _, placed⟩ := placed
+    obtain ⟨start, subtracted, placed⟩ := placed
     rw [bind_some_iff] at placed
     obtain ⟨trustedTop, trustedAdded, placed⟩ := placed
     rw [bind_some_iff] at placed
@@ -70,10 +83,11 @@ theorem adviceRegions_some {trustedSize untrustedSize ioBytes : Nat}
     cases placed
     obtain ⟨trustedTopIs, trustedTopFits⟩ := checkedAdd_some trustedAdded
     obtain ⟨untrustedTopIs, untrustedTopFits⟩ := checkedAdd_some untrustedAdded
+    obtain ⟨startIs, _⟩ := checkedSub_some subtracted
     omega
   · -- untrusted goes first, trusted starts where it ends
     rw [bind_some_iff] at placed
-    obtain ⟨start, _, placed⟩ := placed
+    obtain ⟨start, subtracted, placed⟩ := placed
     rw [bind_some_iff] at placed
     obtain ⟨untrustedTop, untrustedAdded, placed⟩ := placed
     rw [bind_some_iff] at placed
@@ -81,11 +95,13 @@ theorem adviceRegions_some {trustedSize untrustedSize ioBytes : Nat}
     cases placed
     obtain ⟨trustedTopIs, trustedTopFits⟩ := checkedAdd_some trustedAdded
     obtain ⟨untrustedTopIs, untrustedTopFits⟩ := checkedAdd_some untrustedAdded
+    obtain ⟨startIs, _⟩ := checkedSub_some subtracted
     omega
 
 -- What Rust's layout says about the advice regions and the inputs: each advice size is
 -- its configured maximum rounded up to a multiple of 8, each advice region is as long as
--- its size, the two sit next to each other, and the inputs start where the higher one ends.
+-- its size, the two sit next to each other, both start at multiples of 8, and the inputs
+-- start where the higher one ends.
 -- See : jolt/common/src/jolt_device.rs:348-484 (MemoryLayout::new)
 theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
@@ -99,6 +115,8 @@ theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
       layout.untrusted_advice_start.toNat + layout.max_untrusted_advice_size.toNat ∧
     (layout.untrusted_advice_start.toNat = layout.trusted_advice_end.toNat ∨
       layout.trusted_advice_start.toNat = layout.untrusted_advice_end.toNat) ∧
+    layout.trusted_advice_start.toNat % 8 = 0 ∧
+    layout.untrusted_advice_start.toNat % 8 = 0 ∧
     layout.input_start.toNat =
       max layout.untrusted_advice_end.toNat layout.trusted_advice_end.toNat := by
   unfold MemoryLayout.new at built
@@ -127,7 +145,7 @@ theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
   rw [bind_some_iff] at built
   obtain ⟨_, _, built⟩ := built
   rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
+  obtain ⟨ioBytes, ioBytesMultiplied, built⟩ := built
   -- the advice regions
   rw [bind_some_iff] at built
   obtain ⟨⟨trustedStart, trustedEnd, untrustedStart, untrustedEnd⟩, placed, built⟩ := built
@@ -150,8 +168,11 @@ theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
   cases built
   obtain ⟨trustedAtLeast, trustedMultiple⟩ := alignUp8_some trustedRounded
   obtain ⟨untrustedAtLeast, untrustedMultiple⟩ := alignUp8_some untrustedRounded
-  obtain ⟨trustedEndIs, untrustedEndIs, adjacent, trustedEndFits, untrustedEndFits⟩ :=
-    adviceRegions_some placed
+  obtain ⟨trustedEndIs, untrustedEndIs, adjacent, firstStart, trustedEndFits,
+    untrustedEndFits⟩ := adviceRegions_some placed
+  -- io_bytes is a whole number of 8-byte units, and RAM starts at a multiple of 8
+  have ioBytesIs := checkedMul_some ioBytesMultiplied
+  have ramStart : JoltISA.RAM_START_ADDRESS = 0x80000000 := rfl
   -- every value fits in 64 bits, so reading it back as a BitVec gives it unchanged
   simp only [BitVec.toNat_ofNat]
   rw [Nat.mod_eq_of_lt (a := trusted) (by omega), Nat.mod_eq_of_lt (a := untrusted) (by omega),
@@ -171,7 +192,7 @@ theorem new_advice_below_input (config : MemoryConfig) (layout : MemoryLayout)
     (untrustedFits : untrustedSize ≤ config.max_untrusted_advice_size.toNat) :
     layout.trusted_advice_start.toNat + trustedSize ≤ layout.input_start.toNat ∧
     layout.untrusted_advice_start.toNat + untrustedSize ≤ layout.input_start.toNat := by
-  obtain ⟨_, _, _, _, trustedEnd, untrustedEnd, _, inputStart⟩ :=
+  obtain ⟨_, _, _, _, trustedEnd, untrustedEnd, _, _, _, inputStart⟩ :=
     new_advice_regions config layout built
   omega
 
@@ -180,7 +201,95 @@ theorem new_advice_below_input (config : MemoryConfig) (layout : MemoryLayout)
 theorem new_input_word_aligned (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     (layout.input_start.toNat - layout.get_lowest_address.toNat) % 8 = 0 := by
-  obtain ⟨_, trustedMultiple, _, untrustedMultiple, trustedEnd, untrustedEnd, adjacent,
+  obtain ⟨_, trustedMultiple, _, untrustedMultiple, trustedEnd, untrustedEnd, adjacent, _, _,
     inputStart⟩ := new_advice_regions config layout built
   unfold MemoryLayout.get_lowest_address
   split <;> omega
+
+-- The lowest address, where the advice regions begin, is a multiple of 8.
+-- See : jolt/common/src/jolt_device.rs:486-488 (get_lowest_address)
+theorem new_lowest_address_aligned (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    layout.get_lowest_address.toNat % 8 = 0 := by
+  obtain ⟨_, _, _, _, _, _, _, trustedStart, untrustedStart, _⟩ :=
+    new_advice_regions config layout built
+  unfold MemoryLayout.get_lowest_address
+  split
+  · exact trustedStart
+  · exact untrustedStart
+
+-- The starting device is the one given to init_state, with no outputs and no panic yet.
+theorem init_state_jolt_device (entryAddress : BitVec 64) (ram : Array (BitVec 8))
+    (device : JoltDevice) (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig) :
+    (init_state entryAddress ram device adviceTape hostIO).jolt_device =
+      { device with outputs := #[], panic := false } :=
+  rfl
+
+-- The starting device holds the instance's layout and the prover's advice, which
+-- create_emulator has checked against the configured maximums.
+-- See : jolt/tracer/src/lib.rs:364-408 (create_emulator)
+theorem initial_state_device {Source : Type} (joltInstance : JoltInstance Source)
+    (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
+    (built : joltInstance.initial_state privateInputs = some initialState) :
+    joltInstance.memory_layout = some initialState.jolt_device.memory_layout ∧
+    initialState.jolt_device.trusted_advice = privateInputs.trusted_advice ∧
+    initialState.jolt_device.untrusted_advice = privateInputs.untrusted_advice ∧
+    privateInputs.trusted_advice.size ≤
+      joltInstance.memory_config.max_trusted_advice_size.toNat ∧
+    privateInputs.untrusted_advice.size ≤
+      joltInstance.memory_config.max_untrusted_advice_size.toNat := by
+  unfold JoltInstance.initial_state at built
+  rw [bind_some_iff] at built
+  obtain ⟨layout, layoutBuilt, built⟩ := built
+  dsimp only at built
+  -- create_emulator's three size checks: trusted advice, untrusted advice, inputs
+  split at built
+  · cases built
+  rename_i trustedTooLong
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  split at built
+  · cases built
+  rename_i untrustedTooLong
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  split at built
+  · cases built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the device holds the layout and the prover's advice
+  cases built
+  rw [init_state_jolt_device]
+  exact ⟨layoutBuilt, rfl, rfl, Nat.le_of_not_lt trustedTooLong,
+    Nat.le_of_not_lt untrustedTooLong⟩
+
+-- In the instance's starting device, each advice region, holding the prover's advice,
+-- ends at or before the inputs start, and the inputs start a multiple of 8 bytes above
+-- the lowest address.
+theorem initial_state_advice_below_input {Source : Type} (joltInstance : JoltInstance Source)
+    (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
+    (built : joltInstance.initial_state privateInputs = some initialState) :
+    (initialState.jolt_device.memory_layout.input_start.toNat -
+        initialState.jolt_device.memory_layout.get_lowest_address.toNat) % 8 = 0 ∧
+    initialState.jolt_device.memory_layout.trusted_advice_start.toNat +
+        initialState.jolt_device.trusted_advice.size ≤
+      initialState.jolt_device.memory_layout.input_start.toNat ∧
+    initialState.jolt_device.memory_layout.untrusted_advice_start.toNat +
+        initialState.jolt_device.untrusted_advice.size ≤
+      initialState.jolt_device.memory_layout.input_start.toNat := by
+  obtain ⟨layoutBuilt, trustedIs, untrustedIs, trustedFits, untrustedFits⟩ :=
+    initial_state_device joltInstance privateInputs initialState built
+  unfold JoltInstance.memory_layout at layoutBuilt
+  rw [trustedIs, untrustedIs]
+  obtain ⟨trustedBelow, untrustedBelow⟩ :=
+    new_advice_below_input _ _ layoutBuilt _ _ trustedFits untrustedFits
+  exact ⟨new_input_word_aligned _ _ layoutBuilt, trustedBelow, untrustedBelow⟩
+
+-- In the instance's starting device, the lowest address is a multiple of 8.
+theorem initial_state_lowest_address_aligned {Source : Type} (joltInstance : JoltInstance Source)
+    (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
+    (built : joltInstance.initial_state privateInputs = some initialState) :
+    initialState.jolt_device.memory_layout.get_lowest_address.toNat % 8 = 0 := by
+  obtain ⟨layoutBuilt, _⟩ := initial_state_device joltInstance privateInputs initialState built
+  unfold JoltInstance.memory_layout at layoutBuilt
+  exact new_lowest_address_aligned _ _ layoutBuilt

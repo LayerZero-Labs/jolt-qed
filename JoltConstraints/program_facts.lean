@@ -761,3 +761,105 @@ theorem preprocess_slots (rows : Array JoltInstructionRow) (slots : Array Byteco
       have fits := Nat.le_pow_clog (by decide : 1 < 2) (rows.size + 1)
       omega
   · cases preprocessed
+
+-- In rows laid end to end, where different instructions have different addresses,
+-- a row that starts its instruction comes first among the rows with its address.
+theorem rows_first_of_address (instructions : List (List JoltInstructionRow))
+    (sources : List (SourceInstructionRow SourceInstruction))
+    (lengths : instructions.length = sources.length)
+    (each : ∀ (position : Nat) (inSources : position < sources.length)
+      (inRows : position < instructions.length),
+      ExpandedRows sources[position].address sources[position].is_compressed
+        instructions[position])
+    (distinct : (sources.map (·.address)).Nodup)
+    (other start : Nat) (inOther : other < instructions.flatten.length)
+    (inStart : start < instructions.flatten.length)
+    (sameAddress : instructions.flatten[other].address = instructions.flatten[start].address)
+    (starts : instructions.flatten[start].starts_source = true) :
+    start ≤ other := by
+  induction instructions generalizing sources other start with
+  | nil =>
+    simp only [List.flatten_nil, List.length_nil] at inOther
+    omega
+  | cons rows rest ih =>
+    cases sources with
+    | nil =>
+      simp only [List.length_nil, List.length_cons] at lengths
+      omega
+    | cons source moreSources =>
+      have firstRows := each 0 (by simp only [List.length_cons]; omega)
+        (by simp only [List.length_cons]; omega)
+      simp only [List.getElem_cons_zero] at firstRows
+      have eachRest : ∀ (position : Nat) (inSources : position < moreSources.length)
+          (inRows : position < rest.length),
+          ExpandedRows moreSources[position].address moreSources[position].is_compressed
+            rest[position] := fun position inSources inRows => by
+        have shifted := each (position + 1) (by simp only [List.length_cons]; omega)
+          (by simp only [List.length_cons]; omega)
+        simp only [List.getElem_cons_succ] at shifted
+        exact shifted
+      have lengthsRest : rest.length = moreSources.length := by
+        simp only [List.length_cons] at lengths
+        omega
+      simp only [List.map_cons, List.nodup_cons] at distinct
+      obtain ⟨notLater, distinctRest⟩ := distinct
+      -- a row of a later instruction never has this instruction's address
+      have laterAddress : ∀ position (inRange : position < rest.flatten.length),
+          rest.flatten[position].address ≠ source.address := fun position inRange equal =>
+        notLater (equal ▸ later_row_address rest moreSources eachRest lengthsRest _
+          (List.getElem_mem inRange))
+      simp only [List.flatten_cons, List.length_append] at inOther inStart sameAddress starts
+      by_cases startInside : start < rows.length
+      · -- the starting row belongs to this instruction, so it is its first row
+        rw [List.getElem_append_left startInside, firstRows.starts start startInside] at starts
+        simp only [beq_iff_eq] at starts
+        omega
+      · by_cases otherInside : other < rows.length
+        · -- the other row belongs to this instruction: the addresses differ
+          rw [List.getElem_append_left otherInside,
+            List.getElem_append_right (show rows.length ≤ start by omega),
+            firstRows.same_address _ (List.getElem_mem _)] at sameAddress
+          exact absurd sameAddress.symm (laterAddress _ (by omega))
+        · -- both rows belong to later instructions: use the same fact for the rest
+          rw [List.getElem_append_right (show rows.length ≤ other by omega),
+            List.getElem_append_right (show rows.length ≤ start by omega)] at sameAddress
+          rw [List.getElem_append_right (show rows.length ≤ start by omega)] at starts
+          have shifted := ih moreSources lengthsRest eachRest distinctRest
+            (other - rows.length) (start - rows.length) (by omega) (by omega)
+            sameAddress starts
+          omega
+
+-- In an accepted program, a row that starts its instruction is the first row with
+-- its address.
+theorem expand_program_first_of_address (image : Rv64ProgramImage SourceInstruction)
+    (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode)
+    (accepted : pc_map_ok bytecode = true)
+    (other start : Nat) (inOther : other < bytecode.size) (inStart : start < bytecode.size)
+    (sameAddress : bytecode[other].address = bytecode[start].address)
+    (starts : bytecode[start].starts_source = true) :
+    start ≤ other := by
+  have distinct := pc_map_ok_distinct_addresses image bytecode expanded accepted
+  obtain ⟨instructions, isFlatten, lengths, each⟩ := expand_program_rows image bytecode expanded
+  subst isFlatten
+  simp only [List.getElem_toArray] at sameAddress starts
+  simp only [List.size_toArray] at inOther inStart
+  exact rows_first_of_address instructions image.instructions.toList
+    (by rw [lengths, Array.length_toList])
+    (fun position inSources inRows => by
+      rw [Array.getElem_toList (by rw [Array.length_toList] at inSources; exact inSources)]
+      exact each position (by rw [Array.length_toList] at inSources; exact inSources) inRows)
+    distinct other start inOther inStart sameAddress starts
+
+-- Every row the PC map accepts sits at an address Rust accepts: at least
+-- RAM_START_ADDRESS and even.
+theorem pc_map_ok_addresses (rows : Array JoltInstructionRow) (accepted : pc_map_ok rows = true)
+    (position : Nat) (inRange : position < rows.size) :
+    bytecode_address_ok rows[position].address = true := by
+  unfold pc_map_ok at accepted
+  simp only [Bool.and_eq_true, List.all_eq_true] at accepted
+  obtain ⟨⟨allRuns, _⟩, _⟩ := accepted
+  have member : rows[position] ∈ (rows.toList.splitBy fun a b => a.address == b.address).flatten := by
+    rw [List.flatten_splitBy]
+    exact Array.getElem_mem_toList inRange
+  obtain ⟨run, inRuns, inRun⟩ := List.mem_flatten.mp member
+  exact (allRuns run inRuns).1 _ inRun

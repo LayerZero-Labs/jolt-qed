@@ -681,3 +681,95 @@ theorem initial_state_sourceValue {Source : Type} (joltInstance : JoltInstance S
       | (cases built
          exact init_state_sourceValue _ _ _ _ _ source)
       | cases built
+
+-- An address whose low three bits are 0 is a multiple of 8.
+theorem toNat_mod_eight (address : BitVec 64) (lowBits : address &&& 7 = 0) :
+    address.toNat % 8 = 0 := by
+  have bits := congrArg BitVec.toNat lowBits
+  rw [BitVec.toNat_and] at bits
+  have sevenValue : (7 : BitVec 64).toNat = 2 ^ 3 - 1 := rfl
+  rw [sevenValue, Nat.and_two_pow_sub_one_eq_mod] at bits
+  exact bits
+
+-- A load that retires read from an address that is a multiple of 8: LD gives a
+-- misaligned-access exception otherwise.
+theorem execInstr_load_aligned (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
+    (base : JoltISA.Src) (imm : BitVec 64) (state after : SailJoltState)
+    (runs : JoltISA.execInstr (.LD faultClass dst base imm) state =
+      .ok (.Retire_Success ()) after) :
+    (JoltISA.sourceValue base state + imm).toNat % 8 = 0 := by
+  simp only [JoltISA.execInstr] at runs
+  cases baseRead : JoltISA.readSrc base state with
+  | error failure middle =>
+    simp only [bind, EStateM.bind, baseRead] at runs
+    cases runs
+  | ok baseValue middle =>
+    obtain ⟨_, baseIs⟩ := readSrc_value base state middle baseValue baseRead
+    simp only [bind, EStateM.bind, baseRead] at runs
+    split at runs
+    · rename_i lowBits
+      rw [← baseIs]
+      exact toNat_mod_eight _ lowBits
+    · cases runs
+
+-- A store that retires wrote to an address that is a multiple of 8: SD gives a
+-- misaligned-access exception otherwise.
+theorem execInstr_store_aligned (base value : JoltISA.Src) (imm : BitVec 64)
+    (state after : SailJoltState)
+    (runs : JoltISA.execInstr (.SD base value imm) state = .ok (.Retire_Success ()) after) :
+    (JoltISA.sourceValue base state + imm).toNat % 8 = 0 := by
+  simp only [JoltISA.execInstr] at runs
+  cases baseRead : JoltISA.readSrc base state with
+  | error failure middle =>
+    simp only [bind, EStateM.bind, baseRead] at runs
+    cases runs
+  | ok baseValue middle =>
+    obtain ⟨middleSame, baseIs⟩ := readSrc_value base state middle baseValue baseRead
+    simp only [bind, EStateM.bind, baseRead] at runs
+    rw [middleSame] at runs
+    cases valueRead : JoltISA.readSrc value state with
+    | error failure middle =>
+      rw [valueRead] at runs
+      cases runs
+    | ok storedValue middle =>
+      rw [valueRead] at runs
+      dsimp only at runs
+      split at runs
+      · rename_i lowBits
+        rw [← baseIs]
+        exact toNat_mod_eight _ lowBits
+      · cases runs
+
+-- An LD row carries no runtime advice, so it runs exactly as it is in the bytecode.
+theorem withRuntimeAdvice_load {instruction : JoltISA.Instr} (advice : instruction.RuntimeAdvice)
+    (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA.Dst) (base : JoltISA.Src)
+    (imm : BitVec 64) (isLoad : instruction = .LD faultClass dst base imm) :
+    instruction.withRuntimeAdvice advice = .LD faultClass dst base imm := by
+  subst isLoad
+  rfl
+
+-- An SD row carries no runtime advice, so it runs exactly as it is in the bytecode.
+theorem withRuntimeAdvice_store {instruction : JoltISA.Instr} (advice : instruction.RuntimeAdvice)
+    (base value : JoltISA.Src) (imm : BitVec 64) (isStore : instruction = .SD base value imm) :
+    instruction.withRuntimeAdvice advice = .SD base value imm := by
+  subst isStore
+  rfl
+
+-- In an honest trace, every LD row reads from an address that is a multiple of 8.
+theorem HonestTraceRow.load_aligned {bytecode : Array JoltInstructionRow}
+    (row : HonestTraceRow bytecode) (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
+    (base : JoltISA.Src) (imm : BitVec 64)
+    (isLoad : bytecode[row.rowIndex].instruction = .LD faultClass dst base imm) :
+    (JoltISA.sourceValue base row.preState + imm).toNat % 8 = 0 := by
+  have runs := row.executes
+  rw [withRuntimeAdvice_load row.runtimeAdvice faultClass dst base imm isLoad] at runs
+  exact execInstr_load_aligned faultClass dst base imm row.preState row.postState runs
+
+-- In an honest trace, every SD row writes to an address that is a multiple of 8.
+theorem HonestTraceRow.store_aligned {bytecode : Array JoltInstructionRow}
+    (row : HonestTraceRow bytecode) (base value : JoltISA.Src) (imm : BitVec 64)
+    (isStore : bytecode[row.rowIndex].instruction = .SD base value imm) :
+    (JoltISA.sourceValue base row.preState + imm).toNat % 8 = 0 := by
+  have runs := row.executes
+  rw [withRuntimeAdvice_store row.runtimeAdvice base value imm isStore] at runs
+  exact execInstr_store_aligned base value imm row.preState row.postState runs
