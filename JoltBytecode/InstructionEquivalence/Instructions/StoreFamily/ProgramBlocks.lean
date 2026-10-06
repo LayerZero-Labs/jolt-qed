@@ -1800,7 +1800,7 @@ theorem sdWriteBlock (rest : JoltISA.Program)
       vmem_write_addr (Virtaddr base) 8 dword_new
         (Store Data) false false false js_store.sail =
       .ok (Ok true) s')
-    (h_ram : JoltISA.ramStartAddress ≤ base.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ base.toNat) :
     ∃ js_write : SailJoltState,
       (JoltISA.execProgram (.instr (JoltISA.Encoded.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0) rest)).run js_store =
         (JoltISA.execProgram rest).run js_write ∧

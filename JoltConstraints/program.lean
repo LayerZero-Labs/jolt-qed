@@ -34,7 +34,7 @@ private def initialRegisterValue (entryAddress : BitVec 64)
 -- components of Jolt as modelled in Lean exists.
 -- Remember we needed to do that for proving bytecode expansions.
 noncomputable def init_state (entryAddress : BitVec 64)
-    (ram : Array (BitVec 8)) (io : JoltIOState)
+    (ram : Array (BitVec 8)) (io : JoltDevice)
     (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig := {}) : SailJoltState :=
   { sail :=
       { regs := (Finset.univ.toList : List Register).foldl
@@ -46,7 +46,7 @@ noncomputable def init_state (entryAddress : BitVec 64)
         cycleCount := 0
         sailOutput := #[] }
     vregs := fun _ => 0
-    io := io
+    jolt_device := io
     adviceTape := adviceTape
     hostIO := hostIO }
 
@@ -72,7 +72,7 @@ private theorem initialRegisters_fold_get
 -- we also defined
 -- Type: Plumbing Lemma
 theorem init_state_register (entry : BitVec 64) (ram : Array (BitVec 8))
-    (io : JoltIOState) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
+    (io : JoltDevice) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
     (r : Register) :
     (init_state entry ram io tape hostIO).sail.regs.get? r = some (initialRegisterValue entry r) := by
   simp only [init_state, initialRegisters_fold_get]
@@ -81,7 +81,7 @@ theorem init_state_register (entry : BitVec 64) (ram : Array (BitVec 8))
 /-- Rust initializes both the architectural integer and virtual register banks
 to zero. This follows from the initializer, independently of the program. -/
 theorem sourceValue_init_state (entry : BitVec 64) (ram : Array (BitVec 8))
-    (io : JoltIOState) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
+    (io : JoltDevice) (tape : JoltAdviceTape) (hostIO : JoltHostIOConfig)
     (src : JoltISA.Src) :
     JoltISA.sourceValue src (init_state entry ram io tape hostIO) = 0 := by
   cases src with

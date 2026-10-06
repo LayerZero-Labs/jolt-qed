@@ -16,20 +16,20 @@ theorem honestWitness_ramAddressEqRamRaf
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
     (validAccesses : ramAccessesValid trace)
-    : ramAddressEqRamRaf program.initialState.io.layout
+    : ramAddressEqRamRaf program.initialState.jolt_device.memory_layout
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   intro t
   change HonestWitness.RamAddress (F := F) params trace t =
     ∑ address : Fin params.ramSize,
-      ((ramLowestAddress program.initialState.io.layout + 8 * address.val : Nat) : F) *
+      ((ramLowestAddress program.initialState.jolt_device.memory_layout + 8 * address.val : Nat) : F) *
         HonestWitness.RamRa params trace ramFits address t
   have hswap :
       (∑ address : Fin params.ramSize,
-        ((ramLowestAddress program.initialState.io.layout + 8 * address.val : Nat) : F) *
+        ((ramLowestAddress program.initialState.jolt_device.memory_layout + 8 * address.val : Nat) : F) *
           HonestWitness.RamRa params trace ramFits address t) =
       ∑ address : Fin params.ramSize,
         HonestWitness.RamRa params trace ramFits address t *
-          ((ramLowestAddress program.initialState.io.layout + 8 * address.val : Nat) : F) := by
+          ((ramLowestAddress program.initialState.jolt_device.memory_layout + 8 * address.val : Nat) : F) := by
     apply Finset.sum_congr rfl
     intro address _
     ring
@@ -60,7 +60,7 @@ theorem honestWitness_ramAddressEqRamRaf
             simp [HonestWitness.remappedRamAddress, ht, ha] at hr
         | some raw =>
             have hremap : HonestWitness.remapRamAddress
-                program.initialState.io.layout raw = some b := by
+                program.initialState.jolt_device.memory_layout raw = some b := by
               simpa [HonestWitness.remappedRamAddress, ht, ha] using hr
             have hv := validAccesses ⟨t.val, ht⟩
             change (match HonestWitness.ramAccessAddress
@@ -69,15 +69,15 @@ theorem honestWitness_ramAddressEqRamRaf
               (getElem trace.rows t.val ht).preState with
               | none => True
               | some address => address.toNat ≠ 0 ∧
-                  (address.toNat - ramLowestAddress program.initialState.io.layout) % 8 = 0) at hv
+                  (address.toNat - ramLowestAddress program.initialState.jolt_device.memory_layout) % 8 = 0) at hv
             simp only [ha] at hv
             unfold HonestWitness.remapRamAddress at hremap
             dsimp at hremap
             split_ifs at hremap with hfail
-            have hb : (raw.toNat - ramLowestAddress program.initialState.io.layout) / 8 = b :=
+            have hb : (raw.toNat - ramLowestAddress program.initialState.jolt_device.memory_layout) / 8 = b :=
               Option.some.inj hremap
             have hraw : raw.toNat =
-                ramLowestAddress program.initialState.io.layout + 8 * b := by
+                ramLowestAddress program.initialState.jolt_device.memory_layout + 8 * b := by
               dsimp [ramLowestAddress] at hb hv hfail ⊢
               omega
             simp [HonestWitness.RamAddress, ht, ha, hraw]

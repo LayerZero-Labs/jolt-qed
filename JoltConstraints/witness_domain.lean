@@ -18,7 +18,7 @@ def WitnessParams.RamFits (p : WitnessParams) {program : JoltProgram}
     | none => True
     | some rawAddress =>
         rawAddress = 0 ∨ ∃ address : Nat,
-          HonestWitness.remapRamAddress program.initialState.io.layout rawAddress = some address ∧
+          HonestWitness.remapRamAddress program.initialState.jolt_device.memory_layout rawAddress = some address ∧
           address < p.ramSize
 
 theorem WitnessParams.remappedRamAddress_lt (p : WitnessParams)
@@ -33,12 +33,12 @@ theorem WitnessParams.remappedRamAddress_lt (p : WitnessParams)
       (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
     have hf := ramFits ⟨t.val, ht⟩
     change (HonestWitness.ramAccessAddress instruction row.preState).bind
-      (HonestWitness.remapRamAddress program.initialState.io.layout) = some b at hb
+      (HonestWitness.remapRamAddress program.initialState.jolt_device.memory_layout) = some b at hb
     change match HonestWitness.ramAccessAddress instruction row.preState with
       | none => True
       | some rawAddress =>
           rawAddress = 0 ∨ ∃ address : Nat,
-            HonestWitness.remapRamAddress program.initialState.io.layout rawAddress =
+            HonestWitness.remapRamAddress program.initialState.jolt_device.memory_layout rawAddress =
               some address ∧ address < p.ramSize at hf
     cases ha : HonestWitness.ramAccessAddress instruction row.preState with
     | none => simp [ha] at hb

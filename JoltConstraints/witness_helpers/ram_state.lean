@@ -22,7 +22,7 @@ def ramImageWord (byte : Nat → BitVec 8) (start : Nat) : BitVec 64 :=
 
 -- Rust layouts place the device regions at aligned byte addresses. A buffer
 -- overlays whole remapped words, with zero-padding in its final partial word.
-def overlayRamBytes (layout : JoltIOLayout) (start : BitVec 64)
+def overlayRamBytes (layout : MemoryLayout) (start : BitVec 64)
     (bytes : Array (BitVec 8)) (address : Nat) (previous : BitVec 64) : BitVec 64 :=
   match remapRamAddress layout start with
   | none => previous
@@ -38,14 +38,14 @@ def overlayRamBytes (layout : JoltIOLayout) (start : BitVec 64)
 -- in Rust's order; output, panic, and termination start at zero in this witness.
 noncomputable def initialRamWord (program : JoltProgram) (address : Nat) : BitVec 64 :=
   let state := program.initialState
-  let layout := state.io.layout
-  let absolute := min layout.trustedAdvice.1.toNat layout.untrustedAdvice.1.toNat + 8 * address
-  let ram := if JoltISA.ramStartAddress ≤ absolute then
+  let layout := state.jolt_device.memory_layout
+  let absolute := min layout.trusted_advice_start.toNat layout.untrusted_advice_start.toNat + 8 * address
+  let ram := if JoltISA.RAM_START_ADDRESS ≤ absolute then
       ramImageWord (fun i => (state.sail.mem.get? i).getD 0) absolute
     else 0
-  let trusted := overlayRamBytes layout layout.trustedAdvice.1 state.io.trustedAdvice address ram
-  let untrusted := overlayRamBytes layout layout.untrustedAdvice.1 state.io.untrustedAdvice address trusted
-  overlayRamBytes layout layout.input.1 state.io.inputs address untrusted
+  let trusted := overlayRamBytes layout layout.trusted_advice_start state.jolt_device.trusted_advice address ram
+  let untrusted := overlayRamBytes layout layout.untrusted_advice_start state.jolt_device.untrusted_advice address trusted
+  overlayRamBytes layout layout.input_start state.jolt_device.inputs address untrusted
 
 -- Rust: [final_ram_state](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:132).
 -- Use the final ISA RAM snapshot and device buffers. In particular, termination
@@ -54,19 +54,19 @@ noncomputable def initialRamWord (program : JoltProgram) (address : Nat) : BitVe
 noncomputable def finalRamWord {program : JoltProgram}
     (trace : JoltTrace program) (address : Nat) : BitVec 64 :=
   let state := finalTraceState trace
-  let layout := program.initialState.io.layout
-  let absolute := min layout.trustedAdvice.1.toNat layout.untrustedAdvice.1.toNat + 8 * address
-  let ram := if JoltISA.ramStartAddress ≤ absolute then
+  let layout := program.initialState.jolt_device.memory_layout
+  let absolute := min layout.trusted_advice_start.toNat layout.untrusted_advice_start.toNat + 8 * address
+  let ram := if JoltISA.RAM_START_ADDRESS ≤ absolute then
       ramImageWord (fun i => (state.sail.mem.get? i).getD 0) absolute
     else 0
-  let trusted := overlayRamBytes layout state.io.layout.trustedAdvice.1 state.io.trustedAdvice address ram
-  let untrusted := overlayRamBytes layout state.io.layout.untrustedAdvice.1 state.io.untrustedAdvice address trusted
-  let input := overlayRamBytes layout state.io.layout.input.1 state.io.inputs address untrusted
-  let output := overlayRamBytes layout state.io.layout.output.1 state.io.outputs address input
-  let panic := if remapRamAddress layout state.io.layout.panic.1 = some address then
-      (if state.io.panic then 1 else 0)
+  let trusted := overlayRamBytes layout state.jolt_device.memory_layout.trusted_advice_start state.jolt_device.trusted_advice address ram
+  let untrusted := overlayRamBytes layout state.jolt_device.memory_layout.untrusted_advice_start state.jolt_device.untrusted_advice address trusted
+  let input := overlayRamBytes layout state.jolt_device.memory_layout.input_start state.jolt_device.inputs address untrusted
+  let output := overlayRamBytes layout state.jolt_device.memory_layout.output_start state.jolt_device.outputs address input
+  let panic := if remapRamAddress layout state.jolt_device.memory_layout.panic = some address then
+      (if state.jolt_device.panic then 1 else 0)
     else output
-  if !state.io.panic && remapRamAddress layout state.io.layout.termination.1 == some address then 1
+  if !state.jolt_device.panic && remapRamAddress layout state.jolt_device.memory_layout.termination == some address then 1
   else panic
 
 end HonestWitness

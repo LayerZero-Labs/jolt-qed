@@ -18,17 +18,17 @@ open JoltISA
 
 /-- The device fields that Rust fixes in `create_emulator` and never updates.
 Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/tracer/src/lib.rs#L401-L404 -/
-def Same (a b : JoltIOState) : Prop :=
-  b.layout = a.layout ∧ b.trustedAdvice = a.trustedAdvice ∧
-    b.untrustedAdvice = a.untrustedAdvice
+def Same (a b : JoltDevice) : Prop :=
+  b.memory_layout = a.memory_layout ∧ b.trusted_advice = a.trusted_advice ∧
+    b.untrusted_advice = a.untrusted_advice
 
-theorem Same.refl (a : JoltIOState) : Same a a := ⟨rfl, rfl, rfl⟩
+theorem Same.refl (a : JoltDevice) : Same a a := ⟨rfl, rfl, rfl⟩
 
-theorem Same.trans {a b c : JoltIOState} (hab : Same a b) (hbc : Same b c) : Same a c :=
+theorem Same.trans {a b c : JoltDevice} (hab : Same a b) (hbc : Same b c) : Same a c :=
   ⟨hbc.1.trans hab.1, hbc.2.1.trans hab.2.1, hbc.2.2.trans hab.2.2⟩
 
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
-  ∀ (s t : SailJoltState) (v : α), m s = .ok v t → Same s.io t.io
+  ∀ (s t : SailJoltState) (v : α), m s = .ok v t → Same s.jolt_device t.jolt_device
 
 theorem pure_rule {α : Type} (v : α) : Preserves (pure v) := by
   intro s t x h
@@ -64,7 +64,7 @@ theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
   exact Same.refl _
 
 theorem modify_rule (f : SailJoltState → SailJoltState)
-    (hf : ∀ s, (f s).io = s.io) : Preserves (modify f : JoltMonad Unit) := by
+    (hf : ∀ s, (f s).jolt_device = s.jolt_device) : Preserves (modify f : JoltMonad Unit) := by
   intro s t x h
   cases h
   rw [hf s]
@@ -90,18 +90,18 @@ theorem write_rule (dst : Dst) (value : BitVec 64) : Preserves (writeDst dst val
       exact modify_rule _ (fun _ => rfl)
   | xreg rd => exact lift_rule _
 
-theorem storeDeviceByte_same (io io' : JoltIOState) (address : Nat) (value : BitVec 8)
-    (h : storeDeviceByte? io address value = some io') : Same io io' := by
-  unfold storeDeviceByte? at h
+theorem storeDeviceByte_same (io io' : JoltDevice) (address : Nat) (value : BitVec 8)
+    (h : JoltDevice.store? io address value = some io') : Same io io' := by
+  unfold JoltDevice.store? at h
   split_ifs at h <;> cases h <;> exact ⟨rfl, rfl, rfl⟩
 
-theorem storeDeviceWord_same (io io' : JoltIOState) (address value : BitVec 64)
+theorem storeDeviceWord_same (io io' : JoltDevice) (address value : BitVec 64)
     (h : storeDeviceWord? io address value = some io') : Same io io' := by
   unfold storeDeviceWord? at h
-  suffices hfold : ∀ (l : List Nat) (start : Option JoltIOState),
+  suffices hfold : ∀ (l : List Nat) (start : Option JoltDevice),
       (∀ d, start = some d → Same io d) →
       ∀ d, l.foldl (fun current k => current.bind fun device =>
-        storeDeviceByte? device (address.toNat + k) (value.extractLsb' (8 * k) 8)) start =
+        JoltDevice.store? device (address.toNat + k) (value.extractLsb' (8 * k) 8)) start =
           some d → Same io d from
     hfold _ _ (fun d hd => by cases hd; exact Same.refl _) _ h
   intro l
@@ -144,7 +144,7 @@ theorem readMemoryByte_rule (address : BitVec 64) :
   unfold readMemoryByte at h
   dsimp only at h
   split_ifs at h
-  · cases hb : deviceByte? s.io address.toNat with
+  · cases hb : JoltDevice.load? s.jolt_device address.toNat with
     | none => simp only [hb] at h; cases h
     | some byte => simp only [hb] at h; cases h; exact Same.refl _
   · exact lift_rule _ s t v h
@@ -221,7 +221,7 @@ open JoltIOSetupFrame
 /-- Every recorded pre-state has the program's initial device setup. -/
 theorem trace_preState_ioSame {program : JoltProgram} (trace : JoltTrace program)
     (i : Nat) (hi : i < trace.rows.size) :
-    Same program.initialState.io (getElem trace.rows i hi).preState.io := by
+    Same program.initialState.jolt_device (getElem trace.rows i hi).preState.jolt_device := by
   induction i with
   | zero =>
     rw [trace.startsAtInitial (by omega)]
@@ -238,7 +238,7 @@ theorem trace_preState_ioSame {program : JoltProgram} (trace : JoltTrace program
 
 /-- The final recorded state has the program's initial device setup. -/
 theorem finalTraceState_ioSame {program : JoltProgram} (trace : JoltTrace program) :
-    Same program.initialState.io (HonestWitness.finalTraceState trace).io := by
+    Same program.initialState.jolt_device (HonestWitness.finalTraceState trace).jolt_device := by
   unfold HonestWitness.finalTraceState
   split
   · rename_i nonempty

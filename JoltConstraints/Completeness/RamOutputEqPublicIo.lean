@@ -24,13 +24,13 @@ theorem honestWitness_ramOutputEqPublicIo
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
-    (adviceBelowInput : program.initialState.io.AdviceBelowInput)
-    : ramOutputEqPublicIo (HonestWitness.finalTraceState trace).io
+    (adviceBelowInput : program.initialState.jolt_device.AdviceBelowInput)
+    : ramOutputEqPublicIo (HonestWitness.finalTraceState trace).jolt_device
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   intro address
-  change ramPublicIoMask (HonestWitness.finalTraceState trace).io address.val *
+  change ramPublicIoMask (HonestWitness.finalTraceState trace).jolt_device address.val *
     (HonestWitness.RamValFinal (F := F) params trace address -
-      ((ramPublicIoWord (HonestWitness.finalTraceState trace).io address.val).toNat : F)) = 0
+      ((ramPublicIoWord (HonestWitness.finalTraceState trace).jolt_device address.val).toNat : F)) = 0
   have hlayout := (finalTraceState_ioSame trace).1
   unfold ramPublicIoMask
   dsimp only

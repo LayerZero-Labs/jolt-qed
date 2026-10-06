@@ -19,11 +19,11 @@ theorem honestWitness_allConstraints
     (startsAtEntry : (getElem trace.rows 0 terminated.nonempty).rowIndex.val + 1 = entry.val)
     (validAccesses : ramAccessesValid trace)
     (hAssertEqPasses : assertEqPasses trace)
-    (adviceBelowInput : program.initialState.io.AdviceBelowInput)
+    (adviceBelowInput : program.initialState.jolt_device.AdviceBelowInput)
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src program.initialState = 0)
     (ramChunksPos : 0 < params.ramChunks) :
-    AllConstraints program (HonestWitness.finalTraceState trace).io entry
+    AllConstraints program (HonestWitness.finalTraceState trace).jolt_device entry
       (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
   have hlayout := (finalTraceState_ioSame trace).1
   refine {

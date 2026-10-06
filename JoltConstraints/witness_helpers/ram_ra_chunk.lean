@@ -11,8 +11,8 @@ namespace HonestWitness
 -- RAM and device I/O share one word-address domain, starting at the lower
 -- advice-region address. Address 0 and addresses below that start have no hot
 -- entry, matching RemappedRamAddress's treatment of Rust remapping errors.
-def remapRamAddress (layout : JoltIOLayout) (address : BitVec 64) : Option Nat :=
-  let lowest := min layout.trustedAdvice.1.toNat layout.untrustedAdvice.1.toNat
+def remapRamAddress (layout : MemoryLayout) (address : BitVec 64) : Option Nat :=
+  let lowest := min layout.trusted_advice_start.toNat layout.untrusted_advice_start.toNat
   if address.toNat = 0 ∨ address.toNat < lowest then none
   else some ((address.toNat - lowest) / 8)
 
@@ -25,7 +25,7 @@ noncomputable def remappedRamAddress {program : JoltProgram}
     let instruction :=
       (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
     (ramAccessAddress instruction row.preState).bind
-      (remapRamAddress program.initialState.io.layout)
+      (remapRamAddress program.initialState.jolt_device.memory_layout)
   else none
 
 -- Rust: [RamRaChunk](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/one_hot.rs:134).

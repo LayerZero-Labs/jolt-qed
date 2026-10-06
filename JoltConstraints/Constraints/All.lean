@@ -69,7 +69,7 @@ namespace JoltConstraints
 The program, public I/O state, and entry slot are shared by all fields. -/
 structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
     (program : JoltProgram)
-    (io : JoltIOState)
+    (io : JoltDevice)
     (entry : Fin (2 ^ params.logBytecodeK))
     (witness : WitnessType F params) : Prop where
   -- Stage 1: base RV64 relations
@@ -98,7 +98,7 @@ structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
   shouldJumpEqJumpMulNotNextIsNoop : JoltConstraints.shouldJumpEqJumpMulNotNextIsNoop witness
   ramReadValueEqRamRead : JoltConstraints.ramReadValueEqRamRead witness
   ramWriteValueEqRamReadWrite : JoltConstraints.ramWriteValueEqRamReadWrite witness
-  ramAddressEqRamRaf : JoltConstraints.ramAddressEqRamRaf io.layout witness
+  ramAddressEqRamRaf : JoltConstraints.ramAddressEqRamRaf io.memory_layout witness
   ramOutputEqPublicIo : JoltConstraints.ramOutputEqPublicIo io witness
   -- Stage 3: shifts and instruction inputs
   nextUnexpandedPCEqShift : JoltConstraints.nextUnexpandedPCEqShift witness

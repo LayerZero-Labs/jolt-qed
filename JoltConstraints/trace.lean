@@ -119,7 +119,7 @@ structure JoltTrace (program : JoltProgram) where
     match program.expandedBytecode[rows[i].rowIndex].expandedInstruction with
     | .LD _ _ base imm | .SD base _ imm =>
       let addr := JoltISA.sourceValue base rows[i].preState + imm
-      JoltISA.ramStartAddress ≤ addr.toNat →
+      JoltISA.RAM_START_ADDRESS ≤ addr.toNat →
         (assumptionOperands i).memoryWindows addr
     | _ => True
   sequenceLayout : program.SequenceLayout

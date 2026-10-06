@@ -26,7 +26,7 @@ theorem ldNative_x0_run_from_memory_read
     (hread :
       vmem_read_addr (Virtaddr (baseValue + sign_extend (m := 64) imm)) 0 8
         (Load Data) false false false js.sail = .ok (Ok loaded) js.sail)
-    (h_ram : JoltISA.ramStartAddress ≤
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤
       (baseValue + sign_extend (m := 64) imm).toNat) :
     (JoltISA.execInstr (JoltISA.ldNativeInstr (regidx.Regidx 0) rs1 imm)).run js =
       .ok RETIRE_SUCCESS
@@ -141,7 +141,7 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
         (Load Data) false false false js.sail =
         .ok (Ok loaded) js.sail)
     (hlinked : LinkedCSRs js)
-    (h_ram : JoltISA.ramStartAddress ≤ (load_effective_address val imm).toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ (load_effective_address val imm).toNat) :
     System.systemProjectResult
       ((JoltISA.execInstr (JoltISA.ldNativeInstr rd rs1 imm)).run js) =
     .ok RETIRE_SUCCESS (stateAfterWrite js.sail rd loaded) := by

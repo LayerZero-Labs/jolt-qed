@@ -8,16 +8,30 @@ namespace HostIOChecks
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-def device : JoltIOState :=
-  { layout :=
-      { input := (0x4000, 0x4008)
-        trustedAdvice := (0x5000, 0x5000)
-        untrustedAdvice := (0x5000, 0x5000)
-        output := (0x6000, 0x6008)
-        panic := (0x7000, 0x7008)
-        termination := (0x7008, 0x7010) }
+def device : JoltDevice :=
+  { memory_layout :=
+      { program_size := 0
+        max_trusted_advice_size := 0
+        trusted_advice_start := 0x5000
+        trusted_advice_end := 0x5000
+        max_untrusted_advice_size := 0
+        untrusted_advice_start := 0x5000
+        untrusted_advice_end := 0x5000
+        max_input_size := 8
+        max_output_size := 8
+        input_start := 0x4000
+        input_end := 0x4008
+        output_start := 0x6000
+        output_end := 0x6008
+        stack_size := 0
+        stack_end := 0
+        heap_size := 0
+        heap_end := 0
+        panic := 0x7000
+        termination := 0x7008
+        io_end := 0x7010 }
     inputs := #[0xde, 0xad, 0xbe, 0xef]
-    trustedAdvice := #[], untrustedAdvice := #[], outputs := #[], panic := false }
+    trusted_advice := #[], untrusted_advice := #[], outputs := #[], panic := false }
 
 def state (callId pointer count event : BitVec 64)
     (config : JoltHostIOConfig := {}) : SailJoltState :=
@@ -26,7 +40,7 @@ def state (callId pointer count event : BitVec 64)
                 (((regs.insert Register.x10 callId).insert Register.x11 pointer).insert
                   Register.x12 count).insert Register.x13 event
         mem := {}, choiceState := (), tags := (), cycleCount := 0, sailOutput := #[] }
-    io := device
+    jolt_device := device
     adviceTape := { bytes := #[9, 8], readPosition := 1 }
     hostIO := config }
 

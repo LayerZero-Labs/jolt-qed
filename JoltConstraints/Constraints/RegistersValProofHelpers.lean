@@ -460,11 +460,11 @@ theorem register42_memory_write_preserves_sourceValue
     (src : JoltISA.Src) (s : SailJoltState) (ops : AssumptionOperands)
     (ha : TraceAssumptions s ops) (addr data : BitVec 64)
     (halign : addr &&& 7 = 0)
-    (hwindow : JoltISA.ramStartAddress ≤ addr.toNat → ops.memoryWindows addr)
+    (hwindow : JoltISA.RAM_START_ADDRESS ≤ addr.toNat → ops.memoryWindows addr)
     (t : SailJoltState) (v : Result Bool ExecutionResult)
     (hr : JoltISA.writeMemoryWord addr data s = .ok v t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
-  by_cases hram : JoltISA.ramStartAddress ≤ addr.toNat
+  by_cases hram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   · obtain ⟨_, _, hpmp, _, hmmio⟩ :=
       ha.ramWindow addr (hwindow hram)
     have hwrite := vmem_write_addr_dword_store_reduces addr data s.sail
@@ -483,7 +483,7 @@ theorem register42_load_preserves_other
     (base src : JoltISA.Src) (imm : BitVec 64)
     (s t : SailJoltState) (ops : AssumptionOperands)
     (ha : TraceAssumptions s ops)
-    (hwindow : JoltISA.ramStartAddress ≤
+    (hwindow : JoltISA.RAM_START_ADDRESS ≤
       (JoltISA.sourceValue base s + imm).toNat →
       ops.memoryWindows (JoltISA.sourceValue base s + imm))
     (hne : src ≠ register42_dstAsSrc dst)
@@ -512,7 +512,7 @@ theorem register42_store_preserves_sourceValue
     (base stored src : JoltISA.Src) (imm : BitVec 64)
     (s t : SailJoltState) (ops : AssumptionOperands)
     (ha : TraceAssumptions s ops)
-    (hwindow : JoltISA.ramStartAddress ≤
+    (hwindow : JoltISA.RAM_START_ADDRESS ≤
       (JoltISA.sourceValue base s + imm).toNat →
       ops.memoryWindows (JoltISA.sourceValue base s + imm))
     (hexec : JoltISA.execInstr (.SD base stored imm) s =

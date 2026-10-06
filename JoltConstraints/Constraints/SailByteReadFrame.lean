@@ -465,7 +465,7 @@ theorem readMemoryByte_readOnly (addr : BitVec 64) (s t : SailJoltState)
   unfold JoltISA.readMemoryByte at hrun
   dsimp only at hrun
   split_ifs at hrun with hperipheral hdevice
-  · cases hb : JoltISA.deviceByte? s.io addr.toNat with
+  · cases hb : JoltDevice.load? s.jolt_device addr.toNat with
     | none => simp only [hb] at hrun; cases hrun
     | some byte => simp only [hb] at hrun; cases hrun; rfl
   · cases hr : vmem_read_addr (virtaddr.Virtaddr addr) 0 1

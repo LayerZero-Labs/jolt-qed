@@ -218,11 +218,11 @@ theorem branch_not_taken (instr : Instr) (s t : SailJoltState)
 theorem memory_write (s : SailJoltState) (ops : AssumptionOperands)
     (ha : TraceAssumptions s ops) (addr data : BitVec 64)
     (halign : addr &&& 7 = 0)
-    (hwindow : ramStartAddress ≤ addr.toNat → ops.memoryWindows addr)
+    (hwindow : RAM_START_ADDRESS ≤ addr.toNat → ops.memoryWindows addr)
     (t : SailJoltState) (v : Result Bool ExecutionResult)
     (hr : writeMemoryWord addr data s = .ok v t) :
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
-  by_cases hram : ramStartAddress ≤ addr.toNat
+  by_cases hram : RAM_START_ADDRESS ≤ addr.toNat
   · obtain ⟨_, _, hpmp, _, hmmio⟩ :=
       ha.ramWindow addr (hwindow hram)
     have hwrite := vmem_write_addr_dword_store_reduces addr data s.sail
@@ -238,7 +238,7 @@ theorem memory_write (s : SailJoltState) (ops : AssumptionOperands)
 theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
     (imm : BitVec 64) (s t : SailJoltState) (ops : AssumptionOperands)
     (ha : TraceAssumptions s ops)
-    (hwindow : ramStartAddress ≤ (sourceValue base s + imm).toNat →
+    (hwindow : RAM_START_ADDRESS ≤ (sourceValue base s + imm).toNat →
       ops.memoryWindows (sourceValue base s + imm))
     (hexec : execInstr (.LD fault dst base imm) s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
@@ -261,7 +261,7 @@ theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
 theorem store_instruction (base value : Src) (imm : BitVec 64)
     (s t : SailJoltState) (ops : AssumptionOperands)
     (ha : TraceAssumptions s ops)
-    (hwindow : ramStartAddress ≤ (sourceValue base s + imm).toNat →
+    (hwindow : RAM_START_ADDRESS ≤ (sourceValue base s + imm).toNat →
       ops.memoryWindows (sourceValue base s + imm))
     (hexec : execInstr (.SD base value imm) s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by

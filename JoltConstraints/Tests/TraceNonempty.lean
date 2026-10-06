@@ -41,7 +41,7 @@ theorem xRegReadable_of_present {s : SailState} (v : (r : Register) → Register
 
 section
 
-variable (io : JoltIOState) (tape : JoltAdviceTape)
+variable (io : JoltDevice) (tape : JoltAdviceTape)
 
 def jalRow : JoltProgramRow :=
   { inputInstruction := .JAL (.xreg (.Regidx 0)) 0

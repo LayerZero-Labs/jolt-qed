@@ -28,7 +28,7 @@ theorem ld_run_vreg_vreg_from_memory_read {faultClass : LoadFaultClass}
         (Load Data) false false false js.sail =
         .ok (Ok value) js.sail)
     (hvd : WritableVReg vd)
-    (h_ram : ramStartAddress ≤ (js.vregs base + sign_extend (m := 64) imm).toNat) :
+    (h_ram : RAM_START_ADDRESS ≤ (js.vregs base + sign_extend (m := 64) imm).toNat) :
     (execInstr (JoltISA.Encoded.LD faultClass (.vreg vd) (.vreg base) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
@@ -56,7 +56,7 @@ theorem ld_run_vreg_xreg_from_memory_read {faultClass : LoadFaultClass}
         (Load Data) false false false js.sail =
         .ok (Ok value) js.sail)
     (hvd : WritableVReg vd)
-    (h_ram : ramStartAddress ≤ (baseValue + sign_extend (m := 64) imm).toNat) :
+    (h_ram : RAM_START_ADDRESS ≤ (baseValue + sign_extend (m := 64) imm).toNat) :
     (execInstr (JoltISA.Encoded.LD faultClass (.vreg vd) (.xreg base) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with

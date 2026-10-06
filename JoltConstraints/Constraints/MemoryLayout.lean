@@ -2,7 +2,7 @@ import JoltConstraints.Constraints.RamReadData
 
 /-!
 Rust's `MemoryLayout::new`, restricted to the advice and input regions, and a
-proof that every device it lays out satisfies `JoltIOState.AdviceBelowInput`.
+proof that every device it lays out satisfies `JoltDevice.AdviceBelowInput`.
 
 Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/common/src/jolt_device.rs#L346-L438
 
@@ -51,8 +51,8 @@ def adviceInputLayout (config : MemoryConfig) : Option AdviceInputLayout := do
   let ioRegionBytes ← (checkedAdd input trusted).bind fun s =>
     (checkedAdd s untrusted).bind fun s => (checkedAdd s output).bind fun s => checkedAdd s 16
   let ioBytes := (ioRegionBytes / 8).nextPowerOfTwo * 8
-  if 2 ^ 64 ≤ ioBytes ∨ JoltISA.ramStartAddress < ioBytes then none else
-  let first := JoltISA.ramStartAddress - ioBytes
+  if 2 ^ 64 ≤ ioBytes ∨ JoltISA.RAM_START_ADDRESS < ioBytes then none else
+  let first := JoltISA.RAM_START_ADDRESS - ioBytes
   if untrusted ≤ trusted then
     let trustedEnd ← checkedAdd first trusted
     let untrustedEnd ← checkedAdd trustedEnd untrusted
@@ -121,14 +121,14 @@ open JoltConstraints JoltConstraints.RustMemoryLayout in
 `MemoryLayout::new`, and `create_emulator` rejects advice longer than the
 configured maximum before execution starts.
 Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/tracer/src/lib.rs#L382-L393 -/
-theorem JoltIOState.AdviceBelowInput.of_memoryLayout
-    (io : JoltIOState) (config : MemoryConfig) (layout : AdviceInputLayout)
+theorem JoltDevice.AdviceBelowInput.of_memoryLayout
+    (io : JoltDevice) (config : MemoryConfig) (layout : AdviceInputLayout)
     (built : adviceInputLayout config = some layout)
-    (trustedStart : io.layout.trustedAdvice.1.toNat = layout.trustedAdviceStart)
-    (untrustedStart : io.layout.untrustedAdvice.1.toNat = layout.untrustedAdviceStart)
-    (inputStart : io.layout.input.1.toNat = layout.inputStart)
-    (trustedLength : io.trustedAdvice.size ≤ config.maxTrustedAdviceSize)
-    (untrustedLength : io.untrustedAdvice.size ≤ config.maxUntrustedAdviceSize) :
+    (trustedStart : io.memory_layout.trusted_advice_start.toNat = layout.trustedAdviceStart)
+    (untrustedStart : io.memory_layout.untrusted_advice_start.toNat = layout.untrustedAdviceStart)
+    (inputStart : io.memory_layout.input_start.toNat = layout.inputStart)
+    (trustedLength : io.trusted_advice.size ≤ config.maxTrustedAdviceSize)
+    (untrustedLength : io.untrusted_advice.size ≤ config.maxUntrustedAdviceSize) :
     io.AdviceBelowInput := by
   obtain ⟨trusted, untrusted, hT, hT8, hU, hU8, htEnd, huEnd, hadj, hinput⟩ :=
     adviceInputLayout_spec built

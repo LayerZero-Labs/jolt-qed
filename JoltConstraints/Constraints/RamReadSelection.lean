@@ -51,18 +51,18 @@ theorem ramAccess_remapped_some (params : WitnessParams)
   have hf := ramFits ⟨t.val, ht⟩
   have hv := validAccesses ⟨t.val, ht⟩
   have hf' : raw = 0 ∨ ∃ b : Nat,
-      HonestWitness.remapRamAddress program.initialState.io.layout raw = some b ∧
+      HonestWitness.remapRamAddress program.initialState.jolt_device.memory_layout raw = some b ∧
       b < params.ramSize := by
     simpa only [hraw] using hf
   have hv' : raw.toNat ≠ 0 ∧
-      (raw.toNat - ramLowestAddress program.initialState.io.layout) % 8 = 0 := by
+      (raw.toNat - ramLowestAddress program.initialState.jolt_device.memory_layout) % 8 = 0 := by
     change (match HonestWitness.ramAccessAddress
       (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
         (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
       (getElem trace.rows t.val ht).preState with
       | none => True
       | some address => address.toNat ≠ 0 ∧
-          (address.toNat - ramLowestAddress program.initialState.io.layout) % 8 = 0) at hv
+          (address.toNat - ramLowestAddress program.initialState.jolt_device.memory_layout) % 8 = 0) at hv
     simpa only [hraw] using hv
   rcases hf' with hz | ⟨b, hremap, _⟩
   · exact False.elim (hv'.1 (by simp [hz]))

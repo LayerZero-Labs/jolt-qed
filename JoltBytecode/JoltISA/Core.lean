@@ -31,22 +31,37 @@ noncomputable section
 
 abbrev SailState := SequentialState RegisterType trivialChoiceSource
 
-structure JoltIOLayout where
-  -- Address ranges are [start, end).
-  input : BitVec 64 × BitVec 64
-  trustedAdvice : BitVec 64 × BitVec 64
-  untrustedAdvice : BitVec 64 × BitVec 64
-  output : BitVec 64 × BitVec 64
-  panic : BitVec 64 × BitVec 64
-  termination : BitVec 64 × BitVec 64
+-- Rust: jolt/common/src/jolt_device.rs:277-301 (MemoryLayout)
+structure MemoryLayout where
+  program_size : BitVec 64
+  max_trusted_advice_size : BitVec 64
+  trusted_advice_start : BitVec 64
+  trusted_advice_end : BitVec 64
+  max_untrusted_advice_size : BitVec 64
+  untrusted_advice_start : BitVec 64
+  untrusted_advice_end : BitVec 64
+  max_input_size : BitVec 64
+  max_output_size : BitVec 64
+  input_start : BitVec 64
+  input_end : BitVec 64
+  output_start : BitVec 64
+  output_end : BitVec 64
+  stack_size : BitVec 64
+  stack_end : BitVec 64
+  heap_size : BitVec 64
+  heap_end : BitVec 64
+  panic : BitVec 64
+  termination : BitVec 64
+  io_end : BitVec 64
 
-structure JoltIOState where
-  layout : JoltIOLayout
+-- Rust: jolt/common/src/jolt_device.rs:57-68 (JoltDevice)
+structure JoltDevice where
   inputs : Array (BitVec 8)
-  trustedAdvice : Array (BitVec 8)
-  untrustedAdvice : Array (BitVec 8)
+  trusted_advice : Array (BitVec 8)
+  untrusted_advice : Array (BitVec 8)
   outputs : Array (BitVec 8)
   panic : Bool
+  memory_layout : MemoryLayout
 
 structure JoltAdviceTape where
   bytes : Array (BitVec 8)
@@ -67,7 +82,8 @@ structure JoltHostIOConfig where
 structure SailJoltState where
   sail : SailState
   vregs : BitVec 7 → BitVec 64 := fun _ => 0
-  io : JoltIOState
+  -- Rust: jolt/tracer/src/emulator/mmu.rs:25 (Mmu.jolt_device)
+  jolt_device : JoltDevice
   adviceTape : JoltAdviceTape
   hostIO : JoltHostIOConfig := {}
 

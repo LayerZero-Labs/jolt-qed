@@ -156,7 +156,7 @@ device I/O.
 structure NotReadableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Prop where
   -- Rust: [device/RAM split](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/mmu.rs:523).
   -- Excluding Sail's devices alone does not exclude Jolt's device address region.
-  ram : JoltISA.ramStartAddress ≤ addr.toNat
+  ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_readable (physaddr.Physaddr addr) width s = .ok false s
 
 /-- Every explicit sub-load inside a memory window avoids readable MMIO. -/
@@ -176,7 +176,7 @@ device I/O.
 -/
 structure NotWritableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Prop where
   -- The ordinary-RAM equivalence proofs exclude both Jolt and Sail devices.
-  ram : JoltISA.ramStartAddress ≤ addr.toNat
+  ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_writable (physaddr.Physaddr addr) width s = .ok false s
 
 /-- Every explicit sub-store inside a memory window avoids writable MMIO. -/

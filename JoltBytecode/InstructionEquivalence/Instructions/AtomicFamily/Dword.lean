@@ -153,7 +153,7 @@ theorem amo_dword_ld_old_run_into
       vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false js.sail =
         .ok (Ok oldVal) js.sail)
     (holdReg : WritableVReg oldReg)
-    (h_ram : JoltISA.ramStartAddress ≤ addr.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat) :
     ∃ js_afterLoad : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.LD .amo (.vreg oldReg) (.xreg rs1) (0 : BitVec 12))).run js =
@@ -200,7 +200,7 @@ theorem amo_dword_ld_old_run
     (hload :
       vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false js.sail =
         .ok (Ok oldVal) js.sail)
-    (h_ram : JoltISA.ramStartAddress ≤ addr.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat) :
     ∃ js_afterLoad : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.LD .amo (.vreg JoltISA.amoOldVReg) (.xreg rs1) (0 : BitVec 12))).run js =
@@ -224,7 +224,7 @@ theorem amo_dword_sd_result_run
         (Store Data) false false false js_afterLoad.sail =
         .ok (Ok true)
           (state_after_dword_store js_afterLoad.sail addr result))
-    (h_ram : JoltISA.ramStartAddress ≤ addr.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat) :
     ∃ js_afterStore : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) (0 : BitVec 12))).run js_afterLoad =
@@ -275,7 +275,7 @@ theorem amo_dword_sd_xreg_vreg_run_of_write
       vmem_write_addr (Virtaddr (baseValue + sign_extend (m := 64) imm)) 8
         stored (Store Data) false false false js.sail =
         .ok (Ok true) s')
-    (h_ram : JoltISA.ramStartAddress ≤ (baseValue + sign_extend (m := 64) imm).toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ (baseValue + sign_extend (m := 64) imm).toNat) :
     (JoltISA.execInstr (JoltISA.Encoded.SD (.xreg base) (.vreg value) imm)).run js =
       .ok RETIRE_SUCCESS { js with sail := s' } := by
   unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst readVReg liftSail
@@ -299,7 +299,7 @@ theorem amo_dword_sd_vreg_result_run
         (Store Data) false false false js.sail =
         .ok (Ok true)
           (state_after_dword_store js.sail addr result))
-    (h_ram : JoltISA.ramStartAddress ≤ addr.toNat) :
+    (h_ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat) :
     ∃ js_afterStore : SailJoltState,
       (JoltISA.execInstr
         (JoltISA.Encoded.SD (.xreg rs1) (.vreg valueReg) (0 : BitVec 12))).run js =
