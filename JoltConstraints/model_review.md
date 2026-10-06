@@ -215,7 +215,7 @@ pass, escalate it.
 | [#1951](https://github.com/a16z/jolt/issues/1951) items 1-2, [#1950](https://github.com/a16z/jolt/issues/1950) | Termination and panic words: the device treats them as flags, the proof as memory | open | `HonestTrace.matches_outputs` leaves the termination word out; (37) stays `sorry` |
 | [#1949](https://github.com/a16z/jolt/issues/1949) | A load/store address that wraps past 2^64 breaks the RAM-address constraint | open; a fix PR is announced in its comments | (01) stays `sorry` |
 | [#1916](https://github.com/a16z/jolt/issues/1916) | A trace that ends on a taken self-branch breaks the next-PC constraint | fixed by PR [#1968](https://github.com/a16z/jolt/pull/1968) (merged 2026-10-06, upstream `00508a09`): the prover refuses traces whose last row is not a jump | modeled: `HonestTrace.prover_config` has the jump check; (16) can be proved during the rewiring |
-| [#1952](https://github.com/a16z/jolt/issues/1952) | The emulator fetches instructions from memory, the proof uses the decoded bytecode | open | left out: `HonestTrace` runs bytecode rows (WARNING) |
+| [#1952](https://github.com/a16z/jolt/issues/1952) | The emulator fetches instructions from memory, the proof uses the decoded bytecode | open | assumed: field `HonestTrace.code_unchanged` (FIXME) |
 | none | The source PC wraps past 2^64 | not reported; may be impossible (see Completeness conditions) | old assumption `addressAdvanceNoWrap`; to be checked |
 | [#1914](https://github.com/a16z/jolt/issues/1914) | CSRRS writeback | closed, fixed (`f012bfb1`) | (13) proved |
 

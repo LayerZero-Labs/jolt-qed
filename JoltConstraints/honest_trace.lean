@@ -68,13 +68,8 @@ def source_is_compressed (bytecode : Array JoltInstructionRow)
   (bytecode[last]?.map (·.is_compressed)).getD false
 
 -- The rows Rust's tracer records when it runs the instance's program on these
--- private inputs.
--- WARNING: every row here runs a row of the decoded bytecode, as the proof does.
--- Rust's emulator instead fetches each instruction from memory, so the two differ
--- when a program rewrites its own code, jumps into a section that is not
--- executable, or jumps into the middle of an instruction; Rust cannot prove such
--- runs either. This model leaves them out. Reported upstream as a16z/jolt#1952
--- (model_review.md, Upstream issues).
+-- private inputs. Every row runs a row of the decoded bytecode, as the proof does;
+-- `code_unchanged` says the code in memory is still that bytecode when it runs.
 -- See : jolt/tracer/src/lib.rs:74-131 (trace)
 structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) where
@@ -117,6 +112,17 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
         bytecode[next.rowIndex].starts_source ∧
         next.preState = advance_pc address (source_is_compressed bytecode next.rowIndex)
           current.postState
+  -- When an instruction starts, the bytes at its address are the ones the program
+  -- was loaded with. Rust's tracer reads and decodes the instruction from memory at
+  -- that moment (cpu.rs:631-637, 695-717; stores clear its decode cache, mmu.rs:646,
+  -- 689, 710, 731), so it then runs the same instruction as the bytecode.
+  -- FIXME: Jolt does not guarantee this. Its tracer runs the code in memory, its proof
+  -- checks the bytecode, and the two differ when a program runs code it changed.
+  -- Open bug a16z/jolt#1952.
+  code_unchanged : ∀ row ∈ rows, bytecode[row.rowIndex].starts_source →
+    ∀ offset < (if source_is_compressed bytecode row.rowIndex then 2 else 4),
+      row.preState.sail.mem.get? (bytecode[row.rowIndex].address.toNat + offset) =
+        initialState.sail.mem.get? (bytecode[row.rowIndex].address.toNat + offset)
   -- The run ends on the last row of an instruction that left the PC pointing at
   -- itself. Rust's tracer stops there.
   -- See : jolt/tracer/src/lib.rs:113-120, 327-337 (trace, step_emulator)
