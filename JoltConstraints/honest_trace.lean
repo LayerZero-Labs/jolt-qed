@@ -229,6 +229,5 @@ def HonestTrace.SpoilAssertsPass {joltInstance : JoltInstance SourceInstruction}
 def HonestTrace.matches_outputs {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Prop :=
   let finalState := (trace.rows.back?.map (·.postState)).getD trace.initialState
-  let trim (bytes : List (BitVec 8)) := (bytes.reverse.dropWhile (· == 0)).reverse
-  trim finalState.jolt_device.outputs.toList = trim joltInstance.outputs.toList ∧
+  trimTrailingZeros finalState.jolt_device.outputs = trimTrailingZeros joltInstance.outputs ∧
     finalState.jolt_device.panic = joltInstance.panic

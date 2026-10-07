@@ -3,7 +3,7 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 /-!
 Execution never changes the device fields fixed when Rust builds its emulator:
-the memory layout and both advice buffers. Sail steps do not touch the device,
+the memory layout, the inputs and both advice buffers. Sail steps do not touch the device,
 device stores only change `outputs` and `panic`, and HostIO only appends to the
 advice tape. The trace-level result carries this from the program's initial
 state to the final recorded state.

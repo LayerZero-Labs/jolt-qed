@@ -394,6 +394,27 @@ def JoltInstance.validate_inputs {Source : Type} (joltInstance : JoltInstance So
       joltInstance.inputs.size ≤ layout.max_input_size.toNat &&
       joltInstance.outputs.size ≤ layout.max_output_size.toNat
 
+-- The bytes without their trailing zero bytes, as Rust's verifier trims the claimed
+-- outputs.
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:436-443
+def trimTrailingZeros (bytes : Array (BitVec 8)) : Array (BitVec 8) :=
+  (bytes.toList.reverse.dropWhile (· == 0)).reverse.toArray
+
+-- The public I/O the verifier checks a proof against: the instance's layout, inputs,
+-- claimed outputs (trailing zero bytes dropped) and panic flag. Rust's verify takes it
+-- as a JoltDevice and never reads its advice fields.
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:37-42 (verify), 357, 436-443
+--       jolt/crates/jolt-program/src/preprocess/public_io.rs:21-61
+def JoltInstance.public_io {Source : Type} (joltInstance : JoltInstance Source) :
+    Option JoltDevice := do
+  let layout ← joltInstance.memory_layout
+  pure { inputs := joltInstance.inputs
+         trusted_advice := #[]
+         untrusted_advice := #[]
+         outputs := trimTrailingZeros joltInstance.outputs
+         panic := joltInstance.panic
+         memory_layout := layout }
+
 -- The verifier's bytecode for an instance; none where Rust rejects the program:
 -- expansion fails, the PC map rejects the rows, or the entry address maps to no slot.
 -- See : jolt/crates/jolt-program/src/preprocess/program.rs:21-36 (JoltProgramPreprocessing::new)

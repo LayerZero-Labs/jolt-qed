@@ -157,12 +157,28 @@ theorem _root_.HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruc
     rw [HonestWitness.bytecodePc, dif_neg nonempty]
     exact Option.some.inj entryIsRust
 
+-- The run's final state, as matches_outputs reads it, is the witness's final state.
+theorem _root_.HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
+    (trace.rows.back?.map (·.postState)).getD trace.initialState =
+      HonestWitness.finalTraceState trace := by
+  unfold HonestWitness.finalTraceState
+  rw [Array.back?_eq_getElem?]
+  split
+  · rename_i nonempty
+    rw [Array.getElem?_eq_getElem (by omega)]
+    rfl
+  · rw [Array.getElem?_eq_none (by omega)]
+    rfl
+
 -- Every constraint holds for the honest witness at the sizes Rust's prover picks for the
--- run. What is assumed: Rust's prover accepts the run (`accepted`; the open issues that
--- stop it are in model_review.md), no spoil assert fails, the PC does not wrap (a16z),
--- and, inside the trace and the witness, the code does not change during the run
--- (`code_unchanged`, #1952) and the run uses no RAM 2 GiB or more above RAM_START
--- (`finalRamWord`, a16z). `slots` and `entry` name what Rust computes; they always exist.
+-- run, against the public I/O the verifier checks, when the instance claims the outputs
+-- the run produced. What is assumed: Rust's prover accepts the run (`accepted`; the open
+-- issues that stop it are in model_review.md), no spoil assert fails, the PC does not wrap
+-- (a16z), and, inside the trace and the witness, the code does not change during the run
+-- (`code_unchanged`, a16z) and the run uses no RAM 2 GiB or more above RAM_START
+-- (`finalRamWord`, a16z). `slots`, `entry` and `io` name what Rust computes; they always
+-- exist.
 theorem _root_.HonestTrace.allConstraints_rust_sizes
     {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -176,10 +192,14 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
     -- assumed: no spoil assert fails
     (spoilAssertsPass : trace.SpoilAssertsPass)
     -- assumed: a legal ELF's PC does not wrap (a16z confirmed)
-    (noWrap : joltInstance.program.NextPCNoWrap) :
-    AllConstraints trace (HonestWitness.finalTraceState trace).jolt_device entry
-      (trace.honestWitness (F := F) (trace.witness_params config accepted)) :=
-  honestWitness_allConstraints (trace.witness_params config accepted) trace
+    (noWrap : joltInstance.program.NextPCNoWrap)
+    -- the instance claims the outputs the run produced
+    (claimsRunOutputs : trace.matches_outputs)
+    -- the public I/O the verifier checks the proof against
+    (io : JoltDevice) (publicIo : joltInstance.public_io = some io) :
+    AllConstraints trace io entry
+      (trace.honestWitness (F := F) (trace.witness_params config accepted)) := by
+  have all := honestWitness_allConstraints (F := F) (trace.witness_params config accepted) trace
     (trace.witness_params_ram_fits config accepted)
     (trace.witness_params_padded config accepted)
     (trace.witness_params_bytecode_domain config accepted)
@@ -191,5 +211,51 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
     trace.initialRegistersZero
     (trace.witness_params_ram_chunks_pos config accepted)
     noWrap
+  -- the verifier's I/O: the instance's layout, inputs, trimmed outputs and panic flag
+  obtain ⟨layoutBuilt, _⟩ := initial_state_device joltInstance privateInputs trace.initialState
+    trace.initialized
+  unfold JoltInstance.public_io at publicIo
+  rw [bind_some_iff] at publicIo
+  obtain ⟨layout, isLayout, publicIo⟩ := publicIo
+  rw [layoutBuilt] at isLayout
+  cases isLayout
+  cases publicIo
+  -- the run's final device has the same layout and inputs, and the claimed outputs and
+  -- panic flag
+  obtain ⟨sameLayout, _, _, sameInputs⟩ := finalTraceState_ioSame trace
+  have startInputs := initial_state_inputs joltInstance privateInputs trace.initialState
+    trace.initialized
+  obtain ⟨sameOutputs, samePanic⟩ := claimsRunOutputs
+  rw [trace.final_state_eq] at sameOutputs samePanic
+  -- the instance's inputs fit their region (validate_inputs)
+  have valid := trace.valid_inputs
+  unfold JoltInstance.validate_inputs at valid
+  rw [layoutBuilt] at valid
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at valid
+  unfold JoltInstance.memory_layout at layoutBuilt
+  refine { all with ramAddressEqRamRaf := ?_, ramOutputEqPublicIo := ?_ }
+  · -- the RAM-address constraint reads only the layout
+    simpa only [sameLayout] using all.ramAddressEqRamRaf
+  · -- constraint (26): the verifier's public words are the run's
+    intro address
+    have runs := all.ramOutputEqPublicIo address
+    have maskSame : ramPublicIoMask (F := F)
+        { inputs := joltInstance.inputs, trusted_advice := #[], untrusted_advice := #[],
+          outputs := trimTrailingZeros joltInstance.outputs, panic := joltInstance.panic,
+          memory_layout := trace.initialState.jolt_device.memory_layout } address.val =
+        ramPublicIoMask (F := F) (HonestWitness.finalTraceState trace).jolt_device address.val := by
+      unfold ramPublicIoMask
+      rw [sameLayout]
+    have wordSame := ramPublicIoWord_trimmed
+      { inputs := joltInstance.inputs, trusted_advice := #[], untrusted_advice := #[],
+        outputs := trimTrailingZeros joltInstance.outputs, panic := joltInstance.panic,
+        memory_layout := trace.initialState.jolt_device.memory_layout }
+      (HonestWitness.finalTraceState trace).jolt_device _
+      (by rw [sameLayout]; exact layoutBuilt)
+      (by rw [sameInputs, startInputs, sameLayout]; exact valid.1.2)
+      sameLayout.symm (by rw [sameInputs, startInputs]) samePanic.symm sameOutputs.symm
+      address.val
+    rw [maskSame, wordSame]
+    exact runs
 
 end JoltConstraints

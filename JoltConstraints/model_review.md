@@ -205,9 +205,12 @@ arise from a derived configuration.
 
 The final theorem is `HonestTrace.allConstraints_rust_sizes`
 (`Completeness/All.lean`): every constraint holds at the sizes Rust's prover picks,
-with every premise of `honestWitness_allConstraints` discharged. It assumes only
-`accepted`, `SpoilAssertsPass` and `NextPCNoWrap`, plus `code_unchanged` (a trace
-field) and the 2 GiB RAM limit (`finalRamWord`).
+against the public I/O the verifier checks (`JoltInstance.public_io`: the instance's
+layout, inputs, claimed outputs without trailing zero bytes, and panic flag;
+`verifier.rs:357, 436-443`), when the instance claims the outputs the run produced
+(`HonestTrace.matches_outputs`). Every premise of `honestWitness_allConstraints` is
+discharged. It assumes only `accepted`, `SpoilAssertsPass` and `NextPCNoWrap`, plus
+`code_unchanged` (a trace field) and the 2 GiB RAM limit (`finalRamWord`).
 
 ## Upstream issues
 

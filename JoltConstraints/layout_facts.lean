@@ -296,6 +296,70 @@ theorem new_io_ordered (config : MemoryConfig) (layout : MemoryLayout)
   rw [Nat.mod_eq_of_lt (a := max untrustedTop trustedTop) (by omega)] at lowestBelow
   omega
 
+-- The outputs start right after the inputs' region, whose size is a multiple of 8.
+-- See : jolt/common/src/jolt_device.rs:348-484 (MemoryLayout::new)
+theorem new_outputs_after_inputs (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    layout.output_start.toNat = layout.input_start.toNat + layout.max_input_size.toNat ∧
+    layout.max_input_size.toNat % 8 = 0 := by
+  unfold MemoryLayout.new at built
+  -- program size
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the six sizes, rounded up to multiples of 8
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨input, inputRounded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the two power-of-two checks
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the size of the I/O region
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the advice regions
+  rw [bind_some_iff] at built
+  obtain ⟨⟨trustedStart, trustedTop, untrustedStart, untrustedTop⟩, placed, built⟩ := built
+  -- input end
+  rw [bind_some_iff] at built
+  obtain ⟨inputEnd, inputEndAdded, built⟩ := built
+  -- output end, termination, I/O end, stack end, stack start, heap end
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the layout itself
+  cases built
+  obtain ⟨_, _, _, _, trustedTopFits, untrustedTopFits⟩ := adviceRegions_some placed
+  obtain ⟨inputEndIs, inputEndFits⟩ := checkedAdd_some inputEndAdded
+  obtain ⟨_, inputMultiple⟩ := alignUp8_some inputRounded
+  -- every value fits in 64 bits, so reading it back as a BitVec gives it unchanged
+  dsimp only
+  simp only [BitVec.toNat_ofNat]
+  rw [Nat.mod_eq_of_lt (a := max untrustedTop trustedTop) (by omega),
+    Nat.mod_eq_of_lt (a := inputEnd) (by omega), Nat.mod_eq_of_lt (a := input) (by omega)]
+  omega
+
 -- With the lowest address above 8, as validate_inputs requires, no device region covers
 -- an address below 8, and the I/O region ends above it.
 -- See : jolt/crates/jolt-verifier/src/verifier.rs:992-1005 (validate_ram_remap_base)
@@ -366,6 +430,33 @@ theorem initial_state_device {Source : Type} (joltInstance : JoltInstance Source
   rw [init_state_jolt_device]
   exact ⟨layoutBuilt, rfl, rfl, Nat.le_of_not_lt trustedTooLong,
     Nat.le_of_not_lt untrustedTooLong⟩
+
+-- The starting device holds the instance's inputs.
+-- See : jolt/tracer/src/lib.rs:398-399 (create_emulator)
+theorem initial_state_inputs {Source : Type} (joltInstance : JoltInstance Source)
+    (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
+    (built : joltInstance.initial_state privateInputs = some initialState) :
+    initialState.jolt_device.inputs = joltInstance.inputs := by
+  unfold JoltInstance.initial_state at built
+  rw [bind_some_iff] at built
+  obtain ⟨layout, _, built⟩ := built
+  dsimp only at built
+  -- create_emulator's three size checks: trusted advice, untrusted advice, inputs
+  split at built
+  · cases built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  split at built
+  · cases built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  split at built
+  · cases built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the device holds the inputs
+  cases built
+  rw [init_state_jolt_device]
 
 -- In the instance's starting device, each advice region, holding the prover's advice,
 -- ends at or before the inputs start, and the inputs start a multiple of 8 bytes above

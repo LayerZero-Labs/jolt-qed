@@ -1,8 +1,8 @@
 import JoltBytecode.JoltISA.Semantics
 
 /-
-Every Jolt ISA instruction leaves the device's memory layout and advice buffers
-unchanged; Rust fixes them in `create_emulator` and never updates them.
+Every Jolt ISA instruction leaves the device's memory layout, inputs and advice
+buffers unchanged; Rust fixes them in `create_emulator` and never updates them.
 -/
 
 set_option autoImplicit false
@@ -17,12 +17,13 @@ open JoltISA
 Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/tracer/src/lib.rs#L401-L404 -/
 def Same (a b : JoltDevice) : Prop :=
   b.memory_layout = a.memory_layout ∧ b.trusted_advice = a.trusted_advice ∧
-    b.untrusted_advice = a.untrusted_advice
+    b.untrusted_advice = a.untrusted_advice ∧ b.inputs = a.inputs
 
-theorem Same.refl (a : JoltDevice) : Same a a := ⟨rfl, rfl, rfl⟩
+theorem Same.refl (a : JoltDevice) : Same a a := ⟨rfl, rfl, rfl, rfl⟩
 
 theorem Same.trans {a b c : JoltDevice} (hab : Same a b) (hbc : Same b c) : Same a c :=
-  ⟨hbc.1.trans hab.1, hbc.2.1.trans hab.2.1, hbc.2.2.trans hab.2.2⟩
+  ⟨hbc.1.trans hab.1, hbc.2.1.trans hab.2.1, hbc.2.2.1.trans hab.2.2.1,
+    hbc.2.2.2.trans hab.2.2.2⟩
 
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
   ∀ (s t : SailJoltState) (v : α), m s = .ok v t → Same s.jolt_device t.jolt_device
@@ -90,7 +91,7 @@ theorem write_rule (dst : Dst) (value : BitVec 64) : Preserves (writeDst dst val
 theorem storeDeviceByte_same (io io' : JoltDevice) (address : Nat) (value : BitVec 8)
     (h : JoltDevice.store? io address value = some io') : Same io io' := by
   unfold JoltDevice.store? at h
-  split_ifs at h <;> cases h <;> exact ⟨rfl, rfl, rfl⟩
+  split_ifs at h <;> cases h <;> exact ⟨rfl, rfl, rfl, rfl⟩
 
 theorem store_raw_same (s s' : SailJoltState) (ea : Nat) (value : BitVec 8)
     (h : Mmu.store_raw? s ea value = some s') : Same s.jolt_device s'.jolt_device := by
