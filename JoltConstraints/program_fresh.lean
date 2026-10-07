@@ -156,6 +156,12 @@ structure JoltInstructionRow where
 def JoltInstructionRow.starts_source (row : JoltInstructionRow) : Bool :=
   row.virtual_sequence_remaining.isNone || row.is_first_in_sequence
 
+-- A row that is not the last row of its source instruction: more rows of the same
+-- instruction follow. Rust's DoNotUpdateUnexpandedPC flag.
+-- See : jolt/crates/jolt-riscv/src/lib.rs:411-413 (circuit_flags)
+def JoltInstructionRow.continues (row : JoltInstructionRow) : Bool :=
+  row.virtual_sequence_remaining.getD 0 != 0
+
 -- See : jolt/crates/jolt-program/src/expand/metadata.rs:25-53 (stamp_sequence_metadata)
 def stamp_sequence (address : BitVec 64) (is_compressed : Bool)
     (instructions : List JoltISA.Instr) : List JoltInstructionRow :=
