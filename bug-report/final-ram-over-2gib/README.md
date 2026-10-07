@@ -113,14 +113,6 @@ let absolute_address = if address >= dram_start {
 [`materialize_ram_val_final`](https://github.com/a16z/jolt/blob/629ed77b5c999fb2f52e5781b2b98a04ed6cf5ed/crates/jolt-witness/src/backend/trace/ram.rs#L70-L78)
 → [`final_ram_state`](https://github.com/a16z/jolt/blob/629ed77b5c999fb2f52e5781b2b98a04ed6cf5ed/crates/jolt-witness/src/backend/trace/ram.rs#L132-L196).
 
-## Suggested fix (untested)
-
-Treat every final-memory address as RAM-relative, as both tracers produce it:
-
-```rust
-let absolute_address = dram_start.checked_add(address).ok_or_else(|| ...)?;
-```
-
 ## Scope of what was checked
 
 We ran the tracer, `derive_compact` and the witness, and evaluated the final-RAM
