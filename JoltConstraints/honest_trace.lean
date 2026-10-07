@@ -116,9 +116,10 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   -- was loaded with. Rust's tracer reads and decodes the instruction from memory at
   -- that moment (cpu.rs:631-637, 695-717; stores clear its decode cache, mmu.rs:646,
   -- 689, 710, 731), so it then runs the same instruction as the bytecode.
-  -- FIXME: Jolt does not guarantee this. Its tracer runs the code in memory, its proof
-  -- checks the bytecode, and the two differ when a program runs code it changed.
-  -- Open bug a16z/jolt#1952.
+  -- ASSUMPTION: a program does not change its own code. a16z confirmed on 2026-10-07
+  -- that this is an assumption of Jolt: its tracer runs the code in memory, its proof
+  -- checks the bytecode, and the two differ only when a program runs code it changed
+  -- (a16z/jolt#1952; model_review.md, Upstream issues).
   code_unchanged : ∀ row ∈ rows, bytecode[row.rowIndex].starts_source →
     ∀ offset < (if source_is_compressed bytecode row.rowIndex then 2 else 4),
       row.preState.sail.mem.get? (bytecode[row.rowIndex].address.toNat + offset) =
