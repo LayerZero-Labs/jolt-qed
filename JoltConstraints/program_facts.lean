@@ -1,8 +1,8 @@
 /-
 Facts about the Jolt program: what the rows built from an ELF always look like.
-Each one is proved from how program_fresh.lean builds the rows.
+Each one is proved from how program.lean builds the rows.
 -/
-import JoltConstraints.program_fresh
+import JoltConstraints.program
 
 set_option autoImplicit false
 

@@ -173,7 +173,7 @@ theorem rows_source_of_row (instructions : List (List JoltInstructionRow))
           exact sameFlag
 
 -- No row's source instruction has a next PC past 2^64, given the image's NextPCNoWrap
--- (assumed, see program_fresh.lean).
+-- (assumed, see program.lean).
 theorem expand_program_next_pc_no_wrap (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode)
     (noWrap : image.NextPCNoWrap) (i : Fin bytecode.size) :

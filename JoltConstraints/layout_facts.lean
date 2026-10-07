@@ -1,9 +1,9 @@
 /-
 Facts about the memory layout: where Rust's MemoryLayout::new puts the advice regions
 and the inputs. Each one is proved from MemoryLayout.new in JoltDevice.lean and the
-instance's initial state in program_fresh.lean.
+instance's initial state in program.lean.
 -/
-import JoltConstraints.program_fresh
+import JoltConstraints.program
 
 set_option autoImplicit false
 

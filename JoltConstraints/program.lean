@@ -1,8 +1,6 @@
 /-
-A fresh model of the program Jolt is asked to prove, and of the public
-instance the verifier checks it against. Definitions are added one at a time,
-each checked against the Rust source, and copied from `program.lean` only when
-they still fit.
+The program Jolt is asked to prove, and the public instance the verifier checks it
+against. Each definition is checked against the Rust source.
 -/
 import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.JoltISA.DeviceMemory

@@ -124,7 +124,7 @@ private theorem nextUnexpandedPC_eq_current_of_continues
 A nonempty trace stops as Rust's tracer does (`HonestTrace.terminated`), for every
 opcode allowed by Rust's repeated-PC stopping rule.
 There is no jump-only premise. `noWrap` is the image's `NextPCNoWrap`, an
-assumption (asked a16z on 2026-10-07; see program_fresh.lean).
+assumption (a16z confirmed on 2026-10-07; see program.lean).
 The proof derives the final-row nextPC frame from `row.executes` and the
 existing assumption bundle, including live HostIO byte reads. -/
 theorem honestWitness_nextUnexpandedPCUpdateOtherwise

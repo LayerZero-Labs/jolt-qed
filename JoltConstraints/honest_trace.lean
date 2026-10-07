@@ -1,9 +1,9 @@
 /-
 The honest trace: the rows Rust's tracer records for a program and its inputs,
-over the bytecode built in `program_fresh.lean`. Definitions are added one at a
+over the bytecode built in `program.lean`. Definitions are added one at a
 time, each checked against the Rust source.
 -/
-import JoltConstraints.program_fresh
+import JoltConstraints.program
 
 set_option autoImplicit false
 
@@ -176,7 +176,7 @@ structure ProverConfig where
 -- WARNING: Rust's tracer lets a program read below the lowest address (allowed
 -- since ZeroOS, #1229; mmu.rs:139, 154), but the prover panics on it
 -- (config.rs:193). We follow the prover, so such runs have no config. Reported
--- upstream as a16z/jolt#1951 item 3 (model_review.md, Completeness conditions).
+-- upstream as a16z/jolt#1951 item 3 (model_review.md, Upstream issues).
 -- See : jolt/crates/jolt-prover/src/config.rs:103-152 (derive_from_rows)
 --       jolt/crates/jolt-prover/src/config.rs:122-126 at upstream 629ed77b (the jump check)
 --       jolt/crates/jolt-verifier/src/verifier.rs:378-383 (the length bound)
