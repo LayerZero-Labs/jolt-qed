@@ -13,22 +13,22 @@ open scoped BigOperators
 The domain contains every expanded row and the leading no-op slot. -/
 theorem honestWitness_rs1RaEqBytecodeRead
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
-    : rs1RaEqBytecodeRead program
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    : rs1RaEqBytecodeRead trace
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro register t
   rw [bytecodeRead_honest params trace ramFits traceFits bytecodeDomain
-    (bytecodeRegisterSelector program bytecodeRs1Register register) t]
+    (bytecodeRegisterSelector trace bytecodeRs1Register register) t]
   by_cases h : t.val < trace.rows.size
-  · simp [JoltProgram.honestWitness, HonestWitness.Rs1Ra,
+  · simp [HonestTrace.honestWitness, HonestWitness.Rs1Ra,
       HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
     cases hinst :
-      program.expandedBytecode[↑(trace.rows[↑t].rowIndex)].expandedInstruction <;>
+      trace.bytecode[↑(trace.rows[↑t].rowIndex)].instruction <;>
       simp [bytecodeRs1Register, eq_comm]
-  · simp [JoltProgram.honestWitness, HonestWitness.Rs1Ra,
+  · simp [HonestTrace.honestWitness, HonestWitness.Rs1Ra,
       HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
 
 end JoltConstraints

@@ -10,18 +10,18 @@ namespace JoltConstraints
 /-- Completeness target for the honest witness; proof pending. -/
 theorem honestWitness_rs2EqRamWriteIfStore
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     rs2EqRamWriteIfStore
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   change HonestWitness.OpFlags params trace .Store t *
     (HonestWitness.Rs2Value params trace t -
       HonestWitness.RamWriteValue params trace t) = 0
   by_cases inBounds : t.val < trace.rows.size
-  · let instruction := (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
+  · let instruction := (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
     by_cases hStore : JoltMetadata.opcodeFlag instruction .Store = true
     · obtain ⟨base, value, imm, hInstr⟩ :=
         JoltMetadata.opcodeFlag_store_requiresSD instruction hStore

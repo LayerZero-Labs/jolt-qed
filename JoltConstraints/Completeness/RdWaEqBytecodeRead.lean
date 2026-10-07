@@ -14,22 +14,22 @@ recorded in the expanded row, including x0, without a second source rewrite.
 The bytecode domain contains every expanded row and its leading padding slot. -/
 theorem honestWitness_rdWaEqBytecodeRead
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
-    : rdWaEqBytecodeRead program
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    : rdWaEqBytecodeRead trace
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro register t
   rw [bytecodeRead_honest params trace ramFits traceFits bytecodeDomain
-    (bytecodeRegisterSelector program bytecodeRdRegister register) t]
+    (bytecodeRegisterSelector trace bytecodeRdRegister register) t]
   by_cases h : t.val < trace.rows.size
-  · simp [JoltProgram.honestWitness, HonestWitness.RdWa,
+  · simp [HonestTrace.honestWitness, HonestWitness.RdWa,
       HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
     cases hinst :
-      program.expandedBytecode[↑(trace.rows[↑t].rowIndex)].expandedInstruction <;>
+      trace.bytecode[↑(trace.rows[↑t].rowIndex)].instruction <;>
       simp [bytecodeRdRegister, eq_comm]
-  · simp [JoltProgram.honestWitness, HonestWitness.RdWa,
+  · simp [HonestTrace.honestWitness, HonestWitness.RdWa,
       HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
 
 end JoltConstraints

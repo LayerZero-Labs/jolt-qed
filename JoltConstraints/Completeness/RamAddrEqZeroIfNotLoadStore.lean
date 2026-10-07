@@ -20,20 +20,20 @@ private theorem ramAddressZeroWhenNotMemory {F : Type} [Field F]
 /-- Completeness target for the honest witness; proof pending. -/
 theorem honestWitness_ramAddrEqZeroIfNotLoadStore
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     ramAddrEqZeroIfNotLoadStore
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
-  · simpa [JoltProgram.honestWitness, HonestWitness.OpFlags,
+  · simpa [HonestTrace.honestWitness, HonestWitness.OpFlags,
       HonestWitness.RamAddress, JoltMetadata.circuitFlag, inBounds] using
         (ramAddressZeroWhenNotMemory (F := F)
-          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
+          (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
           (trace.rows[t.val]'inBounds).preState)
-  · simp [JoltProgram.honestWitness, HonestWitness.OpFlags,
+  · simp [HonestTrace.honestWitness, HonestWitness.OpFlags,
       HonestWitness.RamAddress, inBounds]
 
 end JoltConstraints

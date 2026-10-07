@@ -13,19 +13,19 @@ open scoped BigOperators
 The domain contains every expanded row and the leading no-op slot. -/
 theorem honestWitness_instructionRafFlagEqBytecodeRead
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
-    : instructionRafFlagEqBytecodeRead program
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    : instructionRafFlagEqBytecodeRead trace
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   rw [bytecodeRead_honest params trace ramFits traceFits bytecodeDomain
-    (bytecodeRafFlag program) t]
+    (bytecodeRafFlag trace) t]
   by_cases h : t.val < trace.rows.size
-  · simp [JoltProgram.honestWitness, HonestWitness.InstructionRafFlag,
+  · simp [HonestTrace.honestWitness, HonestWitness.InstructionRafFlag,
       HonestWitness.bytecodePc, bytecodeRafFlag, bytecodeRow, h]
-  · simp [JoltProgram.honestWitness, HonestWitness.InstructionRafFlag,
+  · simp [HonestTrace.honestWitness, HonestWitness.InstructionRafFlag,
       HonestWitness.bytecodePc, bytecodeRafFlag, bytecodeRow, h]
 
 end JoltConstraints

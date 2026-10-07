@@ -17,23 +17,23 @@ Each bytecode row certifies that its register operands follow the ISA address ma
 The proof must relate the replayed register history to the captured ISA values. -/
 theorem honestWitness_rs1ValueEqRegistersRead
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
-      JoltISA.sourceValue src program.initialState = 0) :
+      JoltISA.sourceValue src trace.initialState = 0) :
     rs1ValueEqRegistersRead
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   change HonestWitness.Rs1Value params trace t =
     ∑ register : Fin 128,
       HonestWitness.Rs1Ra params trace register t *
         HonestWitness.RegistersVal params trace register t
   by_cases hb : t.val < trace.rows.size
-  · let instr := program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction
+  · let instr := trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction
     have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
-      program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].registerOperandsCanonical
+      trace.registerOperandsCanonical (trace.rows[t.val]'hb).rowIndex
     have hra := rs1Ra_real (F := F) params trace t hb
     rw [rs1Value_real (F := F) params trace t hb]
     change (match rs1Operand? instr with

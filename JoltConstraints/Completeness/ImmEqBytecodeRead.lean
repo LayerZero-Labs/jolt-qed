@@ -10,23 +10,23 @@ namespace JoltConstraints
 open scoped BigOperators
 
 /-- The honest witness satisfies constraint (45).
-The bytecode domain must contain every program row and the leading no-op slot.
+The bytecode domain must contain every trace row and the leading no-op slot.
 This bound prevents the address chunks from truncating an executed bytecode PC. -/
 theorem honestWitness_immEqBytecodeRead
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
-    immEqBytecodeRead program
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    immEqBytecodeRead trace
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   rw [bytecodeRead_honest params trace ramFits traceFits bytecodeDomain
-    (bytecodeImmediate program) t]
+    (bytecodeImmediate trace) t]
   by_cases h : t.val < trace.rows.size
-  · simp [JoltProgram.honestWitness, HonestWitness.Imm,
+  · simp [HonestTrace.honestWitness, HonestWitness.Imm,
       HonestWitness.bytecodePc, bytecodeImmediate, bytecodeRow, h]
-  · simp [JoltProgram.honestWitness, HonestWitness.Imm,
+  · simp [HonestTrace.honestWitness, HonestWitness.Imm,
       HonestWitness.bytecodePc, bytecodeImmediate, bytecodeRow, h]
 
 end JoltConstraints

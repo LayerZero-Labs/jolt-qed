@@ -100,6 +100,29 @@ theorem expand_instruction_starts_source (source : SourceInstructionRow SourceIn
       simp only [JoltInstructionRow.starts_source, stamp_sequence, List.getElem_map,
         List.getElem_zipIdx, Nat.zero_add, Option.isNone_some, Bool.false_or]
 
+-- A row with no countdown is a native row, which is not first in a sequence.
+theorem expand_instruction_ordinary (source : SourceInstructionRow SourceInstruction)
+    (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows)
+    (k : Nat) (inRange : k < rows.length)
+    (noCount : rows[k].virtual_sequence_remaining = none) :
+    rows[k].is_first_in_sequence = false := by
+  unfold expand_instruction at expanded
+  split at expanded
+  · -- no expansion
+    cases expanded
+  · -- a native instruction: its single row is not first in a sequence
+    cases expanded
+    simp only [List.length_singleton] at inRange
+    have first : k = 0 := by omega
+    subst first
+    rfl
+  · split at expanded
+    · cases expanded
+    · -- a sequence: every stamped row has a count, so this case cannot happen
+      cases expanded
+      simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx] at noCount
+      cases noCount
+
 -- Only an instruction's last row carries its compressed flag.
 theorem expand_instruction_compressed (source : SourceInstructionRow SourceInstruction)
     (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows)
@@ -134,6 +157,8 @@ structure ExpandedRows (address : BitVec 64) (is_compressed : Bool)
   starts : ∀ (k : Nat) (inRange : k < rows.length), rows[k].starts_source = (k == 0)
   compressed : ∀ (k : Nat) (inRange : k < rows.length),
     rows[k].is_compressed = (k == rows.length - 1 && is_compressed)
+  ordinary : ∀ (k : Nat) (inRange : k < rows.length),
+    rows[k].virtual_sequence_remaining = none → rows[k].is_first_in_sequence = false
 
 -- Whatever expand_instruction returns are the instruction's expanded rows.
 theorem expand_instruction_expandedRows (source : SourceInstructionRow SourceInstruction)
@@ -144,6 +169,7 @@ theorem expand_instruction_expandedRows (source : SourceInstructionRow SourceIns
   countdown := expand_instruction_countdown source rows expanded
   starts := expand_instruction_starts_source source rows expanded
   compressed := expand_instruction_compressed source rows expanded
+  ordinary := expand_instruction_ordinary source rows expanded
 
 -- In rows laid end to end, a row that is not its instruction's last row is followed
 -- by that instruction's next row.

@@ -20,13 +20,13 @@ proves that every Rust-constructed device satisfies it. Output growth needs no
 premise here: both sides overlay the same final output buffer. -/
 theorem honestWitness_ramOutputEqPublicIo
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
-    (adviceBelowInput : program.initialState.jolt_device.AdviceBelowInput)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
     : ramOutputEqPublicIo (HonestWitness.finalTraceState trace).jolt_device
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro address
   change ramPublicIoMask (HonestWitness.finalTraceState trace).jolt_device address.val *
     (HonestWitness.RamValFinal (F := F) params trace address -

@@ -11,18 +11,18 @@ open scoped BigOperators
 Nonzero accessed addresses and RamFits exclude cold selectors on real memory accesses. -/
 theorem honestWitness_ramWriteValueEqRamReadWrite
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (validAccesses : ramAccessesValid trace)
     : ramWriteValueEqRamReadWrite
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   change HonestWitness.RamWriteValue (F := F) params trace t =
     ∑ address : Fin params.ramSize,
-      HonestWitness.RamRa params trace ramFits address t *
-        (HonestWitness.RamVal params trace ramFits address t +
+      HonestWitness.RamRa params trace address t *
+        (HonestWitness.RamVal params trace address t +
           HonestWitness.RamInc params trace t)
   cases hr : HonestWitness.remappedRamAddress trace t.val with
   | none =>

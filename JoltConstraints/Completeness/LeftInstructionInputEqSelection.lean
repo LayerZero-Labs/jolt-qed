@@ -15,20 +15,20 @@ private theorem leftOperandFlagsExclusive (instruction : JoltISA.Instr) :
 /-- The honest witness satisfies constraint (32). -/
 theorem honestWitness_leftInstructionInputEqSelection
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     leftInstructionInputEqSelection
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases h : t.val < trace.rows.size
   · let instruction :=
-      (getElem program.expandedBytecode
+      (getElem trace.bytecode
         (getElem trace.rows t.val h).rowIndex.val
-        (getElem trace.rows t.val h).rowIndex.isLt).expandedInstruction
+        (getElem trace.rows t.val h).rowIndex.isLt).instruction
     have hex := leftOperandFlagsExclusive instruction
-    dsimp [leftInstructionInputEqSelection, JoltProgram.honestWitness,
+    dsimp [leftInstructionInputEqSelection, HonestTrace.honestWitness,
       HonestWitness.LeftInstructionInput, HonestWitness.InstructionFlags]
     simp only [dif_pos h]
     by_cases hpc : JoltMetadata.instructionFlag instruction .LeftOperandIsPC = true
@@ -45,7 +45,7 @@ theorem honestWitness_leftInstructionInputEqSelection
         · cases hrs' : JoltMetadata.instructionFlag instruction .LeftOperandIsRs1Value with
           | true => exact False.elim (hrs hrs')
           | false => simp
-  · dsimp [leftInstructionInputEqSelection, JoltProgram.honestWitness,
+  · dsimp [leftInstructionInputEqSelection, HonestTrace.honestWitness,
       HonestWitness.LeftInstructionInput, HonestWitness.InstructionFlags]
     simp [h]
 

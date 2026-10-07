@@ -13,28 +13,28 @@ Uses the address-chunk selection and operand-encoding correspondence.
 This equation does not require any lookup-table output to be implemented. -/
 theorem honestWitness_leftLookupOperandEqInstructionRaf
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     : leftLookupOperandEqInstructionRaf
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   simp only [mul_assoc]
   rw [instructionRead_honest params trace ramFits traceFits bytecodeDomain
     (fun address =>
-      (1 - (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).InstructionRafFlag t) *
+      (1 - (HonestTrace.honestWitness (F := F) params trace).InstructionRafFlag t) *
         lookupAddressLeft address) t]
   by_cases inBounds : t.val < trace.rows.size
   · -- The selected index must deinterleave to Rust's captured left operand.
     -- Unfolding lookupAddressLeft drops the index's bound proof, so the row's
     -- instruction can be generalized and split by constructor.
-    simp only [JoltProgram.honestWitness, HonestWitness.LeftLookupOperand,
+    simp only [HonestTrace.honestWitness, HonestWitness.LeftLookupOperand,
       HonestWitness.InstructionRafFlag, HonestWitness.lookupIndex,
       HonestWitness.LeftInstructionInput, HonestWitness.Rs1Value, lookupAddressLeft,
       inBounds, dite_true]
-    generalize (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex.val]'
-      (trace.rows[t.val]'inBounds).rowIndex.isLt).expandedInstruction = instruction
+    generalize (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex.val]'
+      (trace.rows[t.val]'inBounds).rowIndex.isLt).instruction = instruction
     -- RAF rows are zero on both sides. Interleaved rows recover rs1, while
     -- FENCE, LD, SD, and HostIO have a zero left input and a zero index.
     cases instruction <;>
@@ -48,7 +48,7 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
     all_goals first
       | exact (sum_interleave_odd_bits _ _).symm
       | simp
-  · simp [JoltProgram.honestWitness, HonestWitness.LeftLookupOperand,
+  · simp [HonestTrace.honestWitness, HonestWitness.LeftLookupOperand,
       HonestWitness.InstructionRafFlag, HonestWitness.lookupIndex,
       lookupAddressLeft, inBounds]
 

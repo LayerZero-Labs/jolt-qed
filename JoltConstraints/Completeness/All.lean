@@ -10,21 +10,22 @@ The branch completeness result currently uses `sorry`; this theorem inherits
 that admission until its proof and the Lean model are completed. -/
 theorem honestWitness_allConstraints
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (entry : Fin (2 ^ params.logBytecodeK))
     (terminated : trace.Terminated)
     (startsAtEntry : (getElem trace.rows 0 terminated.nonempty).rowIndex.val + 1 = entry.val)
     (validAccesses : ramAccessesValid trace)
     (hAssertEqPasses : assertEqPasses trace)
-    (adviceBelowInput : program.initialState.jolt_device.AdviceBelowInput)
+    (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
     (initialRegistersZero : ∀ src : JoltISA.Src,
-      JoltISA.sourceValue src program.initialState = 0)
-    (ramChunksPos : 0 < params.ramChunks) :
-    AllConstraints program (HonestWitness.finalTraceState trace).jolt_device entry
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      JoltISA.sourceValue src trace.initialState = 0)
+    (ramChunksPos : 0 < params.ramChunks)
+    (noWrap : joltInstance.program.NextPCNoWrap) :
+    AllConstraints trace (HonestWitness.finalTraceState trace).jolt_device entry
+      (HonestTrace.honestWitness (F := F) params trace) := by
   have hlayout := (finalTraceState_ioSame trace).1
   refine {
     -- Stage 1: base RV64 relations
@@ -41,12 +42,12 @@ theorem honestWitness_allConstraints
     rightLookupEqRightInputOtherwise := honestWitness_rightLookupEqRightInputOtherwise params trace ramFits traceFits bytecodeDomain
     assertLookupOne := honestWitness_assertLookupOne params trace ramFits traceFits bytecodeDomain hAssertEqPasses
     rdWriteEqLookupIfWriteLookupToRd := honestWitness_rdWriteEqLookupIfWriteLookupToRd params trace ramFits traceFits bytecodeDomain
-    rdWriteEqPCPlusConstIfJump := honestWitness_rdWriteEqPCPlusConstIfJump params trace ramFits traceFits bytecodeDomain
+    rdWriteEqPCPlusConstIfJump := honestWitness_rdWriteEqPCPlusConstIfJump params trace ramFits traceFits bytecodeDomain noWrap
     nextUnexpandedPCEqLookupIfShouldJump := honestWitness_nextUnexpandedPCEqLookupIfShouldJump params trace ramFits terminated traceFits bytecodeDomain
     nextUnexpandedPCEqPCPlusImmIfShouldBranch :=
       honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
         params trace ramFits terminated traceFits bytecodeDomain
-    nextUnexpandedPCUpdateOtherwise := honestWitness_nextUnexpandedPCUpdateOtherwise params trace ramFits terminated traceFits bytecodeDomain
+    nextUnexpandedPCUpdateOtherwise := honestWitness_nextUnexpandedPCUpdateOtherwise params trace ramFits terminated traceFits bytecodeDomain noWrap
     nextPCEqPCPlusOneIfInline := honestWitness_nextPCEqPCPlusOneIfInline params trace ramFits terminated traceFits bytecodeDomain
     mustStartSequenceFromBeginning := honestWitness_mustStartSequenceFromBeginning params trace ramFits traceFits bytecodeDomain
     -- Stage 2: product and RAM relations

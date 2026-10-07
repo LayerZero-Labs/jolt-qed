@@ -14,13 +14,13 @@ snapshot is not just the last RamVal column. Audit Rust-valid executions before
 adding assumptions or attempting this theorem. -/
 theorem honestWitness_ramValFinalEqInitialPlusRamInc
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (validAccesses : ramAccessesValid trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
-    : ramValFinalEqInitialPlusRamInc program
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    : ramValFinalEqInitialPlusRamInc trace
+      (HonestTrace.honestWitness (F := F) params trace) := by
   sorry
 
 end JoltConstraints

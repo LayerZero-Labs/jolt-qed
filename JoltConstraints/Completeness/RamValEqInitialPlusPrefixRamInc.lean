@@ -15,13 +15,13 @@ sets `RamVal` to that captured zero, violating the strict prefix sum. See
 device behavior; do not narrow the theorem to exclude this Rust-accepted trace. -/
 theorem honestWitness_ramValEqInitialPlusPrefixRamInc
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (validAccesses : ramAccessesValid trace)
-    : ramValEqInitialPlusPrefixRamInc program
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+    : ramValEqInitialPlusPrefixRamInc trace
+      (HonestTrace.honestWitness (F := F) params trace) := by
   sorry
 
 end JoltConstraints

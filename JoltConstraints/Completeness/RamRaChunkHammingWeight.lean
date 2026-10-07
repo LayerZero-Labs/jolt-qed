@@ -15,20 +15,20 @@ RamFits ensures every nonzero raw access remaps, so the raw-address activity
 flag agrees with the presence of a selected RAM chunk entry. -/
 theorem honestWitness_ramRaChunkHammingWeight
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     ramRaChunkHammingWeight
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk t
   by_cases h : t.val < trace.rows.size
   · let row := getElem trace.rows t.val h
     let instruction :=
-      (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+      (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
     have fits := ramFits ⟨t.val, h⟩
     dsimp [WitnessParams.RamFits] at fits
-    dsimp [ramRaChunkHammingWeight, JoltProgram.honestWitness,
+    dsimp [ramRaChunkHammingWeight, HonestTrace.honestWitness,
       HonestWitness.RamRaChunk, HonestWitness.RamHammingWeight,
       HonestWitness.remappedRamAddress]
     simp only [dif_pos h]
@@ -45,7 +45,7 @@ theorem honestWitness_ramRaChunkHammingWeight
           simp [HonestWitness.remapRamAddress] at hremap
         simp [hremap, HonestWitness.sum_addressChunkEntry_some]
         exact hnonzero
-  · simp [JoltProgram.honestWitness,
+  · simp [HonestTrace.honestWitness,
       HonestWitness.RamRaChunk, HonestWitness.RamHammingWeight,
       HonestWitness.remappedRamAddress, HonestWitness.addressChunkEntry, h]
 

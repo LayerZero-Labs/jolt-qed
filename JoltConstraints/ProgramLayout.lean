@@ -33,6 +33,9 @@ structure BytecodeLayout (bytecode : Array JoltInstructionRow) : Prop where
       some (bytecode[i].virtual_sequence_remaining.getD 0 - 1) ∧
     bytecode[j].is_first_in_sequence = false ∧
     bytecode[i].is_compressed = false
+  -- A row with no countdown is a native row, so it is not first in a sequence.
+  ordinary : ∀ i : Fin bytecode.size,
+    bytecode[i].virtual_sequence_remaining = none → bytecode[i].is_first_in_sequence = false
 
 -- The rows Rust's expansion produces have this layout.
 theorem expand_program_layout (image : Rv64ProgramImage SourceInstruction)
@@ -86,6 +89,16 @@ theorem expand_program_layout (image : Rv64ProgramImage SourceInstruction)
     apply BitVec.eq_of_toNat_eq
     rw [BitVec.toNat_sub_of_le positive, countDown]
     rfl
+  · -- a row without a countdown is native, so not first in a sequence
+    intro i noCount
+    have member : (instructions.flatten.toArray)[i] ∈ instructions.flatten := by
+      simp only [Fin.getElem_fin, List.getElem_toArray]
+      exact List.getElem_mem _
+    obtain ⟨rows, inInstructions, inRows⟩ := List.mem_flatten.mp member
+    obtain ⟨k, inRange, atK⟩ := List.mem_iff_getElem.mp inRows
+    obtain ⟨_, _, expandedRows⟩ := valid rows inInstructions
+    rw [← atK] at noCount ⊢
+    exact expandedRows.ordinary k inRange noCount
 
 -- The bytecode of an honest trace has this layout.
 theorem HonestTrace.layout {joltInstance : JoltInstance SourceInstruction}

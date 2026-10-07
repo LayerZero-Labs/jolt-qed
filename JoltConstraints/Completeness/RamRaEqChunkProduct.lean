@@ -15,13 +15,13 @@ At least one RAM chunk is required: a padding row has RamRa = 0, whereas an
 empty product is 1. RamFits rules out remapping failures and address truncation. -/
 theorem honestWitness_ramRaEqChunkProduct
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (ramChunksPos : 0 < params.ramChunks) :
     ramRaEqChunkProduct
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   have cover : params.logRamK ≤ params.ramChunks * params.chunkBits := by
     dsimp [WitnessParams.ramChunks]
     have hrem := Nat.mod_lt (params.logRamK + params.chunkBits - 1)
@@ -35,7 +35,7 @@ theorem honestWitness_ramRaEqChunkProduct
       simpa [Nat.mul_comm] using hdiv
     omega
   intro address t
-  dsimp [ramRaEqChunkProduct, JoltProgram.honestWitness,
+  dsimp [ramRaEqChunkProduct, HonestTrace.honestWitness,
     HonestWitness.RamRa, HonestWitness.RamRaChunk]
   cases hr : HonestWitness.remappedRamAddress trace t.val with
   | none =>

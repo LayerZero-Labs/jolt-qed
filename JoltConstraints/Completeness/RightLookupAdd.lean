@@ -33,21 +33,21 @@ private theorem masked_mod_128 (value : Nat) :
 /-- Completeness target for the honest witness. -/
 theorem honestWitness_rightLookupAdd
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     rightLookupAdd
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases h : t.val < trace.rows.size
   · let row := getElem trace.rows t.val h
-    let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-    by_cases ha : JoltMetadata.opcodeFlag bytecodeRow.expandedInstruction .AddOperands = true
+    let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
+    by_cases ha : JoltMetadata.opcodeFlag bytecodeRow.instruction .AddOperands = true
     · have heq : HonestWitness.RightLookupOperand (F := F) params trace t =
           HonestWitness.LeftInstructionInput (F := F) params trace t +
           HonestWitness.RightInstructionInput (F := F) params trace t := by
-        cases hi : bytecodeRow.expandedInstruction
+        cases hi : bytecodeRow.instruction
         all_goals simp [JoltMetadata.opcodeFlag, hi] at ha
         all_goals simp only [bytecodeRow, row] at hi
         all_goals
@@ -60,10 +60,10 @@ theorem honestWitness_rightLookupAdd
         all_goals (try simp [addWide_cast, narrow_mod_128, JoltMetadata.immediate])
         all_goals simp [masked_mod_128]
         all_goals norm_cast
-      simp [JoltProgram.honestWitness, HonestWitness.OpFlags,
+      simp [HonestTrace.honestWitness, HonestWitness.OpFlags,
         JoltMetadata.circuitFlag, h, heq]
-    · simp [JoltProgram.honestWitness,
+    · simp [HonestTrace.honestWitness,
         HonestWitness.OpFlags, JoltMetadata.circuitFlag, h, ha, bytecodeRow, row]
-  · simp [JoltProgram.honestWitness, HonestWitness.OpFlags, h]
+  · simp [HonestTrace.honestWitness, HonestWitness.OpFlags, h]
 
 end JoltConstraints

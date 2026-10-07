@@ -222,9 +222,9 @@ structure Rv64ProgramImage (Source : Type) where
 
 -- No instruction's next PC, its address plus its length (2 if compressed, else 4),
 -- passes 2^64.
--- WARNING: assumed. Asked a16z on 2026-10-07, no answer yet: can an ELF that Jolt
--- accepts contain an instruction whose next PC, its address plus its length (2 or 4),
--- passes 2^64 and wraps around to 0? (model_review.md, Upstream issues)
+-- Assumed: a16z confirmed on 2026-10-07 that the PC is not allowed to wrap; an ELF
+-- with an instruction whose next PC, its address plus its length (2 or 4), passes
+-- 2^64 is an illegal ELF. (model_review.md, Upstream issues)
 def Rv64ProgramImage.NextPCNoWrap {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
   ∀ row ∈ image.instructions, row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 

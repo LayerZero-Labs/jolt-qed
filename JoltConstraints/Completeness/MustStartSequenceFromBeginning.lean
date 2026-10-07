@@ -11,22 +11,22 @@ namespace JoltConstraints
 private theorem array_fin_index {α : Type} (a : Array α) (i : Fin a.size) :
     a[i] = a[i.val] := rfl
 
-private theorem virtual_flag_eq_first_of_entry (program : JoltProgram)
-    (layout : program.SequenceLayout) (i : Fin program.expandedBytecode.size)
-    (hentry : program.expandedBytecode[i].isEntry) :
-    JoltMetadata.circuitFlag program.expandedBytecode[i] .VirtualInstruction =
-      JoltMetadata.circuitFlag program.expandedBytecode[i] .IsFirstInSequence := by
-  change program.expandedBytecode[i].virtualSequenceRemaining.isSome =
-    program.expandedBytecode[i].isFirstInSequence
-  cases hs : program.expandedBytecode[i].virtualSequenceRemaining with
+private theorem virtual_flag_eq_first_of_entry {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
+    (layout : BytecodeLayout trace.bytecode) (i : Fin trace.bytecode.size)
+    (hentry : trace.bytecode[i].starts_source = true) :
+    JoltMetadata.circuitFlag trace.bytecode[i] .VirtualInstruction =
+      JoltMetadata.circuitFlag trace.bytecode[i] .IsFirstInSequence := by
+  change trace.bytecode[i].virtual_sequence_remaining.isSome =
+    trace.bytecode[i].is_first_in_sequence
+  cases hs : trace.bytecode[i].virtual_sequence_remaining with
   | none =>
       have hfirst := layout.ordinary i hs
       simp only [array_fin_index] at hs hfirst ⊢
       simp [hfirst]
   | some n =>
-      have hfirst : program.expandedBytecode[i].isFirstInSequence = true := by
-        change program.expandedBytecode[i].virtualSequenceRemaining = none ∨
-          program.expandedBytecode[i].isFirstInSequence = true at hentry
+      have hfirst : trace.bytecode[i].is_first_in_sequence = true := by
+        unfold JoltInstructionRow.starts_source at hentry
         simp only [array_fin_index] at hs hentry ⊢
         simpa [hs] using hentry
       simp only [array_fin_index] at hs hfirst ⊢
@@ -37,30 +37,30 @@ The trace type supplies fetched addresses and source/virtual sequence boundaries
 termination and arithmetic bounds are required separately where used. -/
 theorem honestWitness_mustStartSequenceFromBeginning
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     mustStartSequenceFromBeginning
-      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases hnextWitness : t.val + 1 < params.traceLength
   · by_cases hnextTrace : t.val + 1 < trace.rows.size
     · have ht : t.val < trace.rows.size := by omega
       let row := getElem trace.rows t.val ht
       let nextRow := getElem trace.rows (t.val + 1) hnextTrace
-      let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-      let nextBytecodeRow := getElem program.expandedBytecode
+      let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
+      let nextBytecodeRow := getElem trace.bytecode
         nextRow.rowIndex.val nextRow.rowIndex.isLt
       by_cases hcont : bytecodeRow.continues = true
       · have hflag : JoltMetadata.circuitFlag bytecodeRow
             .DoNotUpdateUnexpandedPC = true := by
-          simpa [JoltMetadata.circuitFlag, JoltProgramRow.continues] using hcont
+          simpa [JoltMetadata.circuitFlag, JoltInstructionRow.continues] using hcont
         have hflag' : JoltMetadata.circuitFlag
-            program.expandedBytecode[trace.rows[t.val].rowIndex] .DoNotUpdateUnexpandedPC =
+            trace.bytecode[trace.rows[t.val].rowIndex] .DoNotUpdateUnexpandedPC =
               true := by
           simpa only [bytecodeRow, row] using hflag
-        dsimp [mustStartSequenceFromBeginning, JoltProgram.honestWitness,
+        dsimp [mustStartSequenceFromBeginning, HonestTrace.honestWitness,
           HonestWitness.OpFlags]
         simp only [dif_pos ht]
         simp only [array_fin_index] at hflag' ⊢
@@ -69,27 +69,27 @@ theorem honestWitness_mustStartSequenceFromBeginning
         have hsucc := trace.successor t.val ht hnextTrace
         change (if bytecodeRow.continues then _ else
           row.postState.sail.regs.get? Register.nextPC = some nextBytecodeRow.address ∧
-          nextBytecodeRow.isEntry ∧ nextBytecodeRow.address ≠ bytecodeRow.address) at hsucc
+          nextBytecodeRow.starts_source = true ∧ nextBytecodeRow.address ≠ bytecodeRow.address) at hsucc
         simp only [hfalse, Bool.false_eq_true, ↓reduceIte] at hsucc
-        have hflags := virtual_flag_eq_first_of_entry program trace.sequenceLayout
+        have hflags := virtual_flag_eq_first_of_entry trace trace.layout
           nextRow.rowIndex hsucc.2.1
         have hflags' : JoltMetadata.circuitFlag
-            program.expandedBytecode[trace.rows[t.val + 1].rowIndex]
+            trace.bytecode[trace.rows[t.val + 1].rowIndex]
               .VirtualInstruction = JoltMetadata.circuitFlag
-            program.expandedBytecode[trace.rows[t.val + 1].rowIndex]
+            trace.bytecode[trace.rows[t.val + 1].rowIndex]
               .IsFirstInSequence := by
           simpa only [nextRow] using hflags
-        dsimp [mustStartSequenceFromBeginning, JoltProgram.honestWitness,
+        dsimp [mustStartSequenceFromBeginning, HonestTrace.honestWitness,
           HonestWitness.NextIsVirtual, HonestWitness.NextIsFirstInSequence,
           HonestWitness.OpFlags]
         simp only [dif_pos hnextWitness, dif_pos hnextTrace, dif_pos ht]
         simp only [array_fin_index] at hflags' ⊢
         rw [hflags']
         ring
-    · simp [JoltProgram.honestWitness, HonestWitness.NextIsVirtual,
+    · simp [HonestTrace.honestWitness, HonestWitness.NextIsVirtual,
         HonestWitness.NextIsFirstInSequence, HonestWitness.OpFlags,
         hnextWitness, hnextTrace]
-  · simp [JoltProgram.honestWitness, HonestWitness.NextIsVirtual,
+  · simp [HonestTrace.honestWitness, HonestWitness.NextIsVirtual,
       HonestWitness.NextIsFirstInSequence, hnextWitness]
 
 end JoltConstraints

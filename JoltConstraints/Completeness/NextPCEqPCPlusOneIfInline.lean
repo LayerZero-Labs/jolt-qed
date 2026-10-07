@@ -8,15 +8,15 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-private theorem virtual_flag_eq_last_of_not_continues (row : JoltProgramRow)
+private theorem virtual_flag_eq_last_of_not_continues (row : JoltInstructionRow)
     (h : row.continues = false) :
     JoltMetadata.circuitFlag row .VirtualInstruction =
       JoltMetadata.circuitFlag row .IsLastInSequence := by
-  cases hs : row.virtualSequenceRemaining with
+  cases hs : row.virtual_sequence_remaining with
   | none => simp [JoltMetadata.circuitFlag, hs]
   | some n =>
       have hn : n = 0 := by
-        simp [JoltProgramRow.continues, hs] at h
+        simp [JoltInstructionRow.continues, hs] at h
         simpa using h
       subst n
       simp [JoltMetadata.circuitFlag, hs]
@@ -26,17 +26,17 @@ private theorem virtual_flag_eq_last_of_not_continues (row : JoltProgramRow)
 There is no jump-only or nonwrapping-arithmetic assumption. -/
 theorem honestWitness_nextPCEqPCPlusOneIfInline
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (terminated : trace.Terminated)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     nextPCEqPCPlusOneIfInline
-      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases ht : t.val < trace.rows.size
   · let row := getElem trace.rows t.val ht
-    let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
+    let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
     by_cases hcont : bytecodeRow.continues = true
     · have hnext : t.val + 1 < trace.rows.size := by
         by_contra hn
@@ -44,7 +44,7 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
           have := terminated.nonempty
           omega
         have hterm := terminated.atSourceEnd
-        change (getElem program.expandedBytecode
+        change (getElem trace.bytecode
           (getElem trace.rows (trace.rows.size - 1) (by omega)).rowIndex.val
           (getElem trace.rows (trace.rows.size - 1) (by omega)).rowIndex.isLt).continues = false at hterm
         have hterm' : bytecodeRow.continues = false := by
@@ -64,17 +64,17 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
         rw [hsucc]
         push_cast
         ring
-      dsimp [nextPCEqPCPlusOneIfInline, JoltProgram.honestWitness]
+      dsimp [nextPCEqPCPlusOneIfInline, HonestTrace.honestWitness]
       rw [hpc]
       ring
     · have hfalse : bytecodeRow.continues = false := Bool.eq_false_iff.mpr hcont
       have hflags := virtual_flag_eq_last_of_not_continues bytecodeRow hfalse
-      dsimp [nextPCEqPCPlusOneIfInline, JoltProgram.honestWitness,
+      dsimp [nextPCEqPCPlusOneIfInline, HonestTrace.honestWitness,
         HonestWitness.OpFlags]
       simp only [dif_pos ht]
       rw [hflags]
       ring
-  · simp [JoltProgram.honestWitness,
+  · simp [HonestTrace.honestWitness,
       HonestWitness.OpFlags, ht]
 
 end JoltConstraints

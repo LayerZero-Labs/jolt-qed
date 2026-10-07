@@ -72,12 +72,12 @@ The small and virtual chunks decompose the same 128-bit lookup address.
 WitnessParams carries both required chunk-width divisibility conditions. -/
 theorem honestWitness_instructionRaEqChunkProduct
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     instructionRaEqChunkProduct
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk address t
   let x := (HonestWitness.lookupIndex trace t.val).toNat
   let actual := HonestWitness.addressChunk params.virtualChunkBits chunk x

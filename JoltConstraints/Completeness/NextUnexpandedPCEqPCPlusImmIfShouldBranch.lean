@@ -13,13 +13,13 @@ The proof is pending alignment of the Lean trace and witness model with the
 reported Rust fix for the historical taken self-branch counterexample. -/
 theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (_terminated : trace.Terminated)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     nextUnexpandedPCEqPCPlusImmIfShouldBranch
-      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   sorry
 
 end JoltConstraints
