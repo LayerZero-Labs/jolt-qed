@@ -15,7 +15,6 @@ theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
-    (_terminated : trace.Terminated)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     nextUnexpandedPCEqPCPlusImmIfShouldBranch

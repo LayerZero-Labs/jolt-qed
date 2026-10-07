@@ -756,6 +756,14 @@ theorem withRuntimeAdvice_store {instruction : JoltISA.Instr} (advice : instruct
   subst isStore
   rfl
 
+-- A VirtualAssertEQ row carries no runtime advice, so it runs as it is in the bytecode.
+theorem withRuntimeAdvice_assert {instruction : JoltISA.Instr} (advice : instruction.RuntimeAdvice)
+    (lhs rhs : JoltISA.Src) (imm : BitVec 128)
+    (isAssert : instruction = .VirtualAssertEQ lhs rhs imm) :
+    instruction.withRuntimeAdvice advice = .VirtualAssertEQ lhs rhs imm := by
+  subst isAssert
+  rfl
+
 -- In an honest trace, every LD row reads from an address that is a multiple of 8.
 theorem HonestTraceRow.load_aligned {bytecode : Array JoltInstructionRow}
     (row : HonestTraceRow bytecode) (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)

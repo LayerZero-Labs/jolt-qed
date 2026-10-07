@@ -22,13 +22,13 @@ private theorem virtual_flag_eq_last_of_not_continues (row : JoltInstructionRow)
       simp [JoltMetadata.circuitFlag, hs]
 
 /-- Completeness target for a complete Rust trace, with its mandatory padding.
-`Terminated` includes every opcode allowed by Rust's repeated-PC stopping rule.
+A nonempty trace stops as Rust's tracer does (`HonestTrace.terminated`), for every
+opcode allowed by Rust's repeated-PC stopping rule.
 There is no jump-only or nonwrapping-arithmetic assumption. -/
 theorem honestWitness_nextPCEqPCPlusOneIfInline
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
-    (terminated : trace.Terminated)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     nextPCEqPCPlusOneIfInline
@@ -37,6 +37,7 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
   by_cases ht : t.val < trace.rows.size
   · let row := getElem trace.rows t.val ht
     let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
+    have terminated := trace.terminated (by omega)
     by_cases hcont : bytecodeRow.continues = true
     · have hnext : t.val + 1 < trace.rows.size := by
         by_contra hn

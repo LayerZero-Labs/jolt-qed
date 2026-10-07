@@ -179,10 +179,12 @@ To prove, not assume:
   `HonestTrace.store_nonzero` (`Constraints/RamReadSelection.lean`).
   `ramAccessesValid` now asks only for alignment and is proved
   (`HonestTrace.ram_accesses_valid`). An address that wraps to 0 stays bug (01).
-- **Entry address 0.** The trace is empty (a first row would sit at address 0,
-  below every bytecode address). Constraint (53) still holds: Rust's padding row
-  is a NoOp in slot 0 (`preprocess/bytecode.rs:65-68`), the entry slot is 0
-  (`bytecode.rs:121-123, 218-226`), and Lean's `bytecodePc` gives padding 0.
+- **Entry address 0.** Proved. The trace is empty (a first row would sit at
+  address 0, below every bytecode address). Constraint (53) still holds: Rust's
+  padding row is a NoOp in slot 0 (`preprocess/bytecode.rs:65-68`), the entry
+  slot is 0 (`bytecode.rs:121-123, 218-226`), and Lean's `bytecodePc` gives
+  padding 0 (`HonestTrace.entry_slot`). No completeness theorem takes
+  `Terminated` any more: where a row exists, `HonestTrace.terminated` supplies it.
 
 FIXME (modeled as it should be, not as Rust is):
 
@@ -201,6 +203,12 @@ Derived from the trace with Rust's `ProverConfig::derive_from_rows`
 program image ends at slot 2 or later, so archive item #13 (`ram_k = 1`) cannot
 arise from a derived configuration.
 
+The final theorem is `HonestTrace.allConstraints_rust_sizes`
+(`Completeness/All.lean`): every constraint holds at the sizes Rust's prover picks,
+with every premise of `honestWitness_allConstraints` discharged. It assumes only
+`accepted`, `SpoilAssertsPass` and `NextPCNoWrap`, plus `code_unchanged` (a trace
+field) and the 2 GiB RAM limit (`finalRamWord`).
+
 ## Upstream issues
 
 Every Jolt issue that stops a completeness proof, where we mark it, and what we
@@ -218,7 +226,7 @@ pass, escalate it.
 | [#1916](https://github.com/a16z/jolt/issues/1916) | A trace that ends on a taken self-branch breaks the next-PC constraint | fixed by PR [#1968](https://github.com/a16z/jolt/pull/1968) (merged 2026-10-06, upstream `00508a09`): the prover refuses traces whose last row is not a jump | modeled: `HonestTrace.prover_config` has the jump check; (16) can be proved during the rewiring |
 | [#1952](https://github.com/a16z/jolt/issues/1952) | The emulator fetches instructions from memory, the proof uses the decoded bytecode | open | assumed: field `HonestTrace.code_unchanged` (FIXME) |
 | none | The source PC wraps past 2^64 | a16z confirmed on 2026-10-07: the PC is not allowed to wrap; such an ELF is illegal | assumed for legal ELFs: `Rv64ProgramImage.NextPCNoWrap` |
-| none (asked a16z 2026-10-07) | Final RAM: a nonzero byte more than 2 GiB above `RAM_START` lands in the wrong slot, so the final-RAM check fails | reproduced at `8e536f19` (`bug-report/final-ram-over-2gib/`); code unchanged at `629ed77b` | modeled as it should be: `finalRamWord` (FIXME), the second exception after `ram_K` |
+| none | Final RAM: a nonzero byte 2 GiB or more above `RAM_START` lands in the wrong slot, so the final-RAM check fails | a16z confirmed on 2026-10-07: a run must not use RAM 2 GiB or more above `RAM_START`; reproduced at `8e536f19` (`bug-report/final-ram-over-2gib/`) | assumed (ASSUMPTION in `finalRamWord`); below 2 GiB Lean and Rust agree |
 | [#1914](https://github.com/a16z/jolt/issues/1914) | CSRRS writeback | closed, fixed (`f012bfb1`) | (13) proved |
 
 Not issues, by design: spoil asserts (`HonestTrace.SpoilAssertsPass`) and runs

@@ -254,3 +254,15 @@ theorem HonestTrace.witness_params_bytecode_domain {joltInstance : JoltInstance 
     rw [Nat.max_eq_right atLeastOne]
     omega
 
+-- Rust's sizes split a RAM slot number into at least one chunk: ram_K is at least 2,
+-- so logRamK is at least 1.
+theorem HonestTrace.witness_params_ram_chunks_pos {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    0 < (trace.witness_params config accepted).ramChunks := by
+  have atLeastTwo := trace.prover_config_ram_K_ge_two config accepted
+  have logPositive : 1 ≤ Nat.log2 config.ram_K := (Nat.le_log2 (by omega)).mpr atLeastTwo
+  have chunkPositive := (trace.witness_params config accepted).chunkBits_pos
+  unfold WitnessParams.ramChunks
+  change 0 < (Nat.log2 config.ram_K + _ - 1) / _
+  exact Nat.div_pos (by omega) chunkPositive

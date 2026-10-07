@@ -15,8 +15,7 @@ theorem honestWitness_allConstraints
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (entry : Fin (2 ^ params.logBytecodeK))
-    (terminated : trace.Terminated)
-    (startsAtEntry : (getElem trace.rows 0 terminated.nonempty).rowIndex.val + 1 = entry.val)
+    (startsAtEntry : HonestWitness.bytecodePc trace 0 = entry.val)
     (validAccesses : ramAccessesValid trace)
     (hAssertEqPasses : assertEqPasses trace)
     (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
@@ -43,12 +42,12 @@ theorem honestWitness_allConstraints
     assertLookupOne := honestWitness_assertLookupOne params trace ramFits traceFits bytecodeDomain hAssertEqPasses
     rdWriteEqLookupIfWriteLookupToRd := honestWitness_rdWriteEqLookupIfWriteLookupToRd params trace ramFits traceFits bytecodeDomain
     rdWriteEqPCPlusConstIfJump := honestWitness_rdWriteEqPCPlusConstIfJump params trace ramFits traceFits bytecodeDomain noWrap
-    nextUnexpandedPCEqLookupIfShouldJump := honestWitness_nextUnexpandedPCEqLookupIfShouldJump params trace ramFits terminated traceFits bytecodeDomain
+    nextUnexpandedPCEqLookupIfShouldJump := honestWitness_nextUnexpandedPCEqLookupIfShouldJump params trace ramFits traceFits bytecodeDomain
     nextUnexpandedPCEqPCPlusImmIfShouldBranch :=
       honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
-        params trace ramFits terminated traceFits bytecodeDomain
-    nextUnexpandedPCUpdateOtherwise := honestWitness_nextUnexpandedPCUpdateOtherwise params trace ramFits terminated traceFits bytecodeDomain noWrap
-    nextPCEqPCPlusOneIfInline := honestWitness_nextPCEqPCPlusOneIfInline params trace ramFits terminated traceFits bytecodeDomain
+        params trace ramFits traceFits bytecodeDomain
+    nextUnexpandedPCUpdateOtherwise := honestWitness_nextUnexpandedPCUpdateOtherwise params trace ramFits traceFits bytecodeDomain noWrap
+    nextPCEqPCPlusOneIfInline := honestWitness_nextPCEqPCPlusOneIfInline params trace ramFits traceFits bytecodeDomain
     mustStartSequenceFromBeginning := honestWitness_mustStartSequenceFromBeginning params trace ramFits traceFits bytecodeDomain
     -- Stage 2: product and RAM relations
     productEqLeftInputMulRightInput := honestWitness_productEqLeftInputMulRightInput params trace ramFits traceFits bytecodeDomain
@@ -89,7 +88,7 @@ theorem honestWitness_allConstraints
     rdWaEqBytecodeRead := honestWitness_rdWaEqBytecodeRead params trace ramFits traceFits bytecodeDomain
     lookupTableFlagEqBytecodeRead := honestWitness_lookupTableFlagEqBytecodeRead params trace ramFits traceFits bytecodeDomain
     instructionRafFlagEqBytecodeRead := honestWitness_instructionRafFlagEqBytecodeRead params trace ramFits traceFits bytecodeDomain
-    bytecodeRaAtEntryEqOne := honestWitness_bytecodeRaAtEntryEqOne params trace ramFits traceFits bytecodeDomain entry terminated.nonempty startsAtEntry
+    bytecodeRaAtEntryEqOne := honestWitness_bytecodeRaAtEntryEqOne params trace ramFits traceFits bytecodeDomain entry startsAtEntry
     instructionRaChunkBooleanity := honestWitness_instructionRaChunkBooleanity params trace ramFits traceFits bytecodeDomain
     bytecodeRaChunkBooleanity := honestWitness_bytecodeRaChunkBooleanity params trace ramFits traceFits bytecodeDomain
     ramRaChunkBooleanity := honestWitness_ramRaChunkBooleanity params trace ramFits traceFits bytecodeDomain
@@ -101,5 +100,96 @@ theorem honestWitness_allConstraints
     bytecodeRaChunkHammingWeight := honestWitness_bytecodeRaChunkHammingWeight params trace ramFits traceFits bytecodeDomain
     ramRaChunkHammingWeight := honestWitness_ramRaChunkHammingWeight params trace ramFits traceFits bytecodeDomain
   }
+
+-- Every assert in the run has equal sides: an ordinary one (imm = 0) executed, so its
+-- sides were equal; a spoil one (imm ≠ 0) is assumed to pass.
+theorem _root_.HonestTrace.assert_eq_passes {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (spoilAssertsPass : trace.SpoilAssertsPass) : assertEqPasses trace := by
+  intro t
+  dsimp only
+  split
+  · rename_i lhs rhs imm isAssert
+    by_cases zero : imm = 0
+    · -- an ordinary assert
+      subst zero
+      have runs := (trace.rows[t]).executes
+      rw [withRuntimeAdvice_assert (instruction := trace.bytecode[trace.rows[t].rowIndex].instruction)
+        _ lhs rhs 0 isAssert] at runs
+      exact assert_eq_holds lhs rhs _ _ _ runs
+    · -- a spoil assert
+      exact spoilAssertsPass _ (Array.getElem_mem t.isLt) lhs rhs imm isAssert zero
+  · trivial
+
+-- Both advice buffers of the starting device lie below the inputs, which start a whole
+-- number of 64-bit words above the lowest address.
+theorem _root_.HonestTrace.advice_below_input {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
+    trace.initialState.jolt_device.AdviceBelowInput := by
+  have below := initial_state_advice_below_input joltInstance privateInputs trace.initialState
+    trace.initialized
+  rw [MemoryLayout.get_lowest_address_toNat] at below
+  exact ⟨below.1, below.2.1, below.2.2⟩
+
+-- Rust's entry slot is where the witness starts: the first row's slot, or the NoOp's
+-- slot 0 when the trace is empty (the entry address is then 0).
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
+theorem _root_.HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
+    (entrySlot : Nat)
+    (entryIsRust : get_first_pc slots joltInstance.program.entry_address = some entrySlot) :
+    HonestWitness.bytecodePc trace 0 = entrySlot := by
+  by_cases nonempty : 0 < trace.rows.size
+  · -- the trace starts at the entry slot
+    have first := trace.starts_at_entry slots preprocessed (getElem trace.rows 0 nonempty)
+      (Array.getElem?_eq_getElem nonempty)
+    rw [first] at entryIsRust
+    rw [HonestWitness.bytecodePc, dif_pos nonempty]
+    exact Option.some.inj entryIsRust
+  · -- with no rows the entry address is 0, which get_first_pc maps to the NoOp
+    have zero : joltInstance.program.entry_address = 0 := by
+      by_contra notZero
+      exact nonempty (trace.nonempty notZero)
+    rw [zero] at entryIsRust
+    unfold get_first_pc at entryIsRust
+    rw [if_pos rfl] at entryIsRust
+    rw [HonestWitness.bytecodePc, dif_neg nonempty]
+    exact Option.some.inj entryIsRust
+
+-- Every constraint holds for the honest witness at the sizes Rust's prover picks for the
+-- run. What is assumed: Rust's prover accepts the run (`accepted`; the open issues that
+-- stop it are in model_review.md), no spoil assert fails, the PC does not wrap (a16z),
+-- and, inside the trace and the witness, the code does not change during the run
+-- (`code_unchanged`, #1952) and the run uses no RAM 2 GiB or more above RAM_START
+-- (`finalRamWord`, a16z). `slots` and `entry` name what Rust computes; they always exist.
+theorem _root_.HonestTrace.allConstraints_rust_sizes
+    {F : Type} [Field F]
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
+    -- Rust's prover accepts the run and picks these sizes
+    (config : ProverConfig) (accepted : trace.prover_config = some config)
+    -- Rust's preprocessed bytecode, and the entry slot its verifier uses
+    (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
+    (entry : Fin (2 ^ (trace.witness_params config accepted).logBytecodeK))
+    (entryIsRust : get_first_pc slots joltInstance.program.entry_address = some entry.val)
+    -- assumed: no spoil assert fails
+    (spoilAssertsPass : trace.SpoilAssertsPass)
+    -- assumed: a legal ELF's PC does not wrap (a16z confirmed)
+    (noWrap : joltInstance.program.NextPCNoWrap) :
+    AllConstraints trace (HonestWitness.finalTraceState trace).jolt_device entry
+      (trace.honestWitness (F := F) (trace.witness_params config accepted)) :=
+  honestWitness_allConstraints (trace.witness_params config accepted) trace
+    (trace.witness_params_ram_fits config accepted)
+    (trace.witness_params_padded config accepted)
+    (trace.witness_params_bytecode_domain config accepted)
+    entry
+    (trace.entry_slot slots preprocessed entry.val entryIsRust)
+    trace.ram_accesses_valid
+    (trace.assert_eq_passes spoilAssertsPass)
+    trace.advice_below_input
+    trace.initialRegistersZero
+    (trace.witness_params_ram_chunks_pos config accepted)
+    noWrap
 
 end JoltConstraints

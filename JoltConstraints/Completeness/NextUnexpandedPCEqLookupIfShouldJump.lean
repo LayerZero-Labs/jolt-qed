@@ -182,13 +182,11 @@ private theorem jump_next_row_address {joltInstance : JoltInstance SourceInstruc
   exact Option.some.inj haddr.symm
 
 /-- Completeness target for a complete Rust trace, with its mandatory padding.
-`Terminated` includes every opcode allowed by Rust's repeated-PC stopping rule.
 There is no jump-only or nonwrapping-arithmetic assumption. -/
 theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
-    (_terminated : trace.Terminated)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     nextUnexpandedPCEqLookupIfShouldJump
