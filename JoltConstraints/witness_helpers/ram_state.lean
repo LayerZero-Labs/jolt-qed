@@ -53,6 +53,13 @@ noncomputable def initialRamWord {joltInstance : JoltInstance SourceInstruction}
 -- Use the final ISA RAM snapshot and device buffers. In particular, termination
 -- is an explicit witness word (1 unless panicked), even though device loads from
 -- the termination region return zero. Panic occupies one word, not eight 1 bytes.
+-- FIXME: this is what the final RAM should be, not what Rust computes today. Rust
+-- receives final memory as offsets from RAM_START but takes an offset of 2 GiB or
+-- more as an absolute address (crates/jolt-witness/src/backend/trace/ram.rs:204-214),
+-- so a nonzero byte more than 2 GiB above RAM_START lands in the wrong slot and the
+-- final-RAM check fails. Reproduced at 8e536f19 (bug-report/final-ram-over-2gib/);
+-- asked a16z on 2026-10-07. Here every byte stays in its own slot. Recheck once Rust
+-- changes.
 noncomputable def finalRamWord {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (address : Nat) : BitVec 64 :=
   let state := finalTraceState trace
