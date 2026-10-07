@@ -795,8 +795,7 @@ The table reads the right operand as a right-shift bitmask (ones from bit
 `VirtualSRL`/`VirtualSRLI` shifts by `ctz` of whatever mask the row carries.
 `bytecode` is any array here (see the FIXME above), so nothing constrains the
 mask shape.
-Counterexample: source `4`, mask `2`: entry `0`, output `4 >>> ctz 2 = 2`.
-See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
+Counterexample: source `4`, mask `2`: entry `0`, output `4 >>> ctz 2 = 2`. -/
 theorem lookupEntryCorrect_VirtualSRL (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRL) :
     LookupEntryCorrect F .VirtualSRL row := by
@@ -808,8 +807,7 @@ The table reads the right operand as a right-shift bitmask (ones from bit
 `VirtualSRA`/`VirtualSRAI` shifts by `ctz` of whatever mask the row carries.
 `bytecode` is any array here (see the FIXME above), so nothing constrains the
 mask shape.
-Counterexample: source `4`, mask `2`: entry `0`, output `4.sshiftRight 1 = 2`.
-See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
+Counterexample: source `4`, mask `2`: entry `0`, output `4.sshiftRight 1 = 2`. -/
 theorem lookupEntryCorrect_VirtualSRA (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRA) :
     LookupEntryCorrect F .VirtualSRA row := by
@@ -821,8 +819,7 @@ The table reads the right operand as a right-shift bitmask (ones from bit
 `VirtualSRLW`/`VirtualSRLIW` shifts by `ctz` of whatever mask the row carries.
 `bytecode` is any array here (see the FIXME above), so nothing constrains the
 mask shape.
-Counterexample: source `4`, mask `2`: entry `0`, output `2`. Also mask `0` for `VirtualSRLW`: entry `0`, output the sign-extended low word.
-See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
+Counterexample: source `4`, mask `2`: entry `0`, output `2`. Also mask `0` for `VirtualSRLW`: entry `0`, output the sign-extended low word. -/
 theorem lookupEntryCorrect_VirtualSRLW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRLW) :
     LookupEntryCorrect F .VirtualSRLW row := by
@@ -834,8 +831,7 @@ The table reads the right operand as a right-shift bitmask (ones from bit
 `VirtualSRAW`/`VirtualSRAIW` shifts by `ctz` of whatever mask the row carries.
 `bytecode` is any array here (see the FIXME above), so nothing constrains the
 mask shape.
-Counterexample: source `4`, mask `2`: entry `0`, output `2`.
-See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
+Counterexample: source `4`, mask `2`: entry `0`, output `2`. -/
 theorem lookupEntryCorrect_VirtualSRAW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRAW) :
     LookupEntryCorrect F .VirtualSRAW row := by
@@ -847,8 +843,7 @@ The table reads the right operand as a right-shift bitmask (ones from bit
 `VirtualROTRI` shifts by `ctz` of whatever mask the row carries.
 `bytecode` is any array here (see the FIXME above), so nothing constrains the
 mask shape.
-Counterexample: source `4`, mask `2`: entry `4`, output `rotater 4 1 = 2`.
-See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
+Counterexample: source `4`, mask `2`: entry `4`, output `rotater 4 1 = 2`. -/
 theorem lookupEntryCorrect_VirtualROTR (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTR) :
     LookupEntryCorrect F .VirtualROTR row := by
@@ -860,8 +855,7 @@ The table reads the right operand as a right-shift bitmask (ones from bit
 `VirtualROTRIW` shifts by `ctz` of whatever mask the row carries.
 `bytecode` is any array here (see the FIXME above), so nothing constrains the
 mask shape.
-Counterexample: source `4`, mask `2`: entry `4`, output `2`.
-See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
+Counterexample: source `4`, mask `2`: entry `4`, output `2`. -/
 theorem lookupEntryCorrect_VirtualROTRW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTRW) :
     LookupEntryCorrect F .VirtualROTRW row := by

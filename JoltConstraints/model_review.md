@@ -64,8 +64,8 @@ sources. They are leads to recheck, not settled findings.
   completeness theorems moved from `Constraints/` to `Completeness/`. Archive
   links still use the old locations.
 - Some Lean comments still cite `/Users/ari.biswas/...` paths.
-- `JoltConstraints/Tests` is listed in `.gitignore`, but its 16 modules are
-  tracked.
+- `JoltConstraints/Tests` was deleted after the honest-trace rewiring; its
+  modules were written against the old trace and are in history.
 - Rust's `trace_load` rounds the address down to a multiple of 4 before reading
   (`tracer/src/emulator/mmu.rs:480-481`); Lean's `trace_doubleword?` reads at
   the address as given. For LD this cannot differ, since `load_doubleword`
