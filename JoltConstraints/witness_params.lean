@@ -82,3 +82,78 @@ noncomputable def HonestTrace.witness_params
   logT_lt_usizeBits := trace.prover_config_log_trace_length_lt config accepted
   logRamK_lt_usizeBits := trace.prover_config_log_ram_K_lt config accepted
   logBytecodeK_lt_usizeBits := trace.log_bytecode_size_lt
+
+-- For n ≥ 1, the smallest power of two that holds n + 1 is the one just above n.
+theorem clog_succ_eq_log2_succ (n : Nat) (positive : 1 ≤ n) :
+    Nat.clog 2 (n + 1) = Nat.log2 n + 1 := by
+  have below := (Nat.lt_log2_self (n := n))
+  have above := Nat.log2_self_le (n := n) (by omega)
+  apply Nat.le_antisymm
+  · exact (Nat.clog_le_iff_le_pow (by decide : 1 < 2)).mpr (by omega)
+  · by_contra tooSmall
+    have fits := (Nat.clog_le_iff_le_pow (by decide : 1 < 2)
+      (x := n + 1) (y := Nat.log2 n)).mp (by omega)
+    omega
+
+-- Rust's padded length is the witness's prover length with Rust's 256-cycle floor.
+theorem padded_trace_length_eq_prover (rows : Nat) :
+    padded_trace_length rows = WitnessParams.proverTraceLength 8 rows := by
+  unfold padded_trace_length WitnessParams.proverTraceLength
+  have below := (Nat.lt_log2_self (n := rows))
+  split
+  · -- a short run: the power of two above it is at most 256
+    rename_i short
+    have small : 2 ^ (Nat.log2 rows + 1) ≤ 2 ^ 8 := by
+      apply Nat.pow_le_pow_right (by decide)
+      by_cases zero : rows = 0
+      · subst zero
+        decide
+      · have := (Nat.log2_lt zero (k := 8)).mpr (by omega)
+        omega
+    have floor : (2 : Nat) ^ 8 = 256 := rfl
+    omega
+  · -- a longer run: the power of two that holds rows + 1 is the one above rows
+    rename_i long
+    rw [clog_succ_eq_log2_succ rows (by omega)]
+    have floor : (2 : Nat) ^ 8 = 256 := rfl
+    omega
+
+-- The witness length Rust's sizes give is the run's padded length.
+theorem HonestTrace.witness_params_trace_length {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (trace.witness_params config accepted).traceLength = padded_trace_length trace.rows.size := by
+  obtain ⟨isPadded, _⟩ := trace.prover_config_trace_length config accepted
+  obtain ⟨_, _, log, isPower⟩ := padded_trace_length_spec trace.rows.size
+  unfold WitnessParams.traceLength HonestTrace.witness_params
+  dsimp only
+  rw [isPadded, isPower, Nat.log2_two_pow]
+
+-- Rust's sizes pad the run as its prover does (the old ProverPaddedFor assumption).
+theorem HonestTrace.witness_params_padded {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (trace.witness_params config accepted).ProverPaddedFor trace.rows.size := by
+  rw [WitnessParams.ProverPaddedFor, trace.witness_params_trace_length config accepted,
+    padded_trace_length_eq_prover]
+  exact ⟨Or.inl rfl, by
+    rw [← padded_trace_length_eq_prover]
+    exact (padded_trace_length_spec trace.rows.size).1⟩
+
+-- Rust's sizes give the bytecode its preprocessed size (the old BytecodeDomainFor
+-- assumption): a NoOp, the rows, and padding to a power of two, at least 2.
+theorem HonestTrace.witness_params_bytecode_domain {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (trace.witness_params config accepted).BytecodeDomainFor trace.bytecode.size := by
+  unfold WitnessParams.BytecodeDomainFor WitnessParams.preprocessedBytecodeSize
+    HonestTrace.witness_params
+  dsimp only
+  by_cases zero : Nat.clog 2 (trace.bytecode.size + 1) = 0
+  · rw [zero]
+    rfl
+  · have atLeastOne : 1 ≤ Nat.clog 2 (trace.bytecode.size + 1) := by omega
+    have big := Nat.pow_le_pow_right (by decide : 2 > 0) atLeastOne
+    rw [Nat.max_eq_right atLeastOne]
+    omega
+

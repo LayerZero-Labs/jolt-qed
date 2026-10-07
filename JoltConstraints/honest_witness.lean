@@ -1,27 +1,17 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.trace
+import JoltConstraints.honest_trace
 import JoltConstraints.witness_helpers
 
 set_option autoImplicit false
 
--- Rust paths are relative to /Users/ari.biswas/Work-with-A16z/jolt.
-
--- Rust: [oracle_table](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/oracle.rs).
--- Each helper receives the same successful, linked trace and can access
--- its rows and program.initialState.
--- Helpers fill p.traceLength witness positions, padding beyond trace.rows.size.
--- ramFits certifies that every nonzero RAM access is representable in p.ramSize.
--- The prover-padded-length premise matches Rust's selected cycle domain and
--- ensures that no execution suffix is omitted and a padding row remains.
--- The bytecode-domain premise matches Rust's leading no-op and power-of-two
--- bytecode padding before any witness column is constructed.
--- TODO: Eventually name it params and not p but its not a major issue for now
-noncomputable def JoltProgram.honestWitness {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
-    (ramFits : p.RamFits trace)
-    (_padded : p.ProverPaddedFor trace.rows.size)
-    (_bytecodeDomain : p.BytecodeDomainFor program.expandedBytecode.size) : WitnessType F p :=
+-- Rust: [oracle_table](https://github.com/a16z/jolt/blob/629ed77b5c999fb2f52e5781b2b98a04ed6cf5ed/crates/jolt-witness/src/backend/trace/oracle.rs).
+-- The honest witness: every column read from one honest trace. Positions beyond
+-- trace.rows.size are padding. The sizes `p` are any WitnessParams; the completeness
+-- theorems use Rust's (HonestTrace.witness_params) and the facts proved about them.
+noncomputable def HonestTrace.honestWitness {F : Type} [Field F] (p : WitnessParams)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) : WitnessType F p :=
   {
     PC := HonestWitness.PC p trace
     UnexpandedPC := HonestWitness.UnexpandedPC p trace
@@ -56,8 +46,8 @@ noncomputable def JoltProgram.honestWitness {F : Type} [Field F] (p : WitnessPar
     Rs2Ra := HonestWitness.Rs2Ra p trace
     RdWa := HonestWitness.RdWa p trace
     RegistersVal := HonestWitness.RegistersVal p trace
-    RamRa := HonestWitness.RamRa p trace ramFits
-    RamVal := HonestWitness.RamVal p trace ramFits
+    RamRa := HonestWitness.RamRa p trace
+    RamVal := HonestWitness.RamVal p trace
     RamValFinal := HonestWitness.RamValFinal p trace
     InstructionRaChunk := HonestWitness.InstructionRaChunk p trace
     BytecodeRaChunk := HonestWitness.BytecodeRaChunk p trace
