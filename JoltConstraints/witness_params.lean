@@ -21,15 +21,112 @@ theorem HonestTrace.prover_config_log_trace_length_lt
   rw [isPadded, isPower] at fitsMaximum
   exact (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp (by omega)
 
--- An accepted run's RAM size is 2^logRamK with logRamK below 64.
--- TODO: prove: every address a run touches is below heap_end (the MMU checks it), so
--- every touched slot, the program image end, and so ram_K, are at most 2^61.
+-- The largest of a list of numbers below a bound is below it; an empty list gives 0.
+theorem max?_getD_lt (numbers : List Nat) (bound : Nat) (positive : 0 < bound)
+    (allBelow : ∀ number ∈ numbers, number < bound) :
+    numbers.max?.getD 0 < bound := by
+  cases largest : numbers.max? with
+  | none => exact positive
+  | some number => exact allBelow number (List.max?_mem largest)
+
+-- The smallest of a list of numbers below a bound is below it; an empty list gives 0.
+theorem min?_getD_lt (numbers : List Nat) (bound : Nat) (positive : 0 < bound)
+    (allBelow : ∀ number ∈ numbers, number < bound) :
+    numbers.min?.getD 0 < bound := by
+  cases smallest : numbers.min? with
+  | none => exact positive
+  | some number => exact allBelow number (List.min?_mem smallest)
+
+-- A row's memory address is a 64-bit value.
+theorem HonestTraceRow.ram_address_lt {bytecode : Array JoltInstructionRow}
+    (row : HonestTraceRow bytecode) (address : Nat) (touches : row.ram_address = some address) :
+    address < 2 ^ 64 := by
+  unfold HonestTraceRow.ram_address at touches
+  split at touches
+  · -- LD
+    cases touches
+    exact BitVec.isLt _
+  · -- SD
+    cases touches
+    exact BitVec.isLt _
+  · -- no other instruction touches memory
+    cases touches
+
+-- The slot of an address below 2^64 is below 2^61: it counts 64-bit steps.
+theorem remap_address_lt (layout : MemoryLayout) (address : Nat) (fits : address < 2 ^ 64) :
+    (remap_address layout address).getD 0 < 2 ^ 61 := by
+  have steps : (2 : Nat) ^ 64 = 8 * 2 ^ 61 := by norm_num
+  unfold remap_address
+  split
+  · exact Nat.two_pow_pos 61
+  · dsimp only [Option.getD]
+    omega
+
+-- The program image's lowest address is a 64-bit value.
+theorem min_bytecode_address_lt (memory_init : List (BitVec 64 × BitVec 8)) :
+    min_bytecode_address memory_init < 2 ^ 64 := by
+  unfold min_bytecode_address
+  apply min?_getD_lt _ _ (Nat.two_pow_pos 64)
+  intro address member
+  obtain ⟨entry, _, isAddress⟩ := List.mem_map.mp member
+  rw [← isAddress]
+  exact entry.1.isLt
+
+-- The program image spans at most 2^61 + 2 slots: its bytes have 64-bit addresses.
+theorem program_image_len_words_le (memory_init : List (BitVec 64 × BitVec 8)) :
+    program_image_len_words memory_init ≤ 2 ^ 61 + 2 := by
+  have steps : (2 : Nat) ^ 64 = 8 * 2 ^ 61 := by norm_num
+  have highestFits : ((memory_init.map (·.1.toNat)).max?).getD 0 < 2 ^ 64 := by
+    apply max?_getD_lt _ _ (Nat.two_pow_pos 64)
+    intro address member
+    obtain ⟨entry, _, isAddress⟩ := List.mem_map.mp member
+    rw [← isAddress]
+    exact entry.1.isLt
+  unfold program_image_len_words
+  dsimp only
+  omega
+
+-- An accepted run's RAM size is 2^logRamK with logRamK below 64: every touched slot
+-- and the end of the program image come from 64-bit addresses, so they are at most
+-- 2^63, and ram_K is the power of two that rounds them up.
+-- See : jolt/crates/jolt-prover/src/config.rs:140-143
 theorem HonestTrace.prover_config_log_ram_K_lt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
     (accepted : trace.prover_config = some config) :
     Nat.log2 config.ram_K < 64 := by
-  sorry
+  unfold HonestTrace.prover_config at accepted
+  -- the jump check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
+  -- the length check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
+  -- the address check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, _, accepted⟩ := accepted
+  -- the config itself
+  cases accepted
+  dsimp only
+  -- every touched slot comes from a 64-bit address, so it is below 2^61
+  have touchedFits : ((trace.rows.toList.filterMap (·.ram_address)).filterMap
+      (remap_address trace.initialState.jolt_device.memory_layout)).max?.getD 0 < 2 ^ 61 := by
+    apply max?_getD_lt _ _ (Nat.two_pow_pos 61)
+    intro slot member
+    obtain ⟨address, member, remapped⟩ := List.mem_filterMap.mp member
+    obtain ⟨row, _, touches⟩ := List.mem_filterMap.mp member
+    have below := remap_address_lt trace.initialState.jolt_device.memory_layout address
+      (row.ram_address_lt address touches)
+    rw [remapped] at below
+    exact below
+  -- the image starts at a slot below 2^61 and spans at most 2^61 + 2 slots
+  have imageStartFits := remap_address_lt trace.initialState.jolt_device.memory_layout _
+    (min_bytecode_address_lt joltInstance.program.memory_init)
+  have imageLength := program_image_len_words_le joltInstance.program.memory_init
+  -- so both are at most 2^63, and ram_K is 2^c with c at most 63
+  have quarters : (2 : Nat) ^ 63 = 4 * 2 ^ 61 := by norm_num
+  rw [Nat.log2_two_pow]
+  exact Nat.lt_of_le_of_lt (m := 63) (Nat.clog_le_of_le_pow (by omega)) (by decide)
 
 -- The preprocessed bytecode has 2^logBytecodeK slots with logBytecodeK below 64: the
 -- PC map accepts fewer than 2^32 rows.
