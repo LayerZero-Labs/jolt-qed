@@ -12,10 +12,11 @@ open scoped BigOperators
 The flag agrees with the selected fixed bytecode row.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L603-L609 -/
 def lookupTableFlagEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
-    (program : JoltProgram) (witness : WitnessType F params) : Prop :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (witness : WitnessType F params) : Prop :=
   ∀ (table : LookupTableKind) (t : Fin params.traceLength),
     witness.LookupTableFlag table t =
       ∑ address : Fin (2 ^ params.logBytecodeK),
-        bytecodeLookupTableFlag program table address.val * bytecodeRa witness address t
+        bytecodeLookupTableFlag trace table address.val * bytecodeRa witness address t
 
 end JoltConstraints

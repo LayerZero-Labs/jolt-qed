@@ -66,9 +66,10 @@ set_option autoImplicit false
 namespace JoltConstraints
 
 /-- Every modeled constraint holds for one witness and its public context.
-The program, public I/O state, and entry slot are shared by all fields. -/
+The trace, public I/O state, and entry slot are shared by all fields. -/
 structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
-    (program : JoltProgram)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
     (io : JoltDevice)
     (entry : Fin (2 ^ params.logBytecodeK))
     (witness : WitnessType F params) : Prop where
@@ -112,8 +113,8 @@ structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
   rdWriteValueEqRegistersReadWrite : JoltConstraints.rdWriteValueEqRegistersReadWrite witness
   rs1ValueEqRegistersRead : JoltConstraints.rs1ValueEqRegistersRead witness
   rs2ValueEqRegistersRead : JoltConstraints.rs2ValueEqRegistersRead witness
-  ramValEqInitialPlusPrefixRamInc : JoltConstraints.ramValEqInitialPlusPrefixRamInc program witness
-  ramValFinalEqInitialPlusRamInc : JoltConstraints.ramValFinalEqInitialPlusRamInc program witness
+  ramValEqInitialPlusPrefixRamInc : JoltConstraints.ramValEqInitialPlusPrefixRamInc trace witness
+  ramValFinalEqInitialPlusRamInc : JoltConstraints.ramValFinalEqInitialPlusRamInc trace witness
   -- Stage 5: instruction lookup and register history
   lookupOutputEqInstructionReadRaf : JoltConstraints.lookupOutputEqInstructionReadRaf witness
   leftLookupOperandEqInstructionRaf : JoltConstraints.leftLookupOperandEqInstructionRaf witness
@@ -121,15 +122,15 @@ structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
   registersValEqPrefixRdInc : JoltConstraints.registersValEqPrefixRdInc witness
   -- Stage 6: bytecode and selector relations
   pcEqBytecodeRead : JoltConstraints.pcEqBytecodeRead witness
-  unexpandedPCEqBytecodeRead : JoltConstraints.unexpandedPCEqBytecodeRead program witness
-  immEqBytecodeRead : JoltConstraints.immEqBytecodeRead program witness
-  opFlagsEqBytecodeRead : JoltConstraints.opFlagsEqBytecodeRead program witness
-  instructionFlagsEqBytecodeRead : JoltConstraints.instructionFlagsEqBytecodeRead program witness
-  rs1RaEqBytecodeRead : JoltConstraints.rs1RaEqBytecodeRead program witness
-  rs2RaEqBytecodeRead : JoltConstraints.rs2RaEqBytecodeRead program witness
-  rdWaEqBytecodeRead : JoltConstraints.rdWaEqBytecodeRead program witness
-  lookupTableFlagEqBytecodeRead : JoltConstraints.lookupTableFlagEqBytecodeRead program witness
-  instructionRafFlagEqBytecodeRead : JoltConstraints.instructionRafFlagEqBytecodeRead program witness
+  unexpandedPCEqBytecodeRead : JoltConstraints.unexpandedPCEqBytecodeRead trace witness
+  immEqBytecodeRead : JoltConstraints.immEqBytecodeRead trace witness
+  opFlagsEqBytecodeRead : JoltConstraints.opFlagsEqBytecodeRead trace witness
+  instructionFlagsEqBytecodeRead : JoltConstraints.instructionFlagsEqBytecodeRead trace witness
+  rs1RaEqBytecodeRead : JoltConstraints.rs1RaEqBytecodeRead trace witness
+  rs2RaEqBytecodeRead : JoltConstraints.rs2RaEqBytecodeRead trace witness
+  rdWaEqBytecodeRead : JoltConstraints.rdWaEqBytecodeRead trace witness
+  lookupTableFlagEqBytecodeRead : JoltConstraints.lookupTableFlagEqBytecodeRead trace witness
+  instructionRafFlagEqBytecodeRead : JoltConstraints.instructionRafFlagEqBytecodeRead trace witness
   bytecodeRaAtEntryEqOne : JoltConstraints.bytecodeRaAtEntryEqOne entry witness
   instructionRaChunkBooleanity : JoltConstraints.instructionRaChunkBooleanity witness
   bytecodeRaChunkBooleanity : JoltConstraints.bytecodeRaChunkBooleanity witness

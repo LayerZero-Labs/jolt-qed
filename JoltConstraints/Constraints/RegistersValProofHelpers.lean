@@ -13,16 +13,17 @@ set_option linter.unusedSimpArgs false
 open Sail PreSail LeanRV64D.Functions
 
 theorem register42_prepareSource_preserves_sourceValue
-    (program : JoltProgram) (layout : program.SequenceLayout)
-    (i : Fin program.expandedBytecode.size) (s : SailJoltState)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
+    (i : Fin trace.bytecode.size) (s : SailJoltState)
     (src : JoltISA.Src) :
-    JoltISA.sourceValue src (program.prepareSource layout i s) =
+    JoltISA.sourceValue src (prepareSource trace.bytecode i s) =
       JoltISA.sourceValue src s := by
   cases src with
   | vreg vr => rfl
   | xreg rd =>
       reg_cases rd <;>
-        simp only [JoltISA.sourceValue, JoltProgram.prepareSource,
+        simp only [JoltISA.sourceValue, prepareSource,
           Std.ExtDHashMap.get?_insert, beq_iff_eq, reduceCtorEq,
           ↓reduceDIte]
 
@@ -764,18 +765,18 @@ theorem register42_rdValue_eq_destination
 
 theorem register42_RdWa_real
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size)
     (register : Fin 128) :
     HonestWitness.RdWa (F := F) p trace register t =
-      match program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction.destination? with
+      match trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction.destination? with
       | some dst =>
           if register = HonestWitness.destinationRegisterAddress dst then 1 else 0
       | none => 0 := by
   unfold HonestWitness.RdWa
   simp only [dif_pos hb]
   cases instr :
-      program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
+      trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [JoltISA.Instr.destination?, HonestWitness.capturedDestination]
 
 theorem register42_destination_withRuntimeAdvice
@@ -785,7 +786,7 @@ theorem register42_destination_withRuntimeAdvice
 
 theorem register42_row_step
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (register : Fin 128) (t : Fin p.traceLength)
     (hb : t.val < trace.rows.size) :
     ((JoltISA.sourceValue (register42_srcOfAddress register)
@@ -795,7 +796,7 @@ theorem register42_row_step
       HonestWitness.RdWa p trace register t * HonestWitness.RdInc p trace t := by
   let i : Fin trace.rows.size := ⟨t.val, hb⟩
   let row := trace.rows[i]
-  let instr := program.expandedBytecode[row.rowIndex].expandedInstruction
+  let instr := trace.bytecode[row.rowIndex].instruction
   let src := register42_srcOfAddress register
   have ha := trace.rowAssumptions i
   have hready : ∀ rd, Assumptions.XRegReadable rd row.preState.sail := ha.xRegReadable
@@ -811,7 +812,7 @@ theorem register42_row_step
     simp only [dif_pos hb]
     rfl
   have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
-    program.expandedBytecode[row.rowIndex].registerOperandsCanonical
+    trace.registerOperandsCanonical row.rowIndex
   have hframe (hneq : ∀ dst, instr.destination? = some dst →
       src ≠ register42_dstAsSrc dst) :
       JoltISA.sourceValue src row.postState =

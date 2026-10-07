@@ -100,13 +100,13 @@ theorem hostIOFrame_of_exec (instr : JoltISA.Instr) (s t : SailJoltState)
     exact congrArg (fun sail : SailState => sail.regs.get? Register.nextPC) hsail
   | _ => trivial
 
-theorem row {program : JoltProgram} (trace : JoltTrace program)
+theorem row {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Fin trace.rows.size)
     (hjump : JoltMetadata.opcodeFlag
-      (program.expandedBytecode[trace.rows[i].rowIndex].expandedInstruction.withRuntimeAdvice
+      (trace.bytecode[trace.rows[i].rowIndex].instruction.withRuntimeAdvice
         trace.rows[i].runtimeAdvice) .Jump = false)
     (hnot : BranchTaken
-      (program.expandedBytecode[trace.rows[i].rowIndex].expandedInstruction.withRuntimeAdvice
+      (trace.bytecode[trace.rows[i].rowIndex].instruction.withRuntimeAdvice
         trace.rows[i].runtimeAdvice) trace.rows[i].preState = false) :
     trace.rows[i].postState.sail.regs.get? Register.nextPC =
       trace.rows[i].preState.sail.regs.get? Register.nextPC := by

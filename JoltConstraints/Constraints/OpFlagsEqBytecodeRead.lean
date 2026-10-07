@@ -12,10 +12,11 @@ open scoped BigOperators
 each circuit flag is selected from the fixed bytecode table.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L545-L557 -/
 def opFlagsEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
-    (program : JoltProgram) (witness : WitnessType F params) : Prop :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (witness : WitnessType F params) : Prop :=
   ∀ (flag : CircuitFlags) (t : Fin params.traceLength),
     witness.OpFlags flag t =
       ∑ address : Fin (2 ^ params.logBytecodeK),
-        bytecodeCircuitFlag program flag address.val * bytecodeRa witness address t
+        bytecodeCircuitFlag trace flag address.val * bytecodeRa witness address t
 
 end JoltConstraints

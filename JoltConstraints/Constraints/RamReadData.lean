@@ -32,13 +32,14 @@ Advice words are execution inputs, not additional public constants. Reuse the
 existing image encoding; this function does not execute instructions.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-witness/src/backend/trace/ram.rs#L81-L130 -/
 noncomputable def ramInitialValue {F : Type} [Field F]
-    (program : JoltProgram) (address : Nat) : F :=
-  ((HonestWitness.initialRamWord program address).toNat : F)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (address : Nat) : F :=
+  ((HonestWitness.initialRamWord trace address).toNat : F)
 
 /-- Public I/O mask: remapped words from input_start up to RAM_START_ADDRESS,
 excluding RAM_START_ADDRESS. As in Rust preprocessing, the layout must be valid;
 completeness theorems assume the relevant part as `JoltDevice.AdviceBelowInput`.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-program/src/preprocess/public_io.rs#L20-L25 -/
+Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/public_io.rs#L20-L25 -/
 def ramPublicIoMask {F : Type} [Field F] (io : JoltDevice) (address : Nat) : F :=
   let lowest := ramLowestAddress io.memory_layout
   let first := (io.memory_layout.input_start.toNat - lowest) / 8
@@ -48,7 +49,7 @@ def ramPublicIoMask {F : Type} [Field F] (io : JoltDevice) (address : Nat) : F :
 /-- Public I/O words only: input, output, panic, and termination (1 unless
 panicking), with zero elsewhere. Byte buffers are packed little-endian and the
 last partial word is zero-padded. Advice buffers do not enter this array.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-program/src/preprocess/public_io.rs#L27-L55 -/
+Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/public_io.rs#L27-L55 -/
 def ramPublicIoWord (io : JoltDevice) (address : Nat) : BitVec 64 :=
   let input := HonestWitness.overlayRamBytes io.memory_layout io.memory_layout.input_start io.inputs address 0
   let output := HonestWitness.overlayRamBytes io.memory_layout io.memory_layout.output_start io.outputs address input
@@ -62,13 +63,13 @@ def ramPublicIoWord (io : JoltDevice) (address : Nat) : BitVec 64 :=
 /-- Actual RAM accesses are nonzero and word-aligned relative to the layout.
 RamFits separately supplies successful remapping and the RAM-domain bound.
 This is a condition on the recorded accesses, not an ISA execution rule. -/
-def ramAccessesValid {program : JoltProgram} (trace : JoltTrace program) : Prop :=
+def ramAccessesValid {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Prop :=
   ∀ i : Fin trace.rows.size,
     let row := getElem trace.rows i.val i.isLt
-    let instruction := program.expandedBytecode[row.rowIndex].expandedInstruction
+    let instruction := trace.bytecode[row.rowIndex].instruction
     match HonestWitness.ramAccessAddress instruction row.preState with
     | none => True
     | some address => address.toNat ≠ 0 ∧
-        (address.toNat - ramLowestAddress program.initialState.jolt_device.memory_layout) % 8 = 0
+        (address.toNat - ramLowestAddress trace.initialState.jolt_device.memory_layout) % 8 = 0
 
 end JoltConstraints

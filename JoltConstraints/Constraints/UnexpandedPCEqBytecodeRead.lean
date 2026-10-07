@@ -12,10 +12,11 @@ open scoped BigOperators
 the unexpanded PC is the selected row's raw instruction address.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L545-L557 -/
 def unexpandedPCEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
-    (program : JoltProgram) (witness : WitnessType F params) : Prop :=
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (witness : WitnessType F params) : Prop :=
   ∀ (t : Fin params.traceLength),
     witness.UnexpandedPC t =
       ∑ address : Fin (2 ^ params.logBytecodeK),
-        bytecodeAddress program address.val * bytecodeRa witness address t
+        bytecodeAddress trace address.val * bytecodeRa witness address t
 
 end JoltConstraints

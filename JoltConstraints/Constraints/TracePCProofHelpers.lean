@@ -245,7 +245,7 @@ theorem hostIOPCFrame_withRuntimeAdvice (instr : Instr) (advice : instr.RuntimeA
     (instr.withRuntimeAdvice advice).HostIOPCFrame s t = instr.HostIOPCFrame s t := by
   cases instr <;> rfl
 
-theorem row {program : JoltProgram} (trace : JoltTrace program)
+theorem row {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Fin trace.rows.size) :
     trace.rows[i].postState.sail.regs.get? Register.PC =
       trace.rows[i].preState.sail.regs.get? Register.PC := by
@@ -255,44 +255,44 @@ theorem row {program : JoltProgram} (trace : JoltTrace program)
 
 end JoltPCFrame
 
-theorem lookup_prepareSource_PC (program : JoltProgram)
-    (layout : program.SequenceLayout) (i : Fin program.expandedBytecode.size)
+theorem lookup_prepareSource_PC {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (i : Fin trace.bytecode.size)
     (state : SailJoltState) :
-    (program.prepareSource layout i state).sail.regs.get? Register.PC =
-      some program.expandedBytecode[i].address := by
-  simp only [JoltProgram.prepareSource, Std.ExtDHashMap.get?_insert,
+    (prepareSource trace.bytecode i state).sail.regs.get? Register.PC =
+      some trace.bytecode[i].address := by
+  simp only [prepareSource, Std.ExtDHashMap.get?_insert,
     beq_iff_eq, reduceCtorEq, ↓reduceDIte, cast_eq]
 
-theorem lookup_trace_PC {program : JoltProgram} (trace : JoltTrace program)
+theorem lookup_trace_PC {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (n : Nat) (hn : n < trace.rows.size) :
     trace.rows[n].preState.sail.regs.get? Register.PC =
-      some program.expandedBytecode[trace.rows[n].rowIndex].address := by
+      some trace.bytecode[trace.rows[n].rowIndex].address := by
   induction n using Nat.strong_induction_on with
   | h n ih =>
     cases n with
     | zero =>
       rw [trace.startsAtInitial hn]
-      exact lookup_prepareSource_PC program trace.sequenceLayout _ _
+      exact lookup_prepareSource_PC trace _ _
     | succ m =>
       have hm : m < trace.rows.size := by omega
       have hp := ih m (by omega) hm
-      have hlink := trace.linked m hm hn
+      have hlink := trace.linkedState m hm hn
       let prev := trace.rows[m]
       let curr := trace.rows[m + 1]
-      by_cases hc : program.expandedBytecode[prev.rowIndex].continues = true
-      · change program.expandedBytecode[trace.rows[m].rowIndex].continues = true at hc
+      by_cases hc : trace.bytecode[prev.rowIndex].continues = true
+      · change trace.bytecode[trace.rows[m].rowIndex].continues = true at hc
         have hsucc := trace.successor m hm hn
         simp only [hc, ↓reduceIte] at hlink hsucc
         obtain ⟨haddr, _, _, _⟩ :=
-          trace.sequenceLayout.next prev.rowIndex curr.rowIndex hsucc hc
+          trace.layout.next prev.rowIndex curr.rowIndex hsucc hc
         have hpres := JoltPCFrame.row trace ⟨m, hm⟩
         change trace.rows[m].postState.sail.regs.get? Register.PC =
           trace.rows[m].preState.sail.regs.get? Register.PC at hpres
         change curr.preState.sail.regs.get? Register.PC = _
         rw [hlink, hpres, hp]
         exact congrArg some haddr.symm
-      · change ¬ program.expandedBytecode[trace.rows[m].rowIndex].continues = true at hc
+      · change ¬ trace.bytecode[trace.rows[m].rowIndex].continues = true at hc
         simp only [if_neg hc] at hlink
         change curr.preState.sail.regs.get? Register.PC = _
         rw [hlink]
-        exact lookup_prepareSource_PC program trace.sequenceLayout curr.rowIndex _
+        exact lookup_prepareSource_PC trace curr.rowIndex _

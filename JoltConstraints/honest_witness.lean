@@ -2,6 +2,9 @@ import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_trace
 import JoltConstraints.witness_helpers
+import JoltConstraints.trace_interface
+import JoltConstraints.witness_domain
+import JoltConstraints.execution_conditions
 
 set_option autoImplicit false
 

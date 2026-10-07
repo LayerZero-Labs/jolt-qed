@@ -41,26 +41,26 @@ theorem overlayRamBytes_below_input (layout : MemoryLayout)
 /-- On the public I/O interval, the honest final RAM word is the public I/O word.
 Below `RAM_START_ADDRESS` the RAM image is zero, and both advice overlays end
 before the input's first word, so only the public overlays remain. -/
-theorem finalRamWord_eq_ramPublicIoWord {program : JoltProgram} (trace : JoltTrace program)
-    (adviceBelowInput : program.initialState.jolt_device.AdviceBelowInput)
+theorem finalRamWord_eq_ramPublicIoWord {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
     (address : Nat)
-    (lower : (program.initialState.jolt_device.memory_layout.input_start.toNat -
-      ramLowestAddress program.initialState.jolt_device.memory_layout) / 8 ≤ address)
+    (lower : (trace.initialState.jolt_device.memory_layout.input_start.toNat -
+      ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 ≤ address)
     (upper : address <
-      (JoltISA.RAM_START_ADDRESS - ramLowestAddress program.initialState.jolt_device.memory_layout) / 8) :
+      (JoltISA.RAM_START_ADDRESS - ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8) :
     HonestWitness.finalRamWord trace address =
       ramPublicIoWord (HonestWitness.finalTraceState trace).jolt_device address := by
   obtain ⟨hlayout, htrusted, huntrusted⟩ := finalTraceState_ioSame trace
   have hram : ¬ JoltISA.RAM_START_ADDRESS ≤
-      min program.initialState.jolt_device.memory_layout.trusted_advice_start.toNat
-        program.initialState.jolt_device.memory_layout.untrusted_advice_start.toNat + 8 * address := by
+      min trace.initialState.jolt_device.memory_layout.trusted_advice_start.toNat
+        trace.initialState.jolt_device.memory_layout.untrusted_advice_start.toNat + 8 * address := by
     unfold ramLowestAddress at upper
     omega
   have htrustedOverlay := overlayRamBytes_below_input _
-    program.initialState.jolt_device.memory_layout.trusted_advice_start program.initialState.jolt_device.trusted_advice
+    trace.initialState.jolt_device.memory_layout.trusted_advice_start trace.initialState.jolt_device.trusted_advice
     adviceBelowInput.inputWordAligned adviceBelowInput.trustedAdviceBelowInput address lower
   have huntrustedOverlay := overlayRamBytes_below_input _
-    program.initialState.jolt_device.memory_layout.untrusted_advice_start program.initialState.jolt_device.untrusted_advice
+    trace.initialState.jolt_device.memory_layout.untrusted_advice_start trace.initialState.jolt_device.untrusted_advice
     adviceBelowInput.inputWordAligned adviceBelowInput.untrustedAdviceBelowInput address lower
   unfold HonestWitness.finalRamWord ramPublicIoWord
   dsimp only

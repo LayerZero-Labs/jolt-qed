@@ -33,7 +33,7 @@ theorem honestWitness_rdWriteEqLookupIfWriteLookupToRd
   · let row := trace.rows[t.val]
     let bc := program.expandedBytecode[row.rowIndex]
     by_cases hflag : JoltMetadata.circuitFlag bc .WriteLookupOutputToRD = true
-    · have hwrite := lookup_row_write (F := F) row (lookup_trace_PC trace t.val hb) hflag
+    · have hwrite := lookup_row_write (F := F) row (trace.rowValid row.rowIndex) (lookup_trace_PC trace t.val hb) hflag
       simp only [HonestWitness.OpFlags, HonestWitness.RdWriteValue,
         HonestWitness.LookupOutput, dif_pos hb]
       change (if JoltMetadata.circuitFlag bc .WriteLookupOutputToRD then (1 : F) else 0) *

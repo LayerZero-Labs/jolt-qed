@@ -125,76 +125,76 @@ theorem srcOfAddress_sourceRegisterAddress (src : JoltISA.Src)
 
 theorem rs1Ra_real
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size)
     (register : Fin 128) :
     HonestWitness.Rs1Ra (F := F) p trace register t =
       match rs1Operand?
-          program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction with
+          trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction with
       | some src =>
           if register = HonestWitness.sourceRegisterAddress src then 1 else 0
       | none => 0 := by
   unfold HonestWitness.Rs1Ra
   simp only [dif_pos hb]
   cases instr :
-      program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
+      trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs1Operand?]
 
 theorem rs1Value_real
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size) :
     HonestWitness.Rs1Value (F := F) p trace t =
       match rs1Operand?
-          program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction with
+          trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction with
       | some src => ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F)
       | none => 0 := by
   unfold HonestWitness.Rs1Value
   simp only [dif_pos hb]
   cases instr :
-      program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
+      trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs1Operand?]
 
 theorem rs2Ra_real
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size)
     (register : Fin 128) :
     HonestWitness.Rs2Ra (F := F) p trace register t =
       match rs2Operand?
-          program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction with
+          trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction with
       | some src =>
           if register = HonestWitness.sourceRegisterAddress src then 1 else 0
       | none => 0 := by
   unfold HonestWitness.Rs2Ra
   simp only [dif_pos hb]
   cases instr :
-      program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
+      trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs2Operand?]
 
 theorem rs2Value_real
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size) :
     HonestWitness.Rs2Value (F := F) p trace t =
       match rs2Operand?
-          program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction with
+          trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction with
       | some src => ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F)
       | none => 0 := by
   unfold HonestWitness.Rs2Value
   simp only [dif_pos hb]
   cases instr :
-      program.expandedBytecode[(trace.rows[t.val]'hb).rowIndex].expandedInstruction <;>
+      trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs2Operand?]
 
 /-- On a real row, the replayed history of a canonical source register is the
 source value in the row's pre-state. -/
 theorem registersVal_source_eq_preState
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (traceFits : p.ProverPaddedFor trace.rows.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
-      JoltISA.sourceValue src program.initialState = 0)
+      JoltISA.sourceValue src trace.initialState = 0)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size)
     (src : JoltISA.Src) (hcanon : JoltRegisterEncoding.sourceIsCanonical src = true) :
     HonestWitness.RegistersVal (F := F) p trace (HonestWitness.sourceRegisterAddress src) t =

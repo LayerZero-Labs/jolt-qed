@@ -7,13 +7,13 @@ namespace JoltConstraints
 open scoped BigOperators
 
 theorem instructionLookupRa_honest {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (address : Fin (2 ^ 128)) (t : Fin params.traceLength) :
     instructionLookupRa
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain)
+      (HonestTrace.honestWitness (F := F) params trace)
       address t =
       if address.val = (HonestWitness.lookupIndex trace t.val).toNat then 1 else 0 := by
   have hcover : params.virtualInstructionChunks * params.virtualChunkBits = 128 := by
@@ -28,7 +28,7 @@ theorem instructionLookupRa_honest {F : Type} [Field F] (params : WitnessParams)
   · simp only [heq, ↓reduceIte]
     apply Finset.prod_eq_one
     intro chunk _
-    dsimp [JoltProgram.honestWitness, HonestWitness.InstructionRa,
+    dsimp [HonestTrace.honestWitness, HonestWitness.InstructionRa,
       HonestWitness.addressChunkEntry, instructionLookupChunk,
       HonestWitness.addressChunk]
     simp [heq]
@@ -50,7 +50,7 @@ theorem instructionLookupRa_honest {F : Type} [Field F] (params : WitnessParams)
         (HonestWitness.lookupIndex trace t.val).toNat ha hb hd)
     obtain ⟨chunk, hneq⟩ := hdiff
     apply Finset.prod_eq_zero (Finset.mem_univ chunk)
-    dsimp [JoltProgram.honestWitness, HonestWitness.InstructionRa,
+    dsimp [HonestTrace.honestWitness, HonestWitness.InstructionRa,
       HonestWitness.addressChunkEntry, instructionLookupChunk,
       HonestWitness.addressChunk]
     change address.val /
@@ -63,14 +63,14 @@ theorem instructionLookupRa_honest {F : Type} [Field F] (params : WitnessParams)
 
 /-- A fixed instruction-read column evaluates at the honest lookup index. -/
 theorem instructionRead_honest {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (value : Fin (2 ^ 128) → F) (t : Fin params.traceLength) :
     (∑ address : Fin (2 ^ 128),
       instructionLookupRa
-        (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain)
+        (HonestTrace.honestWitness (F := F) params trace)
         address t * value address) =
       value ⟨(HonestWitness.lookupIndex trace t.val).toNat,
         (HonestWitness.lookupIndex trace t.val).isLt⟩ := by

@@ -7,88 +7,89 @@ set_option autoImplicit false
 
 open Sail PreSail LeanRV64D.Functions
 
-theorem jump_prepareSource_nextPC (program : JoltProgram)
-    (layout : program.SequenceLayout) (i : Fin program.expandedBytecode.size)
+theorem jump_prepareSource_nextPC {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (i : Fin trace.bytecode.size)
     (state : SailJoltState) :
-    (program.prepareSource layout i state).sail.regs.get? Register.nextPC =
-      some (program.expandedBytecode[i].address +
-        BitVec.ofNat 64 (program.sourceLength layout i)) := by
-  simp [JoltProgram.prepareSource]
+    (prepareSource trace.bytecode i state).sail.regs.get? Register.nextPC =
+      some (trace.bytecode[i].address +
+        BitVec.ofNat 64 (sourceLength trace.bytecode i)) := by
+  simp [prepareSource]
 
-theorem jump_sourceLength_next (program : JoltProgram)
-    (layout : program.SequenceLayout)
-    (i j : Fin program.expandedBytecode.size)
+theorem jump_sourceLength_next {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
+    (layout : BytecodeLayout trace.bytecode)
+    (i j : Fin trace.bytecode.size)
     (hnext : j.val = i.val + 1)
-    (hcont : program.expandedBytecode[i].continues = true) :
-    program.sourceLength layout i = program.sourceLength layout j := by
+    (hcont : trace.bytecode[i].continues = true) :
+    sourceLength trace.bytecode i = sourceLength trace.bytecode j := by
   obtain ⟨_, hrem, _, _⟩ := layout.next i j hnext hcont
-  have hpositive : 0 < (program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat := by
-    have hne : program.expandedBytecode[i].virtualSequenceRemaining.getD 0 ≠ 0 := by
-      simpa [JoltProgramRow.continues] using hcont
+  have hpositive : 0 < (trace.bytecode[i].virtual_sequence_remaining.getD 0).toNat := by
+    have hne : trace.bytecode[i].virtual_sequence_remaining.getD 0 ≠ 0 := by
+      simpa [JoltInstructionRow.continues] using hcont
     exact BitVec.toNat_pos_of_ne_zero hne
-  unfold JoltProgram.sourceLength
+  unfold sourceLength source_is_compressed
   have hlast :
-      i.val + (program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat =
-      j.val + (program.expandedBytecode[j].virtualSequenceRemaining.getD 0).toNat := by
+      i.val + (trace.bytecode[i].virtual_sequence_remaining.getD 0).toNat =
+      j.val + (trace.bytecode[j].virtual_sequence_remaining.getD 0).toNat := by
     rw [hrem]
     simp only [Option.getD_some]
     have hle : (1 : BitVec 16) ≤
-        program.expandedBytecode[i].virtualSequenceRemaining.getD 0 := by
+        trace.bytecode[i].virtual_sequence_remaining.getD 0 := by
       rw [BitVec.le_def]
       simpa using hpositive
     rw [BitVec.toNat_sub_of_le hle]
-    change i.val + (program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat =
-      j.val + ((program.expandedBytecode[i].virtualSequenceRemaining.getD 0).toNat - 1)
+    change i.val + (trace.bytecode[i].virtual_sequence_remaining.getD 0).toNat =
+      j.val + ((trace.bytecode[i].virtual_sequence_remaining.getD 0).toNat - 1)
     omega
   simp only [hlast]
 
-theorem jump_sourceLength_at_end (program : JoltProgram)
-    (layout : program.SequenceLayout) (i : Fin program.expandedBytecode.size)
-    (hend : program.expandedBytecode[i].continues = false) :
-    program.sourceLength layout i =
-      if program.expandedBytecode[i].isCompressed then 2 else 4 := by
-  have hzero : program.expandedBytecode[i].virtualSequenceRemaining.getD 0 = 0 := by
-    simpa [JoltProgramRow.continues] using hend
-  change program.expandedBytecode[i.val].virtualSequenceRemaining.getD (0#16) = 0#16 at hzero
-  unfold JoltProgram.sourceLength
+theorem jump_sourceLength_at_end {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (i : Fin trace.bytecode.size)
+    (hend : trace.bytecode[i].continues = false) :
+    sourceLength trace.bytecode i =
+      if trace.bytecode[i].is_compressed then 2 else 4 := by
+  have hzero : trace.bytecode[i].virtual_sequence_remaining.getD 0 = 0 := by
+    simpa [JoltInstructionRow.continues] using hend
+  change trace.bytecode[i.val].virtual_sequence_remaining.getD (0#16) = 0#16 at hzero
+  unfold sourceLength source_is_compressed
   simp [hzero]
 
-theorem jump_trace_nextPC {program : JoltProgram} (trace : JoltTrace program)
+theorem jump_trace_nextPC {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (n : Nat) (hn : n < trace.rows.size) :
     (trace.rows[n].preState.sail.regs.get? Register.nextPC) =
-      some (program.expandedBytecode[trace.rows[n].rowIndex].address +
-        BitVec.ofNat 64 (program.sourceLength trace.sequenceLayout trace.rows[n].rowIndex)) := by
+      some (trace.bytecode[trace.rows[n].rowIndex].address +
+        BitVec.ofNat 64 (sourceLength trace.bytecode trace.rows[n].rowIndex)) := by
   induction n using Nat.strong_induction_on with
   | h n ih =>
     cases n with
     | zero =>
       have hstart := trace.startsAtInitial hn
       rw [hstart]
-      exact jump_prepareSource_nextPC program trace.sequenceLayout _ _
+      exact jump_prepareSource_nextPC trace _ _
     | succ m =>
       have hm : m < trace.rows.size := by omega
       have hp := ih m (by omega) hm
-      have hlink := trace.linked m hm hn
+      have hlink := trace.linkedState m hm hn
       let prev := trace.rows[m]
       let curr := trace.rows[m + 1]
-      by_cases hc : program.expandedBytecode[prev.rowIndex].continues = true
-      · change program.expandedBytecode[trace.rows[m].rowIndex].continues = true at hc
+      by_cases hc : trace.bytecode[prev.rowIndex].continues = true
+      · change trace.bytecode[trace.rows[m].rowIndex].continues = true at hc
         have hsucc := trace.successor m hm hn
         simp only [hc, ↓reduceIte] at hlink hsucc
         obtain ⟨haddr, _, _, _⟩ :=
-          trace.sequenceLayout.next prev.rowIndex curr.rowIndex hsucc hc
-        have hlen := jump_sourceLength_next program trace.sequenceLayout
+          trace.layout.next prev.rowIndex curr.rowIndex hsucc hc
+        have hlen := jump_sourceLength_next trace trace.layout
           prev.rowIndex curr.rowIndex hsucc hc
         have hpres := trace.noEarlyNextPCChange prev.rowIndex hc
           prev.runtimeAdvice prev.preState prev.postState prev.executes
         change curr.preState.sail.regs.get? Register.nextPC = _
         rw [hlink, hpres]
         rw [hp, ← haddr, hlen]
-      · change ¬ program.expandedBytecode[trace.rows[m].rowIndex].continues = true at hc
+      · change ¬ trace.bytecode[trace.rows[m].rowIndex].continues = true at hc
         simp only [if_neg hc] at hlink
         change curr.preState.sail.regs.get? Register.nextPC = _
         rw [hlink]
-        exact jump_prepareSource_nextPC program trace.sequenceLayout curr.rowIndex _
+        exact jump_prepareSource_nextPC trace curr.rowIndex _
 
 theorem jump_sourceValue_after_write (rd : regidx) (value : BitVec 64)
     (preState : SailJoltState) (hnotzero : JoltISA.isX0 rd = false) :

@@ -111,25 +111,28 @@ def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
 
 /-- A fixed bytecode register-selector entry. Explicit register zero is distinct
 from an absent operand; leading and trailing padding have no operands. -/
-def bytecodeRegisterSelector {F : Type} [Field F] (program : JoltProgram)
+def bytecodeRegisterSelector {F : Type} [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
     (operand : JoltISA.Instr → Option (Fin 128)) (register : Fin 128) (address : Nat) : F :=
-  match bytecodeRow program address with
-  | some row => if operand row.expandedInstruction = some register then 1 else 0
+  match bytecodeRow trace address with
+  | some row => if operand row.instruction = some register then 1 else 0
   | none => 0
 
 /-- Fixed lookup-table flags; a padding no-op selects no lookup table.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L607-L609 -/
-def bytecodeLookupTableFlag {F : Type} [Field F] (program : JoltProgram)
+def bytecodeLookupTableFlag {F : Type} [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
     (table : LookupTableKind) (address : Nat) : F :=
-  match bytecodeRow program address with
-  | some row => if JoltMetadata.lookupTableFlag row.expandedInstruction table then 1 else 0
+  match bytecodeRow trace address with
+  | some row => if JoltMetadata.lookupTableFlag row.instruction table then 1 else 0
   | none => 0
 
 /-- Fixed RAF flag: one for combined lookup operands; padding contributes zero.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L603-L609 -/
-def bytecodeRafFlag {F : Type} [Field F] (program : JoltProgram) (address : Nat) : F :=
-  match bytecodeRow program address with
-  | some row => if JoltMetadata.instructionRafFlag row.expandedInstruction then 1 else 0
+def bytecodeRafFlag {F : Type} [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (address : Nat) : F :=
+  match bytecodeRow trace address with
+  | some row => if JoltMetadata.instructionRafFlag row.instruction then 1 else 0
   | none => 0
 
 end JoltConstraints

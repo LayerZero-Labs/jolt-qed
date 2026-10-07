@@ -36,7 +36,7 @@ private theorem register42_prefix_sum_succ
 
 private theorem register42_registersVal_succ
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (register : Fin 128) (n : Nat) (hnext : n + 1 < p.traceLength) :
     HonestWitness.RegistersVal (F := F) p trace register ⟨n + 1, hnext⟩ =
       HonestWitness.RegistersVal p trace register ⟨n, by omega⟩ +
@@ -50,7 +50,7 @@ private theorem register42_registersVal_succ
 
 private theorem register42_real_write_delta
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (register : Fin 128) (t : Fin p.traceLength)
     (hb : t.val < trace.rows.size) :
     HonestWitness.RdWa p trace register t *
@@ -59,7 +59,7 @@ private theorem register42_real_write_delta
           (trace.rows[t.val]'hb).preState).toNat : F)) =
       HonestWitness.RdWa p trace register t * HonestWitness.RdInc p trace t := by
   let row := trace.rows[t.val]'hb
-  let instr := program.expandedBytecode[row.rowIndex].expandedInstruction
+  let instr := trace.bytecode[row.rowIndex].instruction
   have hwa := register42_RdWa_real (F := F) p trace t hb register
   change HonestWitness.RdWa (F := F) p trace register t =
     match instr.destination? with
@@ -77,7 +77,7 @@ private theorem register42_real_write_delta
     simp only [dif_pos hb]
     rfl
   have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
-    program.expandedBytecode[row.rowIndex].registerOperandsCanonical
+    trace.registerOperandsCanonical row.rowIndex
   cases hd : instr.destination? with
   | none =>
       rw [hwa, hd]
@@ -94,32 +94,31 @@ private theorem register42_real_write_delta
       · simp [hwa, hd, hselected]
 
 private theorem register42_trace_register_link
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (src : JoltISA.Src) (n : Nat)
     (hn : n < trace.rows.size) (hnext : n + 1 < trace.rows.size) :
     JoltISA.sourceValue src (trace.rows[n + 1]'hnext).preState =
       JoltISA.sourceValue src (trace.rows[n]'hn).postState := by
-  have hlink := trace.linked n hn hnext
+  have hlink := trace.linkedState n hn hnext
   change (trace.rows[n + 1]'hnext).preState =
-    if program.expandedBytecode[(trace.rows[n]'hn).rowIndex].continues then
+    if trace.bytecode[(trace.rows[n]'hn).rowIndex].continues then
       (trace.rows[n]'hn).postState
-    else program.prepareSource trace.sequenceLayout
+    else prepareSource trace.bytecode
       (trace.rows[n + 1]'hnext).rowIndex (trace.rows[n]'hn).postState at hlink
   rw [hlink]
-  by_cases hc : program.expandedBytecode[(trace.rows[n]'hn).rowIndex].continues = true
+  by_cases hc : trace.bytecode[(trace.rows[n]'hn).rowIndex].continues = true
   · change JoltISA.sourceValue src
-      (if program.expandedBytecode[(trace.rows[n]'hn).rowIndex].continues = true then
+      (if trace.bytecode[(trace.rows[n]'hn).rowIndex].continues = true then
         (trace.rows[n]'hn).postState else
-        program.prepareSource trace.sequenceLayout
+        prepareSource trace.bytecode
           (trace.rows[n + 1]'hnext).rowIndex (trace.rows[n]'hn).postState) = _
     simp only [hc, ↓reduceIte]
   · simp only [if_neg hc]
-    exact register42_prepareSource_preserves_sourceValue program
-      trace.sequenceLayout _ _ src
+    exact register42_prepareSource_preserves_sourceValue trace _ _ src
 
 private theorem register42_registersVal_real_step
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (register : Fin 128) (n : Nat) (hb : n < trace.rows.size)
     (hnext : n + 1 < p.traceLength)
     (hpre : HonestWitness.RegistersVal (F := F) p trace register ⟨n, by omega⟩ =
@@ -136,10 +135,10 @@ private theorem register42_registersVal_real_step
 
 theorem register42_registersVal_preState
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (traceFits : p.ProverPaddedFor trace.rows.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
-      JoltISA.sourceValue src program.initialState = 0)
+      JoltISA.sourceValue src trace.initialState = 0)
     (register : Fin 128) (n : Nat) (hn : n < trace.rows.size) :
     HonestWitness.RegistersVal (F := F) p trace register
       ⟨n, Nat.lt_of_lt_of_le hn traceFits.traceFits⟩ =
@@ -151,8 +150,8 @@ theorem register42_registersVal_preState
       | zero =>
           have hstart := trace.startsAtInitial hn
           change (trace.rows[0]'hn).preState =
-            program.prepareSource trace.sequenceLayout
-              (trace.rows[0]'hn).rowIndex program.initialState at hstart
+            prepareSource trace.bytecode
+              (trace.rows[0]'hn).rowIndex trace.initialState at hstart
           rw [hstart, register42_prepareSource_preserves_sourceValue,
             initialRegistersZero]
           simp [HonestWitness.RegistersVal]
@@ -175,10 +174,10 @@ theorem register42_registersVal_preState
 
 private theorem register42_registersVal_step
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (traceFits : p.ProverPaddedFor trace.rows.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
-      JoltISA.sourceValue src program.initialState = 0)
+      JoltISA.sourceValue src trace.initialState = 0)
     (register : Fin 128) (n : Nat) (hnext : n + 1 < p.traceLength) :
     HonestWitness.RegistersVal (F := F) p trace register ⟨n + 1, hnext⟩ =
       HonestWitness.RegistersVal p trace register ⟨n, by omega⟩ +
@@ -200,10 +199,10 @@ private theorem register42_registersVal_step
 
 theorem honestRegistersVal_eq_prefixRdInc
     {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (traceFits : p.ProverPaddedFor trace.rows.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
-      JoltISA.sourceValue src program.initialState = 0)
+      JoltISA.sourceValue src trace.initialState = 0)
     (register : Fin 128) (t : Fin p.traceLength) :
     HonestWitness.RegistersVal (F := F) p trace register t =
       ∑ cycle : Fin p.traceLength,

@@ -26,24 +26,24 @@ open HonestWitness
 open Sail PreSail LeanRV64D.Functions
 
 /-- The expanded instruction executed by a trace row. -/
-abbrev rowInstruction {program : JoltProgram} (row : JoltTraceRow program) : JoltISA.Instr :=
-  (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+abbrev rowInstruction {bytecode : Array JoltInstructionRow} (row : HonestTraceRow bytecode) : JoltISA.Instr :=
+  (getElem bytecode row.rowIndex.val row.rowIndex.isLt).instruction
 
 /-- The honest 128-bit lookup index of an execution row. -/
-noncomputable def rowLookupIndex {program : JoltProgram} (row : JoltTraceRow program) :
+noncomputable def rowLookupIndex {bytecode : Array JoltInstructionRow} (row : HonestTraceRow bytecode) :
     BitVec 128 :=
-  let bc := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-  instructionLookupIndex bc.expandedInstruction bc.address row.preState row.postState
+  let bc := getElem bytecode row.rowIndex.val row.rowIndex.isLt
+  instructionLookupIndex bc.instruction bc.address row.preState row.postState
 
 /-- The honest lookup index as a table address. -/
-noncomputable def rowLookupAddress {program : JoltProgram} (row : JoltTraceRow program) :
+noncomputable def rowLookupAddress {bytecode : Array JoltInstructionRow} (row : HonestTraceRow bytecode) :
     Fin (2 ^ 128) :=
   (rowLookupIndex row).toFin
 
 /-- The per-table obligation of constraint (39): table `table` at the honest
 address is the honest lookup output. -/
-def LookupEntryCorrect (F : Type) [Field F] {program : JoltProgram}
-    (table : LookupTableKind) (row : JoltTraceRow program) : Prop :=
+def LookupEntryCorrect (F : Type) [Field F] {bytecode : Array JoltInstructionRow}
+    (table : LookupTableKind) (row : HonestTraceRow bytecode) : Prop :=
   lookupTableEntry (F := F) table (rowLookupAddress row) = ((rowLookupOutput row).toNat : F)
 
 /-! ## Uninterleaving -/
@@ -231,7 +231,7 @@ theorem jolt_sltu_value_eq (x y : BitVec 64) :
   by_cases hc : x < y <;> simp [hc, toNatInt_lt]
 
 
-theorem row_executes_exists {program : JoltProgram} (row : JoltTraceRow program) :
+theorem row_executes_exists {bytecode : Array JoltInstructionRow} (row : HonestTraceRow bytecode) :
     ∃ advice : (rowInstruction row).RuntimeAdvice,
       JoltISA.execInstr ((rowInstruction row).withRuntimeAdvice advice) row.preState =
         .ok (.Retire_Success ()) row.postState :=
@@ -246,7 +246,7 @@ theorem upper_zero_of_lt (n : Nat) (h : n < 2 ^ 64) : BitVec.ofNat 128 n >>> 64 
 /-! ## Per-table obligations -/
 
 section tables
-variable {F : Type} [Field F] {program : JoltProgram}
+variable {F : Type} [Field F] {bytecode : Array JoltInstructionRow}
 
 set_option hygiene false in
 /-- Split on the row instruction, keep the instructions that use the table, and
@@ -257,7 +257,7 @@ macro "lookup_cases" : tactic => `(tactic| (
     simp only [hi, JoltMetadata.lookupTable, reduceCtorEq, Option.some.injEq] at h <;>
     simp only [lookupTableEntry, rowLookupOutput, instructionLookupIndex, hi]))
 
-theorem lookupEntryCorrect_RangeCheck (row : JoltTraceRow program)
+theorem lookupEntryCorrect_RangeCheck (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .RangeCheck) :
     LookupEntryCorrect F .RangeCheck row := by
   lookup_cases
@@ -265,66 +265,66 @@ theorem lookupEntryCorrect_RangeCheck (row : JoltTraceRow program)
   all_goals simp [ BitVec.setWidth_ofNat_of_le, BitVec.setWidth_setWidth_of_le,
     jolt_virtual_muli_value]
 
-theorem lookupEntryCorrect_And (row : JoltTraceRow program)
+theorem lookupEntryCorrect_And (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .And) :
     LookupEntryCorrect F .And row := by
   lookup_cases
   all_goals simp only [and_entry, Riscv.andi]
 
-theorem lookupEntryCorrect_Or (row : JoltTraceRow program)
+theorem lookupEntryCorrect_Or (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Or) :
     LookupEntryCorrect F .Or row := by
   lookup_cases
   all_goals simp only [or_entry, Riscv.ori]
 
-theorem lookupEntryCorrect_Xor (row : JoltTraceRow program)
+theorem lookupEntryCorrect_Xor (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Xor) :
     LookupEntryCorrect F .Xor row := by
   lookup_cases
   all_goals simp only [xor_entry, jolt_xor_value]
 
-theorem lookupEntryCorrect_Andn (row : JoltTraceRow program)
+theorem lookupEntryCorrect_Andn (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Andn) :
     LookupEntryCorrect F .Andn row := by
   lookup_cases
   all_goals simp only [andn_entry, jolt_andn_value]
 
-theorem lookupEntryCorrect_SignedLessThan (row : JoltTraceRow program)
+theorem lookupEntryCorrect_SignedLessThan (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .SignedLessThan) :
     LookupEntryCorrect F .SignedLessThan row := by
   lookup_cases
   all_goals simp only [signedLessThan_entry, jolt_slt_value_eq, cast_ite_one_zero,
     JoltISA.branchDecisionPure, zopz0zI_s, decide_eq_true_eq]
 
-theorem lookupEntryCorrect_UnsignedLessThan (row : JoltTraceRow program)
+theorem lookupEntryCorrect_UnsignedLessThan (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .UnsignedLessThan) :
     LookupEntryCorrect F .UnsignedLessThan row := by
   lookup_cases
   all_goals simp only [unsignedLessThan_entry, jolt_sltu_value_eq, cast_ite_one_zero,
     JoltISA.branchDecisionPure, zopz0zI_u, decide_eq_true_eq, toNatInt_lt]
 
-theorem lookupEntryCorrect_SignedGreaterThanEqual (row : JoltTraceRow program)
+theorem lookupEntryCorrect_SignedGreaterThanEqual (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .SignedGreaterThanEqual) :
     LookupEntryCorrect F .SignedGreaterThanEqual row := by
   lookup_cases
   all_goals simp only [signedGreaterThanEqual_entry, cast_ite_one_zero,
     JoltISA.branchDecisionPure, zopz0zKzJ_s, decide_eq_true_eq]
 
-theorem lookupEntryCorrect_UnsignedGreaterThanEqual (row : JoltTraceRow program)
+theorem lookupEntryCorrect_UnsignedGreaterThanEqual (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .UnsignedGreaterThanEqual) :
     LookupEntryCorrect F .UnsignedGreaterThanEqual row := by
   lookup_cases
   all_goals simp only [unsignedGreaterThanEqual_entry, cast_ite_one_zero,
     JoltISA.branchDecisionPure, zopz0zKzJ_u, decide_eq_true_eq, toNatInt_ge]
 
-theorem lookupEntryCorrect_Equal (row : JoltTraceRow program)
+theorem lookupEntryCorrect_Equal (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Equal) :
     LookupEntryCorrect F .Equal row := by
   lookup_cases
   all_goals simp only [equal_entry, cast_ite_one_zero, JoltISA.branchDecisionPure,
     beq_iff_eq, jolt_assert_eq]
 
-theorem lookupEntryCorrect_NotEqual (row : JoltTraceRow program)
+theorem lookupEntryCorrect_NotEqual (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .NotEqual) :
     LookupEntryCorrect F .NotEqual row := by
   lookup_cases
@@ -559,9 +559,9 @@ theorem mulWide_lt (x y : BitVec 64) : JoltISA.mulWide x y < 2 ^ 128 := by
     _ = 2 ^ 128 := by norm_num
 
 section tables2
-variable {F : Type} [Field F] {program : JoltProgram}
+variable {F : Type} [Field F] {bytecode : Array JoltInstructionRow}
 
-theorem lookupEntryCorrect_SignExtendWord (row : JoltTraceRow program)
+theorem lookupEntryCorrect_SignExtendWord (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .SignExtendWord) :
     LookupEntryCorrect F .SignExtendWord row := by
   lookup_cases
@@ -571,14 +571,14 @@ theorem lookupEntryCorrect_SignExtendWord (row : JoltTraceRow program)
     BitVec.setWidth_ofNat_of_le (by norm_num : 32 ≤ 128), BitVec.setWidth_ofNat_of_le (by norm_num : 32 ≤ 64),
     BitVec.setWidth_setWidth_of_le _ (by norm_num : 32 ≤ 128)]
 
-theorem lookupEntryCorrect_UpperWord (row : JoltTraceRow program)
+theorem lookupEntryCorrect_UpperWord (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .UpperWord) :
     LookupEntryCorrect F .UpperWord row := by
   lookup_cases
   rw [upperWord_entry _ (mulWide_lt _ _)]
   rfl
 
-theorem lookupEntryCorrect_LowerHalfWord (row : JoltTraceRow program)
+theorem lookupEntryCorrect_LowerHalfWord (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .LowerHalfWord) :
     LookupEntryCorrect F .LowerHalfWord row := by
   lookup_cases
@@ -586,7 +586,7 @@ theorem lookupEntryCorrect_LowerHalfWord (row : JoltTraceRow program)
     Sail.BitVec.zeroExtend, Sail.BitVec.extractLsb]
   congr 2
 
-theorem lookupEntryCorrect_RangeCheckAligned (row : JoltTraceRow program)
+theorem lookupEntryCorrect_RangeCheckAligned (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .RangeCheckAligned) :
     LookupEntryCorrect F .RangeCheckAligned row := by
   lookup_cases
@@ -595,7 +595,7 @@ theorem lookupEntryCorrect_RangeCheckAligned (row : JoltTraceRow program)
   congr 2
   bv_decide
 
-theorem lookupEntryCorrect_AlignAddr (row : JoltTraceRow program)
+theorem lookupEntryCorrect_AlignAddr (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .AlignAddr) :
     LookupEntryCorrect F .AlignAddr row := by
   lookup_cases
@@ -603,19 +603,19 @@ theorem lookupEntryCorrect_AlignAddr (row : JoltTraceRow program)
     BitVec.setWidth_ofNat_of_le (by norm_num : 64 ≤ 128)]
   rfl
 
-theorem lookupEntryCorrect_SignMask (row : JoltTraceRow program)
+theorem lookupEntryCorrect_SignMask (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .SignMask) :
     LookupEntryCorrect F .SignMask row := by
   lookup_cases
   simp only [signMask_entry, jolt_movsign_value]
 
-theorem lookupEntryCorrect_VirtualNegateIf (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualNegateIf (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualNegateIf) :
     LookupEntryCorrect F .VirtualNegateIf row := by
   lookup_cases
   simp only [negateIf_entry, jolt_virtual_negate_if_value]
 
-theorem lookupEntryCorrect_Pow2 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_Pow2 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Pow2) :
     LookupEntryCorrect F .Pow2 row := by
   lookup_cases
@@ -623,7 +623,7 @@ theorem lookupEntryCorrect_Pow2 (row : JoltTraceRow program)
   all_goals congr 4
   all_goals simp [BitVec.toNat_setWidth, Nat.mod_mod_of_dvd]
 
-theorem lookupEntryCorrect_Pow2W (row : JoltTraceRow program)
+theorem lookupEntryCorrect_Pow2W (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Pow2W) :
     LookupEntryCorrect F .Pow2W row := by
   lookup_cases
@@ -631,7 +631,7 @@ theorem lookupEntryCorrect_Pow2W (row : JoltTraceRow program)
   all_goals congr 4
   all_goals simp [BitVec.toNat_setWidth, Nat.mod_mod_of_dvd]
 
-theorem lookupEntryCorrect_ShiftRightBitmask (row : JoltTraceRow program)
+theorem lookupEntryCorrect_ShiftRightBitmask (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .ShiftRightBitmask) :
     LookupEntryCorrect F .ShiftRightBitmask row := by
   lookup_cases
@@ -639,116 +639,116 @@ theorem lookupEntryCorrect_ShiftRightBitmask (row : JoltTraceRow program)
     jolt_virtual_shift_right_bitmaski_value]
   all_goals congr 4 <;> simp [BitVec.toNat_setWidth, Nat.mod_mod_of_dvd]
 
-theorem lookupEntryCorrect_ShiftRightBitmaskW (row : JoltTraceRow program)
+theorem lookupEntryCorrect_ShiftRightBitmaskW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .ShiftRightBitmaskW) :
     LookupEntryCorrect F .ShiftRightBitmaskW row := by
   lookup_cases
   simp only [shiftRightBitmaskW_entry, jolt_virtual_shift_right_bitmaskw_value]
   congr 5
 
-theorem lookupEntryCorrect_ShiftDataB (row : JoltTraceRow program)
+theorem lookupEntryCorrect_ShiftDataB (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .ShiftDataB) :
     LookupEntryCorrect F .ShiftDataB row := by
   lookup_cases
   simp only [shiftDataB_entry]
 
-theorem lookupEntryCorrect_ShiftDataH (row : JoltTraceRow program)
+theorem lookupEntryCorrect_ShiftDataH (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .ShiftDataH) :
     LookupEntryCorrect F .ShiftDataH row := by
   lookup_cases
   simp only [shiftDataH_entry]
 
-theorem lookupEntryCorrect_ShiftDataW (row : JoltTraceRow program)
+theorem lookupEntryCorrect_ShiftDataW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .ShiftDataW) :
     LookupEntryCorrect F .ShiftDataW row := by
   lookup_cases
   simp only [shiftDataW_entry]
 
-theorem lookupEntryCorrect_WindowMaskB (row : JoltTraceRow program)
+theorem lookupEntryCorrect_WindowMaskB (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .WindowMaskB) :
     LookupEntryCorrect F .WindowMaskB row := by
   lookup_cases
   simp only [windowMaskB_entry, jolt_virtual_window_mask_b_value64]
 
-theorem lookupEntryCorrect_WindowMaskH (row : JoltTraceRow program)
+theorem lookupEntryCorrect_WindowMaskH (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .WindowMaskH) :
     LookupEntryCorrect F .WindowMaskH row := by
   lookup_cases
   simp only [windowMaskH_entry, jolt_virtual_window_mask_h_value64]
 
-theorem lookupEntryCorrect_WindowMaskW (row : JoltTraceRow program)
+theorem lookupEntryCorrect_WindowMaskW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .WindowMaskW) :
     LookupEntryCorrect F .WindowMaskW row := by
   lookup_cases
   simp only [windowMaskW_entry, jolt_virtual_window_mask_w_value64]
 
-theorem lookupEntryCorrect_VirtualXORROTL1 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROTL1 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROTL1) :
     LookupEntryCorrect F .VirtualXORROTL1 row := by
   lookup_cases
   simp only [xorRotL1_entry]
 
-theorem lookupEntryCorrect_VirtualXORROT32 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROT32 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROT32) :
     LookupEntryCorrect F .VirtualXORROT32 row := by
   lookup_cases
   exact xorRot_entry 32 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROT24 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROT24 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROT24) :
     LookupEntryCorrect F .VirtualXORROT24 row := by
   lookup_cases
   exact xorRot_entry 24 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROT16 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROT16 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROT16) :
     LookupEntryCorrect F .VirtualXORROT16 row := by
   lookup_cases
   exact xorRot_entry 16 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROT63 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROT63 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROT63) :
     LookupEntryCorrect F .VirtualXORROT63 row := by
   lookup_cases
   exact xorRot_entry 63 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROTW16 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROTW16 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROTW16) :
     LookupEntryCorrect F .VirtualXORROTW16 row := by
   lookup_cases
   exact xorRotW_entry 16 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROTW12 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROTW12 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROTW12) :
     LookupEntryCorrect F .VirtualXORROTW12 row := by
   lookup_cases
   exact xorRotW_entry 12 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROTW8 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROTW8 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROTW8) :
     LookupEntryCorrect F .VirtualXORROTW8 row := by
   lookup_cases
   exact xorRotW_entry 8 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROTW7 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROTW7 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROTW7) :
     LookupEntryCorrect F .VirtualXORROTW7 row := by
   lookup_cases
   exact xorRotW_entry 7 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROTW22 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROTW22 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROTW22) :
     LookupEntryCorrect F .VirtualXORROTW22 row := by
   lookup_cases
   exact xorRotW_entry 22 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROTW19 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROTW19 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROTW19) :
     LookupEntryCorrect F .VirtualXORROTW19 row := by
   lookup_cases
   exact xorRotW_entry 19 (by decide) _ _
 
-theorem lookupEntryCorrect_VirtualXORROTW6 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualXORROTW6 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualXORROTW6) :
     LookupEntryCorrect F .VirtualXORROTW6 row := by
   lookup_cases
@@ -774,7 +774,7 @@ theorem rev8w_eq (v : BitVec 64) :
   simp only [rev8w, swapBytes32]
   bv_decide
 
-theorem lookupEntryCorrect_VirtualRev8W (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualRev8W (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualRev8W) :
     LookupEntryCorrect F .VirtualRev8W row := by
   lookup_cases
@@ -783,21 +783,21 @@ theorem lookupEntryCorrect_VirtualRev8W (row : JoltTraceRow program)
   rw [BitVec.setWidth_eq, rev8w_eq]
 
 
--- FIXME: the six shift/rotate lemmas below are false while
--- `JoltProgram.expandedBytecode` is an arbitrary array: a `VirtualSRLI` row with
--- mask immediate `2` (or a `VirtualSRL` row whose mask register holds `2`) is
--- accepted, and its entry differs from its output. Rust's expander only emits
--- right-shift bitmasks here. Once `JoltProgram` records that construction,
--- prove these for bitmask-shaped masks.
+-- FIXME: the six shift/rotate lemmas below are false for an arbitrary `bytecode`:
+-- a `VirtualSRLI` row with mask immediate `2` (or a `VirtualSRL` row whose mask
+-- register holds `2`) is accepted, and its entry differs from its output. Rust's
+-- expander only emits right-shift bitmasks here. An honest trace's bytecode comes
+-- from `SourceInstruction.expand`; once that is defined, add the bitmask shape to
+-- `ExpansionRowsValid` (trace_interface.lean) and prove these for such masks.
 /-- FALSE for arbitrary programs; left as `sorry`.
 The table reads the right operand as a right-shift bitmask (ones from bit
 `s` upward) and is correct only for such masks, while the honest output of
 `VirtualSRL`/`VirtualSRLI` shifts by `ctz` of whatever mask the row carries.
-`JoltProgram.expandedBytecode` is an arbitrary array (see the FIXME on
-`JoltProgram.rowValid`), so nothing constrains the mask shape.
+`bytecode` is any array here (see the FIXME above), so nothing constrains the
+mask shape.
 Counterexample: source `4`, mask `2`: entry `0`, output `4 >>> ctz 2 = 2`.
 See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
-theorem lookupEntryCorrect_VirtualSRL (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualSRL (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRL) :
     LookupEntryCorrect F .VirtualSRL row := by
   sorry
@@ -806,11 +806,11 @@ theorem lookupEntryCorrect_VirtualSRL (row : JoltTraceRow program)
 The table reads the right operand as a right-shift bitmask (ones from bit
 `s` upward) and is correct only for such masks, while the honest output of
 `VirtualSRA`/`VirtualSRAI` shifts by `ctz` of whatever mask the row carries.
-`JoltProgram.expandedBytecode` is an arbitrary array (see the FIXME on
-`JoltProgram.rowValid`), so nothing constrains the mask shape.
+`bytecode` is any array here (see the FIXME above), so nothing constrains the
+mask shape.
 Counterexample: source `4`, mask `2`: entry `0`, output `4.sshiftRight 1 = 2`.
 See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
-theorem lookupEntryCorrect_VirtualSRA (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualSRA (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRA) :
     LookupEntryCorrect F .VirtualSRA row := by
   sorry
@@ -819,11 +819,11 @@ theorem lookupEntryCorrect_VirtualSRA (row : JoltTraceRow program)
 The table reads the right operand as a right-shift bitmask (ones from bit
 `s` upward) and is correct only for such masks, while the honest output of
 `VirtualSRLW`/`VirtualSRLIW` shifts by `ctz` of whatever mask the row carries.
-`JoltProgram.expandedBytecode` is an arbitrary array (see the FIXME on
-`JoltProgram.rowValid`), so nothing constrains the mask shape.
+`bytecode` is any array here (see the FIXME above), so nothing constrains the
+mask shape.
 Counterexample: source `4`, mask `2`: entry `0`, output `2`. Also mask `0` for `VirtualSRLW`: entry `0`, output the sign-extended low word.
 See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
-theorem lookupEntryCorrect_VirtualSRLW (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualSRLW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRLW) :
     LookupEntryCorrect F .VirtualSRLW row := by
   sorry
@@ -832,11 +832,11 @@ theorem lookupEntryCorrect_VirtualSRLW (row : JoltTraceRow program)
 The table reads the right operand as a right-shift bitmask (ones from bit
 `s` upward) and is correct only for such masks, while the honest output of
 `VirtualSRAW`/`VirtualSRAIW` shifts by `ctz` of whatever mask the row carries.
-`JoltProgram.expandedBytecode` is an arbitrary array (see the FIXME on
-`JoltProgram.rowValid`), so nothing constrains the mask shape.
+`bytecode` is any array here (see the FIXME above), so nothing constrains the
+mask shape.
 Counterexample: source `4`, mask `2`: entry `0`, output `2`.
 See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
-theorem lookupEntryCorrect_VirtualSRAW (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualSRAW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRAW) :
     LookupEntryCorrect F .VirtualSRAW row := by
   sorry
@@ -845,11 +845,11 @@ theorem lookupEntryCorrect_VirtualSRAW (row : JoltTraceRow program)
 The table reads the right operand as a right-shift bitmask (ones from bit
 `s` upward) and is correct only for such masks, while the honest output of
 `VirtualROTRI` shifts by `ctz` of whatever mask the row carries.
-`JoltProgram.expandedBytecode` is an arbitrary array (see the FIXME on
-`JoltProgram.rowValid`), so nothing constrains the mask shape.
+`bytecode` is any array here (see the FIXME above), so nothing constrains the
+mask shape.
 Counterexample: source `4`, mask `2`: entry `4`, output `rotater 4 1 = 2`.
 See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
-theorem lookupEntryCorrect_VirtualROTR (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualROTR (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTR) :
     LookupEntryCorrect F .VirtualROTR row := by
   sorry
@@ -858,29 +858,29 @@ theorem lookupEntryCorrect_VirtualROTR (row : JoltTraceRow program)
 The table reads the right operand as a right-shift bitmask (ones from bit
 `s` upward) and is correct only for such masks, while the honest output of
 `VirtualROTRIW` shifts by `ctz` of whatever mask the row carries.
-`JoltProgram.expandedBytecode` is an arbitrary array (see the FIXME on
-`JoltProgram.rowValid`), so nothing constrains the mask shape.
+`bytecode` is any array here (see the FIXME above), so nothing constrains the
+mask shape.
 Counterexample: source `4`, mask `2`: entry `4`, output `2`.
 See `JoltConstraints/Tests/LookupShiftMask.lean`. -/
-theorem lookupEntryCorrect_VirtualROTRW (row : JoltTraceRow program)
+theorem lookupEntryCorrect_VirtualROTRW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTRW) :
     LookupEntryCorrect F .VirtualROTRW row := by
   sorry
 
-theorem lookupEntryCorrect_Pext (row : JoltTraceRow program)
+theorem lookupEntryCorrect_Pext (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Pext) :
     LookupEntryCorrect F .Pext row := by
   lookup_cases
   all_goals simp only [pextTableEntry, uninterleave_interleave, pext_eq_jolt_virtual_pext_value]
 
-theorem lookupEntryCorrect_PextSigned (row : JoltTraceRow program)
+theorem lookupEntryCorrect_PextSigned (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .PextSigned) :
     LookupEntryCorrect F .PextSigned row := by
   lookup_cases
   all_goals simp only [pextSignedTableEntry, uninterleave_interleave,
     pextSigned_eq_jolt_virtual_pext_signed_value]
 
-theorem lookupEntryCorrect_UnsignedLessThanEqual (row : JoltTraceRow program)
+theorem lookupEntryCorrect_UnsignedLessThanEqual (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .UnsignedLessThanEqual) :
     LookupEntryCorrect F .UnsignedLessThanEqual row := by
   have hexec := row_executes_exists row
@@ -895,7 +895,7 @@ theorem lookupEntryCorrect_UnsignedLessThanEqual (row : JoltTraceRow program)
     simp
   · exact absurd h2 (by simp [throw, throwThe, MonadExceptOf.throw, EStateM.throw])
 
-theorem lookupEntryCorrect_HalfwordAlignment (row : JoltTraceRow program)
+theorem lookupEntryCorrect_HalfwordAlignment (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .HalfwordAlignment) :
     LookupEntryCorrect F .HalfwordAlignment row := by
   have hexec := row_executes_exists row
@@ -910,7 +910,7 @@ theorem lookupEntryCorrect_HalfwordAlignment (row : JoltTraceRow program)
     simp
   · exact absurd h1 (by simp [pure, EStateM.pure])
 
-theorem lookupEntryCorrect_WordAlignment (row : JoltTraceRow program)
+theorem lookupEntryCorrect_WordAlignment (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .WordAlignment) :
     LookupEntryCorrect F .WordAlignment row := by
   have hexec := row_executes_exists row
@@ -925,7 +925,7 @@ theorem lookupEntryCorrect_WordAlignment (row : JoltTraceRow program)
     simp
   · exact absurd h1 (by simp [pure, EStateM.pure])
 
-theorem lookupEntryCorrect_MulUNoOverflow (row : JoltTraceRow program)
+theorem lookupEntryCorrect_MulUNoOverflow (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .MulUNoOverflow) :
     LookupEntryCorrect F .MulUNoOverflow row := by
   have hexec := row_executes_exists row
@@ -941,7 +941,7 @@ theorem lookupEntryCorrect_MulUNoOverflow (row : JoltTraceRow program)
     simp
   · exact absurd h2 (by simp [throw, throwThe, MonadExceptOf.throw, EStateM.throw])
 
-theorem lookupEntryCorrect_ValidDiv0 (row : JoltTraceRow program)
+theorem lookupEntryCorrect_ValidDiv0 (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .ValidDiv0) :
     LookupEntryCorrect F .ValidDiv0 row := by
   have hexec := row_executes_exists row
@@ -956,7 +956,7 @@ theorem lookupEntryCorrect_ValidDiv0 (row : JoltTraceRow program)
   · rw [validDiv0_entry, if_neg (by simpa using hc)]
     simp
 
-theorem lookupEntryCorrect_ValidUnsignedRemainder (row : JoltTraceRow program)
+theorem lookupEntryCorrect_ValidUnsignedRemainder (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .ValidUnsignedRemainder) :
     LookupEntryCorrect F .ValidUnsignedRemainder row := by
   have hexec := row_executes_exists row
@@ -973,7 +973,7 @@ theorem lookupEntryCorrect_ValidUnsignedRemainder (row : JoltTraceRow program)
 
 /-- Rows whose instruction has no lookup table (`FENCE`, `LD`, `SD`,
 `VirtualHostIO`) have lookup output zero. -/
-theorem rowLookupOutput_eq_zero_of_lookupTable_none (row : JoltTraceRow program)
+theorem rowLookupOutput_eq_zero_of_lookupTable_none (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = none) :
     rowLookupOutput row = 0 := by
   unfold rowLookupOutput
@@ -985,7 +985,7 @@ theorem rowLookupOutput_eq_zero_of_lookupTable_none (row : JoltTraceRow program)
 lookup output. Depends on every `lookupEntryCorrect_*` lemma, including the
 ones left as `sorry` (`VirtualSRL`, `VirtualSRA`, `VirtualSRLW`, `VirtualSRAW`,
 `VirtualROTR`, `VirtualROTRW`). -/
-theorem lookupEntryCorrect_of_lookupTable (row : JoltTraceRow program) (k : LookupTableKind)
+theorem lookupEntryCorrect_of_lookupTable (row : HonestTraceRow bytecode) (k : LookupTableKind)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some k) :
     LookupEntryCorrect F k row :=
   match k with
