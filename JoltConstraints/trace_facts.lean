@@ -132,6 +132,18 @@ theorem HonestTrace.prover_config_trace_length {joltInstance : JoltInstance Sour
   cases accepted
   exact ⟨rfl, guard_some lengthChecked⟩
 
+-- When Rust's prover accepts a run, its last row is a jump (a16z/jolt#1968).
+-- See : jolt/crates/jolt-prover/src/config.rs:122-126 at upstream 629ed77b
+theorem HonestTrace.prover_config_last_jump {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (trace.rows.back?.all fun last => trace.bytecode[last.rowIndex].instruction.is_jump) = true := by
+  unfold HonestTrace.prover_config at accepted
+  -- the jump check
+  rw [bind_some_iff] at accepted
+  obtain ⟨_, jumpChecked, _⟩ := accepted
+  exact guard_some jumpChecked
+
 -- A slot at most the highest touched slot is below ram_K: rounding up a number past
 -- the highest slot gives a power of two above it.
 theorem slot_below_ram_K (slot touched imageEnd : Nat) (atMost : slot ≤ touched) :

@@ -265,6 +265,37 @@ theorem jump_to_shape (target : BitVec 64) (sail after : SailState)
   · simp only [evenTarget, throw, throwThe] at runs
     cases runs
 
+-- A jump that retires writes the target into nextPC.
+theorem jump_to_retires (target : BitVec 64) (sail after : SailState)
+    (runs : jump_to target sail = .ok (.Retire_Success ()) after) :
+    after = { sail with regs := sail.regs.insert Register.nextPC target } := by
+  unfold jump_to ext_control_check_pc at runs
+  simp only [SailME.run, PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
+    ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
+    liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
+    bind, EStateM.bind, pure, EStateM.pure,
+    Sail.assert, PreSail.assert] at runs
+  by_cases evenTarget : (BitVec.access target 0 == 0#1) = true
+  · simp only [evenTarget, ↓reduceIte, pure, EStateM.pure, EStateM.bind,
+      ExceptT.bindCont, EStateM.map] at runs
+    cases zcaRun : currentlyEnabled extension.Ext_Zca sail with
+    | error failure middle =>
+      simp only [zcaRun] at runs
+      cases runs
+    | ok zca middle =>
+      have same := zca_enabled_unchanged sail middle zca zcaRun
+      subst same
+      by_cases misaligned : bit_to_bool (BitVec.access target 1) = true ∧
+          LeanRV64D.Functions.not zca = true
+      all_goals
+        simp only [zcaRun, ExceptT.bindCont, EStateM.map, Bool.and_eq_true, misaligned,
+          ↓reduceIte, set_next_pc, Sail.writeReg, bind, EStateM.bind,
+          pure, EStateM.pure] at runs
+        cases runs
+      rfl
+  · simp only [evenTarget, throw, throwThe] at runs
+    cases runs
+
 namespace RegistersKept
 
 -- A Sail step that, when it succeeds, removes no register.

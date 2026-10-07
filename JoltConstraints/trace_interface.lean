@@ -190,7 +190,10 @@ def JoltISA.Dst.NotX0 (dst : JoltISA.Dst) : Prop :=
   | .vreg _ => True
 
 -- What every row Rust's expansions emit satisfies: a jump writes a real register and
--- is the last row of its instruction, and a write to x0 is the canonical no-op.
+-- is the last row of its instruction, a write to x0 is the canonical no-op, and a
+-- branch is its own native row with a 13-bit offset (no expansion or inline emits a
+-- branch; Rust decodes the offset from 13 bits and sign-extends it).
+-- See : jolt/tracer/src/instruction/format/format_b.rs:18-27 (FormatB::parse)
 structure JoltInstructionRow.Valid (row : JoltInstructionRow) : Prop where
   jumpDestinationWritable :
     match row.instruction with
@@ -205,6 +208,15 @@ structure JoltInstructionRow.Valid (row : JoltInstructionRow) : Prop where
     ∀ rd, row.instruction.destination? = some (.xreg rd) →
       JoltISA.isX0 rd = true →
       row.instruction = JoltISA.Instr.canonicalNoOp
+  branchAtSourceEnd :
+    match row.instruction with
+    | .BEQ .. | .BNE .. | .BLT .. | .BGE .. | .BLTU .. | .BGEU .. => row.continues = false
+    | _ => True
+  branchOffsetSmall :
+    match row.instruction with
+    | .BEQ _ _ imm | .BNE _ _ imm | .BLT _ _ imm | .BGE _ _ imm
+    | .BLTU _ _ imm | .BGEU _ _ imm => ∃ offset : BitVec 13, imm = offset.signExtend 128
+    | _ => True
 
 theorem JoltInstructionRow.Valid.jal {row : JoltInstructionRow} (valid : row.Valid)
     {dst : JoltISA.Dst} {imm : BitVec 64} (isJal : row.instruction = .JAL dst imm) :
@@ -219,6 +231,20 @@ theorem JoltInstructionRow.Valid.jalr {row : JoltInstructionRow} (valid : row.Va
   have writable := valid.jumpDestinationWritable
   rw [isJalr] at writable
   exact writable
+
+-- A branch row ends its instruction and has a 13-bit offset.
+theorem JoltInstructionRow.Valid.branch {row : JoltInstructionRow} (valid : row.Valid)
+    {lhs rhs : JoltISA.Src} {imm : BitVec 128}
+    (isBranch : row.instruction = .BEQ lhs rhs imm ∨ row.instruction = .BNE lhs rhs imm ∨
+      row.instruction = .BLT lhs rhs imm ∨ row.instruction = .BGE lhs rhs imm ∨
+      row.instruction = .BLTU lhs rhs imm ∨ row.instruction = .BGEU lhs rhs imm) :
+    row.continues = false ∧ ∃ offset : BitVec 13, imm = offset.signExtend 128 := by
+  have ends := valid.branchAtSourceEnd
+  have small := valid.branchOffsetSmall
+  rcases isBranch with isBranch | isBranch | isBranch | isBranch | isBranch | isBranch
+  all_goals
+    rw [isBranch] at ends small
+    exact ⟨ends, small⟩
 
 -- A row that is not the last of its instruction leaves the pending nextPC unchanged,
 -- so the next row still belongs to the same instruction.

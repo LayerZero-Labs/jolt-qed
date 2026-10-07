@@ -9,7 +9,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-private theorem shouldBranch_eq_branchTaken
+theorem shouldBranch_eq_branchTaken
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Fin params.traceLength) (ht : t.val < trace.rows.size) :

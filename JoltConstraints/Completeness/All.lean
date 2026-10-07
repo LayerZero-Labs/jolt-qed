@@ -5,9 +5,8 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-/-- Assemble the individual honest-witness completeness results.
-The branch completeness result currently uses `sorry`; this theorem inherits
-that admission until its proof and the Lean model are completed. -/
+/-- Assemble the individual honest-witness completeness results. It inherits the
+`sorry`s listed in model_review.md (Proofs owed). -/
 theorem honestWitness_allConstraints
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
@@ -22,7 +21,9 @@ theorem honestWitness_allConstraints
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src trace.initialState = 0)
     (ramChunksPos : 0 < params.ramChunks)
-    (noWrap : joltInstance.program.NextPCNoWrap) :
+    (noWrap : joltInstance.program.NextPCNoWrap)
+    (lastIsJump : (trace.rows.back?.all fun last =>
+      trace.bytecode[last.rowIndex].instruction.is_jump) = true) :
     AllConstraints trace (HonestWitness.finalTraceState trace).jolt_device entry
       (HonestTrace.honestWitness (F := F) params trace) := by
   have hlayout := (finalTraceState_ioSame trace).1
@@ -45,7 +46,7 @@ theorem honestWitness_allConstraints
     nextUnexpandedPCEqLookupIfShouldJump := honestWitness_nextUnexpandedPCEqLookupIfShouldJump params trace ramFits traceFits bytecodeDomain
     nextUnexpandedPCEqPCPlusImmIfShouldBranch :=
       honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
-        params trace ramFits traceFits bytecodeDomain
+        params trace ramFits traceFits bytecodeDomain lastIsJump
     nextUnexpandedPCUpdateOtherwise := honestWitness_nextUnexpandedPCUpdateOtherwise params trace ramFits traceFits bytecodeDomain noWrap
     nextPCEqPCPlusOneIfInline := honestWitness_nextPCEqPCPlusOneIfInline params trace ramFits traceFits bytecodeDomain
     mustStartSequenceFromBeginning := honestWitness_mustStartSequenceFromBeginning params trace ramFits traceFits bytecodeDomain
@@ -211,6 +212,7 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
     trace.initialRegistersZero
     (trace.witness_params_ram_chunks_pos config accepted)
     noWrap
+    (trace.prover_config_last_jump config accepted)
   -- the verifier's I/O: the instance's layout, inputs, trimmed outputs and panic flag
   obtain ⟨layoutBuilt, _⟩ := initial_state_device joltInstance privateInputs trace.initialState
     trace.initialized
