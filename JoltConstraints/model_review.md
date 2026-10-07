@@ -233,5 +233,6 @@ theorem that uses one of them; nothing else in the new files is sorried
 |---|---|---|
 | `pc_map_ok_iff` | `program_fresh.lean` | the shape of `expand_instruction`'s output; unused so far |
 | `HonestTrace.prover_config_log_ram_K_lt` | `witness_params.lean` | every touched address is below `heap_end` (MMU), so `ram_K ≤ 2^61` |
+| `expand_program_rows_valid` | `trace_interface.lean` | facts about the rows Rust's expansions emit: a jump writes a real register and ends its instruction, an x0 write is the canonical no-op, earlier rows keep nextPC, register operands are canonical; needs `SourceInstruction.expand` defined. The Phase 1 audit also found facts the witness's match with Rust relies on, not used by any proof yet: Lean's operand order is Rust's rs1/rs2, `VirtualRev8W` has immediate 0, shift bitmasks are never 0 |
 | `HonestTraceRow.store_word_present` | `execution_facts.lean` | an SD stores over bytes that are present: RAM below `heap_end` (all put in memory by `initialRam`, stores only add) or the device's output/panic/termination words; used by `RamReadValue` |
 
