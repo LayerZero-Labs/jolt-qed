@@ -44,10 +44,14 @@ theorem honestWitness_ramAddressEqRamRaf
           (getElem trace.rows t.val ht).preState with
         | none => simp [HonestWitness.RamAddress, ht, ha]
         | some raw =>
-            obtain ⟨b, hb⟩ := ramAccess_remapped_some params trace ramFits
-              validAccesses t ht raw ha
-            rw [hr] at hb
-            contradiction
+            by_cases zero : raw = 0
+            · -- address 0 is recorded as 0
+              subst zero
+              simp [HonestWitness.RamAddress, ht, ha]
+            · -- any other address has a hot selector
+              obtain ⟨b, hb⟩ := ramAccess_remapped_some params trace ramFits t ht raw ha zero
+              rw [hr] at hb
+              contradiction
       · simp [HonestWitness.RamAddress, ht]
   | some b =>
       rw [ramRa_sum_some params trace ramFits t b hr]
@@ -68,7 +72,7 @@ theorem honestWitness_ramAddressEqRamRaf
                 (getElem trace.rows t.val ht).rowIndex.isLt).instruction
               (getElem trace.rows t.val ht).preState with
               | none => True
-              | some address => address.toNat ≠ 0 ∧
+              | some address =>
                   (address.toNat - ramLowestAddress trace.initialState.jolt_device.memory_layout) % 8 = 0) at hv
             simp only [ha] at hv
             unfold HonestWitness.remapRamAddress at hremap

@@ -54,8 +54,8 @@ theorem honestWitness_allConstraints
     productEqLeftInputMulRightInput := honestWitness_productEqLeftInputMulRightInput params trace ramFits traceFits bytecodeDomain
     shouldBranchEqLookupOutputMulBranch := honestWitness_shouldBranchEqLookupOutputMulBranch params trace ramFits traceFits bytecodeDomain
     shouldJumpEqJumpMulNotNextIsNoop := honestWitness_shouldJumpEqJumpMulNotNextIsNoop params trace ramFits traceFits bytecodeDomain
-    ramReadValueEqRamRead := honestWitness_ramReadValueEqRamRead params trace ramFits traceFits bytecodeDomain validAccesses
-    ramWriteValueEqRamReadWrite := honestWitness_ramWriteValueEqRamReadWrite params trace ramFits traceFits bytecodeDomain validAccesses
+    ramReadValueEqRamRead := honestWitness_ramReadValueEqRamRead params trace ramFits traceFits bytecodeDomain
+    ramWriteValueEqRamReadWrite := honestWitness_ramWriteValueEqRamReadWrite params trace ramFits traceFits bytecodeDomain
     ramAddressEqRamRaf := by simpa only [hlayout] using
       (honestWitness_ramAddressEqRamRaf params trace ramFits traceFits bytecodeDomain validAccesses)
     ramOutputEqPublicIo := honestWitness_ramOutputEqPublicIo params trace ramFits traceFits bytecodeDomain adviceBelowInput

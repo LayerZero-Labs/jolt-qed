@@ -8,14 +8,14 @@ namespace JoltConstraints
 open scoped BigOperators
 
 /-- Completeness target for the honest witness.
-Nonzero accessed addresses and RamFits exclude cold selectors on real memory accesses. -/
+RamFits gives every access at a nonzero address a hot selector; an access at
+address 0 is a load of 0. -/
 theorem honestWitness_ramWriteValueEqRamReadWrite
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
-    (validAccesses : ramAccessesValid trace)
     : ramWriteValueEqRamReadWrite
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
@@ -27,7 +27,7 @@ theorem honestWitness_ramWriteValueEqRamReadWrite
   cases hr : HonestWitness.remappedRamAddress trace t.val with
   | none =>
       rw [ramRa_sum_none params trace ramFits t hr]
-      exact ramWriteValue_zero_of_remapped_none params trace ramFits validAccesses t hr
+      exact ramWriteValue_zero_of_remapped_none params trace ramFits t hr
   | some b =>
       rw [ramRa_sum_some params trace ramFits t b hr]
       dsimp [HonestWitness.RamVal]

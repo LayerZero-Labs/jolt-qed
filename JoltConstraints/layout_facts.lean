@@ -218,6 +218,110 @@ theorem new_lowest_address_aligned (config : MemoryConfig) (layout : MemoryLayou
   · exact trustedStart
   · exact untrustedStart
 
+-- The I/O regions sit in order above the advice regions: the inputs start at or above
+-- the lowest address, then the outputs, the panic word, the termination word, and the
+-- end of I/O.
+-- See : jolt/common/src/jolt_device.rs:348-484 (MemoryLayout::new)
+theorem new_io_ordered (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    layout.get_lowest_address.toNat ≤ layout.input_start.toNat ∧
+    layout.input_start.toNat ≤ layout.output_start.toNat ∧
+    layout.output_start.toNat ≤ layout.panic.toNat ∧
+    layout.panic.toNat ≤ layout.termination.toNat ∧
+    layout.termination.toNat ≤ layout.io_end.toNat := by
+  obtain ⟨_, _, _, _, trustedEnd, untrustedEnd, _, _, _, inputStart⟩ :=
+    new_advice_regions config layout built
+  have lowestBelow : layout.get_lowest_address.toNat ≤ layout.input_start.toNat := by
+    unfold MemoryLayout.get_lowest_address
+    split <;> omega
+  unfold MemoryLayout.new at built
+  -- program size
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the six sizes, rounded up to multiples of 8
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the two power-of-two checks
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the size of the I/O region
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the advice regions
+  rw [bind_some_iff] at built
+  obtain ⟨⟨trustedStart, trustedTop, untrustedStart, untrustedTop⟩, placed, built⟩ := built
+  -- input end, output end, termination, I/O end
+  rw [bind_some_iff] at built
+  obtain ⟨inputEnd, inputEndAdded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨outputEnd, outputEndAdded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨termination, terminationAdded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨ioEnd, ioEndAdded, built⟩ := built
+  -- stack end, stack start, heap end
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  -- the layout itself
+  cases built
+  obtain ⟨_, _, _, _, trustedTopFits, untrustedTopFits⟩ := adviceRegions_some placed
+  obtain ⟨inputEndIs, inputEndFits⟩ := checkedAdd_some inputEndAdded
+  obtain ⟨outputEndIs, outputEndFits⟩ := checkedAdd_some outputEndAdded
+  obtain ⟨terminationIs, terminationFits⟩ := checkedAdd_some terminationAdded
+  obtain ⟨ioEndIs, ioEndFits⟩ := checkedAdd_some ioEndAdded
+  -- every value fits in 64 bits, so reading it back as a BitVec gives it unchanged
+  dsimp only at lowestBelow ⊢
+  simp only [BitVec.toNat_ofNat] at lowestBelow ⊢
+  rw [Nat.mod_eq_of_lt (a := max untrustedTop trustedTop) (by omega),
+    Nat.mod_eq_of_lt (a := inputEnd) (by omega), Nat.mod_eq_of_lt (a := outputEnd) (by omega),
+    Nat.mod_eq_of_lt (a := termination) (by omega), Nat.mod_eq_of_lt (a := ioEnd) (by omega)]
+  rw [Nat.mod_eq_of_lt (a := max untrustedTop trustedTop) (by omega)] at lowestBelow
+  omega
+
+-- With the lowest address above 8, as validate_inputs requires, no device region covers
+-- an address below 8, and the I/O region ends above it.
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:992-1005 (validate_ram_remap_base)
+theorem JoltDevice.low_address_free (device : JoltDevice) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some device.memory_layout)
+    (aboveEight : 8 < device.memory_layout.get_lowest_address.toNat)
+    (address : Nat) (low : address < 8) :
+    device.is_input address = false ∧ device.is_trusted_advice address = false ∧
+    device.is_untrusted_advice address = false ∧ device.is_output address = false ∧
+    device.is_panic address = false ∧ device.is_termination address = false ∧
+    address ≤ device.memory_layout.io_end.toNat := by
+  obtain ⟨inputAbove, outputAbove, panicAbove, terminationAbove, ioEndAbove⟩ :=
+    new_io_ordered config device.memory_layout built
+  have trustedAbove : device.memory_layout.get_lowest_address.toNat ≤
+      device.memory_layout.trusted_advice_start.toNat := by
+    unfold MemoryLayout.get_lowest_address
+    split <;> omega
+  have untrustedAbove : device.memory_layout.get_lowest_address.toNat ≤
+      device.memory_layout.untrusted_advice_start.toNat := by
+    unfold MemoryLayout.get_lowest_address
+    split <;> omega
+  unfold JoltDevice.is_input JoltDevice.is_trusted_advice JoltDevice.is_untrusted_advice
+    JoltDevice.is_output JoltDevice.is_panic JoltDevice.is_termination
+  simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not, Nat.not_le]
+  omega
+
 -- The starting device is the one given to init_state, with no outputs and no panic yet.
 theorem init_state_jolt_device (entryAddress : BitVec 64) (ram : Array (BitVec 8))
     (device : JoltDevice) (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig) :

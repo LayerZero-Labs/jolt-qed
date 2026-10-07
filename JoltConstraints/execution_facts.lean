@@ -3,6 +3,7 @@ Facts about executing Jolt instructions that the old trace assumed per row. Each
 one is proved from the instruction semantics in JoltBytecode.
 -/
 import JoltConstraints.honest_trace
+import JoltConstraints.layout_facts
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
 import Mathlib.Tactic.IntervalCases
@@ -773,6 +774,137 @@ theorem HonestTraceRow.store_aligned {bytecode : Array JoltInstructionRow}
   have runs := row.executes
   rw [withRuntimeAdvice_store row.runtimeAdvice base value imm isStore] at runs
   exact execInstr_store_aligned base value imm row.preState row.postState runs
+
+namespace JoltISA.Mmu
+
+-- A byte below address 8 reads 0: Rust's device returns 0 below RAM outside its regions.
+-- See : jolt/tracer/src/emulator/mmu.rs:450-478 (load_raw)
+--       jolt/common/src/jolt_device.rs:121-148 (JoltDevice::load)
+theorem load_raw_low (state : SailJoltState) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
+    (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)
+    (address : Nat) (low : address < 8) :
+    load_raw? state address = some 0 := by
+  obtain ⟨notInput, notTrusted, notUntrusted, notOutput, notPanic, notTermination, belowEnd⟩ :=
+    state.jolt_device.low_address_free config built aboveEight address low
+  have ramStart : JoltISA.RAM_START_ADDRESS = 0x80000000 := rfl
+  unfold load_raw? effective_address_ok JoltDevice.load?
+  simp only [notInput, notTrusted, notUntrusted, notOutput, notPanic, notTermination, ramStart]
+  have belowRam : address < 2147483648 := by omega
+  have zeroFilled : address ≤ 2147483648 - 8 := by omega
+  simp [belowRam, zeroFilled, belowEnd, show ¬ 2147483648 ≤ address by omega,
+    show ¬ 4128 ≤ address by omega, show ¬ 33554432 ≤ address by omega,
+    show ¬ 201326592 ≤ address by omega, show ¬ 268435456 ≤ address by omega,
+    show ¬ 268439552 ≤ address by omega]
+
+-- A byte below address 8 cannot be written: no output, panic or termination word is there.
+-- See : jolt/tracer/src/emulator/mmu.rs:644-667 (store_raw)
+theorem store_raw_low (state : SailJoltState) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
+    (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)
+    (address : Nat) (low : address < 8) (value : BitVec 8) :
+    store_raw? state address value = none := by
+  obtain ⟨_, _, _, notOutput, notPanic, notTermination, _⟩ :=
+    state.jolt_device.low_address_free config built aboveEight address low
+  have ramStart : JoltISA.RAM_START_ADDRESS = 0x80000000 := rfl
+  unfold store_raw? effective_address_ok
+  simp [notOutput, notPanic, notTermination, ramStart,
+    show ¬ 0x80000000 ≤ address by omega, show address < 0x80000000 by omega,
+    show ¬ 0x02000000 ≤ address by omega, show ¬ 0x0c000000 ≤ address by omega,
+    show ¬ 0x10000000 ≤ address by omega, show ¬ 0x10001000 ≤ address by omega]
+
+
+-- An LD at address 0 reads 0 and changes nothing: all eight bytes are below 8.
+-- See : jolt/tracer/src/emulator/mmu.rs:329-337, 619-635 (load_doubleword, load_doubleword_raw)
+theorem load_doubleword_zero (state : SailJoltState) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
+    (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat) :
+    load_doubleword 0 state = .ok (.Ok 0) state := by
+  have byte := load_raw_low state config built aboveEight
+  have ramStart : RAM_START_ADDRESS = 0x80000000 := rfl
+  unfold load_doubleword read_doubleword?
+  simp [ramStart, byte 0 (by decide), byte 1 (by decide), byte 2 (by decide),
+    byte 3 (by decide), byte 4 (by decide), byte 5 (by decide), byte 6 (by decide),
+    byte 7 (by decide)]
+
+-- An SD at address 0 fails: its first byte cannot be written.
+-- See : jolt/tracer/src/emulator/mmu.rs:437-443, 729-748 (store_doubleword, store_doubleword_raw)
+theorem store_doubleword_zero (state : SailJoltState) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
+    (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)
+    (value : BitVec 64) :
+    ∃ failure, store_doubleword 0 value state = .error failure state := by
+  have firstByte := store_raw_low state config built aboveEight 0 (by decide)
+  have ramStart : RAM_START_ADDRESS = 0x80000000 := rfl
+  unfold store_doubleword
+  simp [ramStart, List.range_succ, firstByte]
+
+end JoltISA.Mmu
+
+-- An LD that retires from address 0 only writes 0 to its destination.
+theorem execInstr_load_zero (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
+    (base : JoltISA.Src) (imm : BitVec 64) (state after : SailJoltState) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
+    (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)
+    (atZero : JoltISA.sourceValue base state + imm = 0)
+    (runs : JoltISA.execInstr (.LD faultClass dst base imm) state =
+      .ok (.Retire_Success ()) after) :
+    JoltISA.writeDst dst 0 state = .ok () after := by
+  simp only [JoltISA.execInstr] at runs
+  cases baseRead : JoltISA.readSrc base state with
+  | error failure middle =>
+    simp only [bind, EStateM.bind, baseRead] at runs
+    cases runs
+  | ok baseValue middle =>
+    obtain ⟨middleSame, baseIs⟩ := readSrc_value base state middle baseValue baseRead
+    simp only [bind, EStateM.bind, baseRead] at runs
+    rw [middleSame, baseIs, atZero] at runs
+    -- address 0 is aligned, and the load reads 0 without changing the state
+    rw [if_pos (by decide), EStateM.bind, JoltISA.Mmu.load_doubleword_zero state config built aboveEight]
+      at runs
+    dsimp only at runs
+    rw [EStateM.bind] at runs
+    -- what is left is the write of 0 to the destination
+    cases written : JoltISA.writeDst dst 0 state with
+    | error failure final =>
+      rw [written] at runs
+      cases runs
+    | ok _ final =>
+      rw [written] at runs
+      cases runs
+      rfl
+
+-- An SD at address 0 never retires.
+theorem execInstr_store_nonzero (base value : JoltISA.Src) (imm : BitVec 64)
+    (state after : SailJoltState) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
+    (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)
+    (runs : JoltISA.execInstr (.SD base value imm) state = .ok (.Retire_Success ()) after) :
+    JoltISA.sourceValue base state + imm ≠ 0 := by
+  intro atZero
+  simp only [JoltISA.execInstr] at runs
+  cases baseRead : JoltISA.readSrc base state with
+  | error failure middle =>
+    simp only [bind, EStateM.bind, baseRead] at runs
+    cases runs
+  | ok baseValue middle =>
+    obtain ⟨middleSame, baseIs⟩ := readSrc_value base state middle baseValue baseRead
+    simp only [bind, EStateM.bind, baseRead] at runs
+    rw [middleSame] at runs
+    cases valueRead : JoltISA.readSrc value state with
+    | error failure middle =>
+      rw [valueRead] at runs
+      cases runs
+    | ok storedValue middle =>
+      obtain ⟨storedSame, _⟩ := readSrc_value value state middle storedValue valueRead
+      rw [valueRead] at runs
+      dsimp only at runs
+      -- address 0 is aligned, and the store fails there
+      rw [storedSame, baseIs, atZero, if_pos (by decide), EStateM.bind] at runs
+      obtain ⟨failure, fails⟩ :=
+        JoltISA.Mmu.store_doubleword_zero state config built aboveEight storedValue
+      rw [fails] at runs
+      cases runs
 
 -- An SD row that retires stores over a 64-bit word that is present in memory, so the
 -- witness can record the old value, as Rust's tracer does.

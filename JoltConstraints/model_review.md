@@ -172,12 +172,13 @@ Assumed (Rust does not prove these runs):
 
 To prove, not assume:
 
-- **Address-0 loads.** Rust treats address 0 as "no RAM access"
+- **Address-0 loads.** Proved. Rust treats address 0 as "no RAM access"
   (`jolt_device.rs:491-492`, `verifier.rs:986-990`). An LD at 0 reads 0 (no
   device region starts below 8, by `validate_inputs`), and an SD at 0 never
-  retires (`mmu.rs:142-145`). Fix the one step in
-  `Constraints/RamReadSelection.lean` that uses "address ≠ 0" during the
-  rewiring. An address that wraps to 0 stays bug (01).
+  retires (`mmu.rs:142-145`): `HonestTrace.load_zero_captured`,
+  `HonestTrace.store_nonzero` (`Constraints/RamReadSelection.lean`).
+  `ramAccessesValid` now asks only for alignment and is proved
+  (`HonestTrace.ram_accesses_valid`). An address that wraps to 0 stays bug (01).
 - **Entry address 0.** The trace is empty (a first row would sit at address 0,
   below every bytecode address). Constraint (53) still holds: Rust's padding row
   is a NoOp in slot 0 (`preprocess/bytecode.rs:65-68`), the entry slot is 0
