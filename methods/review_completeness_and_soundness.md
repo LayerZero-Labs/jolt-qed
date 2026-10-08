@@ -1,0 +1,155 @@
+---
+title: Review of the completeness statement and the soundness infrastructure
+date: 2026-10-08
+---
+
+# What was reviewed
+
+- **Lean.** Branch `refactor/trace-witness`, with the trace refactor still uncommitted (it builds).
+- **Rust.** The checkout at `/Users/ari.biswas/Work-with-A16z/jolt`. HEAD is `3cb4e243`, with upstream `00508a09` (#1968, which includes `8e536f19`) merged but not yet committed. Upstream `629ed77b` is not in the local clone.
+- **How.** I read the code myself, and one independent agent reviewed it separately. I re-checked every agent claim marked *verified* below myself, unless it says otherwise.
+
+Every finding is labelled:
+- **verified**: checked in the code;
+- **suspected**: plausible but not fully checked.
+
+# A. Completeness
+
+## A1. (38) is blocked upstream by #1951 item 1 (known, documented)
+
+**Correction.** An earlier version of this review presented this as a new high-severity finding. It isn't. The theorem is a `sorry`, and `model_review.md` already pointed it at #1951. It is not a translation error: Lean matches Rust here. The problem is on the Jolt side, and it is the same kind of blocker as (01) on #1949 and (37) on #1950. The docs now say "false until #1951 item 1 is fixed".
+
+#1951 item 1 reproduces it in Rust. It covers SDK guests that exit through `platform_exit` or `std::process::exit`, and also a bare ELF `nop; j .` built without the SDK (`F3_no_termination_write`). Every such run fails at Stage 4 on the termination word.
+
+**The bare ELF, step by step.** A bare ELF is a RISC-V program built without the Jolt SDK. Take one whose entry code is the two instructions `nop; j .`.
+
+1. **The tracer executes the program.** It runs `nop`, then `j .`. After `j .`, the PC is the same as before, and the tracer's stop rule ends the run (`tracer/src/lib.rs:327-337`). The trace has two rows. Neither is a store, so the trace records no RAM write. The device's panic flag stays false.
+2. **The prover's size check accepts the trace.** `ProverConfig::derive_from_rows` requires only that the last row be a jump (`crates/jolt-prover/src/config.rs:112-117`, #1968). It is, so the check passes.
+3. **`jolt-witness` computes the RAM columns from the trace** (`crates/jolt-witness/src/backend/trace/ram.rs`). This is a separate crate from the tracer, and it reads the tracer's output.
+   - `initial_ram_state` (lines 81-130) fills the initial RAM from bytecode, advice and inputs. The termination slot is 0.
+   - `RamInc` is nonzero only on rows that store. Here it is 0 on both rows.
+   - `final_ram_state` (lines 188-194) computes `RamValFinal`. Because the panic flag is false, it sets the termination slot to 1, whether or not any row stored there.
+4. **Constraint (38) fails at the termination slot.** (38) requires `RamValFinal = initial + Σ RamInc`, which here is `1 = 0 + 0`. The prover's own Stage 4 check rejects it with `StageClaimSumcheckFailed`, so no proof is produced.
+
+**Where the 1 comes from.** The tracer never records a 1 for the termination word, and it could not: the device ignores stores to that word (#1950). The 1 is written by `jolt-witness` at witness generation, based only on the panic flag. It is there because, for a run that did not panic, the verifier's public I/O has termination = 1 (`PublicIoMemory::new`), and constraint (26) requires `RamValFinal` to equal the public I/O on that slot. So (26) and (38) together require some trace row to have stored 1 to the termination word. The tracer's stop rule requires no such store. The tracer treats the run as finished, but no witness built from it can satisfy both constraints.
+
+**Lean does the same.** `finalRamWord` sets the slot to 1 when there is no panic (`witness_helpers/ram_state.lean:78`), `initialRamWordFromState` gives 0 there, and no row adds an increment. So the honest witness gives `1 = 0` in (38) (`Constraints/RamValFinalEqInitialPlusRamInc.lean:16`). The slot is inside `ramSize`, because the prover's `ram_K` covers the program image, which lies above the I/O region.
+
+The fix proposed in #1951 makes the SDK's exit paths store 1 to the termination word, so it covers SDK guests only. A bare ELF that reaches `j .` without writing the word would still be accepted by the prover and then fail to prove. Whether that needs a further fix depends on whether Jolt promises completeness for any ELF or only for SDK-built guests. That is worth asking a16z on the issue.
+
+**Suspected follow-on.** A store to the panic word sets `panic := true` whatever value it writes (`JoltBytecode/JoltISA/JoltDevice.lean:212`), but the final panic word is always 1. A store of any value other than 1 to the panic word, or to the termination word, may break (38) the same way. Check this alongside #1951 item 2.
+
+## A2. `store_word_present` is false as stated (medium, verified)
+
+`HonestTraceRow.store_word_present` (`execution_facts.lean:956`) is stated for any `HonestTraceRow`, with any pre-state.
+
+- A RAM `SD` retires without checking that the old bytes exist; it just writes them (`JoltBytecode/JoltISA/DeviceMemory.lean:151-154`).
+- `trace_doubleword?` returns `none` unless all 8 bytes are present in `sail.mem` (`DeviceMemory.lean:26-30`).
+
+Counterexample: a pre-state with an empty `sail.mem`, and an `SD` to `RAM_START` that passes `effective_address_ok`.
+
+`HonestWitness.RamReadValue` depends on this lemma. It needs to be restated for rows of an `HonestTrace`, which are reachable from `initial_state`, rather than for an arbitrary row.
+
+## A3. Sorries behind the final theorem
+
+- (01): false until #1949 is fixed.
+- (37): false until #1950 is fixed.
+- (38): false until #1951 item 1 is fixed (A1).
+- The six shift `lookupEntryCorrect_*` lemmas: they need the shift-mask shape of the rows Rust's expansions emit.
+- `expand_program_rows_valid`: cannot be proved while `SourceInstruction.expand` is `opaque` (`program.lean:142`). Until then the whole model is parametric in an uninterpreted expansion.
+- `store_word_present`: false as stated (A2).
+- `pc_map_ok_iff` is not used by the final theorem.
+
+## A4. Premises of the final theorem
+
+Every premise is documented as Rust behaviour or an a16z assumption:
+
+- `accepted`, which covers #1968, the length limit and the #1951 item 3 exclusion;
+- `noWrap`;
+- `SpoilAssertsPass`;
+- `code_unchanged`, inside `HonestTrace`;
+- the 2 GiB rule, inside `finalRamWord`;
+- the `ram_K` FIXME.
+
+The only problem is A1: leaving the termination word out of `matches_outputs` is what hides it.
+
+## A5. Does `HonestTrace` cover every Rust run? (agent-checked, not re-verified)
+
+According to the agent, these match Rust: the stop rule (`stops` / `runs_until_stop` vs `tracer/src/lib.rs:327-337`), registers starting at zero, the first row starting at the entry, and rows linked through the decode cache. Rust has one other stop path, a trap that emits no rows; the agent believes it is unreachable because fetch cannot fault while address translation is off (suspected). I have not re-checked any of A5 myself.
+
+# B. Soundness infrastructure
+
+## B1. The witness sizes are unconstrained (high, verified)
+
+`AllConstraints` (`Constraints/All.lean:152`) leaves `params` completely free. Rust's verifier checks the sizes that come with the proof:
+
+- `trace_length` must be at most `max_padded_trace_length` (`crates/jolt-verifier/src/verifier.rs:379`);
+- `ram_K` must be a power of two between `min_ram_k` and `max_ram_k` (`verifier.rs:385-401`). `min_ram_k` covers the I/O region and the program image (`crates/jolt-program/src/preprocess/ram.rs:96-116`).
+
+Scenario: the prover picks `logRamK = 1`.
+- (26) only ranges over `Fin params.ramSize` (`Constraints/RamOutputEqPublicIo.lean:16`). The I/O mask starts at slot `(input_start - lowest) / 8`, which is at least 2 whenever the advice regions exist. So no I/O slot is checked at all.
+- Then `j .` with any claimed outputs and panic flag passes (26), while Rust rejects `ram_K < min_ram_k`.
+- (37)/(38) lose the program image for the same reason.
+- I have verified this for (26) and (37)/(38). I have not checked every other constraint at that size.
+
+The upper bound matters too (suspected). The agent says Rust's `max_ram_k` cap is what keeps (01)'s field sum from matching a wrapped address.
+
+`logBytecodeK` is also free. It looks harmless, since extra slots are NoOps (`Constraints/BytecodeReadData.lean`). Still, the verifier takes the bytecode size from its own preprocessing (`crates/jolt-verifier/src/preprocessing.rs:147`), so it would be cleaner to tie it.
+
+## B2. Instance validation is not in the relation (high, verified)
+
+`JoltInstance.validate_inputs` (`program.lean:387`) is only a field of `HonestTrace`; `ConstraintContext` doesn't have it.
+
+Scenario: the claimed outputs are `max_output_size` bytes that match the run, followed by 8 nonzero bytes.
+- The extra bytes land in the panic slot, because `panic := output_end` (`JoltBytecode/JoltISA/JoltDevice.lean:111`).
+- `ramPublicIoWord` overwrites that slot with the panic flag (`Constraints/RamReadData.lean`, `ramPublicIoWord`).
+- So the relation holds for the honest witness, while Rust returns `OutputTooLarge` (`verifier.rs:371`).
+
+The `lowest > 8` check is missing as well. Either soundness takes `validate_inputs` as a premise, or it goes into `ConstraintContext`.
+
+## B3. The relation is stricter than the verifier on chunk widths (medium, verified by search)
+
+`WitnessParams.proverChunkConfig` (`witness.lean:107`) fixes the chunk widths to the prover's choice: 4/16 below 2^25 cycles, else 8/32. The verifier takes `proof.one_hot_config` (`verifier.rs:344`). The only check I found is the structural one in `JoltFormulaDimensions::try_from` (`crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs:381-412`). Nothing ties the widths to `log_T`.
+
+A soundness theorem would therefore not cover proofs with other widths that the verifier accepts. Moving `proverChunkConfig` out of `WitnessParams` into a completeness-only fact would fix this.
+
+## B4. The field is unconstrained (medium, verified)
+
+`F` is any `Field`, and nothing in `JoltConstraints` mentions `CharP` or `ringChar`. Completeness is fine over any field. Soundness needs a large characteristic to turn field values back into 64-bit words and 128-bit lookup indices; over GF(2) the equations say almost nothing.
+
+**Suspected:** the Akita build uses a 128-bit field (`jolt-akita/src/adapters.rs:38`), while lookup indices are 128 bits. A premise "characteristic > 2^128" would then exclude Akita. Check this before choosing the premise.
+
+## B5. Private inputs (verified)
+
+The equations see the private inputs only through `initialRam`, which contains the trusted advice, the untrusted advice and the inputs (`constraint_context.lean:20`).
+
+- `advice_tape` and the per-row `runtimeAdvice` never appear in the equations. A soundness theorem can only conclude a correct run for *some* advice tape and *some* runtime advice.
+- Trusted advice is part of `privateInputs`, so the prover chooses it. In Jolt the verifier fixes which trusted advice is meant. Whether it should move into the instance is your call.
+
+## B6. `HonestTrace` is the wrong conclusion for soundness
+
+Some fields of `HonestTrace` cannot be forced by any constraint:
+
+- `code_unchanged` (`honest_trace.lean:92`) is an a16z assumption. Fetch reads the fixed bytecode, never memory.
+- `stops` and `runs_until_stop` (`honest_trace.lean:99-106`) are Rust's repeated-PC stopping rule. A prover can stop at any jump after writing the termination word.
+- `prover_config`'s length limit, the `ram_K` formula and the 2 GiB rule belong to the prover.
+
+Other fields should be forceable: `expands`/`accepted` (already in the context), `initialized` except for the tape, `starts`, `linked`, per-row execution, and the outputs and panic flag once B1 and B2 are fixed. The agent also says (17) and (27) force the last real row to be a JAL/JALR with NoOp padding only at the end; I have not checked that.
+
+**Proposal:** define a separate "valid execution" predicate over `Trace`, sitting between `Trace` and `HonestTrace`, and make it the conclusion of the soundness theorem. It does not exist yet.
+
+# C. Housekeeping (verified)
+
+- The boundary tests never run. `.gitignore:11` ignores `/JoltConstraints/Tests`, and `JoltConstraints.lean` imports only `Completeness.All`. So `RelationBoundary.lean` and `HonestWitnessDependencies.lean` are not committed and not built by `lake build`.
+- `model_review.md` cites Rust `8e536f19`. The local checkout is `3cb4e243` with an uncommitted merge of `00508a09`. Update the header once the merge is committed.
+- `methods/constraint_proving.md:85-106` still refers to `JoltTraceRow`, `JoltTrace`, `compactImmediateFits` and `JoltTrace.Terminated`, none of which exist after the refactor.
+- `ramAccessesValid (trace : Trace)` is only used by completeness, but it lives in the relation layer (`Constraints/RamReadData.lean`).
+
+# Decisions for you
+
+1. A1: ask a16z on #1951 whether completeness is promised for bare ELFs, or only for SDK guests?
+2. B1/B2: put the verifier's size and instance checks into `AllConstraints`, or take them as soundness premises?
+3. B3: move `proverChunkConfig` out of `WitnessParams`?
+4. B4: which characteristic premise, given Akita?
+5. B5: does trusted advice belong in the instance?
+6. B6: the shape of the "valid execution" predicate that soundness concludes.
