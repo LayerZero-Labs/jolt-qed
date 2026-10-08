@@ -15,7 +15,9 @@ Everything it rests on that is not proved is listed here.
 `AllConstraints joltInstance privateInputs witness` binds the constraint data to
 the instance through `ConstraintContext` (`constraint_context.lean`). Bytecode,
 initial RAM, public I/O and the entry slot cannot be chosen independently of
-these inputs. Private advice contributes to initial RAM but is not public I/O.
+these inputs. Trusted advice is part of the instance; Jolt's verifier holds a
+commitment to it, and we model its contents directly. Untrusted advice is
+prover-chosen. Both contribute to initial RAM without being public I/O.
 The context also checks the instance's input/output sizes and lowest address,
 the padded trace limit, the bytecode domain, and the verifier's RAM bounds.
 `ConstraintEquations` is the underlying equation bundle over those data.
@@ -69,7 +71,15 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   against.
 - **Not modeled.** The Akita build's 4096-cycle padding floor (`prover_config` uses the
   default build's 256), program commitments (BytecodeChunk, ProgramImageInit), and
-  TrustedAdvice/UntrustedAdvice witness columns.
+  TrustedAdvice/UntrustedAdvice witness columns and commitment protocols. Trusted
+  advice contents are modeled directly as part of the instance.
+- **Not modeled.** Rust can trace nonempty trusted-advice bytes without a commitment,
+  then fail proving because the verifier expects zeros; Lean has no separate
+  commitment-presence flag to express that mismatch.
+- **Soundness execution data.** The relation is proved independent of `advice_tape`
+  (`AllConstraints.advice_tape_irrelevant`). Reconstructing a consistent tape and
+  per-row runtime advice remains open, including the remaining-length semantics
+  of `VirtualAdviceLen`; see B5 in `methods/review_completeness_and_soundness.md`.
 - **To do.** Audit the model against upstream main `629ed77b` (decoder changes #1902
   and #1958, HostIO #1973, `MemoryLayout::try_new` #1978). Fix 75 comments that cite
   `/Users/ari.biswas/...` paths. Drop the unused `ramFits`, `traceFits` and

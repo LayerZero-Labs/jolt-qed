@@ -250,7 +250,7 @@ theorem initial_state_ram_present {Source : Type} (joltInstance : JoltInstance S
         omega
       have present := init_state_byte_present joltInstance.program.entry_address
         (initialRam layout joltInstance.program.memory_init)
-        { inputs := joltInstance.inputs, trusted_advice := privateInputs.trusted_advice,
+        { inputs := joltInstance.inputs, trusted_advice := joltInstance.trusted_advice,
           untrusted_advice := privateInputs.untrusted_advice, outputs := #[], panic := false,
           memory_layout := layout }
         { bytes := privateInputs.advice_tape, readPosition := 0 } {}

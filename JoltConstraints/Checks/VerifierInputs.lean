@@ -16,6 +16,7 @@ private def baseInstance : JoltInstance SourceInstruction where
   memory_config := {
     max_input_size := 0, max_trusted_advice_size := 0, max_untrusted_advice_size := 0,
     max_output_size := 64, stack_size := 0, heap_size := 0, program_size := none }
+  trusted_advice := #[]
   inputs := #[]
   outputs := #[]
   panic := false

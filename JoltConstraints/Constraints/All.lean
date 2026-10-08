@@ -145,7 +145,10 @@ structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
   bytecodeRaChunkHammingWeight : JoltConstraints.bytecodeRaChunkHammingWeight witness
   ramRaChunkHammingWeight : JoltConstraints.ramRaChunkHammingWeight witness
 
-/-- The relation for a fixed public instance and explicit private inputs.
+/-- The relation for a fixed instance and explicit prover inputs. Trusted advice
+is part of the instance; Jolt's verifier holds a commitment to it, and we model
+its contents directly. The execution tape in `privateInputs` is irrelevant to
+this relation; see `AllConstraints.advice_tape_irrelevant`.
 The context is existential only to name preprocessing results: its certificates
 bind every bytecode row, initial RAM word, public I/O value and entry slot to
 these inputs. No execution trace or honest-witness construction is an input. -/

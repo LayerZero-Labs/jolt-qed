@@ -92,10 +92,33 @@ A soundness theorem would therefore not cover proofs with other widths that the 
 
 ## B5. Private inputs (verified)
 
-The equations see the private inputs only through `initialRam`, which contains the trusted advice, the untrusted advice and the inputs (`constraint_context.lean:20`).
+`initialRam` contains the program image, trusted advice, untrusted advice and public inputs.
 
-- `advice_tape` and the per-row `runtimeAdvice` never appear in the equations. A soundness theorem can only conclude a correct run for *some* advice tape and *some* runtime advice.
-- Trusted advice is part of `privateInputs`, so the prover chooses it. In Jolt the verifier fixes which trusted advice is meant. Whether it should move into the instance is your call.
+Trusted advice is part of the instance (`JoltInstance.trusted_advice`); in Jolt
+the verifier holds a commitment to it (`verifier.rs:41`), and we model its contents
+directly. This does not claim that the verifier learns those bytes, and no PCS
+is needed in this non-succinct relation. `JoltPrivateInputs` contains only untrusted advice and the
+execution tape. `initial_state` loads trusted advice from the instance, so the
+prover cannot change it while keeping the instance fixed. This is proved by
+`JoltInstance.initial_states_agree_on_trusted_advice` (`advice_inputs.lean`).
+
+Not modeled: Rust can trace nonempty trusted-advice bytes without a commitment,
+then fail proving because the verifier expects zeros; Lean has no separate
+commitment-presence flag to express that mismatch.
+
+`AllConstraints.advice_tape_irrelevant` proves that changing the execution tape
+does not affect the relation. Per-row `runtimeAdvice` belongs to the reconstructed
+trace, not the relation's inputs. A soundness conclusion must therefore allow
+existential choices of these execution data, while keeping the instance's trusted
+advice fixed and using the untrusted advice supplied to the relation.
+
+**Still owed:** prove that satisfying witnesses admit consistent execution data.
+Tape independence alone does not prove existence of a suitable tape. In
+particular, `VirtualAdviceLen` reports remaining bytes, so the lengths and reads
+must agree along the run. The local Rust lookup implementation for that
+instruction uses `RangeCheck`; the necessary cross-row consistency needs an
+audit before promising reconstruction under the tracer's tape semantics. This
+is an unresolved soundness obligation, not an established end-to-end Rust bug.
 
 ## B6. `HonestTrace` is the wrong conclusion for soundness
 
@@ -122,5 +145,5 @@ Other fields should be forceable: `expands`/`accepted` (already in the context),
 2. B1/B2: put the verifier's size and instance checks into `AllConstraints`, or take them as soundness premises?
 3. B3: move `proverChunkConfig` out of `WitnessParams`?
 4. B4: which characteristic premise, given Akita?
-5. B5: does trusted advice belong in the instance?
+5. B5: trusted advice is part of the instance, modeled directly; reconstructing consistent tape/runtime advice remains open.
 6. B6: the shape of the "valid execution" predicate that soundness concludes.

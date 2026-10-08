@@ -342,18 +342,24 @@ def initialRam (layout : MemoryLayout) (memory_init : List (BitVec 64 × BitVec 
     zeros
 
 /-
-DRAFT: the instance x, what the verifier sees, and the prover's private inputs.
+The fixed instance and the prover's private execution inputs.
 See : jolt/crates/jolt-verifier/src/verifier.rs:37-42 (verify takes preprocessing,
       public_io : JoltDevice, proof, optional trusted advice commitment)
       jolt/crates/jolt-verifier/src/verifier.rs:356-430 (validate_inputs)
-The program and the memory configuration stand in for the verifier's
-preprocessing; the trusted advice commitment is out of scope.
+The program and memory configuration stand in for verifier preprocessing.
+Trusted advice is part of the instance. In Jolt the verifier holds a commitment
+to it; this non-succinct relation models its contents directly. No PCS is part
+of this relation, and this representation does not assert that the verifier
+learns the bytes.
 -/
 structure JoltInstance (Source : Type) where
   program : Rv64ProgramImage Source
   -- NOTE: memory_config.program_size is ignored; it is always computed from the
   -- program image (see JoltInstance.memory_layout).
   memory_config : MemoryConfig
+  -- Trusted advice is fixed by the instance; we model its contents directly.
+  -- In Jolt an absent commitment contributes the all-zero image (#[]).
+  trusted_advice : Array (BitVec 8)
   inputs : Array (BitVec 8)
   outputs : Array (BitVec 8)
   panic : Bool
@@ -368,9 +374,9 @@ def JoltInstance.toJolt (joltInstance : JoltInstance RiscvInstruction) :
     JoltInstance SourceInstruction :=
   { joltInstance with program := joltInstance.program.toJolt }
 
--- What only the prover has.
+-- Prover-chosen inputs. The execution tape is used by the tracer; the constraint
+-- relation observes untrusted_advice through initial RAM, but not advice_tape.
 structure JoltPrivateInputs where
-  trusted_advice : Array (BitVec 8)
   untrusted_advice : Array (BitVec 8)
   advice_tape : Array (BitVec 8)
 
@@ -431,12 +437,12 @@ noncomputable def JoltInstance.initial_state {Source : Type} (joltInstance : Jol
     Option SailJoltState := do
   let layout ← joltInstance.memory_layout
   -- create_emulator asserts these sizes against the configuration.
-  if joltInstance.memory_config.max_trusted_advice_size.toNat < privateInputs.trusted_advice.size then none
+  if joltInstance.memory_config.max_trusted_advice_size.toNat < joltInstance.trusted_advice.size then none
   if joltInstance.memory_config.max_untrusted_advice_size.toNat < privateInputs.untrusted_advice.size then none
   if joltInstance.memory_config.max_input_size.toNat < joltInstance.inputs.size then none
   let device : JoltDevice :=
     { inputs := joltInstance.inputs
-      trusted_advice := privateInputs.trusted_advice
+      trusted_advice := joltInstance.trusted_advice
       untrusted_advice := privateInputs.untrusted_advice
       outputs := #[]
       panic := false

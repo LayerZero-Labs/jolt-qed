@@ -393,16 +393,16 @@ theorem init_state_jolt_device (entryAddress : BitVec 64) (ram : Array (BitVec 8
       { device with outputs := #[], panic := false } :=
   rfl
 
--- The starting device holds the instance's layout and the prover's advice, which
--- create_emulator has checked against the configured maximums.
+-- The starting device holds the fixed trusted advice and the prover's untrusted
+-- advice. create_emulator checks both against the configured maximums.
 -- See : jolt/tracer/src/lib.rs:364-408 (create_emulator)
 theorem initial_state_device {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :
     joltInstance.memory_layout = some initialState.jolt_device.memory_layout ∧
-    initialState.jolt_device.trusted_advice = privateInputs.trusted_advice ∧
+    initialState.jolt_device.trusted_advice = joltInstance.trusted_advice ∧
     initialState.jolt_device.untrusted_advice = privateInputs.untrusted_advice ∧
-    privateInputs.trusted_advice.size ≤
+    joltInstance.trusted_advice.size ≤
       joltInstance.memory_config.max_trusted_advice_size.toNat ∧
     privateInputs.untrusted_advice.size ≤
       joltInstance.memory_config.max_untrusted_advice_size.toNat := by
@@ -425,7 +425,7 @@ theorem initial_state_device {Source : Type} (joltInstance : JoltInstance Source
   · cases built
   rw [bind_some_iff] at built
   obtain ⟨_, _, built⟩ := built
-  -- the device holds the layout and the prover's advice
+  -- the device holds the layout and the two specified advice buffers
   cases built
   rw [init_state_jolt_device]
   exact ⟨layoutBuilt, rfl, rfl, Nat.le_of_not_lt trustedTooLong,

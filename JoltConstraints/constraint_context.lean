@@ -9,9 +9,11 @@ namespace JoltConstraints
 inputs, with the verifier's public-input and domain-size checks. This contains
 no execution rows or honesty certificate.
 
-`io` is the verifier's public I/O. `initialRam` also includes private advice; it
-is not claimed to be public. Its encoding must come from `initial_state` for the
-explicit private inputs, rather than an arbitrary prover-supplied memory image. -/
+`io` is the verifier's public I/O. Trusted advice is part of the instance; Jolt's
+verifier holds a commitment to it, and we model its contents directly.
+`initialRam` includes this advice and the prover's untrusted advice, so it is
+not claimed to be public. Its encoding comes from `initial_state`; the execution
+tape does not affect this encoding. See `AllConstraints.advice_tape_irrelevant`. -/
 structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) (params : WitnessParams) where
   bytecode : Array JoltInstructionRow
