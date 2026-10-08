@@ -28,3 +28,10 @@ Of course the constraints do not reduce to a single witness.
 That would be ideal, but that would be inefficient. 
 What is most important is the constraints being restrictive enough to only allow claims about machine state that essentially lock the prover to following each instructions semantics. 
 This is what the essence of soundness is.
+
+
+## Soundness Definition
+
+What does Jolt mean when they say a proof system is sound. 
+We will be extremely precise here.
+

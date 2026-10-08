@@ -177,12 +177,12 @@ theorem _root_.HonestTrace.final_state_eq {joltInstance : JoltInstance SourceIns
 -- In English: if the program runs honestly and Rust's prover accepts it, then
 -- the honest witness should satisfy the verifier's checks and all constraints,
 -- under the existing assumptions below. This claim still depends on documented
--- sorrys, including the RAM-size mismatch for an empty program image.
+-- sorrys (model_review.md, Proofs owed).
 -- The equations are checked against the verifier's public I/O, when the instance
 -- claims the outputs the run produced. What is assumed: Rust's prover accepts the
 -- run (`accepted`; open issues are in model_review.md), no spoil assert fails, the PC does not wrap
--- (a16z), and, inside the trace and the witness, the code does not change during the run
--- (`code_unchanged`, a16z) and the run uses no RAM 2 GiB or more above RAM_START
+-- (a16z), the program is not empty (a16z), and, inside the witness, the run uses no RAM
+-- 2 GiB or more above RAM_START
 -- (`finalRamWord`, a16z). `slots`, `entry` and `io` name what Rust computes; they always
 -- exist.
 theorem _root_.HonestTrace.allConstraints_rust_sizes
@@ -199,6 +199,10 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
     (spoilAssertsPass : trace.SpoilAssertsPass)
     -- assumed: a legal ELF's PC does not wrap (a16z confirmed)
     (noWrap : joltInstance.program.NextPCNoWrap)
+    -- assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program is
+    -- never empty, so its memory image loads at least one byte. Rust's prover does not
+    -- reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
+    (imageNonempty : joltInstance.program.ImageNonempty)
     -- the instance claims the outputs the run produced
     (claimsRunOutputs : trace.matches_outputs)
     -- the public I/O the verifier checks the proof against
@@ -218,7 +222,7 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
       obtain ⟨isPadded, bounded⟩ := trace.prover_config_trace_length config accepted
       simpa only [trace.witness_params_trace_length config accepted, isPadded] using bounded
     bytecodeDomain := trace.witness_params_bytecode_domain config accepted
-    ramSizeBounds := trace.witness_params_ram_bounds config accepted
+    ramSizeBounds := trace.witness_params_ram_bounds config accepted imageNonempty
     entryIsRust := ⟨slots, preprocessed, entryIsRust⟩ }, ?_⟩
   change ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace) io entry
     (trace.honestWitness (F := F) (trace.witness_params config accepted))

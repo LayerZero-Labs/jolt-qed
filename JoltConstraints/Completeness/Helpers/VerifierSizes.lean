@@ -84,18 +84,23 @@ theorem _root_.HonestTrace.witness_params_ram_minimum_of_nonempty
     omega
   · cases computed
 
--- Blocked: the empty-image Rust reproducer chooses 4 slots while the verifier
--- requires 16. Keep the original completeness claim and its explicit sorry,
--- as for (01), (37), and (38); do not exclude the run with a new premise.
--- For nonempty images the lower inequality above is proved. Establishing that
--- both bounds compute successfully and proving the upper inequality remain
--- proof obligations, not further established Rust bugs. In particular, audit
--- the existing touched + 1 deviation from Rust before claiming an upper bound.
--- See bug-report/verifier-ram-minimum/README.md and methods/constraint_proving.md.
+-- The prover's chosen RAM size passes the verifier's RAM bounds.
+-- FIXME: false until a16z/jolt#1951 item 4 is fixed, so this stays sorry (the upper
+-- half below cannot be proved before then).
+-- An empty program is excluded by the a16z-confirmed assumption below.
+-- Lower half: proved above once the minimum computes; still to prove that both
+-- bounds compute successfully.
+-- Upper half: false until a16z/jolt#1951 item 4 is fixed. compute_max_ram_k rounds
+-- total_bytes / 8 down. When heap_end is not a multiple of 8, a program may access
+-- the word that straddles heap_end, and touched + 1 then rounds past the maximum.
 theorem _root_.HonestTrace.witness_params_ram_bounds
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (config : ProverConfig) (accepted : trace.prover_config = some config)
+    -- Assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program
+    -- is never empty, so its memory image loads at least one byte. Rust's prover does
+    -- not reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
+    (imageNonempty : joltInstance.program.ImageNonempty) :
     joltInstance.ram_size_in_bounds (trace.witness_params config accepted).ramSize = true := by
   sorry
 

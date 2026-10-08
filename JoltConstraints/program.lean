@@ -226,6 +226,14 @@ structure Rv64ProgramImage (Source : Type) where
 def Rv64ProgramImage.NextPCNoWrap {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
   ∀ row ∈ image.instructions, row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 
+-- The program is not empty: its memory image loads at least one byte.
+-- Assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program is
+-- never empty. Rust's prover does not reject an empty ELF: it traces it and picks
+-- its sizes, and only Rust's verifier rejects those sizes (InvalidRamK;
+-- bug-report/verifier-ram-minimum). (model_review.md, Assumptions)
+def Rv64ProgramImage.ImageNonempty {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
+  image.memory_init ≠ []
+
 -- The host sets the program size from the image.
 -- See : jolt/crates/jolt-host/src/program.rs:319
 def Rv64ProgramImage.program_size {Source : Type} (image : Rv64ProgramImage Source) :

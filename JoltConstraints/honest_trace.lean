@@ -4,6 +4,8 @@ instruction execution, initialization, row linkage and termination. The program
 and input assumptions below are the existing conditions on Rust-accepted runs.
 -/
 import JoltConstraints.trace
+import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divw_math
+import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divuw_math
 
 set_option autoImplicit false
 
@@ -35,21 +37,14 @@ def source_is_compressed (bytecode : Array JoltInstructionRow)
   let last := start.val + (bytecode[start].virtual_sequence_remaining.getD 0).toNat
   (bytecode[last]?.map (·.is_compressed)).getD false
 
--- The rows Rust's tracer records when it runs the instance's program on these
--- private inputs. Every row runs a row of the decoded bytecode, as the proof does;
--- `code_unchanged` says the code in memory is still that bytecode when it runs.
--- See : jolt/tracer/src/lib.rs:74-131 (trace)
-structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
+-- A run of the instance's program on these private inputs: it starts at the entry
+-- from the initial state, every row runs a row of the expanded bytecode, and each
+-- row follows the previous one as in Rust's tracer. It says nothing about when the
+-- run stops or which runtime advice it uses; `HonestTrace` adds both.
+structure ValidRun (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) extends Trace where
   expands : expand_program joltInstance.program = some bytecode
-  -- Rust only proves programs it accepts: the PC map checks and the entry check
-  -- pass during preprocessing, before any tracing.
-  -- See : jolt/crates/jolt-prover/src/preprocessing.rs:43-50
-  accepted : joltInstance.bytecode.isSome
-  -- Rust's verifier rejects an instance whose inputs or layout fail its checks.
-  -- See : jolt/crates/jolt-verifier/src/verifier.rs:356-383
-  valid_inputs : joltInstance.validate_inputs = true
-  -- The same successful-execution condition previously stored in every row.
+  -- Every row retires.
   executes : ∀ row ∈ rows,
     JoltISA.execInstr (bytecode[row.rowIndex].instruction.withRuntimeAdvice row.runtimeAdvice)
       row.preState = .ok (.Retire_Success ()) row.postState
@@ -81,18 +76,88 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
         bytecode[next.rowIndex].starts_source ∧
         next.preState = advance_pc address (source_is_compressed bytecode next.rowIndex)
           current.postState
-  -- When an instruction starts, the bytes at its address are the ones the program
-  -- was loaded with. Rust's tracer reads and decodes the instruction from memory at
-  -- that moment (cpu.rs:631-637, 695-717; stores clear its decode cache, mmu.rs:646,
-  -- 689, 710, 731), so it then runs the same instruction as the bytecode.
-  -- ASSUMPTION: a program does not change its own code. a16z confirmed on 2026-10-07
-  -- that this is an assumption of Jolt: its tracer runs the code in memory, its proof
-  -- checks the bytecode, and the two differ only when a program runs code it changed
-  -- (a16z/jolt#1952; model_review.md, Upstream issues).
-  code_unchanged : ∀ row ∈ rows, bytecode[row.rowIndex].starts_source →
-    ∀ offset < (if source_is_compressed bytecode row.rowIndex then 2 else 4),
-      row.preState.sail.mem.get? (bytecode[row.rowIndex].address.toNat + offset) =
-        initialState.sail.mem.get? (bytecode[row.rowIndex].address.toNat + offset)
+
+-- No run of the program changes its own code: whenever an instruction starts, the
+-- bytes at its address are the ones the program was loaded with. Rust's tracer reads
+-- and decodes each instruction from memory as it starts (cpu.rs:631-637, 695-717;
+-- stores clear its decode cache, mmu.rs:646, 689, 710, 731), while the proof checks
+-- the bytecode, so the two run the same instructions exactly when this holds.
+-- Assumed: a16z told us on 2026-10-07 that Jolt can assume a program does not change
+-- its own code (a16z/jolt#1952; model_review.md, Assumptions).
+def JoltInstance.CodeUnchanged (joltInstance : JoltInstance SourceInstruction) : Prop :=
+  ∀ (privateInputs : JoltPrivateInputs) (run : ValidRun joltInstance privateInputs),
+    ∀ row ∈ run.rows, run.bytecode[row.rowIndex].starts_source →
+      ∀ offset < (if source_is_compressed run.bytecode row.rowIndex then 2 else 4),
+        row.preState.sail.mem.get? (run.bytecode[row.rowIndex].address.toNat + offset) =
+          run.initialState.sail.mem.get? (run.bytecode[row.rowIndex].address.toNat + offset)
+
+def JoltISA.Instr.isVirtualAdvice : JoltISA.Instr → Bool
+  | .VirtualAdvice .. => true
+  | _ => false
+
+-- The number of VirtualAdvice rows in the bytecode from `start` up to, but not
+-- including, `start + offset`. For a row `offset` rows into a source instruction's
+-- sequence, this is its place among that sequence's advice rows, which is the order
+-- in which Rust patches them.
+def advice_ordinal (bytecode : Array JoltInstructionRow) (start offset : Nat) : Nat :=
+  ((List.range offset).filter fun j =>
+    (bytecode[start + j]?.map (·.instruction.isVirtualAdvice)).getD false).length
+
+-- The advice values Rust's tracer patches into the VirtualAdvice rows of one source
+-- instruction, in order. The tracer computes them from the operands just before the
+-- instruction's rows run. Each value is the one the bytecode project's equivalence
+-- proofs use for that expansion; they agree with Rust's formulas, including division
+-- by zero and the signed overflow cases. Other instructions are not patched.
+-- See : jolt/tracer/src/instruction/div.rs, divu.rs, rem.rs, remu.rs, divw.rs,
+--       divuw.rs, remw.rs, remuw.rs (trace)
+-- TODO: SC.W and SC.D patch their first VirtualAdvice with a reservation-success
+-- flag (jolt/tracer/src/instruction/scw.rs, scd.rs); add them with their expansions.
+def SourceInstruction.rustAdvice (source : SourceInstruction) (state : SailJoltState) :
+    List (BitVec 64) :=
+  let value (register : regidx) := JoltISA.sourceValue (.xreg register) state
+  match source with
+  | .riscv (.DIV _ rs1 rs2 _) => [sail_div_value (value rs1) (value rs2) false]
+  | .riscv (.DIVU _ rs1 rs2 _) => [sail_div_value (value rs1) (value rs2) true]
+  | .riscv (.REM _ rs1 rs2 _) => [rem_advice_value (value rs1) (value rs2)]
+  | .riscv (.REMU _ rs1 rs2 _) => [sail_div_value (value rs1) (value rs2) true]
+  | .riscv (.DIVW _ rs1 rs2 _) => [divw_advice_value (value rs1) (value rs2)]
+  | .riscv (.DIVUW _ rs1 rs2 _) => [sail_divuw_advice (value rs1) (value rs2)]
+  | .riscv (.REMW _ rs1 rs2 _) => [remw_advice_value (value rs1) (value rs2)]
+  | .riscv (.REMUW _ rs1 rs2 _) => [sail_divuw_advice (value rs1) (value rs2)]
+  | _ => []
+
+-- The rows Rust's tracer records when it runs the instance's program on these
+-- private inputs: a valid run that uses Rust's runtime advice and stops where
+-- Rust's tracer stops. Whether the code in memory stays the bytecode is not a
+-- field; it follows from the instance assumption `CodeUnchanged`
+-- (`HonestTrace.code_unchanged`).
+-- See : jolt/tracer/src/lib.rs:74-131 (trace)
+structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
+    (privateInputs : JoltPrivateInputs) extends ValidRun joltInstance privateInputs where
+  -- Rust only proves programs it accepts: the PC map checks and the entry check
+  -- pass during preprocessing, before any tracing.
+  -- See : jolt/crates/jolt-prover/src/preprocessing.rs:43-50
+  accepted : joltInstance.bytecode.isSome
+  -- Rust's verifier rejects an instance whose inputs or layout fail its checks.
+  -- See : jolt/crates/jolt-verifier/src/verifier.rs:356-383
+  valid_inputs : joltInstance.validate_inputs = true
+  -- Rust patches each VirtualAdvice row of a source instruction with the values its
+  -- tracer computes for that instruction (`rustAdvice`), in order, from the state
+  -- just before the instruction's rows run. A row Rust does not patch keeps the
+  -- value in the bytecode.
+  -- See : jolt/tracer/src/instruction/mod.rs:207-233 (trace_inline_sequence_with_advice)
+  advice_from_rust : ∀ (i k : Nat) (first row : TraceRow bytecode),
+    rows[i]? = some first → bytecode[first.rowIndex].starts_source →
+    k ≤ (bytecode[first.rowIndex].virtual_sequence_remaining.getD 0).toNat →
+    rows[i + k]? = some row →
+    ∀ source ∈ joltInstance.program.instructions,
+      source.address = bytecode[first.rowIndex].address →
+      ∀ (dst : JoltISA.Dst) (template imm : BitVec 64),
+        bytecode[row.rowIndex].instruction = .VirtualAdvice dst template imm →
+        bytecode[row.rowIndex].instruction.withRuntimeAdvice row.runtimeAdvice =
+          .VirtualAdvice dst
+            ((source.instruction.rustAdvice first.preState)[
+              advice_ordinal bytecode first.rowIndex.val k]?.getD template) imm
   -- The run ends on the last row of an instruction that left the PC pointing at
   -- itself. Rust's tracer stops there.
   -- See : jolt/tracer/src/lib.rs:113-120, 327-337 (trace, step_emulator)
@@ -109,7 +174,18 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   nonempty : joltInstance.program.entry_address ≠ 0 → 0 < rows.size
 
 instance {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} :
-    CoeOut (HonestTrace joltInstance privateInputs) Trace := ⟨HonestTrace.toTrace⟩
+    CoeOut (HonestTrace joltInstance privateInputs) Trace :=
+  ⟨fun trace => trace.toValidRun.toTrace⟩
+
+-- An honest trace never runs changed code, given the instance assumption.
+theorem HonestTrace.code_unchanged {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (codeUnchanged : joltInstance.CodeUnchanged) :
+    ∀ row ∈ trace.rows, trace.bytecode[row.rowIndex].starts_source →
+      ∀ offset < (if source_is_compressed trace.bytecode row.rowIndex then 2 else 4),
+        row.preState.sail.mem.get? (trace.bytecode[row.rowIndex].address.toNat + offset) =
+          trace.initialState.sail.mem.get? (trace.bytecode[row.rowIndex].address.toNat + offset) :=
+  codeUnchanged privateInputs trace.toValidRun
 
 -- Recover the certified view of a recorded row for execution proofs.
 abbrev HonestTrace.row {joltInstance : JoltInstance SourceInstruction}

@@ -50,34 +50,6 @@ The fix proposed in #1951 makes the SDK's exit paths store 1 to the termination 
 
 # B. Soundness infrastructure
 
-## B1. The witness sizes are unconstrained (high, verified)
-
-`AllConstraints` (`Constraints/All.lean:152`) leaves `params` completely free. Rust's verifier checks the sizes that come with the proof:
-
-- `trace_length` must be at most `max_padded_trace_length` (`crates/jolt-verifier/src/verifier.rs:379`);
-- `ram_K` must be a power of two between `min_ram_k` and `max_ram_k` (`verifier.rs:385-401`). `min_ram_k` covers the I/O region and the program image (`crates/jolt-program/src/preprocess/ram.rs:96-116`).
-
-Scenario: the prover picks `logRamK = 1`.
-- (26) only ranges over `Fin params.ramSize` (`Constraints/RamOutputEqPublicIo.lean:16`). The I/O mask starts at slot `(input_start - lowest) / 8`, which is at least 2 whenever the advice regions exist. So no I/O slot is checked at all.
-- Then `j .` with any claimed outputs and panic flag passes (26), while Rust rejects `ram_K < min_ram_k`.
-- (37)/(38) lose the program image for the same reason.
-- I have verified this for (26) and (37)/(38). I have not checked every other constraint at that size.
-
-The upper bound matters too (suspected). The agent says Rust's `max_ram_k` cap is what keeps (01)'s field sum from matching a wrapped address.
-
-`logBytecodeK` is also free. It looks harmless, since extra slots are NoOps (`Constraints/BytecodeReadData.lean`). Still, the verifier takes the bytecode size from its own preprocessing (`crates/jolt-verifier/src/preprocessing.rs:147`), so it would be cleaner to tie it.
-
-## B2. Instance validation is not in the relation (high, verified)
-
-`JoltInstance.validate_inputs` (`program.lean:387`) is only a field of `HonestTrace`; `ConstraintContext` doesn't have it.
-
-Scenario: the claimed outputs are `max_output_size` bytes that match the run, followed by 8 nonzero bytes.
-- The extra bytes land in the panic slot, because `panic := output_end` (`JoltBytecode/JoltISA/JoltDevice.lean:111`).
-- `ramPublicIoWord` overwrites that slot with the panic flag (`Constraints/RamReadData.lean`, `ramPublicIoWord`).
-- So the relation holds for the honest witness, while Rust returns `OutputTooLarge` (`verifier.rs:371`).
-
-The `lowest > 8` check is missing as well. Either soundness takes `validate_inputs` as a premise, or it goes into `ConstraintContext`.
-
 ## B3. The relation is stricter than the verifier on chunk widths (medium, verified by search)
 
 `WitnessParams.proverChunkConfig` (`witness.lean:107`) fixes the chunk widths to the prover's choice: 4/16 below 2^25 cycles, else 8/32. The verifier takes `proof.one_hot_config` (`verifier.rs:344`). The only check I found is the structural one in `JoltFormulaDimensions::try_from` (`crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs:381-412`). Nothing ties the widths to `log_T`.
@@ -88,7 +60,15 @@ A soundness theorem would therefore not cover proofs with other widths that the 
 
 `F` is any `Field`, and nothing in `JoltConstraints` mentions `CharP` or `ringChar`. Completeness is fine over any field. Soundness needs a large characteristic to turn field values back into 64-bit words and 128-bit lookup indices; over GF(2) the equations say almost nothing.
 
-**Suspected:** the Akita build uses a 128-bit field (`jolt-akita/src/adapters.rs:38`), while lookup indices are 128 bits. A premise "characteristic > 2^128" would then exclude Akita. Check this before choosing the premise.
+**Akita:** the Akita build uses a 128-bit field (`jolt-akita/src/adapters.rs:38`), while lookup indices are 128 bits. The user confirmed this on 2026-10-08. A premise "characteristic > 2^128" would therefore exclude Akita.
+
+**Decision (2026-10-08).** This is a non-succinct relation, without a PCS, and we keep `F` generic. Field requirements are added only when a soundness lemma needs them, as we specialise:
+
+- Each lemma states the smallest condition it uses, as a bound on `ringChar F` (for example `2^64 < ringChar F` to recover a 64-bit word), not as a fixed field. The final soundness theorem then takes the largest bound its lemmas use.
+- We use the most generic condition that works. We pull Jolt's actual field (BN254's scalar field) only if some step needs more than a size bound.
+- When the first lemma needs a characteristic above 2^128, record there that Akita is excluded from that point on.
+
+Completeness is unaffected, because it already holds over any field.
 
 ## B5. Private inputs (verified)
 
@@ -128,7 +108,7 @@ Some fields of `HonestTrace` cannot be forced by any constraint:
 - `stops` and `runs_until_stop` (`honest_trace.lean:99-106`) are Rust's repeated-PC stopping rule. A prover can stop at any jump after writing the termination word.
 - `prover_config`'s length limit, the `ram_K` formula and the 2 GiB rule belong to the prover.
 
-Other fields should be forceable: `expands`/`accepted` (already in the context), `initialized` except for the tape, `starts`, `linked`, per-row execution, and the outputs and panic flag once B1 and B2 are fixed. The agent also says (17) and (27) force the last real row to be a JAL/JALR with NoOp padding only at the end; I have not checked that.
+Other fields should be forceable: `expands`/`accepted` (already in the context), `initialized` except for the tape, `starts`, `linked`, per-row execution, and the outputs and panic flag (now that the verifier's size and instance checks are in the relation). The agent also says (17) and (27) force the last real row to be a JAL/JALR with NoOp padding only at the end; I have not checked that.
 
 **Proposal:** define a separate "valid execution" predicate over `Trace`, sitting between `Trace` and `HonestTrace`, and make it the conclusion of the soundness theorem. It does not exist yet.
 
@@ -142,8 +122,7 @@ Other fields should be forceable: `expands`/`accepted` (already in the context),
 # Decisions for you
 
 1. A1: ask a16z on #1951 whether completeness is promised for bare ELFs, or only for SDK guests?
-2. B1/B2: put the verifier's size and instance checks into `AllConstraints`, or take them as soundness premises?
-3. B3: move `proverChunkConfig` out of `WitnessParams`?
-4. B4: which characteristic premise, given Akita?
-5. B5: trusted advice is part of the instance, modeled directly; reconstructing consistent tape/runtime advice remains open.
-6. B6: the shape of the "valid execution" predicate that soundness concludes.
+2. B3: move `proverChunkConfig` out of `WitnessParams`?
+3. B4: which characteristic premise, given Akita?
+4. B5: trusted advice is part of the instance, modeled directly; reconstructing consistent tape/runtime advice remains open.
+5. B6: the shape of the "valid execution" predicate that soundness concludes.

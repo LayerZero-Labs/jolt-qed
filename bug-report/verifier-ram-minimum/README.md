@@ -1,5 +1,11 @@
 # Empty program: prover RAM size falls below the verifier minimum
 
+**Status: out of scope, not reported upstream.** a16z told us by phone on 2026-10-08
+that Jolt can assume a program is never empty. The Lean model records this as the
+assumption `Rv64ProgramImage.ImageNonempty` (the memory image loads at least one
+byte). This folder is kept as the evidence for why that assumption is needed: Rust's
+prover does not reject an empty ELF, and only Rust's verifier rejects the sizes it picks.
+
 An ELF with an empty text section and entry address 0 passes program
 preprocessing and produces an empty compact trace. Rust's prover derives
 `ram_K = 4`; with a 64-byte output region, Rust's verifier requires at least 16
