@@ -59,7 +59,6 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
 | (37) `honestWitness_ramValEqInitialPlusPrefixRamInc` | false until #1950 is fixed |
 | (38) `honestWitness_ramValFinalEqInitialPlusRamInc` | false until #1951 item 1 is fixed |
 | `HonestTrace.witness_params_ram_bounds` (`Completeness/Helpers/VerifierSizes.lean`) | The empty program is excluded by the `ImageNonempty` assumption. Lower half: proved once the minimum computes successfully; still to prove that both bounds compute successfully. Upper half: false until #1951 item 4 is fixed, because the verifier's maximum rounds the word count down |
-| `pc_map_ok_iff` (`program.lean`) | the shape of `expand_instruction`'s output; not used by the final theorem |
 
 ## Gaps in our model
 

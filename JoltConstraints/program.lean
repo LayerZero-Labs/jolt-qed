@@ -245,26 +245,6 @@ def pc_map_ok (rows : Array JoltInstructionRow) : Bool :=
   runs.all (fun run => run.all (bytecode_address_ok ·.address) && valid_run run) &&
     decide addresses.Nodup && rows.size < 2 ^ 32
 
-/-- Rust's PC map accepts an expanded program exactly when the source program
-satisfies four conditions. Precisely: if `expand_program image = some rows`, then
-`pc_map_ok rows = true` if and only if
-- every source address is at least `RAM_START_ADDRESS` (0x80000000),
-- every source address is even,
-- the source addresses are pairwise distinct, and
-- there are fewer than 2³² expanded rows.
-
-The proof uses only the shape of `expand_instruction`'s output (one unstamped row,
-or 1 to 64 stamped rows counting down to 0), so it holds whatever
-`SourceInstruction.expand` returns. -/
-theorem pc_map_ok_iff (image : Rv64ProgramImage SourceInstruction)
-    (rows : Array JoltInstructionRow) (expanded : expand_program image = some rows) :
-    pc_map_ok rows = true ↔
-      (∀ row ∈ image.instructions,
-        JoltISA.RAM_START_ADDRESS ≤ row.address.toNat ∧ row.address.toNat % 2 = 0) ∧
-      (image.instructions.toList.map (·.address)).Nodup ∧
-      rows.size < 2 ^ 32 := by
-  sorry
-
 -- Rust's preprocess: reject what the PC map rejects, then a NoOp at slot 0, the
 -- expanded rows, and NoOps up to a power of two, at least 2.
 -- Rust also checks each row against the profile and that no store names rd; the

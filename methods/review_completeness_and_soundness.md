@@ -46,7 +46,6 @@ The fix proposed in #1951 makes the SDK's exit paths store 1 to the termination 
 - (38): false until #1951 item 1 is fixed (A1).
 - `witness_params_ram_bounds`: the upper half is false until #1951 item 4 is fixed, because the verifier's maximum RAM size rounds down. The lower half is proved. Still to prove: both bounds compute. An empty program is excluded by the a16z assumption `ImageNonempty`.
 - Closed: `expand_program_rows_valid` and the six shift `lookupEntryCorrect_*` lemmas, proved from `SourceInstruction.expand` (`expansion_facts.lean`).
-- `pc_map_ok_iff` is not used by the final theorem.
 
 # B. Soundness infrastructure
 
