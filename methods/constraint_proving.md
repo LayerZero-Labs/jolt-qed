@@ -81,32 +81,34 @@ theorem with its existing premises. Prove the necessary intermediate lemmas
 and use the actual honest-witness definitions. Check that any helper theorem
 does not merely move the `sorry` or the same unproved obligation elsewhere.
 
-Before declaring a blocker, inspect the proof inputs already carried by
-[`JoltTraceRow`](../JoltConstraints/trace.lean) and
-[`JoltTrace`](../JoltConstraints/trace.lean). For a row `trace.rows[i]`, use:
+Before declaring a blocker, inspect the facts already available about an honest
+trace. A row is a [`TraceRow`](../JoltConstraints/trace.lean); `trace.row i h` gives
+the [`HonestTraceRow`](../JoltConstraints/honest_trace.lean) view with its execution
+certificate. For a row `trace.rows[i]`, use:
 
-| Row field | Available fact |
+| Row fact | Available fact |
 | --- | --- |
-| `rowIndex`, `validProgramRow` | The selected bytecode row and its `Valid` certificate. The separate Rust-generation proof for program validity may still be deferred. |
-| `runtimeAdvice`, `compactImmediateFits` | The per-execution advice payload and signed-immediate bound checked during proof-trace conversion. |
-| `preState`, `postState`, `executes` | Full states and successful `execInstr` execution of the selected final instruction **with its runtime advice**. Start here when a frame or state-transition fact appears missing. |
-| `hostIOPreservesPC` | An explicit HostIO **PC-only** certificate. It does not state anything about `nextPC`. |
-| `storeMemoryPresent`, `loadCaptureMatches` | Store old-word presence and the captured load-value agreement used by proof-trace conversion. |
+| `rowIndex`, `HonestTrace.rowValid` | The selected bytecode row and its `Valid` certificate (`trace_interface.lean`). It rests on the sorried `expand_program_rows_valid` until `expand` is defined. |
+| `runtimeAdvice`, `HonestTrace.advice_from_rust` | The per-execution advice, and the fact that it is the value Rust's tracer patches in. |
+| `preState`, `postState`, `HonestTrace.executes` | Full states and successful `execInstr` execution of the selected final instruction **with its runtime advice**. Start here when a frame or state-transition fact appears missing. |
+| `HonestTraceRow.hostIOPreservesPC` | An explicit HostIO **PC-only** certificate. It does not state anything about `nextPC`. |
+| `HonestTrace.store_word_present` | The old word of a store is present (`memory_presence.lean`). |
 
-For the whole trace, use these fields before introducing any new condition:
+For the whole trace, `HonestTrace` (`honest_trace.lean`) extends `ValidRun`. Use
+these before introducing any new condition:
 
-| Trace field | Available fact |
+| Trace fact | Available fact |
 | --- | --- |
-| `rows`, `rowAssumptions` | The execution rows and each row's `TraceAssumptions` at `preState`: architectural register readability. See [`trace.lean`](../JoltConstraints/trace.lean). A new field must hold at every Rust-reachable pre-state, not just be convenient; [TraceNonempty](../JoltConstraints/Tests/TraceNonempty.lean) fails if the bundle stops holding at `init_state`. |
-| `sequenceLayout` | Source/expansion layout, including the current `addressAdvanceNoWrap` assumption. Check which property is actually needed. |
-| `initialized`, `startsAtEntry`, `startsAtInitial` | Initial-state shape, first bytecode entry, and first row's prepared state. |
-| `noEarlyNextPCChange` | The nextPC frame for a nonfinal expansion row. Its source-to-row justification is separate work. |
-| `linked`, `successor` | Consecutive state preparation and the next row's index or source address after a final row. |
+| `rows`, `HonestTrace.rowAssumptions` | The execution rows and each row's `TraceAssumptions` at `preState`: architectural register readability (`trace_interface.lean`). A new condition must hold at every Rust-reachable pre-state, not just be convenient. |
+| `HonestTrace.noEarlyNextPCChange`, `HonestTrace.registerOperandsCanonical` | Facts about what `expand` emits (`trace_interface.lean`), from the sorried `expand_program_rows_valid`. Check which property is actually needed. |
+| `initialized`, `HonestTrace.startsAtEntry`, `HonestTrace.startsAtInitial` | Initial-state shape, first bytecode entry, and first row's prepared state. |
+| `linked`, `HonestTrace.linkedState`, `HonestTrace.successor` | Consecutive state preparation and the next row's index or source address after a final row. |
+| `stops`, `runs_until_stop`, `nonempty` | Rust's PC-stall stopping rule, and a nonempty run when the entry address is nonzero. |
 
-[`JoltTrace.Terminated`](../JoltConstraints/execution_conditions.lean) is a
-separate theorem premise, not an automatic trace field. When present, it gives
-a nonempty trace, a final source-instruction row, and Rust's repeated-PC
-stopping condition. Do not infer termination for a trace prefix.
+`HonestTrace.Terminated` (`execution_conditions.lean`) packages `stops` for a
+nonempty trace; `HonestTrace.terminated` derives it. Whether the code in memory
+stays the bytecode is not a trace field: it follows from the instance assumption
+`JoltInstance.CodeUnchanged` (`HonestTrace.code_unchanged`).
 
 If a proof stalls, search the `JoltBytecode/` project before writing a new
 assumption or re-proving ISA facts. Useful starting points are

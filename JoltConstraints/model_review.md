@@ -1,7 +1,7 @@
 ---
 title: Jolt model in Lean, open issues
 updated: 2026-10-08
-rust: $HOME/Work-With-A16z/jolt at 8e536f19 (upstream main 629ed77b not yet audited)
+rust: $HOME/Work-with-A16z/jolt at 3cb4e243 with upstream 00508a09 (#1968, includes 8e536f19) merged but not yet committed (upstream main 629ed77b not yet audited)
 ---
 
 # Open issues
@@ -79,7 +79,7 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
 - **Soundness execution data.** The relation is proved independent of `advice_tape`
   (`AllConstraints.advice_tape_irrelevant`). Reconstructing a consistent tape and
   per-row runtime advice remains open, including the remaining-length semantics
-  of `VirtualAdviceLen`; see B5 in `methods/review_completeness_and_soundness.md`.
+  of `VirtualAdviceLen`; see B6 in `methods/review_completeness_and_soundness.md`.
 - **To do.** Audit the model against upstream main `629ed77b` (decoder changes #1902
   and #1958, HostIO #1973, `MemoryLayout::try_new` #1978). Fix 75 comments that cite
   `/Users/ari.biswas/...` paths. Drop the unused `ramFits`, `traceFits` and

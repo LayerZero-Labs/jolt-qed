@@ -172,13 +172,21 @@ noncomputable def HonestTrace.witness_params
     split
     · decide
     · decide
-  proverChunkConfig := by
-    by_cases small : Nat.log2 config.trace_length < 25
-    · exact Or.inl ⟨small, if_pos small, if_pos small⟩
-    · exact Or.inr ⟨by omega, if_neg small, if_neg small⟩
   logT_lt_usizeBits := trace.prover_config_log_trace_length_lt config accepted
   logRamK_lt_usizeBits := trace.prover_config_log_ram_K_lt config accepted
   logBytecodeK_lt_usizeBits := trace.log_bytecode_size_lt
+
+-- Rust's sizes use the chunk widths Rust's prover picks.
+theorem HonestTrace.witness_params_chunk_config
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (accepted : trace.prover_config = some config) :
+    (trace.witness_params config accepted).ProverChunkConfig := by
+  unfold WitnessParams.ProverChunkConfig HonestTrace.witness_params
+  dsimp only
+  by_cases small : Nat.log2 config.trace_length < 25
+  · exact Or.inl ⟨small, if_pos small, if_pos small⟩
+  · exact Or.inr ⟨by omega, if_neg small, if_neg small⟩
 
 -- For n ≥ 1, the smallest power of two that holds n + 1 is the one just above n.
 theorem clog_succ_eq_log2_succ (n : Nat) (positive : 1 ≤ n) :

@@ -1,4 +1,5 @@
 import JoltConstraints.Constraints.RamReadData
+import JoltConstraints.Completeness.Helpers.RamAccesses
 import JoltConstraints.Completeness.Helpers.IOSetupFrame
 import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
 

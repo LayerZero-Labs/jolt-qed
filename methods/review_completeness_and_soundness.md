@@ -44,85 +44,64 @@ The fix proposed in #1951 makes the SDK's exit paths store 1 to the termination 
 - (01): false until #1949 is fixed.
 - (37): false until #1950 is fixed.
 - (38): false until #1951 item 1 is fixed (A1).
+- `witness_params_ram_bounds`: the upper half is false until #1951 item 4 is fixed, because the verifier's maximum RAM size rounds down. The lower half is proved. Still to prove: both bounds compute. An empty program is excluded by the a16z assumption `ImageNonempty`.
 - The six shift `lookupEntryCorrect_*` lemmas: they need the shift-mask shape of the rows Rust's expansions emit.
 - `expand_program_rows_valid`: cannot be proved while `SourceInstruction.expand` is `opaque` (`program.lean:142`). Until then the whole model is parametric in an uninterpreted expansion.
 - `pc_map_ok_iff` is not used by the final theorem.
 
 # B. Soundness infrastructure
 
-## B3. The relation is stricter than the verifier on chunk widths (medium, verified by search)
+Closed: B1/B2 (verifier checks in the relation), B3 (chunk widths: only Rust's
+structural checks are in `WitnessParams`; the prover's choice is the
+completeness-only `ProverChunkConfig`), B4 (field: keep `F` generic, add
+`ringChar` bounds lemma by lemma; Akita's prime is about 2^128 − 2^32), B5
+(trusted advice is part of the instance; the relation ignores the tape).
 
-`WitnessParams.proverChunkConfig` (`witness.lean:107`) fixes the chunk widths to the prover's choice: 4/16 below 2^25 cycles, else 8/32. The verifier takes `proof.one_hot_config` (`verifier.rs:344`). The only check I found is the structural one in `JoltFormulaDimensions::try_from` (`crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs:381-412`). Nothing ties the widths to `log_T`.
+## B6. The soundness statement
 
-A soundness theorem would therefore not cover proofs with other widths that the verifier accepts. Moving `proverChunkConfig` out of `WitnessParams` into a completeness-only fact would fix this.
+**The language, agreed.** Jolt's own claim: `x ∈ L` iff for some prover inputs
+(untrusted advice and tape), Rust's run of the program reaches the PC stall and
+its final device has `x`'s outputs (trailing zeros dropped) and panic flag. In Lean
+this is "there exist `a` and `trace : HonestTrace x a` with `trace.matches_outputs`".
+Sources: `jolt-sdk/src/host_utils.rs:318` (the claim is the tracer's final device),
+`book/src/usage/guests_hosts/guests.md:144, 223` (outputs and panic flag are what
+the proof attests; PC-stall exit).
 
-## B4. The field is unconstrained (medium, verified)
+**Premises, decided 2026-10-08.** `2^127 < ringChar F` (Akita's prime, about
+2^128 − 2^32, and BN254's satisfy it), and the conditions on the program
+`NextPCNoWrap` and `CodeUnchanged` (both a16z).
 
-`F` is any `Field`, and nothing in `JoltConstraints` mentions `CharP` or `ringChar`. Completeness is fine over any field. Soundness needs a large characteristic to turn field values back into 64-bit words and 128-bit lookup indices; over GF(2) the equations say almost nothing.
+**In place.** `ValidRun` (a run with no stop rule or advice choice); `HonestTrace`
+extends it with Rust's stop rule and Rust's runtime advice (`advice_from_rust`, the
+division family; SC.W/SC.D to come). Self-modifying code is excluded by the
+instance assumption `JoltInstance.CodeUnchanged` (a16z).
 
-**Akita:** the Akita build uses a 128-bit field (`jolt-akita/src/adapters.rs:38`), while lookup indices are 128 bits. The user confirmed this on 2026-10-08. A premise "characteristic > 2^128" would therefore exclude Akita.
+**Known not sound for this `L`** (from reading the code, not run):
+1. The trace may end at any jump, not only at the PC stall. A program that stores
+   1 to termination and then writes more output can be proved with its earlier output.
+2. Any store to the panic address sets the device's panic flag, but the verifier
+   reads the stored value. A store of 0 there can be proved as "no panic".
 
-**Decision (2026-10-08).** This is a non-succinct relation, without a PCS, and we keep `F` generic. Field requirements are added only when a soundness lemma needs them, as we specialise:
+Both need exit behaviour SDK guests never have. To report to a16z, with `L`
+justified from their book.
 
-- Each lemma states the smallest condition it uses, as a bound on `ringChar F` (for example `2^64 < ringChar F` to recover a 64-bit word), not as a fixed field. The final soundness theorem then takes the largest bound its lemmas use.
-- We use the most generic condition that works. We pull Jolt's actual field (BN254's scalar field) only if some step needs more than a size bound.
-- When the first lemma needs a characteristic above 2^128, record there that Akita is excluded from that point on.
+**Still owed:** show that a satisfying witness gives consistent execution data:
+- runtime advice equal to Rust's (the bytecode project proves this direction for
+  DIV, DIVU, DIVW; check the other five);
+- an advice tape consistent with the reads. `VirtualAdviceLen` reports the
+  remaining bytes, so lengths and reads must agree along the run; its cross-row
+  consistency needs an audit.
 
-Completeness is unaffected, because it already holds over any field.
+# C. Housekeeping
 
-## B5. Private inputs (verified)
+Done: `ramAccessesValid` moved to `Completeness/Helpers/RamAccesses.lean`;
+`constraint_proving.md` names the current trace facts; `model_review.md`'s header
+states the Rust checkout as it is. Build-time check scripts are not kept in the
+code (the `Checks/` folder was removed).
 
-`initialRam` contains the program image, trusted advice, untrusted advice and public inputs.
-
-Trusted advice is part of the instance (`JoltInstance.trusted_advice`); in Jolt
-the verifier holds a commitment to it (`verifier.rs:41`), and we model its contents
-directly. This does not claim that the verifier learns those bytes, and no PCS
-is needed in this non-succinct relation. `JoltPrivateInputs` contains only untrusted advice and the
-execution tape. `initial_state` loads trusted advice from the instance, so the
-prover cannot change it while keeping the instance fixed. This is proved by
-`JoltInstance.initial_states_agree_on_trusted_advice` (`advice_inputs.lean`).
-
-Not modeled: Rust can trace nonempty trusted-advice bytes without a commitment,
-then fail proving because the verifier expects zeros; Lean has no separate
-commitment-presence flag to express that mismatch.
-
-`AllConstraints.advice_tape_irrelevant` proves that changing the execution tape
-does not affect the relation. Per-row `runtimeAdvice` belongs to the reconstructed
-trace, not the relation's inputs. A soundness conclusion must therefore allow
-existential choices of these execution data, while keeping the instance's trusted
-advice fixed and using the untrusted advice supplied to the relation.
-
-**Still owed:** prove that satisfying witnesses admit consistent execution data.
-Tape independence alone does not prove existence of a suitable tape. In
-particular, `VirtualAdviceLen` reports remaining bytes, so the lengths and reads
-must agree along the run. The local Rust lookup implementation for that
-instruction uses `RangeCheck`; the necessary cross-row consistency needs an
-audit before promising reconstruction under the tracer's tape semantics. This
-is an unresolved soundness obligation, not an established end-to-end Rust bug.
-
-## B6. `HonestTrace` is the wrong conclusion for soundness
-
-Some fields of `HonestTrace` cannot be forced by any constraint:
-
-- `code_unchanged` (`honest_trace.lean:92`) is an a16z assumption. Fetch reads the fixed bytecode, never memory.
-- `stops` and `runs_until_stop` (`honest_trace.lean:99-106`) are Rust's repeated-PC stopping rule. A prover can stop at any jump after writing the termination word.
-- `prover_config`'s length limit, the `ram_K` formula and the 2 GiB rule belong to the prover.
-
-Other fields should be forceable: `expands`/`accepted` (already in the context), `initialized` except for the tape, `starts`, `linked`, per-row execution, and the outputs and panic flag (now that the verifier's size and instance checks are in the relation). The agent also says (17) and (27) force the last real row to be a JAL/JALR with NoOp padding only at the end; I have not checked that.
-
-**Proposal:** define a separate "valid execution" predicate over `Trace`, sitting between `Trace` and `HonestTrace`, and make it the conclusion of the soundness theorem. It does not exist yet.
-
-# C. Housekeeping (verified)
-
-- The boundary tests never run. `.gitignore:11` ignores `/JoltConstraints/Tests`, and `JoltConstraints.lean` imports only `Completeness.All`. So `RelationBoundary.lean` and `HonestWitnessDependencies.lean` are not committed and not built by `lake build`.
-- `model_review.md` cites Rust `8e536f19`. The local checkout is `3cb4e243` with an uncommitted merge of `00508a09`. Update the header once the merge is committed.
-- `methods/constraint_proving.md:85-106` still refers to `JoltTraceRow`, `JoltTrace`, `compactImmediateFits` and `JoltTrace.Terminated`, none of which exist after the refactor.
-- `ramAccessesValid (trace : Trace)` is only used by completeness, but it lives in the relation layer (`Constraints/RamReadData.lean`).
+Still open: the Rust checkout's merge of `00508a09` is uncommitted, so update
+`model_review.md`'s header once it is committed.
 
 # Decisions for you
 
 1. A1: ask a16z on #1951 whether completeness is promised for bare ELFs, or only for SDK guests?
-2. B3: move `proverChunkConfig` out of `WitnessParams`?
-3. B4: which characteristic premise, given Akita?
-4. B5: trusted advice is part of the instance, modeled directly; reconstructing consistent tape/runtime advice remains open.
-5. B6: the shape of the "valid execution" predicate that soundness concludes.

@@ -24,7 +24,9 @@ theorem honestWitness_constraintEquations
     (ramChunksPos : 0 < params.ramChunks)
     (noWrap : joltInstance.program.NextPCNoWrap)
     (lastIsJump : (trace.rows.back?.all fun last =>
-      trace.bytecode[last.rowIndex].instruction.is_jump) = true) :
+      trace.bytecode[last.rowIndex].instruction.is_jump) = true)
+    -- the chunk widths Rust's prover picks; Rust's sizes satisfy this
+    (chunkConfig : params.ProverChunkConfig) :
     ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace)
       (TraceWitness.finalTraceState trace).jolt_device entry
       (HonestTrace.honestWitness (F := F) params trace) := by
@@ -97,7 +99,7 @@ theorem honestWitness_constraintEquations
     ramRaChunkBooleanity := honestWitness_ramRaChunkBooleanity params trace ramFits traceFits bytecodeDomain
     ramHammingWeightBooleanity := honestWitness_ramHammingWeightBooleanity params trace ramFits traceFits bytecodeDomain
     ramRaEqChunkProduct := honestWitness_ramRaEqChunkProduct params trace ramFits traceFits bytecodeDomain ramChunksPos
-    instructionRaEqChunkProduct := honestWitness_instructionRaEqChunkProduct params trace ramFits traceFits bytecodeDomain
+    instructionRaEqChunkProduct := honestWitness_instructionRaEqChunkProduct params trace ramFits traceFits bytecodeDomain chunkConfig
     -- Stage 7: hamming weights
     instructionRaChunkHammingWeight := honestWitness_instructionRaChunkHammingWeight params trace ramFits traceFits bytecodeDomain
     bytecodeRaChunkHammingWeight := honestWitness_bytecodeRaChunkHammingWeight params trace ramFits traceFits bytecodeDomain
@@ -239,6 +241,7 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
     (trace.witness_params_ram_chunks_pos config accepted)
     noWrap
     (trace.prover_config_last_jump config accepted)
+    (trace.witness_params_chunk_config config accepted)
   -- the verifier's I/O: the instance's layout, inputs, trimmed outputs and panic flag
   obtain ⟨layoutBuilt, _⟩ := initial_state_device joltInstance privateInputs trace.initialState
     trace.initialized

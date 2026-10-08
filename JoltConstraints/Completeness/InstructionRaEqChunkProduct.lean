@@ -25,12 +25,13 @@ private theorem mod_pow_div_digit (x bits n offset : Nat) (ho : offset < n) :
   simpa only [one_mul] using Nat.mul_le_mul_right bits this
 
 private theorem instruction_shift_split (p : WitnessParams)
+    (chunkConfig : p.ProverChunkConfig)
     (chunk : Fin p.virtualInstructionChunks)
     (offset : Fin (p.virtualChunkBits / p.chunkBits)) :
     (p.instructionChunks - 1 - (instructionSmallChunkIndex p chunk offset).val) * p.chunkBits =
       (p.virtualInstructionChunks - 1 - chunk.val) * p.virtualChunkBits +
         (p.virtualChunkBits / p.chunkBits - 1 - offset.val) * p.chunkBits := by
-  rcases p.proverChunkConfig with ⟨_, hb, hv⟩ | ⟨_, hb, hv⟩
+  rcases chunkConfig with ⟨_, hb, hv⟩ | ⟨_, hb, hv⟩
   · have hc : chunk.val < 8 := by
       simpa [WitnessParams.virtualInstructionChunks, hv] using chunk.isLt
     have ho : offset.val < 4 := by simpa [hb, hv] using offset.isLt
@@ -45,6 +46,7 @@ private theorem instruction_shift_split (p : WitnessParams)
     omega
 
 private theorem virtual_digit_eq_small (p : WitnessParams)
+    (chunkConfig : p.ProverChunkConfig)
     (chunk : Fin p.virtualInstructionChunks)
     (offset : Fin (p.virtualChunkBits / p.chunkBits)) (x : Nat) :
     (TraceWitness.addressChunk p.virtualChunkBits chunk x /
@@ -56,7 +58,7 @@ private theorem virtual_digit_eq_small (p : WitnessParams)
   let inner := (p.virtualChunkBits / p.chunkBits - 1 - offset.val) * p.chunkBits
   let small := (p.instructionChunks - 1 -
     (instructionSmallChunkIndex p chunk offset).val) * p.chunkBits
-  have hsum : small = coarse + inner := instruction_shift_split p chunk offset
+  have hsum : small = coarse + inner := instruction_shift_split p chunkConfig chunk offset
   have hbits : (p.virtualChunkBits / p.chunkBits) * p.chunkBits =
       p.virtualChunkBits := Nat.div_mul_cancel p.chunkBits_dvd_virtual
   change ((x / 2 ^ coarse % 2 ^ p.virtualChunkBits) / 2 ^ inner) %
@@ -69,13 +71,16 @@ private theorem virtual_digit_eq_small (p : WitnessParams)
 
 /-- Completeness target for the honest witness.
 The small and virtual chunks decompose the same 128-bit lookup address.
-WitnessParams carries both required chunk-width divisibility conditions. -/
+WitnessParams carries both required chunk-width divisibility conditions; the
+proof also uses the widths Rust's prover picks (`ProverChunkConfig`), which the
+honest sizes satisfy (`HonestTrace.witness_params_chunk_config`). -/
 theorem honestWitness_instructionRaEqChunkProduct
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (chunkConfig : params.ProverChunkConfig) :
     instructionRaEqChunkProduct
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk address t
@@ -97,7 +102,7 @@ theorem honestWitness_instructionRaEqChunkProduct
       TraceWitness.addressChunk params.chunkBits offset actual =
         TraceWitness.addressChunk params.chunkBits
           (instructionSmallChunkIndex params chunk offset) x := by
-    exact virtual_digit_eq_small params chunk offset x
+    exact virtual_digit_eq_small params chunkConfig chunk offset x
   change (if address.val = actual then (1 : F) else 0) =
     ∏ offset : Fin n,
       TraceWitness.addressChunkEntry params.chunkBits

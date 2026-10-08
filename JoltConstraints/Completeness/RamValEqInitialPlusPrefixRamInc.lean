@@ -1,6 +1,7 @@
 import JoltConstraints.honest_witness
 import JoltConstraints.Constraints.RamValEqInitialPlusPrefixRamInc
 import JoltConstraints.Constraints.RamReadData
+import JoltConstraints.Completeness.Helpers.RamAccesses
 
 set_option autoImplicit false
 
