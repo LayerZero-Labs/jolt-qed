@@ -1,3 +1,4 @@
+import JoltConstraints.honest_witness
 import JoltConstraints.Constraints.InstructionLookupRa
 
 set_option autoImplicit false
@@ -15,48 +16,48 @@ theorem instructionLookupRa_honest {F : Type} [Field F] (params : WitnessParams)
     instructionLookupRa
       (HonestTrace.honestWitness (F := F) params trace)
       address t =
-      if address.val = (HonestWitness.lookupIndex trace t.val).toNat then 1 else 0 := by
+      if address.val = (TraceWitness.lookupIndex trace t.val).toNat then 1 else 0 := by
   have hcover : params.virtualInstructionChunks * params.virtualChunkBits = 128 := by
     exact Nat.div_mul_cancel params.virtualChunkBits_dvd_lookup
   have ha : address.val < 2 ^ (params.virtualInstructionChunks * params.virtualChunkBits) := by
     simpa only [hcover] using address.isLt
-  have hb : (HonestWitness.lookupIndex trace t.val).toNat <
+  have hb : (TraceWitness.lookupIndex trace t.val).toNat <
       2 ^ (params.virtualInstructionChunks * params.virtualChunkBits) := by
-    simpa only [hcover] using (HonestWitness.lookupIndex trace t.val).isLt
+    simpa only [hcover] using (TraceWitness.lookupIndex trace t.val).isLt
   unfold instructionLookupRa
-  by_cases heq : address.val = (HonestWitness.lookupIndex trace t.val).toNat
+  by_cases heq : address.val = (TraceWitness.lookupIndex trace t.val).toNat
   · simp only [heq, ↓reduceIte]
     apply Finset.prod_eq_one
     intro chunk _
-    dsimp [HonestTrace.honestWitness, HonestWitness.InstructionRa,
-      HonestWitness.addressChunkEntry, instructionLookupChunk,
-      HonestWitness.addressChunk]
+    dsimp [HonestTrace.honestWitness, TraceWitness.InstructionRa,
+      TraceWitness.addressChunkEntry, instructionLookupChunk,
+      TraceWitness.addressChunk]
     simp [heq]
   · simp only [heq, ↓reduceIte]
     have hdiff : ∃ chunk : Fin params.virtualInstructionChunks,
-        HonestWitness.addressChunk params.virtualChunkBits chunk address.val ≠
-          HonestWitness.addressChunk params.virtualChunkBits chunk
-            (HonestWitness.lookupIndex trace t.val).toNat := by
+        TraceWitness.addressChunk params.virtualChunkBits chunk address.val ≠
+          TraceWitness.addressChunk params.virtualChunkBits chunk
+            (TraceWitness.lookupIndex trace t.val).toNat := by
       by_contra hn
       have hd : ∀ chunk : Fin params.virtualInstructionChunks,
-          HonestWitness.addressChunk params.virtualChunkBits chunk address.val =
-            HonestWitness.addressChunk params.virtualChunkBits chunk
-              (HonestWitness.lookupIndex trace t.val).toNat := by
+          TraceWitness.addressChunk params.virtualChunkBits chunk address.val =
+            TraceWitness.addressChunk params.virtualChunkBits chunk
+              (TraceWitness.lookupIndex trace t.val).toNat := by
         intro chunk
         by_contra hneq
         exact hn ⟨chunk, hneq⟩
-      exact heq (HonestWitness.addressChunk_injective params.virtualChunkBits
+      exact heq (TraceWitness.addressChunk_injective params.virtualChunkBits
         params.virtualInstructionChunks address.val
-        (HonestWitness.lookupIndex trace t.val).toNat ha hb hd)
+        (TraceWitness.lookupIndex trace t.val).toNat ha hb hd)
     obtain ⟨chunk, hneq⟩ := hdiff
     apply Finset.prod_eq_zero (Finset.mem_univ chunk)
-    dsimp [HonestTrace.honestWitness, HonestWitness.InstructionRa,
-      HonestWitness.addressChunkEntry, instructionLookupChunk,
-      HonestWitness.addressChunk]
+    dsimp [HonestTrace.honestWitness, TraceWitness.InstructionRa,
+      TraceWitness.addressChunkEntry, instructionLookupChunk,
+      TraceWitness.addressChunk]
     change address.val /
       2 ^ ((params.virtualInstructionChunks - 1 - chunk.val) * params.virtualChunkBits) %
         2 ^ params.virtualChunkBits ≠
-      (HonestWitness.lookupIndex trace t.val).toNat /
+      (TraceWitness.lookupIndex trace t.val).toNat /
         2 ^ ((params.virtualInstructionChunks - 1 - chunk.val) * params.virtualChunkBits) %
           2 ^ params.virtualChunkBits at hneq
     exact if_neg hneq
@@ -72,13 +73,13 @@ theorem instructionRead_honest {F : Type} [Field F] (params : WitnessParams)
       instructionLookupRa
         (HonestTrace.honestWitness (F := F) params trace)
         address t * value address) =
-      value ⟨(HonestWitness.lookupIndex trace t.val).toNat,
-        (HonestWitness.lookupIndex trace t.val).isLt⟩ := by
+      value ⟨(TraceWitness.lookupIndex trace t.val).toNat,
+        (TraceWitness.lookupIndex trace t.val).isLt⟩ := by
   let selected : Fin (2 ^ 128) :=
-    ⟨(HonestWitness.lookupIndex trace t.val).toNat,
-      (HonestWitness.lookupIndex trace t.val).isLt⟩
+    ⟨(TraceWitness.lookupIndex trace t.val).toNat,
+      (TraceWitness.lookupIndex trace t.val).isLt⟩
   have hsel : ∀ address : Fin (2 ^ 128),
-      (address.val = (HonestWitness.lookupIndex trace t.val).toNat) ↔
+      (address.val = (TraceWitness.lookupIndex trace t.val).toNat) ↔
         address = selected := by
     intro address
     simp [selected, Fin.ext_iff]

@@ -1,11 +1,11 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.honest_trace
+import JoltConstraints.trace
 import JoltBytecode.JoltISA.RegisterAccess
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
@@ -13,8 +13,7 @@ variable {F : Type} (p : WitnessParams)
 -- Rust: [capture_pre_execution_state](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_r.rs:77).
 -- Read the first source from the pre-state, even when it is also the destination.
 -- Instructions without this operand and padding positions contribute zero.
-noncomputable def Rs1Value [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
+noncomputable def Rs1Value [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     -- The witness includes padding beyond the actual execution rows.
     if inBounds : t.val < trace.rows.size then
@@ -53,4 +52,4 @@ noncomputable def Rs1Value [Field F] {joltInstance : JoltInstance SourceInstruct
       | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => 0
     else 0
 
-end HonestWitness
+end TraceWitness

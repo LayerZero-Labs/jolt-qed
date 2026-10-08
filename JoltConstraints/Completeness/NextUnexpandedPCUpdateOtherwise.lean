@@ -1,9 +1,11 @@
+import JoltConstraints.execution_conditions
+import JoltConstraints.Completeness.Helpers.HostIOFrame
 import JoltConstraints.Constraints.NextUnexpandedPCUpdateOtherwise
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_witness
 import JoltConstraints.execution_conditions
-import JoltConstraints.Constraints.HostIOFrame
+import JoltConstraints.Completeness.Helpers.HostIOFrame
 
 set_option autoImplicit false
 
@@ -13,11 +15,11 @@ theorem shouldBranch_eq_branchTaken
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Fin params.traceLength) (ht : t.val < trace.rows.size) :
-    HonestWitness.ShouldBranch (F := F) params trace t =
+    TraceWitness.ShouldBranch (F := F) params trace t =
       if JoltNextPCFrame.BranchTaken
           trace.bytecode[(trace.rows[t.val]'ht).rowIndex].instruction
           (trace.rows[t.val]'ht).preState then 1 else 0 := by
-  simp only [HonestWitness.ShouldBranch, dif_pos ht]
+  simp only [TraceWitness.ShouldBranch, dif_pos ht]
   generalize hi :
     trace.bytecode[(trace.rows[t.val]'ht).rowIndex].instruction = instr
   cases instr <;> rfl
@@ -97,8 +99,8 @@ private theorem nextUnexpandedPC_eq_current_of_continues
     (tracePadded : params.ProverPaddedFor trace.rows.size)
     (t : Fin params.traceLength) (ht : t.val < trace.rows.size)
     (hcont : trace.bytecode[(trace.rows[t.val]'ht).rowIndex].continues = true) :
-    HonestWitness.NextUnexpandedPC (F := F) params trace t =
-      HonestWitness.UnexpandedPC (F := F) params trace t := by
+    TraceWitness.NextUnexpandedPC (F := F) params trace t =
+      TraceWitness.UnexpandedPC (F := F) params trace t := by
   have hnext : t.val + 1 < trace.rows.size := by
     by_contra hn
     have hlast : t.val = trace.rows.size - 1 := by
@@ -116,8 +118,8 @@ private theorem nextUnexpandedPC_eq_current_of_continues
   obtain ⟨haddr, _, _, _⟩ := trace.layout.next
     (trace.rows[t.val]'ht).rowIndex
     (trace.rows[t.val + 1]'hnext).rowIndex hsucc hcont
-  simp only [HonestWitness.NextUnexpandedPC, dif_pos hnextWitness,
-    HonestWitness.UnexpandedPC, dif_pos hnext, dif_pos ht]
+  simp only [TraceWitness.NextUnexpandedPC, dif_pos hnextWitness,
+    TraceWitness.UnexpandedPC, dif_pos hnext, dif_pos ht]
   exact congrArg (fun address : BitVec 64 => (address.toNat : F)) haddr
 
 /-- Completeness target for a complete Rust trace, with its mandatory padding.
@@ -137,12 +139,12 @@ theorem honestWitness_nextUnexpandedPCUpdateOtherwise
     nextUnexpandedPCUpdateOtherwise
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change (1 - HonestWitness.ShouldBranch (F := F) params trace t -
-      HonestWitness.OpFlags (F := F) params trace .Jump t) *
-    (HonestWitness.NextUnexpandedPC (F := F) params trace t -
-      HonestWitness.UnexpandedPC (F := F) params trace t - 4 +
-      4 * HonestWitness.OpFlags (F := F) params trace .DoNotUpdateUnexpandedPC t +
-      2 * HonestWitness.OpFlags (F := F) params trace .IsCompressed t) = 0
+  change (1 - TraceWitness.ShouldBranch (F := F) params trace t -
+      TraceWitness.OpFlags (F := F) params trace .Jump t) *
+    (TraceWitness.NextUnexpandedPC (F := F) params trace t -
+      TraceWitness.UnexpandedPC (F := F) params trace t - 4 +
+      4 * TraceWitness.OpFlags (F := F) params trace .DoNotUpdateUnexpandedPC t +
+      2 * TraceWitness.OpFlags (F := F) params trace .IsCompressed t) = 0
   by_cases ht : t.val < trace.rows.size
   · let row := trace.rows[t.val]
     let bc := trace.bytecode[row.rowIndex]
@@ -163,35 +165,35 @@ theorem honestWitness_nextUnexpandedPCUpdateOtherwise
         obtain ⟨_, _, _, h⟩ := trace.layout.next row.rowIndex
           ⟨row.rowIndex.val + 1, hnextIndex⟩ rfl hcont
         exact h
-      have hstay : HonestWitness.OpFlags (F := F) params trace
+      have hstay : TraceWitness.OpFlags (F := F) params trace
           .DoNotUpdateUnexpandedPC t = 1 := by
-        simp [HonestWitness.OpFlags, ht, JoltMetadata.circuitFlag,
+        simp [TraceWitness.OpFlags, ht, JoltMetadata.circuitFlag,
           JoltInstructionRow.continues] at hcont ⊢
         exact hcont
-      have hshort : HonestWitness.OpFlags (F := F) params trace
+      have hshort : TraceWitness.OpFlags (F := F) params trace
           .IsCompressed t = 0 := by
         change trace.bytecode[(trace.rows[t.val]'ht).rowIndex.val].is_compressed = false
           at hcompressed
-        simp [HonestWitness.OpFlags, ht, JoltMetadata.circuitFlag, hcompressed]
+        simp [TraceWitness.OpFlags, ht, JoltMetadata.circuitFlag, hcompressed]
       rw [hnextEq, hstay, hshort]
       ring
     · have hend : bc.continues = false := by
         cases h : bc.continues <;> simp_all
-      have hJumpField : HonestWitness.OpFlags (F := F) params trace .Jump t =
+      have hJumpField : TraceWitness.OpFlags (F := F) params trace .Jump t =
           if JoltMetadata.opcodeFlag bc.instruction .Jump then 1 else 0 := by
-        simp [HonestWitness.OpFlags, ht, JoltMetadata.circuitFlag, row, bc]
-      have hShouldField : HonestWitness.ShouldBranch (F := F) params trace t =
+        simp [TraceWitness.OpFlags, ht, JoltMetadata.circuitFlag, row, bc]
+      have hShouldField : TraceWitness.ShouldBranch (F := F) params trace t =
           if JoltNextPCFrame.BranchTaken bc.instruction row.preState
             then 1 else 0 := by
         exact shouldBranch_eq_branchTaken params trace t ht
-      have hStayField : HonestWitness.OpFlags (F := F) params trace
+      have hStayField : TraceWitness.OpFlags (F := F) params trace
           .DoNotUpdateUnexpandedPC t = 0 := by
-        simp [HonestWitness.OpFlags, ht, JoltMetadata.circuitFlag,
+        simp [TraceWitness.OpFlags, ht, JoltMetadata.circuitFlag,
           JoltInstructionRow.continues] at hend ⊢
         exact hend
-      have hCompressedField : HonestWitness.OpFlags (F := F) params trace
+      have hCompressedField : TraceWitness.OpFlags (F := F) params trace
           .IsCompressed t = if bc.is_compressed then 1 else 0 := by
-        simp [HonestWitness.OpFlags, ht, JoltMetadata.circuitFlag, row, bc]
+        simp [TraceWitness.OpFlags, ht, JoltMetadata.circuitFlag, row, bc]
       by_cases hjump : JoltMetadata.opcodeFlag bc.instruction .Jump = true
       · have hnotBranch := branchTaken_false_of_jump bc.instruction
           row.preState hjump
@@ -234,18 +236,18 @@ theorem honestWitness_nextUnexpandedPCUpdateOtherwise
           have hfield := jump_jump_field (F := F) bc.address
             trace.bytecode[(trace.rows[t.val + 1]'hnext).rowIndex].address
             bc.is_compressed hlink hnoWrap
-          have hCurrent : HonestWitness.UnexpandedPC (F := F) params trace t =
+          have hCurrent : TraceWitness.UnexpandedPC (F := F) params trace t =
               (bc.address.toNat : F) := by
-            simp [HonestWitness.UnexpandedPC, ht, row, bc]
-          have hNext : HonestWitness.NextUnexpandedPC (F := F) params trace t =
+            simp [TraceWitness.UnexpandedPC, ht, row, bc]
+          have hNext : TraceWitness.NextUnexpandedPC (F := F) params trace t =
               (trace.bytecode[(trace.rows[t.val + 1]'hnext).rowIndex].address.toNat : F) := by
-            simp [HonestWitness.NextUnexpandedPC, HonestWitness.UnexpandedPC,
+            simp [TraceWitness.NextUnexpandedPC, TraceWitness.UnexpandedPC,
               hnextPadded, hnext]
           rw [hShouldField, hJumpField, hStayField, hCompressedField,
             hCurrent, hNext]
           simpa [hnoBranch, hnoJump] using hfield
   · have hnextNot : ¬ t.val + 1 < trace.rows.size := by omega
-    simp [HonestWitness.ShouldBranch, HonestWitness.OpFlags,
-      HonestWitness.NextUnexpandedPC, HonestWitness.UnexpandedPC, ht, hnextNot]
+    simp [TraceWitness.ShouldBranch, TraceWitness.OpFlags,
+      TraceWitness.NextUnexpandedPC, TraceWitness.UnexpandedPC, ht, hnextNot]
 
 end JoltConstraints

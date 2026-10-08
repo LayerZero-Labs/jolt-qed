@@ -1,3 +1,5 @@
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Field.Defs
 import JoltConstraints.Constraints.RamReadData
 
 set_option autoImplicit false
@@ -10,10 +12,9 @@ open scoped BigOperators
 Before cycle t, each word equals its initial value plus strictly earlier write increments.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135-L154 -/
 def ramValEqInitialPlusPrefixRamInc {F : Type} [Field F] {params : WitnessParams}
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (witness : WitnessType F params) : Prop :=
+    (initialRam : Nat → BitVec 64) (witness : WitnessType F params) : Prop :=
   ∀ (address : Fin params.ramSize) (t : Fin params.traceLength),
-    witness.RamVal address t = ramInitialValue trace address.val +
+    witness.RamVal address t = ramInitialValue initialRam address.val +
       ∑ cycle : Fin params.traceLength,
         if cycle.val < t.val then witness.RamRa address cycle * witness.RamInc cycle else 0
 

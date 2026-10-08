@@ -41,25 +41,25 @@ theorem honestWitness_rightLookupEqProductIfMul
   · let row := getElem trace.rows t.val h
     let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
     by_cases hm : JoltMetadata.opcodeFlag bytecodeRow.instruction .MultiplyOperands = true
-    · have heq : HonestWitness.RightLookupOperand (F := F) params trace t =
-          HonestWitness.Product (F := F) params trace t := by
+    · have heq : TraceWitness.RightLookupOperand (F := F) params trace t =
+          TraceWitness.Product (F := F) params trace t := by
         cases hi : bytecodeRow.instruction
         all_goals simp [JoltMetadata.opcodeFlag, hi] at hm
         all_goals simp only [bytecodeRow, row] at hi
         all_goals
-          simp [HonestWitness.RightLookupOperand, HonestWitness.Product,
-            HonestWitness.lookupIndex, HonestWitness.instructionLookupIndex,
-            HonestWitness.LeftInstructionInput, HonestWitness.RightInstructionInput,
-            HonestWitness.Rs1Value, HonestWitness.Rs2Value, HonestWitness.Imm,
+          simp [TraceWitness.RightLookupOperand, TraceWitness.Product,
+            TraceWitness.lookupIndex, TraceWitness.instructionLookupIndex,
+            TraceWitness.LeftInstructionInput, TraceWitness.RightInstructionInput,
+            TraceWitness.Rs1Value, TraceWitness.Rs2Value, TraceWitness.Imm,
             JoltMetadata.hasCombinedLookupOperands, JoltMetadata.opcodeFlag,
             JoltMetadata.instructionFlag, mulWide_mod,
             hi, h]
         all_goals simp [JoltISA.mulWide, JoltMetadata.immediate]
       simp [HonestTrace.honestWitness,
-        HonestWitness.OpFlags, JoltMetadata.circuitFlag, h, heq]
+        TraceWitness.OpFlags, JoltMetadata.circuitFlag, h, heq]
     · simp [HonestTrace.honestWitness,
-        HonestWitness.OpFlags, JoltMetadata.circuitFlag, h, hm, bytecodeRow, row]
+        TraceWitness.OpFlags, JoltMetadata.circuitFlag, h, hm, bytecodeRow, row]
   · simp [HonestTrace.honestWitness,
-      HonestWitness.OpFlags, h]
+      TraceWitness.OpFlags, h]
 
 end JoltConstraints

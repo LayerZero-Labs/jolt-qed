@@ -1,10 +1,11 @@
+import JoltConstraints.execution_conditions
 import JoltConstraints.Constraints.NextUnexpandedPCEqPCPlusImmIfShouldBranch
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_witness
 import JoltConstraints.execution_conditions
 import JoltConstraints.Completeness.NextUnexpandedPCUpdateOtherwise
-import JoltConstraints.Constraints.TracePCProofHelpers
+import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 
 set_option autoImplicit false
 
@@ -133,10 +134,10 @@ theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
     nextUnexpandedPCEqPCPlusImmIfShouldBranch
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change HonestWitness.ShouldBranch (F := F) params trace t *
-      (HonestWitness.NextUnexpandedPC (F := F) params trace t -
-        HonestWitness.UnexpandedPC (F := F) params trace t -
-        HonestWitness.Imm (F := F) params trace t) = 0
+  change TraceWitness.ShouldBranch (F := F) params trace t *
+      (TraceWitness.NextUnexpandedPC (F := F) params trace t -
+        TraceWitness.UnexpandedPC (F := F) params trace t -
+        TraceWitness.Imm (F := F) params trace t) = 0
   by_cases ht : t.val < trace.rows.size
   · rw [shouldBranch_eq_branchTaken params trace t ht]
     split
@@ -160,7 +161,7 @@ theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
       have hsucc := trace.successor t.val ht hnext
       simp only [atEnd, Bool.false_eq_true, ↓reduceIte] at hsucc
       obtain ⟨nextAt, _, _⟩ := hsucc
-      have runs := (trace.rows[t.val]'ht).executes
+      have runs := (trace.row t.val ht).executes
       rw [withRuntimeAdvice_branch _ isBranch] at runs
       have target := execInstr_branch_target _ lhs rhs imm isBranch _ _ _ taken
         (lookup_trace_PC trace t.val ht) runs
@@ -183,8 +184,8 @@ theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
           rfl
       -- the witness reads the next row's address, this row's address and the offset
       have hnextWitness : t.val + 1 < params.traceLength := hnext.trans tracePadded.2
-      simp only [HonestWitness.NextUnexpandedPC, dif_pos hnextWitness, HonestWitness.UnexpandedPC,
-        dif_pos hnext, dif_pos ht, HonestWitness.Imm]
+      simp only [TraceWitness.NextUnexpandedPC, dif_pos hnextWitness, TraceWitness.UnexpandedPC,
+        dif_pos hnext, dif_pos ht, TraceWitness.Imm]
       simp only [Fin.getElem_fin] at nextIs immIs
       rw [immIs, nextIs]
       rw [nextIs] at toRam
@@ -196,6 +197,6 @@ theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
       rw [castEq]
       ring
     · rw [zero_mul]
-  · simp [HonestWitness.ShouldBranch, ht]
+  · simp [TraceWitness.ShouldBranch, ht]
 
 end JoltConstraints

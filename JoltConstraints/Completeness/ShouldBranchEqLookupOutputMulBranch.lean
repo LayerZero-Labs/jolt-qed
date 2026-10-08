@@ -21,16 +21,16 @@ theorem honestWitness_shouldBranchEqLookupOutputMulBranch
   · let row := getElem trace.rows t.val h
     let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
     dsimp [shouldBranchEqLookupOutputMulBranch, HonestTrace.honestWitness,
-      HonestWitness.ShouldBranch, HonestWitness.LookupOutput,
-      HonestWitness.InstructionFlags]
+      TraceWitness.ShouldBranch, TraceWitness.LookupOutput,
+      TraceWitness.InstructionFlags]
     simp only [dif_pos h]
     cases hi : bytecodeRow.instruction
     all_goals simp only [bytecodeRow, row] at hi
     all_goals simp [JoltMetadata.instructionFlag]
     all_goals
-      simp [HonestWitness.rowLookupOutput, hi]
+      simp [TraceWitness.rowLookupOutput, hi]
     all_goals split_ifs <;> simp
-  · simp [HonestTrace.honestWitness, HonestWitness.ShouldBranch,
-      HonestWitness.LookupOutput, HonestWitness.InstructionFlags, h]
+  · simp [HonestTrace.honestWitness, TraceWitness.ShouldBranch,
+      TraceWitness.LookupOutput, TraceWitness.InstructionFlags, h]
 
 end JoltConstraints

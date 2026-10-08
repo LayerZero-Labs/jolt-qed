@@ -1,6 +1,7 @@
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Field.Defs
 import JoltConstraints.Constraints.BytecodeReadData
-import JoltConstraints.Constraints.BytecodeReadSelection
-import JoltConstraints.honest_witness
+import JoltConstraints.witness_helpers
 
 set_option autoImplicit false
 
@@ -12,11 +13,10 @@ open scoped BigOperators
 each instruction flag is selected from the fixed bytecode table.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L559-L594 -/
 def instructionFlagsEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (witness : WitnessType F params) : Prop :=
+    (bytecode : Array JoltInstructionRow) (witness : WitnessType F params) : Prop :=
   ∀ (flag : InstructionFlags) (t : Fin params.traceLength),
     witness.InstructionFlags flag t =
       ∑ address : Fin (2 ^ params.logBytecodeK),
-        bytecodeInstructionFlag trace flag address.val * bytecodeRa witness address t
+        bytecodeInstructionFlag bytecode flag address.val * bytecodeRa witness address t
 
 end JoltConstraints

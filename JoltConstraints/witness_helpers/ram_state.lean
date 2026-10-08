@@ -2,12 +2,11 @@ import JoltConstraints.witness_helpers.ram_ra_chunk
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- The final snapshot is the last actual post-state, regardless of witness
 -- padding. An empty execution retains the program's initial state.
-noncomputable def finalTraceState {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) : SailJoltState :=
+noncomputable def finalTraceState (trace : Trace) : SailJoltState :=
   if nonempty : 0 < trace.rows.size then
     (getElem trace.rows (trace.rows.size - 1) (Nat.sub_lt nonempty (by decide))).postState
   else trace.initialState
@@ -36,10 +35,8 @@ def overlayRamBytes (layout : MemoryLayout) (start : BitVec 64)
 -- The loaded program bytes are already in initialState.sail.mem. Allocated RAM
 -- beyond that image is zero. Overlay trusted advice, untrusted advice, then input
 -- in Rust's order; output, panic, and termination start at zero in this witness.
-noncomputable def initialRamWord {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+noncomputable def initialRamWordFromState (state : SailJoltState)
     (address : Nat) : BitVec 64 :=
-  let state := trace.initialState
   let layout := state.jolt_device.memory_layout
   let absolute := min layout.trusted_advice_start.toNat layout.untrusted_advice_start.toNat + 8 * address
   let ram := if JoltISA.RAM_START_ADDRESS ≤ absolute then
@@ -48,6 +45,10 @@ noncomputable def initialRamWord {joltInstance : JoltInstance SourceInstruction}
   let trusted := overlayRamBytes layout layout.trusted_advice_start state.jolt_device.trusted_advice address ram
   let untrusted := overlayRamBytes layout layout.untrusted_advice_start state.jolt_device.untrusted_advice address trusted
   overlayRamBytes layout layout.input_start state.jolt_device.inputs address untrusted
+
+-- The honest extractor reads the same image from its trace's initial state.
+noncomputable def initialRamWord (trace : Trace) : Nat → BitVec 64 :=
+  initialRamWordFromState trace.initialState
 
 -- Rust: [final_ram_state](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:132).
 -- Use the final ISA RAM snapshot and device buffers. In particular, termination
@@ -60,8 +61,7 @@ noncomputable def initialRamWord {joltInstance : JoltInstance SourceInstruction}
 -- lands in the wrong slot and the final-RAM check fails (reproduced at 8e536f19,
 -- bug-report/final-ram-over-2gib/). Below 2 GiB, Rust and this definition agree:
 -- every byte stays in its own slot. (model_review.md, Upstream issues)
-noncomputable def finalRamWord {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (address : Nat) : BitVec 64 :=
+noncomputable def finalRamWord (trace : Trace) (address : Nat) : BitVec 64 :=
   let state := finalTraceState trace
   let layout := trace.initialState.jolt_device.memory_layout
   let absolute := min layout.trusted_advice_start.toNat layout.untrusted_advice_start.toNat + 8 * address
@@ -78,4 +78,4 @@ noncomputable def finalRamWord {joltInstance : JoltInstance SourceInstruction} {
   if !state.jolt_device.panic && remapRamAddress layout state.jolt_device.memory_layout.termination == some address then 1
   else panic
 
-end HonestWitness
+end TraceWitness

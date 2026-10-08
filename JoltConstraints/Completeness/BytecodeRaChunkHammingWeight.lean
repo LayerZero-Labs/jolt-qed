@@ -21,8 +21,8 @@ theorem honestWitness_bytecodeRaChunkHammingWeight
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk t
   dsimp [bytecodeRaChunkHammingWeight, HonestTrace.honestWitness,
-    HonestWitness.BytecodeRaChunk]
-  exact HonestWitness.sum_addressChunkEntry_some params.chunkBits chunk
-    (HonestWitness.bytecodePc trace t.val)
+    TraceWitness.BytecodeRaChunk]
+  exact TraceWitness.sum_addressChunkEntry_some params.chunkBits chunk
+    (TraceWitness.bytecodePc trace t.val)
 
 end JoltConstraints

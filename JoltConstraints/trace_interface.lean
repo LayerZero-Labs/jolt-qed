@@ -1,9 +1,8 @@
 /-
-The facts the completeness proofs used to take as fields of the old trace
-(trace.lean and program.lean, deleted; see git d044e63), each one proved here for the
-honest trace. Names and shapes match the old ones, so the proofs that use them
-change as little as possible. The facts about what `expand` emits are one sorried
-theorem, `expand_program_rows_valid`, until `expand` is defined.
+Execution and program-layout facts derived from the honest trace's certificates.
+These facts are not assumptions on the general trace in `trace.lean`.
+The facts about what `expand` emits still rely on the existing sorried theorem
+`expand_program_rows_valid`, until `expand` is defined.
 -/
 import JoltConstraints.ProgramLayout
 import JoltConstraints.execution_facts

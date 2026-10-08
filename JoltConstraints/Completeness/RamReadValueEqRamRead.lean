@@ -1,5 +1,6 @@
+import JoltConstraints.Completeness.Helpers.RamReadSelection
 import JoltConstraints.Constraints.RamReadValueEqRamRead
-import JoltConstraints.Constraints.RamReadSelection
+import JoltConstraints.Completeness.Helpers.RamReadSelection
 
 set_option autoImplicit false
 
@@ -21,15 +22,15 @@ theorem honestWitness_ramReadValueEqRamRead
   intro t
   change HonestWitness.RamReadValue (F := F) params trace t =
     ∑ address : Fin params.ramSize,
-      HonestWitness.RamRa params trace address t *
+      TraceWitness.RamRa params trace address t *
         HonestWitness.RamVal params trace address t
-  cases hr : HonestWitness.remappedRamAddress trace t.val with
+  cases hr : TraceWitness.remappedRamAddress trace t.val with
   | none =>
       rw [ramRa_sum_none params trace ramFits t hr]
       exact ramReadValue_zero_of_remapped_none params trace ramFits t hr
   | some b =>
       rw [ramRa_sum_some params trace ramFits t b hr]
       dsimp [HonestWitness.RamVal]
-      simp [HonestWitness.RamRa, hr]
+      simp [TraceWitness.RamRa, hr]
 
 end JoltConstraints

@@ -1,7 +1,7 @@
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.honest_witness
+import JoltConstraints.witness_helpers
 
 set_option autoImplicit false
 
@@ -32,9 +32,8 @@ Advice words are execution inputs, not additional public constants. Reuse the
 existing image encoding; this function does not execute instructions.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-witness/src/backend/trace/ram.rs#L81-L130 -/
 noncomputable def ramInitialValue {F : Type} [Field F]
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (address : Nat) : F :=
-  ((HonestWitness.initialRamWord trace address).toNat : F)
+    (initialRam : Nat → BitVec 64) (address : Nat) : F :=
+  ((initialRam address).toNat : F)
 
 /-- Public I/O mask: remapped words from input_start up to RAM_START_ADDRESS,
 excluding RAM_START_ADDRESS. As in Rust preprocessing, the layout must be valid;
@@ -51,23 +50,23 @@ panicking), with zero elsewhere. Byte buffers are packed little-endian and the
 last partial word is zero-padded. Advice buffers do not enter this array.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/public_io.rs#L27-L55 -/
 def ramPublicIoWord (io : JoltDevice) (address : Nat) : BitVec 64 :=
-  let input := HonestWitness.overlayRamBytes io.memory_layout io.memory_layout.input_start io.inputs address 0
-  let output := HonestWitness.overlayRamBytes io.memory_layout io.memory_layout.output_start io.outputs address input
-  let panic := if HonestWitness.remapRamAddress io.memory_layout io.memory_layout.panic = some address then
+  let input := TraceWitness.overlayRamBytes io.memory_layout io.memory_layout.input_start io.inputs address 0
+  let output := TraceWitness.overlayRamBytes io.memory_layout io.memory_layout.output_start io.outputs address input
+  let panic := if TraceWitness.remapRamAddress io.memory_layout io.memory_layout.panic = some address then
       (if io.panic then 1 else 0)
     else output
-  if !io.panic && HonestWitness.remapRamAddress io.memory_layout io.memory_layout.termination == some address then
+  if !io.panic && TraceWitness.remapRamAddress io.memory_layout io.memory_layout.termination == some address then
     1
   else panic
 
 /-- Actual RAM accesses are word-aligned relative to the layout.
 RamFits separately supplies successful remapping and the RAM-domain bound.
 This is a condition on the recorded accesses, not an ISA execution rule. -/
-def ramAccessesValid {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Prop :=
+def ramAccessesValid (trace : Trace) : Prop :=
   ∀ i : Fin trace.rows.size,
     let row := getElem trace.rows i.val i.isLt
     let instruction := trace.bytecode[row.rowIndex].instruction
-    match HonestWitness.ramAccessAddress instruction row.preState with
+    match TraceWitness.ramAccessAddress instruction row.preState with
     | none => True
     | some address =>
         (address.toNat - ramLowestAddress trace.initialState.jolt_device.memory_layout) % 8 = 0

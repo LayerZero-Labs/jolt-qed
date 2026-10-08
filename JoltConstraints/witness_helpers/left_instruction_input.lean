@@ -4,14 +4,14 @@ import JoltConstraints.witness_helpers.unexpanded_pc
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [LeftInstructionInput](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:77).
 -- The instruction flags select the original instruction address or captured rs1.
 -- Loads, stores, advice, HOST_IO, and other instructions with neither flag use
 -- zero, even if their trace row has a captured source register. Padding is zero.
 noncomputable def LeftInstructionInput {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
+    (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
@@ -24,4 +24,4 @@ noncomputable def LeftInstructionInput {F : Type} [Field F] (p : WitnessParams)
       else 0
     else 0
 
-end HonestWitness
+end TraceWitness

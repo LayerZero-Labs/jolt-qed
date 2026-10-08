@@ -1,5 +1,6 @@
+import JoltConstraints.Completeness.Helpers.RamOutputProofHelpers
 import JoltConstraints.Constraints.RamOutputEqPublicIo
-import JoltConstraints.Constraints.IOSetupFrame
+import JoltConstraints.Completeness.Helpers.IOSetupFrame
 import JoltConstraints.Constraints.MemoryLayout
 
 set_option autoImplicit false
@@ -25,18 +26,18 @@ theorem honestWitness_ramOutputEqPublicIo
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
-    : ramOutputEqPublicIo (HonestWitness.finalTraceState trace).jolt_device
+    : ramOutputEqPublicIo (TraceWitness.finalTraceState trace).jolt_device
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro address
-  change ramPublicIoMask (HonestWitness.finalTraceState trace).jolt_device address.val *
-    (HonestWitness.RamValFinal (F := F) params trace address -
-      ((ramPublicIoWord (HonestWitness.finalTraceState trace).jolt_device address.val).toNat : F)) = 0
+  change ramPublicIoMask (TraceWitness.finalTraceState trace).jolt_device address.val *
+    (TraceWitness.RamValFinal (F := F) params trace address -
+      ((ramPublicIoWord (TraceWitness.finalTraceState trace).jolt_device address.val).toNat : F)) = 0
   have hlayout := (finalTraceState_ioSame trace).1
   unfold ramPublicIoMask
   dsimp only
   rw [hlayout]
   split_ifs with hmask
-  · rw [HonestWitness.RamValFinal,
+  · rw [TraceWitness.RamValFinal,
       finalRamWord_eq_ramPublicIoWord trace adviceBelowInput address.val hmask.1 hmask.2,
       sub_self, mul_zero]
   · rw [zero_mul]

@@ -1,6 +1,7 @@
+import JoltConstraints.Completeness.Helpers.BytecodeReadSelection
 import JoltConstraints.Constraints.Rs1RaEqBytecodeRead
 import JoltConstraints.Constraints.BytecodeReadSelectors
-import JoltConstraints.Constraints.BytecodeReadSelection
+import JoltConstraints.Completeness.Helpers.BytecodeReadSelection
 import JoltConstraints.honest_witness
 
 set_option autoImplicit false
@@ -17,18 +18,18 @@ theorem honestWitness_rs1RaEqBytecodeRead
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
-    : rs1RaEqBytecodeRead trace
+    : rs1RaEqBytecodeRead trace.bytecode
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro register t
   rw [bytecodeRead_honest params trace ramFits traceFits bytecodeDomain
-    (bytecodeRegisterSelector trace bytecodeRs1Register register) t]
+    (bytecodeRegisterSelector trace.bytecode bytecodeRs1Register register) t]
   by_cases h : t.val < trace.rows.size
-  · simp [HonestTrace.honestWitness, HonestWitness.Rs1Ra,
-      HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
+  · simp [HonestTrace.honestWitness, TraceWitness.Rs1Ra,
+      TraceWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
     cases hinst :
       trace.bytecode[↑(trace.rows[↑t].rowIndex)].instruction <;>
       simp [bytecodeRs1Register, eq_comm]
-  · simp [HonestTrace.honestWitness, HonestWitness.Rs1Ra,
-      HonestWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
+  · simp [HonestTrace.honestWitness, TraceWitness.Rs1Ra,
+      TraceWitness.bytecodePc, bytecodeRegisterSelector, bytecodeRow, h]
 
 end JoltConstraints

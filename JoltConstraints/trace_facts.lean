@@ -15,7 +15,7 @@ set_option autoImplicit false
 theorem HonestTrace.starts_at_entry {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
-    (first : HonestTraceRow trace.bytecode) (firstRow : trace.rows[0]? = some first) :
+    (first : TraceRow trace.bytecode) (firstRow : trace.rows[0]? = some first) :
     get_first_pc slots joltInstance.program.entry_address = some (first.rowIndex.val + 1) := by
   obtain ⟨entryAddress, entryStarts, _⟩ := trace.starts first firstRow
   have accepted := accepted_pc_map_ok joltInstance trace.bytecode trace.expands trace.accepted
@@ -158,7 +158,7 @@ theorem slot_below_ram_K (slot touched imageEnd : Nat) (atMost : slot ≤ touche
 theorem HonestTrace.prover_config_ram_fits {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (accepted : trace.prover_config = some config)
-    (row : HonestTraceRow trace.bytecode) (inTrace : row ∈ trace.rows) (address : Nat)
+    (row : TraceRow trace.bytecode) (inTrace : row ∈ trace.rows) (address : Nat)
     (touches : row.ram_address = some address) :
     address = 0 ∨
       (trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address ∧

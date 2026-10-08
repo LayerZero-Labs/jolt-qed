@@ -1,18 +1,18 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.honest_trace
+import JoltConstraints.trace
 import JoltConstraints.witness_helpers.register_address
 import JoltConstraints.witness_helpers.destination_capture
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [materialize_register_read_write_virtual](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/registers.rs:47).
 -- Select the captured destination register. HOST_IO has a captured rd even though
 -- it does not write it. Absent destinations and padding select no register.
 noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
+    (trace : Trace) :
     Fin 128 → Fin p.traceLength → F :=
   fun address t =>
     if inBounds : t.val < trace.rows.size then
@@ -51,4 +51,4 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualAssertLTE _ _ _ => 0
     else 0
 
-end HonestWitness
+end TraceWitness

@@ -47,10 +47,10 @@ private theorem instruction_shift_split (p : WitnessParams)
 private theorem virtual_digit_eq_small (p : WitnessParams)
     (chunk : Fin p.virtualInstructionChunks)
     (offset : Fin (p.virtualChunkBits / p.chunkBits)) (x : Nat) :
-    (HonestWitness.addressChunk p.virtualChunkBits chunk x /
+    (TraceWitness.addressChunk p.virtualChunkBits chunk x /
         2 ^ ((p.virtualChunkBits / p.chunkBits - 1 - offset.val) * p.chunkBits)) %
         2 ^ p.chunkBits =
-      HonestWitness.addressChunk p.chunkBits
+      TraceWitness.addressChunk p.chunkBits
         (instructionSmallChunkIndex p chunk offset) x := by
   let coarse := (p.virtualInstructionChunks - 1 - chunk.val) * p.virtualChunkBits
   let inner := (p.virtualChunkBits / p.chunkBits - 1 - offset.val) * p.chunkBits
@@ -79,8 +79,8 @@ theorem honestWitness_instructionRaEqChunkProduct
     instructionRaEqChunkProduct
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk address t
-  let x := (HonestWitness.lookupIndex trace t.val).toNat
-  let actual := HonestWitness.addressChunk params.virtualChunkBits chunk x
+  let x := (TraceWitness.lookupIndex trace t.val).toNat
+  let actual := TraceWitness.addressChunk params.virtualChunkBits chunk x
   let n := params.virtualChunkBits / params.chunkBits
   have hbits : n * params.chunkBits = params.virtualChunkBits :=
     Nat.div_mul_cancel params.chunkBits_dvd_virtual
@@ -92,15 +92,15 @@ theorem honestWitness_instructionRaEqChunkProduct
     simpa only [hbits] using hactual
   have digit (offset : Fin n) :
       (instructionVirtualAddressDigit params address offset).val =
-        HonestWitness.addressChunk params.chunkBits offset address.val := rfl
+        TraceWitness.addressChunk params.chunkBits offset address.val := rfl
   have actual_digit (offset : Fin n) :
-      HonestWitness.addressChunk params.chunkBits offset actual =
-        HonestWitness.addressChunk params.chunkBits
+      TraceWitness.addressChunk params.chunkBits offset actual =
+        TraceWitness.addressChunk params.chunkBits
           (instructionSmallChunkIndex params chunk offset) x := by
     exact virtual_digit_eq_small params chunk offset x
   change (if address.val = actual then (1 : F) else 0) =
     ∏ offset : Fin n,
-      HonestWitness.addressChunkEntry params.chunkBits
+      TraceWitness.addressChunkEntry params.chunkBits
         (instructionSmallChunkIndex params chunk offset) (some x)
           (instructionVirtualAddressDigit params address offset)
   by_cases heq : address.val = actual
@@ -108,36 +108,36 @@ theorem honestWitness_instructionRaEqChunkProduct
     symm
     apply Finset.prod_eq_one
     intro offset _
-    dsimp [HonestWitness.addressChunkEntry]
+    dsimp [TraceWitness.addressChunkEntry]
     rw [if_pos]
     calc
       (instructionVirtualAddressDigit params address offset).val =
-          HonestWitness.addressChunk params.chunkBits offset address.val := digit offset
-      _ = HonestWitness.addressChunk params.chunkBits offset actual := by rw [heq]
-      _ = HonestWitness.addressChunk params.chunkBits
+          TraceWitness.addressChunk params.chunkBits offset address.val := digit offset
+      _ = TraceWitness.addressChunk params.chunkBits offset actual := by rw [heq]
+      _ = TraceWitness.addressChunk params.chunkBits
           (instructionSmallChunkIndex params chunk offset) x := actual_digit offset
   · simp only [heq, ↓reduceIte]
     have hdiff : ∃ offset : Fin n,
         (instructionVirtualAddressDigit params address offset).val ≠
-          HonestWitness.addressChunk params.chunkBits
+          TraceWitness.addressChunk params.chunkBits
             (instructionSmallChunkIndex params chunk offset) x := by
       by_contra hn
       have hd : ∀ offset : Fin n,
-          HonestWitness.addressChunk params.chunkBits offset address.val =
-            HonestWitness.addressChunk params.chunkBits offset actual := by
+          TraceWitness.addressChunk params.chunkBits offset address.val =
+            TraceWitness.addressChunk params.chunkBits offset actual := by
         intro offset
         have he : (instructionVirtualAddressDigit params address offset).val =
-            HonestWitness.addressChunk params.chunkBits
+            TraceWitness.addressChunk params.chunkBits
               (instructionSmallChunkIndex params chunk offset) x := by
           by_contra hne
           exact hn ⟨offset, hne⟩
         simpa only [digit offset, ← actual_digit offset] using he
-      exact heq (HonestWitness.addressChunk_injective params.chunkBits n
+      exact heq (TraceWitness.addressChunk_injective params.chunkBits n
         address.val actual haddress hactual' hd)
     obtain ⟨offset, hne⟩ := hdiff
     symm
     apply Finset.prod_eq_zero (Finset.mem_univ offset)
-    dsimp [HonestWitness.addressChunkEntry]
+    dsimp [TraceWitness.addressChunkEntry]
     exact if_neg hne
 
 end JoltConstraints

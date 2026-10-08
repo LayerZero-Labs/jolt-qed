@@ -25,9 +25,9 @@ private theorem bytecodePc_lt (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (t : Fin params.traceLength) :
-    HonestWitness.bytecodePc trace t.val < 2 ^ params.logBytecodeK := by
+    TraceWitness.bytecodePc trace t.val < 2 ^ params.logBytecodeK := by
   have hrows := bytecodeDomain.rowsFit
-  unfold HonestWitness.bytecodePc
+  unfold TraceWitness.bytecodePc
   split_ifs with h
   · have hindex := (getElem trace.rows t.val h).rowIndex.isLt
     omega
@@ -46,42 +46,42 @@ theorem bytecodeRa_honest {F : Type} [Field F] (params : WitnessParams)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (address : Fin (2 ^ params.logBytecodeK)) (t : Fin params.traceLength) :
     bytecodeRa (HonestTrace.honestWitness (F := F) params trace) address t =
-      if address.val = HonestWitness.bytecodePc trace t.val then 1 else 0 := by
+      if address.val = TraceWitness.bytecodePc trace t.val then 1 else 0 := by
   unfold bytecodeRa
-  by_cases heq : address.val = HonestWitness.bytecodePc trace t.val
+  by_cases heq : address.val = TraceWitness.bytecodePc trace t.val
   · simp only [heq, ↓reduceIte]
     apply Finset.prod_eq_one
     intro chunk _
-    dsimp [HonestTrace.honestWitness, HonestWitness.BytecodeRaChunk,
-      HonestWitness.addressChunkEntry, bytecodeAddressChunk,
-      HonestWitness.addressChunk]
+    dsimp [HonestTrace.honestWitness, TraceWitness.BytecodeRaChunk,
+      TraceWitness.addressChunkEntry, bytecodeAddressChunk,
+      TraceWitness.addressChunk]
     simp [heq]
   · simp only [heq, ↓reduceIte]
     have hdiff : ∃ chunk : Fin params.bytecodeChunks,
-        HonestWitness.addressChunk params.chunkBits chunk address.val ≠
-          HonestWitness.addressChunk params.chunkBits chunk
-            (HonestWitness.bytecodePc trace t.val) := by
+        TraceWitness.addressChunk params.chunkBits chunk address.val ≠
+          TraceWitness.addressChunk params.chunkBits chunk
+            (TraceWitness.bytecodePc trace t.val) := by
       by_contra hn
       have hd : ∀ chunk : Fin params.bytecodeChunks,
-          HonestWitness.addressChunk params.chunkBits chunk address.val =
-            HonestWitness.addressChunk params.chunkBits chunk
-              (HonestWitness.bytecodePc trace t.val) := by
+          TraceWitness.addressChunk params.chunkBits chunk address.val =
+            TraceWitness.addressChunk params.chunkBits chunk
+              (TraceWitness.bytecodePc trace t.val) := by
         intro chunk
         by_contra hneq
         exact hn ⟨chunk, hneq⟩
-      exact heq (HonestWitness.addressChunk_injective params.chunkBits
-        params.bytecodeChunks address.val (HonestWitness.bytecodePc trace t.val)
+      exact heq (TraceWitness.addressChunk_injective params.chunkBits
+        params.bytecodeChunks address.val (TraceWitness.bytecodePc trace t.val)
         (bytecodeAddress_lt_chunks params address)
         (lt_of_lt_of_le (bytecodePc_lt params trace bytecodeDomain t)
           (Nat.pow_le_pow_right (by decide) (bytecodeChunks_cover params))) hd)
     obtain ⟨chunk, hneq⟩ := hdiff
     apply Finset.prod_eq_zero (Finset.mem_univ chunk)
-    dsimp [HonestTrace.honestWitness, HonestWitness.BytecodeRaChunk,
-      HonestWitness.addressChunkEntry, bytecodeAddressChunk,
-      HonestWitness.addressChunk]
+    dsimp [HonestTrace.honestWitness, TraceWitness.BytecodeRaChunk,
+      TraceWitness.addressChunkEntry, bytecodeAddressChunk,
+      TraceWitness.addressChunk]
     change address.val / 2 ^ ((params.bytecodeChunks - 1 - chunk.val) * params.chunkBits) %
         2 ^ params.chunkBits ≠
-      HonestWitness.bytecodePc trace t.val /
+      TraceWitness.bytecodePc trace t.val /
         2 ^ ((params.bytecodeChunks - 1 - chunk.val) * params.chunkBits) %
           2 ^ params.chunkBits at hneq
     simp [hneq]
@@ -97,11 +97,11 @@ theorem bytecodeRead_honest {F : Type} [Field F] (params : WitnessParams)
     (∑ address : Fin (2 ^ params.logBytecodeK),
       value address.val * bytecodeRa
         (HonestTrace.honestWitness (F := F) params trace) address t) =
-      value (HonestWitness.bytecodePc trace t.val) := by
+      value (TraceWitness.bytecodePc trace t.val) := by
   let selected : Fin (2 ^ params.logBytecodeK) :=
-    ⟨HonestWitness.bytecodePc trace t.val, bytecodePc_lt params trace bytecodeDomain t⟩
+    ⟨TraceWitness.bytecodePc trace t.val, bytecodePc_lt params trace bytecodeDomain t⟩
   have hsel : ∀ address : Fin (2 ^ params.logBytecodeK),
-      (address.val = HonestWitness.bytecodePc trace t.val) ↔ address = selected := by
+      (address.val = TraceWitness.bytecodePc trace t.val) ↔ address = selected := by
     intro address
     simp [selected, Fin.ext_iff]
   simp_rw [bytecodeRa_honest params trace ramFits traceFits bytecodeDomain]

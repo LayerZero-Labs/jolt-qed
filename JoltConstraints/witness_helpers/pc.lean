@@ -1,16 +1,16 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.honest_trace
+import JoltConstraints.trace
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
 -- Keep the bytecode slot as a natural number for address decomposition, before
 -- casting into the witness field. Slot 0 is reserved for padding.
-def bytecodePc {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) (t : Nat) : Nat :=
+def bytecodePc (trace : Trace) (t : Nat) : Nat :=
   if inBounds : t < trace.rows.size then
     (getElem trace.rows t inBounds).rowIndex.val + 1
   else 0
@@ -21,8 +21,7 @@ def bytecodePc {joltInstance : JoltInstance SourceInstruction} {privateInputs : 
 -- so a represented instruction at array index k occupies slot k + 1.
 -- This is a bytecode index, not a memory address or an execution-step number.
 -- Rust: [preprocess](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/preprocess/bytecode.rs:34).
-noncomputable def PC [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
+noncomputable def PC [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t => (bytecodePc trace t.val : F)
 
-end HonestWitness
+end TraceWitness

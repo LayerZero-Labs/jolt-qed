@@ -1,5 +1,5 @@
 import JoltConstraints.witness
-import JoltConstraints.honest_trace
+import JoltConstraints.trace
 
 set_option autoImplicit false
 

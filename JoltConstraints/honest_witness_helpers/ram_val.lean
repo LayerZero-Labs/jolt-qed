@@ -1,6 +1,7 @@
+import JoltConstraints.execution_facts
 import JoltConstraints.witness_helpers.ram_state
 import JoltConstraints.witness_helpers.ram_ra
-import JoltConstraints.witness_helpers.ram_read_value
+import JoltConstraints.honest_witness_helpers.ram_read_value
 import JoltConstraints.witness_helpers.ram_write_value
 import JoltConstraints.witness_helpers.op_flags
 
@@ -8,13 +9,16 @@ set_option autoImplicit false
 
 namespace HonestWitness
 
+open TraceWitness
+
 -- Rust: [materialize_ram_val](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:22).
 -- Start from the initial image and apply preceding captured stores. At the
 -- current accessed address, use the captured PRE-access read value. This override
 -- matters for device words whose readback differs from their last stored value.
 -- Loads do not change the accumulated array; padding keeps its last contents.
 noncomputable def RamVal {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) :
     Fin p.ramSize → Fin p.traceLength → F :=
   fun address t =>
     let before := (List.finRange t.val).foldl (fun value i =>

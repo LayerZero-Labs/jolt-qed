@@ -1,6 +1,6 @@
-import JoltConstraints.Constraints.LookupWriteProofHelpers
+import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
-import JoltConstraints.Constraints.HostIOFrame
+import JoltConstraints.Completeness.Helpers.HostIOFrame
 
 /-!
 Instruction-level register frames for the honest register-history witness.
@@ -692,15 +692,15 @@ def register42_srcOfAddress (address : Fin 128) : JoltISA.Src :=
     .vreg (BitVec.ofNat 7 address.val)
 
 theorem register42_srcOfAddress_address (address : Fin 128) :
-    HonestWitness.sourceRegisterAddress (register42_srcOfAddress address) =
+    TraceWitness.sourceRegisterAddress (register42_srcOfAddress address) =
       address := by
   by_cases h : address.val < 32
   · simp only [register42_srcOfAddress, h, ↓reduceIte,
-      HonestWitness.sourceRegisterAddress]
+      TraceWitness.sourceRegisterAddress]
     apply Fin.ext
     simp [BitVec.toNat_ofNat, Nat.mod_eq_of_lt h]
   · simp only [register42_srcOfAddress, h, ↓reduceIte,
-      HonestWitness.sourceRegisterAddress]
+      TraceWitness.sourceRegisterAddress]
     apply Fin.ext
     simp [BitVec.toNat_ofNat, Nat.mod_eq_of_lt address.isLt]
 
@@ -715,7 +715,7 @@ theorem register42_canonical_vreg_ge32 (vr : JoltISA.VReg)
 
 theorem register42_srcOfDestinationAddress (dst : JoltISA.Dst)
     (hcanon : JoltRegisterEncoding.destinationIsCanonical dst = true) :
-    register42_srcOfAddress (HonestWitness.destinationRegisterAddress dst) =
+    register42_srcOfAddress (TraceWitness.destinationRegisterAddress dst) =
       register42_dstAsSrc dst := by
   cases dst with
   | xreg rd =>
@@ -723,10 +723,10 @@ theorem register42_srcOfDestinationAddress (dst : JoltISA.Dst)
       | Regidx bits =>
           have hlt : bits.toNat < 32 := bits.isLt
           have haddr :
-              (HonestWitness.destinationRegisterAddress
+              (TraceWitness.destinationRegisterAddress
                 (.xreg (.Regidx bits))).val = bits.toNat := by
             have hlt128 : bits.toNat < 128 := by omega
-            simp [HonestWitness.destinationRegisterAddress,
+            simp [TraceWitness.destinationRegisterAddress,
               BitVec.toNat_setWidth, Nat.mod_eq_of_lt hlt128]
             exact hlt128
           simp [register42_srcOfAddress, haddr, hlt,
@@ -735,7 +735,7 @@ theorem register42_srcOfDestinationAddress (dst : JoltISA.Dst)
   | vreg vr =>
       have hge := register42_canonical_vreg_ge32 vr hcanon
       simp [register42_srcOfAddress,
-        HonestWitness.destinationRegisterAddress,
+        TraceWitness.destinationRegisterAddress,
         register42_dstAsSrc, hge]
 
 theorem register42_instruction_destination_canonical
@@ -749,18 +749,18 @@ theorem register42_instruction_destination_canonical
 
 theorem register42_capturedDestinationValue
     (dst : JoltISA.Dst) (s : SailJoltState) :
-    HonestWitness.capturedDestinationValue dst s =
+    TraceWitness.capturedDestinationValue dst s =
       JoltISA.sourceValue (register42_dstAsSrc dst) s := by
   cases dst <;> rfl
 
 theorem register42_rdValue_eq_destination
     {F : Type} [Field F] (instr : JoltISA.Instr) (s : SailJoltState) :
-    HonestWitness.rdValue (F := F) instr s =
+    TraceWitness.rdValue (F := F) instr s =
       match instr.destination? with
       | some dst => ((JoltISA.sourceValue (register42_dstAsSrc dst) s).toNat : F)
       | none => 0 := by
   cases instr <;>
-    simp [HonestWitness.rdValue, register42_capturedDestinationValue,
+    simp [TraceWitness.rdValue, register42_capturedDestinationValue,
       JoltISA.Instr.destination?]
 
 theorem register42_RdWa_real
@@ -768,16 +768,16 @@ theorem register42_RdWa_real
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size)
     (register : Fin 128) :
-    HonestWitness.RdWa (F := F) p trace register t =
+    TraceWitness.RdWa (F := F) p trace register t =
       match trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction.destination? with
       | some dst =>
-          if register = HonestWitness.destinationRegisterAddress dst then 1 else 0
+          if register = TraceWitness.destinationRegisterAddress dst then 1 else 0
       | none => 0 := by
-  unfold HonestWitness.RdWa
+  unfold TraceWitness.RdWa
   simp only [dif_pos hb]
   cases instr :
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
-    simp [JoltISA.Instr.destination?, HonestWitness.capturedDestination]
+    simp [JoltISA.Instr.destination?, TraceWitness.capturedDestination]
 
 theorem register42_destination_withRuntimeAdvice
     (instr : JoltISA.Instr) (advice : instr.RuntimeAdvice) :
@@ -793,22 +793,22 @@ theorem register42_row_step
       (trace.rows[t.val]'hb).postState).toNat : F) =
       ((JoltISA.sourceValue (register42_srcOfAddress register)
         (trace.rows[t.val]'hb).preState).toNat : F) +
-      HonestWitness.RdWa p trace register t * HonestWitness.RdInc p trace t := by
+      TraceWitness.RdWa p trace register t * TraceWitness.RdInc p trace t := by
   let i : Fin trace.rows.size := ⟨t.val, hb⟩
-  let row := trace.rows[i]
+  let row := trace.row i (by omega)
   let instr := trace.bytecode[row.rowIndex].instruction
   let src := register42_srcOfAddress register
   have ha := trace.rowAssumptions i
   have hready : ∀ rd, Assumptions.XRegReadable rd row.preState.sail := ha.xRegReadable
   have hwa := register42_RdWa_real (F := F) p trace t hb register
-  change HonestWitness.RdWa (F := F) p trace register t =
+  change TraceWitness.RdWa (F := F) p trace register t =
     match instr.destination? with
-    | some dst => if register = HonestWitness.destinationRegisterAddress dst then 1 else 0
+    | some dst => if register = TraceWitness.destinationRegisterAddress dst then 1 else 0
     | none => 0 at hwa
-  have hinc : HonestWitness.RdInc (F := F) p trace t =
-      HonestWitness.rdValue instr row.postState -
-        HonestWitness.rdValue instr row.preState := by
-    unfold HonestWitness.RdInc
+  have hinc : TraceWitness.RdInc (F := F) p trace t =
+      TraceWitness.rdValue instr row.postState -
+        TraceWitness.rdValue instr row.preState := by
+    unfold TraceWitness.RdInc
     simp only [dif_pos hb]
     rfl
   have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
@@ -826,7 +826,7 @@ theorem register42_row_step
     · exact row.executes
   change ((JoltISA.sourceValue src row.postState).toNat : F) =
     ((JoltISA.sourceValue src row.preState).toNat : F) +
-      HonestWitness.RdWa p trace register t * HonestWitness.RdInc p trace t
+      TraceWitness.RdWa p trace register t * TraceWitness.RdInc p trace t
   cases hd : instr.destination? with
   | none =>
       have hs := hframe (by intro dst h; rw [hd] at h; cases h)
@@ -836,7 +836,7 @@ theorem register42_row_step
   | some dst =>
       have hcanondst := register42_instruction_destination_canonical instr dst hcanon hd
       have hsrcdst := register42_srcOfDestinationAddress dst hcanondst
-      by_cases hselected : register = HonestWitness.destinationRegisterAddress dst
+      by_cases hselected : register = TraceWitness.destinationRegisterAddress dst
       · have hsrc : src = register42_dstAsSrc dst := by
           dsimp [src]
           rw [hselected]
@@ -848,8 +848,8 @@ theorem register42_row_step
       · have hneq : src ≠ register42_dstAsSrc dst := by
           intro heq
           rw [← hsrcdst] at heq
-          have hadd := congrArg HonestWitness.sourceRegisterAddress heq
-          change HonestWitness.sourceRegisterAddress
+          have hadd := congrArg TraceWitness.sourceRegisterAddress heq
+          change TraceWitness.sourceRegisterAddress
             (register42_srcOfAddress register) = _ at hadd
           rw [register42_srcOfAddress_address] at hadd
           rw [register42_srcOfAddress_address] at hadd

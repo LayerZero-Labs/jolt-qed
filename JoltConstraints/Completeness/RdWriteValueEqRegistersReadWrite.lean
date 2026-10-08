@@ -1,9 +1,10 @@
+import JoltConstraints.Completeness.Helpers.RegistersValHistoryProofHelpers
 import JoltConstraints.Constraints.RdWriteValueEqRegistersReadWrite
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_witness
-import JoltConstraints.Constraints.RegistersValHistoryProofHelpers
+import JoltConstraints.Completeness.Helpers.RegistersValHistoryProofHelpers
 
 set_option autoImplicit false
 
@@ -26,29 +27,29 @@ theorem honestWitness_rdWriteValueEqRegistersReadWrite
     rdWriteValueEqRegistersReadWrite
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change HonestWitness.RdWriteValue params trace t =
+  change TraceWitness.RdWriteValue params trace t =
     ∑ register : Fin 128,
-      HonestWitness.RdWa params trace register t *
-        (HonestWitness.RegistersVal params trace register t + HonestWitness.RdInc params trace t)
+      TraceWitness.RdWa params trace register t *
+        (TraceWitness.RegistersVal params trace register t + TraceWitness.RdInc params trace t)
   by_cases hb : t.val < trace.rows.size
   · let row := trace.rows[t.val]'hb
     let instr := trace.bytecode[row.rowIndex].instruction
     have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
       trace.registerOperandsCanonical row.rowIndex
     have hwa := register42_RdWa_real (F := F) params trace t hb
-    change ∀ register, HonestWitness.RdWa (F := F) params trace register t =
+    change ∀ register, TraceWitness.RdWa (F := F) params trace register t =
       match instr.destination? with
-      | some dst => if register = HonestWitness.destinationRegisterAddress dst then 1 else 0
+      | some dst => if register = TraceWitness.destinationRegisterAddress dst then 1 else 0
       | none => 0 at hwa
-    have hinc : HonestWitness.RdInc (F := F) params trace t =
-        HonestWitness.rdValue instr row.postState -
-          HonestWitness.rdValue instr row.preState := by
-      unfold HonestWitness.RdInc
+    have hinc : TraceWitness.RdInc (F := F) params trace t =
+        TraceWitness.rdValue instr row.postState -
+          TraceWitness.rdValue instr row.preState := by
+      unfold TraceWitness.RdInc
       simp only [dif_pos hb]
       rfl
-    have hwrite : HonestWitness.RdWriteValue (F := F) params trace t =
-        HonestWitness.rdValue instr row.postState := by
-      unfold HonestWitness.RdWriteValue
+    have hwrite : TraceWitness.RdWriteValue (F := F) params trace t =
+        TraceWitness.rdValue instr row.postState := by
+      unfold TraceWitness.RdWriteValue
       simp only [dif_pos hb]
       rfl
     simp only [hwa]
@@ -57,17 +58,17 @@ theorem honestWitness_rdWriteValueEqRegistersReadWrite
     | none => simp
     | some dst =>
         simp only [ite_mul, one_mul, zero_mul]
-        rw [Finset.sum_ite_eq' Finset.univ (HonestWitness.destinationRegisterAddress dst)]
+        rw [Finset.sum_ite_eq' Finset.univ (TraceWitness.destinationRegisterAddress dst)]
         simp only [Finset.mem_univ, ↓reduceIte]
         have hpre := register42_registersVal_preState (F := F) params trace traceFits
-          initialRegistersZero (HonestWitness.destinationRegisterAddress dst) t.val hb
+          initialRegistersZero (TraceWitness.destinationRegisterAddress dst) t.val hb
         rw [register42_srcOfDestinationAddress dst
           (register42_instruction_destination_canonical instr dst hcanon hd)] at hpre
-        change HonestWitness.RegistersVal (F := F) params trace
-          (HonestWitness.destinationRegisterAddress dst) t = _ at hpre
+        change TraceWitness.RegistersVal (F := F) params trace
+          (TraceWitness.destinationRegisterAddress dst) t = _ at hpre
         rw [hpre, hinc, register42_rdValue_eq_destination,
           register42_rdValue_eq_destination, hd]
         ring
-  · simp [HonestWitness.RdWriteValue, HonestWitness.RdWa, hb]
+  · simp [TraceWitness.RdWriteValue, TraceWitness.RdWa, hb]
 
 end JoltConstraints

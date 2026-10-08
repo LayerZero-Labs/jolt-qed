@@ -17,7 +17,7 @@ theorem honestWitness_ramHammingWeightBooleanity
     ramHammingWeightBooleanity
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  dsimp [HonestTrace.honestWitness, HonestWitness.RamHammingWeight]
+  dsimp [HonestTrace.honestWitness, TraceWitness.RamHammingWeight]
   split_ifs
   · split <;> (try split_ifs) <;> simp_all
   · simp

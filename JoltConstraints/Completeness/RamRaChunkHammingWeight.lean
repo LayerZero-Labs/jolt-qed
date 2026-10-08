@@ -29,24 +29,24 @@ theorem honestWitness_ramRaChunkHammingWeight
     have fits := ramFits ⟨t.val, h⟩
     dsimp [WitnessParams.RamFits] at fits
     dsimp [ramRaChunkHammingWeight, HonestTrace.honestWitness,
-      HonestWitness.RamRaChunk, HonestWitness.RamHammingWeight,
-      HonestWitness.remappedRamAddress]
+      TraceWitness.RamRaChunk, TraceWitness.RamHammingWeight,
+      TraceWitness.remappedRamAddress]
     simp only [dif_pos h]
-    cases ha : HonestWitness.ramAccessAddress instruction row.preState with
-    | none => simp [HonestWitness.addressChunkEntry]
+    cases ha : TraceWitness.ramAccessAddress instruction row.preState with
+    | none => simp [TraceWitness.addressChunkEntry]
     | some raw =>
       simp only [instruction, row, ha] at fits
       rcases fits with hzero | ⟨address, hremap, _⟩
       · subst raw
-        simp [HonestWitness.remapRamAddress, HonestWitness.addressChunkEntry]
+        simp [TraceWitness.remapRamAddress, TraceWitness.addressChunkEntry]
       · have hnonzero : raw ≠ 0 := by
           intro hz
           subst raw
-          simp [HonestWitness.remapRamAddress] at hremap
-        simp [hremap, HonestWitness.sum_addressChunkEntry_some]
+          simp [TraceWitness.remapRamAddress] at hremap
+        simp [hremap, TraceWitness.sum_addressChunkEntry_some]
         exact hnonzero
   · simp [HonestTrace.honestWitness,
-      HonestWitness.RamRaChunk, HonestWitness.RamHammingWeight,
-      HonestWitness.remappedRamAddress, HonestWitness.addressChunkEntry, h]
+      TraceWitness.RamRaChunk, TraceWitness.RamHammingWeight,
+      TraceWitness.remappedRamAddress, TraceWitness.addressChunkEntry, h]
 
 end JoltConstraints

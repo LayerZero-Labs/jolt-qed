@@ -7,7 +7,7 @@ import Mathlib.Tactic
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 open scoped BigOperators
 
@@ -87,4 +87,4 @@ theorem addressChunk_injective (bits chunks a b : Nat)
     have hindex : chunks - 1 - (chunks - 1 - i) = i := by omega
     simpa only [hindex, mul_comm i bits, pow_mul] using h
 
-end HonestWitness
+end TraceWitness

@@ -1,6 +1,7 @@
+import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.Constraints.RightLookupOperandEqInstructionRaf
 import JoltConstraints.Constraints.LookupOperandData
-import JoltConstraints.Constraints.InstructionReadSelection
+import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 
 set_option autoImplicit false
 
@@ -30,9 +31,9 @@ theorem honestWitness_rightLookupOperandEqInstructionRaf
   · -- Combined operands use the full index; ordinary operands deinterleave it.
     -- Unfolding lookupAddressRight drops the index's bound proof, so the row's
     -- instruction can be generalized and split by constructor.
-    simp only [HonestTrace.honestWitness, HonestWitness.RightLookupOperand,
-      HonestWitness.InstructionRafFlag, HonestWitness.lookupIndex,
-      HonestWitness.RightInstructionInput, HonestWitness.Imm, HonestWitness.Rs2Value,
+    simp only [HonestTrace.honestWitness, TraceWitness.RightLookupOperand,
+      TraceWitness.InstructionRafFlag, TraceWitness.lookupIndex,
+      TraceWitness.RightInstructionInput, TraceWitness.Imm, TraceWitness.Rs2Value,
       lookupAddressRight, inBounds, dite_true]
     generalize (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex.val]'
       (trace.rows[t.val]'inBounds).rowIndex.isLt).instruction = instruction
@@ -41,7 +42,7 @@ theorem honestWitness_rightLookupOperandEqInstructionRaf
     cases instruction <;>
       simp only [JoltMetadata.hasCombinedLookupOperands, JoltMetadata.instructionRafFlag,
         JoltMetadata.opcodeFlag, JoltMetadata.instructionFlag, JoltMetadata.immediate,
-        HonestWitness.instructionLookupIndex, Int.cast_natCast,
+        TraceWitness.instructionLookupIndex, Int.cast_natCast,
         Bool.false_eq_true, Bool.or_false, Bool.or_true, ↓reduceIte, sub_zero, sub_self,
         one_mul, zero_mul, zero_add, add_zero]
     -- simp rewrites each ite condition but not its Decidable instance, so the
@@ -49,8 +50,8 @@ theorem honestWitness_rightLookupOperandEqInstructionRaf
     all_goals first
       | exact (sum_interleave_even_bits _ _).symm
       | simp
-  · simp [HonestTrace.honestWitness, HonestWitness.RightLookupOperand,
-      HonestWitness.InstructionRafFlag, HonestWitness.lookupIndex,
+  · simp [HonestTrace.honestWitness, TraceWitness.RightLookupOperand,
+      TraceWitness.InstructionRafFlag, TraceWitness.lookupIndex,
       lookupAddressRight, inBounds]
 
 end JoltConstraints

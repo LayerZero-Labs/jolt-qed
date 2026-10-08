@@ -17,8 +17,8 @@ theorem honestWitness_bytecodeRaChunkBooleanity
     bytecodeRaChunkBooleanity
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk entry t
-  dsimp [HonestTrace.honestWitness, HonestWitness.BytecodeRaChunk,
-    HonestWitness.addressChunkEntry]
+  dsimp [HonestTrace.honestWitness, TraceWitness.BytecodeRaChunk,
+    TraceWitness.addressChunkEntry]
   split_ifs <;> simp_all
 
 end JoltConstraints

@@ -1,6 +1,6 @@
 import JoltConstraints.Constraints.LookupOperandData
-import JoltConstraints.Constraints.LookupWriteProofHelpers
-import JoltConstraints.Constraints.LookupPextProofHelpers
+import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
+import JoltConstraints.Completeness.Helpers.LookupPextProofHelpers
 
 /-!
 # Per-table obligations for constraint (39)
@@ -10,7 +10,7 @@ selected table entry at the honest lookup address. After the address sum and the
 table sum are collapsed (see `LookupOutputEqInstructionReadRaf.lean`), what is
 left is one obligation per `LookupTableKind`:
 
-  lookupTableEntry k (rowLookupAddress row) = rowLookupOutput row
+  lookupTableEntry k (rowLookupAddress row) = rowLookupOutput row.toTraceRow
 
 whenever the row's instruction uses table `k`. This file states that obligation
 as `LookupEntryCorrect` and proves it table by table as
@@ -22,7 +22,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-open HonestWitness
+open TraceWitness
 open Sail PreSail LeanRV64D.Functions
 
 /-- The expanded instruction executed by a trace row. -/
@@ -44,7 +44,7 @@ noncomputable def rowLookupAddress {bytecode : Array JoltInstructionRow} (row : 
 address is the honest lookup output. -/
 def LookupEntryCorrect (F : Type) [Field F] {bytecode : Array JoltInstructionRow}
     (table : LookupTableKind) (row : HonestTraceRow bytecode) : Prop :=
-  lookupTableEntry (F := F) table (rowLookupAddress row) = ((rowLookupOutput row).toNat : F)
+  lookupTableEntry (F := F) table (rowLookupAddress row) = ((rowLookupOutput row.toTraceRow).toNat : F)
 
 /-! ## Uninterleaving -/
 
@@ -969,7 +969,7 @@ theorem lookupEntryCorrect_ValidUnsignedRemainder (row : HonestTraceRow bytecode
 `VirtualHostIO`) have lookup output zero. -/
 theorem rowLookupOutput_eq_zero_of_lookupTable_none (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = none) :
-    rowLookupOutput row = 0 := by
+    rowLookupOutput row.toTraceRow = 0 := by
   unfold rowLookupOutput
   cases hi : rowInstruction row <;>
     simp only [hi, JoltMetadata.lookupTable, reduceCtorEq] at h <;>

@@ -27,12 +27,12 @@ theorem honestWitness_leftLookupZeroIfAddSubMul
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
-  · simpa [HonestTrace.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.LeftLookupOperand, JoltMetadata.circuitFlag, inBounds] using
+  · simpa [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.LeftLookupOperand, JoltMetadata.circuitFlag, inBounds] using
         (arithmeticLeftLookupIsZero (F := F)
           (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
-          (HonestWitness.LeftInstructionInput params trace t))
-  · simp [HonestTrace.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.LeftLookupOperand, inBounds]
+          (TraceWitness.LeftInstructionInput params trace t))
+  · simp [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.LeftLookupOperand, inBounds]
 
 end JoltConstraints

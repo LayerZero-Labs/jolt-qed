@@ -1,4 +1,4 @@
-import JoltConstraints.Constraints.JumpReturnProofHelpers
+import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
 
 set_option autoImplicit false
 set_option maxHeartbeats 1000000
@@ -74,7 +74,7 @@ theorem lookup_write_retire (dst : JoltISA.Dst)
     (value : BitVec 64) (pre post : SailJoltState) (hw : dst.NotX0)
     (hexec : (do JoltISA.writeDst dst value; pure RETIRE_SUCCESS) pre =
       .ok (.Retire_Success ()) post) :
-    HonestWitness.capturedDestinationValue dst post = value := by
+    TraceWitness.capturedDestinationValue dst post = value := by
   cases hr : JoltISA.writeDst dst value pre with
   | error e s => simp only [bind, EStateM.bind, hr] at hexec; cases hexec
   | ok u s =>
@@ -104,19 +104,19 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       some bytecode[row.rowIndex].address)
     (hflag : JoltMetadata.circuitFlag bytecode[row.rowIndex]
       .WriteLookupOutputToRD = true) :
-    HonestWitness.rdValue (F := F)
+    TraceWitness.rdValue (F := F)
       bytecode[row.rowIndex].instruction row.postState =
-      ((HonestWitness.rowLookupOutput row).toNat : F) := by
+      ((TraceWitness.rowLookupOutput row.toTraceRow).toNat : F) := by
   let bc := bytecode[row.rowIndex]
   change JoltMetadata.circuitFlag bc .WriteLookupOutputToRD = true at hflag
-  change HonestWitness.rdValue (F := F) bc.instruction row.postState = _
+  change TraceWitness.rdValue (F := F) bc.instruction row.postState = _
   by_cases hnoop : bc.instruction = JoltISA.Instr.canonicalNoOp
-  · change HonestWitness.rdValue (F := F) bc.instruction row.postState = _
-    simp only [HonestWitness.rowLookupOutput, show
+  · change TraceWitness.rdValue (F := F) bc.instruction row.postState = _
+    simp only [TraceWitness.rowLookupOutput, show
       bytecode[row.rowIndex.val].instruction =
         JoltISA.Instr.canonicalNoOp from hnoop, hnoop,
-      JoltISA.Instr.canonicalNoOp, HonestWitness.rdValue,
-      HonestWitness.capturedDestinationValue, HonestWitness.capturedDestination,
+      JoltISA.Instr.canonicalNoOp, TraceWitness.rdValue,
+      TraceWitness.capturedDestinationValue, TraceWitness.capturedDestination,
       JoltISA.sourceValue, BitVec.toNat_ofNat, Nat.zero_mod, JoltISA.addWide,
       Nat.zero_add, BitVec.toNat_zero]
     rfl
@@ -135,9 +135,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -146,9 +146,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -157,9 +157,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -168,9 +168,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -179,9 +179,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -190,9 +190,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -201,9 +201,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -212,9 +212,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
         (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
@@ -222,9 +222,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       simp only [bind, EStateM.bind, hreadpc] at hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -233,9 +233,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -245,9 +245,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -257,9 +257,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -269,9 +269,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -281,9 +281,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -293,9 +293,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -305,9 +305,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -317,9 +317,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -329,9 +329,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -340,9 +340,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -351,9 +351,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -362,9 +362,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -373,9 +373,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
         (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
@@ -383,9 +383,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
         (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
@@ -393,9 +393,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -404,9 +404,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
         (lookup_write_retire dst _ _ _ (hw dst rfl) hexec)
@@ -414,9 +414,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -425,9 +425,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -436,9 +436,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -447,9 +447,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -458,9 +458,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -469,9 +469,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind bitmask _ _ _ _ hread
@@ -481,9 +481,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind bitmask _ _ _ _ hread
@@ -493,9 +493,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind bitmask _ _ _ _ hread
@@ -505,9 +505,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind bitmask _ _ _ _ hread
@@ -517,9 +517,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -528,9 +528,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -539,9 +539,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -550,9 +550,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -562,9 +562,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -574,9 +574,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -586,9 +586,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -598,9 +598,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -610,9 +610,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -622,9 +622,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -634,9 +634,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -646,9 +646,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -658,9 +658,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -670,9 +670,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -682,9 +682,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -694,9 +694,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -706,9 +706,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -718,9 +718,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -730,9 +730,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -742,9 +742,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind lhs _ _ _ _ hexec
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
@@ -754,9 +754,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind base _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -765,9 +765,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind base _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -776,9 +776,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind base _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -787,9 +787,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind base _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -798,9 +798,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind mask _ _ _ _ hread
@@ -810,9 +810,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind mask _ _ _ _ hread
@@ -822,9 +822,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind address _ _ _ _ hread
@@ -834,9 +834,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind address _ _ _ _ hread
@@ -846,9 +846,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind value _ _ _ _ hexec
       have hread2 := lookup_read_bind address _ _ _ _ hread
@@ -858,9 +858,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -869,9 +869,9 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
@@ -880,32 +880,32 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind src _ _ _ _ hexec
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
         (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualAdvice =>
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
     | VirtualAdviceLoad =>
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
     | VirtualAdviceLen =>
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
     | VirtualNegateIf dst signSource value =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec
       simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [HonestWitness.rowLookupOutput, show
+      simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, HonestWitness.rdValue]
+        hi, TraceWitness.rdValue]
       obtain ⟨advice, hexec⟩ := hexec
       have hread := lookup_read_bind signSource _ _ _ _ hexec
       have hread2 := lookup_read_bind value _ _ _ _ hread

@@ -1,13 +1,13 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.honest_trace
+import JoltConstraints.trace
 import JoltConstraints.metadata
 
 set_option autoImplicit false
 
 -- Rust paths are relative to /Users/ari.biswas/Work-with-A16z/jolt.
 
-namespace HonestWitness
+namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
@@ -15,8 +15,7 @@ variable {F : Type} (p : WitnessParams)
 -- Rust: crates/jolt-witness/src/backend/trace/cycle.rs::walk_cycles;
 -- crates/jolt-riscv/src/instructions/i/noop.rs (padding sets only IsNoop).
 -- Instruction-flag bits over the padded witness; padding sets only IsNoop to one.
-noncomputable def InstructionFlags [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) : _root_.InstructionFlags → Fin p.traceLength → F :=
+noncomputable def InstructionFlags [Field F] (trace : Trace) : _root_.InstructionFlags → Fin p.traceLength → F :=
   fun flag t =>
     -- t indexes the padded witness; the else branch represents a padding position.
     -- inBounds supplies the proof needed to read an actual execution row.
@@ -32,4 +31,4 @@ noncomputable def InstructionFlags [Field F] {joltInstance : JoltInstance Source
       | .IsNoop => 1
       | _ => 0
 
-end HonestWitness
+end TraceWitness

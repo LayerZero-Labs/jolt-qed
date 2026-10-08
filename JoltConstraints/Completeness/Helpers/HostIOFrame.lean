@@ -1,4 +1,4 @@
-import JoltConstraints.Constraints.NextPCFrame
+import JoltConstraints.Completeness.Helpers.NextPCFrame
 
 -- HostIO changes no Sail state: its byte reads go through Jolt's MMU, which
 -- changes nothing, and it otherwise only appends to the advice tape.
@@ -110,7 +110,7 @@ theorem row {joltInstance : JoltInstance SourceInstruction} {privateInputs : Jol
         trace.rows[i].runtimeAdvice) trace.rows[i].preState = false) :
     trace.rows[i].postState.sail.regs.get? Register.nextPC =
       trace.rows[i].preState.sail.regs.get? Register.nextPC := by
-  apply instruction _ _ _ hjump hnot _ trace.rows[i].executes
-  exact hostIOFrame_of_exec _ _ _ trace.rows[i].executes
+  apply instruction _ _ _ hjump hnot _ (trace.row i (by omega)).executes
+  exact hostIOFrame_of_exec _ _ _ (trace.row i (by omega)).executes
 
 end JoltNextPCFrame

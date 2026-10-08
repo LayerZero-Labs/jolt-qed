@@ -1,6 +1,6 @@
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Field.Defs
 import JoltConstraints.Constraints.InstructionLookupRa
-import JoltConstraints.Constraints.InstructionReadSelection
-import JoltConstraints.Constraints.LookupEntryProofHelpers
 
 set_option autoImplicit false
 

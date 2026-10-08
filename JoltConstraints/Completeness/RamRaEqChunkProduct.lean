@@ -36,23 +36,23 @@ theorem honestWitness_ramRaEqChunkProduct
     omega
   intro address t
   dsimp [ramRaEqChunkProduct, HonestTrace.honestWitness,
-    HonestWitness.RamRa, HonestWitness.RamRaChunk]
-  cases hr : HonestWitness.remappedRamAddress trace t.val with
+    TraceWitness.RamRa, TraceWitness.RamRaChunk]
+  cases hr : TraceWitness.remappedRamAddress trace t.val with
   | none =>
-      simp [HonestWitness.addressChunkEntry]
+      simp [TraceWitness.addressChunkEntry]
       rw [zero_pow (Nat.ne_of_gt ramChunksPos)]
   | some b =>
       by_cases heq : b = address.val
       · subst b
-        simp [HonestWitness.addressChunkEntry, ramAddressChunk,
-          HonestWitness.addressChunk]
+        simp [TraceWitness.addressChunkEntry, ramAddressChunk,
+          TraceWitness.addressChunk]
       · have hdiff : ∃ chunk : Fin params.ramChunks,
-            HonestWitness.addressChunk params.chunkBits chunk address.val ≠
-              HonestWitness.addressChunk params.chunkBits chunk b := by
+            TraceWitness.addressChunk params.chunkBits chunk address.val ≠
+              TraceWitness.addressChunk params.chunkBits chunk b := by
           by_contra hn
           have hd : ∀ chunk : Fin params.ramChunks,
-              HonestWitness.addressChunk params.chunkBits chunk address.val =
-                HonestWitness.addressChunk params.chunkBits chunk b := by
+              TraceWitness.addressChunk params.chunkBits chunk address.val =
+                TraceWitness.addressChunk params.chunkBits chunk b := by
             intro chunk
             by_contra hneq
             exact hn ⟨chunk, hneq⟩
@@ -62,7 +62,7 @@ theorem honestWitness_ramRaEqChunkProduct
           have hb : b < 2 ^ (params.ramChunks * params.chunkBits) :=
             (params.remappedRamAddress_lt trace ramFits t b hr).trans_le
               (Nat.pow_le_pow_right (by decide) cover)
-          exact heq (HonestWitness.addressChunk_injective params.chunkBits
+          exact heq (TraceWitness.addressChunk_injective params.chunkBits
             params.ramChunks address.val b ha hb hd).symm
         obtain ⟨chunk, hneq⟩ := hdiff
         have hopt : (some b : Option Nat) ≠ some address.val := by
@@ -77,7 +77,7 @@ theorem honestWitness_ramRaEqChunkProduct
           2 ^ params.chunkBits at hneq
         change (if address.val /
           2 ^ ((params.ramChunks - 1 - chunk.val) * params.chunkBits) %
-          2 ^ params.chunkBits = HonestWitness.addressChunk params.chunkBits chunk b
+          2 ^ params.chunkBits = TraceWitness.addressChunk params.chunkBits chunk b
           then (1 : F) else 0) = 0
         exact if_neg hneq
 

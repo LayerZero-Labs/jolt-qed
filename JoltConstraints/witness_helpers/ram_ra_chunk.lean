@@ -1,11 +1,11 @@
 import JoltConstraints.witness_helpers.address_chunk
 import JoltConstraints.witness_helpers.ram_address
 import JoltConstraints.witness
-import JoltConstraints.honest_trace
+import JoltConstraints.trace
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [remap_word_address](/Users/ari.biswas/Work-with-A16z/jolt/common/src/jolt_device.rs:496).
 -- RAM and device I/O share one word-address domain, starting at the lower
@@ -18,8 +18,7 @@ def remapRamAddress (layout : MemoryLayout) (address : BitVec 64) : Option Nat :
 
 -- Preprocessing uses the program's initial layout for every execution step.
 -- Padding and instructions without a RAM access have no remapped address.
-noncomputable def remappedRamAddress {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (t : Nat) : Option Nat :=
+noncomputable def remappedRamAddress (trace : Trace) (t : Nat) : Option Nat :=
   if inBounds : t < trace.rows.size then
     let row := getElem trace.rows t inBounds
     let instruction :=
@@ -32,9 +31,9 @@ noncomputable def remappedRamAddress {joltInstance : JoltInstance SourceInstruct
 -- Each actual remapped access selects one entry per chunk. All other cycles
 -- are entirely zero, unlike instruction and bytecode padding.
 noncomputable def RamRaChunk {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
+    (trace : Trace) :
     Fin p.ramChunks → Fin (2 ^ p.chunkBits) → Fin p.traceLength → F :=
   fun chunk entry t =>
     addressChunkEntry p.chunkBits chunk (remappedRamAddress trace t.val) entry
 
-end HonestWitness
+end TraceWitness

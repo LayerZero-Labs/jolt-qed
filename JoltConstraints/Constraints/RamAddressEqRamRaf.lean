@@ -1,4 +1,6 @@
-import JoltConstraints.Constraints.RamReadSelection
+import JoltConstraints.Constraints.RamReadData
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Field.Defs
 
 set_option autoImplicit false
 

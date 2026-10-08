@@ -30,18 +30,18 @@ theorem honestWitness_assertLookupOne
             JoltISA.sourceValue lhs row.preState = JoltISA.sourceValue rhs row.preState
         | _ => True := by
       exact hAssertEqPasses ⟨t.val, inBounds⟩
-    change HonestWitness.OpFlags params trace .Assert t *
-      (HonestWitness.LookupOutput params trace t - 1) = 0
-    simp only [HonestWitness.OpFlags, HonestWitness.LookupOutput, inBounds,
+    change TraceWitness.OpFlags params trace .Assert t *
+      (TraceWitness.LookupOutput params trace t - 1) = 0
+    simp only [TraceWitness.OpFlags, TraceWitness.LookupOutput, inBounds,
       dite_true]
     change (if JoltMetadata.circuitFlag
         (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt) .Assert
       then (1 : F) else 0) *
-      (((HonestWitness.rowLookupOutput row).toNat : F) - 1) = 0
+      (((TraceWitness.rowLookupOutput row).toNat : F) - 1) = 0
     change (if JoltMetadata.opcodeFlag instruction .Assert then (1 : F) else 0) *
-      (((HonestWitness.rowLookupOutput row).toNat : F) - 1) = 0
+      (((TraceWitness.rowLookupOutput row).toNat : F) - 1) = 0
     by_cases hAssert : JoltMetadata.opcodeFlag instruction .Assert = true
-    · have hLookup : HonestWitness.rowLookupOutput row = 1 := by
+    · have hLookup : TraceWitness.rowLookupOutput row = 1 := by
         dsimp [instruction] at hAssert hPass
         change JoltMetadata.opcodeFlag
           (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
@@ -53,10 +53,10 @@ theorem honestWitness_assertLookupOne
         cases hInstr : (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction <;>
           (rw [hInstr] at hAssert hPass
            simp [JoltMetadata.opcodeFlag] at hAssert)
-        all_goals simp [HonestWitness.rowLookupOutput, hInstr, hPass, jolt_assert_eq]
+        all_goals simp [TraceWitness.rowLookupOutput, hInstr, hPass, jolt_assert_eq]
       simp [hAssert, hLookup]
     · simp [hAssert]
-  · simp [HonestTrace.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.LookupOutput, inBounds]
+  · simp [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.LookupOutput, inBounds]
 
 end JoltConstraints

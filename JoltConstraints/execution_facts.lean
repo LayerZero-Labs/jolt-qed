@@ -8,6 +8,7 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
 import Mathlib.Tactic.IntervalCases
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
+import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 
 set_option autoImplicit false
 
@@ -16,27 +17,19 @@ open Sail PreSail LeanRV64D.Functions
 namespace SailUnchanged
 
 -- A step that, when it succeeds, leaves the Sail state exactly as it found it.
-def Preserves {Value : Type} (step : JoltMonad Value) : Prop :=
-  ∀ (state after : SailJoltState) (value : Value),
-    step state = .ok value after → after.sail = state.sail
+def Preserves {α : Type} (step : JoltMonad α) : Prop :=
+  StatePreservation.Preserves (fun before after => after.sail = before.sail) step
 
-theorem pure_rule {Value : Type} (value : Value) : Preserves (pure value) := by
-  intro state after result runs
-  cases runs
-  rfl
+theorem pure_rule {Value : Type} (value : Value) : Preserves (pure value) :=
+  StatePreservation.pure_rule
+    (relation := fun (before after : SailJoltState) => after.sail = before.sail)
+    (fun _ => rfl) value
 
 -- Two steps that each keep the Sail state keep it when run one after the other.
 theorem bind_rule {Value Next : Type} {first : JoltMonad Value} {next : Value → JoltMonad Next}
     (keepsFirst : Preserves first) (keepsNext : ∀ value, Preserves (next value)) :
-    Preserves (first >>= next) := by
-  intro state after result runs
-  cases firstRun : first state with
-  | error failure middle =>
-    simp only [bind, EStateM.bind, firstRun] at runs
-    cases runs
-  | ok value middle =>
-    simp only [bind, EStateM.bind, firstRun] at runs
-    exact (keepsNext value middle after result runs).trans (keepsFirst state middle value firstRun)
+    Preserves (first >>= next) :=
+  StatePreservation.bind_rule (fun _ _ _ first next => next.trans first) keepsFirst keepsNext
 
 -- Reading a register, real or virtual, changes nothing.
 theorem read_rule (source : JoltISA.Src) : Preserves (JoltISA.readSrc source) := by
@@ -47,35 +40,23 @@ theorem read_rule (source : JoltISA.Src) : Preserves (JoltISA.readSrc source) :=
     cases runs
     rfl
   | xreg register =>
-    change liftSail (rX_bits register) state = .ok value after at runs
-    unfold liftSail at runs
-    cases readResult : rX_bits register state.sail with
-    | error failure sail =>
-      rw [readResult] at runs
-      cases runs
-    | ok readValue sail =>
-      have same := rX_bits_pure register state.sail readValue sail readResult
-      rw [readResult] at runs
-      cases runs
-      exact same
+    exact StatePreservation.liftSail_rule
+      (relation := fun before after => after.sail = before.sail) (fun _ _ same => same)
+      (fun sail after value runs => rX_bits_pure register sail value after runs)
+      state after value runs
 
-theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
-  intro state after value runs
-  cases runs
-  rfl
+theorem get_rule : Preserves (get : JoltMonad SailJoltState) :=
+  StatePreservation.get_rule (fun _ => rfl)
 
 theorem throw_rule {Value : Type} (failure : Error exception) :
-    Preserves (throw failure : JoltMonad Value) := by
-  intro state after value runs
-  cases runs
+    Preserves (throw failure : JoltMonad Value) :=
+  StatePreservation.throw_rule _ failure
 
 -- Changing only the advice tape (or anything else outside Sail) keeps the Sail state.
 theorem modify_rule (change : SailJoltState → SailJoltState)
     (keeps : ∀ state, (change state).sail = state.sail) :
-    Preserves (modify change : JoltMonad Unit) := by
-  intro state after value runs
-  cases runs
-  exact keeps state
+    Preserves (modify change : JoltMonad Unit) :=
+  StatePreservation.modify_rule change keeps
 
 -- A one-byte load changes nothing.
 theorem load_rule (address : BitVec 64) : Preserves (JoltISA.Mmu.load address) := by
@@ -114,14 +95,9 @@ theorem execHostIO_keeps_sail (state after : SailJoltState) (result : ExecutionR
     · exact SailUnchanged.pure_rule _
     · refine SailUnchanged.bind_rule (SailUnchanged.pure_rule _) (fun _ => ?_)
       refine SailUnchanged.bind_rule (SailUnchanged.read_rule _) (fun callId => ?_)
-      repeat' first
-        | exact SailUnchanged.readHostBytes_rule _ _ _ _ _
-        | exact SailUnchanged.read_rule _
-        | exact SailUnchanged.pure_rule _
-        | exact SailUnchanged.throw_rule _
-        | exact SailUnchanged.modify_rule _ (fun _ => rfl)
-        | split
-        | refine SailUnchanged.bind_rule ?_ (fun _ => ?_)
+      preservation_auto [SailUnchanged.readHostBytes_rule _ _ _ _ _,
+        SailUnchanged.read_rule _, SailUnchanged.pure_rule _, SailUnchanged.throw_rule _,
+        SailUnchanged.modify_rule _ (fun _ => rfl)] using SailUnchanged.bind_rule
   exact keeps state after result runs
 
 -- Every Sail register has a value in the register map.
@@ -513,7 +489,7 @@ theorem initial_state_registers_present {Source : Type} (joltInstance : JoltInst
 -- In an honest trace, every row starts with every Sail register present.
 theorem HonestTrace.registers_present {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (position : Nat) (row : HonestTraceRow trace.bytecode)
+    (position : Nat) (row : TraceRow trace.bytecode)
     (atPosition : trace.rows[position]? = some row) :
     AllRegistersPresent row.preState.sail := by
   induction position generalizing row with
@@ -529,7 +505,7 @@ theorem HonestTrace.registers_present {joltInstance : JoltInstance SourceInstruc
     have previousAt : trace.rows[position]? = some trace.rows[position] :=
       Array.getElem?_eq_getElem (by omega)
     have previousEnd : AllRegistersPresent trace.rows[position].postState.sail :=
-      execInstr_keeps_registers _ _ _ _ trace.rows[position].executes
+      execInstr_keeps_registers _ _ _ _ (trace.executes _ (Array.getElem_mem (by omega)))
         (ih trace.rows[position] previousAt)
     have link := trace.linked position trace.rows[position] row previousAt atPosition
     split at link
@@ -944,17 +920,3 @@ theorem execInstr_store_nonzero (base value : JoltISA.Src) (imm : BitVec 64)
         JoltISA.Mmu.store_doubleword_zero state config built aboveEight storedValue
       rw [fails] at runs
       cases runs
-
--- An SD row that retires stores over a 64-bit word that is present in memory, so the
--- witness can record the old value, as Rust's tracer does.
--- See : jolt/tracer/src/emulator/mmu.rs:556 (trace_store reads the old word)
--- TODO: prove: the address is in RAM below heap_end, every byte of which initialRam
--- puts in memory and stores only add to, or in the device's output, panic or
--- termination words, which always read some byte.
-theorem HonestTraceRow.store_word_present {bytecode : Array JoltInstructionRow}
-    (row : HonestTraceRow bytecode) (base value : JoltISA.Src) (imm : BitVec 64)
-    (isStore : bytecode[row.rowIndex].instruction = .SD base value imm) :
-    (JoltISA.trace_doubleword? row.preState
-      (JoltISA.sourceValue base row.preState + imm)).isSome = true := by
-  sorry
-

@@ -11,11 +11,11 @@ private theorem ramAddressZeroWhenNotMemory {F : Type} [Field F]
     (instruction : JoltISA.Instr) (preState : SailJoltState) :
     ((1 : F) - (if JoltMetadata.opcodeFlag instruction .Load then 1 else 0) -
       (if JoltMetadata.opcodeFlag instruction .Store then 1 else 0)) *
-      (match HonestWitness.ramAccessAddress instruction preState with
+      (match TraceWitness.ramAccessAddress instruction preState with
         | some address => (address.toNat : F)
         | none => 0) = 0 := by
   cases instruction <;>
-    simp [JoltMetadata.opcodeFlag, HonestWitness.ramAccessAddress]
+    simp [JoltMetadata.opcodeFlag, TraceWitness.ramAccessAddress]
 
 /-- Completeness target for the honest witness; proof pending. -/
 theorem honestWitness_ramAddrEqZeroIfNotLoadStore
@@ -28,12 +28,12 @@ theorem honestWitness_ramAddrEqZeroIfNotLoadStore
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
-  · simpa [HonestTrace.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.RamAddress, JoltMetadata.circuitFlag, inBounds] using
+  · simpa [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.RamAddress, JoltMetadata.circuitFlag, inBounds] using
         (ramAddressZeroWhenNotMemory (F := F)
           (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
           (trace.rows[t.val]'inBounds).preState)
-  · simp [HonestTrace.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.RamAddress, inBounds]
+  · simp [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.RamAddress, inBounds]
 
 end JoltConstraints

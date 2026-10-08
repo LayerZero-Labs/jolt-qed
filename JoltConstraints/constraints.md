@@ -19,11 +19,12 @@ under the stated conditions.
 The `FIXME:` targets are (01), blocked by the confirmed
 [wrapping-load completeness bug](../bug-report/ram-address-wrap.md); (16),
 whose [taken self-branch counterexample](../bug-report/self-branch.md) leaves
-its unrestricted target as a statement rather than a theorem; and (37),
+its unrestricted target as a statement rather than a theorem; (37),
 blocked by the confirmed
-[termination-word RAM history bug](../bug-report/ram-val-termination/README.md).
-The two `TODO:` targets are (38) and (39); they still need Rust–Lean
-correspondence checks.
+[termination-word RAM history bug](../bug-report/ram-val-termination/README.md);
+and (38), blocked by [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951)
+item 1: a run that never stores to the termination word.
+The `TODO:` target is (39); it still needs Rust–Lean correspondence checks.
 
 Constraint (12) has a proved conditional completeness theorem requiring
 equality-assertion operands to match;
@@ -51,8 +52,8 @@ The remaining equations (23)–(26), (37)–(38), (40)–(41), (48)–(53), and 
 were also checked against Rust commit `e012da54c3bb26a6436b5ca74e86c19bb39695ad`.
 This checklist covers the base RV64 relations; optional `akita` relations,
 including its extra instruction-address canonicality condition, are outside it.
-The final-RAM completeness target (38) still needs memory-history and
-termination assumptions. Constraint (53) takes the public entry slot
+The final-RAM completeness target (38) is blocked by
+[a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1. Constraint (53) takes the public entry slot
 explicitly and requires the trace to start there. Constraint (50) selects the
 destination recorded in the final bytecode row, including x0. The
 [`JoltTraceRow` load-capture condition](trace.lean) separately requires a load's
@@ -280,7 +281,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 ## RamValCheck — stage 4
 
 - [ ] (37) FIXME: [RAM value from preceding increments](Constraints/RamValEqInitialPlusPrefixRamInc.lean) · [completeness](Completeness/RamValEqInitialPlusPrefixRamInc.lean) — [Rust-accepted termination-word counterexample](../bug-report/ram-val-termination/README.md)
-- [ ] (38) TODO: [Final RAM value from all increments](Constraints/RamValFinalEqInitialPlusRamInc.lean) · [completeness](Completeness/RamValFinalEqInitialPlusRamInc.lean)
+- [ ] (38) FIXME: [Final RAM value from all increments](Constraints/RamValFinalEqInitialPlusRamInc.lean) · [completeness](Completeness/RamValFinalEqInitialPlusRamInc.lean) — [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1: a run that never stores to the termination word
 
 [Rust: constraint](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135); [initial public RAM](https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/preprocess/ram.rs#L134).
 

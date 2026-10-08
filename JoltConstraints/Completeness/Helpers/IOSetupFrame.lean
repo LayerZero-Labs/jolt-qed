@@ -1,3 +1,4 @@
+import JoltConstraints.honest_witness
 import JoltConstraints.Constraints.RamReadData
 import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
@@ -28,7 +29,7 @@ theorem trace_preState_ioSame {joltInstance : JoltInstance SourceInstruction} {p
     exact Same.refl _
   | succ i ih =>
     have hprev := ih (by omega)
-    have hexec := execInstr_rule _ _ _ _ (getElem trace.rows i (by omega)).executes
+    have hexec := execInstr_rule _ _ _ _ (trace.row i (by omega)).executes
     have hlink := trace.linkedState i (by omega) hi
     rw [hlink]
     split
@@ -37,12 +38,12 @@ theorem trace_preState_ioSame {joltInstance : JoltInstance SourceInstruction} {p
 
 /-- The final recorded state has the program's initial device setup. -/
 theorem finalTraceState_ioSame {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
-    Same trace.initialState.jolt_device (HonestWitness.finalTraceState trace).jolt_device := by
-  unfold HonestWitness.finalTraceState
+    Same trace.initialState.jolt_device (TraceWitness.finalTraceState trace).jolt_device := by
+  unfold TraceWitness.finalTraceState
   split
   · rename_i nonempty
     exact (trace_preState_ioSame trace _ _).trans
-      (execInstr_rule _ _ _ _ (getElem trace.rows (trace.rows.size - 1) _).executes)
+      (execInstr_rule _ _ _ _ (trace.row (trace.rows.size - 1) (by omega)).executes)
   · exact Same.refl _
 
 end JoltConstraints

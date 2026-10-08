@@ -1,9 +1,10 @@
+import JoltConstraints.Completeness.Helpers.RegistersValHistoryProofHelpers
 import JoltConstraints.Constraints.RegistersValEqPrefixRdInc
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_witness
-import JoltConstraints.Constraints.RegistersValHistoryProofHelpers
+import JoltConstraints.Completeness.Helpers.RegistersValHistoryProofHelpers
 
 set_option autoImplicit false
 

@@ -20,12 +20,12 @@ theorem honestWitness_shouldJumpEqJumpMulNotNextIsNoop
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases next : t.val + 1 < params.traceLength
-  · simp [HonestTrace.honestWitness, HonestWitness.ShouldJump,
-      HonestWitness.NextIsNoop, next]
+  · simp [HonestTrace.honestWitness, TraceWitness.ShouldJump,
+      TraceWitness.NextIsNoop, next]
   · have padding : ¬ t.val < trace.rows.size := by
       have rowsLt := tracePadded.2
       omega
-    simp [HonestTrace.honestWitness, HonestWitness.ShouldJump,
-      HonestWitness.NextIsNoop, HonestWitness.OpFlags, next, padding]
+    simp [HonestTrace.honestWitness, TraceWitness.ShouldJump,
+      TraceWitness.NextIsNoop, TraceWitness.OpFlags, next, padding]
 
 end JoltConstraints

@@ -17,24 +17,24 @@ theorem honestWitness_ramReadEqRdWriteIfLoad
     ramReadEqRdWriteIfLoad
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change HonestWitness.OpFlags params trace .Load t *
+  change TraceWitness.OpFlags params trace .Load t *
     (HonestWitness.RamReadValue params trace t -
-      HonestWitness.RdWriteValue params trace t) = 0
+      TraceWitness.RdWriteValue params trace t) = 0
   by_cases inBounds : t.val < trace.rows.size
   · let instruction := (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
     by_cases hLoad : JoltMetadata.opcodeFlag instruction .Load = true
     · obtain ⟨faultClass, dst, base, imm, hInstr⟩ :=
         JoltMetadata.opcodeFlag_load_requiresLD instruction hLoad
       dsimp [instruction] at hInstr
-      simp [HonestWitness.OpFlags, HonestWitness.RamReadValue,
-        HonestWitness.RdWriteValue, JoltMetadata.circuitFlag, inBounds, hInstr]
+      simp [TraceWitness.OpFlags, HonestWitness.RamReadValue,
+        TraceWitness.RdWriteValue, JoltMetadata.circuitFlag, inBounds, hInstr]
       all_goals split <;> simp_all [JoltMetadata.opcodeFlag]
       case h_3 =>
         rename_i h
         exact False.elim ((h faultClass dst base imm rfl rfl rfl) rfl)
     · dsimp [instruction] at hLoad
-      simp [HonestWitness.OpFlags, JoltMetadata.circuitFlag, inBounds, hLoad]
-  · simp [HonestWitness.OpFlags, HonestWitness.RamReadValue,
-      HonestWitness.RdWriteValue, inBounds]
+      simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, inBounds, hLoad]
+  · simp [TraceWitness.OpFlags, HonestWitness.RamReadValue,
+      TraceWitness.RdWriteValue, inBounds]
 
 end JoltConstraints

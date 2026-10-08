@@ -17,8 +17,8 @@ theorem honestWitness_ramRaChunkBooleanity
     ramRaChunkBooleanity
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk entry t
-  dsimp [HonestTrace.honestWitness, HonestWitness.RamRaChunk,
-    HonestWitness.addressChunkEntry]
-  cases h : HonestWitness.remappedRamAddress trace t.val <;> simp_all
+  dsimp [HonestTrace.honestWitness, TraceWitness.RamRaChunk,
+    TraceWitness.addressChunkEntry]
+  cases h : TraceWitness.remappedRamAddress trace t.val <;> simp_all
 
 end JoltConstraints

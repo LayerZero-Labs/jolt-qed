@@ -1,4 +1,5 @@
 import JoltBytecode.JoltISA.Semantics
+import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 
 /-
 Every Jolt ISA instruction leaves the device's memory layout, inputs and advice
@@ -26,47 +27,29 @@ theorem Same.trans {a b c : JoltDevice} (hab : Same a b) (hbc : Same b c) : Same
     hbc.2.2.2.trans hab.2.2.2⟩
 
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
-  ∀ (s t : SailJoltState) (v : α), m s = .ok v t → Same s.jolt_device t.jolt_device
+  StatePreservation.Preserves (fun s t => Same s.jolt_device t.jolt_device) m
 
-theorem pure_rule {α : Type} (v : α) : Preserves (pure v) := by
-  intro s t x h
-  cases h
-  exact Same.refl _
+theorem pure_rule {α : Type} (v : α) : Preserves (pure v) :=
+  StatePreservation.pure_rule (fun (s : SailJoltState) => Same.refl s.jolt_device) v
 
 theorem bind_rule {α β : Type} {m : JoltMonad α} {f : α → JoltMonad β}
-    (hm : Preserves m) (hf : ∀ x, Preserves (f x)) : Preserves (m >>= f) := by
-  intro s t v h
-  cases hr : m s with
-  | error e s' => simp only [bind, EStateM.bind, hr] at h; cases h
-  | ok x s' =>
-    simp only [bind, EStateM.bind, hr] at h
-    exact (hm s s' x hr).trans (hf x s' t v h)
+    (hm : Preserves m) (hf : ∀ x, Preserves (f x)) : Preserves (m >>= f) :=
+  StatePreservation.bind_rule (fun _ _ _ first next => first.trans next) hm hf
 
-theorem lift_rule {α : Type} (m : SailM α) : Preserves (liftSail m) := by
-  intro s t v h
-  cases hr : m s.sail with
-  | error e s' => simp only [liftSail, hr] at h; cases h
-  | ok x s' =>
-    simp only [liftSail, hr] at h
-    cases h
-    exact Same.refl _
+theorem lift_rule {α : Type} (m : SailM α) : Preserves (liftSail m) :=
+  StatePreservation.liftSail_rule (sailRelation := fun _ _ => True)
+    (fun _ _ _ => Same.refl _) (fun _ _ _ _ => True.intro)
 
 theorem throw_rule {α : Type} (e : Error exception) :
-    Preserves (throw e : JoltMonad α) := by
-  intro s t x h
-  cases h
+    Preserves (throw e : JoltMonad α) :=
+  StatePreservation.throw_rule _ e
 
-theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
-  intro s t x h
-  cases h
-  exact Same.refl _
+theorem get_rule : Preserves (get : JoltMonad SailJoltState) :=
+  StatePreservation.get_rule (fun (s : SailJoltState) => Same.refl s.jolt_device)
 
 theorem modify_rule (f : SailJoltState → SailJoltState)
-    (hf : ∀ s, (f s).jolt_device = s.jolt_device) : Preserves (modify f : JoltMonad Unit) := by
-  intro s t x h
-  cases h
-  rw [hf s]
-  exact Same.refl _
+    (hf : ∀ s, (f s).jolt_device = s.jolt_device) : Preserves (modify f : JoltMonad Unit) :=
+  StatePreservation.modify_rule f (fun s => by rw [hf s]; exact Same.refl _)
 
 theorem read_rule (src : Src) : Preserves (readSrc src) := by
   cases src with
@@ -176,28 +159,8 @@ theorem execHostIO_rule : Preserves execHostIO := by
   · exact pure_rule _
   · refine bind_rule (pure_rule _) (fun _ => ?_)
     refine bind_rule (read_rule _) (fun callId => ?_)
-    repeat' first
-      | exact readHostBytes_rule _ _ _ _ _
-      | exact read_rule _
-      | exact pure_rule _
-      | exact throw_rule _
-      | exact modify_rule _ (fun _ => rfl)
-      | split
-      | refine bind_rule ?_ (fun x => ?_)
-
-macro "jolt_io_setup_auto" : tactic => `(tactic|
-  repeat' first
-  | exact read_rule _
-  | exact write_rule _ _
-  | exact pure_rule _
-  | exact throw_rule _
-  | exact get_rule
-  | exact lift_rule _
-  | exact load_doubleword_rule _
-  | exact store_doubleword_rule _ _
-  | exact execHostIO_rule
-  | split
-  | refine bind_rule ?_ (fun x => ?_))
+    preservation_auto [readHostBytes_rule _ _ _ _ _, read_rule _, pure_rule _, throw_rule _,
+      modify_rule _ (fun _ => rfl)] using bind_rule
 
 /-- Every Jolt ISA instruction preserves the device setup fields. -/
 theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) := by
@@ -213,7 +176,9 @@ theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) := by
       exact (bind_rule (write_rule dst value) (fun _ => pure_rule _))
         { s with adviceTape := tape } t v h
   all_goals simp only [execInstr]
-  all_goals jolt_io_setup_auto
+  all_goals preservation_auto [read_rule _, write_rule _ _, pure_rule _, throw_rule _,
+    get_rule, lift_rule _, load_doubleword_rule _, store_doubleword_rule _ _, execHostIO_rule]
+    using bind_rule
 
 theorem execProgram_rule (program : Program) : Preserves (execProgram program) := by
   induction program with

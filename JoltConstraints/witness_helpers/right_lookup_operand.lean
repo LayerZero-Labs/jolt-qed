@@ -3,13 +3,13 @@ import JoltConstraints.witness_helpers.lookup_index
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [RightLookupOperand](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:63).
 -- Preserve all 128 bits of a combined lookup index, including arithmetic carry.
 -- Other tables use the unsigned 64-bit right instruction input. Padding is zero.
 noncomputable def RightLookupOperand {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
+    (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
@@ -20,4 +20,4 @@ noncomputable def RightLookupOperand {F : Type} [Field F] (p : WitnessParams)
       else RightInstructionInput p trace t
     else 0
 
-end HonestWitness
+end TraceWitness

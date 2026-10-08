@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.honest_trace
+import JoltConstraints.trace
 import JoltConstraints.metadata
 import JoltConstraints.witness_helpers.branch
 import JoltConstraints.witness_helpers.op_flags
@@ -19,10 +19,8 @@ import JoltConstraints.witness_helpers.next_is_first_in_sequence
 import JoltConstraints.witness_helpers.next_is_noop
 import JoltConstraints.witness_helpers.ram_address
 import JoltConstraints.witness_helpers.ram_hamming_weight
-import JoltConstraints.witness_helpers.ram_read_value
 import JoltConstraints.witness_helpers.ram_write_value
 import JoltConstraints.witness_helpers.rd_inc
-import JoltConstraints.witness_helpers.ram_inc
 
 import JoltConstraints.witness_helpers.instruction_ra_chunk
 import JoltConstraints.witness_helpers.bytecode_ra_chunk
@@ -43,5 +41,4 @@ import JoltConstraints.witness_helpers.product
 import JoltConstraints.witness_helpers.should_jump
 
 import JoltConstraints.witness_helpers.registers_val
-import JoltConstraints.witness_helpers.ram_val
 import JoltConstraints.witness_helpers.ram_val_final

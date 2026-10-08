@@ -1,6 +1,7 @@
+import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.Constraints.LeftLookupOperandEqInstructionRaf
 import JoltConstraints.Constraints.LookupOperandData
-import JoltConstraints.Constraints.InstructionReadSelection
+import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 
 set_option autoImplicit false
 
@@ -29,9 +30,9 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
   · -- The selected index must deinterleave to Rust's captured left operand.
     -- Unfolding lookupAddressLeft drops the index's bound proof, so the row's
     -- instruction can be generalized and split by constructor.
-    simp only [HonestTrace.honestWitness, HonestWitness.LeftLookupOperand,
-      HonestWitness.InstructionRafFlag, HonestWitness.lookupIndex,
-      HonestWitness.LeftInstructionInput, HonestWitness.Rs1Value, lookupAddressLeft,
+    simp only [HonestTrace.honestWitness, TraceWitness.LeftLookupOperand,
+      TraceWitness.InstructionRafFlag, TraceWitness.lookupIndex,
+      TraceWitness.LeftInstructionInput, TraceWitness.Rs1Value, lookupAddressLeft,
       inBounds, dite_true]
     generalize (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex.val]'
       (trace.rows[t.val]'inBounds).rowIndex.isLt).instruction = instruction
@@ -40,7 +41,7 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
     cases instruction <;>
       simp only [JoltMetadata.hasCombinedLookupOperands, JoltMetadata.instructionRafFlag,
         JoltMetadata.opcodeFlag, JoltMetadata.instructionFlag,
-        HonestWitness.instructionLookupIndex,
+        TraceWitness.instructionLookupIndex,
         Bool.false_eq_true, Bool.or_false, Bool.or_true, ↓reduceIte, sub_zero, sub_self,
         one_mul, zero_mul]
     -- simp rewrites each ite condition but not its Decidable instance, so the
@@ -48,8 +49,8 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
     all_goals first
       | exact (sum_interleave_odd_bits _ _).symm
       | simp
-  · simp [HonestTrace.honestWitness, HonestWitness.LeftLookupOperand,
-      HonestWitness.InstructionRafFlag, HonestWitness.lookupIndex,
+  · simp [HonestTrace.honestWitness, TraceWitness.LeftLookupOperand,
+      TraceWitness.InstructionRafFlag, TraceWitness.lookupIndex,
       lookupAddressLeft, inBounds]
 
 end JoltConstraints

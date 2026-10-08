@@ -118,8 +118,8 @@ lemmas for registers, translation, and memory. Match every helper's exact
 premises to the trace.
 
 For reusable frame facts, check
-[`NextPCFrame.lean`](../JoltConstraints/Constraints/NextPCFrame.lean) and
-[`HostIOFrame.lean`](../JoltConstraints/Constraints/HostIOFrame.lean).
+[`NextPCFrame.lean`](../JoltConstraints/Completeness/Helpers/NextPCFrame.lean) and
+[`HostIOFrame.lean`](../JoltConstraints/Completeness/Helpers/HostIOFrame.lean).
 The latter proves that a HostIO call leaves Sail state unchanged (its byte reads
 go through `JoltISA.Mmu.load`, which changes no state) and derives the HostIO
 nextPC frame from `executes`. Constraint

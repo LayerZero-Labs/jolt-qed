@@ -38,10 +38,10 @@ theorem min?_getD_lt (numbers : List Nat) (bound : Nat) (positive : 0 < bound)
   | some number => exact allBelow number (List.min?_mem smallest)
 
 -- A row's memory address is a 64-bit value.
-theorem HonestTraceRow.ram_address_lt {bytecode : Array JoltInstructionRow}
-    (row : HonestTraceRow bytecode) (address : Nat) (touches : row.ram_address = some address) :
+theorem TraceRow.ram_address_lt {bytecode : Array JoltInstructionRow}
+    (row : TraceRow bytecode) (address : Nat) (touches : row.ram_address = some address) :
     address < 2 ^ 64 := by
-  unfold HonestTraceRow.ram_address at touches
+  unfold TraceRow.ram_address at touches
   split at touches
   · -- LD
     cases touches

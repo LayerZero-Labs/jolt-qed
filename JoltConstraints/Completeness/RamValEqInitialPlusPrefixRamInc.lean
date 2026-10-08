@@ -1,3 +1,4 @@
+import JoltConstraints.honest_witness
 import JoltConstraints.Constraints.RamValEqInitialPlusPrefixRamInc
 import JoltConstraints.Constraints.RamReadData
 
@@ -20,7 +21,7 @@ theorem honestWitness_ramValEqInitialPlusPrefixRamInc
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (validAccesses : ramAccessesValid trace)
-    : ramValEqInitialPlusPrefixRamInc trace
+    : ramValEqInitialPlusPrefixRamInc (TraceWitness.initialRamWord trace)
       (HonestTrace.honestWitness (F := F) params trace) := by
   sorry
 

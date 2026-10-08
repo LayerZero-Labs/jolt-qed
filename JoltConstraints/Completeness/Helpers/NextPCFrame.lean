@@ -1,4 +1,4 @@
-import JoltConstraints.Constraints.TracePCProofHelpers
+import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.metadata
 
 /-!

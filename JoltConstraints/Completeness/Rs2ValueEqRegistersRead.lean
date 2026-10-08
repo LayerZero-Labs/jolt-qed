@@ -1,9 +1,10 @@
+import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.Constraints.Rs2ValueEqRegistersRead
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_witness
-import JoltConstraints.Constraints.RegistersReadProofHelpers
+import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 
 set_option autoImplicit false
 
@@ -26,10 +27,10 @@ theorem honestWitness_rs2ValueEqRegistersRead
     rs2ValueEqRegistersRead
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change HonestWitness.Rs2Value params trace t =
+  change TraceWitness.Rs2Value params trace t =
     ∑ register : Fin 128,
-      HonestWitness.Rs2Ra params trace register t *
-        HonestWitness.RegistersVal params trace register t
+      TraceWitness.Rs2Ra params trace register t *
+        TraceWitness.RegistersVal params trace register t
   by_cases hb : t.val < trace.rows.size
   · let instr := trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction
     have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
@@ -39,19 +40,19 @@ theorem honestWitness_rs2ValueEqRegistersRead
     change (match rs2Operand? instr with
       | some src => ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F)
       | none => 0) = _
-    change ∀ register, HonestWitness.Rs2Ra (F := F) params trace register t =
+    change ∀ register, TraceWitness.Rs2Ra (F := F) params trace register t =
       match rs2Operand? instr with
-      | some src => if register = HonestWitness.sourceRegisterAddress src then 1 else 0
+      | some src => if register = TraceWitness.sourceRegisterAddress src then 1 else 0
       | none => 0 at hra
     simp only [hra]
     cases hs : rs2Operand? instr with
     | none => simp
     | some src =>
         simp only [ite_mul, one_mul, zero_mul]
-        rw [Finset.sum_ite_eq' Finset.univ (HonestWitness.sourceRegisterAddress src)]
+        rw [Finset.sum_ite_eq' Finset.univ (TraceWitness.sourceRegisterAddress src)]
         simp only [Finset.mem_univ, ↓reduceIte]
         rw [registersVal_source_eq_preState (F := F) params trace traceFits
           initialRegistersZero t hb src (rs2Operand_canonical instr src hcanon hs)]
-  · simp [HonestWitness.Rs2Value, HonestWitness.Rs2Ra, hb]
+  · simp [TraceWitness.Rs2Value, TraceWitness.Rs2Ra, hb]
 
 end JoltConstraints

@@ -29,7 +29,7 @@ theorem honestWitness_leftInstructionInputEqSelection
         (getElem trace.rows t.val h).rowIndex.isLt).instruction
     have hex := leftOperandFlagsExclusive instruction
     dsimp [leftInstructionInputEqSelection, HonestTrace.honestWitness,
-      HonestWitness.LeftInstructionInput, HonestWitness.InstructionFlags]
+      TraceWitness.LeftInstructionInput, TraceWitness.InstructionFlags]
     simp only [dif_pos h]
     by_cases hpc : JoltMetadata.instructionFlag instruction .LeftOperandIsPC = true
     · have hrs : JoltMetadata.instructionFlag instruction .LeftOperandIsRs1Value = false := by
@@ -46,7 +46,7 @@ theorem honestWitness_leftInstructionInputEqSelection
           | true => exact False.elim (hrs hrs')
           | false => simp
   · dsimp [leftInstructionInputEqSelection, HonestTrace.honestWitness,
-      HonestWitness.LeftInstructionInput, HonestWitness.InstructionFlags]
+      TraceWitness.LeftInstructionInput, TraceWitness.InstructionFlags]
     simp [h]
 
 end JoltConstraints

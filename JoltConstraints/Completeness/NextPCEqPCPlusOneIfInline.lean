@@ -1,3 +1,4 @@
+import JoltConstraints.execution_conditions
 import JoltConstraints.Constraints.NextPCEqPCPlusOneIfInline
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
@@ -58,10 +59,10 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
       simp only [hcont, ↓reduceIte] at hsucc
       have hnextWitness : t.val + 1 < params.traceLength :=
         hnext.trans tracePadded.2
-      have hpc : HonestWitness.NextPC (F := F) params trace t =
-          HonestWitness.PC params trace t + 1 := by
-        simp only [HonestWitness.NextPC, dif_pos hnextWitness, HonestWitness.PC,
-          HonestWitness.bytecodePc, dif_pos ht, dif_pos hnext]
+      have hpc : TraceWitness.NextPC (F := F) params trace t =
+          TraceWitness.PC params trace t + 1 := by
+        simp only [TraceWitness.NextPC, dif_pos hnextWitness, TraceWitness.PC,
+          TraceWitness.bytecodePc, dif_pos ht, dif_pos hnext]
         rw [hsucc]
         push_cast
         ring
@@ -71,11 +72,11 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
     · have hfalse : bytecodeRow.continues = false := Bool.eq_false_iff.mpr hcont
       have hflags := virtual_flag_eq_last_of_not_continues bytecodeRow hfalse
       dsimp [nextPCEqPCPlusOneIfInline, HonestTrace.honestWitness,
-        HonestWitness.OpFlags]
+        TraceWitness.OpFlags]
       simp only [dif_pos ht]
       rw [hflags]
       ring
   · simp [HonestTrace.honestWitness,
-      HonestWitness.OpFlags, ht]
+      TraceWitness.OpFlags, ht]
 
 end JoltConstraints

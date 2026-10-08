@@ -1,52 +1,20 @@
 /-
-The honest trace: the rows Rust's tracer records for a program and its inputs,
-over the bytecode built in `program.lean`. Definitions are added one at a
-time, each checked against the Rust source.
+An honest trace is the general data from `trace.lean` with certificates for
+instruction execution, initialization, row linkage and termination. The program
+and input assumptions below are the existing conditions on Rust-accepted runs.
 -/
-import JoltConstraints.program
+import JoltConstraints.trace
 
 set_option autoImplicit false
 
--- Rust patches each executed VirtualAdvice row with this execution's advice value;
--- every other row runs exactly as it is in the bytecode. VirtualAdvice is the only
--- instruction Rust patches: the advice loads read the advice tape as they run.
--- See : jolt/tracer/src/instruction/mod.rs:210-234 (trace_inline_sequence_with_advice)
---       jolt/tracer/src/instruction/virtual_advice.rs:22
-def JoltISA.Instr.RuntimeAdvice : JoltISA.Instr → Type
-  | .VirtualAdvice .. => BitVec 64
-  | _ => Unit
-
-def JoltISA.Instr.withRuntimeAdvice (instruction : JoltISA.Instr)
-    (advice : instruction.RuntimeAdvice) : JoltISA.Instr :=
-  match instruction with
-  | .VirtualAdvice dst _ imm => .VirtualAdvice dst advice imm
-  | instruction => instruction
-
--- One executed row of an honest run: it really executes and retires. Rust records
--- the row and the operand values before and after; Lean keeps the whole state.
--- See : jolt/tracer/src/instruction/mod.rs:480-492 (RISCVTrace::trace)
-structure HonestTraceRow (bytecode : Array JoltInstructionRow) where
-  rowIndex : Fin bytecode.size
-  runtimeAdvice : bytecode[rowIndex].instruction.RuntimeAdvice
-  preState : SailJoltState
-  postState : SailJoltState
+-- An individual transition with its execution certificate. Whole honest traces
+-- store raw rows and certify each member; this view supports row-level proofs.
+structure HonestTraceRow (bytecode : Array JoltInstructionRow) extends TraceRow bytecode where
   executes : JoltISA.execInstr (bytecode[rowIndex].instruction.withRuntimeAdvice runtimeAdvice)
     preState = .ok (.Retire_Success ()) postState
 
--- The memory address one Jolt row reads or writes. For an LD or SD row it is the
--- value in the base register before the row runs, plus the immediate (wrapping at
--- 64 bits). Any other row does not read or write memory: none. After expansion,
--- LD and SD are the only rows that touch memory (LB, SB, ... become sequences
--- around them).
--- See : jolt/crates/jolt-prover/src/config.rs:91-98 (derive_compact)
---       jolt/tracer/src/instruction/ld.rs:16-30 (wrapping_add)
---       jolt/crates/jolt-program/src/expand/memory/shared.rs:36-58, 481-518
-def HonestTraceRow.ram_address {bytecode : Array JoltInstructionRow}
-    (row : HonestTraceRow bytecode) : Option Nat :=
-  match bytecode[row.rowIndex].instruction with
-  | .LD _ _ base imm | .SD base _ imm =>
-      some (JoltISA.sourceValue base row.preState + imm).toNat
-  | _ => none
+instance {bytecode : Array JoltInstructionRow} :
+    CoeOut (HonestTraceRow bytecode) (TraceRow bytecode) := ⟨HonestTraceRow.toTraceRow⟩
 
 -- Before a source instruction's rows run, Rust has already advanced the PC past it:
 -- PC is the instruction's address, nextPC is 2 bytes on if compressed, else 4.
@@ -72,8 +40,7 @@ def source_is_compressed (bytecode : Array JoltInstructionRow)
 -- `code_unchanged` says the code in memory is still that bytecode when it runs.
 -- See : jolt/tracer/src/lib.rs:74-131 (trace)
 structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
-    (privateInputs : JoltPrivateInputs) where
-  bytecode : Array JoltInstructionRow
+    (privateInputs : JoltPrivateInputs) extends Trace where
   expands : expand_program joltInstance.program = some bytecode
   -- Rust only proves programs it accepts: the PC map checks and the entry check
   -- pass during preprocessing, before any tracing.
@@ -82,10 +49,12 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   -- Rust's verifier rejects an instance whose inputs or layout fail its checks.
   -- See : jolt/crates/jolt-verifier/src/verifier.rs:356-383
   valid_inputs : joltInstance.validate_inputs = true
-  rows : Array (HonestTraceRow bytecode)
+  -- The same successful-execution condition previously stored in every row.
+  executes : ∀ row ∈ rows,
+    JoltISA.execInstr (bytecode[row.rowIndex].instruction.withRuntimeAdvice row.runtimeAdvice)
+      row.preState = .ok (.Retire_Success ()) row.postState
   -- Rust starts from the emulator create_emulator builds.
   -- See : jolt/tracer/src/lib.rs:89-97, 364-408 (create_emulator)
-  initialState : SailJoltState
   initialized : joltInstance.initial_state privateInputs = some initialState
   -- The trace begins where the program begins: Rust's first tick runs the
   -- instruction at the entry address, with the PC already advanced past it.
@@ -101,7 +70,7 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   -- the PC is moved to that instruction before it starts.
   -- See : jolt/tracer/src/instruction/mod.rs:679-687 (rows of one instruction, in order)
   --       jolt/tracer/src/emulator/cpu.rs:622-632 (the next instruction is fetched at the PC)
-  linked : ∀ (i : Nat) (current next : HonestTraceRow bytecode),
+  linked : ∀ (i : Nat) (current next : TraceRow bytecode),
     rows[i]? = some current → rows[i + 1]? = some next →
     if bytecode[current.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 then
       next.rowIndex.val = current.rowIndex.val + 1 ∧
@@ -131,13 +100,23 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
     bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0 ∧
     last.postState.sail.regs.get? Register.nextPC = some bytecode[last.rowIndex].address
   -- The run does not end early: no earlier instruction left the PC pointing at itself.
-  runs_until_stop : ∀ (i : Nat) (current next : HonestTraceRow bytecode),
+  runs_until_stop : ∀ (i : Nat) (current next : TraceRow bytecode),
     rows[i]? = some current → rows[i + 1]? = some next →
     bytecode[current.rowIndex].virtual_sequence_remaining.getD 0 = 0 →
     current.postState.sail.regs.get? Register.nextPC ≠ some bytecode[current.rowIndex].address
   -- The run is empty only when the entry address is 0: Rust compares the PC with a
   -- starting value of 0 and stops before running anything.
   nonempty : joltInstance.program.entry_address ≠ 0 → 0 < rows.size
+
+instance {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} :
+    CoeOut (HonestTrace joltInstance privateInputs) Trace := ⟨HonestTrace.toTrace⟩
+
+-- Recover the certified view of a recorded row for execution proofs.
+abbrev HonestTrace.row {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (i : Nat) (inBounds : i < trace.rows.size) : HonestTraceRow trace.bytecode :=
+  { toTraceRow := trace.rows[i]
+    executes := trace.executes _ (Array.getElem_mem inBounds) }
 
 -- The slot in Rust's RAM table that holds a memory address: the number of 64-bit
 -- steps from the lowest address. Address 0 has no slot: it means the row does not

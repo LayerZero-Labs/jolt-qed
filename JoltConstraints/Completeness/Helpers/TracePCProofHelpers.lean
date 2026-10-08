@@ -1,4 +1,4 @@
-import JoltConstraints.Constraints.LookupWriteProofHelpers
+import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 open Sail PreSail LeanRV64D.Functions
@@ -249,9 +249,9 @@ theorem row {joltInstance : JoltInstance SourceInstruction} {privateInputs : Jol
     (i : Fin trace.rows.size) :
     trace.rows[i].postState.sail.regs.get? Register.PC =
       trace.rows[i].preState.sail.regs.get? Register.PC := by
-  apply instruction _ _ _ _ trace.rows[i].executes
+  apply instruction _ _ _ _ (trace.row i (by omega)).executes
   rw [hostIOPCFrame_withRuntimeAdvice]
-  exact trace.rows[i].hostIOPreservesPC
+  exact (trace.row i (by omega)).hostIOPreservesPC
 
 end JoltPCFrame
 

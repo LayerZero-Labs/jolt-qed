@@ -1,9 +1,11 @@
+import JoltConstraints.execution_conditions
+import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.Constraints.NextUnexpandedPCEqLookupIfShouldJump
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_witness
 import JoltConstraints.execution_conditions
-import JoltConstraints.Constraints.TracePCProofHelpers
+import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 
 set_option autoImplicit false
 
@@ -106,12 +108,12 @@ private theorem jump_row_target {joltInstance : JoltInstance SourceInstruction} 
     (hjump : JoltMetadata.circuitFlag
       trace.bytecode[trace.rows[n].rowIndex] .Jump = true) :
     trace.rows[n].postState.sail.regs.get? Register.nextPC =
-      some (HonestWitness.rowLookupOutput trace.rows[n]) := by
-  let row := trace.rows[n]
+      some (TraceWitness.rowLookupOutput trace.rows[n]) := by
+  let row := trace.row n (by omega)
   let bc := trace.bytecode[row.rowIndex]
   change JoltMetadata.circuitFlag bc .Jump = true at hjump
   change row.postState.sail.regs.get? Register.nextPC =
-    some (HonestWitness.rowLookupOutput row)
+    some (TraceWitness.rowLookupOutput row.toTraceRow)
   have hpc := lookup_trace_PC trace n hn
   have hnext := jump_trace_nextPC trace n hn
   change row.preState.sail.regs.get? Register.PC = some bc.address at hpc
@@ -127,7 +129,7 @@ private theorem jump_row_target {joltInstance : JoltInstance SourceInstruction} 
     have htarget := jal_target dst imm bc.address
       (bc.address + BitVec.ofNat 64 (sourceLength trace.bytecode row.rowIndex))
       row.preState row.postState hpc hnext hexec
-    simpa only [HonestWitness.rowLookupOutput, show
+    simpa only [TraceWitness.rowLookupOutput, show
       trace.bytecode[row.rowIndex.val].instruction = .JAL dst imm from hinst,
       JoltISA.addWide_low] using htarget
   · have hexec := row.executes
@@ -137,7 +139,7 @@ private theorem jump_row_target {joltInstance : JoltInstance SourceInstruction} 
     have htarget := jalr_target dst base imm
       (bc.address + BitVec.ofNat 64 (sourceLength trace.bytecode row.rowIndex))
       row.preState row.postState hnext hexec
-    simpa only [HonestWitness.rowLookupOutput, show
+    simpa only [TraceWitness.rowLookupOutput, show
       trace.bytecode[row.rowIndex.val].instruction = .JALR dst base imm from hinst]
       using htarget
 
@@ -146,7 +148,7 @@ private theorem jump_row_ends_source {joltInstance : JoltInstance SourceInstruct
     (hjump : JoltMetadata.circuitFlag
       trace.bytecode[trace.rows[n].rowIndex] .Jump = true) :
     trace.bytecode[trace.rows[n].rowIndex].continues = false := by
-  let row := trace.rows[n]
+  let row := trace.row n (by omega)
   let bc := trace.bytecode[row.rowIndex]
   change JoltMetadata.circuitFlag bc .Jump = true at hjump
   change bc.continues = false
@@ -172,7 +174,7 @@ private theorem jump_next_row_address {joltInstance : JoltInstance SourceInstruc
     (hjump : JoltMetadata.circuitFlag
       trace.bytecode[trace.rows[n].rowIndex] .Jump = true) :
     trace.bytecode[trace.rows[n + 1].rowIndex].address =
-      HonestWitness.rowLookupOutput trace.rows[n] := by
+      TraceWitness.rowLookupOutput trace.rows[n] := by
   have hend := jump_row_ends_source trace n hn hjump
   have htarget := jump_row_target trace n hn hjump
   have hsucc := trace.successor n hn hn1
@@ -192,9 +194,9 @@ theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
     nextUnexpandedPCEqLookupIfShouldJump
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change HonestWitness.ShouldJump params trace t *
-    (HonestWitness.NextUnexpandedPC params trace t -
-      HonestWitness.LookupOutput params trace t) = 0
+  change TraceWitness.ShouldJump params trace t *
+    (TraceWitness.NextUnexpandedPC params trace t -
+      TraceWitness.LookupOutput params trace t) = 0
   by_cases hreal : t.val < trace.rows.size
   · have hnextWitness : t.val + 1 < params.traceLength := by
       have hpad := tracePadded.2
@@ -203,32 +205,32 @@ theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
     · by_cases hjump : JoltMetadata.circuitFlag
         trace.bytecode[trace.rows[t.val].rowIndex] .Jump = true
       · have haddr := jump_next_row_address trace t.val hreal hnextReal hjump
-        have hvalues : HonestWitness.NextUnexpandedPC (F := F) params trace t =
-            HonestWitness.LookupOutput (F := F) params trace t := by
-          simp only [HonestWitness.NextUnexpandedPC, dif_pos hnextWitness,
-            HonestWitness.UnexpandedPC, dif_pos hnextReal,
-            HonestWitness.LookupOutput, dif_pos hreal]
+        have hvalues : TraceWitness.NextUnexpandedPC (F := F) params trace t =
+            TraceWitness.LookupOutput (F := F) params trace t := by
+          simp only [TraceWitness.NextUnexpandedPC, dif_pos hnextWitness,
+            TraceWitness.UnexpandedPC, dif_pos hnextReal,
+            TraceWitness.LookupOutput, dif_pos hreal]
           exact congrArg (fun address : BitVec 64 => (address.toNat : F)) haddr
         rw [hvalues]
         simp
-      · have hflag : HonestWitness.OpFlags params trace .Jump t = (0 : F) := by
+      · have hflag : TraceWitness.OpFlags params trace .Jump t = (0 : F) := by
           have hfalse : JoltMetadata.circuitFlag
               trace.bytecode[trace.rows[t.val].rowIndex] .Jump = false := by
             cases h : JoltMetadata.circuitFlag
               trace.bytecode[trace.rows[t.val].rowIndex] .Jump <;> simp_all
-          simp only [HonestWitness.OpFlags, dif_pos hreal]
+          simp only [TraceWitness.OpFlags, dif_pos hreal]
           change (if JoltMetadata.circuitFlag
               trace.bytecode[trace.rows[t.val].rowIndex] .Jump
             then (1 : F) else 0) = 0
           rw [hfalse]
           rfl
-        simp [HonestWitness.ShouldJump, hflag]
-    · have hnoop : HonestWitness.InstructionFlags params trace .IsNoop
+        simp [TraceWitness.ShouldJump, hflag]
+    · have hnoop : TraceWitness.InstructionFlags params trace .IsNoop
           ⟨t.val + 1, hnextWitness⟩ = (1 : F) := by
-        simp [HonestWitness.InstructionFlags, hnextReal]
-      simp [HonestWitness.ShouldJump, hnextWitness, hnoop]
-  · have hflag : HonestWitness.OpFlags params trace .Jump t = (0 : F) := by
-      simp [HonestWitness.OpFlags, hreal]
-    simp [HonestWitness.ShouldJump, hflag]
+        simp [TraceWitness.InstructionFlags, hnextReal]
+      simp [TraceWitness.ShouldJump, hnextWitness, hnoop]
+  · have hflag : TraceWitness.OpFlags params trace .Jump t = (0 : F) := by
+      simp [TraceWitness.OpFlags, hreal]
+    simp [TraceWitness.ShouldJump, hflag]
 
 end JoltConstraints

@@ -1,10 +1,10 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
-import JoltConstraints.honest_trace
+import JoltConstraints.trace
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [ram_access_address](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/ram.rs:7).
 -- This is the effective byte address captured by the tracer, including device
@@ -21,7 +21,7 @@ noncomputable def ramAccessAddress (instruction : JoltISA.Instr)
 -- the pre-state, including when a load overwrites that same register.
 -- Instructions without a memory access and padding positions contribute zero.
 noncomputable def RamAddress {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
+    (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
@@ -32,4 +32,4 @@ noncomputable def RamAddress {F : Type} [Field F] (p : WitnessParams)
       | none => 0
     else 0
 
-end HonestWitness
+end TraceWitness

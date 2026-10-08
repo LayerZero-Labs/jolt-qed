@@ -1,10 +1,13 @@
+import JoltConstraints.execution_facts
 import JoltConstraints.metadata
-import JoltConstraints.witness_helpers.ram_read_value
+import JoltConstraints.honest_witness_helpers.ram_read_value
 import JoltConstraints.witness_helpers.ram_write_value
 
 set_option autoImplicit false
 
 namespace HonestWitness
+
+open TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 

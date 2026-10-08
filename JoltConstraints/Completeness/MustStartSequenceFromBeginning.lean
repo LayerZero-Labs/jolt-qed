@@ -1,3 +1,4 @@
+import JoltConstraints.execution_conditions
 import JoltConstraints.Constraints.MustStartSequenceFromBeginning
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
@@ -61,7 +62,7 @@ theorem honestWitness_mustStartSequenceFromBeginning
               true := by
           simpa only [bytecodeRow, row] using hflag
         dsimp [mustStartSequenceFromBeginning, HonestTrace.honestWitness,
-          HonestWitness.OpFlags]
+          TraceWitness.OpFlags]
         simp only [dif_pos ht]
         simp only [array_fin_index] at hflag' ⊢
         simp [hflag']
@@ -80,16 +81,16 @@ theorem honestWitness_mustStartSequenceFromBeginning
               .IsFirstInSequence := by
           simpa only [nextRow] using hflags
         dsimp [mustStartSequenceFromBeginning, HonestTrace.honestWitness,
-          HonestWitness.NextIsVirtual, HonestWitness.NextIsFirstInSequence,
-          HonestWitness.OpFlags]
+          TraceWitness.NextIsVirtual, TraceWitness.NextIsFirstInSequence,
+          TraceWitness.OpFlags]
         simp only [dif_pos hnextWitness, dif_pos hnextTrace, dif_pos ht]
         simp only [array_fin_index] at hflags' ⊢
         rw [hflags']
         ring
-    · simp [HonestTrace.honestWitness, HonestWitness.NextIsVirtual,
-        HonestWitness.NextIsFirstInSequence, HonestWitness.OpFlags,
+    · simp [HonestTrace.honestWitness, TraceWitness.NextIsVirtual,
+        TraceWitness.NextIsFirstInSequence, TraceWitness.OpFlags,
         hnextWitness, hnextTrace]
-  · simp [HonestTrace.honestWitness, HonestWitness.NextIsVirtual,
-      HonestWitness.NextIsFirstInSequence, hnextWitness]
+  · simp [HonestTrace.honestWitness, TraceWitness.NextIsVirtual,
+      TraceWitness.NextIsFirstInSequence, hnextWitness]
 
 end JoltConstraints

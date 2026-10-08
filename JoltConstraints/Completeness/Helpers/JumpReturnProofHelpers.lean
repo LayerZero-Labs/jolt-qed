@@ -70,7 +70,7 @@ theorem jump_trace_nextPC {joltInstance : JoltInstance SourceInstruction} {priva
       have hm : m < trace.rows.size := by omega
       have hp := ih m (by omega) hm
       have hlink := trace.linkedState m hm hn
-      let prev := trace.rows[m]
+      let prev := trace.row m (by omega)
       let curr := trace.rows[m + 1]
       by_cases hc : trace.bytecode[prev.rowIndex].continues = true
       · change trace.bytecode[trace.rows[m].rowIndex].continues = true at hc
@@ -104,7 +104,7 @@ theorem jump_write_capture (dst : JoltISA.Dst)
     (hwritable : dst.NotX0)
     (hwrite : JoltISA.writeDst dst value preState =
       .ok () postState) :
-    HonestWitness.capturedDestinationValue dst postState = value := by
+    TraceWitness.capturedDestinationValue dst postState = value := by
   cases dst with
   | vreg vr =>
     by_cases hw : vr.toNat < 32
@@ -115,23 +115,23 @@ theorem jump_write_capture (dst : JoltISA.Dst)
       cases hwrite
     · simp [JoltISA.writeDst, writeVReg, hw] at hwrite
       cases hwrite
-      simp [HonestWitness.capturedDestinationValue, HonestWitness.capturedDestination,
+      simp [TraceWitness.capturedDestinationValue, TraceWitness.capturedDestination,
         JoltISA.sourceValue]
   | xreg rd =>
     simp only [JoltISA.writeDst_xreg, liftSail, wX_bits_stateAfterWrite] at hwrite
     cases hwrite
-    simpa only [HonestWitness.capturedDestinationValue,
-      HonestWitness.capturedDestination] using
+    simpa only [TraceWitness.capturedDestinationValue,
+      TraceWitness.capturedDestination] using
       jump_sourceValue_after_write rd value preState hwritable
 
 theorem jump_capture_after_nextPC (dst : JoltISA.Dst)
     (state : SailJoltState) (target : BitVec 64) :
-    HonestWitness.capturedDestinationValue dst
+    TraceWitness.capturedDestinationValue dst
       { state with sail := { state.sail with
         regs := state.sail.regs.insert Register.nextPC target } } =
-    HonestWitness.capturedDestinationValue dst state := by
-  unfold HonestWitness.capturedDestinationValue
-  cases HonestWitness.capturedDestination  dst with
+    TraceWitness.capturedDestinationValue dst state := by
+  unfold TraceWitness.capturedDestinationValue
+  cases TraceWitness.capturedDestination  dst with
   | vreg vr => rfl
   | xreg rd =>
     reg_cases rd <;> simp_all [JoltISA.sourceValue, Std.ExtDHashMap.get?_insert]
@@ -142,7 +142,7 @@ theorem jump_jal_link (dst : JoltISA.Dst) (imm : BitVec 64)
     (hnext : preState.sail.regs.get? Register.nextPC = some link)
     (hexec : JoltISA.execInstr (.JAL dst imm) preState =
       .ok (.Retire_Success ()) postState) :
-    HonestWitness.capturedDestinationValue dst postState = link := by
+    TraceWitness.capturedDestinationValue dst postState = link := by
   have hread : liftSail (Sail.readReg Register.nextPC) preState =
       .ok link preState := by
     unfold liftSail
@@ -184,7 +184,7 @@ theorem jump_jalr_link (dst : JoltISA.Dst) (base : JoltISA.Src)
     (hnext : preState.sail.regs.get? Register.nextPC = some link)
     (hexec : JoltISA.execInstr (.JALR dst base imm) preState =
       .ok (.Retire_Success ()) postState) :
-    HonestWitness.capturedDestinationValue dst postState = link := by
+    TraceWitness.capturedDestinationValue dst postState = link := by
   have hread : liftSail (Sail.readReg Register.nextPC) preState =
       .ok link preState := by
     unfold liftSail

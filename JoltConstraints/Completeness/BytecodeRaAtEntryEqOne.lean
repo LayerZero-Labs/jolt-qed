@@ -1,3 +1,4 @@
+import JoltConstraints.ProgramLayout
 import JoltConstraints.Constraints.BytecodeRaAtEntryEqOne
 import JoltConstraints.Constraints.BytecodeReadSelectors
 import JoltConstraints.honest_witness
@@ -20,15 +21,15 @@ theorem honestWitness_bytecodeRaAtEntryEqOne
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (entry : Fin (2 ^ params.logBytecodeK))
-    (startsAtEntry : HonestWitness.bytecodePc trace 0 = entry.val)
+    (startsAtEntry : TraceWitness.bytecodePc trace 0 = entry.val)
     : bytecodeRaAtEntryEqOne entry
       (HonestTrace.honestWitness (F := F) params trace) := by
   unfold bytecodeRaAtEntryEqOne bytecodeRa
   apply Finset.prod_eq_one
   intro chunk _
-  dsimp [HonestTrace.honestWitness, HonestWitness.BytecodeRaChunk,
-    HonestWitness.addressChunkEntry, bytecodeAddressChunk,
-    HonestWitness.addressChunk]
+  dsimp [HonestTrace.honestWitness, TraceWitness.BytecodeRaChunk,
+    TraceWitness.addressChunkEntry, bytecodeAddressChunk,
+    TraceWitness.addressChunk]
   simp [startsAtEntry]
 
 /-- Constraint (53) from the public entry address, rather than an assumed
@@ -67,7 +68,7 @@ theorem honestWitness_bytecodeRaAtEntryEqOne_of_address
     trace.expands accepted (getElem trace.rows 0 nonempty).rowIndex.val entry.val
     (getElem trace.rows 0 nonempty).rowIndex.isLt entry.isLt sameAddress entryIsStart
   apply honestWitness_bytecodeRaAtEntryEqOne params trace ramFits traceFits bytecodeDomain
-  rw [HonestWitness.bytecodePc, dif_pos nonempty]
+  rw [TraceWitness.bytecodePc, dif_pos nonempty]
   change (getElem trace.rows 0 nonempty).rowIndex.val + 1 = entry.val + 1
   omega
 

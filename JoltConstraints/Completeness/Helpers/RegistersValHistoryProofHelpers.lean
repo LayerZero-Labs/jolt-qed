@@ -1,4 +1,4 @@
-import JoltConstraints.Constraints.RegistersValProofHelpers
+import JoltConstraints.Completeness.Helpers.RegistersValProofHelpers
 import Batteries.Data.Fin.Fold
 
 set_option autoImplicit false
@@ -38,12 +38,12 @@ private theorem register42_registersVal_succ
     {F : Type} [Field F] (p : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (register : Fin 128) (n : Nat) (hnext : n + 1 < p.traceLength) :
-    HonestWitness.RegistersVal (F := F) p trace register ⟨n + 1, hnext⟩ =
-      HonestWitness.RegistersVal p trace register ⟨n, by omega⟩ +
-      HonestWitness.RdWa p trace register ⟨n, by omega⟩ *
-        (HonestWitness.RdWriteValue p trace ⟨n, by omega⟩ -
-          HonestWitness.RegistersVal p trace register ⟨n, by omega⟩) := by
-  unfold HonestWitness.RegistersVal
+    TraceWitness.RegistersVal (F := F) p trace register ⟨n + 1, hnext⟩ =
+      TraceWitness.RegistersVal p trace register ⟨n, by omega⟩ +
+      TraceWitness.RdWa p trace register ⟨n, by omega⟩ *
+        (TraceWitness.RdWriteValue p trace ⟨n, by omega⟩ -
+          TraceWitness.RegistersVal p trace register ⟨n, by omega⟩) := by
+  unfold TraceWitness.RegistersVal
   rw [← Fin.foldl_eq_foldl_finRange, Fin.foldl_succ_last]
   simp only [Fin.val_last, Fin.val_castSucc]
   rw [Fin.foldl_eq_foldl_finRange]
@@ -53,27 +53,27 @@ private theorem register42_real_write_delta
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (register : Fin 128) (t : Fin p.traceLength)
     (hb : t.val < trace.rows.size) :
-    HonestWitness.RdWa p trace register t *
-      (HonestWitness.RdWriteValue p trace t -
+    TraceWitness.RdWa p trace register t *
+      (TraceWitness.RdWriteValue p trace t -
         ((JoltISA.sourceValue (register42_srcOfAddress register)
           (trace.rows[t.val]'hb).preState).toNat : F)) =
-      HonestWitness.RdWa p trace register t * HonestWitness.RdInc p trace t := by
+      TraceWitness.RdWa p trace register t * TraceWitness.RdInc p trace t := by
   let row := trace.rows[t.val]'hb
   let instr := trace.bytecode[row.rowIndex].instruction
   have hwa := register42_RdWa_real (F := F) p trace t hb register
-  change HonestWitness.RdWa (F := F) p trace register t =
+  change TraceWitness.RdWa (F := F) p trace register t =
     match instr.destination? with
-    | some dst => if register = HonestWitness.destinationRegisterAddress dst then 1 else 0
+    | some dst => if register = TraceWitness.destinationRegisterAddress dst then 1 else 0
     | none => 0 at hwa
-  have hinc : HonestWitness.RdInc (F := F) p trace t =
-      HonestWitness.rdValue instr row.postState -
-        HonestWitness.rdValue instr row.preState := by
-    unfold HonestWitness.RdInc
+  have hinc : TraceWitness.RdInc (F := F) p trace t =
+      TraceWitness.rdValue instr row.postState -
+        TraceWitness.rdValue instr row.preState := by
+    unfold TraceWitness.RdInc
     simp only [dif_pos hb]
     rfl
-  have hwrite : HonestWitness.RdWriteValue (F := F) p trace t =
-      HonestWitness.rdValue instr row.postState := by
-    unfold HonestWitness.RdWriteValue
+  have hwrite : TraceWitness.RdWriteValue (F := F) p trace t =
+      TraceWitness.rdValue instr row.postState := by
+    unfold TraceWitness.RdWriteValue
     simp only [dif_pos hb]
     rfl
   have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
@@ -83,7 +83,7 @@ private theorem register42_real_write_delta
       rw [hwa, hd]
       simp
   | some dst =>
-      by_cases hselected : register = HonestWitness.destinationRegisterAddress dst
+      by_cases hselected : register = TraceWitness.destinationRegisterAddress dst
       · have hcanondst := register42_instruction_destination_canonical instr dst hcanon hd
         have hsrcdst := register42_srcOfDestinationAddress dst hcanondst
         simp only [hselected, hinc, hwrite]
@@ -121,10 +121,10 @@ private theorem register42_registersVal_real_step
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (register : Fin 128) (n : Nat) (hb : n < trace.rows.size)
     (hnext : n + 1 < p.traceLength)
-    (hpre : HonestWitness.RegistersVal (F := F) p trace register ⟨n, by omega⟩ =
+    (hpre : TraceWitness.RegistersVal (F := F) p trace register ⟨n, by omega⟩ =
       ((JoltISA.sourceValue (register42_srcOfAddress register)
         (trace.rows[n]'hb).preState).toNat : F)) :
-    HonestWitness.RegistersVal p trace register ⟨n + 1, hnext⟩ =
+    TraceWitness.RegistersVal p trace register ⟨n + 1, hnext⟩ =
       ((JoltISA.sourceValue (register42_srcOfAddress register)
         (trace.rows[n]'hb).postState).toNat : F) := by
   have hstep := register42_registersVal_succ (F := F) p trace register n hnext
@@ -140,7 +140,7 @@ theorem register42_registersVal_preState
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src trace.initialState = 0)
     (register : Fin 128) (n : Nat) (hn : n < trace.rows.size) :
-    HonestWitness.RegistersVal (F := F) p trace register
+    TraceWitness.RegistersVal (F := F) p trace register
       ⟨n, Nat.lt_of_lt_of_le hn traceFits.traceFits⟩ =
     ((JoltISA.sourceValue (register42_srcOfAddress register)
       (trace.rows[n]'hn).preState).toNat : F) := by
@@ -154,7 +154,7 @@ theorem register42_registersVal_preState
               (trace.rows[0]'hn).rowIndex trace.initialState at hstart
           rw [hstart, register42_prepareSource_preserves_sourceValue,
             initialRegistersZero]
-          simp [HonestWitness.RegistersVal]
+          simp [TraceWitness.RegistersVal]
       | succ m =>
           have hm : m < trace.rows.size := by omega
           have hmp := ih m (by omega) hm
@@ -165,7 +165,7 @@ theorem register42_registersVal_preState
           have hlink := register42_trace_register_link trace
             (register42_srcOfAddress register) m hm hn
           calc
-            HonestWitness.RegistersVal p trace register
+            TraceWitness.RegistersVal p trace register
                 ⟨m + 1, Nat.lt_of_lt_of_le hn traceFits.traceFits⟩ =
                 ((JoltISA.sourceValue (register42_srcOfAddress register)
                   (trace.rows[m]'hm).postState).toNat : F) := hstep
@@ -179,10 +179,10 @@ private theorem register42_registersVal_step
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src trace.initialState = 0)
     (register : Fin 128) (n : Nat) (hnext : n + 1 < p.traceLength) :
-    HonestWitness.RegistersVal (F := F) p trace register ⟨n + 1, hnext⟩ =
-      HonestWitness.RegistersVal p trace register ⟨n, by omega⟩ +
-        HonestWitness.RdWa p trace register ⟨n, by omega⟩ *
-          HonestWitness.RdInc p trace ⟨n, by omega⟩ := by
+    TraceWitness.RegistersVal (F := F) p trace register ⟨n + 1, hnext⟩ =
+      TraceWitness.RegistersVal p trace register ⟨n, by omega⟩ +
+        TraceWitness.RdWa p trace register ⟨n, by omega⟩ *
+          TraceWitness.RdInc p trace ⟨n, by omega⟩ := by
   have hstep := register42_registersVal_succ (F := F) p trace register n hnext
   by_cases hb : n < trace.rows.size
   · have hpre := register42_registersVal_preState (F := F) p trace traceFits
@@ -191,8 +191,8 @@ private theorem register42_registersVal_step
       ⟨n, by omega⟩ hb
     rw [hstep, hpre, hdelta]
   · rw [hstep]
-    have hwa : HonestWitness.RdWa (F := F) p trace register ⟨n, by omega⟩ = 0 := by
-      unfold HonestWitness.RdWa
+    have hwa : TraceWitness.RdWa (F := F) p trace register ⟨n, by omega⟩ = 0 := by
+      unfold TraceWitness.RdWa
       simp [hb]
     rw [hwa]
     simp
@@ -204,22 +204,22 @@ theorem honestRegistersVal_eq_prefixRdInc
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src trace.initialState = 0)
     (register : Fin 128) (t : Fin p.traceLength) :
-    HonestWitness.RegistersVal (F := F) p trace register t =
+    TraceWitness.RegistersVal (F := F) p trace register t =
       ∑ cycle : Fin p.traceLength,
         if cycle.val < t.val then
-          HonestWitness.RdWa p trace register cycle * HonestWitness.RdInc p trace cycle
+          TraceWitness.RdWa p trace register cycle * TraceWitness.RdInc p trace cycle
         else 0 := by
   have hmain : ∀ n : Nat, (hn : n < p.traceLength) →
-      HonestWitness.RegistersVal (F := F) p trace register ⟨n, hn⟩ =
+      TraceWitness.RegistersVal (F := F) p trace register ⟨n, hn⟩ =
         ∑ cycle : Fin p.traceLength,
           if cycle.val < n then
-            HonestWitness.RdWa p trace register cycle * HonestWitness.RdInc p trace cycle
+            TraceWitness.RdWa p trace register cycle * TraceWitness.RdInc p trace cycle
           else 0 := by
     intro n
     induction n with
     | zero =>
         intro hn
-        simp [HonestWitness.RegistersVal]
+        simp [TraceWitness.RegistersVal]
     | succ m ih =>
         intro hn
         have hm : m < p.traceLength := by omega
@@ -227,8 +227,8 @@ theorem honestRegistersVal_eq_prefixRdInc
           initialRegistersZero register m hn
         have hsum := register42_prefix_sum_succ
           (fun cycle : Fin p.traceLength =>
-            HonestWitness.RdWa (F := F) p trace register cycle *
-              HonestWitness.RdInc p trace cycle) m hm
+            TraceWitness.RdWa (F := F) p trace register cycle *
+              TraceWitness.RdInc p trace cycle) m hm
         rw [hstep, ih hm, hsum]
   exact hmain t.val t.isLt
 

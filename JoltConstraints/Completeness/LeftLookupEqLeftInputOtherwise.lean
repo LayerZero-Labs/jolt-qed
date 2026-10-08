@@ -30,14 +30,14 @@ theorem honestWitness_leftLookupEqLeftInputOtherwise
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
-  · simpa [HonestTrace.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.LeftLookupOperand, HonestWitness.LeftInstructionInput,
+  · simpa [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.LeftLookupOperand, TraceWitness.LeftInstructionInput,
       JoltMetadata.circuitFlag, inBounds] using
         (leftLookupOtherwiseForOpcode (F := F)
           (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
-          (HonestWitness.UnexpandedPC params trace t)
-          (HonestWitness.Rs1Value params trace t))
-  · simp [HonestTrace.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.LeftLookupOperand, HonestWitness.LeftInstructionInput, inBounds]
+          (TraceWitness.UnexpandedPC params trace t)
+          (TraceWitness.Rs1Value params trace t))
+  · simp [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.LeftLookupOperand, TraceWitness.LeftInstructionInput, inBounds]
 
 end JoltConstraints

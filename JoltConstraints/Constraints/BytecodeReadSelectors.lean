@@ -1,3 +1,4 @@
+import Mathlib.Algebra.Field.Defs
 import JoltConstraints.Constraints.BytecodeReadData
 import JoltConstraints.witness_helpers.register_address
 import JoltConstraints.witness_helpers.destination_capture
@@ -33,10 +34,10 @@ def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
   | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
   | .VirtualAssertLTE src _ _ | .VirtualAdviceLen _ src _ | .VirtualHostIO _ src _ =>
-      some (HonestWitness.sourceRegisterAddress src)
+      some (TraceWitness.sourceRegisterAddress src)
   -- Alignment assertions can read architectural or virtual registers.
   | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
-      some (HonestWitness.sourceRegisterAddress base)
+      some (TraceWitness.sourceRegisterAddress base)
   | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
@@ -59,7 +60,7 @@ def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualAssertValidDiv0 _ src _ | .VirtualNegateIf _ _ src
   | .VirtualAssertValidUnsignedRemainder _ src _ | .VirtualAssertMulUNoOverflow _ src _
   | .VirtualAssertLTE _ src _ =>
-      some (HonestWitness.sourceRegisterAddress src)
+      some (TraceWitness.sourceRegisterAddress src)
   | .ADDI _ _ _ | .ADDIW _ _ _ | .ANDI _ _ _ | .ORI _ _ _ | .XORI _ _ _ | .SLTI _ _ _
   | .SLTIU _ _ _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .JALR _ _ _ | .FENCE
   | .VirtualMULI _ _ _ | .VirtualMULIW _ _ _ | .VirtualPow2 _ _ _ | .VirtualPow2W _ _ _
@@ -98,11 +99,11 @@ def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
   | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
-      some (HonestWitness.destinationRegisterAddress
-        (HonestWitness.capturedDestination dst))
+      some (TraceWitness.destinationRegisterAddress
+        (TraceWitness.capturedDestination dst))
   | .LD _ dst _ _ =>
-      some (HonestWitness.destinationRegisterAddress
-        (HonestWitness.capturedDestination dst))
+      some (TraceWitness.destinationRegisterAddress
+        (TraceWitness.capturedDestination dst))
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
   | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _
@@ -111,27 +112,24 @@ def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
 
 /-- A fixed bytecode register-selector entry. Explicit register zero is distinct
 from an absent operand; leading and trailing padding have no operands. -/
-def bytecodeRegisterSelector {F : Type} [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs)
+def bytecodeRegisterSelector {F : Type} [Field F] (bytecode : Array JoltInstructionRow)
     (operand : JoltISA.Instr → Option (Fin 128)) (register : Fin 128) (address : Nat) : F :=
-  match bytecodeRow trace address with
+  match bytecodeRow bytecode address with
   | some row => if operand row.instruction = some register then 1 else 0
   | none => 0
 
 /-- Fixed lookup-table flags; a padding no-op selects no lookup table.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L607-L609 -/
-def bytecodeLookupTableFlag {F : Type} [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs)
+def bytecodeLookupTableFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRow)
     (table : LookupTableKind) (address : Nat) : F :=
-  match bytecodeRow trace address with
+  match bytecodeRow bytecode address with
   | some row => if JoltMetadata.lookupTableFlag row.instruction table then 1 else 0
   | none => 0
 
 /-- Fixed RAF flag: one for combined lookup operands; padding contributes zero.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L603-L609 -/
-def bytecodeRafFlag {F : Type} [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (address : Nat) : F :=
-  match bytecodeRow trace address with
+def bytecodeRafFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (address : Nat) : F :=
+  match bytecodeRow bytecode address with
   | some row => if JoltMetadata.instructionRafFlag row.instruction then 1 else 0
   | none => 0
 

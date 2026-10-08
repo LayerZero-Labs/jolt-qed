@@ -7,14 +7,14 @@ namespace JoltConstraints
 
 /-- Assemble the individual honest-witness completeness results. It inherits the
 `sorry`s listed in model_review.md (Proofs owed). -/
-theorem honestWitness_allConstraints
+theorem honestWitness_constraintEquations
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (entry : Fin (2 ^ params.logBytecodeK))
-    (startsAtEntry : HonestWitness.bytecodePc trace 0 = entry.val)
+    (startsAtEntry : TraceWitness.bytecodePc trace 0 = entry.val)
     (validAccesses : ramAccessesValid trace)
     (hAssertEqPasses : assertEqPasses trace)
     (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
@@ -24,7 +24,8 @@ theorem honestWitness_allConstraints
     (noWrap : joltInstance.program.NextPCNoWrap)
     (lastIsJump : (trace.rows.back?.all fun last =>
       trace.bytecode[last.rowIndex].instruction.is_jump) = true) :
-    AllConstraints trace (HonestWitness.finalTraceState trace).jolt_device entry
+    ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace)
+      (TraceWitness.finalTraceState trace).jolt_device entry
       (HonestTrace.honestWitness (F := F) params trace) := by
   have hlayout := (finalTraceState_ioSame trace).1
   refine {
@@ -114,7 +115,7 @@ theorem _root_.HonestTrace.assert_eq_passes {joltInstance : JoltInstance SourceI
     by_cases zero : imm = 0
     · -- an ordinary assert
       subst zero
-      have runs := (trace.rows[t]).executes
+      have runs := trace.executes trace.rows[t] (Array.getElem_mem t.isLt)
       rw [withRuntimeAdvice_assert (instruction := trace.bytecode[trace.rows[t].rowIndex].instruction)
         _ lhs rhs 0 isAssert] at runs
       exact assert_eq_holds lhs rhs _ _ _ runs
@@ -140,13 +141,13 @@ theorem _root_.HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruc
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
     (entrySlot : Nat)
     (entryIsRust : get_first_pc slots joltInstance.program.entry_address = some entrySlot) :
-    HonestWitness.bytecodePc trace 0 = entrySlot := by
+    TraceWitness.bytecodePc trace 0 = entrySlot := by
   by_cases nonempty : 0 < trace.rows.size
   · -- the trace starts at the entry slot
     have first := trace.starts_at_entry slots preprocessed (getElem trace.rows 0 nonempty)
       (Array.getElem?_eq_getElem nonempty)
     rw [first] at entryIsRust
-    rw [HonestWitness.bytecodePc, dif_pos nonempty]
+    rw [TraceWitness.bytecodePc, dif_pos nonempty]
     exact Option.some.inj entryIsRust
   · -- with no rows the entry address is 0, which get_first_pc maps to the NoOp
     have zero : joltInstance.program.entry_address = 0 := by
@@ -155,15 +156,15 @@ theorem _root_.HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruc
     rw [zero] at entryIsRust
     unfold get_first_pc at entryIsRust
     rw [if_pos rfl] at entryIsRust
-    rw [HonestWitness.bytecodePc, dif_neg nonempty]
+    rw [TraceWitness.bytecodePc, dif_neg nonempty]
     exact Option.some.inj entryIsRust
 
 -- The run's final state, as matches_outputs reads it, is the witness's final state.
 theorem _root_.HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     (trace.rows.back?.map (·.postState)).getD trace.initialState =
-      HonestWitness.finalTraceState trace := by
-  unfold HonestWitness.finalTraceState
+      TraceWitness.finalTraceState trace := by
+  unfold TraceWitness.finalTraceState
   rw [Array.back?_eq_getElem?]
   split
   · rename_i nonempty
@@ -198,9 +199,20 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
     (claimsRunOutputs : trace.matches_outputs)
     -- the public I/O the verifier checks the proof against
     (io : JoltDevice) (publicIo : joltInstance.public_io = some io) :
-    AllConstraints trace io entry
+    AllConstraints joltInstance privateInputs
       (trace.honestWitness (F := F) (trace.witness_params config accepted)) := by
-  have all := honestWitness_allConstraints (F := F) (trace.witness_params config accepted) trace
+  refine ⟨{
+    bytecode := trace.bytecode
+    initialRam := TraceWitness.initialRamWord trace
+    io := io
+    entry := entry
+    expands := trace.expands
+    initialized := ⟨trace.initialState, trace.initialized, rfl⟩
+    publicIo := publicIo
+    entryIsRust := ⟨slots, preprocessed, entryIsRust⟩ }, ?_⟩
+  change ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace) io entry
+    (trace.honestWitness (F := F) (trace.witness_params config accepted))
+  have all := honestWitness_constraintEquations (F := F) (trace.witness_params config accepted) trace
     (trace.witness_params_ram_fits config accepted)
     (trace.witness_params_padded config accepted)
     (trace.witness_params_bytecode_domain config accepted)
@@ -245,14 +257,14 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
         { inputs := joltInstance.inputs, trusted_advice := #[], untrusted_advice := #[],
           outputs := trimTrailingZeros joltInstance.outputs, panic := joltInstance.panic,
           memory_layout := trace.initialState.jolt_device.memory_layout } address.val =
-        ramPublicIoMask (F := F) (HonestWitness.finalTraceState trace).jolt_device address.val := by
+        ramPublicIoMask (F := F) (TraceWitness.finalTraceState trace).jolt_device address.val := by
       unfold ramPublicIoMask
       rw [sameLayout]
     have wordSame := ramPublicIoWord_trimmed
       { inputs := joltInstance.inputs, trusted_advice := #[], untrusted_advice := #[],
         outputs := trimTrailingZeros joltInstance.outputs, panic := joltInstance.panic,
         memory_layout := trace.initialState.jolt_device.memory_layout }
-      (HonestWitness.finalTraceState trace).jolt_device _
+      (TraceWitness.finalTraceState trace).jolt_device _
       (by rw [sameLayout]; exact layoutBuilt)
       (by rw [sameInputs, startInputs, sameLayout]; exact valid.1.2)
       sameLayout.symm (by rw [sameInputs, startInputs]) samePanic.symm sameOutputs.symm

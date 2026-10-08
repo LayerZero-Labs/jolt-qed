@@ -21,8 +21,8 @@ theorem honestWitness_instructionRaChunkHammingWeight
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk t
   dsimp [instructionRaChunkHammingWeight, HonestTrace.honestWitness,
-    HonestWitness.InstructionRaChunk]
-  exact HonestWitness.sum_addressChunkEntry_some params.chunkBits chunk
-    (HonestWitness.lookupIndex trace t.val).toNat
+    TraceWitness.InstructionRaChunk]
+  exact TraceWitness.sum_addressChunkEntry_some params.chunkBits chunk
+    (TraceWitness.lookupIndex trace t.val).toNat
 
 end JoltConstraints
