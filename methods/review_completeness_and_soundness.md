@@ -39,17 +39,6 @@ The fix proposed in #1951 makes the SDK's exit paths store 1 to the termination 
 
 **Suspected follow-on.** A store to the panic word sets `panic := true` whatever value it writes (`JoltBytecode/JoltISA/JoltDevice.lean:212`), but the final panic word is always 1. A store of any value other than 1 to the panic word, or to the termination word, may break (38) the same way. Check this alongside #1951 item 2.
 
-## A2. `store_word_present` is false as stated (medium, verified)
-
-`HonestTraceRow.store_word_present` (`execution_facts.lean:956`) is stated for any `HonestTraceRow`, with any pre-state.
-
-- A RAM `SD` retires without checking that the old bytes exist; it just writes them (`JoltBytecode/JoltISA/DeviceMemory.lean:151-154`).
-- `trace_doubleword?` returns `none` unless all 8 bytes are present in `sail.mem` (`DeviceMemory.lean:26-30`).
-
-Counterexample: a pre-state with an empty `sail.mem`, and an `SD` to `RAM_START` that passes `effective_address_ok`.
-
-`HonestWitness.RamReadValue` depends on this lemma. It needs to be restated for rows of an `HonestTrace`, which are reachable from `initial_state`, rather than for an arbitrary row.
-
 ## A3. Sorries behind the final theorem
 
 - (01): false until #1949 is fixed.
@@ -57,25 +46,7 @@ Counterexample: a pre-state with an empty `sail.mem`, and an `SD` to `RAM_START`
 - (38): false until #1951 item 1 is fixed (A1).
 - The six shift `lookupEntryCorrect_*` lemmas: they need the shift-mask shape of the rows Rust's expansions emit.
 - `expand_program_rows_valid`: cannot be proved while `SourceInstruction.expand` is `opaque` (`program.lean:142`). Until then the whole model is parametric in an uninterpreted expansion.
-- `store_word_present`: false as stated (A2).
 - `pc_map_ok_iff` is not used by the final theorem.
-
-## A4. Premises of the final theorem
-
-Every premise is documented as Rust behaviour or an a16z assumption:
-
-- `accepted`, which covers #1968, the length limit and the #1951 item 3 exclusion;
-- `noWrap`;
-- `SpoilAssertsPass`;
-- `code_unchanged`, inside `HonestTrace`;
-- the 2 GiB rule, inside `finalRamWord`;
-- the `ram_K` FIXME.
-
-The only problem is A1: leaving the termination word out of `matches_outputs` is what hides it.
-
-## A5. Does `HonestTrace` cover every Rust run? (agent-checked, not re-verified)
-
-According to the agent, these match Rust: the stop rule (`stops` / `runs_until_stop` vs `tracer/src/lib.rs:327-337`), registers starting at zero, the first row starting at the entry, and rows linked through the decode cache. Rust has one other stop path, a trap that emits no rows; the agent believes it is unreachable because fetch cannot fault while address translation is off (suspected). I have not re-checked any of A5 myself.
 
 # B. Soundness infrastructure
 
