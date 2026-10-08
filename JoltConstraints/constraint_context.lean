@@ -1,11 +1,13 @@
 import JoltConstraints.witness_helpers.ram_state
+import JoltConstraints.verifier_sizes
 
 set_option autoImplicit false
 
 namespace JoltConstraints
 
 /-- Data used by the constraint equations, bound to one instance and its private
-inputs. This contains no execution rows or honesty certificate.
+inputs, with the verifier's public-input and domain-size checks. This contains
+no execution rows or honesty certificate.
 
 `io` is the verifier's public I/O. `initialRam` also includes private advice; it
 is not claimed to be public. Its encoding must come from `initial_state` for the
@@ -20,6 +22,10 @@ structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
   initialized : ∃ state, joltInstance.initial_state privateInputs = some state ∧
     initialRam = TraceWitness.initialRamWordFromState state
   publicIo : joltInstance.public_io = some io
+  validInputs : joltInstance.validate_inputs = true
+  traceLengthBound : params.traceLength ≤ joltInstance.max_padded_trace_length.toNat
+  bytecodeDomain : params.BytecodeDomainFor bytecode.size
+  ramSizeBounds : joltInstance.ram_size_in_bounds params.ramSize = true
   entryIsRust : ∃ slots, preprocess bytecode = some slots ∧
     get_first_pc slots joltInstance.program.entry_address = some entry.val
 

@@ -7,13 +7,16 @@ rust: $HOME/Work-With-A16z/jolt at 8e536f19 (upstream main 629ed77b not yet audi
 # Open issues
 
 The final theorem is `HonestTrace.allConstraints_rust_sizes` (`Completeness/All.lean`):
-every constraint holds at the sizes Rust's prover picks, against the public I/O the
-verifier checks. Everything it rests on that is not proved is listed here.
+every constraint holds at the sizes Rust's prover picks, provided the chosen RAM
+size passes the verifier's bounds, against the public I/O the verifier checks.
+Everything it rests on that is not proved is listed here.
 
 `AllConstraints joltInstance privateInputs witness` binds the constraint data to
 the instance through `ConstraintContext` (`constraint_context.lean`). Bytecode,
 initial RAM, public I/O and the entry slot cannot be chosen independently of
 these inputs. Private advice contributes to initial RAM but is not public I/O.
+The context also checks the instance's input/output sizes and lowest address,
+the padded trace limit, the bytecode domain, and the verifier's RAM bounds.
 `ConstraintEquations` is the underlying equation bundle over those data.
 
 ## Upstream issues
@@ -29,10 +32,11 @@ pass, escalate it.
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the prover panics | such runs have no `HonestTrace.prover_config` (WARNING) |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` is one slot too small when the highest touched slot is a power of two (`bug-report/ram-k-off-by-one/`) | FIXME: `HonestTrace.prover_config` uses the fixed formula `touched + 1`, so Lean differs from Rust here |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 5 | The emulator loads only some ELF section kinds into RAM, preprocessing loads every section | assumed to agree: `initialRam` TODO in `program.lean` |
+| [Empty-program RAM minimum](../bug-report/verifier-ram-minimum/README.md) (local reproducer, not reported upstream) | An empty ELF at entry 0 traces successfully; the prover chooses `ram_K = 4`, but the verifier requires 16 with a 64-byte output region and returns `InvalidRamK` | Completeness explicitly assumes `ramSizeAccepted`; prover acceptance alone does not imply it. Lean and Rust give the same sizes for this example |
 
 ## Assumptions
 
-Premises or fields of the final theorem. Each is confirmed by a16z or holds by design.
+Premises or fields of the final theorem, with their source or reason below.
 
 | Assumption | Where | Why |
 |---|---|---|
@@ -41,6 +45,7 @@ Premises or fields of the final theorem. Each is confirmed by a16z or holds by d
 | A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | ASSUMPTION in `finalRamWord` | a16z, 2026-10-07 |
 | No spoil assert fails | `HonestTrace.SpoilAssertsPass` | by design: a failing spoil assert is meant to leave no proof |
 | Rust's prover accepts the run | `HonestTrace.prover_config = some config` | by design for its own checks (last row a jump, #1968; length limit); also excludes #1951 item 3 |
+| The prover's chosen RAM size passes the verifier's bounds | `ramSizeAccepted` in `HonestTrace.allConstraints_rust_sizes` | Required by the verifier; not guaranteed by prover acceptance, as the [empty-program counterexample](../bug-report/verifier-ram-minimum/README.md) shows |
 
 ## Proofs owed
 

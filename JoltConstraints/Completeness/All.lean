@@ -173,9 +173,12 @@ theorem _root_.HonestTrace.final_state_eq {joltInstance : JoltInstance SourceIns
   · rw [Array.getElem?_eq_none (by omega)]
     rfl
 
--- Every constraint holds for the honest witness at the sizes Rust's prover picks for the
--- run, against the public I/O the verifier checks, when the instance claims the outputs
--- the run produced. What is assumed: Rust's prover accepts the run (`accepted`; the open
+-- In English: if the program runs honestly and the prover chooses a RAM size the
+-- verifier allows, then the honest witness satisfies all the constraints, under
+-- the other existing assumptions below.
+-- The equations are checked against the verifier's public I/O, when the instance
+-- claims the outputs the run produced. What is assumed: the chosen RAM size passes
+-- the verifier's bounds (`ramSizeAccepted`), Rust's prover accepts the run (`accepted`; the open
 -- issues that stop it are in model_review.md), no spoil assert fails, the PC does not wrap
 -- (a16z), and, inside the trace and the witness, the code does not change during the run
 -- (`code_unchanged`, a16z) and the run uses no RAM 2 GiB or more above RAM_START
@@ -187,6 +190,10 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
     (trace : HonestTrace joltInstance privateInputs)
     -- Rust's prover accepts the run and picks these sizes
     (config : ProverConfig) (accepted : trace.prover_config = some config)
+    -- Assumed: the prover's chosen RAM size passes the verifier's size check.
+    -- Prover acceptance alone does not imply this: see bug-report/verifier-ram-minimum.
+    (ramSizeAccepted : joltInstance.ram_size_in_bounds
+      (trace.witness_params config accepted).ramSize = true)
     -- Rust's preprocessed bytecode, and the entry slot its verifier uses
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
     (entry : Fin (2 ^ (trace.witness_params config accepted).logBytecodeK))
@@ -209,6 +216,12 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
     expands := trace.expands
     initialized := ⟨trace.initialState, trace.initialized, rfl⟩
     publicIo := publicIo
+    validInputs := trace.valid_inputs
+    traceLengthBound := by
+      obtain ⟨isPadded, bounded⟩ := trace.prover_config_trace_length config accepted
+      simpa only [trace.witness_params_trace_length config accepted, isPadded] using bounded
+    bytecodeDomain := trace.witness_params_bytecode_domain config accepted
+    ramSizeBounds := ramSizeAccepted
     entryIsRust := ⟨slots, preprocessed, entryIsRust⟩ }, ?_⟩
   change ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace) io entry
     (trace.honestWitness (F := F) (trace.witness_params config accepted))
