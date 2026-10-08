@@ -111,7 +111,10 @@ def advice_ordinal (bytecode : Array JoltInstructionRow) (start offset : Nat) : 
 -- See : jolt/tracer/src/instruction/div.rs, divu.rs, rem.rs, remu.rs, divw.rs,
 --       divuw.rs, remw.rs, remuw.rs (trace)
 -- TODO: SC.W and SC.D patch their first VirtualAdvice with a reservation-success
--- flag (jolt/tracer/src/instruction/scw.rs, scd.rs); add them with their expansions.
+-- flag (jolt/tracer/src/instruction/scw.rs, scd.rs; cpu.rs:595 reservation_covers).
+-- Until that is modelled they get no value here, so `advice_from_rust` keeps the
+-- bytecode value 0: an SC always fails, which differs from Rust when a reservation
+-- covers the address.
 def SourceInstruction.rustAdvice (source : SourceInstruction) (state : SailJoltState) :
     List (BitVec 64) :=
   let value (register : regidx) := JoltISA.sourceValue (.xreg register) state

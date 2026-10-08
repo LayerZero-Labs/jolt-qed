@@ -6,6 +6,7 @@ import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.JoltISA.DeviceMemory
 import JoltBytecode.JoltISA.JoltDevice
 import JoltBytecode.RiscvInstruction
+import JoltConstraints.expansions
 import Mathlib.Tactic.DeriveFintype
 import Mathlib.Data.Nat.Log
 
@@ -103,43 +104,8 @@ See : jolt/crates/jolt-program/src/image/elf.rs:18-30 (Rv64ProgramImage)
       jolt/crates/jolt-program/src/image/decode.rs (decode_instruction)
 -/
 
--- Jolt's own source instructions: custom opcode 0x5B, decoded alongside RISC-V.
--- Inline (opcodes 0x0B and 0x2B) is out of scope.
--- See : jolt/crates/jolt-program/src/image/decode.rs:71-72, 192-212 (decode_custom)
---       jolt/tracer/src/instruction/format/ (operand formats)
-inductive JoltCustomInstruction where
-  | AdviceLB (rd : regidx)                                -- FormatAdviceLoadI
-  | AdviceLH (rd : regidx)
-  | AdviceLW (rd : regidx)
-  | AdviceLD (rd : regidx)
-  | VirtualAdviceLen (rd rs1 : regidx) (imm : BitVec 12)  -- FormatI
-  | VirtualRev8W (rd rs1 : regidx)                        -- FormatT
-  | VirtualAssertEQ (rs1 rs2 : regidx) (imm : BitVec 13)  -- FormatB
-  | VirtualHostIO (rd rs1 : regidx) (imm : BitVec 12)     -- FormatI
-
--- What Rust's base profile decodes: RISC-V or Jolt's own instructions.
--- See : jolt/crates/jolt-riscv/src/kind.rs:20 (SourceInstructionKind)
-inductive SourceInstruction where
-  | riscv (instruction : RiscvInstruction)
-  | jolt (instruction : JoltCustomInstruction)
-
--- What Rust's dispatch_source returns for one source instruction.
--- See : jolt/crates/jolt-program/src/expand/materialize.rs:71-101 (dispatch_source)
-inductive ExpandedSource where
-  -- A native row, or the no-op for rd = x0: one row, not stamped.
-  | native (instruction : JoltISA.Instr)
-  -- A built-in expansion: stamped as one sequence.
-  | sequence (instructions : List JoltISA.Instr)
-
--- A source instruction's final Jolt rows; none where Lean has no expansion yet.
--- TODO: SC.W and SC.D (Rust expand_scw, expand_scd).
--- TODO: (claude) define from the existing expansions. Until then it is opaque: no proof
--- looks inside it, and an opaque function adds no axiom, unlike `sorry`.
--- The native case is `.native instruction.rewriteNative` (Instruction.lean:451), which
--- already applies Rust's rd = x0 rule; the rd = x0 no-op must be `.native`, not a
--- one-row `.sequence`.
--- See : jolt/crates/jolt-program/src/expand/mod.rs:126-170
-opaque SourceInstruction.expand : SourceInstruction → Option ExpandedSource
+-- The source instruction types and `SourceInstruction.expand` are in
+-- `expansion_helpers.lean` and `expansions.lean`.
 
 -- See : jolt/crates/jolt-riscv/src/row.rs:74-82 (JoltInstructionRow)
 structure JoltInstructionRow where

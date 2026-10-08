@@ -64,7 +64,8 @@ theorem honestWitness_lookupOutputEqInstructionReadRaf
       simp [rowLookupOutput_eq_zero_of_lookupTable_none row hk]
     | some k =>
       simp only [Option.some.injEq, Finset.sum_ite_eq, Finset.mem_univ, if_true]
-      exact (lookupEntryCorrect_of_lookupTable row k hk).symm
+      exact (lookupEntryCorrect_of_lookupTable row k hk
+        (shiftMaskOk_of_honest trace t.val inBounds)).symm
   · -- Padding has zero output and every table flag is zero.
     simp [HonestTrace.honestWitness, TraceWitness.LookupOutput,
       TraceWitness.LookupTableFlag, inBounds]

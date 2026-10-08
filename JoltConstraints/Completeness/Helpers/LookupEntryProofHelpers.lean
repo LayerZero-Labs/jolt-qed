@@ -1,6 +1,7 @@
 import JoltConstraints.Constraints.LookupOperandData
 import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupPextProofHelpers
+import JoltConstraints.Completeness.Helpers.LookupShiftProofHelpers
 
 /-!
 # Per-table obligations for constraint (39)
@@ -383,11 +384,6 @@ theorem alignAddr_entry (v : BitVec 128) :
 theorem umod_toNat (v : BitVec 128) (m : Nat) (hm : m < 2 ^ 128) :
     (v % BitVec.ofNat 128 m).toNat = v.toNat % m := by
   simp only [BitVec.toNat_umod, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hm]
-
-theorem one_shiftLeft_eq (k : Nat) : 1#64 <<< k = BitVec.ofNat 64 (2 ^ k) := by
-  apply BitVec.eq_of_toNat_eq
-  simp only [BitVec.toNat_shiftLeft, BitVec.toNat_ofNat, Nat.shiftLeft_eq]
-  norm_num
 
 theorem pow2_entry (v : BitVec 128) :
     pow2TableEntry (F := F) v.toFin = ((BitVec.ofNat 64 (2 ^ (v.toNat % 64))).toNat : F) := by
@@ -783,83 +779,271 @@ theorem lookupEntryCorrect_VirtualRev8W (row : HonestTraceRow bytecode)
   rw [BitVec.setWidth_eq, rev8w_eq]
 
 
--- FIXME: the six shift/rotate lemmas below are false for an arbitrary `bytecode`:
--- a `VirtualSRLI` row with mask immediate `2` (or a `VirtualSRL` row whose mask
--- register holds `2`) is accepted, and its entry differs from its output. Rust's
--- expander only emits right-shift bitmasks here. An honest trace's bytecode comes
--- from `SourceInstruction.expand`; once that is defined, add the bitmask shape to
--- `ExpansionRowsValid` (trace_interface.lean) and prove these for such masks.
-/-- FALSE for arbitrary programs; left as `sorry`.
-The table reads the right operand as a right-shift bitmask (ones from bit
-`s` upward) and is correct only for such masks, while the honest output of
-`VirtualSRL`/`VirtualSRLI` shifts by `ctz` of whatever mask the row carries.
-`bytecode` is any array here (see the FIXME above), so nothing constrains the
-mask shape.
-Counterexample: source `4`, mask `2`: entry `0`, output `4 >>> ctz 2 = 2`. -/
+/-! ## Shift masks
+
+The shift tables are correct only when the shift's mask is a right-shift bitmask.
+`ShiftMaskOk` says so for a row; `shiftMaskOk_of_honest` proves it for every row of
+an honest trace, from the expansions: an immediate mask is a bitmask in the bytecode,
+and a register mask was written by the `VirtualShiftRightBitmask(W)` row just before.
+-/
+
+/-- The mask a shift row reads is a right-shift bitmask, and no rotate runs. -/
+def ShiftMaskOk (instruction : JoltISA.Instr) (state : SailJoltState) : Prop :=
+  match instruction with
+  | .VirtualSRLI _ _ mask | .VirtualSRAI _ _ mask =>
+      ∃ s < 64, mask = ExpansionFacts.rightShiftMask s
+  | .VirtualSRLIW _ _ mask | .VirtualSRAIW _ _ mask =>
+      ∃ s < 32, mask = ExpansionFacts.wordShiftMask s
+  | .VirtualSRL _ _ mask | .VirtualSRA _ _ mask =>
+      ∃ s < 64, JoltISA.sourceValue mask state =
+        BitVec.ofNat 64 (ExpansionFacts.rightShiftMask s)
+  | .VirtualSRLW _ _ mask | .VirtualSRAW _ _ mask =>
+      ∃ s < 32, JoltISA.sourceValue mask state =
+        BitVec.ofNat 64 (ExpansionFacts.wordShiftMask s)
+  | .VirtualROTRI .. | .VirtualROTRIW .. => False
+  | _ => True
+
+theorem maskOk_mask (mask : Nat) (ok : ExpansionFacts.maskOk mask = true) :
+    ∃ s < 64, mask = ExpansionFacts.rightShiftMask s := by
+  simp only [ExpansionFacts.maskOk, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at ok
+  exact ⟨_, ok.2, ok.1⟩
+
+theorem wordMaskOk_mask (mask : Nat) (ok : ExpansionFacts.wordMaskOk mask = true) :
+    ∃ s < 32, mask = ExpansionFacts.wordShiftMask s := by
+  simp only [ExpansionFacts.wordMaskOk, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at ok
+  exact ⟨_, ok.2, ok.1⟩
+
+-- A row that is not a register shift: its immediate mask, if any, is checked in the
+-- bytecode.
+theorem shiftMaskOk_of_immShiftOk (instruction : JoltISA.Instr) (state : SailJoltState)
+    (immOk : ExpansionFacts.immShiftOk instruction = true)
+    (notShift : ExpansionFacts.isRegisterShift instruction = false) :
+    ShiftMaskOk instruction state := by
+  unfold ShiftMaskOk
+  split
+  all_goals first
+    | trivial
+    | exact maskOk_mask _ immOk
+    | exact wordMaskOk_mask _ immOk
+
+theorem bitmask_written (written : JoltISA.VReg) (src : JoltISA.Src) (imm : BitVec 64)
+    (pre post : SailJoltState)
+    (runs : JoltISA.execInstr (.VirtualShiftRightBitmask (.vreg written) src imm) pre =
+      .ok (.Retire_Success ()) post) :
+    JoltISA.sourceValue (.vreg written) post =
+      BitVec.ofNat 64 (ExpansionFacts.rightShiftMask
+        ((JoltISA.sourceValue src pre).setWidth 6).toNat) := by
+  simp only [JoltISA.execInstr] at runs
+  exact lookup_write_retire (.vreg written) _ _ _ trivial (lookup_read_bind src _ _ _ _ runs)
+
+theorem bitmaskW_written (written : JoltISA.VReg) (src : JoltISA.Src) (imm : BitVec 64)
+    (pre post : SailJoltState)
+    (runs : JoltISA.execInstr (.VirtualShiftRightBitmaskW (.vreg written) src imm) pre =
+      .ok (.Retire_Success ()) post) :
+    JoltISA.sourceValue (.vreg written) post =
+      BitVec.ofNat 64 (ExpansionFacts.wordShiftMask
+        ((JoltISA.sourceValue src pre).setWidth 5).toNat) := by
+  simp only [JoltISA.execInstr] at runs
+  rw [show ExpansionFacts.wordShiftMask ((JoltISA.sourceValue src pre).setWidth 5).toNat =
+      2 ^ 32 - 2 ^ ((JoltISA.sourceValue src pre).setWidth 5).toNat by
+    simp only [ExpansionFacts.wordShiftMask, Nat.one_shiftLeft]]
+  exact lookup_write_retire (.vreg written) _ _ _ trivial (lookup_read_bind src _ _ _ _ runs)
+
+-- Once `previous` has run, the register mask it wrote for `current` is a bitmask.
+theorem fed_mask (previous current : JoltISA.Instr)
+    (fed : ExpansionFacts.masksFed previous current = true) (pre post : SailJoltState)
+    (runs : JoltISA.execInstr previous pre = .ok (.Retire_Success ()) post) :
+    ShiftMaskOk current post := by
+  unfold ExpansionFacts.masksFed at fed
+  split at fed
+  · next written src imm _ _ read =>
+    obtain rfl : written = read := beq_iff_eq.mp fed
+    exact ⟨_, BitVec.isLt _, bitmask_written written src imm pre post runs⟩
+  · next written src imm _ _ read =>
+    obtain rfl : written = read := beq_iff_eq.mp fed
+    exact ⟨_, BitVec.isLt _, bitmask_written written src imm pre post runs⟩
+  · next written src imm _ _ read =>
+    obtain rfl : written = read := beq_iff_eq.mp fed
+    exact ⟨_, BitVec.isLt _, bitmaskW_written written src imm pre post runs⟩
+  · next written src imm _ _ read =>
+    obtain rfl : written = read := beq_iff_eq.mp fed
+    exact ⟨_, BitVec.isLt _, bitmaskW_written written src imm pre post runs⟩
+  · cases fed
+
+-- A bitmask row carries no runtime advice.
+theorem masksFed_withRuntimeAdvice (previous current : JoltISA.Instr)
+    (advice : previous.RuntimeAdvice) (fed : ExpansionFacts.masksFed previous current = true) :
+    previous.withRuntimeAdvice advice = previous := by
+  unfold JoltISA.Instr.withRuntimeAdvice
+  split
+  · simp [ExpansionFacts.masksFed] at fed
+  · rfl
+
+-- Every row of an honest trace reads a right-shift bitmask.
+theorem shiftMaskOk_of_honest {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (t : Nat) (inBounds : t < trace.rows.size) :
+    ShiftMaskOk (rowInstruction (trace.row t inBounds)) (trace.row t inBounds).preState := by
+  cases isShift : ExpansionFacts.isRegisterShift (rowInstruction (trace.row t inBounds)) with
+  | false =>
+    exact shiftMaskOk_of_immShiftOk _ _ (trace.immShiftOk _) isShift
+  | true =>
+    obtain ⟨j, before, fed, notStart⟩ := trace.shiftPairs trace.rows[t].rowIndex isShift
+    obtain ⟨m, mBefore, index, linked⟩ := trace.previous_row t inBounds notStart
+    have same : trace.rows[m].rowIndex = j := Fin.ext (by omega)
+    have fedPrevious : ExpansionFacts.masksFed
+        trace.bytecode[trace.rows[m].rowIndex].instruction
+        (rowInstruction (trace.row t inBounds)) = true := by
+      have sameRow : trace.bytecode[trace.rows[m].rowIndex] = trace.bytecode[j] :=
+        congrArg (fun i : Fin trace.bytecode.size => trace.bytecode[i]) same
+      rw [sameRow]
+      exact fed
+    have runs := trace.executes trace.rows[m] (Array.getElem_mem (by omega))
+    rw [masksFed_withRuntimeAdvice _ _ _ fedPrevious] at runs
+    rw [show (trace.row t inBounds).preState = trace.rows[m].postState from linked]
+    exact fed_mask _ _ fedPrevious _ _ runs
+
+theorem rightShiftMask_shape (s : Nat) (sLt : s < 64) :
+    ∀ i < 64, (BitVec.ofNat 64 (ExpansionFacts.rightShiftMask s)).getLsbD i =
+      decide (s ≤ i) := by
+  intro i iLt
+  rw [BitVec.getLsbD_ofNat, ExpansionFacts.rightShiftMask_testBit s i sLt]
+  simp [iLt]
+
+theorem wordShiftMask_shape (s : Nat) (sLt : s < 32) :
+    ∀ i < 32, (BitVec.ofNat 64 (ExpansionFacts.wordShiftMask s)).getLsbD i =
+      decide (s ≤ i) := by
+  intro i iLt
+  rw [BitVec.getLsbD_ofNat, ExpansionFacts.wordShiftMask_testBit s i sLt]
+  simp [iLt, show i < 64 by omega]
+
+theorem rightShiftMask_toNat (s : Nat) (sLt : s < 64) :
+    (BitVec.ofNat 64 (ExpansionFacts.rightShiftMask s)).toNat =
+      ExpansionFacts.rightShiftMask s := by
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+  apply Nat.lt_pow_two_of_testBit
+  intro i iGe
+  rw [ExpansionFacts.rightShiftMask_testBit s i sLt]
+  simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]
+  omega
+
+theorem wordShiftMask_toNat (s : Nat) (sLt : s < 32) :
+    (BitVec.ofNat 64 (ExpansionFacts.wordShiftMask s)).toNat =
+      ExpansionFacts.wordShiftMask s := by
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt]
+  apply Nat.lt_pow_two_of_testBit
+  intro i iGe
+  rw [ExpansionFacts.wordShiftMask_testBit s i sLt]
+  simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]
+  omega
+
+theorem wordShiftMask_ne_zero (s : Nat) (sLt : s < 32) : ExpansionFacts.wordShiftMask s ≠ 0 := by
+  intro zero
+  have bit := ExpansionFacts.wordShiftMask_testBit s s sLt
+  rw [zero, Nat.zero_testBit] at bit
+  simp [sLt] at bit
+
+theorem srl_mask_entry (x : BitVec 64) (s : Nat) (sLt : s < 64) :
+    virtualSRLTableEntry (F := F)
+        (interleaveLookupOperands x (BitVec.ofNat 64 (ExpansionFacts.rightShiftMask s))).toFin =
+      ((x >>> ctz (ExpansionFacts.rightShiftMask s)).toNat : F) := by
+  rw [ExpansionFacts.ctz_rightShiftMask s sLt]
+  exact ShiftTables.srl_entry _ x _ (uninterleave_interleave _ _) s (rightShiftMask_shape s sLt)
+
+theorem sra_mask_entry (x : BitVec 64) (s : Nat) (sLt : s < 64) :
+    virtualSRATableEntry (F := F)
+        (interleaveLookupOperands x (BitVec.ofNat 64 (ExpansionFacts.rightShiftMask s))).toFin =
+      ((x.sshiftRight (ctz (ExpansionFacts.rightShiftMask s))).toNat : F) := by
+  rw [ExpansionFacts.ctz_rightShiftMask s sLt]
+  exact ShiftTables.sra_entry _ x _ (uninterleave_interleave _ _) s sLt
+    (rightShiftMask_shape s sLt)
+
+theorem srlw_mask_entry (x : BitVec 64) (s : Nat) (sLt : s < 32) :
+    virtualSRLWTableEntry (F := F)
+        (interleaveLookupOperands x (BitVec.ofNat 64 (ExpansionFacts.wordShiftMask s))).toFin =
+      ((((x.setWidth 32) >>> ctz (ExpansionFacts.wordShiftMask s)).signExtend 64).toNat : F) := by
+  rw [ExpansionFacts.ctz_wordShiftMask s sLt]
+  exact ShiftTables.srlw_entry _ x _ (uninterleave_interleave _ _) s sLt
+    (wordShiftMask_shape s sLt)
+
+theorem sraw_mask_entry (x : BitVec 64) (s : Nat) (sLt : s < 32) :
+    virtualSRAWTableEntry (F := F)
+        (interleaveLookupOperands x (BitVec.ofNat 64 (ExpansionFacts.wordShiftMask s))).toFin =
+      ((((x.setWidth 32).sshiftRight (ctz (ExpansionFacts.wordShiftMask s))).signExtend
+        64).toNat : F) := by
+  rw [ExpansionFacts.ctz_wordShiftMask s sLt]
+  exact ShiftTables.sraw_entry _ x _ (uninterleave_interleave _ _) s sLt
+    (wordShiftMask_shape s sLt)
+
 theorem lookupEntryCorrect_VirtualSRL (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRL) :
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRL)
+    (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F .VirtualSRL row := by
-  sorry
+  lookup_cases
+  · rw [hi] at maskOk
+    obtain ⟨s, sLt, rfl⟩ := maskOk
+    exact srl_mask_entry _ s sLt
+  · rw [hi] at maskOk
+    obtain ⟨s, sLt, maskValue⟩ := maskOk
+    simp only [jolt_virtual_srl_value, maskValue, rightShiftMask_toNat s sLt]
+    exact srl_mask_entry _ s sLt
 
-/-- FALSE for arbitrary programs; left as `sorry`.
-The table reads the right operand as a right-shift bitmask (ones from bit
-`s` upward) and is correct only for such masks, while the honest output of
-`VirtualSRA`/`VirtualSRAI` shifts by `ctz` of whatever mask the row carries.
-`bytecode` is any array here (see the FIXME above), so nothing constrains the
-mask shape.
-Counterexample: source `4`, mask `2`: entry `0`, output `4.sshiftRight 1 = 2`. -/
 theorem lookupEntryCorrect_VirtualSRA (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRA) :
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRA)
+    (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F .VirtualSRA row := by
-  sorry
+  lookup_cases
+  · rw [hi] at maskOk
+    obtain ⟨s, sLt, rfl⟩ := maskOk
+    exact sra_mask_entry _ s sLt
+  · rw [hi] at maskOk
+    obtain ⟨s, sLt, maskValue⟩ := maskOk
+    simp only [jolt_virtual_sra_value, maskValue, rightShiftMask_toNat s sLt]
+    exact sra_mask_entry _ s sLt
 
-/-- FALSE for arbitrary programs; left as `sorry`.
-The table reads the right operand as a right-shift bitmask (ones from bit
-`s` upward) and is correct only for such masks, while the honest output of
-`VirtualSRLW`/`VirtualSRLIW` shifts by `ctz` of whatever mask the row carries.
-`bytecode` is any array here (see the FIXME above), so nothing constrains the
-mask shape.
-Counterexample: source `4`, mask `2`: entry `0`, output `2`. Also mask `0` for `VirtualSRLW`: entry `0`, output the sign-extended low word. -/
 theorem lookupEntryCorrect_VirtualSRLW (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRLW) :
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRLW)
+    (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F .VirtualSRLW row := by
-  sorry
+  lookup_cases
+  · rw [hi] at maskOk
+    obtain ⟨s, sLt, rfl⟩ := maskOk
+    simp only [jolt_virtual_srliw_value, if_neg (wordShiftMask_ne_zero s sLt)]
+    exact srlw_mask_entry _ s sLt
+  · rw [hi] at maskOk
+    obtain ⟨s, sLt, maskValue⟩ := maskOk
+    simp only [jolt_virtual_srlw_value, maskValue, wordShiftMask_toNat s sLt]
+    exact srlw_mask_entry _ s sLt
 
-/-- FALSE for arbitrary programs; left as `sorry`.
-The table reads the right operand as a right-shift bitmask (ones from bit
-`s` upward) and is correct only for such masks, while the honest output of
-`VirtualSRAW`/`VirtualSRAIW` shifts by `ctz` of whatever mask the row carries.
-`bytecode` is any array here (see the FIXME above), so nothing constrains the
-mask shape.
-Counterexample: source `4`, mask `2`: entry `0`, output `2`. -/
 theorem lookupEntryCorrect_VirtualSRAW (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRAW) :
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualSRAW)
+    (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F .VirtualSRAW row := by
-  sorry
+  lookup_cases
+  · rw [hi] at maskOk
+    obtain ⟨s, sLt, rfl⟩ := maskOk
+    exact sraw_mask_entry _ s sLt
+  · rw [hi] at maskOk
+    obtain ⟨s, sLt, maskValue⟩ := maskOk
+    simp only [jolt_virtual_sraw_value, maskValue, wordShiftMask_toNat s sLt]
+    exact sraw_mask_entry _ s sLt
 
-/-- FALSE for arbitrary programs; left as `sorry`.
-The table reads the right operand as a right-shift bitmask (ones from bit
-`s` upward) and is correct only for such masks, while the honest output of
-`VirtualROTRI` shifts by `ctz` of whatever mask the row carries.
-`bytecode` is any array here (see the FIXME above), so nothing constrains the
-mask shape.
-Counterexample: source `4`, mask `2`: entry `4`, output `rotater 4 1 = 2`. -/
+-- No expansion emits a rotate, so these tables are never used.
 theorem lookupEntryCorrect_VirtualROTR (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTR) :
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTR)
+    (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F .VirtualROTR row := by
-  sorry
+  lookup_cases
+  rw [hi] at maskOk
+  exact maskOk.elim
 
-/-- FALSE for arbitrary programs; left as `sorry`.
-The table reads the right operand as a right-shift bitmask (ones from bit
-`s` upward) and is correct only for such masks, while the honest output of
-`VirtualROTRIW` shifts by `ctz` of whatever mask the row carries.
-`bytecode` is any array here (see the FIXME above), so nothing constrains the
-mask shape.
-Counterexample: source `4`, mask `2`: entry `4`, output `2`. -/
 theorem lookupEntryCorrect_VirtualROTRW (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTRW) :
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTRW)
+    (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F .VirtualROTRW row := by
-  sorry
+  lookup_cases
+  rw [hi] at maskOk
+  exact maskOk.elim
 
 theorem lookupEntryCorrect_Pext (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Pext) :
@@ -976,11 +1160,11 @@ theorem rowLookupOutput_eq_zero_of_lookupTable_none (row : HonestTraceRow byteco
     simp only [hi]
 
 /-- Dispatcher: the honest entry of the row's lookup table equals the honest
-lookup output. Depends on every `lookupEntryCorrect_*` lemma, including the
-ones left as `sorry` (`VirtualSRL`, `VirtualSRA`, `VirtualSRLW`, `VirtualSRAW`,
-`VirtualROTR`, `VirtualROTRW`). -/
+lookup output. The shift tables need the row's mask to be a bitmask
+(`shiftMaskOk_of_honest`). -/
 theorem lookupEntryCorrect_of_lookupTable (row : HonestTraceRow bytecode) (k : LookupTableKind)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some k) :
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some k)
+    (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F k row :=
   match k with
   | .RangeCheck => lookupEntryCorrect_RangeCheck row h
@@ -1008,10 +1192,10 @@ theorem lookupEntryCorrect_of_lookupTable (row : HonestTraceRow bytecode) (k : L
   | .Pow2W => lookupEntryCorrect_Pow2W row h
   | .ShiftRightBitmask => lookupEntryCorrect_ShiftRightBitmask row h
   | .VirtualRev8W => lookupEntryCorrect_VirtualRev8W row h
-  | .VirtualSRL => lookupEntryCorrect_VirtualSRL row h
-  | .VirtualSRA => lookupEntryCorrect_VirtualSRA row h
-  | .VirtualROTR => lookupEntryCorrect_VirtualROTR row h
-  | .VirtualROTRW => lookupEntryCorrect_VirtualROTRW row h
+  | .VirtualSRL => lookupEntryCorrect_VirtualSRL row h maskOk
+  | .VirtualSRA => lookupEntryCorrect_VirtualSRA row h maskOk
+  | .VirtualROTR => lookupEntryCorrect_VirtualROTR row h maskOk
+  | .VirtualROTRW => lookupEntryCorrect_VirtualROTRW row h maskOk
   | .VirtualNegateIf => lookupEntryCorrect_VirtualNegateIf row h
   | .MulUNoOverflow => lookupEntryCorrect_MulUNoOverflow row h
   | .VirtualXORROT32 => lookupEntryCorrect_VirtualXORROT32 row h
@@ -1028,8 +1212,8 @@ theorem lookupEntryCorrect_of_lookupTable (row : HonestTraceRow bytecode) (k : L
   | .VirtualXORROTW19 => lookupEntryCorrect_VirtualXORROTW19 row h
   | .VirtualXORROTW6 => lookupEntryCorrect_VirtualXORROTW6 row h
   | .ShiftRightBitmaskW => lookupEntryCorrect_ShiftRightBitmaskW row h
-  | .VirtualSRLW => lookupEntryCorrect_VirtualSRLW row h
-  | .VirtualSRAW => lookupEntryCorrect_VirtualSRAW row h
+  | .VirtualSRLW => lookupEntryCorrect_VirtualSRLW row h maskOk
+  | .VirtualSRAW => lookupEntryCorrect_VirtualSRAW row h maskOk
   | .Pext => lookupEntryCorrect_Pext row h
   | .WindowMaskB => lookupEntryCorrect_WindowMaskB row h
   | .WindowMaskH => lookupEntryCorrect_WindowMaskH row h

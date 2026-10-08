@@ -1,5 +1,8 @@
-import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.metadata
+import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
+import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
+import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
+import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 
 /-!
 Instruction-level nextPC frames. Ordinary instructions, untaken branches, and
@@ -10,6 +13,72 @@ word memory operations preserve nextPC. HostIO's frame is proved in
 set_option autoImplicit false
 
 open Sail PreSail LeanRV64D.Functions
+
+-- Operand reads, moved here from LookupWriteProofHelpers.lean so the frame lemmas
+-- below can sit under trace_interface.lean.
+private theorem readReg_get (reg : Register) (s : SailState)
+    (v : RegisterType reg) (s' : SailState)
+    (h : (Sail.readReg reg : SailM (RegisterType reg)) s = .ok v s') :
+    s.regs.get? reg = some v := by
+  unfold Sail.readReg PreSail.readReg at h
+  simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get,
+    pure] at h
+  cases hg : s.regs.get? reg with
+  | none => simp only [hg] at h; change EStateM.Result.error Error.Unreachable s = .ok v s' at h; cases h
+  | some value => simp [hg] at h; cases h; rfl
+
+theorem lookup_readSrc_value (src : JoltISA.Src) (state state' : SailJoltState)
+    (value : BitVec 64)
+    (hread : JoltISA.readSrc src state = .ok value state') :
+    state' = state ∧ value = JoltISA.sourceValue src state := by
+  cases src with
+  | vreg vr =>
+      simp only [JoltISA.readSrc_vreg, readVReg_run] at hread
+      cases hread
+      exact ⟨rfl, rfl⟩
+  | xreg rd =>
+      change liftSail (rX_bits rd) state = .ok value state' at hread
+      unfold liftSail at hread
+      cases h : rX_bits rd state.sail with
+      | error e s =>
+          rw [h] at hread
+          cases hread
+      | ok v s =>
+          rw [h] at hread
+          have hs : s = state.sail := rX_bits_pure rd state.sail v s h
+          subst s
+          cases hread
+          constructor
+          · rfl
+          · reg_cases rd
+            all_goals
+              simp_all only [JoltISA.sourceValue, rX_bits, rX,
+                regval_from_reg, Sail.BitVec.toNatInt, Int.ofNat_eq_natCast,
+                Int.toNat_natCast, zero_reg, zeros]
+              first
+              | simp only [bind, EStateM.bind, pure, EStateM.pure] at h
+                cases h
+                rfl
+              | simp only [bind, EStateM.bind, pure, EStateM.pure] at h
+                generalize hread : Sail.readReg _ state.sail = result at h
+                cases result with
+                | error e s => cases h
+                | ok v s =>
+                    have hg := readReg_get _ _ _ _ hread
+                    simp only [hg, Option.getD_some]
+                    cases h
+                    rfl
+
+/-- Successful operand reads can be replaced by the pure witness calculation. -/
+theorem lookup_read_bind {α : Type} (src : JoltISA.Src)
+    (f : BitVec 64 → JoltMonad α) (pre post : SailJoltState) (result : α)
+    (hexec : (JoltISA.readSrc src >>= f) pre = .ok result post) :
+    f (JoltISA.sourceValue src pre) pre = .ok result post := by
+  cases hr : JoltISA.readSrc src pre with
+  | error e s => simp only [bind, EStateM.bind, hr] at hexec; cases hexec
+  | ok v s =>
+    obtain ⟨rfl, rfl⟩ := lookup_readSrc_value src pre s v hr
+    simpa only [bind, EStateM.bind, hr] using hexec
 
 namespace SailNextPCFrame
 

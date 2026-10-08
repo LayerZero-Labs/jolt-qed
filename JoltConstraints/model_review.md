@@ -59,8 +59,6 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
 | (37) `honestWitness_ramValEqInitialPlusPrefixRamInc` | false until #1950 is fixed |
 | (38) `honestWitness_ramValFinalEqInitialPlusRamInc` | false until #1951 item 1 is fixed |
 | `HonestTrace.witness_params_ram_bounds` (`Completeness/Helpers/VerifierSizes.lean`) | The empty program is excluded by the `ImageNonempty` assumption. Lower half: proved once the minimum computes successfully; still to prove that both bounds compute successfully. Upper half: false until #1951 item 4 is fixed, because the verifier's maximum rounds the word count down |
-| `lookupEntryCorrect_VirtualSRL`, `SRA`, `SRLW`, `SRAW`, `ROTR`, `ROTRW` | the shift-mask shape of the rows Rust's expansions emit; add it to `ExpansionRowsValid` once `expand` is defined |
-| `expand_program_rows_valid` (`trace_interface.lean`) | define `SourceInstruction.expand` from the existing Lean expansions. Facts: a jump writes a real register and ends its instruction, an x0 write is the canonical no-op, a branch is its own native row with a 13-bit offset, earlier rows keep nextPC, register operands are canonical. Also relied on, not yet stated: operand order is Rust's rs1/rs2, `VirtualRev8W` has immediate 0, shift masks are never 0 |
 | `pc_map_ok_iff` (`program.lean`) | the shape of `expand_instruction`'s output; not used by the final theorem |
 
 ## Gaps in our model
@@ -76,6 +74,17 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
 - **Not modeled.** Rust can trace nonempty trusted-advice bytes without a commitment,
   then fail proving because the verifier expects zeros; Lean has no separate
   commitment-presence flag to express that mismatch.
+- **Expansions.** `SourceInstruction.expand` (`expansions.lean`) uses the bytecode
+  project's programs. The 53 generated ones match a fresh run of `jolt-lean-gen` on the
+  current Rust exactly. LR.W, LR.D, SC.W and SC.D are that generator's output, kept in
+  `expansions.lean` until it emits them, and are not proved against Sail. The older
+  `JoltISA.lrwProgram`/`lrdProgram` (`Expansions/LoadReserved.lean`) follow the old
+  tracer and are unused.
+  The rows they emit are checked in `expansion_facts.lean`. Still relied on and not
+  stated there: operand order is Rust's rs1/rs2, and `VirtualRev8W` has immediate 0.
+- **SC success flag.** Rust patches SC's advice row with a reservation-success flag
+  (`cpu.rs:595`); `rustAdvice` does not model it yet, so in an `HonestTrace` an SC
+  always fails. This differs from Rust when a reservation covers the address.
 - **Soundness execution data.** The relation is proved independent of `advice_tape`
   (`AllConstraints.advice_tape_irrelevant`). Reconstructing a consistent tape and
   per-row runtime advice remains open, including the remaining-length semantics

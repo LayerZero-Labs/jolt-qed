@@ -1,4 +1,5 @@
-import JoltConstraints.Completeness.Helpers.NextPCFrame
+import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
+import JoltConstraints.nextpc_frame
 
 -- HostIO changes no Sail state: its byte reads go through Jolt's MMU, which
 -- changes nothing, and it otherwise only appends to the advice tape.
