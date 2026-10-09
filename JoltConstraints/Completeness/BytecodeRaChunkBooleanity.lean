@@ -10,15 +10,15 @@ namespace JoltConstraints
 /-- The honest witness satisfies constraint (55). -/
 theorem honestWitness_bytecodeRaChunkBooleanity
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     bytecodeRaChunkBooleanity
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk entry t
-  dsimp [JoltProgram.honestWitness, HonestWitness.BytecodeRaChunk,
-    HonestWitness.addressChunkEntry]
+  dsimp [HonestTrace.honestWitness, TraceWitness.BytecodeRaChunk,
+    TraceWitness.addressChunkEntry]
   split_ifs <;> simp_all
 
 end JoltConstraints

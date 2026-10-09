@@ -1,4 +1,6 @@
-import JoltConstraints.Constraints.RamReadSelection
+import JoltConstraints.Constraints.RamReadData
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Field.Defs
 
 set_option autoImplicit false
 
@@ -10,7 +12,7 @@ open scoped BigOperators
 Recover the raw byte address from the selected remapped word address.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs#L133-L151 -/
 def ramAddressEqRamRaf {F : Type} [Field F] {params : WitnessParams}
-    (layout : JoltIOLayout) (witness : WitnessType F params) : Prop :=
+    (layout : MemoryLayout) (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,
     witness.RamAddress t =
       ∑ address : Fin params.ramSize,

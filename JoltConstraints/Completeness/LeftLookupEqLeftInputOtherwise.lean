@@ -22,22 +22,22 @@ private theorem leftLookupOtherwiseForOpcode {F : Type} [Field F]
 /-- Completeness target for the honest witness; proof pending. -/
 theorem honestWitness_leftLookupEqLeftInputOtherwise
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     leftLookupEqLeftInputOtherwise
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
-  · simpa [JoltProgram.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.LeftLookupOperand, HonestWitness.LeftInstructionInput,
+  · simpa [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.LeftLookupOperand, TraceWitness.LeftInstructionInput,
       JoltMetadata.circuitFlag, inBounds] using
         (leftLookupOtherwiseForOpcode (F := F)
-          (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
-          (HonestWitness.UnexpandedPC params trace t)
-          (HonestWitness.Rs1Value params trace t))
-  · simp [JoltProgram.honestWitness, HonestWitness.OpFlags,
-      HonestWitness.LeftLookupOperand, HonestWitness.LeftInstructionInput, inBounds]
+          (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
+          (TraceWitness.UnexpandedPC params trace t)
+          (TraceWitness.Rs1Value params trace t))
+  · simp [HonestTrace.honestWitness, TraceWitness.OpFlags,
+      TraceWitness.LeftLookupOperand, TraceWitness.LeftInstructionInput, inBounds]
 
 end JoltConstraints

@@ -197,17 +197,17 @@ def hasCombinedLookupOperands (instruction : JoltISA.Instr) : Bool :=
   opcodeFlag instruction .AddOperands || opcodeFlag instruction .SubtractOperands ||
     opcodeFlag instruction .MultiplyOperands || opcodeFlag instruction .Advice
 
--- Rust: crates/jolt-riscv/src/lib.rs::jolt_instruction (row-dependent circuit flags).
--- TODO: Bit confusing why we have done it twice
--- This maps JoltProgramRow instead of JoltInstruction like the rest of the project (not sure if needed yet)
-def circuitFlag (row : JoltProgramRow) (flag : CircuitFlags) : Bool :=
+-- A bytecode row's circuit flags: the row-dependent ones come from its sequence
+-- stamp, the rest from its instruction (opcodeFlag).
+-- Rust: jolt/crates/jolt-riscv/src/lib.rs:399-421 (circuit_flags), checked 2026-10-07
+def circuitFlag (row : JoltInstructionRow) (flag : CircuitFlags) : Bool :=
   match flag with
-  | .VirtualInstruction => row.virtualSequenceRemaining.isSome
-  | .IsLastInSequence => row.virtualSequenceRemaining == some 0
-  | .DoNotUpdateUnexpandedPC => row.virtualSequenceRemaining.getD 0 != 0
-  | .IsCompressed => row.isCompressed
-  | .IsFirstInSequence => row.isFirstInSequence
-  | _ => opcodeFlag row.expandedInstruction flag
+  | .VirtualInstruction => row.virtual_sequence_remaining.isSome
+  | .IsLastInSequence => row.virtual_sequence_remaining == some 0
+  | .DoNotUpdateUnexpandedPC => row.virtual_sequence_remaining.getD 0 != 0
+  | .IsCompressed => row.is_compressed
+  | .IsFirstInSequence => row.is_first_in_sequence
+  | _ => opcodeFlag row.instruction flag
 
 theorem opcodeFlag_load_requiresLD (instruction : JoltISA.Instr)
     (h : opcodeFlag instruction .Load = true) :

@@ -156,7 +156,7 @@ device I/O.
 structure NotReadableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Prop where
   -- Rust: [device/RAM split](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/mmu.rs:523).
   -- Excluding Sail's devices alone does not exclude Jolt's device address region.
-  ram : JoltISA.ramStartAddress ≤ addr.toNat
+  ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_readable (physaddr.Physaddr addr) width s = .ok false s
 
 /-- Every explicit sub-load inside a memory window avoids readable MMIO. -/
@@ -176,7 +176,7 @@ device I/O.
 -/
 structure NotWritableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Prop where
   -- The ordinary-RAM equivalence proofs exclude both Jolt and Sail devices.
-  ram : JoltISA.ramStartAddress ≤ addr.toNat
+  ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_writable (physaddr.Physaddr addr) width s = .ok false s
 
 /-- Every explicit sub-store inside a memory window avoids writable MMIO. -/
@@ -185,6 +185,26 @@ structure NotWritableMmioWindow
   ok :
     ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
       NotWritableMmio (base + BitVec.ofNat 64 offset) accessWidth s
+
+-- ============================================================================
+-- Jolt RAM assumptions
+-- ============================================================================
+
+-- Rust's MMU accepts a 64-bit RAM load at `addr` without panicking: the address
+-- is below heap_end. Sail has no such check, so only the Sail equivalence proofs
+-- assume it; a Jolt trace gets it from the load succeeding.
+-- See : jolt/tracer/src/emulator/mmu.rs:177-182 (assert_effective_address, loads)
+structure JoltRamLoadOk (addr : BitVec 64) (js : SailJoltState) : Prop where
+  below_heap_end : addr.toNat < js.jolt_device.memory_layout.heap_end.toNat
+
+-- Rust's MMU accepts a 64-bit RAM store at `addr` without panicking: the address
+-- is below heap_end and outside the stack canary.
+-- See : jolt/tracer/src/emulator/mmu.rs:160-176 (assert_effective_address, stores)
+structure JoltRamStoreOk (addr : BitVec 64) (js : SailJoltState) : Prop where
+  below_heap_end : addr.toNat < js.jolt_device.memory_layout.heap_end.toNat
+  outside_canary :
+    addr.toNat < js.jolt_device.memory_layout.stack_end.toNat ∨
+      js.jolt_device.memory_layout.stack_end.toNat + JoltISA.STACK_CANARY_SIZE ≤ addr.toNat
 
 -- ============================================================================
 -- System/CSR register assumptions
@@ -346,6 +366,8 @@ export Assumptions (
   NotReadableMmioWindow
   NotWritableMmio
   NotWritableMmioWindow
+  JoltRamLoadOk
+  JoltRamStoreOk
 )
 
 end

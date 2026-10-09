@@ -15,21 +15,21 @@ private theorem rightOperandFlagsExclusive (instruction : JoltISA.Instr) :
 /-- The honest witness satisfies constraint (33). -/
 theorem honestWitness_rightInstructionInputEqSelection
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     rightInstructionInputEqSelection
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases h : t.val < trace.rows.size
   · let instruction :=
-      (getElem program.expandedBytecode
+      (getElem trace.bytecode
         (getElem trace.rows t.val h).rowIndex.val
-        (getElem trace.rows t.val h).rowIndex.isLt).expandedInstruction
+        (getElem trace.rows t.val h).rowIndex.isLt).instruction
     have hex := rightOperandFlagsExclusive instruction
-    dsimp [rightInstructionInputEqSelection, JoltProgram.honestWitness,
-      HonestWitness.RightInstructionInput, HonestWitness.InstructionFlags]
+    dsimp [rightInstructionInputEqSelection, HonestTrace.honestWitness,
+      TraceWitness.RightInstructionInput, TraceWitness.InstructionFlags]
     simp only [dif_pos h]
     by_cases himm : JoltMetadata.instructionFlag instruction .RightOperandIsImm = true
     · have hrs : JoltMetadata.instructionFlag instruction .RightOperandIsRs2Value = false := by
@@ -45,8 +45,8 @@ theorem honestWitness_rightInstructionInputEqSelection
         · cases hrs' : JoltMetadata.instructionFlag instruction .RightOperandIsRs2Value with
           | true => exact False.elim (hrs hrs')
           | false => simp
-  · dsimp [rightInstructionInputEqSelection, JoltProgram.honestWitness,
-      HonestWitness.RightInstructionInput, HonestWitness.InstructionFlags]
+  · dsimp [rightInstructionInputEqSelection, HonestTrace.honestWitness,
+      TraceWitness.RightInstructionInput, TraceWitness.InstructionFlags]
     simp [h]
 
 end JoltConstraints

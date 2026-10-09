@@ -1,20 +1,21 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.trace
+import JoltConstraints.witness_helpers.destination_capture
 import JoltBytecode.JoltISA.Values
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [per-instruction lookup outputs](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions).
 -- Reuse the pure calculations called by execInstr, including when rd = x0
 -- discards the computed value. Jumps output their target, not their link value.
 -- Advice is the exception: Rust explicitly reads the captured post-state rd.
-noncomputable def rowLookupOutput {program : JoltProgram}
-    (row : JoltTraceRow program) : BitVec 64 :=
-  let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-  let instruction := bytecodeRow.expandedInstruction
+noncomputable def rowLookupOutput {bytecode : Array JoltInstructionRow}
+    (row : TraceRow bytecode) : BitVec 64 :=
+  let bytecodeRow := getElem bytecode row.rowIndex.val row.rowIndex.isLt
+  let instruction := bytecodeRow.instruction
   let source := fun src => JoltISA.sourceValue src row.preState
   match instruction with
   | .ADDI _ src imm => BitVec.ofNat 64 (JoltISA.addWide (source src) imm)
@@ -91,8 +92,8 @@ noncomputable def rowLookupOutput {program : JoltProgram}
   | .VirtualMovsign _ src _ => jolt_movsign_value (source src)
   | .VirtualNegateIf _ sign src => jolt_virtual_negate_if_value (source sign) (source src)
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ | .VirtualAdviceLen dst _ _ =>
-      HonestWitness.capturedDestinationValue dst row.postState
-  -- row.executes certifies success, so these enforced assertions hold.
+      TraceWitness.capturedDestinationValue dst row.postState
+  -- For an honest row, successful execution certifies these enforced assertions.
   | .VirtualAssertHalfwordAlignment .. | .VirtualAssertWordAlignment ..
   | .VirtualAssertValidDiv0 .. | .VirtualAssertValidUnsignedRemainder ..
   | .VirtualAssertMulUNoOverflow .. | .VirtualAssertLTE .. => 1
@@ -104,10 +105,10 @@ noncomputable def rowLookupOutput {program : JoltProgram}
 -- Rust: [LookupOutput](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:23).
 -- Cast the unsigned 64-bit result into F. The no-op padding output is zero.
 noncomputable def LookupOutput {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       ((rowLookupOutput (getElem trace.rows t.val inBounds)).toNat : F)
     else 0
 
-end HonestWitness
+end TraceWitness

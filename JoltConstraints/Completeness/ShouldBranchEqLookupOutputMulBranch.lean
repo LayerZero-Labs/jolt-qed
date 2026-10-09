@@ -10,27 +10,27 @@ namespace JoltConstraints
 /-- Completeness target for the honest witness. -/
 theorem honestWitness_shouldBranchEqLookupOutputMulBranch
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     shouldBranchEqLookupOutputMulBranch
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases h : t.val < trace.rows.size
   · let row := getElem trace.rows t.val h
-    let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-    dsimp [shouldBranchEqLookupOutputMulBranch, JoltProgram.honestWitness,
-      HonestWitness.ShouldBranch, HonestWitness.LookupOutput,
-      HonestWitness.InstructionFlags]
+    let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
+    dsimp [shouldBranchEqLookupOutputMulBranch, HonestTrace.honestWitness,
+      TraceWitness.ShouldBranch, TraceWitness.LookupOutput,
+      TraceWitness.InstructionFlags]
     simp only [dif_pos h]
-    cases hi : bytecodeRow.expandedInstruction
+    cases hi : bytecodeRow.instruction
     all_goals simp only [bytecodeRow, row] at hi
     all_goals simp [JoltMetadata.instructionFlag]
     all_goals
-      simp [HonestWitness.rowLookupOutput, hi]
+      simp [TraceWitness.rowLookupOutput, hi]
     all_goals split_ifs <;> simp
-  · simp [JoltProgram.honestWitness, HonestWitness.ShouldBranch,
-      HonestWitness.LookupOutput, HonestWitness.InstructionFlags, h]
+  · simp [HonestTrace.honestWitness, TraceWitness.ShouldBranch,
+      TraceWitness.LookupOutput, TraceWitness.InstructionFlags, h]
 
 end JoltConstraints

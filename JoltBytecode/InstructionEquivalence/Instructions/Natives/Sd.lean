@@ -78,11 +78,22 @@ theorem sdJolt_reduces_to_vmem_write_addr
           (Store Data) false false false js.sail =
         .ok (Ok true) (state_after_dword_store js.sail ea h.rs2_val) := by
       simpa [ea, load_effective_address, Memory.effectiveAddr12] using hwrite
+    have hclear : ∀ x : BitVec 64, x &&& 7 = 0 → x &&& (-8 : BitVec 64) = x := by
+      intro x hx
+      bv_decide
+    have hbase_eq : compute_aligned_dword_base_address h.rs1_val imm = ea := by
+      simpa [compute_aligned_dword_base_address, ea] using hclear ea halign_ea
+    have hjolt : Assumptions.JoltRamStoreOk ea js := by
+      simpa [hbase_eq] using h.jolt_ram_store
     simp only [halign, if_true]
-    rw [JoltISA.writeMemoryWord_ram _ _ hstore_access.write_mmio.ram]
+    simp only [EStateM.bind]
+    rw [JoltISA.Mmu.store_doubleword_eq_sail js ea h.rs2_val h.cur_privilege h.mstatus_mprv
+      (aligned_dword_access_of_align ea halign_ea) hstore_access.store_pmp
+      hstore_access.write_mmio
+      (JoltISA.Mmu.effective_address_ok_of_store hstore_access.write_mmio.ram hjolt)]
     unfold liftSail
     unfold System.systemProjectResult
-    simp only [hwrite_raw, EStateM.bind, EStateM.pure]
+    simp only [hwrite, hwrite_raw, EStateM.pure]
     rw [h_project_final]
   · have hmis :
         access_causes_misaligned_exception

@@ -147,6 +147,7 @@ private theorem amoaddwProgram_core_eq_sail
           ((Sail.BitVec.extractLsb rs2Val 31 0 : BitVec 32) + oldWord)
           h.rs1_read hbytes_base hload_pmp_base hread_mmio_base
           hstore_pmp_base hwrite_mmio_base h_align
+          h.jolt_ram_load h.jolt_ram_store
           (amo_word_add_result_extract_eq addr rs2Val dword oldWord hold)
           (amo_word_add_middle_after_pre_for rd rs2 js rs2Val dword
             (amoWordShiftedOld addr dword)

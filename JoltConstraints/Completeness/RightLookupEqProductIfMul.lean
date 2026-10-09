@@ -30,36 +30,36 @@ private theorem mulWide_mod (left right : BitVec 64) :
 /-- Completeness target for the honest witness. -/
 theorem honestWitness_rightLookupEqProductIfMul
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     rightLookupEqProductIfMul
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases h : t.val < trace.rows.size
   · let row := getElem trace.rows t.val h
-    let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-    by_cases hm : JoltMetadata.opcodeFlag bytecodeRow.expandedInstruction .MultiplyOperands = true
-    · have heq : HonestWitness.RightLookupOperand (F := F) params trace t =
-          HonestWitness.Product (F := F) params trace t := by
-        cases hi : bytecodeRow.expandedInstruction
+    let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
+    by_cases hm : JoltMetadata.opcodeFlag bytecodeRow.instruction .MultiplyOperands = true
+    · have heq : TraceWitness.RightLookupOperand (F := F) params trace t =
+          TraceWitness.Product (F := F) params trace t := by
+        cases hi : bytecodeRow.instruction
         all_goals simp [JoltMetadata.opcodeFlag, hi] at hm
         all_goals simp only [bytecodeRow, row] at hi
         all_goals
-          simp [HonestWitness.RightLookupOperand, HonestWitness.Product,
-            HonestWitness.lookupIndex, HonestWitness.instructionLookupIndex,
-            HonestWitness.LeftInstructionInput, HonestWitness.RightInstructionInput,
-            HonestWitness.Rs1Value, HonestWitness.Rs2Value, HonestWitness.Imm,
+          simp [TraceWitness.RightLookupOperand, TraceWitness.Product,
+            TraceWitness.lookupIndex, TraceWitness.instructionLookupIndex,
+            TraceWitness.LeftInstructionInput, TraceWitness.RightInstructionInput,
+            TraceWitness.Rs1Value, TraceWitness.Rs2Value, TraceWitness.Imm,
             JoltMetadata.hasCombinedLookupOperands, JoltMetadata.opcodeFlag,
             JoltMetadata.instructionFlag, mulWide_mod,
             hi, h]
         all_goals simp [JoltISA.mulWide, JoltMetadata.immediate]
-      simp [JoltProgram.honestWitness,
-        HonestWitness.OpFlags, JoltMetadata.circuitFlag, h, heq]
-    · simp [JoltProgram.honestWitness,
-        HonestWitness.OpFlags, JoltMetadata.circuitFlag, h, hm, bytecodeRow, row]
-  · simp [JoltProgram.honestWitness,
-      HonestWitness.OpFlags, h]
+      simp [HonestTrace.honestWitness,
+        TraceWitness.OpFlags, JoltMetadata.circuitFlag, h, heq]
+    · simp [HonestTrace.honestWitness,
+        TraceWitness.OpFlags, JoltMetadata.circuitFlag, h, hm, bytecodeRow, row]
+  · simp [HonestTrace.honestWitness,
+      TraceWitness.OpFlags, h]
 
 end JoltConstraints

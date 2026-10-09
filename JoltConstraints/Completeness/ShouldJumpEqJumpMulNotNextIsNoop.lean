@@ -12,20 +12,20 @@ Strict padding ensures that the final cycle is a no-op, as in Rust
 `ProverConfig::derive_from_rows`; a final real jump would violate this equation. -/
 theorem honestWitness_shouldJumpEqJumpMulNotNextIsNoop
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     shouldJumpEqJumpMulNotNextIsNoop
-      (JoltProgram.honestWitness (F := F) params trace ramFits tracePadded bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases next : t.val + 1 < params.traceLength
-  · simp [JoltProgram.honestWitness, HonestWitness.ShouldJump,
-      HonestWitness.NextIsNoop, next]
+  · simp [HonestTrace.honestWitness, TraceWitness.ShouldJump,
+      TraceWitness.NextIsNoop, next]
   · have padding : ¬ t.val < trace.rows.size := by
       have rowsLt := tracePadded.2
       omega
-    simp [JoltProgram.honestWitness, HonestWitness.ShouldJump,
-      HonestWitness.NextIsNoop, HonestWitness.OpFlags, next, padding]
+    simp [HonestTrace.honestWitness, TraceWitness.ShouldJump,
+      TraceWitness.NextIsNoop, TraceWitness.OpFlags, next, padding]
 
 end JoltConstraints

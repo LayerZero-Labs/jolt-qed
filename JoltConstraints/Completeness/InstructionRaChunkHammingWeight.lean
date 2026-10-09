@@ -13,16 +13,16 @@ open scoped BigOperators
 /-- The honest witness satisfies constraint (60). -/
 theorem honestWitness_instructionRaChunkHammingWeight
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     instructionRaChunkHammingWeight
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk t
-  dsimp [instructionRaChunkHammingWeight, JoltProgram.honestWitness,
-    HonestWitness.InstructionRaChunk]
-  exact HonestWitness.sum_addressChunkEntry_some params.chunkBits chunk
-    (HonestWitness.lookupIndex trace t.val).toNat
+  dsimp [instructionRaChunkHammingWeight, HonestTrace.honestWitness,
+    TraceWitness.InstructionRaChunk]
+  exact TraceWitness.sum_addressChunkEntry_some params.chunkBits chunk
+    (TraceWitness.lookupIndex trace t.val).toNat
 
 end JoltConstraints

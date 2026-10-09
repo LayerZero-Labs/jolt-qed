@@ -1,6 +1,7 @@
+import Mathlib.Algebra.Field.Defs
 import Mathlib.Data.Nat.GCD.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import JoltConstraints.honest_witness
+import JoltConstraints.witness_helpers
 
 set_option autoImplicit false
 

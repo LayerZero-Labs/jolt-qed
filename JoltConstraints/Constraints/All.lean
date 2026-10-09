@@ -1,3 +1,5 @@
+import Mathlib.Algebra.Field.Defs
+import JoltConstraints.constraint_context
 import JoltConstraints.Constraints.AssertLookupOne
 import JoltConstraints.Constraints.BytecodeRaAtEntryEqOne
 import JoltConstraints.Constraints.BytecodeRaChunkBooleanity
@@ -65,11 +67,12 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-/-- Every modeled constraint holds for one witness and its public context.
-The program, public I/O state, and entry slot are shared by all fields. -/
-structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
-    (program : JoltProgram)
-    (io : JoltIOState)
+/-- The modeled equations over bytecode, initial RAM, public I/O and one witness.
+`AllConstraints` below binds these data to the instance and private inputs. -/
+structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
+    (bytecode : Array JoltInstructionRow)
+    (initialRam : Nat → BitVec 64)
+    (io : JoltDevice)
     (entry : Fin (2 ^ params.logBytecodeK))
     (witness : WitnessType F params) : Prop where
   -- Stage 1: base RV64 relations
@@ -98,7 +101,7 @@ structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
   shouldJumpEqJumpMulNotNextIsNoop : JoltConstraints.shouldJumpEqJumpMulNotNextIsNoop witness
   ramReadValueEqRamRead : JoltConstraints.ramReadValueEqRamRead witness
   ramWriteValueEqRamReadWrite : JoltConstraints.ramWriteValueEqRamReadWrite witness
-  ramAddressEqRamRaf : JoltConstraints.ramAddressEqRamRaf io.layout witness
+  ramAddressEqRamRaf : JoltConstraints.ramAddressEqRamRaf io.memory_layout witness
   ramOutputEqPublicIo : JoltConstraints.ramOutputEqPublicIo io witness
   -- Stage 3: shifts and instruction inputs
   nextUnexpandedPCEqShift : JoltConstraints.nextUnexpandedPCEqShift witness
@@ -112,8 +115,8 @@ structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
   rdWriteValueEqRegistersReadWrite : JoltConstraints.rdWriteValueEqRegistersReadWrite witness
   rs1ValueEqRegistersRead : JoltConstraints.rs1ValueEqRegistersRead witness
   rs2ValueEqRegistersRead : JoltConstraints.rs2ValueEqRegistersRead witness
-  ramValEqInitialPlusPrefixRamInc : JoltConstraints.ramValEqInitialPlusPrefixRamInc program witness
-  ramValFinalEqInitialPlusRamInc : JoltConstraints.ramValFinalEqInitialPlusRamInc program witness
+  ramValEqInitialPlusPrefixRamInc : JoltConstraints.ramValEqInitialPlusPrefixRamInc initialRam witness
+  ramValFinalEqInitialPlusRamInc : JoltConstraints.ramValFinalEqInitialPlusRamInc initialRam witness
   -- Stage 5: instruction lookup and register history
   lookupOutputEqInstructionReadRaf : JoltConstraints.lookupOutputEqInstructionReadRaf witness
   leftLookupOperandEqInstructionRaf : JoltConstraints.leftLookupOperandEqInstructionRaf witness
@@ -121,15 +124,15 @@ structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
   registersValEqPrefixRdInc : JoltConstraints.registersValEqPrefixRdInc witness
   -- Stage 6: bytecode and selector relations
   pcEqBytecodeRead : JoltConstraints.pcEqBytecodeRead witness
-  unexpandedPCEqBytecodeRead : JoltConstraints.unexpandedPCEqBytecodeRead program witness
-  immEqBytecodeRead : JoltConstraints.immEqBytecodeRead program witness
-  opFlagsEqBytecodeRead : JoltConstraints.opFlagsEqBytecodeRead program witness
-  instructionFlagsEqBytecodeRead : JoltConstraints.instructionFlagsEqBytecodeRead program witness
-  rs1RaEqBytecodeRead : JoltConstraints.rs1RaEqBytecodeRead program witness
-  rs2RaEqBytecodeRead : JoltConstraints.rs2RaEqBytecodeRead program witness
-  rdWaEqBytecodeRead : JoltConstraints.rdWaEqBytecodeRead program witness
-  lookupTableFlagEqBytecodeRead : JoltConstraints.lookupTableFlagEqBytecodeRead program witness
-  instructionRafFlagEqBytecodeRead : JoltConstraints.instructionRafFlagEqBytecodeRead program witness
+  unexpandedPCEqBytecodeRead : JoltConstraints.unexpandedPCEqBytecodeRead bytecode witness
+  immEqBytecodeRead : JoltConstraints.immEqBytecodeRead bytecode witness
+  opFlagsEqBytecodeRead : JoltConstraints.opFlagsEqBytecodeRead bytecode witness
+  instructionFlagsEqBytecodeRead : JoltConstraints.instructionFlagsEqBytecodeRead bytecode witness
+  rs1RaEqBytecodeRead : JoltConstraints.rs1RaEqBytecodeRead bytecode witness
+  rs2RaEqBytecodeRead : JoltConstraints.rs2RaEqBytecodeRead bytecode witness
+  rdWaEqBytecodeRead : JoltConstraints.rdWaEqBytecodeRead bytecode witness
+  lookupTableFlagEqBytecodeRead : JoltConstraints.lookupTableFlagEqBytecodeRead bytecode witness
+  instructionRafFlagEqBytecodeRead : JoltConstraints.instructionRafFlagEqBytecodeRead bytecode witness
   bytecodeRaAtEntryEqOne : JoltConstraints.bytecodeRaAtEntryEqOne entry witness
   instructionRaChunkBooleanity : JoltConstraints.instructionRaChunkBooleanity witness
   bytecodeRaChunkBooleanity : JoltConstraints.bytecodeRaChunkBooleanity witness
@@ -141,5 +144,18 @@ structure AllConstraints {F : Type} [Field F] {params : WitnessParams}
   instructionRaChunkHammingWeight : JoltConstraints.instructionRaChunkHammingWeight witness
   bytecodeRaChunkHammingWeight : JoltConstraints.bytecodeRaChunkHammingWeight witness
   ramRaChunkHammingWeight : JoltConstraints.ramRaChunkHammingWeight witness
+
+/-- The relation for a fixed instance and explicit prover inputs. Trusted advice
+is part of the instance; Jolt's verifier holds a commitment to it, and we model
+its contents directly. The execution tape in `privateInputs` is irrelevant to
+this relation; see `AllConstraints.advice_tape_irrelevant`.
+The context is existential only to name preprocessing results: its certificates
+bind every bytecode row, initial RAM word, public I/O value and entry slot to
+these inputs. No execution trace or honest-witness construction is an input. -/
+def AllConstraints {F : Type} [Field F] {params : WitnessParams}
+    (joltInstance : JoltInstance SourceInstruction) (privateInputs : JoltPrivateInputs)
+    (witness : WitnessType F params) : Prop :=
+  ∃ context : ConstraintContext joltInstance privateInputs params,
+    ConstraintEquations context.bytecode context.initialRam context.io context.entry witness
 
 end JoltConstraints

@@ -384,6 +384,14 @@ theorem aligned_addr_no_ovf_of_align (addr : BitVec 64)
 
 /-- Specialisation of the previous lemma to the Jolt inline-sequence base
     address. -/
+-- An 8-aligned address gives every alignment fact the Sail dword lemmas need.
+theorem aligned_dword_access_of_align (addr : BitVec 64) (h : addr &&& 7 = 0) :
+    AlignedDwordAccess addr :=
+  { misalign := access_misaligned_8_aligned_false addr h
+    split := split_misaligned_aligned_8 addr h
+    align := h
+    no_ovf := aligned_addr_no_ovf_of_align addr h }
+
 theorem aligned_dword_addr_no_ovf (val : BitVec 64) (imm : BitVec 12) :
     (aligned_dword_addr val imm).toNat + 7 < 2 ^ 64 :=
   aligned_addr_no_ovf_of_align _ (aligned_dword_addr_aligns val imm)

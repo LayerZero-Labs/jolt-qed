@@ -3,7 +3,7 @@ import JoltConstraints.witness_helpers.destination_capture
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [FormatR register capture](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_r.rs:77).
 -- Extract the captured destination register from the supplied state and encode its
@@ -44,4 +44,4 @@ noncomputable def rdValue {F : Type} [Field F]
   | .VirtualAssertValidUnsignedRemainder _ _ _ | .VirtualAssertMulUNoOverflow _ _ _
   | .VirtualAssertLTE _ _ _ => 0
 
-end HonestWitness
+end TraceWitness

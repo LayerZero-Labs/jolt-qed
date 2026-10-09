@@ -1,7 +1,9 @@
+import JoltConstraints.Completeness.Helpers.InstructionReadSelection
+import JoltConstraints.Completeness.Helpers.LookupEntryProofHelpers
 import JoltConstraints.Constraints.LookupOutputEqInstructionReadRaf
 import JoltConstraints.Constraints.InstructionLookupRa
-import JoltConstraints.Constraints.InstructionReadSelection
-import JoltConstraints.Constraints.LookupEntryProofHelpers
+import JoltConstraints.Completeness.Helpers.InstructionReadSelection
+import JoltConstraints.Completeness.Helpers.LookupEntryProofHelpers
 
 set_option autoImplicit false
 
@@ -26,35 +28,35 @@ reduces to `lookupEntryCorrect_of_lookupTable` (one lemma per lookup table in
 `LookupEntryProofHelpers.lean`); some of those remain `sorry`, see there. -/
 theorem honestWitness_lookupOutputEqInstructionReadRaf
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     lookupOutputEqInstructionReadRaf
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases inBounds : t.val < trace.rows.size
   · -- Execution row: collapse the address sum to the honest index, the table
     -- sum to the flagged table, and apply the per-table entry lemmas.
-    set row := getElem trace.rows t.val inBounds with hrow
+    set row := trace.row t.val inBounds with hrow
     rw [instructionRead_honest params trace ramFits traceFits bytecodeDomain
       (fun a => ∑ table : LookupTableKind,
-        (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).LookupTableFlag
+        (HonestTrace.honestWitness (F := F) params trace).LookupTableFlag
           table t * lookupTableEntry table a) t]
-    have hidx : (⟨(HonestWitness.lookupIndex trace t.val).toNat,
-        (HonestWitness.lookupIndex trace t.val).isLt⟩ : Fin (2 ^ 128)) = rowLookupAddress row := by
-      simp only [HonestWitness.lookupIndex, dif_pos inBounds, rowLookupAddress, rowLookupIndex, hrow]
+    have hidx : (⟨(TraceWitness.lookupIndex trace t.val).toNat,
+        (TraceWitness.lookupIndex trace t.val).isLt⟩ : Fin (2 ^ 128)) = rowLookupAddress row := by
+      simp only [TraceWitness.lookupIndex, dif_pos inBounds, rowLookupAddress, rowLookupIndex, hrow]
       rfl
     rw [hidx]
     have hflag : ∀ table : LookupTableKind,
-        (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).LookupTableFlag
+        (HonestTrace.honestWitness (F := F) params trace).LookupTableFlag
           table t = if JoltMetadata.lookupTable (rowInstruction row) = some table then 1 else 0 := by
       intro table
-      simp only [JoltProgram.honestWitness, HonestWitness.LookupTableFlag, dif_pos inBounds,
+      simp only [HonestTrace.honestWitness, TraceWitness.LookupTableFlag, dif_pos inBounds,
         JoltMetadata.lookupTableFlag, beq_iff_eq, rowInstruction, hrow]
-    have hout : (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain).LookupOutput t
-        = ((HonestWitness.rowLookupOutput row).toNat : F) := by
-      simp only [JoltProgram.honestWitness, HonestWitness.LookupOutput, dif_pos inBounds]
+    have hout : (HonestTrace.honestWitness (F := F) params trace).LookupOutput t
+        = ((TraceWitness.rowLookupOutput row.toTraceRow).toNat : F) := by
+      simp only [HonestTrace.honestWitness, TraceWitness.LookupOutput, dif_pos inBounds]
       rfl
     simp only [hflag, hout, ite_mul, one_mul, zero_mul]
     cases hk : JoltMetadata.lookupTable (rowInstruction row) with
@@ -62,9 +64,10 @@ theorem honestWitness_lookupOutputEqInstructionReadRaf
       simp [rowLookupOutput_eq_zero_of_lookupTable_none row hk]
     | some k =>
       simp only [Option.some.injEq, Finset.sum_ite_eq, Finset.mem_univ, if_true]
-      exact (lookupEntryCorrect_of_lookupTable row k hk).symm
+      exact (lookupEntryCorrect_of_lookupTable row k hk
+        (shiftMaskOk_of_honest trace t.val inBounds)).symm
   · -- Padding has zero output and every table flag is zero.
-    simp [JoltProgram.honestWitness, HonestWitness.LookupOutput,
-      HonestWitness.LookupTableFlag, inBounds]
+    simp [HonestTrace.honestWitness, TraceWitness.LookupOutput,
+      TraceWitness.LookupTableFlag, inBounds]
 
 end JoltConstraints

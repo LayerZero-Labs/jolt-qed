@@ -1,3 +1,5 @@
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Algebra.Field.Defs
 import JoltConstraints.Constraints.InstructionLookupRa
 
 set_option autoImplicit false
@@ -17,7 +19,7 @@ significant bit. The identity RAF instead uses the entire 128-bit address. -/
 noncomputable def lookupAddressRight {F : Type} [Field F] (address : Fin (2 ^ 128)) : F :=
   ∑ bit : Fin 64, if address.val.testBit (2 * bit.val) then (2 : F) ^ bit.val else 0
 
-/-- The low `k` bit pairs of `HonestWitness.interleaveLookupOperands`. -/
+/-- The low `k` bit pairs of `TraceWitness.interleaveLookupOperands`. -/
 private def interleavePrefix (left right : BitVec 64) (k : Nat) : Nat :=
   (List.range k).foldl (fun address bit =>
     address + (if left.getLsbD bit then 2 ^ (2 * bit + 1) else 0) +
@@ -65,7 +67,7 @@ private theorem interleavePrefix_spec (left right : BitVec 64) (k : Nat) :
 
 /-- Bit `j` of an interleaved lookup index: odd positions hold `left`, even positions `right`. -/
 theorem interleaveLookupOperands_testBit (left right : BitVec 64) {j : Nat} (hj : j < 128) :
-    (HonestWitness.interleaveLookupOperands left right).toNat.testBit j =
+    (TraceWitness.interleaveLookupOperands left right).toNat.testBit j =
       if j % 2 = 1 then left.getLsbD (j / 2) else right.getLsbD (j / 2) := by
   have hspec := interleavePrefix_spec left right 64
   change (BitVec.ofNat 128 (interleavePrefix left right 64)).toNat.testBit j = _
@@ -94,7 +96,7 @@ theorem bitVec_toNat_cast_eq_sum {F : Type} [Field F] (x : BitVec 64) :
 /-- Deinterleaving the odd bits of an interleaved index recovers its left operand. -/
 theorem sum_interleave_odd_bits {F : Type} [Field F] (left right : BitVec 64) :
     (∑ bit : Fin 64,
-      if (HonestWitness.interleaveLookupOperands left right).toNat.testBit (2 * bit.val + 1)
+      if (TraceWitness.interleaveLookupOperands left right).toNat.testBit (2 * bit.val + 1)
       then (2 : F) ^ bit.val else 0) = (left.toNat : F) := by
   rw [bitVec_toNat_cast_eq_sum]
   refine Finset.sum_congr rfl fun bit _ => ?_
@@ -106,7 +108,7 @@ theorem sum_interleave_odd_bits {F : Type} [Field F] (left right : BitVec 64) :
 /-- Deinterleaving the even bits of an interleaved index recovers its right operand. -/
 theorem sum_interleave_even_bits {F : Type} [Field F] (left right : BitVec 64) :
     (∑ bit : Fin 64,
-      if (HonestWitness.interleaveLookupOperands left right).toNat.testBit (2 * bit.val)
+      if (TraceWitness.interleaveLookupOperands left right).toNat.testBit (2 * bit.val)
       then (2 : F) ^ bit.val else 0) = (right.toNat : F) := by
   rw [bitVec_toNat_cast_eq_sum]
   refine Finset.sum_congr rfl fun bit _ => ?_

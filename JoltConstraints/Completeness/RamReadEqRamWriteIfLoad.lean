@@ -10,32 +10,32 @@ namespace JoltConstraints
 /-- Completeness target for the honest witness; proof pending. -/
 theorem honestWitness_ramReadEqRamWriteIfLoad
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     ramReadEqRamWriteIfLoad
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change HonestWitness.OpFlags params trace .Load t *
+  change TraceWitness.OpFlags params trace .Load t *
     (HonestWitness.RamReadValue params trace t -
-      HonestWitness.RamWriteValue params trace t) = 0
+      TraceWitness.RamWriteValue params trace t) = 0
   by_cases inBounds : t.val < trace.rows.size
-  · let instruction := (program.expandedBytecode[(trace.rows[t.val]'inBounds).rowIndex]).expandedInstruction
+  · let instruction := (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
     by_cases hLoad : JoltMetadata.opcodeFlag instruction .Load = true
     · obtain ⟨faultClass, dst, base, imm, hInstr⟩ :=
         JoltMetadata.opcodeFlag_load_requiresLD instruction hLoad
       dsimp [instruction] at hLoad hInstr
-      simp [HonestWitness.OpFlags, HonestWitness.RamReadValue,
-        HonestWitness.RamWriteValue, JoltMetadata.circuitFlag,
+      simp [TraceWitness.OpFlags, HonestWitness.RamReadValue,
+        TraceWitness.RamWriteValue, JoltMetadata.circuitFlag,
         inBounds, hInstr]
       all_goals split <;> simp_all [JoltMetadata.opcodeFlag]
       case h_3 =>
         rename_i h
         exact False.elim ((h faultClass dst base imm rfl rfl rfl) rfl)
     · dsimp [instruction] at hLoad
-      simp [HonestWitness.OpFlags, JoltMetadata.circuitFlag, inBounds, hLoad]
-  · simp [HonestWitness.OpFlags, HonestWitness.RamReadValue,
-      HonestWitness.RamWriteValue, inBounds]
+      simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, inBounds, hLoad]
+  · simp [TraceWitness.OpFlags, HonestWitness.RamReadValue,
+      TraceWitness.RamWriteValue, inBounds]
 
 end JoltConstraints

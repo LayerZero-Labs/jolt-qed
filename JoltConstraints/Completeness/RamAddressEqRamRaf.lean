@@ -1,5 +1,6 @@
+import JoltConstraints.Completeness.Helpers.RamReadSelection
 import JoltConstraints.Constraints.RamAddressEqRamRaf
-import JoltConstraints.Constraints.RamReadSelection
+import JoltConstraints.Completeness.Helpers.RamReadSelection
 
 set_option autoImplicit false
 
@@ -11,76 +12,80 @@ open scoped BigOperators
 Alignment is required because Rust remaps byte addresses by integer division by eight. -/
 theorem honestWitness_ramAddressEqRamRaf
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size)
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (validAccesses : ramAccessesValid trace)
-    : ramAddressEqRamRaf program.initialState.io.layout
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+    : ramAddressEqRamRaf trace.initialState.jolt_device.memory_layout
+      (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change HonestWitness.RamAddress (F := F) params trace t =
+  change TraceWitness.RamAddress (F := F) params trace t =
     ∑ address : Fin params.ramSize,
-      ((ramLowestAddress program.initialState.io.layout + 8 * address.val : Nat) : F) *
-        HonestWitness.RamRa params trace ramFits address t
+      ((ramLowestAddress trace.initialState.jolt_device.memory_layout + 8 * address.val : Nat) : F) *
+        TraceWitness.RamRa params trace address t
   have hswap :
       (∑ address : Fin params.ramSize,
-        ((ramLowestAddress program.initialState.io.layout + 8 * address.val : Nat) : F) *
-          HonestWitness.RamRa params trace ramFits address t) =
+        ((ramLowestAddress trace.initialState.jolt_device.memory_layout + 8 * address.val : Nat) : F) *
+          TraceWitness.RamRa params trace address t) =
       ∑ address : Fin params.ramSize,
-        HonestWitness.RamRa params trace ramFits address t *
-          ((ramLowestAddress program.initialState.io.layout + 8 * address.val : Nat) : F) := by
+        TraceWitness.RamRa params trace address t *
+          ((ramLowestAddress trace.initialState.jolt_device.memory_layout + 8 * address.val : Nat) : F) := by
     apply Finset.sum_congr rfl
     intro address _
     ring
   rw [hswap]
-  cases hr : HonestWitness.remappedRamAddress trace t.val with
+  cases hr : TraceWitness.remappedRamAddress trace t.val with
   | none =>
       rw [ramRa_sum_none params trace ramFits t hr]
       by_cases ht : t.val < trace.rows.size
-      · cases ha : HonestWitness.ramAccessAddress
-          (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-            (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
+      · cases ha : TraceWitness.ramAccessAddress
+          (getElem trace.bytecode (getElem trace.rows t.val ht).rowIndex.val
+            (getElem trace.rows t.val ht).rowIndex.isLt).instruction
           (getElem trace.rows t.val ht).preState with
-        | none => simp [HonestWitness.RamAddress, ht, ha]
+        | none => simp [TraceWitness.RamAddress, ht, ha]
         | some raw =>
-            obtain ⟨b, hb⟩ := ramAccess_remapped_some params trace ramFits
-              validAccesses t ht raw ha
-            rw [hr] at hb
-            contradiction
-      · simp [HonestWitness.RamAddress, ht]
+            by_cases zero : raw = 0
+            · -- address 0 is recorded as 0
+              subst zero
+              simp [TraceWitness.RamAddress, ht, ha]
+            · -- any other address has a hot selector
+              obtain ⟨b, hb⟩ := ramAccess_remapped_some params trace ramFits t ht raw ha zero
+              rw [hr] at hb
+              contradiction
+      · simp [TraceWitness.RamAddress, ht]
   | some b =>
       rw [ramRa_sum_some params trace ramFits t b hr]
       by_cases ht : t.val < trace.rows.size
-      · cases ha : HonestWitness.ramAccessAddress
-          (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-            (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
+      · cases ha : TraceWitness.ramAccessAddress
+          (getElem trace.bytecode (getElem trace.rows t.val ht).rowIndex.val
+            (getElem trace.rows t.val ht).rowIndex.isLt).instruction
           (getElem trace.rows t.val ht).preState with
         | none =>
-            simp [HonestWitness.remappedRamAddress, ht, ha] at hr
+            simp [TraceWitness.remappedRamAddress, ht, ha] at hr
         | some raw =>
-            have hremap : HonestWitness.remapRamAddress
-                program.initialState.io.layout raw = some b := by
-              simpa [HonestWitness.remappedRamAddress, ht, ha] using hr
+            have hremap : TraceWitness.remapRamAddress
+                trace.initialState.jolt_device.memory_layout raw = some b := by
+              simpa [TraceWitness.remappedRamAddress, ht, ha] using hr
             have hv := validAccesses ⟨t.val, ht⟩
-            change (match HonestWitness.ramAccessAddress
-              (getElem program.expandedBytecode (getElem trace.rows t.val ht).rowIndex.val
-                (getElem trace.rows t.val ht).rowIndex.isLt).expandedInstruction
+            change (match TraceWitness.ramAccessAddress
+              (getElem trace.bytecode (getElem trace.rows t.val ht).rowIndex.val
+                (getElem trace.rows t.val ht).rowIndex.isLt).instruction
               (getElem trace.rows t.val ht).preState with
               | none => True
-              | some address => address.toNat ≠ 0 ∧
-                  (address.toNat - ramLowestAddress program.initialState.io.layout) % 8 = 0) at hv
+              | some address =>
+                  (address.toNat - ramLowestAddress trace.initialState.jolt_device.memory_layout) % 8 = 0) at hv
             simp only [ha] at hv
-            unfold HonestWitness.remapRamAddress at hremap
+            unfold TraceWitness.remapRamAddress at hremap
             dsimp at hremap
             split_ifs at hremap with hfail
-            have hb : (raw.toNat - ramLowestAddress program.initialState.io.layout) / 8 = b :=
+            have hb : (raw.toNat - ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 = b :=
               Option.some.inj hremap
             have hraw : raw.toNat =
-                ramLowestAddress program.initialState.io.layout + 8 * b := by
+                ramLowestAddress trace.initialState.jolt_device.memory_layout + 8 * b := by
               dsimp [ramLowestAddress] at hb hv hfail ⊢
               omega
-            simp [HonestWitness.RamAddress, ht, ha, hraw]
-      · simp [HonestWitness.remappedRamAddress, ht] at hr
+            simp [TraceWitness.RamAddress, ht, ha, hraw]
+      · simp [TraceWitness.remappedRamAddress, ht] at hr
 
 end JoltConstraints

@@ -13,12 +13,12 @@ TODO: Relate the wrapping 64-bit address calculation to field addition;
 rule out address wraparound in the admissible execution assumptions. -/
 theorem honestWitness_ramAddrEqRs1PlusImmIfLoadStore
     {F : Type} [Field F] (params : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor program.expandedBytecode.size) :
+    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     ramAddrEqRs1PlusImmIfLoadStore
-      (JoltProgram.honestWitness (F := F) params trace ramFits traceFits bytecodeDomain) := by
+      (HonestTrace.honestWitness (F := F) params trace) := by
   sorry
 
 end JoltConstraints

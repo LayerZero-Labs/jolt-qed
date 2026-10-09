@@ -5,7 +5,7 @@ import JoltBytecode.JoltISA.RegisterAccess
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
@@ -13,14 +13,13 @@ variable {F : Type} (p : WitnessParams)
 -- Rust: [capture_pre_execution_state](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_r.rs:77).
 -- Read the first source from the pre-state, even when it is also the destination.
 -- Instructions without this operand and padding positions contribute zero.
-noncomputable def Rs1Value [Field F] {program : JoltProgram}
-    (trace : JoltTrace program) : Fin p.traceLength → F :=
+noncomputable def Rs1Value [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     -- The witness includes padding beyond the actual execution rows.
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       match instruction with
       | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _ | .XORI _ src _
       | .SLTI _ src _ | .SLTIU _ src _ | .JALR _ src _ | .BEQ src _ _ | .BNE src _ _
@@ -53,4 +52,4 @@ noncomputable def Rs1Value [Field F] {program : JoltProgram}
       | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => 0
     else 0
 
-end HonestWitness
+end TraceWitness
