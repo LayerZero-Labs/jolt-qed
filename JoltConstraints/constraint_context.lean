@@ -28,6 +28,7 @@ structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
   traceLengthBound : params.traceLength ≤ joltInstance.max_padded_trace_length.toNat
   bytecodeDomain : params.BytecodeDomainFor bytecode.size
   ramSizeBounds : joltInstance.ram_size_in_bounds params.ramSize = true
+  oneHotFitsSetup : joltInstance.one_hot_fits_setup params.logT params.chunkBits = true
   entryIsRust : ∃ slots, preprocess bytecode = some slots ∧
     get_first_pc slots joltInstance.program.entry_address = some entry.val
 

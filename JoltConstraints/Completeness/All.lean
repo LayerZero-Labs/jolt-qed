@@ -225,6 +225,13 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
       simpa only [trace.witness_params_trace_length config accepted, isPadded] using bounded
     bytecodeDomain := trace.witness_params_bytecode_domain config accepted
     ramSizeBounds := trace.witness_params_ram_bounds config accepted imageNonempty
+    oneHotFitsSetup := by
+      cases hasLayout : joltInstance.memory_layout with
+      | none =>
+        unfold JoltInstance.public_io at publicIo
+        rw [hasLayout] at publicIo
+        contradiction
+      | some layout => exact trace.witness_params_one_hot_fits_setup config accepted layout hasLayout
     entryIsRust := ⟨slots, preprocessed, entryIsRust⟩ }, ?_⟩
   change ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace) io entry
     (trace.honestWitness (F := F) (trace.witness_params config accepted))

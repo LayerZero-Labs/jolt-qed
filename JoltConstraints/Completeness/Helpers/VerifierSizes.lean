@@ -104,4 +104,49 @@ theorem _root_.HonestTrace.witness_params_ram_bounds
     joltInstance.ram_size_in_bounds (trace.witness_params config accepted).ramSize = true := by
   sorry
 
+-- Rounding up to even never decreases.
+private theorem le_round_up_even (vars : Nat) : vars ≤ if vars % 2 = 0 then vars else vars + 1 := by
+  split <;> omega
+
+-- A longer trace never gets a narrower honest chunk width.
+private theorem chunks_mono {logT maxLogT : Nat} (shorter : logT ≤ maxLogT) :
+    logT + VerifierSizes.committedLogKChunk logT ≤
+      maxLogT + VerifierSizes.committedLogKChunk maxLogT := by
+  unfold VerifierSizes.committedLogKChunk
+  split <;> split <;> omega
+
+-- Chunks of the honest width for a trace no longer than the maximum fit the setup
+-- sized for the maximum.
+theorem VerifierSizes.chunks_fit_dorySetupLogN (layout : MemoryLayout) (maxLength logT : Nat)
+    (shorter : logT ≤ Nat.clog 2 maxLength) :
+    logT + VerifierSizes.committedLogKChunk logT ≤ VerifierSizes.dorySetupLogN layout maxLength := by
+  unfold VerifierSizes.dorySetupLogN
+  exact ((chunks_mono shorter).trans (le_max_left _ _)).trans (le_round_up_even _)
+
+-- The honest prover's one-hot chunks fit the verifier's Dory setup: its trace is no
+-- longer than the maximum padded length, and its chunk width is the setup's.
+theorem _root_.HonestTrace.witness_params_one_hot_fits_setup
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.prover_config = some config)
+    (layout : MemoryLayout) (hasLayout : joltInstance.memory_layout = some layout) :
+    joltInstance.one_hot_fits_setup (trace.witness_params config accepted).logT
+      (trace.witness_params config accepted).chunkBits = true := by
+  obtain ⟨isPadded, bounded⟩ := trace.prover_config_trace_length config accepted
+  have fits : 2 ^ (trace.witness_params config accepted).logT ≤
+      joltInstance.max_padded_trace_length.toNat := by
+    have length := trace.witness_params_trace_length config accepted
+    unfold WitnessParams.traceLength at length
+    rw [length, ← isPadded]
+    exact bounded
+  have shorter : (trace.witness_params config accepted).logT ≤
+      Nat.clog 2 joltInstance.max_padded_trace_length.toNat := by
+    have := Nat.clog_mono_right 2 fits
+    rwa [Nat.clog_pow 2 _ (by decide)] at this
+  have chunk : (trace.witness_params config accepted).chunkBits =
+      VerifierSizes.committedLogKChunk (trace.witness_params config accepted).logT := rfl
+  unfold JoltInstance.one_hot_fits_setup
+  rw [hasLayout, chunk, decide_eq_true_eq]
+  exact VerifierSizes.chunks_fit_dorySetupLogN layout _ _ shorter
+
 end JoltConstraints
