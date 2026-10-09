@@ -343,9 +343,12 @@ def HonestTrace.SpoilAssertsPass {joltInstance : JoltInstance SourceInstruction}
     trace.bytecode[row.rowIndex].instruction = .VirtualAssertEQ lhs rhs imm → imm ≠ 0 →
     JoltISA.sourceValue lhs row.preState = JoltISA.sourceValue rhs row.preState
 
--- The run's outputs are the ones the instance claims: the same bytes once trailing
--- zero bytes are dropped, and the same panic flag. The termination word is left out
--- for now (model_review.md).
+-- The instance claims an output, `joltInstance.outputs` (a list of bytes), and a panic
+-- flag, `joltInstance.panic`. The honest tracer's run writes its output and panic flag
+-- into the device in its state. This says the two agree: the bytes in the device after
+-- the last step equal the claimed bytes once trailing zero bytes are dropped from
+-- both, and the device's panic flag equals the claimed one. The termination word is
+-- not compared yet (model_review.md).
 -- See : jolt/crates/jolt-program/src/preprocess/public_io.rs:21-61
 --       jolt/crates/jolt-verifier/src/verifier.rs:436-443
 def HonestTrace.matches_outputs {joltInstance : JoltInstance SourceInstruction}

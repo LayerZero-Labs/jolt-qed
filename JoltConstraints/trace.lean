@@ -13,6 +13,8 @@ def JoltISA.Instr.RuntimeAdvice : JoltISA.Instr → Type
   | .VirtualAdvice .. => BitVec 64
   | _ => Unit
 
+-- The instruction with the recorded value in place of the bytecode's placeholder.
+-- Only VirtualAdvice changes.
 def JoltISA.Instr.withRuntimeAdvice (instruction : JoltISA.Instr)
     (advice : instruction.RuntimeAdvice) : JoltISA.Instr :=
   match instruction with
