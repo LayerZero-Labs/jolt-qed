@@ -81,33 +81,34 @@ theorem with its existing premises. Prove the necessary intermediate lemmas
 and use the actual honest-witness definitions. Check that any helper theorem
 does not merely move the `sorry` or the same unproved obligation elsewhere.
 
-Before declaring a blocker, inspect the proof inputs already carried by
-[`JoltTraceRow`](../JoltConstraints/trace.lean) and
-[`JoltTrace`](../JoltConstraints/trace.lean). For a row `trace.rows[i]`, use:
+Before declaring a blocker, inspect the facts already available about an honest
+trace. A row is a [`TraceRow`](../JoltConstraints/trace.lean); `trace.row i h` gives
+the [`HonestTraceRow`](../JoltConstraints/honest_trace.lean) view with its execution
+certificate. For a row `trace.rows[i]`, use:
 
-| Row field | Available fact |
+| Row fact | Available fact |
 | --- | --- |
-| `rowIndex`, `validProgramRow` | The selected bytecode row and its `Valid` certificate. The separate Rust-generation proof for program validity may still be deferred. |
-| `runtimeAdvice`, `compactImmediateFits` | The per-execution advice payload and signed-immediate bound checked during proof-trace conversion. |
-| `preState`, `postState`, `executes` | Full states and successful `execInstr` execution of the selected final instruction **with its runtime advice**. Start here when a frame or state-transition fact appears missing. |
-| `hostIOPreservesPC` | An explicit HostIO **PC-only** certificate. It does not state anything about `nextPC`. |
-| `storeMemoryPresent`, `loadCaptureMatches` | Store old-word presence and the captured load-value agreement used by proof-trace conversion. |
+| `rowIndex`, `HonestTrace.rowValid` | The selected bytecode row and its `Valid` certificate (`trace_interface.lean`). It rests on the sorried `expand_program_rows_valid` until `expand` is defined. |
+| `runtimeAdvice`, `HonestTrace.advice_from_rust` | The per-execution advice, and the fact that it is the value Rust's tracer patches in. |
+| `preState`, `postState`, `HonestTrace.executes` | Full states and successful `execInstr` execution of the selected final instruction **with its runtime advice**. Start here when a frame or state-transition fact appears missing. |
+| `HonestTraceRow.hostIOPreservesPC` | An explicit HostIO **PC-only** certificate. It does not state anything about `nextPC`. |
+| `HonestTrace.store_word_present` | The old word of a store is present (`memory_presence.lean`). |
 
-For the whole trace, use these fields before introducing any new condition:
+For the whole trace, `HonestTrace` (`honest_trace.lean`) extends `ValidRun`. Use
+these before introducing any new condition:
 
-| Trace field | Available fact |
+| Trace fact | Available fact |
 | --- | --- |
-| `rows`, `assumptionOperands`, `rowAssumptions` | The execution rows and each row's `TraceAssumptions` at `preState`: architectural register readability, `CurPrivilegeMachine`, `MstatusMprvZero`, and the `RamWindowAssumptions` facts for each address in `memoryWindows`. See [`trace.lean`](../JoltConstraints/trace.lean). A new field must hold at every Rust-reachable pre-state, not just be convenient; [TraceNonempty](../JoltConstraints/Tests/TraceNonempty.lean) fails if the bundle stops holding at `init_state`. |
-| `ramAccessAssumed` | Connects `memoryWindows` to an `LD` or `SD` effective RAM address. It does **not** cover arbitrary HostIO byte addresses; the memory-window facts concern 8-byte accesses. |
-| `sequenceLayout` | Source/expansion layout, including the current `addressAdvanceNoWrap` assumption. Check which property is actually needed. |
-| `initialized`, `startsAtEntry`, `startsAtInitial` | Initial-state shape, first bytecode entry, and first row's prepared state. |
-| `noEarlyNextPCChange` | The nextPC frame for a nonfinal expansion row. Its source-to-row justification is separate work. |
-| `linked`, `successor` | Consecutive state preparation and the next row's index or source address after a final row. |
+| `rows`, `HonestTrace.rowAssumptions` | The execution rows and each row's `TraceAssumptions` at `preState`: architectural register readability (`trace_interface.lean`). A new condition must hold at every Rust-reachable pre-state, not just be convenient. |
+| `HonestTrace.noEarlyNextPCChange`, `HonestTrace.registerOperandsCanonical` | Facts about what `expand` emits (`trace_interface.lean`), from the sorried `expand_program_rows_valid`. Check which property is actually needed. |
+| `initialized`, `HonestTrace.startsAtEntry`, `HonestTrace.startsAtInitial` | Initial-state shape, first bytecode entry, and first row's prepared state. |
+| `linked`, `HonestTrace.linkedState`, `HonestTrace.successor` | Consecutive state preparation and the next row's index or source address after a final row. |
+| `stops`, `runs_until_stop`, `nonempty` | Rust's PC-stall stopping rule, and a nonempty run when the entry address is nonzero. |
 
-[`JoltTrace.Terminated`](../JoltConstraints/execution_conditions.lean) is a
-separate theorem premise, not an automatic trace field. When present, it gives
-a nonempty trace, a final source-instruction row, and Rust's repeated-PC
-stopping condition. Do not infer termination for a trace prefix.
+`HonestTrace.Terminated` (`execution_conditions.lean`) packages `stops` for a
+nonempty trace; `HonestTrace.terminated` derives it. Whether the code in memory
+stays the bytecode is not a trace field: it follows from the instance assumption
+`JoltInstance.CodeUnchanged` (`HonestTrace.code_unchanged`).
 
 If a proof stalls, search the `JoltBytecode/` project before writing a new
 assumption or re-proving ISA facts. Useful starting points are
@@ -116,18 +117,14 @@ assumption or re-proving ISA facts. Useful starting points are
 [`Bundles.lean`](../JoltBytecode/Bundles.lean), and the
 [`InstructionEquivalence/ProofSupport`](../JoltBytecode/InstructionEquivalence/ProofSupport/)
 lemmas for registers, translation, and memory. Match every helper's exact
-premises to the trace: for example, the successful byte-load lemmas in
-[`Memory/Read.lean`](../JoltBytecode/InstructionEquivalence/ProofSupport/Memory/Read.lean)
-need byte presence and 1-byte PMP/MMIO facts, which an `LD`/`SD` 8-byte
-memory window does not supply for HostIO pointers.
+premises to the trace.
 
 For reusable frame facts, check
-[`NextPCFrame.lean`](../JoltConstraints/Constraints/NextPCFrame.lean) and
-[`SailByteReadFrame.lean`](../JoltConstraints/Constraints/SailByteReadFrame.lean).
-The latter proves that Sail's successful byte-read pipeline leaves Sail state
-unchanged under the existing machine-mode/MPRV assumptions, including when it
-returns a memory fault. It carries those assumptions across all bytes of a
-live HostIO call and derives the HostIO nextPC frame from `executes`. Constraint
+[`NextPCFrame.lean`](../JoltConstraints/Completeness/Helpers/NextPCFrame.lean) and
+[`HostIOFrame.lean`](../JoltConstraints/Completeness/Helpers/HostIOFrame.lean).
+The latter proves that a HostIO call leaves Sail state unchanged (its byte reads
+go through `JoltISA.Mmu.load`, which changes no state) and derives the HostIO
+nextPC frame from `executes`. Constraint
 (17) is the worked example in
 [`NextUnexpandedPCUpdateOtherwise.lean`](../JoltConstraints/Constraints/NextUnexpandedPCUpdateOtherwise.lean).
 

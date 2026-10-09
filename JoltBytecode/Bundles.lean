@@ -67,7 +67,9 @@ def all_assumptions (js : SailJoltState) (operands : AssumptionOperands) : Prop 
     Assumptions.NotReadableMmio addr 8 js.sail ∧
     Assumptions.NotReadableMmioWindow addr 8 js.sail ∧
     Assumptions.NotWritableMmio addr 8 js.sail ∧
-    Assumptions.NotWritableMmioWindow addr 8 js.sail) ∧
+    Assumptions.NotWritableMmioWindow addr 8 js.sail ∧
+    Assumptions.JoltRamLoadOk addr js ∧
+    Assumptions.JoltRamStoreOk addr js) ∧
   Assumptions.CurPrivilegeMachine js.sail ∧
   Assumptions.MisaUserEnabled js.sail ∧
   Assumptions.MstatusMprvZero js.sail ∧
@@ -268,6 +270,7 @@ structure LoadProgramEqSailAssumptions (imm : BitVec 12) (rs1 : regidx)
         (compute_aligned_dword_base_address rs1_val imm) js.sail where
   cur_privilege : Assumptions.CurPrivilegeMachine js.sail
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
+  jolt_ram : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address rs1_val imm) js
 
 def LoadProgramEqSailAssumptions.linkedCSRs
     {imm : BitVec 12} {rs1 : regidx} {js : SailJoltState}
@@ -291,6 +294,7 @@ structure StoreProgramEqSailAssumptions
         (compute_aligned_dword_base_address rs1_val imm) js.sail where
   rs2_val : BitVec 64
   rs2_read : rX_bits rs2 js.sail = .ok rs2_val js.sail
+  jolt_ram_store : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address rs1_val imm) js
 
 def StoreProgramEqSailAssumptions.linkedCSRs
     {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
@@ -336,6 +340,8 @@ structure AmoDwordProgramEqSailAssumptions
       DwordAtomicWindowAssumptions op rs1_val js.sail where
   cur_privilege : Assumptions.CurPrivilegeMachine js.sail
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
+  jolt_ram_load : Assumptions.JoltRamLoadOk rs1_val js
+  jolt_ram_store : Assumptions.JoltRamStoreOk rs1_val js
 
 def AmoDwordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
@@ -357,6 +363,8 @@ structure AmoWordProgramEqSailAssumptions
       DwordAtomicWindowAssumptions op (amoWordBase rs1_val) js.sail where
   cur_privilege : Assumptions.CurPrivilegeMachine js.sail
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
+  jolt_ram_load : Assumptions.JoltRamLoadOk (amoWordBase rs1_val) js
+  jolt_ram_store : Assumptions.JoltRamStoreOk (amoWordBase rs1_val) js
 
 def AmoWordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}

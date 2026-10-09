@@ -1,0 +1,6 @@
+add(2, 3)
+inputs  (bytes) = [02, 03]
+outputs (bytes) = [05, 00, 00, 00, 00, 00, 00, 00]
+panic           = false
+output (value)  = 5
+proof valid     = true

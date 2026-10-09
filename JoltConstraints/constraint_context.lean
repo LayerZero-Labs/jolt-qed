@@ -1,0 +1,61 @@
+import JoltConstraints.witness_helpers.ram_state
+import JoltConstraints.verifier_sizes
+
+set_option autoImplicit false
+
+namespace JoltConstraints
+
+/-- Data used by the constraint equations, bound to one instance and its private
+inputs, with the verifier's public-input and domain-size checks. This contains
+no execution rows or honesty certificate.
+
+`io` is the verifier's public I/O. Trusted advice is part of the instance; Jolt's
+verifier holds a commitment to it, and we model its contents directly.
+`initialRam` includes this advice and the prover's untrusted advice, so it is
+not claimed to be public. Its encoding comes from `initial_state`; the execution
+tape does not affect this encoding. See `AllConstraints.advice_tape_irrelevant`. -/
+structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
+    (privateInputs : JoltPrivateInputs) (params : WitnessParams) where
+  bytecode : Array JoltInstructionRow
+  initialRam : Nat → BitVec 64
+  io : JoltDevice
+  entry : Fin (2 ^ params.logBytecodeK)
+  expands : expand_program joltInstance.program = some bytecode
+  initialized : ∃ state, joltInstance.initial_state privateInputs = some state ∧
+    initialRam = TraceWitness.initialRamWordFromState state
+  publicIo : joltInstance.public_io = some io
+  validInputs : joltInstance.validate_inputs = true
+  traceLengthBound : params.traceLength ≤ joltInstance.max_padded_trace_length.toNat
+  bytecodeDomain : params.BytecodeDomainFor bytecode.size
+  ramSizeBounds : joltInstance.ram_size_in_bounds params.ramSize = true
+  entryIsRust : ∃ slots, preprocess bytecode = some slots ∧
+    get_first_pc slots joltInstance.program.entry_address = some entry.val
+
+namespace ConstraintContext
+
+variable {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    {params : WitnessParams} (a b : ConstraintContext joltInstance privateInputs params)
+
+-- Choosing a different context cannot change the program or its initial memory.
+theorem bytecode_unique : a.bytecode = b.bytecode :=
+  Option.some.inj (a.expands.symm.trans b.expands)
+
+theorem initialRam_unique : a.initialRam = b.initialRam := by
+  obtain ⟨sa, ha, ra⟩ := a.initialized
+  obtain ⟨sb, hb, rb⟩ := b.initialized
+  have same := Option.some.inj (ha.symm.trans hb)
+  rw [ra, rb, same]
+
+theorem publicIo_unique : a.io = b.io :=
+  Option.some.inj (a.publicIo.symm.trans b.publicIo)
+
+theorem entry_unique : a.entry = b.entry := by
+  obtain ⟨sa, ha, ea⟩ := a.entryIsRust
+  obtain ⟨sb, hb, eb⟩ := b.entryIsRust
+  rw [bytecode_unique a b] at ha
+  have same := Option.some.inj (ha.symm.trans hb)
+  rw [same] at ea
+  exact Fin.ext (Option.some.inj (ea.symm.trans eb))
+
+end ConstraintContext
+end JoltConstraints

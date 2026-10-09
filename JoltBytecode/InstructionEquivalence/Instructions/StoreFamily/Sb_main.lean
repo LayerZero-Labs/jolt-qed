@@ -84,7 +84,13 @@ theorem sbProgramAuto_reduces_to_dword_store (imm : BitVec 12) (rs2 rs1 : regidx
           (compute_aligned_dword_base_address rs1_val imm)
           (sbSplicedDword imm rs1_val rs2_val
             (loaded_dword_at js.sail (compute_aligned_dword_base_address rs1_val imm)
-              hbytes h_base_aligned.no_ovf)))) :
+              hbytes h_base_aligned.no_ovf))))
+    (hstore_pmp :
+      Assumptions.StorePmpOk (compute_aligned_dword_base_address rs1_val imm) 8 js.sail)
+    (hwrite_mmio :
+      Assumptions.NotWritableMmio (compute_aligned_dword_base_address rs1_val imm) 8 js.sail)
+    (hjolt_load : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address rs1_val imm) js)
+    (hjolt_store : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address rs1_val imm) js) :
     ∃ js' : SailJoltState,
       (JoltISA.execProgram (JoltISA.sbProgramAuto rs1 rs2 imm)).run js =
         .ok RETIRE_SUCCESS js' ∧
@@ -109,12 +115,12 @@ theorem sbProgramAuto_reduces_to_dword_store (imm : BitVec 12) (rs2 rs1 : regidx
   let dword_new := sbSplicedDword imm rs1_val rs2_val dword_orig
   let finalSail := state_after_dword_store js.sail base dword_new
   rcases StoreProgramBlocks.setupBlock spliceTail imm rs1 js hpriv hmprv rs1_val hrs1
-      h_base_aligned hbytes hload_pmp hread_mmio with
-    ⟨js_load, hsetup_run, hload_sail, hload_v0, hload_v1, hload_v2⟩
+      h_base_aligned hbytes hload_pmp hread_mmio hjolt_load with
+    ⟨js_load, hsetup_run, hload_sail, hload_v0, hload_v1, hload_v2, hload_dev⟩
   rcases StoreProgramBlocks.fusedByteSpliceBlock writeTail imm rs2 js js_load
       rs1_val rs2_val dword_orig hsetup hload_sail hload_v0 hload_v1
       (by simpa [dword_orig] using hload_v2) hrs2 with
-    ⟨js_splice, hsplice_run, hsplice_sail, hsplice_v1, hsplice_v2⟩
+    ⟨js_splice, hsplice_run, hsplice_sail, hsplice_v1, hsplice_v2, hsplice_dev⟩
   have hdword_new : js_splice.vregs JoltISA.inlineTmp2 = dword_new := by
     simpa [dword_new, sbSplicedDword] using hsplice_v2
   have hwrite_for_sd :
@@ -126,7 +132,11 @@ theorem sbProgramAuto_reduces_to_dword_store (imm : BitVec 12) (rs2 rs1 : regidx
   rcases StoreProgramBlocks.sdWriteBlock (.done RETIRE_SUCCESS)
       js_splice base dword_new finalSail hsplice_v1 hdword_new
       (by simpa [base] using StoreSplice.dword_base_aligns rs1_val imm)
-      hwrite_for_sd hread_mmio.ram with
+      hwrite_for_sd hread_mmio.ram
+      (by rw [hsplice_sail]; exact hpriv) (by rw [hsplice_sail]; exact hmprv)
+      (by rw [hsplice_sail]; exact hstore_pmp) (by rw [hsplice_sail]; exact hwrite_mmio)
+      ⟨by rw [hsplice_dev, hload_dev]; exact hjolt_store.below_heap_end,
+       by rw [hsplice_dev, hload_dev]; exact hjolt_store.outside_canary⟩ with
     ⟨js_write, hsd_run, hsail_write, _hvregs_write⟩
   refine ⟨js_write, ?_, ?_⟩
   · calc
@@ -233,7 +243,13 @@ theorem sbProgramAuto_concrete (imm : BitVec 12) (rs2 rs1 : regidx)
           (compute_aligned_dword_base_address rs1_val imm)
           (sbSplicedDword imm rs1_val rs2_val
             (loaded_dword_at js.sail (compute_aligned_dword_base_address rs1_val imm)
-              hbytes h_base_aligned.no_ovf)))) :
+              hbytes h_base_aligned.no_ovf))))
+    (hstore_pmp :
+      Assumptions.StorePmpOk (compute_aligned_dword_base_address rs1_val imm) 8 js.sail)
+    (hwrite_mmio :
+      Assumptions.NotWritableMmio (compute_aligned_dword_base_address rs1_val imm) 8 js.sail)
+    (hjolt_load : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address rs1_val imm) js)
+    (hjolt_store : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address rs1_val imm) js) :
     ∃ js' : SailJoltState,
       (JoltISA.execProgram (JoltISA.sbProgramAuto rs1 rs2 imm)).run js =
         .ok RETIRE_SUCCESS js' ∧
@@ -242,7 +258,8 @@ theorem sbProgramAuto_concrete (imm : BitVec 12) (rs2 rs1 : regidx)
           (load_effective_address rs1_val imm)
           (Sail.BitVec.extractLsb rs2_val 7 0) := by
   rcases sbProgramAuto_reduces_to_dword_store imm rs2 rs1 js hpriv hmprv rs1_val rs2_val
-      hrs1 hrs2 hsetup h_base_aligned hbytes hload_pmp hread_mmio hwrite_dword with
+      hrs1 hrs2 hsetup h_base_aligned hbytes hload_pmp hread_mmio hwrite_dword
+      hstore_pmp hwrite_mmio hjolt_load hjolt_store with
     ⟨js', hjolt, hjolt_sail⟩
   refine ⟨js', hjolt, ?_⟩
   rw [hjolt_sail]
@@ -363,7 +380,10 @@ theorem sbProgram_eq_sail (imm : BitVec 12) (rs2 rs1 : regidx)
       (by simpa [base] using hwin.bytes)
       (by simpa [base] using hwin.load_pmp)
       (by simpa [base] using hwin.read_mmio)
-      (by simpa [base, dword_orig, dword_new] using hwrite_dword) with
+      (by simpa [base, dword_orig, dword_new] using hwrite_dword)
+        (by simpa [base] using hwin.store_pmp)
+        (by simpa [base] using hwin.write_mmio)
+        h.jolt_ram h.jolt_ram_store with
     ⟨js', hjolt, hjolt_sail⟩
   have hsail := execute_SB_reduces imm rs2 rs1 js h.rs1_val h.rs2_val
     h.rs1_read h.rs2_read hwrite_byte

@@ -1,9 +1,10 @@
 import JoltConstraints.trace
+import JoltConstraints.witness_helpers.destination_capture
 import JoltBytecode.JoltISA.semantic_helpers
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [interleave_bits](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/interleave.rs:17).
 -- Counting from the least significant bit, left occupies odd positions and
@@ -80,18 +81,17 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
       (BitVec.ofNat 64 imm).setWidth 128
   | .VirtualMovsign _ src imm => interleaveLookupOperands (source src) imm
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ | .VirtualAdviceLen dst _ _ =>
-      (capturedDestinationValue instruction dst postState).setWidth 128
+      (capturedDestinationValue dst postState).setWidth 128
   | .FENCE | .LD _ _ _ _ | .SD _ _ _ | .VirtualHostIO _ _ _ => 0
 
 -- Rust: [LookupIndex](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:45).
 -- Both committed and virtual instruction address chunks use this same index.
 -- Padding is the no-op lookup at address 0.
-noncomputable def lookupIndex {program : JoltProgram}
-    (trace : JoltTrace program) (t : Nat) : BitVec 128 :=
+noncomputable def lookupIndex (trace : Trace) (t : Nat) : BitVec 128 :=
   if inBounds : t < trace.rows.size then
     let row := getElem trace.rows t inBounds
-    let bytecodeRow := getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt
-    instructionLookupIndex bytecodeRow.expandedInstruction bytecodeRow.address row.preState row.postState
+    let bytecodeRow := getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt
+    instructionLookupIndex bytecodeRow.instruction bytecodeRow.address row.preState row.postState
   else 0
 
-end HonestWitness
+end TraceWitness

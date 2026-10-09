@@ -1,6 +1,7 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Alignment
 import Mathlib.Tactic.IntervalCases
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.SD
 
 set_option linter.unusedVariables false
 set_option linter.unusedSimpArgs false
@@ -237,6 +238,83 @@ theorem vmem_write_addr_dword_store_reduces
       (mem_write_ea_plain_dword_ok addr s)
       (mem_write_value_dword_eq_state_after_dword_store
         addr data s hpriv hmprv hpmp hmmio)
+
+-- Jolt's direct 64-bit RAM write is Sail's canonical dword store.
+theorem JoltISA.Mmu.write_ram_doubleword_eq (s : SailState) (addr value : BitVec 64) :
+    { s with mem := JoltISA.Mmu.write_ram_doubleword s.mem addr.toNat value } =
+      state_after_dword_store s addr value := by
+  have hrange : List.range 8 = [0, 1, 2, 3, 4, 5, 6, 7] := rfl
+  simp [JoltISA.Mmu.write_ram_doubleword, state_after_dword_store, dword_byte, hrange]
+
+-- Under the Sail assumptions, Jolt's 64-bit RAM write (JoltISA.Mmu) is Sail's.
+theorem JoltISA.Mmu.store_doubleword_eq_sail (js : SailJoltState) (addr value : BitVec 64)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hda : AlignedDwordAccess addr)
+    (hpmp : Assumptions.StorePmpOk addr 8 js.sail)
+    (hmmio : Assumptions.NotWritableMmio addr 8 js.sail)
+    (hlegal : JoltISA.Mmu.effective_address_ok js.jolt_device addr.toNat true = true) :
+    JoltISA.Mmu.store_doubleword addr value js =
+      liftSail (vmem_write_addr (Virtaddr addr) 8 value (Store Data) false false false) js := by
+  rw [JoltISA.Mmu.store_doubleword_ram js addr value hda.align hmmio.ram hlegal]
+  unfold liftSail
+  rw [vmem_write_addr_dword_store_reduces addr value js.sail hpriv hmprv hda.toAlignedAccess
+    hpmp hmmio, ← JoltISA.Mmu.write_ram_doubleword_eq]
+
+namespace JoltISA
+
+-- SD stated through Sail's write: under the Sail assumptions and Rust's checks,
+-- Sail's write produces exactly the state Jolt's SD produces.
+theorem execInstr_sd_vreg_run_of_write (base value : VReg) (imm : BitVec 12)
+    (js : SailJoltState) (s' : SailState)
+    (h_align :
+      (js.vregs base + sign_extend (m := 64) imm) &&& (7 : BitVec 64) = 0)
+    (h :
+      vmem_write_addr (Virtaddr (js.vregs base + sign_extend (m := 64) imm)) 8
+        (js.vregs value) (Store Data) false false false js.sail =
+        .ok (Ok true) s')
+    (h_ram : RAM_START_ADDRESS ≤ (js.vregs base + sign_extend (m := 64) imm).toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hpmp : Assumptions.StorePmpOk (js.vregs base + sign_extend (m := 64) imm) 8 js.sail)
+    (hmmio : Assumptions.NotWritableMmio (js.vregs base + sign_extend (m := 64) imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamStoreOk (js.vregs base + sign_extend (m := 64) imm) js) :
+    (execInstr (JoltISA.Encoded.SD (.vreg base) (.vreg value) imm)).run js =
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
+  have hda := aligned_dword_access_of_align _ h_align
+  rw [vmem_write_addr_dword_store_reduces _ _ js.sail hpriv hmprv hda.toAlignedAccess hpmp hmmio] at h
+  cases h
+  rw [execInstr_sd_vreg_run base value imm js h_align h_ram
+    (Mmu.effective_address_ok_of_store h_ram hjolt), Mmu.write_ram_doubleword_eq]
+
+-- The same, from architectural-register base and value sources.
+theorem execInstr_sd_xreg_xreg_run_of_write
+    (base value : regidx) (imm : BitVec 12)
+    (js : SailJoltState) (baseValue stored : BitVec 64) (s' : SailState)
+    (hbase : rX_bits base js.sail = .ok baseValue js.sail)
+    (hvalue : rX_bits value js.sail = .ok stored js.sail)
+    (h_align :
+      (baseValue + sign_extend (m := 64) imm) &&& (7 : BitVec 64) = 0)
+    (hwrite :
+      vmem_write_addr (Virtaddr (baseValue + sign_extend (m := 64) imm)) 8
+        stored (Store Data) false false false js.sail =
+        .ok (Ok true) s')
+    (h_ram : RAM_START_ADDRESS ≤ (baseValue + sign_extend (m := 64) imm).toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hpmp : Assumptions.StorePmpOk (baseValue + sign_extend (m := 64) imm) 8 js.sail)
+    (hmmio : Assumptions.NotWritableMmio (baseValue + sign_extend (m := 64) imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamStoreOk (baseValue + sign_extend (m := 64) imm) js) :
+    (execInstr (JoltISA.Encoded.SD (.xreg base) (.xreg value) imm)).run js =
+      .ok RETIRE_SUCCESS { js with sail := s' } := by
+  have hda := aligned_dword_access_of_align _ h_align
+  rw [vmem_write_addr_dword_store_reduces _ _ js.sail hpriv hmprv hda.toAlignedAccess hpmp hmmio]
+    at hwrite
+  cases hwrite
+  rw [execInstr_sd_xreg_xreg_run base value imm js baseValue stored hbase hvalue h_align h_ram
+    (Mmu.effective_address_ok_of_store h_ram hjolt), Mmu.write_ram_doubleword_eq]
+
+end JoltISA
 
 -- Inputs: k (a natural number)
 -- Assumptions: k < 8

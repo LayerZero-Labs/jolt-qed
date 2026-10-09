@@ -37,7 +37,7 @@ theorem luiInstr_eq_sail
     intro hx0
     have hrd := JoltISA.eq_regidx_zero_of_isX0_eq_true hx0
     subst rd
-    simp only [JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
+    simp only [JoltISA.execInstr, JoltISA.writeDst, liftSail,
       EStateM.run, bind, EStateM.bind, pure, EStateM.pure,
       wX_bits_regidx_zero])]
   -- RHS

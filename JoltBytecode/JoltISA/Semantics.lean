@@ -428,7 +428,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let baseValue ← readSrc base
       let addr := (baseValue + imm)
       if addr &&& (7 : BitVec 64) = 0 then
-        match ← readMemoryWord addr with
+        match ← Mmu.load_doubleword addr with
         | .Ok dword =>
             writeDst dst dword
             pure RETIRE_SUCCESS
@@ -441,7 +441,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let addr := (baseValue + imm)
       let stored ← readSrc value
       if addr &&& (7 : BitVec 64) = 0 then
-        match ← writeMemoryWord addr stored with
+        match ← Mmu.store_doubleword addr stored with
         | .Ok _ => pure RETIRE_SUCCESS
         | .Err e => pure e
       else

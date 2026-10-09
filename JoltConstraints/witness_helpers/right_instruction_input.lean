@@ -4,7 +4,7 @@ import JoltConstraints.witness_helpers.imm
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [RightInstructionInput](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:96).
 -- Use the same normalized immediate as Imm when the instruction's flag selects
@@ -13,12 +13,12 @@ namespace HonestWitness
 -- I/U/J and alignment immediates are unsigned 64-bit values widened to i128.
 -- Padding contributes zero.
 noncomputable def RightInstructionInput {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) : Fin p.traceLength → F :=
+    (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then
       let row := getElem trace.rows t.val inBounds
       let instruction :=
-        (getElem program.expandedBytecode row.rowIndex.val row.rowIndex.isLt).expandedInstruction
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       if JoltMetadata.instructionFlag instruction .RightOperandIsImm then
         Imm p trace t
       else if JoltMetadata.instructionFlag instruction .RightOperandIsRs2Value then
@@ -26,4 +26,4 @@ noncomputable def RightInstructionInput {F : Type} [Field F] (p : WitnessParams)
       else 0
     else 0
 
-end HonestWitness
+end TraceWitness

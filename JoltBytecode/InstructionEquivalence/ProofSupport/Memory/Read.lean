@@ -458,6 +458,86 @@ theorem vmem_read_addr_dword_reduces (addr : BitVec 64) (s : SailState)
     (loaded_dword_at s addr hbytes hda.no_ovf)
     (mem_read_eq_loaded_dword addr s hpriv hmprv hda.no_ovf hbytes hpmp hmmio)
 
+-- Under the Sail assumptions, Jolt's 64-bit RAM read (JoltISA.Mmu) is Sail's.
+theorem JoltISA.Mmu.load_doubleword_eq_sail (js : SailJoltState) (addr : BitVec 64)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hda : AlignedDwordAccess addr)
+    (hbytes : MemBytesPresentAt js.sail addr 8)
+    (hpmp : Assumptions.LoadPmpOk addr 8 js.sail)
+    (hmmio : Assumptions.NotReadableMmio addr 8 js.sail)
+    (hlegal : JoltISA.Mmu.effective_address_ok js.jolt_device addr.toNat false = true) :
+    JoltISA.Mmu.load_doubleword addr js =
+      liftSail (vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false) js := by
+  rw [JoltISA.Mmu.load_doubleword_ram js addr hda.align hmmio.ram hlegal]
+  unfold liftSail
+  rw [vmem_read_addr_dword_reduces addr js.sail hpriv hmprv hda hbytes hpmp hmmio,
+    JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail addr hbytes hda.no_ovf]
+
+namespace JoltISA
+
+-- LD stated through Sail's read: under the Sail assumptions and Rust's checks,
+-- Sail's read returns exactly the 64 bits Jolt's LD reads.
+theorem ld_run_vreg_vreg_from_memory_read {faultClass : LoadFaultClass}
+    (vd base : VReg) (imm : BitVec 12)
+    (js : SailJoltState) (value : BitVec 64)
+    (h_align :
+      (js.vregs base + sign_extend (m := 64) imm) &&& (7 : BitVec 64) = 0)
+    (h :
+      vmem_read_addr (Virtaddr (js.vregs base + sign_extend (m := 64) imm)) 0 8
+        (Load Data) false false false js.sail =
+        .ok (Ok value) js.sail)
+    (hvd : WritableVReg vd)
+    (h_ram : RAM_START_ADDRESS ≤ (js.vregs base + sign_extend (m := 64) imm).toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hbytes : MemBytesPresentAt js.sail (js.vregs base + sign_extend (m := 64) imm) 8)
+    (hpmp : Assumptions.LoadPmpOk (js.vregs base + sign_extend (m := 64) imm) 8 js.sail)
+    (hmmio : Assumptions.NotReadableMmio (js.vregs base + sign_extend (m := 64) imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk (js.vregs base + sign_extend (m := 64) imm) js) :
+    (execInstr (JoltISA.Encoded.LD faultClass (.vreg vd) (.vreg base) imm)).run js =
+      .ok RETIRE_SUCCESS
+        { js with
+          vregs := fun r => if r = vd then value else js.vregs r } := by
+  have hda := aligned_dword_access_of_align _ h_align
+  rw [vmem_read_addr_dword_reduces _ js.sail hpriv hmprv hda hbytes hpmp hmmio] at h
+  rw [← JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail _ hbytes hda.no_ovf] at h
+  cases h
+  exact ld_run_vreg_vreg vd base imm js h_align hvd h_ram
+    (Mmu.effective_address_ok_of_load h_ram hjolt)
+
+-- The same, from an architectural-register base.
+theorem ld_run_vreg_xreg_from_memory_read {faultClass : LoadFaultClass}
+    (vd : VReg) (base : regidx)
+    (imm : BitVec 12) (js : SailJoltState) (baseValue value : BitVec 64)
+    (hbase : rX_bits base js.sail = .ok baseValue js.sail)
+    (h_align :
+      (baseValue + sign_extend (m := 64) imm) &&& (7 : BitVec 64) = 0)
+    (hread :
+      vmem_read_addr (Virtaddr (baseValue + sign_extend (m := 64) imm)) 0 8
+        (Load Data) false false false js.sail =
+        .ok (Ok value) js.sail)
+    (hvd : WritableVReg vd)
+    (h_ram : RAM_START_ADDRESS ≤ (baseValue + sign_extend (m := 64) imm).toNat)
+    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hbytes : MemBytesPresentAt js.sail (baseValue + sign_extend (m := 64) imm) 8)
+    (hpmp : Assumptions.LoadPmpOk (baseValue + sign_extend (m := 64) imm) 8 js.sail)
+    (hmmio : Assumptions.NotReadableMmio (baseValue + sign_extend (m := 64) imm) 8 js.sail)
+    (hjolt : Assumptions.JoltRamLoadOk (baseValue + sign_extend (m := 64) imm) js) :
+    (execInstr (JoltISA.Encoded.LD faultClass (.vreg vd) (.xreg base) imm)).run js =
+      .ok RETIRE_SUCCESS
+        { js with
+          vregs := fun r => if r = vd then value else js.vregs r } := by
+  have hda := aligned_dword_access_of_align _ h_align
+  rw [vmem_read_addr_dword_reduces _ js.sail hpriv hmprv hda hbytes hpmp hmmio] at hread
+  rw [← JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail _ hbytes hda.no_ovf] at hread
+  cases hread
+  exact ld_run_vreg_xreg vd base imm js baseValue hbase h_align hvd h_ram
+    (Mmu.effective_address_ok_of_load h_ram hjolt)
+
+end JoltISA
+
 theorem vmem_read_word_reduces (imm : BitVec 12) (rs1 : regidx)
     (s : SailState)
     (hpriv : Assumptions.CurPrivilegeMachine s)
@@ -527,30 +607,19 @@ theorem vreg_LD_run_of_aligned_dword_phys
     (hbytes : MemBytesPresentAt js.sail addr 8)
     (hpmp : Assumptions.LoadPmpOk addr 8 js.sail)
     (hmmio : Assumptions.NotReadableMmio addr 8 js.sail)
-    (hvd : WritableVReg vd) :
+    (hvd : WritableVReg vd)
+    (hjolt : Assumptions.JoltRamLoadOk addr js) :
     (JoltISA.execInstr (JoltISA.Encoded.LD faultClass (.vreg vd) (.vreg vs1) 0)).run js = .ok RETIRE_SUCCESS
       { js with
         vregs := fun r =>
           if r = vd then loaded_dword_at js.sail addr hbytes haligned.no_ovf else js.vregs r } := by
-  have hread :
-      vmem_read_addr (Virtaddr (js.vregs vs1 + sign_extend (m := 64) (0 : BitVec 12))) 0 8
-        (Load Data) false false false js.sail =
-      .ok (Ok (loaded_dword_at js.sail addr hbytes haligned.no_ovf)) js.sail := by
+  have haddr : js.vregs vs1 + sign_extend (m := 64) (0 : BitVec 12) = addr := by
     have h0 : sign_extend (m := 64) (0 : BitVec 12) = (0 : BitVec 64) := by decide
     rw [hvs1, h0]
-    have haddr : addr + (0 : BitVec 64) = addr := by simp
-    rw [haddr]
-    exact aligned_dword_vmem_read_reduces addr js.sail hpriv hmprv haligned hbytes hpmp hmmio
-  have halign :
-      (js.vregs vs1 + sign_extend (m := 64) (0 : BitVec 12)) &&& (7 : BitVec 64) = 0 := by
-    have h0 : sign_extend (m := 64) (0 : BitVec 12) = (0 : BitVec 64) := by decide
-    rw [hvs1, h0]
-    have haddr : addr + (0 : BitVec 64) = addr := by simp
-    rw [haddr]
-    exact haligned.align
-  exact
-    JoltISA.ld_run_vreg_vreg_from_memory_read
-      vd vs1 0 js (loaded_dword_at js.sail addr hbytes haligned.no_ovf) halign hread hvd
-      (by simpa [hvs1, sign_extend, Sail.BitVec.signExtend] using hmmio.ram)
+    simp
+  have hrun := JoltISA.ld_run_vreg_vreg (faultClass := faultClass) vd vs1 0 js
+    (by rw [haddr]; exact haligned.align) hvd (by rw [haddr]; exact hmmio.ram)
+    (by rw [haddr]; exact JoltISA.Mmu.effective_address_ok_of_load hmmio.ram hjolt)
+  rw [hrun, haddr, JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail addr hbytes haligned.no_ovf]
 
 end

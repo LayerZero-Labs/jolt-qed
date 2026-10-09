@@ -114,6 +114,7 @@ theorem lb_ld_run
   · exact h.dwordWindowFacts.load_pmp
   · exact h.dwordWindowFacts.read_mmio
   · exact hWritable
+  · exact ⟨h.jolt_ram.below_heap_end⟩
 
 /-- The third LB instruction writes the byte-window mask to its chosen scratch
 virtual register. -/
@@ -203,7 +204,7 @@ theorem lbProgramAuto_preserves_projected_vregs
     split <;>
       simp only [JoltISA.ProgramWritesNoProtectedVReg,
         JoltISA.InstrWritesNoProtectedVReg, JoltISA.DstWritesNoProtectedVReg,
-        JoltISA.sideEffectingDst, and_true] <;>
+        and_true] <;>
       norm_num [JoltISA.IsProtectedJoltRegister, JoltISA.joltRegisterSlot,
         JoltISA.JoltRegisterSlot.isProtected]
   exact Projection.execProgram_preserves_projected_vregs_of_no_protected_writes

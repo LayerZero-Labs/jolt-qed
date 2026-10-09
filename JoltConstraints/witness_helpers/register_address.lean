@@ -2,7 +2,7 @@ import JoltBytecode.JoltISA.Instruction
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [register domain](/Users/ari.biswas/Work-with-A16z/jolt/common/src/constants.rs).
 -- Architectural and virtual operands use the same 128-address witness domain.
@@ -15,4 +15,4 @@ def destinationRegisterAddress : JoltISA.Dst → Fin 128
   | .vreg r => r.toFin
   | .xreg (.Regidx r) => (r.setWidth 7).toFin
 
-end HonestWitness
+end TraceWitness

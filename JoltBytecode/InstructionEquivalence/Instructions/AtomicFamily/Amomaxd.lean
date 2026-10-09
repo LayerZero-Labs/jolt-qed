@@ -93,7 +93,7 @@ private theorem amomaxdProgram_core_eq_sail
             (amo_dword_aligned_no_ovf addr h_align))
         h.rs1_read h.rs2_read h.rdReadable.exists_value
         hbytes hload_pmp hstore_pmp hatomic_pmp hread_mmio hwrite_mmio
-        h_align (by decide) h.linkedCSRs
+        h_align h.jolt_ram_load h.jolt_ram_store (by decide) h.linkedCSRs
         (amomaxdProgramCore_doesNotWriteProtectedVRegs rs2 rs1 rd)
         (amo_dword_max_middle_after_load_for rd rs2 js addr rs2Val
           (loaded_dword_at js.sail addr hbytes

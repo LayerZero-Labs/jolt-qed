@@ -5,6 +5,7 @@ Authors: Ari
 -/
 
 import LeanRV64D
+import JoltBytecode.JoltISA.JoltDevice
 
 /-!
 # Jolt ISA core state
@@ -31,23 +32,6 @@ noncomputable section
 
 abbrev SailState := SequentialState RegisterType trivialChoiceSource
 
-structure JoltIOLayout where
-  -- Address ranges are [start, end).
-  input : BitVec 64 × BitVec 64
-  trustedAdvice : BitVec 64 × BitVec 64
-  untrustedAdvice : BitVec 64 × BitVec 64
-  output : BitVec 64 × BitVec 64
-  panic : BitVec 64 × BitVec 64
-  termination : BitVec 64 × BitVec 64
-
-structure JoltIOState where
-  layout : JoltIOLayout
-  inputs : Array (BitVec 8)
-  trustedAdvice : Array (BitVec 8)
-  untrustedAdvice : Array (BitVec 8)
-  outputs : Array (BitVec 8)
-  panic : Bool
-
 structure JoltAdviceTape where
   bytes : Array (BitVec 8)
   readPosition : Nat
@@ -67,7 +51,8 @@ structure JoltHostIOConfig where
 structure SailJoltState where
   sail : SailState
   vregs : BitVec 7 → BitVec 64 := fun _ => 0
-  io : JoltIOState
+  -- Rust: jolt/tracer/src/emulator/mmu.rs:25 (Mmu.jolt_device)
+  jolt_device : JoltDevice
   adviceTape : JoltAdviceTape
   hostIO : JoltHostIOConfig := {}
 

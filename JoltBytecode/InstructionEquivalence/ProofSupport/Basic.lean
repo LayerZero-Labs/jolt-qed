@@ -52,7 +52,7 @@ def DstWritesNoProtectedVReg : Dst → Prop
 private theorem inlineTmp_le6_not_protected (n : Nat) (h : n ≤ 6) :
     ¬ IsProtectedJoltRegister (inlineTmp n) := by
   interval_cases n
-  · simpa [inlineTmp0] using inlineTmp0_not_protected
+  · simp
   · simpa [inlineTmp1] using inlineTmp1_not_protected
   · simpa [inlineTmp2] using inlineTmp2_not_protected
   · simpa [inlineTmp3] using inlineTmp3_not_protected
@@ -301,25 +301,65 @@ private theorem liftSail_preserves_vregs
       rw [hm] at hrun
       cases hrun
 
-private theorem readMemoryWord_preserves_vregs
+private theorem load_doubleword_preserves_state
     {address : BitVec 64} {js js' : SailJoltState}
     {value : Result (BitVec 64) ExecutionResult}
-    (hrun : (readMemoryWord address).run js = .ok value js') :
-    js'.vregs = js.vregs := by
-  simp only [EStateM.run, readMemoryWord] at hrun
-  split at hrun
-  · split at hrun <;> cases hrun <;> rfl
-  · exact liftSail_preserves_vregs hrun
+    (hrun : (Mmu.load_doubleword address).run js = .ok value js') :
+    js' = js := by
+  simp only [EStateM.run, Mmu.load_doubleword] at hrun
+  repeat' split at hrun
+  all_goals first | (cases hrun; rfl) | cases hrun
 
-private theorem writeMemoryWord_preserves_vregs
+private theorem load_doubleword_preserves_vregs
+    {address : BitVec 64} {js js' : SailJoltState}
+    {value : Result (BitVec 64) ExecutionResult}
+    (hrun : (Mmu.load_doubleword address).run js = .ok value js') :
+    js'.vregs = js.vregs := by
+  rw [load_doubleword_preserves_state hrun]
+
+private theorem store_raw_preserves_vregs {s s' : SailJoltState} {ea : Nat} {v : BitVec 8}
+    (h : Mmu.store_raw? s ea v = some s') : s'.vregs = s.vregs := by
+  simp only [Mmu.store_raw?] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; rfl)
+    | cases h
+    | (cases hst : s.jolt_device.store? ea v <;> simp [hst] at h; cases h; rfl)
+
+private theorem store_bytes_preserves_vregs (ea : Nat) (value : BitVec 64) :
+    ∀ (l : List Nat) (o : Option SailJoltState) (s0 s' : SailJoltState),
+      (∀ s, o = some s → s.vregs = s0.vregs) →
+      l.foldl (fun current k => current.bind fun s =>
+        Mmu.store_raw? s (ea + k) (value.extractLsb' (8 * k) 8)) o = some s' →
+      s'.vregs = s0.vregs := by
+  intro l
+  induction l with
+  | nil => intro o s0 s' ho h; exact ho s' h
+  | cons k rest ih =>
+      intro o s0 s' ho h
+      simp only [List.foldl] at h
+      apply ih _ s0 s' _ h
+      intro s hs
+      cases o with
+      | none => simp at hs
+      | some s1 =>
+          simp only [Option.bind] at hs
+          rw [store_raw_preserves_vregs hs]
+          exact ho s1 rfl
+
+private theorem store_doubleword_preserves_vregs
     {address value : BitVec 64} {js js' : SailJoltState}
     {result : Result Bool ExecutionResult}
-    (hrun : (writeMemoryWord address value).run js = .ok result js') :
+    (hrun : (Mmu.store_doubleword address value).run js = .ok result js') :
     js'.vregs = js.vregs := by
-  simp only [EStateM.run, writeMemoryWord] at hrun
-  split at hrun
-  · split at hrun <;> cases hrun <;> rfl
-  · exact liftSail_preserves_vregs hrun
+  simp only [EStateM.run, Mmu.store_doubleword] at hrun
+  repeat' split at hrun
+  all_goals first
+    | (cases hrun; rfl)
+    | (rename_i heq
+       cases hrun
+       exact store_bytes_preserves_vregs _ value _ (some js) js _ (fun s hs => by cases hs; rfl) heq)
+    | cases hrun
 
 private theorem writeDst_preserves_protected
     {dst : Dst} {js js' : SailJoltState} {value : BitVec 64}
@@ -599,7 +639,7 @@ private theorem ld_preserves_protected
         let baseValue ← readSrc base
         let addr := baseValue + imm
         if addr &&& (7 : BitVec 64) = 0 then
-          match ← readMemoryWord addr with
+          match ← Mmu.load_doubleword addr with
           | .Ok dword =>
               writeDst dst dword
               pure RETIRE_SUCCESS
@@ -619,10 +659,10 @@ private theorem ld_preserves_protected
       by_cases halign : addr &&& (7 : BitVec 64) = 0
       · simp only [addr, halign, ↓reduceIte] at hrun
         cases hmem :
-            (readMemoryWord addr).run
+            (Mmu.load_doubleword addr).run
                 js_afterBase with
         | ok memResult js_afterMem =>
-            change readMemoryWord (baseValue + imm)
+            change Mmu.load_doubleword (baseValue + imm)
                 js_afterBase = .ok memResult js_afterMem at hmem
             simp only [EStateM.bind, hmem] at hrun
             cases memResult with
@@ -636,7 +676,7 @@ private theorem ld_preserves_protected
                     simp only [pure, EStateM.pure] at hrun
                     cases hrun
                     have hbase_frame := readSrc_preserves_vregs hbase
-                    have hmem_frame := readMemoryWord_preserves_vregs hmem
+                    have hmem_frame := load_doubleword_preserves_vregs hmem
                     have hwrite_frame := writeDst_preserves_protected hsafe hwrite
                     intro vr hprotected
                     rw [hwrite_frame vr hprotected, hmem_frame, hbase_frame]
@@ -649,11 +689,11 @@ private theorem ld_preserves_protected
                 simp only [pure, EStateM.pure] at hrun
                 cases hrun
                 have hbase_frame := readSrc_preserves_vregs hbase
-                have hmem_frame := readMemoryWord_preserves_vregs hmem
+                have hmem_frame := load_doubleword_preserves_vregs hmem
                 intro vr hprotected
                 rw [hmem_frame, hbase_frame]
         | error e js_error =>
-            change readMemoryWord (baseValue + imm)
+            change Mmu.load_doubleword (baseValue + imm)
                 js_afterBase = .error e js_error at hmem
             simp only [EStateM.bind, hmem] at hrun
             cases hrun
@@ -676,7 +716,7 @@ private theorem sd_preserves_protected
         let addr := baseValue + imm
         let stored ← readSrc value
         if addr &&& (7 : BitVec 64) = 0 then
-          match ← writeMemoryWord addr stored with
+          match ← Mmu.store_doubleword addr stored with
           | .Ok _ => pure RETIRE_SUCCESS
           | .Err e => pure e
         else
@@ -698,10 +738,10 @@ private theorem sd_preserves_protected
           by_cases halign : addr &&& (7 : BitVec 64) = 0
           · simp only [addr, halign, ↓reduceIte] at hrun
             cases hmem :
-                (writeMemoryWord addr stored).run
+                (Mmu.store_doubleword addr stored).run
                     js_afterValue with
             | ok memResult js_afterMem =>
-                change writeMemoryWord (baseValue + imm) stored
+                change Mmu.store_doubleword (baseValue + imm) stored
                     js_afterValue = .ok memResult js_afterMem at hmem
                 simp only [EStateM.bind, hmem] at hrun
                 cases memResult <;> simp only [pure, EStateM.pure] at hrun <;>
@@ -709,11 +749,11 @@ private theorem sd_preserves_protected
                 all_goals
                   have hbase_frame := readSrc_preserves_vregs hbase
                   have hvalue_frame := readSrc_preserves_vregs hvalue
-                  have hmem_frame := writeMemoryWord_preserves_vregs hmem
+                  have hmem_frame := store_doubleword_preserves_vregs hmem
                   intro vr hprotected
                   rw [hmem_frame, hvalue_frame, hbase_frame]
             | error e js_error =>
-                change writeMemoryWord (baseValue + imm) stored
+                change Mmu.store_doubleword (baseValue + imm) stored
                     js_afterValue = .error e js_error at hmem
                 simp only [EStateM.bind, hmem] at hrun
                 cases hrun

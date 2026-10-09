@@ -3,7 +3,7 @@ import JoltConstraints.witness_helpers.rd_write_value
 
 set_option autoImplicit false
 
-namespace HonestWitness
+namespace TraceWitness
 
 -- Rust: [RegistersVal materialization](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/registers.rs:26).
 -- The witness register array starts at zero, including virtual registers. Each
@@ -11,7 +11,7 @@ namespace HonestWitness
 -- Apply only preceding writes; padding retains the last accumulated value.
 -- A one-hot write bit replaces value by RdWriteValue; a zero bit preserves it.
 noncomputable def RegistersVal {F : Type} [Field F] (p : WitnessParams)
-    {program : JoltProgram} (trace : JoltTrace program) :
+    (trace : Trace) :
     Fin 128 → Fin p.traceLength → F :=
   fun register t =>
     -- RegVal[reg. t] = RegVal[reg, t -1] + RdWa[reg,
@@ -19,4 +19,4 @@ noncomputable def RegistersVal {F : Type} [Field F] (p : WitnessParams)
       let cycle : Fin p.traceLength := ⟨i.val, Nat.lt_trans i.isLt t.isLt⟩
       value + RdWa p trace register cycle * (RdWriteValue p trace cycle - value)) 0
 
-end HonestWitness
+end TraceWitness
