@@ -70,8 +70,9 @@ the proof attests; PC-stall exit).
 `NextPCNoWrap` and `CodeUnchanged` (both a16z).
 
 **In place.** `ValidRun` (a run with no stop rule or advice choice); `HonestTrace`
-extends it with Rust's stop rule and Rust's runtime advice (`advice_from_rust`, the
-division family; SC.W/SC.D to come). Self-modifying code is excluded by the
+extends it with Rust's stop rule and Rust's runtime advice (`advice_from_rust`: the
+division family, and the SC.W/SC.D reservation flag computed from virtual registers 32
+and 33; see model_review.md, "SC success flag"). Self-modifying code is excluded by the
 instance assumption `JoltInstance.CodeUnchanged` (a16z).
 
 **Known not sound for this `L`** (from reading the code, not run):

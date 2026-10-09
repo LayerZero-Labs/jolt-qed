@@ -24,7 +24,8 @@ inductive JoltCustomInstruction where
   | VirtualAssertEQ (rs1 rs2 : regidx) (imm : BitVec 13)  -- FormatB
   | VirtualHostIO (rd rs1 : regidx) (imm : BitVec 12)     -- FormatI
 
--- What Rust's base profile decodes: RISC-V or Jolt's own instructions.
+-- An expandable instruction: one instruction of the guest program, RISC-V or one of
+-- Jolt's custom instructions.
 -- See : jolt/crates/jolt-riscv/src/kind.rs:20 (SourceInstructionKind)
 inductive SourceInstruction where
   | riscv (instruction : RiscvInstruction)

@@ -6,11 +6,9 @@ import JoltConstraints.program
 
 set_option autoImplicit false
 
--- Rust patches each executed VirtualAdvice row with this execution's advice value;
--- every other row runs exactly as it is in the bytecode. VirtualAdvice is the only
--- instruction Rust patches: the advice loads read the advice tape as they run.
+-- In the bytecode, a VirtualAdvice instruction's value is a placeholder. The tracer
+-- supplies the real value when it runs the instruction, and the trace row records it.
 -- See : jolt/tracer/src/instruction/mod.rs:210-234 (trace_inline_sequence_with_advice)
---       jolt/tracer/src/instruction/virtual_advice.rs:22
 def JoltISA.Instr.RuntimeAdvice : JoltISA.Instr → Type
   | .VirtualAdvice .. => BitVec 64
   | _ => Unit
@@ -21,7 +19,10 @@ def JoltISA.Instr.withRuntimeAdvice (instruction : JoltISA.Instr)
   | .VirtualAdvice dst _ imm => .VirtualAdvice dst advice imm
   | instruction => instruction
 
--- A recorded transition. These data do not assert that the instruction executed.
+-- One step of a trace: the bytecode row it runs, the advice value it recorded, and
+-- the states before and after. The trace comes from some tracer, honest or not; all
+-- we know is that it type-checks. `ValidRun` and `HonestTrace` say what an honest
+-- tracer records.
 structure TraceRow (bytecode : Array JoltInstructionRow) where
   rowIndex : Fin bytecode.size
   runtimeAdvice : bytecode[rowIndex].instruction.RuntimeAdvice

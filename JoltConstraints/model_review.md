@@ -1,6 +1,6 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-10-08
+updated: 2026-10-09
 rust: $HOME/Work-with-A16z/jolt at 3cb4e243 with upstream 00508a09 (#1968, includes 8e536f19) merged but not yet committed (upstream main 629ed77b not yet audited)
 ---
 
@@ -81,9 +81,12 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   tracer and are unused.
   The rows they emit are checked in `expansion_facts.lean`. Still relied on and not
   stated there: operand order is Rust's rs1/rs2, and `VirtualRev8W` has immediate 0.
-- **SC success flag.** Rust patches SC's advice row with a reservation-success flag
-  (`cpu.rs:595`); `rustAdvice` does not model it yet, so in an `HonestTrace` an SC
-  always fails. This differs from Rust when a reservation covers the address.
+- **SC success flag.** Jolt's tracer patches SC's advice row with a reservation-success
+  flag taken from its emulator's reservation (`cpu.rs:595`), which our state does not
+  have. `rustAdvice` computes the flag from virtual registers 32 (SC.W) and 33 (SC.D)
+  instead, which Jolt's LR and SC expansions keep equal to that reservation. That they
+  agree is argued in `rustAdvice`'s comment, not proved. Not yet checked in
+  `expansion_facts.lean`: no other expansion writes registers 32 and 33.
 - **Soundness execution data.** The relation is proved independent of `advice_tape`
   (`AllConstraints.advice_tape_irrelevant`). Reconstructing a consistent tape and
   per-row runtime advice remains open, including the remaining-length semantics
