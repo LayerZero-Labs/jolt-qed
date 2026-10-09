@@ -83,9 +83,9 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   stated there: operand order is Rust's rs1/rs2, and `VirtualRev8W` has immediate 0.
 - **SC success flag.** Jolt's tracer patches SC's advice row with a reservation-success
   flag taken from its emulator's reservation (`cpu.rs:595`), which our state does not
-  have. `rustAdvice` computes the flag from virtual registers 32 (SC.W) and 33 (SC.D)
+  have. `honestTracerAdvice` computes the flag from virtual registers 32 (SC.W) and 33 (SC.D)
   instead, which Jolt's LR and SC expansions keep equal to that reservation. That they
-  agree is argued in `rustAdvice`'s comment, not proved. Not yet checked in
+  agree is argued in `honestTracerAdvice`'s comment, not proved. Not yet checked in
   `expansion_facts.lean`: no other expansion writes registers 32 and 33.
 - **Soundness execution data.** The relation is proved independent of `advice_tape`
   (`AllConstraints.advice_tape_irrelevant`). Reconstructing a consistent tape and

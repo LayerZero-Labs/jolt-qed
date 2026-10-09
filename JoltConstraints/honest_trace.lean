@@ -99,7 +99,7 @@ def JoltISA.Instr.adviceValue? : JoltISA.Instr → Option (BitVec 64)
 -- The value a trace row's VirtualAdvice instruction writes: the one recorded in the
 -- row (`runtimeAdvice`). None if the row runs any other instruction. The row comes
 -- from some tracer, honest or not, so the value may be wrong.
-def TraceRow.adviceValue? {bytecode : Array JoltInstructionRow} (row : TraceRow bytecode) :
+def TraceRow.someTracerAdvice? {bytecode : Array JoltInstructionRow} (row : TraceRow bytecode) :
     Option (BitVec 64) :=
   (bytecode[row.rowIndex].instruction.withRuntimeAdvice row.runtimeAdvice).adviceValue?
 
@@ -146,19 +146,19 @@ def Rv64ProgramImage.instructionAt (program : Rv64ProgramImage SourceInstruction
     (addr : BitVec 64) : Option SourceInstruction :=
   (program.instructions.find? (·.address == addr)).map (·.instruction)
 
--- The advice values Jolt's tracer patches into the VirtualAdvice rows of one source
--- instruction, in order. The tracer computes them from the state just before the
--- instruction's rows run. The division values are the ones the bytecode project's
--- equivalence proofs use for that expansion; they agree with the tracer's formulas,
--- including division by zero and the signed overflow cases. Other instructions are
--- not patched.
+-- The advice values the honest tracer (Jolt's tracer) patches into the VirtualAdvice
+-- rows of one expandable instruction, in order. It computes them from the state just
+-- before the instruction's rows run. The division values are the ones the bytecode
+-- project's equivalence proofs use for that expansion; they agree with the honest
+-- tracer's formulas, including division by zero and the signed overflow cases. Other
+-- instructions are not patched.
 -- See : jolt/tracer/src/instruction/div.rs, divu.rs, rem.rs, remu.rs, divw.rs,
 --       divuw.rs, remw.rs, remuw.rs, scw.rs, scd.rs (trace)
-def SourceInstruction.rustAdvice (source : SourceInstruction) (state : SailJoltState) :
+def SourceInstruction.honestTracerAdvice (source : SourceInstruction) (state : SailJoltState) :
     List (BitVec 64) :=
   let value (register : regidx) := JoltISA.sourceValue (.xreg register) state
   match source with
-  -- SC.W: 1 if Jolt's tracer holds a reservation at rs1's address, else 0. Our state
+  -- SC.W: 1 if the honest tracer holds a reservation at rs1's address, else 0. Our state
   -- has no reservation, but Jolt's expansions keep a copy in virtual register 32:
   -- LR.W and LR.D write the reserved address there, SC.W and SC.D write 0, and no
   -- other expansion writes it. SC's expansion asserts the address is at least
@@ -182,16 +182,17 @@ def SourceInstruction.rustAdvice (source : SourceInstruction) (state : SailJoltS
   | .riscv (.REMUW _ rs1 rs2 _) => [sail_divuw_advice (value rs1) (value rs2)]
   | _ => []
 
--- The value Jolt's tracer gives the VirtualAdvice at step `n`, where step `n` is
+-- The value the honest tracer gives the VirtualAdvice at step `n`, where step `n` is
 -- `rows[n]`; none if step `n` does not run a VirtualAdvice.
--- When the tracer starts an expansion, it computes the list of all advice values the
--- expansion needs (`rustAdvice`), from the state at that moment. Each VirtualAdvice
--- of the expansion then takes the next value from the list: the first VirtualAdvice
--- takes the first value, the second takes the second, and so on. For example, a DIV's
--- expansion has one VirtualAdvice, and the list holds one value: the quotient of the
--- DIV's two source registers, as they were just before the expansion began.
+-- When the honest tracer starts an expansion, it computes the list of all advice
+-- values the expansion needs (`honestTracerAdvice`), from the state at that moment.
+-- Each VirtualAdvice of the expansion then takes the next value from the list: the
+-- first VirtualAdvice takes the first value, the second takes the second, and so on.
+-- For example, a DIV's expansion has one VirtualAdvice, and the list holds one value:
+-- the quotient of the DIV's two source registers, as they were just before the
+-- expansion began.
 -- See : jolt/tracer/src/instruction/mod.rs:207-233 (trace_inline_sequence_with_advice)
-def tracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
+def honestTracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
     {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode)) (n : Nat) :
     Option (BitVec 64) := do
   let row ← rows[n]?
@@ -201,8 +202,8 @@ def tracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
   let first ← rows[startOfExpansionContainingStepN rows n]?
   -- the instruction step `n`'s expansion came from
   let instruction ← program.instructionAt bytecode[first.rowIndex].address
-  -- the tracer's advice values for it, from the state before its expansion began
-  let values := instruction.rustAdvice first.preState
+  -- the honest tracer's advice values for it, from the state before its expansion began
+  let values := instruction.honestTracerAdvice first.preState
   pure (values[adviceStepsBeforeStepN rows n]?.getD bytecodeValue)
 
 -- The rows Rust's tracer records when it runs the instance's program on these
@@ -220,10 +221,10 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   -- Rust's verifier rejects an instance whose inputs or layout fail its checks.
   -- See : jolt/crates/jolt-verifier/src/verifier.rs:356-383
   valid_inputs : joltInstance.validate_inputs = true
-  -- At every step of the trace, the value its VirtualAdvice writes is the value
-  -- Jolt's tracer gives it (`tracerAdviceAtStepN`).
-  advice_from_rust : ∀ n : Fin rows.size,
-    rows[n].adviceValue? = tracerAdviceAtStepN joltInstance.program rows n
+  -- At every step of the trace, the advice value recorded (`someTracerAdvice?`) is
+  -- the value the honest tracer gives it (`honestTracerAdviceAtStepN`).
+  advice_from_honest_tracer : ∀ n : Fin rows.size,
+    rows[n].someTracerAdvice? = honestTracerAdviceAtStepN joltInstance.program rows n
   -- The run ends on the last row of an instruction that left the PC pointing at
   -- itself. Rust's tracer stops there.
   -- See : jolt/tracer/src/lib.rs:113-120, 327-337 (trace, step_emulator)

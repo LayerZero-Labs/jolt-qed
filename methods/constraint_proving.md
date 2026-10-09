@@ -89,7 +89,7 @@ certificate. For a row `trace.rows[i]`, use:
 | Row fact | Available fact |
 | --- | --- |
 | `rowIndex`, `HonestTrace.rowValid` | The selected bytecode row and its `Valid` certificate (`trace_interface.lean`). It rests on the sorried `expand_program_rows_valid` until `expand` is defined. |
-| `runtimeAdvice`, `HonestTrace.advice_from_rust` | The per-execution advice, and the fact that it is the value Rust's tracer patches in. |
+| `runtimeAdvice`, `HonestTrace.advice_from_honest_tracer` | The per-execution advice, and the fact that it is the value the honest tracer (Jolt's tracer) patches in. |
 | `preState`, `postState`, `HonestTrace.executes` | Full states and successful `execInstr` execution of the selected final instruction **with its runtime advice**. Start here when a frame or state-transition fact appears missing. |
 | `HonestTraceRow.hostIOPreservesPC` | An explicit HostIO **PC-only** certificate. It does not state anything about `nextPC`. |
 | `HonestTrace.store_word_present` | The old word of a store is present (`memory_presence.lean`). |
