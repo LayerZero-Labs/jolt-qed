@@ -14,6 +14,73 @@ Read these before beginning work:
 
 The local `blog/` is stale; use the published article for background.
 
+## PR #2039 experiment (2026-10-10)
+
+This checkout is `experiment/pr2039-sc`, based on Lean commit `cd0474b`.
+It models [PR #2039](https://github.com/a16z/jolt/pull/2039) at
+`2a924239c1f99f2e4f2c94a5dae5e403b182b27c`, applied without conflicts to
+Jolt `43cc043332762034b5f65379441576e06e7a3890`. It does not import the
+other changes on the PR's newer base. The main Lean checkout remains at the
+old model and retains its in-progress memory-access restriction work.
+
+The first review chunk regenerates all 57 expansion programs with LR/SC
+support enabled in `jolt-lean-gen`. Before the patch, all 57 definitions
+matched the existing Lean definitions exactly. After the patch, only SC.W
+and SC.D change. SC.W goes from 30 to 26 rows in each destination branch;
+SC.D goes from 16 to 12 rows in each destination branch (`rd = x0` and
+`rd ≠ x0`). Both replace success advice and its one-way
+assertions with XOR followed by SLTIU. LR.W, LR.D and the other 53 programs
+are unchanged. `honestTracerAdvice` no longer supplies an SC answer, matching
+the PR's tracer change. The row-validity proofs take the regenerated programs
+without extra assumptions.
+
+The separate commit `e3a34fc` only moves the unchanged LR/SC definitions into
+the generated module; it is independent of the proposed SC semantics.
+The Rust generator change is `cf450ba2` in `/private/tmp/jolt-pr2039-rust`;
+the applied PR is `1bac0a87` there. To regenerate, build `jolt-lean-gen` in
+that checkout and run it with `--lean --out` pointing to this checkout's
+`JoltBytecode/JoltISA/ExpansionsAutomated.lean` (the generator's default
+output path points to the main checkout).
+
+Validation for this chunk: `lake build JoltConstraints` passed (8739 jobs).
+The existing unfinished theorems remain unfinished; no `sorry`, axiom, premise
+or heartbeat override was added. `#print axioms` for `scw_ok`, `scd_ok`,
+`expand_ok`, `lookupOutput_xor` and `lookupOutput_unsignedLessThan` lists only
+`propext`, `Classical.choice` and `Quot.sound`. `expand_program_rows_valid`
+also lists the already-approved Sail constant `sys_enable_experimental_extensions`.
+The Rust `jolt-program` and `tracer` suites passed
+all 260 tests (nextest marked the canonical-padding-row test as leaky; no test
+failed). `cargo +1.95 clippy -p jolt-lean-gen --offline --all-targets -- -D warnings`
+and `cargo +1.95 fmt --check -p jolt-lean-gen` passed. This checks the expander
+and tracer; no new verifier-acceptance experiment was run.
+
+**Review boundary.** `NoStoreConditional` is retained in this first chunk.
+A successful build of the still-sorried main theorem would not establish
+soundness after deleting a premise. Ari has approved removing the premise
+on this experimental branch. The constraint-to-execution proof needs:
+
+1. Show that neither destination branch of either SC expansion contains a
+   `VirtualAdvice` row. On every SC row, both sides of
+   `advice_from_honest_tracer` are then `none`.
+2. Cover the rows SC uses through the ordinary Layer 5b instruction proofs:
+   LUI, VirtualAssertLTE, XOR, SLTIU, ADDI, XORI, SUB, MUL, ADD, LD/SD, and
+   SC.W's alignment and word-lane rows. These proofs are also needed for other
+   source programs. Register agreement already compares virtual registers 32
+   and 33 with the run's state, so the XOR/SLTIU rows compute the same success
+   bit on both sides without any interpretation of LR/SC history. Check both
+   destination branches and source-register aliases through these row proofs.
+3. Remove `NoStoreConditional` and use that ordinary instruction coverage for
+   SC's rows. The memory-device and stopping obligations remain separate.
+
+Relating registers 32 and 33 to Jolt's emulator reservation is a separate
+obligation about the model, recorded under **LR/SC reservation correspondence**
+in [model_review.md](../JoltConstraints/model_review.md). It is not a prerequisite
+for removing `NoStoreConditional` from the constraint-to-execution theorem.
+
+No additional soundness or instance premise is authorized by this experiment.
+SC-specific changes stay here until upstream merges and the proof is reviewed;
+only independent improvements are eligible for transfer to the main branch.
+
 ## Soundness statement
 
 The current target is [`JoltInstance.soundness`](../JoltConstraints/Soundness/soundness.lean).
@@ -109,7 +176,7 @@ Under the planned untrusted-answer semantics (decision of 2026-10-10, Layer 5a),
 The private inputs instead supply the answers the witness gives at each tape read and each `bytes_remaining()` query.
 
 At each step that uses runtime advice, we must prove that the value in `w` agrees with the honest tracer's computation.
-SC.W can report failure where Jolt's tracer reports success. The temporary `NoStoreConditional` premise excludes its source rows and those of SC.D; the execution proof must use that premise to eliminate these cases.
+At the main model's `43cc043`, SC.W can report failure where Jolt's tracer reports success. This experimental model uses PR #2039's deterministic comparison. `NoStoreConditional` remains in the theorem pending the SC proof steps listed above; the experiment must discharge those steps before removing it.
 
 ### The witness proves facts about the execution prefix
 
@@ -1243,13 +1310,14 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   Layer 0–1 lemmas retain their weaker bounds. Akita will be modeled separately
   as a non-succinct constraint relation, with PCS security outside scope.
   The detailed source audit is in Layer 4 above.
-- **SC advice (runtime-advice agreement):** SC.W can report failure when the reservation holds;
+- **SC advice at the main model's `43cc043` (runtime-advice agreement):** SC.W can report failure when the reservation holds;
   the honest tracer reports success. The reproducer was reported as
   [a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037). SC.D has the same
   one-way check; only SC.W was run. With Ari's approval on 2026-10-10, the main
   theorem now temporarily assumes `NoStoreConditional`, excluding both instructions
   from the source program. The `FIXME` requires removing this premise after the
-  constraints and model are fixed; the underlying issue remains unresolved.
+  constraints and model are fixed. In this experimental checkout the model is
+  regenerated from PR #2039; its SC constraint-to-execution proof remains open.
 - **Stopping and panic (Layers 7–8):** the two cases under "Known not sound for
   this L" in [B6](./review_completeness_and_soundness.md#b6-the-soundness-statement)
   are findings from reading the code; they still need reproductions.

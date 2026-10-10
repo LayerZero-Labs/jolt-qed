@@ -114,8 +114,14 @@ dispatch and device value agreement remain separate proof obligations.
 
 **In place.** `ValidRun` (a run with no stop rule or advice choice); `HonestTrace`
 extends it with Rust's stop rule and Rust's runtime advice (`advice_from_honest_tracer`: the
-division family, and the SC.W/SC.D reservation flag computed from virtual registers 32
-and 33; see model_review.md, "SC success flag"). Self-modifying code is excluded by the
+division family). This experimental checkout models PR #2039: SC.W/SC.D
+compute success from reservation registers with XOR/SLTIU and have no runtime
+advice. Removing the temporary SC premise requires ordinary Layer 5b instruction
+coverage and the fact that every SC row has runtime-advice agreement `none = none`.
+The separate correspondence between virtual registers and the emulator's
+reservation is a model obligation, not a prerequisite for that removal; see
+model_review.md, "LR/SC reservation correspondence". The premise is retained for
+this first review chunk. Self-modifying code is excluded by the
 instance assumption `JoltInstance.CodeUnchanged` (a16z).
 
 **Known not sound for this `L`** (from reading the code, not run):

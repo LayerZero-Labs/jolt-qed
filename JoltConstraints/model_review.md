@@ -1,7 +1,7 @@
 ---
 title: Jolt model in Lean, open issues
 updated: 2026-10-10
-rust: $HOME/Work-with-A16z/jolt at 3cb4e243 with upstream 00508a09 (#1968, includes 8e536f19) merged but not yet committed (upstream main 629ed77b not yet audited)
+rust: experiment/pr2039-sc; 43cc043 plus PR #2039 at 2a924239 (not the main model)
 ---
 
 # Open issues
@@ -128,19 +128,37 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   then fail proving because the verifier expects zeros; Lean has no separate
   commitment-presence flag to express that mismatch.
 - **Expansions.** `SourceInstruction.expand` (`expansions.lean`) uses the bytecode
-  project's programs. The 53 generated ones match a fresh run of `jolt-lean-gen` on the
-  current Rust exactly. LR.W, LR.D, SC.W and SC.D are that generator's output, kept in
-  `expansions.lean` until it emits them, and are not proved against Sail. The older
+  project's programs. All 57 generated programs, including LR.W, LR.D, SC.W and
+  SC.D, are in `ExpansionsAutomated.lean` and match `jolt-lean-gen` on the
+  experimental Rust checkout exactly. LR/SC are not proved against Sail. The older
   `JoltISA.lrwProgram`/`lrdProgram` (`Expansions/LoadReserved.lean`) follow the old
   tracer and are unused.
   The rows they emit are checked in `expansion_facts.lean`. Still relied on and not
   stated there: operand order is Rust's rs1/rs2, and `VirtualRev8W` has immediate 0.
-- **SC success flag.** Jolt's tracer patches SC's advice row with a reservation-success
-  flag taken from its emulator's reservation (`cpu.rs:595`), which our state does not
-  have. `honestTracerAdvice` computes the flag from virtual registers 32 (SC.W) and 33 (SC.D)
-  instead, which Jolt's LR and SC expansions keep equal to that reservation. That they
-  agree is argued in `honestTracerAdvice`'s comment, not proved. Not yet checked in
-  `expansion_facts.lean`: no other expansion writes registers 32 and 33.
+- **SC success flag, PR #2039 experiment.** The new expansion computes success
+  with XOR and SLTIU from virtual register 32 (SC.W) or 33 (SC.D) and the target
+  address. The RAM guard remains. The patched tracer no longer supplies SC advice,
+  so neither does `honestTracerAdvice`. No SC row is a `VirtualAdvice`; its
+  runtime-advice agreement reduces to `none = none`. Constraint-to-execution
+  soundness only needs the ordinary instruction proofs for SC's rows. Register
+  agreement supplies the same values of registers 32 and 33 to the witness and
+  run, without an invariant interpreting them as an emulator reservation.
+  `NoStoreConditional` stays in this first review chunk pending that instruction
+  coverage; the main theorem is still sorried. The follow-up steps are in the
+  plan's PR #2039 section.
+- **LR/SC reservation correspondence (model obligation).** Jolt's native
+  execution methods `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`;
+  the patched inline trace path and this model compute success from virtual
+  registers 32 and 33. Their agreement remains to be proved at source-instruction
+  boundaries: initialization, LR.W setting only the word reservation, LR.D
+  setting both, either SC clearing both, and other instructions preserving them.
+  Include reservation validity and width, source-register aliases, `rd = x0`,
+  and the RAM guard excluding the cleared value zero. Do not assert this
+  correspondence inside SC.W, which temporarily uses these registers for the
+  success bit and store data. The previous `honestTracerAdvice` translation
+  already relied on this unproved correspondence. It is an obligation relating
+  the model to Jolt's execution paths, not a soundness premise or a prerequisite
+  for removing `NoStoreConditional` from the constraint-to-execution theorem.
 - **Soundness execution data.** The relation is proved independent of `advice_tape`
   (`AllConstraints.advice_tape_irrelevant`). Layer 5a now defines
   [`execWithTapeAnswer`](./Soundness/Layer5/TapeSemantics.lean) and

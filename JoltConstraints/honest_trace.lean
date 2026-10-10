@@ -153,25 +153,12 @@ def Rv64ProgramImage.instructionAt (program : Rv64ProgramImage SourceInstruction
 -- tracer's formulas, including division by zero and the signed overflow cases. Other
 -- instructions are not patched.
 -- See : jolt/tracer/src/instruction/div.rs, divu.rs, rem.rs, remu.rs, divw.rs,
---       divuw.rs, remw.rs, remuw.rs, scw.rs, scd.rs (trace)
+--       divuw.rs, remw.rs, remuw.rs (trace)
+-- SC.W and SC.D have no runtime advice after PR #2039 (2a924239).
 def SourceInstruction.honestTracerAdvice (source : SourceInstruction) (state : SailJoltState) :
     List (BitVec 64) :=
   let value (register : regidx) := JoltISA.sourceValue (.xreg register) state
   match source with
-  -- SC.W: 1 if the honest tracer holds a reservation at rs1's address, else 0. Our state
-  -- has no reservation, but Jolt's expansions keep a copy in virtual register 32:
-  -- LR.W and LR.D write the reserved address there, SC.W and SC.D write 0, and no
-  -- other expansion writes it. SC's expansion asserts the address is at least
-  -- 0x80000000 before it uses the flag, so a register holding 0 never matches.
-  -- See : jolt/tracer/src/instruction/lrw.rs:45, lrd.rs:45, scw.rs:52
-  --       jolt/tracer/src/emulator/cpu.rs:577-598 (set, clear, reservation_covers)
-  | .riscv (.SC_W _ rs1 _ _ _) =>
-      [if JoltISA.sourceValue (.vreg 32) state = value rs1 then 1 else 0]
-  -- SC.D: the same with virtual register 33, which only LR.D sets to the address
-  -- (LR.W writes 0 there: a word reservation does not cover a doubleword).
-  -- See : jolt/tracer/src/instruction/scd.rs:50
-  | .riscv (.SC_D _ rs1 _ _ _) =>
-      [if JoltISA.sourceValue (.vreg 33) state = value rs1 then 1 else 0]
   | .riscv (.DIV _ rs1 rs2 _) => [sail_div_value (value rs1) (value rs2) false]
   | .riscv (.DIVU _ rs1 rs2 _) => [sail_div_value (value rs1) (value rs2) true]
   | .riscv (.REM _ rs1 rs2 _) => [rem_advice_value (value rs1) (value rs2)]

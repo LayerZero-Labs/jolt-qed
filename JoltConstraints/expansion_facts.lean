@@ -393,12 +393,12 @@ theorem lrd_ok (rd rs1 rs2 : regidx) :
     sequenceOk (JoltISA.lrdProgramAuto rd rs1 rs2).instrs = true := by
   rows_ok JoltISA.lrdProgramAuto
 
-theorem scw_ok (rd rs1 rs2 : regidx) (advice : BitVec 64) :
-    sequenceOk (JoltISA.scwProgramAuto rd rs1 rs2 advice).instrs = true := by
+theorem scw_ok (rd rs1 rs2 : regidx) :
+    sequenceOk (JoltISA.scwProgramAuto rd rs1 rs2).instrs = true := by
   rows_ok JoltISA.scwProgramAuto
 
-theorem scd_ok (rd rs1 rs2 : regidx) (advice : BitVec 64) :
-    sequenceOk (JoltISA.scdProgramAuto rd rs1 rs2 advice).instrs = true := by
+theorem scd_ok (rd rs1 rs2 : regidx) :
+    sequenceOk (JoltISA.scdProgramAuto rd rs1 rs2).instrs = true := by
   rows_ok JoltISA.scdProgramAuto
 
 theorem advicelb_ok (rd : regidx) :
