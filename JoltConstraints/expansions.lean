@@ -87,8 +87,8 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     -- A
     -- The generated LR programs take an rs2 they do not use.
     | .LR_W rd rs1 _ _ => some (.ofProgram (JoltISA.lrwProgramAuto rd rs1 (regidx.Regidx 0)))
-    -- SC's advice row holds 0 in the bytecode; the tracer patches it at run time.
-    | .SC_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.scwProgramAuto rd rs1 rs2 0))
+    -- PR #2039 computes SC success from reservation registers, without advice.
+    | .SC_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.scwProgramAuto rd rs1 rs2))
     | .AMOSWAP_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoswapwProgramAuto rd rs1 rs2))
     | .AMOADD_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoaddwProgramAuto rd rs1 rs2))
     | .AMOXOR_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoxorwProgramAuto rd rs1 rs2))
@@ -99,7 +99,7 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .AMOMINU_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amominuwProgramAuto rd rs1 rs2))
     | .AMOMAXU_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amomaxuwProgramAuto rd rs1 rs2))
     | .LR_D rd rs1 _ _ => some (.ofProgram (JoltISA.lrdProgramAuto rd rs1 (regidx.Regidx 0)))
-    | .SC_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.scdProgramAuto rd rs1 rs2 0))
+    | .SC_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.scdProgramAuto rd rs1 rs2))
     | .AMOSWAP_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoswapdProgramAuto rd rs1 rs2))
     | .AMOADD_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoadddProgramAuto rd rs1 rs2))
     | .AMOXOR_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoxordProgramAuto rd rs1 rs2))
