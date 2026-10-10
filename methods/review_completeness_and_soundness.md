@@ -69,6 +69,33 @@ the proof attests; PC-stall exit).
 2^128 − 2^32, and BN254's satisfy it), and the conditions on the program
 `NextPCNoWrap` and `CodeUnchanged` (both a16z).
 
+**Field scope revised with Ari on 2026-10-10.** The current base-model theorem
+now requires `2^128 < ringChar F`, so full 128-bit lookup addresses have injective
+field encodings. BN254 satisfies this bound. Akita's smaller field uses an
+extra address guard that the base relation omits; model Akita separately as a
+deterministic, non-succinct constraint relation. PCS security is outside this work.
+See the source audit in [Layer 4 of the soundness plan](./soundness.md#layer-4-lookups).
+
+**RAM-region premise, approved by Ari on 2026-10-10. NOTE: to confirm with a16z.**
+The theorem assumes `JoltInstance.RamRegionFits`: the instance's layout and
+maximum padded RAM size satisfy `lowest + 8 * maxRamSize ≤ 2^64`.
+Together with `ConstraintContext.ramSizeBounds`, this bounds every byte of
+all in-domain words. At a satisfying LD/SD cycle, field injectivity recovers
+the signed integer sum as `lowest + 8 * c` for a selected word, or zero if
+none is selected. This gives nonwrapping machine addresses for either tape
+specification. `Layer5/MemoryAddress.lean` proves that arithmetic argument;
+source agreement and actual memory-access execution remain later obligations.
+The former run-based premise and its next-step helper are deleted. This is
+an instance restriction assumed by the theorem, not a modeled verifier check.
+
+**Temporary restriction, approved by Ari on 2026-10-10.** The main soundness
+theorem also assumes `NoStoreConditional`: no source row is `SC.W` or `SC.D`.
+This excludes the advice mismatch reported in [a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)
+while the remaining proofs proceed. `LR.W` and `LR.D` remain allowed. The theorem's
+`FIXME` calls for removing the premise once Jolt's SC constraints enforce the
+honest tracer's outcome and the model reflects the fix. This is a theorem
+restriction, not a verifier check; the stopping and panic findings below remain open.
+
 **In place.** `ValidRun` (a run with no stop rule or advice choice); `HonestTrace`
 extends it with Rust's stop rule and Rust's runtime advice (`advice_from_honest_tracer`: the
 division family, and the SC.W/SC.D reservation flag computed from virtual registers 32

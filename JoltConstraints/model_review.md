@@ -1,6 +1,6 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-10-09
+updated: 2026-10-10
 rust: $HOME/Work-with-A16z/jolt at 3cb4e243 with upstream 00508a09 (#1968, includes 8e536f19) merged but not yet committed (upstream main 629ed77b not yet audited)
 ---
 
@@ -11,6 +11,14 @@ it claims the modeled verifier checks and constraints hold at the sizes Rust's p
 picks, against the public I/O the verifier checks. This still depends on the `sorry`s
 under "Proofs owed"; it is not a completed completeness proof.
 Everything it rests on that is not proved is listed here.
+
+**Source-language scope.** Completeness and soundness cover programs represented
+by `SourceInstruction`: the modeled RISC-V instructions and the listed Jolt custom
+instructions at opcode `0x5B`. Jolt's inline/precompile opcodes `0x0B` and `0x2B`,
+including the SHA-256 and Keccak inlines, are outside this type. A guest using
+these inlines is outside the theorems' scope by construction. This existing type
+restriction is recorded in [`expansion_helpers.lean`](./expansion_helpers.lean);
+it is not an additional premise or a verifier check.
 
 `AllConstraints joltInstance privateInputs witness` binds the constraint data to
 the instance through `ConstraintContext` (`constraint_context.lean`). Bytecode,
@@ -42,7 +50,10 @@ Premises or fields of the final theorem, with their source or reason below.
 
 | Assumption | Where | Why |
 |---|---|---|
+| The field's characteristic exceeds `2^128` | `JoltInstance.soundness`, premise `charAbove2pow128` | Ari, 2026-10-10: the base relation must distinguish full 128-bit lookup addresses. BN254 satisfies this; model Akita's field and extra address guard separately. PCS security is outside this work |
+| No source row is SC.W or SC.D (temporary) | `Rv64ProgramImage.NoStoreConditional`, soundness premise `noStoreConditional` | Ari, 2026-10-10: exclude the SC advice mismatch (#2037) while proving the remaining cases; remove this restriction after the constraints and model are fixed |
 | The PC does not wrap past 2^64 | `Rv64ProgramImage.NextPCNoWrap` | a16z, 2026-10-07: such an ELF is illegal |
+| The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `Soundness/Layer3/Layout.lean`, soundness premise `ramRegionFits` | Approved by Ari, 2026-10-10, replacing the run-based address restriction. With the verifier's RAM-size check, all eight bytes of each in-domain word fit. The signed sum is then recovered from satisfying constraints, including address zero. NOTE: to confirm with a16z. This is an instance restriction, not a verifier check |
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty` (premise `imageNonempty`) | a16z, by phone, 2026-10-08. Rust's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Rust's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
 | A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | `JoltInstance.CodeUnchanged`, over every `ValidRun`; honest traces get it from `HonestTrace.code_unchanged`. Completeness does not use it | a16z, 2026-10-07 |
 | A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | ASSUMPTION in `finalRamWord` | a16z, 2026-10-07 |
@@ -70,6 +81,14 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   default build's 256), program commitments (BytecodeChunk, ProgramImageInit), and
   TrustedAdvice/UntrustedAdvice witness columns and commitment protocols. Trusted
   advice contents are modeled directly as part of the instance.
+- **Akita soundness scope.** The base constraint relation also omits Akita's
+  instruction-address canonicality guard, as recorded in `constraints.md`.
+  At `43cc043332762034b5f65379441576e06e7a3890`, the `akita` feature enables
+  `CANONICAL_INSTRUCTION_ADDRESS` in `jolt-claims`; the stage-5 verifier excludes
+  identity-RAF addresses whose upper 64 bits are all ones. The source audit and
+  separate-model plan are in [Layer 4](../methods/soundness.md#layer-4-lookups).
+  The current soundness theorem uses `2^128 < ringChar F`; its earlier `2^127`
+  bound did not justify full-address injectivity for the unguarded base relation.
 - **Not modeled.** Rust can trace nonempty trusted-advice bytes without a commitment,
   then fail proving because the verifier expects zeros; Lean has no separate
   commitment-presence flag to express that mismatch.
@@ -88,9 +107,60 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   agree is argued in `honestTracerAdvice`'s comment, not proved. Not yet checked in
   `expansion_facts.lean`: no other expansion writes registers 32 and 33.
 - **Soundness execution data.** The relation is proved independent of `advice_tape`
-  (`AllConstraints.advice_tape_irrelevant`). Reconstructing a consistent tape and
-  per-row runtime advice remains open, including the remaining-length semantics
-  of `VirtualAdviceLen`; see B6 in `methods/review_completeness_and_soundness.md`.
+  (`AllConstraints.advice_tape_irrelevant`). Layer 5a now defines
+  [`execWithTapeAnswer`](./Soundness/Layer5/TapeSemantics.lean) and
+  [`UntrustedAnswerLanguage`](./Soundness/Layer5/TapeTrace.lean) separately from
+  the fixed-tape specification. Each tape load or length query gets any 64-bit
+  answer; load widths remain restricted to 1, 2, 4 or 8 bytes and advance the
+  cursor, but neither rule enforces consistency with tape bytes or exhaustion.
+  The answer sequence is private existential data in the relaxed trace.
+  Fixed-tape inclusion is proved with identical states, outputs and stopping
+  facts. `NarrowAdvice.lean` proves the narrow-load post-processing keeps only
+  the signed low-width portion of an answer. `AdviceExpansion.lean` now proves
+  the generated AdviceLB/LH/LW sequences and their full execution under the
+  relaxed per-row rule, including cursor increments and x0's temporary-register
+  branch. Connecting these states to a satisfying witness remains open.
+  This implements Ari's provisional decision of 2026-10-10, based on Jolt's
+  documented distrust of advice values. That documentation does not specify the
+  contract of `bytes_remaining()`; a16z's confirmation is still needed.
+  No complete satisfying witness with inconsistent length answers has been
+  constructed. Fixed-tape soundness and internal runtime-advice agreement
+  remain open; see B6 in `methods/review_completeness_and_soundness.md`.
+- **RAM region restriction.** `RamRegionFits` now bounds the instance's maximum
+  padded RAM region by `2^64`; Ari approved this replacement on 2026-10-10.
+  NOTE: to confirm with a16z. The old run-based predicate and next-step helper
+  are deleted. `Layer3/Layout.lean` transfers the bound to the witness domain
+  using `ConstraintContext.ramSizeBounds`. `Layer5/MemoryAddress.lean` recovers
+  the signed integer sum as the selected word address, or exactly zero when
+  no word is selected, before deriving the machine address. No premise over
+  fixed-tape or relaxed runs is needed. The remaining execution proof must
+  establish source-register agreement and actual memory-access behavior.
+- **Code-memory assumption.** `CodeUnchanged` also quantifies over fixed-tape runs,
+  but the soundness proof executes bytecode rather than fetching it from memory.
+  No proved soundness lemma uses this premise, and no relaxed counterpart is
+  needed for that execution proof. It is retained as justification for relating
+  the model to Jolt's tracer; its role in the final theorem can be reviewed
+  separately. It is not a Layer 5b proof blocker.
+- **Register agreement.** `Layer5/Registers.lean` now proves initialization,
+  successful operand reads, and preservation through PC preparation and
+  destination writes for the register part of the soundness invariant.
+  It includes `AllRegistersPresent` because `sourceValue` defaults missing
+  architectural registers to zero, while execution rejects missing reads.
+  Presence follows from initialization and is preserved by writes; it is not
+  a new premise. Instruction families still have to establish successful
+  writes and their value's encoding in `RdWriteValue` before applying the
+  shared update lemma. The new proofs use only Lean's three standard axioms.
+- **ADDI soundness step.** `Layer5/AddImmediate.lean` now proves a selected
+  ADDI row executes to the concrete destination-write state, writes the
+  wrapped sum constrained by the lookup, and preserves register agreement
+  whenever a next table column exists. Operands, metadata and write success
+  are derived from bytecode validity, the constraints and current register
+  agreement. `Layer5/RegisterWrite.lean` proves canonical destination writes
+  succeed. Neither lemma adds a soundness premise. The ADDI result's axiom
+  list contains the standard three plus the allowed uninterpreted Sail
+  constant `sys_enable_experimental_extensions`; the write helper uses only
+  the standard three. Other families, RAM agreement and control flow remain
+  open.
 - **To do.** Audit the model against upstream main `629ed77b` (decoder changes #1902
   and #1958, HostIO #1973, `MemoryLayout::try_new` #1978). Fix 75 comments that cite
   `/Users/ari.biswas/...` paths. Drop the unused `ramFits`, `traceFits` and

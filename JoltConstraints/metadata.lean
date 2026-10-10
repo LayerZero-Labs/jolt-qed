@@ -109,7 +109,11 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
       match instruction with
       | .BEQ .. | .BNE .. | .BLT .. | .BGE .. | .BLTU .. | .BGEU .. => true
       | _ => false
-  -- No instruction is a No op flag (TODO: double check this)
+  -- Jolt's pseudo Noop has IsNoop, but is not a modeled Instr constructor.
+  -- At 43cc043, jolt-program/src/image/decode.rs never returns NoOp; its
+  -- NoOp match arm only defines operands for that already-supplied kind.
+  -- expand/operands.rs::noop_for emits ADDI x0, x0, 0, whose IsNoop is false.
+  -- Padding flags are supplied separately by bytecodeInstructionFlag.
   | .IsNoop => false
 
 -- Rust: crates/jolt-riscv/src/instructions/{i,m,virt,assert}/*.rs (circuit flags).

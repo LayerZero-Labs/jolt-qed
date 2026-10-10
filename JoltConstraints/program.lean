@@ -378,8 +378,7 @@ def JoltInstance.public_io {Source : Type} (joltInstance : JoltInstance Source) 
 -- See : jolt/crates/jolt-program/src/preprocess/program.rs:21-36 (JoltProgramPreprocessing::new)
 --       jolt/crates/jolt-prover/src/preprocessing.rs:43-50
 --       jolt/crates/jolt-verifier/src/preprocessing.rs:132-141
-def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) :
-    Option (Array BytecodeSlot) := do
+def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) : Option (Array BytecodeSlot) := do
   let rows ← expand_program joltInstance.program
   let bytecode ← preprocess rows
   guard (get_first_pc bytecode joltInstance.program.entry_address).isSome
