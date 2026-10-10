@@ -96,6 +96,22 @@ while the remaining proofs proceed. `LR.W` and `LR.D` remain allowed. The theore
 honest tracer's outcome and the model reflects the fix. This is a theorem
 restriction, not a verifier check; the stopping and panic findings below remain open.
 
+**Address-check restriction, approved by Ari.** The theorem now assumes
+`TracerAddressChecks` as a temporary workaround for
+[#2044](https://github.com/a16z/jolt/issues/2044), following #2041, and four
+separate candidates: zero stores, the I/O padding gap, canary stores and
+accesses at or above `heap_end`. The latter four have no complete satisfying
+witnesses or accepted-proof reproductions in this work; each is listed with
+its next check in the plan. Every next attempted LD/SD after an initialized
+relaxed prefix with honest internal runtime advice must pass
+`Mmu.effective_address_ok`, for every private input and tape-answer sequence.
+RAM checks the starting address; device memory checks all eight bytes.
+The next row need not succeed, so aborting programs are not covered vacuously.
+Its FIXME requires narrowing or removal as each case is resolved, the model
+is updated and the corresponding unrestricted proof is established. This
+replaces the earlier input/advice-only restriction. Alignment, peripheral
+dispatch and device value agreement remain separate proof obligations.
+
 **In place.** `ValidRun` (a run with no stop rule or advice choice); `HonestTrace`
 extends it with Rust's stop rule and Rust's runtime advice (`advice_from_honest_tracer`: the
 division family, and the SC.W/SC.D reservation flag computed from virtual registers 32
@@ -110,6 +126,21 @@ instance assumption `JoltInstance.CodeUnchanged` (a16z).
 
 Both need exit behaviour SDK guests never have. To report to a16z, with `L`
 justified from their book.
+
+**Layer 5b device audit, 2026-10-10.** The panic case also obstructs RAM
+agreement before the final output proof: reads return the flag in every byte,
+whereas the table retains stored bytes. The termination restriction under
+discussion does not resolve this. Its normal SDK load-before-store exit
+sequence is compatible with the proposed restriction, but arbitrary guest
+bodies and panic paths still need checking.
+
+Separately, Ari's #2044 reports a reproduction of the input/advice-store gap:
+the tracer rejects the program, while a modified tracer supplies a witness
+whose proof the unchanged verifier accepts. The report and patch have been
+read but not independently rerun here. See the
+[source audit and approved workaround](./soundness.md#layer-5b-one-execution-step).
+`TracerAddressChecks` covers this case; no premise covering the separate
+termination or panic discrepancies has been added.
 
 **Still owed:** show that a satisfying witness gives consistent execution data:
 - runtime advice equal to Rust's (the bytecode project proves this direction for

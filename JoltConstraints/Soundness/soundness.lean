@@ -11,16 +11,9 @@ The proof is left as `sorry`; it is not expected to hold yet
 import JoltConstraints.Constraints.All
 import JoltConstraints.honest_trace
 import JoltConstraints.Soundness.Layer3.Layout
+import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
 
 set_option autoImplicit false
-
--- The instance is in Jolt's language: for some private inputs, Jolt's tracer runs
--- the program to the PC stall with the outputs (trailing zero bytes dropped) and the
--- panic flag the instance claims.
--- See : jolt/jolt-sdk/src/host_utils.rs:320 (the claim is the tracer's final device)
---       jolt/book/src/usage/guests_hosts/guests.md:144, 223
-def JoltInstance.InLanguage (joltInstance : JoltInstance SourceInstruction) : Prop :=
-  ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs), trace.matches_outputs
 
 -- Temporary scope restriction for the SC advice mismatch (a16z/jolt#2037).
 -- Exclude SC.W and SC.D from every source row, including unreachable rows.
@@ -55,6 +48,15 @@ theorem JoltInstance.soundness {F : Type} [Field F]
     -- tracer's outcome and that fix is reflected in the model (a16z/jolt#2037).
     -- Temporary restriction approved by Ari on 2026-10-10.
     (noStoreConditional : joltInstance.program.NoStoreConditional)
+    -- FIXME: Temporary program restriction for https://github.com/a16z/jolt/issues/2044
+    -- and the four separate address-check candidates listed in methods/soundness.md
+    -- (zero stores, I/O gap, canary stores, past heap_end), approved by Ari.
+    -- Narrow or remove it as each case is resolved in Jolt and the model and
+    -- the corresponding unrestricted proof is established. The four new cases
+    -- remain candidates, without complete satisfying witnesses.
+    -- Covers the next attempted LD/SD after relaxed prefixes, even if it aborts.
+    -- Does not resolve the separate panic, termination or stopping discrepancies.
+    (tracerAddressChecks : joltInstance.TracerAddressChecks)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance privateInputs witness) :

@@ -1,8 +1,8 @@
 import JoltConstraints.Soundness.Layer5.TapeSemantics
-import JoltConstraints.Soundness.soundness
+import JoltConstraints.Soundness.Language
 
-/-! A separate execution language for independent tape answers. Existing
-ValidRun, HonestTrace and the main soundness statement are unchanged.
+/-! A separate execution language for independent tape answers.
+The fixed-tape execution definitions ValidRun and HonestTrace are unchanged.
 The fixed-tape inclusion below preserves the entire Trace, including all states,
 so it preserves registers, RAM, outputs, runtime advice and stopping behavior.
 The shared run and trace requirements are currently duplicated. Changes to

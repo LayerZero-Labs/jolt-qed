@@ -44,6 +44,40 @@ pass, escalate it.
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` is one slot too small when the highest touched slot is a power of two (`bug-report/ram-k-off-by-one/`). The verifier's maximum is also one word short: `compute_max_ram_k` rounds `total_bytes / 8` down. When `heap_end` is not a multiple of 8 (`program_size` is not rounded), a program may access the word that straddles `heap_end`, and an honest run that does so gets no proof. The issue proposes `touched + 1` together with `div_ceil(8)` | FIXME: `HonestTrace.prover_config` uses the fixed formula `touched + 1`, so Lean differs from Rust here. Blocks the upper half of the verifier's RAM-size check (`ramSizeBounds`, via `HonestTrace.witness_params_ram_bounds`) |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 5 | The emulator loads only some ELF section kinds into RAM, preprocessing loads every section | assumed to agree: `initialRam` TODO in `program.lean` |
 
+## Device-memory soundness findings
+
+The [Layer 5b audit](../methods/soundness.md#layer-5b-one-execution-step), at
+Jolt revision `43cc043332762034b5f65379441576e06e7a3890`, distinguishes three
+cases. Termination ignores writes (#1950/#1951 item 2); panic sets a flag
+regardless of the first byte stored and ignores writes to the other bytes
+(B6); input/advice stores are rejected by the MMU. The Lean execution model
+matches those behaviours. RAM-table history alone does not establish them.
+
+**Input/advice stores:** the candidate in
+[#2041](https://github.com/a16z/jolt/issues/2041) now has a reproduction reported
+by Ari in [#2044](https://github.com/a16z/jolt/issues/2044). At `00508a09`, the
+tracer aborts at the input store, while a modified tracer records stores into
+all three read-only regions and the unchanged verifier accepts outputs 7, 9
+and 11 in clear/Dory mode. The report and patch have been read, but this session
+has not independently rerun them. This contradicts soundness relative to the
+tracer's execution semantics if the reported verification is reproduced.
+
+Ari approved the broader temporary `TracerAddressChecks` premise. It supplies
+`Mmu.effective_address_ok` for the next attempted LD or SD after an initialized
+relaxed prefix with honest internal runtime advice, even if the attempt would
+abort. It matches the tracer's starting-address check for RAM and eight byte
+checks for device memory. No witness columns appear in the predicate.
+
+The plan separately records four further candidates: stores at zero, the I/O
+padding gap, stores to the stack canary, and loads/stores at or above `heap_end`.
+No complete satisfying witness or verifier reproduction exists for those cases
+in this work; #2044 does not establish them. Each has its own next check in the
+plan. The FIXME links #2044 and these candidates and requires narrowing or
+removal as each is resolved and proved. This replaces the input/advice-only
+restriction. Alignment, unsupported peripheral dispatch, panic/termination
+value agreement and stopping remain separate obligations; address assertions
+alone do not establish successful execution.
+
 ## Assumptions
 
 Premises or fields of the final theorem, with their source or reason below.
@@ -52,6 +86,7 @@ Premises or fields of the final theorem, with their source or reason below.
 |---|---|---|
 | The field's characteristic exceeds `2^128` | `JoltInstance.soundness`, premise `charAbove2pow128` | Ari, 2026-10-10: the base relation must distinguish full 128-bit lookup addresses. BN254 satisfies this; model Akita's field and extra address guard separately. PCS security is outside this work |
 | No source row is SC.W or SC.D (temporary) | `Rv64ProgramImage.NoStoreConditional`, soundness premise `noStoreConditional` | Ari, 2026-10-10: exclude the SC advice mismatch (#2037) while proving the remaining cases; remove this restriction after the constraints and model are fixed |
+| Every attempted LD/SD passes the tracer's address assertions (temporary) | `JoltInstance.TracerAddressChecks` in `Soundness/Layer5/MemoryAccessRestriction.lean`, soundness premise `tracerAddressChecks` | Approved by Ari for #2044 and four separate candidates: zero stores, the I/O gap, canary stores and accesses at or above `heap_end`. Quantifies over every private input and relaxed prefix with honest internal runtime advice; checks the next attempted row without assuming it succeeds. Uses `Mmu.effective_address_ok` at the start for RAM, every byte for devices. FIXME to narrow or remove as each case is resolved and proved; not a verifier check |
 | The PC does not wrap past 2^64 | `Rv64ProgramImage.NextPCNoWrap` | a16z, 2026-10-07: such an ELF is illegal |
 | The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `Soundness/Layer3/Layout.lean`, soundness premise `ramRegionFits` | Approved by Ari, 2026-10-10, replacing the run-based address restriction. With the verifier's RAM-size check, all eight bytes of each in-domain word fit. The signed sum is then recovered from satisfying constraints, including address zero. NOTE: to confirm with a16z. This is an instance restriction, not a verifier check |
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty` (premise `imageNonempty`) | a16z, by phone, 2026-10-08. Rust's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Rust's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
