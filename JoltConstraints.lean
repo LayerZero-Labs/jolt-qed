@@ -46,3 +46,6 @@ import JoltConstraints.Soundness.Layer5.MemoryAddress
 import JoltConstraints.Soundness.Layer5.AdviceExpansion
 import JoltConstraints.Soundness.Layer5.Registers
 import JoltConstraints.Soundness.Layer5.AddImmediate
+import JoltConstraints.Soundness.Layer5.Xor
+import JoltConstraints.Soundness.Layer5.SetLessThanImmediate
+import JoltConstraints.Soundness.Layer5.RuntimeAdvice

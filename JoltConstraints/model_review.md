@@ -1,7 +1,7 @@
 ---
 title: Jolt model in Lean, open issues
 updated: 2026-10-10
-rust: experiment/pr2039-sc; 43cc043 plus PR #2039 at 2a924239 (not the main model)
+rust: 43cc043 plus PR #2039 at 2a924239; reviewed update merged into feat/soundness
 ---
 
 # Open issues
@@ -130,22 +130,30 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
 - **Expansions.** `SourceInstruction.expand` (`expansions.lean`) uses the bytecode
   project's programs. All 57 generated programs, including LR.W, LR.D, SC.W and
   SC.D, are in `ExpansionsAutomated.lean` and match `jolt-lean-gen` on the
-  experimental Rust checkout exactly. LR/SC are not proved against Sail. The older
+  patched Rust generation checkout exactly. LR/SC are not proved against Sail. The older
   `JoltISA.lrwProgram`/`lrdProgram` (`Expansions/LoadReserved.lean`) follow the old
   tracer and are unused.
   The rows they emit are checked in `expansion_facts.lean`. Still relied on and not
   stated there: operand order is Rust's rs1/rs2, and `VirtualRev8W` has immediate 0.
-- **SC success flag, PR #2039 experiment.** The new expansion computes success
+- **SC success flag, PR #2039 model.** The new expansion computes success
   with XOR and SLTIU from virtual register 32 (SC.W) or 33 (SC.D) and the target
   address. The RAM guard remains. The patched tracer no longer supplies SC advice,
-  so neither does `honestTracerAdvice`. No SC row is a `VirtualAdvice`; its
-  runtime-advice agreement reduces to `none = none`. Constraint-to-execution
+  so neither does `honestTracerAdvice`. `Layer5/RuntimeAdvice.lean` proves that
+  no SC row is a `VirtualAdvice` and that a row without advice has runtime-advice
+  agreement `none = none`. Constraint-to-execution
   soundness only needs the ordinary instruction proofs for SC's rows. Register
   agreement supplies the same values of registers 32 and 33 to the witness and
   run, without an invariant interpreting them as an emulator reservation.
-  `NoStoreConditional` stays in this first review chunk pending that instruction
+  `NoStoreConditional` currently remains pending that instruction
   coverage; the main theorem is still sorried. The follow-up steps are in the
   plan's PR #2039 section.
+- **XOR and SLTIU soundness steps.** `Layer5/Xor.lean` and
+  `Layer5/SetLessThanImmediate.lean` prove successful execution, the constrained
+  write value and preservation of register agreement for selected rows.
+  Operand canonicality, RAF, table selection and inputs come from the row and
+  constraints; source/destination aliases need no extra condition. This covers
+  SC's two comparison instructions individually. Composing the whole expansion,
+  the remaining instruction families and RAM agreement are still open.
 - **LR/SC reservation correspondence (model obligation).** Jolt's native
   execution methods `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`;
   the patched inline trace path and this model compute success from virtual

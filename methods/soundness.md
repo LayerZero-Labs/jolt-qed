@@ -14,16 +14,21 @@ Read these before beginning work:
 
 The local `blog/` is stale; use the published article for background.
 
-## PR #2039 experiment (2026-10-10)
+## PR #2039 model update (2026-10-10)
 
-This checkout is `experiment/pr2039-sc`, based on Lean commit `cd0474b`.
-It models [PR #2039](https://github.com/a16z/jolt/pull/2039) at
+Ari reviewed the experiment and approved merging it into `feat/soundness`.
+Merge `c42f8f0` preserves both the SC update and the memory-access restriction.
+The temporary Lean branch and worktree have been removed. This model includes [PR #2039](https://github.com/a16z/jolt/pull/2039) at
 `2a924239c1f99f2e4f2c94a5dae5e403b182b27c`, applied without conflicts to
 Jolt `43cc043332762034b5f65379441576e06e7a3890`. It does not import the
-other changes on the PR's newer base. The main Lean checkout remains at the
-old model and retains its in-progress memory-access restriction work.
+other changes on the PR's newer base. The original Rust checkout remains at
+`43cc043`; the generation checkout described below contains the applied patch.
+This is a model of the pinned PR revision, not a claim about its eventual merged
+version. If Michael changes the PR, regenerate the SC expansions from the new
+revision, review the generated diff and tracer changes, and rebuild the affected
+proofs before updating this revision record.
 
-The first review chunk regenerates all 57 expansion programs with LR/SC
+The reviewed update regenerates all 57 expansion programs with LR/SC
 support enabled in `jolt-lean-gen`. Before the patch, all 57 definitions
 matched the existing Lean definitions exactly. After the patch, only SC.W
 and SC.D change. SC.W goes from 30 to 26 rows in each destination branch;
@@ -37,7 +42,8 @@ without extra assumptions.
 The separate commit `e3a34fc` only moves the unchanged LR/SC definitions into
 the generated module; it is independent of the proposed SC semantics.
 The Rust generator change is `cf450ba2` in `/private/tmp/jolt-pr2039-rust`;
-the applied PR is `1bac0a87` there. To regenerate, build `jolt-lean-gen` in
+the applied PR is `1bac0a87` there, retained with detached HEAD and no
+experimental branch. To regenerate, build `jolt-lean-gen` in
 that checkout and run it with `--lean --out` pointing to this checkout's
 `JoltBytecode/JoltISA/ExpansionsAutomated.lean` (the generator's default
 output path points to the main checkout).
@@ -54,14 +60,15 @@ failed). `cargo +1.95 clippy -p jolt-lean-gen --offline --all-targets -- -D warn
 and `cargo +1.95 fmt --check -p jolt-lean-gen` passed. This checks the expander
 and tracer; no new verifier-acceptance experiment was run.
 
-**Review boundary.** `NoStoreConditional` is retained in this first chunk.
+**Remaining proof work.** `NoStoreConditional` is currently retained.
 A successful build of the still-sorried main theorem would not establish
 soundness after deleting a premise. Ari has approved removing the premise
-on this experimental branch. The constraint-to-execution proof needs:
+for this updated model. The constraint-to-execution proof needs:
 
-1. Show that neither destination branch of either SC expansion contains a
-   `VirtualAdvice` row. On every SC row, both sides of
-   `advice_from_honest_tracer` are then `none`.
+1. **Proved in `Layer5/RuntimeAdvice.lean`:** neither destination branch of
+   either SC expansion contains a `VirtualAdvice` row. The generic lemma
+   `runtimeAdvice_agrees_of_noAdvice` gives `none = none` for any such trace
+   row. Applying it during the whole-trace induction remains to be done.
 2. Cover the rows SC uses through the ordinary Layer 5b instruction proofs:
    LUI, VirtualAssertLTE, XOR, SLTIU, ADDI, XORI, SUB, MUL, ADD, LD/SD, and
    SC.W's alignment and word-lane rows. These proofs are also needed for other
@@ -69,17 +76,46 @@ on this experimental branch. The constraint-to-execution proof needs:
    and 33 with the run's state, so the XOR/SLTIU rows compute the same success
    bit on both sides without any interpretation of LR/SC history. Check both
    destination branches and source-register aliases through these row proofs.
+   Selected ADDI, XOR and SLTIU rows now have execution and register-agreement
+   lemmas. Composition into the whole SC expansion and the other row families
+   remain open.
 3. Remove `NoStoreConditional` and use that ordinary instruction coverage for
    SC's rows. The memory-device and stopping obligations remain separate.
+
+**Next 5b chunk, before adding more instruction copies:**
+
+- Bridge the step lemmas' `execWithTapeAnswer row.instruction` to
+  `UntrustedAnswerRun.executes`, which applies `withRuntimeAdvice` first.
+  Prove that `instruction.adviceValue? = none` implies
+  `instruction.withRuntimeAdvice advice = instruction`, then use that equality
+  to transport execution. The absence fact follows from each selected ordinary
+  instruction's syntax. `ordinary_withRuntimeAdvice` in `trace_interface.lean`
+  only preserves the `ordinary` predicate; it does not prove instruction equality,
+  and `VirtualAdvice` itself is ordinary. The bridge therefore needs the absence
+  fact, not ordinary status alone.
+- Factor the lookup-writing register-step pattern shared by XOR and SLTIU before
+  covering further instructions. Share canonical operand reads, input recovery,
+  lookup-to-write conversion and the final register-agreement update. Each
+  instruction supplies its proved metadata, table interpretation and interpreter
+  read/write equation; derive these from the selected row instead of assuming a
+  successful execution. Instantiate the shared lemma for the existing XOR and
+  SLTIU proofs first. These local proof facts must not become new soundness or
+  instance premises. Keep the exact post-state and final-cycle coverage.
+
+After that refactor, the remaining SC row families are LUI, VirtualAssertLTE,
+XORI, SUB, MUL, ADD, LD/SD, and the alignment and word-lane rows. ADDI, XOR and
+SLTIU already have their individual step lemmas. Whole-expansion composition
+and the induction remain open. This is queued work, not work begun during the
+weekend pause.
 
 Relating registers 32 and 33 to Jolt's emulator reservation is a separate
 obligation about the model, recorded under **LR/SC reservation correspondence**
 in [model_review.md](../JoltConstraints/model_review.md). It is not a prerequisite
 for removing `NoStoreConditional` from the constraint-to-execution theorem.
 
-No additional soundness or instance premise is authorized by this experiment.
-SC-specific changes stay here until upstream merges and the proof is reviewed;
-only independent improvements are eligible for transfer to the main branch.
+No additional soundness or instance premise is authorized by this model update.
+The reviewed SC changes are now part of `feat/soundness`, with Ari's approval;
+this records our chosen model revision and does not assert that the PR has merged upstream.
 
 ## Soundness statement
 
@@ -176,7 +212,7 @@ Under the planned untrusted-answer semantics (decision of 2026-10-10, Layer 5a),
 The private inputs instead supply the answers the witness gives at each tape read and each `bytes_remaining()` query.
 
 At each step that uses runtime advice, we must prove that the value in `w` agrees with the honest tracer's computation.
-At the main model's `43cc043`, SC.W can report failure where Jolt's tracer reports success. This experimental model uses PR #2039's deterministic comparison. `NoStoreConditional` remains in the theorem pending the SC proof steps listed above; the experiment must discharge those steps before removing it.
+At the previous model revision `43cc043`, SC.W can report failure where Jolt's tracer reports success. The current model uses PR #2039's deterministic comparison. `NoStoreConditional` remains in the theorem pending the SC proof steps listed above; the proof must discharge those steps before removing it.
 
 ### The witness proves facts about the execution prefix
 
@@ -1310,13 +1346,13 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   Layer 0–1 lemmas retain their weaker bounds. Akita will be modeled separately
   as a non-succinct constraint relation, with PCS security outside scope.
   The detailed source audit is in Layer 4 above.
-- **SC advice at the main model's `43cc043` (runtime-advice agreement):** SC.W can report failure when the reservation holds;
+- **SC advice at the previous revision `43cc043` (runtime-advice agreement):** SC.W can report failure when the reservation holds;
   the honest tracer reports success. The reproducer was reported as
   [a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037). SC.D has the same
   one-way check; only SC.W was run. With Ari's approval on 2026-10-10, the main
   theorem now temporarily assumes `NoStoreConditional`, excluding both instructions
   from the source program. The `FIXME` requires removing this premise after the
-  constraints and model are fixed. In this experimental checkout the model is
+  constraints and model are fixed. The current model is
   regenerated from PR #2039; its SC constraint-to-execution proof remains open.
 - **Stopping and panic (Layers 7–8):** the two cases under "Known not sound for
   this L" in [B6](./review_completeness_and_soundness.md#b6-the-soundness-statement)
@@ -1455,6 +1491,35 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   `sys_enable_experimental_extensions`, without assuming its value.
   No new soundness premise, `sorry`, compiler-trust axiom, heartbeat setting
   or finite register enumeration was introduced.
+- **Layer 5b, XOR, SLTIU and runtime advice proved; weekend review boundary:**
+  [Xor.lean](../JoltConstraints/Soundness/Layer5/Xor.lean) and
+  [SetLessThanImmediate.lean](../JoltConstraints/Soundness/Layer5/SetLessThanImmediate.lean)
+  prove `xor_step` and `sltiu_step` from the selected row, constraints and
+  current register agreement. Private lemmas derive canonical operands,
+  metadata, instruction inputs and the write value; Layer 4 interprets the
+  lookup, and `RegisterAgreement.write` establishes the next register column.
+  Each theorem returns the exact destination-write state and covers aliases,
+  architectural and virtual operands, and the last cycle's execution/result.
+  SLTIU reads its source before writing the same register, as SC requires.
+
+  [RuntimeAdvice.lean](../JoltConstraints/Soundness/Layer5/RuntimeAdvice.lean)
+  proves runtime-advice agreement for any row without `VirtualAdvice`, plus
+  absence of such rows throughout each generated SC.W/SC.D expansion in both
+  destination branches. These are facts about expanded rows; neither they nor
+  the execution lemmas assume anything about LR/SC history. Connecting selected
+  rows through the full expansion, RAM agreement and the other instruction
+  families remains open. `NoStoreConditional` is still present; this chunk
+  neither removes it nor completes Layer 5b.
+
+  All three modules are imported by `JoltConstraints.lean`; `lake build
+  JoltConstraints` passed (8744 jobs). Module builds reported 4.3 s for XOR,
+  4.9 s for SLTIU and 3.8 s for runtime advice. The five public lemmas passed
+  `#print axioms`: only the standard axioms occur, with the allowed Sail
+  constant `sys_enable_experimental_extensions` also in the two execution
+  lemmas. No new premise, `sorry`, compiler-trust axiom or heartbeat override
+  was introduced. Ari reviewed all three files by reading and found them correct.
+  The PR-regeneration rule and the next chunk's advice bridge and shared step
+  lemma are recorded above. Work remains stopped at this boundary at Ari's request.
 - **Layer 5b, device-memory audit; still open:** the termination restriction
   under discussion permits the standard SDK return sequence, but does not
   close RAM agreement. Panic needs separate read and final-flag arguments.
