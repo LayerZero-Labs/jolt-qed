@@ -225,6 +225,22 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   patched instruction exactly as the trace definition does. Their results still
   cover aliases, the full post-state and execution at the final cycle. This
   closes the earlier application mismatch; it does not complete Layer 5b.
+- **Shared operands and further Layer 5b steps, 2026-10-15.**
+  `Layer5/RegisterInputs.lean` now holds the source-value helpers and shares
+  register/register and register/immediate input recovery across instruction
+  families. The existing ADDI, XOR and SLTIU statements are unchanged. New
+  results cover LUI, XORI and VirtualAssertLTE, with one `arithmetic_step`
+  covering ADD, SUB and MUL. They derive successful execution from selected
+  bytecode, constraints and current register agreement; runtime advice, aliases
+  and final-cycle execution are included. VirtualAssertLTE derives that its
+  check passes and preserves the entire state, using `RegisterAgreement.noWrite`
+  for the next table column. All other new steps reuse `registerWrite_step`.
+  The source audit and validation are in `methods/soundness.md`. SC.W still
+  needs step lemmas for `VirtualAssertWordAlignment`, `VirtualAlignAddr`,
+  `ANDI`, `LD`, `VirtualWindowMaskW`, `VirtualPextSigned`, `ANDN`,
+  `VirtualShiftDataW` and `SD`; SC.D still needs `LD` and `SD`. RAM/PC agreement
+  and whole-trace composition remain open; no main-theorem or instance premise
+  was added.
 - **LR/SC reservation correspondence (model obligation).** Jolt's native
   execution methods `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`;
   the patched inline trace path and this model compute success from virtual

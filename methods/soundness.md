@@ -125,15 +125,15 @@ for this updated model. The constraint-to-execution proof needs:
    either SC expansion contains a `VirtualAdvice` row. The generic lemma
    `runtimeAdvice_agrees_of_noAdvice` gives `none = none` for any such trace
    row. Applying it during the whole-trace induction remains to be done.
-2. Cover the rows SC uses through the ordinary Layer 5b instruction proofs:
-   LUI, VirtualAssertLTE, XOR, SLTIU, ADDI, XORI, SUB, MUL, ADD, LD/SD, and
-   SC.W's alignment and word-lane rows. These proofs are also needed for other
-   source programs. Register agreement already compares virtual registers 32
-   and 33 with the run's state, so the XOR/SLTIU rows compute the same success
-   bit on both sides without any interpretation of LR/SC history. Check both
-   destination branches and source-register aliases through these row proofs.
-   Selected ADDI, XOR and SLTIU rows now have execution and register-agreement
-   lemmas. Composition into the whole SC expansion and the other row families
+2. Cover the rows SC uses through the ordinary Layer 5b instruction proofs.
+   LUI, VirtualAssertLTE, XOR, SLTIU, ADDI, XORI, SUB, MUL and ADD now have step
+   lemmas; the nine remaining SC.W row kinds are listed below. These proofs
+   are also needed for other source programs. Register agreement already
+   compares virtual registers 32 and 33 with the run's state, so the XOR/SLTIU
+   rows compute the same success bit on both sides without any interpretation
+   of LR/SC history. Check both destination branches and source-register aliases
+   through these row proofs.
+   Composition into the whole SC expansion and the remaining row proofs
    remain open.
 3. Remove `NoStoreConditional` and use that ordinary instruction coverage for
    SC's rows. The memory-device and stopping obligations remain separate.
@@ -164,11 +164,13 @@ does. They retain the exact post-state, alias coverage and last-cycle execution;
 only next-column register agreement requires a following cycle. This changes
 the step-lemma API; it does not change either interpreter or the main theorem.
 
-The remaining SC row families are LUI, VirtualAssertLTE,
-XORI, SUB, MUL, ADD, LD/SD, and the alignment and word-lane rows. ADDI, XOR and
-SLTIU already have their individual step lemmas. Whole-expansion composition
-and the induction remain open. The shared-step refactor is complete; the
-remaining instruction families are the next Layer 5b work.
+ADDI, XOR, SLTIU, LUI, XORI and VirtualAssertLTE now have step lemmas; ADD,
+SUB and MUL share `arithmetic_step`. The SC.W rows still without a step lemma
+are `VirtualAssertWordAlignment`, `VirtualAlignAddr`, `ANDI`, `LD`,
+`VirtualWindowMaskW`, `VirtualPextSigned`, `ANDN`, `VirtualShiftDataW` and `SD`.
+For SC.D, only `LD` and `SD` remain. Whole-expansion composition, RAM/PC
+agreement and the induction remain open. The instruction-family chunk below
+records the shared proofs and validation.
 
 Relating registers 32 and 33 to Jolt's emulator reservation is a separate
 obligation about the model, recorded under **LR/SC reservation correspondence**
@@ -1647,6 +1649,64 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   audit was repeated and retained exactly the allowed dependencies above.
   Ari requested committing the completed soundness work and returning to
   Layer 5b; the remaining instruction families are next.
+- **Layer 5b, shared operands and six more instruction cases, 2026-10-15:**
+  [RegisterInputs.lean](../JoltConstraints/Soundness/Layer5/RegisterInputs.lean)
+  now holds `RegisterAgreement.rs1Value` and `rs2Value`, moved unchanged from
+  `LookupWrite.lean`. Its two new input lemmas recover either two register
+  operands or a register and decoded immediate. XOR, ADD/SUB/MUL and
+  VirtualAssertLTE use the former; ADDI, SLTIU and XORI use the latter. Each
+  caller derives canonicality and discharges the operand/selection facts from
+  its selected instruction. No successful read or execution is assumed.
+
+  | Instructions | Step result | Reused proof |
+  | --- | --- | --- |
+  | ADD, SUB, MUL | `arithmetic_step` in `Layer5/Arithmetic.lean` | One proof indexed by `RegisterArithmetic`; shared register inputs, the three existing Layer 4 RangeCheck rules, and `registerWrite_step` |
+  | LUI | `lui_step` in `Layer5/LoadUpperImmediate.lean` | RangeCheck addition of zero and the decoded immediate, then `registerWrite_step` |
+  | XORI | `xori_step` in `Layer5/XorImmediate.lean` | Shared immediate inputs, the existing XOR lookup theorem, and `registerWrite_step` |
+  | VirtualAssertLTE | `assertLTE_step` in `Layer5/AssertLessThanEqual.lean` | Shared register inputs, unsigned comparison and `predicate_of_assert`; `RegisterAgreement.noWrite` preserves the table |
+
+  `RegisterArithmetic.instruction` selects the existing ADD/SUB/MUL constructors,
+  and `.value` states their wrapped result. They do not replace `execInstr`:
+  the common proof checks each of its three branches. The assertion proof
+  derives the comparison from `AssertLookupOne`, proves successful execution
+  with the entire state unchanged, and derives the next register column from
+  the absence of a destination. All step results apply runtime advice as the
+  trace does, permit register aliases, retain exact post-states, and cover
+  execution at the final cycle. Only next-column agreement requires a successor.
+
+  The local Rust checkout remains at `1c8aaff2`; the inspected tracer,
+  instruction-metadata and lookup-query files match public pin `8bbb2357`.
+  Source checks cover `tracer/src/instruction/{lui,xori,add,sub,mul,virtual_assert_lte}.rs`,
+  their `crates/jolt-riscv/src/instructions/{i,m,assert}` metadata, and
+  `crates/jolt-lookup-tables/src/instructions/{riscv,virt}` lookup queries.
+  LUI takes the already-decoded immediate; `normalize_imm` preserves its word
+  bits. ADD/SUB/MUL wrap at 64 bits; XORI combines the source with that decoded
+  word; VirtualAssertLTE compares unsigned words and writes nothing. These
+  proofs apply to a selected row of the expanded bytecode, whether it represents
+  a source instruction directly or was emitted inside an expansion. They do
+  not claim whole-expansion composition or LR/SC-to-Sail equivalence.
+
+  All new modules are imported by `JoltConstraints.lean`. The existing ADDI,
+  XOR and SLTIU statements are unchanged. Remaining work includes the nine
+  SC.W row kinds named above, RAM/PC agreement and execution-prefix composition.
+
+  Validation: `lake build JoltBytecode JoltConstraints` passed (8756 jobs).
+  `#print axioms` checked the 14 affected public soundness lemmas and both
+  main theorems. The 14 lemmas use only the three standard Lean axioms and,
+  for execution results, the allowed `sys_enable_experimental_extensions`.
+  Both main theorems retain exactly their previous dependency sets, including
+  their existing proof gaps. No new premise, `sorry`, native proof or heartbeat
+  override was added. All 20 inspected Rust source files match `8bbb2357`.
+  Review corrections name the remaining SC.W rows and the division, remainder
+  and LR/SC expansions using VirtualAssertLTE, clarify which rows of the
+  expanded bytecode the proofs cover, and add line numbers to the new Rust
+  citations. The FIXME in `soundness.lean` now states that the theorem is false
+  today for B6's stopping and panic cases, which the temporary restrictions
+  do not cover. Two proof-style edits use a direct `exact` and an explicit
+  `simpa only` set; statements are
+  unchanged. After these corrections, the same build passed (8756 jobs) and
+  all 16 audited axiom sets were unchanged. All 14 files cited in the four
+  new instruction headers match `8bbb2357`; each cited line range exists.
 - **Layer 5b, device-memory audit; still open:** the termination restriction
   under discussion permits the standard SDK return sequence, but does not
   close RAM agreement. Panic needs separate read and final-flag arguments.
@@ -1741,8 +1801,9 @@ advice word recovery. Layer 5a now adds the relaxed tape semantics and proves
 fixed-tape inclusion and narrow-answer truncation. It is built and reviewed by
 reading. Layer 5b now includes the address proofs, full execution of the
 three narrow-advice expansions, and the shared register-agreement invariant
-with initialization, read and write rules. ADDI now derives its local write
-and witness encoding and preserves register agreement. The remaining
-instruction families must do the same, and these results still need to be
+with initialization, read, write and no-write rules. ADDI, XOR, SLTIU, LUI,
+XORI, ADD/SUB/MUL and VirtualAssertLTE now derive their local execution and
+preserve register agreement, reusing common operand and update proofs. The
+remaining instruction families must do the same, and these results still need to be
 connected to RAM agreement and the execution-prefix induction.
 The separate Akita model remains future work.

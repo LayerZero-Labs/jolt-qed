@@ -46,8 +46,13 @@ import JoltConstraints.Soundness.Layer5.NarrowAdvice
 import JoltConstraints.Soundness.Layer5.MemoryAddress
 import JoltConstraints.Soundness.Layer5.AdviceExpansion
 import JoltConstraints.Soundness.Layer5.Registers
+import JoltConstraints.Soundness.Layer5.RegisterInputs
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer5.AddImmediate
+import JoltConstraints.Soundness.Layer5.Arithmetic
+import JoltConstraints.Soundness.Layer5.LoadUpperImmediate
 import JoltConstraints.Soundness.Layer5.Xor
+import JoltConstraints.Soundness.Layer5.XorImmediate
 import JoltConstraints.Soundness.Layer5.SetLessThanImmediate
+import JoltConstraints.Soundness.Layer5.AssertLessThanEqual
 import JoltConstraints.Soundness.Layer5.RuntimeAdvice

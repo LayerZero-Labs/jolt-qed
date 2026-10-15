@@ -19,8 +19,8 @@ set_option autoImplicit false
 -- `JoltInstance.SoundnessAssumptions` and, for now, the workarounds in
 -- `JoltInstance.TemporaryRestrictions`; both are in Soundness/Assumptions.lean.
 -- The private inputs of the run need not be the ones given.
--- FIXME: expected to fail today for programs that stop or panic in ways SDK guests
--- never do (B6, "Known not sound for this L").
+-- FIXME: false today for programs that stop or panic in ways SDK guests never do
+-- (B6, "Known not sound for this L"); the temporary restrictions do not cover these.
 theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)

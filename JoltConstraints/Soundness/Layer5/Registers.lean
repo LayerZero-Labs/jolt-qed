@@ -151,6 +151,25 @@ private theorem sourceValue_writeDst_same (destination : Dst)
 
 variable {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
 
+/-- A selected row without a destination leaves the register table unchanged.
+This transports agreement when an instruction, such as an assertion, keeps the state. -/
+theorem RegisterAgreement.noWrite
+    (charAbove2pow127 : 2 ^ 127 < ringChar F)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {t : Fin params.traceLength} (next : t.val + 1 < params.traceLength)
+    (chosen : Fin (2 ^ params.logBytecodeK)) (selected : bytecodeRa witness chosen t = 1)
+    {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode chosen.val = some row)
+    (destinationIs : row.instruction.destination? = none)
+    {state : SailJoltState} (agrees : RegisterAgreement witness t state) :
+    RegisterAgreement witness ⟨t.val + 1, next⟩ state := by
+  refine ⟨agrees.present, ?_⟩
+  intro register
+  rw [registersVal_succ_of_selected_bytecode charAbove2pow127
+    context equations register t next chosen selected]
+  simpa only [rowIs, Option.bind_some, bytecodeRdRegister_eq_destination,
+    destinationIs, Option.map_none] using agrees.values register
+
 /-- A selected instruction's successful destination write extends register
 agreement to the next cycle when its value matches `RdWriteValue`. Canonicality
 comes from expansion. The x0 case uses the proved zero-table invariant, since

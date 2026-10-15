@@ -36,15 +36,11 @@ private theorem xor_inputs {pre : SailJoltState}
     (agrees : RegisterAgreement witness t pre) :
     witness.LeftInstructionInput t = ((sourceValue lhs pre).toNat : F) ∧
     witness.RightInstructionInput t = ((sourceValue rhs pre).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
   have canonical := xor_canonical context rowIs instructionIs
-  have leftSource := agrees.rs1Value bound context equations selected rowIs lhs canonical.1.2
+  exact agrees.registerInputs (two_pow_127_lt_char charAbove2pow128)
+    context equations selected rowIs lhs rhs canonical.1.2 canonical.2
+    (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
     (by rw [instructionIs]; rfl)
-  have rightSource := agrees.rs2Value bound context equations selected rowIs rhs canonical.2
-    (by rw [instructionIs]; rfl)
-  simpa only [instructionIs, JoltMetadata.instructionFlag, Bool.false_eq_true, ↓reduceIte,
-    add_zero, zero_add, leftSource, rightSource] using
-    instructionInputs_of_selected_bytecode bound context equations t slot selected row rowIs
 
 private theorem xor_write_value {pre : SailJoltState}
     (agrees : RegisterAgreement witness t pre) :

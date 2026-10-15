@@ -51,21 +51,11 @@ private theorem addi_inputs {pre : SailJoltState}
     (agrees : RegisterAgreement witness t pre) :
     witness.LeftInstructionInput t = ((sourceValue source pre).toNat : F) ∧
     witness.RightInstructionInput t = (imm.toNat : F) := by
-  have charAbove2pow127 := two_pow_127_lt_char charAbove2pow128
-  have canonical := (addi_canonical context rowIs instructionIs).2
-  have sourceTable : witness.Rs1Value t =
-      witness.RegistersVal (TraceWitness.sourceRegisterAddress source) t := by
-    simpa only [rowIs, Option.bind_some, instructionIs, bytecodeRs1Register] using
-      rs1Value_of_selected_bytecode charAbove2pow127 context equations t slot selected
-  have sourceValueIs := sourceTable.trans (agrees.read source canonical).2
-  have immediate : witness.Imm t = (imm.toNat : F) := by
-    simpa only [bytecodeImmediate, rowIs, instructionIs, JoltMetadata.immediate,
-      Int.cast_natCast] using
-      imm_of_selected_bytecode charAbove2pow127 context equations t slot selected
-  simpa only [instructionIs, JoltMetadata.instructionFlag, Bool.false_eq_true, ↓reduceIte,
-    add_zero, zero_add, sourceValueIs, immediate] using
-    instructionInputs_of_selected_bytecode charAbove2pow127 context equations
-      t slot selected row rowIs
+  exact agrees.immediateInputs (two_pow_127_lt_char charAbove2pow128)
+    context equations selected rowIs source imm
+    (addi_canonical context rowIs instructionIs).2
+    (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
+    (by rw [instructionIs]; rfl)
 
 private theorem addi_write_value {pre : SailJoltState}
     (agrees : RegisterAgreement witness t pre) :

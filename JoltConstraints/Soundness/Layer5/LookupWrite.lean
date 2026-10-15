@@ -1,8 +1,7 @@
-import JoltConstraints.Soundness.Layer5.Registers
+import JoltConstraints.Soundness.Layer5.RegisterInputs
 import JoltConstraints.Soundness.Layer5.RegisterWrite
 import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.Soundness.Layer5.TapeSemantics
-import JoltConstraints.Soundness.Layer4.Inputs
 import JoltConstraints.Soundness.Layer4.Outputs
 
 /-! Shared steps for instructions that write a lookup result to a register.
@@ -27,30 +26,6 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
 
 include charAbove2pow127 context equations selected rowIs
-
-/-- A selected canonical first source has the value supplied by register agreement. -/
-theorem RegisterAgreement.rs1Value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) (source : Src)
-    (canonical : JoltRegisterEncoding.sourceIsCanonical source = true)
-    (operand : bytecodeRs1Register row.instruction =
-      some (TraceWitness.sourceRegisterAddress source)) :
-    witness.Rs1Value t = ((sourceValue source pre).toNat : F) := by
-  have table := rs1Value_of_selected_bytecode
-    charAbove2pow127 context equations t slot selected
-  simp only [rowIs, Option.bind_some, operand] at table
-  exact table.trans (agrees.read source canonical).2
-
-/-- A selected canonical second source has the value supplied by register agreement. -/
-theorem RegisterAgreement.rs2Value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) (source : Src)
-    (canonical : JoltRegisterEncoding.sourceIsCanonical source = true)
-    (operand : bytecodeRs2Register row.instruction =
-      some (TraceWitness.sourceRegisterAddress source)) :
-    witness.Rs2Value t = ((sourceValue source pre).toNat : F) := by
-  have table := rs2Value_of_selected_bytecode
-    charAbove2pow127 context equations t slot selected
-  simp only [rowIs, Option.bind_some, operand] at table
-  exact table.trans (agrees.read source canonical).2
 
 /-- For an interleaved lookup-writing row, transfer its inputs through the
 lookup and into RdWriteValue. The caller supplies the proved Layer 4 table rule. -/

@@ -36,16 +36,11 @@ private theorem sltiu_inputs {pre : SailJoltState}
     (agrees : RegisterAgreement witness t pre) :
     witness.LeftInstructionInput t = ((sourceValue source pre).toNat : F) ∧
     witness.RightInstructionInput t = (imm.toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
-  have canonical := (sltiu_canonical context rowIs instructionIs).2
-  have sourceValueIs := agrees.rs1Value bound context equations selected rowIs source canonical
+  exact agrees.immediateInputs (two_pow_127_lt_char charAbove2pow128)
+    context equations selected rowIs source imm
+    (sltiu_canonical context rowIs instructionIs).2
+    (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
     (by rw [instructionIs]; rfl)
-  have immediate : witness.Imm t = (imm.toNat : F) := by
-    simpa only [bytecodeImmediate, rowIs, instructionIs, JoltMetadata.immediate,
-      Int.cast_natCast] using imm_of_selected_bytecode bound context equations t slot selected
-  simpa only [instructionIs, JoltMetadata.instructionFlag, Bool.false_eq_true, ↓reduceIte,
-    add_zero, zero_add, sourceValueIs, immediate] using
-    instructionInputs_of_selected_bytecode bound context equations t slot selected row rowIs
 
 private theorem sltiu_write_value {pre : SailJoltState}
     (agrees : RegisterAgreement witness t pre) :
