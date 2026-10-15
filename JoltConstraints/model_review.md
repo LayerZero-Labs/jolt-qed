@@ -214,6 +214,17 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   constraints; source/destination aliases need no extra condition. This covers
   SC's two comparison instructions individually. Composing the whole expansion,
   the remaining instruction families and RAM agreement are still open.
+- **Shared register steps, 2026-10-15.** `Layer5/LookupWrite.lean` shares source
+  recovery, interleaved lookup-write reasoning and the final successful
+  destination write/register update. XOR and SLTIU supply their proved metadata
+  and Layer 4 rules; ADDI also uses the final step lemma. Each caller proves the
+  interpreter's read/write equation from successful reads given by register
+  agreement. The shared proof derives write success from bytecode canonicality.
+  No soundness premise is added. `withRuntimeAdvice_eq_of_noAdvice` is now public,
+  and the three step lemmas accept the row's runtime advice and execute the
+  patched instruction exactly as the trace definition does. Their results still
+  cover aliases, the full post-state and execution at the final cycle. This
+  closes the earlier application mismatch; it does not complete Layer 5b.
 - **LR/SC reservation correspondence (model obligation).** Jolt's native
   execution methods `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`;
   the patched inline trace path and this model compute success from virtual

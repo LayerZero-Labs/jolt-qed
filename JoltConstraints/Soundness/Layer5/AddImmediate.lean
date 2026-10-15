@@ -1,9 +1,5 @@
-import JoltConstraints.Soundness.Layer5.Registers
-import JoltConstraints.Soundness.Layer5.RegisterWrite
-import JoltConstraints.Soundness.Layer5.TapeSemantics
+import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Arithmetic
-import JoltConstraints.Soundness.Layer4.Inputs
-import JoltConstraints.Soundness.Layer4.Outputs
 
 /-! A selected ADDI row executes with the wrapped sum required by its lookup
 constraints and preserves register agreement. All operand, metadata and write
@@ -85,28 +81,25 @@ private theorem addi_write_value {pre : SailJoltState}
 /-- A selected ADDI row writes the constrained wrapped sum and executes to the
 concrete destination-write state. Register agreement holds at the next cycle
 whenever that column exists. Execution and the write value also cover the last
-cycle. The arbitrary tape answer is ignored by ADDI. -/
+cycle. Runtime advice is applied exactly as in the trace definition; both
+internal advice and the arbitrary tape answer are ignored by ADDI. -/
 theorem addi_step {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
-    (answer : BitVec 64) :
+    (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := sourceValue source pre + imm
     witness.RdWriteValue t = (value.toNat : F) ∧
-    execWithTapeAnswer row.instruction answer pre =
+    execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
       RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
-  obtain ⟨destinationCanonical, sourceCanonical⟩ := addi_canonical context rowIs instructionIs
+  have sourceCanonical := (addi_canonical context rowIs instructionIs).2
   have encoded := addi_write_value charAbove2pow128 context equations
     selected rowIs instructionIs agrees
   have read := (agrees.read source sourceCanonical).1
-  have written := writeDst_afterWriteDst destination destinationCanonical
-    (sourceValue source pre + imm) pre
-  refine ⟨encoded, ?_, ?_⟩
-  · rw [instructionIs]
-    simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, read,
-      addWide_low, written, pure, EStateM.pure]
-  · intro next
-    exact agrees.write charAbove2pow128 context equations next slot selected rowIs
-      (by rw [instructionIs]; rfl) _ encoded written
+  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    destination (by rw [instructionIs]; rfl) _ encoded answer advice
+    (by rw [instructionIs]; rfl)
+  rw [instructionIs]
+  simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, read, addWide_low]
 
 end JoltConstraints.Soundness

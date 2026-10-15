@@ -138,31 +138,37 @@ for this updated model. The constraint-to-execution proof needs:
 3. Remove `NoStoreConditional` and use that ordinary instruction coverage for
    SC's rows. The memory-device and stopping obligations remain separate.
 
-**Next 5b chunk, before adding more instruction copies:**
+**5b advice bridge and shared steps, 2026-10-15; implemented:**
 
-- Bridge the step lemmas' `execWithTapeAnswer row.instruction` to
-  `UntrustedAnswerRun.executes`, which applies `withRuntimeAdvice` first.
-  Prove that `instruction.adviceValue? = none` implies
-  `instruction.withRuntimeAdvice advice = instruction`, then use that equality
-  to transport execution. The absence fact follows from each selected ordinary
-  instruction's syntax. `ordinary_withRuntimeAdvice` in `trace_interface.lean`
-  only preserves the `ordinary` predicate; it does not prove instruction equality,
-  and `VirtualAdvice` itself is ordinary. The bridge therefore needs the absence
-  fact, not ordinary status alone.
-- Factor the lookup-writing register-step pattern shared by XOR and SLTIU before
-  covering further instructions. Share canonical operand reads, input recovery,
-  lookup-to-write conversion and the final register-agreement update. Each
-  instruction supplies its proved metadata, table interpretation and interpreter
-  read/write equation; derive these from the selected row instead of assuming a
-  successful execution. Instantiate the shared lemma for the existing XOR and
-  SLTIU proofs first. These local proof facts must not become new soundness or
-  instance premises. Keep the exact post-state and final-cycle coverage.
+- `withRuntimeAdvice_eq_of_noAdvice` in `Layer5/RuntimeAdvice.lean` proves
+  that supplying runtime advice leaves a row unchanged when
+  `instruction.adviceValue? = none`. It is used by both runtime-advice
+  agreement and the shared step lemma. `ordinary_withRuntimeAdvice` alone
+  would not suffice: it preserves the ordinary flag, not instruction equality.
+- `Layer5/LookupWrite.lean` supplies four small lemmas. `RegisterAgreement.rs1Value`
+  and `rs2Value` recover selected source-column values using canonical operands
+  and register agreement. `lookupWrite_value_of_raf_zero` derives RAF, write and
+  table selection from the row, connects input columns to lookup operands, and
+  applies the caller's proved Layer 4 rule. `registerWrite_step` proves a
+  canonical destination write succeeds and extends register agreement.
+- XOR and SLTIU use all of that shared argument; ADDI also uses the final write
+  step. Each caller still proves its operand facts, metadata and interpreter
+  read/write equation. The shared lemma does not assume successful execution.
+  Its local proof obligations are all discharged in these callers, with no new
+  soundness or instance premise.
 
-After that refactor, the remaining SC row families are LUI, VirtualAssertLTE,
+The three public step lemmas now take `advice : row.instruction.RuntimeAdvice`
+after the tape `answer`, and their execution conclusion runs
+`row.instruction.withRuntimeAdvice advice`, exactly as `UntrustedAnswerRun.executes`
+does. They retain the exact post-state, alias coverage and last-cycle execution;
+only next-column register agreement requires a following cycle. This changes
+the step-lemma API; it does not change either interpreter or the main theorem.
+
+The remaining SC row families are LUI, VirtualAssertLTE,
 XORI, SUB, MUL, ADD, LD/SD, and the alignment and word-lane rows. ADDI, XOR and
 SLTIU already have their individual step lemmas. Whole-expansion composition
-and the induction remain open. This is queued work, not work begun during the
-weekend pause.
+and the induction remain open. The shared-step refactor is complete; the
+remaining instruction families are the next Layer 5b work.
 
 Relating registers 32 and 33 to Jolt's emulator reservation is a separate
 obligation about the model, recorded under **LR/SC reservation correspondence**
@@ -1585,11 +1591,11 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   `sys_enable_experimental_extensions`, without assuming its value.
   No new soundness premise, `sorry`, compiler-trust axiom, heartbeat setting
   or finite register enumeration was introduced.
-- **Layer 5b, XOR, SLTIU and runtime advice proved; weekend review boundary:**
+- **Layer 5b, XOR, SLTIU and runtime advice; original reviewed chunk:**
   [Xor.lean](../JoltConstraints/Soundness/Layer5/Xor.lean) and
   [SetLessThanImmediate.lean](../JoltConstraints/Soundness/Layer5/SetLessThanImmediate.lean)
   prove `xor_step` and `sltiu_step` from the selected row, constraints and
-  current register agreement. Private lemmas derive canonical operands,
+  current register agreement. The original private lemmas derived canonical operands,
   metadata, instruction inputs and the write value; Layer 4 interprets the
   lookup, and `RegisterAgreement.write` establishes the next register column.
   Each theorem returns the exact destination-write state and covers aliases,
@@ -1612,8 +1618,35 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   constant `sys_enable_experimental_extensions` also in the two execution
   lemmas. No new premise, `sorry`, compiler-trust axiom or heartbeat override
   was introduced. Ari reviewed all three files by reading and found them correct.
-  The PR-regeneration rule and the next chunk's advice bridge and shared step
-  lemma are recorded above. Work remains stopped at this boundary at Ari's request.
+  This was the weekend review boundary. The 2026-10-15 chunk below implements
+  the advice bridge and shared steps planned after that review.
+- **Layer 5b, advice bridge and shared steps; implemented, 2026-10-15:**
+  [LookupWrite.lean](../JoltConstraints/Soundness/Layer5/LookupWrite.lean) has four
+  reusable lemmas, all used by the refactored instruction proofs. The public
+  identity in [RuntimeAdvice.lean](../JoltConstraints/Soundness/Layer5/RuntimeAdvice.lean)
+  replaces its weaker private helper and connects all three step conclusions
+  to the trace's runtime-advice application. XOR and SLTIU share the selected
+  metadata and lookup-write argument; ADDI shares the final write/execute/update
+  argument. Instruction-specific canonicality, input selection and read/write
+  equations remain proved locally. The new arguments and the remaining work
+  are described in the PR #2039 section above.
+
+  `lake build` passed for both libraries (8747 jobs). The shared module built
+  in 3.6 s; XOR, SLTIU and ADDI built in 4.9 s, 4.0 s and 5.4 s respectively.
+  These proofs use the default heartbeat limit. `#print axioms` checked the
+  five new public lemmas, all three step lemmas and the three existing
+  runtime-advice/SC facts. Only `propext`, `Classical.choice`, `Quot.sound` and
+  the allowed Sail constant `sys_enable_experimental_extensions` occur; that
+  Sail constant appears in the four execution lemmas. No new premise, `sorry`,
+  compiler-trust axiom or heartbeat override was introduced. The main theorem
+  and its existing proof gaps are unchanged.
+
+  After the migration and main-theorem cleanup, `lake build JoltBytecode
+  JoltConstraints` passed again (8751 jobs). All Lean sources are unchanged
+  since that build. Before committing this refactor, the same 11-lemma axiom
+  audit was repeated and retained exactly the allowed dependencies above.
+  Ari requested committing the completed soundness work and returning to
+  Layer 5b; the remaining instruction families are next.
 - **Layer 5b, device-memory audit; still open:** the termination restriction
   under discussion permits the standard SDK return sequence, but does not
   close RAM agreement. Panic needs separate read and final-flag arguments.

@@ -11,10 +11,12 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-private theorem withRuntimeAdvice_noAdvice (instruction : Instr)
+/-- Supplying internal runtime advice leaves a row unchanged when it is not a
+VirtualAdvice instruction. This connects ordinary step rules to trace execution. -/
+theorem withRuntimeAdvice_eq_of_noAdvice (instruction : Instr)
     (advice : instruction.RuntimeAdvice) (absent : instruction.adviceValue? = none) :
-    (instruction.withRuntimeAdvice advice).adviceValue? = none := by
-  cases instruction <;> first | exact absent | cases absent
+    instruction.withRuntimeAdvice advice = instruction := by
+  cases instruction <;> first | rfl | cases absent
 
 /-- A row without VirtualAdvice has no recorded or honest runtime-advice value,
 independently of how the trace prefix was constructed. -/
@@ -23,10 +25,9 @@ theorem runtimeAdvice_agrees_of_noAdvice (program : Rv64ProgramImage SourceInstr
     (n : Fin rows.size)
     (absent : bytecode[rows[n].rowIndex].instruction.adviceValue? = none) :
     rows[n].someTracerAdvice? = honestTracerAdviceAtStepN program rows n := by
-  have recorded := withRuntimeAdvice_noAdvice _ rows[n].runtimeAdvice absent
   change (bytecode[rows[n].rowIndex].instruction.withRuntimeAdvice
     rows[n].runtimeAdvice).adviceValue? = _
-  rw [recorded]
+  rw [withRuntimeAdvice_eq_of_noAdvice _ rows[n].runtimeAdvice absent, absent]
   simp only [honestTracerAdviceAtStepN, Array.getElem?_eq_getElem n.isLt,
     bind, Option.bind_some]
   change none = bytecode[rows[n].rowIndex].instruction.adviceValue?.bind _
