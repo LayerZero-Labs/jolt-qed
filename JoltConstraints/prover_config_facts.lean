@@ -267,6 +267,44 @@ theorem HonestTrace.prover_config_eq_corrected_iff
           program_image_len_words joltInstance.program.memory_init + 1)) } = some config
     rw [correctedRam, ← lengthIs]
 
+/-- If Jolt's prover accepts the honest trace, so does the corrected policy. Both
+make the same last-jump, padded-length and address checks; they differ only in
+the RAM size they pick. -/
+theorem HonestTrace.corrected_prover_config_isSome
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (accepted : trace.prover_config = some config) :
+    trace.corrected_prover_config.isSome := by
+  obtain ⟨jump, lengthChecked, _, lengthBound⟩ :=
+    ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config accepted
+  have lengthIs := ProverConfig.checkedTraceLength_eq_padded _ _ lengthChecked
+  change config.trace_length = padded_trace_length trace.rows.size at lengthIs
+  obtain ⟨addressesOk, _⟩ := trace.prover_config_ram_shape config accepted
+  have lastJump : (trace.rows.back?.all fun last =>
+      trace.bytecode[last.rowIndex].instruction.is_jump) = true := by
+    rcases jump with empty | jump
+    · change trace.rows.size = 0 at empty
+      have emptyRows := Array.size_eq_zero_iff.mp empty
+      rw [emptyRows]
+      rfl
+    · change (trace.rows.back?.any fun last =>
+        trace.bytecode[last.rowIndex].instruction.is_jump) = true at jump
+      cases last : trace.rows.back? with
+      | none => rfl
+      | some row => simpa only [last, Option.any_some, Option.all_some] using jump
+  have addressCheck : (trace.rows.toList.filterMap (·.ram_address)).all
+      (fun address => address == 0 ||
+        trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address) = true := by
+    apply List.all_eq_true.mpr
+    intro a member
+    simpa only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] using addressesOk a member
+  have paddedBound : padded_trace_length trace.rows.size ≤
+      joltInstance.max_padded_trace_length.toNat := by
+    omega
+  unfold HonestTrace.corrected_prover_config
+  simp only [lastJump, addressCheck, guard, paddedBound, ↓reduceIte, pure_bind]
+  rfl
+
 /-- Checked Rust dimensions fit the logarithm fields of `WitnessParams`. -/
 theorem HonestTrace.prover_config_log_bounds
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

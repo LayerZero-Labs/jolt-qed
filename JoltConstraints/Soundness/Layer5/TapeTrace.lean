@@ -142,7 +142,7 @@ def UntrustedAnswerLanguage (joltInstance : JoltInstance SourceInstruction) : Pr
 theorem inLanguage_implies_untrustedAnswerLanguage
     {joltInstance : JoltInstance SourceInstruction} (member : joltInstance.InLanguage) :
     UntrustedAnswerLanguage joltInstance := by
-  obtain ⟨privateInputs, trace, outputs⟩ := member
+  obtain ⟨privateInputs, trace, outputs, _⟩ := member
   exact ⟨privateInputs, UntrustedAnswerTrace.ofFixed trace, outputs⟩
 
 end JoltConstraints.Soundness

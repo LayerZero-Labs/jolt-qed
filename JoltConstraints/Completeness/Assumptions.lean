@@ -1,8 +1,8 @@
 /-
-What the completeness theorem assumes, grouped by what each assumption is about:
-the instance, and Jolt's prover accepting the honest trace.
+What the completeness theorem assumes about the instance. Nothing is assumed
+about the trace: what Jolt says it proves is part of `JoltInstance.InLanguage`.
 -/
-import JoltConstraints.prover_config_facts
+import JoltConstraints.honest_trace
 
 set_option autoImplicit false
 
@@ -17,21 +17,3 @@ structure JoltInstance.CompletenessAssumptions
   -- empty. Jolt's prover does not reject an empty ELF; only Jolt's verifier does
   -- (bug-report/verifier-ram-minimum).
   imageNonempty : joltInstance.program.ImageNonempty
-
--- Jolt's prover accepts the honest trace and proves it at the sizes in `config`: the
--- padded trace length and the RAM size `ram_K`, in 64-bit words.
--- See : jolt/jolt-sdk/src/host_utils.rs:321 (ProverConfig::derive_from_dimensions)
-structure HonestTrace.ProverAccepts {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) : Prop where
-  -- Jolt's prover picks the sizes in `config` for this honest trace.
-  -- See : jolt/crates/jolt-prover/src/config.rs:63-109 (derive_from_dimensions)
-  proverSizes : trace.prover_config = some config
-  -- Every spoil assert the honest trace runs has equal sides. Jolt only proves such
-  -- a trace (`HonestTrace.SpoilAssertsPass`).
-  spoilAssertsPass : trace.SpoilAssertsPass
-  -- FIXME: the highest RAM slot the honest trace touches is below `ram_K`. Jolt's
-  -- prover rounds that slot up to a power of two without adding one: a trace that
-  -- touches slot 1024 gets `ram_K = 1024`, and its witness is rejected
-  -- (a16z/jolt#1951 item 4; bug-report/ram-k-off-by-one). Remove once fixed.
-  ramBoundary : trace.highest_touched_slot < config.ram_K
