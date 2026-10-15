@@ -176,10 +176,12 @@ this records our chosen model revision and does not assert that the PR has merge
 ## Soundness statement
 
 The current target is [`JoltInstance.soundness`](../JoltConstraints/Soundness/soundness.lean).
-It still uses the fixed-tape language. Layer 5a now defines the separate relaxed
-language in [TapeTrace.lean](../JoltConstraints/Soundness/Layer5/TapeTrace.lean)
-and proves fixed-tape language inclusion. The main theorem has not been switched
-to that language. Layer 5a is built and reviewed by reading. Ari approved the
+It concludes the fixed-tape language `JoltInstance.InLanguage`, and keeps it:
+on 2026-10-15 Ari decided this is Jolt's language (see
+[Choosing the private inputs](#choosing-the-private-inputs)). Layer 5a defines the
+relaxed language in [TapeTrace.lean](../JoltConstraints/Soundness/Layer5/TapeTrace.lean),
+used only inside the proof, and proves fixed-tape language inclusion.
+Layer 5a is built and reviewed by reading. Ari approved the
 instance-only RAM-region premise below; Layer 5b begins by deriving nonwrapping
 addresses from it and the constraints.
 
@@ -196,20 +198,22 @@ not an added soundness premise.
 An instance is a claim about one program.
 It gives the program, its public inputs and trusted advice, and the output bytes and panic flag the program is claimed to produce.
 The private inputs are what the prover picks and Jolt's verifier never sees.
-In the existing specification they are the untrusted advice, which is loaded into RAM, and the advice tape, which the guest reads while the program runs. The relaxed specification supplies independent answers in the existentially chosen trace (Layer 5a). It retains the tape state for exact inclusion, but the relaxed tape instructions do not consult its bytes or enforce exhaustion.
+In the existing specification they are the untrusted advice, which is loaded into RAM, and the advice tape, which the guest reads while the program runs. The relaxed specification, used only inside the proof, supplies independent answers in the existentially chosen trace (Layer 5a). It retains the tape state for exact inclusion, but the relaxed tape instructions do not consult its bytes or enforce exhaustion.
 A step is one row of the expanded bytecode being run; an expandable instruction such as DIV takes several steps.
 A witness `w` is a set of tables indexed by `params.traceLength` cycles.
 The proof must establish which cycles describe execution steps and which are padding.
 In the non-succinct model, the verifier receives `w` in the clear and checks every modeled constraint.
 
-The planned theorem says: if some `w` satisfies every constraint, then there are private inputs and a trace under the untrusted-answer semantics whose final device holds the claimed output bytes, after trimming trailing zeros, and the claimed panic flag.
+The theorem says: if some `w` satisfies every constraint, then there are private inputs, including one advice tape, and an `HonestTrace` on them whose final device holds the claimed output bytes, after trimming trailing zeros, and the claimed panic flag. Jolt's prover must also accept that trace (`prover_config.isSome`), and none of its spoil asserts may fail (`SpoilAssertsPass`). On 2026-10-15 Ari added these two to `InLanguage`, because Jolt's code says it proves only such runs; L is exactly what Jolt's code says, nothing more or less.
 The existing `HonestTrace` describes Jolt's tracer running with a fixed tape: each step's bytecode row, its state before and after, the runtime advice Jolt's tracer computes, and the step where Jolt's tracer stops.
-The relaxed trace allows independent tape answers while retaining the other execution, internal runtime-advice and stopping requirements. Its definition and the inclusion of fixed-tape traces are implemented in Layer 5a.
-We aim to preserve the supplied untrusted advice in RAM and choose the tape answers from the witness; the audit has found no constraint linking those answers to one tape.
+The proof first builds a relaxed trace, which allows independent tape answers while retaining the other execution, internal runtime-advice and stopping requirements. Its definition and the inclusion of fixed-tape traces are implemented in Layer 5a. Layer 7 then rebuilds one tape from the answers, giving an `HonestTrace`.
+We aim to preserve the supplied untrusted advice in RAM and choose the tape answers from the witness. The audit has found no constraint linking those answers to one tape; none is needed, because one tape can be rebuilt from them.
 
-The premises are `2^128 < ringChar F`, `NextPCNoWrap`, `RamRegionFits`,
-`CodeUnchanged`, and the temporary restrictions `NoStoreConditional` and
-`TracerAddressChecks`.
+The premises are bundled in
+[Soundness/Assumptions.lean](../JoltConstraints/Soundness/Assumptions.lean):
+`JoltField F` (`2^128 < ringChar F`); `JoltInstance.SoundnessAssumptions`
+(`NextPCNoWrap`, `CodeUnchanged`, `RamRegionFits`); and the temporary
+`JoltInstance.TemporaryRestrictions` (`NoStoreConditional`, `TracerAddressChecks`).
 On 2026-10-10, Ari approved `RamRegionFits`: for the instance's layout and
 successfully computed maximum RAM size, `lowest + 8 * maxRamSize ≤ 2^64`.
 **NOTE: to confirm with a16z.** The definition is in
@@ -250,6 +254,7 @@ It assumes precisely these address assertions, not successful LD/SD execution
 or table agreement. Alignment, raw peripheral dispatch, and the known panic,
 termination and stopping discrepancies remain separate proof obligations.
 On 2026-10-10, Ari also decided to treat every advice-tape answer as untrusted for the planned soundness theorem, pending a16z's confirmation. Retain the fixed-tape specification for completeness and add the relaxed specification alongside it, as recorded in Layer 5a.
+On 2026-10-15, Ari decided the theorem keeps the fixed-tape language. Jolt's tracer reads one tape, in order; "untrusted" means the prover chooses its contents, which the ∃ over private inputs already allows. The relaxed specification stays, as a proof device.
 On 2026-10-10, Ari chose to model Akita separately. The current theorem covers the base constraint relation over fields with characteristic above `2^128`, including BN254. Akita's prime is smaller and its extra lookup-address guard is outside this relation. The audit in Layer 4 records that distinction.
 The separate Akita work will model its field and deterministic, non-succinct constraint relation, including that guard. PCS security, commitments, and opening protocols are outside the current proof scope.
 Whether the modeled constraints are the ones Jolt's verifier checks is a separate question.
@@ -266,9 +271,13 @@ Once the private inputs are chosen, nothing else is free: Jolt's tracer computes
 ### Choosing the private inputs
 
 Keep the `untrusted_advice` from the `privateInputs` supplied to `AllConstraints`; the context already binds initial RAM to those inputs.
-Under the planned untrusted-answer semantics (decision of 2026-10-10, Layer 5a), no single consistent tape is needed.
-The private inputs instead supply the answers the witness gives at each tape read.
-PR #2049 removes `bytes_remaining()` and its instruction from the model.
+The witness gives one answer at each tape read, and no constraint ties the answers to a tape.
+The proof runs on these answers under the relaxed semantics (Layer 5a), then rebuilds one tape from them (Layer 7):
+- The tape is the answers' low bytes, laid end to end in read order: 1 byte for `AdviceLB`, 2 for `AdviceLH`, 4 for `AdviceLW`, 8 for `AdviceLD`. It holds exactly the bytes read, so no read runs out.
+- A narrow answer may have high bits no tape can give, such as 300 for a 1-byte read. The expansion keeps only the low bytes. `AdviceLB rd` is `VirtualAdviceLoad rd 1`, then `VirtualMULI rd rd 2^56`, then `VirtualSRAI rd rd 56` ([ExpansionsAutomated.lean:1180-1190](../JoltBytecode/JoltISA/ExpansionsAutomated.lean)); `AdviceLH` and `AdviceLW` use 48 and 32. With the answer 300 = 0x12C, or with the tape byte 0x2C, `rd` holds 0x2C · 2^56 after the second row and 44 after the third.
+- So the rebuilt run differs from the relaxed one only in the tape, and in the destination register (v40 when `rd` is x0) between the first and second rows of a narrow read. Every source instruction ends with the same registers and memory, so the outputs and panic flag are the same.
+
+PR #2049 removed `bytes_remaining()`, the only instruction that could see the tape's length. Before it, the answers could disagree with every tape (Layer 5a, historical candidate).
 
 At each step that uses runtime advice, we must prove that the value in `w` agrees with the honest tracer's computation.
 At the previous model revision `43cc043`, SC.W can report failure where Jolt's tracer reports success. The current model uses PR #2039's deterministic comparison. `NoStoreConditional` remains in the theorem pending the SC proof steps listed above; the proof must discharge those steps before removing it.
@@ -359,7 +368,7 @@ There are two induction obligations:
 1. **Initialization:** the constraints select the entry slot, zero the register table, and supply the initial RAM. Use `initial_state_sourceValue` to show that the initial state's general-purpose and virtual registers are also zero. For `n > 0`, apply the entry instruction's `advance_pc` and prove that it preserves these register and RAM values. For `n = 0`, keep the initial state. Establish agreement for the empty prefix.
 2. **Extension:** for `t < n`, use agreement at `t` and the required advice compatibility to prove that the step succeeds under the untrusted-answer semantics and returns a post-state matching the step's writes. Prove the new row's runtime-advice equality and preserve those for earlier rows, together with the tape-answer facts. If `t + 1 < n`, use the next slot and pre-state specified above to establish agreement at `t + 1`. If `t + 1 = n`, retain the post-state and establish the endpoint table comparisons above.
 
-At a tape-reading step, recover a 64-bit answer from the witness and use it directly; no agreement with a fixed tape is required for the relaxed target. At an internal runtime-advice step (`VirtualAdvice`), prove that the value agrees with the honest tracer.
+At a tape-reading step, recover a 64-bit answer from the witness and use it directly; agreement with one tape comes later, when Layer 7 rebuilds it. At an internal runtime-advice step (`VirtualAdvice`), prove that the value agrees with the honest tracer.
 Local extension lemmas may take these facts as hypotheses; their application must justify them from the constraints, possibly using other rows of the same expansion.
 These proofs work with the prefix and its state, before a completed relaxed trace exists.
 
@@ -435,14 +444,14 @@ Proofs live in `JoltConstraints/Soundness/Layer0/` through `Layer8/`, matching t
 layers below. Create each directory as its proofs are added. The final theorem
 stays in `JoltConstraints/Soundness/soundness.lean`.
 Algebraic helpers shared across layers live in `JoltConstraints/Soundness/Helpers/`.
-Layer 5 has two parts: 5a is the model change for untrusted tape answers, and
+Layer 5 has two parts: 5a adds the relaxed semantics for tape answers, used inside the proof, and
 `Layer5/Step.lean` (5b) proves execution steps.
 These are planned, not completed.
 
 Layers 0 to 4 prove field bounds, selection, table histories and lookup facts.
 Layer 5a adds the untrusted-answer semantics alongside the fixed-tape semantics and proves inclusion; the execution-prefix induction in Layers 5b and 6 then takes tape answers from the witness.
 Runtime-advice agreement is established when extending the prefix and retained in `Agrees`.
-Layer 7 collects the execution and advice facts, proves the stopping obligations, and assembles the relaxed trace; Layer 8 proves `matches_outputs`.
+Layer 7 collects the execution and advice facts, proves the stopping obligations, assembles the relaxed trace and rebuilds one tape from its answers, giving an `HonestTrace`; Layer 8 proves `matches_outputs`.
 
 ### Layer 0: field elements to numbers
 
@@ -680,7 +689,9 @@ used by `#[jolt::advice]`. PR #2049 removes `bytes_remaining()` and the
 `VirtualAdviceLen` source and final-row constructors.
 
 **Advice contract.** Ari's decision of 2026-10-10 treats tape answers as
-untrusted. PR #2049's revised documentation explicitly states that the proof
+untrusted: the prover chooses the tape's contents. On 2026-10-15 Ari decided the
+theorem keeps the fixed-tape language, which already allows any tape.
+PR #2049's revised documentation explicitly states that the proof
 does not authenticate a runtime tape length or require all supplied advice to
 be consumed. Guest checks must establish the intended relation on every
 successful path. The original question about `bytes_remaining()` is resolved
@@ -688,7 +699,7 @@ by removing that API and instruction, as recorded in
 [Questions for a16z](#questions-for-a16z), item 1.
 
 **Two specifications to retain.** Keep the existing fixed-tape execution, including its cursor and [`readAdviceTape`](../JoltBytecode/JoltISA/AdviceTape.lean), for Jolt's actual tracer and completeness.
-The separate untrusted-answer execution for the planned soundness theorem is
+The separate untrusted-answer execution, used inside the soundness proof, is
 `execWithTapeAnswer`. `UntrustedAnswerRun.answers` supplies a finite sequence
 indexed by executed rows; answers on non-tape rows are ignored. These answers
 are private existential data in `UntrustedAnswerLanguage`. The induction will
@@ -699,7 +710,7 @@ does not read the tape bytes or enforce exhaustion.
 A free answer must be allowed to be any 64-bit word, because the constraints only range-check the advice row's value; the honest `readAdviceTape` result has zero high bits for a narrow read.
 Check that each narrow-load expansion uses only the low bytes of that row's value, so the guest still sees a value of the declared width.
 Prove that every fixed-tape run gives an untrusted-answer run by taking its actual read values as the answers, preserving the executed rows, register and RAM values, outputs and stopping behaviour.
-This proves inclusion of the fixed-tape language in the relaxed language; the reverse inclusion is not assumed.
+This proves inclusion of the fixed-tape language in the relaxed language. The reverse direction, rebuilding one tape, is planned for Layer 7 and is not assumed.
 
 **Shared trace requirements.** `UntrustedAnswerRun` and `UntrustedAnswerTrace`
 currently duplicate the linkage, initialization, preprocessing, internal-advice
@@ -728,15 +739,17 @@ After reviewing Layer 5a, Ari approved this premise replacement and continuing
 with Layer 5b. The later approved device-store restriction is recorded above
 and in Layer 5b below.
 The two execution specifications and the updated upstream contract are recorded
-in `model_review.md`. The main theorem still targets the fixed-tape language;
+in `model_review.md`. The main theorem targets the fixed-tape language;
 this ISA update does not change that statement. The inclusion lemma alone
-cannot establish soundness for the stronger fixed-tape target.
+cannot establish soundness for that target; Layer 7 also rebuilds one tape.
 
-**What the relaxed target does not require.** The relaxed proof need not build
-a tape whose reads give the witness's answers. Removing length queries does
-not itself supply such a construction for fixed-tape soundness. In particular,
-a relaxed narrow load admits high bits that the finite-tape read cannot return;
-the generated post-processing removes them from the guest-visible result.
+**Why one tape can be rebuilt.** No tape need give the witness's exact
+answers: a relaxed narrow load admits high bits that the finite-tape read cannot
+return. The generated post-processing removes them from the guest-visible
+result, so the tape of the answers' low bytes gives the same registers and
+memory at the end of every source instruction
+([Choosing the private inputs](#choosing-the-private-inputs)). With
+`bytes_remaining()` removed, no instruction can see the tape's length.
 The [modeled metadata](../JoltConstraints/metadata.lean) still gives
 `VirtualAdviceLoad` the `Advice` flag and a `RangeCheck` lookup.
 [`rightLookupEqRightInputOtherwise`](../JoltConstraints/Constraints/RightLookupEqRightInputOtherwise.lean)
@@ -990,16 +1003,18 @@ We have not established whether `AllConstraints` admits such an instance.
 The proof must either rule it out using the existing constraints or derive `n = 0` from entry selection and the no-op flag, then handle the initial device in Layers 7–8.
 It must not assume a positive entry address or a positive number of executed steps.
 
-### Layer 7: the relaxed trace
+### Layer 7: the relaxed trace and the rebuilt tape
 
 What: use the prefix constructed on the supplied untrusted advice and the tape answers from the witness.
 Take the successful execution, linkage and runtime-advice equalities from `Agrees w n prefix state` for the relaxed trace's counterparts of the `HonestTrace` fields.
+L also requires two facts about the rebuilt trace: Jolt's prover accepts it (it ends in a jump, its RAM addresses are at or above the lowest address, and its padded length is at most the maximum), and none of its spoil asserts fails.
 The required stopping obligations are `stops` (the final source instruction leaves `nextPC` at its own address), `runs_until_stop` (no earlier source instruction did so), and `nonempty` (a nonzero entry address gives a nonempty trace).
 These are open. In particular, [B6](./review_completeness_and_soundness.md#b6-the-soundness-statement) records a known unsound stopping case from reading the code: a witness can end at a jump before the tracer's PC stall. A reproduction against Jolt's code is still needed.
 Prefix agreement and a padding suffix do not establish these stopping properties.
 For an empty prefix, `stops` and `runs_until_stop` are vacuous; `nonempty` still requires excluding a nonzero entry address.
 Take the instance facts, including `initialized`, from the context, adapted to the new form of the private input after the Layer 5a model change; `accepted` follows from `expands` and `entryIsRust`.
-Why: once all these obligations are resolved, the constructed prefix can be packaged as a relaxed trace.
+Then rebuild one tape from the answers' low bytes, in read order, and run the program on it. Prove that this run is an `HonestTrace` with the same bytecode rows, ending every source instruction with the same registers and memory ([Choosing the private inputs](#choosing-the-private-inputs)).
+Why: once all these obligations are resolved, the constructed prefix can be packaged as a relaxed trace, and the rebuilt tape turns it into an `HonestTrace`, the form the theorem concludes.
 Uses: the context, Layers 5 and 6, stopping proofs.
 
 ### Layer 8: outputs
@@ -1010,7 +1025,7 @@ Translate the agreed RAM encoding on the public I/O region into the final device
 Then use `RamOutputEqPublicIo` to prove that the final device has the instance's output bytes, after trimming trailing zeros, and its panic flag.
 For an empty trace, use the initial device.
 The panic-store discrepancy in B6 is an open obstacle to this step.
-Why: this gives `matches_outputs`; together with Layer 7's relaxed trace, it proves the planned theorem's existential conclusion.
+Why: this gives `matches_outputs` for the relaxed trace. The rebuilt run has the same final device, so it carries over to Layer 7's `HonestTrace`, which proves the theorem's existential conclusion.
 Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputEqPublicIo`, device semantics.
 
 ### Obligations that need particular care
@@ -1614,7 +1629,7 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   [MemoryAccessRestriction.lean](../JoltConstraints/Soundness/Layer5/MemoryAccessRestriction.lean)
   defines the premise, the next-attempt predicate and two application lemmas
   for LD/SD. The unchanged fixed-tape language definition moved to
-  [Language.lean](../JoltConstraints/Soundness/Language.lean) to avoid an import
+  [Language.lean](../JoltConstraints/language.lean) to avoid an import
   cycle with the relaxed-run definitions. `lake build JoltConstraints` passes
   (8741 jobs). Both new application lemmas, the premise and `NextStep` were
   checked with `#print axioms`: only the three standard axioms and the allowed
@@ -1629,6 +1644,19 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   Boundary checks also confirm that RAM words starting below an unaligned
   heap/canary boundary retain the tracer's starting-address behaviour. These
   checks validate the restriction, not satisfying witnesses for the candidates.
+- **Language decision, 2026-10-15:** Ari decided the theorem keeps
+  `JoltInstance.InLanguage`. Jolt's tracer reads one tape whose contents the
+  prover chooses; the relaxed semantics is a proof device. Rebuilding one tape
+  from the witness's answers is planned for Layer 7 and not yet proved.
+  `JoltInstance.soundness` and `JoltInstance.completeness` now take bundled
+  assumptions (`Soundness/Assumptions.lean`, `Completeness/Assumptions.lean`;
+  commit `8f6d59f`).
+  Ari then made L exactly what Jolt's code says it proves: `InLanguage` also
+  requires that Jolt's prover accepts the trace and that no spoil assert fails.
+  Completeness now takes only `CompletenessAssumptions` and `InLanguage`, and
+  concludes that some private inputs and witness satisfy `AllConstraints`;
+  `HonestTrace.ProverAccepts` is removed. Soundness must now also prove those two
+  facts (Layer 7).
 
 ## Questions for a16z
 

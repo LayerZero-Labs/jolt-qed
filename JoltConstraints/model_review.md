@@ -19,16 +19,21 @@ baseline was `43cc043` plus the reviewed SC and advice-length changes. The
 source audits and remaining proof obligations. Historical revision citations
 below retain the revision at which each finding was established.
 
-The completeness theorem is `HonestTrace.allConstraints_corrected_sizes`
-(`Completeness/All.lean`): it claims the modeled verifier checks and constraints
-hold at the explicitly corrected mathematical sizes, against the verifier’s
-public I/O. `HonestTrace.prover_config` separately models Rust’s checked policy
-at `8bbb2357`; its accepted RAM domain need not contain the highest touched slot.
-The bridge proves the configs agree exactly when that slot is below `ram_K`.
-`HonestTrace.allConstraints_rust_sizes` transfers the corrected result under
-the review-requested exclusion of the equality boundary. Both results retain
-the existing `sorry`s under "Proofs owed" and eight native bit-vector axioms
-listed in the migration record; neither is a completed completeness proof.
+The completeness theorem is `JoltInstance.completeness`
+(`Completeness/completeness.lean`): every instance in `JoltInstance.InLanguage`
+(`language.lean`) has private inputs and a witness that satisfy
+`AllConstraints`, given `JoltInstance.CompletenessAssumptions`. Its workhorse is
+`HonestTrace.allConstraints_corrected_sizes` (`Completeness/All.lean`), which
+claims the modeled verifier checks and constraints hold at the explicitly
+corrected mathematical sizes, against the verifier’s public I/O.
+`HonestTrace.prover_config` models Rust’s checked policy at `8bbb2357`; when it
+accepts, so does the corrected policy (`HonestTrace.corrected_prover_config_isSome`).
+Rust's accepted RAM domain need not contain the highest touched slot (#1951
+item 4), so the witness uses the corrected sizes. The former Rust-sizes
+corollary and its bridge lemmas were deleted on 2026-10-15 as unused.
+The theorem retains the existing `sorry`s under "Proofs owed" and eight native
+bit-vector axioms listed in the migration record; it is not a completed
+completeness proof.
 The native-proof repair remains deferred until after migration review.
 Everything it rests on that is not proved is listed here.
 
@@ -126,16 +131,17 @@ Premises or fields of the final theorem, with their source or reason below.
 
 | Assumption | Where | Why |
 |---|---|---|
-| The field's characteristic exceeds `2^128` | `JoltInstance.soundness`, premise `charAbove2pow128` | Ari, 2026-10-10: the base relation must distinguish full 128-bit lookup addresses. BN254 satisfies this; model Akita's field and extra address guard separately. PCS security is outside this work |
-| No source row is SC.W or SC.D (temporary) | `Rv64ProgramImage.NoStoreConditional`, soundness premise `noStoreConditional` | Ari, 2026-10-10: exclude the SC advice mismatch (#2037) while proving the remaining cases; remove this restriction after the constraints and model are fixed |
-| Every attempted LD/SD passes the tracer's address assertions (temporary) | `JoltInstance.TracerAddressChecks` in `Soundness/Layer5/MemoryAccessRestriction.lean`, soundness premise `tracerAddressChecks` | Approved by Ari for #2044 and four separate candidates: zero stores, the I/O gap, canary stores and accesses at or above `heap_end`. Quantifies over every private input and relaxed prefix with honest internal runtime advice; checks the next attempted row without assuming it succeeds. Uses `Mmu.effective_address_ok` at the start for RAM, every byte for devices. FIXME to narrow or remove as each case is resolved and proved; not a verifier check |
-| The PC does not wrap past 2^64 | `Rv64ProgramImage.NextPCNoWrap` | a16z, 2026-10-07: such an ELF is illegal |
-| The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `Soundness/Layer3/Layout.lean`, soundness premise `ramRegionFits` | Approved by Ari, 2026-10-10, replacing the run-based address restriction. With the verifier's RAM-size check, all eight bytes of each in-domain word fit. The signed sum is then recovered from satisfying constraints, including address zero. NOTE: to confirm with a16z. This is an instance restriction, not a verifier check |
-| A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty` (premise `imageNonempty`) | a16z, by phone, 2026-10-08. Rust's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Rust's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
-| A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | `JoltInstance.CodeUnchanged`, over every `ValidRun`; honest traces get it from `HonestTrace.code_unchanged`. Completeness does not use it | a16z, 2026-10-07 |
+| The field's characteristic exceeds `2^128` | `JoltField F`, soundness premise `joltField` | Ari, 2026-10-10: the base relation must distinguish full 128-bit lookup addresses. BN254 satisfies this; model Akita's field and extra address guard separately. PCS security is outside this work |
+| No source row is SC.W or SC.D (temporary) | `Rv64ProgramImage.NoStoreConditional`, field `noStoreConditional` of `JoltInstance.TemporaryRestrictions` | Ari, 2026-10-10: exclude the SC advice mismatch (#2037) while proving the remaining cases; remove this restriction after the constraints and model are fixed |
+| Every attempted LD/SD passes the tracer's address assertions (temporary) | `JoltInstance.TracerAddressChecks` in `Soundness/Layer5/MemoryAccessRestriction.lean`, field `tracerAddressChecks` of `JoltInstance.TemporaryRestrictions` | Approved by Ari for #2044 and four separate candidates: zero stores, the I/O gap, canary stores and accesses at or above `heap_end`. Quantifies over every private input and relaxed prefix with honest internal runtime advice; checks the next attempted row without assuming it succeeds. Uses `Mmu.effective_address_ok` at the start for RAM, every byte for devices. FIXME to narrow or remove as each case is resolved and proved; not a verifier check |
+| The PC does not wrap past 2^64 | `Rv64ProgramImage.NextPCNoWrap`, field `pcNoWrap` of `JoltInstance.SoundnessAssumptions` and `JoltInstance.CompletenessAssumptions` | a16z, 2026-10-07: such an ELF is illegal |
+| The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10, replacing the run-based address restriction. With the verifier's RAM-size check, all eight bytes of each in-domain word fit. The signed sum is then recovered from satisfying constraints, including address zero. NOTE: to confirm with a16z. This is an instance restriction, not a verifier check |
+| A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Rust's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Rust's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
+| A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | `JoltInstance.CodeUnchanged`, over every `ValidRun`; honest traces get it from `HonestTrace.code_unchanged`. Field `codeUnchanged` of `JoltInstance.SoundnessAssumptions`; completeness does not use it | a16z, 2026-10-07 |
 | A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | ASSUMPTION in `finalRamWord` | a16z, 2026-10-07 |
-| No spoil assert fails | `HonestTrace.SpoilAssertsPass` | by design: a failing spoil assert is meant to leave no proof |
-| The corrected sizing policy accepts the run | `HonestTrace.corrected_prover_config = some config` | Retains the previous theorem’s exact hypothesis; includes last-jump, length and address guards, with the intentional `touched + 1` correction. It is not Rust acceptance. |
+| No spoil assert fails | `HonestTrace.SpoilAssertsPass`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): a spoiled run is meant to have no proof (`jolt-platform/src/spoil.rs:1-3`) |
+| The corrected sizing policy accepts the run | `HonestTrace.corrected_prover_config = some config` | Retains the previous theorem’s exact hypothesis; includes last-jump, length and address guards, with the intentional `touched + 1` correction. It is not Rust acceptance. `JoltInstance.completeness` derives it from Jolt's prover accepting (`HonestTrace.corrected_prover_config_isSome`) |
+| Jolt's prover accepts the trace | `trace.prover_config.isSome`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): Jolt's prover refuses other traces (`config.rs:63-110`). Completeness uses the corrected sizes, so Jolt's undersized RAM ([#1951](https://github.com/a16z/jolt/issues/1951) item 4, `bug-report/ram-k-off-by-one/`) needs no premise |
 
 ## Proofs owed
 
@@ -241,6 +247,11 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   answers. The removed length-query example is retained as historical evidence
   in the plan; no complete satisfying witness was constructed for it.
   The ISA removal does not change the main theorem's fixed-tape target.
+  On 2026-10-15 Ari decided the theorem keeps that target: Jolt's tracer reads
+  one tape whose contents the prover chooses, so the relaxed semantics is a
+  proof device. Rebuilding one tape from the answers' low bytes gives the same
+  registers and memory at the end of every source instruction; that step is
+  planned for Layer 7 and not yet proved.
   Fixed-tape soundness and internal runtime-advice agreement
   remain open; see B6 in `methods/review_completeness_and_soundness.md`.
 - **RAM region restriction.** `RamRegionFits` now bounds the instance's maximum
