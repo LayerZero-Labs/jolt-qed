@@ -14,6 +14,63 @@ Read these before beginning work:
 
 The local `blog/` is stale; use the published article for background.
 
+## Current Jolt pin and migration (2026-10-15)
+
+Ari selected the latest pulled version. Rust semantic citations use the public
+upstream pin [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
+The local merge `1c8aaff2` and generator commit `7dfe8a0f` are unpublished;
+their separate tooling provenance and a reproducible generator patch are in
+the [migration checklist](./model_update.md), together with all 36 upstream
+commits, the six migration chunks and their validation. The migration and
+requested sizing bridge are implemented and validated; the final import and
+Rust completeness corollary are ready for review.
+This migration does not discharge the existing proof gaps or native-proof
+axioms, whose repair Ari deferred.
+The PR sections below describe the previous model's incremental updates.
+
+The earlier warning about removing bytecode chunks was too broad: upstream
+removed precommitted program-table chunking, while the bytecode selector chunks
+used by Layer 1 remain. Device-memory agreement, stopping before the PC stall,
+and fixed-tape reconstruction remain separate open proof obligations. New
+premises still require Ari's approval.
+
+## PR #2049 ISA update (2026-10-15)
+
+The model now also includes the advice-length removal from
+[PR #2049](https://github.com/a16z/jolt/pull/2049), audited at production-change
+commit `7b311c939eb63bdd6cbb243b432e55023d2b68e9`. This is that specific change
+on top of `43cc043` plus PR #2039, not an update to all of current Jolt.
+
+| Operation | Before | After |
+|---|---|---|
+| `VirtualAdviceLoad dst byteCount` | Reads 1, 2, 4 or 8 bytes in the tracer; fails on exhaustion | Unchanged |
+| `VirtualAdviceLen dst src imm` | Writes the unread byte count in the tracer; gives an independent word in the relaxed semantics | Removed from both instruction types and both interpreters |
+| `AdviceLB/LH/LW/LD` expansions | Tape load followed by the existing narrow-load processing where needed | Unchanged |
+
+The source dispatch, metadata, witness helpers and exhaustive proof cases lose
+the removed instruction's branch. Its dedicated native-row validity lemma is
+deleted. No soundness premise, constraint equation or read-width rule changes.
+The generated programs are unchanged. Lean starts from decoded source
+instructions; it does not model the ELF decoder or serialized instruction tags.
+Upstream removes the old decoder case and retires tag `0x0062`, so guests using
+`bytes_remaining()` and persisted traces using the old format need updating.
+
+The revised [runtime advice documentation](https://github.com/a16z/jolt/blob/7b311c939eb63bdd6cbb243b432e55023d2b68e9/book/src/usage/runtime_advice.md#security-model)
+explicitly distinguishes the tracer's finite tape and exhaustion check from
+the proof's untrusted answers. The fixed-tape interpreter remains in place for
+completeness, and the relaxed interpreter remains separate. This removal alone
+does not prove the fixed-tape soundness target or change it to the relaxed one.
+
+Validation: `lake build` passes for both libraries (8746 jobs). An axiom audit
+of 13 declarations covers expansion validity, the completeness lookup-write
+lemma, fixed-tape inclusion, narrow-advice execution and the ADDI/XOR/SLTIU
+steps. It reports only `propext`, `Classical.choice`, `Quot.sound` and the
+allowed Sail constant `sys_enable_experimental_extensions`. Six scratch
+examples checked by kernel reduction cover little-endian reads, cursor
+increments, an exact-boundary read, exhaustion and invalid widths. No new
+`sorry`, axiom, premise or heartbeat override was added. The main soundness
+theorem retains its existing `sorry` and fixed-tape target.
+
 ## PR #2039 model update (2026-10-10)
 
 Ari reviewed the experiment and approved merging it into `feat/soundness`.
@@ -21,8 +78,8 @@ Merge `c42f8f0` preserves both the SC update and the memory-access restriction.
 The temporary Lean branch and worktree have been removed. This model includes [PR #2039](https://github.com/a16z/jolt/pull/2039) at
 `2a924239c1f99f2e4f2c94a5dae5e403b182b27c`, applied without conflicts to
 Jolt `43cc043332762034b5f65379441576e06e7a3890`. It does not import the
-other changes on the PR's newer base. The original Rust checkout remains at
-`43cc043`; the generation checkout described below contains the applied patch.
+other changes on the PR's newer base. That experiment used a generation
+checkout at `43cc043` with the applied patch; the current reference pin is above.
 This is a model of the pinned PR revision, not a claim about its eventual merged
 version. If Michael changes the PR, regenerate the SC expansions from the new
 revision, review the generated diff and tracer changes, and rebuild the affected
@@ -41,12 +98,11 @@ without extra assumptions.
 
 The separate commit `e3a34fc` only moves the unchanged LR/SC definitions into
 the generated module; it is independent of the proposed SC semantics.
-The Rust generator change is `cf450ba2` in `/private/tmp/jolt-pr2039-rust`;
-the applied PR is `1bac0a87` there, retained with detached HEAD and no
-experimental branch. To regenerate, build `jolt-lean-gen` in
-that checkout and run it with `--lean --out` pointing to this checkout's
-`JoltBytecode/JoltISA/ExpansionsAutomated.lean` (the generator's default
-output path points to the main checkout).
+The experiment recorded generator change `cf450ba2` and applied PR `1bac0a87`
+in `/private/tmp/jolt-pr2039-rust`. That temporary checkout is no longer
+available. The pulled generator still skips LR/SC; migration item 2 records
+restoring that coverage and regenerating to a scratch destination before
+updating `JoltBytecode/JoltISA/ExpansionsAutomated.lean`.
 
 Validation for this chunk: `lake build JoltConstraints` passed (8739 jobs).
 The existing unfinished theorems remain unfinished; no `sorry`, axiom, premise
@@ -131,8 +187,10 @@ addresses from it and the constraints.
 [`SourceInstruction`](../JoltConstraints/expansion_helpers.lean): the modeled
 RISC-V instructions and the listed Jolt custom instructions at opcode `0x5B`.
 Jolt's inline/precompile opcodes `0x0B` and `0x2B`, including the SHA-256 and
-Keccak inlines, are outside that type. Any guest using these inlines is outside
-the theorem's scope by construction. This is an existing language restriction,
+Keccak inlines, and field-inline opcode `0x7B` are outside that type. The SDK's
+`field_to_limbs!` and `field_from_limbs!` emit `0x7B` instructions; the migration
+record documents the source check. Any guest containing these instructions is
+outside the theorem's scope by construction. This is an existing language restriction,
 not an added soundness premise.
 
 An instance is a claim about one program.
@@ -209,7 +267,8 @@ Once the private inputs are chosen, nothing else is free: Jolt's tracer computes
 
 Keep the `untrusted_advice` from the `privateInputs` supplied to `AllConstraints`; the context already binds initial RAM to those inputs.
 Under the planned untrusted-answer semantics (decision of 2026-10-10, Layer 5a), no single consistent tape is needed.
-The private inputs instead supply the answers the witness gives at each tape read and each `bytes_remaining()` query.
+The private inputs instead supply the answers the witness gives at each tape read.
+PR #2049 removes `bytes_remaining()` and its instruction from the model.
 
 At each step that uses runtime advice, we must prove that the value in `w` agrees with the honest tracer's computation.
 At the previous model revision `43cc043`, SC.W can report failure where Jolt's tracer reports success. The current model uses PR #2039's deterministic comparison. `NoStoreConditional` remains in the theorem pending the SC proof steps listed above; the proof must discharge those steps before removing it.
@@ -236,8 +295,8 @@ Call cycle `t < N` a padding cycle when `w.InstructionFlags .IsNoop t = 1`.
 Define `n` to be the first such cycle, or `N` if there is none.
 The proposed execution prefix uses cycles `0, …, n - 1`; it is empty when `n = 0`.
 
-**Noop source audit:** at Jolt revision
-`43cc043332762034b5f65379441576e06e7a3890`, the pseudo instruction
+**Noop source audit:** rechecked at Jolt revision
+`8bbb2357890928d8f83b00ca542879077c4d3d28`, the pseudo instruction
 `jolt-riscv/src/instructions/i/noop.rs` does carry `IsNoop`. It is absent from
 the modeled `JoltISA.Instr` constructors. No branch of
 `jolt-program/src/image/decode.rs::decode_instruction` or its instruction-kind
@@ -531,8 +590,8 @@ would address that word in the field equations but wrap to zero in execution.
 This refutes the proposed bound from those checks; it is **not** a witness
 satisfying `AllConstraints` or a reproduction against Jolt's verifier.
 
-The source check at `43cc043` finds the same arithmetic in
-`common/src/jolt_device.rs::MemoryLayout::new`,
+The source recheck at `8bbb2357` finds the same relevant arithmetic in
+`common/src/jolt_device.rs::MemoryLayout::try_new`,
 `crates/jolt-program/src/preprocess/ram.rs::compute_max_ram_k`, and the RAM-size
 checks in `crates/jolt-verifier/src/verifier.rs`.
 The same wrap breaks completeness: [ram-address-wrap.md](../bug-report/ram-address-wrap.md) shows the honest witness failing the address constraint when the address wraps.
@@ -575,7 +634,7 @@ encodes a word; no input-determined `encoded` hypothesis is available for
 `lookupOutput_rangeCheck_of_identity`. At the lookup level, any 64-bit word is
 possible; constraints elsewhere in the program may restrict it. Layers 5–7
 must separately prove that runtime advice (`VirtualAdvice`) equals the honest
-tracer's result. Tape answers (`VirtualAdviceLoad`, `VirtualAdviceLen`) need no
+tracer's result. Tape answers (`VirtualAdviceLoad`) need no
 such proof: they are untrusted under the Layer 5a decision.
 
 **Field-scope audit before this layer:** an identity-RAF row
@@ -587,7 +646,7 @@ support an injectivity argument from the former `2^127 < ringChar F` premise.
 This is an obstruction to the proposed argument, not a constructed witness
 satisfying every constraint.
 
-Jolt revision `43cc043332762034b5f65379441576e06e7a3890` already addresses this
+Jolt revision `8bbb2357890928d8f83b00ca542879077c4d3d28` retains the guard addressing this
 alias in its Akita build. In
 `crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs`,
 `CANONICAL_INSTRUCTION_ADDRESS = cfg!(feature = "akita")`, and
@@ -614,13 +673,19 @@ adding the upper-half guard would still not cover every characteristic above
 #### Layer 5a: untrusted advice-tape answers
 
 **Where tape instructions come from.** No RISC-V instruction expands to a tape instruction.
-`VirtualAdviceLoad` and `VirtualAdviceLen` come only from Jolt's custom source instructions (opcode `0x5B`): `AdviceLB`, `AdviceLH`, `AdviceLW`, `AdviceLD` and `VirtualAdviceLen` ([`expansions.lean`](../JoltConstraints/expansions.lean), lines 279–285).
-A guest gets them by calling the SDK's tape functions: the reads that `#[jolt::advice]` uses, and `AdviceTape::bytes_remaining()` (`jolt-sdk/src/lib.rs:545`), which nothing in the SDK calls.
+`VirtualAdviceLoad` comes from Jolt's custom source instructions (opcode `0x5B`):
+`AdviceLB`, `AdviceLH`, `AdviceLW` and `AdviceLD`
+([`expansions.lean`](../JoltConstraints/expansions.lean)). These are the SDK reads
+used by `#[jolt::advice]`. PR #2049 removes `bytes_remaining()` and the
+`VirtualAdviceLen` source and final-row constructors.
 
-**Decision of 2026-10-10.** The [runtime advice page](https://jolt.a16zcrypto.com/usage/runtime_advice.html) says: "Advice values are untrusted -- the prover could supply arbitrary data. The guest must verify correctness using `check_advice!`."
-Ari decided to treat every tape answer as untrusted, including the answer to `bytes_remaining()`, which the page does not mention.
-That last point is to be confirmed with a16z ([Questions for a16z](#questions-for-a16z), item 1).
-A weak check in a guest is the guest's problem, not a Jolt soundness bug.
+**Advice contract.** Ari's decision of 2026-10-10 treats tape answers as
+untrusted. PR #2049's revised documentation explicitly states that the proof
+does not authenticate a runtime tape length or require all supplied advice to
+be consumed. Guest checks must establish the intended relation on every
+successful path. The original question about `bytes_remaining()` is resolved
+by removing that API and instruction, as recorded in
+[Questions for a16z](#questions-for-a16z), item 1.
 
 **Two specifications to retain.** Keep the existing fixed-tape execution, including its cursor and [`readAdviceTape`](../JoltBytecode/JoltISA/AdviceTape.lean), for Jolt's actual tracer and completeness.
 The separate untrusted-answer execution for the planned soundness theorem is
@@ -629,11 +694,11 @@ indexed by executed rows; answers on non-tape rows are ignored. These answers
 are private existential data in `UntrustedAnswerLanguage`. The induction will
 take them from the witness. The original `JoltPrivateInputs` and initial state
 are retained, including tape bytes and the cursor, so fixed-tape inclusion can
-preserve every state exactly. Only the relaxed load rule advances the cursor;
-neither relaxed tape rule reads the tape bytes or enforces exhaustion.
+preserve every state exactly. The relaxed load rule advances the cursor but
+does not read the tape bytes or enforce exhaustion.
 A free answer must be allowed to be any 64-bit word, because the constraints only range-check the advice row's value; the honest `readAdviceTape` result has zero high bits for a narrow read.
 Check that each narrow-load expansion uses only the low bytes of that row's value, so the guest still sees a value of the declared width.
-Prove that every fixed-tape run gives an untrusted-answer run by taking its actual read values and length reports as the answers, preserving the executed rows, register and RAM values, outputs and stopping behaviour.
+Prove that every fixed-tape run gives an untrusted-answer run by taking its actual read values as the answers, preserving the executed rows, register and RAM values, outputs and stopping behaviour.
 This proves inclusion of the fixed-tape language in the relaxed language; the reverse inclusion is not assumed.
 
 **Shared trace requirements.** `UntrustedAnswerRun` and `UntrustedAnswerTrace`
@@ -662,21 +727,31 @@ are retained. Whether it belongs in that theorem is a separate scope question.
 After reviewing Layer 5a, Ari approved this premise replacement and continuing
 with Layer 5b. The later approved device-store restriction is recorded above
 and in Layer 5b below.
-The relaxed specification and its provisional justification are recorded in
-`model_review.md`. Jolt's documented distrust of advice values does not itself
-settle the contract of `bytes_remaining()`.
-If a16z requires accurate length reports, retain the shared proofs and return to the fixed-tape soundness target. That still requires a tape-consistency proof or an upstream fix; the inclusion lemma alone cannot establish the stronger conclusion.
+The two execution specifications and the updated upstream contract are recorded
+in `model_review.md`. The main theorem still targets the fixed-tape language;
+this ISA update does not change that statement. The inclusion lemma alone
+cannot establish soundness for the stronger fixed-tape target.
 
-**What the relaxed target does not require.** The obligation that the witness's reads and length answers fit one tape remains open for fixed-tape soundness, but is not needed for the relaxed target.
-Candidate inconsistency: a guest calls `bytes_remaining()` twice with no read in between, and the witness answers 3 and then 100. We found no constraint that rules this out, but have not constructed a complete satisfying witness. No fixed tape gives those two different answers.
-The audit evidence below records the checks made for constraints linking these answers.
-The [modeled metadata](../JoltConstraints/metadata.lean) gives `VirtualAdviceLoad` and `VirtualAdviceLen` the `Advice` flag and a `RangeCheck` lookup; [`rightLookupEqRightInputOtherwise`](../JoltConstraints/Constraints/RightLookupEqRightInputOtherwise.lean) leaves the right lookup operand unconstrained by the instruction input in this case.
+**What the relaxed target does not require.** The relaxed proof need not build
+a tape whose reads give the witness's answers. Removing length queries does
+not itself supply such a construction for fixed-tape soundness. In particular,
+a relaxed narrow load admits high bits that the finite-tape read cannot return;
+the generated post-processing removes them from the guest-visible result.
+The [modeled metadata](../JoltConstraints/metadata.lean) still gives
+`VirtualAdviceLoad` the `Advice` flag and a `RangeCheck` lookup.
+[`rightLookupEqRightInputOtherwise`](../JoltConstraints/Constraints/RightLookupEqRightInputOtherwise.lean)
+still leaves its right lookup operand unconstrained by the instruction input.
 
-The initial source audit at Jolt revision `43cc043332762034b5f65379441576e06e7a3890` found the same flags in `crates/jolt-riscv/src/instructions/virt/advice_{len,load}.rs`, the same lookup over the captured destination value in `crates/jolt-lookup-tables/src/instructions/virt/advice_{len,load}.rs`, and the same Advice exemption in `crates/jolt-r1cs/src/constraints/rv64.rs`.
-The expansion dispatch in `crates/jolt-program/src/expand/{grammar,materialize}.rs` leaves a nonzero-destination `VirtualAdviceLen` as one native row; it adds no assertion relating separate length queries.
-Advice-load expansions in `expand/memory/shared.rs` add sign extension for narrow loads, with no tape-length consistency check. The x0 rewrite in `expand/materialize.rs`, using the side-effect classification in `crates/jolt-riscv/src/kind.rs`, redirects these loads to a temporary register.
-No cross-query or load/length relation was found in this audit of the modeled constraints and Jolt's R1CS, claim relations and verifier code.
-Under the untrusted-answer semantics, and pending a16z's confirmation, independent answers are intended behaviour rather than a bug. Whether this is Jolt's intended contract remains open.
+**Historical length-query candidate, removed by PR #2049.** At revision
+`43cc043332762034b5f65379441576e06e7a3890`, two `bytes_remaining()` queries with
+no intervening read could apparently answer 3 and then 100: no cross-query
+constraint was found, but no complete satisfying witness was constructed.
+No fixed tape gives those answers. The audit checked the Advice flags,
+RangeCheck lookups, R1CS exemption and native expansion of `VirtualAdviceLen`.
+PR #2049 acknowledges that its answer was not tied to tape contents or reads
+and removes the instruction; it does not add a tape-consistency constraint.
+The current source type cannot express this example. Advice-load expansions,
+including their sign extension and x0 temporary-register branch, are unchanged.
 
 #### Layer 5b: one execution step
 
@@ -706,8 +781,10 @@ cycle. Other instruction families and RAM/PC agreement remain to be connected.
 **Device-memory obligations.** These are three cases of a broader obligation:
 derive both successful memory access and the device's value from the RAM
 constraints. Consistent RAM history alone does not establish either one.
-The source audit below uses Jolt revision
-`43cc043332762034b5f65379441576e06e7a3890`.
+The source audit below records the historical findings at Jolt revision
+`43cc043332762034b5f65379441576e06e7a3890`. The current device/MMU source
+was rechecked at `8bbb2357` in [migration chunk 6](./model_update.md#chunk-6-source-recheck-and-historical-citations);
+the existing discussion and proposed premises are unchanged.
 
 **Termination-device restriction under discussion; not added.** Banning all
 termination accesses would exclude normal SDK exits: the SDK writes byte 1,
@@ -769,7 +846,7 @@ the same restriction. These are memory regions, distinct from relaxed
 runtime tape answers; relaxing those answers does not permit these stores.
 
 We found no constraint ruling out these stores in the audited RV64 constraints
-(`crates/jolt-r1cs/src/constraints/rv64.rs`), RAM read/write and value relations,
+(`crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`), RAM read/write and value relations,
 or public-output relation (`crates/jolt-claims/src/protocols/jolt/relations/ram/`).
 `RamOutputEqPublicIo` fixes only final input values. Advice regions lie below
 the public-I/O mask, as in `crates/jolt-program/src/preprocess/public_io.rs:23–24`.
@@ -784,8 +861,10 @@ rerun in this proof session. Relative to the tracer's semantics, acceptance of
 that claim is a soundness failure: no valid completed execution produces it.
 
 **Four further candidates from the same address-check mismatch.** These are
-separate from #2044 and from one another. The local code audit is at `43cc043`;
-none has a constructed witness satisfying all constraints or an accepted-proof
+separate from #2044 and from one another. The original local code audit was at
+`43cc043`; the relevant MMU checks and device behavior were rechecked unchanged
+at `8bbb2357` in [migration chunk 6](./model_update.md#chunk-6-source-recheck-and-historical-citations).
+None has a constructed witness satisfying all constraints or an accepted-proof
 reproduction. The temporary premise must not be used as evidence that these
 cases are impossible under the constraints.
 
@@ -906,7 +985,7 @@ Uses: the PC and sequence constraints, Layer 5b.
 
 **Entry address zero:** neither the [program image type nor entry preprocessing](../JoltConstraints/program.lean) excludes it; `get_first_pc` maps it to slot 0.
 Jolt's preprocessing also maps address 0 to the no-op entry, and Jolt's tracer initializes `prev_pc` to 0, so an initial PC of 0 produces no executed rows.
-This was checked in `crates/jolt-program/src/preprocess/bytecode.rs` (`get_first_pc`) and `tracer/src/lib.rs` (`trace`, `step_emulator`) at revision `43cc043332762034b5f65379441576e06e7a3890`.
+This was rechecked in `crates/jolt-program/src/preprocess/bytecode.rs:224-232` (`get_first_pc`) and `tracer/src/lib.rs:75-124,328-338` (`trace`, `step_emulator`) at revision `8bbb2357890928d8f83b00ca542879077c4d3d28`.
 We have not established whether `AllConstraints` admits such an instance.
 The proof must either rule it out using the existing constraints or derive `n = 0` from entry selection and the no-op flag, then handle the initial device in Layers 7–8.
 It must not assume a positive entry address or a positive number of executed steps.
@@ -974,8 +1053,8 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   assumption, directly matching the generic one-hot lemmas' cardinality premise.
   No honest-prover chunk configuration is assumed. The four lemmas compile at
   the default heartbeat limit; their only axioms are `propext`, `Classical.choice`
-  and `Quot.sound`. The setup definition was checked against Jolt revision
-  `43cc043332762034b5f65379441576e06e7a3890`; precommitted program tables remain
+  and `Quot.sound`. The setup definition was rechecked against Jolt revision
+  `8bbb2357890928d8f83b00ca542879077c4d3d28`; precommitted program tables remain
   outside this model, as documented in `verifier_sizes.lean`. Revisit 72 if those
   `extra_candidates` are modeled.
 - **Proved, Layer 0 word encodings:** [Layer0/Words.lean](../JoltConstraints/Soundness/Layer0/Words.lean)
@@ -1008,8 +1087,8 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   rules out all-zero bytecode selection: it would force the next unexpanded PC
   to four, contradicting either the next cycle's preprocessed address or the
   final-cycle zero shift. Every cycle therefore selects exactly one bytecode slot.
-  The final-cycle boundary was checked against Jolt revision
-  `43cc043332762034b5f65379441576e06e7a3890`: the `NextUnexpandedPC` claim in
+  The final-cycle boundary was rechecked against Jolt revision
+  `8bbb2357890928d8f83b00ca542879077c4d3d28`: the `NextUnexpandedPC` claim in
   `crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs` is weighted
   by `EqPlusOneOuter`, which the verifier evaluates in
   `crates/jolt-verifier/src/stages/stage3/spartan_shift.rs` using
@@ -1073,8 +1152,8 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   corollaries when concrete callers need them.
   No soundness premise was added. `Rs1Ra`, `Rs2Ra`, and `RdWa` column wrappers
   from Layer 1(c) now have callers here.
-  The equations were checked against Jolt revision
-  `43cc043332762034b5f65379441576e06e7a3890`, in
+  The equations were rechecked against Jolt revision
+  `8bbb2357890928d8f83b00ca542879077c4d3d28`, in
   `crates/jolt-claims/src/protocols/jolt/relations/registers/{val_evaluation,read_write_checking}.rs`
   and the verifier's `stages/stage5/registers_val_evaluation.rs` and
   `stages/derivations.rs`: the history uses the strict comparison of the write
@@ -1162,15 +1241,15 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   using its padding-suffix proof, `ramAddress_zero_of_padding`, and
   `ram_zero_effects`. Read agreement after execution, including device regions,
   remains in Layer 5b; output and panic agreement remain in Layer 8.
-  The history equations were checked against Jolt revision
-  `43cc043332762034b5f65379441576e06e7a3890`:
+  The history equations were rechecked against Jolt revision
+  `8bbb2357890928d8f83b00ca542879077c4d3d28`:
   `crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs` batches the
   current and final histories; the verifier's `stages/stage4/ram_val_check.rs`
   uses `LtPolynomial::evaluate(write_cycle, read_cycle) + gamma`. The strict
   comparison in `crates/jolt-poly/src/lt.rs` gives earlier writes for `RamVal`,
   while the final term includes every cycle. The remapping matches
   `MemoryLayout::remap_word_address` in `common/src/jolt_device.rs`; the
-  non-memory and load guards match `crates/jolt-r1cs/src/constraints/rv64.rs`.
+  non-memory and load guards match `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`.
   This is a source check of the modeled equations, not a PCS proof.
 - **Layer 3 review, address wraparound:** resolved by a new premise.
   [layout_check.lean](../bug-report/ram-address-wraparound/layout_check.lean)
@@ -1210,8 +1289,8 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   These twelve public lemmas use only subsets of the three standard axioms,
   build at the default heartbeat limit, and introduce no soundness or instance
   premise. Jolt's `add.rs`, `sub.rs`, `mul.rs`, `tables/range_check.rs` and the
-  arithmetic rows of `jolt-r1cs/src/constraints/rv64.rs` were checked at
-  `43cc043`; no mismatch was found in this chunk.
+  arithmetic rows of `jolt-claims/src/protocols/composed/r1cs/rv64.rs` were rechecked at
+  `8bbb2357`; no mismatch was found in this chunk.
   Connecting instruction inputs and destination writes to execution belongs
   to Layer 5b.
   The requested timing check for `instructionRafFlag_one_of_arithmetic` measured
@@ -1246,8 +1325,8 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   reported 6.2 s for `Interleave.lean`, including imports and concurrent jobs.
   Docstrings now describe both interleaving bit lemmas and every bitwise and
   comparison entry lemma.
-  Jolt's `interleave.rs` and stage-5 `instruction_read_raf.rs` were checked at
-  `43cc043`; the odd-left/even-right convention agrees with the model.
+  Jolt's `interleave.rs` and stage-5 `instruction_read_raf.rs` were rechecked at
+  `8bbb2357`; the odd-left/even-right convention agrees with the model.
 - **Proved and reviewed, Layer 4(b), table operations:**
   [Layer4/Bitwise.lean](../JoltConstraints/Soundness/Layer4/Bitwise.lean) and
   [Layer4/Comparison.lean](../JoltConstraints/Soundness/Layer4/Comparison.lean)
@@ -1258,7 +1337,7 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   lemmas in Layer 4(a–b) were audited: only the three standard axioms occur.
   The modules build at the default heartbeat limit. Ari reviewed these table
   interpretations on 2026-10-10. The eleven table operations were checked against
-  Jolt's `materialize_entry` implementations at `43cc043`; no mismatch was found.
+  Jolt's `materialize_entry` implementations at `8bbb2357`; the source recheck found no change.
 - **Proved and reviewed, Layer 4(c):**
   [Layer4/Word.lean](../JoltConstraints/Soundness/Layer4/Word.lean) interprets
   word slices, sign extension, aligned addresses, powers, shift masks, byte
@@ -1338,7 +1417,7 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
 
   The remaining table families' `materialize_entry`
   functions, including the PEXT and byte-reversal helpers, were checked against
-  Jolt at `43cc043`; no translation mismatch was found in those definitions.
+  Jolt at `8bbb2357`; the source recheck found no change in those definitions.
 - **Resolved scope, Layer 4:** the Akita address alias is excluded by a
   feature-gated constraint already present in Jolt at `43cc043`, but that
   constraint is explicitly outside our base model. With Ari's approval on
@@ -1389,10 +1468,10 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   the need to keep the duplicated trace requirements synchronized. The relaxed
   load's error message now says only `invalid width`: it cannot exhaust a tape.
 
-  The provisional advice contract is recorded in `model_review.md`.
-  A complete satisfying witness with inconsistent length answers has not been
-  constructed; fixed-tape soundness and a16z's answer about `bytes_remaining()`
-  remain open. Layer 5a was reviewed before starting 5b. `CodeUnchanged`
+  The updated advice contract is recorded in `model_review.md`.
+  PR #2049 removes the length-query candidate; no complete satisfying witness
+  for that historical example was constructed. Fixed-tape soundness remains
+  open. Layer 5a was reviewed before starting 5b. `CodeUnchanged`
   needs no relaxed counterpart for bytecode execution.
 - **Layer 5b, address chunk proved and ready for review:**
   [Layer3/Layout.lean](../JoltConstraints/Soundness/Layer3/Layout.lean) defines
@@ -1555,14 +1634,15 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
 
 Collected here so they can be sent together. Each item states what we assume meanwhile.
 
-1. **Is the answer to `bytes_remaining()` untrusted, like advice values?**
-   Before proving, the prover prepares the tape, for example `[7, 3, 9]`.
-   A read takes the next byte; `bytes_remaining()` says how many bytes are left (3 at the start).
-   The constraints only check that each answer is a 64-bit number.
-   If a guest calls `bytes_remaining()` twice with no read in between, we found no constraint that rules out answers 3 and then 100, although a real tape answers 3 both times. We have not constructed a complete satisfying witness for this example.
-   The runtime advice page says advice values are untrusted but does not mention `bytes_remaining()`.
-   If the answer may be arbitrary, guests must validate any property they rely on. If it is meant to be accurate, which constraint enforces that guarantee?
-   Assumed meanwhile: untrusted (Layer 5a).
+1. **Resolved by removal: the guarantee of `bytes_remaining()`.**
+   Michael's [PR #2049](https://github.com/a16z/jolt/pull/2049) removes the API
+   and `VirtualAdviceLen`, acknowledging that its result was only range-checked
+   and not tied to reads. The revised documentation says tape length and
+   exhaustion are tracer bookkeeping, not proof guarantees. Our ISA now
+   includes that removal. The original 3-then-100 example remains historical
+   audit evidence, without a complete satisfying witness. Fixed-tape and
+   relaxed execution remain separate specifications; the theorem still needs
+   to state and prove the chosen guarantee.
 2. **Can we assume the RAM region `[lowest, lowest + 8·maxRamSize)` fits below `2^64`?**
    This bounds the verifier's maximum padded RAM domain, including every byte
    of its last word. We use it with the RAM-size check and the address

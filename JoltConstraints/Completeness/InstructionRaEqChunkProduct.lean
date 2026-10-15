@@ -73,7 +73,7 @@ private theorem virtual_digit_eq_small (p : WitnessParams)
 The small and virtual chunks decompose the same 128-bit lookup address.
 WitnessParams carries both required chunk-width divisibility conditions; the
 proof also uses the widths Rust's prover picks (`ProverChunkConfig`), which the
-honest sizes satisfy (`HonestTrace.witness_params_chunk_config`). -/
+honest sizes satisfy (`HonestTrace.corrected_witness_params_chunk_config`). -/
 theorem honestWitness_instructionRaEqChunkProduct
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

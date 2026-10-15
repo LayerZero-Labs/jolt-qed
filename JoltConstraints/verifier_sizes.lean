@@ -1,5 +1,7 @@
 import JoltConstraints.program
 
+-- Source audit: public pin 8bbb2357, base/Dory full-program mode.
+-- See methods/model_update.md, chunks 4–6, for the setup-bound source chain.
 set_option autoImplicit false
 
 namespace JoltConstraints.VerifierSizes
@@ -33,18 +35,18 @@ def maxRamSize (layout : MemoryLayout) : Option Nat := do
   let totalBytes ← MemoryLayout.checkedSub layout.heap_end.toNat layout.get_lowest_address.toNat
   checkedNextPowerOfTwo (totalBytes / 8)
 
-/-- `committed_log_k_chunk` in `crates/jolt-prover/src/config.rs:221-243`: the width of
+/-- `committed_log_k_chunk` in `crates/jolt-prover/src/config.rs:208-234`: the width of
 the honest prover's one-hot chunks over `2^logT` cycles, 4 below 2^25 cycles, else 8. -/
 def committedLogKChunk (logT : Nat) : Nat := if logT < 25 then 4 else 8
 
-/-- `advice_vars` in `crates/jolt-prover/src/dory/preprocessing.rs:189-196`: the
+/-- `advice_vars` in `crates/jolt-prover/src/dory/preprocessing.rs:187-194`: the
 number of variables of an advice polynomial of at most `bytes` bytes. -/
 def adviceVars (bytes : Nat) : Nat :=
   let words := max (bytes / 8) 1
   if words = 1 then 0 else Nat.log 2 (words - 1) + 1
 
 /-- The number of variables of the verifier's Dory setup: `setup_total_vars` in
-`crates/jolt-prover/src/dory/preprocessing.rs:198-211`, rounded up to even by
+`crates/jolt-prover/src/dory/preprocessing.rs:196-210`, rounded up to even by
 `canonical_setup_log_n` in `crates/jolt-dory/src/scheme.rs:120-126`. Programs
 committed in preprocessing add more candidates; they are not modeled. -/
 def dorySetupLogN (layout : MemoryLayout) (maxPaddedTraceLength : Nat) : Nat :=
@@ -78,7 +80,7 @@ setup has variables, and Jolt opens the committed one-hot chunks at a point with
 `logT + chunkBits` coordinates. The prover picks `chunkBits`; the setup is the
 verifier's.
 Rust: dory-pcs-0.4.2/src/evaluation_proof.rs:341-352, 394-399 (point size, setup bound)
-      crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs:28
+      crates/jolt-claims/src/protocols/jolt/geometry/committed_openings.rs:164-203
       crates/jolt-verifier/src/stages/stage8/verify.rs:132-135 -/
 def JoltInstance.one_hot_fits_setup {Source : Type} (joltInstance : JoltInstance Source)
     (logT chunkBits : Nat) : Bool :=

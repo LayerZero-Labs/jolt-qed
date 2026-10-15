@@ -93,7 +93,6 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .VirtualMovsign dst _ _
   | .VirtualAdvice dst _ _
   | .VirtualAdviceLoad dst _
-  | .VirtualAdviceLen dst _ _
   | .VirtualNegateIf dst _ _ => dst.WritesProtectedVReg
   | .LD _ dst _ _ => dst.WritesProtectedVReg
   | .BEQ _ _ _

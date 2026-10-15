@@ -9,8 +9,8 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [RamWriteValue](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/ram.rs).
--- Rust: [RAM capture slots](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-riscv/src/trace_row.rs).
+-- Rust: [RamWriteValue](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/ram.rs).
+-- Rust: [RAM capture slots](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-riscv/src/trace_row.rs#L388-L464).
 -- A load preserves the RAM word, so its captured destination supplies this value.
 -- A store supplies its source value from the pre-state, including for device stores
 -- whose effects are not an ordinary RAM overwrite. Other instructions and padding

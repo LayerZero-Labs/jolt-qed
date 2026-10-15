@@ -55,7 +55,7 @@ def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   | .VirtualWindowMaskH dst src _ | .VirtualWindowMaskW dst src _
   | .VirtualSignExtendWord dst src _ | .VirtualZeroExtendWord dst src _
   | .VirtualMovsign dst src _ | .LD _ dst src _
-  | .VirtualAdviceLen dst src _ | .VirtualHostIO dst src _ =>
+  | .VirtualHostIO dst src _ =>
       destinationIsCanonical dst && sourceIsCanonical src
   -- Two sources and one destination.
   | .ADD dst lhs rhs | .ADDW dst lhs rhs | .SUB dst lhs rhs | .SUBW dst lhs rhs

@@ -8,7 +8,7 @@ namespace JoltConstraints
 
 /-- Constraint (01) in `constraints.md` (stage 1):
 loads and stores use the base register plus the immediate as their RAM address.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-r1cs/src/constraints/rv64.rs -/
+Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
 def ramAddrEqRs1PlusImmIfLoadStore {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

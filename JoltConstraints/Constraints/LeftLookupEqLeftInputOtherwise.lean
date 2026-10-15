@@ -8,7 +8,7 @@ namespace JoltConstraints
 
 /-- Constraint (07) in `constraints.md` (stage 1):
 the other operand modes preserve the left instruction input.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-r1cs/src/constraints/rv64.rs -/
+Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
 def leftLookupEqLeftInputOtherwise {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

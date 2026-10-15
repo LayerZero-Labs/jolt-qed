@@ -4,7 +4,7 @@ import JoltConstraints.lookup_table
 /-! Pure identities for the interleaved lookup address, shared with completeness.
 Odd positions hold the left operand and even positions the right, counting from
 bit zero at the least significant end. The bit-unpacking implementation mirrors
-Jolt's `uninterleave_bits` at revision 43cc043332762034b5f65379441576e06e7a3890. -/
+Jolt's `uninterleave_bits` at revision 8bbb2357890928d8f83b00ca542879077c4d3d28. -/
 
 set_option autoImplicit false
 

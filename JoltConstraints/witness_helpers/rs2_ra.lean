@@ -9,8 +9,9 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [materialize_register_read_write_virtual](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/registers.rs:47).
+-- Rust: [materialize_register_read_write_virtual](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
 -- Select the instruction's second source register, including an explicit x0.
+-- Selection uses the encoded integer operand, independently of capture presence.
 -- An absent operand and a padding position select no register.
 noncomputable def Rs2Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLength → F :=
   fun address t =>
@@ -46,7 +47,7 @@ noncomputable def Rs2Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLengt
       | .VirtualWindowMaskB _ _ _ | .VirtualWindowMaskH _ _ _ | .VirtualWindowMaskW _ _ _
       | .VirtualSignExtendWord _ _ _ | .VirtualZeroExtendWord _ _ _ | .VirtualMovsign _ _ _
       | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
-      | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ | .VirtualAdviceLen _ _ _
+      | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
       | .VirtualHostIO _ _ _ => 0
     else 0
 

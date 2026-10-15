@@ -8,9 +8,10 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [materialize_register_read_write_virtual](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/registers.rs:47).
--- Select the captured destination register. HOST_IO has a captured rd even though
--- it does not write it. Absent destinations and padding select no register.
+-- Rust: [materialize_register_read_write_virtual](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
+-- Select the instruction's encoded integer destination, independently of capture
+-- presence. The completed tracer captures HOST_IO's rd even though it does not
+-- write it. Absent destinations and padding select no register.
 noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
     (trace : Trace) :
     Fin 128 → Fin p.traceLength → F :=
@@ -40,7 +41,7 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _
       | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
       | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
-      | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+      | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
           if address = destinationRegisterAddress (capturedDestination dst) then 1 else 0
       | .LD _ dst _ _ =>
           if address = destinationRegisterAddress (capturedDestination dst) then 1 else 0

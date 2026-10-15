@@ -39,7 +39,7 @@ def rs1Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
   | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
   | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
-  | .VirtualAssertLTE src _ _ | .VirtualAdviceLen _ src _ | .VirtualHostIO _ src _
+  | .VirtualAssertLTE src _ _ | .VirtualHostIO _ src _
   | .VirtualAssertHalfwordAlignment src _ _ | .VirtualAssertWordAlignment src _ _ => some src
   | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
@@ -71,7 +71,7 @@ def rs2Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualWindowMaskB _ _ _ | .VirtualWindowMaskH _ _ _ | .VirtualWindowMaskW _ _ _
   | .VirtualSignExtendWord _ _ _ | .VirtualZeroExtendWord _ _ _ | .VirtualMovsign _ _ _
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
-  | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ | .VirtualAdviceLen _ _ _
+  | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
   | .VirtualHostIO _ _ _ => none
 
 theorem rs1Operand_canonical

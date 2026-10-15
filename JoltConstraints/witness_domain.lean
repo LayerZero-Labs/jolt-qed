@@ -69,11 +69,11 @@ theorem MemoryLayout.get_lowest_address_toNat (layout : MemoryLayout) :
   split <;> omega
 
 -- An accepted run's RAM size is a power of two.
-theorem HonestTrace.prover_config_ram_K_pow {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.corrected_prover_config_ram_K_pow {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config) :
     ∃ log, config.ram_K = 2 ^ log := by
-  unfold HonestTrace.prover_config at accepted
+  unfold HonestTrace.corrected_prover_config at accepted
   -- the jump check, the length check and the address check
   rw [bind_some_iff] at accepted
   obtain ⟨_, _, accepted⟩ := accepted
@@ -86,16 +86,16 @@ theorem HonestTrace.prover_config_ram_K_pow {joltInstance : JoltInstance SourceI
   exact ⟨_, rfl⟩
 
 -- Rust's witness sizes hold every RAM access of an accepted run: each LD or SD
--- address is 0 or has a slot below ram_K (HonestTrace.prover_config_ram_fits).
-theorem HonestTrace.witness_params_ram_fits {joltInstance : JoltInstance SourceInstruction}
+-- address is 0 or has a slot below ram_K (HonestTrace.corrected_prover_config_ram_fits).
+theorem HonestTrace.corrected_witness_params_ram_fits {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config) :
-    (trace.witness_params config accepted).RamFits trace := by
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config) :
+    (trace.corrected_witness_params config accepted).RamFits trace := by
   intro i
   dsimp only
-  obtain ⟨log, isPower⟩ := trace.prover_config_ram_K_pow config accepted
-  have ramSizeIs : (trace.witness_params config accepted).ramSize = config.ram_K := by
-    unfold WitnessParams.ramSize HonestTrace.witness_params
+  obtain ⟨log, isPower⟩ := trace.corrected_prover_config_ram_K_pow config accepted
+  have ramSizeIs : (trace.corrected_witness_params config accepted).ramSize = config.ram_K := by
+    unfold WitnessParams.ramSize HonestTrace.corrected_witness_params
     dsimp only
     rw [isPower, Nat.log2_two_pow]
   cases access : TraceWitness.ramAccessAddress
@@ -105,7 +105,7 @@ theorem HonestTrace.witness_params_ram_fits {joltInstance : JoltInstance SourceI
     have touches : trace.rows[i.val].ram_address = some rawAddress.toNat := by
       rw [TraceRow.ram_address_eq, access, Option.map_some]
     have member : trace.rows[i.val] ∈ trace.rows := Array.getElem_mem i.isLt
-    rcases trace.prover_config_ram_fits config accepted _ member _ touches with
+    rcases trace.corrected_prover_config_ram_fits config accepted _ member _ touches with
       zero | ⟨above, slot, remapped, small⟩
     · -- address 0 means no access
       left

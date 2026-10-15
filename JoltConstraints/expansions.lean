@@ -119,11 +119,9 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .AdviceLH rd => some (.ofProgram (JoltISA.advicelhProgramAuto rd))
     | .AdviceLW rd => some (.ofProgram (JoltISA.advicelwProgramAuto rd))
     | .AdviceLD rd => some (.ofProgram (JoltISA.adviceldProgramAuto rd))
-    -- FormatI immediates are sign-extended (jolt/tracer/src/instruction/format/format_i.rs:18-24).
-    | .VirtualAdviceLen rd rs1 imm =>
-        some (.ofNative (.VirtualAdviceLen (.xreg rd) (.xreg rs1) (sign_extend (m := 64) imm)))
     | .VirtualRev8W rd rs1 => some (.ofNative (.VirtualRev8W (.xreg rd) (.xreg rs1)))
     | .VirtualAssertEQ rs1 rs2 imm =>
         some (.ofNative (JoltISA.Encoded.VirtualAssertEQ (.xreg rs1) (.xreg rs2) imm))
+    -- FormatI immediates are sign-extended (jolt/tracer/src/instruction/format/format_i.rs:18-24).
     | .VirtualHostIO rd rs1 imm =>
         some (.ofNative (.VirtualHostIO (.xreg rd) (.xreg rs1) (sign_extend (m := 64) imm)))

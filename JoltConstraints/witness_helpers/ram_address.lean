@@ -6,7 +6,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [ram_access_address](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/ram.rs:7).
+-- Rust: [ram_access_address](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/ram.rs).
 -- This is the effective byte address captured by the tracer, including device
 -- I/O. Use the same address calculation as ISA load/store execution.
 noncomputable def ramAccessAddress (instruction : JoltISA.Instr)
@@ -16,7 +16,7 @@ noncomputable def ramAccessAddress (instruction : JoltISA.Instr)
       some (((JoltISA.sourceValue base preState) + imm))
   | _ => none
 
--- Rust: [RamAddress](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/ram.rs:41).
+-- Rust: [RamAddress](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/ram.rs).
 -- Encode the raw byte address before RAM word remapping. Read the base from
 -- the pre-state, including when a load overwrites that same register.
 -- Instructions without a memory access and padding positions contribute zero.

@@ -154,7 +154,9 @@ def Rv64ProgramImage.instructionAt (program : Rv64ProgramImage SourceInstruction
 -- instructions are not patched.
 -- See : jolt/tracer/src/instruction/div.rs, divu.rs, rem.rs, remu.rs, divw.rs,
 --       divuw.rs, remw.rs, remuw.rs (trace)
--- SC.W and SC.D have no runtime advice after PR #2039 (2a924239).
+-- SC.W and SC.D have no runtime advice after merged PR #2039 (0dad0d9e),
+-- rechecked at public pin 8bbb2357:
+-- https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/instruction/scw.rs#L46-L51
 def SourceInstruction.honestTracerAdvice (source : SourceInstruction) (state : SailJoltState) :
     List (BitVec 64) :=
   let value (register : regidx) := JoltISA.sourceValue (.xreg register) state
@@ -248,18 +250,16 @@ abbrev HonestTrace.row {joltInstance : JoltInstance SourceInstruction}
   { toTraceRow := trace.rows[i]
     executes := trace.executes _ (Array.getElem_mem inBounds) }
 
--- The slot in Rust's RAM table that holds a memory address: the number of 64-bit
--- steps from the lowest address. Address 0 has no slot: it means the row does not
--- touch memory. Rust panics on an address below the lowest address; the prover
--- config checks for that before using this.
--- See : jolt/crates/jolt-prover/src/config.rs:183-195 (remap_address)
+-- The word offset used by the corrected sizing policy below. Zero means no
+-- access. This helper alone truncates subtraction; its caller checks addresses.
+-- The checked Rust path is in prover_config.lean.
 def remap_address (layout : MemoryLayout) (address : Nat) : Option Nat :=
   if address = 0 then none
   else some ((address - layout.get_lowest_address.toNat) / 8)
 
 -- The witness length Rust's prover pads a run to: the smallest power of two that
 -- is larger than the run, and at least 256.
--- See : jolt/crates/jolt-prover/src/config.rs:30, 113-118
+-- See : jolt/crates/jolt-prover/src/config.rs:29, 73-81 at 8bbb2357
 def padded_trace_length (rows : Nat) : Nat :=
   if rows < 256 then 256 else 2 ^ Nat.clog 2 (rows + 1)
 
@@ -270,26 +270,17 @@ def JoltISA.Instr.is_jump : JoltISA.Instr → Bool
   | _ => false
 
 -- The two sizes Rust's prover picks from a run before it builds the witness.
--- See : jolt/crates/jolt-prover/src/config.rs:34-40 (ProverConfig)
+-- See : jolt/crates/jolt-prover/src/config.rs:36-40 at 8bbb2357 (ProverConfig size fields)
 structure ProverConfig where
   trace_length : Nat
   ram_K : Nat
 
--- How Rust's prover sizes the proof from a run; none where it refuses or panics.
--- It refuses a run whose last row is not a jump (an empty run passes), and a run
--- whose padded length passes the instance's maximum; it panics if a row touches an
--- address below the lowest address. ram_K is the smallest power of two at least
--- every touched slot and the end of the program image.
--- The jump check came with a16z/jolt#1968 (merged 2026-10-06, upstream 00508a09),
--- which fixed #1916: a trace ending on a taken self-branch cannot be proved.
--- WARNING: Rust's tracer lets a program read below the lowest address (allowed
--- since ZeroOS, #1229; mmu.rs:139, 154), but the prover panics on it
--- (config.rs:193). We follow the prover, so such runs have no config. Reported
--- upstream as a16z/jolt#1951 item 3 (model_review.md, Upstream issues).
--- See : jolt/crates/jolt-prover/src/config.rs:103-152 (derive_from_rows)
---       jolt/crates/jolt-prover/src/config.rs:122-126 at upstream 629ed77b (the jump check)
---       jolt/crates/jolt-verifier/src/verifier.rs:378-383 (the length bound)
-def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
+-- Intentional corrected mathematical policy, preserved from the previous model.
+-- It guards the last jump, trace maximum and accessed addresses, then rounds
+-- past the highest touched slot. Unlike Rust at 8bbb2357, it uses `touched + 1`.
+-- HonestTrace.prover_config in prover_config.lean models Rust's checked policy.
+-- Completeness uses this corrected variant; see methods/model_update.md, chunk 4.
+def HonestTrace.corrected_prover_config {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Option ProverConfig := do
   guard (trace.rows.back?.all fun last => trace.bytecode[last.rowIndex].instruction.is_jump)
@@ -302,12 +293,8 @@ def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
   let image := joltInstance.program.memory_init
   let image_end := (remap_address layout (min_bytecode_address image)).getD 0 +
     program_image_len_words image + 1
-  -- FIXME: this is what ram_K should be, not what Rust computes today. Rust rounds
-  -- up `touched` instead of `touched + 1` (config.rs:143), so when the highest
-  -- touched slot is a power of two its RAM table is one slot too small and its
-  -- witness rejects the run. Reported as a16z/jolt#1951 item 4, with this fix;
-  -- reproduced at 8e536f19 (bug-report/ram-k-off-by-one/run.sh), and the formula is
-  -- unchanged at upstream 629ed77b (config.rs:159). Recheck once Rust is fixed.
+  -- #1951 item 4: Rust still rounds `touched`, which need not contain that slot.
+  -- This correction is intentional; bug-report/ram-k-off-by-one records it.
   pure { trace_length := trace_length, ram_K := 2 ^ Nat.clog 2 (max (touched + 1) image_end) }
 
 -- Rust only proves a run in which every spoil assert that runs has equal sides. A

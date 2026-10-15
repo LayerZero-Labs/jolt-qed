@@ -9,8 +9,8 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [Rs1Value](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/registers.rs).
--- Rust: [capture_pre_execution_state](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_r.rs:77).
+-- Rust: [Rs1Value](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/registers.rs).
+-- Rust: [RegisterStateR::capture_pre](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/instruction/registers/r.rs#L67-L79).
 -- Read the first source from the pre-state, even when it is also the destination.
 -- Instructions without this operand and padding positions contribute zero.
 noncomputable def Rs1Value [Field F] (trace : Trace) : Fin p.traceLength → F :=
@@ -43,7 +43,7 @@ noncomputable def Rs1Value [Field F] (trace : Trace) : Fin p.traceLength → F :
       | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
       | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
       | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
-      | .VirtualAssertLTE src _ _ | .VirtualAdviceLen _ src _ | .VirtualHostIO _ src _ =>
+      | .VirtualAssertLTE src _ _ | .VirtualHostIO _ src _ =>
           ((JoltISA.sourceValue src row.preState).toNat : F)
       -- Alignment assertions can read architectural or virtual registers.
       | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>

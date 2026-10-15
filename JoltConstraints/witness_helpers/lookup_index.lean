@@ -80,7 +80,7 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   | .VirtualPow2I _ imm | .VirtualPow2IW _ imm | .VirtualShiftRightBitmaskI _ imm =>
       (BitVec.ofNat 64 imm).setWidth 128
   | .VirtualMovsign _ src imm => interleaveLookupOperands (source src) imm
-  | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ | .VirtualAdviceLen dst _ _ =>
+  | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       (capturedDestinationValue dst postState).setWidth 128
   | .FENCE | .LD _ _ _ _ | .SD _ _ _ | .VirtualHostIO _ _ _ => 0
 

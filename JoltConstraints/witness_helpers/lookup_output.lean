@@ -91,7 +91,7 @@ noncomputable def rowLookupOutput {bytecode : Array JoltInstructionRow}
   | .VirtualZeroExtendWord _ src _ => jolt_virtual_zero_extend_word_value (source src)
   | .VirtualMovsign _ src _ => jolt_movsign_value (source src)
   | .VirtualNegateIf _ sign src => jolt_virtual_negate_if_value (source sign) (source src)
-  | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ | .VirtualAdviceLen dst _ _ =>
+  | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       TraceWitness.capturedDestinationValue dst row.postState
   -- For an honest row, successful execution certifies these enforced assertions.
   | .VirtualAssertHalfwordAlignment .. | .VirtualAssertWordAlignment ..

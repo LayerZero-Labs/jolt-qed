@@ -9,8 +9,8 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [Rs2Value](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/registers.rs).
--- Rust: [capture_pre_execution_state](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_r.rs:77).
+-- Rust: [Rs2Value](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/registers.rs).
+-- Rust: [RegisterStateR::capture_pre](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/instruction/registers/r.rs#L67-L79).
 -- Read the second source from the pre-state, even when it is also the destination.
 -- Instructions without this operand and padding positions contribute zero.
 noncomputable def Rs2Value [Field F] (trace : Trace) : Fin p.traceLength → F :=
@@ -47,7 +47,7 @@ noncomputable def Rs2Value [Field F] (trace : Trace) : Fin p.traceLength → F :
       | .VirtualWindowMaskB _ _ _ | .VirtualWindowMaskH _ _ _ | .VirtualWindowMaskW _ _ _
       | .VirtualSignExtendWord _ _ _ | .VirtualZeroExtendWord _ _ _ | .VirtualMovsign _ _ _
       | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
-      | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ | .VirtualAdviceLen _ _ _
+      | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
       | .VirtualHostIO _ _ _ => 0
     else 0
 

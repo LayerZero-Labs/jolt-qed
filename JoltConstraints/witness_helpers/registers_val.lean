@@ -5,9 +5,9 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [RegistersVal materialization](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/registers.rs:26).
+-- Rust: [RegistersVal materialization](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
 -- The witness register array starts at zero, including virtual registers. Each
--- column records its contents BEFORE that cycle's captured destination write.
+-- column records its contents BEFORE that cycle's encoded destination write.
 -- Apply only preceding writes; padding retains the last accumulated value.
 -- A one-hot write bit replaces value by RdWriteValue; a zero bit preserves it.
 noncomputable def RegistersVal {F : Type} [Field F] (p : WitnessParams)

@@ -604,10 +604,6 @@ theorem sd_native_ok (rs1 rs2 : regidx) (imm : BitVec 12) :
     ExpandedOk (.ofNative (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) imm)) := by
   native_ok
 
-theorem virtualAdviceLen_native_ok (rd rs1 : regidx) (imm : BitVec 64) :
-    ExpandedOk (.ofNative (JoltISA.Instr.VirtualAdviceLen (.xreg rd) (.xreg rs1) imm)) := by
-  native_ok
-
 theorem virtualRev8W_native_ok (rd rs1 : regidx) :
     ExpandedOk (.ofNative (JoltISA.Instr.VirtualRev8W (.xreg rd) (.xreg rs1))) := by
   native_ok
@@ -733,7 +729,6 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .jolt (.AdviceLH rd), _, h => by cases h; exact ofProgram_ok _ (advicelh_ok ..)
   | .jolt (.AdviceLW rd), _, h => by cases h; exact ofProgram_ok _ (advicelw_ok ..)
   | .jolt (.AdviceLD rd), _, h => by cases h; exact ofProgram_ok _ (adviceld_ok ..)
-  | .jolt (.VirtualAdviceLen rd rs1 imm), _, h => by cases h; exact virtualAdviceLen_native_ok ..
   | .jolt (.VirtualRev8W rd rs1), _, h => by cases h; exact virtualRev8W_native_ok ..
   | .jolt (.VirtualAssertEQ rs1 rs2 imm), _, h => by cases h; exact virtualAssertEQ_native_ok ..
   | .jolt (.VirtualHostIO rd rs1 imm), _, h => by cases h; exact virtualHostIO_native_ok ..

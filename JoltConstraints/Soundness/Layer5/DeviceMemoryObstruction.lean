@@ -9,8 +9,8 @@ and the conflicting next-table value forced by a selected store of one.
 This is not a constructed witness satisfying `AllConstraints`, nor a new
 verifier reproduction. It formalizes the local obstruction behind the existing
 termination issue (#1950/#1951). No soundness premise or semantics is changed.
-Jolt revision checked: 43cc043332762034b5f65379441576e06e7a3890,
-common/src/jolt_device.rs:121-155 (loads return zero; stores are ignored). -/
+Jolt revision checked: 8bbb2357890928d8f83b00ca542879077c4d3d28,
+common/src/jolt_device.rs:146-181 (loads return zero; stores are ignored). -/
 
 set_option autoImplicit false
 

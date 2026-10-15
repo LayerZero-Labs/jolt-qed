@@ -5,6 +5,13 @@ date: 2026-10-08
 
 # What was reviewed
 
+**Current Rust semantics pin (2026-10-15):** upstream
+[`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
+The unpublished local merge `1c8aaff2` and generator changes have separate
+provenance. Lean migration is implemented and validated; see the
+[migration checklist](./model_update.md). The review provenance below is
+historical and does not claim a completed audit of the new pin.
+
 - **Lean.** Branch `refactor/trace-witness`, with the trace refactor still uncommitted (it builds).
 - **Rust.** The checkout at `/Users/ari.biswas/Work-with-A16z/jolt`. HEAD is `3cb4e243`, with upstream `00508a09` (#1968, which includes `8e536f19`) merged but not yet committed. Upstream `629ed77b` is not in the local clone.
 - **How.** I read the code myself, and one independent agent reviewed it separately. I re-checked every agent claim marked *verified* below myself, unless it says otherwise.
@@ -150,9 +157,13 @@ termination or panic discrepancies has been added.
 **Still owed:** show that a satisfying witness gives consistent execution data:
 - runtime advice equal to Rust's (the bytecode project proves this direction for
   DIV, DIVU, DIVW; check the other five);
-- an advice tape consistent with the reads. `VirtualAdviceLen` reports the
-  remaining bytes, so lengths and reads must agree along the run; its cross-row
-  consistency needs an audit.
+- for the current fixed-tape theorem, an advice tape consistent with the reads.
+  PR #2049 removes `VirtualAdviceLen`; the two-query inconsistency is now a
+  historical candidate, not an instruction available in the current model.
+  The updated upstream contract distinguishes finite-tape tracer behavior from
+  the proof's untrusted answers. Layer 5a models both and proves fixed-tape
+  inclusion in the relaxed language. The reverse direction remains unproved;
+  removing the length query alone does not establish fixed-tape soundness.
 
 # C. Housekeeping
 

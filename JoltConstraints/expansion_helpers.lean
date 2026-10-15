@@ -19,7 +19,6 @@ inductive JoltCustomInstruction where
   | AdviceLH (rd : regidx)
   | AdviceLW (rd : regidx)
   | AdviceLD (rd : regidx)
-  | VirtualAdviceLen (rd rs1 : regidx) (imm : BitVec 12)  -- FormatI
   | VirtualRev8W (rd rs1 : regidx)                        -- FormatT
   | VirtualAssertEQ (rs1 rs2 : regidx) (imm : BitVec 13)  -- FormatB
   | VirtualHostIO (rd rs1 : regidx) (imm : BitVec 12)     -- FormatI

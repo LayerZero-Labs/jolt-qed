@@ -8,7 +8,7 @@ namespace JoltConstraints
 
 /-- Constraint (22) in `constraints.md` (stage 2):
 ShouldJump is the jump flag multiplied by one minus the next no-op flag.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-r1cs/src/constraints/rv64.rs -/
+Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
 def shouldJumpEqJumpMulNotNextIsNoop {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

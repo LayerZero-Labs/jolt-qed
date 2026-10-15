@@ -201,7 +201,7 @@ def Rv64ProgramImage.ImageNonempty {Source : Type} (image : Rv64ProgramImage Sou
   image.memory_init ≠ []
 
 -- The host sets the program size from the image.
--- See : jolt/crates/jolt-host/src/program.rs:319
+-- See : jolt/crates/jolt-host/src/program.rs:355-356, 482-492 (8bbb2357)
 def Rv64ProgramImage.program_size {Source : Type} (image : Rv64ProgramImage Source) :
     BitVec 64 :=
   image.program_end - BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS
@@ -335,7 +335,9 @@ structure JoltPrivateInputs where
   advice_tape : Array (BitVec 8)
 
 -- The host overwrites program_size with the size of the program image.
--- See : jolt/crates/jolt-host/src/program.rs:319, 333
+-- Checked layout failures propagate as none, including a padded I/O start at zero.
+-- Rust (8bbb2357): jolt-sdk/src/host_utils.rs:128-143 (program_preprocessing)
+-- https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/jolt-sdk/src/host_utils.rs#L128-L143
 def JoltInstance.memory_layout {Source : Type} (joltInstance : JoltInstance Source) :
     Option MemoryLayout :=
   MemoryLayout.new { joltInstance.memory_config with program_size := some joltInstance.program.program_size }

@@ -1,10 +1,12 @@
 import JoltBytecode.JoltISA.Semantics
 import Mathlib.Tactic
 
-/-! Provisional untrusted-answer semantics for tape reads and length queries.
+/-! Untrusted-answer semantics for tape reads.
 Each answer is a full 64-bit word. Width checks and cursor increments remain,
-but tape contents, remaining length and exhaustion do not constrain the answer.
+but tape contents and exhaustion do not constrain the answer.
 The existing fixed-tape interpreter remains the specification for completeness.
+PR #2049 removes the length-query instruction and documents this separation:
+https://github.com/a16z/jolt/pull/2049
 Internal VirtualAdvice is unchanged and still needs its separate honesty proof. -/
 
 set_option autoImplicit false
@@ -28,9 +30,6 @@ noncomputable def execWithTapeAnswer (instruction : Instr) (answer : BitVec 64) 
             { state.adviceTape with readPosition := state.adviceTape.readPosition + byteCount.toNat } }
       else
         .error (Error.Assertion "VirtualAdviceLoad: invalid width") state
-  | .VirtualAdviceLen destination _ _ => do
-      writeDst destination answer
-      pure RETIRE_SUCCESS
   | instruction => execInstr instruction
 
 /-- The answer supplied by the existing fixed-tape interpreter, or zero for an
@@ -39,8 +38,6 @@ def fixedTapeAnswer (instruction : Instr) (state : SailJoltState) : BitVec 64 :=
   match instruction with
   | .VirtualAdviceLoad _ byteCount =>
       ((readAdviceTape state.adviceTape byteCount).map Prod.fst).getD 0
-  | .VirtualAdviceLen .. =>
-      BitVec.ofNat 64 (state.adviceTape.bytes.size - state.adviceTape.readPosition)
   | _ => 0
 
 private theorem readAdviceTape_shape (tape : JoltAdviceTape) (byteCount value : BitVec 64)
