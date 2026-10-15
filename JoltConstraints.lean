@@ -1,4 +1,5 @@
 import JoltConstraints.Completeness.All
+import JoltConstraints.Completeness.completeness
 import JoltConstraints.advice_inputs
 import JoltConstraints.Soundness.soundness
 import JoltConstraints.Soundness.Layer0.Bounds

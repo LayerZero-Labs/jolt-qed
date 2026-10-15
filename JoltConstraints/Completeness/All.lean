@@ -107,9 +107,13 @@ theorem honestWitness_constraintEquations
     ramRaChunkHammingWeight := honestWitness_ramRaChunkHammingWeight params trace ramFits traceFits bytecodeDomain
   }
 
+end JoltConstraints
+
+open JoltConstraints
+
 -- Every assert in the run has equal sides: an ordinary one (imm = 0) executed, so its
 -- sides were equal; a spoil one (imm ≠ 0) is assumed to pass.
-theorem _root_.HonestTrace.assert_eq_passes {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.assert_eq_passes {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (spoilAssertsPass : trace.SpoilAssertsPass) : assertEqPasses trace := by
   intro t
@@ -129,7 +133,7 @@ theorem _root_.HonestTrace.assert_eq_passes {joltInstance : JoltInstance SourceI
 
 -- Both advice buffers of the starting device lie below the inputs, which start a whole
 -- number of 64-bit words above the lowest address.
-theorem _root_.HonestTrace.advice_below_input {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.advice_below_input {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     trace.initialState.jolt_device.AdviceBelowInput := by
   have below := initial_state_advice_below_input joltInstance privateInputs trace.initialState
@@ -140,7 +144,7 @@ theorem _root_.HonestTrace.advice_below_input {joltInstance : JoltInstance Sourc
 -- Rust's entry slot is where the witness starts: the first row's slot, or the NoOp's
 -- slot 0 when the trace is empty (the entry address is then 0).
 -- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
-theorem _root_.HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
     (entrySlot : Nat)
@@ -164,7 +168,7 @@ theorem _root_.HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruc
     exact Option.some.inj entryIsRust
 
 -- The run's final state, as matches_outputs reads it, is the witness's final state.
-theorem _root_.HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     (trace.rows.back?.map (·.postState)).getD trace.initialState =
       TraceWitness.finalTraceState trace := by
@@ -182,7 +186,7 @@ theorem _root_.HonestTrace.final_state_eq {joltInstance : JoltInstance SourceIns
 -- is by corrected_prover_config: its RAM formula uses `touched + 1`, unlike Rust
 -- at 8bbb2357. No completeness claim for Rust's undersized RAM policy follows.
 -- The public I/O is the verifier's, when the instance claims the run's outputs.
-theorem _root_.HonestTrace.allConstraints_corrected_sizes
+theorem HonestTrace.allConstraints_corrected_sizes
     {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -294,7 +298,7 @@ theorem _root_.HonestTrace.allConstraints_corrected_sizes
 /-- Transfer corrected completeness to the checked Rust policy away from its
 exact off-by-one boundary. This is the bridge condition requested in migration
 review; the corrected theorem's existing premises and proof gaps are unchanged. -/
-theorem _root_.HonestTrace.allConstraints_rust_sizes
+theorem HonestTrace.allConstraints_rust_sizes
     {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -323,5 +327,3 @@ theorem _root_.HonestTrace.allConstraints_rust_sizes
   exact trace.allConstraints_corrected_sizes config
     ((trace.prover_config_eq_corrected_iff config accepted).2 ramFits) slots preprocessed entry
     entryIsRust spoilAssertsPass noWrap imageNonempty claimsRunOutputs io publicIo
-
-end JoltConstraints

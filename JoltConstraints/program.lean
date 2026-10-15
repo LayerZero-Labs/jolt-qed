@@ -301,10 +301,16 @@ See : jolt/crates/jolt-verifier/src/verifier.rs:37-42 (verify takes preprocessin
       public_io : JoltDevice, proof, optional trusted advice commitment)
       jolt/crates/jolt-verifier/src/verifier.rs:356-430 (validate_inputs)
 The program and memory configuration stand in for verifier preprocessing.
-Trusted advice is part of the instance. In Jolt the verifier holds a commitment
-to it; this non-succinct relation models its contents directly. No PCS is part
-of this relation, and this representation does not assert that the verifier
-learns the bytes.
+
+NOTE: the PCS is ignored for now. This differs from the inputs of Jolt's verifier
+in two ways:
+1. Trusted advice. Jolt's verifier receives only a commitment to it
+   (`trusted_advice_commitment`); this relation holds the bytes themselves. That
+   the commitment fixes the bytes is a PCS property, outside this model. This
+   representation does not assert that the verifier learns the bytes.
+2. Omitted: `preprocessing.pcs_setup`, `preprocessing.vc_setup` and
+   `preprocessing.preprocessing_digest`. They serve only the PCS and transcript.
+   See : jolt/crates/jolt-verifier/src/preprocessing.rs:200-211 at 8bbb2357
 -/
 structure JoltInstance (Source : Type) where
   program : Rv64ProgramImage Source
@@ -313,6 +319,8 @@ structure JoltInstance (Source : Type) where
   memory_config : MemoryConfig
   -- Trusted advice is fixed by the instance; we model its contents directly.
   -- In Jolt an absent commitment contributes the all-zero image (#[]).
+  -- Differs from Rust: Jolt's verifier holds a commitment, not these bytes
+  -- (NOTE above).
   trusted_advice : Array (BitVec 8)
   inputs : Array (BitVec 8)
   outputs : Array (BitVec 8)

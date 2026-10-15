@@ -20,9 +20,32 @@ theorem min_bytecode_address_ge_ram_start {Source : Type}
     simpa only [Option.getD_some, ← isAddress] using
       (program.memory_init_in_program entry member).1
 
+-- Rounding up to even never decreases.
+private theorem le_round_up_even (vars : Nat) : vars ≤ if vars % 2 = 0 then vars else vars + 1 := by
+  split <;> omega
+
+-- A longer trace never gets a narrower honest chunk width.
+private theorem chunks_mono {logT maxLogT : Nat} (shorter : logT ≤ maxLogT) :
+    logT + VerifierSizes.committedLogKChunk logT ≤
+      maxLogT + VerifierSizes.committedLogKChunk maxLogT := by
+  unfold VerifierSizes.committedLogKChunk
+  split <;> split <;> omega
+
+-- Chunks of the honest width for a trace no longer than the maximum fit the setup
+-- sized for the maximum.
+theorem VerifierSizes.chunks_fit_dorySetupLogN (layout : MemoryLayout) (maxLength logT : Nat)
+    (shorter : logT ≤ Nat.clog 2 maxLength) :
+    logT + VerifierSizes.committedLogKChunk logT ≤ VerifierSizes.dorySetupLogN layout maxLength := by
+  unfold VerifierSizes.dorySetupLogN
+  exact ((chunks_mono shorter).trans (le_max_left _ _)).trans (le_round_up_even _)
+
+end JoltConstraints
+
+open JoltConstraints
+
 -- If the verifier computes a minimum for a nonempty image, the corrected policy's chosen
 -- RAM size meets it. No additional condition is imposed on the final theorem.
-theorem _root_.HonestTrace.corrected_witness_params_ram_minimum_of_nonempty
+theorem HonestTrace.corrected_witness_params_ram_minimum_of_nonempty
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (accepted : trace.corrected_prover_config = some config)
@@ -93,7 +116,7 @@ theorem _root_.HonestTrace.corrected_witness_params_ram_minimum_of_nonempty
 -- Upper half: false until a16z/jolt#1951 item 4 is fixed. compute_max_ram_k rounds
 -- total_bytes / 8 down. When heap_end is not a multiple of 8, a program may access
 -- the word that straddles heap_end, and touched + 1 then rounds past the maximum.
-theorem _root_.HonestTrace.corrected_witness_params_ram_bounds
+theorem HonestTrace.corrected_witness_params_ram_bounds
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (accepted : trace.corrected_prover_config = some config)
@@ -104,28 +127,9 @@ theorem _root_.HonestTrace.corrected_witness_params_ram_bounds
     joltInstance.ram_size_in_bounds (trace.corrected_witness_params config accepted).ramSize = true := by
   sorry
 
--- Rounding up to even never decreases.
-private theorem le_round_up_even (vars : Nat) : vars ≤ if vars % 2 = 0 then vars else vars + 1 := by
-  split <;> omega
-
--- A longer trace never gets a narrower honest chunk width.
-private theorem chunks_mono {logT maxLogT : Nat} (shorter : logT ≤ maxLogT) :
-    logT + VerifierSizes.committedLogKChunk logT ≤
-      maxLogT + VerifierSizes.committedLogKChunk maxLogT := by
-  unfold VerifierSizes.committedLogKChunk
-  split <;> split <;> omega
-
--- Chunks of the honest width for a trace no longer than the maximum fit the setup
--- sized for the maximum.
-theorem VerifierSizes.chunks_fit_dorySetupLogN (layout : MemoryLayout) (maxLength logT : Nat)
-    (shorter : logT ≤ Nat.clog 2 maxLength) :
-    logT + VerifierSizes.committedLogKChunk logT ≤ VerifierSizes.dorySetupLogN layout maxLength := by
-  unfold VerifierSizes.dorySetupLogN
-  exact ((chunks_mono shorter).trans (le_max_left _ _)).trans (le_round_up_even _)
-
 -- The honest prover's one-hot chunks fit the verifier's Dory setup: its trace is no
 -- longer than the maximum padded length, and its chunk width is the setup's.
-theorem _root_.HonestTrace.corrected_witness_params_one_hot_fits_setup
+theorem HonestTrace.corrected_witness_params_one_hot_fits_setup
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (accepted : trace.corrected_prover_config = some config)
@@ -148,5 +152,3 @@ theorem _root_.HonestTrace.corrected_witness_params_one_hot_fits_setup
   unfold JoltInstance.one_hot_fits_setup
   rw [hasLayout, chunk, decide_eq_true_eq]
   exact VerifierSizes.chunks_fit_dorySetupLogN layout _ _ shorter
-
-end JoltConstraints

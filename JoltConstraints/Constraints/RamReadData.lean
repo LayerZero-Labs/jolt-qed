@@ -12,21 +12,6 @@ Rust: https://github.com/abiswas3/jolt/tree/main/common/src/jolt_device.rs#L491-
 def ramLowestAddress (layout : MemoryLayout) : Nat :=
   min layout.trusted_advice_start.toNat layout.untrusted_advice_start.toNat
 
-/-- Both advice buffers of a device lie below `input_start`, and `input_start`
-is a whole number of words above the lowest RAM address. These are the only
-layout facts the public-output constraint (26) needs: together they keep every
-advice byte out of the public I/O interval.
-
-Rust establishes them before execution starts:
-`JoltDevice.AdviceBelowInput.of_memoryLayout` derives them from Rust's
-`MemoryLayout::new` and the advice-length checks in `create_emulator`. -/
-structure _root_.JoltDevice.AdviceBelowInput (io : JoltDevice) : Prop where
-  inputWordAligned : (io.memory_layout.input_start.toNat - ramLowestAddress io.memory_layout) % 8 = 0
-  trustedAdviceBelowInput :
-    io.memory_layout.trusted_advice_start.toNat + io.trusted_advice.size ≤ io.memory_layout.input_start.toNat
-  untrustedAdviceBelowInput :
-    io.memory_layout.untrusted_advice_start.toNat + io.untrusted_advice.size ≤ io.memory_layout.input_start.toNat
-
 /-- The initial RAM image, including public inputs and both advice buffers.
 Advice words are execution inputs, not additional public constants. Reuse the
 existing image encoding; this function does not execute instructions.
@@ -60,3 +45,20 @@ def ramPublicIoWord (io : JoltDevice) (address : Nat) : BitVec 64 :=
   else panic
 
 end JoltConstraints
+
+open JoltConstraints
+
+/-- Both advice buffers of a device lie below `input_start`, and `input_start`
+is a whole number of words above the lowest RAM address. These are the only
+layout facts the public-output constraint (26) needs: together they keep every
+advice byte out of the public I/O interval.
+
+Rust establishes them before execution starts:
+`JoltDevice.AdviceBelowInput.of_memoryLayout` derives them from Rust's
+`MemoryLayout::new` and the advice-length checks in `create_emulator`. -/
+structure JoltDevice.AdviceBelowInput (io : JoltDevice) : Prop where
+  inputWordAligned : (io.memory_layout.input_start.toNat - ramLowestAddress io.memory_layout) % 8 = 0
+  trustedAdviceBelowInput :
+    io.memory_layout.trusted_advice_start.toNat + io.trusted_advice.size ≤ io.memory_layout.input_start.toNat
+  untrustedAdviceBelowInput :
+    io.memory_layout.untrusted_advice_start.toNat + io.untrusted_advice.size ≤ io.memory_layout.input_start.toNat
