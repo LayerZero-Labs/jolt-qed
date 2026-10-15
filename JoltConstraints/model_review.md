@@ -236,11 +236,24 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   check passes and preserves the entire state, using `RegisterAgreement.noWrite`
   for the next table column. All other new steps reuse `registerWrite_step`.
   The source audit and validation are in `methods/soundness.md`. SC.W still
-  needs step lemmas for `VirtualAssertWordAlignment`, `VirtualAlignAddr`,
+  needs full step coverage for `VirtualAssertWordAlignment`, `VirtualAlignAddr`,
   `ANDI`, `LD`, `VirtualWindowMaskW`, `VirtualPextSigned`, `ANDN`,
   `VirtualShiftDataW` and `SD`; SC.D still needs `LD` and `SD`. RAM/PC agreement
   and whole-trace composition remain open; no main-theorem or instance premise
   was added.
+- **Alignment and ordinary-RAM SD, 2026-10-15.** `Layer5/RamAlignment.lean`
+  derives eight-byte alignment from the encoded address and RAM selection,
+  including the zero-address case. `Layer5/RamStore.lean` reuses the existing
+  byte hit/frame lemmas to show that an eight-byte write updates exactly one
+  word on the RAM table's grid. `Layer5/StoreDoubleword.lean` combines these
+  with source-register agreement and constraints in `sd_ram_step`: execution
+  succeeds, the interpreter and witness perform matching word updates, and
+  registers retain agreement. The last-cycle result updates `RamValFinal`.
+  This covers the ordinary-RAM branch using the existing address-check fact;
+  it adds no instance or main-theorem premise. LD, device stores, initial RAM
+  agreement and execution-prefix composition remain open. The source check
+  and validation are recorded in `methods/soundness.md`; no new Jolt issue
+  is claimed.
 - **LR/SC reservation correspondence (model obligation).** Jolt's native
   execution methods `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`;
   the patched inline trace path and this model compute success from virtual

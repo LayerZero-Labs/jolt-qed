@@ -44,6 +44,9 @@ import JoltConstraints.Soundness.Layer4.Reachable
 import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Soundness.Layer5.NarrowAdvice
 import JoltConstraints.Soundness.Layer5.MemoryAddress
+import JoltConstraints.Soundness.Layer5.RamAlignment
+import JoltConstraints.Soundness.Layer5.RamStore
+import JoltConstraints.Soundness.Layer5.StoreDoubleword
 import JoltConstraints.Soundness.Layer5.AdviceExpansion
 import JoltConstraints.Soundness.Layer5.Registers
 import JoltConstraints.Soundness.Layer5.RegisterInputs

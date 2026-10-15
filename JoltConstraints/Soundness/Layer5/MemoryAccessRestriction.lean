@@ -60,7 +60,9 @@ structure UntrustedAnswerRun.NextStep
 RAM checks only the starting address; device memory checks each of eight bytes.
 Checking all eight RAM bytes would strengthen Jolt's rule at an unaligned
 heap or canary boundary. This predicate does not assume execution succeeds.
-Rust: tracer/src/emulator/mmu.rs:619–635, 729–748 at 00508a09. -/
+At public pin 8bbb2357:
+See : jolt/tracer/src/emulator/mmu.rs:611-628
+See : jolt/tracer/src/emulator/mmu.rs:721-740 -/
 def DoublewordAddressChecks (device : JoltDevice) (address : BitVec 64)
     (isWrite : Bool) : Prop :=
   if RAM_START_ADDRESS ≤ address.toNat then

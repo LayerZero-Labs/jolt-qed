@@ -165,10 +165,11 @@ only next-column register agreement requires a following cycle. This changes
 the step-lemma API; it does not change either interpreter or the main theorem.
 
 ADDI, XOR, SLTIU, LUI, XORI and VirtualAssertLTE now have step lemmas; ADD,
-SUB and MUL share `arithmetic_step`. The SC.W rows still without a step lemma
+SUB and MUL share `arithmetic_step`. The SC.W rows still needing full step coverage
 are `VirtualAssertWordAlignment`, `VirtualAlignAddr`, `ANDI`, `LD`,
 `VirtualWindowMaskW`, `VirtualPextSigned`, `ANDN`, `VirtualShiftDataW` and `SD`.
-For SC.D, only `LD` and `SD` remain. Whole-expansion composition, RAM/PC
+For SC.D, only `LD` and `SD` remain. `sd_ram_step` now covers SD to ordinary
+RAM; the device-store cases remain open. Whole-expansion composition, RAM/PC
 agreement and the induction remain open. The instruction-family chunk below
 records the shared proofs and validation.
 
@@ -1707,6 +1708,58 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
   unchanged. After these corrections, the same build passed (8756 jobs) and
   all 16 audited axiom sets were unchanged. All 14 files cited in the four
   new instruction headers match `8bbb2357`; each cited line range exists.
+- **Layer 5b, alignment and ordinary-RAM stores, 2026-10-15:**
+  This chunk tests the connection between the constraints and memory execution.
+  [RamAlignment.lean](../JoltConstraints/Soundness/Layer5/RamAlignment.lean)
+  proves `ramAddress_aligned` and `ramAddress_mask_aligned`: every encoded
+  machine address is eight-byte aligned. Selection gives an aligned layout
+  base plus eight times an index; the all-zero selector gives address zero.
+  No alignment assumption or successful-access certificate is added.
+
+  [RamStore.lean](../JoltConstraints/Soundness/Layer5/RamStore.lean) proves
+  `ram_store_index`. It reuses `stored_dword_get?_hit`, `stored_dword_untouched`
+  and `Mmu.write_ram_doubleword_eq` from the instruction-equivalence work.
+  Adjacent BitVec extraction lemmas reassemble the eight stored bytes. Reading
+  the resulting byte map on the RAM table's eight-byte grid yields the stored
+  word at the selected index and the original words everywhere else, including
+  where the original byte map was sparse.
+
+  [StoreDoubleword.lean](../JoltConstraints/Soundness/Layer5/StoreDoubleword.lean)
+  proves `sd_ram_step` for addresses at or above `RAM_START_ADDRESS`. It derives
+  canonical source operands, the signed address encoding, alignment, the Store
+  flag, the stored value and a selected RAM index. It then proves successful
+  execution with the exact byte-map post-state, the matching single-word
+  update in both memory and the witness, and next-cycle register agreement.
+  At the last cycle, the same update goes to `RamValFinal`. Source aliases and
+  runtime advice are included; no initial RAM value agreement is needed to
+  establish this matching update.
+
+  The local `inRam` argument selects the ordinary-RAM branch. `checked` is the
+  existing `DoublewordAddressChecks` fact obtainable from `sd_address_checks`
+  under the approved restriction and execution-prefix readiness. Neither is
+  added to the main theorem or instance. The proof uses the existing
+  `RamRegionFits` bound. Connecting the prefix to the selected bytecode row,
+  initializing the full RAM invariant, LD execution, device stores and PC
+  agreement remain open. This is not a proof of all SD cases or of Layer 5b.
+
+  The inspected local Rust MMU, SD execution and R1CS sources match public pin
+  `8bbb2357`. In ordinary RAM, Rust checks only the starting address before
+  writing eight bytes. Its fast-path condition also checks that adding seven
+  does not wrap; eight-byte alignment and the 64-bit word bound ensure that
+  condition for these accesses. No new Jolt issue is claimed by this chunk.
+
+  Validation: all three modules are imported by `JoltConstraints.lean`.
+  `lake build JoltBytecode JoltConstraints` passed (8759 jobs). An axiom audit
+  checked the four new public lemmas, the 14 previously reviewed Layer 5
+  lemmas and both main theorems. The three new memory/address lemmas use only
+  `propext`, `Classical.choice` and `Quot.sound`; `sd_ram_step` additionally
+  uses the allowed `sys_enable_experimental_extensions`. All 16 previous
+  dependency sets are unchanged, including the deferred main-theorem gaps.
+  No new `sorry`, native decision proof, heartbeat setting or main-theorem
+  premise was added. Existing Lean declarations and unrelated working files
+  are unchanged. Reviewed by reading; the final comment corrections refresh
+  the `DoublewordAddressChecks` MMU citation to `8bbb2357` and simplify the
+  `RamStore.lean` header. Lean declarations are unchanged since validation.
 - **Layer 5b, device-memory audit; still open:** the termination restriction
   under discussion permits the standard SDK return sequence, but does not
   close RAM agreement. Panic needs separate read and final-flag arguments.
@@ -1803,7 +1856,10 @@ reading. Layer 5b now includes the address proofs, full execution of the
 three narrow-advice expansions, and the shared register-agreement invariant
 with initialization, read, write and no-write rules. ADDI, XOR, SLTIU, LUI,
 XORI, ADD/SUB/MUL and VirtualAssertLTE now derive their local execution and
-preserve register agreement, reusing common operand and update proofs. The
-remaining instruction families must do the same, and these results still need to be
-connected to RAM agreement and the execution-prefix induction.
+preserve register agreement, reusing common operand and update proofs.
+`ramAddress_aligned` derives eight-byte alignment from RAM selection;
+`sd_ram_step` connects ordinary-RAM SD execution to matching byte-map and
+witness-word updates. LD, device stores and the other instruction families
+remain, and these results still need to be connected to the full RAM invariant
+and execution-prefix induction.
 The separate Akita model remains future work.
