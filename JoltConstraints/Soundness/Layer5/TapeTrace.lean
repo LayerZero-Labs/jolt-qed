@@ -1,5 +1,5 @@
 import JoltConstraints.Soundness.Layer5.TapeSemantics
-import JoltConstraints.Soundness.Language
+import JoltConstraints.language
 
 /-! A separate execution language for independent tape answers.
 The fixed-tape execution definitions ValidRun and HonestTrace are unchanged.

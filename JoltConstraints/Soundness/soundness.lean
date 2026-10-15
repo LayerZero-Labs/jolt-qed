@@ -10,6 +10,7 @@ The proof is left as `sorry`; it is not expected to hold yet
 -/
 import JoltConstraints.Constraints.All
 import JoltConstraints.Soundness.Assumptions
+import JoltConstraints.language
 
 set_option autoImplicit false
 

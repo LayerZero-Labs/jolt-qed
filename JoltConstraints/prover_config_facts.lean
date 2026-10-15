@@ -130,142 +130,21 @@ theorem checkedTraceLength_eq_padded (rows padded : Nat)
 
 end ProverConfig
 
-/-- Largest remapped slot actually touched by the physical trace; zero when
-there is no nonzero memory access. This is the scan used by the corrected policy. -/
-def HonestTrace.highest_touched_slot {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Nat :=
-  (((trace.rows.toList.filterMap (·.ram_address)).filterMap
-    (remap_address trace.initialState.jolt_device.memory_layout)).max?).getD 0
-
-private theorem remapWordAddress_eq (layout : MemoryLayout) (address : Nat)
-    (slot : Option Nat)
-    (checked : JoltConstraints.VerifierSizes.remapWordAddress layout address = some slot) :
-    slot = remap_address layout address := by
-  unfold JoltConstraints.VerifierSizes.remapWordAddress at checked
-  by_cases zero : address = 0
-  · subst address
-    simpa [remap_address] using checked.symm
-  · simp only [if_neg zero, pure_bind] at checked
-    rw [bind_some_iff] at checked
-    obtain ⟨offset, subtracted, result⟩ := checked
-    obtain ⟨rfl, _⟩ := checkedSub_some subtracted
-    cases result
-    simp [remap_address, zero]
-
-private theorem HonestTrace.prover_config_ram_shape
+-- Jolt's prover accepts only traces whose nonzero RAM addresses are at or above the
+-- lowest address.
+private theorem HonestTrace.prover_config_addresses_ok
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
     (accepted : trace.prover_config = some config) :
-    (∀ address ∈ trace.rows.toList.filterMap (·.ram_address), address = 0 ∨
-      trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address) ∧
-    config.ram_K = 2 ^ Nat.clog 2 (max trace.highest_touched_slot
-      ((remap_address trace.initialState.jolt_device.memory_layout
-        (min_bytecode_address joltInstance.program.memory_init)).getD 0 +
-        program_image_len_words joltInstance.program.memory_init + 1)) := by
+    ∀ address ∈ trace.rows.toList.filterMap (·.ram_address), address = 0 ∨
+      trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address := by
   have checked := (ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config accepted).2.2.1
   unfold ProverConfig.checkedRamSize at checked
   simp only [bind_some_iff] at checked
-  obtain ⟨touched, touchChecked, start, startChecked, imageEnd, imageAdded,
-    imageEnd', extraAdded, rounded⟩ := checked
-  obtain ⟨addressesOk, touchedIs⟩ := ExecutionDimensions.checkedTouched_fold
+  obtain ⟨touched, touchChecked, _⟩ := checked
+  exact (ExecutionDimensions.checkedTouched_fold
     (trace.rows.toList.filterMap (fun (row : TraceRow trace.bytecode) => row.ram_address))
-      trace.initialState.jolt_device.memory_layout touched touchChecked
-  obtain ⟨rfl, _⟩ := checkedAdd_some imageAdded
-  obtain ⟨rfl, _⟩ := checkedAdd_some extraAdded
-  have startIs := remapWordAddress_eq _ _ _ startChecked
-  dsimp only [JoltConstraints.VerifierSizes.checkedNextPowerOfTwo] at rounded
-  split at rounded
-  · refine ⟨addressesOk, ?_⟩
-    have formula := Option.some.inj rounded
-    rw [← formula, startIs, ← touchedIs]
-    rfl
-  · cases rounded
-
-private theorem corrected_rounding (touched imageEnd ramK : Nat)
-    (rust : ramK = 2 ^ Nat.clog 2 (max touched imageEnd)) (fits : touched < ramK) :
-    2 ^ Nat.clog 2 (max (touched + 1) imageEnd) = ramK := by
-  have roundedUp := Nat.le_pow_clog (by decide : 1 < 2) (max touched imageEnd)
-  have upper : max (touched + 1) imageEnd ≤ 2 ^ Nat.clog 2 (max touched imageEnd) := by
-    omega
-  apply Nat.le_antisymm
-  · rw [rust]
-    exact Nat.pow_le_pow_right (by decide) (Nat.clog_le_of_le_pow upper)
-  · rw [rust]
-    apply Nat.pow_le_pow_right (by decide)
-    exact Nat.clog_mono_right 2 (by omega)
-
-/-- Every accepted Rust domain reaches the highest slot. Failure of the strict
-bound is therefore precisely equality with `ram_K`, not a larger missed range. -/
-theorem HonestTrace.prover_config_highest_le
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
-    (accepted : trace.prover_config = some config) : trace.highest_touched_slot ≤ config.ram_K := by
-  rw [(trace.prover_config_ram_shape config accepted).2]
-  exact (Nat.le_max_left _ _).trans (Nat.le_pow_clog (by decide : 1 < 2) _)
-
-/-- Rust acceptance agrees with the corrected policy exactly when the highest
-slot is strictly inside Rust's RAM domain. The reverse direction identifies the
-excluded off-by-one boundary; it adds no premise to corrected completeness. -/
-theorem HonestTrace.prover_config_eq_corrected_iff
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
-    (accepted : trace.prover_config = some config) :
-    trace.corrected_prover_config = some config ↔ trace.highest_touched_slot < config.ram_K := by
-  constructor
-  · intro corrected
-    apply Nat.lt_of_le_of_ne (trace.prover_config_highest_le config accepted)
-    unfold HonestTrace.corrected_prover_config at corrected
-    simp only [bind_some_iff] at corrected
-    obtain ⟨_, _, _, _, _, _, result⟩ := corrected
-    cases result
-    change trace.highest_touched_slot ≠ 2 ^ Nat.clog 2
-      (max (trace.highest_touched_slot + 1)
-        ((remap_address trace.initialState.jolt_device.memory_layout
-          (min_bytecode_address joltInstance.program.memory_init)).getD 0 +
-          program_image_len_words joltInstance.program.memory_init + 1))
-    have roundedUp := Nat.le_pow_clog (by decide : 1 < 2)
-      (max (trace.highest_touched_slot + 1)
-        ((remap_address trace.initialState.jolt_device.memory_layout
-          (min_bytecode_address joltInstance.program.memory_init)).getD 0 +
-          program_image_len_words joltInstance.program.memory_init + 1))
-    omega
-  · intro fits
-    obtain ⟨jump, lengthChecked, _, lengthBound⟩ :=
-      ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config accepted
-    have lengthIs := ProverConfig.checkedTraceLength_eq_padded _ _ lengthChecked
-    change config.trace_length = padded_trace_length trace.rows.size at lengthIs
-    obtain ⟨addressesOk, ramIs⟩ := trace.prover_config_ram_shape config accepted
-    have correctedRam := corrected_rounding _ _ _ ramIs fits
-    have lastJump : (trace.rows.back?.all fun last =>
-        trace.bytecode[last.rowIndex].instruction.is_jump) = true := by
-      rcases jump with empty | jump
-      · change trace.rows.size = 0 at empty
-        have emptyRows := Array.size_eq_zero_iff.mp empty
-        rw [emptyRows]
-        rfl
-      · change (trace.rows.back?.any fun last =>
-          trace.bytecode[last.rowIndex].instruction.is_jump) = true at jump
-        cases last : trace.rows.back? with
-        | none => rfl
-        | some row => simpa only [last, Option.any_some, Option.all_some] using jump
-    have addressCheck : (trace.rows.toList.filterMap (·.ram_address)).all
-        (fun address => address == 0 ||
-          trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address) = true := by
-      apply List.all_eq_true.mpr
-      intro a member
-      simpa only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] using addressesOk a member
-    have paddedBound : padded_trace_length trace.rows.size ≤
-        joltInstance.max_padded_trace_length.toNat := by
-      omega
-    unfold HonestTrace.corrected_prover_config
-    simp only [lastJump, addressCheck, guard, paddedBound, ↓reduceIte, pure_bind]
-    change some {
-      trace_length := padded_trace_length trace.rows.size
-      ram_K := 2 ^ Nat.clog 2 (max (trace.highest_touched_slot + 1)
-        ((remap_address trace.initialState.jolt_device.memory_layout
-          (min_bytecode_address joltInstance.program.memory_init)).getD 0 +
-          program_image_len_words joltInstance.program.memory_init + 1)) } = some config
-    rw [correctedRam, ← lengthIs]
+      trace.initialState.jolt_device.memory_layout touched touchChecked).1
 
 /-- If Jolt's prover accepts the honest trace, so does the corrected policy. Both
 make the same last-jump, padded-length and address checks; they differ only in
@@ -279,7 +158,7 @@ theorem HonestTrace.corrected_prover_config_isSome
     ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config accepted
   have lengthIs := ProverConfig.checkedTraceLength_eq_padded _ _ lengthChecked
   change config.trace_length = padded_trace_length trace.rows.size at lengthIs
-  obtain ⟨addressesOk, _⟩ := trace.prover_config_ram_shape config accepted
+  have addressesOk := trace.prover_config_addresses_ok config accepted
   have lastJump : (trace.rows.back?.all fun last =>
       trace.bytecode[last.rowIndex].instruction.is_jump) = true := by
     rcases jump with empty | jump
@@ -304,53 +183,3 @@ theorem HonestTrace.corrected_prover_config_isSome
   unfold HonestTrace.corrected_prover_config
   simp only [lastJump, addressCheck, guard, paddedBound, ↓reduceIte, pure_bind]
   rfl
-
-/-- Checked Rust dimensions fit the logarithm fields of `WitnessParams`. -/
-theorem HonestTrace.prover_config_log_bounds
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
-    (accepted : trace.prover_config = some config) :
-    Nat.log2 config.trace_length < 64 ∧ Nat.log2 config.ram_K < 64 := by
-  obtain ⟨_, traceChecked, ramChecked, _⟩ :=
-    ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config accepted
-  obtain ⟨_, _, traceBound⟩ := ProverConfig.checkedTraceLength_bounds _ _ traceChecked
-  obtain ⟨traceLog, tracePower⟩ := ProverConfig.checkedTraceLength_power _ _ traceChecked
-  obtain ⟨⟨ramLog, ramPower⟩, ramBound⟩ := ProverConfig.checkedRamSize_power _ _ _ _ _ ramChecked
-  rw [tracePower] at traceBound
-  rw [ramPower] at ramBound
-  rw [tracePower, ramPower, Nat.log2_two_pow, Nat.log2_two_pow]
-  exact ⟨(Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp traceBound,
-    (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp ramBound⟩
-
-/-- Witness parameters from Rust's checked policy, including its actual RAM
-size. Constructing these parameters does not assert that all touched slots fit. -/
-noncomputable def HonestTrace.witness_params
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
-    (accepted : trace.prover_config = some config) : WitnessParams where
-  logT := Nat.log2 config.trace_length
-  logRamK := Nat.log2 config.ram_K
-  logBytecodeK := max 1 (Nat.clog 2 (trace.bytecode.size + 1))
-  chunkBits := if Nat.log2 config.trace_length < 25 then 4 else 8
-  virtualChunkBits := if Nat.log2 config.trace_length < 25 then 16 else 32
-  chunkBits_pos := by
-    split
-    · decide
-    · decide
-  virtualChunkBits_pos := by
-    split
-    · decide
-    · decide
-  chunkBits_dvd_virtual := by
-    by_cases small : Nat.log2 config.trace_length < 25
-    · rw [if_pos small, if_pos small]
-      decide
-    · rw [if_neg small, if_neg small]
-      decide
-  virtualChunkBits_dvd_lookup := by
-    split
-    · decide
-    · decide
-  logT_lt_usizeBits := (trace.prover_config_log_bounds config accepted).1
-  logRamK_lt_usizeBits := (trace.prover_config_log_bounds config accepted).2
-  logBytecodeK_lt_usizeBits := trace.log_bytecode_size_lt

@@ -998,3 +998,17 @@ The migration-pending status is lifted. This closes adoption of the public pin
 within the stated model scope, not the existing completeness/soundness gaps.
 Work stops here for review; native-proof repair and discussion of #2044 remain
 separate and deferred.
+
+## Follow-up, 2026-10-15: unused sizing results deleted
+
+`JoltInstance.completeness` now takes `JoltInstance.InLanguage`, which includes
+Jolt's prover accepting the trace, and uses the corrected sizes through
+`HonestTrace.corrected_prover_config_isSome`. Nothing used the Rust-sizes
+corollary any more, so Ari's rule (keep only theorems the main theorems use)
+removed it and the results only it used: `HonestTrace.allConstraints_rust_sizes`,
+`prover_config_eq_corrected_iff`, `prover_config_highest_le`,
+`prover_config_log_bounds`, `HonestTrace.witness_params`,
+`HonestTrace.highest_touched_slot`, and `ProverConfig.checkedTraceLength_bounds`,
+`checkedTraceLength_power` and `checkedRamSize_power`. The `#print axioms`
+lines above that name them no longer apply. The off-by-one they characterized
+remains reproduced in `bug-report/ram-k-off-by-one/`.

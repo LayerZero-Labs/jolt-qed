@@ -294,36 +294,3 @@ theorem HonestTrace.allConstraints_corrected_sizes
       address.val
     rw [maskSame, wordSame]
     exact runs
-
-/-- Transfer corrected completeness to the checked Rust policy away from its
-exact off-by-one boundary. This is the bridge condition requested in migration
-review; the corrected theorem's existing premises and proof gaps are unchanged. -/
-theorem HonestTrace.allConstraints_rust_sizes
-    {F : Type} [Field F]
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs)
-    -- Rust's checked sizing policy accepts the run and picks these sizes
-    (config : ProverConfig) (accepted : trace.prover_config = some config)
-    -- The sole configuration mismatch is the highest slot equaling ram_K.
-    (ramFits : trace.highest_touched_slot < config.ram_K)
-    -- Rust's preprocessed bytecode, and the entry slot its verifier uses
-    (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
-    (entry : Fin (2 ^ (trace.witness_params config accepted).logBytecodeK))
-    (entryIsRust : get_first_pc slots joltInstance.program.entry_address = some entry.val)
-    -- assumed: no spoil assert fails
-    (spoilAssertsPass : trace.SpoilAssertsPass)
-    -- assumed: a legal ELF's PC does not wrap (a16z confirmed)
-    (noWrap : joltInstance.program.NextPCNoWrap)
-    -- assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program is
-    -- never empty, so its memory image loads at least one byte. Rust's prover does not
-    -- reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
-    (imageNonempty : joltInstance.program.ImageNonempty)
-    -- the instance claims the outputs the run produced
-    (claimsRunOutputs : trace.matches_outputs)
-    -- the public I/O the verifier checks the proof against
-    (io : JoltDevice) (publicIo : joltInstance.public_io = some io) :
-    AllConstraints joltInstance privateInputs
-      (trace.honestWitness (F := F) (trace.witness_params config accepted)) := by
-  exact trace.allConstraints_corrected_sizes config
-    ((trace.prover_config_eq_corrected_iff config accepted).2 ramFits) slots preprocessed entry
-    entryIsRust spoilAssertsPass noWrap imageNonempty claimsRunOutputs io publicIo

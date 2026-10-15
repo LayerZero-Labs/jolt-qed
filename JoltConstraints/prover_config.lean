@@ -103,39 +103,6 @@ theorem checkedTraceLength_eq (rows padded : Nat)
     padded = max (2 ^ Nat.clog 2 (rows + 1)) 256 :=
   (checkedTraceLength_rounding rows padded accepted).1
 
-theorem checkedTraceLength_bounds (rows padded : Nat)
-    (accepted : checkedTraceLength rows = some padded) :
-    rows < padded ∧ 256 ≤ padded ∧ padded < 2 ^ 64 := by
-  obtain ⟨rfl, bound⟩ := checkedTraceLength_rounding rows padded accepted
-  have roundedUp := Nat.le_pow_clog (by decide : 1 < 2) (rows + 1)
-  omega
-
-theorem checkedTraceLength_power (rows padded : Nat)
-    (accepted : checkedTraceLength rows = some padded) :
-    ∃ exponent, padded = 2 ^ exponent := by
-  rw [checkedTraceLength_eq rows padded accepted]
-  by_cases small : 2 ^ Nat.clog 2 (rows + 1) ≤ 256
-  · rw [max_eq_right small]
-    exact ⟨8, rfl⟩
-  · rw [max_eq_left (by omega)]
-    exact ⟨_, rfl⟩
-
-theorem checkedRamSize_power (dimensions : ExecutionDimensions) (layout : MemoryLayout)
-    (minBytecodeAddress imageWords ramK : Nat)
-    (accepted : checkedRamSize dimensions layout minBytecodeAddress imageWords = some ramK) :
-    (∃ exponent, ramK = 2 ^ exponent) ∧ ramK < 2 ^ 64 := by
-  unfold checkedRamSize at accepted
-  rw [bind_some_iff] at accepted
-  obtain ⟨touched, _, accepted⟩ := accepted
-  rw [bind_some_iff] at accepted
-  obtain ⟨imageStart, _, accepted⟩ := accepted
-  rw [bind_some_iff] at accepted
-  obtain ⟨imageEnd, _, accepted⟩ := accepted
-  rw [bind_some_iff] at accepted
-  obtain ⟨imageEnd, _, accepted⟩ := accepted
-  obtain ⟨rfl, bound⟩ := checkedRound_some _ _ accepted
-  exact ⟨⟨_, rfl⟩, bound⟩
-
 theorem deriveFromDimensions_sizes (dimensions : ExecutionDimensions) (layout : MemoryLayout)
     (minBytecodeAddress imageWords maximum : Nat) (config : ProverConfig)
     (accepted : deriveFromDimensions dimensions layout minBytecodeAddress imageWords maximum =

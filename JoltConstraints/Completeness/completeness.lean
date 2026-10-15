@@ -7,7 +7,7 @@ false until Jolt bugs are fixed (a16z/jolt#1951 items 1 and 4).
 -/
 import JoltConstraints.Completeness.All
 import JoltConstraints.Completeness.Assumptions
-import JoltConstraints.Soundness.Language
+import JoltConstraints.language
 
 set_option autoImplicit false
 
