@@ -1,19 +1,26 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-10-15
+updated: 2026-10-19
 rust: 8bbb2357890928d8f83b00ca542879077c4d3d28
 migration: implemented and validated
 ---
 
 # Open issues
 
+For the next Layer 5b session, start with the
+[current handoff](../methods/soundness.md#layer-5b-handoff-2026-10-19).
+Commit `6203c30` builds; 74 of 88 native row kinds have local steps, two are
+unreachable, and the remaining twelve plus device agreement and the dispatcher
+are open. `ExpansionFacts.expand_temps_ok` proves per-expansion temporary
+write-before-read; the global HostIO register-agreement use is still owed.
+
 **Current Rust semantics pin, selected with Ari on 2026-10-15:** upstream
 [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
 The inspected local merge is `1c8aaff2`; its unpublished generator changes
 are recorded separately, with a reproducible patch, in the migration checklist.
-Chunks 1–6 have been reviewed by reading. The requested sizing bridge, import
-and Rust completeness caller pass the final build and axiom audit recorded in
-the migration checklist; these final follow-ups are ready for review. The previous
+Chunks 1–6 were reviewed by reading and adopted. The corrected-sizing
+completeness caller remains; the unused Rust-sizes corollary and supporting
+lemmas were later removed, as the migration follow-up records. The previous
 baseline was `43cc043` plus the reviewed SC and advice-length changes. The
 [migration checklist](../methods/model_update.md) records the concrete changes,
 source audits and remaining proof obligations. Historical revision citations

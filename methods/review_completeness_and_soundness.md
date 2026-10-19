@@ -11,6 +11,10 @@ The unpublished local merge `1c8aaff2` and generator changes have separate
 provenance. Lean migration is implemented and validated; see the
 [migration checklist](./model_update.md). The review provenance below is
 historical and does not claim a completed audit of the new pin.
+For current Layer 5b status and the fresh-session starting point, use the
+[2026-10-19 handoff](./soundness.md#layer-5b-handoff-2026-10-19) and
+[open-issues record](../JoltConstraints/model_review.md). The checkout and
+restriction descriptions below document this earlier review.
 
 - **Lean.** Branch `refactor/trace-witness`, with the trace refactor still uncommitted (it builds).
 - **Rust.** The checkout at `/Users/ari.biswas/Work-with-A16z/jolt`. HEAD is `3cb4e243`, with upstream `00508a09` (#1968, which includes `8e536f19`) merged but not yet committed. Upstream `629ed77b` is not in the local clone.

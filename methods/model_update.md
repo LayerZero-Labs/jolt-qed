@@ -1,6 +1,6 @@
 ---
 title: Migration to the current Jolt pin
-updated: 2026-10-15
+updated: 2026-10-19
 rust: 8bbb2357890928d8f83b00ca542879077c4d3d28
 status: migration implemented and validated
 ---
@@ -46,10 +46,12 @@ gaps are separate from adopting this source pin.
 Ari reviewed chunks 1–3 against the public pin by reading the Rust source and
 accepted them. Deferred notes 1 (the saved generator patch and hash) and 2
 (the placement of the layout facts) are resolved. Deferred note 3, the
-`43cc043` citation search, is completed and classified in chunk 6. Ari also reviewed chunks 4–6 by reading. The requested bridge, import and
-completeness caller are now implemented, built and axiom-audited; the final
-validation record below closes the migration work for review. Existing
-native-proof repairs are deferred until after that review, at Ari’s request.
+`43cc043` citation search, is completed and classified in chunk 6. Ari also
+reviewed chunks 4–6 by reading. The corrected-sizing completeness caller is
+implemented, built and retained; the unused Rust-sizes corollary and its
+supporting bridge lemmas were later deleted, as recorded in the follow-up
+below. Migration adoption is closed. Existing
+native-proof repairs remain deferred at Ari’s request.
 The present theorem scope remains
 decoded RV64 and the modeled custom instructions, with the base field bound.
 Akita remains separate, and PCS security, committed-program protocols and

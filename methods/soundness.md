@@ -14,6 +14,41 @@ Read these before beginning work:
 
 The local `blog/` is stale; use the published article for background.
 
+## Layer 5b handoff (2026-10-19)
+
+Use proof baseline commit `6203c30`, this handoff and the
+[closing checklist](#layer-5b-one-execution-step). The root
+`lake build JoltConstraints` passed (8783 jobs). Local execution steps cover
+74 of 88 native row kinds, counting LD and SD for ordinary RAM only; two
+more kinds are proved unreachable. Twelve kinds still need steps:
+`VirtualHostIO`, AUIPC, JAL, JALR, the six branches, `VirtualAdviceLoad` and
+`VirtualAdvice`. Device-memory agreement and the dispatcher remain open.
+
+The best first composition target is HostIO: use `HostCallsSucceed` for
+successful live execution, `HostCallRdZero` for the architectural destination,
+and `ExpansionFacts.expand_temps_ok` to show the rewritten temporary's value
+cannot affect a later source expansion. The expansion fact is proved; its use
+in the global register-agreement induction is not. The pinned Rust allocator
+uses temps 40–47, disjoint from LR/SC reservations 32 and 33. After HostIO,
+compose the PC rows with `Layer6/BytecodePC.lean`, then the advice rows,
+device accesses and dispatcher. The [detailed checklist](#layer-5b-one-execution-step)
+separates proof work from the temporary restrictions.
+
+`Layer5/Registers.lean` currently states `RegisterAgreement` for every
+register, which a HostIO row with an unconstrained rewritten destination
+cannot preserve. The next proof must carry agreement only where a later row
+can read it before a new write, or track that one temporary as unavailable
+until its next write. Use the source-expansion fact at the source boundary;
+keep persistent registers 32–39 in agreement. The existing fact does not by
+itself prove this induction or a HostIO step.
+
+Keep Rust semantic reads at public pin `8bbb2357`. Preserve the unrelated
+untracked blog and bug-report drafts. Do not add theorem premises without
+Ari's approval; do not use `bv_decide`, `native_decide` or a larger
+`maxHeartbeats`. Split difficult proofs into smaller lemmas. The issue
+write-ups remain for the agreed batch; #2044 discussion waits for Michael's
+comments.
+
 ## Current Jolt pin and migration (2026-10-15)
 
 Ari selected the latest pulled version. Rust semantic citations use the public
@@ -21,9 +56,10 @@ upstream pin [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16
 The local merge `1c8aaff2` and generator commit `7dfe8a0f` are unpublished;
 their separate tooling provenance and a reproducible generator patch are in
 the [migration checklist](./model_update.md), together with all 36 upstream
-commits, the six migration chunks and their validation. The migration and
-requested sizing bridge are implemented and validated; the final import and
-Rust completeness corollary are ready for review.
+commits, the six migration chunks and their validation. The migration was
+reviewed and adopted. Completeness still uses the corrected sizing policy;
+the unused Rust-sizes corollary and its supporting lemmas were subsequently
+removed, as recorded in the migration follow-up.
 This migration does not discharge the existing proof gaps or native-proof
 axioms, whose repair Ari deferred.
 The PR sections below describe the previous model's incremental updates.
@@ -1029,10 +1065,12 @@ Remaining proof work, which no restriction may replace:
   `VirtualAdviceLoad`, connecting tape reads to the witness's answers; and
   `VirtualAdvice`.
 - Device memory for the input, advice, output and termination regions.
-- The write-before-read argument for the temporary register that Jolt's
-  materializer gives a host call whose source destination is `x0`
-  (`crates/jolt-program/src/expand/materialize.rs:79-90`). The allocator must
-  never hand out the reservation registers 32 and 33.
+- Apply the proved per-expansion write-before-read fact
+  (`ExpansionFacts.expand_temps_ok`) in the global register-agreement induction,
+  so a HostIO `x0` rewrite's unconstrained temporary is dropped before the
+  next source expansion. The pinned allocator uses 40–47, not reservation
+  registers 32 and 33 (`crates/jolt-program/src/expand/materialize.rs:79-90`,
+  `expand/allocator.rs:115-139`).
 - The dispatcher, shared with Layer 6.
 
 Runtime advice honesty must not become a restriction. If the DIV/REM assertions
