@@ -102,13 +102,7 @@ theorem sd_ram_step (regionFits : joltInstance.RamRegionFits)
     simpa only [DoublewordAddressChecks, inRam, ↓reduceIte] using checked
   have write := Mmu.store_doubleword_ram pre (sourceValue base pre + imm)
     (sourceValue source pre) aligned inRam legal
-  have nonzero : witness.RamAddress t ≠ 0 := by
-    intro zero
-    have same : (sourceValue base pre + imm).toNat = 0 := natCast_injective_below_char
-      (word_toNat_lt_char bound _) (lt_trans (by decide) bound)
-      (encoded.symm.trans (zero.trans Nat.cast_zero.symm))
-    rw [same] at inRam
-    norm_num [RAM_START_ADDRESS] at inRam
+  have nonzero := ramAddress_nonzero_of_inRam bound t _ encoded inRam
   obtain ⟨chosen, one, _⟩ := ramRa_unique_of_address_ne_zero bound context equations t nonzero
   have addressIs := ramAddress_eq_of_selected bound context equations t chosen one _ encoded
   refine ⟨stored, ?_, chosen, one, addressIs, ?_, ?_, ?_⟩

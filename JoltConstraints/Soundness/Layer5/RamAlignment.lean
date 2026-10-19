@@ -13,6 +13,8 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
+open JoltISA
+
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow127 : 2 ^ 127 < ringChar F)
@@ -28,7 +30,21 @@ private theorem ramLowestAddress_aligned : ramLowestAddress context.io.memory_la
   unfold ramLowestAddress
   split at aligned <;> omega
 
-include charAbove2pow127 context equations
+include charAbove2pow127
+
+/-- An encoded ordinary-RAM address cannot be the unselected zero address. -/
+theorem ramAddress_nonzero_of_inRam (t : Fin params.traceLength) (raw : BitVec 64)
+    (encoded : witness.RamAddress t = (raw.toNat : F))
+    (inRam : RAM_START_ADDRESS ≤ raw.toNat) : witness.RamAddress t ≠ 0 := by
+  intro zero
+  have same : raw.toNat = 0 := natCast_injective_below_char
+    (word_toNat_lt_char charAbove2pow127 raw)
+    (lt_trans (by decide) charAbove2pow127)
+    (encoded.symm.trans (zero.trans Nat.cast_zero.symm))
+  rw [same] at inRam
+  norm_num [RAM_START_ADDRESS] at inRam
+
+include context equations
 
 /-- Every machine address encoded by the RAM address column is eight-byte
 aligned, including address zero where no RAM word is selected. -/

@@ -7,6 +7,8 @@ import Mathlib.Algebra.CharP.Defs
 import JoltConstraints.honest_trace
 import JoltConstraints.Soundness.Layer3.Layout
 import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
+import JoltConstraints.Soundness.Layer5.HostCallRestriction
+import JoltConstraints.Soundness.Layer5.TerminationRestriction
 
 set_option autoImplicit false
 
@@ -44,6 +46,15 @@ def Rv64ProgramImage.NoStoreConditional (program : Rv64ProgramImage SourceInstru
     | .riscv (.SC_W _ _ _ _ _) | .riscv (.SC_D _ _ _ _ _) => False
     | _ => True
 
+-- A source HostIO call names x0 as its destination. Rust rewrites that x0 to
+-- an instruction temporary in bytecode; the temporary is handled by a separate
+-- write-before-read argument, not by this source-level restriction.
+def Rv64ProgramImage.HostCallRdZero (program : Rv64ProgramImage SourceInstruction) : Prop :=
+  ∀ row ∈ program.instructions,
+    match row.instruction with
+    | .jolt (.VirtualHostIO rd _ _) => JoltISA.isX0 rd = true
+    | _ => True
+
 -- Workarounds for known issues. Each one excludes programs that would expose a
 -- reported or suspected bug, so that the rest of the proof can go ahead. None of
 -- them is a check Jolt's verifier makes. Each must be removed once its issue is
@@ -59,3 +70,20 @@ structure JoltInstance.TemporaryRestrictions
   -- at zero, the I/O gap, stack-canary stores, and accesses at or above heap_end).
   -- Narrow or remove it as each case is resolved.
   tracerAddressChecks : joltInstance.TracerAddressChecks
+  -- FIXME: every attempted VirtualHostIO call succeeds in the modeled
+  -- execution. This excludes invalid cycle-marker or print events, and
+  -- pointer overflow when the model enables its overflow check. Matching
+  -- checked Rust overflow behavior remains a separate obligation.
+  -- The local constraints do not encode host-call success.
+  -- Candidate, not reproduced; to raise with a16z with the other FIXMEs.
+  hostCallsSucceed : joltInstance.HostCallsSucceed
+  -- FIXME: source HostIO calls name x0, excluding an unconstrained write to
+  -- an architectural destination. The bytecode x0 rewrite still writes a
+  -- temporary; its value must be shown dead before any later read. Candidate,
+  -- not reproduced; raise with a16z in the batch and remove after resolution.
+  hostCallRdZero : joltInstance.program.HostCallRdZero
+  -- FIXME: once the program has stored to the termination word, its next jump is
+  -- the stall (a JAL with offset 0), and it never loads the termination word again
+  -- (B6, stopping early; related to a16z/jolt#1950 and #1951 item 2).
+  -- The SDK's exit is written this way. To raise with a16z with the other FIXMEs.
+  terminationThenStall : joltInstance.TerminationThenStall

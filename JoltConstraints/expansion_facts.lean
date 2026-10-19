@@ -5,6 +5,7 @@ them into `ExpansionRowsValid`.
 import JoltConstraints.expansions
 import JoltConstraints.register_encoding
 import JoltConstraints.metadata
+import JoltConstraints.expansion_temp_liveness
 
 set_option autoImplicit false
 
@@ -90,7 +91,8 @@ def shiftsOk : List JoltISA.Instr → Bool
   | first :: rest => immShiftOk first && !isRegisterShift first && shiftPairsOk first rest
 
 def sequenceOk (instructions : List JoltISA.Instr) : Bool :=
-  rowsOk instructions && shiftsOk instructions
+  rowsOk instructions && shiftsOk instructions &&
+    ExpansionTempLiveness.tempsReadAfterWrite instructions
 
 -- ctz reads off the lowest set bit.
 theorem ctz_eq_of_bits : ∀ (s n : Nat), (∀ i < s, n.testBit i = false) → n.testBit s = true →
@@ -450,7 +452,8 @@ def BranchOffsetOk : JoltISA.Instr → Prop
 -- that reads a bitmask.
 def nativeRowOk (instruction : JoltISA.Instr) : Bool :=
   x0Ok instruction && JoltRegisterEncoding.instructionIsCanonical instruction &&
-    immShiftOk instruction && !isRegisterShift instruction
+    immShiftOk instruction && !isRegisterShift instruction &&
+    ExpansionTempLiveness.tempsReadAfterWrite [instruction]
 
 -- What `trace_interface.lean` needs from one source instruction's expansion.
 def ExpandedOk : ExpandedSource → Prop
@@ -732,5 +735,19 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .jolt (.VirtualRev8W rd rs1), _, h => by cases h; exact virtualRev8W_native_ok ..
   | .jolt (.VirtualAssertEQ rs1 rs2 imm), _, h => by cases h; exact virtualAssertEQ_native_ok ..
   | .jolt (.VirtualHostIO rd rs1 imm), _, h => by cases h; exact virtualHostIO_native_ok ..
+
+/-- The first read of each instruction temporary in a source expansion follows
+a write within that same expansion. Reserved virtual registers are excluded. -/
+theorem expand_temps_ok (source : SourceInstruction) (expanded : ExpandedSource)
+    (h : source.expand = some expanded) :
+    ExpansionTempLiveness.ExpandedTempsOk expanded := by
+  have ok := expand_ok source expanded h
+  cases expanded with
+  | native row =>
+    simp only [ExpandedOk, nativeRowOk, Bool.and_eq_true] at ok
+    exact ok.1.2
+  | sequence rows =>
+    simp only [ExpandedOk, sequenceOk, Bool.and_eq_true] at ok
+    exact ok.2
 
 end ExpansionFacts

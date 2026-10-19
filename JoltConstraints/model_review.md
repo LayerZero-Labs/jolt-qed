@@ -134,6 +134,9 @@ Premises or fields of the final theorem, with their source or reason below.
 | The field's characteristic exceeds `2^128` | `JoltField F`, soundness premise `joltField` | Ari, 2026-10-10: the base relation must distinguish full 128-bit lookup addresses. BN254 satisfies this; model Akita's field and extra address guard separately. PCS security is outside this work |
 | No source row is SC.W or SC.D (temporary) | `Rv64ProgramImage.NoStoreConditional`, field `noStoreConditional` of `JoltInstance.TemporaryRestrictions` | Ari, 2026-10-10: exclude the SC advice mismatch (#2037) while proving the remaining cases; remove this restriction after the constraints and model are fixed |
 | Every attempted LD/SD passes the tracer's address assertions (temporary) | `JoltInstance.TracerAddressChecks` in `Soundness/Layer5/MemoryAccessRestriction.lean`, field `tracerAddressChecks` of `JoltInstance.TemporaryRestrictions` | Approved by Ari for #2044 and four separate candidates: zero stores, the I/O gap, canary stores and accesses at or above `heap_end`. Quantifies over every private input and relaxed prefix with honest internal runtime advice; checks the next attempted row without assuming it succeeds. Uses `Mmu.effective_address_ok` at the start for RAM, every byte for devices. FIXME to narrow or remove as each case is resolved and proved; not a verifier check |
+| Every attempted HostIO call succeeds (temporary) | `JoltInstance.HostCallsSucceed` in `Soundness/Layer5/HostCallRestriction.lean`, field `hostCallsSucceed` | Excludes unencoded host-call failures in live mode; program-execution condition approved by Ari pending the a16z batch |
+| Source HostIO calls name x0 (temporary) | `Rv64ProgramImage.HostCallRdZero`, field `hostCallRdZero` | Approved by Ari to exclude an unconstrained architectural destination. The expanded row writes a temporary; its value must be shown dead across the source boundary using `ExpansionFacts.expand_temps_ok` |
+| Termination is followed by a stall and no later termination load (temporary) | `JoltInstance.TerminationThenStall` in `Soundness/Layer5/TerminationRestriction.lean`, field `terminationThenStall` | Approved by Ari for the B6 stopping discrepancy; remains until the unrestricted argument is established |
 | The PC does not wrap past 2^64 | `Rv64ProgramImage.NextPCNoWrap`, field `pcNoWrap` of `JoltInstance.SoundnessAssumptions` and `JoltInstance.CompletenessAssumptions` | a16z, 2026-10-07: such an ELF is illegal |
 | The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10, replacing the run-based address restriction. With the verifier's RAM-size check, all eight bytes of each in-domain word fit. The signed sum is then recovered from satisfying constraints, including address zero. NOTE: to confirm with a16z. This is an instance restriction, not a verifier check |
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Rust's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Rust's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
@@ -318,6 +321,70 @@ Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` throu
   a new premise. Instruction families still have to establish successful
   writes and their value's encoding in `RdWriteValue` before applying the
   shared update lemma. The new proofs use only Lean's three standard axioms.
+- **Routine Layer 5b rows, 2026-10-15.** The grouped local steps now cover
+  68 of 88 row kinds, with LD and SD established for ordinary RAM. The latest
+  batch closes Ari's 29-kind routine list: 27 have local execution steps and
+  VirtualROTRI/VirtualROTRIW are excluded by checked expansion facts.
+  Immediate right shifts obtain their mask shape from `immShiftOk`; register-fed
+  shifts use a paired producer/shift lemma that derives the shape from the
+  preceding mask write. The dispatcher still must connect predecessor and
+  successor rows in the execution-prefix induction. Constraint (19) by itself
+  only forces `DoNotUpdateUnexpandedPC` before an interior virtual row, and a
+  padding no-op also sets that flag. Layer 6 must use entry selection, the
+  nonpadding prefix, shifted flags and expanded PC, and the
+  expansion's `ShiftPairs` fact to establish the actual predecessor. Rev8W's
+  table/interpreter equality is kernel-checked without `bv_decide`. `lake build JoltBytecode
+  JoltConstraints` passed (8778 jobs); the new axiom audits contain no native
+  decision axiom or `sorryAx`. The source comparison and detailed row list are
+  recorded in `methods/soundness.md`. Register-write steps retain register
+  agreement; the dispatcher will carry ordinary-RAM agreement with
+  `OrdinaryRamAgreement.noAccess` and `afterWriteDst`. No main-theorem premise
+  changed.
+- **Six assertion rows and HostIO mode, 2026-10-15.** Local steps for
+  AssertEQ, both alignment assertions, AssertMulUNoOverflow, AssertValidDiv0
+  and AssertValidUnsignedRemainder are imported and built. Their lookup and
+  `assertLookupOne` proofs establish successful execution without new premises;
+  AssertEQ also handles the nonzero spoil immediate. The count is now 74 of
+  88 row kinds with steps, plus two proved unreachable. The new axiom audits
+  contain no native decision axiom or `sorryAx`. VirtualHostIO remains open:
+  the modeled initial state and Rust pass 1 use live mode, whereas only Rust's
+  chunk workers replay. Live advice-write calls can extend the tape, and
+  marker/print calls can fail on invalid events. The replay no-op branch is
+  therefore insufficient for the soundness execution step. Ari has since added
+  `HostCallsSucceed` to the temporary restrictions; it compiles in the root
+  build and requires successful execution of attempted host calls.
+  `host_call_exec_sail_frame` derives that success and preserves Sail registers
+  and RAM while allowing advice-tape changes. The
+  separate register-increment obligation for a HostIO row with nonzero `rd`
+  and the model's disabled pointer-overflow check remain under review. Details
+  and pinned Rust ranges are in `methods/soundness.md`.
+- **Termination restriction and HostIO destination, 2026-10-16.** Ari added
+  `TerminationThenStall` to the temporary restrictions. It is imported by
+  `Assumptions.lean` and the root build passes. Its application lemmas rule out
+  a later termination load and JALR; a later JAL must have offset zero, and
+  `termination_next_jal_stalls` proves that executing it sets `nextPC` to its
+  own address. The Layer 7 last-row argument and device agreement remain open.
+  At pin `8bbb2357`, Rust accepts a HostIO source instruction with nonzero
+  `rd` (`image/decode.rs:196-208`, `format_i.rs:7-24`). Even when the source
+  uses `rd = x0`, `expand/materialize.rs:79-90` rewrites its side-effecting
+  destination to a temporary virtual register. Thus a source-level `rd = x0`
+  clause alone does not force the expanded HostIO row's `RdInc` to zero. Ari
+  approved a temporary source `HostCallRdZero` restriction to exclude the
+  architectural-destination case. The pinned allocator gives ordinary
+  expansion temps 40–47, disjoint from LR/SC reservations 32 and 33.
+  `ExpansionFacts.expand_temps_ok` checks every source expansion: a temporary
+  is written before its first read in that expansion, counting a row's read
+  before its write. The global register-agreement induction must still use
+  this fact to drop the rewritten HostIO temporary at the source boundary.
+- **Layer 6 bytecode PC bridge, 2026-10-15.** `Layer6/BytecodePC.lean` is
+  imported and built. It identifies the entry slot, proves an interior row's
+  selected predecessor from the sequence and expanded-PC constraints when
+  that predecessor is a real row, and connects a selected register shift to
+  its expansion's mask producer. Its five public lemmas use only Lean's three
+  standard axioms. The execution-prefix state link, entry-start fact,
+  padding suffix, source-boundary transition and full dispatcher remain open;
+  no main-theorem premise changed. The validation and scope are recorded in
+  `methods/soundness.md`.
 - **ADDI soundness step.** `Layer5/AddImmediate.lean` now proves a selected
   ADDI row executes to the concrete destination-write state, writes the
   wrapped sum constrained by the lookup, and preserves register agreement

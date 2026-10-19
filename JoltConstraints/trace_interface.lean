@@ -482,10 +482,11 @@ theorem stamp_sequence_rowOk (address : BitVec 64) (isCompressed : Bool)
   have inInstructions : k < instructions.length := by
     simpa only [stamp_sequence, List.length_map, List.length_zipIdx] using inRange
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  obtain ⟨rowOk, notLast⟩ := rowsOk_rows instructions ok.1 k inInstructions
+  obtain ⟨rowOk, notLast⟩ := rowsOk_rows instructions ok.1.1 k inInstructions
   obtain ⟨x0, canonical, branchOffset⟩ := sequenceRow_rowOk _ rowOk
   simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx, Nat.zero_add]
-  refine ⟨x0, canonical, branchOffset, ?_, (shiftsOk_rows instructions ok.2 k inInstructions).1⟩
+  refine ⟨x0, canonical, branchOffset, ?_,
+    (shiftsOk_rows instructions ok.1.2 k inInstructions).1⟩
   intro continues
   apply notLast
   by_contra last
@@ -503,10 +504,11 @@ theorem expand_instruction_rowOk (source : SourceInstructionRow SourceInstructio
     have ok := expand_ok _ _ isNative
     obtain ⟨nativeOk, branchOffset⟩ := ok
     simp only [nativeRowOk, Bool.and_eq_true] at nativeOk
+    have old := nativeOk.1
     intro row isRow
     rw [List.mem_singleton] at isRow
     subst isRow
-    refine ⟨nativeOk.1.1.1, nativeOk.1.1.2, branchOffset, ?_, nativeOk.1.2⟩
+    refine ⟨old.1.1.1, old.1.1.2, branchOffset, ?_, old.1.2⟩
     intro continues
     simp [JoltInstructionRow.continues] at continues
   · split at expanded
@@ -565,14 +567,14 @@ theorem expand_instruction_shiftPairs (source : SourceInstructionRow SourceInstr
     intro k inRange isShift
     have zero : k = 0 := by simpa using inRange
     subst zero
-    simp [nativeOk.2] at isShift
+    simp [nativeOk.1.2] at isShift
   · split at expanded
     · cases expanded
     · rename_i instructions isSequence _
       cases expanded
       have ok : sequenceOk instructions = true := expand_ok _ _ isSequence
       simp only [sequenceOk, Bool.and_eq_true] at ok
-      exact stamp_sequence_shiftPairs _ _ instructions ok.2
+      exact stamp_sequence_shiftPairs _ _ instructions ok.1.2
 
 theorem shiftPairs_append (front back : List JoltInstructionRow) (frontOk : ShiftPairs front)
     (backOk : ShiftPairs back) : ShiftPairs (front ++ back) := by
