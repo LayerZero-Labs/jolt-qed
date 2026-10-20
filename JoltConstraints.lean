@@ -52,6 +52,7 @@ import JoltConstraints.Soundness.Layer5.RamInitialization
 import JoltConstraints.Soundness.Layer5.RamAgreement
 import JoltConstraints.Soundness.Layer5.LoadDoubleword
 import JoltConstraints.Soundness.Layer5.RamStoreAgreement
+import JoltConstraints.Soundness.Layer5.DeviceMemoryObstruction
 import JoltConstraints.Soundness.Layer5.AdviceExpansion
 import JoltConstraints.Soundness.Layer5.Registers
 import JoltConstraints.Soundness.Layer5.RegisterInputs
@@ -68,6 +69,8 @@ import JoltConstraints.Soundness.Layer5.AddressMasks
 import JoltConstraints.Soundness.Layer5.ImmediateShift
 import JoltConstraints.Soundness.Layer5.RegisterShift
 import JoltConstraints.Soundness.Layer5.LoadUpperImmediate
+import JoltConstraints.Soundness.Layer5.Auipc
+import JoltConstraints.Soundness.Layer5.HostCallRegisterFrame
 import JoltConstraints.Soundness.Layer5.Xor
 import JoltConstraints.Soundness.Layer5.BitwiseBinary
 import JoltConstraints.Soundness.Layer5.XorRotation

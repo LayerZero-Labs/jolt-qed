@@ -19,8 +19,10 @@ set_option autoImplicit false
 -- `JoltInstance.SoundnessAssumptions` and, for now, the workarounds in
 -- `JoltInstance.TemporaryRestrictions`; both are in Soundness/Assumptions.lean.
 -- The private inputs of the run need not be the ones given.
--- FIXME: false today for programs that stop or panic in ways SDK guests never do
--- (B6, "Known not sound for this L"); the temporary restrictions do not cover these.
+-- FIXME: the statement is still false for B6's store-of-zero panic case and
+-- for an early stop on a "panicked" claim. TerminationThenStall covers B6's
+-- early-stop case for "no panic" claims only; these two cases remain known
+-- soundness gaps until their restrictions or verifier fixes are established.
 theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)

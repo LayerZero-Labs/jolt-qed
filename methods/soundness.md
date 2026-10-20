@@ -14,33 +14,58 @@ Read these before beginning work:
 
 The local `blog/` is stale; use the published article for background.
 
-## Layer 5b handoff (2026-10-19)
+## Layer 5b handoff (updated 2026-10-20)
 
 Use proof baseline commit `6203c30`, this handoff and the
-[closing checklist](#layer-5b-one-execution-step). The root
-`lake build JoltConstraints` passed (8783 jobs). Local execution steps cover
-74 of 88 native row kinds, counting LD and SD for ordinary RAM only; two
-more kinds are proved unreachable. Twelve kinds still need steps:
-`VirtualHostIO`, AUIPC, JAL, JALR, the six branches, `VirtualAdviceLoad` and
-`VirtualAdvice`. Device-memory agreement and the dispatcher remain open.
+[closing checklist](#layer-5b-one-execution-step). The root build passed after
+the AUIPC addition.
+Local execution steps cover 75 of 88 native row kinds, counting LD and SD for
+ordinary RAM only; two more kinds are proved unreachable. Eleven kinds still
+need steps: `VirtualHostIO`, JAL, JALR, the six branches,
+`VirtualAdviceLoad` and `VirtualAdvice`. Device-memory agreement and the
+dispatcher remain open.
+
+`Layer5/Auipc.lean` proves a selected AUIPC row's constrained wrapped
+PC-plus-immediate write, successful interpreter step, and next-cycle register
+agreement. Its local PC hypothesis connects Jolt's row address to the Sail PC
+read by the Lean interpreter; the global induction must establish it. The
+proof was checked against AUIPC's tracer, flag and lookup implementations at
+public Rust pin `8bbb2357`. No theorem premise, `sorry`, native decision proof
+or heartbeat override was added. The step's axiom audit lists only `propext`,
+`Classical.choice`, `Quot.sound` and the existing
+`sys_enable_experimental_extensions`.
 
 The best first composition target is HostIO: use `HostCallsSucceed` for
 successful live execution, `HostCallRdZero` for the architectural destination,
-and `ExpansionFacts.expand_temps_ok` to show the rewritten temporary's value
-cannot affect a later source expansion. The expansion fact is proved; its use
-in the global register-agreement induction is not. The pinned Rust allocator
-uses temps 40–47, disjoint from LR/SC reservations 32 and 33. After HostIO,
+and `ExpansionFacts.expand_temps_ok` to show that the next expansion writes
+the rewritten temporary before reading it. The register-agreement induction
+must keep that temporary unavailable until the write; this is not yet proved.
+The pinned Rust allocator uses temps 40–47, disjoint from LR/SC reservations
+32 and 33. After HostIO,
 compose the PC rows with `Layer6/BytecodePC.lean`, then the advice rows,
 device accesses and dispatcher. The [detailed checklist](#layer-5b-one-execution-step)
 separates proof work from the temporary restrictions.
 
 `Layer5/Registers.lean` currently states `RegisterAgreement` for every
 register, which a HostIO row with an unconstrained rewritten destination
-cannot preserve. The next proof must carry agreement only where a later row
-can read it before a new write, or track that one temporary as unavailable
+cannot preserve. The next proof must track that temporary as unavailable
 until its next write. Use the source-expansion fact at the source boundary;
 keep persistent registers 32–39 in agreement. The existing fact does not by
 itself prove this induction or a HostIO step.
+
+`execHostIO_keeps_state` and `host_call_exec_sail_frame` prove that successful
+HostIO execution preserves Sail state and virtual registers.
+`Layer5/HostCallRegisterFrame.lean` proves that every register-table entry
+except the selected destination still agrees with execution. It also proves
+that a source HostIO with `rd = x0` targets `rdZeroRewriteVReg`, and that this
+register is 40. The remaining task is to carry that one unavailable
+temporary through the execution-prefix induction and use per-expansion
+write-before-read to restore agreement before it is read. This is proof work;
+no further premise has been added. The full `lake build JoltConstraints` passes
+(8786 jobs, including the device diagnostic).
+Axiom audits of the new
+HostIO declarations show only `propext`, `Classical.choice`, `Quot.sound` and,
+for the live-call bridge, the existing `sys_enable_experimental_extensions`.
 
 Keep Rust semantic reads at public pin `8bbb2357`. Preserve the unrelated
 untracked blog and bug-report drafts. Do not add theorem premises without
@@ -116,10 +141,9 @@ The temporary Lean branch and worktree have been removed. This model includes [P
 Jolt `43cc043332762034b5f65379441576e06e7a3890`. It does not import the
 other changes on the PR's newer base. That experiment used a generation
 checkout at `43cc043` with the applied patch; the current reference pin is above.
-This is a model of the pinned PR revision, not a claim about its eventual merged
-version. If Michael changes the PR, regenerate the SC expansions from the new
-revision, review the generated diff and tracer changes, and rebuild the affected
-proofs before updating this revision record.
+PR #2039 has since merged upstream (2026-10-12, `0dad0d9e`) and is in the
+current pin `8bbb2357`; migration item 2 found that the merged SC fix agrees
+with these expansions ([model_update.md](./model_update.md)).
 
 The reviewed update regenerates all 57 expansion programs with LR/SC
 support enabled in `jolt-lean-gen`. Before the patch, all 57 definitions
@@ -136,9 +160,8 @@ The separate commit `e3a34fc` only moves the unchanged LR/SC definitions into
 the generated module; it is independent of the proposed SC semantics.
 The experiment recorded generator change `cf450ba2` and applied PR `1bac0a87`
 in `/private/tmp/jolt-pr2039-rust`. That temporary checkout is no longer
-available. The pulled generator still skips LR/SC; migration item 2 records
-restoring that coverage and regenerating to a scratch destination before
-updating `JoltBytecode/JoltISA/ExpansionsAutomated.lean`.
+available. Migration item 2 has since added LR/SC coverage to the generator;
+all 57 regenerated programs match `JoltBytecode/JoltISA/ExpansionsAutomated.lean`.
 
 Validation for this chunk: `lake build JoltConstraints` passed (8739 jobs).
 The existing unfinished theorems remain unfinished; no `sorry`, axiom, premise
@@ -162,14 +185,14 @@ for this updated model. The constraint-to-execution proof needs:
    `runtimeAdvice_agrees_of_noAdvice` gives `none = none` for any such trace
    row. Applying it during the whole-trace induction remains to be done.
 2. Cover the rows SC uses through the ordinary Layer 5b instruction proofs.
-   LUI, VirtualAssertLTE, XOR, SLTIU, ADDI, XORI, SUB, MUL and ADD now have step
-   lemmas; the nine remaining SC.W row kinds are listed below. These proofs
+   Every SC.W and SC.D row kind now has a local step lemma, with LD and SD
+   covered for ordinary RAM only. These proofs
    are also needed for other source programs. Register agreement already
    compares virtual registers 32 and 33 with the run's state, so the XOR/SLTIU
    rows compute the same success bit on both sides without any interpretation
    of LR/SC history. Check both destination branches and source-register aliases
    through these row proofs.
-   Composition into the whole SC expansion and the remaining row proofs
+   Composition into the whole SC expansion, and LD/SD on device memory,
    remain open.
 3. Remove `NoStoreConditional` and use that ordinary instruction coverage for
    SC's rows. The memory-device and stopping obligations remain separate.
@@ -181,8 +204,8 @@ for this updated model. The constraint-to-execution proof needs:
   `instruction.adviceValue? = none`. It is used by both runtime-advice
   agreement and the shared step lemma. `ordinary_withRuntimeAdvice` alone
   would not suffice: it preserves the ordinary flag, not instruction equality.
-- `Layer5/LookupWrite.lean` supplies four small lemmas. `RegisterAgreement.rs1Value`
-  and `rs2Value` recover selected source-column values using canonical operands
+- `Layer5/LookupWrite.lean` supplied four small lemmas; `RegisterAgreement.rs1Value`
+  and `rs2Value` have since moved to `Layer5/RegisterInputs.lean`. They recover selected source-column values using canonical operands
   and register agreement. `lookupWrite_value_of_raf_zero` derives RAF, write and
   table selection from the row, connects input columns to lookup operands, and
   applies the caller's proved Layer 4 rule. `registerWrite_step` proves a
@@ -201,13 +224,13 @@ only next-column register agreement requires a following cycle. This changes
 the step-lemma API; it does not change either interpreter or the main theorem.
 
 ADDI, XOR, SLTIU, LUI, XORI and VirtualAssertLTE now have step lemmas; ADD,
-SUB and MUL share `arithmetic_step`. The SC.W rows still needing full step coverage
-are `VirtualAssertWordAlignment`, `VirtualAlignAddr`, `ANDI`, `LD`,
-`VirtualWindowMaskW`, `VirtualPextSigned`, `ANDN`, `VirtualShiftDataW` and `SD`.
-For SC.D, only `LD` and `SD` remain. `sd_ram_step` now covers SD to ordinary
-RAM; the device-store cases remain open. Whole-expansion composition, RAM/PC
-agreement and the induction remain open. The instruction-family chunk below
-records the shared proofs and validation.
+SUB and MUL share `arithmetic_step`. The other SC.W rows,
+`VirtualAssertWordAlignment`, `VirtualAlignAddr`, `ANDI`, `LD`,
+`VirtualWindowMaskW`, `VirtualPextSigned`, `ANDN`, `VirtualShiftDataW` and `SD`,
+now have local steps too, recorded in the instruction-family chunks below.
+SC.D uses rows from both lists. `ld_ram_step` and `sd_ram_step` cover
+ordinary RAM; device accesses remain open. Whole-expansion composition, RAM/PC
+agreement and the induction remain open.
 
 Relating registers 32 and 33 to Jolt's emulator reservation is a separate
 obligation about the model, recorded under **LR/SC reservation correspondence**
@@ -215,8 +238,8 @@ in [model_review.md](../JoltConstraints/model_review.md). It is not a prerequisi
 for removing `NoStoreConditional` from the constraint-to-execution theorem.
 
 No additional soundness or instance premise is authorized by this model update.
-The reviewed SC changes are now part of `feat/soundness`, with Ari's approval;
-this records our chosen model revision and does not assert that the PR has merged upstream.
+The reviewed SC changes are now part of `feat/soundness`, with Ari's approval.
+PR #2039 has since merged upstream and is in the current pin.
 
 ## Soundness statement
 
@@ -270,8 +293,13 @@ every in-domain word. Layer 5b recovers integer address sums from satisfying
 constraints, including the unselected address-zero case; the argument applies
 to both fixed-tape and independent-answer execution. The former run-based
 RAM no-wrap predicate and its next-step helper have been deleted.
-On 2026-10-10, Ari approved excluding `SC.W` and `SC.D` from every source row, including unreachable rows, while their advice mismatch is unresolved ([a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)). `LR.W` and `LR.D` remain allowed.
-`NoStoreConditional` is a restriction on this theorem, not a check made by Jolt's verifier. Its `FIXME` calls for removal once Jolt's SC constraints enforce the honest tracer's outcome and the model reflects that fix.
+On 2026-10-10, Ari approved excluding `SC.W` and `SC.D` from every source row,
+including unreachable rows, while their advice mismatch was unresolved
+([a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)). PR #2039 has
+since fixed that mismatch. `LR.W` and `LR.D` remain allowed.
+`NoStoreConditional` is a restriction on this theorem, not a check made by
+Jolt's verifier. Its `FIXME` now calls for removal after the remaining SC
+device-memory cases and global expansion composition are proved.
 The language and instance are unchanged by it. Stopping and panic remain open obligations; this restriction only excludes the SC cases.
 Ari approved `TracerAddressChecks`, a temporary program restriction for both
 LD and SD. It covers the input/advice-store counterexample reported in
@@ -326,7 +354,10 @@ The proof runs on these answers under the relaxed semantics (Layer 5a), then reb
 PR #2049 removed `bytes_remaining()`, the only instruction that could see the tape's length. Before it, the answers could disagree with every tape (Layer 5a, historical candidate).
 
 At each step that uses runtime advice, we must prove that the value in `w` agrees with the honest tracer's computation.
-At the previous model revision `43cc043`, SC.W can report failure where Jolt's tracer reports success. The current model uses PR #2039's deterministic comparison. `NoStoreConditional` remains in the theorem pending the SC proof steps listed above; the proof must discharge those steps before removing it.
+At the previous model revision `43cc043`, SC.W could report failure where
+Jolt's tracer reported success. The current model uses PR #2039's deterministic
+comparison. `NoStoreConditional` remains pending the SC device-memory cases
+and global expansion composition; both must be proved before removing it.
 
 ### The witness proves facts about the execution prefix
 
@@ -337,7 +368,11 @@ It connects the prefix and its current state to these witness columns:
 - **Registers:** `RegistersVal r t`, the value `w` says register `r` holds before cycle `t`; the read selectors `Rs1Ra`, `Rs2Ra` and write selector `RdWa`; and the values `Rs1Value`, `Rs2Value`, `RdWriteValue`.
 - **RAM:** `RamVal a t`, the value `w` says the memory word at RAM index `a` holds before cycle `t`; `RamAddress`, the selector `RamRa`, and the values `RamReadValue`, `RamWriteValue`. `RamValFinal a` is the claimed value at RAM index `a` after all cycles.
 
-The register and RAM tables are compared in full, because cycle `t + 1` may read any register or address, not only the ones cycle `t` wrote.
+`OrdinaryRamAgreement` compares every ordinary-RAM table entry with the
+interpreter's byte-map word. Device-region entries need a separate relation,
+as described below. The register table is compared in full except after a
+HostIO row, when its rewrite temporary is unavailable until its next write
+(see the Layer 5b handoff).
 The columns not listed above need not be unique.
 Individual helpers that accept a plain `Trace`, such as `TraceWitness.PC`, can be reused when stating agreement.
 
@@ -380,11 +415,15 @@ Use a predicate `Agrees w t prefix state` on a plain execution prefix under the 
 Here `0 ≤ t ≤ n`, and `prefix` contains exactly the `t` rows already executed.
 For `t < n`, `state` is the pre-state for executing row `t`, with `advance_pc` already applied when that row starts a source instruction.
 For `t = n`, `state` is the last post-state, or the initial state if `n = 0`; no further `advance_pc` is applied.
+For `t < n`, `state.sail.regs.get? Register.PC = some selectedRow.address` for
+the row selected at `t`. Jolt's tracer uses the row's own address for AUIPC,
+while the Lean interpreter reads Sail's PC; JAL, JALR and branches need the
+same equality.
 The predicate records successful execution and linkage of the prefix, agreement with the witness columns for its executed rows, and the runtime-advice equality required by `advice_from_honest_tracer` for each of those rows.
 State agreement is retained through the endpoint `t = n`:
 
-- For `t ≤ n` and `t < N`, compare `RegistersVal r t` and `RamVal a t` with the field encodings of the corresponding register and RAM word in `state`, for every register `r` and RAM index `a`.
-- For `t = n = N`, compare `RamValFinal a` with the final state's RAM encoding for every RAM index `a`. There is no `RegistersVal` column at cycle `N`.
+- For `t ≤ n` and `t < N`, compare `RegistersVal r t` with the corresponding register value in `state` for every register `r` except an unavailable HostIO temporary. Compare `RamVal a t` with `state` for every ordinary-RAM index `a`; device indices need the separate relation below.
+- For `t = n = N`, compare `RamValFinal a` with the final state's RAM encoding for every ordinary-RAM index `a`. There is no `RegistersVal` column at cycle `N`.
 
 Also retain `AllRegistersPresent state.sail`: agreement with `sourceValue`
 alone would not ensure a successful read, because that function defaults missing
@@ -394,7 +433,7 @@ preserves it through PC preparation and destination writes. Register presence
 is a proved induction invariant, not an added soundness premise.
 
 The RAM comparison must account for address remapping and the device regions.
-The full comparison above cannot mean equality with readable device memory
+Device indices cannot be compared by equality with readable device memory
 after every store: termination ignores writes, and panic reads a flag rather
 than the stored bytes. Its device cases need a separate invariant relating
 table history, permitted reads and final public I/O. That invariant remains
@@ -491,8 +530,8 @@ layers below. Create each directory as its proofs are added. The final theorem
 stays in `JoltConstraints/Soundness/soundness.lean`.
 Algebraic helpers shared across layers live in `JoltConstraints/Soundness/Helpers/`.
 Layer 5 has two parts: 5a adds the relaxed semantics for tape answers, used inside the proof, and
-`Layer5/Step.lean` (5b) proves execution steps.
-These are planned, not completed.
+5b proves execution steps, one file per instruction family in `Layer5/`.
+Layers 0–4 and 5a are proved; Layers 5b–8 are in progress or planned.
 
 Layers 0 to 4 prove field bounds, selection, table histories and lookup facts.
 Layer 5a adds the untrusted-answer semantics alongside the fixed-tape semantics and proves inclusion; the execution-prefix induction in Layers 5b and 6 then takes tape answers from the witness.
@@ -650,8 +689,12 @@ The source recheck at `8bbb2357` finds the same relevant arithmetic in
 `crates/jolt-program/src/preprocess/ram.rs::compute_max_ram_k`, and the RAM-size
 checks in `crates/jolt-verifier/src/verifier.rs`.
 The same wrap breaks completeness: [ram-address-wrap.md](../bug-report/ram-address-wrap.md) shows the honest witness failing the address constraint when the address wraps.
-Ari chose a run-level no-wrap premise.
-Ask a16z to confirm that Jolt programs never compute a wrapping load or store address.
+Soundness needs no run-level no-wrap premise: it uses the instance-only
+`RamRegionFits` and derives no-wrap at satisfying LD/SD cycles (below).
+Completeness still needs one: `honestWitness_ramAddrEqRs1PlusImmIfLoadStore`
+is a `sorry` whose TODO calls for ruling out wrapping addresses.
+For completeness, ask a16z to confirm that Jolt programs never compute a
+wrapping load or store address.
 
 ### Layer 4: lookups
 
@@ -814,7 +857,8 @@ including their sign extension and x0 temporary-register branch, are unchanged.
 
 #### Layer 5b: one execution step
 
-Planned file: `JoltConstraints/Soundness/Layer5/Step.lean`.
+Files: one per instruction family in `JoltConstraints/Soundness/Layer5/`; the
+dispatcher that composes them is not yet written.
 
 What: for `t < n`, given `Agrees w t prefix state` and the step's advice compatibility facts, prove that the step succeeds under the untrusted-answer semantics and returns a post-state matching the witness's writes.
 When `t + 1 < n`, combine this with Layer 6's next-row selection and `advance_pc` rule to extend agreement.
@@ -835,7 +879,8 @@ source/immediate encodings, the addition and write flags, and the RangeCheck
 table from the selected row, then proves execution and next-cycle register
 agreement. The result is the wrapped 64-bit sum; no arithmetic no-wrap premise
 is needed. Its execution and write-value conclusions also apply at the last
-cycle. Other instruction families and RAM/PC agreement remain to be connected.
+cycle. Most other instruction families now have local steps too (see the
+status list below); PC agreement and the composition remain open.
 
 **Device-memory obligations.** These are three cases of a broader obligation:
 derive both successful memory access and the device's value from the RAM
@@ -843,7 +888,9 @@ constraints. Consistent RAM history alone does not establish either one.
 The source audit below records the historical findings at Jolt revision
 `43cc043332762034b5f65379441576e06e7a3890`. The current device/MMU source
 was rechecked at `8bbb2357` in [migration chunk 6](./model_update.md#chunk-6-source-recheck-and-historical-citations);
-the existing discussion and proposed premises are unchanged.
+the existing discussion is unchanged. The address-check and termination
+restrictions discussed there have since been added; the panic restrictions
+remain open.
 
 **Termination-device restriction added; execution proof still open.** Banning
 all termination accesses would exclude normal SDK exits: the SDK writes byte 1,
@@ -887,8 +934,8 @@ permanent requirement on guest programs.
 
 The local store/load discrepancy does not by itself demonstrate an accepted
 cheating proof. No complete satisfying witness for that consequence has been
-constructed. This candidate restriction does not resolve the separate stopping,
-panic or input/advice-store obligations.
+constructed. This restriction does not resolve the panic or input/advice-store
+obligations, or stopping for "panicked" claims.
 
 **Panic: known B6 case, also an obstacle in Layer 5b.** In
 `common/src/jolt_device.rs:121–155`, a write to the first panic byte sets the
@@ -1013,8 +1060,9 @@ and maintain register/RAM table agreement through their intermediate states.
 For an LD or SD step, use `ld_address_encoded` or `sd_address_encoded`
 with the approved `RamRegionFits` premise and the source-column agreement
 from the induction. These address lemmas already derive the signed integer
-equality, nonwrapping bound and machine-address encoding; they do not yet
-prove the memory access succeeds or matches the RAM table.
+equality, nonwrapping bound and machine-address encoding. For ordinary RAM,
+`ld_ram_step` and `sd_ram_step_agreement` then prove the access succeeds and
+matches the RAM table; device accesses remain open.
 Preserve the tape-answer facts and the runtime-advice equalities in `Agrees`; prove that appending a row leaves the earlier rows' `honestTracerAdviceAtStepN` values unchanged.
 Why: this supplies the transition for the induction step and the proof required by the eventual `executes` field.
 Uses: Layers 0 to 4, Layer 5a, instruction semantics, runtime-advice compatibility.
@@ -1040,10 +1088,12 @@ further when a family has different operand modes. Compose those proved facts
 with the state-transition lemma.
 
 **Closing Layer 5b (agreed with Ari, 2026-10-19).** Layer 5b can close with
-temporary restrictions standing in for the suspected Jolt bugs. Everything else
-is proof work.
+approved restrictions for suspected Jolt bugs. The panic read-after-store gap
+below remains open. Remove the SC restriction before calling this layer closed.
 
-Blocked parts, and the restriction that covers each:
+Blocked parts and their status:
+- `TracerAddressChecks` supplies the address checks for attempted LD/SD rows.
+  Narrow or remove it as the address cases documented above are resolved.
 - Host calls that fail in Jolt's tracer but pass the constraints as no-op
   rows: `HostCallsSucceed`.
 - Host calls whose source destination is an architectural register, which the
@@ -1053,22 +1103,26 @@ Blocked parts, and the restriction that covers each:
   RAM table keeps the stored bytes: `TerminationThenStall`, whose load clause
   forbids loading that word after storing to it.
 - The panic word, where the device loads its flag in every byte while the RAM
-  table keeps the stored bytes: a restriction still to be added, mirroring
-  termination's load clause, that the program never loads the panic region
-  after storing to it. Before any store, the device and the table both read 0.
+  table keeps the stored bytes: this needs a proof or Ari's approval of a
+  restriction forbidding loads from the panic region after storing to it.
+  No such restriction has been added. Before any store, the device and the
+  table both read 0.
   The separate problem that a store of 0 is proved as "no panic" concerns only
   the final panic flag; its restriction belongs to Layer 8.
 
 Remaining proof work, which no restriction may replace:
-- The 12 row kinds without a step: `VirtualHostIO`; AUIPC, JAL, JALR and the
+- Remove `NoStoreConditional` after composing SC.W and SC.D expansions. PR
+  #2039 fixed the upstream bug; their local LD and SD steps currently cover
+  ordinary RAM only, so device cases remain part of this work.
+- The 11 row kinds without a step: `VirtualHostIO`; JAL, JALR and the
   six branches, whose state part is a destination write or nothing;
   `VirtualAdviceLoad`, connecting tape reads to the witness's answers; and
   `VirtualAdvice`.
 - Device memory for the input, advice, output and termination regions.
 - Apply the proved per-expansion write-before-read fact
   (`ExpansionFacts.expand_temps_ok`) in the global register-agreement induction,
-  so a HostIO `x0` rewrite's unconstrained temporary is dropped before the
-  next source expansion. The pinned allocator uses 40–47, not reservation
+  keeping a HostIO `x0` rewrite's unconstrained temporary unavailable until
+  its next write. The pinned allocator uses 40–47, not reservation
   registers 32 and 33 (`crates/jolt-program/src/expand/materialize.rs:79-90`,
   `expand/allocator.rs:115-139`).
 - The dispatcher, shared with Layer 6.
@@ -1078,8 +1132,7 @@ do not force each `VirtualAdvice` value to equal Jolt's tracer's value, that is
 a soundness bug to report, not something to assume. The bytecode project covers
 DIV, DIVU and DIVW; the other five are unchecked.
 
-A FIXME restriction stands only for a suspected Jolt bug, never for unfinished
-proof.
+Do not add a new FIXME restriction for unfinished proof work.
 
 ### Layer 6: control flow
 
@@ -1130,7 +1183,7 @@ The required stopping obligations are `stops` (the final source instruction leav
 These are open. In particular, [B6](./review_completeness_and_soundness.md#b6-the-soundness-statement) records an unsound stopping case from reading the code: a witness can end at a jump before the tracer's PC stall. For "no panic" claims, the temporary `TerminationThenStall` restriction makes that jump the stall: after a termination store, a JAL must have offset 0, and `termination_next_jal_stalls` proves it sets `nextPC` to its own address. "Panicked" claims depend on the panic word instead of termination, and remain open. B6 has been communicated to a16z privately.
 Prefix agreement and a padding suffix do not establish these stopping properties.
 For an empty prefix, `stops` and `runs_until_stop` are vacuous; `nonempty` still requires excluding a nonzero entry address.
-Take the instance facts, including `initialized`, from the context, adapted to the new form of the private input after the Layer 5a model change; `accepted` follows from `expands` and `entryIsRust`.
+Take the instance facts, including `initialized`, from the context; Layer 5a left `JoltPrivateInputs` unchanged. `accepted` follows from `expands` and `entryIsRust`.
 Then rebuild one tape from the answers' low bytes, in read order, and run the program on it. Prove that this run is an `HonestTrace` with the same bytecode rows, ending every source instruction with the same registers and memory ([Choosing the private inputs](#choosing-the-private-inputs)).
 Why: once all these obligations are resolved, the constructed prefix can be packaged as a relaxed trace, and the rebuilt tape turns it into an `HonestTrace`, the form the theorem concludes.
 Uses: the context, Layers 5 and 6, stopping proofs.
@@ -1149,7 +1202,7 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
 ### Order of the remaining work
 
 Agreed with Ari, 2026-10-16. Close Layer 5b as described in
-[Closing Layer 5b](#layer-5b-one-execution-step). Then state Layer 6's lemmas
+[Closing Layer 5b](#layer-5b-one-execution-step), refined on 2026-10-19. Then state Layer 6's lemmas
 with `sorry`, each in the form Layer 7 needs and with a short proof sketch.
 Prove Layer 7 against those statements, then close Layer 6. Genuine unknowns
 stay explicit open questions rather than `sorry`'d facts; in particular, whether
@@ -1332,9 +1385,9 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
   No premise was added to the soundness theorem or instance. This completes the
   planned Layer 2 obligations; agreement after instruction
   execution remains in Layer 5b.
-  `source_encode_decode`, `sourceRegisterAddress_injective`,
-  `registersVal_initial_advance_pc`, and `x0_write_effect_zero` currently have no
-  callers. Keep them for the planned state and linkage proofs in Layers 5b and 6;
+  `sourceRegisterAddress_injective`, `registersVal_initial_advance_pc` and
+  `x0_write_effect_zero` currently have no callers; `source_encode_decode` is
+  now used by `Layer5/Registers.lean`. Keep them for the planned state and linkage proofs in Layers 5b and 6;
   recheck their callers when those layers land and remove any left unused.
 
   The three case-split proofs requested for timing were profiled separately
@@ -1743,8 +1796,9 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
   This was the weekend review boundary. The 2026-10-15 chunk below implements
   the advice bridge and shared steps planned after that review.
 - **Layer 5b, advice bridge and shared steps; implemented, 2026-10-15:**
-  [LookupWrite.lean](../JoltConstraints/Soundness/Layer5/LookupWrite.lean) has four
-  reusable lemmas, all used by the refactored instruction proofs. The public
+  [LookupWrite.lean](../JoltConstraints/Soundness/Layer5/LookupWrite.lean) had four
+  reusable lemmas, all used by the refactored instruction proofs; two of them,
+  `RegisterAgreement.rs1Value` and `rs2Value`, later moved to `RegisterInputs.lean`. The public
   identity in [RuntimeAdvice.lean](../JoltConstraints/Soundness/Layer5/RuntimeAdvice.lean)
   replaces its weaker private helper and connects all three step conclusions
   to the trace's runtime-advice application. XOR and SLTIU share the selected
@@ -1882,6 +1936,15 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
 - **Layer 5b, device-memory audit; still open:** `TerminationThenStall` permits
   the standard SDK return sequence and is built, but does not yet
   close RAM agreement. Panic needs separate read and final-flag arguments.
+  [DeviceMemoryObstruction.lean](../JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean)
+  is a diagnostic artifact: for a generated layout, it proves that a store of
+  one to the termination word is ignored by device execution while a selected
+  store forces the next RAM-table entry to one. It does not construct a
+  satisfying witness. It is imported by `JoltConstraints.lean`, so the root
+  build checks it. `MemoryLayout` now derives its equality decision in
+  `JoltDevice.lean`. The diagnostic has two `decide +kernel` invocations; a
+  direct `lake env lean` check took 5.55 s wall time, and its Lake module build
+  took 4.6 s on 2026-10-20. These times include elaboration and kernel checks.
   Ari reports an accepted-proof reproduction for input/advice stores in #2044,
   following #2041; it has not been independently rerun here. The approved
   `TracerAddressChecks` premise now supplies the modeled address assertions for
@@ -1972,8 +2035,9 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
 
   The four register-based virtual shifts require a right-shift mask of the
   correct shape. The paired producer lemma recorded below now derives that
-  shape from a preceding mask write. Applying it in the execution-prefix
-  induction still requires the selected predecessor and state linkage.
+  shape from a preceding mask write, and `selected_registerShift_fed` in
+  `Layer6/BytecodePC.lean` identifies that predecessor among the selected rows.
+  Applying them in the execution-prefix induction still requires state linkage.
 - **Layer 5b, word arithmetic, virtual binary and FENCE rows; ready for review,
   2026-10-15:**
   [WordArithmetic.lean](../JoltConstraints/Soundness/Layer5/WordArithmetic.lean)
@@ -2061,17 +2125,14 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
   covers VirtualSRL, VirtualSRA, VirtualSRLW and VirtualSRAW. Its paired-row
   lemma derives the mask shape from the concrete post-state of the immediately
   preceding VirtualShiftRightBitmask(W) write and `masksFed`; the dispatcher
-  still has to connect those adjacent selected rows and their states. In
-  particular, `mustStartSequenceFromBeginning` (constraint 19) only forces the
-  previous row's `DoNotUpdateUnexpandedPC` flag for an interior virtual row; it
-  does not identify the predecessor by itself: a padding no-op also sets this
-  flag. The Layer 6 induction must rule out an interior row at entry and a
-  padding predecessor, use the shifted first/virtual flags and the expanded-PC
-  increment and shift to identify the previous selected bytecode slot, then use
-  `ExpansionRows.expand_program_shiftPairs` to identify its mask-producing
-  instruction. The execution-prefix linkage must identify the shift's input
-  state with that producer's post-state before applying
-  `registerShift_step_after_producer`.
+  still has to connect those adjacent selected rows and their states.
+  `selected_registerShift_fed` in `Layer6/BytecodePC.lean` now proves that the
+  cycle before a selected shift selects the previous bytecode slot, and that
+  this slot's instruction produces the shift's mask. It needs that earlier slot
+  to be a real row, because a padding no-op also sets `DoNotUpdateUnexpandedPC`.
+  The induction must still supply that real-row fact, rule out a register shift
+  at cycle 0, and identify the shift's input state with the producer's
+  post-state before applying `registerShift_step_after_producer`.
   VirtualROTRI and VirtualROTRIW are excluded by `immShiftOk` and the existing
   `bytecodeTable_ne_plainRotate` proof, so no execution step is needed.
 
@@ -2268,7 +2329,7 @@ proved as well. The six remaining assertion rows have steps too. Layer 6's
 bytecode/PC bridge proves entry selection, next-slot selection inside an
 expansion, and the link from a register shift to the row producing its mask.
 Temporary restrictions now also cover host calls and the termination word.
-Layer 5b still needs `VirtualHostIO`, the state part of the nine PC rows,
+Layer 5b still needs `VirtualHostIO`, the state part of eight PC rows,
 `VirtualAdviceLoad`, `VirtualAdvice`, device accesses and the composition; see
 Closing Layer 5b under [Layer 5b](#layer-5b-one-execution-step).
 The separate Akita model remains future work.

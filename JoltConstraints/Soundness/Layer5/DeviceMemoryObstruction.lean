@@ -18,12 +18,6 @@ namespace JoltConstraints.Soundness.DeviceMemoryObstruction
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-private instance : DecidableEq MemoryLayout := by
-  intro a b
-  cases a
-  cases b
-  exact decidable_of_iff _ MemoryLayout.mk.injEq.symm
-
 /-- A small configuration with one output word and no advice, stack or heap. -/
 def config : MemoryConfig := {
   max_input_size := 0, max_trusted_advice_size := 0,
@@ -115,6 +109,6 @@ theorem selected_store_one_disagrees
   rw [updated]
   change (1 : F) ≠ ((0 : Nat) : F)
   simp only [Nat.cast_zero]
-  exact _root_.one_ne_zero
+  exact one_ne_zero
 
 end JoltConstraints.Soundness.DeviceMemoryObstruction

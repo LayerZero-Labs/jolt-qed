@@ -55,15 +55,19 @@ def Rv64ProgramImage.HostCallRdZero (program : Rv64ProgramImage SourceInstructio
     | .jolt (.VirtualHostIO rd _ _) => JoltISA.isX0 rd = true
     | _ => True
 
--- Workarounds for known issues. Each one excludes programs that would expose a
--- reported or suspected bug, so that the rest of the proof can go ahead. None of
--- them is a check Jolt's verifier makes. Each must be removed once its issue is
--- resolved in Jolt and in the model, and the proof without it is established.
+-- Temporary program restrictions. Most exclude programs that expose reported
+-- or suspected Jolt bugs; NoStoreConditional now remains only for unfinished
+-- proof composition after PR #2039 fixed its original upstream issue. None is
+-- a check Jolt's verifier makes. Remove bug restrictions once Jolt and the
+-- model are fixed and the unrestricted proof is established; remove
+-- NoStoreConditional when the remaining SC proof work is complete.
 structure JoltInstance.TemporaryRestrictions
     (joltInstance : JoltInstance SourceInstruction) : Prop where
   -- FIXME: no source row is SC.W or SC.D (a16z/jolt#2037).
   -- Fixed upstream by a16z/jolt#2039 (merged 2026-10-12) and already in the model.
-  -- Remove once Layer 5b proves the steps of SC's expansion rows.
+  -- Local steps cover every SC row; LD and SD only for ordinary RAM. Remove
+  -- this restriction once Layer 5b also handles their device cases
+  -- and composes SC expansions in the global execution-prefix induction.
   noStoreConditional : joltInstance.program.NoStoreConditional
   -- FIXME: every load and store the program attempts passes Jolt's tracer address
   -- checks (a16z/jolt#2044, plus four candidates in methods/soundness.md: stores

@@ -45,8 +45,8 @@ open Sail PreSail LeanRV64D.Functions JoltISA
 
 /-- The program restriction supplies successful live HostIO execution for an
 attempted row. HostIO can append to the advice tape, but cannot change Sail
-registers or RAM bytes. The register-table increment still needs a separate
-argument. -/
+registers, RAM bytes or virtual registers. The register-table increment still
+needs a separate argument. -/
 theorem host_call_exec_sail_frame
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (restricted : joltInstance.HostCallsSucceed)
@@ -58,11 +58,13 @@ theorem host_call_exec_sail_frame
     (advice : run.bytecode[next].instruction.RuntimeAdvice) :
     ∃ post, execWithTapeAnswer
         (run.bytecode[next].instruction.withRuntimeAdvice advice) answer pre =
-        .ok RETIRE_SUCCESS post ∧ post.sail = pre.sail := by
+        .ok RETIRE_SUCCESS post ∧ post.sail = pre.sail ∧
+        post.vregs = pre.vregs := by
   have success := restricted privateInputs run next pre ready
   rw [instruction] at success
   obtain ⟨post, executes⟩ := success
-  refine ⟨post, ?_, execHostIO_keeps_sail pre post _ executes⟩
+  have frame := execHostIO_keeps_state pre post _ executes
+  refine ⟨post, ?_, frame.1, frame.2⟩
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instruction]; rfl),
     instruction]
   simpa only [execWithTapeAnswer, execInstr] using executes

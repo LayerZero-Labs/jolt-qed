@@ -47,6 +47,7 @@ structure MemoryLayout where
   panic : BitVec 64
   termination : BitVec 64
   io_end : BitVec 64
+  deriving DecidableEq
 
 namespace MemoryLayout
 

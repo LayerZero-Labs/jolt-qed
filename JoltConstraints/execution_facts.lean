@@ -14,56 +14,65 @@ set_option autoImplicit false
 
 open Sail PreSail LeanRV64D.Functions
 
-namespace SailUnchanged
+namespace SailAndVRegsUnchanged
 
--- A step that, when it succeeds, leaves the Sail state exactly as it found it.
-def Preserves {α : Type} (step : JoltMonad α) : Prop :=
-  StatePreservation.Preserves (fun before after => after.sail = before.sail) step
+-- A successful step leaves Sail state and virtual registers as they were.
+def Preserves {Value : Type} (step : JoltMonad Value) : Prop :=
+  StatePreservation.Preserves
+    (fun before after => after.sail = before.sail ∧ after.vregs = before.vregs) step
 
 theorem pure_rule {Value : Type} (value : Value) : Preserves (pure value) :=
   StatePreservation.pure_rule
-    (relation := fun (before after : SailJoltState) => after.sail = before.sail)
-    (fun _ => rfl) value
+    (relation := fun (before after : SailJoltState) =>
+      after.sail = before.sail ∧ after.vregs = before.vregs)
+    (fun _ => ⟨rfl, rfl⟩) value
 
--- Two steps that each keep the Sail state keep it when run one after the other.
-theorem bind_rule {Value Next : Type} {first : JoltMonad Value} {next : Value → JoltMonad Next}
+-- Composing two such steps preserves both components.
+theorem bind_rule {Value Next : Type} {first : JoltMonad Value}
+    {next : Value → JoltMonad Next}
     (keepsFirst : Preserves first) (keepsNext : ∀ value, Preserves (next value)) :
     Preserves (first >>= next) :=
-  StatePreservation.bind_rule (fun _ _ _ first next => next.trans first) keepsFirst keepsNext
+  StatePreservation.bind_rule
+    (fun _ _ _ first next => ⟨next.1.trans first.1, next.2.trans first.2⟩)
+    keepsFirst keepsNext
 
--- Reading a register, real or virtual, changes nothing.
+-- Reading a register, architectural or virtual, changes neither component.
 theorem read_rule (source : JoltISA.Src) : Preserves (JoltISA.readSrc source) := by
   intro state after value runs
   cases source with
   | vreg register =>
     simp only [JoltISA.readSrc_vreg, readVReg_run] at runs
     cases runs
-    rfl
+    exact ⟨rfl, rfl⟩
   | xreg register =>
     exact StatePreservation.liftSail_rule
-      (relation := fun before after => after.sail = before.sail) (fun _ _ same => same)
+      (relation := fun before after => after.sail = before.sail ∧
+        after.vregs = before.vregs)
+      (fun _ _ same => ⟨same, rfl⟩)
       (fun sail after value runs => rX_bits_pure register sail value after runs)
       state after value runs
 
 theorem get_rule : Preserves (get : JoltMonad SailJoltState) :=
-  StatePreservation.get_rule (fun _ => rfl)
+  StatePreservation.get_rule (fun _ => ⟨rfl, rfl⟩)
 
 theorem throw_rule {Value : Type} (failure : Error exception) :
     Preserves (throw failure : JoltMonad Value) :=
   StatePreservation.throw_rule _ failure
 
--- Changing only the advice tape (or anything else outside Sail) keeps the Sail state.
+-- A modification that keeps both components unchanged has the same property.
 theorem modify_rule (change : SailJoltState → SailJoltState)
-    (keeps : ∀ state, (change state).sail = state.sail) :
+    (keeps : ∀ state,
+      (change state).sail = state.sail ∧ (change state).vregs = state.vregs) :
     Preserves (modify change : JoltMonad Unit) :=
   StatePreservation.modify_rule change keeps
 
--- A one-byte load changes nothing.
+-- Loading one byte changes neither component.
 theorem load_rule (address : BitVec 64) : Preserves (JoltISA.Mmu.load address) := by
   intro state after value runs
   rw [JoltISA.Mmu.load_state runs]
+  exact ⟨rfl, rfl⟩
 
--- Reading a run of bytes for a host call changes nothing in the Sail state.
+-- Reading host-call bytes through MMU loads changes neither component.
 theorem readHostBytes_rule (overflowChecks incrementAfterLast : Bool) {width : Nat}
     (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
     Preserves (JoltISA.readHostBytes JoltISA.Mmu.load
@@ -80,25 +89,44 @@ theorem readHostBytes_rule (overflowChecks incrementAfterLast : Bool) {width : N
       · exact bind_rule (throw_rule _) (fun _ => ih _ _)
       · exact bind_rule (pure_rule _) (fun _ => ih _ _)
 
+end SailAndVRegsUnchanged
+
+namespace SailUnchanged
+
+-- A successful Jolt step preserves the Sail component of its state.
+def Preserves {Value : Type} (step : JoltMonad Value) : Prop :=
+  StatePreservation.Preserves (fun before after => after.sail = before.sail) step
+
+theorem read_rule (source : JoltISA.Src) : Preserves (JoltISA.readSrc source) :=
+  fun state after value runs =>
+    (SailAndVRegsUnchanged.read_rule source state after value runs).1
+
 end SailUnchanged
 
--- A HostIO call changes nothing in the Sail state: it only reads memory and may
--- append to the advice tape, which is not part of it.
-theorem execHostIO_keeps_sail (state after : SailJoltState) (result : ExecutionResult)
+-- A successful HostIO call may append advice; it leaves Sail state and virtual
+-- registers unchanged.
+theorem execHostIO_keeps_state (state after : SailJoltState) (result : ExecutionResult)
     (runs : JoltISA.execHostIO state = .ok result after) :
-    after.sail = state.sail := by
-  have keeps : SailUnchanged.Preserves JoltISA.execHostIO := by
+    after.sail = state.sail ∧ after.vregs = state.vregs := by
+  have keeps : SailAndVRegsUnchanged.Preserves JoltISA.execHostIO := by
     unfold JoltISA.execHostIO JoltISA.execHostIOWith
-    refine SailUnchanged.bind_rule SailUnchanged.get_rule (fun config => ?_)
+    refine SailAndVRegsUnchanged.bind_rule SailAndVRegsUnchanged.get_rule (fun config => ?_)
     dsimp only
     split
-    · exact SailUnchanged.pure_rule _
-    · refine SailUnchanged.bind_rule (SailUnchanged.pure_rule _) (fun _ => ?_)
-      refine SailUnchanged.bind_rule (SailUnchanged.read_rule _) (fun callId => ?_)
-      preservation_auto [SailUnchanged.readHostBytes_rule _ _ _ _ _,
-        SailUnchanged.read_rule _, SailUnchanged.pure_rule _, SailUnchanged.throw_rule _,
-        SailUnchanged.modify_rule _ (fun _ => rfl)] using SailUnchanged.bind_rule
+    · exact SailAndVRegsUnchanged.pure_rule _
+    · refine SailAndVRegsUnchanged.bind_rule (SailAndVRegsUnchanged.pure_rule _) (fun _ => ?_)
+      refine SailAndVRegsUnchanged.bind_rule (SailAndVRegsUnchanged.read_rule _) (fun callId => ?_)
+      preservation_auto [SailAndVRegsUnchanged.readHostBytes_rule _ _ _ _ _,
+        SailAndVRegsUnchanged.read_rule _, SailAndVRegsUnchanged.pure_rule _,
+        SailAndVRegsUnchanged.throw_rule _,
+        SailAndVRegsUnchanged.modify_rule _ (fun _ => ⟨rfl, rfl⟩)]
+        using SailAndVRegsUnchanged.bind_rule
   exact keeps state after result runs
+
+theorem execHostIO_keeps_sail (state after : SailJoltState) (result : ExecutionResult)
+    (runs : JoltISA.execHostIO state = .ok result after) :
+    after.sail = state.sail :=
+  (execHostIO_keeps_state state after result runs).1
 
 -- Every Sail register has a value in the register map.
 def AllRegistersPresent (sail : SailState) : Prop :=
