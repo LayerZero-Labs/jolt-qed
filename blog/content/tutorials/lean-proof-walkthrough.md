@@ -6,7 +6,6 @@ draft = true
 
 [taxonomies]
 tutorials = ["Demo Series 1: Lean Proofs"]
-tags = ["Lean", "proofs"]
 +++
 
 This sample tutorial exercises the blog's code, math, and callout rendering. It uses a small arithmetic theorem so the proof is easy to read without needing the Jolt definitions first.

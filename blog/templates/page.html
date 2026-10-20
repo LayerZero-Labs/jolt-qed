@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}{{ page.title }} | {{ config.title }}{% endblock title %}
+{% block head %}{% if page.extra.hidden %}<meta name="robots" content="noindex">{% endif %}{% endblock head %}
 {% block content %}
   <div class="article-layout">
     {% if page.toc | length > 0 %}
@@ -44,13 +45,13 @@
       {{ page.content | safe }}
       {% if page.taxonomies.tutorials %}
         <nav class="tutorial-pagination" aria-label="Tutorial document navigation">
-          {% if page.lower and page.lower.taxonomies.tutorials and page.lower.taxonomies.tutorials[0] == page.taxonomies.tutorials[0] %}
+          {% if page.lower and not page.lower.extra.hidden and page.lower.taxonomies.tutorials and page.lower.taxonomies.tutorials[0] == page.taxonomies.tutorials[0] %}
             <a class="tutorial-pagination-link tutorial-previous" href="{{ page.lower.permalink }}">
               <span>← Previous</span>
               <strong>{{ page.lower.title }}</strong>
             </a>
           {% else %}<span></span>{% endif %}
-          {% if page.higher and page.higher.taxonomies.tutorials and page.higher.taxonomies.tutorials[0] == page.taxonomies.tutorials[0] %}
+          {% if page.higher and not page.higher.extra.hidden and page.higher.taxonomies.tutorials and page.higher.taxonomies.tutorials[0] == page.taxonomies.tutorials[0] %}
             <a class="tutorial-pagination-link tutorial-next" href="{{ page.higher.permalink }}">
               <span>Next →</span>
               <strong>{{ page.higher.title }}</strong>

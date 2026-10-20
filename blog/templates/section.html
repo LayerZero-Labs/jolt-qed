@@ -9,6 +9,7 @@
   {{ section.content | safe }}
   <ul class="post-list">
     {% for post in section.pages %}
+      {% if not post.extra.hidden %}
       <li class="post-item">
         <a class="post-title" href="{{ post.permalink }}">{{ post.title }}</a>
         <div class="post-meta">
@@ -16,6 +17,7 @@
           {% if post.taxonomies.tutorials %}<span>Tutorial: {% for tutorial in post.taxonomies.tutorials %}<a href="{{ get_taxonomy_url(kind='tutorials', term=tutorial) }}">{{ tutorial }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
         </div>
       </li>
+      {% endif %}
     {% endfor %}
   </ul>
 {% endblock content %}

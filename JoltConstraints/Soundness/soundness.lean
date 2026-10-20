@@ -5,12 +5,11 @@ Source programs are limited to the instructions represented by `SourceInstructio
 Jolt's inline/precompile opcodes 0x0B and 0x2B, including the SHA-256 and Keccak
 inlines, are outside that type. Guests using them are outside this theorem's scope.
 Akita's extra constraints are to be modeled separately; PCS security is out of scope.
-The proof is left as `sorry`; it is not expected to hold yet
+The top-level proof is a short chain of named helpers. B6's known
+counterexamples are excluded by temporary restrictions
 (methods/review_completeness_and_soundness.md, B6).
 -/
-import JoltConstraints.Constraints.All
-import JoltConstraints.Soundness.Assumptions
-import JoltConstraints.language
+import JoltConstraints.Soundness.TopLevel
 
 set_option autoImplicit false
 
@@ -19,10 +18,10 @@ set_option autoImplicit false
 -- `JoltInstance.SoundnessAssumptions` and, for now, the workarounds in
 -- `JoltInstance.TemporaryRestrictions`; both are in Soundness/Assumptions.lean.
 -- The private inputs of the run need not be the ones given.
--- FIXME: the statement is still false for B6's store-of-zero panic case and
--- for an early stop on a "panicked" claim. TerminationThenStall covers B6's
--- early-stop case for "no panic" claims only; these two cases remain known
--- soundness gaps until their restrictions or verifier fixes are established.
+-- FIXME: B6's known counterexamples are excluded only by temporary restrictions:
+-- `terminationThenStall` for stopping early on a "no panic" claim, `claimsNoPanic`
+-- for stopping early on a "panicked" claim, and `panicStoresOne` for a store of 0
+-- proved as "no panic". These are Jolt bugs that must be fixed in Jolt.
 theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
@@ -31,4 +30,16 @@ theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance privateInputs witness) :
     joltInstance.InLanguage := by
-  sorry
+  obtain ⟨context, equations⟩ := satisfied
+  let tape := soundnessWitnessTape context.bytecode witness
+  let reconstructedInputs : JoltPrivateInputs := { privateInputs with advice_tape := tape }
+  obtain ⟨trace, bytecodeEq, represented⟩ :=
+    soundness_reconstruct_trace joltField joltInstance assumptions restrictions
+      privateInputs witness context equations
+  refine ⟨reconstructedInputs, trace, ?_, ?_, ?_⟩
+  · exact soundness_matches_outputs joltField joltInstance privateInputs witness
+      context equations trace represented
+  · exact soundness_prover_accepts joltField joltInstance privateInputs witness
+      context equations trace bytecodeEq represented
+  · exact soundness_spoil_asserts_pass joltField joltInstance privateInputs witness
+      context equations trace bytecodeEq represented

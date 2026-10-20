@@ -6,7 +6,6 @@ draft = true
 
 [taxonomies]
 tutorials = ["Demo Series 1: Lean Proofs"]
-tags = ["Lean", "proofs"]
 +++
 
 **Demo document 2 of 2** in the Lean Proofs series.

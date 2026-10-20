@@ -81,8 +81,63 @@ def tempsReadAfterWrite (rows : List Instr) : Bool :=
   (List.range 8).all fun index =>
     firstAccessIsWrite (BitVec.ofNat 7 (40 + index)) rows
 
+/-- The per-expansion check includes the HostIO rewrite register. -/
+theorem hostTemp_firstAccessIsWrite (rows : List Instr)
+    (ok : tempsReadAfterWrite rows = true) :
+    firstAccessIsWrite rdZeroRewriteVReg rows = true := by
+  have checked := List.all_eq_true.mp ok 0 (by simp)
+  simpa only [Nat.add_zero] using checked
+
+/-- A pending temporary is not read by the first row of an expansion. -/
+theorem firstAccessIsWrite_head_no_read (register : JoltISA.VReg) (row : Instr)
+    (rest : List Instr)
+    (ok : firstAccessIsWrite register (row :: rest) = true) :
+    reads register row = false := by
+  simp only [firstAccessIsWrite, Bool.and_eq_true] at ok
+  cases h : reads register row with
+  | false => rfl
+  | true => simp [h] at ok
+
+/-- If the first row does not write the pending temporary, the rest of the
+expansion still has to write it before reading it. -/
+theorem firstAccessIsWrite_tail (register : JoltISA.VReg) (row : Instr)
+    (rest : List Instr)
+    (ok : firstAccessIsWrite register (row :: rest) = true)
+    (noWrite : writes register row = false) :
+    firstAccessIsWrite register rest = true := by
+  simp only [firstAccessIsWrite, Bool.and_eq_true, Bool.or_eq_true] at ok
+  rcases ok.2 with wrote | pending
+  · rw [noWrite] at wrote
+    cases wrote
+  · exact pending
+
 def ExpandedTempsOk : ExpandedSource → Prop
   | .native row => tempsReadAfterWrite [row] = true
   | .sequence rows => tempsReadAfterWrite rows = true
+
+def firstRow? : ExpandedSource → Option Instr
+  | .native row => some row
+  | .sequence rows => rows.head?
+
+/-- The first row of a checked source expansion does not read the HostIO
+rewrite register before it can be written. -/
+theorem hostTemp_firstRow_noRead (expanded : ExpandedSource)
+    (ok : ExpandedTempsOk expanded) (row : Instr)
+    (first : firstRow? expanded = some row) :
+    reads rdZeroRewriteVReg row = false := by
+  cases expanded with
+  | native instruction =>
+    simp only [firstRow?, Option.some.injEq] at first
+    subst row
+    exact firstAccessIsWrite_head_no_read _ _ []
+      (hostTemp_firstAccessIsWrite [instruction] ok)
+  | sequence rows =>
+    cases rows with
+    | nil => simp [firstRow?] at first
+    | cons instruction rest =>
+      simp only [firstRow?, List.head?_cons, Option.some.injEq] at first
+      subst row
+      exact firstAccessIsWrite_head_no_read _ _ rest
+        (hostTemp_firstAccessIsWrite (instruction :: rest) ok)
 
 end ExpansionTempLiveness

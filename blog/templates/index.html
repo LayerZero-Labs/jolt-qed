@@ -14,10 +14,12 @@
     </div>
     <ul class="post-list">
     {% for post in blog.pages %}
+      {% if not post.extra.hidden %}
       <li class="post-item">
         <a class="post-title" href="{{ post.permalink }}">{{ post.title }}</a>
         {% if post.date %}<time datetime="{{ post.date }}">{{ post.date | date(format="%B %e, %Y") }}</time>{% endif %}
       </li>
+      {% endif %}
     {% endfor %}
     </ul>
   </section>

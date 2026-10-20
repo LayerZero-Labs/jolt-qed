@@ -29,7 +29,10 @@ def x0Ok (instruction : JoltISA.Instr) : Bool :=
 def sequenceRowOk (instruction : JoltISA.Instr) : Bool :=
   x0Ok instruction &&
   !JoltMetadata.instructionFlag instruction .Branch &&
-  JoltRegisterEncoding.instructionIsCanonical instruction
+  JoltRegisterEncoding.instructionIsCanonical instruction &&
+  (match instruction with
+   | .VirtualHostIO .. => false
+   | _ => true)
 
 -- A row that is not its instruction's last is not a jump, a branch or HostIO.
 def ordinary (instruction : JoltISA.Instr) : Bool :=

@@ -472,7 +472,7 @@ theorem sequenceRow_rowOk (instruction : JoltISA.Instr)
       JoltRegisterEncoding.instructionIsCanonical instruction = true ∧
       BranchOffsetOk instruction := by
   simp only [sequenceRowOk, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] at ok
-  exact ⟨ok.1.1, ok.2, branchOffsetOk_of_not_branch _ ok.1.2⟩
+  exact ⟨ok.1.1.1, ok.1.2, branchOffsetOk_of_not_branch _ ok.1.1.2⟩
 
 theorem stamp_sequence_rowOk (address : BitVec 64) (isCompressed : Bool)
     (instructions : List JoltISA.Instr) (ok : sequenceOk instructions = true) :

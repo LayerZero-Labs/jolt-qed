@@ -1,18 +1,22 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-10-19
+updated: 2026-10-20
 rust: 8bbb2357890928d8f83b00ca542879077c4d3d28
 migration: implemented and validated
 ---
 
 # Open issues
 
-For the next Layer 5b session, start with the
-[current handoff](../methods/soundness.md#layer-5b-handoff-2026-10-19).
-Commit `6203c30` builds; 74 of 88 native row kinds have local steps, two are
-unreachable, and the remaining twelve plus device agreement and the dispatcher
-are open. `ExpansionFacts.expand_temps_ok` proves per-expansion temporary
-write-before-read; the global HostIO register-agreement use is still owed.
+For the next soundness session, start with
+[the change of course](../methods/soundness.md#change-of-course-top-down-2026-10-20):
+since 2026-10-20 the soundness proof is built top-down from
+`JoltInstance.soundness`, with helper lemmas stated as `sorry` first. The same
+section summarizes the argument and says where to start. The
+[Layer 5b handoff](../methods/soundness.md#layer-5b-handoff-updated-2026-10-20)
+records the existing step lemmas: 77 of 88 native row kinds have local steps,
+two are unreachable, and nine remain, plus device agreement and the
+dispatcher. `ExpansionFacts.expand_temps_ok` proves per-expansion temporary
+write-before-read; its use in the global HostIO register agreement is still owed.
 
 **Current Rust semantics pin, selected with Ari on 2026-10-15:** upstream
 [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
@@ -155,7 +159,28 @@ Premises or fields of the final theorem, with their source or reason below.
 
 ## Proofs owed
 
-Sorried theorems behind the final theorem; `#print axioms` shows `sorryAx` through them.
+Sorried theorems behind the final theorems; `#print axioms` shows `sorryAx` through them.
+
+**Soundness.** `JoltInstance.soundness` (`Soundness/soundness.lean`) is now a
+short proof from the obligations in `Soundness/TopLevel.lean`. Its statement has
+no new premises. `Represents` records the real-row count, PC, source values,
+RAM addresses, and `finalRamWord` at every RAM index, including device words.
+The following declarations still use `sorry`:
+
+| Declaration | What it needs |
+|---|---|
+| `JoltInstance.soundnessWitnessTape` | Extract one fixed byte tape from witness advice rows, in bytecode order. The current definition is a placeholder. |
+| `JoltInstance.soundness_reconstruct_trace` (A) | Reconstruct an honest run on that tape, prove bytecode and row correspondence, stopping, and final RAM agreement. Use the approved temporary restrictions for B6's stopping and panic cases; prove that the same tape answers every read. |
+| `JoltInstance.soundness_matches_outputs` (B) | Use `Represents.finalRam` and constraint 26 to derive the claimed output bytes and panic flag. Account for `finalRamWord`'s device encoding and field-to-word injectivity. |
+| `JoltInstance.soundness_prover_accepts` (C) | Derive Jolt's last-jump, checked RAM-address, and padded-length guards from the constraints and represented rows. In particular, `rows.size ≤ traceLength` alone does not show that `max(nextPow2(rows + 1), 256)` fits the instance maximum. The potential maximum-below-256 and final-cycle cases remain to be resolved here. |
+| `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
+
+Validation on 2026-10-20: `lake build` passed (8792 jobs), and
+`#print axioms JoltInstance.soundness` reported `propext`, `sorryAx`,
+`sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`.
+The five declarations above account for the new `sorryAx` dependency.
+
+**Completeness:**
 
 | Theorem | What it needs |
 |---|---|

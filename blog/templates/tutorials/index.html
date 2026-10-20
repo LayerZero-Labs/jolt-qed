@@ -11,10 +11,13 @@
   {% if tutorials_taxonomy and tutorials_taxonomy.items | length > 0 %}
     <ul class="taxonomy-list">
       {% for term in tutorials_taxonomy.items %}
+        {% set_global shown = 0 %}{% for post in term.pages %}{% if not post.extra.hidden %}{% set_global shown = shown + 1 %}{% endif %}{% endfor %}
+        {% if shown > 0 %}
         <li class="taxonomy-card">
           <h2><a href="{{ term.permalink }}">{{ term.name }}</a></h2>
-          <p>{{ term.page_count }} {% if term.page_count == 1 %}document{% else %}documents{% endif %}</p>
+          <p>{{ shown }} {% if shown == 1 %}document{% else %}documents{% endif %}</p>
         </li>
+        {% endif %}
       {% endfor %}
     </ul>
   {% else %}

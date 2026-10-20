@@ -44,7 +44,7 @@ theorem RegisterAgreement.advance_pc {t : Fin params.traceLength} {state : SailJ
   rw [sourceValue_advance_pc]
   exact agrees.values register
 
-private theorem readSrc_of_present (source : Src) (state : SailJoltState)
+theorem readSrc_of_present (source : Src) (state : SailJoltState)
     (present : AllRegistersPresent state.sail) :
     readSrc source state = .ok (sourceValue source state) state := by
   cases source with
@@ -67,11 +67,11 @@ theorem RegisterAgreement.read {t : Fin params.traceLength} {state : SailJoltSta
   simpa only [source_decode_encode source canonical] using
     agrees.values (TraceWitness.sourceRegisterAddress source)
 
-private def destinationSource : Dst → Src
+def destinationSource : Dst → Src
   | .xreg register => .xreg register
   | .vreg register => .vreg register
 
-private theorem source_of_destination (destination : Dst)
+theorem source_of_destination (destination : Dst)
     (canonical : JoltRegisterEncoding.destinationIsCanonical destination = true) :
     JoltRegisterEncoding.source
       (BitVec.ofFin (TraceWitness.destinationRegisterAddress destination)) =
@@ -80,7 +80,7 @@ private theorem source_of_destination (destination : Dst)
   | xreg register => exact source_decode_encode (.xreg register) canonical
   | vreg register => exact source_decode_encode (.vreg register) canonical
 
-private theorem sourceValue_writeDst_other (destination : Dst) (source : Src)
+theorem sourceValue_writeDst_other (destination : Dst) (source : Src)
     (value : BitVec 64) (pre post : SailJoltState)
     (different : TraceWitness.sourceRegisterAddress source ≠
       TraceWitness.destinationRegisterAddress destination)
@@ -122,7 +122,7 @@ private theorem sourceValue_writeDst_other (destination : Dst) (source : Src)
           exact different rfl
         simp only [sourceValue, distinct, ↓reduceIte]
 
-private theorem sourceValue_writeDst_same (destination : Dst)
+theorem sourceValue_writeDst_same (destination : Dst)
     (value : BitVec 64) (pre post : SailJoltState)
     (nonzero : TraceWitness.destinationRegisterAddress destination ≠ 0)
     (written : writeDst destination value pre = .ok () post) :

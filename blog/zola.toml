@@ -6,7 +6,6 @@ generate_feeds = true
 # A post can be part of one or more tutorials, or stand on its own.
 taxonomies = [
   { name = "tutorials", feed = true },
-  { name = "tags", feed = true },
 ]
 taxonomy_root = "collections"
 

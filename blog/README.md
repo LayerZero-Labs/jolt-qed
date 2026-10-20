@@ -14,7 +14,6 @@ weight = 10
 
 [taxonomies]
 tutorials = ["Example Tutorial"]
-tags = ["proofs", "Lean"]
 +++
 ```
 
@@ -31,6 +30,21 @@ theorem example : True := trivial
 ````
 
 Use a language name after the opening fence. Code fence annotations such as `,linenos` enable line numbers.
+
+## Hidden posts
+
+A hidden post is built and has a URL, but nothing on the site links to it.
+Add this to its front matter:
+
+```toml
+[extra]
+hidden = true
+```
+
+Hidden posts are left out of the home page, the posts index, tutorial pages and their counts, tutorial Previous and Next links, the Atom feeds and the sitemap.
+The page asks search engines not to index it (`<meta name="robots" content="noindex">`).
+Anyone with the URL can still open it, so this is not access control.
+Unlike `draft = true`, which stops Zola from building the page at all, a hidden post is published.
 
 ## Tera components
 

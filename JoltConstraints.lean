@@ -70,6 +70,7 @@ import JoltConstraints.Soundness.Layer5.ImmediateShift
 import JoltConstraints.Soundness.Layer5.RegisterShift
 import JoltConstraints.Soundness.Layer5.LoadUpperImmediate
 import JoltConstraints.Soundness.Layer5.Auipc
+import JoltConstraints.Soundness.Layer5.Jal
 import JoltConstraints.Soundness.Layer5.HostCallRegisterFrame
 import JoltConstraints.Soundness.Layer5.Xor
 import JoltConstraints.Soundness.Layer5.BitwiseBinary

@@ -9,6 +9,7 @@ import JoltConstraints.Soundness.Layer3.Layout
 import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
 import JoltConstraints.Soundness.Layer5.HostCallRestriction
 import JoltConstraints.Soundness.Layer5.TerminationRestriction
+import JoltConstraints.Soundness.Layer5.PanicRestriction
 
 set_option autoImplicit false
 
@@ -91,3 +92,12 @@ structure JoltInstance.TemporaryRestrictions
   -- (B6, stopping early; related to a16z/jolt#1950 and #1951 item 2).
   -- The SDK's exit is written this way. To raise with a16z with the other FIXMEs.
   terminationThenStall : joltInstance.TerminationThenStall
+  -- FIXME: every store to the panic word stores 1, and no load reads the panic
+  -- word after such a store. Excludes a store of 0 being proved as "no panic"
+  -- (blog/content/blog/completeness-and-soundness/index.md). A Jolt bug: it must
+  -- be fixed in Jolt and cannot remain a restriction.
+  panicStoresOne : joltInstance.PanicStoresOne
+  -- FIXME: the claim says "no panic". Excludes a "panicked" claim proved from an
+  -- execution cut short at a jump (blog/content/blog/proof-stops-at-any-jump/index.md).
+  -- A Jolt bug: it must be fixed in Jolt and cannot remain a restriction.
+  claimsNoPanic : joltInstance.ClaimsNoPanic
