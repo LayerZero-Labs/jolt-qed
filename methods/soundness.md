@@ -1343,6 +1343,12 @@ Then rebuild one tape from the answers' low bytes, in read order, and run the pr
 Why: once all these obligations are resolved, the constructed prefix can be packaged as a relaxed trace, and the rebuilt tape turns it into an `HonestTrace`, the form the theorem concludes.
 Uses: the context, Layers 5 and 6, stopping proofs.
 
+The tape-rebuild closing plan's steps 1–5 are complete on `feat/layer7-tape-rebuild` as of 2026-10-21.
+`rebuild_rows` now constructs all six fields directly, using a shared masking proof for every narrow width.
+`narrow_load_shape` is the file's sole remaining `sorry`; proving it waits for the step (c) Part 1 commit and the generalized adjacent-row lift in step 6.
+The reverse-language inclusion depends on `sorryAx` only through that declaration.
+See the [validation and declaration timings](#2026-10-21-tape-rebuild-closing-steps-1-5).
+
 ### Layer 8: outputs
 
 What: use the endpoint RAM comparison in `Agrees w n prefix state`.
@@ -2493,3 +2499,111 @@ Layer 5b still needs `VirtualHostIO`, the state part of eight PC rows,
 `VirtualAdviceLoad`, `VirtualAdvice`, device accesses and the composition; see
 Closing Layer 5b under [Layer 5b](#layer-5b-one-execution-step).
 The separate Akita model remains future work.
+
+
+### 2026-10-21: tape-rebuild closing steps 1–5
+
+`rebuild_rows` constructs the fixed-tape execution by mapping the relaxed rows, with `narrow_load_shape` as its sole staged dependency.
+The six certificate fields are proved: length, execution, initialization, linkage, row agreement and source-start agreement.
+Loads read the low answer bytes from the rebuilt prefix, and the following multiply restores full state agreement for a narrow load.
+Non-load instructions preserve the rebase while host writes append the same suffix.
+The shared arithmetic proof handles all narrow widths, including the x0 destination rewrite to temporary register 40.
+`read_afterDst` and `afterDst_afterDst` in `AdviceExpansion.lean` are now public and reused.
+The seven unused expansion-specific or width-specific lemmas and two unused replay helpers were removed.
+The existing long tape-growth proof was split into its used frame lemmas, and pending-load shape arguments share one bytecode helper.
+The protected statements and definitions are unchanged.
+Step 6 has not been attempted; it needs the step (c) Part 1 commit and the generalized adjacent-row property lift.
+
+Validation used an isolated copy of the build cache because this worktree's `.lake` links to the main worktree's cache.
+`lake -f /private/tmp/tape-rebuild-lakefile.toml build JoltConstraints.Soundness.Layer7.TapeRebuild` passed all 8,591 jobs, rebuilding this worktree's changed dependencies.
+The temporary configuration changes only the build directory.
+The complete `TapeRebuild.lean` check took **8.52 seconds** wall time; Lake reported **9.2 seconds** for its build job.
+`git diff --check` passed.
+The only file warnings are the staged `narrow_load_shape` gap and two existing `simpa` style suggestions.
+
+`#print axioms untrustedAnswerLanguage_implies_inLanguage` reports `propext`, `Classical.choice`, `Quot.sound`, the existing `sys_enable_experimental_extensions`, and `sorryAx`.
+A second `Lean.CollectAxioms` traversal with `narrow_load_shape` already visited reports the same axioms except `sorryAx`.
+Thus the staged bytecode shape is the only remaining route to `sorryAx` in the reverse inclusion.
+
+No existing private helper gained hypotheses.
+The new `lowAnswer_muli` and `exec_muli_truncated` helpers require `0 < width` and `width < 8`.
+Their caller gets positivity from `UntrustedAnswerRun.pendingBefore_width`, which uses the preceding executed load's valid width, and gets narrowness from the bytecode shape.
+The positive-width premise ensures that the six-bit shift immediate does not wrap from 64 to zero.
+No limit was raised and no new `bv_decide`, `native_decide` or `decide +kernel` was used.
+
+The following are every new or changed declaration's elaboration times, measured with Lean's `#time` and `Elab.async=false` after loading imports.
+A value of 0 ms is below the timer's millisecond resolution.
+Documentation-only changes are included.
+The slowest new or changed declaration was `replayRow_executes_nonload` at **574 ms**.
+
+| Declaration in `TapeRebuild.lean` | Elaboration (ms) |
+|---|---:|
+| `tapeGrowth_lift` | 2 |
+| `tapeGrowth_append` | 4 |
+| `tapeGrowth_read` | 5 |
+| `tapeGrowth_write` | 12 |
+| `tapeGrowth_storeFold` | 7 |
+| `tapeGrowth_loadDoubleword` | 22 |
+| `tapeGrowth_storeDoubleword` | 37 |
+| `tapeGrowth_load` | 6 |
+| `tapeGrowth_readHostBytes` | 11 |
+| `tapeGrowth_execHostIO` | 206 |
+| `execInstr_tapeGrowth` | 570 |
+| `execWithTapeAnswer_load_width` | 8 |
+| `UntrustedAnswerRun.load_width` | 42 |
+| `UntrustedAnswerRun.postCursor_step` | 434 |
+| `rebuiltTape_read_exact` | 218 |
+| `ReplayStateAgreement` | 1 |
+| `swapBytes` | 3 |
+| `swapResult` | 3 |
+| `SwapInvariant` | 0 |
+| `SwapAppend` | 2 |
+| `RebuildAgreement` | 43 |
+| `tapeHostSuffix` | 2 |
+| `rebaseTapeState` | 1 |
+| `narrowLoadAt?` | 5 |
+| `pendingBefore?` | 2 |
+| `dstSource` | 1 |
+| `replayState` | 2 |
+| `replayRow` | 63 |
+| `narrow_load_shape` | 5 |
+| `narrowLoadAt?_eq_some` | 37 |
+| `narrow_load_next_not_start` | 10 |
+| `pendingBefore?_shape` | 28 |
+| `pendingBefore?_none_of_start` | 5 |
+| `pendingBefore?_none_of_load` | 6 |
+| `narrowAdvicePending_post_iff` | 6 |
+| `narrowAdvicePending_pre_iff` | 24 |
+| `replaceDst_sideEffecting` | 5 |
+| `dstSource_sideEffecting` | 3 |
+| `rebaseTapeState_replaceDst` | 13 |
+| `rebaseTapeState_afterDst` | 1 |
+| `replaceDst_nextPC` | 5 |
+| `replayState_nextPC` | 4 |
+| `replayState_agreement` | 6 |
+| `narrowLoadAt?_none_of_ends` | 10 |
+| `replayRow_agrees` | 31 |
+| `replayRow_sourceStartPre` | 64 |
+| `replayState_initial` | 5 |
+| `UntrustedAnswerRun.pendingBefore_width` | 343 |
+| `lowAnswer_muli` | 31 |
+| `sourceValue_afterDst` | 1 |
+| `exec_muli_truncated` | 10 |
+| `exec_rebased` | 5 |
+| `swap_answer_load` | 9 |
+| `replay_load_eq_answer` | 97 |
+| `replayRow_executes_load` | 232 |
+| `replayRow_executes_nonload` | 574 |
+| `replayRow_executes` | 122 |
+| `replayRow_starts` | 78 |
+| `replayRow_linked` | 379 |
+| `replayRows_at` | 5 |
+| `replayRows_pair` | 56 |
+| `RebuiltRows` | 246 |
+| `rebuild_rows` | 67 |
+| `RebuildAgreement.ram_address_eq` | 160 |
+
+| Declaration in `AdviceExpansion.lean` | Elaboration (ms) |
+|---|---:|
+| `read_afterDst` | 9 |
+| `afterDst_afterDst` | 23 |

@@ -173,24 +173,19 @@ The following declarations still use `sorry`:
 | `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. |
 | `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
-| `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) | Build one byte tape from the independent low-byte answers and replay the relaxed execution as an honest trace. |
-| `rebuiltTape_read_exact` (Layer 7 worktree) | Show every advice read returns its low bytes from the rebuilt tape and stays before appended host advice. |
-| `advicelb_low_answer` (Layer 7 worktree) | Show the one-byte expansion has the same end state after low-byte masking. |
-| `advicelh_low_answer` (Layer 7 worktree) | Show the two-byte expansion has the same end state after low-byte masking. |
-| `advicelw_low_answer` (Layer 7 worktree) | Show the four-byte expansion has the same end state after low-byte masking. |
-| `adviceld_low_answer` (Layer 7 worktree) | Show the eight-byte expansion is unchanged by taking all eight bytes. |
-| `rebuild_valid_run` (Layer 7 worktree) | Replay the relaxed run with the rebuilt tape, matching row indices and states apart from tape bytes and the narrow load destination before masking. |
-| `rebuild_matches_outputs` (Layer 7 worktree) | Transfer public output and panic equality from the relaxed run. |
-| `rebuild_prover_config` (Layer 7 worktree) | Transfer checked prover acceptance from equal run dimensions. |
-| `rebuild_spoil_asserts` (Layer 7 worktree) | Transfer spoil-assert success from equal operands. |
-| `rebuild_honest_advice` (Layer 7 worktree) | Show internal tracer advice is computed from the replay's expansion-start states. |
-| `rebuild_stops` (Layer 7 worktree) | Transfer the final stable stall. |
-| `rebuild_runs_until_stop` (Layer 7 worktree) | Transfer the absence of an earlier stable stall. |
-| `rebuild_nonempty` (Layer 7 worktree) | Transfer the positive row count required by the revised trace definition. |
+| `narrow_load_shape` (`Soundness/Layer7/TapeRebuild.lean`) | Lift the expansion's narrow-advice load/multiply pair property to bytecode, including the rewritten destination, continuation flag and masking multiplier. This is step 6, after the step (c) Part 1 commit. |
 
-The 13 tape-rebuild helpers are staged in the separate `/Users/ari.biswas/Lean/jolt-qed-tape-rebuild` worktree for Ari's review.
-Its reverse-inclusion theorem is proved from them; the main worktree still has the earlier single `sorry` until that reviewed change is integrated.
-The worktree proof statement compiles and its `git diff --check` passes; synchronization with the uncommitted stopping-rule changes is pending.
+Steps 1–5 of the tape-rebuild closing plan are complete on `feat/layer7-tape-rebuild` in `/Users/ari.biswas/Lean/jolt-qed-tape-rebuild`.
+`rebuild_rows` maps the relaxed rows directly with `Array.ofFn`, proving execution, initialization, linkage, row agreement and source-start agreement.
+The rebuilt-tape read theorem and all transfer theorems are proved.
+The unused expansion-specific low-answer lemmas and width-specific multiply lemmas were deleted.
+`narrow_load_shape` is the sole remaining `sorry` in `TapeRebuild.lean`.
+The axiom audit for `untrustedAnswerLanguage_implies_inLanguage` gives `propext`, `Classical.choice`, `Quot.sound`, the existing `sys_enable_experimental_extensions`, and `sorryAx`.
+Repeating the dependency traversal with `narrow_load_shape` excluded removes `sorryAx`; no other path to it remains.
+An isolated Lake build of `JoltConstraints.Soundness.Layer7.TapeRebuild` passed all 8,591 jobs.
+No existing helper gained hypotheses, and no new `bv_decide`, native decision proof or raised limit was used.
+The new arithmetic helpers require positive width, proved from the preceding executed load by `UntrustedAnswerRun.pendingBefore_width`.
+See the [declaration timings and validation report](../methods/soundness.md#2026-10-21-tape-rebuild-closing-steps-1-5).
 
 With Ari's permission (2026-10-20), C remains assumed while a16z considers `blog/content/blog/prover-verifier-trace-length/index.md`.
 C fails when the instance maximum is below 256, and when execution fills every cycle of a witness whose length is the largest power of two within the maximum.

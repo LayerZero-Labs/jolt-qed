@@ -36,7 +36,9 @@ noncomputable def afterAdviceLoad (pre : SailJoltState) (rd : regidx)
     { pre with adviceTape :=
       { pre.adviceTape with readPosition := pre.adviceTape.readPosition + byteCount } } rd value
 
-private theorem read_afterDst (rd : regidx) (value : BitVec 64) (pre : SailJoltState) :
+/-- Reading the rewritten destination returns the value just written.
+For example, writing source x0 puts 300 in temporary 40, which this read returns. -/
+theorem read_afterDst (rd : regidx) (value : BitVec 64) (pre : SailJoltState) :
     readSrc (adviceReadSource rd) (NativeDispatch.afterDst pre rd value) =
       .ok value (NativeDispatch.afterDst pre rd value) := by
   unfold adviceReadSource NativeDispatch.afterDst
@@ -49,7 +51,9 @@ private theorem read_afterDst (rd : regidx) (value : BitVec 64) (pre : SailJoltS
       exact nonzero rfl
     simp only [readSrc_xreg, liftSail, rX_after_stateAfterWrite rd value pre.sail rdNe]
 
-private theorem afterDst_afterDst (rd : regidx) (first last : BitVec 64)
+/-- Two writes to the same rewritten destination retain only the last value.
+For example, writing 300 and then 44 to temporary 40 leaves 44 there. -/
+theorem afterDst_afterDst (rd : regidx) (first last : BitVec 64)
     (pre : SailJoltState) :
     NativeDispatch.afterDst (NativeDispatch.afterDst pre rd first) rd last =
       NativeDispatch.afterDst pre rd last := by
