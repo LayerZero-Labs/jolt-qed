@@ -126,8 +126,9 @@ theorem HonestTrace.linkedState {joltInstance : JoltInstance SourceInstruction}
     rw [prepareSource_eq_advance_pc, sameAddress]
     exact startState
 
--- Which row comes next: the next row of the same instruction, or the first row of the
--- instruction at nextPC, which is a different address (Rust stops at a self-jump).
+-- Which row comes next: the next row of the same instruction, or the first row
+-- at nextPC. A JALR self-jump may continue when it does not repeat on re-run.
+-- See : a16z/jolt PR #2109, head d2995380.
 theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (currentExists : i < trace.rows.size) (nextExists : i + 1 < trace.rows.size) :
@@ -136,9 +137,7 @@ theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
     else
       (trace.rows[i]'currentExists).postState.sail.regs.get? Register.nextPC =
         some trace.bytecode[(trace.rows[i + 1]'nextExists).rowIndex].address ∧
-      trace.bytecode[(trace.rows[i + 1]'nextExists).rowIndex].starts_source = true ∧
-      trace.bytecode[(trace.rows[i + 1]'nextExists).rowIndex].address ≠
-        trace.bytecode[(trace.rows[i]'currentExists).rowIndex].address := by
+      trace.bytecode[(trace.rows[i + 1]'nextExists).rowIndex].starts_source = true := by
   have link := trace.linked i _ _ (Array.getElem?_eq_getElem currentExists)
     (Array.getElem?_eq_getElem nextExists)
   unfold JoltInstructionRow.continues
@@ -149,10 +148,7 @@ theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
   · rename_i isLast
     rw [if_neg (by rw [bne_iff_ne]; exact isLast)]
     obtain ⟨address, nextPC, sameAddress, starts, _⟩ := link
-    have moves := trace.runs_until_stop i _ _ (Array.getElem?_eq_getElem currentExists)
-      (Array.getElem?_eq_getElem nextExists) (by simpa only [ne_eq, not_not] using isLast)
-    refine ⟨by rw [sameAddress]; exact nextPC, starts, fun same => moves ?_⟩
-    rw [nextPC, ← sameAddress, same]
+    exact ⟨by rw [sameAddress]; exact nextPC, starts⟩
 
 -- A HostIO row leaves PC unchanged.
 def JoltISA.Instr.HostIOPCFrame (instruction : JoltISA.Instr)

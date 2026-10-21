@@ -70,10 +70,10 @@ theorem honestWitness_mustStartSequenceFromBeginning
         have hsucc := trace.successor t.val ht hnextTrace
         change (if bytecodeRow.continues then _ else
           row.postState.sail.regs.get? Register.nextPC = some nextBytecodeRow.address ∧
-          nextBytecodeRow.starts_source = true ∧ nextBytecodeRow.address ≠ bytecodeRow.address) at hsucc
+          nextBytecodeRow.starts_source = true) at hsucc
         simp only [hfalse, Bool.false_eq_true, ↓reduceIte] at hsucc
         have hflags := virtual_flag_eq_first_of_entry trace trace.layout
-          nextRow.rowIndex hsucc.2.1
+          nextRow.rowIndex hsucc.2
         have hflags' : JoltMetadata.circuitFlag
             trace.bytecode[trace.rows[t.val + 1].rowIndex]
               .VirtualInstruction = JoltMetadata.circuitFlag

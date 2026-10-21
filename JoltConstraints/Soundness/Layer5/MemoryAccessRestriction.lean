@@ -23,22 +23,19 @@ namespace JoltConstraints.Soundness
 open Sail PreSail LeanRV64D.Functions JoltISA
 
 /-- The prefix uses honest internal runtime advice, has not continued past a
-PC stall, and is about to attempt `next` in `pre`. The row need not succeed.
-The boundary cases follow the entry and linkage rules of UntrustedAnswerRun;
-entry address zero and a completed PC stall have no next source instruction. -/
+stable stall, and is about to attempt `next` in `pre`. The row need not succeed.
+The boundary cases follow the entry and linkage rules of UntrustedAnswerRun.
+The stopping rule follows a16z/jolt PR #2109, head d2995380. -/
 structure UntrustedAnswerRun.NextStep
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (next : Fin run.bytecode.size) (pre : SailJoltState) : Prop where
-  entryNonzero : joltInstance.program.entry_address ≠ 0
   honestRuntimeAdvice : ∀ n : Fin run.rows.size,
     run.rows[n].someTracerAdvice? =
       honestTracerAdviceAtStepN joltInstance.program run.rows n
   noEarlierStop : ∀ (i : Nat) (current following : TraceRow run.bytecode),
     run.rows[i]? = some current → run.rows[i + 1]? = some following →
-    run.bytecode[current.rowIndex].virtual_sequence_remaining.getD 0 = 0 →
-    current.postState.sail.regs.get? Register.nextPC ≠
-      some run.bytecode[current.rowIndex].address
+    ¬ current.StableStall
   ready :
     match run.rows.back? with
     | none =>
@@ -51,7 +48,7 @@ structure UntrustedAnswerRun.NextStep
         next.val = last.rowIndex.val + 1 ∧ pre = last.postState
       else
         ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
-          address ≠ run.bytecode[last.rowIndex].address ∧
+          ¬ last.StableStall ∧
           run.bytecode[next].address = address ∧
           run.bytecode[next].starts_source ∧
           pre = advance_pc address (source_is_compressed run.bytecode next) last.postState

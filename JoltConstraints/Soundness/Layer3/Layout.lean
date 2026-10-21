@@ -1,5 +1,7 @@
 import JoltConstraints.constraint_context
 import JoltConstraints.Constraints.RamReadData
+import JoltConstraints.layout_facts
+import JoltConstraints.witness_domain
 
 /-! The approved layout restriction and its consequence for a witness's RAM
 domain. These facts depend only on the instance and verifier size checks. -/
@@ -48,6 +50,62 @@ theorem ram_domain_fits (context : ConstraintContext joltInstance privateInputs 
       rw [← layoutEq]
       unfold ramLowestAddress MemoryLayout.get_lowest_address at *
       split at bound <;> omega
+
+/-- The word index `(RAM_START_ADDRESS - lowest) / 8` is the first word after
+the public I/O range, and the verifier's RAM minimum places it within the
+witness's RAM domain. -/
+theorem public_io_words_fit_ram
+    (context : ConstraintContext joltInstance privateInputs params) :
+    (JoltISA.RAM_START_ADDRESS - ramLowestAddress context.io.memory_layout) / 8 ≤
+      params.ramSize := by
+  have publicIo := context.publicIo
+  unfold JoltInstance.public_io at publicIo
+  obtain ⟨layout, hasLayout, sameIo⟩ := Option.bind_eq_some_iff.mp publicIo
+  have layoutEq : layout = context.io.memory_layout :=
+    congrArg JoltDevice.memory_layout (Option.some.inj sameIo)
+  have sizes := context.ramSizeBounds
+  unfold JoltInstance.ram_size_in_bounds JoltInstance.verifier_ram_bounds at sizes
+  rw [hasLayout] at sizes
+  cases minimumIs : VerifierSizes.minRamSize joltInstance.program layout with
+  | none => simp [minimumIs] at sizes
+  | some minimum =>
+    cases maximumIs : VerifierSizes.maxRamSize layout with
+    | none => simp [minimumIs, maximumIs] at sizes
+    | some maximum =>
+      have minimumBound : minimum ≤ params.ramSize := by
+        have h : minimum ≤ params.ramSize ∧ params.ramSize ≤ maximum := by
+          simpa [minimumIs, maximumIs] using sizes
+        exact h.1
+      unfold VerifierSizes.minRamSize at minimumIs
+      rw [bind_some_iff] at minimumIs
+      obtain ⟨bytecodeStart, _, minimumIs⟩ := minimumIs
+      rw [bind_some_iff] at minimumIs
+      obtain ⟨bytecodeEnd, _, minimumIs⟩ := minimumIs
+      rw [bind_some_iff] at minimumIs
+      obtain ⟨ioEnd?, remappedIo, minimumIs⟩ := minimumIs
+      cases ioEnd? with
+      | none => simp at minimumIs
+      | some ioEnd =>
+        have ioEndBound : ioEnd ≤ minimum := by
+          unfold VerifierSizes.checkedNextPowerOfTwo at minimumIs
+          dsimp only at minimumIs
+          split at minimumIs
+          · have minimumEq := Option.some.inj minimumIs.symm
+            rw [minimumEq]
+            exact (Nat.le_max_right _ _).trans
+              (Nat.le_pow_clog (by decide : 1 < 2) _)
+          · cases minimumIs
+        unfold VerifierSizes.remapWordAddress at remappedIo
+        simp only [if_neg (by decide : JoltISA.RAM_START_ADDRESS ≠ 0)] at remappedIo
+        cases subtracted : MemoryLayout.checkedSub JoltISA.RAM_START_ADDRESS
+            layout.get_lowest_address.toNat with
+        | none => simp [subtracted] at remappedIo
+        | some offset =>
+          have ioEndEq : offset / 8 = ioEnd := by simpa [subtracted] using remappedIo
+          obtain ⟨offsetIs, _⟩ := checkedSub_some subtracted
+          rw [MemoryLayout.get_lowest_address_toNat] at offsetIs
+          rw [← layoutEq]
+          simpa [← ioEndEq, offsetIs] using ioEndBound.trans minimumBound
 
 /-- All eight bytes of every in-domain word fit below `2^64`, including the
 last word when the region's exclusive endpoint equals `2^64`. -/

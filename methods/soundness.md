@@ -25,9 +25,8 @@ The plan below is unchanged: the same layers, argument and proved lemmas.
 Only the order of work changes:
 
 1. Close `JoltInstance.soundness` by proving it from helper lemmas, each
-   stated with `sorry`. Done on 2026-10-20: the main proof reconstructs an
-   `HonestTrace`, then obtains output agreement, prover acceptance, and
-   passing spoil asserts from four named helpers.
+   stated with `sorry`.
+   Done on 2026-10-20: the main proof reconstructs a relaxed trace, obtains output agreement, prover acceptance, and passing spoil asserts from four named helpers, then uses the reverse language inclusion to obtain an `HonestTrace`.
 2. Prove each helper the same way: state the lemmas it needs with `sorry`,
    in exactly the form it uses them.
 3. Continue downward until the statements reach the existing Layer 5b step
@@ -56,22 +55,16 @@ Read this before the layers below; the rest of this document fills it in.
   and an `HonestTrace` on them whose final device has the claimed outputs and
   panic flag (`matches_outputs`), which Jolt's prover accepts, and whose spoil
   asserts all pass. Stopping at the PC stall is part of `HonestTrace` itself.
-- **The existential.** The private inputs are the given untrusted advice and
-  a tape built from the values the witness records at its tape-read cycles.
-  The given tape cannot be used: no constraint reads it
-  (`AllConstraints.advice_tape_irrelevant`). The honest trace is the program
-  run on those inputs for `n` steps, where `n` is the witness's number of real
-  cycles. It is defined by running the program, not by reading the witness.
-- **The connection, step 1.** For every cycle `t`, the witness's columns at
-  `t` describe the honest trace's state before step `t`: the selected row,
-  the registers (except dead temporaries) and the memory. In particular, the
-  witness's final memory (`RamValFinal`) equals the honest trace's final
-  memory, word by word. This is proved by induction on `t`, using the
-  constraints; it is the `Agrees` invariant below.
-- **The claim, step 2.** Constraint 26 (`ramOutputEqPublicIo`) says that in
-  the public I/O region the witness's final memory equals the claimed I/O.
-  With step 1, the honest trace's final memory holds the claim, which gives
-  `matches_outputs`.
+- **The existential.** The private inputs are the given untrusted advice and a tape built from the values the witness records at its tape-read cycles.
+  The given tape cannot be used: no constraint reads it (`AllConstraints.advice_tape_irrelevant`).
+  The relaxed trace ends at the first stable stall, or at padding or the last witness cycle if neither comes first.
+  The rebuilt tape then gives an honest trace with the same source-level results.
+- **The connection, step 1.** For every retained cycle `t`, the witness's columns describe the relaxed trace's state before step `t`: the selected row, its live registers and its memory.
+  The witness may repeat the stable source instruction after the cut before padding begins.
+  Its final memory (`RamValFinal`) then equals the relaxed trace's final memory outside the synthetic termination word.
+  The retained-prefix comparison is proved by induction on `t`, using the constraints; it is the `Agrees` invariant below.
+- **The claim, step 2.** Constraint 26 (`ramOutputEqPublicIo`) says that in the public I/O region the witness's final memory equals the claimed I/O.
+  With step 1, the relaxed trace's final memory holds the claim, which gives `matches_outputs`; the rebuilt honest trace inherits that result.
 - **Why the witness is essential.** Constraint 26 is the only constraint that
   reads the claimed outputs. Take a true claim and its honest witness, then
   change only the claimed outputs, keeping them within the instance's output
@@ -85,16 +78,64 @@ every source instruction with the same registers and memory (Layer 7).
 
 ### Current top-level status
 
-`JoltInstance.soundness` now chains four named helpers in
-`Soundness/TopLevel.lean`; the reconstructed tape and all four helpers still
-use `sorry`. `Represents` states real-row PC, source-value and RAM-address
-correspondence and final RAM agreement, including device words. The exact
-obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
-Review those statements, then prove them one level down. The prover-acceptance
-helper still needs a derivation of the 256-row padding minimum and a spare
-padding cycle; those have not been assumed. The
-[handoff](#layer-5b-handoff-updated-2026-10-20) records what already exists
-at the bottom.
+`JoltInstance.soundness` chains four named helpers in `Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion from Layer 7 to get `InLanguage`.
+Helper A returns an `UntrustedAnswerTrace` represented at every actual row.
+`Represents.finalRam` covers every RAM index except the termination word.
+Helper B checks the output and panic words through constraint 26 and final RAM agreement, with no panic restriction.
+Its relaxed-trace frame, output-bound and decoder support statements are proved.
+The plain-`Trace` final RAM overlay and byte-store output bound are proved.
+The generic pre-state frame and shared trace and instruction frames are proved.
+The word-index geometry is proved.
+The ten Ari-approved trace-independent refactor statements are proved.
+Step (a) shares the output, prover-acceptance and spoil-assert predicates on the plain `Trace` between both languages.
+Its fixed-tape inclusion is proved, and Ari approved the reverse-inclusion statement now staged with `sorry` in Layer 7.
+Helper A is proved from the restated execution-prefix and stopping statements, each staged with `sorry` and approved by Ari for proof.
+Helpers C and D still use `sorry`.
+Helper C keeps its approved ⚠️ DANGER status and the same two counterexamples.
+The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
+Step (c)'s statements have Ari's approval and are being proved.
+The execution-prefix statement is in `Soundness/Layer6/ExecutionPrefix.lean`, and the stopping statement is in `Soundness/Layer7/Stopping.lean`.
+The prefix cuts at the first stable stall, padding, or the last witness cycle and owns RAM agreement at that boundary.
+The stopping statement owns final RAM agreement after the cut and is supported by a separately staged constraint-level zero-RAM-update lemma.
+The stopping rule mirrors a16z/jolt PR #2109 at head d2995380; soundness obtains unconditional nonemptiness from the termination store.
+No additional restriction is used for the JALR self-jump case.
+The prover-acceptance helper C is known false when the instance maximum is below 256, or when execution fills every cycle of a witness whose length is the largest power of two within the maximum, and is assumed on purpose until a16z answers; see its ⚠️ DANGER docstring.
+The [handoff](#layer-5b-handoff-updated-2026-10-20) records what already exists at the bottom.
+
+### When the proof uncovers an issue
+
+Proving top-down will uncover more issues.
+When a statement cannot be proved, name the exact missing fact or counterexample, and stop to ask Ari before changing anything.
+Do not add a restriction, change L, or keep a known-false statement without Ari's decision.
+The only known-false statement allowed is helper C, marked ⚠️ DANGER with Ari's permission.
+
+First rule out a translation issue.
+Our constraints, Jolt's tracer semantics, the device and the prover's sizing are Lean translations of Jolt's Rust code.
+Compare every Lean definition the counterexample depends on with Jolt's code at the pin.
+If they differ, the issue is ours: propose a model fix to Ari, and record it in `model_review.md` under "Gaps in our model".
+For example, the code that builds the claimed I/O words suggests a panicked claim never checks the termination word; the verifier's check covers the whole I/O region, so it does check it, against 0.
+
+If the Lean definitions match Jolt's code, decide which kind of issue it is:
+- a Jolt bug, where a false claim is accepted, as in the panic-word and early-stop posts;
+- a prover/verifier mismatch, where the claim is true but Jolt's prover would not prove it, so only L fails, as in the trace-length post.
+
+An issue is confirmed only once reproduced against Jolt's actual prover and verifier; the write-up says whether it was.
+
+Write each issue up as its own post; `blog/README.md` says where posts live.
+Posts go to a16z privately, never as public GitHub issues.
+A post has: background with quoted Jolt code and a reference link; each constraint as one plain sentence followed by its formula, without references; an example in real RISC-V, with no pseudo-instructions, and made-up addresses in label, PC and instruction columns; the cheating witness; the constraints that matter checked one by one with the values filled in; the final check against the false claim; the false claim and the true claim; and the core issue.
+Write plain prose, one sentence per line, with no status labels, and check every quoted line at the pin.
+A FIXME restriction for the issue links to its post and says the bug must be fixed in Jolt.
+
+### Register agreement must be over live registers
+
+This is a design point for helper A's induction step.
+`RegisterAgreement` (`Layer5/Registers.lean`) compares every register, and `RegisterAgreementExceptHostTemp` (`Layer5/HostCallRegisterFrame.lean`) leaves out register 40 after a HostIO row.
+About 77 step lemmas take and return full `RegisterAgreement`, so the exception form does not compose.
+Register 40 can stay unavailable across many native rows that never write it, and two HostIO rows in a row already need the weaker form as input.
+When the induction step is written, parameterize agreement by a set of live registers: each step requires its source operands to be live and adds its destination.
+Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
+This also removes the near-duplicate write lemmas in `HostCallRegisterFrame.lean`.
 
 ## Layer 5b handoff (updated 2026-10-20)
 
@@ -485,8 +526,8 @@ For a fixed-tape trace `T : HonestTrace`, `f(T) := T.honestWitness params` is th
 
 Let `N := params.traceLength`.
 Call cycle `t < N` a padding cycle when `w.InstructionFlags .IsNoop t = 1`.
-Define `n` to be the first such cycle, or `N` if there is none.
-The proposed execution prefix uses cycles `0, …, n - 1`; it is empty when `n = 0`.
+The first pseudo Noop marks padding, but the retained execution prefix can end earlier at its first stable stall.
+The prefix includes that stall row, or ends at padding or the last witness cycle if no stall occurs.
 
 **Noop source audit:** rechecked at Jolt revision
 `8bbb2357890928d8f83b00ca542879077c4d3d28`, the pseudo instruction
@@ -503,10 +544,10 @@ these decoded programs. If we later model manually supplied pseudo Noops or
 additional inline instruction kinds, revisit this distinction. This source
 audit resolves the TODO in `metadata.lean`; it is not the Layer 6 suffix proof.
 
-This definition does not establish that padding forms a suffix.
-Layer 6 must prove that every cycle from `n` to `N - 1` is padding, that these cycles preserve the register and RAM tables, and that each earlier cycle selects an actual bytecode row.
-The case `n = N` has no padding cycle: the shift equation sets `NextIsNoop` to 1 at the last cycle even if that cycle is not a no-op, so it does not by itself force `n < N`.
-Whether the execution stops at this boundary is a separate obligation in Layer 7.
+This definition does not establish the shape of the suffix after the retained prefix.
+Layer 6 proves that every retained cycle selects a real bytecode row and that the witness may repeat the stable source instruction before padding begins.
+Layer 7 proves that repeated stall rows leave RAM unchanged and that the retained run stops at its final row.
+The case with no padding includes the last witness cycle in the retained prefix when no stable stall occurs earlier.
 
 ### Agreement is proved by induction on the step
 
@@ -515,7 +556,7 @@ At the start of a source instruction, `advance_pc` sets `PC` to that instruction
 Within an expansion, the next row instead starts directly from the previous row's post-state.
 
 Use a predicate `Agrees w t prefix state` on a plain execution prefix under the untrusted-answer semantics and its current state, before constructing a completed relaxed trace.
-Here `0 ≤ t ≤ n`, and `prefix` contains exactly the `t` rows already executed.
+Write `n` for the retained prefix length; here `0 ≤ t ≤ n`, and `prefix` contains exactly the `t` rows already executed.
 For `t < n`, `state` is the pre-state for executing row `t`, with `advance_pc` already applied when that row starts a source instruction.
 For `t = n`, `state` is the last post-state, or the initial state if `n = 0`; no further `advance_pc` is applied.
 For `t < n`, `state.sail.regs.get? Register.PC = some selectedRow.address` for
@@ -1239,12 +1280,13 @@ Do not add a new FIXME restriction for unfinished proof work.
 
 ### Layer 6: control flow
 
-What: prove entry selection and the two next-slot rules in `Agrees` for all cycles before `n`.
-Prove the padding suffix properties stated above, including preservation of the tables after cycle `n - 1` when `n > 0`.
-For RAM, prove that `RamRa a t * RamInc t = 0` throughout the suffix, for every RAM index `a`; the unselected `RamInc t` need not itself be zero.
+What: prove entry selection and the two next-slot rules in `Agrees` for every retained cycle up to and including the first stable stall, or up to padding or the final witness cycle when no stall occurs.
+After the cut, the witness may repeat the stall's whole source expansion before padding begins.
+Prove directly from the witness constraints that every later real row stays within the stall's source instruction and that those rows have no RAM update; then prove the padding suffix preserves the tables.
+For RAM, prove that `RamRa a t * RamInc t = 0` during stall replays and padding, for every RAM index `a`; the unselected `RamInc t` need not itself be zero.
 Handle `n = 0` and `n = N` explicitly.
 Why: Layer 5b handles the state; this handles which bytecode row runs next.
-It supplies the `starts` and `linked` fields and connects the defined boundary `n` to the witness's no-op suffix.
+It supplies the `starts` and `linked` fields and connects the cut boundary to stall replays and then the no-op suffix.
 Uses: the PC and sequence constraints, Layer 5b.
 
 **Entry and interior-slot bridge, ready for review, 2026-10-15.**
@@ -1271,21 +1313,24 @@ with its producer's post-state. The padding suffix and source-boundary
 transition remain to be proved before the dispatcher can use these lemmas.
 
 **Entry address zero:** neither the [program image type nor entry preprocessing](../JoltConstraints/program.lean) excludes it; `get_first_pc` maps it to slot 0.
-Jolt's preprocessing also maps address 0 to the no-op entry, and Jolt's tracer initializes `prev_pc` to 0, so an initial PC of 0 produces no executed rows.
-This was rechecked in `crates/jolt-program/src/preprocess/bytecode.rs:224-232` (`get_first_pc`) and `tracer/src/lib.rs:75-124,328-338` (`trace`, `step_emulator`) at revision `8bbb2357890928d8f83b00ca542879077c4d3d28`.
+The earlier tracer initialized `prev_pc` to 0 and could produce no rows at entry address 0.
+PR #2109, head d2995380, starts `prev_pc` unset, but a first fetch at address 0 may still fail because address 0 is not program memory.
+`get_first_pc` still maps address 0 to the no-op entry, as checked in `crates/jolt-program/src/preprocess/bytecode.rs:224-232`.
 We have not established whether `AllConstraints` admits such an instance.
-The proof must either rule it out using the existing constraints or derive `n = 0` from entry selection and the no-op flag, then handle the initial device in Layers 7–8.
-It must not assume a positive entry address or a positive number of executed steps.
+The proof must rule out a satisfying witness with no executable entry row using the existing constraints or identify a counterexample.
+It must not assume a positive entry address; a completed soundness run has at least one row because its termination store executes.
 
 ### Layer 7: the relaxed trace and the rebuilt tape
 
 What: use the prefix constructed on the supplied untrusted advice and the tape answers from the witness.
 Take the successful execution, linkage and runtime-advice equalities from `Agrees w n prefix state` for the relaxed trace's counterparts of the `HonestTrace` fields.
 L also requires two facts about the rebuilt trace: Jolt's prover accepts it (it ends in a jump, its RAM addresses are at or above the lowest address, and its padded length is at most the maximum), and none of its spoil asserts fails.
-The required stopping obligations are `stops` (the final source instruction leaves `nextPC` at its own address), `runs_until_stop` (no earlier source instruction did so), and `nonempty` (a nonzero entry address gives a nonempty trace).
-These are open. In particular, [B6](./review_completeness_and_soundness.md#b6-the-soundness-statement) records an unsound stopping case from reading the code: a witness can end at a jump before the tracer's PC stall. For "no panic" claims, the temporary `TerminationThenStall` restriction makes that jump the stall: after a termination store, a JAL must have offset 0, and `termination_next_jal_stalls` proves it sets `nextPC` to its own address. "Panicked" claims are excluded for now by the temporary `ClaimsNoPanic` restriction. B6 has been communicated to a16z privately.
-Prefix agreement and a padding suffix do not establish these stopping properties.
-For an empty prefix, `stops` and `runs_until_stop` are vacuous; `nonempty` still requires excluding a nonzero entry address.
+The required stopping obligations are `stops` (the final source instruction is a stable self-jump), `runs_until_stop` (no earlier source instruction is a stable self-jump), and unconditional `nonempty`, derived from the termination store.
+The rule follows a16z/jolt PR #2109 at head d2995380: a self-jumping JALR with destination equal to its nonzero base register continues if re-execution would jump elsewhere.
+The execution prefix is cut at its first stable self-jump, or at padding or the last witness cycle if no stable stall occurs.
+The stopping proof must show the cut ends at a stable stall and that later witness rows stay on its source instruction with zero RAM updates.
+The execution-prefix lemma owns RAM agreement at the cut, and the stopping lemma owns the final RAM comparison.
+The temporary `TerminationThenStall` and `ClaimsNoPanic` restrictions still address the separate B6 early-end case described in [the earlier review](./review_completeness_and_soundness.md#b6-the-soundness-statement).
 Take the instance facts, including `initialized`, from the context; Layer 5a left `JoltPrivateInputs` unchanged. `accepted` follows from `expands` and `entryIsRust`.
 Then rebuild one tape from the answers' low bytes, in read order, and run the program on it. Prove that this run is an `HonestTrace` with the same bytecode rows, ending every source instruction with the same registers and memory ([Choosing the private inputs](#choosing-the-private-inputs)).
 Why: once all these obligations are resolved, the constructed prefix can be packaged as a relaxed trace, and the rebuilt tape turns it into an `HonestTrace`, the form the theorem concludes.

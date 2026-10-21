@@ -126,6 +126,20 @@ def JoltInstructionRow.starts_source (row : JoltInstructionRow) : Bool :=
 def JoltInstructionRow.continues (row : JoltInstructionRow) : Bool :=
   row.virtual_sequence_remaining.getD 0 != 0
 
+/-- Whether a row that jumped to its own address would jump there again.
+The expanded JALR row retains the normalized base and sign-extended immediate;
+the `rd = x0` rewrite uses a virtual destination and takes the `true` branch.
+See : a16z/jolt#2109, head d2995380, crates/jolt-riscv/src/row.rs
+(`JoltInstructionRow::self_jump_repeats`). -/
+def JoltInstructionRow.selfJumpRepeats (row : JoltInstructionRow) : Bool :=
+  match row.instruction with
+  | .JALR (.xreg rd) (.xreg rs1) imm =>
+      if JoltISA.isX0 rd || rd != rs1 then true
+      else
+        jolt_jalr_target64
+          (row.address + (if row.is_compressed then 2 else 4)) imm == row.address
+  | _ => true
+
 -- See : jolt/crates/jolt-program/src/expand/metadata.rs:25-53 (stamp_sequence_metadata)
 def stamp_sequence (address : BitVec 64) (is_compressed : Bool)
     (instructions : List JoltISA.Instr) : List JoltInstructionRow :=

@@ -6,6 +6,7 @@ Layout source at public pin 8bbb2357:
 https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/common/src/jolt_device.rs#L381-L537
 -/
 import JoltConstraints.program
+import JoltConstraints.Soundness.Layer5.PowerOfTwo
 
 set_option autoImplicit false
 
@@ -331,6 +332,86 @@ theorem new_io_ordered (config : MemoryConfig) (layout : MemoryLayout)
   rw [Nat.mod_eq_of_lt (a := max untrustedTop trustedTop) (by omega)] at lowestBelow
   omega
 
+/-- The output, panic, termination, and I/O end addresses of a successful layout.
+See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new). -/
+theorem new_io_geometry (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    layout.panic.toNat = layout.output_start.toNat + layout.max_output_size.toNat ∧
+    layout.max_output_size.toNat % 8 = 0 ∧
+    layout.termination.toNat = layout.panic.toNat + 8 ∧
+    layout.io_end.toNat = layout.termination.toNat + 8 ∧
+    layout.io_end.toNat ≤ JoltISA.RAM_START_ADDRESS := by
+  unfold MemoryLayout.new at built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨trusted, trustedRounded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨untrusted, untrustedRounded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨input, inputRounded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨output, outputRounded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨total, summed, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨padded, multiplied, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨⟨ts, te, us, ue⟩, placed, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨inputEnd, inputAdded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨outputEnd, outputAdded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨termination, terminationAdded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨ioEnd, ioEndAdded, built⟩ := built
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  have layoutEq := Option.some.inj built
+  rw [← layoutEq]
+  rw [bind_some_iff] at summed
+  obtain ⟨a, addedA, summed⟩ := summed
+  rw [bind_some_iff] at addedA
+  obtain ⟨b, addedB, addedA⟩ := addedA
+  rw [bind_some_iff] at addedB
+  obtain ⟨c, addedC, addedB⟩ := addedB
+  have ca := (checkedAdd_some addedC).1
+  have cb := (checkedAdd_some addedB).1
+  have cc := (checkedAdd_some addedA).1
+  have cd := (checkedAdd_some summed).1
+  have inputEight := (alignUp8_some inputRounded).2
+  have outputEight := (alignUp8_some outputRounded).2
+  have trustedEight := (alignUp8_some trustedRounded).2
+  have untrustedEight := (alignUp8_some untrustedRounded).2
+  have padding := checkedMul_some multiplied
+  have roundedUp := JoltConstraints.Soundness.nextPowerOfTwo_ge (total / 8)
+  have regions := adviceRegions_some placed
+  have inputEndIs := checkedAdd_some inputAdded
+  have outputEndIs := checkedAdd_some outputAdded
+  have terminationIs := checkedAdd_some terminationAdded
+  have ioEndIs := checkedAdd_some ioEndAdded
+  have ioEndBound : ioEnd ≤ JoltISA.RAM_START_ADDRESS := by
+    unfold MemoryLayout.adviceRegions at placed
+    obtain ⟨_, subtracted, _⟩ := Option.bind_eq_some_iff.mp placed
+    have startBound := checkedSub_some subtracted
+    omega
+  dsimp only
+  simp only [BitVec.toNat_ofNat]
+  rw [Nat.mod_eq_of_lt (a := inputEnd) (by omega),
+    Nat.mod_eq_of_lt (a := outputEnd) (by omega),
+    Nat.mod_eq_of_lt (a := termination) (by omega),
+    Nat.mod_eq_of_lt (a := ioEnd) (by omega),
+    Nat.mod_eq_of_lt (a := output) (by omega)]
+  omega
+
 -- The outputs start right after the inputs' region, whose size is a multiple of 8.
 -- See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
 theorem new_outputs_after_inputs (config : MemoryConfig) (layout : MemoryLayout)
@@ -393,6 +474,30 @@ theorem new_outputs_after_inputs (config : MemoryConfig) (layout : MemoryLayout)
   simp only [BitVec.toNat_ofNat]
   rw [Nat.mod_eq_of_lt (a := max untrustedTop trustedTop) (by omega),
     Nat.mod_eq_of_lt (a := inputEnd) (by omega), Nat.mod_eq_of_lt (a := input) (by omega)]
+  omega
+
+/-- A word index counts 8-byte words up from the lowest address:
+`(address - lowest) / 8`.
+In a successful layout the output, panic and termination word indices follow
+from the input word index, and the panic word index is below the index of
+`RAM_START_ADDRESS`.
+See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new). -/
+theorem new_io_word_geometry (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    (layout.output_start.toNat - layout.get_lowest_address.toNat) / 8 =
+      (layout.input_start.toNat - layout.get_lowest_address.toNat) / 8 +
+        layout.max_input_size.toNat / 8 ∧
+    (layout.panic.toNat - layout.get_lowest_address.toNat) / 8 =
+      (layout.output_start.toNat - layout.get_lowest_address.toNat) / 8 +
+        layout.max_output_size.toNat / 8 ∧
+    (layout.termination.toNat - layout.get_lowest_address.toNat) / 8 =
+      (layout.panic.toNat - layout.get_lowest_address.toNat) / 8 + 1 ∧
+    (layout.panic.toNat - layout.get_lowest_address.toNat) / 8 <
+      (JoltISA.RAM_START_ADDRESS - layout.get_lowest_address.toNat) / 8 := by
+  obtain ⟨inputLower, _, _, _, _⟩ := new_io_ordered config layout built
+  obtain ⟨outputStart, inputMultiple⟩ := new_outputs_after_inputs config layout built
+  obtain ⟨panicStart, outputMultiple, terminationStart, ioEndStart, ioEndBound⟩ :=
+    new_io_geometry config layout built
   omega
 
 -- With the lowest address above 8, as validate_inputs requires, no device region covers

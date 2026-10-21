@@ -30,10 +30,12 @@ theorem overlayRamBytes_below_input (layout : MemoryLayout)
     rw [if_neg]
     omega
 
-/-- On the public I/O interval, the honest final RAM word is the public I/O word.
+/-- On the public I/O interval, the final RAM word is the public I/O word.
 Below `RAM_START_ADDRESS` the RAM image is zero, and both advice overlays end
 before the input's first word, so only the public overlays remain. -/
-theorem finalRamWord_eq_ramPublicIoWord {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+theorem finalRamWord_eq_ramPublicIoWord (trace : Trace)
+    (frame : JoltIOSetupFrame.Same trace.initialState.jolt_device
+      (TraceWitness.finalTraceState trace).jolt_device)
     (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
     (address : Nat)
     (lower : (trace.initialState.jolt_device.memory_layout.input_start.toNat -
@@ -42,17 +44,19 @@ theorem finalRamWord_eq_ramPublicIoWord {joltInstance : JoltInstance SourceInstr
       (JoltISA.RAM_START_ADDRESS - ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8) :
     TraceWitness.finalRamWord trace address =
       ramPublicIoWord (TraceWitness.finalTraceState trace).jolt_device address := by
-  obtain ⟨hlayout, htrusted, huntrusted, _⟩ := finalTraceState_ioSame trace
+  obtain ⟨hlayout, htrusted, huntrusted, _⟩ := frame
   have hram : ¬ JoltISA.RAM_START_ADDRESS ≤
       min trace.initialState.jolt_device.memory_layout.trusted_advice_start.toNat
         trace.initialState.jolt_device.memory_layout.untrusted_advice_start.toNat + 8 * address := by
     unfold ramLowestAddress at upper
     omega
   have htrustedOverlay := overlayRamBytes_below_input _
-    trace.initialState.jolt_device.memory_layout.trusted_advice_start trace.initialState.jolt_device.trusted_advice
+    trace.initialState.jolt_device.memory_layout.trusted_advice_start
+      trace.initialState.jolt_device.trusted_advice
     adviceBelowInput.inputWordAligned adviceBelowInput.trustedAdviceBelowInput address lower
   have huntrustedOverlay := overlayRamBytes_below_input _
-    trace.initialState.jolt_device.memory_layout.untrusted_advice_start trace.initialState.jolt_device.untrusted_advice
+    trace.initialState.jolt_device.memory_layout.untrusted_advice_start
+      trace.initialState.jolt_device.untrusted_advice
     adviceBelowInput.inputWordAligned adviceBelowInput.untrustedAdviceBelowInput address lower
   unfold TraceWitness.finalRamWord ramPublicIoWord
   dsimp only
@@ -91,6 +95,47 @@ theorem trimTrailingZeros_spec (bytes : Array (BitVec 8)) :
         (bytes.toList.reverse.takeWhile (· == 0)).reverse.length := by omega
     rw [List.getElem?_eq_getElem inZeros]
     exact congrArg some (zeros _ (List.getElem_mem inZeros))
+
+/-- Appending zero bytes does not change the trimmed output. -/
+private theorem trimTrailingZeros_append_zeros (bytes : Array (BitVec 8)) (n : Nat) :
+    trimTrailingZeros (bytes ++ Array.replicate n 0) = trimTrailingZeros bytes := by
+  simp [trimTrailingZeros, Array.toList_append, List.reverse_append]
+
+/-- Equal zero-padded bytes up to `limit` determine equal trimmed arrays. -/
+theorem trimTrailingZeros_of_padded_eq (a b : Array (BitVec 8)) (limit : Nat)
+    (ha : a.size ≤ limit) (hb : b.size ≤ limit)
+    (same : ∀ i < limit, a[i]?.getD 0 = b[i]?.getD 0) :
+    trimTrailingZeros a = trimTrailingZeros b := by
+  have padRead (x : Array (BitVec 8)) (hx : x.size ≤ limit) (i : Nat)
+      (hi : i < limit) :
+      (x ++ Array.replicate (limit - x.size) 0)[i]?.getD 0 = x[i]?.getD 0 := by
+    rw [Array.getElem?_append]
+    split_ifs with within
+    · rfl
+    · rw [Array.getElem?_replicate, if_pos (by omega), Array.getElem?_eq_none (by omega)]
+      rfl
+  have padEq : a ++ Array.replicate (limit - a.size) 0 =
+      b ++ Array.replicate (limit - b.size) 0 := by
+    apply Array.ext
+    · simp only [Array.size_append, Array.size_replicate]
+      omega
+    · intro i hiA hiB
+      have hi : i < limit := by
+        simp only [Array.size_append, Array.size_replicate] at hiA
+        omega
+      have haRead := padRead a ha i hi
+      have hbRead := padRead b hb i hi
+      rw [Array.getElem?_eq_getElem hiA] at haRead
+      rw [Array.getElem?_eq_getElem hiB] at hbRead
+      have := (haRead.trans (same i hi)).trans hbRead.symm
+      simpa using this
+  rw [← trimTrailingZeros_append_zeros a (limit - a.size),
+    ← trimTrailingZeros_append_zeros b (limit - b.size), padEq]
+
+/-- Trimming trailing zero output bytes twice has the same result as trimming once. -/
+theorem trimTrailingZeros_idempotent (bytes : Array (BitVec 8)) :
+    trimTrailingZeros (trimTrailingZeros bytes) = trimTrailingZeros bytes := by
+  simp [trimTrailingZeros, List.dropWhile_idempotent]
 
 -- Eight zero bytes make the zero word.
 theorem ramImageWord_zero (byte : Nat → BitVec 8) (start : Nat)
@@ -143,6 +188,167 @@ theorem overlayRamBytes_trailing_zeros (layout : MemoryLayout) (start : BitVec 6
         rw [Array.getElem?_eq_none past]
         rfl
       · rw [if_neg inBytes]
+
+/-- `q` counts words from the output start; word `q` holds output bytes `8*q`
+through `8*q+7`, with missing bytes read as zero.
+When the configured output region has at least two words, a three-byte output
+occupies the low three bytes of word zero and leaves word one zero. -/
+theorem ramPublicIoWord_output (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout)
+    (io : JoltDevice) (sameLayout : io.memory_layout = layout)
+    (inputsFit : io.inputs.size ≤ layout.max_input_size.toNat)
+    (q : Nat) (inOutput : q < layout.max_output_size.toNat / 8) :
+    ramPublicIoWord io ((layout.output_start.toNat - ramLowestAddress layout) / 8 + q) =
+      TraceWitness.ramImageWord (fun i => io.outputs[i]?.getD 0) (8 * q) := by
+  obtain ⟨lowLeInput, _, _, _, _⟩ := new_io_ordered config layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at lowLeInput
+  obtain ⟨outputAfterInput, inputMultiple⟩ := new_outputs_after_inputs config layout built
+  obtain ⟨panicAfterOutput, outputMultiple, terminationAfterPanic, _, _⟩ :=
+    new_io_geometry config layout built
+  have inputWordAligned := new_input_word_aligned config layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at inputWordAligned
+  let low := ramLowestAddress layout
+  change (layout.input_start.toNat - low) % 8 = 0 at inputWordAligned
+  let inputFirst := (layout.input_start.toNat - low) / 8
+  let outputFirst := (layout.output_start.toNat - low) / 8
+  let panicFirst := (layout.panic.toNat - low) / 8
+  let terminationFirst := (layout.termination.toNat - low) / 8
+  change ramPublicIoWord io (outputFirst + q) =
+    TraceWitness.ramImageWord (fun i => io.outputs[i]?.getD 0) (8 * q)
+  have outputWordAligned : (layout.output_start.toNat - low) % 8 = 0 := by
+    have outputSub : layout.output_start.toNat - low =
+        (layout.input_start.toNat - low) + layout.max_input_size.toNat := by
+      dsimp only [low, ramLowestAddress] at *
+      omega
+    rw [outputSub]
+    omega
+  have panicWordAligned : (layout.panic.toNat - low) % 8 = 0 := by
+    have panicSub : layout.panic.toNat - low =
+        (layout.output_start.toNat - low) + layout.max_output_size.toNat := by
+      dsimp only [low, ramLowestAddress] at *
+      omega
+    rw [panicSub]
+    omega
+  have outputIndex : low + 8 * outputFirst = layout.output_start.toNat := by
+    dsimp only [outputFirst, low, ramLowestAddress] at *
+    omega
+  have inputBeforeOutput : inputFirst + layout.max_input_size.toNat / 8 =
+      outputFirst := by
+    dsimp only [inputFirst, outputFirst, low, ramLowestAddress] at *
+    omega
+  have outputBeforePanic : outputFirst + layout.max_output_size.toNat / 8 =
+      panicFirst := by
+    dsimp only [outputFirst, panicFirst, low, ramLowestAddress] at *
+    omega
+  have terminationAfter : terminationFirst = panicFirst + 1 := by
+    dsimp only [terminationFirst, panicFirst, low, ramLowestAddress] at *
+    omega
+  have lowPos := new_lowest_address_pos config layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at lowPos
+  have remapInput : TraceWitness.remapRamAddress layout layout.input_start =
+      some inputFirst := by
+    unfold TraceWitness.remapRamAddress
+    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rfl
+  have remapOutput : TraceWitness.remapRamAddress layout layout.output_start =
+      some outputFirst := by
+    unfold TraceWitness.remapRamAddress
+    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rfl
+  have remapPanic : TraceWitness.remapRamAddress layout layout.panic =
+      some panicFirst := by
+    unfold TraceWitness.remapRamAddress
+    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rfl
+  have remapTermination : TraceWitness.remapRamAddress layout layout.termination =
+      some terminationFirst := by
+    unfold TraceWitness.remapRamAddress
+    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rfl
+  have inputZero : TraceWitness.overlayRamBytes layout layout.input_start
+      io.inputs (outputFirst + q) 0 = 0 := by
+    unfold TraceWitness.overlayRamBytes
+    rw [remapInput]
+    dsimp only
+    have hInputNot : ¬ (inputFirst ≤ outputFirst + q ∧
+        (outputFirst + q - inputFirst) * 8 < io.inputs.size) := by
+      intro h
+      have : (outputFirst + q - inputFirst) * 8 ≥ layout.max_input_size.toNat := by
+        omega
+      omega
+    rw [if_neg hInputNot]
+  have outputPacked : TraceWitness.overlayRamBytes layout layout.output_start
+      io.outputs (outputFirst + q) 0 =
+        TraceWitness.ramImageWord (fun i => io.outputs[i]?.getD 0) (8 * q) := by
+    unfold TraceWitness.overlayRamBytes
+    rw [remapOutput]
+    dsimp only
+    by_cases within : 8 * q < io.outputs.size
+    · rw [if_pos (by omega)]
+      congr 1
+      omega
+    · rw [if_neg (by omega)]
+      symm
+      apply ramImageWord_zero
+      intro offset offsetLt
+      rw [Array.getElem?_eq_none (by omega)]
+      rfl
+  have beforePanic : outputFirst + q < panicFirst := by omega
+  have beforeTermination : outputFirst + q < terminationFirst := by omega
+  unfold ramPublicIoWord
+  rw [sameLayout, remapPanic, remapTermination]
+  simp only [show (some terminationFirst == some (outputFirst + q)) = false by
+    simp [Nat.ne_of_gt beforeTermination]]
+  rw [inputZero, outputPacked]
+  simp [show panicFirst ≠ outputFirst + q by omega]
+
+/-- The word at the panic address encodes the device's panic flag as zero or one. -/
+theorem ramPublicIoWord_panic (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout)
+    (io : JoltDevice) (sameLayout : io.memory_layout = layout) :
+    ramPublicIoWord io ((layout.panic.toNat - ramLowestAddress layout) / 8) =
+      if io.panic then 1 else 0 := by
+  obtain ⟨lowLeInput, _, _, _, _⟩ := new_io_ordered config layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at lowLeInput
+  obtain ⟨outputAfterInput, inputMultiple⟩ := new_outputs_after_inputs config layout built
+  obtain ⟨panicAfterOutput, outputMultiple, terminationAfterPanic, _, _⟩ :=
+    new_io_geometry config layout built
+  have inputWordAligned := new_input_word_aligned config layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at inputWordAligned
+  let low := ramLowestAddress layout
+  change (layout.input_start.toNat - low) % 8 = 0 at inputWordAligned
+  let panicFirst := (layout.panic.toNat - low) / 8
+  let terminationFirst := (layout.termination.toNat - low) / 8
+  change ramPublicIoWord io panicFirst = if io.panic then 1 else 0
+  have panicWordAligned : (layout.panic.toNat - low) % 8 = 0 := by
+    have outputSub : layout.output_start.toNat - low =
+        (layout.input_start.toNat - low) + layout.max_input_size.toNat := by
+      dsimp only [low, ramLowestAddress] at *
+      omega
+    have panicSub : layout.panic.toNat - low =
+        (layout.output_start.toNat - low) + layout.max_output_size.toNat := by
+      dsimp only [low, ramLowestAddress] at *
+      omega
+    rw [panicSub, outputSub]
+    omega
+  have terminationAfter : terminationFirst = panicFirst + 1 := by
+    dsimp only [terminationFirst, panicFirst, low, ramLowestAddress] at *
+    omega
+  have lowPos := new_lowest_address_pos config layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at lowPos
+  have remapPanic : TraceWitness.remapRamAddress layout layout.panic =
+      some panicFirst := by
+    unfold TraceWitness.remapRamAddress
+    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rfl
+  have remapTermination : TraceWitness.remapRamAddress layout layout.termination =
+      some terminationFirst := by
+    unfold TraceWitness.remapRamAddress
+    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rfl
+  unfold ramPublicIoWord
+  rw [sameLayout, remapPanic, remapTermination]
+  simp [show terminationFirst ≠ panicFirst by omega]
 
 -- The verifier's public I/O word is the run's: they share the layout, inputs and panic
 -- flag, and the verifier's outputs are the run's without their trailing zero bytes.

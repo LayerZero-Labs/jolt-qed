@@ -10,6 +10,7 @@ counterexamples are excluded by temporary restrictions
 (methods/review_completeness_and_soundness.md, B6).
 -/
 import JoltConstraints.Soundness.TopLevel
+import JoltConstraints.Soundness.Layer7.TapeRebuild
 
 set_option autoImplicit false
 
@@ -22,6 +23,9 @@ set_option autoImplicit false
 -- `terminationThenStall` for stopping early on a "no panic" claim, `claimsNoPanic`
 -- for stopping early on a "panicked" claim, and `panicStoresOne` for a store of 0
 -- proved as "no panic". These are Jolt bugs that must be fixed in Jolt.
+-- ⚠️ DANGER ⚠️ `soundness_prover_accepts` (TopLevel.lean) is known false in two
+-- cases and is assumed on purpose until a16z answers; see its docstring and
+-- blog/content/blog/prover-verifier-trace-length/index.md.
 theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
@@ -31,12 +35,11 @@ theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (satisfied : JoltConstraints.AllConstraints joltInstance privateInputs witness) :
     joltInstance.InLanguage := by
   obtain ⟨context, equations⟩ := satisfied
-  let tape := soundnessWitnessTape context.bytecode witness
-  let reconstructedInputs : JoltPrivateInputs := { privateInputs with advice_tape := tape }
   obtain ⟨trace, bytecodeEq, represented⟩ :=
     soundness_reconstruct_trace joltField joltInstance assumptions restrictions
       privateInputs witness context equations
-  refine ⟨reconstructedInputs, trace, ?_, ?_, ?_⟩
+  apply JoltConstraints.Soundness.untrustedAnswerLanguage_implies_inLanguage
+  refine ⟨privateInputs, trace, ?_, ?_, ?_⟩
   · exact soundness_matches_outputs joltField joltInstance privateInputs witness
       context equations trace represented
   · exact soundness_prover_accepts joltField joltInstance privateInputs witness

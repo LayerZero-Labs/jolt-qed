@@ -135,7 +135,7 @@ end ProverConfig
 private theorem HonestTrace.prover_config_addresses_ok
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
-    (accepted : trace.prover_config = some config) :
+    (accepted : trace.prover_config joltInstance = some config) :
     ∀ address ∈ trace.rows.toList.filterMap (·.ram_address), address = 0 ∨
       trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address := by
   have checked := (ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config accepted).2.2.1
@@ -152,7 +152,7 @@ the RAM size they pick. -/
 theorem HonestTrace.corrected_prover_config_isSome
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
-    (accepted : trace.prover_config = some config) :
+    (accepted : trace.prover_config joltInstance = some config) :
     trace.corrected_prover_config.isSome := by
   obtain ⟨jump, lengthChecked, _, lengthBound⟩ :=
     ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config accepted

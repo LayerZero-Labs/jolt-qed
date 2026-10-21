@@ -179,7 +179,7 @@ private theorem jump_next_row_address {joltInstance : JoltInstance SourceInstruc
   have htarget := jump_row_target trace n hn hjump
   have hsucc := trace.successor n hn hn1
   simp only [hend, Bool.false_eq_true, ↓reduceIte] at hsucc
-  obtain ⟨haddr, _, _⟩ := hsucc
+  obtain ⟨haddr, _⟩ := hsucc
   rw [htarget] at haddr
   exact Option.some.inj haddr.symm
 

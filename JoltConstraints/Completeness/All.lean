@@ -150,22 +150,12 @@ theorem HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruction}
     (entrySlot : Nat)
     (entryIsRust : get_first_pc slots joltInstance.program.entry_address = some entrySlot) :
     TraceWitness.bytecodePc trace 0 = entrySlot := by
-  by_cases nonempty : 0 < trace.rows.size
-  · -- the trace starts at the entry slot
-    have first := trace.starts_at_entry slots preprocessed (getElem trace.rows 0 nonempty)
-      (Array.getElem?_eq_getElem nonempty)
-    rw [first] at entryIsRust
-    rw [TraceWitness.bytecodePc, dif_pos nonempty]
-    exact Option.some.inj entryIsRust
-  · -- with no rows the entry address is 0, which get_first_pc maps to the NoOp
-    have zero : joltInstance.program.entry_address = 0 := by
-      by_contra notZero
-      exact nonempty (trace.nonempty notZero)
-    rw [zero] at entryIsRust
-    unfold get_first_pc at entryIsRust
-    rw [if_pos rfl] at entryIsRust
-    rw [TraceWitness.bytecodePc, dif_neg nonempty]
-    exact Option.some.inj entryIsRust
+  have nonempty := trace.nonempty
+  have first := trace.starts_at_entry slots preprocessed (getElem trace.rows 0 nonempty)
+    (Array.getElem?_eq_getElem nonempty)
+  rw [first] at entryIsRust
+  rw [TraceWitness.bytecodePc, dif_pos nonempty]
+  exact Option.some.inj entryIsRust
 
 -- The run's final state, as matches_outputs reads it, is the witness's final state.
 theorem HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstruction}
@@ -205,7 +195,7 @@ theorem HonestTrace.allConstraints_corrected_sizes
     -- reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
     (imageNonempty : joltInstance.program.ImageNonempty)
     -- the instance claims the outputs the run produced
-    (claimsRunOutputs : trace.matches_outputs)
+    (claimsRunOutputs : trace.matches_outputs joltInstance)
     -- the public I/O the verifier checks the proof against
     (io : JoltDevice) (publicIo : joltInstance.public_io = some io) :
     AllConstraints joltInstance privateInputs

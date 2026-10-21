@@ -37,7 +37,7 @@ The completeness theorem is `JoltInstance.completeness`
 `HonestTrace.allConstraints_corrected_sizes` (`Completeness/All.lean`), which
 claims the modeled verifier checks and constraints hold at the explicitly
 corrected mathematical sizes, against the verifier’s public I/O.
-`HonestTrace.prover_config` models Rust’s checked policy at `8bbb2357`; when it
+`Trace.prover_config` models Rust’s checked policy at `8bbb2357`; when it
 accepts, so does the corrected policy (`HonestTrace.corrected_prover_config_isSome`).
 Rust's accepted RAM domain need not contain the highest touched slot (#1951
 item 4), so the witness uses the corrected sizes. The former Rust-sizes
@@ -89,9 +89,9 @@ pass, escalate it.
 |---|---|---|
 | [#1949](https://github.com/a16z/jolt/issues/1949) | A load/store address that wraps past 2^64 breaks the RAM-address constraint | (01) stays `sorry`; a fix PR is announced in the issue |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 1 | A run that does not panic and never stores to the termination word: an SDK guest exiting through `platform_exit` or `std::process::exit`, or a bare ELF that reaches `j .` first. The tracer records no write to the word, but `jolt-witness`'s `final_ram_state` sets its `RamValFinal` slot to 1 from the panic flag alone, while initial RAM and the increments give 0 | (38) stays `sorry`. The fix proposed in the issue changes only the SDK's exit paths, so a bare ELF stays unprovable |
-| [#1950](https://github.com/a16z/jolt/issues/1950), [#1951](https://github.com/a16z/jolt/issues/1951) item 2 | A store to the termination word is recorded but the device ignores it, so a later load reads 0 (`bug-report/ram-val-termination/`) | (37) stays `sorry`; `HonestTrace.matches_outputs` leaves the termination word out |
-| [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the checked prover configuration rejects it | such runs have no checked `HonestTrace.prover_config` |
-| [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` is one slot too small when the highest touched slot is a power of two (`bug-report/ram-k-off-by-one/`). The verifier's maximum is also one word short: `compute_max_ram_k` rounds `total_bytes / 8` down. When `heap_end` is not a multiple of 8 (`program_size` is not rounded), a program may access the word that straddles `heap_end`, and an honest run that does so gets no proof. The issue proposes `touched + 1` together with `div_ceil(8)` | `HonestTrace.prover_config` now preserves Rust’s formula. The explicitly separate `HonestTrace.corrected_prover_config` retains `touched + 1` for completeness. The discrepancy remains open and blocks the upper half of the verifier's RAM-size check (`ramSizeBounds`, via `HonestTrace.corrected_witness_params_ram_bounds`) |
+| [#1950](https://github.com/a16z/jolt/issues/1950), [#1951](https://github.com/a16z/jolt/issues/1951) item 2 | A store to the termination word is recorded but the device ignores it, so a later load reads 0 (`bug-report/ram-val-termination/`) | (37) stays `sorry`; `Trace.matches_outputs` leaves the termination word out, and `Represents.finalRam` excludes it |
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the checked prover configuration rejects it | such runs have no checked `Trace.prover_config` |
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` is one slot too small when the highest touched slot is a power of two (`bug-report/ram-k-off-by-one/`). The verifier's maximum is also one word short: `compute_max_ram_k` rounds `total_bytes / 8` down. When `heap_end` is not a multiple of 8 (`program_size` is not rounded), a program may access the word that straddles `heap_end`, and an honest run that does so gets no proof. The issue proposes `touched + 1` together with `div_ceil(8)` | `Trace.prover_config` preserves Rust’s formula. The explicitly separate `HonestTrace.corrected_prover_config` retains `touched + 1` for completeness. The discrepancy remains open and blocks the upper half of the verifier's RAM-size check (`ramSizeBounds`, via `HonestTrace.corrected_witness_params_ram_bounds`) |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 5 | The emulator loads only some ELF section kinds into RAM, preprocessing loads every section | assumed to agree: `initialRam` TODO in `program.lean` |
 
 ## Device-memory soundness findings
@@ -153,32 +153,83 @@ Premises or fields of the final theorem, with their source or reason below.
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Rust's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Rust's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
 | A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | `JoltInstance.CodeUnchanged`, over every `ValidRun`; honest traces get it from `HonestTrace.code_unchanged`. Field `codeUnchanged` of `JoltInstance.SoundnessAssumptions`; completeness does not use it | a16z, 2026-10-07 |
 | A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | ASSUMPTION in `finalRamWord` | a16z, 2026-10-07 |
-| No spoil assert fails | `HonestTrace.SpoilAssertsPass`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): a spoiled run is meant to have no proof (`jolt-platform/src/spoil.rs:1-3`) |
+| No spoil assert fails | `Trace.SpoilAssertsPass`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): a spoiled run is meant to have no proof (`jolt-platform/src/spoil.rs:1-3`) |
 | The corrected sizing policy accepts the run | `HonestTrace.corrected_prover_config = some config` | Retains the previous theorem’s exact hypothesis; includes last-jump, length and address guards, with the intentional `touched + 1` correction. It is not Rust acceptance. `JoltInstance.completeness` derives it from Jolt's prover accepting (`HonestTrace.corrected_prover_config_isSome`) |
-| Jolt's prover accepts the trace | `trace.prover_config.isSome`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): Jolt's prover refuses other traces (`config.rs:63-110`). Completeness uses the corrected sizes, so Jolt's undersized RAM ([#1951](https://github.com/a16z/jolt/issues/1951) item 4, `bug-report/ram-k-off-by-one/`) needs no premise |
+| Jolt's prover accepts the trace | `(trace.prover_config joltInstance).isSome`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): Jolt's prover refuses other traces (`config.rs:63-110`). Completeness uses the corrected sizes, so Jolt's undersized RAM ([#1951](https://github.com/a16z/jolt/issues/1951) item 4, `bug-report/ram-k-off-by-one/`) needs no premise |
 
 ## Proofs owed
 
 Sorried theorems behind the final theorems; `#print axioms` shows `sorryAx` through them.
 
-**Soundness.** `JoltInstance.soundness` (`Soundness/soundness.lean`) is now a
-short proof from the obligations in `Soundness/TopLevel.lean`. Its statement has
-no new premises. `Represents` records the real-row count, PC, source values,
-RAM addresses, and `finalRamWord` at every RAM index, including device words.
+**Soundness.** `JoltInstance.soundness` (`Soundness/soundness.lean`) is a short proof from the obligations in `Soundness/TopLevel.lean` and the reverse language inclusion in `Soundness/Layer7/TapeRebuild.lean`.
+Its statement has no new premises.
+`RepresentsRows` in `Soundness/Layer6/ExecutionPrefix.lean` records the row count, PC, source values and RAM addresses for the relaxed trace cut at its first stable stall, padding, or final witness cycle.
+`RepresentsPrefix` adds RAM agreement at that cut for the stopping proof.
+`Represents` adds final RAM agreement for every witness RAM index except the termination word, which the device ignores as a store; B, C and D use this form without cut RAM.
 The following declarations still use `sorry`:
 
 | Declaration | What it needs |
 |---|---|
-| `JoltInstance.soundnessWitnessTape` | Extract one fixed byte tape from witness advice rows, in bytecode order. The current definition is a placeholder. |
-| `JoltInstance.soundness_reconstruct_trace` (A) | Reconstruct an honest run on that tape, prove bytecode and row correspondence, stopping, and final RAM agreement. Use the approved temporary restrictions for B6's stopping and panic cases; prove that the same tape answers every read. |
-| `JoltInstance.soundness_matches_outputs` (B) | Use `Represents.finalRam` and constraint 26 to derive the claimed output bytes and panic flag. Account for `finalRamWord`'s device encoding and field-to-word injectivity. |
-| `JoltInstance.soundness_prover_accepts` (C) | Derive Jolt's last-jump, checked RAM-address, and padded-length guards from the constraints and represented rows. In particular, `rows.size ≤ traceLength` alone does not show that `max(nextPow2(rows + 1), 256)` fits the instance maximum. The potential maximum-below-256 and final-cycle cases remain to be resolved here. |
+| `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. |
+| `JoltInstance.soundness_stall_suffix_zero_ram_effects` (`Soundness/Layer7/Stopping.lean`) | Use the witness's bytecode and register constraints to show that each cycle after the first stable stall selects that source instruction or padding and has zero RAM update at every word. |
+| `JoltInstance.soundness_stopping` (`Soundness/Layer7/Stopping.lean`) | Prove that the cut run is nonempty and ends at a stable stall. The final RAM step from cut agreement and the staged zero-effect suffix lemma is already proved locally, including a cut at the last cycle. |
+| `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
+| `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) | Build one byte tape from the independent low-byte answers and replay the relaxed execution as an honest trace. |
+| `rebuiltTape_read_exact` (Layer 7 worktree) | Show every advice read returns its low bytes from the rebuilt tape and stays before appended host advice. |
+| `advicelb_low_answer` (Layer 7 worktree) | Show the one-byte expansion has the same end state after low-byte masking. |
+| `advicelh_low_answer` (Layer 7 worktree) | Show the two-byte expansion has the same end state after low-byte masking. |
+| `advicelw_low_answer` (Layer 7 worktree) | Show the four-byte expansion has the same end state after low-byte masking. |
+| `adviceld_low_answer` (Layer 7 worktree) | Show the eight-byte expansion is unchanged by taking all eight bytes. |
+| `rebuild_valid_run` (Layer 7 worktree) | Replay the relaxed run with the rebuilt tape, matching row indices and states apart from tape bytes and the narrow load destination before masking. |
+| `rebuild_matches_outputs` (Layer 7 worktree) | Transfer public output and panic equality from the relaxed run. |
+| `rebuild_prover_config` (Layer 7 worktree) | Transfer checked prover acceptance from equal run dimensions. |
+| `rebuild_spoil_asserts` (Layer 7 worktree) | Transfer spoil-assert success from equal operands. |
+| `rebuild_honest_advice` (Layer 7 worktree) | Show internal tracer advice is computed from the replay's expansion-start states. |
+| `rebuild_stops` (Layer 7 worktree) | Transfer the final stable stall. |
+| `rebuild_runs_until_stop` (Layer 7 worktree) | Transfer the absence of an earlier stable stall. |
+| `rebuild_nonempty` (Layer 7 worktree) | Transfer the positive row count required by the revised trace definition. |
 
-Validation on 2026-10-20: `lake build` passed (8792 jobs), and
-`#print axioms JoltInstance.soundness` reported `propext`, `sorryAx`,
-`sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`.
-The five declarations above account for the new `sorryAx` dependency.
+The 13 tape-rebuild helpers are staged in the separate `/private/tmp/jolt-qed-tape-rebuild` worktree for Ari's review.
+Its reverse-inclusion theorem is proved from them; the main worktree still has the earlier single `sorry` until that reviewed change is integrated.
+The worktree proof statement compiles and its `git diff --check` passes; synchronization with the uncommitted stopping-rule changes is pending.
+
+With Ari's permission (2026-10-20), C remains assumed while a16z considers `blog/content/blog/prover-verifier-trace-length/index.md`.
+C fails when the instance maximum is below 256, and when execution fills every cycle of a witness whose length is the largest power of two within the maximum.
+In both cases the claim is true, but Jolt's prover rejects the trace.
+No other helper uses C.
+Apart from those cases, C needs the last-jump, RAM-address and padded-length guards from the constraints and represented rows.
+
+Helper B checks public words outside the termination word through constraint 26, `Represents.finalRam`, field-to-word injectivity and the final RAM overlay.
+Its proof is now about `UntrustedAnswerTrace` and has no direct `sorry` or panic restriction.
+`Trace.finalTraceState_device_relation`, `UntrustedAnswerTrace.final_device_same`, `UntrustedAnswerTrace.final_outputs_fit_layout` and `public_words_determine_matches_outputs` are proved.
+The fixed and relaxed `Same` callers use the trace-kind relation lemmas, and the output decoder uses the proved word-index geometry.
+B's axiom audit shows no `sorryAx`.
+The previous fixed-tape support proofs were removed from `TopLevel.lean` during the redesign.
+
+The trace-independent statements Ari approved on 2026-10-20 are proved: `execInstr_rule_of_device_relation`, `new_io_geometry`, `ramImageWord_getLsbD`, `ramImageWord_injective_byte`, `trimTrailingZeros_append_zeros`, `trimTrailingZeros_of_padded_eq`, `trimTrailingZeros_idempotent`, `public_io_words_fit_ram`, `ramPublicIoWord_output`, and `ramPublicIoWord_panic`.
+`trimTrailingZeros_append_zeros` is private, and `execInstr_rule` for `Same` uses the generic instruction rule directly.
+The plain-`Trace` pre-state frame and final RAM overlay were restated for both fixed-tape and relaxed callers and are proved.
+The byte-store output bound has only the layout and panic/output span as its geometry premise.
+The approved plain-`Trace` final RAM overlay and byte-store output bound are proved.
+The generic pre-state relation retains `refl` with Ari's approval because its row-zero case requires it after the start hypothesis became an equality.
+The five shared device and geometry statements are proved.
+Helper A is proved from the staged execution-prefix and stopping statements above.
+The stable-stall re-execution statement is also staged, pending Ari's review.
+The prefix owns RAM agreement at the cut, and stopping owns final RAM agreement after the constraint-level zero-update proof for repeated stall rows and padding.
+The modeled stopping rule follows a16z/jolt PR #2109 at head d2995380, with no new restriction.
+Soundness obtains the positive row count from the termination store.
+
+Step (a) defines output matching, checked prover configuration and spoil-assert success once on the plain `Trace`, and both languages use those definitions.
+The fixed-tape inclusion is proved with all three conditions.
+The reverse inclusion is stated with `sorry` in Layer 7 and is now the final step of `JoltInstance.soundness`.
+The axiom audit found no `sorryAx` in B, the plain-`Trace` final RAM overlay, the byte-store output bound, or the five newly proved statements.
+After restating A's obligations, `lake build JoltConstraints.Soundness.TopLevel` passed (8703 jobs) and `git diff --check` passed.
+The full `lake build` also passed (8797 jobs).
+After replacing source-level replay with the constraint-level suffix statement, `lake build JoltBytecode JoltConstraints` passed (8797 jobs).
+The axiom audit found `sorryAx` in the staged suffix statement, stopping, execution-prefix agreement, A and the final soundness theorem; B remained free of `sorryAx`.
+With synchronous elaboration, the five new proofs took 12 ms (`writeDst_rule_of_device_relation`), 74 ms (`execWithTapeAnswer_rule_of_device_relation`), 537 ms (`HonestTrace.device_relation`), 494 ms (`UntrustedAnswerTrace.device_relation`), and 213 ms (`new_io_word_geometry`).
+The output decoder took 381 ms after using `new_io_word_geometry`, down from 1996 ms before this refactor.
 
 **Completeness:**
 

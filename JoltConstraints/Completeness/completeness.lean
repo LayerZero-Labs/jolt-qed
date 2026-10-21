@@ -22,27 +22,18 @@ theorem HonestTrace.exists_preprocessed {joltInstance : JoltInstance SourceInstr
   exact ⟨_, rfl⟩
 
 -- Jolt's verifier finds the entry slot with get_first_pc. For the honest trace it is
--- the slot the witness starts at: the first row's slot, or the NoOp's slot 0 when the
--- trace is empty (the entry address is then 0).
+-- the slot the witness starts at: the first row's slot.
 -- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
 theorem HonestTrace.first_pc_eq_entry {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots) :
     get_first_pc slots joltInstance.program.entry_address =
       some (TraceWitness.bytecodePc trace 0) := by
-  by_cases nonempty : 0 < trace.rows.size
-  · -- the trace starts at the first row's slot
-    have first := trace.starts_at_entry slots preprocessed (getElem trace.rows 0 nonempty)
-      (Array.getElem?_eq_getElem nonempty)
-    rw [TraceWitness.bytecodePc, dif_pos nonempty]
-    exact first
-  · -- with no rows the entry address is 0, which get_first_pc maps to the NoOp
-    have zero : joltInstance.program.entry_address = 0 := by
-      by_contra notZero
-      exact nonempty (trace.nonempty notZero)
-    rw [zero, TraceWitness.bytecodePc, dif_neg nonempty]
-    unfold get_first_pc
-    rw [if_pos rfl]
+  have nonempty := trace.nonempty
+  have first := trace.starts_at_entry slots preprocessed (getElem trace.rows 0 nonempty)
+    (Array.getElem?_eq_getElem nonempty)
+  rw [TraceWitness.bytecodePc, dif_pos nonempty]
+  exact first
 
 -- The witness's starting slot lies in the bytecode domain at the corrected sizes:
 -- the slot is at most the number of rows, and the domain holds the rows plus the NoOp.

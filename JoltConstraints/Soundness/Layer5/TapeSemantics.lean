@@ -1,4 +1,5 @@
 import JoltBytecode.JoltISA.Semantics
+import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 import Mathlib.Tactic
 
 /-! Untrusted-answer semantics for tape reads.
@@ -31,6 +32,36 @@ noncomputable def execWithTapeAnswer (instruction : Instr) (answer : BitVec 64) 
       else
         .error (Error.Assertion "VirtualAdviceLoad: invalid width") state
   | instruction => execInstr instruction
+
+/-- Every relaxed instruction preserves a reflexive, transitive device
+relation that successful device byte stores preserve. -/
+theorem execWithTapeAnswer_rule_of_device_relation
+    (relation : JoltDevice → JoltDevice → Prop)
+    (refl : ∀ io, relation io io)
+    (trans : ∀ a b c, relation a b → relation b c → relation a c)
+    (store : ∀ io io' address value,
+      JoltDevice.store? io address value = some io' → relation io io')
+    (instruction : Instr) (answer : BitVec 64) :
+    StatePreservation.Preserves
+      (fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
+      (execWithTapeAnswer instruction answer) := by
+  cases instruction <;> simp only [execWithTapeAnswer]
+  case VirtualAdviceLoad destination byteCount =>
+    intro before after value runs
+    split at runs
+    · have keeps := StatePreservation.bind_rule
+        (relation := fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
+        (fun a b c ab bc => trans _ _ _ ab bc)
+        (JoltIOSetupFrame.writeDst_rule_of_device_relation relation refl destination answer)
+        (fun _ => StatePreservation.pure_rule
+          (fun s : SailJoltState => refl s.jolt_device) RETIRE_SUCCESS)
+      have kept : relation
+          ({ before with adviceTape := { before.adviceTape with
+            readPosition := before.adviceTape.readPosition + byteCount.toNat } }).jolt_device
+          after.jolt_device := keeps _ _ _ runs
+      exact kept
+    · cases runs
+  all_goals exact JoltIOSetupFrame.execInstr_rule_of_device_relation relation refl trans store _
 
 /-- The answer supplied by the existing fixed-tape interpreter, or zero for an
 instruction with no tape answer or a read that fails. -/

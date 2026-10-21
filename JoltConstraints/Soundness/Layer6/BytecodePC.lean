@@ -192,4 +192,81 @@ theorem selected_registerShift_fed
     simpa only [Array.getElem_toList jBound, Array.getElem_toList inRange,
       producer, rowEq] using fed
 
+/-- Once a witness cycle selects a padding no-op, the next cycle also selects
+padding. The padding row has unexpanded address zero, sets
+`DoNotUpdateUnexpandedPC`, and has neither jump nor branch flag. Constraint 17
+therefore keeps the next unexpanded address at zero; every real bytecode row
+has an address at or above `RAM_START_ADDRESS`.
+See : jolt/crates/jolt-riscv/src/instructions/mod.rs:534-537 at 8bbb2357. -/
+theorem padding_persists
+    (t : Fin params.traceLength) (next : t.val + 1 < params.traceLength)
+    (padding : witness.InstructionFlags .IsNoop t = 1) :
+    witness.InstructionFlags .IsNoop ⟨t.val + 1, next⟩ = 1 := by
+  obtain ⟨slot, selected, _⟩ := bytecodeRa_unique charAbove2pow127 context equations t
+  have flag := instructionFlag_of_selected_bytecode charAbove2pow127 context equations
+    .IsNoop t slot selected
+  have noRow : bytecodeRow context.bytecode slot.val = none := by
+    cases present : bytecodeRow context.bytecode slot.val with
+    | none => rfl
+    | some row =>
+      simp [bytecodeInstructionFlag, present, JoltMetadata.instructionFlag, padding] at flag
+  have currentPC : witness.UnexpandedPC t = 0 := by
+    rw [unexpandedPC_of_selected_bytecode charAbove2pow127 context equations t slot selected]
+    simp [bytecodeAddress, noRow]
+  have opFlag (f : CircuitFlags) (different : f ≠ .DoNotUpdateUnexpandedPC) :
+      witness.OpFlags f t = 0 := by
+    rw [opFlag_of_selected_bytecode charAbove2pow127 context equations f t slot selected]
+    simp [bytecodeCircuitFlag, noRow, different]
+  have branch : witness.ShouldBranch t = 0 := by
+    rw [equations.shouldBranchEqLookupOutputMulBranch t,
+      instructionFlag_of_selected_bytecode charAbove2pow127 context equations
+        .Branch t slot selected]
+    simp [bytecodeInstructionFlag, noRow]
+  have nextPC : witness.NextUnexpandedPC t = 0 := by
+    have update := equations.nextUnexpandedPCUpdateOtherwise t
+    rw [currentPC, branch, opFlag .Jump (by decide),
+      opFlag .IsCompressed (by decide)] at update
+    have doNotUpdate : witness.OpFlags .DoNotUpdateUnexpandedPC t = 1 := by
+      rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
+        .DoNotUpdateUnexpandedPC t slot selected]
+      simp [bytecodeCircuitFlag, noRow]
+    rw [doNotUpdate] at update
+    linear_combination update
+  have shifted : witness.UnexpandedPC ⟨t.val + 1, next⟩ = 0 := by
+    simpa only [equations.nextUnexpandedPCEqShift t, dif_pos next] using nextPC
+  obtain ⟨nextSlot, nextSelected, _⟩ :=
+    bytecodeRa_unique charAbove2pow127 context equations ⟨t.val + 1, next⟩
+  have nextNoRow : bytecodeRow context.bytecode nextSlot.val = none := by
+    cases present : bytecodeRow context.bytecode nextSlot.val with
+    | none => rfl
+    | some row =>
+      have encoded : (row.address.toNat : F) = 0 := by
+        simpa [bytecodeAddress, present] using
+          (unexpandedPC_of_selected_bytecode charAbove2pow127 context equations
+            ⟨t.val + 1, next⟩ nextSlot nextSelected).symm.trans shifted
+      have zeroWord : row.address = (0 : BitVec 64) :=
+        word_eq_of_field_eq charAbove2pow127 (by simpa using encoded)
+      have accepted : pc_map_ok context.bytecode = true := by
+        obtain ⟨slots, preprocessed, _⟩ := context.entryIsRust
+        unfold preprocess at preprocessed
+        split at preprocessed
+        · assumption
+        · cases preprocessed
+      cases nextSlot with
+      | mk val bound =>
+        cases val with
+        | zero => simp [bytecodeRow] at present
+        | succ index =>
+          have inRange : index < context.bytecode.size := by
+            simpa [bytecodeRow] using Option.isSome_iff_exists.mpr ⟨row, present⟩
+          have valid := pc_map_ok_addresses context.bytecode accepted index inRange
+          simp only [bytecodeRow, Array.getElem?_eq_getElem inRange,
+            Option.some.injEq] at present
+          subst row
+          rw [zeroWord] at valid
+          exact False.elim ((by decide : bytecode_address_ok (0 : BitVec 64) ≠ true) valid)
+  rw [instructionFlag_of_selected_bytecode charAbove2pow127 context equations
+    .IsNoop ⟨t.val + 1, next⟩ nextSlot nextSelected]
+  simp [bytecodeInstructionFlag, nextNoRow]
+
 end JoltConstraints.Soundness

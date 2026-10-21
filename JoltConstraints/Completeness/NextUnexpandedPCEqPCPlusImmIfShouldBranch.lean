@@ -160,7 +160,7 @@ theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
       -- the branch ends its instruction, so the next row starts at the branch target
       have hsucc := trace.successor t.val ht hnext
       simp only [atEnd, Bool.false_eq_true, ↓reduceIte] at hsucc
-      obtain ⟨nextAt, _, _⟩ := hsucc
+      obtain ⟨nextAt, _⟩ := hsucc
       have runs := (trace.row t.val ht).executes
       rw [withRuntimeAdvice_branch _ isBranch] at runs
       have target := execInstr_branch_target _ lhs rhs imm isBranch _ _ _ taken

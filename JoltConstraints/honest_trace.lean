@@ -29,6 +29,16 @@ def advance_pc (address : BitVec 64) (is_compressed : Bool)
     (address + length)
   { state with sail := { state.sail with regs := registers } }
 
+/-- The last row of a source instruction that jumped to its own address and
+would jump there again if re-run. Jolt's tracer stops after it.
+This matches `Cpu::tick` and `self_jump_repeats` in a16z/jolt PR #2109,
+head d2995380. -/
+def TraceRow.StableStall {bytecode : Array JoltInstructionRow}
+    (row : TraceRow bytecode) : Prop :=
+  bytecode[row.rowIndex].virtual_sequence_remaining.getD 0 = 0 ∧
+  row.postState.sail.regs.get? Register.nextPC = some bytecode[row.rowIndex].address ∧
+  bytecode[row.rowIndex].selfJumpRepeats = true
+
 -- Whether the source instruction whose rows start at `start` is compressed. Stamping
 -- puts the source's flag on the last row of its block; a native row carries it itself.
 -- See : jolt/crates/jolt-program/src/expand/metadata.rs:46-52 (stamp_sequence_metadata)
@@ -214,20 +224,18 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   -- the value the honest tracer gives it (`honestTracerAdviceAtStepN`).
   advice_from_honest_tracer : ∀ n : Fin rows.size,
     rows[n].someTracerAdvice? = honestTracerAdviceAtStepN joltInstance.program rows n
-  -- The run ends on the last row of an instruction that left the PC pointing at
-  -- itself. Rust's tracer stops there.
-  -- See : jolt/tracer/src/lib.rs:113-120, 327-337 (trace, step_emulator)
-  stops : ∀ last ∈ rows.back?,
-    bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0 ∧
-    last.postState.sail.regs.get? Register.nextPC = some bytecode[last.rowIndex].address
-  -- The run does not end early: no earlier instruction left the PC pointing at itself.
+  -- The tracer stops only at a self-jump that repeats on re-execution.
+  -- See : a16z/jolt PR #2109, head d2995380, `Cpu::tick`.
+  stops : ∀ last ∈ rows.back?, last.StableStall
+  -- No earlier row meets that stopping rule.
   runs_until_stop : ∀ (i : Nat) (current next : TraceRow bytecode),
     rows[i]? = some current → rows[i + 1]? = some next →
-    bytecode[current.rowIndex].virtual_sequence_remaining.getD 0 = 0 →
-    current.postState.sail.regs.get? Register.nextPC ≠ some bytecode[current.rowIndex].address
-  -- The run is empty only when the entry address is 0: Rust compares the PC with a
-  -- starting value of 0 and stops before running anything.
-  nonempty : joltInstance.program.entry_address ≠ 0 → 0 < rows.size
+    ¬ current.StableStall
+  -- Language membership has no empty trace because this field requires it;
+  -- `prover_config` itself allows trace length zero. Soundness obtains this
+  -- bound from the termination store.
+  -- See : a16z/jolt PR #2109, head d2995380.
+  nonempty : 0 < rows.size
 
 instance {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} :
     CoeOut (HonestTrace joltInstance privateInputs) Trace :=
@@ -278,7 +286,7 @@ structure ProverConfig where
 -- Intentional corrected mathematical policy, preserved from the previous model.
 -- It guards the last jump, trace maximum and accessed addresses, then rounds
 -- past the highest touched slot. Unlike Rust at 8bbb2357, it uses `touched + 1`.
--- HonestTrace.prover_config in prover_config.lean models Rust's checked policy.
+-- Trace.prover_config in prover_config.lean models Rust's checked policy.
 -- Completeness uses this corrected variant; see methods/model_update.md, chunk 4.
 def HonestTrace.corrected_prover_config {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
@@ -311,22 +319,21 @@ def HonestTrace.corrected_prover_config {joltInstance : JoltInstance SourceInstr
 --       jolt/jolt-platform/src/spoil.rs:1-26
 --       jolt/crates/jolt-program/src/expand/memory/scw.rs:54-59 (and scd.rs: immediate 0)
 --       jolt/jolt-inlines/p256/src/sdk.rs:768-787, 853-858 (ECDSA advice checks)
-def HonestTrace.SpoilAssertsPass {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Prop :=
+def Trace.SpoilAssertsPass (trace : Trace) : Prop :=
   ∀ row ∈ trace.rows, ∀ (lhs rhs : JoltISA.Src) (imm : BitVec 128),
     trace.bytecode[row.rowIndex].instruction = .VirtualAssertEQ lhs rhs imm → imm ≠ 0 →
     JoltISA.sourceValue lhs row.preState = JoltISA.sourceValue rhs row.preState
 
 -- The instance claims an output, `joltInstance.outputs` (a list of bytes), and a panic
--- flag, `joltInstance.panic`. The honest tracer's run writes its output and panic flag
--- into the device in its state. This says the two agree: the bytes in the device after
+-- flag, `joltInstance.panic`. A trace records its output and panic flag
+-- in the final device. This says the two agree: the bytes in the device after
 -- the last step equal the claimed bytes once trailing zero bytes are dropped from
 -- both, and the device's panic flag equals the claimed one. The termination word is
 -- not compared yet (model_review.md).
 -- See : jolt/crates/jolt-program/src/preprocess/public_io.rs:21-61
 --       jolt/crates/jolt-verifier/src/verifier.rs:436-443
-def HonestTrace.matches_outputs {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) : Prop :=
+def Trace.matches_outputs (joltInstance : JoltInstance SourceInstruction)
+    (trace : Trace) : Prop :=
   let finalState := (trace.rows.back?.map (·.postState)).getD trace.initialState
   trimTrailingZeros finalState.jolt_device.outputs = trimTrailingZeros joltInstance.outputs ∧
     finalState.jolt_device.panic = joltInstance.panic

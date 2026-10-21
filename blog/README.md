@@ -1,5 +1,11 @@
 # Jolt QED blog
 
+The current blog now lives in the LZ Notes Zola site, under
+`content/projects/jolt-qed/blog/` in the `LayerZero-Research/LZ-Notes` repository
+(`../../Writing/LZ-notes` from this repository in Ari's local workspace).
+Create and edit posts there. This copy remains temporarily because soundness
+notes and Lean comments in this repository still refer to its file paths.
+
 This is a Zola 0.23+ site. From this directory, run `zola serve` for a local preview and `zola build` to generate the site.
 
 ## Posts and tutorials

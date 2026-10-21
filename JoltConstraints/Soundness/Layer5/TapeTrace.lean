@@ -2,13 +2,13 @@ import JoltConstraints.Soundness.Layer5.TapeSemantics
 import JoltConstraints.language
 
 /-! A separate execution language for independent tape answers.
-The fixed-tape execution definitions ValidRun and HonestTrace are unchanged.
 The fixed-tape inclusion below preserves the entire Trace, including all states,
 so it preserves registers, RAM, outputs, runtime advice and stopping behavior.
-The shared run and trace requirements are currently duplicated. Changes to
-ValidRun or HonestTrace, especially their stopping rules, must be reviewed here
-too; the inclusion proof alone does not ensure that both specifications change
-in the same way. -/
+The two languages use shared predicates on the plain Trace for outputs, checked
+prover configuration and spoil asserts.
+UntrustedAnswerRun and UntrustedAnswerTrace still repeat the run requirements
+of ValidRun and HonestTrace, so changes to either trace structure must be
+checked here until the reverse inclusion is proved. -/
 
 set_option autoImplicit false
 
@@ -70,20 +70,23 @@ structure UntrustedAnswerTrace (joltInstance : JoltInstance SourceInstruction)
   -- the value the honest tracer gives it (`honestTracerAdviceAtStepN`).
   advice_from_honest_tracer : ∀ n : Fin rows.size,
     rows[n].someTracerAdvice? = honestTracerAdviceAtStepN joltInstance.program rows n
-  -- The run ends on the last row of an instruction that left the PC pointing at
-  -- itself. Jolt's tracer stops there.
-  -- See : jolt/tracer/src/lib.rs:113-120, 327-337 (trace, step_emulator)
-  stops : ∀ last ∈ rows.back?,
-    bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0 ∧
-    last.postState.sail.regs.get? Register.nextPC = some bytecode[last.rowIndex].address
-  -- The run does not end early: no earlier instruction left the PC pointing at itself.
+  -- The tracer stops at a self-jump only when re-execution jumps there again.
+  -- See : a16z/jolt PR #2109, head d2995380, `Cpu::tick`.
+  stops : ∀ last ∈ rows.back?, last.StableStall
+  -- No earlier row meets that stopping rule.
   runs_until_stop : ∀ (i : Nat) (current next : TraceRow bytecode),
     rows[i]? = some current → rows[i + 1]? = some next →
-    bytecode[current.rowIndex].virtual_sequence_remaining.getD 0 = 0 →
-    current.postState.sail.regs.get? Register.nextPC ≠ some bytecode[current.rowIndex].address
-  -- The run is empty only when the entry address is 0: Jolt compares the PC with a
-  -- starting value of 0 and stops before running anything.
-  nonempty : joltInstance.program.entry_address ≠ 0 → 0 < rows.size
+    ¬ current.StableStall
+  -- Language membership has no empty trace because this field requires it;
+  -- `prover_config` itself allows trace length zero. Soundness obtains this
+  -- bound from the termination store.
+  -- See : a16z/jolt PR #2109, head d2995380.
+  nonempty : 0 < rows.size
+
+instance {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} :
+    CoeOut (UntrustedAnswerTrace joltInstance privateInputs) Trace :=
+  ⟨fun trace => trace.toUntrustedAnswerRun.toTrace⟩
 
 /-- Embed a fixed-tape run by supplying its actual answers at every row. -/
 noncomputable def UntrustedAnswerRun.ofFixed
@@ -119,30 +122,20 @@ noncomputable def UntrustedAnswerTrace.ofFixed
   runs_until_stop := trace.runs_until_stop
   nonempty := trace.nonempty
 
-/-- Compare the final device to the instance exactly as the fixed-tape specification does. -/
-def UntrustedAnswerTrace.matches_outputs
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : UntrustedAnswerTrace joltInstance privateInputs) : Prop :=
-  let finalState := (trace.rows.back?.map (·.postState)).getD trace.initialState
-  trimTrailingZeros finalState.jolt_device.outputs = trimTrailingZeros joltInstance.outputs ∧
-    finalState.jolt_device.panic = joltInstance.panic
-
-/-- Embedding a fixed-tape trace preserves its output and panic comparison. -/
-theorem UntrustedAnswerTrace.ofFixed_matches_outputs
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : HonestTrace joltInstance privateInputs) :
-    (UntrustedAnswerTrace.ofFixed trace).matches_outputs ↔ trace.matches_outputs := Iff.rfl
-
-/-- The proposed language existentially chooses private inputs and independent
-per-row tape answers, retaining the output and stopping requirements. -/
+/-- The relaxed language existentially chooses private inputs and independent
+per-row tape answers, with the same public output, prover and spoil requirements. -/
 def UntrustedAnswerLanguage (joltInstance : JoltInstance SourceInstruction) : Prop :=
-  ∃ privateInputs, ∃ trace : UntrustedAnswerTrace joltInstance privateInputs, trace.matches_outputs
+  ∃ privateInputs, ∃ trace : UntrustedAnswerTrace joltInstance privateInputs,
+    trace.matches_outputs joltInstance ∧
+    (trace.prover_config joltInstance).isSome ∧
+    trace.SpoilAssertsPass
 
 /-- Every instance in the fixed-tape language is also in the relaxed language. -/
 theorem inLanguage_implies_untrustedAnswerLanguage
     {joltInstance : JoltInstance SourceInstruction} (member : joltInstance.InLanguage) :
     UntrustedAnswerLanguage joltInstance := by
-  obtain ⟨privateInputs, trace, outputs, _⟩ := member
-  exact ⟨privateInputs, UntrustedAnswerTrace.ofFixed trace, outputs⟩
+  obtain ⟨privateInputs, trace, outputs, proverAccepts, spoilAsserts⟩ := member
+  exact ⟨privateInputs, UntrustedAnswerTrace.ofFixed trace,
+    outputs, proverAccepts, spoilAsserts⟩
 
 end JoltConstraints.Soundness

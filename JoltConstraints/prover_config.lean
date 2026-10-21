@@ -28,9 +28,7 @@ def ExecutionDimensions.observe (bounds : Option (Nat × Nat)) (address : Nat) :
 
 /-- `ExecutionDimensions::from_rows`, before padding. Only accesses contribute
 to the bounds, including stores whose value is unchanged. -/
-def HonestTrace.execution_dimensions {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
-    ExecutionDimensions :=
+def Trace.execution_dimensions (trace : Trace) : ExecutionDimensions :=
   { trace_length := trace.rows.size
     ends_in_jump := trace.rows.back?.any fun last =>
       trace.bytecode[last.rowIndex].instruction.is_jump
@@ -122,9 +120,8 @@ end ProverConfig
 
 /-- Rust's checked sizing policy. Completeness currently uses the separately
 named `corrected_prover_config`, whose RAM domain contains the highest slot. -/
-def HonestTrace.prover_config {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
-    Option ProverConfig :=
+def Trace.prover_config (joltInstance : JoltInstance SourceInstruction)
+    (trace : Trace) : Option ProverConfig :=
   ProverConfig.deriveFromDimensions trace.execution_dimensions
     trace.initialState.jolt_device.memory_layout
     (min_bytecode_address joltInstance.program.memory_init)
