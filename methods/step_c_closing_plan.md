@@ -66,9 +66,10 @@ Each of gaps 3 to 5 is a property of an instruction list alone, so it does not n
 
 The tape rebuild needs one more property of the same kind, and it belongs in the same extension:
 
-- `advicePairsOk`: every `VirtualAdviceLoad dst w` with `w.toNat < 8` is immediately followed by `VirtualMULI dst src m`, where `src` reads the register `dst` writes and `m = slliMultiplier (BitVec.ofNat 6 (64 - 8 * w.toNat))`.
-  This is the shape of `narrowAdviceProgram` (`Soundness/Layer5/AdviceExpansion.lean:23`): `sideEffectingRdZeroDst rd` and `adviceReadSource rd` name the same register.
+- `advicePairsOk`: every `VirtualAdviceLoad dst w` with `w.toNat < 8` has `dst = sideEffectingRdZeroDst rd` for some `rd`, is not the list's last instruction, and is immediately followed by `VirtualMULI (sideEffectingRdZeroDst rd) (adviceReadSource rd) (slliMultiplier (BitVec.ofNat 6 (64 - 8 * w.toNat)))`.
+  This is the shape of `narrowAdviceProgram` (`Soundness/Layer5/AdviceExpansion.lean:23`).
   Every other sequence contains no such load, so it holds trivially.
+  Also make sure no native row is a narrow `VirtualAdviceLoad`: if `nativeRowOk` does not already imply it, add it to the native check.
 
 ## Plan
 
