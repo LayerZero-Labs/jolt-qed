@@ -282,6 +282,82 @@ private theorem UntrustedAnswerRun.postCursor_step
       · rfl
     simpa [noBytes] using growth.1.symm
 
+private theorem execWithTapeAnswer_bytes_extend
+    (instruction : Instr) (answer : BitVec 64)
+    (pre post : SailJoltState)
+    (runs : execWithTapeAnswer instruction answer pre =
+      .ok (.Retire_Success ()) post) :
+    ∃ suffix, post.adviceTape.bytes = pre.adviceTape.bytes ++ suffix := by
+  by_cases load : ∃ dst width, instruction = .VirtualAdviceLoad dst width
+  · obtain ⟨dst, width, h⟩ := load
+    subst instruction
+    simp only [execWithTapeAnswer] at runs
+    split at runs
+    · have growth := execInstr_tapeGrowth (.VirtualAdvice dst answer)
+        (by simp) _ _ _ runs
+      exact growth.2
+    · cases runs
+  · have growth := execInstr_tapeGrowth instruction
+      (by intro dst width h; exact load ⟨dst, width, h⟩)
+        pre post _ (by
+          simp only [execWithTapeAnswer] at runs
+          split at runs
+          · exact False.elim (load ⟨_, _, rfl⟩)
+          · exact runs)
+    exact growth.2
+
+private theorem UntrustedAnswerRun.initial_bytes_prefix
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (step : Fin run.rows.size) :
+    ∃ suffix,
+      run.rows[step].preState.adviceTape.bytes =
+        run.initialState.adviceTape.bytes ++ suffix := by
+  have all : ∀ i (bound : i < run.rows.size),
+      ∃ suffix, (run.rows[i]'bound).preState.adviceTape.bytes =
+        run.initialState.adviceTape.bytes ++ suffix := by
+    intro i
+    induction i with
+    | zero =>
+      intro bound
+      let first := run.rows[0]'bound
+      have firstAt : run.rows[0]? = some first := by simp [first, bound]
+      have starts := (run.starts first firstAt).2.2
+      refine ⟨#[], ?_⟩
+      change first.preState.adviceTape.bytes = _
+      rw [starts]
+      simp [advance_pc]
+    | succ i ih =>
+      intro bound
+      have previousBound : i < run.rows.size := by omega
+      let previous := run.rows[i]'previousBound
+      let current := run.rows[i + 1]'bound
+      have previousAt : run.rows[i]? = some previous := by
+        simp [previous, previousBound]
+      have currentAt : run.rows[i + 1]? = some current := by
+        simp [current, bound]
+      obtain ⟨earlier, preBytes⟩ := ih previousBound
+      obtain ⟨added, postBytes⟩ := execWithTapeAnswer_bytes_extend
+        _ (run.answers ⟨i, previousBound⟩) _ _
+        (run.executes ⟨i, previousBound⟩)
+      change previous.postState.adviceTape.bytes =
+        previous.preState.adviceTape.bytes ++ added at postBytes
+      change previous.preState.adviceTape.bytes =
+        run.initialState.adviceTape.bytes ++ earlier at preBytes
+      have linkedBytes : current.preState.adviceTape.bytes =
+          previous.postState.adviceTape.bytes := by
+        have link := run.linked i previous current previousAt currentAt
+        split at link
+        · simpa using congrArg (fun s : SailJoltState =>
+            s.adviceTape.bytes) link.2
+        · obtain ⟨address, _, _, _, nextPre⟩ := link
+          rw [nextPre]
+          rfl
+      refine ⟨earlier ++ added, ?_⟩
+      rw [linkedBytes, postBytes, preBytes, Array.append_assoc]
+  exact all step.val step.isLt
+
 private theorem rebuiltTapeOffset_succ
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -1023,6 +1099,40 @@ private theorem RebuildAgreement.slot_eq
   rw [oldSlot, newSlot] at slots
   exact Option.some.inj slots
 
+private def tapeHostSuffix (baseBytes : Array (BitVec 8))
+    (state : SailJoltState) : Array (BitVec 8) :=
+  (state.adviceTape.bytes.toList.drop baseBytes.size).toArray
+
+private def rebaseTapeState (baseBytes replacement : Array (BitVec 8))
+    (state : SailJoltState) : SailJoltState :=
+  swapBytes state (replacement ++ tapeHostSuffix baseBytes state)
+
+private theorem tapeHostSuffix_of_append (baseBytes suffix : Array (BitVec 8))
+    (state : SailJoltState)
+    (bytes : state.adviceTape.bytes = baseBytes ++ suffix) :
+    tapeHostSuffix baseBytes state = suffix := by
+  simp [tapeHostSuffix, bytes, Array.toList_append]
+
+private theorem rebaseTapeState_same (baseBytes replacement : Array (BitVec 8))
+    (state : SailJoltState) :
+    SameExceptTapeBytes state (rebaseTapeState baseBytes replacement state) := by
+  rfl
+
+private theorem rebaseTapeState_bytes_of_prefix
+    (baseBytes replacement suffix : Array (BitVec 8))
+    (state : SailJoltState)
+    (bytes : state.adviceTape.bytes = baseBytes ++ suffix) :
+    (rebaseTapeState baseBytes replacement state).adviceTape.bytes =
+      replacement ++ suffix := by
+  simp only [rebaseTapeState, swapBytes]
+  rw [tapeHostSuffix_of_append baseBytes suffix state bytes]
+
+private theorem rebaseTapeState_advance_pc (baseBytes replacement : Array (BitVec 8))
+    (address : BitVec 64) (compressed : Bool) (state : SailJoltState) :
+    rebaseTapeState baseBytes replacement (advance_pc address compressed state) =
+      advance_pc address compressed (rebaseTapeState baseBytes replacement state) := by
+  rfl
+
 /-- The rowwise replay certificate. It is the induction target: each new row
 executes against the fixed tape, follows its predecessor, and agrees with the
 untrusted row except for tape bytes and the narrow load's transient destination.
@@ -1341,6 +1451,183 @@ theorem rebuild_spoil_asserts
     _ = sourceValue rhs old.preState := passes old oldMem lhs rhs imm oldAssert nonzero
     _ = sourceValue rhs row.preState := samePre.sourceValue_eq rhs
 
+/-- The honest advice calculator reads registers, not tape bytes: replacing
+`[0x2C, 0x01]` with `[0x2C]` leaves its result unchanged.
+See `jolt/tracer/src/instruction/mod.rs:207-233` at 8bbb2357. -/
+private theorem honestTracerAdvice_ignores_tape
+    (source : SourceInstruction) (old replay : SailJoltState)
+    (same : SameExceptTapeBytes old replay) :
+    source.honestTracerAdvice old = source.honestTracerAdvice replay := by
+  have ignored : source.honestTracerAdvice old =
+      source.honestTracerAdvice
+        { old with adviceTape :=
+          { old.adviceTape with bytes := replay.adviceTape.bytes } } := rfl
+  exact ignored.trans (congrArg source.honestTracerAdvice same)
+
+private theorem RebuildAgreement.observedSlotAt
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay) (i : Nat) :
+    (original.rows[i]?.map fun row => original.bytecode[row.rowIndex]) =
+      (replay.rows[i]?.map fun row => replay.bytecode[row.rowIndex]) := by
+  by_cases oldBound : i < original.rows.size
+  · have newBound : i < replay.rows.size := by rw [agreement.length]; exact oldBound
+    let old := original.rows[i]'oldBound
+    let new := replay.rows[i]'newBound
+    have oldAt : original.rows[i]? = some old := by simp [old, oldBound]
+    have newAt : replay.rows[i]? = some new := by simp [new, newBound]
+    obtain ⟨sameIndex, _, _, _, _⟩ := agreement.rows i old new oldAt newAt
+    simpa only [oldAt, newAt, Option.map_some] using
+      congrArg some (agreement.slot_eq old new sameIndex)
+  · have newBound : ¬ i < replay.rows.size := by
+      rw [agreement.length]
+      exact oldBound
+    simp [show original.rows[i]? = none from by simp [oldBound],
+      show replay.rows[i]? = none from by simp [newBound]]
+
+private theorem RebuildAgreement.startFlagAt_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay) (i : Nat) :
+    stepNOfTraceIsStartOfNewExpansion original.rows i =
+      stepNOfTraceIsStartOfNewExpansion replay.rows i := by
+  simp only [stepNOfTraceIsStartOfNewExpansion]
+  simpa only [Option.map_map] using congrArg
+    (fun slot : Option JoltInstructionRow =>
+      (slot.map JoltInstructionRow.starts_source).getD false)
+    (agreement.observedSlotAt i)
+
+private theorem RebuildAgreement.adviceFlagAt_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay) (i : Nat) :
+    stepNOfTraceIsAdvice original.rows i = stepNOfTraceIsAdvice replay.rows i := by
+  simp only [stepNOfTraceIsAdvice]
+  simpa only [Option.bind_map] using congrArg
+    (fun slot : Option JoltInstructionRow =>
+      (slot.bind fun row => row.instruction.adviceValue?).isSome)
+    (agreement.observedSlotAt i)
+
+private theorem RebuildAgreement.startOfExpansion_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay) (n : Nat) :
+    startOfExpansionContainingStepN original.rows n =
+      startOfExpansionContainingStepN replay.rows n := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    simp only [startOfExpansionContainingStepN,
+      agreement.startFlagAt_eq (n + 1), ih]
+
+private theorem RebuildAgreement.adviceCount_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay) (n : Nat) :
+    adviceStepsBeforeStepN original.rows n =
+      adviceStepsBeforeStepN replay.rows n := by
+  have flags : stepNOfTraceIsAdvice original.rows =
+      stepNOfTraceIsAdvice replay.rows := funext agreement.adviceFlagAt_eq
+  simp only [adviceStepsBeforeStepN, agreement.startOfExpansion_eq n, flags]
+
+private theorem startOfExpansion_is_start_or_zero
+    {bytecode : Array JoltInstructionRow}
+    (rows : Array (TraceRow bytecode)) (n : Nat) :
+    startOfExpansionContainingStepN rows n = 0 ∨
+      stepNOfTraceIsStartOfNewExpansion rows
+        (startOfExpansionContainingStepN rows n) = true := by
+  induction n with
+  | zero => exact Or.inl rfl
+  | succ n ih =>
+    by_cases h : stepNOfTraceIsStartOfNewExpansion rows (n + 1) = true
+    · simp only [startOfExpansionContainingStepN, if_pos h]
+      exact Or.inr h
+    · simp only [startOfExpansionContainingStepN, if_neg h]
+      exact ih
+
+private theorem UntrustedAnswerRun.expansionStart_starts_source
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (n : Nat) (first : TraceRow run.bytecode)
+    (firstAt : run.rows[startOfExpansionContainingStepN run.rows n]? = some first) :
+    run.bytecode[first.rowIndex].starts_source := by
+  rcases startOfExpansion_is_start_or_zero run.rows n with zero | marked
+  · rw [zero] at firstAt
+    exact (run.starts first (by simpa using firstAt)).2.1
+  · simp only [stepNOfTraceIsStartOfNewExpansion, firstAt,
+      Option.map_some, Option.getD_some] at marked
+    exact marked
+
+private theorem RebuildAgreement.honestAdviceAt_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay)
+    (n : Nat) (old : TraceRow original.bytecode)
+    (new : TraceRow replay.bytecode)
+    (oldAt : original.rows[n]? = some old)
+    (newAt : replay.rows[n]? = some new) :
+    honestTracerAdviceAtStepN joltInstance.program original.rows n =
+      honestTracerAdviceAtStepN joltInstance.program replay.rows n := by
+  obtain ⟨sameIndex, _, _, _, _⟩ := agreement.rows n old new oldAt newAt
+  have sameSlot := agreement.slot_eq old new sameIndex
+  have sameCurrentAdvice :
+      original.bytecode[old.rowIndex.val].instruction.adviceValue? =
+        replay.bytecode[new.rowIndex.val].instruction.adviceValue? := by
+    simpa using congrArg (fun slot : JoltInstructionRow =>
+      slot.instruction.adviceValue?) sameSlot
+  let firstIndex := startOfExpansionContainingStepN original.rows n
+  have sameStart : firstIndex = startOfExpansionContainingStepN replay.rows n :=
+    agreement.startOfExpansion_eq n
+  have sameCount := agreement.adviceCount_eq n
+  by_cases firstBound : firstIndex < original.rows.size
+  · have replayBound : firstIndex < replay.rows.size := by
+      rw [agreement.length]
+      exact firstBound
+    let oldFirst := original.rows[firstIndex]'firstBound
+    let newFirst := replay.rows[firstIndex]'replayBound
+    have oldFirstAt : original.rows[firstIndex]? = some oldFirst := by
+      simp [oldFirst, firstBound]
+    have newFirstAt : replay.rows[firstIndex]? = some newFirst := by
+      simp [newFirst, replayBound]
+    obtain ⟨firstSameIndex, _, _, _, _⟩ :=
+      agreement.rows firstIndex oldFirst newFirst oldFirstAt newFirstAt
+    have sameFirstSlot := agreement.slot_eq oldFirst newFirst firstSameIndex
+    have firstIsStart : original.bytecode[oldFirst.rowIndex].starts_source := by
+      exact original.expansionStart_starts_source n oldFirst oldFirstAt
+    have samePre := agreement.sourceStartPre firstIndex oldFirst newFirst
+      oldFirstAt newFirstAt firstIsStart
+    have sameAddress : original.bytecode[oldFirst.rowIndex].address =
+        replay.bytecode[newFirst.rowIndex].address :=
+      congrArg JoltInstructionRow.address sameFirstSlot
+    have sameSourceAddress : original.bytecode[oldFirst.rowIndex.val].address =
+        replay.bytecode[newFirst.rowIndex.val].address := by
+      simpa using sameAddress
+    dsimp only [firstIndex] at oldFirstAt
+    simp [honestTracerAdviceAtStepN, oldAt, newAt, sameCurrentAdvice,
+      ← sameStart, oldFirstAt, newFirstAt, sameSourceAddress, ← sameCount,
+      honestTracerAdvice_ignores_tape _ _ _ samePre]
+  · have replayBound : ¬ firstIndex < replay.rows.size := by
+      rw [agreement.length]
+      exact firstBound
+    have oldFirstAt : original.rows[firstIndex]? = none := by simp [firstBound]
+    have newFirstAt : replay.rows[firstIndex]? = none := by simp [replayBound]
+    dsimp only [firstIndex] at oldFirstAt
+    simp [honestTracerAdviceAtStepN, oldAt, newAt,
+      ← sameStart, oldFirstAt, newFirstAt]
+
 /-- Honest internal advice uses the state at the start of its source expansion;
 the rebuilt run has that state, apart from tape bytes. -/
 theorem rebuild_honest_advice
@@ -1353,7 +1640,19 @@ theorem rebuild_honest_advice
     ∀ n : Fin replay.rows.size,
       replay.rows[n].someTracerAdvice? =
         honestTracerAdviceAtStepN joltInstance.program replay.rows n := by
-  sorry
+  intro n
+  have oldBound : n.val < original.rows.size := by
+    rw [← agreement.length]
+    exact n.isLt
+  let old := original.rows[n.val]'oldBound
+  let new := replay.rows[n]
+  have oldAt : original.rows[n.val]? = some old := by simp [old, oldBound]
+  have newAt : replay.rows[n.val]? = some new := by simp [new]
+  have observed := (agreement.rows n.val old new oldAt newAt).2.1
+  have originalAdvice := original.advice_from_honest_tracer ⟨n.val, oldBound⟩
+  simpa only [old, new] using
+    observed.symm.trans (originalAdvice.trans
+      (agreement.honestAdviceAt_eq n.val old new oldAt newAt))
 
 /-- PR #2109's stable-stall predicate depends on bytecode, row index and nextPC,
 all preserved by replay. Pinned to a16z/jolt PR #2109 head d2995380. -/
