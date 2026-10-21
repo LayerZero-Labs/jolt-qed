@@ -1,6 +1,6 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-10-20
+updated: 2026-10-21
 rust: 8bbb2357890928d8f83b00ca542879077c4d3d28
 migration: implemented and validated
 ---
@@ -15,8 +15,8 @@ section summarizes the argument and says where to start. The
 [Layer 5b handoff](../methods/soundness.md#layer-5b-handoff-updated-2026-10-20)
 records the existing step lemmas: 77 of 88 native row kinds have local steps,
 two are unreachable, and nine remain, plus device agreement and the
-dispatcher. `ExpansionFacts.expand_temps_ok` proves per-expansion temporary
-write-before-read; its use in the global HostIO register agreement is still owed.
+dispatcher.
+`ExpansionFacts.expand_temps_ok` proves per-expansion temporary write-before-read; the global induction will use [live-register agreement](../methods/soundness.md#register-agreement-must-be-over-live-registers) instead of keeping the HostIO temporary unavailable.
 
 **Current Rust semantics pin, selected with Ari on 2026-10-15:** upstream
 [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
@@ -126,9 +126,8 @@ No complete satisfying witness or verifier reproduction exists for those cases
 in this work; #2044 does not establish them. Each has its own next check in the
 plan. The FIXME links #2044 and these candidates and requires narrowing or
 removal as each is resolved and proved. This replaces the input/advice-only
-restriction. Alignment, unsupported peripheral dispatch, panic/termination
-value agreement and stopping remain separate obligations; address assertions
-alone do not establish successful execution.
+restriction.
+Alignment, unsupported peripheral dispatch and panic/termination value agreement remain separate obligations, and stopping is proved in Layer 7; address assertions alone do not establish successful execution.
 
 The [migration source recheck](../methods/model_update.md#source-audits-refreshed-at-the-public-pin)
 records the unchanged device/MMU behavior at the public pin and refreshes the
@@ -148,6 +147,8 @@ Premises or fields of the final theorem, with their source or reason below.
 | Every attempted HostIO call succeeds (temporary) | `JoltInstance.HostCallsSucceed` in `Soundness/Layer5/HostCallRestriction.lean`, field `hostCallsSucceed` | Excludes unencoded host-call failures in live mode; program-execution condition approved by Ari pending the a16z batch |
 | Source HostIO calls name x0 (temporary) | `Rv64ProgramImage.HostCallRdZero`, field `hostCallRdZero` | Approved by Ari to exclude an unconstrained architectural destination. The expanded row writes a temporary; its value must be shown dead across the source boundary using `ExpansionFacts.expand_temps_ok` |
 | Termination is followed by a stall and no later termination load (temporary) | `JoltInstance.TerminationThenStall` in `Soundness/Layer5/TerminationRestriction.lean`, field `terminationThenStall` | Approved by Ari for the B6 stopping discrepancy; remains until the unrestricted argument is established |
+| Every store to the panic word stores 1, and no load reads the panic word after such a store (temporary) | `JoltInstance.PanicStoresOne` in `Soundness/Layer5/PanicRestriction.lean`, field `panicStoresOne` of `JoltInstance.TemporaryRestrictions` | Added 2026-10-20 to exclude a store of 0 being proved as "no panic" (`blog/content/blog/completeness-and-soundness/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction |
+| The claim says "no panic" (temporary) | `JoltInstance.ClaimsNoPanic` in `Soundness/Layer5/PanicRestriction.lean`, field `claimsNoPanic` of `JoltInstance.TemporaryRestrictions` | Added 2026-10-20 to exclude a "panicked" claim proved from an execution cut short at a jump (`blog/content/blog/proof-stops-at-any-jump/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction |
 | The PC does not wrap past 2^64 | `Rv64ProgramImage.NextPCNoWrap`, field `pcNoWrap` of `JoltInstance.SoundnessAssumptions` and `JoltInstance.CompletenessAssumptions` | a16z, 2026-10-07: such an ELF is illegal |
 | The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10, replacing the run-based address restriction. With the verifier's RAM-size check, all eight bytes of each in-domain word fit. The signed sum is then recovered from satisfying constraints, including address zero. NOTE: to confirm with a16z. This is an instance restriction, not a verifier check |
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Rust's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Rust's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
@@ -170,11 +171,11 @@ The following declarations still use `sorry`:
 
 | Declaration | What it needs |
 |---|---|
-| `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. |
+| `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. It must also give `cutRam`: RAM agreement at the cut, or `RamValFinal` agreement when the run fills every cycle, for every RAM word except the termination word, including input, advice, output and panic words. |
 | `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
 
-Steps 1–6 of the tape-rebuild closing plan are complete on `feat/layer7-tape-rebuild` in `/Users/ari.biswas/Lean/jolt-qed-tape-rebuild`, rebased onto step (c) commit `de5aff70de66d290ceaeb6e7357ba352b855c5d0`.
+Steps 1–6 of the tape-rebuild closing plan are complete; `feat/layer7-tape-rebuild`, rebased onto step (c) commit `de5aff70de66d290ceaeb6e7357ba352b855c5d0`, is merged into `feat/soundness`.
 `rebuild_rows` maps the relaxed rows directly with `Array.ofFn`, proving execution, initialization, linkage, row agreement and source-start agreement.
 The rebuilt-tape read theorem, the narrow-load shape, and all transfer theorems are proved.
 Both advice and register-shift pairs use the checker-independent lift in `Soundness/Layer7/AdjacentRows.lean`.
@@ -222,7 +223,6 @@ The axiom audit found no `sorryAx` in B, the plain-`Trace` final RAM overlay, th
 After restating A's obligations, `lake build JoltConstraints.Soundness.TopLevel` passed (8703 jobs) and `git diff --check` passed.
 The full `lake build` also passed (8797 jobs).
 After replacing source-level replay with the constraint-level suffix statement, `lake build JoltBytecode JoltConstraints` passed (8797 jobs).
-The axiom audit found `sorryAx` in the staged suffix statement, stopping, execution-prefix agreement, A and the final soundness theorem; B remained free of `sorryAx`.
 With synchronous elaboration, the five new proofs took 12 ms (`writeDst_rule_of_device_relation`), 74 ms (`execWithTapeAnswer_rule_of_device_relation`), 537 ms (`HonestTrace.device_relation`), 494 ms (`UntrustedAnswerTrace.device_relation`), and 213 ms (`new_io_word_geometry`).
 The output decoder took 381 ms after using `new_io_word_geometry`, down from 1996 ms before this refactor.
 
@@ -303,9 +303,9 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
   soundness only needs the ordinary instruction proofs for SC's rows. Register
   agreement supplies the same values of registers 32 and 33 to the witness and
   run, without an invariant interpreting them as an emulator reservation.
-  `NoStoreConditional` currently remains pending that instruction
-  coverage; the main theorem is still sorried. The follow-up steps are in the
-  plan's PR #2039 section.
+  `NoStoreConditional` currently remains pending that instruction coverage.
+  The main theorem depends on `sorry` only through `soundness_execution_prefix_agreement`, `soundness_prover_accepts` and `soundness_spoil_asserts_pass`.
+  The follow-up steps are in the plan's PR #2039 section.
 - **XOR and SLTIU soundness steps.** `Layer5/Xor.lean` and
   `Layer5/SetLessThanImmediate.lean` prove successful execution, the constrained
   write value and preservation of register agreement for selected rows.
@@ -334,12 +334,9 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
   and final-cycle execution are included. VirtualAssertLTE derives that its
   check passes and preserves the entire state, using `RegisterAgreement.noWrite`
   for the next table column. All other new steps reuse `registerWrite_step`.
-  The source audit and validation are in `methods/soundness.md`. SC.W still
-  needs full step coverage for `VirtualAssertWordAlignment`, `VirtualAlignAddr`,
-  `ANDI`, `LD`, `VirtualWindowMaskW`, `VirtualPextSigned`, `ANDN`,
-  `VirtualShiftDataW` and `SD`; SC.D still needs `LD` and `SD`. RAM/PC agreement
-  and whole-trace composition remain open; no main-theorem or instance premise
-  was added.
+  The source audit and validation are in `methods/soundness.md`.
+  SC.W's remaining rows `VirtualAssertWordAlignment`, `VirtualAlignAddr`, `ANDI`, `LD`, `VirtualWindowMaskW`, `VirtualPextSigned`, `ANDN`, `VirtualShiftDataW` and `SD`, and SC.D's `LD` and `SD`, now have local steps, with LD and SD for ordinary RAM only.
+  RAM/PC agreement and whole-trace composition remain open; no main-theorem or instance premise was added.
 - **Alignment and ordinary-RAM SD, 2026-10-15.** `Layer5/RamAlignment.lean`
   derives eight-byte alignment from the encoded address and RAM selection,
   including the zero-address case. `Layer5/RamStore.lean` reuses the existing
@@ -349,10 +346,9 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
   succeeds, the interpreter and witness perform matching word updates, and
   registers retain agreement. The last-cycle result updates `RamValFinal`.
   This covers the ordinary-RAM branch using the existing address-check fact;
-  it adds no instance or main-theorem premise. LD, device stores, initial RAM
-  agreement and execution-prefix composition remain open. The source check
-  and validation are recorded in `methods/soundness.md`; no new Jolt issue
-  is claimed.
+  it adds no instance or main-theorem premise.
+  LD and initial ordinary-RAM agreement are now proved (`ld_ram_step` in `Layer5/LoadDoubleword.lean`, `initialRamWord_eq_ram_doubleword` in `Layer5/RamInitialization.lean`); device stores and execution-prefix composition remain open.
+  The source check and validation are recorded in `methods/soundness.md`; no new Jolt issue is claimed.
 - **LR/SC reservation correspondence (model obligation).** Jolt's native
   execution methods `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`;
   the patched inline trace path and this model compute success from virtual
@@ -390,9 +386,8 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
   one tape whose contents the prover chooses, so the relaxed semantics is a
   proof device. Rebuilding one tape from the answers' low bytes gives the same
   registers and memory at the end of every source instruction; that step is
-  planned for Layer 7 and not yet proved.
-  Fixed-tape soundness and internal runtime-advice agreement
-  remain open; see B6 in `methods/review_completeness_and_soundness.md`.
+  proved in Layer 7 (`untrustedAnswerLanguage_implies_inLanguage`).
+  Internal runtime-advice agreement remains open as part of the execution prefix; see B6 in `methods/review_completeness_and_soundness.md`.
 - **RAM region restriction.** `RamRegionFits` now bounds the instance's maximum
   padded RAM region by `2^64`; Ari approved this replacement on 2026-10-10.
   NOTE: to confirm with a16z. The old run-based predicate and next-step helper
@@ -417,10 +412,9 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
   a new premise. Instruction families still have to establish successful
   writes and their value's encoding in `RdWriteValue` before applying the
   shared update lemma. The new proofs use only Lean's three standard axioms.
-- **Routine Layer 5b rows, 2026-10-15.** The grouped local steps now cover
-  68 of 88 row kinds, with LD and SD established for ordinary RAM. The latest
-  batch closes Ari's 29-kind routine list: 27 have local execution steps and
-  VirtualROTRI/VirtualROTRIW are excluded by checked expansion facts.
+- **Routine Layer 5b rows, 2026-10-15.**
+  The grouped local steps then covered 68 of 88 row kinds and now cover 77 of 88, with LD and SD established for ordinary RAM.
+  The latest batch closes Ari's 29-kind routine list: 27 have local execution steps and VirtualROTRI/VirtualROTRIW are excluded by checked expansion facts.
   Immediate right shifts obtain their mask shape from `immShiftOk`; register-fed
   shifts use a paired producer/shift lemma that derives the shape from the
   preceding mask write. The dispatcher still must connect predecessor and
@@ -440,13 +434,14 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
   AssertEQ, both alignment assertions, AssertMulUNoOverflow, AssertValidDiv0
   and AssertValidUnsignedRemainder are imported and built. Their lookup and
   `assertLookupOne` proofs establish successful execution without new premises;
-  AssertEQ also handles the nonzero spoil immediate. The count is now 74 of
-  88 row kinds with steps, plus two proved unreachable. The new axiom audits
-  contain no native decision axiom or `sorryAx`. VirtualHostIO remains open:
-  the modeled initial state and Rust pass 1 use live mode, whereas only Rust's
-  chunk workers replay. Live advice-write calls can extend the tape, and
-  marker/print calls can fail on invalid events. The replay no-op branch is
-  therefore insufficient for the soundness execution step. Ari has since added
+  AssertEQ also handles the nonzero spoil immediate.
+  The count was then 74 of 88 row kinds with steps, plus two proved unreachable; it is now 77 of 88.
+  The new axiom audits contain no native decision axiom or `sorryAx`.
+  VirtualHostIO was then open and now has a local step (`Layer5/HostCallRegisterFrame.lean`).
+  The modeled initial state and pass 1 of Jolt's tracer use live mode, whereas only the tracer's chunk workers replay.
+  Live advice-write calls can extend the tape, and marker/print calls can fail on invalid events.
+  The replay no-op branch is therefore insufficient for the soundness execution step.
+  Ari has since added
   `HostCallsSucceed` to the temporary restrictions; it compiles in the root
   build and requires successful execution of attempted host calls.
   `host_call_exec_sail_frame` derives that success and preserves Sail registers
@@ -459,7 +454,8 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
   `Assumptions.lean` and the root build passes. Its application lemmas rule out
   a later termination load and JALR; a later JAL must have offset zero, and
   `termination_next_jal_stalls` proves that executing it sets `nextPC` to its
-  own address. The Layer 7 last-row argument and device agreement remain open.
+  own address.
+  The Layer 7 last-row argument is proved (`Layer7/LastJump.lean`, `Layer7/TerminationStore.lean`); device agreement remains open.
   At pin `8bbb2357`, Rust accepts a HostIO source instruction with nonzero
   `rd` (`image/decode.rs:196-208`, `format_i.rs:7-24`). Even when the source
   uses `rd = x0`, `expand/materialize.rs:79-90` rewrites its side-effecting
@@ -477,10 +473,10 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
   selected predecessor from the sequence and expanded-PC constraints when
   that predecessor is a real row, and connects a selected register shift to
   its expansion's mask producer. Its five public lemmas use only Lean's three
-  standard axioms. The execution-prefix state link, entry-start fact,
-  padding suffix, source-boundary transition and full dispatcher remain open;
-  no main-theorem premise changed. The validation and scope are recorded in
-  `methods/soundness.md`.
+  standard axioms.
+  Padding persistence (`padding_persists`, `padding_from`) is now proved in this file, and the padding suffix is proved in Layer 7.
+  The execution-prefix state link, entry-start fact, source-boundary transition and full dispatcher remain open; no main-theorem premise changed.
+  The validation and scope are recorded in `methods/soundness.md`.
 - **ADDI soundness step.** `Layer5/AddImmediate.lean` now proves a selected
   ADDI row executes to the concrete destination-write state, writes the
   wrapped sum constrained by the lookup, and preserves register agreement

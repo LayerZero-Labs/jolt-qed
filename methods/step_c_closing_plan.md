@@ -1,5 +1,8 @@
 # Closing step (c): the stopping half of Layer 7
 
+Status: completed on 2026-10-21; `soundness_stopping` is proved.
+This file is kept as the record of the plan; see [the integration report](step_c_closing_report.md).
+
 This file is for a fresh agent with no prior context.
 Read `AGENTS.md` at the repository root first; its rules apply to everything below.
 

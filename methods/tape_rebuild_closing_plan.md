@@ -1,5 +1,8 @@
 # Closing the tape rebuild: the second half of Layer 7
 
+Status: completed on 2026-10-21; `untrustedAnswerLanguage_implies_inLanguage` is proved and merged into `feat/soundness` (commit `abbe045`).
+This file is kept as the record of the plan.
+
 This file is for a fresh agent with no prior context.
 Read `/Users/ari.biswas/Lean/jolt-qed-public/AGENTS.md` first; its rules apply to everything below.
 
