@@ -617,10 +617,10 @@ four expansion lemmas above. Host writes extend only the suffix. -/
 private noncomputable def rebuild_rows
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
-    (original : UntrustedAnswerRun joltInstance privateInputs)
-    (initial : SailJoltState)
-    (sameInitial : SameExceptTapeBytes original.initialState initial) :
-    RebuiltRows original initial := by
+    (original : UntrustedAnswerRun joltInstance privateInputs) :
+    RebuiltRows original
+      { original.initialState with adviceTape :=
+        { bytes := rebuiltTape original, readPosition := 0 } } := by
   sorry
 
 theorem rebuild_valid_run
@@ -650,7 +650,7 @@ theorem rebuild_valid_run
           state.adviceTape.readPosition) init.symm
   have sameInitial : SameExceptTapeBytes original.initialState initial := by
     simp [SameExceptTapeBytes, initial, zeroCursor]
-  let replayRows := rebuild_rows original.toUntrustedAnswerRun initial sameInitial
+  let replayRows := rebuild_rows original.toUntrustedAnswerRun
   let replay : ValidRun joltInstance
       (rebuiltInputs privateInputs original.toUntrustedAnswerRun) :=
     { toTrace :=
