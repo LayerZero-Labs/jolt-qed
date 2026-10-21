@@ -18,12 +18,17 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
+/-- `width` little-endian bytes from an answer. For answer 300 and width 1,
+this is `[0x2C]`: the high byte of 300 is dropped. -/
 def lowAnswerBytes (answer : BitVec 64) (width : Nat) : List (BitVec 8) :=
   (List.range width).map fun offset => BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * offset))
 
+/-- The word formed by zero-extending `lowAnswerBytes`; 300 at width 1 becomes 44. -/
 def lowAnswer (answer : BitVec 64) (width : Nat) : BitVec 64 :=
   BitVec.ofNat 64 (answer.toNat % 2 ^ (8 * width))
 
+/-- The bytes contributed by one executed row, empty unless it is a tape read.
+A one-byte advice-load row answered with 300 contributes `[0x2C]`. -/
 def answerBytesAt {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)
@@ -38,12 +43,14 @@ def rebuiltTape {joltInstance : JoltInstance SourceInstruction}
     (run : UntrustedAnswerRun joltInstance privateInputs) : Array (BitVec 8) :=
   ((List.finRange run.rows.size).flatMap (answerBytesAt run)).toArray
 
+/-- Keep the prover's non-tape private input and replace only its tape. -/
 def rebuiltInputs {joltInstance : JoltInstance SourceInstruction}
     (privateInputs : JoltPrivateInputs)
     (run : UntrustedAnswerRun joltInstance privateInputs) : JoltPrivateInputs :=
-  { untrusted_advice := privateInputs.untrusted_advice
-    advice_tape := rebuiltTape run }
+  { privateInputs with advice_tape := rebuiltTape run }
 
+/-- Number of rebuilt tape bytes before a row. If the first read answered 300
+at width 1, its offset is zero and the next read starts at offset one. -/
 def rebuiltTapeOffset {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)
@@ -76,33 +83,93 @@ theorem advicelb_low_answer (rd : regidx) (answers : Nat → BitVec 64)
     execProgramWithTapeAnswers (advicelbProgramAuto rd) answers pre =
     execProgramWithTapeAnswers (advicelbProgramAuto rd)
       (fun n => if n = 0 then lowAnswer (answers 0) 1 else answers n) pre := by
-  sorry
+  rw [advicelb_exec, advicelb_exec]
+  simp only [↓reduceIte]
+  have loweq : (lowAnswer (answers 0) 1).setWidth 8 = (answers 0).setWidth 8 := by
+    apply BitVec.eq_of_toNat_eq
+    simp [lowAnswer, BitVec.toNat_setWidth]
+  simp only [loweq]
 
 theorem advicelh_low_answer (rd : regidx) (answers : Nat → BitVec 64)
     (pre : SailJoltState) :
     execProgramWithTapeAnswers (advicelhProgramAuto rd) answers pre =
     execProgramWithTapeAnswers (advicelhProgramAuto rd)
       (fun n => if n = 0 then lowAnswer (answers 0) 2 else answers n) pre := by
-  sorry
+  rw [advicelh_exec, advicelh_exec]
+  simp only [↓reduceIte]
+  have loweq : (lowAnswer (answers 0) 2).setWidth 16 = (answers 0).setWidth 16 := by
+    apply BitVec.eq_of_toNat_eq
+    simp [lowAnswer, BitVec.toNat_setWidth]
+  simp only [loweq]
 
 theorem advicelw_low_answer (rd : regidx) (answers : Nat → BitVec 64)
     (pre : SailJoltState) :
     execProgramWithTapeAnswers (advicelwProgramAuto rd) answers pre =
     execProgramWithTapeAnswers (advicelwProgramAuto rd)
       (fun n => if n = 0 then lowAnswer (answers 0) 4 else answers n) pre := by
-  sorry
+  rw [advicelw_exec, advicelw_exec]
+  simp only [↓reduceIte]
+  have loweq : (lowAnswer (answers 0) 4).setWidth 32 = (answers 0).setWidth 32 := by
+    apply BitVec.eq_of_toNat_eq
+    simp [lowAnswer, BitVec.toNat_setWidth]
+  simp only [loweq]
 
 theorem adviceld_low_answer (rd : regidx) (answers : Nat → BitVec 64)
     (pre : SailJoltState) :
     execProgramWithTapeAnswers (adviceldProgramAuto rd) answers pre =
     execProgramWithTapeAnswers (adviceldProgramAuto rd)
       (fun n => if n = 0 then lowAnswer (answers 0) 8 else answers n) pre := by
-  sorry
+  have loweq : lowAnswer (answers 0) 8 = answers 0 := by
+    apply BitVec.eq_of_toNat_eq
+    simp [lowAnswer, Nat.mod_eq_of_lt (BitVec.isLt _)]
+  have functions : (fun n => if n = 0 then lowAnswer (answers 0) 8 else answers n) =
+      answers := by
+    funext n
+    by_cases zero : n = 0 <;> simp [zero, loweq]
+  rw [functions]
 
+/-- Masking has already completed after the multiply row. The later arithmetic
+shift only sign-extends the now-equal value. -/
+theorem lowAnswer_muli_1 (answer : BitVec 64) :
+    jolt_virtual_muli_value answer (slliMultiplier 56) =
+      jolt_virtual_muli_value (lowAnswer answer 1) (slliMultiplier 56) := by
+  have loweq : lowAnswer answer 1 = (answer.setWidth 8).zeroExtend 64 := by
+    apply BitVec.eq_of_toNat_eq
+    simp [lowAnswer, BitVec.toNat_setWidth]
+  rw [loweq]
+  simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
+  bv_decide
+
+theorem lowAnswer_muli_2 (answer : BitVec 64) :
+    jolt_virtual_muli_value answer (slliMultiplier 48) =
+      jolt_virtual_muli_value (lowAnswer answer 2) (slliMultiplier 48) := by
+  have loweq : lowAnswer answer 2 = (answer.setWidth 16).zeroExtend 64 := by
+    apply BitVec.eq_of_toNat_eq
+    simp [lowAnswer, BitVec.toNat_setWidth]
+  rw [loweq]
+  simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
+  bv_decide
+
+theorem lowAnswer_muli_4 (answer : BitVec 64) :
+    jolt_virtual_muli_value answer (slliMultiplier 32) =
+      jolt_virtual_muli_value (lowAnswer answer 4) (slliMultiplier 32) := by
+  have loweq : lowAnswer answer 4 = (answer.setWidth 32).zeroExtend 64 := by
+    apply BitVec.eq_of_toNat_eq
+    simp [lowAnswer, BitVec.toNat_setWidth]
+  rw [loweq]
+  simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
+  bv_decide
+
+/-- The states agree on cursor, registers, RAM, device and host mode; only the
+tape byte array may differ (for example original `[0x2C,0x01]` versus replay
+`[0x2C]` after a one-byte read answered with 300). -/
 def SameExceptTapeBytes (original replay : SailJoltState) : Prop :=
   { original with adviceTape :=
     { original.adviceTape with bytes := replay.adviceTape.bytes } } = replay
 
+/-- Write one architectural or virtual destination in a state. This lets the
+replay relation account for the transient register value 300 versus 44 after
+a one-byte load, while leaving all other fields fixed. -/
 noncomputable def replaceDst (dst : Dst) (state : SailJoltState)
     (value : BitVec 64) : SailJoltState :=
   match dst with
@@ -110,22 +177,26 @@ noncomputable def replaceDst (dst : Dst) (state : SailJoltState)
   | .vreg vr =>
       { state with vregs := fun r => if r = vr then value else state.vregs r }
 
+/-- Agreement modulo the tape bytes and one destination register. For the
+one-byte answer 300, the unmasked original destination may be 300 while the
+fixed-tape replay destination is 44. -/
 def SameExceptTapeBytesAndDst (dst : Dst)
     (original replay : SailJoltState) : Prop :=
   ∃ value : BitVec 64,
     SameExceptTapeBytes (replaceDst dst original value) replay
 
-/-- The destination can differ only after the advice load or its multiply;
-the arithmetic shift restores full state agreement. -/
+/-- The destination can differ only after the narrow advice load, which is
+also the pre-state of the immediately following multiply. The multiply itself
+discards all high answer bits, so its post-state already agrees exactly. -/
 def NarrowAdvicePending (bytecode : Array JoltInstructionRow)
     (rowIndex : Nat) (preState : Bool) (dst : Dst) : Prop :=
   ∃ (start : Fin bytecode.size) (width : BitVec 64),
     bytecode[start].instruction = .VirtualAdviceLoad dst width ∧
     width.toNat < 8 ∧
     (if preState then
-      rowIndex = start.val + 1 ∨ rowIndex = start.val + 2
+      rowIndex = start.val + 1
     else
-      rowIndex = start.val ∨ rowIndex = start.val + 1)
+      rowIndex = start.val)
 
 def ReplayStateAgreement (bytecode : Array JoltInstructionRow)
     (rowIndex : Nat) (preState : Bool)
@@ -134,6 +205,47 @@ def ReplayStateAgreement (bytecode : Array JoltInstructionRow)
     SameExceptTapeBytesAndDst dst original replay) ∧
   ((¬ ∃ dst, NarrowAdvicePending bytecode rowIndex preState dst) →
     SameExceptTapeBytes original replay)
+
+private theorem SameExceptTapeBytes.device_eq
+    {original replay : SailJoltState}
+    (same : SameExceptTapeBytes original replay) :
+    original.jolt_device = replay.jolt_device := by
+  change { original with adviceTape :=
+    { original.adviceTape with bytes := replay.adviceTape.bytes } } = replay at same
+  have h := congrArg SailJoltState.jolt_device same
+  exact h
+
+private theorem SameExceptTapeBytes.sourceValue_eq
+    {original replay : SailJoltState}
+    (same : SameExceptTapeBytes original replay) (src : Src) :
+    sourceValue src original = sourceValue src replay := by
+  change { original with adviceTape :=
+    { original.adviceTape with bytes := replay.adviceTape.bytes } } = replay at same
+  have h := congrArg (sourceValue src) same
+  exact h
+
+private theorem replaceDst_device_eq (dst : Dst) (state : SailJoltState)
+    (value : BitVec 64) :
+    (replaceDst dst state value).jolt_device = state.jolt_device := by
+  cases dst with
+  | vreg vr => rfl
+  | xreg rd =>
+      simp only [replaceDst, NativeDispatch.afterDst]
+      split <;> rfl
+
+private theorem ReplayStateAgreement.device_eq
+    {bytecode : Array JoltInstructionRow} {rowIndex : Nat}
+    {preState : Bool} {original replay : SailJoltState}
+    (same : ReplayStateAgreement bytecode rowIndex preState original replay) :
+    original.jolt_device = replay.jolt_device := by
+  by_cases pending : ∃ dst, NarrowAdvicePending bytecode rowIndex preState dst
+  · obtain ⟨dst, occurs⟩ := pending
+    obtain ⟨value, sameDst⟩ := same.1 dst occurs
+    calc
+      original.jolt_device = (replaceDst dst original value).jolt_device :=
+        (replaceDst_device_eq dst original value).symm
+      _ = replay.jolt_device := sameDst.device_eq
+  · exact (same.2 pending).device_eq
 
 /-- Row indices, recorded runtime advice and nextPC are identical. Registers,
 RAM and device agree at every row except the pending narrow-load destination. -/
@@ -157,6 +269,38 @@ structure RebuildAgreement
       ReplayStateAgreement original.bytecode old.rowIndex.val false
         old.postState new.postState
 
+private theorem stableStall_iff_of_slot_nextPC
+    {oldBytecode newBytecode : Array JoltInstructionRow}
+    (old : TraceRow oldBytecode) (new : TraceRow newBytecode)
+    (slot : oldBytecode[old.rowIndex] = newBytecode[new.rowIndex])
+    (nextPC : old.postState.sail.regs.get? Register.nextPC =
+      new.postState.sail.regs.get? Register.nextPC) :
+    old.StableStall ↔ new.StableStall := by
+  simp only [TraceRow.StableStall, slot, nextPC]
+
+private theorem RebuildAgreement.slot_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay)
+    (old : TraceRow original.bytecode) (new : TraceRow replay.bytecode)
+    (sameIndex : old.rowIndex.val = new.rowIndex.val) :
+    original.bytecode[old.rowIndex] = replay.bytecode[new.rowIndex] := by
+  have slots := congrArg
+    (fun bc : Array JoltInstructionRow => bc[old.rowIndex.val]?)
+    agreement.bytecode.symm
+  change original.bytecode[old.rowIndex.val]? =
+    replay.bytecode[old.rowIndex.val]? at slots
+  have oldSlot : original.bytecode[old.rowIndex.val]? =
+      some original.bytecode[old.rowIndex] := by simp
+  have newSlot : replay.bytecode[old.rowIndex.val]? =
+      some replay.bytecode[new.rowIndex] := by
+    rw [sameIndex]
+    simp
+  rw [oldSlot, newSlot] at slots
+  exact Option.some.inj slots
+
 theorem rebuild_valid_run
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -176,6 +320,41 @@ theorem rebuild_matches_outputs
     (agreement : RebuildAgreement original.toUntrustedAnswerRun replay)
     (outputs : original.matches_outputs joltInstance) :
     replay.matches_outputs joltInstance := by
+  have nonempty : 0 < replay.rows.size := by
+    simpa [agreement.length] using original.nonempty
+  let index := replay.rows.size - 1
+  have oldBound : index < original.rows.size := by
+    have length := agreement.length
+    dsimp [index]
+    omega
+  have newBound : index < replay.rows.size := by
+    dsimp [index]
+    omega
+  let old := original.rows[index]'oldBound
+  let new := replay.rows[index]'newBound
+  have oldAt : original.rows[index]? = some old := by simp [old, oldBound]
+  have newAt : replay.rows[index]? = some new := by simp [new, newBound]
+  have deviceEq : old.postState.jolt_device = new.postState.jolt_device :=
+    ((agreement.rows index old new oldAt newAt).2.2.2.2).device_eq
+  have oldBack : original.rows.back? = some old := by
+    rw [Array.back?_eq_getElem?]
+    simpa [index, agreement.length] using oldAt
+  have newBack : replay.rows.back? = some new := by
+    rw [Array.back?_eq_getElem?]
+    simpa [index] using newAt
+  unfold Trace.matches_outputs at outputs ⊢
+  simp only [oldBack, newBack, Option.map_some, Option.getD_some] at outputs ⊢
+  simpa only [deviceEq] using outputs
+
+/-- Replay preserves the three prover dimension observations: row count, final
+jump, and the ordered bounds of nonzero RAM addresses. -/
+theorem RebuildAgreement.execution_dimensions_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay) :
+    original.execution_dimensions = replay.execution_dimensions := by
   sorry
 
 /-- Equal row count, final jump and RAM-address observations give equal checked
@@ -189,7 +368,11 @@ theorem rebuild_prover_config
     (agreement : RebuildAgreement original.toUntrustedAnswerRun replay)
     (accepts : (original.prover_config joltInstance).isSome) :
     (replay.prover_config joltInstance).isSome := by
-  sorry
+  have dimensions := agreement.execution_dimensions_eq
+  have layout := agreement.initial.device_eq
+  unfold Trace.prover_config at accepts ⊢
+  simp only [← dimensions, ← layout]
+  exact accepts
 
 /-- Every spoil assert has the same source operands in both runs. -/
 theorem rebuild_spoil_asserts
@@ -227,7 +410,25 @@ theorem rebuild_stops
       (rebuiltInputs privateInputs original.toUntrustedAnswerRun))
     (agreement : RebuildAgreement original.toUntrustedAnswerRun replay) :
     ∀ last ∈ replay.rows.back?, last.StableStall := by
-  sorry
+  intro last lastMem
+  have nonempty : 0 < replay.rows.size := by
+    simpa [agreement.length] using original.nonempty
+  let index := replay.rows.size - 1
+  have oldBound : index < original.rows.size := by
+    have length := agreement.length
+    dsimp [index]
+    omega
+  let old := original.rows[index]'oldBound
+  have oldAt : original.rows[index]? = some old := by
+    simp [old, oldBound]
+  have newAt : replay.rows[index]? = some last := by
+    simpa [index, Array.back?_eq_getElem?] using lastMem
+  have oldLast : old ∈ original.rows.back? := by
+    simpa [Array.back?_eq_getElem?, index, agreement.length] using oldAt
+  have oldStable := original.stops old oldLast
+  obtain ⟨sameIndex, _, sameNextPC, _, _⟩ := agreement.rows index old last oldAt newAt
+  have sameSlot := agreement.slot_eq old last sameIndex
+  exact (stableStall_iff_of_slot_nextPC old last sameSlot sameNextPC).mp oldStable
 
 theorem rebuild_runs_until_stop
     {joltInstance : JoltInstance SourceInstruction}
@@ -239,7 +440,27 @@ theorem rebuild_runs_until_stop
     ∀ (i : Nat) (current next : TraceRow replay.bytecode),
       replay.rows[i]? = some current → replay.rows[i + 1]? = some next →
       ¬ current.StableStall := by
-  sorry
+  intro i current next currentAt nextAt stable
+  have length := agreement.length
+  have oldCurrentBound : i < original.rows.size := by
+    have replayBound := (getElem?_eq_some_iff.mp currentAt).1
+    omega
+  have oldNextBound : i + 1 < original.rows.size := by
+    have replayBound := (getElem?_eq_some_iff.mp nextAt).1
+    omega
+  let oldCurrent := original.rows[i]'oldCurrentBound
+  let oldNext := original.rows[i + 1]'oldNextBound
+  have oldCurrentAt : original.rows[i]? = some oldCurrent := by
+    simp [oldCurrent, oldCurrentBound]
+  have oldNextAt : original.rows[i + 1]? = some oldNext := by
+    simp [oldNext, oldNextBound]
+  have oldNoStop := original.runs_until_stop i oldCurrent oldNext
+    oldCurrentAt oldNextAt
+  obtain ⟨sameIndex, _, sameNextPC, _, _⟩ :=
+    agreement.rows i oldCurrent current oldCurrentAt currentAt
+  have sameSlot := agreement.slot_eq oldCurrent current sameIndex
+  exact oldNoStop ((stableStall_iff_of_slot_nextPC oldCurrent current
+    sameSlot sameNextPC).mpr stable)
 
 theorem rebuild_nonempty
     {joltInstance : JoltInstance SourceInstruction}
@@ -249,7 +470,7 @@ theorem rebuild_nonempty
       (rebuiltInputs privateInputs original.toUntrustedAnswerRun))
     (agreement : RebuildAgreement original.toUntrustedAnswerRun replay) :
     0 < replay.rows.size := by
-  sorry
+  simpa [agreement.length] using original.nonempty
 
 /-- Every instance in the relaxed-answer language is in Jolt's language. -/
 theorem untrustedAnswerLanguage_implies_inLanguage
