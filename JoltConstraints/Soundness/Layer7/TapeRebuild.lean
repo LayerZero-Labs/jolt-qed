@@ -60,6 +60,17 @@ def rebuiltTapeOffset {joltInstance : JoltInstance SourceInstruction}
   (((List.finRange run.rows.size).take step.val).flatMap
     (answerBytesAt run)).length
 
+/-- The relaxed run's tape cursor counts the byte widths of preceding loads.
+Host advice writes append bytes and leave the cursor unchanged. -/
+private theorem UntrustedAnswerRun.preCursor_eq_rebuiltTapeOffset
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (step : Fin run.rows.size) :
+    run.rows[step].preState.adviceTape.readPosition =
+      rebuiltTapeOffset run step := by
+  sorry
+
 private theorem rebuiltTape_split
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -77,12 +88,6 @@ private theorem rebuiltTape_split
   conv_lhs => rw [← split]
   simp only [List.flatMap_append, List.flatMap_cons, List.append_assoc]
 
-private theorem lowAnswerBytes_one_value (answer : BitVec 64) :
-    ((lowAnswerBytes answer 1)[0]!).zeroExtend 64 = lowAnswer answer 1 := by
-  simp [lowAnswerBytes, lowAnswer]
-  apply BitVec.eq_of_toNat_eq
-  simp [BitVec.toNat_setWidth]
-
 private theorem lowAnswerByte_as_shift (answer : BitVec 64) (i : Nat) :
     BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i)) =
       (answer >>> (8 * i)).setWidth 8 := by
@@ -90,102 +95,42 @@ private theorem lowAnswerByte_as_shift (answer : BitVec 64) (i : Nat) :
   simp [BitVec.toNat_setWidth, BitVec.toNat_ushiftRight,
     Nat.shiftRight_eq_div_pow]
 
-private theorem lowAnswerBytes_two_value (answer : BitVec 64) :
-    ((List.range 2).foldl (fun value i =>
+/-- Folding at most eight little-endian answer bytes reconstructs precisely
+those low bytes of the original 64-bit answer. -/
+private theorem lowAnswerBytes_range_value (answer : BitVec 64) (width : Nat)
+    (valid : width ≤ 8) :
+    (List.range width).foldl (fun value i =>
       value ||| ((BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))).zeroExtend 64 <<<
-        (8 * i))) (0#64)) = lowAnswer answer 2 := by
-  have loweq : lowAnswer answer 2 = (answer.setWidth 16).zeroExtend 64 := by
-    apply BitVec.eq_of_toNat_eq
-    simp [lowAnswer, BitVec.toNat_setWidth]
-  rw [loweq]
-  change ([0, 1].foldl (fun value i =>
-    value ||| ((BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))).zeroExtend 64 <<<
-      (8 * i))) (0#64)) = _
-  simp only [List.foldl_cons, List.foldl_nil]
-  simp_rw [lowAnswerByte_as_shift]
-  norm_num only [mul_zero, mul_one, pow_zero, pow_succ, Nat.div_one,
-    Nat.zero_add, Nat.add_zero]
-  ext i hi
-  simp only [BitVec.zeroExtend, BitVec.getElem_or, BitVec.getElem_shiftLeft,
-    BitVec.getElem_setWidth, BitVec.getLsbD_setWidth,
-    BitVec.getLsbD_ushiftRight, BitVec.getElem_zero]
-  by_cases h8 : i < 8
-  · have h16 : i < 16 := by omega
-    simp [h8, h16]
-  · by_cases h16 : i < 16
-    · have hByte : i - 8 < 8 := by omega
-      have idx : 8 + (i - 8) = i := by omega
-      simpa [h8, h16, hByte, idx]
-    · have hByte : ¬ i - 8 < 8 := by omega
-      simp [h8, h16, hByte]
-
-private theorem lowAnswerBytes_four_value (answer : BitVec 64) :
-    ((List.range 4).foldl (fun value i =>
-      value ||| ((BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))).zeroExtend 64 <<<
-        (8 * i))) (0#64)) = lowAnswer answer 4 := by
-  have loweq : lowAnswer answer 4 = (answer.setWidth 32).zeroExtend 64 := by
-    apply BitVec.eq_of_toNat_eq
-    simp [lowAnswer, BitVec.toNat_setWidth]
-  rw [loweq]
-  change ([0, 1, 2, 3].foldl (fun value i =>
-    value ||| ((BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))).zeroExtend 64 <<<
-      (8 * i))) (0#64)) = _
-  simp only [List.foldl_cons, List.foldl_nil]
-  simp_rw [lowAnswerByte_as_shift]
-  norm_num only [mul_zero, mul_one, pow_zero, pow_succ, Nat.div_one,
-    Nat.zero_add, Nat.add_zero]
-  ext i hi
-  simp only [BitVec.zeroExtend, BitVec.getElem_or, BitVec.getElem_shiftLeft,
-    BitVec.getElem_setWidth, BitVec.getLsbD_setWidth,
-    BitVec.getLsbD_ushiftRight, BitVec.getElem_zero]
-  by_cases h8 : i < 8
-  · have h16 : i < 16 := by omega
-    have h24 : i < 24 := by omega
-    have h32 : i < 32 := by omega
-    simp [h8, h16, h24, h32]
-  · by_cases h16 : i < 16
-    · have h24 : i < 24 := by omega
-      have h32 : i < 32 := by omega
-      have hByte : i - 8 < 8 := by omega
-      have idx : 8 + (i - 8) = i := by omega
-      simp [h8, h16, h24, h32, hByte, idx]
-    · by_cases h24 : i < 24
-      · have h32 : i < 32 := by omega
-        have hByte : i - 16 < 8 := by omega
-        have hOld : ¬ i - 8 < 8 := by omega
-        have idx : 16 + (i - 16) = i := by omega
-        simp [h8, h16, h24, h32, hByte, hOld, idx]
-      · by_cases h32 : i < 32
-        · have hByte : i - 24 < 8 := by omega
-          have hOld8 : ¬ i - 8 < 8 := by omega
-          have hOld16 : ¬ i - 16 < 8 := by omega
-          have idx : 24 + (i - 24) = i := by omega
-          simp [h8, h16, h24, h32, hByte, hOld8, hOld16, idx]
-        · have hOld8 : ¬ i - 8 < 8 := by omega
-          have hOld16 : ¬ i - 16 < 8 := by omega
-          have hOld24 : ¬ i - 24 < 8 := by omega
-          simp [h8, h16, h24, h32, hOld8, hOld16, hOld24]
-
-private theorem lowAnswerBytes_eight_value (answer : BitVec 64) :
-    ((List.range 8).foldl (fun value i =>
-      value ||| ((BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))).zeroExtend 64 <<<
-        (8 * i))) (0#64)) = lowAnswer answer 8 := by
-  have loweq : lowAnswer answer 8 = answer := by
-    apply BitVec.eq_of_toNat_eq
-    simp [lowAnswer, Nat.mod_eq_of_lt (BitVec.isLt _)]
-  rw [loweq]
-  change ([0, 1, 2, 3, 4, 5, 6, 7].foldl (fun value i =>
-    value ||| ((BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))).zeroExtend 64 <<<
-      (8 * i))) (0#64)) = _
-  simp only [List.foldl_cons, List.foldl_nil]
-  simp_rw [lowAnswerByte_as_shift]
-  norm_num only [mul_zero, mul_one, pow_zero, pow_succ, Nat.div_one,
-    Nat.zero_add, Nat.add_zero]
-  ext i hi
-  simp only [BitVec.zeroExtend, BitVec.getElem_or, BitVec.getElem_shiftLeft,
-    BitVec.getElem_setWidth, BitVec.getLsbD_setWidth,
-    BitVec.getLsbD_ushiftRight, BitVec.getElem_zero]
-  interval_cases i <;> simp
+        (8 * i))) (0#64) = lowAnswer answer width := by
+  have core : ∀ n : Nat, n ≤ 8 →
+      (List.range n).foldl (fun value i =>
+        value ||| ((BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))).zeroExtend 64 <<<
+          (8 * i))) (0#64) = (answer.setWidth (8 * n)).zeroExtend 64 := by
+    intro n hn
+    induction n with
+    | zero =>
+      apply BitVec.eq_of_toNat_eq
+      norm_num [BitVec.toNat_setWidth, Nat.mod_one]
+    | succ n ih =>
+      rw [List.range_succ, List.foldl_append]
+      simp only [List.foldl_cons, List.foldl_nil]
+      rw [ih (by omega), lowAnswerByte_as_shift]
+      ext i hi
+      simp only [BitVec.getElem_or, BitVec.zeroExtend,
+        BitVec.getElem_shiftLeft, BitVec.getElem_setWidth,
+        BitVec.getLsbD_setWidth, BitVec.getLsbD_ushiftRight]
+      by_cases before : i < 8 * n
+      · have within : i < 8 * (n + 1) := by omega
+        simp [before, within]
+      · by_cases within : i < 8 * (n + 1)
+        · have byte : i - 8 * n < 8 := by omega
+          have idx : 8 * n + (i - 8 * n) = i := by omega
+          simp [before, within, byte, idx]
+        · have byte : ¬ i - 8 * n < 8 := by omega
+          simp [before, within, byte]
+  rw [core width valid]
+  apply BitVec.eq_of_toNat_eq
+  simp [lowAnswer, BitVec.toNat_setWidth]
 
 private theorem lowAnswerBytes_fold_value (answer : BitVec 64) (width : Nat)
     (valid : width = 1 ∨ width = 2 ∨ width = 4 ∨ width = 8) :
@@ -201,17 +146,7 @@ private theorem lowAnswerBytes_fold_value (answer : BitVec 64) (width : Nat)
     rw [← List.map_coe_finRange_eq_range]
     simp only [List.foldl_map]
   rw [mapped]
-  rcases valid with h | h | h | h <;> subst width
-  · change ([0].foldl (fun value i =>
-      value ||| ((BitVec.ofNat 8 (answer.toNat / 2 ^ (8 * i))).zeroExtend 64 <<<
-        (8 * i))) (0#64)) = _
-    simp only [List.foldl_cons, List.foldl_nil]
-    norm_num only [mul_zero, pow_zero, Nat.div_one, BitVec.shiftLeft_zero,
-      BitVec.zero_or]
-    simpa [lowAnswerBytes] using lowAnswerBytes_one_value answer
-  · exact lowAnswerBytes_two_value answer
-  · exact lowAnswerBytes_four_value answer
-  · exact lowAnswerBytes_eight_value answer
+  exact lowAnswerBytes_range_value answer width (by rcases valid with h | h | h | h <;> omega)
 
 /-- A read uses its own answer bytes and cannot reach host advice appended
 after the rebuilt prefix. -/
@@ -341,64 +276,54 @@ theorem adviceld_low_answer (rd : regidx) (answers : Nat → BitVec 64)
     by_cases zero : n = 0 <;> simp [zero, loweq]
   rw [functions]
 
+/-- Shifting a 64-bit value left by the complement of its low byte width
+forgets precisely the high bytes. The width must be below eight. -/
+private theorem lowAnswer_shift_width (answer : BitVec 64) (width : Nat)
+    (valid : width < 8) :
+    answer <<< (64 - 8 * width) =
+      lowAnswer answer width <<< (64 - 8 * width) := by
+  have loweq : lowAnswer answer width =
+      (answer.setWidth (8 * width)).zeroExtend 64 := by
+    apply BitVec.eq_of_toNat_eq
+    simp [lowAnswer, BitVec.toNat_setWidth]
+  rw [loweq]
+  ext i hi
+  simp only [BitVec.getElem_shiftLeft, BitVec.zeroExtend]
+  by_cases before : i < 64 - 8 * width
+  · simp [before]
+  · have low : i - (64 - 8 * width) < 8 * width := by omega
+    simp [BitVec.getElem_setWidth, before, low]
+    exact (BitVec.getLsbD_eq_getElem (x := answer)
+      (i := i - (64 - 8 * width)) (by omega)).symm
+
 /-- Masking has already completed after the multiply row. The later arithmetic
 shift only sign-extends the now-equal value. -/
 theorem lowAnswer_muli_1 (answer : BitVec 64) :
     jolt_virtual_muli_value answer (slliMultiplier 56) =
       jolt_virtual_muli_value (lowAnswer answer 1) (slliMultiplier 56) := by
-  have loweq : lowAnswer answer 1 = (answer.setWidth 8).zeroExtend 64 := by
-    apply BitVec.eq_of_toNat_eq
-    simp [lowAnswer, BitVec.toNat_setWidth]
-  rw [loweq]
   simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
   change answer * (BitVec.twoPow 64 56) =
-    (answer.setWidth 8).zeroExtend 64 * (BitVec.twoPow 64 56)
+    lowAnswer answer 1 * (BitVec.twoPow 64 56)
   simp only [BitVec.mul_twoPow_eq_shiftLeft]
-  ext i hi
-  simp only [BitVec.getElem_shiftLeft, BitVec.zeroExtend]
-  by_cases before : i < 56
-  · simp [before]
-  · have low : i - 56 < 8 := by omega
-    simp [BitVec.getElem_setWidth, before, low]
-    exact (BitVec.getLsbD_eq_getElem (x := answer) (i := i - 56) (by omega)).symm
+  exact lowAnswer_shift_width answer 1 (by omega)
 
 theorem lowAnswer_muli_2 (answer : BitVec 64) :
     jolt_virtual_muli_value answer (slliMultiplier 48) =
       jolt_virtual_muli_value (lowAnswer answer 2) (slliMultiplier 48) := by
-  have loweq : lowAnswer answer 2 = (answer.setWidth 16).zeroExtend 64 := by
-    apply BitVec.eq_of_toNat_eq
-    simp [lowAnswer, BitVec.toNat_setWidth]
-  rw [loweq]
   simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
   change answer * (BitVec.twoPow 64 48) =
-    (answer.setWidth 16).zeroExtend 64 * (BitVec.twoPow 64 48)
+    lowAnswer answer 2 * (BitVec.twoPow 64 48)
   simp only [BitVec.mul_twoPow_eq_shiftLeft]
-  ext i hi
-  simp only [BitVec.getElem_shiftLeft, BitVec.zeroExtend]
-  by_cases before : i < 48
-  · simp [before]
-  · have low : i - 48 < 16 := by omega
-    simp [BitVec.getElem_setWidth, before, low]
-    exact (BitVec.getLsbD_eq_getElem (x := answer) (i := i - 48) (by omega)).symm
+  exact lowAnswer_shift_width answer 2 (by omega)
 
 theorem lowAnswer_muli_4 (answer : BitVec 64) :
     jolt_virtual_muli_value answer (slliMultiplier 32) =
       jolt_virtual_muli_value (lowAnswer answer 4) (slliMultiplier 32) := by
-  have loweq : lowAnswer answer 4 = (answer.setWidth 32).zeroExtend 64 := by
-    apply BitVec.eq_of_toNat_eq
-    simp [lowAnswer, BitVec.toNat_setWidth]
-  rw [loweq]
   simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
   change answer * (BitVec.twoPow 64 32) =
-    (answer.setWidth 32).zeroExtend 64 * (BitVec.twoPow 64 32)
+    lowAnswer answer 4 * (BitVec.twoPow 64 32)
   simp only [BitVec.mul_twoPow_eq_shiftLeft]
-  ext i hi
-  simp only [BitVec.getElem_shiftLeft, BitVec.zeroExtend]
-  by_cases before : i < 32
-  · simp [before]
-  · have low : i - 32 < 32 := by omega
-    simp [BitVec.getElem_setWidth, before, low]
-    exact (BitVec.getLsbD_eq_getElem (x := answer) (i := i - 32) (by omega)).symm
+  exact lowAnswer_shift_width answer 4 (by omega)
 
 /-- The states agree on cursor, registers, RAM, device and host mode; only the
 tape byte array may differ (for example original `[0x2C,0x01]` versus replay
@@ -466,6 +391,21 @@ private theorem SameExceptTapeBytes.sourceValue_eq
     { original.adviceTape with bytes := replay.adviceTape.bytes } } = replay at same
   have h := congrArg (sourceValue src) same
   exact h
+
+/-- A successful non-read instruction replays from states that differ only in
+tape bytes. It can append host advice after an existing replay-tape prefix. -/
+private theorem execInstr_replay_nonload
+    (instruction : Instr) (oldPre replayPre oldPost : SailJoltState)
+    (same : SameExceptTapeBytes oldPre replayPre)
+    (notLoad : ∀ dst width, instruction ≠ .VirtualAdviceLoad dst width)
+    (oldExec : execInstr instruction oldPre = .ok (.Retire_Success ()) oldPost)
+    (tapePrefix hostSuffix : Array (BitVec 8))
+    (replayBytes : replayPre.adviceTape.bytes = tapePrefix ++ hostSuffix) :
+    ∃ (replayPost : SailJoltState) (nextHostSuffix : Array (BitVec 8)),
+      execInstr instruction replayPre = .ok (.Retire_Success ()) replayPost ∧
+      SameExceptTapeBytes oldPost replayPost ∧
+      replayPost.adviceTape.bytes = tapePrefix ++ nextHostSuffix := by
+  sorry
 
 private theorem replaceDst_device_eq (dst : Dst) (state : SailJoltState)
     (value : BitVec 64) :
@@ -623,6 +563,8 @@ private noncomputable def rebuild_rows
         { bytes := rebuiltTape original, readPosition := 0 } } := by
   sorry
 
+/-- Replay an accepted relaxed trace over the fixed low-byte tape, preserving
+row indices, advice observations and architectural state modulo tape bytes. -/
 theorem rebuild_valid_run
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -639,15 +581,8 @@ theorem rebuild_valid_run
       original.initialized]
     rfl
   have zeroCursor : original.initialState.adviceTape.readPosition = 0 := by
-    have init := original.initialized
-    unfold JoltInstance.initial_state at init
-    cases layout : joltInstance.memory_layout with
-    | none => simp [layout] at init
-    | some layout =>
-        simp only [layout] at init
-        split_ifs at init <;> simp_all [init_state]
-        simpa using congrArg (fun state : SailJoltState =>
-          state.adviceTape.readPosition) init.symm
+    exact joltInstance.initial_state_adviceTape_readPosition_zero
+      privateInputs original.initialState original.initialized
   have sameInitial : SameExceptTapeBytes original.initialState initial := by
     simp [SameExceptTapeBytes, initial, zeroCursor]
   let replayRows := rebuild_rows original.toUntrustedAnswerRun
@@ -706,8 +641,8 @@ theorem rebuild_matches_outputs
   simp only [oldBack, newBack, Option.map_some, Option.getD_some] at outputs ⊢
   simpa only [deviceEq] using outputs
 
-/-- Replay preserves the three prover dimension observations: row count, final
-jump, and the ordered bounds of nonzero RAM addresses. -/
+/-- The row slot and the base-register value agree, so RAM accesses use the
+same address in the original run and the replay. -/
 private theorem RebuildAgreement.ram_address_eq
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -753,6 +688,7 @@ private theorem RebuildAgreement.ram_address_eq
     rw [heq]
     simp [sameState.sourceValue_eq base]
 
+/-- Replay preserves row count, the final jump flag and observed RAM bounds. -/
 theorem RebuildAgreement.execution_dimensions_eq
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -931,6 +867,7 @@ theorem rebuild_stops
   have sameSlot := agreement.slot_eq old last sameIndex
   exact (stableStall_iff_of_slot_nextPC old last sameSlot sameNextPC).mp oldStable
 
+/-- The replay has no stable stall before its final row, as in the original. -/
 theorem rebuild_runs_until_stop
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -963,6 +900,7 @@ theorem rebuild_runs_until_stop
   exact oldNoStop ((stableStall_iff_of_slot_nextPC oldCurrent current
     sameSlot sameNextPC).mpr stable)
 
+/-- The replay has at least one row because it has the original row count. -/
 theorem rebuild_nonempty
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
