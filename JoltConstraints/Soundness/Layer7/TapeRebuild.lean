@@ -250,6 +250,22 @@ private theorem ReplayStateAgreement.device_eq
       _ = replay.jolt_device := sameDst.device_eq
   · exact (same.2 pending).device_eq
 
+private theorem ReplayStateAgreement.pre_same_of_ne_muli
+    {bytecode : Array JoltInstructionRow} {rowIndex : Nat}
+    {original replay : SailJoltState}
+    (same : ReplayStateAgreement bytecode rowIndex true original replay)
+    (instruction : Instr)
+    (slot : (bytecode[rowIndex]?.map (·.instruction)) = some instruction)
+    (notMuli : ∀ dst src multiplier,
+      instruction ≠ .VirtualMULI dst src multiplier) :
+    SameExceptTapeBytes original replay := by
+  apply same.2
+  rintro ⟨dst, start, width, _, _, pending⟩
+  obtain ⟨_, src, multiplier, isMuli⟩ := pending
+  rw [slot] at isMuli
+  have : instruction = .VirtualMULI dst src multiplier := Option.some.inj isMuli
+  exact notMuli dst src multiplier this
+
 /-- Row indices, recorded runtime advice and nextPC are identical. Registers,
 RAM and device agree at every row except the pending narrow-load destination. -/
 structure RebuildAgreement
@@ -351,6 +367,51 @@ theorem rebuild_matches_outputs
 
 /-- Replay preserves the three prover dimension observations: row count, final
 jump, and the ordered bounds of nonzero RAM addresses. -/
+private theorem RebuildAgreement.ram_address_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay)
+    (i : Nat) (old : TraceRow original.bytecode)
+    (new : TraceRow replay.bytecode)
+    (oldAt : original.rows[i]? = some old)
+    (newAt : replay.rows[i]? = some new) :
+    old.ram_address = new.ram_address := by
+  obtain ⟨sameIndex, _, _, samePre, _⟩ := agreement.rows i old new oldAt newAt
+  have sameSlot := agreement.slot_eq old new sameIndex
+  unfold TraceRow.ram_address
+  rw [sameSlot]
+  split <;> try rfl
+  · rename_i instr faultClass dst base imm heq
+    have oldInstr : original.bytecode[old.rowIndex].instruction =
+        .LD faultClass dst base imm := by
+      rw [sameSlot]
+      exact heq
+    have slotInstruction :
+        (original.bytecode[old.rowIndex.val]?.map (·.instruction)) =
+          some (.LD faultClass dst base imm) := by
+      simpa only [Array.getElem?_eq_getElem old.rowIndex.isLt,
+        Option.map_some, Fin.getElem_fin, Option.some.injEq] using oldInstr
+    have sameState := samePre.pre_same_of_ne_muli
+      (.LD faultClass dst base imm) slotInstruction (by intros; simp)
+    rw [heq]
+    simp [sameState.sourceValue_eq base]
+  · rename_i instr base value imm heq
+    have oldInstr : original.bytecode[old.rowIndex].instruction =
+        .SD base value imm := by
+      rw [sameSlot]
+      exact heq
+    have slotInstruction :
+        (original.bytecode[old.rowIndex.val]?.map (·.instruction)) =
+          some (.SD base value imm) := by
+      simpa only [Array.getElem?_eq_getElem old.rowIndex.isLt,
+        Option.map_some, Fin.getElem_fin, Option.some.injEq] using oldInstr
+    have sameState := samePre.pre_same_of_ne_muli
+      (.SD base value imm) slotInstruction (by intros; simp)
+    rw [heq]
+    simp [sameState.sourceValue_eq base]
+
 theorem RebuildAgreement.execution_dimensions_eq
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -358,7 +419,51 @@ theorem RebuildAgreement.execution_dimensions_eq
     {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
     (agreement : RebuildAgreement original replay) :
     original.execution_dimensions = replay.execution_dimensions := by
-  sorry
+  unfold Trace.execution_dimensions
+  congr 1
+  · exact agreement.length.symm
+  · by_cases nonempty : 0 < replay.rows.size
+    · let index := replay.rows.size - 1
+      have oldBound : index < original.rows.size := by
+        have length := agreement.length
+        dsimp [index]
+        omega
+      have newBound : index < replay.rows.size := by
+        dsimp [index]
+        omega
+      let old := original.rows[index]'oldBound
+      let new := replay.rows[index]'newBound
+      have oldAt : original.rows[index]? = some old := by simp [old, oldBound]
+      have newAt : replay.rows[index]? = some new := by simp [new, newBound]
+      have oldBack : original.rows.back? = some old := by
+        rw [Array.back?_eq_getElem?]
+        simpa [index, agreement.length] using oldAt
+      have newBack : replay.rows.back? = some new := by
+        rw [Array.back?_eq_getElem?]
+        simpa [index] using newAt
+      obtain ⟨sameIndex, _, _, _, _⟩ := agreement.rows index old new oldAt newAt
+      have sameSlot := agreement.slot_eq old new sameIndex
+      simp only [oldBack, newBack, Option.any_some]
+      exact congrArg (fun slot : JoltInstructionRow => slot.instruction.is_jump) sameSlot
+    · have zero : replay.rows.size = 0 := by omega
+      have oldZero : original.rows.size = 0 := by rw [← agreement.length]; exact zero
+      simp [Array.back?_eq_getElem?, zero, oldZero]
+  · have addressListEq : original.rows.toList.map (·.ram_address) =
+        replay.rows.toList.map (·.ram_address) := by
+      apply List.ext_getElem
+      · simpa [agreement.length]
+      · intro i oldIn newIn
+        have oldBound : i < original.rows.size := by simpa using oldIn
+        have newBound : i < replay.rows.size := by simpa using newIn
+        let old := original.rows[i]'oldBound
+        let new := replay.rows[i]'newBound
+        have oldAt : original.rows[i]? = some old := by simp [old, oldBound]
+        have newAt : replay.rows[i]? = some new := by simp [new, newBound]
+        simpa [old, new] using agreement.ram_address_eq i old new oldAt newAt
+    have filtered := congrArg (fun xs : List (Option Nat) => xs.filterMap id)
+      addressListEq
+    simpa [List.filterMap_map] using congrArg
+      (List.foldl ExecutionDimensions.observe none) filtered
 
 /-- Equal row count, final jump and RAM-address observations give equal checked
 prover dimensions. -/
