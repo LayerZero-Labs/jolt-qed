@@ -1343,11 +1343,12 @@ Then rebuild one tape from the answers' low bytes, in read order, and run the pr
 Why: once all these obligations are resolved, the constructed prefix can be packaged as a relaxed trace, and the rebuilt tape turns it into an `HonestTrace`, the form the theorem concludes.
 Uses: the context, Layers 5 and 6, stopping proofs.
 
-The tape-rebuild closing plan's steps 1–5 are complete on `feat/layer7-tape-rebuild` as of 2026-10-21.
-`rebuild_rows` now constructs all six fields directly, using a shared masking proof for every narrow width.
-`narrow_load_shape` is the file's sole remaining `sorry`; proving it waits for the step (c) Part 1 commit and the generalized adjacent-row lift in step 6.
-The reverse-language inclusion depends on `sorryAx` only through that declaration.
-See the [validation and declaration timings](#2026-10-21-tape-rebuild-closing-steps-1-5).
+The tape-rebuild closing plan's steps 1–6 are complete on `feat/layer7-tape-rebuild` as of 2026-10-21.
+`rebuild_rows` constructs all six fields directly, using a shared masking proof for every narrow width.
+`narrow_load_shape` is proved from the advice-pair checker added in `de5aff70de66d290ceaeb6e7357ba352b855c5d0` and the generic adjacent-row lift.
+The same lift now proves register-shift pairs.
+`TapeRebuild.lean` has no `sorry`, and the reverse-language inclusion has no `sorryAx` dependency.
+See the [step 6 validation and declaration timings](#tape-rebuild-step-6-2026-10-21).
 
 ### Layer 8: outputs
 
@@ -2683,3 +2684,42 @@ The shared instruction theorem takes 878 ms; neither instance repeats its instru
 |---|---:|
 | `writeDst_rule_of_device_relation` | 2 |
 | `store_raw_same` | 2 |
+
+
+### Tape rebuild: step 6 (2026-10-21)
+
+Rebased `feat/layer7-tape-rebuild` onto Ari's supplied step (c) commit `de5aff70de66d290ceaeb6e7357ba352b855c5d0`.
+The previous branch tip is retained at `backup/tape-rebuild-before-step-c` (`53f0608`).
+The only rebase conflict was the stale tape-rebuild paragraph in `model_review.md`; the completed stopping proof and completed tape work are both retained.
+
+`ExpansionFacts.expand_instruction_property` transports any property supplied by the native and sequence checks to the instruction list of materialized rows, using the existing `expand_instruction_checks` theorem.
+The advice instance decodes the two accepted register forms: the same nonzero architectural register throughout, or virtual register 40 for the x0 rewrite.
+`advicePairsOk_narrow` locates the resulting multiply in the checked instruction list.
+`narrow_load_shape` then uses `AdjacentRows.expand_program_pairs` with side 0 to obtain the exact multiply and the load's continuation flag in bytecode.
+The existing `ExpansionRows.expand_program_shiftPairs` uses the same lift with side 1.
+Its old stamping, per-expansion, append, and flatten transport lemmas were deleted because no proof uses them.
+
+All protected statements are unchanged, including `narrow_load_shape`, `untrustedAnswerLanguage_implies_inLanguage`, `rebuild_valid_run`, `RebuiltRows`, `RebuildAgreement`, `ReplayStateAgreement`, and `NarrowAdvicePending`.
+No existing helper gained a hypothesis.
+No limit was raised and no new `bv_decide`, `native_decide`, or `decide +kernel` was used.
+
+`lake -f /private/tmp/tape-rebuild-lakefile.toml build JoltBytecode JoltConstraints` passed all 8,802 jobs using the isolated build cache.
+The complete `TapeRebuild.lean` timing and axiom-audit check took 28.14 seconds wall time while the full build was still running.
+Lake reported 21 seconds for its `TapeRebuild.lean` job during that build.
+`git diff --check` passed.
+`TapeRebuild.lean` has no `sorry`; its only warnings are two pre-existing `simpa` style suggestions.
+`#print axioms narrow_load_shape` reports only `propext`, `Classical.choice`, and `Quot.sound`.
+`#print axioms untrustedAnswerLanguage_implies_inLanguage` reports those three axioms plus the existing `sys_enable_experimental_extensions`, with no `sorryAx`.
+A dependency traversal also rejects any occurrence of `sorryAx` and passed for the reverse inclusion.
+The generic materialization property and the migrated shift-pair theorem have only `propext`, `Classical.choice`, and `Quot.sound` as axioms.
+
+The following are all added or changed declarations, measured with `#time` and `Elab.async=false` after loading imports.
+
+| Declaration | File | Elaboration (ms) |
+|---|---|---:|
+| `expand_instruction_property` | `expansion_facts.lean` | 6 |
+| `expand_program_shiftPairs` | `trace_interface.lean` | 45 |
+| `regidx_eq_of_beq` | `TapeRebuild.lean` | 3 |
+| `advicePairsOk_head` | `TapeRebuild.lean` | 65 |
+| `advicePairsOk_narrow` | `TapeRebuild.lean` | 57 |
+| `narrow_load_shape` | `TapeRebuild.lean` | 40 |

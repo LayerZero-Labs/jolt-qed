@@ -976,4 +976,28 @@ theorem expand_instruction_checks (source : SourceInstructionRow SourceInstructi
               sequenceOk_virtualJalrBaseUnwritten instructions ok,
               sequenceOk_advicePairsOk instructions ok⟩
 
+/-- Transfer a property of instruction lists from the native and sequence checks
+into the instructions of materialized rows.
+For example, an advice-pair property follows from the corresponding projection
+of each checker, while stamping changes only the row metadata. -/
+theorem expand_instruction_property (property : List JoltISA.Instr → Prop)
+    (native : ∀ instruction, nativeRowOk instruction = true → property [instruction])
+    (sequence : ∀ instructions, sequenceOk instructions = true → property instructions)
+    (source : SourceInstructionRow SourceInstruction) (rows : List JoltInstructionRow)
+    (expanded : expand_instruction source = some rows) :
+    property (rows.map (·.instruction)) := by
+  have checks := expand_instruction_checks source rows expanded
+  cases shape : source.instruction.expand with
+  | none => simp only [shape] at checks
+  | some result =>
+    cases result with
+    | native instruction =>
+      simp only [shape] at checks
+      rw [checks.1]
+      exact native instruction checks.2.1
+    | sequence instructions =>
+      simp only [shape] at checks
+      rw [checks.1]
+      exact sequence instructions checks.2.1
+
 end ExpansionFacts

@@ -9,6 +9,7 @@ import JoltConstraints.layout_facts
 import JoltConstraints.register_encoding
 import JoltConstraints.nextpc_frame
 import JoltConstraints.expansion_facts
+import JoltConstraints.Soundness.Layer7.AdjacentRows
 
 set_option autoImplicit false
 
@@ -529,83 +530,32 @@ def ShiftPairs (rows : List JoltInstructionRow) : Prop :=
       masksFed (rows[j]'(by omega)).instruction rows[k].instruction = true ∧
         rows[k].starts_source = false
 
-theorem stamp_sequence_shiftPairs (address : BitVec 64) (isCompressed : Bool)
-    (instructions : List JoltISA.Instr) (ok : shiftsOk instructions = true) :
-    ShiftPairs (stamp_sequence address isCompressed instructions) := by
-  intro k inRange isShift
-  have inInstructions : k < instructions.length := by
-    simpa only [stamp_sequence, List.length_map, List.length_zipIdx] using inRange
-  simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx, Nat.zero_add] at isShift ⊢
-  obtain ⟨j, before, fed⟩ := (shiftsOk_rows instructions ok k inInstructions).2 isShift
-  subst before
-  exact ⟨j, rfl, fed, by simp [JoltInstructionRow.starts_source]⟩
-
-theorem expand_instruction_shiftPairs (source : SourceInstructionRow SourceInstruction)
-    (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows) :
-    ShiftPairs rows := by
-  unfold expand_instruction at expanded
-  split at expanded
-  · cases expanded
-  · rename_i instruction isNative
-    cases expanded
-    obtain ⟨nativeOk, _⟩ := expand_ok _ _ isNative
-    intro k inRange isShift
-    have zero : k = 0 := by simpa using inRange
-    subst zero
-    simp [nativeRowOk_not_registerShift instruction nativeOk] at isShift
-  · split at expanded
-    · cases expanded
-    · rename_i instructions isSequence _
-      cases expanded
-      have ok : sequenceOk instructions = true := expand_ok _ _ isSequence
-      exact stamp_sequence_shiftPairs _ _ instructions
-        (sequenceOk_shiftsOk instructions ok)
-
-theorem shiftPairs_append (front back : List JoltInstructionRow) (frontOk : ShiftPairs front)
-    (backOk : ShiftPairs back) : ShiftPairs (front ++ back) := by
-  intro k inRange isShift
-  rw [List.length_append] at inRange
-  by_cases inFront : k < front.length
-  · rw [List.getElem_append_left inFront] at isShift
-    obtain ⟨j, before, fed, notStart⟩ := frontOk k inFront isShift
-    refine ⟨j, before, ?_, ?_⟩
-    · rw [List.getElem_append_left (by omega), List.getElem_append_left inFront]
-      exact fed
-    · rw [List.getElem_append_left inFront]
-      exact notStart
-  · rw [List.getElem_append_right (by omega)] at isShift
-    obtain ⟨j, before, fed, notStart⟩ := backOk (k - front.length) (by omega) isShift
-    refine ⟨front.length + j, by omega, ?_, ?_⟩
-    · rw [List.getElem_append_right (by omega), List.getElem_append_right (by omega)]
-      simpa only [Nat.add_sub_cancel_left] using fed
-    · rw [List.getElem_append_right (by omega)]
-      exact notStart
-
-theorem flatten_shiftPairs : ∀ (instructions : List (List JoltInstructionRow)),
-    (∀ rows ∈ instructions, ShiftPairs rows) → ShiftPairs instructions.flatten
-  | [], _ => fun _ inRange => absurd inRange (by simp)
-  | rows :: rest, each => by
-    rw [List.flatten_cons]
-    exact shiftPairs_append _ _ (each rows List.mem_cons_self)
-      (flatten_shiftPairs rest (fun later member => each later (List.mem_cons_of_mem _ member)))
-
+/-- Every register-shift row follows its mask producer inside the same expansion.
+For example, a `VirtualSRL` reads the mask written by its preceding row.
+This is the later-row instance of the generic adjacent-pair lift. -/
 theorem expand_program_shiftPairs (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode) :
     ShiftPairs bytecode.toList := by
-  unfold expand_program at expanded
-  cases mapped : image.instructions.toList.mapM expand_instruction with
-  | none =>
-    rw [mapped] at expanded
-    cases expanded
-  | some instructions =>
-    rw [mapped, Option.map_some, Option.some.injEq] at expanded
-    subst expanded
-    rw [List.toList_toArray]
-    apply flatten_shiftPairs
-    intro rows inInstructions
-    obtain ⟨k, inRange, rfl⟩ := List.mem_iff_getElem.mp inInstructions
-    obtain ⟨lengths, steps⟩ := option_mapM_results expand_instruction _ instructions mapped
-    exact expand_instruction_shiftPairs _ _ (steps k (by omega) inRange)
+  have pairs := JoltConstraints.Soundness.AdjacentRows.expand_program_pairs
+    (fun instructions => shiftsOk instructions = true)
+    (fun instruction => isRegisterShift instruction = true)
+    (fun first second => masksFed first second = true) 1
+    (by
+      intro instructions ok k bound isShift
+      obtain ⟨j, before, fed⟩ := (shiftsOk_rows instructions ok k bound).2 isShift
+      refine ⟨j, by omega, by simpa using before.symm, ?_⟩
+      simpa only [before] using fed)
+    (expand_instruction_property _
+      (fun instruction ok => by
+        simp only [shiftsOk, shiftPairsOk, nativeRowOk_immShiftOk instruction ok,
+          nativeRowOk_not_registerShift instruction ok, Bool.not_false, Bool.and_self])
+      sequenceOk_shiftsOk)
+    image bytecode expanded
+  intro k bound isShift
+  obtain ⟨j, next, position, fed, _, notStart⟩ := pairs k bound isShift
+  have before : j + 1 = k := by simpa using position.symm
+  exact ⟨j, before, by simpa only [before] using fed,
+    by simpa only [before] using notStart⟩
 
 end ExpansionRows
 

@@ -173,21 +173,15 @@ The following declarations still use `sorry`:
 | `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. |
 | `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
-| `narrow_load_shape` (`Soundness/Layer7/TapeRebuild.lean`) | Lift the expansion's narrow-advice load/multiply pair property to bytecode, including the rewritten destination, continuation flag and masking multiplier. The generic lift in `Soundness/Layer7/AdjacentRows.lean` is proved; the checker fact `advicePairsOk` still waits for the step (c) Part 1 commit. |
 
-Steps 1–5 of the tape-rebuild closing plan are complete on `feat/layer7-tape-rebuild` in `/Users/ari.biswas/Lean/jolt-qed-tape-rebuild`.
+Steps 1–6 of the tape-rebuild closing plan are complete on `feat/layer7-tape-rebuild` in `/Users/ari.biswas/Lean/jolt-qed-tape-rebuild`, rebased onto step (c) commit `de5aff70de66d290ceaeb6e7357ba352b855c5d0`.
 `rebuild_rows` maps the relaxed rows directly with `Array.ofFn`, proving execution, initialization, linkage, row agreement and source-start agreement.
-The rebuilt-tape read theorem and all transfer theorems are proved.
-The unused expansion-specific low-answer lemmas and width-specific multiply lemmas were deleted.
-`narrow_load_shape` is the sole remaining `sorry` in `TapeRebuild.lean`.
-The axiom audit for `untrustedAnswerLanguage_implies_inLanguage` gives `propext`, `Classical.choice`, `Quot.sound`, the existing `sys_enable_experimental_extensions`, and `sorryAx`.
-Repeating the dependency traversal with `narrow_load_shape` excluded removes `sorryAx`; no other path to it remains.
-An isolated Lake build of `JoltConstraints.Soundness.Layer7.TapeRebuild` passed all 8,591 jobs.
-No existing helper gained hypotheses, and no new `bv_decide`, native decision proof or raised limit was used.
-The new arithmetic helpers require positive width, proved from the preceding executed load by `UntrustedAnswerRun.pendingBefore_width`.
-See the [declaration timings and validation report](../methods/soundness.md#2026-10-21-tape-rebuild-closing-steps-1-5).
-The tape-growth and device frame proofs now instantiate the shared `InstructionFrame.execInstr_rule`; their statements and callers are unchanged.
-The follow-up build and axiom audit passed; see the [shared-frame report and before/after timings](../methods/soundness.md#tape-rebuild-shared-instruction-frame-2026-10-21).
+The rebuilt-tape read theorem, the narrow-load shape, and all transfer theorems are proved.
+Both advice and register-shift pairs use the checker-independent lift in `Soundness/Layer7/AdjacentRows.lean`.
+`TapeRebuild.lean` has no `sorry`, and the axiom audit for `untrustedAnswerLanguage_implies_inLanguage` reports no `sorryAx`.
+The tape-growth and device frame proofs instantiate the shared `InstructionFrame.execInstr_rule`; their statements and callers are unchanged.
+No protected statement or existing helper hypothesis changed, and no new `bv_decide`, native decision proof or raised limit was used.
+See the [step 6 declaration timings and validation report](../methods/soundness.md#tape-rebuild-step-6-2026-10-21) and the [shared-frame report](../methods/soundness.md#tape-rebuild-shared-instruction-frame-2026-10-21).
 
 With Ari's permission (2026-10-20), C remains assumed while a16z considers `blog/content/blog/prover-verifier-trace-length/index.md`.
 C fails when the instance maximum is below 256, and when execution fills every cycle of a witness whose length is the largest power of two within the maximum.
@@ -223,7 +217,7 @@ Soundness obtains the positive row count from the termination store.
 
 Step (a) defines output matching, checked prover configuration and spoil-assert success once on the plain `Trace`, and both languages use those definitions.
 The fixed-tape inclusion is proved with all three conditions.
-The reverse inclusion is stated with `sorry` in Layer 7 and is now the final step of `JoltInstance.soundness`.
+The reverse inclusion is proved without `sorryAx` in Layer 7 and is the final step of `JoltInstance.soundness`.
 The axiom audit found no `sorryAx` in B, the plain-`Trace` final RAM overlay, the byte-store output bound, or the five newly proved statements.
 After restating A's obligations, `lake build JoltConstraints.Soundness.TopLevel` passed (8703 jobs) and `git diff --check` passed.
 The full `lake build` also passed (8797 jobs).
