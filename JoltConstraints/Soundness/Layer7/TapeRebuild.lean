@@ -105,7 +105,19 @@ private theorem lowAnswerBytes_two_value (answer : BitVec 64) :
   simp_rw [lowAnswerByte_as_shift]
   norm_num only [mul_zero, mul_one, pow_zero, pow_succ, Nat.div_one,
     Nat.zero_add, Nat.add_zero]
-  bv_decide
+  ext i hi
+  simp only [BitVec.zeroExtend, BitVec.getElem_or, BitVec.getElem_shiftLeft,
+    BitVec.getElem_setWidth, BitVec.getLsbD_setWidth,
+    BitVec.getLsbD_ushiftRight, BitVec.getElem_zero]
+  by_cases h8 : i < 8
+  · have h16 : i < 16 := by omega
+    simp [h8, h16]
+  · by_cases h16 : i < 16
+    · have hByte : i - 8 < 8 := by omega
+      have idx : 8 + (i - 8) = i := by omega
+      simpa [h8, h16, hByte, idx]
+    · have hByte : ¬ i - 8 < 8 := by omega
+      simp [h8, h16, hByte]
 
 private theorem lowAnswerBytes_four_value (answer : BitVec 64) :
     ((List.range 4).foldl (fun value i =>
@@ -122,7 +134,37 @@ private theorem lowAnswerBytes_four_value (answer : BitVec 64) :
   simp_rw [lowAnswerByte_as_shift]
   norm_num only [mul_zero, mul_one, pow_zero, pow_succ, Nat.div_one,
     Nat.zero_add, Nat.add_zero]
-  bv_decide
+  ext i hi
+  simp only [BitVec.zeroExtend, BitVec.getElem_or, BitVec.getElem_shiftLeft,
+    BitVec.getElem_setWidth, BitVec.getLsbD_setWidth,
+    BitVec.getLsbD_ushiftRight, BitVec.getElem_zero]
+  by_cases h8 : i < 8
+  · have h16 : i < 16 := by omega
+    have h24 : i < 24 := by omega
+    have h32 : i < 32 := by omega
+    simp [h8, h16, h24, h32]
+  · by_cases h16 : i < 16
+    · have h24 : i < 24 := by omega
+      have h32 : i < 32 := by omega
+      have hByte : i - 8 < 8 := by omega
+      have idx : 8 + (i - 8) = i := by omega
+      simp [h8, h16, h24, h32, hByte, idx]
+    · by_cases h24 : i < 24
+      · have h32 : i < 32 := by omega
+        have hByte : i - 16 < 8 := by omega
+        have hOld : ¬ i - 8 < 8 := by omega
+        have idx : 16 + (i - 16) = i := by omega
+        simp [h8, h16, h24, h32, hByte, hOld, idx]
+      · by_cases h32 : i < 32
+        · have hByte : i - 24 < 8 := by omega
+          have hOld8 : ¬ i - 8 < 8 := by omega
+          have hOld16 : ¬ i - 16 < 8 := by omega
+          have idx : 24 + (i - 24) = i := by omega
+          simp [h8, h16, h24, h32, hByte, hOld8, hOld16, idx]
+        · have hOld8 : ¬ i - 8 < 8 := by omega
+          have hOld16 : ¬ i - 16 < 8 := by omega
+          have hOld24 : ¬ i - 24 < 8 := by omega
+          simp [h8, h16, h24, h32, hOld8, hOld16, hOld24]
 
 private theorem lowAnswerBytes_eight_value (answer : BitVec 64) :
     ((List.range 8).foldl (fun value i =>
@@ -139,7 +181,11 @@ private theorem lowAnswerBytes_eight_value (answer : BitVec 64) :
   simp_rw [lowAnswerByte_as_shift]
   norm_num only [mul_zero, mul_one, pow_zero, pow_succ, Nat.div_one,
     Nat.zero_add, Nat.add_zero]
-  bv_decide
+  ext i hi
+  simp only [BitVec.zeroExtend, BitVec.getElem_or, BitVec.getElem_shiftLeft,
+    BitVec.getElem_setWidth, BitVec.getLsbD_setWidth,
+    BitVec.getLsbD_ushiftRight, BitVec.getElem_zero]
+  interval_cases i <;> simp
 
 private theorem lowAnswerBytes_fold_value (answer : BitVec 64) (width : Nat)
     (valid : width = 1 ∨ width = 2 ∨ width = 4 ∨ width = 8) :
@@ -305,7 +351,16 @@ theorem lowAnswer_muli_1 (answer : BitVec 64) :
     simp [lowAnswer, BitVec.toNat_setWidth]
   rw [loweq]
   simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
-  bv_decide
+  change answer * (BitVec.twoPow 64 56) =
+    (answer.setWidth 8).zeroExtend 64 * (BitVec.twoPow 64 56)
+  simp only [BitVec.mul_twoPow_eq_shiftLeft]
+  ext i hi
+  simp only [BitVec.getElem_shiftLeft, BitVec.zeroExtend]
+  by_cases before : i < 56
+  · simp [before]
+  · have low : i - 56 < 8 := by omega
+    simp [BitVec.getElem_setWidth, before, low]
+    exact (BitVec.getLsbD_eq_getElem (x := answer) (i := i - 56) (by omega)).symm
 
 theorem lowAnswer_muli_2 (answer : BitVec 64) :
     jolt_virtual_muli_value answer (slliMultiplier 48) =
@@ -315,7 +370,16 @@ theorem lowAnswer_muli_2 (answer : BitVec 64) :
     simp [lowAnswer, BitVec.toNat_setWidth]
   rw [loweq]
   simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
-  bv_decide
+  change answer * (BitVec.twoPow 64 48) =
+    (answer.setWidth 16).zeroExtend 64 * (BitVec.twoPow 64 48)
+  simp only [BitVec.mul_twoPow_eq_shiftLeft]
+  ext i hi
+  simp only [BitVec.getElem_shiftLeft, BitVec.zeroExtend]
+  by_cases before : i < 48
+  · simp [before]
+  · have low : i - 48 < 16 := by omega
+    simp [BitVec.getElem_setWidth, before, low]
+    exact (BitVec.getLsbD_eq_getElem (x := answer) (i := i - 48) (by omega)).symm
 
 theorem lowAnswer_muli_4 (answer : BitVec 64) :
     jolt_virtual_muli_value answer (slliMultiplier 32) =
@@ -325,7 +389,16 @@ theorem lowAnswer_muli_4 (answer : BitVec 64) :
     simp [lowAnswer, BitVec.toNat_setWidth]
   rw [loweq]
   simp only [jolt_virtual_muli_value, mulWide_low, slliMultiplier]
-  bv_decide
+  change answer * (BitVec.twoPow 64 32) =
+    (answer.setWidth 32).zeroExtend 64 * (BitVec.twoPow 64 32)
+  simp only [BitVec.mul_twoPow_eq_shiftLeft]
+  ext i hi
+  simp only [BitVec.getElem_shiftLeft, BitVec.zeroExtend]
+  by_cases before : i < 32
+  · simp [before]
+  · have low : i - 32 < 32 := by omega
+    simp [BitVec.getElem_setWidth, before, low]
+    exact (BitVec.getLsbD_eq_getElem (x := answer) (i := i - 32) (by omega)).symm
 
 /-- The states agree on cursor, registers, RAM, device and host mode; only the
 tape byte array may differ (for example original `[0x2C,0x01]` versus replay
