@@ -39,7 +39,10 @@ If you believe a staged statement is false, stop and report the exact missing fa
 - Never replace a proved fact with `sorry`.
 - Do not use `bv_decide`, `native_decide` or `decide +kernel`, and never raise `maxHeartbeats`.
 - Delete every lemma no proof uses.
-- Report each new declaration's elaboration time, and rework any proof slower than about one second.
+- Report each new declaration's elaboration time.
+  Aim for about one second or less.
+  A slower proof is acceptable only if it is significantly simpler than any faster one; say so in your report, with the time and why the faster version would be worse.
+  This never allows raising `maxHeartbeats` or using the decision tactics above.
 - Commit only when Ari asks, and add no Co-Authored-By lines.
 - Keep git worktrees under `/Users/ari.biswas/Lean/`, never in `/private/tmp`, which macOS clears.
 
@@ -58,7 +61,7 @@ If you believe a staged statement is false, stop and report the exact missing fa
    - the Layer 1 to 4 witness lemmas under `JoltConstraints/Soundness/`.
 6. Treat these as signs that a lemma is missing:
    - a proof longer than about 60 lines;
-   - an elaboration time over about one second;
+   - an elaboration time over about one second, unless the proof is already as simple as it can be;
    - a blanket `cases … <;> simp_all` with `all_goals try`;
    - a block of near-identical declarations.
 

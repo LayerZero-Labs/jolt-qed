@@ -160,7 +160,7 @@ Helpers you will need, with the existing ones to reuse:
    - delete `advicel{b,h,w,d}_low_answer` and `lowAnswer_muli_{1,2,4}` if nothing uses them;
    - fix the docstring on `RebuildAgreement.ram_address_eq`, which describes `execution_dimensions_eq`;
    - make sure every public theorem has a docstring;
-   - keep every proof under about 60 lines and one second.
+   - keep every proof under about 60 lines and about one second, unless a slower proof is significantly simpler (see `AGENTS.md`).
 5. Commit on `feat/layer7-tape-rebuild` (Ari authorizes this commit; no Co-Authored-By lines), and report.
 6. When the step (c) agent's Part 1 is committed on `feat/soundness` (Ari will tell you), rebase onto it and prove `narrow_load_shape`.
    Part 1 adds a check `advicePairsOk` to `sequenceOk`, saying an expansion's narrow loads are followed by exactly this multiply, and makes `expand_ok` prove it for every source instruction.
