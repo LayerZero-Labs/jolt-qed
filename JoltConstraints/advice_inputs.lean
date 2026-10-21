@@ -34,7 +34,14 @@ theorem JoltInstance.initial_state_adviceTape_readPosition_zero {Source : Type}
     (state : SailJoltState)
     (initialized : joltInstance.initial_state privateInputs = some state) :
     state.adviceTape.readPosition = 0 := by
-  sorry
+  unfold JoltInstance.initial_state at initialized
+  cases layout : joltInstance.memory_layout with
+  | none => simp [layout] at initialized
+  | some layout =>
+      simp only [layout] at initialized
+      split_ifs at initialized <;> simp_all [init_state]
+      simpa using congrArg (fun state : SailJoltState =>
+        state.adviceTape.readPosition) initialized.symm
 
 namespace JoltConstraints
 

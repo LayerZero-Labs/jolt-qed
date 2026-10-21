@@ -20,6 +20,164 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
+/-- Between two non-read states, the tape cursor is fixed and bytes may only be
+appended. For a tape `[0x2C]`, a host write of `0x01` gives `[0x2C, 0x01]`.
+See `jolt/tracer/src/emulator/cpu.rs:24-60` at 8bbb2357. -/
+private def TapeGrowth (a b : SailJoltState) : Prop :=
+  a.adviceTape.readPosition = b.adviceTape.readPosition ∧
+    ∃ suffix, b.adviceTape.bytes = a.adviceTape.bytes ++ suffix
+
+private theorem tapeGrowth_refl (s : SailJoltState) : TapeGrowth s s := by
+  exact ⟨rfl, #[], by simp⟩
+
+private theorem tapeGrowth_trans (a b c : SailJoltState)
+    (ab : TapeGrowth a b) (bc : TapeGrowth b c) : TapeGrowth a c := by
+  obtain ⟨cursorAB, suffixAB, bytesAB⟩ := ab
+  obtain ⟨cursorBC, suffixBC, bytesBC⟩ := bc
+  refine ⟨cursorAB.trans cursorBC, suffixAB ++ suffixBC, ?_⟩
+  rw [bytesBC, bytesAB, Array.append_assoc]
+
+private theorem storeRaw_tapeGrowth (s s' : SailJoltState) (ea : Nat) (v : BitVec 8)
+    (h : Mmu.store_raw? s ea v = some s') : TapeGrowth s s' := by
+  simp only [Mmu.store_raw?] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; exact ⟨rfl, #[], by simp⟩)
+    | cases h
+    | (cases hst : s.jolt_device.store? ea v with
+        | none => simp [hst] at h
+        | some d =>
+            simp only [hst, Option.map_some] at h
+            cases h
+            exact ⟨rfl, #[], by simp⟩)
+
+private theorem execInstr_tapeGrowth (instr : Instr)
+    (notLoad : ∀ dst width, instr ≠ .VirtualAdviceLoad dst width) :
+    StatePreservation.Preserves TapeGrowth (execInstr instr) := by
+  have reflState (s : SailJoltState) : TapeGrowth s s := tapeGrowth_refl s
+  have transState (s m t : SailJoltState) (sm : TapeGrowth s m)
+      (mt : TapeGrowth m t) : TapeGrowth s t := tapeGrowth_trans s m t sm mt
+  have pureRule {α : Type} (v : α) :
+      StatePreservation.Preserves TapeGrowth (pure v : JoltMonad α) :=
+    StatePreservation.pure_rule reflState v
+  have bindRule {α β : Type} {first : JoltMonad α} {next : α → JoltMonad β}
+      (a : StatePreservation.Preserves TapeGrowth first)
+      (b : ∀ v, StatePreservation.Preserves TapeGrowth (next v)) :
+      StatePreservation.Preserves TapeGrowth (first >>= next) :=
+    StatePreservation.bind_rule transState a b
+  have throwRule {α : Type} (e : Error exception) :
+      StatePreservation.Preserves TapeGrowth (throw e : JoltMonad α) :=
+    StatePreservation.throw_rule TapeGrowth e
+  have getRule : StatePreservation.Preserves TapeGrowth
+      (get : JoltMonad SailJoltState) := StatePreservation.get_rule reflState
+  have liftRule {α : Type} (step : SailM α) :
+      StatePreservation.Preserves TapeGrowth (liftSail step) :=
+    StatePreservation.liftSail_rule (sailRelation := fun _ _ => True)
+      (fun _ _ _ => ⟨rfl, #[], by simp⟩) (fun _ _ _ _ => True.intro)
+  have modifyRule (change : SailJoltState → SailJoltState)
+      (keeps : ∀ s, TapeGrowth s (change s)) :
+      StatePreservation.Preserves TapeGrowth (modify change : JoltMonad Unit) :=
+    StatePreservation.modify_rule change keeps
+  have appendRule (bytes : Array (BitVec 8)) :
+      StatePreservation.Preserves TapeGrowth (modify fun state =>
+        { state with adviceTape :=
+          { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } }) :=
+    modifyRule _ (fun _ => ⟨rfl, bytes, rfl⟩)
+  have readRule (src : Src) : StatePreservation.Preserves TapeGrowth (readSrc src) := by
+    cases src with
+    | vreg vr =>
+      intro s t v h
+      simp only [readSrc, readVReg, bind, EStateM.bind, get, getThe,
+        MonadStateOf.get, EStateM.get, pure, EStateM.pure] at h
+      cases h
+      exact tapeGrowth_refl _
+    | xreg rs => exact liftRule _
+  have writeRule (dst : Dst) (v : BitVec 64) :
+      StatePreservation.Preserves TapeGrowth (writeDst dst v) := by
+    cases dst with
+    | vreg vr =>
+      intro s t result runs
+      simp only [writeDst, writeVReg] at runs
+      split at runs
+      · cases runs
+      · cases runs
+        exact ⟨rfl, #[], by simp⟩
+    | xreg rd => exact liftRule _
+  have storeFold (ea : Nat) (value : BitVec 64) (s0 : SailJoltState) :
+      ∀ (l : List Nat) (start : Option SailJoltState),
+        (∀ s, start = some s → TapeGrowth s0 s) →
+        ∀ s', l.foldl (fun current k => current.bind fun s =>
+          Mmu.store_raw? s (ea + k) (value.extractLsb' (8 * k) 8)) start = some s' →
+          TapeGrowth s0 s' := by
+    intro l
+    induction l with
+    | nil => intro start hstart s' hs'; exact hstart s' hs'
+    | cons k l ih =>
+      intro start hstart s' hs'
+      refine ih _ ?_ s' hs'
+      intro s hs
+      cases hst : start with
+      | none => rw [hst] at hs; cases hs
+      | some e =>
+        rw [hst] at hs
+        exact transState _ _ _ (hstart e hst) (storeRaw_tapeGrowth _ _ _ _ hs)
+  have loadDoublewordRule (address : BitVec 64) :
+      StatePreservation.Preserves TapeGrowth (Mmu.load_doubleword address) := by
+    intro s t v h
+    simp only [Mmu.load_doubleword] at h
+    repeat' split at h
+    all_goals first | (cases h; exact tapeGrowth_refl _) | cases h
+  have storeDoublewordRule (address value : BitVec 64) :
+      StatePreservation.Preserves TapeGrowth (Mmu.store_doubleword address value) := by
+    intro s t v h
+    simp only [Mmu.store_doubleword] at h
+    repeat' split at h
+    all_goals first
+      | (cases h; exact tapeGrowth_refl _)
+      | (rename_i heq
+         cases h
+         exact storeFold _ value s _ (some s)
+           (fun s1 hs1 => by cases hs1; exact tapeGrowth_refl _) _ heq)
+      | cases h
+  have loadRule (address : BitVec 64) :
+      StatePreservation.Preserves TapeGrowth (Mmu.load address) := by
+    intro s t v h
+    simp only [Mmu.load] at h
+    repeat' split at h
+    all_goals first | (cases h; exact tapeGrowth_refl _) | cases h
+  have readHostBytesRule
+      (overflowChecks incrementAfterLast : Bool) {width : Nat}
+      (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
+      StatePreservation.Preserves TapeGrowth
+        (readHostBytes Mmu.load overflowChecks incrementAfterLast pointer n bytes) := by
+    induction n generalizing pointer bytes with
+    | zero => exact pureRule _
+    | succ n ih =>
+      dsimp only [readHostBytes]
+      refine bindRule (loadRule _) (fun result => ?_)
+      cases result with
+      | Err e => exact pureRule _
+      | Ok byte =>
+        split_ifs with h
+        · exact bindRule (throwRule _) (fun _ => ih _ _)
+        · exact bindRule (pureRule _) (fun _ => ih _ _)
+  have execHostIORule : StatePreservation.Preserves TapeGrowth execHostIO := by
+    unfold execHostIO execHostIOWith
+    refine bindRule getRule (fun config => ?_)
+    dsimp only
+    split
+    · exact pureRule _
+    · refine bindRule (pureRule _) (fun _ => ?_)
+      refine bindRule (readRule _) (fun callId => ?_)
+      preservation_auto [readHostBytesRule _ _ _ _ _, readRule _, pureRule _, throwRule _,
+        appendRule _] using bindRule
+  cases instr
+  case VirtualAdviceLoad dst width => exact False.elim (notLoad dst width rfl)
+  all_goals simp only [execInstr]
+  all_goals preservation_auto [readRule _, writeRule _ _, pureRule _, throwRule _,
+    getRule, liftRule _, loadDoublewordRule _, storeDoublewordRule _ _, execHostIORule]
+    using bindRule
+
 /-- `width` little-endian bytes from an answer. For answer 300 and width 1,
 this is `[0x2C]`: the high byte of 300 is dropped. -/
 def lowAnswerBytes (answer : BitVec 64) (width : Nat) : List (BitVec 8) :=
@@ -60,6 +218,85 @@ def rebuiltTapeOffset {joltInstance : JoltInstance SourceInstruction}
   (((List.finRange run.rows.size).take step.val).flatMap
     (answerBytesAt run)).length
 
+private theorem withRuntimeAdvice_eq_adviceLoad_iff (instruction : Instr)
+    (advice : instruction.RuntimeAdvice) (dst : Dst) (width : BitVec 64) :
+    instruction.withRuntimeAdvice advice = .VirtualAdviceLoad dst width ↔
+      instruction = .VirtualAdviceLoad dst width := by
+  unfold Instr.withRuntimeAdvice
+  split <;> simp_all
+
+private theorem UntrustedAnswerRun.postCursor_step
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (step : Fin run.rows.size) :
+    run.rows[step].postState.adviceTape.readPosition =
+      run.rows[step].preState.adviceTape.readPosition +
+        (answerBytesAt run step).length := by
+  let instruction := run.bytecode[run.rows[step].rowIndex].instruction
+  let advice := run.rows[step].runtimeAdvice
+  have runs := run.executes step
+  by_cases isLoad : ∃ dst width, instruction = .VirtualAdviceLoad dst width
+  · obtain ⟨dst, width, load⟩ := isLoad
+    have patched : instruction.withRuntimeAdvice advice =
+        .VirtualAdviceLoad dst width :=
+      (withRuntimeAdvice_eq_adviceLoad_iff instruction advice dst width).2 load
+    have valid : width.toNat = 1 ∨ width.toNat = 2 ∨
+        width.toNat = 4 ∨ width.toNat = 8 := by
+      rw [patched] at runs
+      by_contra invalid
+      simp only [execWithTapeAnswer, if_neg invalid] at runs
+      contradiction
+    let moved : SailJoltState :=
+      { run.rows[step].preState with adviceTape :=
+        { run.rows[step].preState.adviceTape with
+          readPosition := run.rows[step].preState.adviceTape.readPosition + width.toNat } }
+    have virtualRun : execInstr (.VirtualAdvice dst (run.answers step)) moved =
+        .ok (.Retire_Success ()) run.rows[step].postState := by
+      rw [patched] at runs
+      simpa only [execWithTapeAnswer, valid, ↓reduceIte, execInstr, moved] using runs
+    have growth := execInstr_tapeGrowth (.VirtualAdvice dst (run.answers step))
+      (by simp) moved run.rows[step].postState _ virtualRun
+    have bytesLength : (answerBytesAt run step).length = width.toNat := by
+      change (match instruction with
+        | .VirtualAdviceLoad _ width => lowAnswerBytes (run.answers step) width.toNat
+        | _ => []).length = width.toNat
+      rw [load]
+      simp [lowAnswerBytes]
+    simpa only [TapeGrowth, moved, bytesLength] using growth.1.symm
+  · have notPatched : ∀ dst width,
+        instruction.withRuntimeAdvice advice ≠ .VirtualAdviceLoad dst width := by
+      intro dst width h
+      exact isLoad ⟨dst, width,
+        (withRuntimeAdvice_eq_adviceLoad_iff instruction advice dst width).1 h⟩
+    have oldRun : execInstr (instruction.withRuntimeAdvice advice)
+        run.rows[step].preState = .ok (.Retire_Success ()) run.rows[step].postState := by
+      simpa only [execWithTapeAnswer, instruction, advice] using runs
+    have growth := execInstr_tapeGrowth (instruction.withRuntimeAdvice advice)
+      notPatched run.rows[step].preState run.rows[step].postState _ oldRun
+    have noBytes : answerBytesAt run step = [] := by
+      unfold answerBytesAt
+      split
+      · rename_i dst width h
+        exact False.elim (isLoad ⟨dst, width, h⟩)
+      · rfl
+    simpa [noBytes] using growth.1.symm
+
+private theorem rebuiltTapeOffset_succ
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (i : Nat) (bound : i + 1 < run.rows.size) :
+    rebuiltTapeOffset run ⟨i + 1, bound⟩ =
+      rebuiltTapeOffset run ⟨i, by omega⟩ +
+        (answerBytesAt run ⟨i, by omega⟩).length := by
+  unfold rebuiltTapeOffset
+  have iBound : i < (List.finRange run.rows.size).length := by simp; omega
+  rw [← List.take_concat_get' (List.finRange run.rows.size) i iBound]
+  simp only [List.flatMap_append, List.flatMap_cons, List.flatMap_nil,
+    List.length_append, List.length_nil, Nat.add_zero]
+  simp
+
 /-- The relaxed run's tape cursor counts the byte widths of preceding loads.
 Host advice writes append bytes and leave the cursor unchanged. -/
 private theorem UntrustedAnswerRun.preCursor_eq_rebuiltTapeOffset
@@ -69,7 +306,48 @@ private theorem UntrustedAnswerRun.preCursor_eq_rebuiltTapeOffset
     (step : Fin run.rows.size) :
     run.rows[step].preState.adviceTape.readPosition =
       rebuiltTapeOffset run step := by
-  sorry
+  have all : ∀ i (bound : i < run.rows.size),
+      (run.rows[i]'bound).preState.adviceTape.readPosition =
+        rebuiltTapeOffset run ⟨i, bound⟩ := by
+    intro i
+    induction i with
+    | zero =>
+      intro bound
+      let first := run.rows[0]'bound
+      have firstAt : run.rows[0]? = some first := by simp [first, bound]
+      obtain ⟨_, _, starts⟩ := run.starts first firstAt
+      have zero := joltInstance.initial_state_adviceTape_readPosition_zero
+        privateInputs run.initialState run.initialized
+      change first.preState.adviceTape.readPosition = _
+      rw [starts]
+      simp [advance_pc, rebuiltTapeOffset, zero]
+    | succ i ih =>
+      intro bound
+      have previousBound : i < run.rows.size := by omega
+      let previous := run.rows[i]'previousBound
+      let current := run.rows[i + 1]'bound
+      have previousAt : run.rows[i]? = some previous := by simp [previous, previousBound]
+      have currentAt : run.rows[i + 1]? = some current := by simp [current, bound]
+      have link := run.linked i previous current previousAt currentAt
+      have carry : current.preState.adviceTape.readPosition =
+          previous.postState.adviceTape.readPosition := by
+        split at link
+        · simpa using congrArg (fun s : SailJoltState =>
+            s.adviceTape.readPosition) link.2
+        · obtain ⟨address, _, _, _, nextPre⟩ := link
+          rw [nextPre]
+          rfl
+      calc
+        current.preState.adviceTape.readPosition =
+            previous.postState.adviceTape.readPosition := carry
+        _ = previous.preState.adviceTape.readPosition +
+              (answerBytesAt run ⟨i, previousBound⟩).length := by
+            exact run.postCursor_step ⟨i, previousBound⟩
+        _ = rebuiltTapeOffset run ⟨i, previousBound⟩ +
+              (answerBytesAt run ⟨i, previousBound⟩).length := by rw [ih previousBound]
+        _ = rebuiltTapeOffset run ⟨i + 1, bound⟩ :=
+              (rebuiltTapeOffset_succ run i bound).symm
+  exact all step.val step.isLt
 
 private theorem rebuiltTape_split
     {joltInstance : JoltInstance SourceInstruction}
@@ -392,6 +670,237 @@ private theorem SameExceptTapeBytes.sourceValue_eq
   have h := congrArg (sourceValue src) same
   exact h
 
+private def swapBytes (s : SailJoltState) (b : Array (BitVec 8)) : SailJoltState :=
+  {s with adviceTape := {s.adviceTape with bytes := b}}
+private def swapResult {α : Type} (b : Array (BitVec 8)) :
+    EStateM.Result (Error exception) SailJoltState α →
+      EStateM.Result (Error exception) SailJoltState α
+  | .ok a s => .ok a (swapBytes s b)
+  | .error e s => .error e (swapBytes s b)
+
+private def SwapInvariant {α : Type} (m : JoltMonad α) : Prop :=
+  ∀ s b, m (swapBytes s b) = swapResult b (m s)
+
+private theorem swap_bind {α β : Type} {m : JoltMonad α} {f : α → JoltMonad β}
+    (hm : SwapInvariant m) (hf : ∀ x, SwapInvariant (f x)) :
+    SwapInvariant (m >>= f) := by
+  intro s b
+  have hm' := hm s b
+  cases h : m s with
+  | error e t =>
+    rw [h] at hm'
+    simp only [bind, EStateM.bind, hm', h, swapResult]
+  | ok x t =>
+    rw [h] at hm'
+    simp only [bind, EStateM.bind, hm', h, swapResult]
+    exact hf x t b
+
+private theorem swap_pure {α : Type} (x : α) :
+    SwapInvariant (pure x : JoltMonad α) := by
+  intro s b
+  rfl
+
+private theorem swap_throw {α : Type} (e : Error exception) :
+    SwapInvariant (throw e : JoltMonad α) := by
+  intro s b
+  rfl
+
+private theorem swap_lift {α : Type} (m : SailM α) :
+    SwapInvariant (liftSail m) := by
+  intro s b
+  unfold liftSail
+  cases h : m s.sail <;> simp [swapResult, swapBytes, h]
+
+private theorem swap_read (src : Src) : SwapInvariant (readSrc src) := by
+  cases src with
+  | xreg rs => exact swap_lift _
+  | vreg vr =>
+    intro s b
+    rfl
+
+private theorem swap_write (dst : Dst) (value : BitVec 64) :
+    SwapInvariant (writeDst dst value) := by
+  cases dst with
+  | xreg rd => exact swap_lift _
+  | vreg vr =>
+    intro s b
+    simp only [writeDst, writeVReg]
+    split <;> rfl
+
+private theorem swap_load (address : BitVec 64) :
+    SwapInvariant (Mmu.load address) := by
+  intro s b
+  unfold Mmu.load
+  simp only [Mmu.load?, Mmu.load_raw?, swapBytes, swapResult]
+  split <;> rfl
+
+private theorem swap_load_doubleword (address : BitVec 64) :
+    SwapInvariant (Mmu.load_doubleword address) := by
+  intro s b
+  have raw : Mmu.load_raw? (swapBytes s b) = Mmu.load_raw? s := rfl
+  have dev : (swapBytes s b).jolt_device = s.jolt_device := rfl
+  unfold Mmu.load_doubleword
+  simp only [raw, dev]
+  split_ifs <;> simp [swapResult, swapBytes]
+  cases read_doubleword? (Mmu.load_raw? s) address.toNat <;> rfl
+
+private theorem swap_store_raw (s : SailJoltState) (b : Array (BitVec 8))
+    (ea : Nat) (v : BitVec 8) :
+    Mmu.store_raw? (swapBytes s b) ea v =
+      (Mmu.store_raw? s ea v).map (swapBytes · b) := by
+  simp [Mmu.store_raw?, swapBytes]
+  split_ifs <;> simp
+  congr 1
+
+private theorem swap_store_fold (b : Array (BitVec 8)) (ea : Nat)
+    (value : BitVec 64) (l : List Nat) (start : Option SailJoltState) :
+    l.foldl (fun current k => current.bind fun s =>
+      Mmu.store_raw? s (ea + k) (value.extractLsb' (8 * k) 8))
+        (start.map (swapBytes · b)) =
+    (l.foldl (fun current k => current.bind fun s =>
+      Mmu.store_raw? s (ea + k) (value.extractLsb' (8 * k) 8)) start).map
+        (swapBytes · b) := by
+  induction l generalizing start with
+  | nil => rfl
+  | cons k rest ih =>
+    simp only [List.foldl_cons]
+    cases start with
+    | none => simpa using ih none
+    | some s =>
+      simp only [Option.map_some, Option.bind_some]
+      rw [swap_store_raw]
+      simpa only [Option.map_eq_map] using ih (Mmu.store_raw? s (ea + k)
+        (value.extractLsb' (8 * k) 8))
+
+private theorem swap_store_doubleword (address value : BitVec 64) :
+    SwapInvariant (Mmu.store_doubleword address value) := by
+  intro s b
+  have dev : (swapBytes s b).jolt_device = s.jolt_device := rfl
+  have stored :
+      (List.range 8).foldl (fun current k => current.bind fun state =>
+        Mmu.store_raw? state (address.toNat + k) (value.extractLsb' (8 * k) 8))
+        (some (swapBytes s b)) =
+      ((List.range 8).foldl (fun current k => current.bind fun state =>
+        Mmu.store_raw? state (address.toNat + k) (value.extractLsb' (8 * k) 8))
+        (some s)).map (swapBytes · b) := by
+    simpa using swap_store_fold b address.toNat value (List.range 8) (some s)
+  unfold Mmu.store_doubleword
+  simp only [dev, stored]
+  split_ifs <;> simp [swapBytes, swapResult]
+  cases (List.range 8).foldl (fun current k => current.bind fun state =>
+    Mmu.store_raw? state (address.toNat + k) (value.extractLsb' (8 * k) 8))
+    (some s) <;> rfl
+
+private theorem swap_execInstr_nonhost (instr : Instr)
+    (notLoad : ∀ dst width, instr ≠ .VirtualAdviceLoad dst width)
+    (notHost : ∀ dst src imm, instr ≠ .VirtualHostIO dst src imm) :
+    SwapInvariant (execInstr instr) := by
+  cases instr
+  case VirtualAdviceLoad dst width => exact False.elim (notLoad dst width rfl)
+  case VirtualHostIO dst src imm => exact False.elim (notHost dst src imm rfl)
+  all_goals simp only [execInstr]
+  all_goals preservation_auto [swap_read _, swap_write _ _, swap_pure _,
+    swap_throw _, swap_lift _, swap_load_doubleword _, swap_store_doubleword _ _]
+    using swap_bind
+
+private theorem swap_readHostBytes
+    (overflow increment : Bool) {width : Nat}
+    (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
+    SwapInvariant (readHostBytes Mmu.load overflow increment pointer count bytes) := by
+  induction count generalizing pointer bytes with
+  | zero => exact swap_pure _
+  | succ count ih =>
+    dsimp only [readHostBytes]
+    refine swap_bind (swap_load _) (fun result => ?_)
+    cases result with
+    | Err e => exact swap_pure _
+    | Ok byte =>
+      split_ifs
+      · exact swap_bind (swap_throw _) (fun _ => ih _ _)
+      · exact swap_bind (swap_pure _) (fun _ => ih _ _)
+
+private def SwapAppend {α : Type} (m : JoltMonad α) : Prop :=
+  ∀ s b v t, m s = .ok v t →
+    ∃ suffix,
+      m (swapBytes s b) = .ok v (swapBytes t (b ++ suffix)) ∧
+      t.adviceTape.bytes = s.adviceTape.bytes ++ suffix
+
+private theorem swapInvariant_to_append {α : Type} {m : JoltMonad α}
+    (inv : SwapInvariant m) : SwapAppend m := by
+  intro s b v t runs
+  have self : swapBytes s s.adviceTape.bytes = s := by
+    cases s
+    rfl
+  have hself := inv s s.adviceTape.bytes
+  rw [self, runs] at hself
+  have bytes : t.adviceTape.bytes = s.adviceTape.bytes := by
+    have stateEq : t = swapBytes t s.adviceTape.bytes := by
+      exact (EStateM.Result.ok.inj hself).2
+    simpa [swapBytes] using
+      congrArg (fun state : SailJoltState => state.adviceTape.bytes) stateEq
+  refine ⟨#[], ?_, by simpa using bytes⟩
+  simpa [runs] using inv s b
+
+private theorem swapAppend_bind {α β : Type} {m : JoltMonad α}
+    {f : α → JoltMonad β} (hm : SwapAppend m)
+    (hf : ∀ x, SwapAppend (f x)) : SwapAppend (m >>= f) := by
+  intro s b v t runs
+  cases first : m s with
+  | error e middle =>
+    simp only [bind, EStateM.bind, first] at runs
+    cases runs
+  | ok x middle =>
+    have next : f x middle = .ok v t := by
+      simpa only [bind, EStateM.bind, first] using runs
+    obtain ⟨suffixFirst, replayFirst, bytesFirst⟩ := hm s b x middle first
+    obtain ⟨suffixNext, replayNext, bytesNext⟩ :=
+      hf x middle (b ++ suffixFirst) v t next
+    refine ⟨suffixFirst ++ suffixNext, ?_, ?_⟩
+    · simp only [bind, EStateM.bind, replayFirst, replayNext,
+        Array.append_assoc]
+    · rw [bytesNext, bytesFirst, Array.append_assoc]
+
+private theorem swapAppend_append (bytes : Array (BitVec 8)) :
+    SwapAppend (modify fun state =>
+      { state with adviceTape :=
+        { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } }) := by
+  intro s b v t runs
+  cases runs
+  refine ⟨bytes, ?_, rfl⟩
+  simp [modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
+    swapBytes]
+
+private theorem swapAppend_getHostIO {α : Type} (next : SailJoltState → JoltMonad α)
+    (same : ∀ s b, next (swapBytes s b) = next s)
+    (hnext : ∀ s, SwapAppend (next s)) :
+    SwapAppend (get >>= next) := by
+  intro s b v t runs
+  simpa [bind, EStateM.bind, get, getThe, MonadStateOf.get,
+    EStateM.get, same s b] using hnext s s b v t runs
+
+private theorem swap_execHostIO : SwapAppend execHostIO := by
+  unfold execHostIO execHostIOWith
+  refine swapAppend_getHostIO _ (by intro s b; rfl) (fun config => ?_)
+  dsimp only
+  split
+  · exact swapInvariant_to_append (swap_pure _)
+  · refine swapAppend_bind (swapInvariant_to_append (swap_pure _)) (fun _ => ?_)
+    refine swapAppend_bind (swapInvariant_to_append (swap_read _)) (fun callId => ?_)
+    preservation_auto [swapInvariant_to_append (swap_read _),
+      swapInvariant_to_append (swap_readHostBytes _ _ _ _ _),
+      swapInvariant_to_append (swap_pure _), swapInvariant_to_append (swap_throw _),
+      swapAppend_append _] using swapAppend_bind
+
+private theorem swap_execInstr_nonload (instruction : Instr)
+    (notLoad : ∀ dst width, instruction ≠ .VirtualAdviceLoad dst width) :
+    SwapAppend (execInstr instruction) := by
+  by_cases host : ∃ dst src imm, instruction = .VirtualHostIO dst src imm
+  · obtain ⟨dst, src, imm, h⟩ := host
+    subst instruction
+    simpa only [execInstr] using swap_execHostIO
+  · exact swapInvariant_to_append (swap_execInstr_nonhost instruction notLoad
+      (by intro dst src imm h; exact host ⟨dst, src, imm, h⟩))
+
 /-- A successful non-read instruction replays from states that differ only in
 tape bytes. It can append host advice after an existing replay-tape prefix. -/
 private theorem execInstr_replay_nonload
@@ -405,7 +914,16 @@ private theorem execInstr_replay_nonload
       execInstr instruction replayPre = .ok (.Retire_Success ()) replayPost ∧
       SameExceptTapeBytes oldPost replayPost ∧
       replayPost.adviceTape.bytes = tapePrefix ++ nextHostSuffix := by
-  sorry
+  have replayPreEq : replayPre = swapBytes oldPre replayPre.adviceTape.bytes := by
+    simpa only [SameExceptTapeBytes, swapBytes] using same.symm
+  obtain ⟨added, replayExec, _⟩ :=
+    swap_execInstr_nonload instruction notLoad oldPre replayPre.adviceTape.bytes
+      (.Retire_Success ()) oldPost oldExec
+  let replayPost := swapBytes oldPost (replayPre.adviceTape.bytes ++ added)
+  refine ⟨replayPost, hostSuffix ++ added, ?_, ?_, ?_⟩
+  · exact (congrArg (execInstr instruction) replayPreEq).trans replayExec
+  · rfl
+  · simp [replayPost, swapBytes, replayBytes, Array.append_assoc]
 
 private theorem replaceDst_device_eq (dst : Dst) (state : SailJoltState)
     (value : BitVec 64) :
