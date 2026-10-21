@@ -2607,3 +2607,27 @@ The slowest new or changed declaration was `replayRow_executes_nonload` at **574
 |---|---:|
 | `read_afterDst` | 9 |
 | `afterDst_afterDst` | 23 |
+
+
+### Tape rebuild: generic adjacent-row lift (2026-10-21)
+
+`Soundness/Layer7/AdjacentRows.lean` now provides a checker-independent lift from an arbitrary property of each materialized expansion's instruction list to adjacent bytecode rows.
+`Pairs` selects the earlier item with side 0 (load/multiply) or the later item with side 1 (mask/shift).
+`materialized_pairs` derives the earlier row's continuation and the later row's false `starts_source` flag from `ExpandedRows` countdown and start metadata.
+`expand_program_pairs` transports these local pairs through concatenation, so a pair cannot cross a source boundary.
+The file imports only `program_facts`; it does not depend on `expand_ok`, `shiftsOk`, or an advice checker.
+`trace_interface.lean` is unchanged; moving `ShiftPairs` onto this lift waits for step (c).
+`narrow_load_shape` remains staged until `expand_ok` supplies `advicePairsOk`.
+
+The isolated Lake target `JoltConstraints.Soundness.Layer7.AdjacentRows` builds.
+`#print axioms expand_program_pairs` reports only `propext`, `Classical.choice`, and `Quot.sound`, with no `sorryAx`.
+No limit was raised and no new `bv_decide`, `native_decide`, or `decide +kernel` was used.
+All new declaration times below use `#time` with `Elab.async=false`.
+
+| Declaration in `AdjacentRows.lean` | Elaboration (ms) |
+|---|---:|
+| `Pairs` | 11 |
+| `pairs_append` | 87 |
+| `pairs_flatten` | 11 |
+| `materialized_pairs` | 93 |
+| `expand_program_pairs` | 45 |

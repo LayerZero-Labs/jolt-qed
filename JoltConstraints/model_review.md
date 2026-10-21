@@ -173,7 +173,7 @@ The following declarations still use `sorry`:
 | `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. |
 | `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
-| `narrow_load_shape` (`Soundness/Layer7/TapeRebuild.lean`) | Lift the expansion's narrow-advice load/multiply pair property to bytecode, including the rewritten destination, continuation flag and masking multiplier. This is step 6, after the step (c) Part 1 commit. |
+| `narrow_load_shape` (`Soundness/Layer7/TapeRebuild.lean`) | Lift the expansion's narrow-advice load/multiply pair property to bytecode, including the rewritten destination, continuation flag and masking multiplier. The generic lift in `Soundness/Layer7/AdjacentRows.lean` is proved; the checker fact `advicePairsOk` still waits for the step (c) Part 1 commit. |
 
 Steps 1–5 of the tape-rebuild closing plan are complete on `feat/layer7-tape-rebuild` in `/Users/ari.biswas/Lean/jolt-qed-tape-rebuild`.
 `rebuild_rows` maps the relaxed rows directly with `Array.ofFn`, proving execution, initialization, linkage, row agreement and source-start agreement.
