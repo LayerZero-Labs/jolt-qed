@@ -93,10 +93,10 @@ Helper A is proved from the restated execution-prefix and stopping statements, e
 Helpers C and D still use `sorry`.
 Helper C keeps its approved ⚠️ DANGER status and the same two counterexamples.
 The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
-Step (c)'s statements have Ari's approval and are being proved.
+Step (c)'s two target theorems are assembled from named Layer 6 and Layer 7 obligations, and Ari approved the staged statements for proof after adding stable-stall control-flow classification and virtual-base JALR source facts.
 The execution-prefix statement is in `Soundness/Layer6/ExecutionPrefix.lean`, and the stopping statement is in `Soundness/Layer7/Stopping.lean`.
 The prefix cuts at the first stable stall, padding, or the last witness cycle and owns RAM agreement at that boundary.
-The stopping statement owns final RAM agreement after the cut and is supported by a separately staged constraint-level zero-RAM-update lemma.
+The stopping theorem obtains nonemptiness from a named termination-store obligation, obtains the final stall from the cut or named last-jump and termination obligations, and carries cut RAM agreement to final RAM through the staged zero-effect suffix lemma.
 The stopping rule mirrors a16z/jolt PR #2109 at head d2995380; soundness obtains unconditional nonemptiness from the termination store.
 No additional restriction is used for the JALR self-jump case.
 The prover-acceptance helper C is known false when the instance maximum is below 256, or when execution fills every cycle of a witness whose length is the largest power of two within the maximum, and is assumed on purpose until a16z answers; see its ⚠️ DANGER docstring.

@@ -269,4 +269,26 @@ theorem padding_persists
     .IsNoop ⟨t.val + 1, next⟩ nextSlot nextSelected]
   simp [bytecodeInstructionFlag, nextNoRow]
 
+/-- If witness cycle `start` selects padding, every later cycle `cycle`
+selects padding too. For example, padding at cycle 3 includes cycle 5.
+The no-op transition is modeled after
+jolt/crates/jolt-riscv/src/instructions/mod.rs:534-537 at 8bbb2357. -/
+theorem padding_from
+    (start cycle : Fin params.traceLength)
+    (atStart : witness.InstructionFlags .IsNoop start = 1)
+    (later : start.val ≤ cycle.val) :
+    witness.InstructionFlags .IsNoop cycle = 1 := by
+  have proveAt (n : Nat) (lower : start.val ≤ n)
+      (upper : n < params.traceLength) :
+      witness.InstructionFlags .IsNoop ⟨n, upper⟩ = 1 := by
+    induction n, lower using Nat.le_induction with
+    | base => simpa using atStart
+    | succ n lower ih =>
+      have prevBound : n < params.traceLength := by omega
+      have prev : witness.InstructionFlags .IsNoop ⟨n, prevBound⟩ = 1 :=
+        ih prevBound
+      simpa using padding_persists charAbove2pow127 context equations
+        ⟨n, prevBound⟩ (by omega) prev
+  exact proveAt cycle.val later cycle.isLt
+
 end JoltConstraints.Soundness

@@ -171,8 +171,29 @@ The following declarations still use `sorry`:
 | Declaration | What it needs |
 |---|---|
 | `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. |
-| `JoltInstance.soundness_stall_suffix_zero_ram_effects` (`Soundness/Layer7/Stopping.lean`) | Use the witness's bytecode and register constraints to show that each cycle after the first stable stall selects that source instruction or padding and has zero RAM update at every word. |
-| `JoltInstance.soundness_stopping` (`Soundness/Layer7/Stopping.lean`) | Prove that the cut run is nonempty and ends at a stable stall. The final RAM step from cut agreement and the staged zero-effect suffix lemma is already proved locally, including a cut at the last cycle. |
+| `padding_from` (`Soundness/Layer6/BytecodePC.lean`) | Iterate `padding_persists` from any padding cycle to every later cycle. |
+| `stall_suffix_initial` (`Soundness/Layer7/StallSuffix.lean`) | Establish the replay invariant at the first cycle after the retained stable stall. |
+| `stall_jal_step` (`Soundness/Layer7/StallSuffix.lean`) | Preserve the replay invariant across a JAL or EBREAK replay step. |
+| `stall_branch_step` (`Soundness/Layer7/StallSuffix.lean`) | Preserve the two branch operands and replay invariant across a branch step. |
+| `stall_jalr_preserved_base_step` (`Soundness/Layer7/StallSuffix.lean`) | Preserve the base and replay invariant for architectural-base JALR, including the x0 rewrite with a virtual destination. |
+| `stall_jalr_written_base_step` (`Soundness/Layer7/StallSuffix.lean`) | Use `selfJumpRepeats` to preserve the replay invariant when JALR writes its nonzero base. |
+| `stall_system_jalr_step` (`Soundness/Layer7/StallSuffix.lean`) | Move through ECALL or MRET virtual rows while preserving the virtual jump base and replay invariant. |
+| `expanded_virtual_jalr_source` (`Soundness/Layer7/StallSuffix.lean`) | Identify ECALL and MRET as the only virtual-base JALR sources and prove their source rows do not write that base. |
+| `expanded_jalr_operand_forms` (`Soundness/Layer7/StallSuffix.lean`) | Exclude architectural-destination, virtual-base JALR rows from expanded bytecode. |
+| `noncontrol_next_pc` (`Soundness/Layer7/StallSuffix.lean`) | Show an executed noncontrol row leaves nextPC at its source address plus instruction length. |
+| `stable_stall_control_flow` (`Soundness/Layer7/StallSuffix.lean`) | Classify a stable stall's final row as JAL, JALR or branch. |
+| `stall_suffix_replays_source` (`Soundness/Layer7/StallSuffix.lean`) | Induct from `stall_suffix_initial` using the five step cases and `padding_from`. |
+| `stable_stall_source_no_store` (`Soundness/Layer7/StallSuffix.lean`) | Show all bytecode rows at a stable stall's source address have no Store flag. |
+| `stall_suffix_no_store` (`Soundness/Layer7/StallSuffix.lean`) | Use replay and the bytecode no-store fact to turn off Store on every real suffix cycle. |
+| `soundness_last_row_is_jump` (`Soundness/Layer7/LastJump.lean`) | Use the next-PC constraints to rule out a branch, ordinary row or interior virtual row at a padding or final-cycle cut. |
+| `soundness_termination_store_exists` (`Soundness/Layer7/TerminationStore.lean`) | Use the no-panic public termination word, RAM history, row representation and cut to locate a completed termination store. |
+| `UntrustedAnswerRun.truncate_rows_size` (`Soundness/Layer7/TerminationStore.lean`) | Compute the length of a bounded row extraction. |
+| `UntrustedAnswerRun.truncate_executes` (`Soundness/Layer7/TerminationStore.lean`) | Transfer execution certificates to extracted rows. |
+| `UntrustedAnswerRun.truncate_starts` (`Soundness/Layer7/TerminationStore.lean`) | Transfer the entry-row certificate to a nonempty extracted run. |
+| `UntrustedAnswerRun.truncate_linked` (`Soundness/Layer7/TerminationStore.lean`) | Transfer adjacency certificates to extracted rows. |
+| `honestTracerAdviceAtStepN_extract` (`Soundness/Layer7/TerminationStore.lean`) | Show advice at row `i` depends only on rows through `i`. |
+| `soundness_prefix_next_step` (`Soundness/Layer7/TerminationStore.lean`) | Truncate a run before an existing row and establish `NextStep` for the attempted row. |
+| `soundness_termination_last_stall` (`Soundness/Layer7/TerminationStore.lean`) | Apply `TerminationThenStall` to the truncated prefix before the final jump and prove `StableStall`. |
 | `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
 | `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) | Build one byte tape from the independent low-byte answers and replay the relaxed execution as an honest trace. |
