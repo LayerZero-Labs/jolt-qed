@@ -377,6 +377,31 @@ theorem expand_program_rows (image : Rv64ProgramImage SourceInstruction)
       rw [Array.getElem_toList inRange] at step
       exact expand_instruction_expandedRows _ _ step
 
+/-- Every materialized bytecode row belongs to one source instruction's
+expansion. This does not require unique source addresses: for example, a JALR
+row still has an emitting source even before the PC map is checked.
+See jolt/crates/jolt-program/src/expand/materialize.rs:71-101 at 8bbb2357. -/
+theorem expand_program_source_of_row (image : Rv64ProgramImage SourceInstruction)
+    (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode)
+    (row : JoltInstructionRow) (member : row ∈ bytecode.toList) :
+    ∃ source ∈ image.instructions.toList, ∃ rows : List JoltInstructionRow,
+      expand_instruction source = some rows ∧ row ∈ rows := by
+  unfold expand_program at expanded
+  cases mapped : image.instructions.toList.mapM expand_instruction with
+  | none =>
+    rw [mapped] at expanded
+    cases expanded
+  | some instructions =>
+    rw [mapped, Option.map_some, Option.some.injEq] at expanded
+    subst expanded
+    rw [List.toList_toArray] at member
+    obtain ⟨rows, inInstructions, inRows⟩ := List.mem_flatten.mp member
+    obtain ⟨k, inRange, rfl⟩ := List.mem_iff_getElem.mp inInstructions
+    obtain ⟨lengths, steps⟩ := option_mapM_results expand_instruction _ instructions mapped
+    have inSources : k < image.instructions.toList.length := by omega
+    exact ⟨image.instructions.toList[k], List.getElem_mem inSources,
+      instructions[k], steps k inSources inRange, inRows⟩
+
 -- A run Rust's PC map accepts counts down to 0: row k of n has count n - 1 - k.
 theorem valid_run_countdown (run : List JoltInstructionRow)
     (valid : valid_run run = true) (position : Nat) (inRange : position < run.length) :
@@ -610,6 +635,64 @@ theorem pc_map_ok_distinct_addresses (image : Rv64ProgramImage SourceInstruction
       exact each position (by rw [Array.length_toList] at inSources; exact inSources) inRows)]
     at distinct
   exact distinct
+
+namespace JoltInstance
+
+/-- Rows at one accepted bytecode address come from one source instruction's
+expansion. For example, every row at an ECALL address comes from that ECALL.
+See jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-164 at 8bbb2357. -/
+theorem expanded_same_source_rows
+    (image : Rv64ProgramImage SourceInstruction)
+    (bytecode : Array JoltInstructionRow)
+    (expanded : expand_program image = some bytecode)
+    (accepted : pc_map_ok bytecode = true)
+    (first second : JoltInstructionRow)
+    (firstMember : first ∈ bytecode.toList)
+    (secondMember : second ∈ bytecode.toList)
+    (sameAddress : first.address = second.address) :
+    ∃ source ∈ image.instructions.toList,
+      ∃ rows : List JoltInstructionRow,
+        expand_instruction source = some rows ∧ first ∈ rows ∧ second ∈ rows := by
+  have originalExpanded := expanded
+  unfold expand_program at expanded
+  cases mapped : image.instructions.toList.mapM expand_instruction with
+  | none => simp only [mapped, Option.map_none] at expanded; cases expanded
+  | some groups =>
+      simp only [mapped, Option.map_some, Option.some.injEq] at expanded
+      have distinct := pc_map_ok_distinct_addresses image bytecode
+        originalExpanded accepted
+      subst bytecode
+      obtain ⟨firstRows, firstRowsMember, firstIn⟩ := List.mem_flatten.mp firstMember
+      obtain ⟨secondRows, secondRowsMember, secondIn⟩ := List.mem_flatten.mp secondMember
+      obtain ⟨i, iBound, firstRowsAt⟩ := List.mem_iff_getElem.mp firstRowsMember
+      obtain ⟨j, jBound, secondRowsAt⟩ := List.mem_iff_getElem.mp secondRowsMember
+      obtain ⟨lengths, steps⟩ := option_mapM_results expand_instruction
+        image.instructions.toList groups mapped
+      have iSourceBound : i < image.instructions.toList.length := by omega
+      have jSourceBound : j < image.instructions.toList.length := by omega
+      have firstStep := steps i iSourceBound iBound
+      have secondStep := steps j jSourceBound jBound
+      have firstAt : first ∈ groups[i] := by simpa only [firstRowsAt] using firstIn
+      have secondAt : second ∈ groups[j] := by simpa only [secondRowsAt] using secondIn
+      have firstAddress := expand_instruction_address
+        image.instructions.toList[i] groups[i] firstStep first firstAt
+      have secondAddress := expand_instruction_address
+        image.instructions.toList[j] groups[j] secondStep second secondAt
+      have iMapBound : i < (image.instructions.toList.map (·.address)).length := by
+        simpa only [List.length_map] using iSourceBound
+      have jMapBound : j < (image.instructions.toList.map (·.address)).length := by
+        simpa only [List.length_map] using jSourceBound
+      have indices : i = j := by
+        apply (List.Nodup.getElem_inj_iff distinct
+          (hi := iMapBound) (hj := jMapBound)).mp
+        rw [List.getElem_map, List.getElem_map]
+        exact firstAddress.symm.trans (sameAddress.trans secondAddress)
+      subst j
+      refine ⟨image.instructions.toList[i], List.getElem_mem _ , groups[i], firstStep,
+        firstAt, ?_⟩
+      exact secondAt
+
+end JoltInstance
 
 -- In rows laid end to end, a row of a later instruction has one of the later
 -- instructions' addresses.
@@ -897,4 +980,3 @@ theorem pc_map_ok_size (rows : Array JoltInstructionRow) (accepted : pc_map_ok r
   unfold pc_map_ok at accepted
   simp only [Bool.and_eq_true, decide_eq_true_eq] at accepted
   exact accepted.2
-

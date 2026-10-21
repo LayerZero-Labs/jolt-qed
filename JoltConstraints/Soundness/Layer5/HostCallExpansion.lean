@@ -77,8 +77,8 @@ private theorem host_not_in_sequence (source : SourceInstruction)
     (expands : source.expand = some (.sequence instructions)) :
     ∀ instr ∈ instructions, NotHostIO instr := by
   have good := ExpansionFacts.expand_ok source (.sequence instructions) expands
-  simp only [ExpansionFacts.ExpandedOk, ExpansionFacts.sequenceOk, Bool.and_eq_true] at good
-  exact rowsOk_no_host instructions good.1.1
+  exact rowsOk_no_host instructions
+    (ExpansionFacts.sequenceOk_rowsOk instructions good)
 
 private theorem host_expanded_destination
     (sourceRow : SourceInstructionRow SourceInstruction)

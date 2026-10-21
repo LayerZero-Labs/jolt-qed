@@ -93,9 +93,124 @@ def shiftsOk : List JoltISA.Instr → Bool
   | [] => true
   | first :: rest => immShiftOk first && !isRegisterShift first && shiftPairsOk first rest
 
+/-- If the final instruction is JAL or JALR, every instruction has its Store
+opcode flag unset. For example, ECALL ends in JALR and contains no store.
+See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:23-52 at 8bbb2357. -/
+def jumpEndNoStore (instructions : List JoltISA.Instr) : Bool :=
+  match instructions.getLast? with
+  | some (.JAL ..) | some (.JALR ..) =>
+      instructions.all fun instruction => !JoltMetadata.opcodeFlag instruction .Store
+  | _ => true
+
+/-- Every JALR in a sequence has a virtual destination and a virtual base.
+For example, MRET reads virtual mepc and writes its link to a temporary.
+See jolt/crates/jolt-program/src/expand/control_flow/mret.rs:11-18 at 8bbb2357. -/
+def sequenceJalrsVirtual (instructions : List JoltISA.Instr) : Bool :=
+  instructions.all fun instruction =>
+    match instruction with
+    | .JALR (.vreg _) (.vreg _) _ => true
+    | .JALR .. => false
+    | _ => true
+
+/-- Each virtual-base, virtual-destination JALR reads a virtual register that
+no instruction in its sequence names as a virtual destination.
+For example, ECALL jumps through mtvec without writing mtvec.
+See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:15-50 at 8bbb2357. -/
+def virtualJalrBaseUnwritten (instructions : List JoltISA.Instr) : Bool :=
+  instructions.all fun instruction =>
+    match instruction with
+    | .JALR (.vreg _) (.vreg base) _ =>
+        instructions.all fun other => !ExpansionTempLiveness.writes base other
+    | _ => true
+
+/-- Every advice load of fewer than eight bytes is immediately followed by
+a multiply that shifts those bytes to the high end of a 64-bit word.
+Both rows write the same nonzero architectural register, or the x0 rewrite's
+virtual register 40, and the multiply reads that register.
+These are exactly the destination and source forms of `sideEffectingRdZeroDst`
+and `adviceReadSource`: for example, AdviceLB x0 loads virtual register 40,
+then multiplies that register by `slliMultiplier (BitVec.ofNat 6 56)`.
+A narrow load at the end of the list fails this check.
+See jolt/crates/jolt-program/src/expand/memory/shared.rs:137-169 at 8bbb2357. -/
+def advicePairsOk : List JoltISA.Instr → Bool
+  | [] => true
+  | instruction :: rest =>
+      (match instruction with
+       | .VirtualAdviceLoad dst width =>
+           if width.toNat < 8 then
+             match rest with
+             | .VirtualMULI nextDst src multiplier :: _ =>
+                 (match dst, nextDst, src with
+                  | .xreg rd, .xreg nextRd, .xreg rs =>
+                      !JoltISA.isX0 rd && nextRd == rd && rs == rd
+                  | .vreg rd, .vreg nextRd, .vreg rs =>
+                      rd == JoltISA.rdZeroRewriteVReg && nextRd == rd && rs == rd
+                  | _, _, _ => false) &&
+                   multiplier == JoltISA.slliMultiplier
+                     (BitVec.ofNat 6 (64 - 8 * width.toNat))
+             | _ => false
+           else true
+       | _ => true) && advicePairsOk rest
+
+/-- A native JALR has an architectural base; its destination may be
+architectural or virtual after the x0 rewrite.
+For example, native JALR x0, 0(x2) retains x2 as its base.
+See jolt/crates/jolt-program/src/expand/mod.rs:126-170 at 8bbb2357. -/
+def nativeJalrBaseOk : JoltISA.Instr → Bool
+  | .JALR _ (.vreg _) _ => false
+  | _ => true
+
+/-- All syntactic checks for one source sequence: valid rows and shifts,
+initialized temporaries, jump/store separation, virtual JALRs with unchanged
+bases, and adjacent narrow advice multiplies. For example, ECALL passes all
+checks while a sequence that stores before its final JAL does not. -/
 def sequenceOk (instructions : List JoltISA.Instr) : Bool :=
   rowsOk instructions && shiftsOk instructions &&
-    ExpansionTempLiveness.tempsReadAfterWrite instructions
+    ExpansionTempLiveness.tempsReadAfterWrite instructions &&
+    jumpEndNoStore instructions && sequenceJalrsVirtual instructions &&
+    virtualJalrBaseUnwritten instructions && advicePairsOk instructions
+
+/-- Every row passes the sequence row checks; for example, ECALL contains no branch. -/
+theorem sequenceOk_rowsOk (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : rowsOk instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.1.1.1.1.1
+
+/-- Shifts use the required masks; for example, a register shift follows its mask producer. -/
+theorem sequenceOk_shiftsOk (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : shiftsOk instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.1.1.1.1.2
+
+/-- Temporary reads follow writes; for example, ECALL initializes its scratch register. -/
+theorem sequenceOk_tempsReadAfterWrite (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : ExpansionTempLiveness.tempsReadAfterWrite instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.1.1.1.2
+
+/-- A sequence ending in a jump has no store; for example, ECALL ends in JALR. -/
+theorem sequenceOk_jumpEndNoStore (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : jumpEndNoStore instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.1.1.2
+
+/-- Sequence JALRs have virtual operands; for example, MRET reads virtual mepc. -/
+theorem sequenceOk_sequenceJalrsVirtual (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : sequenceJalrsVirtual instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.1.2
+
+/-- A virtual jump base is unwritten in its sequence; for example, ECALL preserves mtvec. -/
+theorem sequenceOk_virtualJalrBaseUnwritten (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : virtualJalrBaseUnwritten instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.2
+
+/-- Narrow advice loads have the required multiply; for example, AdviceLB shifts by 56 bits. -/
+theorem sequenceOk_advicePairsOk (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : advicePairsOk instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.2
 
 -- ctz reads off the lowest set bit.
 theorem ctz_eq_of_bits : ∀ (s n : Nat), (∀ i < s, n.testBit i = false) → n.testBit s = true →
@@ -174,8 +289,14 @@ macro "rows_ok " program:ident : tactic => `(tactic| (
     simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
-      wordMaskOk_shamt, *]
-    rfl))
+      wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
+      advicePairsOk, nativeJalrBaseOk, List.getLast?_cons, List.getLast?_nil,
+      List.all_cons, List.all_nil, ExpansionTempLiveness.writes, *]
+    first
+    | rfl
+    | cases_type regidx
+      simp only [BEq.beq, instBEqRegidx.beq, decide_true]
+      rfl))
 
 -- For a pure program only rd ≠ x0 matters: take that branch first.
 macro "pure_rows_ok " program:ident notX0:ident : tactic => `(tactic| (
@@ -186,7 +307,9 @@ macro "pure_rows_ok " program:ident notX0:ident : tactic => `(tactic| (
     simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
-      wordMaskOk_shamt, *]
+      wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
+      advicePairsOk, nativeJalrBaseOk, List.getLast?_cons, List.getLast?_nil,
+      List.all_cons, List.all_nil, ExpansionTempLiveness.writes, *]
     rfl))
 
 -- Pure source-only programs: with rd = x0 Rust emits the native no-op instead
@@ -453,10 +576,56 @@ def BranchOffsetOk : JoltISA.Instr → Prop
 -- Natives: one row, after Rust's rd = x0 rewrite. A native row writes x0 only as
 -- the canonical no-op, its register operands are canonical, and it is not a shift
 -- that reads a bitmask.
+/-- Syntactic checks for a native row, including an architectural JALR base
+and absence of a narrow advice load. For example, native JALR x0, 0(x2)
+passes after the destination rewrite, while a lone one-byte advice load fails. -/
 def nativeRowOk (instruction : JoltISA.Instr) : Bool :=
   x0Ok instruction && JoltRegisterEncoding.instructionIsCanonical instruction &&
     immShiftOk instruction && !isRegisterShift instruction &&
-    ExpansionTempLiveness.tempsReadAfterWrite [instruction]
+    ExpansionTempLiveness.tempsReadAfterWrite [instruction] &&
+    nativeJalrBaseOk instruction && advicePairsOk [instruction]
+
+/-- A native row writes x0 only as the canonical no-op; for example, JAL x0 is rewritten. -/
+theorem nativeRowOk_x0Ok (instruction : JoltISA.Instr)
+    (ok : nativeRowOk instruction = true) : x0Ok instruction = true := by
+  simp only [nativeRowOk, Bool.and_eq_true] at ok
+  exact ok.1.1.1.1.1.1
+
+/-- Native operands use canonical register storage; for example, x2 is architectural. -/
+theorem nativeRowOk_canonical (instruction : JoltISA.Instr)
+    (ok : nativeRowOk instruction = true) : JoltRegisterEncoding.instructionIsCanonical instruction = true := by
+  simp only [nativeRowOk, Bool.and_eq_true] at ok
+  exact ok.1.1.1.1.1.2
+
+/-- A native immediate shift has a valid mask; for example, a native ADDI has no shift to check. -/
+theorem nativeRowOk_immShiftOk (instruction : JoltISA.Instr)
+    (ok : nativeRowOk instruction = true) : immShiftOk instruction = true := by
+  simp only [nativeRowOk, Bool.and_eq_true] at ok
+  exact ok.1.1.1.1.2
+
+/-- A native row is not a register-mask shift; for example, JALR needs no mask producer. -/
+theorem nativeRowOk_not_registerShift (instruction : JoltISA.Instr)
+    (ok : nativeRowOk instruction = true) : isRegisterShift instruction = false := by
+  simp only [nativeRowOk, Bool.and_eq_true] at ok
+  simpa only [Bool.not_eq_eq_eq_not, Bool.not_true] using ok.1.1.1.2
+
+/-- A native row does not read an uninitialized temporary; for example, JALR reads an architectural base. -/
+theorem nativeRowOk_tempsReadAfterWrite (instruction : JoltISA.Instr)
+    (ok : nativeRowOk instruction = true) : ExpansionTempLiveness.tempsReadAfterWrite [instruction] = true := by
+  simp only [nativeRowOk, Bool.and_eq_true] at ok
+  exact ok.1.1.2
+
+/-- A native JALR reads an architectural base; for example, JALR x1, 0(x2) reads x2. -/
+theorem nativeRowOk_nativeJalrBaseOk (instruction : JoltISA.Instr)
+    (ok : nativeRowOk instruction = true) : nativeJalrBaseOk instruction = true := by
+  simp only [nativeRowOk, Bool.and_eq_true] at ok
+  exact ok.1.2
+
+/-- A native row cannot be a narrow advice load; for example, AdviceLB needs a sequence. -/
+theorem nativeRowOk_advicePairsOk (instruction : JoltISA.Instr)
+    (ok : nativeRowOk instruction = true) : advicePairsOk [instruction] = true := by
+  simp only [nativeRowOk, Bool.and_eq_true] at ok
+  exact ok.2
 
 -- What `trace_interface.lean` needs from one source instruction's expansion.
 def ExpandedOk : ExpandedSource → Prop
@@ -472,7 +641,7 @@ macro "native_ok" : tactic => `(tactic| (
   all_goals
     refine ⟨?_, ?_⟩
     · simp only [nativeRowOk, x0Ok, isCanonicalNoOp, JoltISA.Instr.destination?,
-        Bool.not_false, immShiftOk, isRegisterShift, *]
+        Bool.not_false, immShiftOk, isRegisterShift, nativeJalrBaseOk, advicePairsOk, *]
       rfl
     · first
         | trivial
@@ -747,10 +916,64 @@ theorem expand_temps_ok (source : SourceInstruction) (expanded : ExpandedSource)
   have ok := expand_ok source expanded h
   cases expanded with
   | native row =>
-    simp only [ExpandedOk, nativeRowOk, Bool.and_eq_true] at ok
-    exact ok.1.2
+    exact nativeRowOk_tempsReadAfterWrite row ok.1
   | sequence rows =>
-    simp only [ExpandedOk, sequenceOk, Bool.and_eq_true] at ok
-    exact ok.2
+    exact sequenceOk_tempsReadAfterWrite rows ok
+
+/-- The Store circuit flag is the instruction's Store opcode flag: stamping
+metadata does not affect it. For example, a stamped SD retains Store = true.
+See jolt/crates/jolt-riscv/src/lib.rs:399-421 at 8bbb2357. -/
+theorem circuitFlag_store_eq_opcodeFlag (row : JoltInstructionRow) :
+    JoltMetadata.circuitFlag row .Store =
+      JoltMetadata.opcodeFlag row.instruction .Store := rfl
+
+/-- Materializing one source preserves the ordered instruction list and its
+checks. A native expansion has one instruction satisfying the native checks;
+a sequence satisfies the sequence checker, including its jump and advice checks.
+For example, stamping ECALL keeps its final JALR in the last position.
+See jolt/crates/jolt-program/src/expand/metadata.rs:25-53 and
+jolt/crates/jolt-program/src/expand/materialize.rs:71-101 at 8bbb2357. -/
+theorem expand_instruction_checks (source : SourceInstructionRow SourceInstruction)
+    (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows) :
+    match source.instruction.expand with
+    | none => False
+    | some (.native instruction) =>
+        rows.map (·.instruction) = [instruction] ∧
+        nativeRowOk instruction = true ∧
+        nativeJalrBaseOk instruction = true ∧ advicePairsOk [instruction] = true
+    | some (.sequence instructions) =>
+        rows.map (·.instruction) = instructions ∧
+        sequenceOk instructions = true ∧
+        jumpEndNoStore instructions = true ∧
+        sequenceJalrsVirtual instructions = true ∧
+        virtualJalrBaseUnwritten instructions = true ∧
+        advicePairsOk instructions = true := by
+  unfold expand_instruction at expanded
+  cases sourceExpansion : source.instruction.expand with
+  | none => simp only [sourceExpansion] at expanded; cases expanded
+  | some result =>
+      have ok := expand_ok source.instruction result sourceExpansion
+      cases result with
+      | native instruction =>
+          simp only [sourceExpansion, Option.some.injEq] at expanded ⊢
+          subst rows
+          exact ⟨rfl, ok.1, nativeRowOk_nativeJalrBaseOk instruction ok.1,
+            nativeRowOk_advicePairsOk instruction ok.1⟩
+      | sequence instructions =>
+          simp only [sourceExpansion] at expanded ⊢
+          split at expanded
+          · cases expanded
+          · cases expanded
+            have instructionList :
+                (stamp_sequence source.address source.is_compressed instructions).map
+                  (·.instruction) = instructions := by
+              apply List.ext_getElem
+              · simp only [stamp_sequence, List.length_map, List.length_zipIdx]
+              · intro i leftBound rightBound
+                simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx]
+            exact ⟨instructionList, ok, sequenceOk_jumpEndNoStore instructions ok,
+              sequenceOk_sequenceJalrsVirtual instructions ok,
+              sequenceOk_virtualJalrBaseUnwritten instructions ok,
+              sequenceOk_advicePairsOk instructions ok⟩
 
 end ExpansionFacts

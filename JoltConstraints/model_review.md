@@ -171,29 +171,6 @@ The following declarations still use `sorry`:
 | Declaration | What it needs |
 |---|---|
 | `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. |
-| `padding_from` (`Soundness/Layer6/BytecodePC.lean`) | Iterate `padding_persists` from any padding cycle to every later cycle. |
-| `stall_suffix_initial` (`Soundness/Layer7/StallSuffix.lean`) | Establish the replay invariant at the first cycle after the retained stable stall. |
-| `stall_jal_step` (`Soundness/Layer7/StallSuffix.lean`) | Preserve the replay invariant across a JAL or EBREAK replay step. |
-| `stall_branch_step` (`Soundness/Layer7/StallSuffix.lean`) | Preserve the two branch operands and replay invariant across a branch step. |
-| `stall_jalr_preserved_base_step` (`Soundness/Layer7/StallSuffix.lean`) | Preserve the base and replay invariant for architectural-base JALR, including the x0 rewrite with a virtual destination. |
-| `stall_jalr_written_base_step` (`Soundness/Layer7/StallSuffix.lean`) | Use `selfJumpRepeats` to preserve the replay invariant when JALR writes its nonzero base. |
-| `stall_system_jalr_step` (`Soundness/Layer7/StallSuffix.lean`) | Move through ECALL or MRET virtual rows while preserving the virtual jump base and replay invariant. |
-| `expanded_virtual_jalr_source` (`Soundness/Layer7/StallSuffix.lean`) | Identify ECALL and MRET as the only virtual-base JALR sources and prove their source rows do not write that base. |
-| `expanded_jalr_operand_forms` (`Soundness/Layer7/StallSuffix.lean`) | Exclude architectural-destination, virtual-base JALR rows from expanded bytecode. |
-| `noncontrol_next_pc` (`Soundness/Layer7/StallSuffix.lean`) | Show an executed noncontrol row leaves nextPC at its source address plus instruction length. |
-| `stable_stall_control_flow` (`Soundness/Layer7/StallSuffix.lean`) | Classify a stable stall's final row as JAL, JALR or branch. |
-| `stall_suffix_replays_source` (`Soundness/Layer7/StallSuffix.lean`) | Induct from `stall_suffix_initial` using the five step cases and `padding_from`. |
-| `stable_stall_source_no_store` (`Soundness/Layer7/StallSuffix.lean`) | Show all bytecode rows at a stable stall's source address have no Store flag. |
-| `stall_suffix_no_store` (`Soundness/Layer7/StallSuffix.lean`) | Use replay and the bytecode no-store fact to turn off Store on every real suffix cycle. |
-| `soundness_last_row_is_jump` (`Soundness/Layer7/LastJump.lean`) | Use the next-PC constraints to rule out a branch, ordinary row or interior virtual row at a padding or final-cycle cut. |
-| `soundness_termination_store_exists` (`Soundness/Layer7/TerminationStore.lean`) | Use the no-panic public termination word, RAM history, row representation and cut to locate a completed termination store. |
-| `UntrustedAnswerRun.truncate_rows_size` (`Soundness/Layer7/TerminationStore.lean`) | Compute the length of a bounded row extraction. |
-| `UntrustedAnswerRun.truncate_executes` (`Soundness/Layer7/TerminationStore.lean`) | Transfer execution certificates to extracted rows. |
-| `UntrustedAnswerRun.truncate_starts` (`Soundness/Layer7/TerminationStore.lean`) | Transfer the entry-row certificate to a nonempty extracted run. |
-| `UntrustedAnswerRun.truncate_linked` (`Soundness/Layer7/TerminationStore.lean`) | Transfer adjacency certificates to extracted rows. |
-| `honestTracerAdviceAtStepN_extract` (`Soundness/Layer7/TerminationStore.lean`) | Show advice at row `i` depends only on rows through `i`. |
-| `soundness_prefix_next_step` (`Soundness/Layer7/TerminationStore.lean`) | Truncate a run before an existing row and establish `NextStep` for the attempted row. |
-| `soundness_termination_last_stall` (`Soundness/Layer7/TerminationStore.lean`) | Apply `TerminationThenStall` to the truncated prefix before the final jump and prove `StableStall`. |
 | `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
 | `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) | Build one byte tape from the independent low-byte answers and replay the relaxed execution as an honest trace. |
@@ -211,7 +188,7 @@ The following declarations still use `sorry`:
 | `rebuild_runs_until_stop` (Layer 7 worktree) | Transfer the absence of an earlier stable stall. |
 | `rebuild_nonempty` (Layer 7 worktree) | Transfer the positive row count required by the revised trace definition. |
 
-The 13 tape-rebuild helpers are staged in the separate `/private/tmp/jolt-qed-tape-rebuild` worktree for Ari's review.
+The 13 tape-rebuild helpers are staged in the separate `/Users/ari.biswas/Lean/jolt-qed-tape-rebuild` worktree for Ari's review.
 Its reverse-inclusion theorem is proved from them; the main worktree still has the earlier single `sorry` until that reviewed change is integrated.
 The worktree proof statement compiles and its `git diff --check` passes; synchronization with the uncommitted stopping-rule changes is pending.
 
@@ -235,8 +212,14 @@ The byte-store output bound has only the layout and panic/output span as its geo
 The approved plain-`Trace` final RAM overlay and byte-store output bound are proved.
 The generic pre-state relation retains `refl` with Ari's approval because its row-zero case requires it after the start hypothesis became an equality.
 The five shared device and geometry statements are proved.
-Helper A is proved from the staged execution-prefix and stopping statements above.
-The stable-stall re-execution statement is also staged, pending Ari's review.
+Helper A is proved from the staged execution-prefix statement and the assembled stopping theorem.
+The five original step (c) gaps in `StallSuffix.lean` are proved, using the strengthened expansion checker and its proved materialization lift.
+`Emission.lean` has been deleted, and the architectural JALR singleton fact now uses the checker.
+The approved `expand_program_source_of_row` is proved by extracting the shared traversal from `expand_program_rowOk`; both row validity and JALR operand forms use it.
+The final 2026-10-21 axiom audit finds no `sorryAx` in `soundness_stopping`.
+A reaches `sorryAx` only through `soundness_execution_prefix_agreement`.
+`lake build JoltBytecode JoltConstraints` passed with 8800 jobs.
+See the [integration report](../methods/step_c_closing_report.md) for the completed helper, build, axiom audit and declaration timings.
 The prefix owns RAM agreement at the cut, and stopping owns final RAM agreement after the constraint-level zero-update proof for repeated stall rows and padding.
 The modeled stopping rule follows a16z/jolt PR #2109 at head d2995380, with no new restriction.
 Soundness obtains the positive row count from the termination store.
@@ -251,6 +234,24 @@ After replacing source-level replay with the constraint-level suffix statement, 
 The axiom audit found `sorryAx` in the staged suffix statement, stopping, execution-prefix agreement, A and the final soundness theorem; B remained free of `sorryAx`.
 With synchronous elaboration, the five new proofs took 12 ms (`writeDst_rule_of_device_relation`), 74 ms (`execWithTapeAnswer_rule_of_device_relation`), 537 ms (`HonestTrace.device_relation`), 494 ms (`UntrustedAnswerTrace.device_relation`), and 213 ms (`new_io_word_geometry`).
 The output decoder took 381 ms after using `new_io_word_geometry`, down from 1996 ms before this refactor.
+
+### Proof-performance cleanup
+
+Speed up `expansion_facts.lean` after the step (c) checker extension.
+Synchronous declaration elaboration rose from about 11 s to 44 s (11.375 s to 44.287 s measured), with CSRRS at 7.728 s, CSRRW at 4.481 s and SLLI at 1.739 s.
+Retain the shared expansion checker and avoid another per-instruction proof table.
+This is deferred cleanup authorized by Ari; it is not a remaining logical gap in stopping.
+
+### bv_decide
+
+`bv_decide` is temporarily accepted under the updated `AGENTS.md` rules.
+The uses on the step (c) proof path are tracked here for later removal.
+
+| Declaration | Use |
+|---|---|
+| `JoltConstraints.branch_target_toNat` (`Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean:104`) | Existing use proving `(offset.signExtend 128).setWidth 64 = offset.signExtend 64`; `soundness_stopping` depends on this lemma. |
+
+The step (c) checker integration and bytecode proofs have introduced no new uses.
 
 **Completeness:**
 

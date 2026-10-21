@@ -477,12 +477,12 @@ theorem stamp_sequence_rowOk (address : BitVec 64) (isCompressed : Bool)
   obtain ⟨k, inRange, rfl⟩ := List.mem_iff_getElem.mp isRow
   have inInstructions : k < instructions.length := by
     simpa only [stamp_sequence, List.length_map, List.length_zipIdx] using inRange
-  simp only [sequenceOk, Bool.and_eq_true] at ok
-  obtain ⟨rowOk, notLast⟩ := rowsOk_rows instructions ok.1.1 k inInstructions
+  obtain ⟨rowOk, notLast⟩ := rowsOk_rows instructions
+    (sequenceOk_rowsOk instructions ok) k inInstructions
   obtain ⟨x0, canonical, branchOffset⟩ := sequenceRow_rowOk _ rowOk
   simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx, Nat.zero_add]
   refine ⟨x0, canonical, branchOffset, ?_,
-    (shiftsOk_rows instructions ok.1.2 k inInstructions).1⟩
+    (shiftsOk_rows instructions (sequenceOk_shiftsOk instructions ok) k inInstructions).1⟩
   intro continues
   apply notLast
   by_contra last
@@ -499,12 +499,12 @@ theorem expand_instruction_rowOk (source : SourceInstructionRow SourceInstructio
     cases expanded
     have ok := expand_ok _ _ isNative
     obtain ⟨nativeOk, branchOffset⟩ := ok
-    simp only [nativeRowOk, Bool.and_eq_true] at nativeOk
-    have old := nativeOk.1
     intro row isRow
     rw [List.mem_singleton] at isRow
     subst isRow
-    refine ⟨old.1.1.1, old.1.1.2, branchOffset, ?_, old.1.2⟩
+    refine ⟨nativeRowOk_x0Ok instruction nativeOk,
+      nativeRowOk_canonical instruction nativeOk, branchOffset, ?_,
+      nativeRowOk_immShiftOk instruction nativeOk⟩
     intro continues
     simp [JoltInstructionRow.continues] at continues
   · split at expanded
@@ -516,20 +516,10 @@ theorem expand_instruction_rowOk (source : SourceInstructionRow SourceInstructio
 theorem expand_program_rowOk (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode) :
     ∀ row ∈ bytecode.toList, RowOk row := by
-  unfold expand_program at expanded
-  cases mapped : image.instructions.toList.mapM expand_instruction with
-  | none =>
-    rw [mapped] at expanded
-    cases expanded
-  | some instructions =>
-    rw [mapped, Option.map_some, Option.some.injEq] at expanded
-    subst expanded
-    intro row isRow
-    rw [List.toList_toArray] at isRow
-    obtain ⟨rows, inInstructions, inRows⟩ := List.mem_flatten.mp isRow
-    obtain ⟨k, inRange, rfl⟩ := List.mem_iff_getElem.mp inInstructions
-    obtain ⟨lengths, steps⟩ := option_mapM_results expand_instruction _ instructions mapped
-    exact expand_instruction_rowOk _ _ (steps k (by omega) inRange) _ inRows
+  intro row isRow
+  obtain ⟨source, _, rows, sourceExpanded, inRows⟩ :=
+    expand_program_source_of_row image bytecode expanded row isRow
+  exact expand_instruction_rowOk source rows sourceExpanded row inRows
 
 -- Each register shift row comes right after the row that writes its mask, inside the
 -- same source instruction.
@@ -559,18 +549,17 @@ theorem expand_instruction_shiftPairs (source : SourceInstructionRow SourceInstr
   · rename_i instruction isNative
     cases expanded
     obtain ⟨nativeOk, _⟩ := expand_ok _ _ isNative
-    simp only [nativeRowOk, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] at nativeOk
     intro k inRange isShift
     have zero : k = 0 := by simpa using inRange
     subst zero
-    simp [nativeOk.1.2] at isShift
+    simp [nativeRowOk_not_registerShift instruction nativeOk] at isShift
   · split at expanded
     · cases expanded
     · rename_i instructions isSequence _
       cases expanded
       have ok : sequenceOk instructions = true := expand_ok _ _ isSequence
-      simp only [sequenceOk, Bool.and_eq_true] at ok
-      exact stamp_sequence_shiftPairs _ _ instructions ok.1.2
+      exact stamp_sequence_shiftPairs _ _ instructions
+        (sequenceOk_shiftsOk instructions ok)
 
 theorem shiftPairs_append (front back : List JoltInstructionRow) (frontOk : ShiftPairs front)
     (backOk : ShiftPairs back) : ShiftPairs (front ++ back) := by

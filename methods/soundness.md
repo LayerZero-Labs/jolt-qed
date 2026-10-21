@@ -89,14 +89,21 @@ The word-index geometry is proved.
 The ten Ari-approved trace-independent refactor statements are proved.
 Step (a) shares the output, prover-acceptance and spoil-assert predicates on the plain `Trace` between both languages.
 Its fixed-tape inclusion is proved, and Ari approved the reverse-inclusion statement now staged with `sorry` in Layer 7.
-Helper A is proved from the restated execution-prefix and stopping statements, each staged with `sorry` and approved by Ari for proof.
+Helper A is proved from execution-prefix agreement, which remains staged with `sorry`, and the assembled stopping theorem.
 Helpers C and D still use `sorry`.
 Helper C keeps its approved ⚠️ DANGER status and the same two counterexamples.
 The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
-Step (c)'s two target theorems are assembled from named Layer 6 and Layer 7 obligations, and Ari approved the staged statements for proof after adding stable-stall control-flow classification and virtual-base JALR source facts.
+Step (c)'s five original stopping gaps are proved after Ari approved the checker integration.
+The four sequence checks, native JALR guard and singleton advice check are integrated, and the materialization lift is proved.
+`Emission.lean` has been deleted; stopping uses the single expansion checker.
+The approved shared helper `expand_program_source_of_row` is proved; row validity and JALR operand forms both use its source-expansion certificate.
+The final axiom audit finds no `sorryAx` in `soundness_stopping`; A reaches it only through execution-prefix agreement.
+The [integration report](step_c_closing_report.md) records the completed proofs, validation and declaration timings.
 The execution-prefix statement is in `Soundness/Layer6/ExecutionPrefix.lean`, and the stopping statement is in `Soundness/Layer7/Stopping.lean`.
 The prefix cuts at the first stable stall, padding, or the last witness cycle and owns RAM agreement at that boundary.
-The stopping theorem obtains nonemptiness from a named termination-store obligation, obtains the final stall from the cut or named last-jump and termination obligations, and carries cut RAM agreement to final RAM through the staged zero-effect suffix lemma.
+The stopping theorem obtains nonemptiness from the proved termination-store lemma, obtains the final stall from the cut or the proved last-jump and termination lemmas, and carries cut RAM agreement to final RAM through the suffix proof.
+Step (c) is complete, with `lake build JoltBytecode JoltConstraints` passing 8800 jobs.
+The checker elaboration increase from about 11 s to 44 s is deferred cleanup under “Proofs owed.”
 The stopping rule mirrors a16z/jolt PR #2109 at head d2995380; soundness obtains unconditional nonemptiness from the termination store.
 No additional restriction is used for the JALR self-jump case.
 The prover-acceptance helper C is known false when the instance maximum is below 256, or when execution fills every cycle of a witness whose length is the largest power of two within the maximum, and is assumed on purpose until a16z answers; see its ⚠️ DANGER docstring.
