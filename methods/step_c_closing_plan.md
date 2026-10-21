@@ -64,6 +64,12 @@ Each of gaps 3 to 5 is a property of an instruction list alone, so it does not n
   JALRs with an architectural base come only from native JALR rows.
 - `virtualJalrBaseUnwritten`: for every `JALR (.vreg _) (.vreg b)` in the list, no instruction in the list writes `b`.
 
+The tape rebuild needs one more property of the same kind, and it belongs in the same extension:
+
+- `advicePairsOk`: every `VirtualAdviceLoad dst w` with `w.toNat < 8` is immediately followed by `VirtualMULI dst src m`, where `src` reads the register `dst` writes and `m = slliMultiplier (BitVec.ofNat 6 (64 - 8 * w.toNat))`.
+  This is the shape of `narrowAdviceProgram` (`Soundness/Layer5/AdviceExpansion.lean:23`): `sideEffectingRdZeroDst rd` and `adviceReadSource rd` name the same register.
+  Every other sequence contains no such load, so it holds trivially.
+
 ## Plan
 
 ### Part 1: extend the existing checker (stop for review after staging)
@@ -71,7 +77,7 @@ Each of gaps 3 to 5 is a property of an instruction list alone, so it does not n
 1. Make `sequenceOk` safe to extend.
    Five places take it apart by position (`ok.1.2` and similar): `expansion_facts.lean:753`, `trace_interface.lean:480` and `:572`, `Soundness/Layer5/HostCallExpansion.lean:80`, and `Emission.lean:403`, which is deleted in step 6.
    Add named projection lemmas (`sequenceOk_rowsOk`, `sequenceOk_shiftsOk`, `sequenceOk_tempsReadAfterWrite`) and use them at those sites.
-2. Define `jumpEndNoStore`, `sequenceJalrsVirtual` and `virtualJalrBaseUnwritten` in `expansion_facts.lean`, next to `shiftsOk`, and add them to `sequenceOk`.
+2. Define `jumpEndNoStore`, `sequenceJalrsVirtual`, `virtualJalrBaseUnwritten` and `advicePairsOk` in `expansion_facts.lean`, next to `shiftsOk`, and add them to `sequenceOk`.
    If the native JALR operand forms (architectural base, with an architectural destination or the x0 rewrite's virtual destination) are not already implied by `nativeRowOk`, add that check to the native case in the same way.
 3. Add the new definitions to the simp sets of `pure_rows_ok` and `native_ok`, so the existing per-program lemmas and `expand_ok` prove the new conjuncts with no new table.
    Measure the elaboration time of `expansion_facts.lean` before and after; report both.
@@ -117,7 +123,7 @@ Then stop.
 ## Out of scope
 
 - The tape rebuild (`Soundness/Layer7/TapeRebuild.lean`, branch `feat/layer7-tape-rebuild`, worktree `/Users/ari.biswas/Lean/jolt-qed-tape-rebuild`) is a separate task; do not edit it.
-  It may later add one more property to the same checker, so keep the extension easy to extend.
+  It uses `advicePairsOk` from your Part 1 and lifts it to the bytecode itself; you only define the check and make `expand_ok` prove it.
 - `soundness_execution_prefix_agreement` and helpers C and D.
 
 ## Sources
