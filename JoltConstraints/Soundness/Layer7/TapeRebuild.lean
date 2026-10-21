@@ -194,7 +194,10 @@ def NarrowAdvicePending (bytecode : Array JoltInstructionRow)
     bytecode[start].instruction = .VirtualAdviceLoad dst width ∧
     width.toNat < 8 ∧
     (if preState then
-      rowIndex = start.val + 1
+      rowIndex = start.val + 1 ∧
+        ∃ src multiplier,
+          (bytecode[rowIndex]?.map (·.instruction)) =
+            some (.VirtualMULI dst src multiplier)
     else
       rowIndex = start.val)
 
@@ -374,6 +377,36 @@ theorem rebuild_prover_config
   simp only [← dimensions, ← layout]
   exact accepts
 
+/-- A spoil-assert row is outside the one-register transient interval. -/
+private theorem RebuildAgreement.assert_pre_same
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay)
+    (i : Nat) (old : TraceRow original.bytecode)
+    (new : TraceRow replay.bytecode)
+    (oldAt : original.rows[i]? = some old)
+    (newAt : replay.rows[i]? = some new)
+    (lhs rhs : Src) (imm : BitVec 128)
+    (isAssert : replay.bytecode[new.rowIndex].instruction =
+      .VirtualAssertEQ lhs rhs imm) :
+    SameExceptTapeBytes old.preState new.preState := by
+  obtain ⟨sameIndex, _, _, samePre, _⟩ := agreement.rows i old new oldAt newAt
+  have sameSlot := agreement.slot_eq old new sameIndex
+  have oldAssert : original.bytecode[old.rowIndex].instruction =
+      .VirtualAssertEQ lhs rhs imm := by
+    rw [sameSlot]
+    exact isAssert
+  apply samePre.2
+  rintro ⟨dst, start, width, _, _, pending⟩
+  obtain ⟨_, src, multiplier, mul⟩ := pending
+  have rowInstruction :
+      (original.bytecode[old.rowIndex.val]?.map (·.instruction)) =
+        some (original.bytecode[old.rowIndex].instruction) := by simp
+  rw [rowInstruction, oldAssert] at mul
+  cases mul
+
 /-- Every spoil assert has the same source operands in both runs. -/
 theorem rebuild_spoil_asserts
     {joltInstance : JoltInstance SourceInstruction}
@@ -384,7 +417,29 @@ theorem rebuild_spoil_asserts
     (agreement : RebuildAgreement original.toUntrustedAnswerRun replay)
     (passes : original.SpoilAssertsPass) :
     replay.SpoilAssertsPass := by
-  sorry
+  intro row rowMem lhs rhs imm isAssert nonzero
+  obtain ⟨i, newAt⟩ := Array.mem_iff_getElem?.mp rowMem
+  have oldBound : i < original.rows.size := by
+    have replayBound := (getElem?_eq_some_iff.mp newAt).1
+    have length := agreement.length
+    omega
+  let old := original.rows[i]'oldBound
+  have oldAt : original.rows[i]? = some old := by simp [old, oldBound]
+  have oldMem : old ∈ original.rows :=
+    Array.mem_iff_getElem?.mpr ⟨i, oldAt⟩
+  obtain ⟨sameIndex, _, _, _, _⟩ := agreement.rows i old row oldAt newAt
+  have sameSlot := agreement.slot_eq old row sameIndex
+  have oldAssert : original.bytecode[old.rowIndex].instruction =
+      .VirtualAssertEQ lhs rhs imm := by
+    rw [sameSlot]
+    exact isAssert
+  have samePre := agreement.assert_pre_same i old row oldAt newAt
+    lhs rhs imm isAssert
+  calc
+    sourceValue lhs row.preState = sourceValue lhs old.preState :=
+      (samePre.sourceValue_eq lhs).symm
+    _ = sourceValue rhs old.preState := passes old oldMem lhs rhs imm oldAssert nonzero
+    _ = sourceValue rhs row.preState := samePre.sourceValue_eq rhs
 
 /-- Honest internal advice uses the state at the start of its source expansion;
 the rebuilt run has that state, apart from tape bytes. -/
