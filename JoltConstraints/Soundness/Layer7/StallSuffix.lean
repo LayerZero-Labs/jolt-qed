@@ -5,6 +5,7 @@ import JoltConstraints.Soundness.Layer2.Registers
 import JoltConstraints.Completeness.NextUnexpandedPCEqPCPlusImmIfShouldBranch
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer5.Registers
+import JoltConstraints.Soundness.Layer7.Emission
 import JoltConstraints.Soundness.Layer4.Word
 import JoltConstraints.Soundness.Layer4.ComparisonEntry
 import JoltConstraints.Soundness.Layer4.Inputs
@@ -481,7 +482,7 @@ that address. For example, a `JAL +0` target at address `a` can only lead to
 padding or a row whose address is `a`.
 See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:344-352
 at 8bbb2357. -/
-private theorem stall_next_padding_or_address
+private theorem stall_next_cycle_of_target
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -538,6 +539,34 @@ private theorem stall_real_slot_index (bytecode : Array JoltInstructionRow)
       refine ⟨⟨n, inRange⟩, rfl, ?_⟩
       simpa only [JoltConstraints.bytecodeRow, Array.getElem?_eq_getElem inRange,
         Option.some.injEq] using present.symm
+
+/-- A real selected row of accepted expanded bytecode has an array index, and
+its slot can be read through the witness context. For example, bytecode row
+zero is selected through slot one.
+See jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-164 at 8bbb2357. -/
+theorem stall_cycle_selected_row
+    (joltInstance : JoltInstance SourceInstruction)
+    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
+    (bytecode : Array JoltInstructionRow)
+    (bytecodeEq : bytecode = context.bytecode)
+    (slot : Fin (2 ^ params.logBytecodeK)) (row : JoltInstructionRow)
+    (rowAt : JoltConstraints.bytecodeRow bytecode slot.val = some row) :
+    pc_map_ok bytecode = true ∧
+      JoltConstraints.bytecodeRow context.bytecode slot.val = some row ∧
+      ∃ index : Fin bytecode.size,
+        slot.val = index.val + 1 ∧ row = bytecode[index] := by
+  have acceptedContext : pc_map_ok context.bytecode = true := by
+    obtain ⟨slots, preprocessed, _⟩ := context.entryIsRust
+    unfold preprocess at preprocessed
+    split at preprocessed
+    · assumption
+    · cases preprocessed
+  have accepted : pc_map_ok bytecode = true := by
+    simpa only [bytecodeEq] using acceptedContext
+  obtain ⟨index, slotIs, rowIs⟩ := stall_real_slot_index bytecode slot.val row rowAt
+  exact ⟨accepted, by simpa only [← bytecodeEq] using rowAt,
+    index, slotIs, rowIs⟩
 
 /-- A selected JAL row's lookup computes its wrapped bytecode address plus
 its immediate. For example, `JAL +0` at `a` looks up `a`.
@@ -693,11 +722,11 @@ private theorem stall_last_run_index
   refine ⟨⟨run.rows.size - 1, inRange⟩, ?_⟩
   exact (Array.getElem?_eq_some_iff.mp someLast).2
 
-/-- A selected row without a destination preserves every register-table entry
-at the next cycle. For example, BEQ writes no register, so its operands survive
-the branch. See jolt/crates/jolt-riscv/src/instructions/b/beq.rs:1-35
+/-- A selected row preserves a register it does not write at the next cycle.
+For example, `jalr x2, 0(x1)` leaves x1's table entry unchanged.
+See jolt/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs:97-121
 at 8bbb2357. -/
-private theorem stall_no_destination_preserves_registers
+theorem register_unchanged_of_no_write
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -710,14 +739,20 @@ private theorem stall_no_destination_preserves_registers
     (selected : JoltConstraints.bytecodeRa witness slot cycle = 1)
     (row : JoltInstructionRow)
     (present : JoltConstraints.bytecodeRow context.bytecode slot.val = some row)
-    (noDestination : JoltConstraints.bytecodeRdRegister row.instruction = none)
-    (register : Fin 128) :
+    (register : Fin 128)
+    (noWrite : JoltConstraints.bytecodeRdRegister row.instruction ≠ some register) :
     witness.RegistersVal register ⟨cycle.val + 1, next⟩ =
       witness.RegistersVal register cycle := by
   have charAbove2pow127 := JoltConstraints.Soundness.two_pow_127_lt_char joltField
-  simpa [present, noDestination] using
-    JoltConstraints.Soundness.registersVal_succ_of_selected_bytecode
-      charAbove2pow127 context equations register cycle next slot selected
+  have succ := JoltConstraints.Soundness.registersVal_succ_of_selected_bytecode
+    charAbove2pow127 context equations register cycle next slot selected
+  cases destination : JoltConstraints.bytecodeRdRegister row.instruction with
+  | none => simpa [present, destination] using succ
+  | some written =>
+      have different : register ≠ written := by
+        intro same
+        exact noWrite (by simpa only [same] using destination)
+      simpa [present, destination, different] using succ
 
 /-- A Branch flag identifies one of the six conditional branch instructions.
 For example, BEQ has this flag and its two source operands are explicit.
@@ -1140,6 +1175,66 @@ private theorem stall_executed_jal_immediate_zero
       if source_is_compressed run.bytecode last.rowIndex then 2 else 4)
     last.preState last.postState pc nextPC jalRuns stable.2.1
 
+/-- A selected interior virtual row selects the following bytecode row of the
+same source on the next cycle. For example, the first ECALL row is followed by
+another row stamped with ECALL's address.
+See jolt/crates/jolt-program/src/expand/metadata.rs:25-53 at 8bbb2357. -/
+theorem stall_next_cycle_of_remaining
+    {F : Type} [Field F] (joltField : JoltField F)
+    (joltInstance : JoltInstance SourceInstruction)
+    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (witness : WitnessType F params)
+    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
+    (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
+      context.io context.entry witness)
+    (bytecode : Array JoltInstructionRow)
+    (expanded : expand_program joltInstance.program = some bytecode)
+    (bytecodeEq : bytecode = context.bytecode)
+    (sourceAddress : BitVec 64)
+    (cycle : Fin params.traceLength) (next : cycle.val + 1 < params.traceLength)
+    (slot : Fin (2 ^ params.logBytecodeK))
+    (selected : JoltConstraints.bytecodeRa witness slot cycle = 1)
+    (row : JoltInstructionRow)
+    (rowAt : JoltConstraints.bytecodeRow bytecode slot.val = some row)
+    (sameSource : row.address = sourceAddress)
+    (index : Fin bytecode.size)
+    (slotIs : slot.val = index.val + 1)
+    (rowIs : row = bytecode[index])
+    (remaining : bytecode[index].virtual_sequence_remaining.getD 0 ≠ 0) :
+    ∃ (nextSlot : Fin (2 ^ params.logBytecodeK)) (nextRow : JoltInstructionRow),
+      JoltConstraints.bytecodeRa witness nextSlot ⟨cycle.val + 1, next⟩ = 1 ∧
+      JoltConstraints.bytecodeRow bytecode nextSlot.val = some nextRow ∧
+      nextRow.address = sourceAddress := by
+  have charAbove2pow127 := JoltConstraints.Soundness.two_pow_127_lt_char joltField
+  have layout := expand_program_layout joltInstance.program bytecode expanded
+  have nextIndexBound : index.val + 1 < bytecode.size := by
+    have endBound := layout.endInBounds index
+    have positive : 0 < (bytecode[index].virtual_sequence_remaining.getD 0).toNat :=
+      Nat.pos_of_ne_zero (BitVec.toNat_ne_iff_ne.mpr remaining)
+    omega
+  let nextIndex : Fin bytecode.size := ⟨index.val + 1, nextIndexBound⟩
+  have continuesFlag : bytecode[index].continues = true := by
+    simpa [JoltInstructionRow.continues, bne_iff_ne] using remaining
+  have sameNext := (layout.next index nextIndex rfl continuesFlag).1
+  have rowRemaining : row.virtual_sequence_remaining.getD 0 ≠ 0 := by
+    rw [rowIs]
+    exact remaining
+  have rowAtContext : JoltConstraints.bytecodeRow context.bytecode slot.val = some row := by
+    simpa only [← bytecodeEq] using rowAt
+  obtain ⟨nextSlot, nextSelected, nextSlotIs⟩ :=
+    JoltConstraints.Soundness.selected_next_of_remaining charAbove2pow127
+      context equations cycle next slot selected rowAtContext rowRemaining
+  have nextRowAt : JoltConstraints.bytecodeRow bytecode nextSlot.val =
+      some bytecode[nextIndex] := by
+    rw [nextSlotIs, slotIs]
+    simp [JoltConstraints.bytecodeRow, nextIndex,
+      Array.getElem?_eq_getElem nextIndexBound]
+  refine ⟨nextSlot, bytecode[nextIndex], nextSelected, nextRowAt, ?_⟩
+  calc
+    bytecode[nextIndex].address = bytecode[index].address := sameNext
+    _ = row.address := by rw [rowIs]
+    _ = sourceAddress := sameSource
+
 /-- A real JAL replay advances to another row of the same source, or to
 padding. For example, EBREAK's `JAL +0` returns to its own source address.
 See jolt/crates/jolt-program/src/expand/control_flow/ebreak.rs:1-20
@@ -1162,57 +1257,22 @@ theorem stall_jal_step
     (real : witness.InstructionFlags .IsNoop cycle ≠ 1)
     (atCycle : StallSuffixInvariant witness run.bytecode last cycle) :
     StallSuffixInvariant witness run.bytecode last ⟨cycle.val + 1, next⟩ := by
-  have charAbove2pow127 := JoltConstraints.Soundness.two_pow_127_lt_char joltField
   have offsetZero : imm = 0 :=
     stall_executed_jal_immediate_zero joltInstance privateInputs run last atEnd
       stable dst imm jump
   rcases atCycle with padding | ⟨slot, row, selected, rowAt, sameSource, _⟩
   · exact False.elim (real padding)
-  have acceptedContext : pc_map_ok context.bytecode = true := by
-    obtain ⟨slots, preprocessed, _⟩ := context.entryIsRust
-    unfold preprocess at preprocessed
-    split at preprocessed
-    · assumption
-    · cases preprocessed
-  have accepted : pc_map_ok run.bytecode = true := by
-    simpa only [bytecodeEq] using acceptedContext
-  have rowAtRun : JoltConstraints.bytecodeRow run.bytecode slot.val = some row := by
-    exact rowAt
-  have rowAtContext : JoltConstraints.bytecodeRow context.bytecode slot.val = some row := by
-    rw [← bytecodeEq]
-    exact rowAt
-  obtain ⟨index, slotIs, rowIs⟩ :=
-    stall_real_slot_index run.bytecode slot.val row rowAtRun
+  obtain ⟨accepted, rowAtContext, index, slotIs, rowIs⟩ :=
+    stall_cycle_selected_row joltInstance privateInputs context run.bytecode
+      bytecodeEq slot row rowAt
   by_cases continues : run.bytecode[index].virtual_sequence_remaining.getD 0 ≠ 0
-  · have layout := expand_program_layout joltInstance.program run.bytecode run.expands
-    have nextIndexBound : index.val + 1 < run.bytecode.size := by
-      have endBound := layout.endInBounds index
-      have positive : 0 < (run.bytecode[index].virtual_sequence_remaining.getD 0).toNat := by
-        exact Nat.pos_of_ne_zero (BitVec.toNat_ne_iff_ne.mpr continues)
-      omega
-    let nextIndex : Fin run.bytecode.size := ⟨index.val + 1, nextIndexBound⟩
-    have continuesFlag : run.bytecode[index].continues = true := by
-      simpa [JoltInstructionRow.continues, bne_iff_ne] using continues
-    have sameNext := (layout.next index nextIndex rfl continuesFlag).1
-    have remaining : row.virtual_sequence_remaining.getD 0 ≠ 0 := by
-      rw [rowIs]
-      exact continues
-    obtain ⟨nextSlot, nextSelected, nextSlotIs⟩ :=
-      JoltConstraints.Soundness.selected_next_of_remaining charAbove2pow127
-        context equations cycle next slot selected rowAtContext remaining
-    have nextRowAt : JoltConstraints.bytecodeRow run.bytecode nextSlot.val =
-        some run.bytecode[nextIndex] := by
-      rw [nextSlotIs, slotIs]
-      simp [JoltConstraints.bytecodeRow, nextIndex,
-        Array.getElem?_eq_getElem nextIndexBound]
-    right
-    refine ⟨nextSlot, run.bytecode[nextIndex], nextSelected, ?_, ?_, ?_⟩
-    · exact nextRowAt
-    · calc
-        run.bytecode[nextIndex].address = run.bytecode[index].address := sameNext
-        _ = row.address := by rw [rowIs]
-        _ = run.bytecode[last.rowIndex].address := sameSource
-    · simp only [jump]
+  · obtain ⟨nextSlot, nextRow, nextSelected, nextRowAt, nextAddress⟩ :=
+      stall_next_cycle_of_remaining joltField joltInstance privateInputs witness
+        context equations run.bytecode run.expands bytecodeEq
+        run.bytecode[last.rowIndex].address cycle next slot selected row rowAt
+        sameSource index slotIs rowIs continues
+    exact Or.inr ⟨nextSlot, nextRow, nextSelected, nextRowAt,
+      nextAddress, by rw [jump]; trivial⟩
   · have lastCount := stable.1
     have indexZero : run.bytecode[index].virtual_sequence_remaining.getD 0 = 0 := by
       by_contra nonzero
@@ -1235,7 +1295,7 @@ theorem stall_jal_step
       have targetAddress : witness.NextUnexpandedPC cycle =
           (run.bytecode[last.rowIndex].address.toNat : F) := by
         simpa only [offsetZero, add_zero, sameSource] using target
-      rcases stall_next_padding_or_address joltField joltInstance privateInputs
+      rcases stall_next_cycle_of_target joltField joltInstance privateInputs
         witness context equations cycle next run.bytecode[last.rowIndex].address
           targetAddress with
         isPadding | ⟨nextSlot, nextRow, nextSelected, nextRowAt, nextAddress⟩
@@ -1470,6 +1530,184 @@ private theorem stall_branch_witness_target
   rw [address, immediate] at relation
   exact sub_eq_zero.mp (by simpa only [sub_zero] using relation)
 
+/-- The two branch controls in the suffix invariant supply the source's
+original operands. For example, a replayed BEQ keeps both compared registers.
+See PR #2109 head d2995380, jolt/tracer/src/emulator/cpu.rs:553-578. -/
+private theorem stall_branch_control_values
+    {F : Type} [Field F]
+    {params : WitnessParams} (witness : WitnessType F params)
+    (bytecode : Array JoltInstructionRow) (last : TraceRow bytecode)
+    (cycle : Fin params.traceLength)
+    (lhs rhs : JoltISA.Src) (imm : BitVec 128)
+    (shape : bytecode[last.rowIndex].instruction = .BEQ lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BNE lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BLT lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BGE lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BLTU lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BGEU lhs rhs imm)
+    (controls :
+      let readAtStall (src : JoltISA.Src) : Prop :=
+        witness.RegistersVal (TraceWitness.sourceRegisterAddress src) cycle =
+          ((JoltISA.sourceValue src last.preState).toNat : F)
+      match bytecode[last.rowIndex].instruction with
+      | .JALR dst base _ =>
+          witness.RegistersVal (TraceWitness.sourceRegisterAddress base) cycle =
+            ((JoltISA.sourceValue base
+              (if TraceWitness.destinationRegisterAddress dst =
+                    TraceWitness.sourceRegisterAddress base ∧
+                  (TraceWitness.sourceRegisterAddress base).val ≠ 0 then
+                last.postState else last.preState)).toNat : F)
+      | .BEQ left right _ | .BNE left right _ | .BLT left right _
+      | .BGE left right _ | .BLTU left right _ | .BGEU left right _ =>
+          readAtStall left ∧ readAtStall right
+      | _ => True) :
+    witness.RegistersVal (TraceWitness.sourceRegisterAddress lhs) cycle =
+        ((JoltISA.sourceValue lhs last.preState).toNat : F) ∧
+      witness.RegistersVal (TraceWitness.sourceRegisterAddress rhs) cycle =
+        ((JoltISA.sourceValue rhs last.preState).toNat : F) := by
+  rcases shape with h | h | h | h | h | h
+  all_goals simpa only [h] using controls
+
+/-- A branch writes neither control register, so the next cycle keeps both
+values from the stable row. For example, BEQ leaves both compared registers
+unchanged. See jolt/crates/jolt-riscv/src/instructions/b/beq.rs:1-35
+at 8bbb2357. -/
+private theorem stall_branch_controls_succ
+    {F : Type} [Field F] (joltField : JoltField F)
+    (joltInstance : JoltInstance SourceInstruction)
+    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (witness : WitnessType F params)
+    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
+    (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
+      context.io context.entry witness)
+    (bytecode : Array JoltInstructionRow) (last : TraceRow bytecode)
+    (cycle : Fin params.traceLength) (next : cycle.val + 1 < params.traceLength)
+    (slot : Fin (2 ^ params.logBytecodeK))
+    (selected : JoltConstraints.bytecodeRa witness slot cycle = 1)
+    (row : JoltInstructionRow)
+    (present : JoltConstraints.bytecodeRow context.bytecode slot.val = some row)
+    (lhs rhs : JoltISA.Src) (imm : BitVec 128)
+    (shape : bytecode[last.rowIndex].instruction = .BEQ lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BNE lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BLT lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BGE lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BLTU lhs rhs imm ∨
+      bytecode[last.rowIndex].instruction = .BGEU lhs rhs imm)
+    (current : row = bytecode[last.rowIndex])
+    (values :
+      witness.RegistersVal (TraceWitness.sourceRegisterAddress lhs) cycle =
+          ((JoltISA.sourceValue lhs last.preState).toNat : F) ∧
+        witness.RegistersVal (TraceWitness.sourceRegisterAddress rhs) cycle =
+          ((JoltISA.sourceValue rhs last.preState).toNat : F)) :
+    let readAtStall (src : JoltISA.Src) : Prop :=
+      witness.RegistersVal (TraceWitness.sourceRegisterAddress src)
+        ⟨cycle.val + 1, next⟩ =
+          ((JoltISA.sourceValue src last.preState).toNat : F)
+    match bytecode[last.rowIndex].instruction with
+    | .JALR dst base _ =>
+        witness.RegistersVal (TraceWitness.sourceRegisterAddress base)
+          ⟨cycle.val + 1, next⟩ =
+          ((JoltISA.sourceValue base
+            (if TraceWitness.destinationRegisterAddress dst =
+                  TraceWitness.sourceRegisterAddress base ∧
+                (TraceWitness.sourceRegisterAddress base).val ≠ 0 then
+              last.postState else last.preState)).toNat : F)
+    | .BEQ left right _ | .BNE left right _ | .BLT left right _
+    | .BGE left right _ | .BLTU left right _ | .BGEU left right _ =>
+        readAtStall left ∧ readAtStall right
+    | _ => True := by
+  have noDestination : JoltConstraints.bytecodeRdRegister row.instruction = none := by
+    rw [current]
+    rcases shape with h | h | h | h | h | h
+    all_goals rw [h]; rfl
+  have nextLhs := register_unchanged_of_no_write joltField joltInstance
+    privateInputs witness context equations cycle next slot selected row present
+      (TraceWitness.sourceRegisterAddress lhs) (by simp [noDestination])
+  have nextRhs := register_unchanged_of_no_write joltField joltInstance
+    privateInputs witness context equations cycle next slot selected row present
+      (TraceWitness.sourceRegisterAddress rhs) (by simp [noDestination])
+  rcases shape with h | h | h | h | h | h
+  all_goals
+    simp only [h]
+    exact ⟨nextLhs.trans values.1, nextRhs.trans values.2⟩
+
+/-- The witness branch target at a replayed stable stall is its source
+address. For example, a taken BEQ with zero offset targets its own source.
+See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:337-347
+at 8bbb2357. -/
+private theorem stall_branch_replay_target
+    {F : Type} [Field F] (joltField : JoltField F)
+    (joltInstance : JoltInstance SourceInstruction)
+    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (witness : WitnessType F params)
+    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
+    (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
+      context.io context.entry witness)
+    (bytecode : Array JoltInstructionRow) (last : TraceRow bytecode)
+    (cycle : Fin params.traceLength)
+    (slot : Fin (2 ^ params.logBytecodeK))
+    (selected : JoltConstraints.bytecodeRa witness slot cycle = 1)
+    (row : JoltInstructionRow)
+    (present : JoltConstraints.bytecodeRow context.bytecode slot.val = some row)
+    (current : row = bytecode[last.rowIndex])
+    (branch : JoltMetadata.instructionFlag bytecode[last.rowIndex].instruction .Branch = true)
+    (model : JoltNextPCFrame.BranchTaken bytecode[last.rowIndex].instruction
+        last.preState = true ∧
+      JoltMetadata.immediate bytecode[last.rowIndex].instruction = 0)
+    (controls :
+      let readAtStall (src : JoltISA.Src) : Prop :=
+        witness.RegistersVal (TraceWitness.sourceRegisterAddress src) cycle =
+          ((JoltISA.sourceValue src last.preState).toNat : F)
+      match bytecode[last.rowIndex].instruction with
+      | .JALR dst base _ =>
+          witness.RegistersVal (TraceWitness.sourceRegisterAddress base) cycle =
+            ((JoltISA.sourceValue base
+              (if TraceWitness.destinationRegisterAddress dst =
+                    TraceWitness.sourceRegisterAddress base ∧
+                  (TraceWitness.sourceRegisterAddress base).val ≠ 0 then
+                last.postState else last.preState)).toNat : F)
+      | .BEQ left right _ | .BNE left right _ | .BLT left right _
+      | .BGE left right _ | .BLTU left right _ | .BGEU left right _ =>
+          readAtStall left ∧ readAtStall right
+      | _ => True) :
+    witness.NextUnexpandedPC cycle = (row.address.toNat : F) := by
+  obtain ⟨lhs, rhs, imm, isBranch⟩ :=
+    stall_branch_shape bytecode[last.rowIndex].instruction branch
+  have sourceReads := stall_branch_control_values witness bytecode last cycle
+    lhs rhs imm isBranch controls
+  have rs1 : witness.Rs1Value cycle =
+      ((JoltISA.sourceValue lhs last.preState).toNat : F) := by
+    have read := selected_operand_register
+      (JoltConstraints.Soundness.two_pow_127_lt_char joltField)
+      joltInstance privateInputs witness context equations cycle slot selected row
+      present false (TraceWitness.sourceRegisterAddress lhs) (by
+        rw [current]
+        rcases isBranch with h | h | h | h | h | h
+        all_goals rw [h]; rfl)
+    exact read.trans sourceReads.1
+  have rs2 : witness.Rs2Value cycle =
+      ((JoltISA.sourceValue rhs last.preState).toNat : F) := by
+    have read := selected_operand_register
+      (JoltConstraints.Soundness.two_pow_127_lt_char joltField)
+      joltInstance privateInputs witness context equations cycle slot selected row
+      present true (TraceWitness.sourceRegisterAddress rhs) (by
+        rw [current]
+        rcases isBranch with h | h | h | h | h | h
+        all_goals rw [h]; rfl)
+    exact read.trans sourceReads.2
+  have taken : JoltISA.branchDecisionPure row.instruction
+      (JoltISA.sourceValue lhs last.preState)
+      (JoltISA.sourceValue rhs last.preState) = true := by
+    rw [current]
+    rcases isBranch with h | h | h | h | h | h
+    all_goals simpa only [h, JoltNextPCFrame.BranchTaken] using model.1
+  exact stall_branch_witness_target joltField joltInstance privateInputs
+    witness context equations cycle slot selected row present
+      (by rw [current]; exact branch)
+      (JoltISA.sourceValue lhs last.preState)
+      (JoltISA.sourceValue rhs last.preState) rs1 rs2 taken
+      (by rw [current]; exact model.2)
+
 /-- A real branch replay preserves its two control operands and advances to
 the same source or padding. For example, a BEQ self jump still compares the
 same registers on replay. See jolt/crates/jolt-riscv/src/row.rs:105-132
@@ -1493,19 +1731,9 @@ theorem stall_branch_step
     StallSuffixInvariant witness run.bytecode last ⟨cycle.val + 1, next⟩ := by
   rcases atCycle with padding | ⟨slot, row, selected, rowAt, sameSource, controls⟩
   · exact False.elim (real padding)
-  have charAbove2pow127 := JoltConstraints.Soundness.two_pow_127_lt_char joltField
-  have acceptedContext : pc_map_ok context.bytecode = true := by
-    obtain ⟨slots, preprocessed, _⟩ := context.entryIsRust
-    unfold preprocess at preprocessed
-    split at preprocessed
-    · assumption
-    · cases preprocessed
-  have accepted : pc_map_ok run.bytecode = true := by
-    simpa only [bytecodeEq] using acceptedContext
-  have rowAtContext : JoltConstraints.bytecodeRow context.bytecode slot.val = some row := by
-    rw [← bytecodeEq]
-    exact rowAt
-  obtain ⟨index, _, rowIs⟩ := stall_real_slot_index run.bytecode slot.val row rowAt
+  obtain ⟨accepted, rowAtContext, index, _, rowIs⟩ :=
+    stall_cycle_selected_row joltInstance privateInputs context run.bytecode
+      bytecodeEq slot row rowAt
   have rowMember : row ∈ run.bytecode.toList := by
     rw [rowIs]
     exact Array.getElem_mem_toList index.isLt
@@ -1514,60 +1742,18 @@ theorem stall_branch_step
       last.rowIndex branch row rowMember sameSource
   have model := stall_branch_model_target joltInstance privateInputs run accepted
     last atEnd stable branch
-  obtain ⟨lhs, rhs, imm, isBranch⟩ :=
-    stall_branch_shape run.bytecode[last.rowIndex].instruction branch
-  have sourceReads :
-      witness.RegistersVal (TraceWitness.sourceRegisterAddress lhs) cycle =
-          ((JoltISA.sourceValue lhs last.preState).toNat : F) ∧
-        witness.RegistersVal (TraceWitness.sourceRegisterAddress rhs) cycle =
-          ((JoltISA.sourceValue rhs last.preState).toNat : F) := by
-    rcases isBranch with h | h | h | h | h | h
-    all_goals simpa only [h] using controls
-  have rs1 : witness.Rs1Value cycle =
-      ((JoltISA.sourceValue lhs last.preState).toNat : F) := by
-    have read := selected_operand_register charAbove2pow127 joltInstance privateInputs
-      witness context equations cycle slot selected row rowAtContext false
-      (TraceWitness.sourceRegisterAddress lhs) (by
-        rw [currentEq]
-        rcases isBranch with h | h | h | h | h | h
-        all_goals rw [h]; rfl)
-    exact read.trans sourceReads.1
-  have rs2 : witness.Rs2Value cycle =
-      ((JoltISA.sourceValue rhs last.preState).toNat : F) := by
-    have read := selected_operand_register charAbove2pow127 joltInstance privateInputs
-      witness context equations cycle slot selected row rowAtContext true
-      (TraceWitness.sourceRegisterAddress rhs) (by
-        rw [currentEq]
-        rcases isBranch with h | h | h | h | h | h
-        all_goals rw [h]; rfl)
-    exact read.trans sourceReads.2
-  have taken : JoltISA.branchDecisionPure row.instruction
-      (JoltISA.sourceValue lhs last.preState)
-      (JoltISA.sourceValue rhs last.preState) = true := by
-    rw [currentEq]
-    rcases isBranch with h | h | h | h | h | h
-    all_goals simpa only [h, JoltNextPCFrame.BranchTaken] using model.1
-  have target := stall_branch_witness_target joltField joltInstance privateInputs
-    witness context equations cycle slot selected row rowAtContext
-      (by rw [currentEq]; exact branch)
-      (JoltISA.sourceValue lhs last.preState)
-      (JoltISA.sourceValue rhs last.preState) rs1 rs2 taken
-      (by rw [currentEq]; exact model.2)
-  rcases stall_next_padding_or_address joltField joltInstance privateInputs
+  have target := stall_branch_replay_target joltField joltInstance privateInputs
+    witness context equations run.bytecode last cycle slot selected row rowAtContext
+    currentEq branch model controls
+  rcases stall_next_cycle_of_target joltField joltInstance privateInputs
     witness context equations cycle next run.bytecode[last.rowIndex].address
       (by simpa only [sameSource] using target) with
     isPadding | ⟨nextSlot, nextRow, nextSelected, nextRowAt, nextAddress⟩
   · exact Or.inl isPadding
-  · have noDestination : JoltConstraints.bytecodeRdRegister row.instruction = none := by
-      rw [currentEq]
-      rcases isBranch with h | h | h | h | h | h
-      all_goals rw [h]; rfl
-    have nextLhs := stall_no_destination_preserves_registers joltField joltInstance
-      privateInputs witness context equations cycle next slot selected row rowAtContext
-        noDestination (TraceWitness.sourceRegisterAddress lhs)
-    have nextRhs := stall_no_destination_preserves_registers joltField joltInstance
-      privateInputs witness context equations cycle next slot selected row rowAtContext
-        noDestination (TraceWitness.sourceRegisterAddress rhs)
+  · obtain ⟨lhs, rhs, imm, isBranch⟩ :=
+      stall_branch_shape run.bytecode[last.rowIndex].instruction branch
+    have sourceReads := stall_branch_control_values witness run.bytecode last cycle
+      lhs rhs imm isBranch controls
     have nextControls :
         (let readAtStall (src : JoltISA.Src) : Prop :=
           witness.RegistersVal (TraceWitness.sourceRegisterAddress src)
@@ -1585,11 +1771,10 @@ theorem stall_branch_step
          | .BEQ left right _ | .BNE left right _ | .BLT left right _
          | .BGE left right _ | .BLTU left right _ | .BGEU left right _ =>
              readAtStall left ∧ readAtStall right
-         | _ => True) := by
-      rcases isBranch with h | h | h | h | h | h
-      all_goals
-        simp only [h]
-        exact ⟨nextLhs.trans sourceReads.1, nextRhs.trans sourceReads.2⟩
+         | _ => True) :=
+      stall_branch_controls_succ joltField joltInstance privateInputs witness
+        context equations run.bytecode last cycle next slot selected row rowAtContext
+        lhs rhs imm isBranch currentEq sourceReads
     have nextRowAtRun : JoltConstraints.bytecodeRow run.bytecode nextSlot.val =
         some nextRow := by rw [bytecodeEq]; exact nextRowAt
     exact Or.inr ⟨nextSlot, nextRow, nextSelected, nextRowAtRun,
@@ -1684,6 +1869,88 @@ theorem stable_jalr_target
       if run.bytecode[last.rowIndex].is_compressed then 2 else 4)
     (run.answers i) last.preState last.postState hnext actual
   exact Option.some.inj (target.symm.trans stable.2.1)
+
+/-- A final executed JALR that writes its own nonzero architectural base
+leaves that base holding the source's prepared return address. For example,
+`jalr x1, imm(x1)` leaves `x1` equal to its address plus its source length.
+See jolt/tracer/src/instruction/jalr.rs:19-30 at 8bbb2357. -/
+theorem stable_written_jalr_link
+    (joltInstance : JoltInstance SourceInstruction)
+    (privateInputs : JoltPrivateInputs)
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (last : TraceRow run.bytecode) (atEnd : last ∈ run.rows.back?)
+    (stable : last.StableStall)
+    (rd : regidx) (imm : BitVec 64)
+    (jump : run.bytecode[last.rowIndex].instruction = .JALR (.xreg rd) (.xreg rd) imm)
+    (nonzero : JoltISA.isX0 rd = false) :
+    JoltISA.sourceValue (.xreg rd) last.postState =
+      run.bytecode[last.rowIndex].address +
+        if run.bytecode[last.rowIndex].is_compressed then 2 else 4 := by
+  obtain ⟨i, rowEq⟩ := stall_last_run_index joltInstance privateInputs run last atEnd
+  have prepared : last.preState.sail.regs.get? Register.nextPC =
+      some (run.bytecode[last.rowIndex].address +
+        if run.bytecode[last.rowIndex].is_compressed then 2 else 4) := by
+    have nextPC : last.preState.sail.regs.get? Register.nextPC =
+        some (run.bytecode[last.rowIndex].address +
+          if source_is_compressed run.bytecode last.rowIndex then 2 else 4) := by
+      simpa only [rowEq] using untrusted_row_next_pc joltInstance privateInputs run i
+    rw [source_compressed_of_last run.bytecode last.rowIndex stable.1] at nextPC
+    exact nextPC
+  have idxEq : run.rows[i].rowIndex = last.rowIndex :=
+    congrArg TraceRow.rowIndex rowEq
+  have hinst : run.bytecode[run.rows[i].rowIndex].instruction =
+      .JALR (.xreg rd) (.xreg rd) imm := by simpa only [idxEq] using jump
+  have runs := run.executes i
+  rw [JoltConstraints.Soundness.withRuntimeAdvice_eq_of_noAdvice
+    _ run.rows[i].runtimeAdvice (by rw [hinst]; rfl), hinst] at runs
+  have executed : JoltISA.execInstr (.JALR (.xreg rd) (.xreg rd) imm)
+      last.preState = .ok (.Retire_Success ()) last.postState := by
+    simpa only [rowEq, JoltConstraints.Soundness.execWithTapeAnswer] using runs
+  have link := jump_jalr_link (.xreg rd) (.xreg rd) imm
+    (run.bytecode[last.rowIndex].address +
+      if run.bytecode[last.rowIndex].is_compressed then 2 else 4)
+    last.preState last.postState nonzero prepared executed
+  simpa only [TraceWitness.capturedDestinationValue,
+    TraceWitness.capturedDestination] using link
+
+/-- An architectural register index does not compare unequal to itself; for
+example, the repeated base in `jalr x1, imm(x1)` is the same index.
+See PR #2109 head d2995380, jolt/crates/jolt-riscv/src/row.rs:105-132. -/
+private theorem regidx_bne_self_false (rd : regidx) : (rd != rd) = false := by
+  cases rd with
+  | Regidx bits =>
+    change (!(bits == bits)) = false
+    rw [beq_self_eq_true bits]
+    rfl
+
+/-- For a stable JALR that overwrites its own nonzero base, the stored link
+targets the same source on replay. For example, `jalr x1, imm(x1)` is stable
+only when applying its immediate to its new `x1` returns its address.
+See PR #2109 head d2995380,
+jolt/crates/jolt-riscv/src/row.rs:105-132. -/
+theorem stable_written_jalr_replay_target
+    (joltInstance : JoltInstance SourceInstruction)
+    (privateInputs : JoltPrivateInputs)
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (last : TraceRow run.bytecode) (atEnd : last ∈ run.rows.back?)
+    (stable : last.StableStall)
+    (rd : regidx) (imm : BitVec 64)
+    (jump : run.bytecode[last.rowIndex].instruction = .JALR (.xreg rd) (.xreg rd) imm)
+    (nonzero : JoltISA.isX0 rd = false) :
+    jolt_jalr_target64 (JoltISA.sourceValue (.xreg rd) last.postState) imm =
+      run.bytecode[last.rowIndex].address := by
+  rw [stable_written_jalr_link joltInstance privateInputs run last atEnd
+    stable rd imm jump nonzero]
+  have repeats := stable.2.2
+  unfold JoltInstructionRow.selfJumpRepeats at repeats
+  rw [jump] at repeats
+  change (if (JoltISA.isX0 rd || rd != rd) = true then true else
+    jolt_jalr_target64
+      (run.bytecode[last.rowIndex].address +
+        if run.bytecode[last.rowIndex].is_compressed then 2 else 4) imm ==
+          run.bytecode[last.rowIndex].address) = true at repeats
+  rw [nonzero, regidx_bne_self_false] at repeats
+  simpa only [Bool.false_or, Bool.false_eq_true, ↓reduceIte, beq_iff_eq] using repeats
 
 /-- For canonical operands, equal register-table addresses mean that a JALR
 destination and base name the same register. For example, `x1` and `x1`
@@ -1825,6 +2092,159 @@ theorem selected_jalr_next_target
     (selected_jalr_lookup_target joltField joltInstance privateInputs witness
       context equations cycle slot selected row present dst base imm value jump baseAt)
 
+/-- At an accepted address, a JALR with an architectural base is the only
+row of its source. For example, the `ret` x0 rewrite emits one JALR row.
+See jolt/crates/jolt-program/src/expand/mod.rs:281-307 at 8bbb2357. -/
+theorem architectural_jalr_same_source_row
+    (image : Rv64ProgramImage SourceInstruction)
+    (bytecode : Array JoltInstructionRow)
+    (expanded : expand_program image = some bytecode)
+    (accepted : pc_map_ok bytecode = true)
+    (lastIndex : Fin bytecode.size)
+    (dst : JoltISA.Dst) (rs1 : regidx) (imm : BitVec 64)
+    (jump : bytecode[lastIndex].instruction = .JALR dst (.xreg rs1) imm)
+    (row : JoltInstructionRow) (member : row ∈ bytecode.toList)
+    (sameAddress : row.address = bytecode[lastIndex].address) :
+    row = bytecode[lastIndex] := by
+  obtain ⟨source, _, rows, sourceExpanded, lastMember, rowMember⟩ :=
+    expanded_same_source_rows image bytecode expanded accepted
+      bytecode[lastIndex] row (Array.getElem_mem_toList lastIndex.isLt)
+      member sameAddress.symm
+  have singleton := expanded_arch_jalr_singleton source rows sourceExpanded
+    bytecode[lastIndex] lastMember dst rs1 imm jump
+  rw [singleton] at rowMember
+  simpa only [List.mem_singleton] using rowMember
+
+/-- A selected jump writes the source address plus its full source length as
+the link value when that addition does not wrap. For example, an uncompressed
+JALR at `0x1000` writes `0x1004`.
+See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:296-302
+at 8bbb2357. -/
+theorem selected_jump_link_write_value
+    {F : Type} [Field F] (joltField : JoltField F)
+    (joltInstance : JoltInstance SourceInstruction)
+    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (witness : WitnessType F params)
+    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
+    (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
+      context.io context.entry witness)
+    (cycle : Fin params.traceLength) (slot : Fin (2 ^ params.logBytecodeK))
+    (selected : JoltConstraints.bytecodeRa witness slot cycle = 1)
+    (row : JoltInstructionRow)
+    (present : JoltConstraints.bytecodeRow context.bytecode slot.val = some row)
+    (jump : JoltMetadata.opcodeFlag row.instruction .Jump = true)
+    (linkNoWrap :
+      (row.address + if row.is_compressed then 2 else 4).toNat =
+        row.address.toNat + if row.is_compressed then 2 else 4) :
+    witness.RdWriteValue cycle =
+      ((row.address + if row.is_compressed then 2 else 4).toNat : F) := by
+  have charAbove2pow127 := JoltConstraints.Soundness.two_pow_127_lt_char joltField
+  have flags := JoltConstraints.Soundness.opFlag_of_selected_bytecode
+    charAbove2pow127 context equations
+  have jumpFlag : witness.OpFlags .Jump cycle = 1 := by
+    simpa only [JoltConstraints.bytecodeCircuitFlag, present,
+      JoltMetadata.circuitFlag, jump] using
+      flags .Jump cycle slot selected
+  have compressedFlag : witness.OpFlags .IsCompressed cycle =
+      if row.is_compressed then 1 else 0 := by
+    simpa only [JoltConstraints.bytecodeCircuitFlag, present,
+      JoltMetadata.circuitFlag] using flags .IsCompressed cycle slot selected
+  have address : witness.UnexpandedPC cycle = (row.address.toNat : F) := by
+    simpa only [JoltConstraints.bytecodeAddress, present] using
+      JoltConstraints.Soundness.unexpandedPC_of_selected_bytecode
+        charAbove2pow127 context equations cycle slot selected
+  have relation := equations.rdWriteEqPCPlusConstIfJump cycle
+  rw [jumpFlag, one_mul, address, compressedFlag] at relation
+  rw [linkNoWrap]
+  cases compressed : row.is_compressed with
+  | false =>
+      simp only [compressed, Bool.false_eq_true, ↓reduceIte] at relation ⊢
+      rw [Nat.cast_add]
+      linear_combination relation
+  | true =>
+      simp only [compressed, ↓reduceIte] at relation ⊢
+      rw [Nat.cast_add]
+      linear_combination relation
+
+/-- A terminal architectural-base JALR whose destination differs from its
+base replays with the same base value. For example, `jalr x1, 0(x2)` keeps
+reading `x2` on each visit to its source.
+See PR #2109 head d2995380, jolt/crates/jolt-riscv/src/row.rs:105-132. -/
+private theorem stall_arch_jalr_preserved_step
+    {F : Type} [Field F] (joltField : JoltField F)
+    (joltInstance : JoltInstance SourceInstruction)
+    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (witness : WitnessType F params)
+    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
+    (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
+      context.io context.entry witness)
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (bytecodeEq : run.bytecode = context.bytecode)
+    (last : TraceRow run.bytecode) (atEnd : last ∈ run.rows.back?)
+    (stable : last.StableStall)
+    (dst : JoltISA.Dst) (rs1 : regidx) (imm : BitVec 64)
+    (jump : run.bytecode[last.rowIndex].instruction = .JALR dst (.xreg rs1) imm)
+    (noWriteBase : TraceWitness.destinationRegisterAddress dst ≠
+      TraceWitness.sourceRegisterAddress (.xreg rs1))
+    (cycle : Fin params.traceLength) (next : cycle.val + 1 < params.traceLength)
+    (real : witness.InstructionFlags .IsNoop cycle ≠ 1)
+    (atCycle : StallSuffixInvariant witness run.bytecode last cycle) :
+    StallSuffixInvariant witness run.bytecode last ⟨cycle.val + 1, next⟩ := by
+  rcases atCycle with padding | ⟨slot, row, selected, rowAt, sameSource, control⟩
+  · exact False.elim (real padding)
+  obtain ⟨accepted, rowAtContext, index, _, rowIs⟩ :=
+    stall_cycle_selected_row joltInstance privateInputs context run.bytecode
+      bytecodeEq slot row rowAt
+  have member : row ∈ run.bytecode.toList := by
+    rw [rowIs]
+    exact Array.getElem_mem_toList index.isLt
+  have rowEq : row = run.bytecode[last.rowIndex] :=
+    architectural_jalr_same_source_row joltInstance.program run.bytecode
+      run.expands accepted last.rowIndex dst rs1 imm jump row member sameSource
+  have currentJump : row.instruction = .JALR dst (.xreg rs1) imm := by
+    rw [rowEq]
+    exact jump
+  have baseAt : witness.RegistersVal
+      (TraceWitness.sourceRegisterAddress (.xreg rs1)) cycle =
+        ((JoltISA.sourceValue (.xreg rs1) last.preState).toNat : F) := by
+    simpa only [jump, noWriteBase, false_and, ↓reduceIte] using control
+  by_cases nextPadding :
+      witness.InstructionFlags .IsNoop ⟨cycle.val + 1, next⟩ = 1
+  · exact Or.inl nextPadding
+  have stableTarget := stable_jalr_target joltInstance privateInputs run last
+    atEnd stable dst (.xreg rs1) imm jump
+  have target := selected_jalr_next_target joltField joltInstance privateInputs
+    witness context equations cycle next slot selected row rowAtContext
+    dst (.xreg rs1) imm (JoltISA.sourceValue (.xreg rs1) last.preState)
+    currentJump baseAt nextPadding
+  have targetAddress : witness.NextUnexpandedPC cycle =
+      (run.bytecode[last.rowIndex].address.toNat : F) := by
+    simpa only [stableTarget] using target
+  rcases stall_next_cycle_of_target joltField joltInstance privateInputs
+    witness context equations cycle next run.bytecode[last.rowIndex].address
+      targetAddress with isPadding | ⟨nextSlot, nextRow, nextSelected,
+        nextRowAtContext, nextAddress⟩
+  · exact False.elim (nextPadding isPadding)
+  have nextRowAt : JoltConstraints.bytecodeRow run.bytecode nextSlot.val =
+      some nextRow := by simpa only [bytecodeEq] using nextRowAtContext
+  have noWrite : JoltConstraints.bytecodeRdRegister row.instruction ≠
+      some (TraceWitness.sourceRegisterAddress (.xreg rs1)) := by
+    intro same
+    have addressEq : TraceWitness.destinationRegisterAddress dst =
+        TraceWitness.sourceRegisterAddress (.xreg rs1) := by
+      simpa [currentJump, JoltConstraints.bytecodeRdRegister,
+        TraceWitness.capturedDestination] using same
+    exact noWriteBase addressEq
+  have unchanged := register_unchanged_of_no_write joltField joltInstance
+    privateInputs witness context equations cycle next slot selected row rowAtContext
+    (TraceWitness.sourceRegisterAddress (.xreg rs1)) noWrite
+  have baseNext : witness.RegistersVal
+      (TraceWitness.sourceRegisterAddress (.xreg rs1)) ⟨cycle.val + 1, next⟩ =
+        ((JoltISA.sourceValue (.xreg rs1) last.preState).toNat : F) := by
+    exact unchanged.trans baseAt
+  exact Or.inr ⟨nextSlot, nextRow, nextSelected, nextRowAt, nextAddress,
+    by simpa only [jump, noWriteBase, false_and, ↓reduceIte] using baseNext⟩
+
 /-- A real JALR replay with an unwritten architectural base returns to the
 same source or padding. This includes `jalr x1, 0(x2)` with distinct registers
 and the x0 rewrite `JALR (.vreg _) (.xreg rs1) imm` used for `ret` and `jr`.
@@ -1851,7 +2271,41 @@ theorem stall_jalr_preserved_base_step
     (real : witness.InstructionFlags .IsNoop cycle ≠ 1)
     (atCycle : StallSuffixInvariant witness run.bytecode last cycle) :
     StallSuffixInvariant witness run.bytecode last ⟨cycle.val + 1, next⟩ := by
-  sorry
+  have lastOk := ExpansionRows.expand_program_rowOk joltInstance.program
+    run.bytecode run.expands run.bytecode[last.rowIndex]
+      (Array.getElem_mem_toList last.rowIndex.isLt)
+  rcases preserved with ⟨rd, rs1, imm, jump, condition⟩ |
+    ⟨rd, rs1, imm, jump⟩
+  · have writable : JoltISA.isX0 rd = false := (lastOk.valid.jalr jump)
+    have different : rd ≠ rs1 := by
+      rcases condition with different | zero
+      · exact different
+      · rw [writable] at zero
+        cases zero
+    have noWriteBase : TraceWitness.destinationRegisterAddress (.xreg rd) ≠
+        TraceWitness.sourceRegisterAddress (.xreg rs1) := by
+      intro same
+      have registerEq :=
+        (jalr_destination_base_address_eq_iff (.xreg rd) (.xreg rs1)
+          (by rfl) (by rfl)).mp same
+      exact different (by simpa [JoltConstraints.Soundness.destinationSource] using registerEq)
+    exact stall_arch_jalr_preserved_step joltField joltInstance privateInputs
+      witness context equations run bytecodeEq last atEnd stable (.xreg rd)
+        rs1 imm jump noWriteBase cycle next real atCycle
+  · have canonicalDst : JoltRegisterEncoding.destinationIsCanonical (.vreg rd) = true :=
+      JoltConstraints.Soundness.instruction_destination_canonical
+        run.bytecode[last.rowIndex].instruction (.vreg rd) lastOk.canonical
+        (by rw [jump]; rfl)
+    have noWriteBase : TraceWitness.destinationRegisterAddress (.vreg rd) ≠
+        TraceWitness.sourceRegisterAddress (.xreg rs1) := by
+      intro same
+      have impossible :=
+        (jalr_destination_base_address_eq_iff (.vreg rd) (.xreg rs1)
+          canonicalDst (by rfl)).mp same
+      cases impossible
+    exact stall_arch_jalr_preserved_step joltField joltInstance privateInputs
+      witness context equations run bytecodeEq last atEnd stable (.vreg rd)
+        rs1 imm jump noWriteBase cycle next real atCycle
 
 /-- A JALR that writes its own nonzero base uses the link value from its
 first execution; `selfJumpRepeats` says that value still targets the source.
@@ -1877,7 +2331,104 @@ theorem stall_jalr_written_base_step
     (real : witness.InstructionFlags .IsNoop cycle ≠ 1)
     (atCycle : StallSuffixInvariant witness run.bytecode last cycle) :
     StallSuffixInvariant witness run.bytecode last ⟨cycle.val + 1, next⟩ := by
-  sorry
+  rcases atCycle with padding | ⟨slot, row, selected, rowAt, sameSource, control⟩
+  · exact False.elim (real padding)
+  obtain ⟨accepted, rowAtContext, index, _, rowIs⟩ :=
+    stall_cycle_selected_row joltInstance privateInputs context run.bytecode
+      bytecodeEq slot row rowAt
+  have member : row ∈ run.bytecode.toList := by
+    rw [rowIs]
+    exact Array.getElem_mem_toList index.isLt
+  have rowEq : row = run.bytecode[last.rowIndex] :=
+    architectural_jalr_same_source_row joltInstance.program run.bytecode
+      run.expands accepted last.rowIndex (.xreg rd) rd imm jump row member sameSource
+  have currentJump : row.instruction = .JALR (.xreg rd) (.xreg rd) imm := by
+    rw [rowEq]
+    exact jump
+  have nonzeroAddress :
+      (TraceWitness.sourceRegisterAddress (.xreg rd)).val ≠ 0 := by
+    intro zeroAddress
+    cases rd with
+    | Regidx bits =>
+        have bitsMod : bits.toNat % 128 = 0 := by
+          simpa [TraceWitness.sourceRegisterAddress, BitVec.toFin] using zeroAddress
+        have bitsLt : bits.toNat < 128 := by
+          have small : bits.toNat < 2 ^ 5 := by simpa using bits.isLt
+          exact lt_trans small (by norm_num)
+        have bitsZero : bits.toNat = 0 := by
+          simpa only [Nat.mod_eq_of_lt bitsLt] using bitsMod
+        have isZero : JoltISA.isX0 (.Regidx bits) = true := by
+          change decide (bits.toNat = 0) = true
+          simp only [bitsZero, decide_true]
+        rw [isZero] at nonzero
+        cases nonzero
+  have baseAt : witness.RegistersVal
+      (TraceWitness.sourceRegisterAddress (.xreg rd)) cycle =
+        ((JoltISA.sourceValue (.xreg rd) last.postState).toNat : F) := by
+    have activeGuard : TraceWitness.destinationRegisterAddress (.xreg rd) =
+        TraceWitness.sourceRegisterAddress (.xreg rd) ∧
+        (TraceWitness.sourceRegisterAddress (.xreg rd)).val ≠ 0 :=
+      ⟨rfl, nonzeroAddress⟩
+    simpa only [jump, if_pos activeGuard] using control
+  by_cases nextPadding :
+      witness.InstructionFlags .IsNoop ⟨cycle.val + 1, next⟩ = 1
+  · exact Or.inl nextPadding
+  have stableTarget := stable_written_jalr_replay_target
+    joltInstance privateInputs run last atEnd stable rd imm jump nonzero
+  have target := selected_jalr_next_target joltField joltInstance privateInputs
+    witness context equations cycle next slot selected row rowAtContext
+    (.xreg rd) (.xreg rd) imm (JoltISA.sourceValue (.xreg rd) last.postState)
+    currentJump baseAt nextPadding
+  have targetAddress : witness.NextUnexpandedPC cycle =
+      (run.bytecode[last.rowIndex].address.toNat : F) := by
+    simpa only [stableTarget] using target
+  rcases stall_next_cycle_of_target joltField joltInstance privateInputs
+    witness context equations cycle next run.bytecode[last.rowIndex].address
+      targetAddress with isPadding | ⟨nextSlot, nextRow, nextSelected,
+        nextRowAtContext, nextAddress⟩
+  · exact False.elim (nextPadding isPadding)
+  have nextRowAt : JoltConstraints.bytecodeRow run.bytecode nextSlot.val =
+      some nextRow := by simpa only [bytecodeEq] using nextRowAtContext
+  have terminalLink := terminal_link_no_wrap joltInstance.program run.bytecode
+    run.expands noWrap last.rowIndex stable.1
+  have linkNoWrap :
+      (row.address + if row.is_compressed then 2 else 4).toNat =
+        row.address.toNat + if row.is_compressed then 2 else 4 := by
+    simpa only [rowEq] using terminalLink
+  have jumpFlag : JoltMetadata.opcodeFlag row.instruction .Jump = true := by
+    simp [currentJump, JoltMetadata.opcodeFlag]
+  have linkWrite := selected_jump_link_write_value joltField joltInstance
+    privateInputs witness context equations cycle slot selected row rowAtContext
+    jumpFlag linkNoWrap
+  have modelLink := stable_written_jalr_link joltInstance privateInputs run
+    last atEnd stable rd imm jump nonzero
+  have after := JoltConstraints.Soundness.registersVal_succ_of_selected_bytecode
+    (JoltConstraints.Soundness.two_pow_127_lt_char joltField)
+    context equations (TraceWitness.sourceRegisterAddress (.xreg rd))
+    cycle next slot selected
+  have afterWrite : witness.RegistersVal
+      (TraceWitness.sourceRegisterAddress (.xreg rd)) ⟨cycle.val + 1, next⟩ =
+        witness.RdWriteValue cycle := by
+    have sameAddress : TraceWitness.sourceRegisterAddress (.xreg rd) =
+        TraceWitness.destinationRegisterAddress (.xreg rd) := rfl
+    simpa only [rowAtContext, Option.bind_some, currentJump,
+      JoltConstraints.bytecodeRdRegister, TraceWitness.capturedDestination,
+      if_pos sameAddress] using after
+  have modelLinkEq :
+      ((row.address + if row.is_compressed then 2 else 4).toNat : F) =
+        ((JoltISA.sourceValue (.xreg rd) last.postState).toNat : F) := by
+    rw [rowEq, modelLink]
+  have baseNext : witness.RegistersVal
+      (TraceWitness.sourceRegisterAddress (.xreg rd)) ⟨cycle.val + 1, next⟩ =
+        ((JoltISA.sourceValue (.xreg rd) last.postState).toNat : F) := by
+    exact afterWrite.trans (linkWrite.trans modelLinkEq)
+  exact Or.inr ⟨nextSlot, nextRow, nextSelected, nextRowAt, nextAddress,
+    by
+      have activeGuard : TraceWitness.destinationRegisterAddress (.xreg rd) =
+          TraceWitness.sourceRegisterAddress (.xreg rd) ∧
+          (TraceWitness.sourceRegisterAddress (.xreg rd)).val ≠ 0 :=
+        ⟨rfl, nonzeroAddress⟩
+      simpa only [jump, if_pos activeGuard] using baseNext⟩
 
 /-- A real ECALL or MRET replay moves through its virtual rows and then
 returns to the same source or padding; the virtual JALR base is not written.
@@ -2245,6 +2796,23 @@ theorem stall_suffix_replays_source
               equations run bytecodeEq last atEnd stable branch previous bound
               padding atPrevious
   exact replay cycle.val afterCut cycle.isLt
+
+/-- A stamped bytecode row retains an instruction from its source expansion.
+For example, a stamped ECALL JALR comes from `ecallProgram.instrs`.
+See jolt/crates/jolt-program/src/expand/metadata.rs:25-53 at 8bbb2357. -/
+theorem stamp_sequence_instruction_member
+    (address : BitVec 64) (compressed : Bool)
+    (instructions : List JoltISA.Instr) (row : JoltInstructionRow)
+    (member : row ∈ stamp_sequence address compressed instructions) :
+    row.instruction ∈ instructions := by
+  obtain ⟨index, bound, rowAt⟩ := List.mem_iff_getElem.mp member
+  have sourceBound : index < instructions.length := by
+    simpa only [stamp_sequence, List.length_map, List.length_zipIdx] using bound
+  have instructionAt : row.instruction = instructions[index] := by
+    rw [← rowAt]
+    simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx]
+  rw [instructionAt]
+  exact List.getElem_mem sourceBound
 
 /-- If a stable stall ends in JAL, JALR or branch, every bytecode row at that
 source address has no Store flag. For example, ECALL's virtual rows and final

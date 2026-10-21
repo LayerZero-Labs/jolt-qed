@@ -633,9 +633,9 @@ private theorem termination_effect_in_run
         assumptions.pcNoWrap privateInputs witness context equations run bytecodeEq
         represented.toRepresentsRows nonempty stops cycle after address)
 
-/-- A nonzero write to the selected termination word is an executed SD touching
-that word. For example, the SDK's termination store reaches the device region. -/
-private theorem termination_effect_store_row
+/-- A nonzero RAM effect in a represented cycle selects an SD instruction.
+For example, an LD cannot change its selected RAM word. -/
+private theorem termination_effect_is_sd
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -645,20 +645,17 @@ private theorem termination_effect_store_row
       context.io context.entry witness)
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (bytecodeEq : run.bytecode = context.bytecode)
-    (represented : JoltInstance.RepresentsPrefix witness run.toTrace)
+    (represented : JoltInstance.RepresentsRows witness run.toTrace)
     (address : Fin params.ramSize)
-    (atTermination : address.val =
-      (context.io.memory_layout.termination.toNat -
-        ramLowestAddress context.io.memory_layout) / 8)
     (cycle : Fin params.traceLength) (inRun : cycle.val < run.rows.size)
     (effect : witness.RamRa address cycle * witness.RamInc cycle ≠ 0) :
-    run.StoresTerminationAt ⟨cycle.val, inRun⟩ := by
+    ∃ base value imm,
+      run.bytecode[run.rows[cycle.val].rowIndex].instruction = .SD base value imm := by
   let i : Fin run.rows.size := ⟨cycle.val, inRun⟩
   let row := run.bytecode[run.rows[i].rowIndex]
   have charAbove := two_pow_127_lt_char joltField
   have selected := JoltInstance.selected_represented_row joltField joltInstance
-    privateInputs witness context equations run bytecodeEq
-    represented.toRepresentsRows cycle inRun
+    privateInputs witness context equations run bytecodeEq represented cycle inRun
   let slot : Fin (2 ^ params.logBytecodeK) :=
     ⟨run.rows[i].rowIndex.val + 1, by
       have domain : params.BytecodeDomainFor run.bytecode.size := by
@@ -671,7 +668,7 @@ private theorem termination_effect_store_row
     rw [← bytecodeEq]
     change bytecodeRow run.bytecode (run.rows[i].rowIndex.val + 1) =
       some run.bytecode[run.rows[i].rowIndex]
-    simp [bytecodeRow, Array.getElem?_eq_getElem]
+    simp [bytecodeRow]
   have loadFlag : witness.OpFlags .Load cycle =
       if JoltMetadata.circuitFlag row .Load then 1 else 0 := by
     rw [opFlag_of_selected_bytecode charAbove context equations .Load cycle slot selectedSlot]
@@ -696,8 +693,33 @@ private theorem termination_effect_store_row
     simpa only [JoltMetadata.circuitFlag] using isStore
   obtain ⟨base, value, imm, instructionIs⟩ :=
     JoltMetadata.opcodeFlag_store_requiresSD row.instruction opcodeStore
-  have instructionAt : run.bytecode[run.rows[i].rowIndex].instruction =
-      .SD base value imm := instructionIs
+  exact ⟨base, value, imm, instructionIs⟩
+
+/-- A selected SD at the termination word writes a byte address inside the
+termination region. For example, the SDK's final SD touches that device word. -/
+private theorem termination_sd_touches_termination
+    {F : Type} [Field F] (joltField : JoltField F)
+    (joltInstance : JoltInstance SourceInstruction)
+    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (witness : WitnessType F params)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam
+      context.io context.entry witness)
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (represented : JoltInstance.RepresentsRows witness run.toTrace)
+    (address : Fin params.ramSize)
+    (atTermination : address.val =
+      (context.io.memory_layout.termination.toNat -
+        ramLowestAddress context.io.memory_layout) / 8)
+    (cycle : Fin params.traceLength) (inRun : cycle.val < run.rows.size)
+    (selectedRam : witness.RamRa address cycle = 1)
+    (base value : Src) (imm : BitVec 64)
+    (instructionAt : run.bytecode[run.rows[cycle.val].rowIndex].instruction =
+      .SD base value imm) :
+    TouchesTermination run.rows[cycle.val].preState.jolt_device
+      (sourceValue base run.rows[cycle.val].preState + imm) := by
+  let i : Fin run.rows.size := ⟨cycle.val, inRun⟩
+  have charAbove := two_pow_127_lt_char joltField
   let raw := sourceValue base run.rows[i].preState + imm
   have encoded : witness.RamAddress cycle = (raw.toNat : F) := by
     rw [represented.ramAddress cycle inRun]
@@ -707,12 +729,10 @@ private theorem termination_effect_store_row
       run.bytecode[run.rows[i].rowIndex].instruction run.rows[i].preState with
       | some address => (address.toNat : F)
       | none => 0) = (raw.toNat : F)
-    rw [instructionAt]
+    have atI : run.bytecode[run.rows[i].rowIndex].instruction = .SD base value imm :=
+      instructionAt
+    rw [atI]
     rfl
-  have selectedRam : witness.RamRa address cycle = 1 := by
-    rcases ramRa_zero_or_one context equations address cycle with zero | one
-    · exact False.elim (effect (by simp [zero]))
-    · exact one
   have rawAddress := ramAddress_eq_of_selected charAbove context equations
     cycle address selectedRam raw encoded
   have built := context_layout_built context
@@ -730,14 +750,49 @@ private theorem termination_effect_store_row
       context.io.memory_layout :=
     (run.preState_layout i).trans sameInitialLayout
   obtain ⟨_, _, _, ioEnd, _⟩ := new_io_geometry _ context.io.memory_layout built
-  change run.StoresTerminationAt i
-  unfold UntrustedAnswerRun.StoresTerminationAt
-  rw [instructionAt]
   change TouchesTermination run.rows[i].preState.jolt_device raw
   refine ⟨0, by omega, ?_⟩
   simp only [JoltDevice.is_termination, Bool.and_eq_true, decide_eq_true_eq]
   rw [rowLayout, rawTermination, ioEnd]
   omega
+
+/-- A nonzero write to the selected termination word is an executed SD touching
+that word. For example, the SDK's termination store reaches the device region. -/
+private theorem termination_effect_store_row
+    {F : Type} [Field F] (joltField : JoltField F)
+    (joltInstance : JoltInstance SourceInstruction)
+    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (witness : WitnessType F params)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam
+      context.io context.entry witness)
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (bytecodeEq : run.bytecode = context.bytecode)
+    (represented : JoltInstance.RepresentsPrefix witness run.toTrace)
+    (address : Fin params.ramSize)
+    (atTermination : address.val =
+      (context.io.memory_layout.termination.toNat -
+        ramLowestAddress context.io.memory_layout) / 8)
+    (cycle : Fin params.traceLength) (inRun : cycle.val < run.rows.size)
+    (effect : witness.RamRa address cycle * witness.RamInc cycle ≠ 0) :
+    run.StoresTerminationAt ⟨cycle.val, inRun⟩ := by
+  obtain ⟨base, value, imm, instructionAt⟩ :=
+    termination_effect_is_sd joltField joltInstance privateInputs witness
+      context equations run bytecodeEq represented.toRepresentsRows
+      address cycle inRun effect
+  have selectedRam : witness.RamRa address cycle = 1 := by
+    rcases ramRa_zero_or_one context equations address cycle with zero | one
+    · exact False.elim (effect (by simp [zero]))
+    · exact one
+  let i : Fin run.rows.size := ⟨cycle.val, inRun⟩
+  change run.StoresTerminationAt i
+  unfold UntrustedAnswerRun.StoresTerminationAt
+  have atI : run.bytecode[run.rows[i].rowIndex].instruction =
+      .SD base value imm := instructionAt
+  rw [atI]
+  exact termination_sd_touches_termination joltField joltInstance privateInputs witness
+    context equations run represented.toRepresentsRows address atTermination cycle
+    inRun selectedRam base value imm instructionAt
 
 end JoltConstraints.Soundness
 
@@ -781,6 +836,72 @@ theorem soundness_termination_store_exists
       context equations run bytecodeEq represented address atTermination
       cycle inRun effect⟩
 
+/-- A truncated run keeps the original honest runtime advice on every retained
+row. For example, cutting after row 3 leaves row 2's advice unchanged. -/
+private theorem truncate_honest_runtime_advice
+    (joltInstance : JoltInstance SourceInstruction)
+    (privateInputs : JoltPrivateInputs)
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (advice : ∀ n : Fin run.rows.size,
+      run.rows[n].someTracerAdvice? =
+        honestTracerAdviceAtStepN joltInstance.program run.rows n)
+    (i : Fin run.rows.size) :
+    ∀ m : Fin (run.truncate i.val (Nat.le_of_lt i.isLt)).rows.size,
+      (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[m].someTracerAdvice? =
+        honestTracerAdviceAtStepN joltInstance.program
+          (run.truncate i.val (Nat.le_of_lt i.isLt)).rows m := by
+  intro m
+  have hm : m.val < i.val := by
+    have hs := run.truncate_rows_size i.val (Nat.le_of_lt i.isLt)
+    have hlt : m.val < (run.rows.extract 0 i.val).size := m.isLt
+    omega
+  have hm' : m.val < run.rows.size := by omega
+  have hrow : (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[m] =
+      run.rows[m.val]'hm' := by
+    change (run.rows.extract 0 i.val)[m.val]'m.isLt = run.rows[m.val]'hm'
+    simp only [Array.getElem_extract, Nat.zero_add]
+  have hadvice := advice ⟨m.val, hm'⟩
+  have hextract := honestTracerAdviceAtStepN_extract joltInstance.program
+    run.rows i.val m.val (Nat.le_of_lt i.isLt) hm
+  change (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[m].someTracerAdvice? =
+    honestTracerAdviceAtStepN joltInstance.program
+      (run.truncate i.val (Nat.le_of_lt i.isLt)).rows m.val
+  rw [hrow]
+  exact hadvice.trans hextract.symm
+
+/-- Truncation preserves the certificate that no retained row before another
+retained row is a stable stall. For example, rows 1 and 2 keep that property. -/
+private theorem truncate_no_earlier_stall
+    (joltInstance : JoltInstance SourceInstruction)
+    (privateInputs : JoltPrivateInputs)
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (noEarlierStop : ∀ (n : Nat) (current next : TraceRow run.bytecode),
+      run.rows[n]? = some current → run.rows[n + 1]? = some next →
+      ¬ current.StableStall)
+    (i : Fin run.rows.size) :
+    ∀ (n : Nat) (current following : TraceRow run.bytecode),
+      (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[n]? = some current →
+      (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[n + 1]? = some following →
+      ¬ current.StableStall := by
+  intro n current following hcurrent hfollowing
+  change (run.rows.extract 0 i.val)[n]? = some current at hcurrent
+  change (run.rows.extract 0 i.val)[n + 1]? = some following at hfollowing
+  have hn : n < i.val := by
+    have h := (Array.getElem?_eq_some_iff.mp hcurrent).1
+    rw [run.truncate_rows_size i.val (Nat.le_of_lt i.isLt)] at h
+    exact h
+  have hnext : n + 1 < i.val := by
+    have h := (Array.getElem?_eq_some_iff.mp hfollowing).1
+    rw [run.truncate_rows_size i.val (Nat.le_of_lt i.isLt)] at h
+    exact h
+  have hcurrent' : run.rows[n]? = some current := by
+    simpa only [extract_getElem?_before run.rows i.val n (Nat.le_of_lt i.isLt) hn]
+      using hcurrent
+  have hfollowing' : run.rows[n + 1]? = some following := by
+    simpa only [extract_getElem?_before run.rows i.val (n + 1)
+      (Nat.le_of_lt i.isLt) hnext] using hfollowing
+  exact noEarlierStop n current following hcurrent' hfollowing'
+
 /-- Truncating a run before its existing row `i` produces an initialized
 prefix ready to execute that row, with honest advice and no earlier stall.
 For example, truncating before row 4 leaves rows 0 through 3.
@@ -802,41 +923,8 @@ theorem soundness_prefix_next_step
   let cutRun := run.truncate i.val (Nat.le_of_lt i.isLt)
   change cutRun.NextStep run.rows[i].rowIndex run.rows[i].preState
   constructor
-  · intro m
-    have hm : m.val < i.val := by
-      have hs := run.truncate_rows_size i.val (Nat.le_of_lt i.isLt)
-      have hlt : m.val < (run.rows.extract 0 i.val).size := m.isLt
-      omega
-    have hm' : m.val < run.rows.size := by omega
-    have hrow : cutRun.rows[m] = run.rows[m.val]'hm' := by
-      change (run.rows.extract 0 i.val)[m] = run.rows[m.val]'hm'
-      change (run.rows.extract 0 i.val)[m.val]'m.isLt = run.rows[m.val]'hm'
-      simp only [Array.getElem_extract, Nat.zero_add]
-    have hadvice := advice ⟨m.val, hm'⟩
-    have hextract := honestTracerAdviceAtStepN_extract joltInstance.program
-      run.rows i.val m.val (Nat.le_of_lt i.isLt) hm
-    change cutRun.rows[m].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program cutRun.rows m.val
-    rw [hrow]
-    exact hadvice.trans hextract.symm
-  · intro n current following hcurrent hfollowing
-    change (run.rows.extract 0 i.val)[n]? = some current at hcurrent
-    change (run.rows.extract 0 i.val)[n + 1]? = some following at hfollowing
-    have hn : n < i.val := by
-      have h := (Array.getElem?_eq_some_iff.mp hcurrent).1
-      rw [run.truncate_rows_size i.val (Nat.le_of_lt i.isLt)] at h
-      exact h
-    have hnext : n + 1 < i.val := by
-      have h := (Array.getElem?_eq_some_iff.mp hfollowing).1
-      rw [run.truncate_rows_size i.val (Nat.le_of_lt i.isLt)] at h
-      exact h
-    have hcurrent' : run.rows[n]? = some current := by
-      simpa only [extract_getElem?_before run.rows i.val n (Nat.le_of_lt i.isLt) hn]
-        using hcurrent
-    have hfollowing' : run.rows[n + 1]? = some following := by
-      simpa only [extract_getElem?_before run.rows i.val (n + 1)
-        (Nat.le_of_lt i.isLt) hnext] using hfollowing
-    exact noEarlierStop n current following hcurrent' hfollowing'
+  · exact truncate_honest_runtime_advice joltInstance privateInputs run advice i
+  · exact truncate_no_earlier_stall joltInstance privateInputs run noEarlierStop i
   · have hrowAt : run.rows[i.val]? = some run.rows[i] := by
       exact Array.getElem?_eq_getElem i.isLt
     by_cases iz : i.val = 0
