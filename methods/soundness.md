@@ -2631,3 +2631,55 @@ All new declaration times below use `#time` with `Elab.async=false`.
 | `pairs_flatten` | 11 |
 | `materialized_pairs` | 93 |
 | `expand_program_pairs` | 45 |
+
+
+### Tape rebuild: shared instruction frame (2026-10-21)
+
+`InstructionEquivalence/ProofSupport/InstructionFrame.lean` now proves `execInstr_rule` once for a reflexive, transitive relation on `SailJoltState`.
+`Rules` records preservation under Sail-state replacement (covering Sail steps and RAM stores), virtual-register writes, successful device byte stores, and advice-tape appends.
+The theorem also takes a conditional obligation for a successful advice-tape read when the instruction is `VirtualAdviceLoad`.
+This obligation is necessary because a tape read advances the cursor, which `TapeGrowth` forbids.
+`execInstr_tapeGrowth` discharges it using its existing `notLoad` hypothesis; `execInstr_rule_of_device_relation` discharges it because changing the tape leaves the device unchanged.
+Both existing theorem statements are unchanged, as are the statements and source of their callers.
+
+The two frame proofs are now short instances of this theorem.
+The shared proof uses `StatePreservation.Preserves` and `preservation_auto`, with one traversal of the instruction constructors.
+Eleven tape-specific primitive helpers were removed.
+The existing public device-register-write and raw-store lemmas also use the shared primitive proofs, with their statements unchanged.
+
+The isolated Lake build of `JoltConstraints.Soundness.Layer7.TapeRebuild` and `JoltConstraints.Completeness.Helpers.IOSetupFrame` passed all 8,605 jobs.
+This rebuilt the existing device-frame callers, including `TapeSemantics`, `memory_presence`, and the atomic-instruction proofs.
+`git diff --check` passed.
+The shared instruction theorem and both instances have only `propext`, `Classical.choice`, `Quot.sound`, and the existing `sys_enable_experimental_extensions` as axioms, with no `sorryAx`.
+The reverse inclusion's dependency audit still finds `sorryAx` only through `narrow_load_shape`.
+No limit was raised and no new `bv_decide`, `native_decide`, or `decide +kernel` was used.
+
+All times below use Lean's `#time` with `Elab.async=false`, after loading imports.
+The before measurements use the original complete source files; the after measurements use the modified complete source files.
+A value of 0 ms is below the timer's millisecond resolution.
+The shared instruction theorem takes 878 ms; neither instance repeats its instruction traversal.
+
+| Existing declaration | Before (ms) | After (ms) |
+|---|---:|---:|
+| `execInstr_tapeGrowth` | 580 | 6 |
+| `execInstr_rule_of_device_relation` | 1363 | 4 |
+
+| New declaration in `InstructionFrame.lean` | Elaboration (ms) |
+|---|---:|
+| `Rules` | 5 |
+| `writeDst_rule` | 14 |
+| `lift_rule` | 0 |
+| `readSrc_rule` | 6 |
+| `storeRaw_rule` | 29 |
+| `storeFold_rule` | 6 |
+| `loadDoubleword_rule` | 22 |
+| `storeDoubleword_rule` | 32 |
+| `load_rule` | 10 |
+| `readHostBytes_rule` | 11 |
+| `execHostIO_rule` | 212 |
+| `execInstr_rule` | 878 |
+
+| Other changed declaration in `DeviceFrame.lean` | Elaboration (ms) |
+|---|---:|
+| `writeDst_rule_of_device_relation` | 2 |
+| `store_raw_same` | 2 |

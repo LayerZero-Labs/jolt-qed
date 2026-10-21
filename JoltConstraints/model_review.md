@@ -186,6 +186,8 @@ An isolated Lake build of `JoltConstraints.Soundness.Layer7.TapeRebuild` passed 
 No existing helper gained hypotheses, and no new `bv_decide`, native decision proof or raised limit was used.
 The new arithmetic helpers require positive width, proved from the preceding executed load by `UntrustedAnswerRun.pendingBefore_width`.
 See the [declaration timings and validation report](../methods/soundness.md#2026-10-21-tape-rebuild-closing-steps-1-5).
+The tape-growth and device frame proofs now instantiate the shared `InstructionFrame.execInstr_rule`; their statements and callers are unchanged.
+The follow-up build and axiom audit passed; see the [shared-frame report and before/after timings](../methods/soundness.md#tape-rebuild-shared-instruction-frame-2026-10-21).
 
 With Ari's permission (2026-10-20), C remains assumed while a16z considers `blog/content/blog/prover-verifier-trace-length/index.md`.
 C fails when the instance maximum is below 256, and when execution fills every cycle of a witness whose length is the largest power of two within the maximum.

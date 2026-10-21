@@ -39,136 +39,18 @@ private theorem tapeGrowth_trans (a b c : SailJoltState)
   refine ⟨cursorAB.trans cursorBC, suffixAB ++ suffixBC, ?_⟩
   rw [bytesBC, bytesAB, Array.append_assoc]
 
-private theorem storeRaw_tapeGrowth (s s' : SailJoltState) (ea : Nat) (v : BitVec 8)
-    (h : Mmu.store_raw? s ea v = some s') : TapeGrowth s s' := by
-  simp only [Mmu.store_raw?] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; exact ⟨rfl, #[], by simp⟩)
-    | cases h
-    | (cases hst : s.jolt_device.store? ea v with
-        | none => simp [hst] at h
-        | some d =>
-            simp only [hst, Option.map_some] at h
-            cases h
-            exact ⟨rfl, #[], by simp⟩)
-
-private theorem tapeGrowth_lift {α : Type} (step : SailM α) :
-    StatePreservation.Preserves TapeGrowth (liftSail step) :=
-  StatePreservation.liftSail_rule (sailRelation := fun _ _ => True)
-    (fun _ _ _ => ⟨rfl, #[], by simp⟩) (fun _ _ _ _ => True.intro)
-
-private theorem tapeGrowth_append (bytes : Array (BitVec 8)) :
-    StatePreservation.Preserves TapeGrowth (modify (fun state =>
-      { state with adviceTape :=
-        { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } }) : JoltMonad Unit) :=
-  StatePreservation.modify_rule _ (fun _ => ⟨rfl, bytes, rfl⟩)
-
-private theorem tapeGrowth_read (src : Src) : StatePreservation.Preserves TapeGrowth (readSrc src) := by
-  cases src with
-  | vreg vr =>
-    intro s t v h
-    simp only [readSrc, readVReg, bind, EStateM.bind, get, getThe,
-      MonadStateOf.get, EStateM.get, pure, EStateM.pure] at h
-    cases h
-    exact tapeGrowth_refl _
-  | xreg rs => exact tapeGrowth_lift _
-
-private theorem tapeGrowth_write (dst : Dst) (v : BitVec 64) :
-    StatePreservation.Preserves TapeGrowth (writeDst dst v) := by
-  cases dst with
-  | vreg vr =>
-    intro s t result runs
-    simp only [writeDst, writeVReg] at runs
-    split at runs
-    · cases runs
-    · cases runs
-      exact ⟨rfl, #[], by simp⟩
-  | xreg rd => exact tapeGrowth_lift _
-
-private theorem tapeGrowth_storeFold (ea : Nat) (value : BitVec 64) (s0 : SailJoltState) :
-    ∀ (l : List Nat) (start : Option SailJoltState),
-      (∀ s, start = some s → TapeGrowth s0 s) →
-      ∀ s', l.foldl (fun current k => current.bind fun s =>
-        Mmu.store_raw? s (ea + k) (value.extractLsb' (8 * k) 8)) start = some s' →
-        TapeGrowth s0 s' := by
-  intro l
-  induction l with
-  | nil => intro start hstart s' hs'; exact hstart s' hs'
-  | cons k l ih =>
-    intro start hstart s' hs'
-    refine ih _ ?_ s' hs'
-    intro s hs
-    cases hst : start with
-    | none => rw [hst] at hs; cases hs
-    | some e =>
-      rw [hst] at hs
-      exact tapeGrowth_trans _ _ _ (hstart e hst) (storeRaw_tapeGrowth _ _ _ _ hs)
-
-private theorem tapeGrowth_loadDoubleword (address : BitVec 64) :
-    StatePreservation.Preserves TapeGrowth (Mmu.load_doubleword address) := by
-  intro s t v h
-  simp only [Mmu.load_doubleword] at h
-  repeat' split at h
-  all_goals first | (cases h; exact tapeGrowth_refl _) | cases h
-
-private theorem tapeGrowth_storeDoubleword (address value : BitVec 64) :
-    StatePreservation.Preserves TapeGrowth (Mmu.store_doubleword address value) := by
-  intro s t v h
-  simp only [Mmu.store_doubleword] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; exact tapeGrowth_refl _)
-    | (rename_i heq
-       cases h
-       exact tapeGrowth_storeFold _ value s _ (some s)
-         (fun s1 hs1 => by cases hs1; exact tapeGrowth_refl _) _ heq)
-    | cases h
-
-private theorem tapeGrowth_load (address : BitVec 64) :
-    StatePreservation.Preserves TapeGrowth (Mmu.load address) := by
-  intro s t v h
-  simp only [Mmu.load] at h
-  repeat' split at h
-  all_goals first | (cases h; exact tapeGrowth_refl _) | cases h
-
-private theorem tapeGrowth_readHostBytes
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    StatePreservation.Preserves TapeGrowth
-      (readHostBytes Mmu.load overflowChecks incrementAfterLast pointer n bytes) := by
-  induction n generalizing pointer bytes with
-  | zero => exact (StatePreservation.pure_rule tapeGrowth_refl) _
-  | succ n ih =>
-    dsimp only [readHostBytes]
-    refine (StatePreservation.bind_rule tapeGrowth_trans) (tapeGrowth_load _) (fun result => ?_)
-    cases result with
-    | Err e => exact (StatePreservation.pure_rule tapeGrowth_refl) _
-    | Ok byte =>
-      split_ifs with h
-      · exact (StatePreservation.bind_rule tapeGrowth_trans) ((StatePreservation.throw_rule TapeGrowth) _) (fun _ => ih _ _)
-      · exact (StatePreservation.bind_rule tapeGrowth_trans) ((StatePreservation.pure_rule tapeGrowth_refl) _) (fun _ => ih _ _)
-
-private theorem tapeGrowth_execHostIO : StatePreservation.Preserves TapeGrowth execHostIO := by
-  unfold execHostIO execHostIOWith
-  refine (StatePreservation.bind_rule tapeGrowth_trans) (StatePreservation.get_rule tapeGrowth_refl) (fun config => ?_)
-  dsimp only
-  split
-  · exact (StatePreservation.pure_rule tapeGrowth_refl) _
-  · refine (StatePreservation.bind_rule tapeGrowth_trans) ((StatePreservation.pure_rule tapeGrowth_refl) _) (fun _ => ?_)
-    refine (StatePreservation.bind_rule tapeGrowth_trans) (tapeGrowth_read _) (fun callId => ?_)
-    preservation_auto [tapeGrowth_readHostBytes _ _ _ _ _, tapeGrowth_read _, (StatePreservation.pure_rule tapeGrowth_refl) _, (StatePreservation.throw_rule TapeGrowth) _,
-      tapeGrowth_append _] using (StatePreservation.bind_rule tapeGrowth_trans)
-
 private theorem execInstr_tapeGrowth (instr : Instr)
     (notLoad : ∀ dst width, instr ≠ .VirtualAdviceLoad dst width) :
     StatePreservation.Preserves TapeGrowth (execInstr instr) := by
-  cases instr
-  case VirtualAdviceLoad dst width => exact False.elim (notLoad dst width rfl)
-  all_goals simp only [execInstr]
-  all_goals preservation_auto [tapeGrowth_read _, tapeGrowth_write _ _, (StatePreservation.pure_rule tapeGrowth_refl) _, (StatePreservation.throw_rule TapeGrowth) _,
-    (StatePreservation.get_rule tapeGrowth_refl), tapeGrowth_lift _, tapeGrowth_loadDoubleword _, tapeGrowth_storeDoubleword _ _, tapeGrowth_execHostIO]
-    using (StatePreservation.bind_rule tapeGrowth_trans)
+  apply InstructionFrame.execInstr_rule
+    { refl := tapeGrowth_refl
+      trans := tapeGrowth_trans
+      sail := fun _ _ => ⟨rfl, #[], by simp⟩
+      vreg := fun _ _ _ => ⟨rfl, #[], by simp⟩
+      store := fun _ _ _ _ _ => ⟨rfl, #[], by simp⟩
+      append := fun _ bytes => ⟨rfl, bytes, rfl⟩ }
+  intro dst width isLoad
+  exact False.elim (notLoad dst width isLoad)
 
 /-- `width` little-endian bytes from an answer. For answer 300 and width 1,
 this is `[0x2C]`: the high byte of 300 is dropped. -/
