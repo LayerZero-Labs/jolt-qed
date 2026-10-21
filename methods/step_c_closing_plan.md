@@ -16,9 +16,15 @@ A stable stall is the last row of an instruction that jumped to its own address 
 
 ## Starting state
 
-Ari commits the current main working tree before you start.
-Check that `git status` in `/Users/ari.biswas/Lean/jolt-qed-public` shows no modified Lean files, and record the commit hash in your first report.
+Start from commit `3a31d96` on branch `feat/soundness` in `/Users/ari.biswas/Lean/jolt-qed-public`.
+Check that `git status` shows no modified Lean files.
 Do not use the old worktrees `/Users/ari.biswas/Lean/jolt-qed-stepc-*`; they are stale.
+
+The previous agent was stopped mid-edit.
+`Soundness/Layer7/StallSuffix.lean` and `Soundness/Layer7/TerminationStore.lean` were changed after its last build and have not been built since.
+Before anything else, run `lake build JoltBytecode JoltConstraints` and the axiom audit for `soundness_stopping`.
+Report the result, every error, and every `sorry` outside the five gaps listed below.
+If an edit is broken, fix it only if the fix is clear and changes no statement; otherwise stop and report.
 
 Proved, with no `sorry`:
 
