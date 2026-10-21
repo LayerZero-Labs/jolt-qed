@@ -37,12 +37,14 @@ If you believe a staged statement is false, stop and report the exact missing fa
 - Never write a theorem or `sorry` you know to be false.
 - Never leave `sorry` inside a proof body; make each gap its own named, stated lemma.
 - Never replace a proved fact with `sorry`.
-- Do not use `bv_decide`, `native_decide` or `decide +kernel`, and never raise `maxHeartbeats`.
+- Do not use `native_decide` or `decide +kernel`, and never raise `maxHeartbeats`.
+- `bv_decide` is accepted for now, to make progress; it will be removed later.
+  List every new use in your report, and add it to the `bv_decide` list in "Proofs owed" (`JoltConstraints/model_review.md`).
 - Delete every lemma no proof uses.
 - Report each new declaration's elaboration time.
   Aim for about one second or less.
   A slower proof is acceptable only if it is significantly simpler than any faster one; say so in your report, with the time and why the faster version would be worse.
-  This never allows raising `maxHeartbeats` or using the decision tactics above.
+  This never allows raising `maxHeartbeats`, `native_decide` or `decide +kernel`.
 - Commit only when Ari asks, and add no Co-Authored-By lines.
 - Keep git worktrees under `/Users/ari.biswas/Lean/`, never in `/private/tmp`, which macOS clears.
 
