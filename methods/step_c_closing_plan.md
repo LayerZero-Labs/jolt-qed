@@ -16,7 +16,7 @@ A stable stall is the last row of an instruction that jumped to its own address 
 
 ## Starting state
 
-Start from commit `3a31d96` on branch `feat/soundness` in `/Users/ari.biswas/Lean/jolt-qed-public`.
+Work on the current head of branch `feat/soundness` in `/Users/ari.biswas/Lean/jolt-qed-public` (commit `42e56d8` or later); do not check out an older commit.
 Check that `git status` shows no modified Lean files.
 Do not use the old worktrees `/Users/ari.biswas/Lean/jolt-qed-stepc-*`; they are stale.
 
