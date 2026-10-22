@@ -22,6 +22,8 @@ Follow the top-down rule in `AGENTS.md`: stage the hard lemma, prove its caller 
 1. Stage `terminal_next_unexpanded_pc` with `sorry` in the new file `TerminalNextPC.lean`.
    It says: at the witness cycle of a run's last row, when that row ends its source (its `virtual_sequence_remaining.getD 0` is 0), Sail's `nextPC` after the row holds some `address`, and the witness's `NextUnexpandedPC` at that cycle is `(address.toNat : F)`.
    It takes the run's execution certificate (`last ∈ run.rows.back?`), `RepresentsRows witness run.toTrace`, the context, the equations, `joltField` and `assumptions.pcNoWrap`; it needs no restriction and no honest advice.
+   It also needs the next cycle `run.rows.size` to exist and be real (`IsNoop` not 1, as `nextReal` in `stall_jal_next_target`).
+   Without it the statement is false: before padding, `ShouldJump = Jump * (1 - NextIsNoop)` is 0, so a terminal `JAL +0` has `NextUnexpandedPC` 0 while Sail's `nextPC` is its own address (stage 5b report).
    Its proof, in a later stage, splits the last row into four kinds:
    - not JAL, JALR or a branch: `noncontrol_next_pc` and `terminal_link_no_wrap` (`StallSuffix.lean`);
    - JAL: the lookup computes the wrapped target (`stall_jal_lookup_target`, `jal_step`);
