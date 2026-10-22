@@ -26,6 +26,90 @@ private theorem first_row_of_entry_slot
     ∃ first : Fin bytecode.size,
       slot = first.val + 1 ∧ bytecode[first].address = image.entry_address ∧
       bytecode[first].starts_source = true := by
+  have addressNonzero : image.entry_address ≠ 0 := by
+    intro zero
+    rw [zero] at found
+    simp only [get_first_pc, ↓reduceIte, Option.some.injEq] at found
+    exact nonzero found.symm
+  obtain ⟨noopSlot, rowSlots, paddingSlots, _⟩ :=
+    preprocess_slots bytecode slots preprocessed
+  unfold get_first_pc at found
+  rw [if_neg addressNonzero, Array.findIdx?_eq_some_iff_getElem] at found
+  obtain ⟨inSlots, slotMatches, noEarlierSlot⟩ := found
+  have inRows : slot - 1 < bytecode.size := by
+    by_contra outside
+    have after : bytecode.size < slot := by omega
+    have noop := paddingSlots slot after inSlots
+    have noopElem := (Array.getElem?_eq_some_iff.mp noop).2
+    rw [noopElem] at slotMatches
+    exact Bool.false_ne_true slotMatches
+  have slotIs : slot = (slot - 1) + 1 := by omega
+  have rowSlot := rowSlots (slot - 1) inRows
+  rw [← slotIs] at rowSlot
+  have rowElem := (Array.getElem?_eq_some_iff.mp rowSlot).2
+  rw [rowElem] at slotMatches
+  simp only [beq_iff_eq] at slotMatches
+  let first : Fin bytecode.size := ⟨slot - 1, inRows⟩
+  have firstVal : first.val = slot - 1 := rfl
+  have earlier : ∀ position : Fin bytecode.size, position.val < first.val →
+      bytecode[position].address ≠ image.entry_address := by
+    intro position before same
+    have previousSlot := rowSlots position.val position.isLt
+    have slotBefore : position.val + 1 < slot := by rw [firstVal] at before; omega
+    have previousNotMatch := noEarlierSlot (position.val + 1) slotBefore
+    have previousElem := (Array.getElem?_eq_some_iff.mp previousSlot).2
+    rw [previousElem] at previousNotMatch
+    simp only [beq_iff_eq] at previousNotMatch
+    exact previousNotMatch same
+  obtain ⟨groups, flattened, valid⟩ := expand_program_flatten image bytecode expanded
+  have starts : bytecode[first].starts_source = true := by
+    by_cases zero : first.val = 0
+    · have bytecodeNonempty : 0 < bytecode.size := by omega
+      have nonempty : 0 < groups.flatten.length := by
+        simpa only [flattened, List.size_toArray] using bytecodeNonempty
+      have firstStarts := rows_first_starts groups valid nonempty
+      have firstStartsBytecode : bytecode[0].starts_source = true := by
+        simpa only [flattened, List.getElem_toArray] using firstStarts
+      simpa only [Fin.getElem_fin, zero] using firstStartsBytecode
+    · let previous : Fin bytecode.size := ⟨first.val - 1, by omega⟩
+      have previousVal : previous.val = first.val - 1 := rfl
+      have different : bytecode[previous].address ≠ bytecode[first].address := by
+        intro same
+        exact earlier previous (by omega) (same.trans slotMatches)
+      have previousLast : bytecode[previous].virtual_sequence_remaining.getD 0 = 0 := by
+        by_contra continues
+        have following := (expand_program_layout image bytecode expanded).next
+          previous first (by omega) (by simpa [JoltInstructionRow.continues] using continues)
+        exact different following.1.symm
+      have prevInList : previous.val < groups.flatten.length := by
+        simpa only [flattened, List.size_toArray] using previous.isLt
+      have previousLastList :
+          (groups.flatten[previous.val]'prevInList).virtual_sequence_remaining.getD 0 = 0 := by
+        simpa only [flattened, Fin.getElem_fin, List.getElem_toArray] using previousLast
+      have nextIs : previous.val + 1 = first.val := by omega
+      have nextInRange : previous.val + 1 < groups.flatten.length := by
+        rw [nextIs]
+        simpa only [flattened, List.size_toArray] using first.isLt
+      have nextStarts := rows_after_last groups valid previous.val nextInRange previousLastList
+      have nextStartsBytecode : bytecode[first].starts_source = true := by
+        simpa only [flattened, Fin.getElem_fin, List.getElem_toArray, nextIs] using nextStarts
+      exact nextStartsBytecode
+  exact ⟨first, slotIs, slotMatches, starts⟩
+
+/-- Initialization leaves output empty and panic false, and its initial RAM
+image has zero at the panic word.
+For example, before the first ADDI the panic word has not been written.
+See jolt/tracer/src/lib.rs (`create_emulator`) and
+jolt/common/src/jolt_device.rs (`JoltDevice::new`, `MemoryLayout::try_new`)
+at 5def437f. -/
+private theorem initialized_device_words {Source : Type}
+    (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
+    (state : SailJoltState)
+    (built : joltInstance.initial_state privateInputs = some state) :
+    state.jolt_device.outputs = #[] ∧ state.jolt_device.panic = false ∧
+      TraceWitness.initialRamWordFromState state
+        ((state.jolt_device.memory_layout.panic.toNat -
+          JoltConstraints.ramLowestAddress state.jolt_device.memory_layout) / 8) = 0 := by
   sorry
 
 /-- On an empty initialized run, the final RAM image equals the initial image
@@ -44,7 +128,54 @@ private theorem empty_run_ram_word
         JoltConstraints.ramLowestAddress run.initialState.jolt_device.memory_layout) / 8) :
     TraceWitness.finalRamWord run.toTrace address =
       TraceWitness.initialRamWordFromState run.initialState address := by
-  sorry
+  obtain ⟨outputsEmpty, panicFalse, panicZero⟩ :=
+    initialized_device_words joltInstance privateInputs run.initialState run.initialized
+  let layout := run.initialState.jolt_device.memory_layout
+  have finalState : TraceWitness.finalTraceState run.toTrace = run.initialState := by
+    simp [TraceWitness.finalTraceState, empty]
+  have outputOverlay (previous : BitVec 64) :
+      TraceWitness.overlayRamBytes layout layout.output_start #[] address previous = previous := by
+    unfold TraceWitness.overlayRamBytes
+    cases TraceWitness.remapRamAddress layout layout.output_start <;> simp
+  have noTermination :
+      TraceWitness.remapRamAddress layout layout.termination ≠ some address := by
+    intro remapped
+    change (if layout.termination.toNat = 0 ∨
+        layout.termination.toNat < JoltConstraints.ramLowestAddress layout then none
+      else some ((layout.termination.toNat - JoltConstraints.ramLowestAddress layout) / 8)) =
+        some address at remapped
+    by_cases bad : layout.termination.toNat = 0 ∨
+        layout.termination.toNat < JoltConstraints.ramLowestAddress layout
+    · simp [bad] at remapped
+    · simp only [bad, ↓reduceIte, Option.some.injEq] at remapped
+      exact outsideTermination (by simpa [layout] using remapped.symm)
+  by_cases atPanic : TraceWitness.remapRamAddress layout layout.panic = some address
+  · have initialZero : TraceWitness.initialRamWordFromState run.initialState address = 0 := by
+      change (if layout.panic.toNat = 0 ∨
+          layout.panic.toNat < JoltConstraints.ramLowestAddress layout then none
+        else some ((layout.panic.toNat - JoltConstraints.ramLowestAddress layout) / 8)) =
+          some address at atPanic
+      by_cases bad : layout.panic.toNat = 0 ∨
+          layout.panic.toNat < JoltConstraints.ramLowestAddress layout
+      · simp [bad] at atPanic
+      · simp only [bad, ↓reduceIte, Option.some.injEq] at atPanic
+        simpa [layout, ← atPanic] using panicZero
+    unfold TraceWitness.finalRamWord
+    rw [finalState]
+    simp only [outputsEmpty, panicFalse]
+    rw [outputOverlay]
+    dsimp only [layout] at noTermination atPanic
+    simp only [Bool.not_false, Bool.true_and, beq_iff_eq]
+    rw [if_neg noTermination, if_pos atPanic]
+    exact initialZero.symm
+  · unfold TraceWitness.finalRamWord
+    rw [finalState]
+    simp only [outputsEmpty, panicFalse]
+    rw [outputOverlay]
+    dsimp only [layout] at noTermination atPanic
+    simp only [Bool.not_false, Bool.true_and, beq_iff_eq]
+    rw [if_neg noTermination, if_neg atPanic]
+    rfl
 
 /-- The instance's initialized state admits an empty run satisfying the boundary
 invariant at witness cycle zero. The run's `initialized` certificate identifies

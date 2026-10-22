@@ -36,3 +36,29 @@ These are proof obligations, not added soundness premises.
 `#print axioms JoltInstance.soundness` still reports `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound`, and the existing `JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5` axiom.
 No `bv_decide` use or proof limit was added.
 I did not edit the concurrently modified `DivisionBlock.lean` or make a commit.
+
+## Stage 4b
+
+I checked the plan against `get_first_pc`, `preprocess_slots`, `expand_program_layout`, `rows_first_starts`, `rows_after_last`, `JoltInstance.initial_state`, the RAM-image definitions, and the checked-layout lemmas before editing.
+The pinned Jolt preprocessing, tracer, device-layout, and RAM-witness paths cited above agree with those claims.
+I found no false claim in the plan.
+
+The following declarations in `JoltConstraints/Soundness/Layer6/BoundaryStart.lean` are new or changed.
+Times are proof-elaboration seconds from Lean's asynchronous profiler with one worker.
+
+| Declaration | Line | Result | Time |
+| --- | ---: | --- | ---: |
+| `first_row_of_entry_slot` | 19 | Proved with its staged statement unchanged; preprocessing locates the bytecode row, and the expansion layout makes the first matching row a source start. | 0.286555 s |
+| `initialized_device_words` | 105 | New private staged lemma with `sorry`: initialization leaves outputs empty and panic false, and its initial RAM image is zero at the panic word. | 0.000305 s |
+| `empty_run_ram_word` | 121 | Proved with its staged statement unchanged, using `initialized_device_words` for the initial panic word. | 0.082995 s |
+
+The remaining `initialized_device_words` proof must extract the input-size check and device fields from `JoltInstance.initial_state`, then use the checked `MemoryLayout.new` geometry to show that the panic word lies beyond the advice and input overlays and below ordinary RAM.
+The existing `initialRamWord_termination_zero` proof in `JoltConstraints/Soundness/Layer7/TerminationStore.lean:408` supplies the analogous argument for the termination word, but its conclusion does not cover the panic word.
+This is a named proof obligation, not an added premise of either target lemma.
+The `first_row_of_entry_slot` proof is 69 lines of slot and list-index bookkeeping; its elaboration is below one second.
+No private lemma was made public, and no `bv_decide` use or proof limit was added.
+
+`lake build JoltConstraints` passed with 8806 jobs, the direct Lean check of `BoundaryStart.lean` passed with the expected warning for the new staged lemma, and `git diff --check` passed.
+`#print axioms JoltInstance.boundaryState_empty` reports `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`.
+The remaining `sorryAx` is reached through `initialized_device_words`.
+I changed no files outside `BoundaryStart.lean` and this report, and made no commit.
