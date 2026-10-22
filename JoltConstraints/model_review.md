@@ -249,6 +249,7 @@ This is deferred cleanup authorized by Ari; it is not a remaining logical gap in
 Split the Layer 6 proofs longer than about 60 lines: `append_expansion_row`, `arithmetic_execution` and `arithmetic_plain_row_step` (`PlainRow.lean`), `arithmetic_advice_suffix_run` (`DivisionDefs.lean`), and `terminal_branch` and `terminal_branch_taken` (`TerminalNextPC.lean`).
 Unpack `JoltInstance.initial_state` once: `initial_state_device`, `initial_state_inputs` (`layout_facts.lean`) and `initial_state_empty_outputs_and_input_bound` (`Layer6/BoundaryStart.lean`) each repeat it.
 `RawRowEntry` (`Layer6/PlainRow.lean`) repeats the entry and linkage clause of `UntrustedAnswerRun.NextStep` and `ExpansionState.next`; defining both from it changes approved definitions and waits for Ari.
+`Soundness/Layer5/ImmediatePowerMask.lean` and `XorRotation.lean` prove steps for instructions no source expansion emits (stage 6b report); once `plain_row_step_other` excludes those kinds, delete them.
 `Soundness/Layer5/DeviceMemoryObstruction.lean` uses `decide +kernel`, which `AGENTS.md` bans; only `JoltConstraints.lean` imports it and no proof uses it, so delete it or move its finding to the docs.
 
 ### bv_decide
