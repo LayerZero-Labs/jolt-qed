@@ -5,6 +5,19 @@ date: 2026-10-08
 
 # What was reviewed
 
+**Current Rust semantics pin (2026-10-15):** upstream
+[`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
+The unpublished local merge `1c8aaff2` and generator changes have separate
+provenance. Lean migration is implemented and validated; see the
+[migration checklist](./model_update.md). The review provenance below is
+historical and does not claim a completed audit of the new pin.
+For the current plan and the fresh-session starting point, use
+[the change of course](./soundness.md#change-of-course-top-down-2026-10-20)
+(the soundness proof is now built top-down), the
+[Layer 5b handoff](./soundness.md#layer-5b-handoff-updated-2026-10-20) and the
+[open-issues record](../JoltConstraints/model_review.md). The checkout and
+restriction descriptions below document this earlier review.
+
 - **Lean.** Branch `refactor/trace-witness`, with the trace refactor still uncommitted (it builds).
 - **Rust.** The checkout at `/Users/ari.biswas/Work-with-A16z/jolt`. HEAD is `3cb4e243`, with upstream `00508a09` (#1968, which includes `8e536f19`) merged but not yet committed. Upstream `629ed77b` is not in the local clone.
 - **How.** I read the code myself, and one independent agent reviewed it separately. I re-checked every agent claim marked *verified* below myself, unless it says otherwise.
@@ -69,9 +82,58 @@ the proof attests; PC-stall exit).
 2^128 − 2^32, and BN254's satisfy it), and the conditions on the program
 `NextPCNoWrap` and `CodeUnchanged` (both a16z).
 
+**Field scope revised with Ari on 2026-10-10.** The current base-model theorem
+now requires `2^128 < ringChar F`, so full 128-bit lookup addresses have injective
+field encodings. BN254 satisfies this bound. Akita's smaller field uses an
+extra address guard that the base relation omits; model Akita separately as a
+deterministic, non-succinct constraint relation. PCS security is outside this work.
+See the source audit in [Layer 4 of the soundness plan](./soundness.md#layer-4-lookups).
+
+**RAM-region premise, approved by Ari on 2026-10-10. NOTE: to confirm with a16z.**
+The theorem assumes `JoltInstance.RamRegionFits`: the instance's layout and
+maximum padded RAM size satisfy `lowest + 8 * maxRamSize ≤ 2^64`.
+Together with `ConstraintContext.ramSizeBounds`, this bounds every byte of
+all in-domain words. At a satisfying LD/SD cycle, field injectivity recovers
+the signed integer sum as `lowest + 8 * c` for a selected word, or zero if
+none is selected. This gives nonwrapping machine addresses for either tape
+specification. `Layer5/MemoryAddress.lean` proves that arithmetic argument;
+source agreement and actual memory-access execution remain later obligations.
+The former run-based premise and its next-step helper are deleted. This is
+an instance restriction assumed by the theorem, not a modeled verifier check.
+
+**Temporary restriction, approved by Ari on 2026-10-10.** The main soundness
+theorem also assumes `NoStoreConditional`: no source row is `SC.W` or `SC.D`.
+This excludes the advice mismatch reported in [a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)
+while the remaining proofs proceed. `LR.W` and `LR.D` remain allowed. The theorem's
+`FIXME` calls for removing the premise once Jolt's SC constraints enforce the
+honest tracer's outcome and the model reflects the fix. This is a theorem
+restriction, not a verifier check; the stopping and panic findings below remain open.
+
+**Address-check restriction, approved by Ari.** The theorem now assumes
+`TracerAddressChecks` as a temporary workaround for
+[#2044](https://github.com/a16z/jolt/issues/2044), following #2041, and four
+separate candidates: zero stores, the I/O padding gap, canary stores and
+accesses at or above `heap_end`. The latter four have no complete satisfying
+witnesses or accepted-proof reproductions in this work; each is listed with
+its next check in the plan. Every next attempted LD/SD after an initialized
+relaxed prefix with honest internal runtime advice must pass
+`Mmu.effective_address_ok`, for every private input and tape-answer sequence.
+RAM checks the starting address; device memory checks all eight bytes.
+The next row need not succeed, so aborting programs are not covered vacuously.
+Its FIXME requires narrowing or removal as each case is resolved, the model
+is updated and the corresponding unrestricted proof is established. This
+replaces the earlier input/advice-only restriction. Alignment, peripheral
+dispatch and device value agreement remain separate proof obligations.
+
 **In place.** `ValidRun` (a run with no stop rule or advice choice); `HonestTrace`
-extends it with Rust's stop rule and Rust's runtime advice (`advice_from_rust`, the
-division family; SC.W/SC.D to come). Self-modifying code is excluded by the
+extends it with Rust's stop rule and Rust's runtime advice (`advice_from_honest_tracer`: the
+division family). The current model includes PR #2039: SC.W/SC.D
+compute success from reservation registers with XOR/SLTIU and have no runtime
+advice. Removing the temporary SC premise requires ordinary Layer 5b instruction
+coverage and the fact that every SC row has runtime-advice agreement `none = none`.
+The separate correspondence between virtual registers and the emulator's
+reservation is a model obligation, not a prerequisite for that removal; see
+model_review.md, "LR/SC reservation correspondence". The premise is currently retained pending that instruction coverage. Self-modifying code is excluded by the
 instance assumption `JoltInstance.CodeUnchanged` (a16z).
 
 **Known not sound for this `L`** (from reading the code, not run):
@@ -83,12 +145,31 @@ instance assumption `JoltInstance.CodeUnchanged` (a16z).
 Both need exit behaviour SDK guests never have. To report to a16z, with `L`
 justified from their book.
 
+**Layer 5b device audit, 2026-10-10.** The panic case also obstructs RAM
+agreement before the final output proof: reads return the flag in every byte,
+whereas the table retains stored bytes. The termination restriction under
+discussion does not resolve this. Its normal SDK load-before-store exit
+sequence is compatible with the proposed restriction, but arbitrary guest
+bodies and panic paths still need checking.
+
+Separately, Ari's #2044 reports a reproduction of the input/advice-store gap:
+the tracer rejects the program, while a modified tracer supplies a witness
+whose proof the unchanged verifier accepts. The report and patch have been
+read but not independently rerun here. See the
+[source audit and approved workaround](./soundness.md#layer-5b-one-execution-step).
+`TracerAddressChecks` covers this case; no premise covering the separate
+termination or panic discrepancies has been added.
+
 **Still owed:** show that a satisfying witness gives consistent execution data:
 - runtime advice equal to Rust's (the bytecode project proves this direction for
   DIV, DIVU, DIVW; check the other five);
-- an advice tape consistent with the reads. `VirtualAdviceLen` reports the
-  remaining bytes, so lengths and reads must agree along the run; its cross-row
-  consistency needs an audit.
+- for the current fixed-tape theorem, an advice tape consistent with the reads.
+  PR #2049 removes `VirtualAdviceLen`; the two-query inconsistency is now a
+  historical candidate, not an instruction available in the current model.
+  The updated upstream contract distinguishes finite-tape tracer behavior from
+  the proof's untrusted answers. Layer 5a models both and proves fixed-tape
+  inclusion in the relaxed language. The reverse direction remains unproved;
+  removing the length query alone does not establish fixed-tape soundness.
 
 # C. Housekeeping
 

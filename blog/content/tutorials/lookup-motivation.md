@@ -6,7 +6,6 @@ draft = true
 
 [taxonomies]
 tutorials = ["Demo Series 2: Lookup Arguments"]
-tags = ["lookup", "proofs"]
 +++
 
 **Demo document 1 of 3** in the Lookup Arguments series.

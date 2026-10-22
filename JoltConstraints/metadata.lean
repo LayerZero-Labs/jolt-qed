@@ -24,7 +24,7 @@ def immediate (instruction : JoltISA.Instr) : Int :=
   | .VirtualShiftRightBitmaskW _ _ imm | .VirtualRev8W _ _ imm
   | .VirtualSignExtendWord _ _ imm | .VirtualZeroExtendWord _ _ imm
   | .VirtualMovsign _ _ imm | .VirtualAdvice _ _ imm | .VirtualAdviceLoad _ imm
-  | .VirtualAdviceLen _ _ imm | .VirtualHostIO _ _ imm => imm.toNat
+  | .VirtualHostIO _ _ imm => imm.toNat
   | .VirtualPow2I _ imm | .VirtualPow2IW _ imm | .VirtualShiftRightBitmaskI _ imm
   | .VirtualSRLI _ _ imm | .VirtualSRAI _ _ imm | .VirtualSRLIW _ _ imm
   | .VirtualSRAIW _ _ imm | .VirtualROTRI _ _ imm | .VirtualROTRIW _ _ imm =>
@@ -109,7 +109,11 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
       match instruction with
       | .BEQ .. | .BNE .. | .BLT .. | .BGE .. | .BLTU .. | .BGEU .. => true
       | _ => false
-  -- No instruction is a No op flag (TODO: double check this)
+  -- Jolt's pseudo Noop has IsNoop, but is not a modeled Instr constructor.
+  -- At 8bbb2357, jolt-program/src/image/decode.rs never returns NoOp; its
+  -- NoOp match arm only defines operands for that already-supplied kind.
+  -- expand/operands.rs::noop_for emits ADDI x0, x0, 0, whose IsNoop is false.
+  -- Padding flags are supplied separately by bytecodeInstructionFlag.
   | .IsNoop => false
 
 -- Rust: crates/jolt-riscv/src/instructions/{i,m,virt,assert}/*.rs (circuit flags).
@@ -167,7 +171,7 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
       | .VirtualWindowMaskW .. | .VirtualPext .. | .VirtualPextSigned ..
       | .VirtualShiftDataB .. | .VirtualShiftDataH .. | .VirtualShiftDataW ..
       | .VirtualSignExtendWord .. | .VirtualZeroExtendWord .. | .VirtualMovsign ..
-      | .VirtualAdvice .. | .VirtualAdviceLoad .. | .VirtualAdviceLen ..
+      | .VirtualAdvice .. | .VirtualAdviceLoad ..
       | .VirtualNegateIf .. => true
       | _ => false
   -- TODO: There is no Virtual Instruction?
@@ -184,7 +188,7 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
   | .DoNotUpdateUnexpandedPC => false
   | .Advice =>
       match instruction with
-      | .VirtualAdvice .. | .VirtualAdviceLoad .. | .VirtualAdviceLen .. => true
+      | .VirtualAdvice .. | .VirtualAdviceLoad .. => true
       | _ => false
   | .IsCompressed => false
   | .IsFirstInSequence => false
@@ -224,8 +228,7 @@ theorem opcodeFlag_store_requiresSD (instruction : JoltISA.Instr)
 def lookupTable (instruction : JoltISA.Instr) : Option LookupTableKind :=
   match instruction with
   | .ADDI .. | .LUI .. | .AUIPC .. | .JAL .. | .ADD .. | .SUB .. | .MUL ..
-  | .VirtualMULI .. | .VirtualAdvice .. | .VirtualAdviceLoad ..
-  | .VirtualAdviceLen .. => some .RangeCheck
+  | .VirtualMULI .. | .VirtualAdvice .. | .VirtualAdviceLoad .. => some .RangeCheck
   | .ADDIW .. | .ADDW .. | .SUBW .. | .MULW .. | .VirtualMULIW ..
   | .VirtualSignExtendWord .. => some .SignExtendWord
   | .ANDI .. | .AND .. => some .And

@@ -38,7 +38,8 @@ theorem honestWitness_ramOutputEqPublicIo
   rw [hlayout]
   split_ifs with hmask
   · rw [TraceWitness.RamValFinal,
-      finalRamWord_eq_ramPublicIoWord trace adviceBelowInput address.val hmask.1 hmask.2,
+      finalRamWord_eq_ramPublicIoWord trace (finalTraceState_ioSame trace)
+        adviceBelowInput address.val hmask.1 hmask.2,
       sub_self, mul_zero]
   · rw [zero_mul]
 

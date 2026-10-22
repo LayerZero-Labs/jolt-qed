@@ -90,7 +90,7 @@ theorem HonestTrace.store_offset_aligned {joltInstance : JoltInstance SourceInst
 
 -- Rust's padded length is a power of two, at least 256, and larger than the run, so
 -- the witness always ends with at least one padding row.
--- See : jolt/crates/jolt-prover/src/config.rs:118-122
+-- See : jolt/crates/jolt-prover/src/config.rs:73-81 at 8bbb2357 (successful padding)
 theorem padded_trace_length_spec (rows : Nat) :
     rows < padded_trace_length rows ∧ 256 ≤ padded_trace_length rows ∧
     ∃ log, padded_trace_length rows = 2 ^ log := by
@@ -110,15 +110,15 @@ theorem guard_some {condition : Prop} [Decidable condition] {passed : Unit}
   · assumption
   · cases checked
 
--- When Rust's prover accepts a run, its trace length is the padded length, and that
+-- When the corrected sizing policy accepts a run, its trace length is the padded length, and that
 -- length is within the instance's maximum.
--- See : jolt/crates/jolt-prover/src/config.rs:118-128
-theorem HonestTrace.prover_config_trace_length {joltInstance : JoltInstance SourceInstruction}
+-- See : jolt/crates/jolt-prover/src/config.rs:73-81, 128-133 at 8bbb2357 (padding/limit)
+theorem HonestTrace.corrected_prover_config_trace_length {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config) :
     config.trace_length = padded_trace_length trace.rows.size ∧
     config.trace_length ≤ joltInstance.max_padded_trace_length.toNat := by
-  unfold HonestTrace.prover_config at accepted
+  unfold HonestTrace.corrected_prover_config at accepted
   -- the jump check
   rw [bind_some_iff] at accepted
   obtain ⟨_, _, accepted⟩ := accepted
@@ -132,13 +132,13 @@ theorem HonestTrace.prover_config_trace_length {joltInstance : JoltInstance Sour
   cases accepted
   exact ⟨rfl, guard_some lengthChecked⟩
 
--- When Rust's prover accepts a run, its last row is a jump (a16z/jolt#1968).
--- See : jolt/crates/jolt-prover/src/config.rs:122-126 at upstream 629ed77b
-theorem HonestTrace.prover_config_last_jump {joltInstance : JoltInstance SourceInstruction}
+-- When the corrected sizing policy accepts a run, its last row is a jump (a16z/jolt#1968).
+-- See : jolt/crates/jolt-prover/src/config.rs:70-72 at 8bbb2357
+theorem HonestTrace.corrected_prover_config_last_jump {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config) :
     (trace.rows.back?.all fun last => trace.bytecode[last.rowIndex].instruction.is_jump) = true := by
-  unfold HonestTrace.prover_config at accepted
+  unfold HonestTrace.corrected_prover_config at accepted
   -- the jump check
   rw [bind_some_iff] at accepted
   obtain ⟨_, jumpChecked, _⟩ := accepted
@@ -151,20 +151,20 @@ theorem slot_below_ram_K (slot touched imageEnd : Nat) (atMost : slot ≤ touche
   have roundedUp := Nat.le_pow_clog (by decide : 1 < 2) (max (touched + 1) imageEnd)
   omega
 
--- When Rust's prover accepts a run, every memory address a row touches is 0 (no
+-- With the corrected sizing policy, every memory address a row touches is 0 (no
 -- access), or is at or above the lowest address and has a slot below ram_K.
--- See : jolt/crates/jolt-prover/src/config.rs:125-143, 183-195
+-- The strict RAM bound uses the correction, not Rust config.rs:106-114 at 8bbb2357.
 --       jolt/crates/jolt-witness/src/backend/trace/ram.rs:260-283 (the slot must be below ram_K)
-theorem HonestTrace.prover_config_ram_fits {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.corrected_prover_config_ram_fits {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config)
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config)
     (row : TraceRow trace.bytecode) (inTrace : row ∈ trace.rows) (address : Nat)
     (touches : row.ram_address = some address) :
     address = 0 ∨
       (trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address ∧
         ∃ slot, remap_address trace.initialState.jolt_device.memory_layout address = some slot ∧
           slot < config.ram_K) := by
-  unfold HonestTrace.prover_config at accepted
+  unfold HonestTrace.corrected_prover_config at accepted
   -- the jump check
   rw [bind_some_iff] at accepted
   obtain ⟨_, _, accepted⟩ := accepted
@@ -202,15 +202,15 @@ theorem program_image_len_words_pos (memory_init : List (BitVec 64 × BitVec 8))
   dsimp only
   omega
 
--- When Rust's prover accepts a run, its RAM table has at least 2 slots, since the
+-- With the corrected sizing policy, the RAM table has at least 2 slots, since the
 -- program image ends at slot 2 or later. So a RAM slot number splits into at least
 -- one chunk.
--- See : jolt/crates/jolt-prover/src/config.rs:140-143
-theorem HonestTrace.prover_config_ram_K_ge_two {joltInstance : JoltInstance SourceInstruction}
+-- See : jolt/crates/jolt-prover/src/config.rs:94-108 at 8bbb2357 (image extent)
+theorem HonestTrace.corrected_prover_config_ram_K_ge_two {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config) :
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config) :
     2 ≤ config.ram_K := by
-  unfold HonestTrace.prover_config at accepted
+  unfold HonestTrace.corrected_prover_config at accepted
   -- the jump check
   rw [bind_some_iff] at accepted
   obtain ⟨_, _, accepted⟩ := accepted

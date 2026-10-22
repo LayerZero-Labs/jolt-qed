@@ -5,7 +5,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [FormatR register capture](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_r.rs:77).
+-- Rust: [RegisterStateR capture](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/instruction/registers/r.rs#L67-L79).
 -- Extract the captured destination register from the supplied state and encode its
 -- unsigned 64-bit contents in F. Supplying the pre-state gives the old value;
 -- supplying the post-state gives the new value. Instructions without rd give zero.
@@ -35,7 +35,7 @@ noncomputable def rdValue {F : Type} [Field F]
   | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _
   | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
-  | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+  | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
       destinationValue dst
   | .LD _ dst _ _ => destinationValue dst
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE

@@ -5,7 +5,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [ShouldJump](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/flags.rs:118).
+-- Rust: [ShouldJump](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/flags.rs).
 -- A jump followed by an explicit padding row gives zero. At the final witness
 -- position Rust's missing successor does NOT count as a no-op, so the Jump bit
 -- is retained there. This differs from NextIsNoop's missing-successor rule.

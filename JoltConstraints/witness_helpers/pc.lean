@@ -15,12 +15,12 @@ def bytecodePc (trace : Trace) (t : Nat) : Nat :=
     (getElem trace.rows t inBounds).rowIndex.val + 1
   else 0
 
--- Rust: [Pc](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/pc.rs:31).
+-- Rust: [Pc](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/pc.rs).
 -- The expanded bytecode slot of the instruction executed at this trace position.
 -- Rust's preprocessing prepends a no-op at slot 0 to trace.bytecode,
 -- so a represented instruction at array index k occupies slot k + 1.
 -- This is a bytecode index, not a memory address or an execution-step number.
--- Rust: [preprocess](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/preprocess/bytecode.rs:34).
+-- Rust: [preprocess](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-program/src/preprocess/bytecode.rs#L34-L63).
 noncomputable def PC [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t => (bytecodePc trace t.val : F)
 

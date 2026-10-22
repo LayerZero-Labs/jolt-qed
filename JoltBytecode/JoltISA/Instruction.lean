@@ -143,9 +143,6 @@ inductive Instr where
   | SD (base value : Src) (imm : BitVec 64)
   | VirtualAdvice (dst : Dst) (value : BitVec 64) (imm : BitVec 64 := 0)
   | VirtualAdviceLoad (dst : Dst) (byteCount : BitVec 64)
-  -- Rust captures src even though computing the advice length ignores it.
-  -- Rust: [VirtualAdviceLen format](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_advice_len.rs:9).
-  | VirtualAdviceLen (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   -- Rust captures src before execution and dst afterward, even though HOST_IO
   -- does not write dst. Preserve the final row's operands, including rd=x0 rewrites.
   -- Rust: [VirtualHostIO format](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_host_io.rs:8).
@@ -436,7 +433,7 @@ def Instr.destination? : Instr → Option Dst
   | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _ | .VirtualShiftDataW dst _ _
   | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
-  | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+  | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
       some dst
   | .LD _ dst _ _ => some dst
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _

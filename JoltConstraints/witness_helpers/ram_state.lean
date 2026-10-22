@@ -19,6 +19,29 @@ def ramImageWord (byte : Nat → BitVec 8) (start : Nat) : BitVec 64 :=
   byte (start + 7) ++ byte (start + 6) ++ byte (start + 5) ++ byte (start + 4) ++
     byte (start + 3) ++ byte (start + 2) ++ byte (start + 1) ++ byte start
 
+/-- Byte index `k` is counted from the low end of the packed word, and `bit`
+is the bit index within that byte. -/
+private theorem ramImageWord_getLsbD (byte : Nat → BitVec 8) (start : Nat)
+    (k : Fin 8) (bit : Nat) (inByte : bit < 8) :
+    (ramImageWord byte start).getLsbD (8 * k.val + bit) =
+      (byte (start + k.val)).getLsbD bit := by
+  fin_cases k <;> simp only [ramImageWord, Nat.reduceMul,
+    Nat.zero_add, Nat.add_zero]
+  all_goals repeat' (rw [BitVec.getLsbD_append]; split_ifs <;> try omega)
+  all_goals congr 1 <;> omega
+
+/-- Equal packed words have equal bytes at every offset from zero through seven. -/
+theorem ramImageWord_injective_byte (f g : Nat → BitVec 8) (start : Nat)
+    (same : ramImageWord f start = ramImageWord g start) :
+    ∀ offset < 8, f (start + offset) = g (start + offset) := by
+  intro offset offsetLt
+  let k : Fin 8 := ⟨offset, offsetLt⟩
+  apply BitVec.eq_of_getLsbD_eq
+  intro bit bitLt
+  have bits := congrArg (fun word : BitVec 64 => word.getLsbD (8 * k.val + bit)) same
+  simpa only [ramImageWord_getLsbD f start k bit bitLt,
+    ramImageWord_getLsbD g start k bit bitLt] using bits
+
 -- Rust layouts place the device regions at aligned byte addresses. A buffer
 -- overlays whole remapped words, with zero-padding in its final partial word.
 def overlayRamBytes (layout : MemoryLayout) (start : BitVec 64)

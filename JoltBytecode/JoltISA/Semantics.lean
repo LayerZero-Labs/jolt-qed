@@ -457,13 +457,6 @@ def execInstr : Instr → JoltMonad ExecutionResult
           (do
             writeDst rd advice_value
             pure RETIRE_SUCCESS) { cpu with adviceTape := advice_tape }
-  -- Rust: [VirtualAdviceLen::exec](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_advice_len.rs:18).
-  | .VirtualAdviceLen rd _ _ => do
-      let cpu ← get
-      let remaining :=
-        cpu.adviceTape.bytes.size - cpu.adviceTape.readPosition
-      writeDst rd (BitVec.ofNat 64 remaining)
-      pure RETIRE_SUCCESS
   | .VirtualHostIO _ _ _ =>
       execHostIO
   | .VirtualAssertEQ lhs rhs imm => do

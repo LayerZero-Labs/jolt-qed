@@ -126,6 +126,20 @@ def JoltInstructionRow.starts_source (row : JoltInstructionRow) : Bool :=
 def JoltInstructionRow.continues (row : JoltInstructionRow) : Bool :=
   row.virtual_sequence_remaining.getD 0 != 0
 
+/-- Whether a row that jumped to its own address would jump there again.
+The expanded JALR row retains the normalized base and sign-extended immediate;
+the `rd = x0` rewrite uses a virtual destination and takes the `true` branch.
+See : a16z/jolt#2109, head d2995380, crates/jolt-riscv/src/row.rs
+(`JoltInstructionRow::self_jump_repeats`). -/
+def JoltInstructionRow.selfJumpRepeats (row : JoltInstructionRow) : Bool :=
+  match row.instruction with
+  | .JALR (.xreg rd) (.xreg rs1) imm =>
+      if JoltISA.isX0 rd || rd != rs1 then true
+      else
+        jolt_jalr_target64
+          (row.address + (if row.is_compressed then 2 else 4)) imm == row.address
+  | _ => true
+
 -- See : jolt/crates/jolt-program/src/expand/metadata.rs:25-53 (stamp_sequence_metadata)
 def stamp_sequence (address : BitVec 64) (is_compressed : Bool)
     (instructions : List JoltISA.Instr) : List JoltInstructionRow :=
@@ -201,7 +215,7 @@ def Rv64ProgramImage.ImageNonempty {Source : Type} (image : Rv64ProgramImage Sou
   image.memory_init ≠ []
 
 -- The host sets the program size from the image.
--- See : jolt/crates/jolt-host/src/program.rs:319
+-- See : jolt/crates/jolt-host/src/program.rs:355-356, 482-492 (8bbb2357)
 def Rv64ProgramImage.program_size {Source : Type} (image : Rv64ProgramImage Source) :
     BitVec 64 :=
   image.program_end - BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS
@@ -301,10 +315,16 @@ See : jolt/crates/jolt-verifier/src/verifier.rs:37-42 (verify takes preprocessin
       public_io : JoltDevice, proof, optional trusted advice commitment)
       jolt/crates/jolt-verifier/src/verifier.rs:356-430 (validate_inputs)
 The program and memory configuration stand in for verifier preprocessing.
-Trusted advice is part of the instance. In Jolt the verifier holds a commitment
-to it; this non-succinct relation models its contents directly. No PCS is part
-of this relation, and this representation does not assert that the verifier
-learns the bytes.
+
+NOTE: the PCS is ignored for now. This differs from the inputs of Jolt's verifier
+in two ways:
+1. Trusted advice. Jolt's verifier receives only a commitment to it
+   (`trusted_advice_commitment`); this relation holds the bytes themselves. That
+   the commitment fixes the bytes is a PCS property, outside this model. This
+   representation does not assert that the verifier learns the bytes.
+2. Omitted: `preprocessing.pcs_setup`, `preprocessing.vc_setup` and
+   `preprocessing.preprocessing_digest`. They serve only the PCS and transcript.
+   See : jolt/crates/jolt-verifier/src/preprocessing.rs:200-211 at 8bbb2357
 -/
 structure JoltInstance (Source : Type) where
   program : Rv64ProgramImage Source
@@ -313,6 +333,8 @@ structure JoltInstance (Source : Type) where
   memory_config : MemoryConfig
   -- Trusted advice is fixed by the instance; we model its contents directly.
   -- In Jolt an absent commitment contributes the all-zero image (#[]).
+  -- Differs from Rust: Jolt's verifier holds a commitment, not these bytes
+  -- (NOTE above).
   trusted_advice : Array (BitVec 8)
   inputs : Array (BitVec 8)
   outputs : Array (BitVec 8)
@@ -335,7 +357,9 @@ structure JoltPrivateInputs where
   advice_tape : Array (BitVec 8)
 
 -- The host overwrites program_size with the size of the program image.
--- See : jolt/crates/jolt-host/src/program.rs:319, 333
+-- Checked layout failures propagate as none, including a padded I/O start at zero.
+-- Rust (8bbb2357): jolt-sdk/src/host_utils.rs:128-143 (program_preprocessing)
+-- https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/jolt-sdk/src/host_utils.rs#L128-L143
 def JoltInstance.memory_layout {Source : Type} (joltInstance : JoltInstance Source) :
     Option MemoryLayout :=
   MemoryLayout.new { joltInstance.memory_config with program_size := some joltInstance.program.program_size }
@@ -378,8 +402,7 @@ def JoltInstance.public_io {Source : Type} (joltInstance : JoltInstance Source) 
 -- See : jolt/crates/jolt-program/src/preprocess/program.rs:21-36 (JoltProgramPreprocessing::new)
 --       jolt/crates/jolt-prover/src/preprocessing.rs:43-50
 --       jolt/crates/jolt-verifier/src/preprocessing.rs:132-141
-def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) :
-    Option (Array BytecodeSlot) := do
+def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) : Option (Array BytecodeSlot) := do
   let rows ← expand_program joltInstance.program
   let bytecode ← preprocess rows
   guard (get_first_pc bytecode joltInstance.program.entry_address).isSome

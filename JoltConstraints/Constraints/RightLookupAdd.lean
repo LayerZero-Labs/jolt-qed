@@ -8,7 +8,7 @@ namespace JoltConstraints
 
 /-- Constraint (08) in `constraints.md` (stage 1):
 addition places the sum of the instruction inputs in the right lookup operand.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-r1cs/src/constraints/rv64.rs -/
+Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
 def rightLookupAdd {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

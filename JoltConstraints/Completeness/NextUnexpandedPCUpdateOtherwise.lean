@@ -227,7 +227,7 @@ theorem honestWitness_nextUnexpandedPCUpdateOtherwise
           have hc : trace.bytecode[trace.rows[t.val].rowIndex].continues = false := by
             simpa [row, bc] using hend
           simp only [hc, Bool.false_eq_true, ↓reduceIte] at hsucc
-          obtain ⟨hsuccPC, _, _⟩ := hsucc
+          obtain ⟨hsuccPC, _⟩ := hsucc
           have hlink : trace.bytecode[(trace.rows[t.val + 1]'hnext).rowIndex].address =
               bc.address + BitVec.ofNat 64 (if bc.is_compressed then 2 else 4) := by
             rw [hframe, hpre] at hsuccPC

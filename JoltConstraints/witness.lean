@@ -4,7 +4,7 @@ import Mathlib.Tactic.DeriveFintype
 
 set_option autoImplicit false
 
--- Rust paths below are relative to /Users/ari.biswas/Work-with-A16z/jolt.
+-- Rust paths below refer to public pin 8bbb2357, inspected in the local checkout.
 
 -- Rust: crates/jolt-riscv/src/flags.rs::CircuitFlags.
 -- TODO: For each constructor write a simple english description
@@ -124,11 +124,12 @@ Rust: [walk_cycles](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/sr
 -/
 def WitnessParams.traceLength (p : WitnessParams) : Nat := 2 ^ p.logT
 
-/-- Rust `ProverConfig::derive_from_rows` chooses the first power-of-two cycle
+/-- Rust `ProverConfig::derive_from_dimensions` chooses the first power-of-two cycle
 domain strictly larger than the physical trace, subject to the compiled PCS
 floor. The ordinary build has `minimumLogT = 8` (256 cycles); Akita has
-`minimumLogT = 12` (4096 cycles). For zero rows the floor dominates.
-Rust: crates/jolt-prover/src/config.rs::derive_from_rows. -/
+`minimumLogT = 12` (4096 cycles). For zero rows the floor dominates. This mathematical formula describes successful
+padding; `ProverConfig.checkedTraceLength` also models overflow rejection.
+Rust: crates/jolt-prover/src/config.rs::derive_from_dimensions. -/
 def WitnessParams.proverTraceLength (minimumLogT physicalRows : Nat) : Nat :=
   max (2 ^ minimumLogT) (2 ^ (Nat.log2 physicalRows + 1))
 

@@ -9,6 +9,7 @@ import JoltConstraints.layout_facts
 import JoltConstraints.register_encoding
 import JoltConstraints.nextpc_frame
 import JoltConstraints.expansion_facts
+import JoltConstraints.Soundness.Layer7.AdjacentRows
 
 set_option autoImplicit false
 
@@ -126,8 +127,9 @@ theorem HonestTrace.linkedState {joltInstance : JoltInstance SourceInstruction}
     rw [prepareSource_eq_advance_pc, sameAddress]
     exact startState
 
--- Which row comes next: the next row of the same instruction, or the first row of the
--- instruction at nextPC, which is a different address (Rust stops at a self-jump).
+-- Which row comes next: the next row of the same instruction, or the first row
+-- at nextPC. A JALR self-jump may continue when it does not repeat on re-run.
+-- See : a16z/jolt PR #2109, head d2995380.
 theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (currentExists : i < trace.rows.size) (nextExists : i + 1 < trace.rows.size) :
@@ -136,9 +138,7 @@ theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
     else
       (trace.rows[i]'currentExists).postState.sail.regs.get? Register.nextPC =
         some trace.bytecode[(trace.rows[i + 1]'nextExists).rowIndex].address ∧
-      trace.bytecode[(trace.rows[i + 1]'nextExists).rowIndex].starts_source = true ∧
-      trace.bytecode[(trace.rows[i + 1]'nextExists).rowIndex].address ≠
-        trace.bytecode[(trace.rows[i]'currentExists).rowIndex].address := by
+      trace.bytecode[(trace.rows[i + 1]'nextExists).rowIndex].starts_source = true := by
   have link := trace.linked i _ _ (Array.getElem?_eq_getElem currentExists)
     (Array.getElem?_eq_getElem nextExists)
   unfold JoltInstructionRow.continues
@@ -149,10 +149,7 @@ theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
   · rename_i isLast
     rw [if_neg (by rw [bne_iff_ne]; exact isLast)]
     obtain ⟨address, nextPC, sameAddress, starts, _⟩ := link
-    have moves := trace.runs_until_stop i _ _ (Array.getElem?_eq_getElem currentExists)
-      (Array.getElem?_eq_getElem nextExists) (by simpa only [ne_eq, not_not] using isLast)
-    refine ⟨by rw [sameAddress]; exact nextPC, starts, fun same => moves ?_⟩
-    rw [nextPC, ← sameAddress, same]
+    exact ⟨by rw [sameAddress]; exact nextPC, starts⟩
 
 -- A HostIO row leaves PC unchanged.
 def JoltISA.Instr.HostIOPCFrame (instruction : JoltISA.Instr)
@@ -472,7 +469,7 @@ theorem sequenceRow_rowOk (instruction : JoltISA.Instr)
       JoltRegisterEncoding.instructionIsCanonical instruction = true ∧
       BranchOffsetOk instruction := by
   simp only [sequenceRowOk, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] at ok
-  exact ⟨ok.1.1, ok.2, branchOffsetOk_of_not_branch _ ok.1.2⟩
+  exact ⟨ok.1.1.1, ok.1.2, branchOffsetOk_of_not_branch _ ok.1.1.2⟩
 
 theorem stamp_sequence_rowOk (address : BitVec 64) (isCompressed : Bool)
     (instructions : List JoltISA.Instr) (ok : sequenceOk instructions = true) :
@@ -481,11 +478,12 @@ theorem stamp_sequence_rowOk (address : BitVec 64) (isCompressed : Bool)
   obtain ⟨k, inRange, rfl⟩ := List.mem_iff_getElem.mp isRow
   have inInstructions : k < instructions.length := by
     simpa only [stamp_sequence, List.length_map, List.length_zipIdx] using inRange
-  simp only [sequenceOk, Bool.and_eq_true] at ok
-  obtain ⟨rowOk, notLast⟩ := rowsOk_rows instructions ok.1 k inInstructions
+  obtain ⟨rowOk, notLast⟩ := rowsOk_rows instructions
+    (sequenceOk_rowsOk instructions ok) k inInstructions
   obtain ⟨x0, canonical, branchOffset⟩ := sequenceRow_rowOk _ rowOk
   simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx, Nat.zero_add]
-  refine ⟨x0, canonical, branchOffset, ?_, (shiftsOk_rows instructions ok.2 k inInstructions).1⟩
+  refine ⟨x0, canonical, branchOffset, ?_,
+    (shiftsOk_rows instructions (sequenceOk_shiftsOk instructions ok) k inInstructions).1⟩
   intro continues
   apply notLast
   by_contra last
@@ -502,11 +500,12 @@ theorem expand_instruction_rowOk (source : SourceInstructionRow SourceInstructio
     cases expanded
     have ok := expand_ok _ _ isNative
     obtain ⟨nativeOk, branchOffset⟩ := ok
-    simp only [nativeRowOk, Bool.and_eq_true] at nativeOk
     intro row isRow
     rw [List.mem_singleton] at isRow
     subst isRow
-    refine ⟨nativeOk.1.1.1, nativeOk.1.1.2, branchOffset, ?_, nativeOk.1.2⟩
+    refine ⟨nativeRowOk_x0Ok instruction nativeOk,
+      nativeRowOk_canonical instruction nativeOk, branchOffset, ?_,
+      nativeRowOk_immShiftOk instruction nativeOk⟩
     intro continues
     simp [JoltInstructionRow.continues] at continues
   · split at expanded
@@ -518,20 +517,10 @@ theorem expand_instruction_rowOk (source : SourceInstructionRow SourceInstructio
 theorem expand_program_rowOk (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode) :
     ∀ row ∈ bytecode.toList, RowOk row := by
-  unfold expand_program at expanded
-  cases mapped : image.instructions.toList.mapM expand_instruction with
-  | none =>
-    rw [mapped] at expanded
-    cases expanded
-  | some instructions =>
-    rw [mapped, Option.map_some, Option.some.injEq] at expanded
-    subst expanded
-    intro row isRow
-    rw [List.toList_toArray] at isRow
-    obtain ⟨rows, inInstructions, inRows⟩ := List.mem_flatten.mp isRow
-    obtain ⟨k, inRange, rfl⟩ := List.mem_iff_getElem.mp inInstructions
-    obtain ⟨lengths, steps⟩ := option_mapM_results expand_instruction _ instructions mapped
-    exact expand_instruction_rowOk _ _ (steps k (by omega) inRange) _ inRows
+  intro row isRow
+  obtain ⟨source, _, rows, sourceExpanded, inRows⟩ :=
+    expand_program_source_of_row image bytecode expanded row isRow
+  exact expand_instruction_rowOk source rows sourceExpanded row inRows
 
 -- Each register shift row comes right after the row that writes its mask, inside the
 -- same source instruction.
@@ -541,84 +530,32 @@ def ShiftPairs (rows : List JoltInstructionRow) : Prop :=
       masksFed (rows[j]'(by omega)).instruction rows[k].instruction = true ∧
         rows[k].starts_source = false
 
-theorem stamp_sequence_shiftPairs (address : BitVec 64) (isCompressed : Bool)
-    (instructions : List JoltISA.Instr) (ok : shiftsOk instructions = true) :
-    ShiftPairs (stamp_sequence address isCompressed instructions) := by
-  intro k inRange isShift
-  have inInstructions : k < instructions.length := by
-    simpa only [stamp_sequence, List.length_map, List.length_zipIdx] using inRange
-  simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx, Nat.zero_add] at isShift ⊢
-  obtain ⟨j, before, fed⟩ := (shiftsOk_rows instructions ok k inInstructions).2 isShift
-  subst before
-  exact ⟨j, rfl, fed, by simp [JoltInstructionRow.starts_source]⟩
-
-theorem expand_instruction_shiftPairs (source : SourceInstructionRow SourceInstruction)
-    (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows) :
-    ShiftPairs rows := by
-  unfold expand_instruction at expanded
-  split at expanded
-  · cases expanded
-  · rename_i instruction isNative
-    cases expanded
-    obtain ⟨nativeOk, _⟩ := expand_ok _ _ isNative
-    simp only [nativeRowOk, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] at nativeOk
-    intro k inRange isShift
-    have zero : k = 0 := by simpa using inRange
-    subst zero
-    simp [nativeOk.2] at isShift
-  · split at expanded
-    · cases expanded
-    · rename_i instructions isSequence _
-      cases expanded
-      have ok : sequenceOk instructions = true := expand_ok _ _ isSequence
-      simp only [sequenceOk, Bool.and_eq_true] at ok
-      exact stamp_sequence_shiftPairs _ _ instructions ok.2
-
-theorem shiftPairs_append (front back : List JoltInstructionRow) (frontOk : ShiftPairs front)
-    (backOk : ShiftPairs back) : ShiftPairs (front ++ back) := by
-  intro k inRange isShift
-  rw [List.length_append] at inRange
-  by_cases inFront : k < front.length
-  · rw [List.getElem_append_left inFront] at isShift
-    obtain ⟨j, before, fed, notStart⟩ := frontOk k inFront isShift
-    refine ⟨j, before, ?_, ?_⟩
-    · rw [List.getElem_append_left (by omega), List.getElem_append_left inFront]
-      exact fed
-    · rw [List.getElem_append_left inFront]
-      exact notStart
-  · rw [List.getElem_append_right (by omega)] at isShift
-    obtain ⟨j, before, fed, notStart⟩ := backOk (k - front.length) (by omega) isShift
-    refine ⟨front.length + j, by omega, ?_, ?_⟩
-    · rw [List.getElem_append_right (by omega), List.getElem_append_right (by omega)]
-      simpa only [Nat.add_sub_cancel_left] using fed
-    · rw [List.getElem_append_right (by omega)]
-      exact notStart
-
-theorem flatten_shiftPairs : ∀ (instructions : List (List JoltInstructionRow)),
-    (∀ rows ∈ instructions, ShiftPairs rows) → ShiftPairs instructions.flatten
-  | [], _ => fun _ inRange => absurd inRange (by simp)
-  | rows :: rest, each => by
-    rw [List.flatten_cons]
-    exact shiftPairs_append _ _ (each rows List.mem_cons_self)
-      (flatten_shiftPairs rest (fun later member => each later (List.mem_cons_of_mem _ member)))
-
+/-- Every register-shift row follows its mask producer inside the same expansion.
+For example, a `VirtualSRL` reads the mask written by its preceding row.
+This is the later-row instance of the generic adjacent-pair lift. -/
 theorem expand_program_shiftPairs (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode) :
     ShiftPairs bytecode.toList := by
-  unfold expand_program at expanded
-  cases mapped : image.instructions.toList.mapM expand_instruction with
-  | none =>
-    rw [mapped] at expanded
-    cases expanded
-  | some instructions =>
-    rw [mapped, Option.map_some, Option.some.injEq] at expanded
-    subst expanded
-    rw [List.toList_toArray]
-    apply flatten_shiftPairs
-    intro rows inInstructions
-    obtain ⟨k, inRange, rfl⟩ := List.mem_iff_getElem.mp inInstructions
-    obtain ⟨lengths, steps⟩ := option_mapM_results expand_instruction _ instructions mapped
-    exact expand_instruction_shiftPairs _ _ (steps k (by omega) inRange)
+  have pairs := JoltConstraints.Soundness.AdjacentRows.expand_program_pairs
+    (fun instructions => shiftsOk instructions = true)
+    (fun instruction => isRegisterShift instruction = true)
+    (fun first second => masksFed first second = true) 1
+    (by
+      intro instructions ok k bound isShift
+      obtain ⟨j, before, fed⟩ := (shiftsOk_rows instructions ok k bound).2 isShift
+      refine ⟨j, by omega, by simpa using before.symm, ?_⟩
+      simpa only [before] using fed)
+    (expand_instruction_property _
+      (fun instruction ok => by
+        simp only [shiftsOk, shiftPairsOk, nativeRowOk_immShiftOk instruction ok,
+          nativeRowOk_not_registerShift instruction ok, Bool.not_false, Bool.and_self])
+      sequenceOk_shiftsOk)
+    image bytecode expanded
+  intro k bound isShift
+  obtain ⟨j, next, position, fed, _, notStart⟩ := pairs k bound isShift
+  have before : j + 1 = k := by simpa using position.symm
+  exact ⟨j, before, by simpa only [before] using fed,
+    by simpa only [before] using notStart⟩
 
 end ExpansionRows
 

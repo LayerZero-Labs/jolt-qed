@@ -1,0 +1,21 @@
+base_url = "https://layerzero-labs.github.io/jolt-qed"
+title = "Jolt QED"
+
+generate_feeds = true
+
+# A post can be part of one or more tutorials, or stand on its own.
+taxonomies = [
+  { name = "tutorials", feed = true },
+]
+taxonomy_root = "collections"
+
+[markdown]
+insert_anchor_links = "heading"
+bottom_footnotes = true
+
+[markdown.highlighting]
+theme = "catppuccin-mocha"
+style = "inline"
+
+[extra]
+mathjax = true

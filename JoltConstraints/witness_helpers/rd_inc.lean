@@ -9,7 +9,7 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [RdInc::extract](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/increments.rs:24).
+-- Rust: [RdInc::extract](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/increments.rs).
 -- New destination value minus old destination value. Convert each unsigned word
 -- into F before subtracting: a decrease must give a negative field value, without
 -- Nat subtraction truncation or 64-bit wraparound. No destination or padding gives zero.

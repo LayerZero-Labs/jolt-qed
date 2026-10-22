@@ -1,0 +1,4 @@
+User-agent: *
+Disallow:
+Allow: /
+Sitemap: https://layerzero-labs.github.io/jolt-qed/sitemap.xml

@@ -11,7 +11,7 @@ namespace HonestWitness
 
 open TraceWitness
 
--- Rust: [materialize_ram_val](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:22).
+-- Rust: [materialize_ram_val](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/ram.rs).
 -- Start from the initial image and apply preceding captured stores. At the
 -- current accessed address, use the captured PRE-access read value. This override
 -- matters for device words whose readback differs from their last stored value.

@@ -1,4 +1,7 @@
--- Rust: jolt/common/src/jolt_device.rs and jolt/common/src/constants.rs
+-- Rust layout source: common/src/jolt_device.rs at public pin 8bbb2357.
+-- https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/common/src/jolt_device.rs#L381-L533
+-- Constants: common/src/constants.rs at public pin 8bbb2357.
+-- https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/common/src/constants.rs#L21-L30
 
 set_option autoImplicit false
 
@@ -12,7 +15,7 @@ def STACK_CANARY_SIZE : Nat := 128
 
 end JoltISA
 
--- Rust: jolt/common/src/jolt_device.rs:248-256 (MemoryConfig)
+-- Rust: jolt/common/src/jolt_device.rs:273-281 (MemoryConfig)
 structure MemoryConfig where
   max_input_size : BitVec 64
   max_trusted_advice_size : BitVec 64
@@ -22,7 +25,7 @@ structure MemoryConfig where
   heap_size : BitVec 64
   program_size : Option (BitVec 64)
 
--- Rust: jolt/common/src/jolt_device.rs:277-301 (MemoryLayout)
+-- Rust: jolt/common/src/jolt_device.rs:302-326 (MemoryLayout)
 structure MemoryLayout where
   program_size : BitVec 64
   max_trusted_advice_size : BitVec 64
@@ -44,11 +47,13 @@ structure MemoryLayout where
   panic : BitVec 64
   termination : BitVec 64
   io_end : BitVec 64
+  deriving DecidableEq
 
 namespace MemoryLayout
 
--- Arithmetic is on Nat. Every Rust `checked_*(..).expect(..)` and `assert!`
--- becomes `none`, so `new` returns `none` exactly where Rust panics.
+-- Arithmetic is on Nat. `new` models `MemoryLayout::try_new`, erasing error
+-- variants: `Ok layout` becomes `some layout`, and every `Err` becomes `none`.
+-- Rust's `MemoryLayout::new` unwraps that result, panicking on the same failures.
 
 def checkedAdd (a b : Nat) : Option Nat :=
   if a + b < 2 ^ 64 then some (a + b) else none
@@ -59,7 +64,7 @@ def checkedSub (a b : Nat) : Option Nat :=
 def checkedMul (a b : Nat) : Option Nat :=
   if a * b < 2 ^ 64 then some (a * b) else none
 
--- Rust: align_up(val, 8), local to MemoryLayout::new
+-- Rust: align_up(val, region), local to MemoryLayout::try_new (387-394)
 def alignUp8 (val : Nat) : Option Nat :=
   if val % 8 = 0 then some val else checkedAdd val (8 - val % 8)
 
@@ -68,20 +73,23 @@ def powerOfTwoOrZero (n : Nat) : Bool :=
 
 -- The larger advice region (trusted on a tie) starts io_bytes below RAM; the other
 -- starts where it ends. Gives (trusted start, trusted end, untrusted start, untrusted end).
--- Rust: jolt/common/src/jolt_device.rs:402-429 (inside MemoryLayout::new)
-def adviceRegions (trusted_size untrusted_size io_bytes : Nat) : Option (Nat × Nat × Nat × Nat) :=
+-- Rust: jolt/common/src/jolt_device.rs:435-477 (inside MemoryLayout::try_new)
+def adviceRegions (trusted_size untrusted_size io_bytes : Nat) : Option (Nat × Nat × Nat × Nat) := do
+  let io_start ← checkedSub JoltISA.RAM_START_ADDRESS io_bytes
+  -- Zero is the no-access sentinel, so the padded region must start above it.
+  if io_start = 0 then none else
   if untrusted_size ≤ trusted_size then do
-    let trusted_start ← checkedSub JoltISA.RAM_START_ADDRESS io_bytes
+    let trusted_start := io_start
     let trusted_end ← checkedAdd trusted_start trusted_size
     let untrusted_end ← checkedAdd trusted_end untrusted_size
     pure (trusted_start, trusted_end, trusted_end, untrusted_end)
   else do
-    let untrusted_start ← checkedSub JoltISA.RAM_START_ADDRESS io_bytes
+    let untrusted_start := io_start
     let untrusted_end ← checkedAdd untrusted_start untrusted_size
     let trusted_end ← checkedAdd untrusted_end trusted_size
     pure (untrusted_end, trusted_end, untrusted_start, untrusted_end)
 
--- Rust: jolt/common/src/jolt_device.rs:348-484 (MemoryLayout::new)
+-- Rust: jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
 def new (config : MemoryConfig) : Option MemoryLayout := do
   let program_size ← config.program_size
   let max_trusted_advice_size ← alignUp8 config.max_trusted_advice_size.toNat
@@ -98,6 +106,9 @@ def new (config : MemoryConfig) : Option MemoryLayout := do
     >>= (checkedAdd · max_untrusted_advice_size)
     >>= (checkedAdd · max_output_size)
     >>= (checkedAdd · 16)
+  -- The checked sum is below 2^64, so its quotient by eight is below 2^61.
+  -- Its next power of two is at most 2^61 and cannot overflow Rust's u64.
+  -- Multiplication by eight can still overflow; checkedMul rejects that case.
   let io_region_words := (io_region_bytes / 8).nextPowerOfTwo
   let io_bytes ← checkedMul io_region_words 8
 
@@ -138,13 +149,13 @@ def new (config : MemoryConfig) : Option MemoryLayout := do
       termination := BitVec.ofNat 64 termination
       io_end := BitVec.ofNat 64 io_end }
 
--- Rust: jolt/common/src/jolt_device.rs:486-488
+-- Rust: jolt/common/src/jolt_device.rs:535-537
 def get_lowest_address (layout : MemoryLayout) : BitVec 64 :=
   if layout.trusted_advice_start.toNat ≤ layout.untrusted_advice_start.toNat
   then layout.trusted_advice_start
   else layout.untrusted_advice_start
 
--- Rust: jolt/common/src/jolt_device.rs:512-514
+-- Rust: jolt/common/src/jolt_device.rs:561-563
 def get_total_memory_size (layout : MemoryLayout) : BitVec 64 :=
   layout.heap_end - BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS
 

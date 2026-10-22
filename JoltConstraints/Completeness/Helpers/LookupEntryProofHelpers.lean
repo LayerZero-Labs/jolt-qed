@@ -1,4 +1,9 @@
 import JoltConstraints.Constraints.LookupOperandData
+import JoltConstraints.Soundness.Layer4.WordEntry
+import JoltConstraints.Soundness.Layer4.BitwiseEntry
+import JoltConstraints.Soundness.Layer4.ComparisonEntry
+import JoltConstraints.Soundness.Layer4.ConditionalEntry
+import JoltConstraints.Soundness.Layer4.RotateEntry
 import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupPextProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupShiftProofHelpers
@@ -47,32 +52,6 @@ def LookupEntryCorrect (F : Type) [Field F] {bytecode : Array JoltInstructionRow
     (table : LookupTableKind) (row : HonestTraceRow bytecode) : Prop :=
   lookupTableEntry (F := F) table (rowLookupAddress row) = ((rowLookupOutput row.toTraceRow).toNat : F)
 
-/-! ## Uninterleaving -/
-
-theorem uninterleave_fst_getLsbD (v : BitVec 128) (i : Nat) (hi : i < 64) :
-    (uninterleave v.toFin).1.getLsbD i = v.getLsbD (2 * i + 1) := by
-  interval_cases i <;> (simp only [uninterleave, BitVec.ofFin_toFin]; bv_decide)
-
-theorem uninterleave_snd_getLsbD (v : BitVec 128) (i : Nat) (hi : i < 64) :
-    (uninterleave v.toFin).2.getLsbD i = v.getLsbD (2 * i) := by
-  interval_cases i <;> (simp only [uninterleave, BitVec.ofFin_toFin]; bv_decide)
-
-theorem uninterleave_interleave (l r : BitVec 64) :
-    uninterleave (interleaveLookupOperands l r).toFin = (l, r) := by
-  ext i hi
-  · rw [← BitVec.getLsbD_eq_getElem, ← BitVec.getLsbD_eq_getElem,
-      uninterleave_fst_getLsbD _ i hi, BitVec.getLsbD,
-      interleaveLookupOperands_testBit l r (by omega)]
-    have h1 : (2 * i + 1) % 2 = 1 := by omega
-    have h2 : (2 * i + 1) / 2 = i := by omega
-    simp only [h1, h2, ↓reduceIte]
-  · rw [← BitVec.getLsbD_eq_getElem, ← BitVec.getLsbD_eq_getElem,
-      uninterleave_snd_getLsbD _ i hi, BitVec.getLsbD,
-      interleaveLookupOperands_testBit l r (by omega)]
-    have h1 : 2 * i % 2 = 0 := by omega
-    have h2 : 2 * i / 2 = i := by omega
-    simp only [h1, h2, Nat.zero_ne_one, ↓reduceIte]
-
 /-! ## Wide arithmetic as bit-vector arithmetic -/
 
 theorem ofNat128_addWide (x y : BitVec 64) :
@@ -102,112 +81,6 @@ theorem ofNat128_mulWide (x y : BitVec 64) :
 
 section entries
 variable {F : Type} [Field F]
-
-theorem rangeCheck_entry (v : BitVec 128) :
-    rangeCheckTableEntry (F := F) v.toFin = ((v.setWidth 64).toNat : F) := by
-  unfold rangeCheckTableEntry
-  have h : (v &&& ((1#128 <<< 64) - 1)).setWidth 64 = v.setWidth 64 := by bv_decide
-  simp only [BitVec.ofFin_toFin, h]
-
-theorem interleave_testBit_odd (l r : BitVec 64) (i : Nat) (hi : i < 64) :
-    (interleaveLookupOperands l r).toNat.testBit (2 * i + 1) = l.getLsbD i := by
-  rw [interleaveLookupOperands_testBit l r (by omega)]
-  have h1 : (2 * i + 1) % 2 = 1 := by omega
-  have h2 : (2 * i + 1) / 2 = i := by omega
-  simp only [h1, h2, ↓reduceIte]
-
-theorem interleave_testBit_even (l r : BitVec 64) (i : Nat) (hi : i < 64) :
-    (interleaveLookupOperands l r).toNat.testBit (2 * i) = r.getLsbD i := by
-  rw [interleaveLookupOperands_testBit l r (by omega)]
-  have h1 : 2 * i % 2 = 0 := by omega
-  have h2 : 2 * i / 2 = i := by omega
-  simp only [h1, h2, Nat.zero_ne_one, ↓reduceIte]
-
-theorem and_entry (l r : BitVec 64) :
-    andTableEntry (F := F) (interleaveLookupOperands l r).toFin = ((l &&& r).toNat : F) := by
-  rw [bitVec_toNat_cast_eq_sum]
-  unfold andTableEntry
-  refine Finset.sum_congr rfl fun i _ => ?_
-  simp only [BitVec.val_toFin, interleave_testBit_odd l r i i.isLt,
-    interleave_testBit_even l r i i.isLt, BitVec.getLsbD_and]
-
-theorem or_entry (l r : BitVec 64) :
-    orTableEntry (F := F) (interleaveLookupOperands l r).toFin = ((l ||| r).toNat : F) := by
-  rw [bitVec_toNat_cast_eq_sum]
-  unfold orTableEntry
-  refine Finset.sum_congr rfl fun i _ => ?_
-  simp only [BitVec.val_toFin, interleave_testBit_odd l r i i.isLt,
-    interleave_testBit_even l r i i.isLt, BitVec.getLsbD_or]
-
-theorem xor_entry (l r : BitVec 64) :
-    xorTableEntry (F := F) (interleaveLookupOperands l r).toFin = ((l ^^^ r).toNat : F) := by
-  rw [bitVec_toNat_cast_eq_sum]
-  unfold xorTableEntry
-  refine Finset.sum_congr rfl fun i _ => ?_
-  simp only [BitVec.val_toFin, interleave_testBit_odd l r i i.isLt,
-    interleave_testBit_even l r i i.isLt, BitVec.getLsbD_xor, bne]
-
-theorem andn_entry (l r : BitVec 64) :
-    andnTableEntry (F := F) (interleaveLookupOperands l r).toFin = ((l &&& ~~~r).toNat : F) := by
-  simp only [andnTableEntry, uninterleave_interleave]
-
-theorem equal_entry (l r : BitVec 64) :
-    equalTableEntry (F := F) (interleaveLookupOperands l r).toFin = if l = r then 1 else 0 := by
-  simp only [equalTableEntry, uninterleave_interleave]
-
-theorem notEqual_entry (l r : BitVec 64) :
-    notEqualTableEntry (F := F) (interleaveLookupOperands l r).toFin = if l ≠ r then 1 else 0 := by
-  simp only [notEqualTableEntry, uninterleave_interleave]
-
-theorem unsignedLessThan_entry (l r : BitVec 64) :
-    unsignedLessThanTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      if l < r then 1 else 0 := by
-  simp only [unsignedLessThanTableEntry, uninterleave_interleave]
-
-theorem unsignedLessThanEqual_entry (l r : BitVec 64) :
-    unsignedLessThanEqualTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      if l ≤ r then 1 else 0 := by
-  simp only [unsignedLessThanEqualTableEntry, uninterleave_interleave]
-
-theorem unsignedGreaterThanEqual_entry (l r : BitVec 64) :
-    unsignedGreaterThanEqualTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      if l ≥ r then 1 else 0 := by
-  simp only [unsignedGreaterThanEqualTableEntry, uninterleave_interleave]
-
-theorem signedLessThan_entry (l r : BitVec 64) :
-    signedLessThanTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      if l.toInt < r.toInt then 1 else 0 := by
-  simp only [signedLessThanTableEntry, uninterleave_interleave]
-
-theorem signedGreaterThanEqual_entry (l r : BitVec 64) :
-    signedGreaterThanEqualTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      if l.toInt ≥ r.toInt then 1 else 0 := by
-  simp only [signedGreaterThanEqualTableEntry, uninterleave_interleave]
-
-theorem validDiv0_entry (l r : BitVec 64) :
-    validDiv0TableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      if l = 0 ∧ r ≠ -1 then 0 else 1 := by
-  have hmax : ((1#128 <<< 64) - 1).setWidth 64 = (-1 : BitVec 64) := by decide
-  simp only [validDiv0TableEntry, uninterleave_interleave, hmax]
-  split_ifs <;> simp_all
-
-theorem validUnsignedRemainder_entry (l r : BitVec 64) :
-    validUnsignedRemainderTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      if r = 0 ∨ l < r then 1 else 0 := by
-  simp only [validUnsignedRemainderTableEntry, uninterleave_interleave]
-
-theorem signMask_entry (l r : BitVec 64) :
-    signMaskTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      ((if l.msb then (-1 : BitVec 64) else 0).toNat : F) := by
-  unfold signMaskTableEntry
-  have hbit : (interleaveLookupOperands l r &&& 1#128 <<< 127 ≠ 0) = (l.msb = true) := by
-    have h127 := interleave_testBit_odd l r 63 (by omega)
-    have hiff : ∀ v : BitVec 128, (v &&& 1#128 <<< 127 ≠ 0) ↔ v.getLsbD 127 = true := by
-      intro v; bv_decide
-    rw [hiff, BitVec.getLsbD, h127, BitVec.msb_eq_getLsbD_last]
-  have hones : ((1#128 <<< 64) - 1).setWidth 64 = (-1 : BitVec 64) := by decide
-  simp only [BitVec.ofFin_toFin, hbit, hones]
-  split <;> simp
 
 theorem cast_ite_one_zero (c : Prop) [Decidable c] :
     (((if c then (1 : BitVec 64) else 0).toNat : F)) = if c then 1 else 0 := by
@@ -337,123 +210,6 @@ end tables
 section entries2
 variable {F : Type} [Field F]
 
-theorem signExtendWord_entry (v : BitVec 128) :
-    signExtendWordTableEntry (F := F) v.toFin =
-      (((v.setWidth 32).signExtend 64).toNat : F) := by
-  unfold signExtendWordTableEntry
-  simp only [BitVec.ofFin_toFin]
-  split
-  · rename_i hs
-    congr 2
-    bv_decide
-  · rename_i hs
-    congr 2
-    bv_decide
-
-theorem upperWord_entry (n : Nat) (hn : n < 2 ^ 128) :
-    upperWordTableEntry (F := F) (BitVec.ofNat 128 n).toFin =
-      ((BitVec.ofNat 64 (n / 2 ^ 64)).toNat : F) := by
-  unfold upperWordTableEntry
-  simp only [BitVec.ofFin_toFin]
-  congr 2
-  apply BitVec.eq_of_toNat_eq
-  simp only [BitVec.toNat_setWidth, BitVec.toNat_ushiftRight, BitVec.toNat_ofNat,
-    Nat.shiftRight_eq_div_pow, Nat.mod_eq_of_lt hn]
-
-theorem lowerHalfWord_entry (v : BitVec 128) :
-    lowerHalfWordTableEntry (F := F) v.toFin = (((v.setWidth 32).setWidth 64).toNat : F) := by
-  unfold lowerHalfWordTableEntry
-  simp only [BitVec.ofFin_toFin]
-  congr 2
-  bv_decide
-
-theorem rangeCheckAligned_entry (v : BitVec 128) :
-    rangeCheckAlignedTableEntry (F := F) v.toFin =
-      ((v.setWidth 64 &&& ~~~1#64).toNat : F) := by
-  unfold rangeCheckAlignedTableEntry
-  have h : (v &&& ((1#128 <<< 64) - 1)).setWidth 64 = v.setWidth 64 := by bv_decide
-  simp only [BitVec.ofFin_toFin, h]
-
-theorem alignAddr_entry (v : BitVec 128) :
-    alignAddrTableEntry (F := F) v.toFin =
-      ((v.setWidth 64 &&& ~~~7#64).toNat : F) := by
-  unfold alignAddrTableEntry
-  have h : (v &&& ((1#128 <<< 64) - 1)).setWidth 64 = v.setWidth 64 := by bv_decide
-  simp only [BitVec.ofFin_toFin, h]
-
-theorem umod_toNat (v : BitVec 128) (m : Nat) (hm : m < 2 ^ 128) :
-    (v % BitVec.ofNat 128 m).toNat = v.toNat % m := by
-  simp only [BitVec.toNat_umod, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hm]
-
-theorem pow2_entry (v : BitVec 128) :
-    pow2TableEntry (F := F) v.toFin = ((BitVec.ofNat 64 (2 ^ (v.toNat % 64))).toNat : F) := by
-  unfold pow2TableEntry
-  simp only [BitVec.ofFin_toFin, one_shiftLeft_eq]
-  rw [show (64 : BitVec 128) = BitVec.ofNat 128 64 from rfl, umod_toNat _ _ (by norm_num)]
-
-theorem pow2W_entry (v : BitVec 128) :
-    pow2WTableEntry (F := F) v.toFin = ((BitVec.ofNat 64 (2 ^ (v.toNat % 32))).toNat : F) := by
-  unfold pow2WTableEntry
-  simp only [BitVec.ofFin_toFin, one_shiftLeft_eq]
-  rw [show (32 : BitVec 128) = BitVec.ofNat 128 32 from rfl, umod_toNat _ _ (by norm_num)]
-
-theorem shiftRightBitmask_value (s : Nat) (hs : s < 64) :
-    ((1#128 <<< (64 - s)) - 1).setWidth 64 <<< s =
-      BitVec.ofNat 64 (((1 <<< (64 - s)) - 1) <<< s) := by
-  interval_cases s <;> decide
-
-theorem shiftRightBitmask_entry (v : BitVec 128) :
-    shiftRightBitmaskTableEntry (F := F) v.toFin =
-      ((BitVec.ofNat 64 (((1 <<< (64 - v.toNat % 64)) - 1) <<< (v.toNat % 64))).toNat : F) := by
-  unfold shiftRightBitmaskTableEntry
-  simp only [BitVec.ofFin_toFin]
-  rw [show (64 : BitVec 128) = BitVec.ofNat 128 64 from rfl, umod_toNat _ _ (by norm_num),
-    shiftRightBitmask_value _ (Nat.mod_lt _ (by norm_num))]
-
-theorem shiftRightBitmaskW_value (s : Nat) (hs : s < 32) :
-    ((1#128 <<< 32) - (1#128 <<< s)).setWidth 64 = BitVec.ofNat 64 (2 ^ 32 - 2 ^ s) := by
-  interval_cases s <;> decide
-
-theorem shiftRightBitmaskW_entry (v : BitVec 128) :
-    shiftRightBitmaskWTableEntry (F := F) v.toFin =
-      ((BitVec.ofNat 64 (2 ^ 32 - 2 ^ (v.toNat % 32))).toNat : F) := by
-  unfold shiftRightBitmaskWTableEntry
-  simp only [BitVec.ofFin_toFin]
-  rw [show (32 : BitVec 128) = BitVec.ofNat 128 32 from rfl, umod_toNat _ _ (by norm_num),
-    shiftRightBitmaskW_value _ (Nat.mod_lt _ (by norm_num))]
-
-theorem negateIf_entry (l r : BitVec 64) :
-    virtualNegateIfTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      ((if l.msb then -r else r).toNat : F) := by
-  have hmask : ((1#128 <<< 64) - 1).setWidth 64 = (-1 : BitVec 64) := by decide
-  have h1 : r &&& -1 = r := by bv_decide
-  have h2 : -r &&& -1 = -r := by bv_decide
-  simp only [virtualNegateIfTableEntry, uninterleave_interleave, hmask, h1, h2]
-  have hsign : (l &&& 1#64 <<< 63 = 0) ↔ l.msb = false := by bv_decide
-  by_cases hm : l.msb
-  · have : ¬ (l &&& 1#64 <<< 63 = 0) := by rw [hsign, hm]; simp
-    simp only [this, hm, ↓reduceIte]
-  · have : l &&& 1#64 <<< 63 = 0 := by rw [hsign]; simpa using hm
-    simp only [this, hm, ↓reduceIte, Bool.false_eq_true]
-
-theorem shiftDataB_entry (l r : BitVec 64) :
-    shiftDataBTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      ((jolt_virtual_shift_data_b_value l r).toNat : F) := by
-  have hm : ((1#128 <<< 8) - 1).setWidth 64 = (0xFF : BitVec 64) := by decide
-  simp only [shiftDataBTableEntry, uninterleave_interleave, hm, jolt_virtual_shift_data_b_value]
-
-theorem shiftDataH_entry (l r : BitVec 64) :
-    shiftDataHTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      ((jolt_virtual_shift_data_h_value l r).toNat : F) := by
-  have hm : ((1#128 <<< 16) - 1).setWidth 64 = (0xFFFF : BitVec 64) := by decide
-  simp only [shiftDataHTableEntry, uninterleave_interleave, hm, jolt_virtual_shift_data_h_value]
-
-theorem shiftDataW_entry (l r : BitVec 64) :
-    shiftDataWTableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      ((jolt_virtual_shift_data_w_value l r).toNat : F) := by
-  have hm : ((1#128 <<< 32) - 1).setWidth 64 = (0xFFFF_FFFF : BitVec 64) := by decide
-  simp only [shiftDataWTableEntry, uninterleave_interleave, hm, jolt_virtual_shift_data_w_value]
-
 theorem shiftLeft_ofNat_eq (c k : Nat) :
     BitVec.ofNat 64 c <<< k = BitVec.ofNat 64 (c <<< k) := by
   apply BitVec.eq_of_toNat_eq
@@ -491,49 +247,6 @@ theorem windowMaskW_entry (n : Nat) :
   have ho : ((BitVec.ofNat 128 n >>> 2) &&& 1).toNat = ((BitVec.ofNat 64 n >>> 2) &&& 1).toNat :=
     toNat_eq_of_setWidth _ _ (by rw [ofNat64_eq_setWidth]; bv_decide)
   simp only [windowMaskWTableEntry, BitVec.ofFin_toFin, hm, shiftLeft_ofNat_eq, ho]
-
-theorem rotater_eq {n : Nat} (z : BitVec n) (s : Nat) (hs : s ≤ n) :
-    rotater z s = (z >>> s) ||| (z <<< (n - s)) := by
-  unfold rotater
-  have : (Sail.BitVec.length z -i (s : Int)) = ((n - s : Nat) : Int) := by
-    simp only [Sail.BitVec.length]; omega
-  rw [this]
-  rfl
-
-theorem rotatel_one (z : BitVec 64) : rotatel z 1 = (z <<< 1) ||| (z >>> 63) := rfl
-
-theorem xorRotL1_getLsbD (x y : BitVec 64) (i : Nat) (hi : i < 64) :
-    (x ^^^ ((y <<< 1) ||| (y >>> 63))).getLsbD i = (x.getLsbD i != y.getLsbD ((i + 63) % 64)) := by
-  interval_cases i <;> bv_decide
-
-theorem xorRotL1_entry (l r : BitVec 64) :
-    virtualXorRotL1TableEntry (F := F) (interleaveLookupOperands l r).toFin =
-      ((jolt_virtual_xorrotl1_value l r).toNat : F) := by
-  rw [jolt_virtual_xorrotl1_value, rotatel_one, bitVec_toNat_cast_eq_sum]
-  unfold virtualXorRotL1TableEntry
-  refine Finset.sum_congr rfl fun i _ => ?_
-  simp only [BitVec.val_toFin, interleave_testBit_odd l r i i.isLt,
-    interleave_testBit_even l r _ (Nat.mod_lt _ (by omega)), xorRotL1_getLsbD l r i i.isLt]
-
-theorem xorRot_entry (r : Nat) (hr : r = 32 ∨ r = 24 ∨ r = 16 ∨ r = 63) (l y : BitVec 64) :
-    virtualXorRotTableEntry (F := F) r (interleaveLookupOperands l y).toFin =
-      ((jolt_virtual_xorrot_value r l y).toNat : F) := by
-  have hr64 : r < 64 := by omega
-  simp only [virtualXorRotTableEntry, uninterleave_interleave, jolt_virtual_xorrot_value,
-    rotater_eq _ r hr64.le, Nat.mod_eq_of_lt hr64]
-  congr 2
-  rcases hr with rfl | rfl | rfl | rfl <;> bv_decide
-
-theorem xorRotW_entry (r : Nat)
-    (hr : r = 16 ∨ r = 12 ∨ r = 8 ∨ r = 7 ∨ r = 22 ∨ r = 19 ∨ r = 6) (l y : BitVec 64) :
-    virtualXorRotWTableEntry (F := F) r (interleaveLookupOperands l y).toFin =
-      ((jolt_virtual_xorrotw_value r l y).toNat : F) := by
-  have hr32 : r < 32 := by omega
-  simp only [virtualXorRotWTableEntry, uninterleave_interleave, jolt_virtual_xorrotw_value,
-    rotater_eq _ r hr32.le, Nat.mod_eq_of_lt hr32, zero_extend, Sail.BitVec.zeroExtend,
-    Sail.BitVec.extractLsb]
-  congr 2
-  rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> bv_decide
 
 theorem halfword_aligned (n : Nat) (h : BitVec.ofNat 64 n &&& 1 = 0) :
     BitVec.ofNat 128 n % 2 = 0 := by

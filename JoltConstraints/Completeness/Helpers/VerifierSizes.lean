@@ -20,16 +20,39 @@ theorem min_bytecode_address_ge_ram_start {Source : Type}
     simpa only [Option.getD_some, ← isAddress] using
       (program.memory_init_in_program entry member).1
 
--- If the verifier computes a minimum for a nonempty image, the prover's chosen
+-- Rounding up to even never decreases.
+private theorem le_round_up_even (vars : Nat) : vars ≤ if vars % 2 = 0 then vars else vars + 1 := by
+  split <;> omega
+
+-- A longer trace never gets a narrower honest chunk width.
+private theorem chunks_mono {logT maxLogT : Nat} (shorter : logT ≤ maxLogT) :
+    logT + VerifierSizes.committedLogKChunk logT ≤
+      maxLogT + VerifierSizes.committedLogKChunk maxLogT := by
+  unfold VerifierSizes.committedLogKChunk
+  split <;> split <;> omega
+
+-- Chunks of the honest width for a trace no longer than the maximum fit the setup
+-- sized for the maximum.
+theorem VerifierSizes.chunks_fit_dorySetupLogN (layout : MemoryLayout) (maxLength logT : Nat)
+    (shorter : logT ≤ Nat.clog 2 maxLength) :
+    logT + VerifierSizes.committedLogKChunk logT ≤ VerifierSizes.dorySetupLogN layout maxLength := by
+  unfold VerifierSizes.dorySetupLogN
+  exact ((chunks_mono shorter).trans (le_max_left _ _)).trans (le_round_up_even _)
+
+end JoltConstraints
+
+open JoltConstraints
+
+-- If the verifier computes a minimum for a nonempty image, the corrected policy's chosen
 -- RAM size meets it. No additional condition is imposed on the final theorem.
-theorem _root_.HonestTrace.witness_params_ram_minimum_of_nonempty
+theorem HonestTrace.corrected_witness_params_ram_minimum_of_nonempty
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config)
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config)
     (nonempty : joltInstance.program.memory_init ≠ []) (minimum : Nat)
     (computed : VerifierSizes.minRamSize joltInstance.program
       trace.initialState.jolt_device.memory_layout = some minimum) :
-    minimum ≤ (trace.witness_params config accepted).ramSize := by
+    minimum ≤ (trace.corrected_witness_params config accepted).ramSize := by
   have imageAbove := min_bytecode_address_ge_ram_start joltInstance.program nonempty
   have imageNonzero : min_bytecode_address joltInstance.program.memory_init ≠ 0 := by
     unfold JoltISA.RAM_START_ADDRESS at imageAbove
@@ -65,9 +88,9 @@ theorem _root_.HonestTrace.witness_params_ram_minimum_of_nonempty
   dsimp only [VerifierSizes.checkedNextPowerOfTwo] at computed
   split at computed
   · cases computed
-    unfold WitnessParams.ramSize HonestTrace.witness_params
+    unfold WitnessParams.ramSize HonestTrace.corrected_witness_params
     dsimp only
-    unfold HonestTrace.prover_config at accepted
+    unfold HonestTrace.corrected_prover_config at accepted
     rw [bind_some_iff] at accepted
     obtain ⟨_, _, accepted⟩ := accepted
     rw [bind_some_iff] at accepted
@@ -84,7 +107,7 @@ theorem _root_.HonestTrace.witness_params_ram_minimum_of_nonempty
     omega
   · cases computed
 
--- The prover's chosen RAM size passes the verifier's RAM bounds.
+-- The corrected policy's chosen RAM size passes the verifier's RAM bounds.
 -- FIXME: false until a16z/jolt#1951 item 4 is fixed, so this stays sorry (the upper
 -- half below cannot be proved before then).
 -- An empty program is excluded by the a16z-confirmed assumption below.
@@ -93,15 +116,39 @@ theorem _root_.HonestTrace.witness_params_ram_minimum_of_nonempty
 -- Upper half: false until a16z/jolt#1951 item 4 is fixed. compute_max_ram_k rounds
 -- total_bytes / 8 down. When heap_end is not a multiple of 8, a program may access
 -- the word that straddles heap_end, and touched + 1 then rounds past the maximum.
-theorem _root_.HonestTrace.witness_params_ram_bounds
+theorem HonestTrace.corrected_witness_params_ram_bounds
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (accepted : trace.prover_config = some config)
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config)
     -- Assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program
     -- is never empty, so its memory image loads at least one byte. Rust's prover does
     -- not reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
     (imageNonempty : joltInstance.program.ImageNonempty) :
-    joltInstance.ram_size_in_bounds (trace.witness_params config accepted).ramSize = true := by
+    joltInstance.ram_size_in_bounds (trace.corrected_witness_params config accepted).ramSize = true := by
   sorry
 
-end JoltConstraints
+-- The honest prover's one-hot chunks fit the verifier's Dory setup: its trace is no
+-- longer than the maximum padded length, and its chunk width is the setup's.
+theorem HonestTrace.corrected_witness_params_one_hot_fits_setup
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
+    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config)
+    (layout : MemoryLayout) (hasLayout : joltInstance.memory_layout = some layout) :
+    joltInstance.one_hot_fits_setup (trace.corrected_witness_params config accepted).logT
+      (trace.corrected_witness_params config accepted).chunkBits = true := by
+  obtain ⟨isPadded, bounded⟩ := trace.corrected_prover_config_trace_length config accepted
+  have fits : 2 ^ (trace.corrected_witness_params config accepted).logT ≤
+      joltInstance.max_padded_trace_length.toNat := by
+    have length := trace.corrected_witness_params_trace_length config accepted
+    unfold WitnessParams.traceLength at length
+    rw [length, ← isPadded]
+    exact bounded
+  have shorter : (trace.corrected_witness_params config accepted).logT ≤
+      Nat.clog 2 joltInstance.max_padded_trace_length.toNat := by
+    have := Nat.clog_mono_right 2 fits
+    rwa [Nat.clog_pow 2 _ (by decide)] at this
+  have chunk : (trace.corrected_witness_params config accepted).chunkBits =
+      VerifierSizes.committedLogKChunk (trace.corrected_witness_params config accepted).logT := rfl
+  unfold JoltInstance.one_hot_fits_setup
+  rw [hasLayout, chunk, decide_eq_true_eq]
+  exact VerifierSizes.chunks_fit_dorySetupLogN layout _ _ shorter

@@ -1,5 +1,6 @@
 import JoltBytecode.JoltISA.Semantics
-import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionFrame
+import Batteries.Data.Array.Lemmas
 
 /-
 Every Jolt ISA instruction leaves the device's memory layout, inputs and advice
@@ -29,166 +30,107 @@ theorem Same.trans {a b c : JoltDevice} (hab : Same a b) (hbc : Same b c) : Same
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
   StatePreservation.Preserves (fun s t => Same s.jolt_device t.jolt_device) m
 
-theorem pure_rule {α : Type} (v : α) : Preserves (pure v) :=
-  StatePreservation.pure_rule (fun (s : SailJoltState) => Same.refl s.jolt_device) v
-
-theorem bind_rule {α β : Type} {m : JoltMonad α} {f : α → JoltMonad β}
-    (hm : Preserves m) (hf : ∀ x, Preserves (f x)) : Preserves (m >>= f) :=
-  StatePreservation.bind_rule (fun _ _ _ first next => first.trans next) hm hf
-
-theorem lift_rule {α : Type} (m : SailM α) : Preserves (liftSail m) :=
-  StatePreservation.liftSail_rule (sailRelation := fun _ _ => True)
-    (fun _ _ _ => Same.refl _) (fun _ _ _ _ => True.intro)
-
-theorem throw_rule {α : Type} (e : Error exception) :
-    Preserves (throw e : JoltMonad α) :=
-  StatePreservation.throw_rule _ e
-
-theorem get_rule : Preserves (get : JoltMonad SailJoltState) :=
-  StatePreservation.get_rule (fun (s : SailJoltState) => Same.refl s.jolt_device)
-
-theorem modify_rule (f : SailJoltState → SailJoltState)
-    (hf : ∀ s, (f s).jolt_device = s.jolt_device) : Preserves (modify f : JoltMonad Unit) :=
-  StatePreservation.modify_rule f (fun s => by rw [hf s]; exact Same.refl _)
-
-theorem read_rule (src : Src) : Preserves (readSrc src) := by
-  cases src with
-  | vreg vr =>
-    intro s t v h
-    simp only [readSrc, readVReg, bind, EStateM.bind, get, getThe, MonadStateOf.get,
-      EStateM.get, pure, EStateM.pure] at h
-    cases h
-    exact Same.refl _
-  | xreg rs => exact lift_rule _
-
-theorem write_rule (dst : Dst) (value : BitVec 64) : Preserves (writeDst dst value) := by
-  cases dst with
-  | vreg vr =>
-    by_cases hw : vr.toNat < 32
-    · simp only [writeDst, writeVReg, hw, ↓reduceIte]
-      exact throw_rule _
-    · simp only [writeDst, writeVReg, hw, ↓reduceIte]
-      exact modify_rule _ (fun _ => rfl)
-  | xreg rd => exact lift_rule _
-
 theorem storeDeviceByte_same (io io' : JoltDevice) (address : Nat) (value : BitVec 8)
     (h : JoltDevice.store? io address value = some io') : Same io io' := by
   unfold JoltDevice.store? at h
   split_ifs at h <;> cases h <;> exact ⟨rfl, rfl, rfl, rfl⟩
 
+/-- A successful device byte store preserves the layout and keeps the output
+byte count within the layout's `max_output_size.toNat`. -/
+theorem storeDeviceByte_outputs_fit (layout : MemoryLayout)
+    (outputSpan : layout.panic.toNat =
+      layout.output_start.toNat + layout.max_output_size.toNat)
+    (io io' : JoltDevice) (address : Nat) (value : BitVec 8)
+    (sameLayout : io.memory_layout = layout)
+    (oldBound : io.outputs.size ≤ layout.max_output_size.toNat)
+    (stored : io.store? address value = some io') :
+    io'.memory_layout = layout ∧
+      io'.outputs.size ≤ layout.max_output_size.toNat := by
+  unfold JoltDevice.store? at stored
+  split_ifs at stored with isPanic special isOutput
+  · cases stored
+    exact ⟨sameLayout, oldBound⟩
+  · cases stored
+    exact ⟨sameLayout, oldBound⟩
+  · cases stored
+    refine ⟨sameLayout, ?_⟩
+    have notPanic : io.is_panic address = false := by
+      cases hp : io.is_panic address <;> simp_all
+    have outputRange : layout.output_start.toNat ≤ address ∧
+        address < layout.termination.toNat := by
+      simpa [JoltDevice.is_output, sameLayout] using isOutput
+    have beforePanic : address < layout.panic.toNat := by
+      have panicRange : ¬ (layout.panic.toNat ≤ address ∧
+          address < layout.termination.toNat) := by
+        simpa [JoltDevice.is_panic, sameLayout] using notPanic
+      omega
+    simp only [Array.size_set!, Array.size_append, Array.size_replicate]
+    rw [sameLayout]
+    omega
+
+/-- Writing an integer or virtual register leaves the Jolt device unchanged,
+so it preserves every reflexive relation on devices.
+For example, writing x5 preserves equality of the input arrays. -/
+theorem writeDst_rule_of_device_relation
+    (relation : JoltDevice → JoltDevice → Prop)
+    (refl : ∀ io, relation io io)
+    (dst : Dst) (value : BitVec 64) :
+    StatePreservation.Preserves
+      (fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
+      (writeDst dst value) :=
+  InstructionFrame.writeDst_rule _ (fun _ _ => refl _) (fun _ _ _ => refl _) dst value
+
+/-- Shared instruction frame for any reflexive, transitive device relation
+that a successful device byte store preserves.
+For example, equality of device inputs is preserved even when an instruction
+updates RAM, writes an output byte, or consumes the advice tape. -/
+theorem execInstr_rule_of_device_relation
+    (relation : JoltDevice → JoltDevice → Prop)
+    (refl : ∀ io, relation io io)
+    (trans : ∀ a b c, relation a b → relation b c → relation a c)
+    (store : ∀ io io' address value,
+      JoltDevice.store? io address value = some io' → relation io io')
+    (instr : Instr) :
+    StatePreservation.Preserves
+      (fun s t => relation s.jolt_device t.jolt_device) (execInstr instr) :=
+  InstructionFrame.execInstr_rule
+    (relation := fun s t => relation s.jolt_device t.jolt_device)
+    { refl := fun _ => refl _
+      trans := fun _ _ _ first second => trans _ _ _ first second
+      sail := fun _ _ => refl _
+      vreg := fun _ _ _ => refl _
+      store := fun _ _ _ _ stored => store _ _ _ _ stored
+      append := fun _ _ => refl _ }
+    instr (fun _ _ _ _ _ _ _ => refl _)
+
+/-- A raw byte store preserves the device setup fields: layout, advice buffers,
+and inputs.
+For example, writing an output byte leaves the input array unchanged. -/
 theorem store_raw_same (s s' : SailJoltState) (ea : Nat) (value : BitVec 8)
-    (h : Mmu.store_raw? s ea value = some s') : Same s.jolt_device s'.jolt_device := by
-  simp only [Mmu.store_raw?] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; exact Same.refl _)
-    | cases h
-    | (cases hst : s.jolt_device.store? ea value with
-        | none => simp [hst] at h
-        | some d =>
-            simp only [hst, Option.map_some] at h
-            cases h
-            exact storeDeviceByte_same _ _ _ _ hst)
-
-theorem store_raw_fold_same (ea : Nat) (value : BitVec 64) (s0 : SailJoltState) :
-    ∀ (l : List Nat) (start : Option SailJoltState),
-      (∀ s, start = some s → Same s0.jolt_device s.jolt_device) →
-      ∀ s', l.foldl (fun current k => current.bind fun s =>
-        Mmu.store_raw? s (ea + k) (value.extractLsb' (8 * k) 8)) start = some s' →
-      Same s0.jolt_device s'.jolt_device := by
-  intro l
-  induction l with
-  | nil => intro start hstart s' hs'; exact hstart s' hs'
-  | cons k l ih =>
-    intro start hstart s' hs'
-    refine ih _ ?_ s' hs'
-    intro s hs
-    cases hst : start with
-    | none => rw [hst] at hs; cases hs
-    | some e =>
-      rw [hst] at hs
-      exact (hstart e hst).trans (store_raw_same _ _ _ _ hs)
-
-theorem load_doubleword_rule (address : BitVec 64) :
-    Preserves (Mmu.load_doubleword address) := by
-  intro s t v h
-  simp only [Mmu.load_doubleword] at h
-  repeat' split at h
-  all_goals first | (cases h; exact Same.refl _) | cases h
-
-theorem store_doubleword_rule (address value : BitVec 64) :
-    Preserves (Mmu.store_doubleword address value) := by
-  intro s t v h
-  simp only [Mmu.store_doubleword] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; exact Same.refl _)
-    | (rename_i heq
-       cases h
-       exact store_raw_fold_same _ value s _ (some s)
-         (fun s1 hs1 => by cases hs1; exact Same.refl _) _ heq)
-    | cases h
-
-theorem load_rule (address : BitVec 64) : Preserves (Mmu.load address) := by
-  intro s t v h
-  simp only [Mmu.load] at h
-  split at h
-  all_goals first | (cases h; exact Same.refl _) | cases h
-
-theorem readHostBytes_rule
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (readHostBytes Mmu.load overflowChecks incrementAfterLast pointer n bytes) := by
-  induction n generalizing pointer bytes with
-  | zero => exact pure_rule _
-  | succ n ih =>
-    dsimp only [readHostBytes]
-    refine bind_rule (load_rule _) (fun result => ?_)
-    cases result with
-    | Err e => exact pure_rule _
-    | Ok byte =>
-      split_ifs with h
-      · exact bind_rule (throw_rule _) (fun _ => ih _ _)
-      · exact bind_rule (pure_rule _) (fun _ => ih _ _)
-
-theorem execHostIO_rule : Preserves execHostIO := by
-  unfold execHostIO execHostIOWith
-  refine bind_rule get_rule (fun config => ?_)
-  dsimp only
-  split
-  · exact pure_rule _
-  · refine bind_rule (pure_rule _) (fun _ => ?_)
-    refine bind_rule (read_rule _) (fun callId => ?_)
-    preservation_auto [readHostBytes_rule _ _ _ _ _, read_rule _, pure_rule _, throw_rule _,
-      modify_rule _ (fun _ => rfl)] using bind_rule
+    (h : Mmu.store_raw? s ea value = some s') : Same s.jolt_device s'.jolt_device :=
+  InstructionFrame.storeRaw_rule (relation := fun s t => Same s.jolt_device t.jolt_device)
+    (fun _ _ => Same.refl _) (fun _ _ _ _ stored => storeDeviceByte_same _ _ _ _ stored)
+    s s' ea value h
 
 /-- Every Jolt ISA instruction preserves the device setup fields. -/
-theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) := by
-  cases instr
-  case VirtualAdviceLoad dst byteCount =>
-    intro s t v h
-    simp only [execInstr] at h
-    cases hr : readAdviceTape s.adviceTape byteCount with
-    | none => simp only [hr] at h; cases h
-    | some pair =>
-      obtain ⟨value, tape⟩ := pair
-      simp only [hr] at h
-      exact (bind_rule (write_rule dst value) (fun _ => pure_rule _))
-        { s with adviceTape := tape } t v h
-  all_goals simp only [execInstr]
-  all_goals preservation_auto [read_rule _, write_rule _ _, pure_rule _, throw_rule _,
-    get_rule, lift_rule _, load_doubleword_rule _, store_doubleword_rule _ _, execHostIO_rule]
-    using bind_rule
+theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) :=
+  execInstr_rule_of_device_relation Same Same.refl
+    (fun _ _ _ first next => first.trans next) storeDeviceByte_same instr
 
 theorem execProgram_rule (program : Program) : Preserves (execProgram program) := by
   induction program with
-  | done result => exact pure_rule _
+  | done result =>
+    exact StatePreservation.pure_rule (fun (s : SailJoltState) => Same.refl s.jolt_device) _
   | instr instr rest ih =>
     simp only [execProgram]
-    refine bind_rule (execInstr_rule instr) (fun result => ?_)
+    refine StatePreservation.bind_rule
+      (relation := fun (s t : SailJoltState) => Same s.jolt_device t.jolt_device)
+      (fun _ _ _ first next => first.trans next)
+      (execInstr_rule instr) (fun result => ?_)
     split
     · exact ih
-    · exact pure_rule _
+    · exact StatePreservation.pure_rule
+        (fun (s : SailJoltState) => Same.refl s.jolt_device) _
 
 -- A step that runs any tail program after it keeps the memory layout.
 theorem layout_of_tail_run {step : Program → Program} {s t : SailJoltState}

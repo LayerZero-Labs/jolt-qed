@@ -1,0 +1,13 @@
+--- a/tracer/src/instruction/scw.rs
++++ b/tracer/src/instruction/scw.rs
+@@ -49,7 +49,9 @@
+         let address = cpu.x[self.operands.rs1 as usize] as u64;
+         // See SCW::exec — SC.W succeeds for any reservation (word or
+         // doubleword) whose set covers the 4 bytes being written.
+-        let success = cpu.reservation_covers(address, ReservationWidth::Word);
++        let success = cpu.reservation_covers(address, ReservationWidth::Word)
++            // CHEAT (bug-report/sc-forced-failure): a cheating prover reports failure.
++            && std::env::var_os("JOLT_CHEAT_SC_FAIL").is_none();
+ 
+         // Patch v_success (1=success, 0=failure) into the first VirtualAdvice
+         // in the sequence, on a per-execution copy of the row. Locating it by

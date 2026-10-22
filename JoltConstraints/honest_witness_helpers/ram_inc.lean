@@ -11,7 +11,7 @@ open TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [RamInc::extract](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/increments.rs:45).
+-- Rust: [RamInc::extract](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/increments.rs).
 -- Stores contribute the new RAM word minus the old word, subtracting in F to
 -- preserve signed decreases. Reads, other instructions, and padding contribute zero.
 noncomputable def RamInc [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

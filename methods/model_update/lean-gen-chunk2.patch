@@ -1,0 +1,77 @@
+diff --git a/crates/jolt-lean-gen/Readme.md b/crates/jolt-lean-gen/Readme.md
+index 69f36ff9..12165cb0 100644
+--- a/crates/jolt-lean-gen/Readme.md
++++ b/crates/jolt-lean-gen/Readme.md
+@@ -16,8 +16,6 @@ fn is_unsupported(kind: SourceInstructionKind) -> bool {
+         kind.name(),
+         // System / CSR
+         "ECALL" | "EBREAK" | "MRET" | "CSRRW" | "CSRRS"
+-        // Load-reserved / store-conditional (hand-coded in LoadReserved.lean)
+-        | "LRW" | "LRD" | "SCW" | "SCD"
+         // Registered inline dispatch (needs an InlineExpansionProvider)
+         | "Inline"
+     )
+@@ -25,6 +23,10 @@ fn is_unsupported(kind: SourceInstructionKind) -> bool {
+ 
+ ```
+ 
++LR.W, LR.D, SC.W and SC.D are generated for both destination branches.
++Only `VirtualAdvice` introduces a runtime payload parameter; `VirtualAdviceLoad`
++retains its fixed byte-count immediate.
++
+ ## Usage 
+ 
+ To see bytecode expansion for the `LB` instruction in Lean 
+diff --git a/crates/jolt-lean-gen/src/main.rs b/crates/jolt-lean-gen/src/main.rs
+index efaac314..8d115763 100644
+--- a/crates/jolt-lean-gen/src/main.rs
++++ b/crates/jolt-lean-gen/src/main.rs
+@@ -116,7 +116,16 @@ fn final_imm_width(name: &str) -> Option<u32> {
+         | "VirtualAssertHalfwordAlignment"
+         | "VirtualAssertWordAlignment"
+         | "LD"
+-        | "SD" => Some(64),
++        | "SD"
++        | "VirtualPow2"
++        | "VirtualPow2W"
++        | "VirtualShiftRightBitmask"
++        | "VirtualShiftRightBitmaskW"
++        | "VirtualSignExtendWord"
++        | "VirtualZeroExtendWord"
++        | "VirtualMovsign"
++        | "VirtualRev8W"
++        | "VirtualHostIO" => Some(64),
+         "BEQ"
+         | "BNE"
+         | "BLT"
+@@ -276,7 +285,8 @@ fn lean_instr(
+             format!("{base} {imm} {align_fault}")
+         }
+         "SD" | "SB" | "SH" | "SW" => format!("{rs1} {rs2} {imm}"),
+-        "VirtualAdvice" | "VirtualAdviceLoad" => format!("{rd} {imm}"),
++        "VirtualAdvice" => format!("{rd} {imm} {row_imm}"),
++        "VirtualAdviceLoad" => format!("{rd} {row_imm}"),
+         "AUIPC" | "JAL" | "LUI" => format!("{rd} {imm}"),
+         "JALR" => format!("{rd} {rs1} {imm}"),
+         "VirtualAssertValidDiv0"
+@@ -331,7 +341,7 @@ enum Class {
+ fn is_unsupported(kind: SourceInstructionKind) -> bool {
+     matches!(
+         kind.name(),
+-        "ECALL" | "EBREAK" | "MRET" | "CSRRW" | "CSRRS" | "LRW" | "LRD" | "SCW" | "SCD" | "Inline"
++        "ECALL" | "EBREAK" | "MRET" | "CSRRW" | "CSRRS" | "Inline"
+     )
+ }
+ 
+@@ -558,9 +568,9 @@ fn load_class_and_align_fault(kind: SourceInstructionKind) -> (&'static str, &'s
+ }
+ 
+ // Only VirtualAdvice receives a per-execution payload. AdviceLoad's immediate
+-// is a fixed byte count; AdviceLen reads the runtime tape without a row payload.
++// is a fixed byte count, preserved in the generated program.
+ fn is_advice_row(name: &str) -> bool {
+-    matches!(name, "VirtualAdvice" | "VirtualAdviceLoad")
++    name == "VirtualAdvice"
+ }
+ 
+ fn render_rows(

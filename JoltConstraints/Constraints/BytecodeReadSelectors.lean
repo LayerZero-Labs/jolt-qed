@@ -33,7 +33,7 @@ def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
   | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
   | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
-  | .VirtualAssertLTE src _ _ | .VirtualAdviceLen _ src _ | .VirtualHostIO _ src _ =>
+  | .VirtualAssertLTE src _ _ | .VirtualHostIO _ src _ =>
       some (TraceWitness.sourceRegisterAddress src)
   -- Alignment assertions can read architectural or virtual registers.
   | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
@@ -71,7 +71,7 @@ def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualWindowMaskB _ _ _ | .VirtualWindowMaskH _ _ _ | .VirtualWindowMaskW _ _ _
   | .VirtualSignExtendWord _ _ _ | .VirtualZeroExtendWord _ _ _ | .VirtualMovsign _ _ _
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
-  | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ | .VirtualAdviceLen _ _ _
+  | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
   | .VirtualHostIO _ _ _ => none
 
 /-- Fixed normalized register operand, with no operand represented by none.
@@ -98,7 +98,7 @@ def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _
   | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
-  | .VirtualAdviceLen dst _ _ | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+  | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
       some (TraceWitness.destinationRegisterAddress
         (TraceWitness.capturedDestination dst))
   | .LD _ dst _ _ =>

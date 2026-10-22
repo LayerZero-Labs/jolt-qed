@@ -9,8 +9,9 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [materialize_register_read_write_virtual](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/registers.rs:47).
+-- Rust: [materialize_register_read_write_virtual](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
 -- Select the instruction's first source register, including an explicit x0.
+-- Selection uses the encoded integer operand, independently of capture presence.
 -- An absent operand and a padding position select no register.
 noncomputable def Rs1Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLength → F :=
   fun address t =>
@@ -42,7 +43,7 @@ noncomputable def Rs1Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLengt
       | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
       | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
       | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
-      | .VirtualAssertLTE src _ _ | .VirtualAdviceLen _ src _ | .VirtualHostIO _ src _ =>
+      | .VirtualAssertLTE src _ _ | .VirtualHostIO _ src _ =>
           if address = sourceRegisterAddress src then 1 else 0
       -- Alignment assertions can read architectural or virtual registers.
       | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>

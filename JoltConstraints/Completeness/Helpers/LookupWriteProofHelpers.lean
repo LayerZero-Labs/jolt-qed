@@ -831,10 +831,6 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       simp only [TraceWitness.rowLookupOutput, show
         bytecode[row.rowIndex.val].instruction = _ from hi,
         hi, TraceWitness.rdValue]
-    | VirtualAdviceLen =>
-      simp only [TraceWitness.rowLookupOutput, show
-        bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, TraceWitness.rdValue]
     | VirtualNegateIf dst signSource value =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec

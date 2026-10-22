@@ -8,7 +8,7 @@ namespace JoltConstraints
 
 /-- Constraint (05) in `constraints.md` (stage 1):
 a store writes its second source register value to RAM.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-r1cs/src/constraints/rv64.rs -/
+Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
 def rs2EqRamWriteIfStore {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

@@ -5,13 +5,11 @@ import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
 
 set_option autoImplicit false
 
-namespace JoltConstraints
-
-open scoped BigOperators
+open JoltConstraints
 
 -- Every recorded pre-state has a layout Rust's MemoryLayout::new built, with the
 -- lowest address above 8 (validate_inputs).
-theorem _root_.HonestTrace.preState_layout {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.preState_layout {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (inTrace : i < trace.rows.size) :
     ∃ config, MemoryLayout.new config =
@@ -28,7 +26,7 @@ theorem _root_.HonestTrace.preState_layout {joltInstance : JoltInstance SourceIn
   exact ⟨_, initialLayout, valid.1.1⟩
 
 -- An LD row at address 0 captures 0 as the value it loads.
-theorem _root_.HonestTrace.load_zero_captured {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.load_zero_captured {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (inTrace : i < trace.rows.size) (faultClass : JoltISA.LoadFaultClass)
     (dst : JoltISA.Dst) (base : JoltISA.Src) (imm : BitVec 64)
@@ -55,7 +53,7 @@ theorem _root_.HonestTrace.load_zero_captured {joltInstance : JoltInstance Sourc
     · exact jump_write_capture (.xreg register) 0 _ _ (by simpa using zeroRegister) written
 
 -- No SD row stores at address 0.
-theorem _root_.HonestTrace.store_nonzero {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.store_nonzero {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (inTrace : i < trace.rows.size) (base value : JoltISA.Src) (imm : BitVec 64)
     (isStore : trace.bytecode[(getElem trace.rows i inTrace).rowIndex].instruction =
@@ -68,7 +66,7 @@ theorem _root_.HonestTrace.store_nonzero {joltInstance : JoltInstance SourceInst
 
 -- Every memory access in an honest trace is a whole number of 64-bit words above the
 -- lowest address: LD and SD retire only at multiples of 8, and the lowest address is one.
-theorem _root_.HonestTrace.ram_accesses_valid {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.ram_accesses_valid {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     ramAccessesValid trace := by
   intro i
@@ -96,6 +94,10 @@ theorem _root_.HonestTrace.ram_accesses_valid {joltInstance : JoltInstance Sourc
       unfold ramLowestAddress
       omega
     · cases accesses
+
+namespace JoltConstraints
+
+open scoped BigOperators
 
 /-- A missing RAM address has no hot selector. -/
 theorem ramRa_sum_none {F : Type} [Field F] (params : WitnessParams)

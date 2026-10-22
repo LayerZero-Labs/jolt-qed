@@ -12,8 +12,8 @@ open TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [RamReadValue](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/ram.rs).
--- Rust: [trace_store](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/mmu.rs:609).
+-- Rust: [RamReadValue](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/ram.rs).
+-- Rust: [trace_store](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/emulator/mmu.rs).
 -- A load supplies its captured destination value. A store supplies the old word
 -- from the full pre-state. HonestTrace.store_word_present proves its presence
 -- from initialization and the preceding steps of this trace.
