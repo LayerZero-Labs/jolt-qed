@@ -16,7 +16,7 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -37,14 +37,16 @@ private theorem assertLTE_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem assertLTE_passes {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     (sourceValue lhs pre).toNat ≤ (sourceValue rhs pre).toNat := by
   have bound := two_pow_127_lt_char charAbove2pow128
   have canonical := assertLTE_canonical context rowIs instructionIs
   obtain ⟨left, right⟩ := agrees.registerInputs bound context equations selected rowIs
     lhs rhs canonical.1 canonical.2
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
-    (by rw [instructionIs]; rfl)
+    (by rw [instructionIs]; rfl) leftLive rightLive
   have raf : witness.InstructionRafFlag t = 0 := by
     simpa only [bytecodeRafFlag, rowIs, instructionIs, JoltMetadata.instructionRafFlag,
       JoltMetadata.opcodeFlag, Bool.or_self] using
@@ -62,18 +64,22 @@ private theorem assertLTE_passes {pre : SailJoltState}
 
 /-- The lookup and assertion constraints force the unsigned comparison to pass.
 The row executes without changing any state, and preserves register agreement.
-The comparison and execution also hold at the last cycle. -/
-theorem assertLTE_step {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+The comparison and execution also hold at the last cycle.
+Both source registers must be live; the live set is unchanged.
+For example, a division guard retains agreement on its initialized temporaries. -/
+theorem assertLTE_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     (sourceValue lhs pre).toNat ≤ (sourceValue rhs pre).toNat ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS pre ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ pre := by
+      RegisterAgreementOn live witness ⟨t.val + 1, next⟩ pre := by
   have canonical := assertLTE_canonical context rowIs instructionIs
-  have leftRead := (agrees.read lhs canonical.1).1
-  have rightRead := (agrees.read rhs canonical.2).1
-  have passes := assertLTE_passes charAbove2pow128 context equations selected rowIs instructionIs agrees
+  have leftRead := (agrees.read lhs canonical.1 leftLive).1
+  have rightRead := (agrees.read rhs canonical.2 rightLive).1
+  have passes := assertLTE_passes charAbove2pow128 context equations selected rowIs instructionIs agrees leftLive rightLive
   refine ⟨passes, ?_, ?_⟩
   · rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
     simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, leftRead, rightRead,

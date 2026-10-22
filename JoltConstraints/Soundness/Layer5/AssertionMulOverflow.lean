@@ -16,7 +16,7 @@ private theorem mulWide_lt_128 (lhs rhs : BitVec 64) : mulWide lhs rhs < 2 ^ 128
   have bound := Nat.mul_lt_mul'' lhs.isLt rhs.isLt
   simpa only [mulWide, ← pow_add] using bound
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -37,14 +37,16 @@ private theorem mulAssertion_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem mulAssertion_passes {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     mulWide (sourceValue lhs pre) (sourceValue rhs pre) < 2 ^ 64 := by
   have bound := two_pow_127_lt_char charAbove2pow128
   have canonical := mulAssertion_canonical context rowIs instructionIs
   obtain ⟨left, right⟩ := agrees.registerInputs bound context equations selected rowIs
     lhs rhs canonical.1 canonical.2
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
-    (by rw [instructionIs]; rfl)
+    (by rw [instructionIs]; rfl) leftLive rightLive
   have active : witness.OpFlags .MultiplyOperands t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
       JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using
@@ -66,20 +68,24 @@ private theorem mulAssertion_passes {pre : SailJoltState}
     (mulWide_lt_128 (sourceValue lhs pre) (sourceValue rhs pre))] using passes
 
 /-- The multiplication guard's lookup forces its successful, state-preserving
-execution, including at the final cycle. -/
+execution, including at the final cycle.
+Both source registers must be live; the live set is unchanged.
+For example, a division guard retains agreement on its initialized temporaries. -/
 theorem mulAssertion_step {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     mulWide (sourceValue lhs pre) (sourceValue rhs pre) < 2 ^ 64 ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS pre ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ pre := by
+      RegisterAgreementOn live witness ⟨t.val + 1, next⟩ pre := by
   have canonical := mulAssertion_canonical context rowIs instructionIs
-  have leftRead := (agrees.read lhs canonical.1).1
-  have rightRead := (agrees.read rhs canonical.2).1
+  have leftRead := (agrees.read lhs canonical.1 leftLive).1
+  have rightRead := (agrees.read rhs canonical.2 rightLive).1
   have passes := mulAssertion_passes charAbove2pow128 context equations
-    selected rowIs instructionIs agrees
+    selected rowIs instructionIs agrees leftLive rightLive
   refine ⟨passes, ?_, ?_⟩
   · rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl),
       instructionIs]

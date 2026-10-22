@@ -33,7 +33,7 @@ def BinaryAssertion.Passes (kind : BinaryAssertion) (lhs rhs : BitVec 64) : Prop
   | .div0 => ¬ (lhs = 0 ∧ rhs ≠ -1)
   | .remainder => rhs = 0 ∨ lhs < rhs
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -56,7 +56,9 @@ private theorem binaryAssertion_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem binaryAssertion_passes {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     kind.Passes (sourceValue lhs pre) (sourceValue rhs pre) := by
   have bound := two_pow_127_lt_char charAbove2pow128
   have canonical := binaryAssertion_canonical context rowIs kind instructionIs
@@ -64,7 +66,7 @@ private theorem binaryAssertion_passes {pre : SailJoltState}
     lhs rhs canonical.1 canonical.2
     (by cases kind <;> rw [instructionIs] <;> rfl)
     (by cases kind <;> rw [instructionIs] <;> rfl)
-    (by cases kind <;> rw [instructionIs] <;> rfl)
+    (by cases kind <;> rw [instructionIs] <;> rfl) leftLive rightLive
   have raf : witness.InstructionRafFlag t = 0 := by
     have flag := instructionRafFlag_of_selected_bytecode bound context equations t slot selected
     cases kind <;>
@@ -107,20 +109,24 @@ private theorem binaryAssertion_passes {pre : SailJoltState}
     exact predicate_of_assert equations.assertLookupOne t active _ output
 
 /-- All three assertion rows retire with no state change and preserve register
-agreement, including at the final cycle. -/
+agreement, including at the final cycle.
+Both source registers must be live; the live set is unchanged.
+For example, a division guard retains agreement on its initialized temporaries. -/
 theorem binaryAssertion_step {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     kind.Passes (sourceValue lhs pre) (sourceValue rhs pre) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS pre ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ pre := by
+      RegisterAgreementOn live witness ⟨t.val + 1, next⟩ pre := by
   have canonical := binaryAssertion_canonical context rowIs kind instructionIs
-  have leftRead := (agrees.read lhs canonical.1).1
-  have rightRead := (agrees.read rhs canonical.2).1
+  have leftRead := (agrees.read lhs canonical.1 leftLive).1
+  have rightRead := (agrees.read rhs canonical.2 rightLive).1
   have passes := binaryAssertion_passes charAbove2pow128 context equations
-    selected rowIs kind instructionIs agrees
+    selected rowIs kind instructionIs agrees leftLive rightLive
   refine ⟨passes, ?_, ?_⟩
   · rw [withRuntimeAdvice_eq_of_noAdvice _ advice
       (by cases kind <;> rw [instructionIs] <;> rfl), instructionIs]

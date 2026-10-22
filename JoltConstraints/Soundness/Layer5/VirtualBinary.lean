@@ -49,7 +49,7 @@ private def VirtualBinary.table : VirtualBinary → LookupTableKind
   | .shiftDataW => .ShiftDataW
   | .negateIf => .VirtualNegateIf
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -73,7 +73,9 @@ private theorem virtualBinary_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem virtualBinary_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue lhs pre) (sourceValue rhs pre)).toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
@@ -82,7 +84,7 @@ private theorem virtualBinary_write_value {pre : SailJoltState}
     lhs rhs canonical.1.2 canonical.2
     (by cases operation <;> rw [instructionIs] <;> rfl)
     (by cases operation <;> rw [instructionIs] <;> rfl)
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+    (by cases operation <;> rw [instructionIs] <;> rfl) leftLive rightLive
   apply lookupWrite_value_of_raf_zero bound context equations selected rowIs
     (sourceValue lhs pre) (sourceValue rhs pre) _ operation.table
     (by cases operation <;> rw [instructionIs] <;> rfl)
@@ -113,24 +115,30 @@ private theorem virtualBinary_write_value {pre : SailJoltState}
         leftLookup rightLookup table)
 
 /-- These six virtual rows execute with their table-constrained result and
-preserve register agreement at the next cycle. -/
-theorem virtualBinary_step {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+preserve register agreement at the next cycle.
+The source registers must be live, and the destination is added to the live set.
+For example, a division row can initialize a dead temporary from live operands. -/
+theorem virtualBinary_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := operation.value (sourceValue lhs pre) (sourceValue rhs pre)
     witness.RdWriteValue t = (value.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have canonical := virtualBinary_canonical context rowIs operation instructionIs
-  have leftRead := (agrees.read lhs canonical.1.2).1
-  have rightRead := (agrees.read rhs canonical.2).1
+  have leftRead := (agrees.read lhs canonical.1.2 leftLive).1
+  have rightRead := (agrees.read rhs canonical.2 rightLive).1
   have encoded := virtualBinary_write_value charAbove2pow128 context equations selected rowIs
-    operation instructionIs agrees
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    operation instructionIs agrees leftLive rightLive
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by cases operation <;> rw [instructionIs] <;> rfl)]
   cases operation <;> rw [instructionIs] <;>
     simp only [VirtualBinary.instruction, VirtualBinary.value,
       execWithTapeAnswer, execInstr, bind, EStateM.bind, leftRead, rightRead]

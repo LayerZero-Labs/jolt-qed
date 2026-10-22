@@ -96,7 +96,7 @@ private theorem rev8_32_kernel (x : BitVec 32) : rev8 x = swapBytes32 x := by
   intro hi
   interval_cases i <;> simp (config := { decide := true }) at *
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -119,13 +119,14 @@ private theorem unaryWord_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem unaryWord_inputs {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.LeftInstructionInput t = ((sourceValue source pre).toNat : F) ∧
     witness.RightInstructionInput t = 0 := by
   have sourceRead := agrees.rs1Value (two_pow_127_lt_char charAbove2pow128)
     context equations selected rowIs source
     (unaryWord_canonical context rowIs operation instructionIs).2
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+    (by cases operation <;> rw [instructionIs] <;> rfl) sourceLive
   have inputs := instructionInputs_of_selected_bytecode
     (two_pow_127_lt_char charAbove2pow128) context equations t slot selected row rowIs
   cases operation <;>
@@ -134,12 +135,13 @@ private theorem unaryWord_inputs {pre : SailJoltState}
       zero_add] using inputs
 
 private theorem unaryWord_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue source pre)).toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
   obtain ⟨left, right⟩ := unaryWord_inputs charAbove2pow128 context equations
-    selected rowIs operation instructionIs agrees
+    selected rowIs operation instructionIs agrees sourceLive
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
     have flag := opFlag_of_selected_bytecode bound context equations
       .WriteLookupOutputToRD t slot selected
@@ -220,24 +222,29 @@ private theorem unaryWord_write_value {pre : SailJoltState}
       using output
 
 /-- Seven unary word and mask rows write their
-constrained result and preserve register agreement at the next cycle. -/
+constrained result and preserve register agreement at the next cycle.
+The source register must be live, and the destination is added to the live set.
+For example, a division row can initialize a dead temporary from live operands. -/
 theorem unaryWord_step {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := operation.value (sourceValue source pre)
     witness.RdWriteValue t = (value.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have sourceRead := (agrees.read source
-    (unaryWord_canonical context rowIs operation instructionIs).2).1
+    (unaryWord_canonical context rowIs operation instructionIs).2 sourceLive).1
   have encoded := unaryWord_write_value charAbove2pow128 context equations
-    selected rowIs operation instructionIs agrees
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    selected rowIs operation instructionIs agrees sourceLive
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by cases operation <;> rw [instructionIs] <;> rfl)]
   cases operation <;> rw [instructionIs] <;>
     simp only [UnaryWord.instruction, UnaryWord.value,
       execWithTapeAnswer, execInstr, bind, EStateM.bind, sourceRead]

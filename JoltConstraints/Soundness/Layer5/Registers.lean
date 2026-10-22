@@ -59,6 +59,14 @@ theorem RegisterAgreement.toOn {t : Fin params.traceLength} {state : SailJoltSta
     ⟨agrees.present, fun register _ => agrees.values register⟩).mono
       (fun _ _ => True.intro)
 
+/-- Agreement on a live predicate containing every register gives full agreement.
+For example, the predicate `fun _ => True` recovers the full-agreement API. -/
+theorem RegisterAgreementOn.toFull {live : Fin 128 → Prop}
+    {t : Fin params.traceLength} {state : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t state)
+    (allLive : ∀ register, live register) : RegisterAgreement witness t state :=
+  ⟨agrees.present, fun register => agrees.values register (allLive register)⟩
+
 /-- The zero table and the instance's initialized state establish register
 agreement, including successful-read availability. -/
 theorem RegisterAgreement.initial
@@ -69,14 +77,16 @@ theorem RegisterAgreement.initial
     RegisterAgreement witness ⟨0, Nat.two_pow_pos _⟩ state :=
   ⟨initial_state_registers_present _ _ _ built, registersVal_initial_state history built⟩
 
-/-- Preparing the next source instruction's PC preserves register agreement. -/
-theorem RegisterAgreement.advance_pc {t : Fin params.traceLength} {state : SailJoltState}
-    (agrees : RegisterAgreement witness t state) (address : BitVec 64) (compressed : Bool) :
-    RegisterAgreement witness t (advance_pc address compressed state) := by
+/-- Preparing the next source instruction's PC preserves agreement on `live`.
+For example, preparing a REM leaves agreement on architectural registers intact. -/
+theorem RegisterAgreementOn.advance_pc {live : Fin 128 → Prop}
+    {t : Fin params.traceLength} {state : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t state) (address : BitVec 64) (compressed : Bool) :
+    RegisterAgreementOn live witness t (advance_pc address compressed state) := by
   refine ⟨advance_pc_keeps_registers _ _ _ agrees.present, ?_⟩
-  intro register
+  intro register member
   rw [sourceValue_advance_pc]
-  exact agrees.values register
+  exact agrees.values register member
 
 theorem readSrc_of_present (source : Src) (state : SailJoltState)
     (present : AllRegistersPresent state.sail) :
@@ -89,17 +99,29 @@ theorem readSrc_of_present (source : Src) (state : SailJoltState)
     rw [(lookup_readSrc_value _ _ _ _ lifted).2] at lifted
     exact lifted
 
+/-- A canonical live operand reads successfully and agrees with its table entry.
+For example, a live temporary 40 can supply a division assertion operand. -/
+theorem RegisterAgreementOn.read {live : Fin 128 → Prop} {t : Fin params.traceLength} {state : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t state) (source : Src)
+    (canonical : JoltRegisterEncoding.sourceIsCanonical source = true)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
+    readSrc source state = .ok (sourceValue source state) state ∧
+      witness.RegistersVal (TraceWitness.sourceRegisterAddress source) t =
+        ((sourceValue source state).toNat : F) := by
+  refine ⟨readSrc_of_present source state agrees.present, ?_⟩
+  simpa only [source_decode_encode source canonical] using
+    agrees.values (TraceWitness.sourceRegisterAddress source) sourceLive
+
 /-- A canonical operand reads successfully, and the value read is represented
-by its register-table entry. -/
+by its register-table entry.
+For example, a canonical x1 operand agrees with table address 1. -/
 theorem RegisterAgreement.read {t : Fin params.traceLength} {state : SailJoltState}
     (agrees : RegisterAgreement witness t state) (source : Src)
     (canonical : JoltRegisterEncoding.sourceIsCanonical source = true) :
     readSrc source state = .ok (sourceValue source state) state ∧
       witness.RegistersVal (TraceWitness.sourceRegisterAddress source) t =
         ((sourceValue source state).toNat : F) := by
-  refine ⟨readSrc_of_present source state agrees.present, ?_⟩
-  simpa only [source_decode_encode source canonical] using
-    agrees.values (TraceWitness.sourceRegisterAddress source)
+  exact (agrees.toOn (fun _ => True)).read source canonical True.intro
 
 def destinationSource : Dst → Src
   | .xreg register => .xreg register
@@ -186,6 +208,26 @@ theorem sourceValue_writeDst_same (destination : Dst)
 variable {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
 
 /-- A selected row without a destination leaves the register table unchanged.
+This keeps the live set unchanged; for example, an assertion preserves
+agreement on its live division temporaries. -/
+theorem RegisterAgreementOn.noWrite {live : Fin 128 → Prop}
+    (charAbove2pow127 : 2 ^ 127 < ringChar F)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {t : Fin params.traceLength} (next : t.val + 1 < params.traceLength)
+    (chosen : Fin (2 ^ params.logBytecodeK)) (selected : bytecodeRa witness chosen t = 1)
+    {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode chosen.val = some row)
+    (destinationIs : row.instruction.destination? = none)
+    {state : SailJoltState} (agrees : RegisterAgreementOn live witness t state) :
+    RegisterAgreementOn live witness ⟨t.val + 1, next⟩ state := by
+  refine ⟨agrees.present, ?_⟩
+  intro register member
+  rw [registersVal_succ_of_selected_bytecode charAbove2pow127
+    context equations register t next chosen selected]
+  simpa only [rowIs, Option.bind_some, bytecodeRdRegister_eq_destination,
+    destinationIs, Option.map_none] using agrees.values register member
+
+/-- A selected row without a destination leaves the register table unchanged.
 This transports agreement when an instruction, such as an assertion, keeps the state. -/
 theorem RegisterAgreement.noWrite
     (charAbove2pow127 : 2 ^ 127 < ringChar F)
@@ -197,18 +239,16 @@ theorem RegisterAgreement.noWrite
     (destinationIs : row.instruction.destination? = none)
     {state : SailJoltState} (agrees : RegisterAgreement witness t state) :
     RegisterAgreement witness ⟨t.val + 1, next⟩ state := by
-  refine ⟨agrees.present, ?_⟩
-  intro register
-  rw [registersVal_succ_of_selected_bytecode charAbove2pow127
-    context equations register t next chosen selected]
-  simpa only [rowIs, Option.bind_some, bytecodeRdRegister_eq_destination,
-    destinationIs, Option.map_none] using agrees.values register
+  exact ((agrees.toOn (fun _ => True)).noWrite charAbove2pow127 context equations
+    next chosen selected rowIs destinationIs).toFull (fun _ => True.intro)
 
 /-- A selected instruction's successful destination write extends register
 agreement to the next cycle when its value matches `RdWriteValue`. Canonicality
 comes from expansion. The x0 case uses the proved zero-table invariant, since
-Sail discards that write. The final cycle has no next register-table column. -/
-theorem RegisterAgreement.write
+Sail discards that write. The destination becomes live; for example, REM's
+advice write makes temporary 40 live without requiring its previous value.
+The final cycle has no next register-table column. -/
+theorem RegisterAgreementOn.write {live : Fin 128 → Prop}
     (charAbove2pow128 : 2 ^ 128 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
@@ -216,12 +256,14 @@ theorem RegisterAgreement.write
     (chosen : Fin (2 ^ params.logBytecodeK)) (selected : bytecodeRa witness chosen t = 1)
     {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode chosen.val = some row)
     {destination : Dst} (destinationIs : row.instruction.destination? = some destination)
-    {pre post : SailJoltState} (agrees : RegisterAgreement witness t pre)
+    {pre post : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
     (value : BitVec 64) (encoded : witness.RdWriteValue t = (value.toNat : F))
     (written : writeDst destination value pre = .ok () post) :
-    RegisterAgreement witness ⟨t.val + 1, next⟩ post := by
+    RegisterAgreementOn
+      (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+      witness ⟨t.val + 1, next⟩ post := by
   refine ⟨RegistersKept.write_rule destination value pre post () written agrees.present, ?_⟩
-  intro register
+  intro register member
   by_cases zero : register = 0
   · subst register
     rw [registersVal_x0 charAbove2pow128 context equations]
@@ -237,9 +279,30 @@ theorem RegisterAgreement.write
   · subst register
     rw [if_pos rfl, encoded, source_of_destination destination canonical,
       sourceValue_writeDst_same destination value pre post zero written]
-  · rw [if_neg same, agrees.values]
+  · rw [if_neg same, agrees.values register (member.resolve_right same)]
     rw [sourceValue_writeDst_other destination _ value pre post
       (by simpa only [source_encode_decode, BitVec.toFin_ofFin] using same)
       agrees.present written]
+
+/-- A selected instruction's successful destination write extends register
+agreement to the next cycle when its value matches `RdWriteValue`. Canonicality
+comes from expansion. The x0 case uses the proved zero-table invariant, since
+Sail discards that write. The final cycle has no next register-table column.
+For example, an AND write preserves agreement on all other registers. -/
+theorem RegisterAgreement.write
+    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {t : Fin params.traceLength} (next : t.val + 1 < params.traceLength)
+    (chosen : Fin (2 ^ params.logBytecodeK)) (selected : bytecodeRa witness chosen t = 1)
+    {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode chosen.val = some row)
+    {destination : Dst} (destinationIs : row.instruction.destination? = some destination)
+    {pre post : SailJoltState} (agrees : RegisterAgreement witness t pre)
+    (value : BitVec 64) (encoded : witness.RdWriteValue t = (value.toNat : F))
+    (written : writeDst destination value pre = .ok () post) :
+    RegisterAgreement witness ⟨t.val + 1, next⟩ post := by
+  exact ((agrees.toOn (fun _ => True)).write charAbove2pow128 context equations
+    next chosen selected rowIs destinationIs value encoded written).toFull
+      (fun _ => Or.inl True.intro)
 
 end JoltConstraints.Soundness
