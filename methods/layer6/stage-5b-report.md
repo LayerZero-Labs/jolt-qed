@@ -85,3 +85,27 @@ I left Agent 1's Layer 5, `DivisionBlock.lean`, `PlainRow.lean`, and other repor
 `#print axioms JoltInstance.expansion_finish` still reports `sorryAx`, inherited through `terminal_next_unexpanded_pc` from the staged `terminal_branch` obligation.
 No new `bv_decide`, `native_decide`, heartbeat increase, or proof over ten seconds was introduced.
 I did not edit `JoltConstraints/model_review.md` or `methods/soundness.md`, and I made no commit.
+
+## Stage 5c, branch case
+
+I checked the branch item of `methods/layer6/stage-5c.md` against the Lean selector, branch lookup, row-validity, Sail execution, and next-PC lemmas before editing.
+I also checked Jolt's pinned `5def437f` implementations in `crates/jolt-witness/src/witnesses/pc.rs` (`NextUnexpandedPc::extract`), `crates/jolt-witness/src/witnesses/flags.rs` (`ShouldBranch::extract`), `crates/jolt-program/src/expand/metadata.rs` (`stamp_sequence_metadata`), and `tracer/src/instruction/format/format_b.rs` (`FormatB::parse`).
+The real successor supplies an accepted bytecode address, and the signed 13-bit branch offset is recorded by `JoltInstructionRow.Valid.branch`; I found no incorrect plan claim.
+
+`JoltConstraints/Soundness/Layer6/TerminalNextPC.lean:641` now proves `terminal_branch` with its staged statement unchanged.
+The common terminal fallthrough calculation was extracted as `terminal_fallthrough_witness` at `TerminalNextPC.lean:80`, and `terminal_noncontrol` at `:110` now uses it without changing its statement.
+The new branch helpers are `terminal_real_successor_address` at `:279`, `terminal_branch_target_cast` at `:309`, `terminal_branch_real_target` at `:335`, `terminal_branch_decision` at `:392`, `terminal_taken_branch_field` at `:421`, `terminal_taken_branch_target_ram` at `:451`, `terminal_branch_untaken` at `:477`, `terminal_branch_taken` at `:519`, and `terminal_branch_prepared_decision` at `:590`.
+Each helper is used by the staged theorem's proof path; the taken case uses the real successor's lower address bound to rule out 64-bit branch-target wrap before applying `branch_target_toNat`.
+No existing theorem statement, definition, or hypothesis changed.
+
+`JoltConstraints/Soundness/Layer7/StallSuffix.lean:467` adds `next_cycle_address` by extracting the general address relation from `next_cycle_of_target`, whose statement at `:506` is unchanged and whose proof now derives from it.
+The former private `stall_real_slot_index` was made public and renamed `real_slot_index` at `StallSuffix.lean:534`, with its statement and proof unchanged; its existing caller was updated.
+`represented_last_branch_registers` at `StallSuffix.lean:2787` generalizes the operand extraction previously embedded in `stall_suffix_initial_branch`; the latter retains its statement at `:2866` and now uses the new lemma.
+No `LastJump.lean` edit was needed.
+
+`lake build JoltConstraints` passed with 8,810 jobs, and `git diff --check` passed.
+`#print axioms JoltInstance.expansion_finish` reports `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound`, and `JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5`; it does not reach `sorryAx`.
+There is no new `bv_decide` tactic call, `native_decide`, raised proof limit, or `sorry` in the changed Lean files.
+The existing `branch_target_toNat` proof's `bv_decide` axiom is newly reachable from `expansion_finish` through the taken-branch proof.
+Per-declaration profiling found no proof over ten seconds; the slowest changed proof was `represented_last_branch_registers` at 5.168 seconds.
+I did not edit Agent 1's division files or `PlainRow.lean`, and I made no commit.
