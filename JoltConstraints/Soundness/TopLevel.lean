@@ -13,6 +13,7 @@ import JoltConstraints.language
 import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Soundness.Layer6.PrefixAgreement
 import JoltConstraints.Soundness.Layer7.Stopping
+import JoltConstraints.Soundness.Layer7.ProverAccepts
 import JoltConstraints.Soundness.Layer7.SpoilAsserts
 import JoltConstraints.Soundness.Layer8.OutputWords
 import JoltConstraints.witness_helpers.pc
@@ -145,10 +146,12 @@ theorem soundness_matches_outputs {F : Type} [Field F] (joltField : JoltField F)
       trace.final_outputs_fit_layout runPublicWord
 
 /-- C. The represented rows and verifier bounds give Jolt prover acceptance.
-The proof will use the last-jump check, the RAM-address check, and the padded
+The proof uses the last-jump check, the RAM-address check, and the padded
 length derived from the 256-cycle verifier floor, the witness length bound and
 `NoMaxLengthTrace`. For example, under a maximum of 1024, a 256-row run may
-be padded to 512, while the restriction excludes a 1024-row run. -/
+be padded to 512, while the restriction excludes a 1024-row run.
+See jolt/crates/jolt-prover/src/config.rs
+(`ProverConfig::derive_from_dimensions`) at 5def437f. -/
 theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (noMaxLengthTrace : joltInstance.NoMaxLengthTrace)
@@ -161,7 +164,27 @@ theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (bytecodeEq : trace.bytecode = context.bytecode)
     (represented : Represents witness trace.toUntrustedAnswerRun.toTrace) :
     (trace.prover_config joltInstance).isSome := by
-  sorry
+  have jump := represented_trace_ends_in_jump joltField joltInstance privateInputs
+    witness context equations trace bytecodeEq represented.toRepresentsRows
+  obtain ⟨padded, padding, fits⟩ := checked_trace_length_fits trace.rows.size
+    params.logT joltInstance.max_padded_trace_length represented.rowsBound
+    context.traceLengthBound (context.traceLengthFloor.trans context.traceLengthBound)
+    (noMaxLengthTrace privateInputs trace)
+  obtain ⟨ramK, ramSize⟩ := represented_ram_size_computes joltField joltInstance
+    privateInputs witness context equations trace.toUntrustedAnswerRun.toTrace
+    trace.initialized represented.rowsBound represented.ramAddress
+  unfold Trace.prover_config ProverConfig.deriveFromDimensions
+  change (do
+    guard (trace.rows.size = 0 ∨ trace.execution_dimensions.ends_in_jump = true)
+    let traceLength ← ProverConfig.checkedTraceLength trace.rows.size
+    let ramSize ← ProverConfig.checkedRamSize trace.execution_dimensions
+      trace.initialState.jolt_device.memory_layout
+      (min_bytecode_address joltInstance.program.memory_init)
+      (program_image_len_words joltInstance.program.memory_init)
+    guard (traceLength ≤ joltInstance.max_padded_trace_length.toNat)
+    pure ({ trace_length := traceLength, ram_K := ramSize } : ProverConfig)).isSome
+  simp only [jump]
+  simp [padding, ramSize, fits]
 
 /-- D. Each executed spoil assert uses its row's pre-state operands.
 Representation supplies those operands because they are not instruction
