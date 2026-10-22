@@ -150,7 +150,8 @@ Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
 Layers 5b–6 are done in stages.
 Each stage has its own plan, `methods/layer6/stage-N.md`, written only after the previous stage's report has been reviewed, and Claude gives Ari the prompt for the agent.
-At most two agents run at once.
+Up to three agents run at once: agents 1 and 3 are strong models and take the unknown and hard work; agent 2 is a medium model and takes work that follows a known pattern.
+Agents work in one checkout on disjoint files, and Claude audits agent 2's reports most closely.
 Each stage ends with a report, `methods/layer6/stage-N-report.md`; read it, with Claude's audit, before the next stage starts.
 
 ## Order of the remaining work (2026-10-23)
