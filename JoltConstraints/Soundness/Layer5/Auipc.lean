@@ -16,7 +16,7 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -56,8 +56,10 @@ private theorem auipc_write_value :
     addFlag row.address imm inputs.1 inputs.2
 
 /-- AUIPC executes with the constrained wrapped sum. The global execution-prefix
-proof must connect Sail's PC to the selected row's address. -/
-theorem auipc_step {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+proof must connect Sail's PC to the selected row's address.
+The live set contains registers already matched to the witness; the destination joins it.
+For example, AUIPC can initialize a destination absent from the incoming live set. -/
+theorem auipc_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
     (pc : pre.sail.regs.get? Register.PC = some row.address)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := row.address + imm
@@ -65,15 +67,18 @@ theorem auipc_step {pre : SailJoltState} (agrees : RegisterAgreement witness t p
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have readPC : liftSail (get_arch_pc ()) pre = .ok row.address pre := by
     unfold liftSail get_arch_pc
     rw [readReg_eq_of_get? Register.PC pre.sail row.address pc]
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by rw [instructionIs]; rfl) _
     (auipc_write_value charAbove2pow128 context equations selected rowIs instructionIs)
-    answer advice (by rw [instructionIs]; rfl)
+    answer advice
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl)]
   rw [instructionIs]
   simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, readPC, addWide_low]
 

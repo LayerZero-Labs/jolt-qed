@@ -18,7 +18,7 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-  {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+  {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
   (selected : bytecodeRa witness slot t = 1)
   {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
   {destination : Dst} {source : Src} {imm : BitVec 64}
@@ -34,13 +34,14 @@ private theorem movsign_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem movsign_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t = ((jolt_movsign_value (sourceValue source pre)).toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
   obtain ⟨left, right⟩ := agrees.immediateInputs bound context equations selected rowIs
     source imm (movsign_canonical context rowIs instructionIs).2
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
-    (by rw [instructionIs]; rfl)
+    (by rw [instructionIs]; rfl) sourceLive
   apply lookupWrite_value_of_raf_zero bound context equations selected rowIs
     (sourceValue source pre) imm _ .SignMask
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
@@ -51,23 +52,29 @@ private theorem movsign_write_value {pre : SailJoltState}
       (sourceValue source pre) imm raf leftLookup rightLookup table)
 
 /-- VirtualMovsign executes with its constrained sign mask and preserves
-register agreement at the next cycle. -/
+register agreement at the next cycle.
+The source is live; the destination joins the live set after the row.
+For example, VirtualMovsign can read a live source and initialize a temporary. -/
 theorem movsign_step {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := jolt_movsign_value (sourceValue source pre)
     witness.RdWriteValue t = (value.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
-  have sourceRead := (agrees.read source (movsign_canonical context rowIs instructionIs).2).1
+  have sourceRead := (agrees.read source (movsign_canonical context rowIs instructionIs).2 sourceLive).1
   have encoded := movsign_write_value charAbove2pow128 context equations
-    selected rowIs instructionIs agrees
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    selected rowIs instructionIs agrees sourceLive
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by rw [instructionIs]; rfl) _ encoded answer advice
-    (by rw [instructionIs]; rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice
+    (by rw [instructionIs]; rfl)]
   rw [instructionIs]
   simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, sourceRead]
 

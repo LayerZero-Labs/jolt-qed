@@ -47,7 +47,7 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-  {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+  {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
   (selected : bytecodeRa witness slot t = 1)
   {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
   (operation : ImmediateArithmetic) {destination : Dst} {source : Src} {imm : BitVec 64}
@@ -65,7 +65,8 @@ private theorem immediateArithmetic_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem immediateArithmetic_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue source pre) imm).toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
@@ -73,7 +74,7 @@ private theorem immediateArithmetic_write_value {pre : SailJoltState}
     source imm (immediateArithmetic_canonical context rowIs operation instructionIs).2
     (by cases operation <;> rw [instructionIs] <;> rfl)
     (by cases operation <;> rw [instructionIs] <;> rfl)
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+    (by cases operation <;> rw [instructionIs] <;> rfl) sourceLive
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
     have flag := opFlag_of_selected_bytecode bound context equations
       .WriteLookupOutputToRD t slot selected
@@ -108,24 +109,30 @@ private theorem immediateArithmetic_write_value {pre : SailJoltState}
     simpa only [ImmediateArithmetic.value, jolt_virtual_muliw_value, mulWide_low] using output
 
 /-- ADDIW and both immediate multiplications execute with their constrained
-result and preserve register agreement at the next cycle. -/
+result and preserve register agreement at the next cycle.
+The source is live; the destination joins the live set after the row.
+For example, ADDIW can read a live source and initialize a temporary. -/
 theorem immediateArithmetic_step {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := operation.value (sourceValue source pre) imm
     witness.RdWriteValue t = (value.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have sourceRead := (agrees.read source
-    (immediateArithmetic_canonical context rowIs operation instructionIs).2).1
+    (immediateArithmetic_canonical context rowIs operation instructionIs).2 sourceLive).1
   have encoded := immediateArithmetic_write_value charAbove2pow128 context equations
-    selected rowIs operation instructionIs agrees
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    selected rowIs operation instructionIs agrees sourceLive
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice
+    (by cases operation <;> rw [instructionIs] <;> rfl)]
   cases operation <;> rw [instructionIs] <;>
     simp only [ImmediateArithmetic.instruction, ImmediateArithmetic.value,
       execWithTapeAnswer, execInstr, bind, EStateM.bind, sourceRead]

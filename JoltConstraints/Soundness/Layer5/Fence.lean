@@ -14,7 +14,7 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -27,15 +27,17 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 /-- A selected FENCE executes without changing state, while both agreement
-relations advance through the next or final RAM column. -/
+relations advance through the next or final RAM column.
+The live set contains registers already matched to the witness and stays the same.
+For example, FENCE preserves agreement on a live architectural register. -/
 theorem fence_step {pre : SailJoltState}
-    (registers : RegisterAgreement witness t pre)
+    (registers : RegisterAgreementOn live witness t pre)
     (ram : OrdinaryRamAgreement context.io.memory_layout (fun index => witness.RamVal index t) pre)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS pre ∧
     (∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ pre ∧
+      RegisterAgreementOn live witness ⟨t.val + 1, next⟩ pre ∧
       OrdinaryRamAgreement context.io.memory_layout
         (fun index => witness.RamVal index ⟨t.val + 1, next⟩) pre) ∧
     (∀ _last : t.val + 1 = params.traceLength,
