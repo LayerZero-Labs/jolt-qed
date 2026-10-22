@@ -21,12 +21,9 @@ Inside an expansion only some registers agree, so each kind needs a step lemma o
    The families still on full agreement are in `AddressMasks`, `AssertionsAlignment`, `Auipc`, `BitwiseBinary`, `Fence`, `ImmediateArithmetic`, `ImmediateLogic`, `ImmediatePowerMask`, `ImmediateShift`, `LoadUpperImmediate`, `Movsign`, `RegisterComparison`, `RegisterShift`, `SetLessThanImmediate`, `WordArithmetic`, `XorImmediate` and `XorRotation`; check this list against step 1.
    Keep a full-agreement version only where a proof still uses it, derived from the general one, and delete the rest.
    Do not copy a proof per family.
-3. Two plain kinds have no step lemma; write them in new Layer 5 files.
-   - Branches (BEQ, BNE, BLT, BGE, BLTU, BGEU): both operands live, no write, the row executes successfully, and agreement holds on the same live set.
-     Execution can fail only if Sail rejects the target; check that a canonical bytecode branch's target cannot fail Sail's alignment check, and if it can, stop and report the exact case.
-   - `VirtualAdviceLoad` (a tape read): as `advice_step` (`Advice.lean`), the witness's written value is a 64-bit word `v`, executing with tape answer `v` (`execWithTapeAnswer`, `TapeSemantics.lean`) writes `v`, and the destination becomes live.
-     Execution fails for a byte count other than 1, 2, 4 or 8; check that expanded bytecode never has one.
-   Check both statements against "Before staging a statement" in `AGENTS.md` and against Jolt's tracer at the pin.
+3. Branches (BEQ, BNE, BLT, BGE, BLTU, BGEU) and `VirtualAdviceLoad` have no step lemma.
+   Do not write them; a later stage does.
+   List them in the report with any other plain kind that has no step lemma.
 
 Keep each proof under about 60 lines.
 If a step needs a fact that is not a short proof and is not named here or in `reuse.md`, stage it as its own lemma with `sorry`, and stop and report.
