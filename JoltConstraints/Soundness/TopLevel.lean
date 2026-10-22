@@ -13,6 +13,7 @@ import JoltConstraints.language
 import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Soundness.Layer6.PrefixAgreement
 import JoltConstraints.Soundness.Layer7.Stopping
+import JoltConstraints.Soundness.Layer7.SpoilAsserts
 import JoltConstraints.Soundness.Layer8.OutputWords
 import JoltConstraints.witness_helpers.pc
 import JoltConstraints.witness_helpers.rs1_value
@@ -162,8 +163,12 @@ theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (trace.prover_config joltInstance).isSome := by
   sorry
 
-/-- D. Each executed spoil assert uses its row's pre-state operands. The row
-observations and lookup constraints must rule out a failing assertion. -/
+/-- D. Each executed spoil assert uses its row's pre-state operands.
+Representation supplies those operands because they are not instruction
+temporaries, and the lookup and Assert constraints force equality.
+For example, a custom equality assertion with immediate 2 must have equal sides.
+See jolt/tracer/src/instruction/virtual_assert_eq.rs (`VirtualAssertEQ::exec`)
+at 5def437f. -/
 theorem soundness_spoil_asserts_pass {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -175,6 +180,7 @@ theorem soundness_spoil_asserts_pass {F : Type} [Field F] (joltField : JoltField
     (bytecodeEq : trace.bytecode = context.bytecode)
     (represented : Represents witness trace.toUntrustedAnswerRun.toTrace) :
     trace.SpoilAssertsPass := by
-  sorry
+  exact represented_spoil_asserts_pass joltField joltInstance privateInputs witness
+    context equations trace.toUntrustedAnswerRun bytecodeEq represented.toRepresentsRows
 
 end JoltInstance

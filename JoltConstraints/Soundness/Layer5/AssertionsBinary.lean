@@ -55,18 +55,18 @@ private theorem binaryAssertion_canonical :
 
 include charAbove2pow128 context equations selected rowIs instructionIs
 
-private theorem binaryAssertion_passes {pre : SailJoltState}
-    (agrees : RegisterAgreementOn live witness t pre)
-    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
-    (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
-    kind.Passes (sourceValue lhs pre) (sourceValue rhs pre) := by
+/-- The selected assertion's lookup and Assert constraint enforce its predicate
+on the two 64-bit words encoded by its instruction inputs.
+For example, an equality assertion forces `leftWord = rightWord` even when
+its nonzero immediate lets Jolt's tracer continue after unequal operands.
+See jolt/tracer/src/instruction/virtual_assert_eq.rs (`VirtualAssertEQ::exec`)
+and jolt/crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs
+(`LookupQuery<XLEN>::to_lookup_output`) at 5def437f. -/
+theorem binaryAssertion_passes_of_inputs (leftWord rightWord : BitVec 64)
+    (left : witness.LeftInstructionInput t = (leftWord.toNat : F))
+    (right : witness.RightInstructionInput t = (rightWord.toNat : F)) :
+    kind.Passes leftWord rightWord := by
   have bound := two_pow_127_lt_char charAbove2pow128
-  have canonical := binaryAssertion_canonical context rowIs kind instructionIs
-  obtain ⟨left, right⟩ := agrees.registerInputs bound context equations selected rowIs
-    lhs rhs canonical.1 canonical.2
-    (by cases kind <;> rw [instructionIs] <;> rfl)
-    (by cases kind <;> rw [instructionIs] <;> rfl)
-    (by cases kind <;> rw [instructionIs] <;> rfl) leftLive rightLive
   have raf : witness.InstructionRafFlag t = 0 := by
     have flag := instructionRafFlag_of_selected_bytecode bound context equations t slot selected
     cases kind <;>
@@ -83,30 +83,45 @@ private theorem binaryAssertion_passes {pre : SailJoltState}
   cases kind with
   | eq =>
     have output := lookupOutput_equal bound context equations t slot selected
-      (sourceValue lhs pre) (sourceValue rhs pre) raf
+      leftWord rightWord raf
       (leftLookup.trans left) (rightLookup.trans right)
       (by simp only [rowIs, Option.bind_some, instructionIs,
         BinaryAssertion.instruction, JoltMetadata.lookupTable])
-    change sourceValue lhs pre = sourceValue rhs pre
+    change leftWord = rightWord
     exact predicate_of_assert equations.assertLookupOne t active _ output
   | div0 =>
     have output := lookupOutput_validDiv0 bound context equations t slot selected
-      (sourceValue lhs pre) (sourceValue rhs pre) raf
+      leftWord rightWord raf
       (leftLookup.trans left) (rightLookup.trans right)
       (by simp only [rowIs, Option.bind_some, instructionIs,
         BinaryAssertion.instruction, JoltMetadata.lookupTable])
-    change ¬ (sourceValue lhs pre = 0 ∧ sourceValue rhs pre ≠ -1)
+    change ¬ (leftWord = 0 ∧ rightWord ≠ -1)
     intro bad
     rw [if_pos bad] at output
     exact zero_ne_one (output.symm.trans accepted)
   | remainder =>
     have output := lookupOutput_validUnsignedRemainder bound context equations t slot selected
-      (sourceValue lhs pre) (sourceValue rhs pre) raf
+      leftWord rightWord raf
       (leftLookup.trans left) (rightLookup.trans right)
       (by simp only [rowIs, Option.bind_some, instructionIs,
         BinaryAssertion.instruction, JoltMetadata.lookupTable])
-    change sourceValue rhs pre = 0 ∨ sourceValue lhs pre < sourceValue rhs pre
+    change rightWord = 0 ∨ leftWord < rightWord
     exact predicate_of_assert equations.assertLookupOne t active _ output
+
+private theorem binaryAssertion_passes {pre : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t pre)
+    (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
+    kind.Passes (sourceValue lhs pre) (sourceValue rhs pre) := by
+  have canonical := binaryAssertion_canonical context rowIs kind instructionIs
+  obtain ⟨left, right⟩ := agrees.registerInputs
+    (two_pow_127_lt_char charAbove2pow128) context equations selected rowIs
+    lhs rhs canonical.1 canonical.2
+    (by cases kind <;> rw [instructionIs] <;> rfl)
+    (by cases kind <;> rw [instructionIs] <;> rfl)
+    (by cases kind <;> rw [instructionIs] <;> rfl) leftLive rightLive
+  exact binaryAssertion_passes_of_inputs charAbove2pow128 context equations
+    selected rowIs kind instructionIs _ _ left right
 
 /-- All three assertion rows retire with no state change and preserve register
 agreement, including at the final cycle.
