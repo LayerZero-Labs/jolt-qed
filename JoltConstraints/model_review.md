@@ -171,9 +171,15 @@ The following declarations still use `sorry`:
 
 | Declaration | What it needs |
 |---|---|
-| `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice in the run. The witness's division advice may differ; the `*Program_sound` theorems give the honest machine state after the expansion, and `RepresentsRows` omits instruction-temporary reads while retaining comparisons for absent operands. It must also give `cutRam`: RAM agreement at the cut, or `RamValFinal` agreement when the run fills every cycle, for every RAM word except the termination word, including input, advice, output and panic words. |
+| `JoltInstance.boundaryState_empty` (`Soundness/Layer6/PrefixAgreement.lean`) | Construct the empty initialized run and establish `BoundaryState`: initial register and nontermination RAM agreement, zero termination RAM, and entry readiness when cycle zero is real; the retained-row fields are vacuous. |
+| `JoltInstance.boundary_step` (`Soundness/Layer6/PrefixAgreement.lean`) | From a boundary with a real next cycle and no final stable stall, execute one whole source instruction and restore every `BoundaryState` field with a strictly larger row count. The witness's division advice may differ; use the expansion soundness results for the honest machine state, omit instruction-temporary reads in `RepresentsRows`, and restore register agreement outside those temporaries. Preserve cut RAM outside the termination word, zero termination RAM before any store there, honest advice, real rows, no earlier stop, and readiness at the next boundary. |
 | `JoltInstance.soundness_prover_accepts` (C) | Prove the last-jump and RAM-address checks and the prover's padded length from the verifier's 256-cycle floor, the witness upper bound and `NoMaxLengthTrace`. The helper remains `sorry`; the two previously known counterexamples are excluded by the floor and the temporary restriction. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
+
+Layer 6 stage 1 moves `soundness_execution_prefix_agreement`, with its statement unchanged, to `Soundness/Layer6/PrefixAgreement.lean` and proves it by strong induction from `boundaryState_empty` and `boundary_step`.
+The two boundary lemmas remain staged for review; no proof of either is attempted in this stage.
+`ExecutionPrefix.lean` retains the unchanged representation definitions used by Layer 7.
+See [the stage 1 report](../methods/layer6/stage-1-report.md) for the invariant audit and validation.
 
 Steps 1–6 of the tape-rebuild closing plan are complete; `feat/layer7-tape-rebuild`, rebased onto step (c) commit `de5aff70de66d290ceaeb6e7357ba352b855c5d0`, is merged into `feat/soundness`.
 `rebuild_rows` maps the relaxed rows directly with `Array.ofFn`, proving execution, initialization, linkage, row agreement and source-start agreement.

@@ -91,7 +91,8 @@ Step (a) shares the output, prover-acceptance and spoil-assert predicates on the
 Its fixed-tape inclusion is proved, and the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` in Layer 7 is proved without `sorryAx`.
 Helper A is proved from execution-prefix agreement and the assembled stopping theorem.
 Layers 7 and 8 are proved.
-The only remaining `sorry`s are `soundness_execution_prefix_agreement` (Layers 5b–6, `Soundness/Layer6/ExecutionPrefix.lean`), helper C `soundness_prover_accepts` and helper D `soundness_spoil_asserts_pass`.
+The remaining soundness `sorry`s are `boundaryState_empty` and `boundary_step` (Layers 5b–6, `Soundness/Layer6/PrefixAgreement.lean`), helper C `soundness_prover_accepts` and helper D `soundness_spoil_asserts_pass`.
+Layer 6 stage 1 proves the unchanged `soundness_execution_prefix_agreement` statement by strong induction from those two staged boundary lemmas; see [the stage 1 report](layer6/stage-1-report.md).
 Helper C remains `sorry` but is no longer known false: the base verifier floor excludes short witnesses, and the approved `noMaxLengthTrace` restriction excludes a run that fills the largest permitted power-of-two domain.
 The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
 Step (c)'s five original stopping gaps are proved after Ari approved the checker integration.
@@ -147,10 +148,9 @@ Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
 ## Running the Layer 6 agents (for Ari)
 
-Layers 5b–6 are done in stages, one fresh agent per stage; [layer6/README.md](./layer6/README.md) lists them.
-Each stage has its own file, `methods/layer6/stage-N.md`, written only after the previous stage's report has been reviewed.
+Layers 5b–6 are done in stages.
+Each stage has its own plan, `methods/layer6/stage-N.md`, written only after the previous stage's report has been reviewed, and Claude gives Ari the prompt for the agent.
 At most two agents run at once.
-To start a stage, open a fresh agent and give it the prompt in "Starting a stage" in `methods/layer6/README.md`.
 Each stage ends with a report, `methods/layer6/stage-N-report.md`; read it, with Claude's audit, before the next stage starts.
 
 ## Layer 5b handoff (updated 2026-10-20)

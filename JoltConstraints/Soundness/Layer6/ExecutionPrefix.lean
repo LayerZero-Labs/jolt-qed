@@ -74,34 +74,5 @@ structure Represents {F : Type} [Field F] {params : WitnessParams}
       JoltConstraints.ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 →
     witness.RamValFinal address = ((TraceWitness.finalRamWord trace address.val).toNat : F)
 
-/-- Reconstruct witness rows through the first stable stall, or through padding
-or the last cycle when no stall occurs. Every retained row is real, no retained
-row stops before the last, and its observations and internal advice agree. -/
-theorem soundness_execution_prefix_agreement {F : Type} [Field F]
-    (joltField : JoltField F)
-    (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
-    (restrictions : joltInstance.TemporaryRestrictions)
-    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
-    (witness : WitnessType F params)
-    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
-    (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
-      context.io context.entry witness) :
-    ∃ run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs,
-      run.bytecode = context.bytecode ∧
-      RepresentsPrefix witness run.toTrace ∧
-      (∀ t : Fin params.traceLength,
-        t.val < run.rows.size → witness.InstructionFlags .IsNoop t = 0) ∧
-      (∀ (i : Nat) (current next : TraceRow run.bytecode),
-        run.rows[i]? = some current → run.rows[i + 1]? = some next →
-        ¬ current.StableStall) ∧
-      (run.rows.size = params.traceLength ∨
-        ∃ bound : run.rows.size < params.traceLength,
-          witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 1 ∨
-          ∃ last ∈ run.rows.back?, last.StableStall) ∧
-      (∀ n : Fin run.rows.size,
-        run.rows[n].someTracerAdvice? =
-          honestTracerAdviceAtStepN joltInstance.program run.rows n) := by
-  sorry
 
 end JoltInstance

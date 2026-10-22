@@ -25,6 +25,19 @@ structure RegisterAgreement (witness : WitnessType F params)
     witness.RegistersVal register t =
       ((sourceValue (JoltRegisterEncoding.source (BitVec.ofFin register)) state).toNat : F)
 
+/-- The register table agrees with `state` on the registers satisfying `live`,
+and every Sail register is present so execution reads can succeed.
+For example, between source instructions `live` excludes instruction temporaries
+40–47: a REM witness may retain quotient 5 there while the honest run retains 0.
+The equation uses the same register decoding and field cast as `RegisterAgreement`.
+See jolt/crates/jolt-program/src/expand/allocator.rs:133-143 at 5def437f. -/
+structure RegisterAgreementOn (live : Fin 128 → Prop) (witness : WitnessType F params)
+    (t : Fin params.traceLength) (state : SailJoltState) : Prop where
+  present : AllRegistersPresent state.sail
+  values : ∀ register : Fin 128, live register →
+    witness.RegistersVal register t =
+      ((sourceValue (JoltRegisterEncoding.source (BitVec.ofFin register)) state).toNat : F)
+
 /-- The zero table and the instance's initialized state establish register
 agreement, including successful-read availability. -/
 theorem RegisterAgreement.initial

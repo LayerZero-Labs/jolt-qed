@@ -11,6 +11,7 @@ import JoltConstraints.Completeness.Helpers.RamOutputProofHelpers
 import JoltConstraints.Completeness.All
 import JoltConstraints.language
 import JoltConstraints.Soundness.Layer5.TapeTrace
+import JoltConstraints.Soundness.Layer6.PrefixAgreement
 import JoltConstraints.Soundness.Layer7.Stopping
 import JoltConstraints.Soundness.Layer8.OutputWords
 import JoltConstraints.witness_helpers.pc
