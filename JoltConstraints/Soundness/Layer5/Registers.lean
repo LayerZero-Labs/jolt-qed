@@ -38,6 +38,27 @@ structure RegisterAgreementOn (live : Fin 128 → Prop) (witness : WitnessType F
     witness.RegistersVal register t =
       ((sourceValue (JoltRegisterEncoding.source (BitVec.ofFin register)) state).toNat : F)
 
+/-- Agreement on `live` implies agreement on `smaller` when every register in
+`smaller` belongs to `live`; all Sail registers remain present.
+For example, agreement on registers x1 and x2 implies agreement on x1 alone. -/
+theorem RegisterAgreementOn.mono {live smaller : Fin 128 → Prop}
+    {t : Fin params.traceLength} {state : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t state)
+    (subset : ∀ register, smaller register → live register) :
+    RegisterAgreementOn smaller witness t state :=
+  ⟨agrees.present, fun register member => agrees.values register (subset register member)⟩
+
+/-- Full register agreement implies agreement on any chosen predicate `live`,
+retaining the presence of all Sail registers.
+For example, initial full agreement can be restricted to registers other than
+instruction temporaries 40–47 at a source boundary. -/
+theorem RegisterAgreement.toOn {t : Fin params.traceLength} {state : SailJoltState}
+    (agrees : RegisterAgreement witness t state) (live : Fin 128 → Prop) :
+    RegisterAgreementOn live witness t state :=
+  (show RegisterAgreementOn (fun _ => True) witness t state from
+    ⟨agrees.present, fun register _ => agrees.values register⟩).mono
+      (fun _ _ => True.intro)
+
 /-- The zero table and the instance's initialized state establish register
 agreement, including successful-read availability. -/
 theorem RegisterAgreement.initial
