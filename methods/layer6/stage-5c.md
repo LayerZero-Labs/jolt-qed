@@ -36,6 +36,10 @@ Most parts exist in Layer 7, proved for the final stable stall; several are alre
   Taken: `nextUnexpandedPCEqPCPlusImmIfShouldBranch` gives address plus immediate as a field sum, and `branch_target_toNat` gives the word.
   Not taken: the update equation, as for the ordinary kind.
   Sail: `JoltNextPCFrame.BranchTaken` and `branch_not_taken` (`JoltConstraints/nextpc_frame.lean`).
+  The plan first omitted the target bound that `branch_target_toNat` needs (stage 5c report).
+  The real successor supplies it: the next cycle selects a real bytecode row (as in the proof of `next_cycle_of_target`), whose address is a 64-bit word at least `RAM_START_ADDRESS` (`pc_map_ok_addresses` and `bytecode_address_ok`, as in `HonestTrace.starts_at_entry`).
+  By `nextUnexpandedPCEqShift`, `NextUnexpandedPC` at the branch's cycle is that address; extract this from `next_cycle_of_target` as its own lemma rather than repeat it.
+  For a taken branch, the field sum of source address and immediate then equals that word, so, with the characteristic above 2^127, the unwrapped sum is that word and Sail's wrapped target equals it.
 
 Keep each proof under about 60 lines; if one grows past that, a lemma is missing.
 Do not copy a Layer 7 proof for the general case: generalize it in place and derive the stall version from it.
