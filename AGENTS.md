@@ -14,6 +14,13 @@ The state of the proof lives in the repository, not in any one session:
 - `methods/soundness.md`: the plan, the layers, and the current status.
 - `JoltConstraints/model_review.md`, "Proofs owed": every remaining `sorry` and what it needs.
 
+## Review
+
+Claude, in a separate session, is the auditor.
+It reviews every staged statement and every report before Ari approves it.
+It checks for drift from Jolt's Rust code, false or weak statements, new assumptions, proof quality against this file, and whether the docs match the code.
+Write your reports so they can be checked: name each declaration with its file and line, and list every statement change, added hypothesis, `bv_decide` use and timing.
+
 ## When stuck, discuss first
 
 Stop and bring the problem to Ari before doing any of the following:
