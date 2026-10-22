@@ -6,7 +6,8 @@ Work in `/Users/ari.biswas/Lean/jolt-qed-public` on `feat/soundness`; do not com
 Stage 4a Part B (`PlainRow.lean`, `DivisionBlock.lean`) is committed (`af7e9a6`); do not revert anything you did not write.
 The other agent works in `TerminalNextPC.lean`, `ExpansionFinish.lean`, and parts of `LastJump.lean` and `StallSuffix.lean`; do not edit those four files.
 Edit `DivisionBlock.lean`, and put new lemmas in a new file `Soundness/Layer6/DivisionAppend.lean` that `DivisionBlock.lean` imports, so that `DivisionBlock.lean` stays readable.
-`division_append_honest` uses definitions from `DivisionBlock.lean`, so to avoid an import cycle first move the definitions it needs (`DivisionKind` through `DivisionFinalAgreement`, and helpers such as `arithmetic_exec_eq`) unchanged into a new `Soundness/Layer6/DivisionDefs.lean` that both files import.
+`division_append_honest` uses definitions from `DivisionBlock.lean`, so to avoid an import cycle first move the definitions it needs (`DivisionKind` through `DivisionFinalAgreement`, and helpers such as `arithmetic_exec_eq`) into a new `Soundness/Layer6/DivisionDefs.lean` that both files import, with their statements unchanged.
+A moved private lemma that another file uses becomes public; give it a docstring and list it in the report.
 Do not edit `JoltConstraints/model_review.md` or `methods/soundness.md`.
 
 ## Why
