@@ -147,7 +147,9 @@ private theorem witnessWord_of_encoded {F : Type} [Field F] {params : WitnessPar
   · exact (Exists.choose_spec (show ∃ v : BitVec 64,
         witness.RdWriteValue cycle = (v.toNat : F) from ⟨value, encoded⟩)).symm.trans encoded
 
-private theorem single_advice_index (rows : List Instr)
+/-- A sequence with one advice-bearing instruction has a unique index for it.
+For example, the VirtualAdvice instruction in REM's expansion is the sole index. -/
+theorem single_advice_index (rows : List Instr)
     (single : (rows.filter fun row => row.adviceValue?.isSome).length = 1) :
     ∃ (index : Nat) (bound : index < rows.length), rows[index].adviceValue?.isSome = true ∧
       ∀ (other : Nat) (inRows : other < rows.length),
@@ -211,7 +213,9 @@ theorem arithmetic_exec_eq (instruction : Instr) (arithmetic : DivisionArithmeti
   · exact False.elim arithmetic
   · rfl
 
-private theorem expansionInstructions_at (bytecode : Array JoltInstructionRow)
+/-- A row inside an expansion is the instruction at the same list offset.
+For example, offset two of REM's bytecode expansion is its third program row. -/
+theorem expansionInstructions_at (bytecode : Array JoltInstructionRow)
     (first : Fin bytecode.size) (offset : Nat)
     (inside : offset < expansionRowCount bytecode first)
     (count : (expansionInstructions bytecode first).length = expansionRowCount bytecode first)

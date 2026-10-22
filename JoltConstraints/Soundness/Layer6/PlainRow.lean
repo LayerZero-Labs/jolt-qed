@@ -242,7 +242,12 @@ private theorem expansion_row_countdown
   rw [atOffset] at countdown
   omega
 
-private theorem expansion_row_remaining
+/-- A row before the end of a stamped expansion has a nonzero countdown.
+For example, the first row of a nine-row REM block has eight rows remaining.
+The proof uses Jolt's sequence stamp from
+`jolt/crates/jolt-program/src/expand/metadata.rs` (`stamp_sequence_metadata`)
+at 5def437f. -/
+theorem expansion_row_remaining
     (image : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
     (expanded : expand_program image = some bytecode)
     (first : Fin bytecode.size) (starts : bytecode[first].starts_source = true)
