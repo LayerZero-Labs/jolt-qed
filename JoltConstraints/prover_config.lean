@@ -3,9 +3,9 @@ import JoltConstraints.verifier_sizes
 
 set_option autoImplicit false
 
-/- Checked base/Dory sizing at public pin 8bbb2357, on a 64-bit host.
+/- Checked base/Dory sizing at public pin 5def437f, on a 64-bit host.
    Rust: crates/jolt-program/src/execution/trace.rs:193-288 and
-   crates/jolt-prover/src/config.rs:62-149. Error variants are erased to none.
+   crates/jolt-prover/src/config.rs:52-139. Error variants are erased to none.
    Addresses and lengths use Nat as in the layout model; summaries produced
    from an honest trace contain 64-bit addresses. Akita is outside this model. -/
 

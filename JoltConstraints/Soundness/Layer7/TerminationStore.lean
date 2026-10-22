@@ -120,7 +120,7 @@ theorem UntrustedAnswerRun.truncate_linked
 
 /-- The first `n` rows form an untrusted-answer run with literally the same
 bytecode, initial state and answers. For example, cutting at 4 retains rows 0–3.
-See jolt/tracer/src/emulator/cpu.rs:622-632 at 8bbb2357. -/
+See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
 noncomputable def UntrustedAnswerRun.truncate
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)
@@ -254,7 +254,7 @@ theorem honestTracerAdviceAtStepN_extract
 
 /-- Each retained row uses the layout fixed by the emulator's initial device.
 For example, an SD at row 3 interprets the termination region using the same
-layout as row 0. See jolt/tracer/src/emulator/cpu.rs:622-632 at 8bbb2357. -/
+layout as row 0. See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
 theorem UntrustedAnswerRun.preState_layout
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -299,7 +299,7 @@ theorem UntrustedAnswerRun.preState_layout
 
 /-- A no-panic public I/O image assigns one to its termination word.
 For example, the SDK exit claim uses word value 1 at its termination address.
-See jolt/crates/jolt-program/src/preprocess/public_io.rs:47-52 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/preprocess/public_io.rs:51-56 at 5def437f. -/
 theorem ramPublicIoWord_termination (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout)
     (io : JoltDevice) (sameLayout : io.memory_layout = layout)
@@ -320,7 +320,7 @@ theorem ramPublicIoWord_termination (config : MemoryConfig) (layout : MemoryLayo
 
 /-- The termination word lies inside the verifier's masked public I/O interval.
 For example, the SDK exit word is checked by constraint 26.
-See jolt/crates/jolt-program/src/preprocess/public_io.rs:47-52 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/preprocess/public_io.rs:51-56 at 5def437f. -/
 theorem ramPublicIoMask_termination {F : Type} [Field F]
     (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout)
@@ -803,7 +803,7 @@ open JoltConstraints.Soundness
 /-- A no-panic claim forces a completed SD to touch the termination word in
 the retained run. For example, storing 1 to the SDK exit word supplies this row.
 The final public word is set in
-jolt/crates/jolt-program/src/preprocess/public_io.rs:47-52 at 8bbb2357;
+jolt/crates/jolt-program/src/preprocess/public_io.rs:51-56 at 5def437f;
 the store is emitted in jolt/jolt-sdk/macros/src/lib.rs:880-887. -/
 theorem soundness_termination_store_exists
     {F : Type} [Field F] (joltField : JoltField F)
@@ -905,8 +905,8 @@ private theorem truncate_no_earlier_stall
 /-- Truncating a run before its existing row `i` produces an initialized
 prefix ready to execute that row, with honest advice and no earlier stall.
 For example, truncating before row 4 leaves rows 0 through 3.
-See jolt/tracer/src/emulator/cpu.rs:622-632 at 8bbb2357 and
-PR #2109 head d2995380, jolt/tracer/src/emulator/cpu.rs:553-578. -/
+See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f and
+PR #2109 merge commit 0249591a, jolt/tracer/src/emulator/cpu.rs:553-576. -/
 theorem soundness_prefix_next_step
     (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs)
@@ -972,7 +972,7 @@ theorem soundness_prefix_next_step
 
 /-- A termination store occurs before a final row that is a JAL or JALR.
 For example, the SDK exit store precedes its final `j .` row.
-See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 8bbb2357. -/
+See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 5def437f. -/
 private theorem store_precedes_last_jump
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -1013,8 +1013,8 @@ private theorem store_precedes_last_jump
 /-- Once a completed termination store precedes the final jump, the temporary
 exit restriction makes that jump `JAL +0`, and execution makes it a stable stall.
 For example, the SDK's `j .` after its exit store is the final row.
-See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 8bbb2357 and
-PR #2109 head d2995380, jolt/crates/jolt-riscv/src/row.rs:105-132. -/
+See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 5def437f and
+PR #2109 merge commit 0249591a, jolt/crates/jolt-riscv/src/row.rs:106-130. -/
 theorem soundness_termination_last_stall
     (joltInstance : JoltInstance SourceInstruction)
     (restricted : joltInstance.TerminationThenStall)

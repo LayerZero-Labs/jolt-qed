@@ -89,7 +89,7 @@ theorem program_image_len_words_le (memory_init : List (BitVec 64 × BitVec 8)) 
 -- An accepted run's RAM size is 2^logRamK with logRamK below 64: every touched slot
 -- and the end of the program image come from 64-bit addresses, so they are at most
 -- 2^63, and ram_K is the power of two that rounds them up.
--- See : jolt/crates/jolt-prover/src/config.rs:94-108 at 8bbb2357 (the policy here has the explicit +1 correction)
+-- See : jolt/crates/jolt-prover/src/config.rs:84-98 at 5def437f (the policy here has the explicit +1 correction)
 theorem HonestTrace.corrected_prover_config_log_ram_K_lt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -143,7 +143,7 @@ theorem HonestTrace.log_bytecode_size_lt
 -- ram_K from the prover config, the bytecode size from preprocessing (preprocess_slots:
 -- max 2 (2 ^ clog 2 (rows + 1)) slots), and the chunk widths Rust picks from the length:
 -- 4 and 16 below 2^25 cycles, else 8 and 32.
--- See : jolt/crates/jolt-prover/src/config.rs:208-225 at 8bbb2357 (one_hot_config)
+-- See : jolt/crates/jolt-prover/src/config.rs:188-204 at 5def437f (one_hot_config)
 --       jolt/common/src/constants.rs:13 (ONEHOT_CHUNK_THRESHOLD_LOG_T = 25)
 noncomputable def HonestTrace.corrected_witness_params
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

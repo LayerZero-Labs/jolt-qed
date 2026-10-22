@@ -10,16 +10,36 @@ set_option autoImplicit false
 
 namespace JoltInstance
 
+/-- An instruction temporary is a register classified as `instructionTmp` by
+Jolt's register map, namely registers 40–47. For example, register 40 is an
+instruction temporary, while register 36 (`mepc`) is persistent machine state.
+See jolt/crates/jolt-program/src/expand/allocator.rs:133-143 at 8bbb2357. -/
+def IsInstructionTemporary (register : Fin 128) : Prop :=
+  (match JoltISA.joltRegisterSlot (BitVec.ofFin register) with
+  | .instructionTmp _ => true
+  | _ => false) = true
+
 /-- The witness observations for every row up to and including the first stable
-stall, or up to padding or the last witness cycle when there is no stall. -/
+stall, or up to padding or the last witness cycle when there is no stall.
+Source operands agree unless their register is an instruction temporary;
+absent operands still agree. For example, `rem a0, a1, zero` may use witness
+quotient advice 5 and honest advice 0: its reads of temporary 40 may differ,
+while its architectural operands and final result agree.
+See jolt/crates/jolt-program/src/expand/division/rem.rs:15-24 at 8bbb2357. -/
 structure RepresentsRows {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) (trace : Trace) : Prop where
   rowsBound : trace.rows.size ≤ params.traceLength
   pc : ∀ t : Fin params.traceLength, t.val < trace.rows.size →
     witness.PC t = TraceWitness.PC params trace t
-  rs1 : ∀ t : Fin params.traceLength, t.val < trace.rows.size →
+  rs1 : ∀ (t : Fin params.traceLength) (inRun : t.val < trace.rows.size),
+    (∀ register ∈ JoltConstraints.bytecodeRs1Register
+      trace.bytecode[trace.rows[t.val].rowIndex].instruction,
+      ¬ IsInstructionTemporary register) →
     witness.Rs1Value t = TraceWitness.Rs1Value params trace t
-  rs2 : ∀ t : Fin params.traceLength, t.val < trace.rows.size →
+  rs2 : ∀ (t : Fin params.traceLength) (inRun : t.val < trace.rows.size),
+    (∀ register ∈ JoltConstraints.bytecodeRs2Register
+      trace.bytecode[trace.rows[t.val].rowIndex].instruction,
+      ¬ IsInstructionTemporary register) →
     witness.Rs2Value t = TraceWitness.Rs2Value params trace t
   ramAddress : ∀ t : Fin params.traceLength, t.val < trace.rows.size →
     witness.RamAddress t = TraceWitness.RamAddress params trace t

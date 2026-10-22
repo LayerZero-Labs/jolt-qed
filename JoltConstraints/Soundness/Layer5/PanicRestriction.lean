@@ -19,7 +19,7 @@ The SDK's panic path stores the byte 1 once; its SB expansion loads the panic
 word only before that store, when the device and the table both read 0.
 At public pin 8bbb2357:
 See : jolt/common/src/jolt_device.rs:121-148, 175-178
-See : jolt/crates/jolt-program/src/preprocess/public_io.rs:42-52
+See : jolt/crates/jolt-program/src/preprocess/public_io.rs:42-56
 See : jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:312-317, 392-394
 See : jolt/jolt-sdk/src/runtime/exit.rs:34-40
 See : jolt/jolt-sdk/macros/src/lib.rs:899-903 -/

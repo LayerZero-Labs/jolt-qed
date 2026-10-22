@@ -120,7 +120,7 @@ open JoltConstraints JoltConstraints.RustMemoryLayout in
 /-- Every device Rust builds satisfies `AdviceBelowInput`: its layout comes from
 `MemoryLayout::new`, and `create_emulator` rejects advice longer than the
 configured maximum before execution starts.
-Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/tracer/src/lib.rs#L382-L393 -/
+Jolt: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/tracer/src/lib.rs#L367-L377 -/
 theorem JoltDevice.AdviceBelowInput.of_memoryLayout
     (io : JoltDevice) (config : JoltConstraints.RustMemoryLayout.MemoryConfig) (layout : AdviceInputLayout)
     (built : adviceInputLayout config = some layout)

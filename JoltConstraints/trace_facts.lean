@@ -90,7 +90,7 @@ theorem HonestTrace.store_offset_aligned {joltInstance : JoltInstance SourceInst
 
 -- Rust's padded length is a power of two, at least 256, and larger than the run, so
 -- the witness always ends with at least one padding row.
--- See : jolt/crates/jolt-prover/src/config.rs:73-81 at 8bbb2357 (successful padding)
+-- See : jolt/crates/jolt-prover/src/config.rs:63-70 at 5def437f (successful padding)
 theorem padded_trace_length_spec (rows : Nat) :
     rows < padded_trace_length rows ∧ 256 ≤ padded_trace_length rows ∧
     ∃ log, padded_trace_length rows = 2 ^ log := by
@@ -112,7 +112,7 @@ theorem guard_some {condition : Prop} [Decidable condition] {passed : Unit}
 
 -- When the corrected sizing policy accepts a run, its trace length is the padded length, and that
 -- length is within the instance's maximum.
--- See : jolt/crates/jolt-prover/src/config.rs:73-81, 128-133 at 8bbb2357 (padding/limit)
+-- See : jolt/crates/jolt-prover/src/config.rs:63-70, 116-119 at 5def437f (padding/limit)
 theorem HonestTrace.corrected_prover_config_trace_length {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (accepted : trace.corrected_prover_config = some config) :
@@ -133,7 +133,7 @@ theorem HonestTrace.corrected_prover_config_trace_length {joltInstance : JoltIns
   exact ⟨rfl, guard_some lengthChecked⟩
 
 -- When the corrected sizing policy accepts a run, its last row is a jump (a16z/jolt#1968).
--- See : jolt/crates/jolt-prover/src/config.rs:70-72 at 8bbb2357
+-- See : jolt/crates/jolt-prover/src/config.rs:60-62 at 5def437f
 theorem HonestTrace.corrected_prover_config_last_jump {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (accepted : trace.corrected_prover_config = some config) :
@@ -205,7 +205,7 @@ theorem program_image_len_words_pos (memory_init : List (BitVec 64 × BitVec 8))
 -- With the corrected sizing policy, the RAM table has at least 2 slots, since the
 -- program image ends at slot 2 or later. So a RAM slot number splits into at least
 -- one chunk.
--- See : jolt/crates/jolt-prover/src/config.rs:94-108 at 8bbb2357 (image extent)
+-- See : jolt/crates/jolt-prover/src/config.rs:84-98 at 5def437f (image extent)
 theorem HonestTrace.corrected_prover_config_ram_K_ge_two {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (accepted : trace.corrected_prover_config = some config) :

@@ -698,7 +698,7 @@ theorem init_state_sourceValue (entryAddress : BitVec 64) (ram : Array (BitVec 8
 
 -- The instance's initial state has every register, real or virtual, at 0, as Rust's
 -- Cpu::new sets them.
--- See : jolt/tracer/src/emulator/cpu.rs:504 (x: [0; REGISTER_COUNT])
+-- See : jolt/tracer/src/emulator/cpu.rs:448 at 5def437f (x: [0; REGISTER_COUNT])
 theorem initial_state_sourceValue {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState)

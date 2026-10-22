@@ -8,7 +8,7 @@ set_option autoImplicit false
 namespace JoltConstraints
 
 /-- Fixed normalized register operand, with no operand represented by none.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L598-L630 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L657-L689 -/
 def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _ | .XORI _ src _
@@ -42,7 +42,7 @@ def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
 /-- Fixed normalized register operand, with no operand represented by none.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L598-L630 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L657-L689 -/
 def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .BEQ _ src _ | .BNE _ src _ | .BLT _ src _ | .BGE _ src _ | .BLTU _ src _ | .BGEU _ src _
@@ -75,7 +75,7 @@ def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualHostIO _ _ _ => none
 
 /-- Fixed normalized register operand, with no operand represented by none.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L598-L630 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L657-L689 -/
 def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
@@ -119,7 +119,7 @@ def bytecodeRegisterSelector {F : Type} [Field F] (bytecode : Array JoltInstruct
   | none => 0
 
 /-- Fixed lookup-table flags; a padding no-op selects no lookup table.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L607-L609 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L668-L670 -/
 def bytecodeLookupTableFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRow)
     (table : LookupTableKind) (address : Nat) : F :=
   match bytecodeRow bytecode address with
@@ -127,7 +127,7 @@ def bytecodeLookupTableFlag {F : Type} [Field F] (bytecode : Array JoltInstructi
   | none => 0
 
 /-- Fixed RAF flag: one for combined lookup operands; padding contributes zero.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L603-L609 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L662-L668 -/
 def bytecodeRafFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (address : Nat) : F :=
   match bytecodeRow bytecode address with
   | some row => if JoltMetadata.instructionRafFlag row.instruction then 1 else 0

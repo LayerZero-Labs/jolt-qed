@@ -26,7 +26,7 @@ open Sail PreSail LeanRV64D.Functions JoltISA
 
 /-- Between two non-read states, the tape cursor is fixed and bytes may only be
 appended. For a tape `[0x2C]`, a host write of `0x01` gives `[0x2C, 0x01]`.
-See `jolt/tracer/src/emulator/cpu.rs:24-60` at 8bbb2357. -/
+See `jolt/tracer/src/emulator/cpu.rs:44-60` at 5def437f. -/
 private def TapeGrowth (a b : SailJoltState) : Prop :=
   a.adviceTape.readPosition = b.adviceTape.readPosition ∧
     ∃ suffix, b.adviceTape.bytes = a.adviceTape.bytes ++ suffix
@@ -1926,7 +1926,7 @@ theorem rebuild_spoil_asserts
 
 /-- The honest advice calculator reads registers, not tape bytes: replacing
 `[0x2C, 0x01]` with `[0x2C]` leaves its result unchanged.
-See `jolt/tracer/src/instruction/mod.rs:207-233` at 8bbb2357. -/
+See `jolt/tracer/src/instruction/mod.rs:207-233` at 5def437f. -/
 private theorem honestTracerAdvice_ignores_tape
     (source : SourceInstruction) (old replay : SailJoltState)
     (same : SameExceptTapeBytes old replay) :
@@ -2128,7 +2128,7 @@ theorem rebuild_honest_advice
       (agreement.honestAdviceAt_eq n.val old new oldAt newAt))
 
 /-- PR #2109's stable-stall predicate depends on bytecode, row index and nextPC,
-all preserved by replay. Pinned to a16z/jolt PR #2109 head d2995380. -/
+all preserved by replay. Pinned to a16z/jolt PR #2109 merge commit 0249591a. -/
 theorem rebuild_stops
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}

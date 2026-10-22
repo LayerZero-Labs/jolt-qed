@@ -16,7 +16,7 @@ SDK guests pass only valid constant events.
 At public pin 8bbb2357:
 See : jolt/crates/jolt-riscv/src/instructions/virt/host_io.rs:3-6
 See : jolt/tracer/src/instruction/virtual_host_io.rs:19-39
-See : jolt/tracer/src/emulator/cpu.rs:1056-1105 -/
+See : jolt/tracer/src/emulator/cpu.rs:1079-1128 -/
 
 set_option autoImplicit false
 

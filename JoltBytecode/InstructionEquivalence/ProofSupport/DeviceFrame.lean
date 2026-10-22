@@ -16,7 +16,7 @@ namespace JoltIOSetupFrame
 open JoltISA
 
 /-- The device fields that Rust fixes in `create_emulator` and never updates.
-Rust: https://github.com/a16z/jolt/blob/754fc88214936801a7d8a2260d9fc73478be4cbd/tracer/src/lib.rs#L401-L404 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/tracer/src/lib.rs#L388-L391 -/
 def Same (a b : JoltDevice) : Prop :=
   b.memory_layout = a.memory_layout ∧ b.trusted_advice = a.trusted_advice ∧
     b.untrusted_advice = a.untrusted_advice ∧ b.inputs = a.inputs

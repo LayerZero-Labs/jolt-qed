@@ -1,16 +1,22 @@
 ---
-title: Migration to the current Jolt pin
+title: Migration to Jolt pin 8bbb2357
 updated: 2026-10-19
 rust: 8bbb2357890928d8f83b00ca542879077c4d3d28
-status: migration implemented and validated
+status: historical migration implemented and validated
 ---
+
+# Current Jolt pin (2026-10-22)
+
+The current model source pin is [`5def437f21a0006e13c063a03f0b5a7c9b93cd6f`](https://github.com/a16z/jolt/commit/5def437f21a0006e13c063a03f0b5a7c9b93cd6f).
+The [pin update report](./pin_update_report.md) audits changes from the prior pin and records the staged adoption.
+The rest of this file documents the validated migration to `8bbb2357` and retains its original source citations as historical evidence.
 
 # Reference revision
 
 Ari selected the latest pulled version on 2026-10-15. The publicly available
 **Rust semantics pin** is upstream
 [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
-Use this revision for Rust semantic citations.
+This revision was the source for that migration's semantic citations.
 
 The inspected local checkout is `/Users/ari.biswas/Work-with-A16z/jolt`, branch
 `rust-to-lean-second-round`, at merge

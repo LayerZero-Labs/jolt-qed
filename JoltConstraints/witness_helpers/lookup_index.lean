@@ -45,7 +45,7 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   | .LUI _ imm => imm.setWidth 128
   -- Rust's FormatU decoder stores the sign-extended offset as u64 widened to
   -- i128, so AUIPC retains the unsigned 64-bit offset, including any carry.
-  -- Rust: [FormatU decoding](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/image/decode.rs:471).
+  -- Jolt: FormatU decoding, jolt/crates/jolt-program/src/image/decode.rs:513-520 at 5def437f.
   | .AUIPC _ imm =>
       BitVec.ofNat 128 (JoltISA.addWide address imm)
   -- Rust: [JAL](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jal.rs:18).

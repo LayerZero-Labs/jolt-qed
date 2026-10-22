@@ -366,7 +366,7 @@ The empty sum at `t = 0` is zero.
 - [x] (52) DONE: [Instruction RAF flag from bytecode](Constraints/InstructionRafFlagEqBytecodeRead.lean) · [completeness](Completeness/InstructionRafFlagEqBytecodeRead.lean)
 - [x] (53) DONE: [Entry bytecode row](Constraints/BytecodeRaAtEntryEqOne.lean) · [completeness](Completeness/BytecodeRaAtEntryEqOne.lean)
 
-[Rust: row values](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L533); [PC and entry](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L358).
+[Rust: row values](https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L594); [PC and entry](https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L360).
 
 Abbreviate the full bytecode selector:
 

@@ -6,7 +6,7 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 /-! FENCE has no destination and no RAM effect. Its selected row therefore
 preserves both register and ordinary-RAM agreement.
 At public pin 8bbb2357:
-See : jolt/tracer/src/instruction/fence.rs:19-25 -/
+See : jolt/tracer/src/instruction/fence.rs:20-26 -/
 
 set_option autoImplicit false
 

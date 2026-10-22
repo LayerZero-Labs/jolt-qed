@@ -19,7 +19,7 @@ def bytecodeAddressChunk (params : WitnessParams) (address : Fin (2 ^ params.log
 
 /-- The full bytecode selector, defined from the witness's committed chunks.
 This is an abbreviation, not an additional witness column.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L724-L733 -/
+Jolt: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L781-L789 -/
 noncomputable def bytecodeRa {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) (address : Fin (2 ^ params.logBytecodeK))
     (t : Fin params.traceLength) : F := ∏ chunk : Fin params.bytecodeChunks,
@@ -35,7 +35,7 @@ def bytecodeRow (bytecode : Array JoltInstructionRow) (address : Nat) : Option J
   | index + 1 => bytecode[index]?
 
 /-- The fixed row's raw instruction address, encoded in the field; zero for no-ops.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L545-L552 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L606-L613 -/
 def bytecodeAddress {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (address : Nat) : F :=
   match bytecodeRow bytecode address with
   | some row => (row.address.toNat : F)
@@ -43,7 +43,7 @@ def bytecodeAddress {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (
 
 /-- The normalized row immediate, encoded by an integer-to-field cast.
 Use the shared metadata normalization, including signed load/store offsets.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L551-L574 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L612-L635 -/
 def bytecodeImmediate {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (address : Nat) : F :=
   match bytecodeRow bytecode address with
   | some row => (JoltMetadata.immediate row.instruction : F)

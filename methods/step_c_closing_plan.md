@@ -15,7 +15,7 @@ A is proved from two staged statements: the execution-prefix agreement (`Soundne
 
 Step (c) is the stopping lemma.
 It proves three things about the run cut from the witness: it is nonempty, it ends at a stable stall (`TraceRow.StableStall`, `JoltConstraints/honest_trace.lean`), and the witness cycles after the cut change no RAM word, so the witness's final RAM matches the run.
-A stable stall is the last row of an instruction that jumped to its own address and would jump there again if re-run; Jolt's tracer stops there (a16z/jolt PR #2109, head `d2995380`, `JoltInstructionRow::self_jump_repeats`).
+A stable stall is the last row of an instruction that jumped to its own address and would jump there again if re-run; Jolt's tracer stops there (merged a16z/jolt PR #2109, `0249591a`, `JoltInstructionRow::self_jump_repeats`).
 
 ## Starting state
 

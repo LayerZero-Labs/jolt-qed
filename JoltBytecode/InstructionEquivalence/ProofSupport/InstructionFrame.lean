@@ -6,8 +6,8 @@ import Batteries.Data.Array.Lemmas
 The state-changing primitives are Sail updates, virtual-register writes, device
 stores, tape appends, and tape reads.
 See `jolt/tracer/src/emulator/mmu.rs:644-667`,
-`jolt/tracer/src/emulator/cpu.rs:24-60,1244-1333`, and
-`jolt/tracer/src/instruction/virtual_advice_load.rs:20-27` at 8bbb2357. -/
+`jolt/tracer/src/emulator/cpu.rs:45-60,494-515,984-1018`, and
+`jolt/tracer/src/instruction/virtual_advice_load.rs:20-27` at 5def437f. -/
 
 set_option autoImplicit false
 

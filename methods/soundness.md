@@ -105,7 +105,7 @@ The prefix cuts at the first stable stall, padding, or the last witness cycle an
 The stopping theorem obtains nonemptiness from the proved termination-store lemma, obtains the final stall from the cut or the proved last-jump and termination lemmas, and carries cut RAM agreement to final RAM through the suffix proof.
 Step (c) is complete, with `lake build JoltBytecode JoltConstraints` passing 8800 jobs.
 The checker elaboration increase from about 11 s to 44 s is deferred cleanup under “Proofs owed.”
-The stopping rule mirrors a16z/jolt PR #2109 at head d2995380; soundness obtains unconditional nonemptiness from the termination store.
+The stopping rule mirrors a16z/jolt PR #2109 at merge commit `0249591a`; soundness obtains unconditional nonemptiness from the termination store.
 No additional restriction is used for the JALR self-jump case.
 The prover-acceptance helper C is known false when the instance maximum is below 256, or when execution fills every cycle of a witness whose length is the largest power of two within the maximum, and is assumed on purpose until a16z answers; see its ⚠️ DANGER docstring.
 The [handoff](#layer-5b-handoff-updated-2026-10-20) records what already exists at the bottom.
@@ -147,36 +147,11 @@ This also removes the near-duplicate write lemmas in `HostCallRegisterFrame.lean
 
 ## Running the Layer 6 agents (for Ari)
 
-The plan for finishing Layers 5b–6 is in [layer6/README.md](./layer6/README.md), with one file per agent.
-Start a fresh agent for each file, and point it at `methods/layer6/README.md` and its own file.
-
-| Agent | Point it at | What it works on |
-|---|---|---|
-| 1 | `methods/layer6/agent-1.md` | Restructures files, stages every interface, then proves the induction and merges everyone's work |
-| 2 | `methods/layer6/agent-2.md` | JALR and the six branch instructions |
-| 3 | `methods/layer6/agent-3.md` | Tape reads, runtime advice, and honest advice for the eight division expansions |
-| 4 | `methods/layer6/agent-4.md` | Device memory, LD and SD on every address, then SC.W and SC.D |
-| 5 | `methods/layer6/agent-5.md` | Porting the 77 existing step lemmas to live-register agreement |
-
-The order:
-
-1. Start agent 1 alone.
-   It restructures and stages the interfaces (Phase 0), then stops and writes `methods/layer6/phase0_report.md`.
-2. Read that report.
-   It holds the one decision for you: live-register agreement (option A, recommended) or the alternative (option B).
-   Approve it, and give agent 1 your choice.
-3. Start agents 2, 3 and 4 together.
-   Start agent 5 too if you chose option A.
-   Each works on its own branch from the commit the Phase 0 report names.
-   Agent 1 continues with its own proofs meanwhile.
-4. Each agent reports a branch head when its piece builds.
-   Tell agent 1 when all have reported; it merges them, in the order agent 5, 2, 3, 4, and runs the final audit.
-
-Where each agent needs you:
-
-- Agent 1: approval of Phase 0, and of the register design.
-- Agent 4: approval before removing `NoStoreConditional` from the restrictions.
-- Any agent: when it stops because a staged statement looks false, or it is stuck (see `AGENTS.md`).
+Layers 5b–6 are done in stages, one fresh agent per stage; [layer6/README.md](./layer6/README.md) lists them.
+Each stage has its own file, `methods/layer6/stage-N.md`, written only after the previous stage's report has been reviewed.
+At most two agents run at once.
+To start a stage, open a fresh agent and give it the prompt in "Starting a stage" in `methods/layer6/README.md`.
+Each stage ends with a report, `methods/layer6/stage-N-report.md`; read it, with Claude's audit, before the next stage starts.
 
 ## Layer 5b handoff (updated 2026-10-20)
 
@@ -246,16 +221,21 @@ Axiom audits of the new
 HostIO declarations show only `propext`, `Classical.choice`, `Quot.sound` and,
 for the live-call bridge, the existing `sys_enable_experimental_extensions`.
 
-Keep Rust semantic reads at public pin `8bbb2357`. Preserve the unrelated
+That Layer 5b audit used public pin `8bbb2357`. Preserve the unrelated
 untracked blog and bug-report drafts.
 Do not add theorem premises without Ari's approval; do not use `native_decide`, `decide +kernel` or a larger `maxHeartbeats`.
 `bv_decide` is accepted temporarily under `AGENTS.md`; every use is tracked in the `bv_decide` list under "Proofs owed" in `model_review.md` and must be removed before the proof is final.
 Split difficult proofs into smaller lemmas.
 The issue write-ups remain for the agreed batch; #2044 discussion waits for Michael's comments.
 
-## Current Jolt pin and migration (2026-10-15)
+## Current Jolt pin (2026-10-22)
 
-Ari selected the latest pulled version. Rust semantic citations use the public
+The current Jolt source pin is [`5def437f21a0006e13c063a03f0b5a7c9b93cd6f`](https://github.com/a16z/jolt/commit/5def437f21a0006e13c063a03f0b5a7c9b93cd6f).
+The source-only audit is in [the pin update report](./pin_update_report.md); the prior pin's validated migration remains below as historical evidence.
+
+## Historical Jolt pin and migration (2026-10-15)
+
+Ari selected the latest pulled version on 2026-10-15. That migration used the public
 upstream pin [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
 The local merge `1c8aaff2` and generator commit `7dfe8a0f` are unpublished;
 their separate tooling provenance and a reproducible generator patch are in
@@ -536,7 +516,9 @@ The proof runs on these answers under the relaxed semantics (Layer 5a), then reb
 
 PR #2049 removed `bytes_remaining()`, the only instruction that could see the tape's length. Before it, the answers could disagree with every tape (Layer 5a, historical candidate).
 
-At each step that uses runtime advice, we must prove that the value in `w` agrees with the honest tracer's computation.
+The relaxed run uses the honest tracer's runtime advice.
+In a division expansion, the witness's advice may differ; the `*Program_sound` theorems still give the honest machine state after the expansion.
+`RepresentsRows` does not compare instruction temporaries, so `rem a0, a1, zero` can use witness advice 5 and honest advice 0 while preserving the required observations.
 At the previous model revision `43cc043`, SC.W could report failure where
 Jolt's tracer reported success. The current model uses PR #2039's deterministic
 comparison. `NoStoreConditional` remains pending the SC device-memory cases
@@ -636,7 +618,9 @@ There are two induction obligations:
 1. **Initialization:** the constraints select the entry slot, zero the register table, and supply the initial RAM. Use `initial_state_sourceValue` to show that the initial state's general-purpose and virtual registers are also zero. For `n > 0`, apply the entry instruction's `advance_pc` and prove that it preserves these register and RAM values. For `n = 0`, keep the initial state. Establish agreement for the empty prefix.
 2. **Extension:** for `t < n`, use agreement at `t` and the required advice compatibility to prove that the step succeeds under the untrusted-answer semantics and returns a post-state matching the step's writes. Prove the new row's runtime-advice equality and preserve those for earlier rows, together with the tape-answer facts. If `t + 1 < n`, use the next slot and pre-state specified above to establish agreement at `t + 1`. If `t + 1 = n`, retain the post-state and establish the endpoint table comparisons above.
 
-At a tape-reading step, recover a 64-bit answer from the witness and use it directly; agreement with one tape comes later, when Layer 7 rebuilds it. At an internal runtime-advice step (`VirtualAdvice`), prove that the value agrees with the honest tracer.
+At a tape-reading step, recover a 64-bit answer from the witness and use it directly; agreement with one tape comes later, when Layer 7 rebuilds it.
+At an internal runtime-advice step (`VirtualAdvice`), the relaxed run uses the honest tracer's advice, which need not equal the witness's advice.
+For division expansions, the `*Program_sound` theorems give agreement with the honest machine state after the expansion, and `RepresentsRows` omits temporary-register comparisons within it.
 Local extension lemmas may take these facts as hypotheses; their application must justify them from the constraints, possibly using other rows of the same expansion.
 These proofs work with the prefix and its state, before a completed relaxed trace exists.
 
@@ -913,10 +897,10 @@ right instruction input. Choose the address supplied by
 `rangeCheck_entry` to obtain its low 64 bits. This proves that the lookup output
 encodes a word; no input-determined `encoded` hypothesis is available for
 `lookupOutput_rangeCheck_of_identity`. At the lookup level, any 64-bit word is
-possible; constraints elsewhere in the program may restrict it. Layers 5–7
-must separately prove that runtime advice (`VirtualAdvice`) equals the honest
-tracer's result. Tape answers (`VirtualAdviceLoad`) need no
-such proof: they are untrusted under the Layer 5a decision.
+possible; constraints elsewhere in the program may restrict it.
+Layers 5–7 construct the relaxed run with honest runtime advice (`VirtualAdvice`), while the witness's division advice may differ.
+The `*Program_sound` theorems give the honest machine state after each division expansion, and `RepresentsRows` does not compare instruction temporaries.
+Tape answers (`VirtualAdviceLoad`) are untrusted under the Layer 5a decision.
 
 **Field-scope audit before this layer:** an identity-RAF row
 (`InstructionRafFlag = 1`) equates the full lookup address with the right operand
@@ -1310,10 +1294,11 @@ Remaining proof work, which no restriction may replace:
   `expand/allocator.rs:115-139`).
 - The dispatcher, shared with Layer 6.
 
-Runtime advice honesty must not become a restriction. If the DIV/REM assertions
-do not force each `VirtualAdvice` value to equal Jolt's tracer's value, that is
-a soundness bug to report, not something to assume. The bytecode project covers
-DIV, DIVU and DIVW; the other five are unchecked.
+Runtime advice honesty must not become a restriction.
+The relaxed run uses the honest tracer's advice, but a witness may use different division advice with the same architectural result: for example, every quotient advice value passes `rem a0, a1, zero`.
+This non-uniqueness is not a soundness bug.
+The bytecode project's eight `*Program_sound` theorems establish advice uniqueness for DIV, DIVU and DIVW, and the final Sail state for REM, REMU, REMW, REMUW and DIVUW.
+`RepresentsRows` excludes instruction-temporary comparisons; expansion liveness ensures that a later expansion overwrites each temporary before reading it.
 
 Do not add a new FIXME restriction for unfinished proof work.
 
@@ -1353,7 +1338,7 @@ Padding persistence is now proved (`padding_persists`, `padding_from`); the sour
 
 **Entry address zero:** neither the [program image type nor entry preprocessing](../JoltConstraints/program.lean) excludes it; `get_first_pc` maps it to slot 0.
 The earlier tracer initialized `prev_pc` to 0 and could produce no rows at entry address 0.
-PR #2109, head d2995380, starts `prev_pc` unset, but a first fetch at address 0 may still fail because address 0 is not program memory.
+PR #2109, merged as `0249591a`, starts `Cpu.stalled` as false (`jolt/tracer/src/emulator/cpu.rs:441-453` at `5def437f`), but a first fetch at address 0 may still fail because address 0 is not program memory.
 `get_first_pc` still maps address 0 to the no-op entry, as checked in `crates/jolt-program/src/preprocess/bytecode.rs:224-232`.
 We have not established whether `AllConstraints` admits such an instance.
 Soundness does not need to rule it out: the cut allows a zero-row prefix, and the completed run's nonemptiness comes from the proved `soundness_termination_store_exists`.
@@ -1365,7 +1350,7 @@ What: use the prefix constructed on the supplied untrusted advice and the tape a
 Take the successful execution, linkage and runtime-advice equalities from `Agrees w n prefix state` for the relaxed trace's counterparts of the `HonestTrace` fields.
 L also requires two facts about the rebuilt trace: Jolt's prover accepts it (it ends in a jump, its RAM addresses are at or above the lowest address, and its padded length is at most the maximum), and none of its spoil asserts fails.
 The required stopping obligations are `stops` (the final source instruction is a stable self-jump), `runs_until_stop` (no earlier source instruction is a stable self-jump), and unconditional `nonempty`, derived from the termination store.
-The rule follows a16z/jolt PR #2109 at head d2995380: a self-jumping JALR with destination equal to its nonzero base register continues if re-execution would jump elsewhere.
+The rule follows a16z/jolt PR #2109 at merge commit `0249591a`: a self-jumping JALR with destination equal to its nonzero base register continues if re-execution would jump elsewhere.
 The execution prefix is cut at its first stable self-jump, or at padding or the last witness cycle if no stable stall occurs.
 The stopping proof `soundness_stopping` (`Layer7/Stopping.lean`, with `StallSuffix.lean`, `LastJump.lean` and `TerminationStore.lean`) proves the cut ends at a stable stall and that later witness rows stay on its source instruction with zero RAM updates; it does not depend on `sorryAx`.
 The execution-prefix lemma owns RAM agreement at the cut, and the stopping lemma owns the final RAM comparison.

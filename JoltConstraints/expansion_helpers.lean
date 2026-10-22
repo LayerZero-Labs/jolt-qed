@@ -12,7 +12,7 @@ open Sail PreSail LeanRV64D.Functions
 
 -- Jolt's own source instructions: custom opcode 0x5B, decoded alongside RISC-V.
 -- Inline (opcodes 0x0B and 0x2B) is out of scope.
--- See : jolt/crates/jolt-program/src/image/decode.rs:71-72, 192-212 (decode_custom)
+-- See : jolt/crates/jolt-program/src/image/decode.rs:71-72, 192-210 at 5def437f (decode_custom)
 --       jolt/tracer/src/instruction/format/ (operand formats)
 inductive JoltCustomInstruction where
   | AdviceLB (rd : regidx)                                -- FormatAdviceLoadI

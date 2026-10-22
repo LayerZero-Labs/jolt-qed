@@ -159,7 +159,7 @@ inductive Instr where
 /-! Decode source operands before constructing final rows. These are abbreviations,
 not extra execution rules: every resulting instruction runs through execInstr.
 AUIPC's encoded upper immediate is shifted once here, just as in Rust's decoder.
-Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/image/decode.rs#L471-L485
+Jolt: jolt/crates/jolt-program/src/image/decode.rs:253-256,513-520 at 5def437f.
 -/
 namespace Encoded
 

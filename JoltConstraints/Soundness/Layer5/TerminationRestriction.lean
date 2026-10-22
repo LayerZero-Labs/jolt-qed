@@ -18,7 +18,7 @@ At public pin 8bbb2357:
 See : jolt/jolt-sdk/macros/src/lib.rs:880-887
 See : jolt/common/src/jolt_device.rs:146-150
 See : jolt/common/src/jolt_device.rs:175-181
-See : jolt/crates/jolt-program/src/preprocess/public_io.rs:47-52 -/
+See : jolt/crates/jolt-program/src/preprocess/public_io.rs:51-56 -/
 
 set_option autoImplicit false
 

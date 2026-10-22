@@ -36,8 +36,8 @@ def ramPmaRegion (ramSize : Nat) : PMA_Region :=
 
 /-
 Jolt initialises its register file according to this rule. 
-See : jolt/tracer/src/emulator/cpu.rs:499-528 (Cpu::new)
-      jolt/tracer/src/emulator/mod.rs:285 (setup_program sets the PC to the ELF entry)
+See : jolt/tracer/src/emulator/cpu.rs:443-473 (Cpu::new)
+      jolt/tracer/src/emulator/mod.rs:262 (setup_program sets the PC to the ELF entry)
 -/
 def initialRegisterValue (entryAddress : BitVec 64) (ramSize : Nat)
     (register : Register) : RegisterType register :=
@@ -129,7 +129,7 @@ def JoltInstructionRow.continues (row : JoltInstructionRow) : Bool :=
 /-- Whether a row that jumped to its own address would jump there again.
 The expanded JALR row retains the normalized base and sign-extended immediate;
 the `rd = x0` rewrite uses a virtual destination and takes the `true` branch.
-See : a16z/jolt#2109, head d2995380, crates/jolt-riscv/src/row.rs
+See : a16z/jolt#2109, merge commit 0249591a, crates/jolt-riscv/src/row.rs
 (`JoltInstructionRow::self_jump_repeats`). -/
 def JoltInstructionRow.selfJumpRepeats (row : JoltInstructionRow) : Bool :=
   match row.instruction with
@@ -295,7 +295,7 @@ def program_image_len_words (memory_init : List (BitVec 64 × BitVec 8)) : Nat :
 -- Jolt RAM before the first instruction: zeros for Rust's whole RAM, with the ELF
 -- bytes written over them in order. Rust allocates RAM in whole 64-bit units, so
 -- its size is the total memory size rounded up to a multiple of 8.
--- See : jolt/tracer/src/emulator/mod.rs:242-261
+-- See : jolt/tracer/src/emulator/mod.rs:219-239 at 5def437f
 --       jolt/tracer/src/emulator/memory.rs:49-51 (init_with_capacity)
 -- TODO: (claude) the tracer loads RAM from the ELF section headers, while
 -- preprocessing uses decode_elf's memory_init; check that they always agree.
@@ -311,9 +311,9 @@ def initialRam (layout : MemoryLayout) (memory_init : List (BitVec 64 × BitVec 
 
 /-
 The fixed instance and the prover's private execution inputs.
-See : jolt/crates/jolt-verifier/src/verifier.rs:37-42 (verify takes preprocessing,
+See : jolt/crates/jolt-verifier/src/verifier.rs:38-43 (verify takes preprocessing,
       public_io : JoltDevice, proof, optional trusted advice commitment)
-      jolt/crates/jolt-verifier/src/verifier.rs:356-430 (validate_inputs)
+      jolt/crates/jolt-verifier/src/verifier.rs:357-426 (validate_inputs)
 The program and memory configuration stand in for verifier preprocessing.
 
 NOTE: the PCS is ignored for now. This differs from the inputs of Jolt's verifier
@@ -342,7 +342,7 @@ structure JoltInstance (Source : Type) where
   -- Part of the verifier's preprocessing; the padded trace length may not exceed it.
   -- A usize in Rust, so 64 bits.
   -- See : jolt/crates/jolt-program/src/preprocess/program.rs:17
-  --       jolt/crates/jolt-verifier/src/verifier.rs:378-383
+  --       jolt/crates/jolt-verifier/src/verifier.rs:375-380
   max_padded_trace_length : BitVec 64
 
 -- The pure RISC-V instance seen as a Jolt instance.
@@ -366,8 +366,8 @@ def JoltInstance.memory_layout {Source : Type} (joltInstance : JoltInstance Sour
 
 -- The verifier's checks on the instance alone; the proof's own parameters come
 -- with the trace.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:356-383 (validate_inputs)
---       jolt/crates/jolt-verifier/src/verifier.rs:992-1005 (validate_ram_remap_base)
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:357-380 (validate_inputs)
+--       jolt/crates/jolt-verifier/src/verifier.rs:999-1016 (validate_ram_remap_base)
 def JoltInstance.validate_inputs {Source : Type} (joltInstance : JoltInstance Source) : Bool :=
   match joltInstance.memory_layout with
   | none => false
@@ -378,15 +378,15 @@ def JoltInstance.validate_inputs {Source : Type} (joltInstance : JoltInstance So
 
 -- The bytes without their trailing zero bytes, as Rust's verifier trims the claimed
 -- outputs.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:436-443
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:432-439
 def trimTrailingZeros (bytes : Array (BitVec 8)) : Array (BitVec 8) :=
   (bytes.toList.reverse.dropWhile (· == 0)).reverse.toArray
 
 -- The public I/O the verifier checks a proof against: the instance's layout, inputs,
 -- claimed outputs (trailing zero bytes dropped) and panic flag. Rust's verify takes it
 -- as a JoltDevice and never reads its advice fields.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:37-42 (verify), 357, 436-443
---       jolt/crates/jolt-program/src/preprocess/public_io.rs:21-61
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:38-43 (verify), 357, 432-439 at 5def437f
+--       jolt/crates/jolt-program/src/preprocess/public_io.rs:21-65
 def JoltInstance.public_io {Source : Type} (joltInstance : JoltInstance Source) :
     Option JoltDevice := do
   let layout ← joltInstance.memory_layout
@@ -408,7 +408,7 @@ def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) : Opti
   guard (get_first_pc bytecode joltInstance.program.entry_address).isSome
   pure bytecode
 
--- See : jolt/tracer/src/lib.rs:364-408 (create_emulator)
+-- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
 noncomputable def JoltInstance.initial_state {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) :
     Option SailJoltState := do

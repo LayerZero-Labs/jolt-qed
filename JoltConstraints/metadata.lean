@@ -6,7 +6,7 @@ set_option autoImplicit false
 namespace JoltMetadata
 
 -- Rust: [format normalization](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format).
--- Rust: [decoded operands](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/image/decode.rs:399).
+-- Jolt: decoded operands, jolt/crates/jolt-program/src/image/decode.rs:253-342 at 5def437f.
 -- Preserve the normalized row immediate, including fields ignored by execution.
 -- I/U/J and alignment formats widen a u64 to i128. Loads/stores and branches
 -- retain a signed offset. AdviceLoad carries its byte count, not its loaded value.

@@ -19,7 +19,7 @@ def sourceLength (bytecode : Array JoltInstructionRow) (i : Fin bytecode.size) :
 
 -- Move the PC to the start of row i's source instruction, as Rust's tick does: PC is
 -- the instruction's address and nextPC is its length further on.
--- See : jolt/tracer/src/emulator/cpu.rs:628-632 (tick_operate)
+-- See : jolt/tracer/src/emulator/cpu.rs:657-679 (tick_operate)
 noncomputable def prepareSource (bytecode : Array JoltInstructionRow) (i : Fin bytecode.size)
     (state : SailJoltState) : SailJoltState :=
   let address := bytecode[i].address
@@ -53,7 +53,7 @@ theorem HonestTrace.initialRegistersZero {joltInstance : JoltInstance SourceInst
   initial_state_sourceValue joltInstance privateInputs trace.initialState trace.initialized src
 
 -- The instance's initial state has PC at the program's entry address.
--- See : jolt/tracer/src/lib.rs:364-408 (create_emulator)
+-- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
 theorem initial_state_pc {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :
@@ -129,7 +129,7 @@ theorem HonestTrace.linkedState {joltInstance : JoltInstance SourceInstruction}
 
 -- Which row comes next: the next row of the same instruction, or the first row
 -- at nextPC. A JALR self-jump may continue when it does not repeat on re-run.
--- See : a16z/jolt PR #2109, head d2995380.
+-- See : a16z/jolt PR #2109, merge commit 0249591a.
 theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (currentExists : i < trace.rows.size) (nextExists : i + 1 < trace.rows.size) :

@@ -171,7 +171,7 @@ The following declarations still use `sorry`:
 
 | Declaration | What it needs |
 |---|---|
-| `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice. It must also give `cutRam`: RAM agreement at the cut, or `RamValFinal` agreement when the run fills every cycle, for every RAM word except the termination word, including input, advice, output and panic words. |
+| `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice in the run. The witness's division advice may differ; the `*Program_sound` theorems give the honest machine state after the expansion, and `RepresentsRows` omits instruction-temporary reads while retaining comparisons for absent operands. It must also give `cutRam`: RAM agreement at the cut, or `RamValFinal` agreement when the run fills every cycle, for every RAM word except the termination word, including input, advice, output and panic words. |
 | `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
 
@@ -213,7 +213,7 @@ A reaches `sorryAx` only through `soundness_execution_prefix_agreement`.
 `lake build JoltBytecode JoltConstraints` passed with 8800 jobs.
 See the [integration report](../methods/step_c_closing_report.md) for the completed helper, build, axiom audit and declaration timings.
 The prefix owns RAM agreement at the cut, and stopping owns final RAM agreement after the constraint-level zero-update proof for repeated stall rows and padding.
-The modeled stopping rule follows a16z/jolt PR #2109 at head d2995380, with no new restriction.
+The modeled stopping rule follows merged a16z/jolt PR #2109 at `0249591a`, with no new restriction.
 Soundness obtains the positive row count from the termination store.
 
 Step (a) defines output matching, checked prover configuration and spoil-assert success once on the plain `Trace`, and both languages use those definitions.
