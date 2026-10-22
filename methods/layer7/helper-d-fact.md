@@ -11,7 +11,7 @@ Edit only `JoltConstraints/expansion_facts.lean` and `Soundness/Layer7/SpoilAsse
 Helper D is proved from one staged fact, `source_spoil_assert_read_not_temporary` (`SpoilAsserts.lean`): a `VirtualAssertEQ` with a nonzero immediate in one source's expansion reads no instruction temporary.
 The fact is true at the pin: every `VirtualAssertEQ` the expander emits has immediate 0, and a guest's own spoil assert decodes to architectural registers (helper D report).
 The expansion checker does not give it yet: it accepts a sequence in which a spoil assert reads a temporary.
-Ari approved, on 2026-10-23, adding one check to the checker rather than a case split over all sources.
+The checker is our own proof tool, so adding one check to it changes no statement; it replaces a case split over all sources.
 
 ## The task
 
