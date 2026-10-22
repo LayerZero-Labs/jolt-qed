@@ -10,7 +10,7 @@ If the others' unfinished edits break the full build, build your own modules ins
 ## Why
 
 `JoltInstance.soundness_spoil_asserts_pass` (D, `Soundness/TopLevel.lean`) is one of Layer 7's two open helpers.
-L requires that no spoil assert in the trace fails (`Trace.SpoilAssertsPass`, `JoltConstraints/language.lean`).
+L requires that no spoil assert in the trace fails (`Trace.SpoilAssertsPass`, `JoltConstraints/honest_trace.lean`).
 A spoil assert is a `VirtualAssertEQ` with a nonzero immediate; Jolt's tracer only warns when its sides differ (`jolt/tracer/src/instruction/virtual_assert_eq.rs`), so the trace's own execution does not give equal sides.
 The witness's constraints do.
 
