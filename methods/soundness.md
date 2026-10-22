@@ -153,6 +153,18 @@ Each stage has its own plan, `methods/layer6/stage-N.md`, written only after the
 At most two agents run at once.
 Each stage ends with a report, `methods/layer6/stage-N-report.md`; read it, with Claude's audit, before the next stage starts.
 
+## Order of the remaining work (2026-10-23)
+
+Unknown areas come first, so that a false statement or a missing restriction shows up early, while there is time for Ari to decide on it.
+
+1. `row_step` for LD and SD on device memory: the input, advice, output, panic and termination words, under the temporary restrictions.
+   The restrictions' sufficiency for this is not yet established (see the Layer 5b checklist).
+   Stage one step statement per device region, check each against Jolt's device code at the pin, and only then prove them.
+2. Helper C's RAM-address part (every RAM address is at or above the lowest address) and padded-length part (with `NoMaxLengthTrace` and the 256-cycle floor).
+   Its last-jump part reuses `soundness_last_row_is_jump` (`Layer7/LastJump.lean`).
+3. Then the work that follows known patterns: helper D, the three remaining division lemmas, `plain_row_step_other` (the stage 6b port, the branch and `VirtualAdviceLoad` steps, and the wiring), and `row_step`'s other rows (ordinary-RAM LD and SD, HostIO, JAL, JALR).
+4. Last, the cleanup list under "Proofs owed" in `model_review.md`.
+
 ## Layer 5b handoff (updated 2026-10-23)
 
 This records the step lemmas at the bottom of the proof, one file per instruction family in `JoltConstraints/Soundness/Layer5/`.
@@ -1211,9 +1223,6 @@ Blocked parts and their status:
   Narrow or remove it as the address cases documented above are resolved.
 - Host calls that fail in Jolt's tracer but pass the constraints as no-op
   rows: `HostCallsSucceed`.
-- Host calls whose source destination is an architectural register, which the
-  constraints let a witness change while Jolt's tracer leaves it alone:
-  `HostCallRdZero`.
 - The termination word, where the device ignores stores and loads 0 while the
   RAM table keeps the stored bytes: `TerminationThenStall`, whose load clause
   forbids loading that word after storing to it.
