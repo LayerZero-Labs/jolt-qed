@@ -92,7 +92,7 @@ Its fixed-tape inclusion is proved, and the reverse inclusion `untrustedAnswerLa
 Helper A is proved from execution-prefix agreement and the assembled stopping theorem.
 Layers 7 and 8 are proved.
 The only remaining `sorry`s are `soundness_execution_prefix_agreement` (Layers 5b–6, `Soundness/Layer6/ExecutionPrefix.lean`), helper C `soundness_prover_accepts` and helper D `soundness_spoil_asserts_pass`.
-Helper C keeps its approved ⚠️ DANGER status and the same two counterexamples.
+Helper C remains `sorry` but is no longer known false: the base verifier floor excludes short witnesses, and the approved `noMaxLengthTrace` restriction excludes a run that fills the largest permitted power-of-two domain.
 The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
 Step (c)'s five original stopping gaps are proved after Ari approved the checker integration.
 The four sequence checks, native JALR guard and singleton advice check are integrated, and the materialization lift is proved.
@@ -107,7 +107,7 @@ Step (c) is complete, with `lake build JoltBytecode JoltConstraints` passing 880
 The checker elaboration increase from about 11 s to 44 s is deferred cleanup under “Proofs owed.”
 The stopping rule mirrors a16z/jolt PR #2109 at merge commit `0249591a`; soundness obtains unconditional nonemptiness from the termination store.
 No additional restriction is used for the JALR self-jump case.
-The prover-acceptance helper C is known false when the instance maximum is below 256, or when execution fills every cycle of a witness whose length is the largest power of two within the maximum, and is assumed on purpose until a16z answers; see its ⚠️ DANGER docstring.
+The prover-acceptance helper C will use `ConstraintContext.traceLengthFloor` and `JoltInstance.NoMaxLengthTrace` to exclude its two former counterexamples; its last-jump, RAM-address and padded-length proof remains open.
 The [handoff](#layer-5b-handoff-updated-2026-10-20) records what already exists at the bottom.
 
 ### When the proof uncovers an issue
@@ -115,7 +115,7 @@ The [handoff](#layer-5b-handoff-updated-2026-10-20) records what already exists 
 Proving top-down will uncover more issues.
 When a statement cannot be proved, name the exact missing fact or counterexample, and stop to ask Ari before changing anything.
 Do not add a restriction, change L, or keep a known-false statement without Ari's decision.
-The only known-false statement allowed is helper C, marked ⚠️ DANGER with Ari's permission.
+No currently staged statement is known false; stop and report any counterexample before proceeding.
 
 First rule out a translation issue.
 Our constraints, Jolt's tracer semantics, the device and the prover's sizing are Lean translations of Jolt's Rust code.

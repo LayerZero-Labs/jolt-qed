@@ -23,9 +23,6 @@ set_option autoImplicit false
 -- `terminationThenStall` for stopping early on a "no panic" claim, `claimsNoPanic`
 -- for stopping early on a "panicked" claim, and `panicStoresOne` for a store of 0
 -- proved as "no panic". These are Jolt bugs that must be fixed in Jolt.
--- ⚠️ DANGER ⚠️ `soundness_prover_accepts` (TopLevel.lean) is known false in two
--- cases and is assumed on purpose until a16z answers; see its docstring and
--- blog/content/blog/prover-verifier-trace-length/index.md.
 theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
@@ -42,7 +39,8 @@ theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
   refine ⟨privateInputs, trace, ?_, ?_, ?_⟩
   · exact soundness_matches_outputs joltField joltInstance privateInputs witness
       context equations trace represented
-  · exact soundness_prover_accepts joltField joltInstance privateInputs witness
+  · exact soundness_prover_accepts joltField joltInstance restrictions.noMaxLengthTrace
+      privateInputs witness
       context equations trace bytecodeEq represented
   · exact soundness_spoil_asserts_pass joltField joltInstance privateInputs witness
       context equations trace bytecodeEq represented

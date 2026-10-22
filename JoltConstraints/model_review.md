@@ -149,6 +149,7 @@ Premises or fields of the final theorem, with their source or reason below.
 | Termination is followed by a stall and no later termination load (temporary) | `JoltInstance.TerminationThenStall` in `Soundness/Layer5/TerminationRestriction.lean`, field `terminationThenStall` | Approved by Ari for the B6 stopping discrepancy; remains until the unrestricted argument is established |
 | Every store to the panic word stores 1, and no load reads the panic word after such a store (temporary) | `JoltInstance.PanicStoresOne` in `Soundness/Layer5/PanicRestriction.lean`, field `panicStoresOne` of `JoltInstance.TemporaryRestrictions` | Added 2026-10-20 to exclude a store of 0 being proved as "no panic" (`blog/content/blog/completeness-and-soundness/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction |
 | The claim says "no panic" (temporary) | `JoltInstance.ClaimsNoPanic` in `Soundness/Layer5/PanicRestriction.lean`, field `claimsNoPanic` of `JoltInstance.TemporaryRestrictions` | Added 2026-10-20 to exclude a "panicked" claim proved from an execution cut short at a jump (`blog/content/blog/proof-stops-at-any-jump/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction |
+| No relaxed trace has exactly the largest power-of-two number of real rows within a verifier-admissible instance maximum (temporary) | `JoltInstance.NoMaxLengthTrace`, field `noMaxLengthTrace` of `JoltInstance.TemporaryRestrictions` | Ari, 2026-10-22: excludes the full-length prover/verifier mismatch in `blog/content/blog/prover-verifier-trace-length/index.md`, preserves a 256-row run under maximum 1024 that Jolt's prover pads to 512, and must be removed when Jolt resolves the mismatch. |
 | The PC does not wrap past 2^64 | `Rv64ProgramImage.NextPCNoWrap`, field `pcNoWrap` of `JoltInstance.SoundnessAssumptions` and `JoltInstance.CompletenessAssumptions` | a16z, 2026-10-07: such an ELF is illegal |
 | The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10, replacing the run-based address restriction. With the verifier's RAM-size check, all eight bytes of each in-domain word fit. The signed sum is then recovered from satisfying constraints, including address zero. NOTE: to confirm with a16z. This is an instance restriction, not a verifier check |
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Rust's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Rust's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
@@ -163,7 +164,7 @@ Premises or fields of the final theorem, with their source or reason below.
 Sorried theorems behind the final theorems; `#print axioms` shows `sorryAx` through them.
 
 **Soundness.** `JoltInstance.soundness` (`Soundness/soundness.lean`) is a short proof from the obligations in `Soundness/TopLevel.lean` and the reverse language inclusion in `Soundness/Layer7/TapeRebuild.lean`.
-Its statement has no new premises.
+Its explicit theorem parameters are unchanged; the temporary-restriction bundle now includes `noMaxLengthTrace`.
 `RepresentsRows` in `Soundness/Layer6/ExecutionPrefix.lean` records the row count, PC, source values and RAM addresses for the relaxed trace cut at its first stable stall, padding, or final witness cycle.
 `RepresentsPrefix` adds RAM agreement at that cut for the stopping proof.
 `Represents` adds final RAM agreement for every witness RAM index except the termination word, which the device ignores as a store; B, C and D use this form without cut RAM.
@@ -172,7 +173,7 @@ The following declarations still use `sorry`:
 | Declaration | What it needs |
 |---|---|
 | `JoltInstance.soundness_execution_prefix_agreement` (`Soundness/Layer6/ExecutionPrefix.lean`) | Build the relaxed run through the first stable stall or padding or the last witness cycle, with real retained rows, no earlier stable stall, represented row observations and honest runtime advice in the run. The witness's division advice may differ; the `*Program_sound` theorems give the honest machine state after the expansion, and `RepresentsRows` omits instruction-temporary reads while retaining comparisons for absent operands. It must also give `cutRam`: RAM agreement at the cut, or `RamValFinal` agreement when the run fills every cycle, for every RAM word except the termination word, including input, advice, output and panic words. |
-| `JoltInstance.soundness_prover_accepts` (C) | ⚠️ **DANGER: known false in two cases, assumed on purpose** until a16z answers the trace-length issue. |
+| `JoltInstance.soundness_prover_accepts` (C) | Prove the last-jump and RAM-address checks and the prover's padded length from the verifier's 256-cycle floor, the witness upper bound and `NoMaxLengthTrace`. The helper remains `sorry`; the two previously known counterexamples are excluded by the floor and the temporary restriction. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
 
 Steps 1–6 of the tape-rebuild closing plan are complete; `feat/layer7-tape-rebuild`, rebased onto step (c) commit `de5aff70de66d290ceaeb6e7357ba352b855c5d0`, is merged into `feat/soundness`.
@@ -184,11 +185,12 @@ The tape-growth and device frame proofs instantiate the shared `InstructionFrame
 No protected statement or existing helper hypothesis changed, and no new `bv_decide`, native decision proof or raised limit was used.
 See the [step 6 declaration timings and validation report](../methods/soundness.md#tape-rebuild-step-6-2026-10-21) and the [shared-frame report](../methods/soundness.md#tape-rebuild-shared-instruction-frame-2026-10-21).
 
-With Ari's permission (2026-10-20), C remains assumed while a16z considers `blog/content/blog/prover-verifier-trace-length/index.md`.
-C fails when the instance maximum is below 256, and when execution fills every cycle of a witness whose length is the largest power of two within the maximum.
-In both cases the claim is true, but Jolt's prover rejects the trace.
+The base verifier now rejects witness lengths below 256 (`jolt/crates/jolt-verifier/src/verifier.rs:976-991` and `jolt/crates/jolt-verifier/src/config.rs:109-120` at `5def437f`); `ConstraintContext.traceLengthFloor` mirrors that check.
+For the remaining full-length case, `NoMaxLengthTrace` excludes a relaxed run whose real rows fill the largest power-of-two domain permitted by the instance maximum.
+C remains `sorry` while its last-jump, RAM-address and padded-length obligations are proved; it is no longer known false under the revised premises.
+The mismatch and temporary restriction are described in `blog/content/blog/prover-verifier-trace-length/index.md`.
 No other helper uses C.
-Apart from those cases, C needs the last-jump, RAM-address and padded-length guards from the constraints and represented rows.
+Its proof still needs the last-jump, RAM-address and padded-length guards from the constraints and represented rows.
 
 Helper B checks public words outside the termination word through constraint 26, `Represents.finalRam`, field-to-word injectivity and the final RAM overlay.
 Its proof is now about `UntrustedAnswerTrace` and has no direct `sorry` or panic restriction.

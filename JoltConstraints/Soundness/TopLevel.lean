@@ -142,25 +142,14 @@ theorem soundness_matches_outputs {F : Type} [Field F] (joltField : JoltField F)
     joltInstance privateInputs context trace finalFrame
       trace.final_outputs_fit_layout runPublicWord
 
-/-- ⚠️ DANGER ⚠️ KNOWN FALSE, ASSUMED ON PURPOSE ⚠️
-This statement is false in two cases. It is left as `sorry` deliberately, with
-Ari's permission (2026-10-20), until a16z answers the question in
-`blog/content/blog/prover-verifier-trace-length/index.md`:
-- The instance maximum is below 256: Jolt's prover refuses every trace, because
-  it never uses fewer than 256 cycles, while the verifier accepts shorter
-  witnesses.
-- The execution fills every cycle of the witness, and the witness length is the
-  largest power of two within the maximum: Jolt's prover adds one row, needs
-  twice that length and refuses, while the verifier accepts the witness.
-In both cases the claim itself is true; only Jolt's prover acceptance, which is
-part of L, fails. Nothing else in the proof uses this lemma, so it cannot hide
-another issue. Once a16z answers, either add a restriction or change L's length
-rule, and remove this warning.
-
-C. The represented rows and verifier bounds give Jolt prover acceptance: the
-last-jump check, the RAM-address check and the padded length. -/
+/-- C. The represented rows and verifier bounds give Jolt prover acceptance.
+The proof will use the last-jump check, the RAM-address check, and the padded
+length derived from the 256-cycle verifier floor, the witness length bound and
+`NoMaxLengthTrace`. For example, under a maximum of 1024, a 256-row run may
+be padded to 512, while the restriction excludes a 1024-row run. -/
 theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
+    (noMaxLengthTrace : joltInstance.NoMaxLengthTrace)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)

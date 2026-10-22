@@ -212,6 +212,12 @@ theorem HonestTrace.allConstraints_corrected_sizes
     traceLengthBound := by
       obtain ⟨isPadded, bounded⟩ := trace.corrected_prover_config_trace_length config accepted
       simpa only [trace.corrected_witness_params_trace_length config accepted, isPadded] using bounded
+    traceLengthFloor := by
+      obtain ⟨base | akita, _⟩ := trace.corrected_witness_params_padded config accepted
+      · rw [base, WitnessParams.proverTraceLength]
+        exact Nat.le_max_left _ _
+      · rw [akita, WitnessParams.proverTraceLength]
+        exact le_trans (by decide : 256 ≤ 2 ^ 12) (Nat.le_max_left _ _)
     bytecodeDomain := trace.corrected_witness_params_bytecode_domain config accepted
     ramSizeBounds := trace.corrected_witness_params_ram_bounds config accepted imageNonempty
     oneHotFitsSetup := by

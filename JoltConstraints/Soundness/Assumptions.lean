@@ -8,6 +8,7 @@ import JoltConstraints.honest_trace
 import JoltConstraints.Soundness.Layer3.Layout
 import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
 import JoltConstraints.Soundness.Layer5.HostCallRestriction
+import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Soundness.Layer5.TerminationRestriction
 import JoltConstraints.Soundness.Layer5.PanicRestriction
 
@@ -56,6 +57,23 @@ def Rv64ProgramImage.HostCallRdZero (program : Rv64ProgramImage SourceInstructio
     | .jolt (.VirtualHostIO rd _ _) => JoltISA.isX0 rd = true
     | _ => True
 
+/-- A temporary restriction on completed relaxed executions.
+An `UntrustedAnswerTrace` records actual executed rows and independent tape
+answers; `rows.size` counts those real rows. For a verifier-admissible maximum,
+the excluded count `2 ^ Nat.log2 max_padded_trace_length` is the largest
+power-of-two witness domain within that maximum.
+For a maximum of 1024, a 1024-row trace is excluded, while a 256-row trace is
+allowed: Jolt's prover pads the latter to 512.
+Jolt's verifier can accept a full-length witness, but its prover adds a padding
+row and would exceed the maximum. See
+`blog/content/blog/prover-verifier-trace-length/index.md` and
+`jolt/crates/jolt-prover/src/config.rs:63-70,116-119` at `5def437f`. -/
+def JoltInstance.NoMaxLengthTrace
+    (joltInstance : JoltInstance SourceInstruction) : Prop :=
+  ∀ (privateInputs : JoltPrivateInputs)
+    (trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs),
+    trace.rows.size ≠ 2 ^ Nat.log2 joltInstance.max_padded_trace_length.toNat
+
 -- Temporary program restrictions. Most exclude programs that expose reported
 -- or suspected Jolt bugs; NoStoreConditional now remains only for unfinished
 -- proof composition after PR #2039 fixed its original upstream issue. None is
@@ -87,6 +105,12 @@ structure JoltInstance.TemporaryRestrictions
   -- temporary; its value must be shown dead before any later read. Candidate,
   -- not reproduced; raise with a16z in the batch and remove after resolution.
   hostCallRdZero : joltInstance.program.HostCallRdZero
+  -- FIXME: exclude a relaxed execution whose real rows fill the largest
+  -- verifier-admissible power-of-two domain. Jolt's prover requires one more
+  -- padding row, but its verifier can accept that full-length witness.
+  -- Remove when Jolt resolves the mismatch described in
+  -- blog/content/blog/prover-verifier-trace-length/index.md.
+  noMaxLengthTrace : joltInstance.NoMaxLengthTrace
   -- FIXME: once the program has stored to the termination word, its next jump is
   -- the stall (a JAL with offset 0), and it never loads the termination word again
   -- (B6, stopping early; related to a16z/jolt#1950 and #1951 item 2).

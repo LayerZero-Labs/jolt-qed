@@ -265,3 +265,54 @@ The build retains existing warnings and existing `sorry` declarations; Part 2A a
 `#print axioms JoltInstance.completeness` returned those six plus `JoltConstraints.halfword_aligned._native.bv_decide.ax_1_5`, `JoltConstraints.lookupEntryCorrect_RangeCheckAligned._native.bv_decide.ax_1_241`, `JoltConstraints.rev8_32._native.bv_decide.ax_1_10`, `JoltConstraints.windowMaskB_entry._native.bv_decide.ax_1_5`, `JoltConstraints.windowMaskH_entry._native.bv_decide.ax_1_5`, `JoltConstraints.windowMaskW_entry._native.bv_decide.ax_1_5`, and `JoltConstraints.word_aligned._native.bv_decide.ax_1_5`.
 Both theorems still have the pre-existing `sorryAx`; citation-only edits introduced no new axiom dependency.
 No commit was made.
+
+## Part 2B: verifier floor and full-length restriction (2026-10-22)
+
+I checked Part B against the Lean code and Jolt commit `5def437f21a0006e13c063a03f0b5a7c9b93cd6f` before editing.
+Jolt's base verifier rejects trace lengths below 256 and above the instance maximum at `jolt/crates/jolt-verifier/src/verifier.rs:976-991`, using the base constant at `jolt/crates/jolt-verifier/src/config.rs:109-120`; both verifier validation paths call this check at `verifier.rs:379,1055-1058`.
+Jolt's prover adds a row, rounds the length to a power of two and applies the same 256 floor at `jolt/crates/jolt-prover/src/config.rs:63-70`, then rejects a padded length above the maximum at `config.rs:116-119`.
+The Lean witness length is a power of two (`JoltConstraints/witness.lean:125`), and `ProverPaddedFor` already supplies the base or Akita prover floor (`witness.lean:133-142`).
+No false Part B claim was found in the verifier-admissible range.
+The formula `2 ^ Nat.log2 max` denotes the largest power of two at most `max` when `max` is positive; any satisfying context now requires `max ≥ 256`, so this is the range in which the restriction matters.
+
+If the witness length is `T`, its represented trace has `n ≤ T` real rows and `T ≤ max`.
+Let `M = 2 ^ Nat.log2 max`.
+When `n < T`, Jolt's prover can pad to at most `T`; when `n = T < M`, it pads to `2T ≤ M`.
+The previously identified length mismatch is exactly `n = T = M`, which `NoMaxLengthTrace` excludes; this arithmetic does not prove helper C's separate last-jump or RAM-address obligations.
+For example, under a maximum of 1024, the restriction permits a 256-row trace and Jolt's prover pads it to 512, while it excludes a 1024-row trace.
+The cited blog post records the mismatch at the older `8bbb2357` pin; the prover formula and current verifier floor above were checked again at `5def437f`.
+
+### Declaration changes
+
+| Declaration and location | Old statement or field | New statement or field |
+|---|---|---|
+| `ConstraintContext` in `JoltConstraints/constraint_context.lean:17,33` | `traceLengthBound : params.traceLength ≤ joltInstance.max_padded_trace_length.toNat` only | The same upper bound plus `traceLengthFloor : 256 ≤ params.traceLength` beside it, strengthening the context used by `AllConstraints` while leaving Akita's 4096 floor outside the base model. |
+| `JoltInstance.NoMaxLengthTrace` in `JoltConstraints/Soundness/Assumptions.lean:71` | Absent | `∀ privateInputs (trace : UntrustedAnswerTrace joltInstance privateInputs), trace.rows.size ≠ 2 ^ Nat.log2 joltInstance.max_padded_trace_length.toNat`, with a docstring defining the real-row count and giving the 256/1024 example. |
+| `JoltInstance.TemporaryRestrictions` in `JoltConstraints/Soundness/Assumptions.lean:83,113` | No trace-length restriction | New field `noMaxLengthTrace : joltInstance.NoMaxLengthTrace`, marked FIXME and linked to `blog/content/blog/prover-verifier-trace-length/index.md`. |
+| `HonestTrace.allConstraints_corrected_sizes` in `JoltConstraints/Completeness/All.lean:179,215` | Statement unchanged; context constructor supplied only the upper bound | Statement unchanged; its proof now supplies `traceLengthFloor` from `trace.corrected_witness_params_padded`, covering both existing `ProverPaddedFor` branches. |
+| `JoltInstance.soundness_prover_accepts` in `JoltConstraints/Soundness/TopLevel.lean:150-159` | No `NoMaxLengthTrace` hypothesis; conclusion `(trace.prover_config joltInstance).isSome` | Adds `(noMaxLengthTrace : joltInstance.NoMaxLengthTrace)` after the instance; the conclusion and existing hypotheses are unchanged, and the proof remains `sorry`. |
+| `JoltInstance.soundness` in `JoltConstraints/Soundness/soundness.lean:26,42` | The explicit theorem statement already took `restrictions : joltInstance.TemporaryRestrictions`; its C call lacked the new field | The explicit statement is unchanged but the bundle is stronger; the C call passes `restrictions.noMaxLengthTrace`. |
+
+No declaration was deleted, no core language definition was changed, and the `DANGER` label was removed only after the verifier floor and temporary restriction excluded the two known counterexamples.
+`JoltConstraints/model_review.md:152,176,188-191` and `methods/soundness.md:95,110,118` now describe the revised obligations and still identify helper C as `sorry`.
+
+### Source citations changed
+
+| Location | Old reference | New reference and pinned Jolt lines checked |
+|---|---|---|
+| `JoltConstraints/constraint_context.lean:31-32` | None | `jolt/crates/jolt-verifier/src/verifier.rs:976-991` and `jolt/crates/jolt-verifier/src/config.rs:109-120` at `5def437f`. |
+| `JoltConstraints/Soundness/Assumptions.lean:69-70` | None | `jolt/crates/jolt-prover/src/config.rs:63-70,116-119` at `5def437f`. |
+| `JoltConstraints/model_review.md:188` | None | `jolt/crates/jolt-verifier/src/verifier.rs:976-991` and `jolt/crates/jolt-verifier/src/config.rs:109-120` at `5def437f`. |
+
+No existing Jolt citation was changed in Part 2B.
+No new `bv_decide` was used.
+No new or changed proof took more than ten seconds; the targeted build compiled `Completeness/All.lean` in 6.0 seconds and `Soundness/TopLevel.lean` in 3.8 seconds, including their entire files.
+
+### Validation
+
+`lake build JoltBytecode JoltConstraints` completed successfully with 8,802 jobs, with only the repository's existing warnings.
+`git diff --check` passed.
+`#print axioms JoltInstance.soundness` returned `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound`, and `JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5`.
+`#print axioms JoltInstance.completeness` returned those six plus `JoltConstraints.halfword_aligned._native.bv_decide.ax_1_5`, `JoltConstraints.lookupEntryCorrect_RangeCheckAligned._native.bv_decide.ax_1_241`, `JoltConstraints.rev8_32._native.bv_decide.ax_1_10`, `JoltConstraints.windowMaskB_entry._native.bv_decide.ax_1_5`, `JoltConstraints.windowMaskH_entry._native.bv_decide.ax_1_5`, `JoltConstraints.windowMaskW_entry._native.bv_decide.ax_1_5`, and `JoltConstraints.word_aligned._native.bv_decide.ax_1_5`.
+These match Part 2A: both top-level theorems still depend on existing `sorryAx`, and Part 2B added no axiom dependency.
+No commit was made.
