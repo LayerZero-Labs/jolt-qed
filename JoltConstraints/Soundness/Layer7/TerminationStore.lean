@@ -402,6 +402,51 @@ private theorem termination_word_absolute
     omega
   omega
 
+/-- An initial RAM word at or after the output region and before ordinary RAM is
+zero when the advice and input buffers end before its byte address.
+For example, both the panic and termination words start at zero.
+See jolt/crates/jolt-witness/src/backend/trace/ram.rs (`initial_ram_state`)
+at 5def437f. -/
+theorem initialRamWord_after_output_zero
+    (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout)
+    (state : SailJoltState)
+    (sameLayout : state.jolt_device.memory_layout = layout)
+    (adviceBelow : state.jolt_device.AdviceBelowInput)
+    (inputFits : state.jolt_device.inputs.size ≤ layout.max_input_size.toNat)
+    (word : Nat)
+    (afterOutput : layout.output_start.toNat ≤ ramLowestAddress layout + 8 * word)
+    (beforeRam : ramLowestAddress layout + 8 * word < JoltISA.RAM_START_ADDRESS) :
+    TraceWitness.initialRamWordFromState state word = 0 := by
+  obtain ⟨_, trustedBelow, untrustedBelow⟩ := adviceBelow
+  rw [sameLayout] at trustedBelow untrustedBelow
+  obtain ⟨outputStart, _⟩ := new_outputs_after_inputs config layout built
+  have trustedEnd : layout.trusted_advice_start.toNat +
+      state.jolt_device.trusted_advice.size ≤
+      ramLowestAddress layout + 8 * word := by omega
+  have untrustedEnd : layout.untrusted_advice_start.toNat +
+      state.jolt_device.untrusted_advice.size ≤
+      ramLowestAddress layout + 8 * word := by omega
+  have inputEnd : layout.input_start.toNat + state.jolt_device.inputs.size ≤
+      ramLowestAddress layout + 8 * word := by omega
+  have belowRam : ¬ JoltISA.RAM_START_ADDRESS ≤
+      ramLowestAddress layout + 8 * word := by omega
+  unfold TraceWitness.initialRamWordFromState
+  rw [sameLayout]
+  dsimp only
+  rw [overlayRamBytes_after_end layout layout.input_start state.jolt_device.inputs
+      _ _ inputEnd]
+  rw [overlayRamBytes_after_end layout layout.untrusted_advice_start
+      state.jolt_device.untrusted_advice _ _ untrustedEnd]
+  rw [overlayRamBytes_after_end layout layout.trusted_advice_start
+      state.jolt_device.trusted_advice _ _ trustedEnd]
+  change (if JoltISA.RAM_START_ADDRESS ≤ ramLowestAddress layout +
+      8 * word then
+      TraceWitness.ramImageWord (fun i => (state.sail.mem.get? i).getD 0)
+        (ramLowestAddress layout + 8 * word)
+    else 0) = 0
+  rw [if_neg belowRam]
+
 /-- The initial RAM image contains zero at the termination word because the
 advice and input buffers end before it. For example, SDK exit changes that
 word from its initial zero to one with a store. -/
@@ -414,51 +459,14 @@ private theorem initialRamWord_termination_zero
     (inputFits : state.jolt_device.inputs.size ≤ layout.max_input_size.toNat) :
     TraceWitness.initialRamWordFromState state
       ((layout.termination.toNat - ramLowestAddress layout) / 8) = 0 := by
-  obtain ⟨_, trustedBelow, untrustedBelow⟩ := adviceBelow
-  rw [sameLayout] at trustedBelow untrustedBelow
-  obtain ⟨_, inputLeOutput, outputLePanic, panicLeTerm, _⟩ :=
-    new_io_ordered config layout built
-  obtain ⟨outputStart, _⟩ := new_outputs_after_inputs config layout built
-  obtain ⟨_, _, _, _, ioEndBound⟩ := new_io_geometry config layout built
   have absolute := termination_word_absolute config layout built
-  have trustedEnd : layout.trusted_advice_start.toNat +
-      state.jolt_device.trusted_advice.size ≤
-      ramLowestAddress layout +
-        8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) := by
-    rw [absolute]
+  obtain ⟨_, _, outputLePanic, panicLeTerm, _⟩ := new_io_ordered config layout built
+  obtain ⟨_, _, _, ioEndIs, ioEndBound⟩ := new_io_geometry config layout built
+  apply initialRamWord_after_output_zero config layout built state sameLayout adviceBelow inputFits
+  · rw [absolute]
     omega
-  have untrustedEnd : layout.untrusted_advice_start.toNat +
-      state.jolt_device.untrusted_advice.size ≤
-      ramLowestAddress layout +
-        8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) := by
-    rw [absolute]
+  · rw [absolute]
     omega
-  have inputEnd : layout.input_start.toNat + state.jolt_device.inputs.size ≤
-      ramLowestAddress layout +
-        8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) := by
-    rw [absolute]
-    omega
-  have belowRam : ¬ JoltISA.RAM_START_ADDRESS ≤
-      ramLowestAddress layout +
-        8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) := by
-    rw [absolute]
-    omega
-  unfold TraceWitness.initialRamWordFromState
-  rw [sameLayout]
-  dsimp only
-  rw [overlayRamBytes_after_end layout layout.input_start state.jolt_device.inputs
-      _ _ inputEnd]
-  rw [overlayRamBytes_after_end layout layout.untrusted_advice_start
-      state.jolt_device.untrusted_advice _ _ untrustedEnd]
-  rw [overlayRamBytes_after_end layout layout.trusted_advice_start
-      state.jolt_device.trusted_advice _ _ trustedEnd]
-  change (if JoltISA.RAM_START_ADDRESS ≤ ramLowestAddress layout +
-      8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) then
-      TraceWitness.ramImageWord (fun i => (state.sail.mem.get? i).getD 0)
-        (ramLowestAddress layout +
-          8 * ((layout.termination.toNat - ramLowestAddress layout) / 8))
-    else 0) = 0
-  rw [if_neg belowRam]
 
 /-- The verifier's public I/O layout is the layout built from the instance.
 For example, its termination address is the one used by the RAM constraints. -/

@@ -62,3 +62,29 @@ No private lemma was made public, and no `bv_decide` use or proof limit was adde
 `#print axioms JoltInstance.boundaryState_empty` reports `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`.
 The remaining `sorryAx` is reached through `initialized_device_words`.
 I changed no files outside `BoundaryStart.lean` and this report, and made no commit.
+
+## Stage 4c
+
+I checked the task's claims against the current Lean definitions and Jolt at pin `5def437f` before editing.
+Jolt's tracer checks the three supplied buffer lengths in `jolt/tracer/src/lib.rs` (`create_emulator`), and Jolt's device layout rounds the input maximum and places output, panic, and termination in order in `jolt/common/src/jolt_device.rs` (`MemoryLayout::try_new`).
+Jolt's prover initializes RAM from the advice and input buffers before writing the final panic and termination words in `jolt/crates/jolt-witness/src/backend/trace/ram.rs` (`initial_ram_state`, `final_ram_state`).
+I found no false plan claim.
+The bytecode start claim needs an expansion certificate; it is false for an arbitrary array of rows, so the new helper takes only the bytecode as data together with a proof that some program expands to it.
+
+| Declaration | File and line | Change |
+| --- | --- | --- |
+| `new_input_size_bound` | `JoltConstraints/layout_facts.lean:483` | New public theorem relating the configured input maximum to the rounded layout maximum. |
+| `initialRamWord_after_output_zero` | `JoltConstraints/Soundness/Layer7/TerminationStore.lean:410` | New public shared zero-word theorem for byte addresses from the output start to before ordinary RAM. |
+| `initialRamWord_termination_zero` | `JoltConstraints/Soundness/Layer7/TerminationStore.lean:453` | Original statement unchanged; proof now applies the shared theorem at the termination word. |
+| `first_address_row_starts` | `JoltConstraints/Soundness/Layer6/BoundaryStart.lean:17` | New private bytecode helper for a first row at its address in expanded bytecode. |
+| `first_row_of_entry_slot` | `JoltConstraints/Soundness/Layer6/BoundaryStart.lean:63` | Original statement unchanged; proof delegates its source-start step to the new helper. |
+| `initial_state_empty_outputs_and_input_bound` | `JoltConstraints/Soundness/Layer6/BoundaryStart.lean:119` | New private helper extracting empty output, false panic, and the input-size check from initialization. |
+| `initialized_device_words` | `JoltConstraints/Soundness/Layer6/BoundaryStart.lean:152` | Original statement unchanged and now proved using the rounded input bound and shared zero-word theorem. |
+| `empty_run_ram_word` | `JoltConstraints/Soundness/Layer6/BoundaryStart.lean:216` | Original statement unchanged; final-RAM unfolding now occurs once before the panic case split. |
+
+`context_initial_termination_zero` keeps its statement and proof; its private termination-word helper now uses the generalized theorem.
+No approved statement, core definition, or theorem premise changed, and no `bv_decide` use or proof limit was added.
+No new or changed proof took more than ten seconds; the five new or changed `BoundaryStart.lean` proofs each elaborated in under 0.21 seconds.
+`lake build JoltConstraints` passed with 8806 jobs, and `git diff --check` passed.
+`#print axioms JoltInstance.boundaryState_empty` reports `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`, with no `sorryAx`.
+I edited only `BoundaryStart.lean`, `TerminationStore.lean`, `layout_facts.lean`, and this report, and made no commit.

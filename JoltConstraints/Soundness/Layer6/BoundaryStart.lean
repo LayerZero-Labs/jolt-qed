@@ -11,6 +11,50 @@ namespace JoltInstance
 
 open JoltConstraints.Soundness
 
+/-- In expanded bytecode, a row with no earlier row at its address begins its
+source instruction.
+For example, the first row at an ADDI address starts that ADDI's expansion. -/
+private theorem first_address_row_starts
+    (bytecode : Array JoltInstructionRow)
+    (expanded : ∃ image : Rv64ProgramImage SourceInstruction,
+      expand_program image = some bytecode)
+    (first : Fin bytecode.size)
+    (earlier : ∀ position : Fin bytecode.size, position.val < first.val →
+      bytecode[position].address ≠ bytecode[first].address) :
+    bytecode[first].starts_source = true := by
+  obtain ⟨image, expanded⟩ := expanded
+  obtain ⟨groups, flattened, valid⟩ := expand_program_flatten image bytecode expanded
+  by_cases zero : first.val = 0
+  · have bytecodeNonempty : 0 < bytecode.size := by omega
+    have nonempty : 0 < groups.flatten.length := by
+      simpa only [flattened, List.size_toArray] using bytecodeNonempty
+    have firstStarts := rows_first_starts groups valid nonempty
+    have firstStartsBytecode : bytecode[0].starts_source = true := by
+      simpa only [flattened, List.getElem_toArray] using firstStarts
+    simpa only [Fin.getElem_fin, zero] using firstStartsBytecode
+  · let previous : Fin bytecode.size := ⟨first.val - 1, by omega⟩
+    have previousVal : previous.val = first.val - 1 := rfl
+    have different : bytecode[previous].address ≠ bytecode[first].address :=
+      earlier previous (by omega)
+    have previousLast : bytecode[previous].virtual_sequence_remaining.getD 0 = 0 := by
+      by_contra continues
+      have following := (expand_program_layout image bytecode expanded).next
+        previous first (by omega) (by simpa [JoltInstructionRow.continues] using continues)
+      exact different following.1.symm
+    have prevInList : previous.val < groups.flatten.length := by
+      simpa only [flattened, List.size_toArray] using previous.isLt
+    have previousLastList :
+        (groups.flatten[previous.val]'prevInList).virtual_sequence_remaining.getD 0 = 0 := by
+      simpa only [flattened, Fin.getElem_fin, List.getElem_toArray] using previousLast
+    have nextIs : previous.val + 1 = first.val := by omega
+    have nextInRange : previous.val + 1 < groups.flatten.length := by
+      rw [nextIs]
+      simpa only [flattened, List.size_toArray] using first.isLt
+    have nextStarts := rows_after_last groups valid previous.val nextInRange previousLastList
+    have nextStartsBytecode : bytecode[first].starts_source = true := by
+      simpa only [flattened, Fin.getElem_fin, List.getElem_toArray, nextIs] using nextStarts
+    exact nextStartsBytecode
+
 /-- For an accepted nonpadding entry slot, the slot is one past the first row
 of its source instruction, whose address is the program entry address.
 For example, entry slot 1 identifies row 0 of an ADDI at the entry address.
@@ -61,40 +105,43 @@ private theorem first_row_of_entry_slot
     rw [previousElem] at previousNotMatch
     simp only [beq_iff_eq] at previousNotMatch
     exact previousNotMatch same
-  obtain ⟨groups, flattened, valid⟩ := expand_program_flatten image bytecode expanded
   have starts : bytecode[first].starts_source = true := by
-    by_cases zero : first.val = 0
-    · have bytecodeNonempty : 0 < bytecode.size := by omega
-      have nonempty : 0 < groups.flatten.length := by
-        simpa only [flattened, List.size_toArray] using bytecodeNonempty
-      have firstStarts := rows_first_starts groups valid nonempty
-      have firstStartsBytecode : bytecode[0].starts_source = true := by
-        simpa only [flattened, List.getElem_toArray] using firstStarts
-      simpa only [Fin.getElem_fin, zero] using firstStartsBytecode
-    · let previous : Fin bytecode.size := ⟨first.val - 1, by omega⟩
-      have previousVal : previous.val = first.val - 1 := rfl
-      have different : bytecode[previous].address ≠ bytecode[first].address := by
-        intro same
-        exact earlier previous (by omega) (same.trans slotMatches)
-      have previousLast : bytecode[previous].virtual_sequence_remaining.getD 0 = 0 := by
-        by_contra continues
-        have following := (expand_program_layout image bytecode expanded).next
-          previous first (by omega) (by simpa [JoltInstructionRow.continues] using continues)
-        exact different following.1.symm
-      have prevInList : previous.val < groups.flatten.length := by
-        simpa only [flattened, List.size_toArray] using previous.isLt
-      have previousLastList :
-          (groups.flatten[previous.val]'prevInList).virtual_sequence_remaining.getD 0 = 0 := by
-        simpa only [flattened, Fin.getElem_fin, List.getElem_toArray] using previousLast
-      have nextIs : previous.val + 1 = first.val := by omega
-      have nextInRange : previous.val + 1 < groups.flatten.length := by
-        rw [nextIs]
-        simpa only [flattened, List.size_toArray] using first.isLt
-      have nextStarts := rows_after_last groups valid previous.val nextInRange previousLastList
-      have nextStartsBytecode : bytecode[first].starts_source = true := by
-        simpa only [flattened, Fin.getElem_fin, List.getElem_toArray, nextIs] using nextStarts
-      exact nextStartsBytecode
+    apply first_address_row_starts bytecode ⟨image, expanded⟩ first
+    intro position before same
+    exact earlier position before (same.trans slotMatches)
   exact ⟨first, slotIs, slotMatches, starts⟩
+
+/-- The initialized device has no output or panic yet, and the supplied input
+bytes fit their configured maximum.
+For example, before an entry ADDI the output buffer is empty and panic is false.
+See jolt/tracer/src/lib.rs (`create_emulator`) and
+jolt/common/src/jolt_device.rs (`JoltDevice::new`) at 5def437f. -/
+private theorem initial_state_empty_outputs_and_input_bound {Source : Type}
+    (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
+    (state : SailJoltState)
+    (built : joltInstance.initial_state privateInputs = some state) :
+    state.jolt_device.outputs = #[] ∧ state.jolt_device.panic = false ∧
+      joltInstance.inputs.size ≤ joltInstance.memory_config.max_input_size.toNat := by
+  unfold JoltInstance.initial_state at built
+  rw [bind_some_iff] at built
+  obtain ⟨initialLayout, _, built⟩ := built
+  dsimp only at built
+  split at built
+  · cases built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  split at built
+  · cases built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  split at built
+  · cases built
+  rename_i inputTooLong
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  cases built
+  rw [init_state_jolt_device]
+  exact ⟨rfl, rfl, Nat.le_of_not_lt inputTooLong⟩
 
 /-- Initialization leaves output empty and panic false, and its initial RAM
 image has zero at the panic word.
@@ -110,7 +157,55 @@ private theorem initialized_device_words {Source : Type}
       TraceWitness.initialRamWordFromState state
         ((state.jolt_device.memory_layout.panic.toNat -
           JoltConstraints.ramLowestAddress state.jolt_device.memory_layout) / 8) = 0 := by
-  sorry
+  let layout := state.jolt_device.memory_layout
+  have layoutBuilt : MemoryLayout.new
+      {joltInstance.memory_config with program_size := some joltInstance.program.program_size} =
+      some layout :=
+    (initial_state_device joltInstance privateInputs state built).1
+  have adviceFacts := initial_state_advice_below_input joltInstance privateInputs state built
+  rw [MemoryLayout.get_lowest_address_toNat] at adviceFacts
+  have adviceBelow : state.jolt_device.AdviceBelowInput :=
+    ⟨adviceFacts.1, adviceFacts.2.1, adviceFacts.2.2⟩
+  obtain ⟨outputsEmpty, panicFalse, inputBound⟩ :=
+    initial_state_empty_outputs_and_input_bound joltInstance privateInputs state built
+  have inputFits : state.jolt_device.inputs.size ≤ layout.max_input_size.toNat := by
+    rw [initial_state_inputs joltInstance privateInputs state built]
+    exact inputBound.trans (new_input_size_bound
+      {joltInstance.memory_config with program_size := some joltInstance.program.program_size}
+      layout layoutBuilt)
+  obtain ⟨lowLeInput, _, outputLePanic, _, _⟩ := new_io_ordered _ layout layoutBuilt
+  rw [MemoryLayout.get_lowest_address_toNat] at lowLeInput
+  change JoltConstraints.ramLowestAddress layout ≤ layout.input_start.toNat at lowLeInput
+  have inputAligned := new_input_word_aligned _ layout layoutBuilt
+  rw [MemoryLayout.get_lowest_address_toNat] at inputAligned
+  change (layout.input_start.toNat - JoltConstraints.ramLowestAddress layout) % 8 = 0
+    at inputAligned
+  obtain ⟨outputStart, inputMultiple⟩ := new_outputs_after_inputs _ layout layoutBuilt
+  obtain ⟨panicStart, outputMultiple, terminationStart, ioEndStart, ioEndBound⟩ :=
+    new_io_geometry _ layout layoutBuilt
+  have panicOffset : layout.panic.toNat - JoltConstraints.ramLowestAddress layout =
+      (layout.input_start.toNat - JoltConstraints.ramLowestAddress layout) +
+        layout.max_input_size.toNat + layout.max_output_size.toNat := by
+    omega
+  have panicAligned :
+      (layout.panic.toNat - JoltConstraints.ramLowestAddress layout) % 8 = 0 := by
+    rw [panicOffset]
+    omega
+  have panicAbsolute : JoltConstraints.ramLowestAddress layout +
+      8 * ((layout.panic.toNat - JoltConstraints.ramLowestAddress layout) / 8) =
+      layout.panic.toNat := by omega
+  have afterOutput : layout.output_start.toNat ≤ JoltConstraints.ramLowestAddress layout +
+      8 * ((layout.panic.toNat - JoltConstraints.ramLowestAddress layout) / 8) := by
+    rw [panicAbsolute]
+    exact outputLePanic
+  have beforeRam : JoltConstraints.ramLowestAddress layout +
+      8 * ((layout.panic.toNat - JoltConstraints.ramLowestAddress layout) / 8) <
+      JoltISA.RAM_START_ADDRESS := by
+    rw [panicAbsolute]
+    omega
+  refine ⟨outputsEmpty, panicFalse, ?_⟩
+  exact initialRamWord_after_output_zero _ layout layoutBuilt state rfl adviceBelow inputFits
+    _ afterOutput beforeRam
 
 /-- On an empty initialized run, the final RAM image equals the initial image
 outside the synthetic termination word: the initial output buffer is empty and
@@ -149,6 +244,13 @@ private theorem empty_run_ram_word
     · simp [bad] at remapped
     · simp only [bad, ↓reduceIte, Option.some.injEq] at remapped
       exact outsideTermination (by simpa [layout] using remapped.symm)
+  unfold TraceWitness.finalRamWord
+  rw [finalState]
+  simp only [outputsEmpty, panicFalse]
+  rw [outputOverlay]
+  dsimp only [layout] at noTermination
+  simp only [Bool.not_false, Bool.true_and, beq_iff_eq]
+  rw [if_neg noTermination]
   by_cases atPanic : TraceWitness.remapRamAddress layout layout.panic = some address
   · have initialZero : TraceWitness.initialRamWordFromState run.initialState address = 0 := by
       change (if layout.panic.toNat = 0 ∨
@@ -160,21 +262,11 @@ private theorem empty_run_ram_word
       · simp [bad] at atPanic
       · simp only [bad, ↓reduceIte, Option.some.injEq] at atPanic
         simpa [layout, ← atPanic] using panicZero
-    unfold TraceWitness.finalRamWord
-    rw [finalState]
-    simp only [outputsEmpty, panicFalse]
-    rw [outputOverlay]
-    dsimp only [layout] at noTermination atPanic
-    simp only [Bool.not_false, Bool.true_and, beq_iff_eq]
-    rw [if_neg noTermination, if_pos atPanic]
+    dsimp only [layout] at atPanic
+    rw [if_pos atPanic]
     exact initialZero.symm
-  · unfold TraceWitness.finalRamWord
-    rw [finalState]
-    simp only [outputsEmpty, panicFalse]
-    rw [outputOverlay]
-    dsimp only [layout] at noTermination atPanic
-    simp only [Bool.not_false, Bool.true_and, beq_iff_eq]
-    rw [if_neg noTermination, if_neg atPanic]
+  · dsimp only [layout] at atPanic
+    rw [if_neg atPanic]
     rfl
 
 /-- The instance's initialized state admits an empty run satisfying the boundary

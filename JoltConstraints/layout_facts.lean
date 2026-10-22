@@ -476,6 +476,35 @@ theorem new_outputs_after_inputs (config : MemoryConfig) (layout : MemoryLayout)
     Nat.mod_eq_of_lt (a := inputEnd) (by omega), Nat.mod_eq_of_lt (a := input) (by omega)]
   omega
 
+/-- A successful layout reserves at least the configured maximum number of input
+bytes, rounding the reservation up to an eight-byte boundary.
+For example, a configured maximum of nine bytes occupies sixteen layout bytes.
+See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at 5def437f. -/
+theorem new_input_size_bound (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    config.max_input_size.toNat ≤ layout.max_input_size.toNat := by
+  unfold MemoryLayout.new at built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨input, inputRounded, built⟩ := built
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  cases built
+  have inputGe := (alignUp8_some inputRounded).1
+  have inputLt : input < 2 ^ 64 := by
+    unfold MemoryLayout.alignUp8 at inputRounded
+    split at inputRounded
+    · cases inputRounded
+      exact BitVec.isLt _
+    · obtain ⟨eq, bound⟩ := checkedAdd_some inputRounded
+      omega
+  simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt inputLt]
+  exact inputGe
+
 /-- A word index counts 8-byte words up from the lowest address:
 `(address - lowest) / 8`.
 In a successful layout the output, panic and termination word indices follow
