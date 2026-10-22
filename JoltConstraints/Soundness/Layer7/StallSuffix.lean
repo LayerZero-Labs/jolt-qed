@@ -601,7 +601,7 @@ the next unexpanded PC to its lookup target. For example, `JAL +0` at `a`
 keeps the next unexpanded PC at `a`.
 See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:344-352
 at 8bbb2357. -/
-private theorem stall_jal_next_target
+theorem stall_jal_next_target
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -653,7 +653,7 @@ private theorem stall_jal_next_target
 /-- Executing a JAL puts its address plus immediate in Sail's nextPC. For
 example, `JAL +0` at address `a` leaves nextPC at `a`.
 See jolt/tracer/src/instruction/jal.rs:19-30 at 8bbb2357. -/
-private theorem stall_jal_exec_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
+theorem stall_jal_exec_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
     (pre post : SailJoltState)
     (pc : pre.sail.regs.get? Register.PC = some address)
     (nextPC : pre.sail.regs.get? Register.nextPC = some link)
@@ -781,7 +781,7 @@ table, so its lookup output is the ISA taken bit. For example, BEQ with two
 equal register values has lookup output one.
 See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:347-352
 at 8bbb2357. -/
-private theorem stall_branch_lookup_decision
+theorem stall_branch_lookup_decision
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -1338,7 +1338,7 @@ private theorem expanded_branch_same_address
 runtime advice never changes a branch. For example, a BEQ run uses its BEQ
 row rather than a tape answer. See jolt/tracer/src/emulator/cpu.rs:581-620,657-679
 at 5def437f. -/
-private theorem stall_branch_runs
+theorem stall_branch_runs
     (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs)
     (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
@@ -1749,7 +1749,7 @@ theorem stall_branch_step
 even when it also writes a link register. For example, `jalr x1, -4(x2)`
 sets `nextPC` to `(x2 - 4) & ~1`.
 See jolt/tracer/src/instruction/jalr.rs:19-30 at 8bbb2357. -/
-private theorem tape_jalr_target
+theorem tape_jalr_target
     (dst : JoltISA.Dst) (base : JoltISA.Src) (imm link answer : BitVec 64)
     (pre post : SailJoltState)
     (hnext : pre.sail.regs.get? Register.nextPC = some link)

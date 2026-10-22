@@ -166,6 +166,30 @@ private theorem branch_target_ne_zero
       (by simpa using targetCast)
   omega
 
+/-- The ordinary update equation advances a row whose branch, jump and
+continuation flags are zero by its source length as a field sum.
+For example, a compressed ADDI at address `a` advances to `a + 2`.
+See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs
+(`NEXT_UNEXP_PC_UPDATE_OTHERWISE`) at 5def437f. -/
+theorem ordinary_row_next_pc_value
+    {F : Type} [Field F]
+    {params : WitnessParams} (witness : WitnessType F params)
+    (address : BitVec 64) (isCompressed : Bool)
+    (update : JoltConstraints.nextUnexpandedPCUpdateOtherwise witness)
+    (cycle : Fin params.traceLength)
+    (currentPC : witness.UnexpandedPC cycle = (address.toNat : F))
+    (jumpZero : witness.OpFlags .Jump cycle = 0)
+    (branchZero : witness.ShouldBranch cycle = 0)
+    (doNotZero : witness.OpFlags .DoNotUpdateUnexpandedPC cycle = 0)
+    (compressed : witness.OpFlags .IsCompressed cycle =
+      if isCompressed then (1 : F) else 0) :
+    witness.NextUnexpandedPC cycle =
+      ((address.toNat + (if isCompressed then 2 else 4) : Nat) : F) := by
+  have relation := update cycle
+  rw [branchZero, jumpZero, currentPC, doNotZero, compressed] at relation
+  cases h : isCompressed <;> simp [h] at relation ⊢ <;>
+    linear_combination relation
+
 /-- An ordinary row with neither a jump nor a taken branch has a nonzero next
 unexpanded PC when its current address is a real 64-bit address. For example,
 an ADDI at `RAM_START_ADDRESS` advances by two or four bytes under constraint 17.
@@ -185,12 +209,10 @@ private theorem ordinary_row_next_pc_nonzero
       if isCompressed then (1 : F) else 0) :
     witness.NextUnexpandedPC cycle ≠ 0 := by
   intro zero
-  have relation := update cycle
-  rw [branchZero, jumpZero, zero, currentPC, doNotZero, compressed] at relation
   have successorCast :
       ((address.toNat + (if isCompressed then 2 else 4) : Nat) : F) = 0 := by
-    cases h : isCompressed <;> simp [h] at relation ⊢ <;>
-      linear_combination -relation
+    exact (ordinary_row_next_pc_value witness address isCompressed update cycle
+      currentPC jumpZero branchZero doNotZero compressed).symm.trans zero
   have successorBound : address.toNat + (if isCompressed then 2 else 4) < ringChar F := by
     have wordBound := address.isLt
     have charBound := JoltConstraints.Soundness.two_pow_127_lt_char joltField
@@ -206,7 +228,7 @@ For example, the first row of an ECALL expansion selects the next ECALL row.
 Constraint 18 gives the step because the virtual flag is one and the last-row
 flag is zero. See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:354-357
 at 8bbb2357. -/
-private theorem nonterminal_virtual_row_pc_plus_one
+theorem nonterminal_virtual_row_pc_plus_one
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -347,7 +369,7 @@ private theorem represented_last_boundary
 /-- A nonterminal virtual row cannot occupy the final witness cycle, because
 constraint 18 advances its positive expanded slot while the final shift is
 zero. For example, the first ECALL row cannot be the witness's last row. -/
-private theorem nonterminal_at_last_cycle_impossible
+theorem nonterminal_at_last_cycle_impossible
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -488,7 +510,7 @@ private theorem last_row_terminal
 /-- A selected terminal non-jump row has the ordinary update flags: Jump and
 DoNotUpdateUnexpandedPC are zero, while IsCompressed records that row's length.
 For example, a terminal compressed ADDI uses a two-byte successor. -/
-private theorem selected_terminal_nonjump_flags
+theorem selected_terminal_nonjump_flags
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)

@@ -51,3 +51,37 @@ No new proof took over ten seconds to elaborate.
 `#print axioms JoltInstance.expansion_finish` reports `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`.
 The endpoint, last-selector and boundary-terminal helpers have no `sorryAx`; `boundary_successor` and `expansion_ready` reach it through `terminal_next_unexpanded_pc` alone.
 I made no commit and did not edit Agent 1's concurrent Layer 5, `DivisionBlock.lean`, `PlainRow.lean`, or `LastJump.lean` work.
+
+## Stage 5c
+
+I reread `AGENTS.md`, `methods/layer6/reuse.md`, this report, and `methods/layer6/stage-5c.md` in order, and checked the proposed uses against the Lean declarations and Jolt at pin `5def437f`.
+The plan's taken-branch step is incomplete: `branch_target_toNat` in `JoltConstraints/Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean:98` requires both the source and the wrapped target to be at least `RAM_START_ADDRESS`.
+The selected current bytecode row supplies the source bound, but the plan does not name a fact deriving the target bound from the real successor and the field-valued next-PC equation.
+The preliminary audit missed this extra premise; I found it while working on the branch case.
+I found no counterexample to `terminal_next_unexpanded_pc`, but I have not proved its branch case and have not treated the theorem as closed.
+Jolt's pinned witness extractor reads the next unexpanded PC from the successor row in `jolt/crates/jolt-witness/src/witnesses/pc.rs:99-113`, and the real-successor flags are defined in `jolt/crates/jolt-witness/src/witnesses/flags.rs:82-139`.
+
+The following are the new or changed declarations, with Lean asynchronous proof elaboration times where their proofs changed:
+
+- `JoltConstraints/Soundness/Layer6/ExpansionFinish.lean:64`: `boundary_successor` now uses `selected_last_represented_row` directly; 0.161 s.
+- `JoltConstraints/Soundness/Layer6/ExpansionFinish.lean`: the duplicate `last_selected_slot` was deleted.
+- `JoltConstraints/Soundness/Layer7/LastJump.lean:174`: `ordinary_row_next_pc_value` extracts the ordinary field-sum equality; 0.247 s.
+- `JoltConstraints/Soundness/Layer7/LastJump.lean:198`: `ordinary_row_next_pc_nonzero` keeps its statement and derives its equality from that helper; 0.195 s.
+- `JoltConstraints/Soundness/Layer7/LastJump.lean:513`: `selected_terminal_nonjump_flags` was made public in place, without changing its proof; 0.034 s.
+- `JoltConstraints/Soundness/Layer6/TerminalNextPC.lean:15`: `terminal_last_setup` extracts the selected final slot and prepared registers; 0.169 s.
+- `JoltConstraints/Soundness/Layer6/TerminalNextPC.lean:58`: `terminal_direct_execution` extracts direct Sail execution; 0.074 s.
+- `JoltConstraints/Soundness/Layer6/TerminalNextPC.lean:79`: `terminal_noncontrol` is proved; 0.810 s.
+- `JoltConstraints/Soundness/Layer6/TerminalNextPC.lean:153`: `terminal_jal` is proved; 0.367 s.
+- `JoltConstraints/Soundness/Layer6/TerminalNextPC.lean:198`: `terminal_jalr` is proved; 0.321 s.
+- `JoltConstraints/Soundness/Layer6/TerminalNextPC.lean:257`: `terminal_branch` is a named, staged obligation with one `sorry`; 0.001 s.
+- `JoltConstraints/Soundness/Layer6/TerminalNextPC.lean:289`: `terminal_next_unexpanded_pc` retains its statement and now follows from the four cases; 0.261 s, conditional on `terminal_branch`.
+
+In `JoltConstraints/Soundness/Layer7/StallSuffix.lean`, I made `stall_jal_next_target` at line 604, `stall_jal_exec_target` at line 656, `stall_branch_lookup_decision` at line 784, `stall_branch_runs` at line 1341, and `tape_jalr_target` at line 1752 public in place, without changing their statements or proofs.
+No `stall_` lemma was renamed.
+Agent 1 also made `nonterminal_virtual_row_pc_plus_one` and `nonterminal_at_last_cycle_impossible` public in `LastJump.lean`; those visibility edits were concurrent, not mine.
+I left Agent 1's Layer 5, `DivisionBlock.lean`, `PlainRow.lean`, and other report changes untouched.
+
+`lake build JoltConstraints` succeeded with 8808 jobs, and `git diff --check` passed for the four allowed Lean files.
+`#print axioms JoltInstance.expansion_finish` still reports `sorryAx`, inherited through `terminal_next_unexpanded_pc` from the staged `terminal_branch` obligation.
+No new `bv_decide`, `native_decide`, heartbeat increase, or proof over ten seconds was introduced.
+I did not edit `JoltConstraints/model_review.md` or `methods/soundness.md`, and I made no commit.

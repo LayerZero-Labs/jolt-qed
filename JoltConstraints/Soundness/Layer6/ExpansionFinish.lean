@@ -55,47 +55,6 @@ private theorem expanded_endpoint_terminal (bytecode : Array JoltInstructionRow)
       omega
     simpa only [sameIndex, Fin.getElem_fin] using endpoint
 
-/-- The run's last row has its represented bytecode selector at its final cycle.
-For example, the last row of a source block selects its one-based bytecode slot. -/
-private theorem last_selected_slot {F : Type} [Field F] (joltField : JoltField F)
-    (joltInstance : JoltInstance SourceInstruction)
-    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
-    (witness : WitnessType F params)
-    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
-    (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
-      context.io context.entry witness)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (bytecodeEq : run.bytecode = context.bytecode)
-    (represented : RepresentsRows witness run.toTrace)
-    (last : TraceRow run.bytecode) (atEnd : last ∈ run.rows.back?)
-    (cycle : Fin params.traceLength) (atCycle : cycle.val + 1 = run.rows.size) :
-    ∃ slot : Fin (2 ^ params.logBytecodeK),
-      JoltConstraints.bytecodeRa witness slot cycle = 1 ∧
-      JoltConstraints.bytecodeRow context.bytecode slot.val =
-        some run.bytecode[last.rowIndex] := by
-  have inRun : cycle.val < run.rows.size := by omega
-  have lastAt : run.rows[cycle.val] = last := by
-    have back : run.rows.back? = some last := by simpa using atEnd
-    rw [Array.back?_eq_getElem?] at back
-    have cycleIs : cycle.val = run.rows.size - 1 := by omega
-    have atIndex : run.rows[cycle.val]? = some last := by simpa only [cycleIs] using back
-    exact (Array.getElem?_eq_some_iff.mp atIndex).2
-  have selectedLast := selected_represented_row joltField joltInstance privateInputs
-    witness context equations run bytecodeEq represented cycle inRun
-  let lastSlot : Fin (2 ^ params.logBytecodeK) :=
-    ⟨last.rowIndex.val + 1, by
-      have domain : params.BytecodeDomainFor run.bytecode.size := by
-        simpa only [bytecodeEq] using context.bytecodeDomain
-      have fits := domain.rowsFit
-      omega⟩
-  have selectedLastAt : JoltConstraints.bytecodeRa witness lastSlot cycle = 1 := by
-    simpa only [lastAt, lastSlot] using selectedLast
-  have lastRowAt : JoltConstraints.bytecodeRow context.bytecode lastSlot.val =
-      some run.bytecode[last.rowIndex] := by
-    rw [← bytecodeEq]
-    simp [lastSlot, JoltConstraints.bytecodeRow]
-  exact ⟨lastSlot, selectedLastAt, lastRowAt⟩
-
 /-- A real cycle after a terminal run row selects the first bytecode row at
 Sail's post-state next PC.
 For example, after a terminal ADDI at `0x80000000`, the next real cycle selects
@@ -144,9 +103,15 @@ private theorem boundary_successor {F : Type} [Field F] (joltField : JoltField F
     simpa only [bytecodeEq] using nextRowAt
   obtain ⟨_, _, next, slotIs, rowIs⟩ := stall_cycle_selected_row
     joltInstance privateInputs context run.bytecode bytecodeEq slot row nextRowAtRun
-  obtain ⟨lastSlot, selectedLastAt, lastRowAt⟩ := last_selected_slot
-    joltField joltInstance privateInputs witness context equations run bytecodeEq
-    represented last atEnd cycle atCycle
+  obtain ⟨before, lastSlot, beforeIs, _, selectedLast, lastRowRun, _⟩ :=
+    selected_last_represented_row joltField joltInstance privateInputs witness
+      context equations run bytecodeEq represented last atEnd nextBound
+  have beforeEq : before = cycle := Fin.ext (by omega)
+  have selectedLastAt : JoltConstraints.bytecodeRa witness lastSlot cycle = 1 := by
+    simpa only [beforeEq] using selectedLast
+  have lastRowAt : JoltConstraints.bytecodeRow context.bytecode lastSlot.val =
+      some run.bytecode[last.rowIndex] := by
+    simpa only [← bytecodeEq] using lastRowRun
   have starts : row.starts_source = true := by
     by_cases sourceStart : row.starts_source = true
     · exact sourceStart

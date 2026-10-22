@@ -174,7 +174,11 @@ The following declarations still use `sorry`:
 | `JoltInstance.boundaryState_empty` (`Soundness/Layer6/PrefixAgreement.lean`) | Construct the empty initialized run and establish `BoundaryState`: initial register and nontermination RAM agreement, zero termination RAM, and entry readiness when cycle zero is real; the retained-row fields are vacuous. |
 | `JoltInstance.expansion_start` (`Soundness/Layer6/PrefixAgreement.lean`) | Open the source selected by a boundary's real next cycle, establishing `ExpansionState` at zero completed rows on the same run. |
 | `JoltInstance.row_step` (`Soundness/Layer6/PrefixAgreement.lean`) | Append one row of an unfinished expansion without advice, preserving its live-register, RAM, row-order, next-cycle and stopping invariants and honest advice throughout the run. |
-| `JoltInstance.division_block` (`Soundness/Layer6/PrefixAgreement.lean`) | Append every row of an advice-bearing division expansion with honest advice, using the witness-advice execution and division soundness/concrete-execution theorems to recover persistent-register agreement while allowing temporary values to differ. |
+| `JoltInstance.division_expansion_layout` (`Soundness/Layer6/DivisionBlock.lean`) | Identify the advice-bearing division source, its exact expanded rows and generated program, including the unique advice row and temporary-write certificate. |
+| `JoltInstance.division_program_result` (`Soundness/Layer6/DivisionBlock.lean`) | Apply the division soundness theorems to the successful witness-advice program run. |
+| `JoltInstance.division_program_honest` (`Soundness/Layer6/DivisionBlock.lean`) | Construct the honest-advice program run and establish equality of final state outside instruction temporaries. |
+| `JoltInstance.division_append_honest` (`Soundness/Layer6/DivisionBlock.lean`) | Append that honest execution to the original prefix and transfer the completed expansion invariant. |
+| `JoltInstance.plain_row_step_other` (`Soundness/Layer6/PlainRow.lean`) | Port and compose the plain row kinds outside the twelve division arithmetic kinds; LD, SD, VirtualHostIO, JAL and JALR are excluded. |
 | `JoltInstance.expansion_finish` (`Soundness/Layer6/PrefixAgreement.lean`) | Close a completed expansion with honest advice into `BoundaryState`, including the source-boundary PC transition and readiness under the unchanged soundness assumptions. |
 | `JoltInstance.soundness_prover_accepts` (C) | Prove the last-jump and RAM-address checks and the prover's padded length from the verifier's 256-cycle floor, the witness upper bound and `NoMaxLengthTrace`. The helper remains `sorry`; the two previously known counterexamples are excluded by the floor and the temporary restriction. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
@@ -186,6 +190,13 @@ See [the stage 1 report](../methods/layer6/stage-1-report.md) for the invariant 
 Stage 2 proves the unchanged `boundary_step` statement from `expansion_start`, `row_step`, `division_block` and `expansion_finish`, which remain staged for review alongside `boundaryState_empty`.
 Its `ExpansionState` tracks agreement on registers written so far inside an unfinished source and drops instruction-temporary agreement when that source finishes.
 See [the stage 2 report](../methods/layer6/stage-2-report.md) for the corrected-plan audit, statements and validation.
+
+Layer 6 stage 4a Part B proves `arithmetic_advice_sequence_run` with its approved statement unchanged.
+`arithmetic_plain_row_step` in `Soundness/Layer6/PlainRow.lean` derives operand liveness from the expanded source's temporary-write certificate and proves the twelve arithmetic cases using Part A's step rules.
+Its shared append proof preserves row observations, live registers, RAM, the termination word, source ordering and interior progress.
+The sequence proof composes successful row executions into `Program.Run` with the witness's unique advice word and has no `sorryAx` dependency.
+The generic `plain_row_step` retains the single named `plain_row_step_other` gap; the arithmetic specialization does not depend on it.
+See [the Part B report](../methods/layer6/stage-4a-report.md#part-b-the-witness-advice-run) for the audit, declarations and validation.
 
 Steps 1–6 of the tape-rebuild closing plan are complete; `feat/layer7-tape-rebuild`, rebased onto step (c) commit `de5aff70de66d290ceaeb6e7357ba352b855c5d0`, is merged into `feat/soundness`.
 `rebuild_rows` maps the relaxed rows directly with `Array.ofFn`, proving execution, initialization, linkage, row agreement and source-start agreement.
