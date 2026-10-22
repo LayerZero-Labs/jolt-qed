@@ -87,7 +87,9 @@ Each of these has made a staged statement false before.
 ## Writing
 
 - Give every definition and public theorem a docstring that defines each term it uses and gives a concrete example.
-- Cite Jolt's code as `jolt/<path>:<lines>` at the pinned commit.
+- Cite Jolt's code by file and function or item name at the pinned commit, for example `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`).
+  Add line numbers only where they help someone find the code.
+  When the pin moves, update a citation only if the cited code itself changed; do not spend work refreshing line numbers of unchanged code.
 - In prose, name the actor: Jolt's tracer, prover or verifier, not "Rust".
 - In Markdown files, put each sentence on its own line.
 
