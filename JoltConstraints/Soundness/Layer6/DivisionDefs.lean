@@ -180,7 +180,10 @@ theorem single_advice_index (rows : List Instr)
       | succ other => exact congrArg (· + 1) (unique other (by simpa using inRows) hasAdvice)
 
 
-private theorem patchAdviceWord_runtime (instruction : Instr)
+/-- Runtime advice that records word `q` patches an instruction to the same
+VirtualAdvice value as `patchAdviceWord`; a non-advice row stays unchanged.
+For example, REM's VirtualAdvice with runtime quotient 5 becomes its 5-patched row. -/
+theorem patchAdviceWord_runtime (instruction : Instr)
     (advice : instruction.RuntimeAdvice) (q : BitVec 64)
     (encoded : ∀ v ∈ (instruction.withRuntimeAdvice advice).adviceValue?, v = q) :
     instruction.withRuntimeAdvice advice = patchAdviceWord q instruction := by
@@ -198,7 +201,9 @@ private theorem patchAdviceWord_runtime (instruction : Instr)
     obtain ⟨destination, placeholder, imm, rfl⟩ := shape
     exact congrArg (fun value => Instr.VirtualAdvice destination value imm) (encoded advice rfl)
 
-private theorem runtime_advice_isSome (instruction : Instr) (advice : instruction.RuntimeAdvice) :
+/-- Patching runtime advice preserves whether an instruction has an advice slot.
+For example, REM's VirtualAdvice still has one slot, and its MUL still has none. -/
+theorem runtime_advice_isSome (instruction : Instr) (advice : instruction.RuntimeAdvice) :
     (instruction.withRuntimeAdvice advice).adviceValue?.isSome = instruction.adviceValue?.isSome := by
   unfold Instr.withRuntimeAdvice
   split <;> rfl
@@ -397,19 +402,6 @@ theorem arithmetic_advice_sequence_run {F : Type} [Field F] (joltField : JoltFie
   · simpa only [Nat.sub_zero] using size
   · rw [shape.program_eq]
     simpa only [List.drop_zero] using runs
-
-/-- Any successful generated division run has the architectural Sail result.
-Use the existing `*Program_sound` results; for DIV, DIVU and DIVW combine their
-advice uniqueness with `*Program_concrete` and deterministic execution.
-Register presence supplies the successful source reads those theorems require.
-For example, REM of 7 by zero ends with destination 7 even when `q = 5`. -/
-theorem division_program_result (kind : DivisionKind) (rd rs1 rs2 : regidx)
-    (nonzero : rd ≠ .Regidx 0) (q : BitVec 64) (pre post : SailJoltState)
-    (present : AllRegistersPresent pre.sail)
-    (runs : Program.Run (kind.program rd rs1 rs2 q) pre post) :
-    post.sail = stateAfterWrite pre.sail rd
-      (kind.result (sourceValue (.xreg rs1) pre) (sourceValue (.xreg rs2) pre)) := by
-  sorry
 
 /-- Two completed division states agree on every component except instruction
 temporaries: Sail (including PC and RAM), device, tape, host settings, and all

@@ -1,4 +1,5 @@
 import JoltConstraints.Soundness.Layer6.DivisionAppend
+import JoltConstraints.Soundness.Layer6.DivisionPrograms
 
 /-! Complete the division block from witness and honest generated runs. -/
 
@@ -8,25 +9,6 @@ namespace JoltInstance
 
 open JoltConstraints.Soundness
 open Sail PreSail LeanRV64D.Functions JoltISA
-
-/-- Construct the honest generated run from the same prepared state, using
-`*Program_concrete`, and compare its final state with the witness-advice run.
-The supplied Sail result is step 3; the remaining equalities require frames
-for this arithmetic-only program, including virtual registers outside 40–47.
-Use `StatePreservation.Preserves` for those frames; the general device-setup
-frame alone does not establish equality of every device field.
-For example, REM of 7 by zero with witness quotient 5 is replaced by quotient
-0, preserving destination 7, PC, RAM, device, tape and persistent registers. -/
-theorem division_program_honest (kind : DivisionKind) (rd rs1 rs2 : regidx)
-    (nonzero : rd ≠ .Regidx 0) (q : BitVec 64) (pre witnessPost : SailJoltState)
-    (present : AllRegistersPresent pre.sail)
-    (runs : Program.Run (kind.program rd rs1 rs2 q) pre witnessPost)
-    (result : witnessPost.sail = stateAfterWrite pre.sail rd
-      (kind.result (sourceValue (.xreg rs1) pre) (sourceValue (.xreg rs2) pre))) :
-    ∃ honestPost : SailJoltState,
-      Program.Run (kind.program rd rs1 rs2 (kind.honestAdvice rd rs1 rs2 pre)) pre honestPost ∧
-      DivisionFinalAgreement witnessPost honestPost := by
-  sorry
 
 /-- Split the certified honest program run into rows and append them to the
 original prefix, transferring the candidate's represented observations and
