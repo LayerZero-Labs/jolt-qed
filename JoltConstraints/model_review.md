@@ -10,15 +10,12 @@ migration: implemented and validated
 For the next soundness session, start with
 [the change of course](../methods/soundness.md#change-of-course-top-down-2026-10-20):
 since 2026-10-20 the soundness proof is built top-down from
-`JoltInstance.soundness`, with helper lemmas stated as `sorry` first. The same
-section summarizes the argument and says where to start. The
-[Layer 5b handoff](../methods/soundness.md#layer-5b-handoff-updated-2026-10-20)
-records the existing step lemmas: 77 of 88 native row kinds have local steps,
-two are unreachable, and nine remain, plus device agreement and the
-dispatcher.
-`ExpansionFacts.expand_temps_ok` proves per-expansion temporary write-before-read; the global induction will use [live-register agreement](../methods/soundness.md#register-agreement-must-be-over-live-registers) instead of keeping the HostIO temporary unavailable.
+`JoltInstance.soundness`, with helper lemmas stated as `sorry` first.
+The [Layer 6 runbook](../methods/soundness.md#running-the-layer-6-agents-for-ari) says how the stages run, and "Proofs owed" below lists every remaining `sorry`.
+The [Layer 5b handoff](../methods/soundness.md#layer-5b-handoff-updated-2026-10-23) records the step lemmas: JALR, the six branches and `VirtualAdviceLoad` still need steps, and device-memory LD and SD remain open.
 
-**Current Rust semantics pin, selected with Ari on 2026-10-15:** upstream
+**Rust semantics pin:** upstream `5def437f` since 2026-10-22; see [Current Jolt pin](../methods/soundness.md#current-jolt-pin-2026-10-22).
+The earlier pin, selected with Ari on 2026-10-15, was
 [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
 The inspected local merge is `1c8aaff2`; its unpublished generator changes
 are recorded separately, with a reproducible patch, in the migration checklist.
@@ -171,32 +168,24 @@ The following declarations still use `sorry`:
 
 | Declaration | What it needs |
 |---|---|
-| `JoltInstance.boundaryState_empty` (`Soundness/Layer6/PrefixAgreement.lean`) | Construct the empty initialized run and establish `BoundaryState`: initial register and nontermination RAM agreement, zero termination RAM, and entry readiness when cycle zero is real; the retained-row fields are vacuous. |
-| `JoltInstance.expansion_start` (`Soundness/Layer6/PrefixAgreement.lean`) | Open the source selected by a boundary's real next cycle, establishing `ExpansionState` at zero completed rows on the same run. |
-| `JoltInstance.row_step` (`Soundness/Layer6/PrefixAgreement.lean`) | Append one row of an unfinished expansion without advice, preserving its live-register, RAM, row-order, next-cycle and stopping invariants and honest advice throughout the run. |
-| `JoltInstance.division_expansion_layout` (`Soundness/Layer6/DivisionBlock.lean`) | Identify the advice-bearing division source, its exact expanded rows and generated program, including the unique advice row and temporary-write certificate. |
-| `JoltInstance.division_program_result` (`Soundness/Layer6/DivisionBlock.lean`) | Apply the division soundness theorems to the successful witness-advice program run. |
-| `JoltInstance.division_program_honest` (`Soundness/Layer6/DivisionBlock.lean`) | Construct the honest-advice program run and establish equality of final state outside instruction temporaries. |
-| `JoltInstance.division_append_honest` (`Soundness/Layer6/DivisionBlock.lean`) | Append that honest execution to the original prefix and transfer the completed expansion invariant. |
-| `JoltInstance.plain_row_step_other` (`Soundness/Layer6/PlainRow.lean`) | Port and compose the plain row kinds outside the twelve division arithmetic kinds; LD, SD, VirtualHostIO, JAL and JALR are excluded. |
-| `JoltInstance.expansion_finish` (`Soundness/Layer6/PrefixAgreement.lean`) | Close a completed expansion with honest advice into `BoundaryState`, including the source-boundary PC transition and readiness under the unchanged soundness assumptions. |
-| `JoltInstance.soundness_prover_accepts` (C) | Prove the last-jump and RAM-address checks and the prover's padded length from the verifier's 256-cycle floor, the witness upper bound and `NoMaxLengthTrace`. The helper remains `sorry`; the two previously known counterexamples are excluded by the floor and the temporary restriction. |
+| `JoltInstance.row_step` (`Soundness/Layer6/RowStep.lean`) | Append one row of an unfinished expansion without internal advice. Plain rows go through `plain_row_step`; the rest are LD and SD (including device memory, under the restrictions), VirtualHostIO, JAL and JALR. |
+| `JoltInstance.plain_row_step_other` (`Soundness/Layer6/PlainRow.lean`) | The plain row kinds outside the twelve division kinds: their Layer 5 steps over `RegisterAgreementOn`, new steps for the six branches and `VirtualAdviceLoad`, and the append pipeline of `arithmetic_plain_row_step` generalized to them. |
+| `JoltInstance.division_expansion_layout` (`Soundness/Layer6/DivisionDefs.lean`) | Identify the advice-bearing division source, its expanded rows and generated program, including the unique advice row and the temporary-write certificate. |
+| `JoltInstance.division_program_result` (`Soundness/Layer6/DivisionDefs.lean`) | Apply the `*Program_sound` theorems to the witness-advice program run. |
+| `JoltInstance.division_program_honest` (`Soundness/Layer6/DivisionBlock.lean`) | Build the honest-advice program run with `*Program_concrete` and show its final state equals the witness run's outside instruction temporaries. |
+| `JoltInstance.division_replay_rows` (`Soundness/Layer6/DivisionAppend.lean`) | Split the honest program run into rows and append them to the prefix. |
+| `JoltInstance.division_replay_complete` (`Soundness/Layer6/DivisionAppend.lean`) | Carry the witness block's completed `ExpansionState` over to the honest rows, which differ from it only in temporaries. |
+| `JoltInstance.division_replay_honest_new` (`Soundness/Layer6/DivisionAppend.lean`) | Show each appended row's recorded advice is the honest tracer's. |
+| `JoltInstance.soundness_prover_accepts` (C) | Prove the last-jump and RAM-address checks and the prover's padded length from the verifier's 256-cycle floor, the witness upper bound and `NoMaxLengthTrace`. The two previously known counterexamples are excluded by the floor and the temporary restriction. |
 | `JoltInstance.soundness_spoil_asserts_pass` (D) | Connect each spoil assert's pre-state operands to the represented witness source values, then use the lookup/assert equations to rule out a failed assertion. |
 
-Layer 6 stage 1 moves `soundness_execution_prefix_agreement`, with its statement unchanged, to `Soundness/Layer6/PrefixAgreement.lean` and proves it by strong induction from `boundaryState_empty` and `boundary_step`.
-Stage 1 left the two boundary lemmas staged for review.
-`ExecutionPrefix.lean` retains the unchanged representation definitions used by Layer 7.
-See [the stage 1 report](../methods/layer6/stage-1-report.md) for the invariant audit and validation.
-Stage 2 proves the unchanged `boundary_step` statement from `expansion_start`, `row_step`, `division_block` and `expansion_finish`, which remain staged for review alongside `boundaryState_empty`.
-Its `ExpansionState` tracks agreement on registers written so far inside an unfinished source and drops instruction-temporary agreement when that source finishes.
-See [the stage 2 report](../methods/layer6/stage-2-report.md) for the corrected-plan audit, statements and validation.
-
-Layer 6 stage 4a Part B proves `arithmetic_advice_sequence_run` with its approved statement unchanged.
-`arithmetic_plain_row_step` in `Soundness/Layer6/PlainRow.lean` derives operand liveness from the expanded source's temporary-write certificate and proves the twelve arithmetic cases using Part A's step rules.
-Its shared append proof preserves row observations, live registers, RAM, the termination word, source ordering and interior progress.
-The sequence proof composes successful row executions into `Program.Run` with the witness's unique advice word and has no `sorryAx` dependency.
-The generic `plain_row_step` retains the single named `plain_row_step_other` gap; the arithmetic specialization does not depend on it.
-See [the Part B report](../methods/layer6/stage-4a-report.md#part-b-the-witness-advice-run) for the audit, declarations and validation.
+Layer 6 proves `soundness_execution_prefix_agreement` by strong induction over source instructions (`Soundness/Layer6/PrefixAgreement.lean`).
+`boundary_step` crosses one source instruction, from `BoundaryState` to `BoundaryState`.
+It opens the source (`expansion_start`), appends its rows one at a time (`row_step`) or, for a division with internal advice, as a block (`division_block`), and closes it (`expansion_finish`).
+`boundaryState_empty`, `expansion_start` and `expansion_finish` are proved; `expansion_finish` reaches the next source through `terminal_next_unexpanded_pc` (`Soundness/Layer6/TerminalNextPC.lean`).
+`division_block` is proved from the five division lemmas above and `arithmetic_advice_sequence_run`, which runs the block on the witness's own advice and is proved.
+Inside an expansion, registers agree only where they are live (`ExpansionLive`), because a division by zero lets the witness's quotient advice differ from the honest one in instruction temporaries.
+The stage reports in `methods/layer6/` record each step's audit, declarations and validation.
 
 Steps 1–6 of the tape-rebuild closing plan are complete; `feat/layer7-tape-rebuild`, rebased onto step (c) commit `de5aff70de66d290ceaeb6e7357ba352b855c5d0`, is merged into `feat/soundness`.
 `rebuild_rows` maps the relaxed rows directly with `Array.ofFn`, proving execution, initialization, linkage, row agreement and source-start agreement.
@@ -257,6 +246,11 @@ Synchronous declaration elaboration rose from about 11 s to 44 s (11.375 s to 44
 Retain the shared expansion checker and avoid another per-instruction proof table.
 This is deferred cleanup authorized by Ari; it is not a remaining logical gap in stopping.
 
+Split the Layer 6 proofs longer than about 60 lines: `append_expansion_row`, `arithmetic_execution` and `arithmetic_plain_row_step` (`PlainRow.lean`), `arithmetic_advice_suffix_run` (`DivisionDefs.lean`), and `terminal_branch` and `terminal_branch_taken` (`TerminalNextPC.lean`).
+Unpack `JoltInstance.initial_state` once: `initial_state_device`, `initial_state_inputs` (`layout_facts.lean`) and `initial_state_empty_outputs_and_input_bound` (`Layer6/BoundaryStart.lean`) each repeat it.
+`RawRowEntry` (`Layer6/PlainRow.lean`) repeats the entry and linkage clause of `UntrustedAnswerRun.NextStep` and `ExpansionState.next`; defining both from it changes approved definitions and waits for Ari.
+`Soundness/Layer5/DeviceMemoryObstruction.lean` uses `decide +kernel`, which `AGENTS.md` bans; only `JoltConstraints.lean` imports it and no proof uses it, so delete it or move its finding to the docs.
+
 ### bv_decide
 
 `bv_decide` is temporarily accepted under the updated `AGENTS.md` rules.
@@ -264,7 +258,7 @@ The uses on the step (c) proof path are tracked here for later removal.
 
 | Declaration | Use |
 |---|---|
-| `JoltConstraints.branch_target_toNat` (`Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean:104`) | Existing use proving `(offset.signExtend 128).setWidth 64 = offset.signExtend 64`; `soundness_stopping` depends on this lemma. |
+| `JoltConstraints.branch_target_toNat` (`Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean`) | Existing use proving `(offset.signExtend 128).setWidth 64 = offset.signExtend 64`; `soundness_stopping` and `expansion_finish` (through `terminal_branch`) depend on this lemma. |
 
 The step (c) checker integration and bytecode proofs have introduced no new uses.
 

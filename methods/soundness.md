@@ -91,9 +91,8 @@ Step (a) shares the output, prover-acceptance and spoil-assert predicates on the
 Its fixed-tape inclusion is proved, and the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` in Layer 7 is proved without `sorryAx`.
 Helper A is proved from execution-prefix agreement and the assembled stopping theorem.
 Layers 7 and 8 are proved.
-The remaining soundness `sorry`s are `boundaryState_empty`, `expansion_start`, `row_step`, `division_block` and `expansion_finish` (Layers 5b–6, `Soundness/Layer6/PrefixAgreement.lean`), helper C `soundness_prover_accepts` and helper D `soundness_spoil_asserts_pass`.
-Layer 6 stage 1 proves the unchanged `soundness_execution_prefix_agreement` statement by strong induction from `boundaryState_empty` and `boundary_step`, which it staged for review; see [the stage 1 report](layer6/stage-1-report.md).
-Stage 2 proves `boundary_step`, with its statement unchanged, from the four staged expansion lemmas by treating advice-bearing division expansions as whole blocks and stepping other expansions one row at a time; see [the stage 2 report](layer6/stage-2-report.md).
+The remaining soundness `sorry`s are `row_step`, `plain_row_step_other`, five division lemmas behind the proved `division_block`, helper C `soundness_prover_accepts` and helper D `soundness_spoil_asserts_pass`.
+Layer 6 proves `soundness_execution_prefix_agreement` by strong induction over source instructions; the step between two sources, `expansion_finish`, and the start of the run are proved.
 Helper C remains `sorry` but is no longer known false: the base verifier floor excludes short witnesses, and the approved `noMaxLengthTrace` restriction excludes a run that fills the largest permitted power-of-two domain.
 The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
 Step (c)'s five original stopping gaps are proved after Ari approved the checker integration.
@@ -110,7 +109,7 @@ The checker elaboration increase from about 11 s to 44 s is deferred cleanup und
 The stopping rule mirrors a16z/jolt PR #2109 at merge commit `0249591a`; soundness obtains unconditional nonemptiness from the termination store.
 No additional restriction is used for the JALR self-jump case.
 The prover-acceptance helper C will use `ConstraintContext.traceLengthFloor` and `JoltInstance.NoMaxLengthTrace` to exclude its two former counterexamples; its last-jump, RAM-address and padded-length proof remains open.
-The [handoff](#layer-5b-handoff-updated-2026-10-20) records what already exists at the bottom.
+The [handoff](#layer-5b-handoff-updated-2026-10-23) records what already exists at the bottom.
 
 ### When the proof uncovers an issue
 
@@ -142,9 +141,9 @@ A FIXME restriction for the issue links to its post and says the bug must be fix
 This is a design point for the induction in `soundness_execution_prefix_agreement`.
 `RegisterAgreement` (`Layer5/Registers.lean`) compares every register; HostIO now has no operands and writes no register, so its local step preserves full agreement.
 Scratch registers 40 to 47 can still differ between the witness and the honest run after a division expansion (see `methods/advice_fix_report.md`), so live-register agreement is still needed.
-About 77 step lemmas take and return full `RegisterAgreement`, and must compose with this weaker agreement.
 A scratch register can retain a different value across native rows that never write it.
-When the induction step is written, parameterize agreement by a set of live registers: each step requires its source operands to be live and adds its destination.
+`RegisterAgreementOn live` (`Layer5/Registers.lean`) is agreement on a set of live registers: each step requires its source operands to be live and adds its destination.
+`BoundaryState` uses the registers that are not temporaries, and `ExpansionState` adds the temporaries already written in the unfinished source (`ExpansionLive`, `Layer6/PrefixState.lean`).
 Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
 ## Running the Layer 6 agents (for Ari)
@@ -154,76 +153,22 @@ Each stage has its own plan, `methods/layer6/stage-N.md`, written only after the
 At most two agents run at once.
 Each stage ends with a report, `methods/layer6/stage-N-report.md`; read it, with Claude's audit, before the next stage starts.
 
-## Layer 5b handoff (updated 2026-10-20)
+## Layer 5b handoff (updated 2026-10-23)
 
-This records what exists at the bottom of the proof. The order of work is now
-top-down ([Change of course](#change-of-course-top-down-2026-10-20)); the step
-lemmas below will be checked against the statements that come down from the
-main theorem.
-The HostIO-expansion and JAL work is committed; the branch head is now `abbe045`.
-See also the [closing checklist](#layer-5b-one-execution-step).
-The plan for finishing Layers 5b–6 is in [layer6/README.md](./layer6/README.md).
-Local execution steps cover 77 of 88 native row kinds, counting LD and SD for
-ordinary RAM only and HostIO under the existing restrictions; two more kinds
-are proved unreachable. Nine kinds still need steps: JALR, the six branches,
-`VirtualAdviceLoad` and `VirtualAdvice`. Device-memory agreement and the
-dispatcher remain open.
+This records the step lemmas at the bottom of the proof, one file per instruction family in `JoltConstraints/Soundness/Layer5/`.
+They are used top-down by Layer 6's `plain_row_step` and `row_step`.
+Local steps exist for most row kinds, counting LD and SD for ordinary RAM only and HostIO under the restrictions.
+Missing steps: JALR, the six branches and `VirtualAdviceLoad`.
+`VirtualAdvice` has `advice_step` (`Advice.lean`), which writes the witness's range-checked word and makes no honesty claim.
+Device-memory LD and SD, and the dispatcher that `row_step` needs, remain open.
 
-`Layer5/Auipc.lean` proves a selected AUIPC row's constrained wrapped
-PC-plus-immediate write, successful interpreter step, and next-cycle register
-agreement. Its local PC hypothesis connects Jolt's row address to the Sail PC
-read by the Lean interpreter; the global induction must establish it. The
-proof was checked against AUIPC's tracer, flag and lookup implementations at
-public Rust pin `8bbb2357`. No theorem premise, `sorry`, native decision proof
-or heartbeat override was added. The step's axiom audit lists only `propext`,
-`Classical.choice`, `Quot.sound` and the existing
-`sys_enable_experimental_extensions`.
+Steps take `RegisterAgreementOn live` (`Registers.lean`): each needs its source registers live and adds its destination.
+The shared helpers (`RegisterAgreementOn.read`, `.write`, `.noWrite`, `.registerInputs`, `.immediateInputs`, `registerWriteOn_step`) are general, and the full-agreement versions are derived from them.
+The eight families the division expansions use are ported (stage 4a); the families for the other plain rows are being ported (stage 6b); LD, SD, HostIO and JAL port with `row_step`.
 
-`Layer5/Jal.lean` proves a selected JAL row's constrained return-address
-write, wrapped jump execution, and next-cycle register agreement. It handles
-compressed and ordinary rows, including the destination-zero rewrite. Its
-local hypotheses identify Sail's PC and already advanced `nextPC` with the
-selected row, and require the program's approved next-PC no-wrap fact. The
-global execution-prefix induction must supply those facts; they are not new
-soundness premises. Its axiom audit lists only `propext`, `Classical.choice`,
-`Quot.sound` and the existing `sys_enable_experimental_extensions`.
+`Auipc.lean` and `Jal.lean` take local PC and `nextPC` hypotheses; the execution-prefix induction supplies them, and `Jal.lean` uses the approved next-PC no-wrap fact.
+HostIO has no operands and writes no register, so `host_call_selected_step` preserves agreement, using `HostCallsSucceed` for successful execution.
 
-The selected-row HostIO step now uses `HostCallsSucceed` for successful live
-execution. `Layer5/HostCallExpansion.lean` transfers `HostCallRdZero` from
-source instructions to every expanded HostIO row: generated sequences contain
-no HostIO, and a direct source HostIO with `rd = x0` rewrites to temporary 40.
-The step preserves register agreement except at temporary 40.
-The global induction will instead use [live-register agreement](#register-agreement-must-be-over-live-registers), under which temporary 40 is not live after that row.
-`ExpansionFacts.expand_temps_ok` shows the next expansion writes it before reading it.
-The pinned Rust allocator uses temps 40–47, disjoint from LR/SC reservations
-32 and 33. The [detailed checklist](#layer-5b-one-execution-step)
-separates proof work from the temporary restrictions.
-
-`Layer5/Registers.lean` states `RegisterAgreement` for every register, which
-a HostIO row with an unconstrained rewritten destination cannot preserve.
-Live-register agreement handles this: temporary 40 is not live until its next write, and persistent registers 32–39 remain in agreement.
-
-`execHostIO_keeps_state` and `host_call_exec_sail_frame` prove that successful
-HostIO execution preserves Sail state and virtual registers.
-`Layer5/HostCallRegisterFrame.lean` proves that every register-table entry
-except the selected destination still agrees with execution. It also proves
-that a source HostIO with `rd = x0` targets `rdZeroRewriteVReg`, and that this
-register is 40. Its selected-row step proves successful execution and the
-next-cycle agreement outside temporary 40.
-Live-register agreement supersedes carrying that one unavailable temporary through the execution-prefix induction; no further premise has been added.
-`RegisterAgreementExceptHostTemp` now states the agreement that remains after
-HostIO: all register entries except temporary 40. Local lemmas preserve it
-through rows without destinations and constrained writes, and restore full
-agreement when a constrained row writes 40. The expansion liveness proof now
-shows that operands in the first row of the next source expansion are readable
-under this weaker agreement.
-These lemmas are proved, but the global induction uses live-register agreement rather than this weaker form.
-Axiom audits of the new
-HostIO declarations show only `propext`, `Classical.choice`, `Quot.sound` and,
-for the live-call bridge, the existing `sys_enable_experimental_extensions`.
-
-That Layer 5b audit used public pin `8bbb2357`. Preserve the unrelated
-untracked blog and bug-report drafts.
 Do not add theorem premises without Ari's approval; do not use `native_decide`, `decide +kernel` or a larger `maxHeartbeats`.
 `bv_decide` is accepted temporarily under `AGENTS.md`; every use is tracked in the `bv_decide` list under "Proofs owed" in `model_review.md` and must be removed before the proof is final.
 Split difficult proofs into smaller lemmas.
@@ -1312,7 +1257,7 @@ Handle `n = 0` and `n = N` explicitly.
 Why: Layer 5b handles the state; this handles which bytecode row runs next.
 It supplies the `starts` and `linked` fields; Layer 7 connects the cut boundary to stall replays and then the no-op suffix.
 Uses: the PC and sequence constraints, Layer 5b.
-The plan for finishing Layers 5b–6 is in [layer6/README.md](./layer6/README.md).
+The plan for finishing Layers 5b–6 is in [Running the Layer 6 agents](#running-the-layer-6-agents-for-ari).
 
 **Entry and interior-slot bridge, ready for review, 2026-10-15.**
 [BytecodePC.lean](../JoltConstraints/Soundness/Layer6/BytecodePC.lean)
