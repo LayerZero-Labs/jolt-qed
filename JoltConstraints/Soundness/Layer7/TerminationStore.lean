@@ -480,7 +480,7 @@ private theorem context_layout_built
 
 /-- The verifier's initial RAM value at the termination word is zero.
 For example, constraint 38 starts the SDK exit word at zero before its SD. -/
-private theorem context_initial_termination_zero
+theorem context_initial_termination_zero
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {params : WitnessParams}
     (context : ConstraintContext joltInstance privateInputs params) :
