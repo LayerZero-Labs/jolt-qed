@@ -91,8 +91,9 @@ Step (a) shares the output, prover-acceptance and spoil-assert predicates on the
 Its fixed-tape inclusion is proved, and the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` in Layer 7 is proved without `sorryAx`.
 Helper A is proved from execution-prefix agreement and the assembled stopping theorem.
 Layers 7 and 8 are proved.
-The remaining soundness `sorry`s are `boundaryState_empty` and `boundary_step` (Layers 5b–6, `Soundness/Layer6/PrefixAgreement.lean`), helper C `soundness_prover_accepts` and helper D `soundness_spoil_asserts_pass`.
-Layer 6 stage 1 proves the unchanged `soundness_execution_prefix_agreement` statement by strong induction from those two staged boundary lemmas; see [the stage 1 report](layer6/stage-1-report.md).
+The remaining soundness `sorry`s are `boundaryState_empty`, `expansion_start`, `row_step`, `division_block` and `expansion_finish` (Layers 5b–6, `Soundness/Layer6/PrefixAgreement.lean`), helper C `soundness_prover_accepts` and helper D `soundness_spoil_asserts_pass`.
+Layer 6 stage 1 proves the unchanged `soundness_execution_prefix_agreement` statement by strong induction from `boundaryState_empty` and `boundary_step`, which it staged for review; see [the stage 1 report](layer6/stage-1-report.md).
+Stage 2 proves `boundary_step`, with its statement unchanged, from the four staged expansion lemmas by treating advice-bearing division expansions as whole blocks and stepping other expansions one row at a time; see [the stage 2 report](layer6/stage-2-report.md).
 Helper C remains `sorry` but is no longer known false: the base verifier floor excludes short witnesses, and the approved `noMaxLengthTrace` restriction excludes a run that fills the largest permitted power-of-two domain.
 The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
 Step (c)'s five original stopping gaps are proved after Ari approved the checker integration.

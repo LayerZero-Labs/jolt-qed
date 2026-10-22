@@ -18,7 +18,9 @@ Facts the design rests on, each checked in the code:
 - `VirtualAdvice` rows occur only in the eight division expansions (`divProgramAuto`, `divuProgramAuto`, `divwProgramAuto`, `divuwProgramAuto`, `remProgramAuto`, `remuProgramAuto`, `remwProgramAuto`, `remuwProgramAuto`, `JoltBytecode/JoltISA/ExpansionsAutomated.lean`), one per expansion; guest programs have no source-level `VirtualAdvice` (`JoltCustomInstruction`, `JoltConstraints/expansion_helpers.lean:17`).
   With `rd = x0` a division expands to a single `ADDI` with no advice row.
 - Those eight expansions contain no load, store, jump, branch, HostIO or tape read.
-  So no row of theirs uses a restriction, and every restriction is stated over `UntrustedAnswerRun.NextStep`, which needs honest advice.
+  So no row of theirs uses a restriction that concerns an execution step.
+  Four restrictions do, and they are stated over `UntrustedAnswerRun.NextStep`, which needs honest advice: `TracerAddressChecks`, `HostCallsSucceed`, `TerminationThenStall` and `PanicStoresOne` (`Soundness/Layer5/MemoryAccessRestriction.lean`, `HostCallRestriction.lean`, `TerminationRestriction.lean`, `PanicRestriction.lean`); they concern LD, SD, HostIO, JAL and JALR rows.
+  The other three, `NoStoreConditional`, `NoMaxLengthTrace` and `ClaimsNoPanic`, are about the program, completed traces or the claim, not about a step.
 - The witness's division advice may differ from the honest one (for `rem a0, a1, zero` every quotient passes); they then differ only in instruction temporaries (see `methods/advice_fix_report.md`).
 - Every expansion writes each temporary before reading it (`ExpansionTempLiveness.firstAccessIsWrite`, `JoltConstraints/expansion_temp_liveness.lean:71`, checked for every source by `ExpansionFacts.expand_temps_ok`, `JoltConstraints/expansion_facts.lean:916`).
 
