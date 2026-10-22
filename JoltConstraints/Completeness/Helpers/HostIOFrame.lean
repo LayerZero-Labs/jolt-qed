@@ -96,7 +96,7 @@ theorem hostIOFrame_of_exec (instr : JoltISA.Instr) (s t : SailJoltState)
     (hexec : JoltISA.execInstr instr s = .ok (.Retire_Success ()) t) :
     HostIOFrame instr s t := by
   cases instr with
-  | VirtualHostIO dst src imm =>
+  | VirtualHostIO =>
     have hsail := JoltHostFrame.execHostIO_frame s t (.Retire_Success ()) hexec
     exact congrArg (fun sail : SailState => sail.regs.get? Register.nextPC) hsail
   | _ => trivial

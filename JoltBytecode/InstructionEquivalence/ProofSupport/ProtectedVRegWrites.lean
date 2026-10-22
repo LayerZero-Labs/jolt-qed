@@ -105,7 +105,7 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .VirtualAssertHalfwordAlignment _ _ _
   | .VirtualAssertWordAlignment _ _ _
   | .SD _ _ _
-  | .VirtualHostIO _ _ _
+  | .VirtualHostIO
   | .VirtualAssertEQ _ _ _
   | .VirtualAssertValidDiv0 _ _ _
   | .VirtualAssertValidUnsignedRemainder _ _ _

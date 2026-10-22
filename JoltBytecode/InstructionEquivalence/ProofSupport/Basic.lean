@@ -250,7 +250,7 @@ def InstrWritesNoProtectedVReg : Instr → Prop
   | .SD _ _ _ => True
   | .VirtualAdvice dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualAdviceLoad dst _ => DstWritesNoProtectedVReg dst
-  | .VirtualHostIO _ _ _ => False
+  | .VirtualHostIO => False
   | .VirtualAssertEQ _ _ _ => True
   | .VirtualAssertValidDiv0 _ _ _ => True
   | .VirtualNegateIf dst _ _ => DstWritesNoProtectedVReg dst
@@ -950,7 +950,7 @@ theorem execInstr_preserves_protected
           exact dstWrite_preserves_protected (js := { js with adviceTape := tape })
             hsafe
             (by simpa [execInstr, EStateM.run, hread] using hrun)
-  | VirtualHostIO dst src _ =>
+  | VirtualHostIO =>
       cases hsafe
   | VirtualAssertEQ lhs rhs imm =>
       by_cases himm : imm = 0#128

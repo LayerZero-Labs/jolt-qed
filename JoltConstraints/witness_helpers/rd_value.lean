@@ -9,7 +9,8 @@ namespace TraceWitness
 -- Extract the captured destination register from the supplied state and encode its
 -- unsigned 64-bit contents in F. Supplying the pre-state gives the old value;
 -- supplying the post-state gives the new value. Instructions without rd give zero.
--- HOST_IO still has a captured rd even though it does not write it.
+-- HostIO has no captured destination: jolt/tracer/src/instruction/registers/no_operands.rs:13-32
+-- at 5def437f.
 noncomputable def rdValue {F : Type} [Field F]
     (instruction : JoltISA.Instr) (state : SailJoltState) : F :=
   let destinationValue (dst : JoltISA.Dst) : F :=
@@ -35,13 +36,13 @@ noncomputable def rdValue {F : Type} [Field F]
   | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _
   | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
-  | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+  | .VirtualNegateIf dst _ _ =>
       destinationValue dst
   | .LD _ dst _ _ => destinationValue dst
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
   | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _
   | .VirtualAssertValidUnsignedRemainder _ _ _ | .VirtualAssertMulUNoOverflow _ _ _
-  | .VirtualAssertLTE _ _ _ => 0
+  | .VirtualAssertLTE _ _ _ | .VirtualHostIO => 0
 
 end TraceWitness

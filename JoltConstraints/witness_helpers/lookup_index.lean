@@ -82,7 +82,7 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   | .VirtualMovsign _ src imm => interleaveLookupOperands (source src) imm
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       (capturedDestinationValue dst postState).setWidth 128
-  | .FENCE | .LD _ _ _ _ | .SD _ _ _ | .VirtualHostIO _ _ _ => 0
+  | .FENCE | .LD _ _ _ _ | .SD _ _ _ | .VirtualHostIO => 0
 
 -- Rust: [LookupIndex](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:45).
 -- Both committed and virtual instruction address chunks use this same index.

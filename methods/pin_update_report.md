@@ -316,3 +316,197 @@ No new or changed proof took more than ten seconds; the targeted build compiled 
 `#print axioms JoltInstance.completeness` returned those six plus `JoltConstraints.halfword_aligned._native.bv_decide.ax_1_5`, `JoltConstraints.lookupEntryCorrect_RangeCheckAligned._native.bv_decide.ax_1_241`, `JoltConstraints.rev8_32._native.bv_decide.ax_1_10`, `JoltConstraints.windowMaskB_entry._native.bv_decide.ax_1_5`, `JoltConstraints.windowMaskH_entry._native.bv_decide.ax_1_5`, `JoltConstraints.windowMaskW_entry._native.bv_decide.ax_1_5`, and `JoltConstraints.word_aligned._native.bv_decide.ax_1_5`.
 These match Part 2A: both top-level theorems still depend on existing `sorryAx`, and Part 2B added no axiom dependency.
 No commit was made.
+
+## Part 2C: operandless HostIO (2026-10-22)
+
+### Audit before implementation
+
+I read the pin audit and the approved Parts 2A and 2B, checked that this checkout was on `feat/soundness` at `c62ebad`, and checked every Part C claim against the Lean code and Jolt commit `5def437f21a0006e13c063a03f0b5a7c9b93cd6f` before editing.
+The working tree was clean at the start.
+All Jolt evidence came from `git show 5def437f:<path>`; the separate Jolt working tree was not used or changed.
+No false claim or insufficient proof change was found in Part C.
+
+Jolt's program decoder rejects a nonzero encoded `rd` and supplies default operands for HostIO (`jolt/crates/jolt-program/src/image/decode.rs:204-209,335-339`).
+Jolt's interpreter decoder has the same `rd` rejection (`jolt/tracer/src/instruction/mod.rs:1352-1363`); its `FormatNoOperands` ignores the encoded word and converts to default normalized operands (`jolt/tracer/src/instruction/format/format_no_operands.rs:6-29`).
+Those defaults have no `rs1`, `rs2` or `rd` and immediate zero (`jolt/crates/jolt-riscv/src/row.rs:10-20`).
+The typed Lean source constructor represents a successfully decoded instruction, so it has no encoded word to validate and no fields for the ignored `rs1` or immediate bits.
+
+Jolt's expander performs its x0 rewrite only for `rd = Some(0)` and otherwise passes a native row through (`jolt/crates/jolt-program/src/expand/materialize.rs:79-101`).
+An absent `rd` therefore avoids the rewrite.
+Jolt's tracer captures no HostIO register values (`jolt/tracer/src/instruction/registers/no_operands.rs:13-32`, with the absent-value defaults at `registers/mod.rs:30-43`).
+Jolt's witness backend changes the register table only for a present `rd_index()` and makes selectors only for present operand indices (`jolt/crates/jolt-witness/src/backend/trace/registers.rs:26-63`).
+The bytecode selector relation also maps absent operands to zero (`jolt/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs:657-689`).
+
+Jolt's HostIO executor still reads x10–x13 implicitly and calls its host handlers without writing a CPU register (`jolt/tracer/src/instruction/virtual_host_io.rs:19-38`, `jolt/tracer/src/emulator/cpu.rs:1079-1156`).
+The existing Lean `execHostIOWith` and successful-execution frame remain applicable.
+`RegisterAgreement.noWrite` applies to the new absent destination; transporting its result across equality of Sail state and virtual registers proves full post-step agreement.
+The no-destination fact follows directly from the instruction constructor, so no program-wide destination lemma or replacement premise is needed.
+`HostCallsSucceed` still supplies successful execution and remains a separate restriction.
+
+The remaining need for live-register agreement was checked against the approved advice fix and the current REM expansion: quotient temporary 40 is not reset at the end of the expansion, and zero-divisor quotient advice can differ without changing the architectural result (`jolt/crates/jolt-program/src/expand/division/rem.rs:10-32`, `jolt/tracer/src/instruction/rem.rs:44-55`).
+Instruction temporaries are still registers 40–47 (`jolt/crates/jolt-program/src/expand/allocator.rs:133-143`).
+The general head/tail first-access lemmas are used by the control-operand proof in `Layer7/StallSuffix.lean`; they were retained.
+Only the HostIO-specific liveness helpers and their now-unused `firstRow?` definition were removed.
+
+### Definitions and theorem statements changed
+
+Locations below are in the resulting checkout, except deletion locations, which refer to parent commit `c62ebad`.
+In the tables, `.VirtualHostIO dst src imm` denotes the old bytecode constructor and `.VirtualHostIO` the new constructor.
+No new declaration name, hypothesis, restriction, `sorry`, `bv_decide` use, or limit override was added.
+The existing source and bytecode constructor names are retained with no arguments.
+
+| Declaration and location | Old behavior or statement | New behavior or statement |
+|---|---|---|
+| `JoltISA.Instr.VirtualHostIO`, `JoltBytecode/JoltISA/Instruction.lean:150` | `(dst : Dst) (src : Src) (imm : BitVec 64 := 0)` | Operandless constructor. |
+| `JoltCustomInstruction.VirtualHostIO`, `JoltConstraints/expansion_helpers.lean:28` | `(rd rs1 : regidx) (imm : BitVec 12)` | Operandless constructor for successfully decoded HostIO. |
+| `SourceInstruction.expand`, `JoltConstraints/expansions.lean:15` | HostIO expands with architectural destination, source and sign-extended immediate, then native rewriting. | HostIO expands to `some (.ofNative .VirtualHostIO)`, definitionally `some (.native .VirtualHostIO)`. |
+| `Instr.destination?`, `JoltBytecode/JoltISA/Instruction.lean:413` | HostIO returns `some dst`. | HostIO returns `none`. |
+| `Instr.rewriteNative`, `JoltBytecode/JoltISA/Instruction.lean:448` | A special HostIO arm applies `sideEffectingDst dst`. | That arm is deleted; the absent destination leaves HostIO unchanged. Other uses of `sideEffectingDst` remain. |
+| `JoltMetadata.immediate`, `JoltConstraints/metadata.lean:13` | HostIO returns `imm.toNat`. | HostIO returns zero. |
+| `JoltRegisterEncoding.instructionIsCanonical`, `JoltConstraints/register_encoding.lean:43` | Checks HostIO destination and source canonicality. | Returns `true` for operandless HostIO. |
+| `bytecodeRs1Register`, `bytecodeRs2Register`, `bytecodeRdRegister`, `JoltConstraints/Constraints/BytecodeReadSelectors.lean:12,46,79` | HostIO has `some (sourceRegisterAddress src)`, `none`, and `some (destinationRegisterAddress (capturedDestination dst))`, respectively. | All three return `none`; the second-source change is only constructor syntax. |
+| `TraceWitness.Rs1Value`, `JoltConstraints/witness_helpers/rs1_value.lean:16` | Captures the named source's pre-state value. | Returns zero for HostIO. |
+| `TraceWitness.Rs1Ra`, `JoltConstraints/witness_helpers/rs1_ra.lean:16` | Selects the named source register. | Selects no register for HostIO. |
+| `TraceWitness.RdWa`, `JoltConstraints/witness_helpers/rd_wa.lean:15` | Selects HostIO's captured destination. | Selects no register for HostIO. |
+| `TraceWitness.rdValue`, `JoltConstraints/witness_helpers/rd_value.lean:14` | Encodes HostIO's captured destination value. | Returns zero for HostIO in both pre- and post-state uses. |
+| `ExpansionTempLiveness.readSources`, `JoltConstraints/expansion_temp_liveness.lean:18` | HostIO returns `[src]`. | HostIO returns `[]`; implicit host arguments are not normalized operands. |
+| `rs1Operand?`, `rs2Operand?`, `JoltConstraints/Completeness/Helpers/RegistersReadProofHelpers.lean:19,48` | HostIO returns `some src` and `none`. | Both return `none`; the second-source change is only syntax. |
+| `ExpansionFacts.virtualHostIO_native_ok`, `JoltConstraints/expansion_facts.lean:793` | Takes `rd rs1 imm` and proves `ExpandedOk` for their native HostIO row. | Takes no operands and proves `ExpandedOk (.ofNative JoltISA.Instr.VirtualHostIO)`. |
+| `JoltInstance.TemporaryRestrictions`, `JoltConstraints/Soundness/Assumptions.lean:74` | Contains `hostCallRdZero : joltInstance.program.HostCallRdZero`. | Removes that field and its FIXME; all other fields remain. |
+| `JoltInstance.HostCallsSucceed`, `JoltConstraints/Soundness/Layer5/HostCallRestriction.lean:33` | Successful-execution condition matches the three-argument constructor. | The same condition matches the operandless constructor. |
+| `host_call_exec_sail_frame`, `JoltConstraints/Soundness/Layer5/HostCallRestriction.lean:51` | Takes `dst src imm answer` and equality to the three-argument HostIO. | Takes `answer` and equality to operandless HostIO; the execution and Sail/virtual-register frame conclusion is unchanged. |
+| `host_call_selected_step`, `JoltConstraints/Soundness/Layer5/HostCallRegisterFrame.lean:26` | Takes `restrictedDestination : program.HostCallRdZero`, implicit destination/source/immediate, and a three-argument HostIO equality; returns execution and `RegisterAgreementExceptHostTemp`. | Removes that restriction and those operand parameters, requires `row.instruction = .VirtualHostIO`, and returns execution and full `RegisterAgreement witness ⟨t.val + 1, nextCycle⟩ post`. All other hypotheses remain. |
+| `withRuntimeAdvice_hostIO`, `JoltConstraints/trace_interface.lean:164` | Takes three operand parameters and preserves their HostIO constructor. | Takes only runtime advice and `instruction = .VirtualHostIO`, and concludes `instruction.withRuntimeAdvice advice = .VirtualHostIO`. |
+| `JoltPCFrame.ordinary_instruction`, `JoltConstraints/Completeness/Helpers/TracePCProofHelpers.lean:155`; `JoltNextPCFrame.ordinary_instruction`, `JoltConstraints/nextpc_frame.lean:202` | HostIO exclusion is `∀ dst src imm, instr ≠ .VirtualHostIO dst src imm`. | Exclusion is `instr ≠ .VirtualHostIO`; all other hypotheses and conclusions remain. |
+| `swap_execInstr_nonhost`, `JoltConstraints/Soundness/Layer7/TapeRebuild.lean:680` | The same quantified HostIO exclusion. | `instr ≠ .VirtualHostIO`; its other hypothesis and `SwapInvariant` conclusion remain. |
+
+`host_call_selected_step` uses the existing `RegisterAgreement.noWrite`, then transports register values with the retained private `sourceValue_of_host_frame` at `HostCallRegisterFrame.lean:14`.
+`execHostIOWith`, `RegisterAgreement`, `RegisterAgreement.noWrite`, `InLanguage`, and the explicit top-level theorem statements were not edited.
+The soundness theorem's restriction bundle is weaker because the obsolete destination field is gone.
+The existing prefix theorem and helpers C and D remain `sorry`.
+
+### Mechanical proof and pattern updates
+
+The following declarations retain their statements, apart from the instruction types now having an operandless HostIO constructor.
+Only the corresponding constructor arm, its arguments, or its direct caller was updated.
+
+| Declaration | Location |
+|---|---|
+| `JoltISA.execInstr` | `JoltBytecode/JoltISA/Semantics.lean:38` |
+| `JoltISA.InstrWritesNoProtectedVReg`; `JoltISA.execInstr_preserves_protected` | `JoltBytecode/InstructionEquivalence/ProofSupport/Basic.lean:171,776` |
+| `JoltISA.Instr.WritesProtectedVReg` | `JoltBytecode/InstructionEquivalence/ProofSupport/ProtectedVRegWrites.lean:25` |
+| `TraceWitness.Rs2Ra`; `TraceWitness.Rs2Value` | `JoltConstraints/witness_helpers/rs2_ra.lean:16`; `JoltConstraints/witness_helpers/rs2_value.lean:16` |
+| `TraceWitness.instructionLookupIndex` | `JoltConstraints/witness_helpers/lookup_index.lean:25` |
+| `ExpansionFacts.expand_ok` | `JoltConstraints/expansion_facts.lean:813` |
+| `HonestTraceRow.hostIOPreservesPC` | `JoltConstraints/trace_interface.lean:171` |
+| `JoltPCFrame.instruction` | `JoltConstraints/Completeness/Helpers/TracePCProofHelpers.lean:230` |
+| `JoltNextPCFrame.instruction` | `JoltConstraints/nextpc_frame.lean:336` |
+| `JoltNextPCFrame.hostIOFrame_of_exec` | `JoltConstraints/Completeness/Helpers/HostIOFrame.lean:95` |
+| `register42_instruction_preserves_other` | `JoltConstraints/Completeness/Helpers/RegistersValProofHelpers.lean:617` |
+| `swap_execInstr_nonload` | `JoltConstraints/Soundness/Layer7/TapeRebuild.lean:782` |
+| `noncontrol_tape_next_pc`; `tape_row_preserves_pc` | `JoltConstraints/Soundness/Layer7/StallSuffix.lean:859,883` |
+
+`ExpansionTempLiveness.tempsReadAfterWrite` at `JoltConstraints/expansion_temp_liveness.lean:80` has only a docstring change: its example is now quotient advice left by REM, with its formula unchanged.
+The requested live-register paragraph at `methods/soundness.md:138` explains that HostIO preserves full agreement and division scratch values still require live-register agreement.
+The deleted restriction's current assumption-table row was also removed from `JoltConstraints/model_review.md:148`; the historical pin audit and dated history entries remain intact.
+No other section of `methods/soundness.md` was changed.
+
+### Deleted declarations
+
+These were solely for the old synthetic HostIO destination and are not replaced by new hypotheses.
+The table gives their old locations at `c62ebad` and the removed statement's role.
+
+| Deleted declaration | Old location | Removed statement or definition |
+|---|---|---|
+| `Rv64ProgramImage.HostCallRdZero` | `JoltConstraints/Soundness/Assumptions.lean:54` | Every source HostIO has `isX0 rd = true`. |
+| `host_call_rewrite_register_is_40` | `JoltConstraints/Soundness/Layer5/HostCallRegisterFrame.lean:25` | `rdZeroRewriteVReg = BitVec.ofNat 7 40`. |
+| `host_call_zero_destination_is_temp` | Same file, line 30 | An x0-destination source HostIO expands with destination `.vreg rdZeroRewriteVReg`. |
+| `RegisterAgreement.host_call_other` | Same file, line 40 | Post-step agreement at all registers except the selected HostIO destination. |
+| `RegisterAgreementExceptHostTemp` | Same file, line 75 | Register presence and table/state agreement away from register 40. |
+| `RegisterAgreementExceptHostTemp.read` | Same file, line 86 | Read agreement for a canonical source whose address is not 40. |
+| `RegisterAgreementExceptHostTemp.noWrite` | Same file, line 101 | A destination-free row preserves agreement excluding register 40. |
+| `RegisterAgreementExceptHostTemp.write_temp` | Same file, line 126 | A constrained write to register 40 restores full agreement. |
+| `RegisterAgreementExceptHostTemp.write` | Same file, line 172 | A constrained destination write preserves agreement excluding register 40. |
+| `source_available_of_not_read` | Same file, line 212 | A canonical operand in a row not reading the HostIO temporary has address other than 40. |
+| `RegisterAgreementExceptHostTemp.read_first_row` | Same file, line 235 | First-row reads of a checked source expansion are available under the exception relation. |
+| `RegisterAgreement.host_call_except_temp` | Same file, line 253 | A temporary-destination HostIO step produces the exception relation. |
+| `host_source_native_destination` | `JoltConstraints/Soundness/Layer5/HostCallExpansion.lean:15` | A restricted native HostIO expansion has the rewritten temporary destination. |
+| `NotHostIO` | Same file, line 38 | Predicate excluding HostIO rows. |
+| `sequenceRowOk_no_host` | Same file, line 42 | A checked sequence row satisfies `NotHostIO`. |
+| `rowsOk_no_host` | Same file, line 48 | Every member of a checked sequence satisfies `NotHostIO`. |
+| `host_not_in_sequence` | Same file, line 75 | A source expansion sequence contains no HostIO. |
+| `host_expanded_destination` | Same file, line 83 | A HostIO in one restricted source row's stamped expansion has the temporary destination. |
+| `host_program_destination` | Same file, line 124 | `HostCallRdZero` forces every expanded HostIO destination to the rewrite temporary. |
+| `ExpansionTempLiveness.hostTemp_firstAccessIsWrite` | `JoltConstraints/expansion_temp_liveness.lean:85` | The temporary-liveness check includes `rdZeroRewriteVReg`. |
+| `ExpansionTempLiveness.firstRow?` | Same file, line 118 | Returns the first instruction of a native or sequence expansion. |
+| `ExpansionTempLiveness.hostTemp_firstRow_noRead` | Same file, line 124 | A checked expansion's first row does not read the HostIO rewrite temporary. |
+
+`HostCallExpansion.lean` was deleted together with its sole import in `HostCallRegisterFrame.lean`.
+A repository-wide Lean search found no remaining reference to the removed restriction, exception relation, destination lemmas or HostIO liveness helpers.
+The general `firstAccessIsWrite_head_no_read` and `firstAccessIsWrite_tail` remain used by `StallSuffix.lean`.
+
+### Source citations changed or added
+
+Every new source reference below is at `5def437f`, and the listed Jolt lines were read at that commit.
+Unchanged source references were left as they were.
+
+| Location | Old reference | New reference / checked Jolt lines |
+|---|---|---|
+| `JoltBytecode/JoltISA/Instruction.lean:145` | Local path `tracer/src/instruction/virtual_host_io.rs:8` and `format/format_i.rs:72` describing captured operands. | `jolt/tracer/src/instruction/virtual_host_io.rs:9-38` and `jolt/tracer/src/instruction/format/format_no_operands.rs:6-29`. |
+| `JoltConstraints/expansion_helpers.lean:24` | No constructor-specific citation; `FormatI` comment. | `jolt/crates/jolt-program/src/image/decode.rs:204-209,335-339`. |
+| `JoltConstraints/expansions.lean:125` | `jolt/tracer/src/instruction/format/format_i.rs:18-24` for sign extension. | `jolt/crates/jolt-program/src/image/decode.rs:335-339` for absent operands. |
+| `JoltConstraints/expansion_facts.lean:790` | None. | `jolt/crates/jolt-program/src/expand/materialize.rs:79-101`. |
+| `JoltConstraints/Soundness/Layer5/HostCallRegisterFrame.lean:20` | None in the selected-step docstring. | `jolt/tracer/src/instruction/virtual_host_io.rs:9-38` and `jolt/crates/jolt-witness/src/backend/trace/registers.rs:26-57`. |
+| `JoltConstraints/Soundness/Layer5/HostCallRestriction.lean:16-19` | Pin label `8bbb2357`; `jolt/tracer/src/instruction/virtual_host_io.rs:19-39`. | Pin label `5def437f`; `virtual_host_io.rs:9-38`. Rechecked the unchanged accompanying ranges `jolt/crates/jolt-riscv/src/instructions/virt/host_io.rs:3-6` and `jolt/tracer/src/emulator/cpu.rs:1079-1128`. |
+| `JoltConstraints/witness_helpers/rd_value.lean:12` | No HostIO-specific citation; comment claimed a captured destination. | `jolt/tracer/src/instruction/registers/no_operands.rs:13-32`. |
+| `JoltConstraints/witness_helpers/rd_wa.lean:14` | No HostIO-specific citation; comment claimed a captured destination. | `jolt/crates/jolt-program/src/image/decode.rs:335-339`. |
+
+### Validation and proof timings
+
+`lake build JoltBytecode JoltConstraints` completed successfully with 8,801 jobs.
+The initial build caught one remaining `rename_i` that expected the old HostIO operands in `tape_row_preserves_pc`; it was removed before the successful final build.
+Two now-redundant `intros` tactics in PC-frame callers were also removed.
+The final build retains existing repository warnings and existing `sorry` declarations.
+`git diff --check` passed, and a diff search found no added `sorry`, `bv_decide`, `native_decide`, `decide +kernel`, or `maxHeartbeats` setting.
+
+`#print axioms JoltInstance.soundness` returned `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound`, and `JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5`.
+`#print axioms JoltInstance.completeness` returned those six plus `JoltConstraints.halfword_aligned._native.bv_decide.ax_1_5`, `JoltConstraints.lookupEntryCorrect_RangeCheckAligned._native.bv_decide.ax_1_241`, `JoltConstraints.rev8_32._native.bv_decide.ax_1_10`, `JoltConstraints.windowMaskB_entry._native.bv_decide.ax_1_5`, `JoltConstraints.windowMaskH_entry._native.bv_decide.ax_1_5`, `JoltConstraints.windowMaskW_entry._native.bv_decide.ax_1_5`, and `JoltConstraints.word_aligned._native.bv_decide.ax_1_5`.
+Both lists exactly match Part 2B.
+A dependency traversal from soundness found only the same three declarations directly using `sorryAx`: `soundness_execution_prefix_agreement`, `soundness_prover_accepts`, and `soundness_spoil_asserts_pass`.
+Both `host_call_selected_step` and `host_call_exec_sail_frame` have axiom lists `[propext, sys_enable_experimental_extensions, Classical.choice, Quot.sound]`, with no `sorryAx` or `bv_decide` axiom.
+No new `bv_decide` entry is needed in `model_review.md`.
+
+Every changed proof was profiled with `lake env lean -j1 -Dtrace.Elab.async=true -Dtrace.profiler=true -Dtrace.profiler.threshold=1000 <file>`.
+All eleven profiled files type-checked successfully.
+The following numbers are Lean's proof-elaboration times, excluding imports and file startup; no changed proof exceeded ten seconds.
+There are no new hand-written declarations to time.
+
+| Changed proof (locations above) | Elaboration time |
+|---|---|
+| `JoltISA.execInstr_preserves_protected` | 1.836 s |
+| `JoltNextPCFrame.hostIOFrame_of_exec` | 0.042 s |
+| `register42_instruction_preserves_other` | 5.287 s |
+| `JoltPCFrame.ordinary_instruction` | 8.107 s |
+| `JoltPCFrame.instruction` | 0.097 s |
+| `JoltConstraints.Soundness.host_call_selected_step` | 0.210 s |
+| `JoltConstraints.Soundness.host_call_exec_sail_frame` | 0.010 s |
+| `JoltInstance.noncontrol_tape_next_pc` | 0.569 s |
+| `JoltInstance.tape_row_preserves_pc` | 0.026 s |
+| `JoltConstraints.Soundness.swap_execInstr_nonhost` | 0.535 s |
+| `JoltConstraints.Soundness.swap_execInstr_nonload` | 0.006 s |
+| `ExpansionFacts.virtualHostIO_native_ok` | 0.057 s |
+| `ExpansionFacts.expand_ok` | 0.235 s |
+| `JoltNextPCFrame.ordinary_instruction` | 4.969 s |
+| `JoltNextPCFrame.instruction` | 0.391 s |
+| `withRuntimeAdvice_hostIO` | < 0.001 s |
+| `HonestTraceRow.hostIOPreservesPC` | 0.019 s |
+
+The entries above one second are existing generic instruction dispatchers whose HostIO arms or exclusions changed mechanically.
+Their shared proofs were retained; splitting them into extra constructor-specific proofs for timing would add proof structure beyond the operandless migration.
+The substantive HostIO register step takes 0.210 seconds and directly uses the existing no-write and state-frame facts.
+
+
+The successful build log is `/private/tmp/pin-2c-build-final.log`, the axiom audit log is `/private/tmp/pin-2c-axioms.log`, and per-file profiling logs are `/private/tmp/pin-2c-profile-0.log` through `/private/tmp/pin-2c-profile-10.log`.
+No commit was made.
+Work stopped after appending this Part 2C report.
+

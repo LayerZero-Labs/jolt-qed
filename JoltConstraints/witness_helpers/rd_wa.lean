@@ -9,9 +9,9 @@ set_option autoImplicit false
 namespace TraceWitness
 
 -- Rust: [materialize_register_read_write_virtual](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
--- Select the instruction's encoded integer destination, independently of capture
--- presence. The completed tracer captures HOST_IO's rd even though it does not
--- write it. Absent destinations and padding select no register.
+-- Select the instruction's normalized integer destination.
+-- Absent destinations, including HostIO, and padding select no register.
+-- See jolt/crates/jolt-program/src/image/decode.rs:335-339 at 5def437f.
 noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
     (trace : Trace) :
     Fin 128 → Fin p.traceLength → F :=
@@ -41,7 +41,7 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _
       | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
       | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
-      | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+      | .VirtualNegateIf dst _ _ =>
           if address = destinationRegisterAddress (capturedDestination dst) then 1 else 0
       | .LD _ dst _ _ =>
           if address = destinationRegisterAddress (capturedDestination dst) then 1 else 0
@@ -49,7 +49,7 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
       | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _
       | .VirtualAssertValidUnsignedRemainder _ _ _ | .VirtualAssertMulUNoOverflow _ _ _
-      | .VirtualAssertLTE _ _ _ => 0
+      | .VirtualAssertLTE _ _ _ | .VirtualHostIO => 0
     else 0
 
 end TraceWitness

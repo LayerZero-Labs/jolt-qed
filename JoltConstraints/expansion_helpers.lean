@@ -21,7 +21,11 @@ inductive JoltCustomInstruction where
   | AdviceLD (rd : regidx)
   | VirtualRev8W (rd rs1 : regidx)                        -- FormatT
   | VirtualAssertEQ (rs1 rs2 : regidx) (imm : BitVec 13)  -- FormatB
-  | VirtualHostIO (rd rs1 : regidx) (imm : BitVec 12)     -- FormatI
+  /-- A successfully decoded host call, with no normalized operands.
+  For example, nonzero encoded rs1 and immediate fields are ignored; nonzero rd
+  is rejected before constructing this instruction.
+  See jolt/crates/jolt-program/src/image/decode.rs:204-209,335-339 at 5def437f. -/
+  | VirtualHostIO
 
 -- An expandable instruction: one instruction of the guest program, RISC-V or one of
 -- Jolt's custom instructions.

@@ -457,7 +457,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
           (do
             writeDst rd advice_value
             pure RETIRE_SUCCESS) { cpu with adviceTape := advice_tape }
-  | .VirtualHostIO _ _ _ =>
+  | .VirtualHostIO =>
       execHostIO
   | .VirtualAssertEQ lhs rhs imm => do
       if imm = 0#128 then

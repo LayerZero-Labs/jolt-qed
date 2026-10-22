@@ -867,7 +867,7 @@ private theorem noncontrol_tape_next_pc
   by_cases ordinaryRow : ExpansionFacts.ordinary instruction = true
   · exact ordinary_tape_next_pc instruction answer before after ordinaryRow runs
   · cases instruction with
-    | VirtualHostIO dst src imm =>
+    | VirtualHostIO =>
       have ranHost : JoltISA.execHostIO before = .ok (.Retire_Success ()) after := by
         simpa only [JoltConstraints.Soundness.execWithTapeAnswer, JoltISA.execInstr]
           using runs
@@ -903,8 +903,7 @@ private theorem tape_row_preserves_pc
   · have hostFrame : instruction.HostIOPCFrame before after := by
       unfold JoltISA.Instr.HostIOPCFrame
       split
-      · rename_i skipped instr dst src imm notTape
-        have ranHost : JoltISA.execHostIO before = .ok (.Retire_Success ()) after := by
+      · have ranHost : JoltISA.execHostIO before = .ok (.Retire_Success ()) after := by
           simpa only [JoltISA.execInstr] using runs
         rw [execHostIO_keeps_sail before after _ ranHost]
       · trivial

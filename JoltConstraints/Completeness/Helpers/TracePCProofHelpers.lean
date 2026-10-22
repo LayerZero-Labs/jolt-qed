@@ -155,7 +155,7 @@ macro "jolt_pc_auto" : tactic => `(tactic|
 theorem ordinary_instruction (instr : Instr)
     (hload : ∀ fault dst base imm, instr ≠ .LD fault dst base imm)
     (hstore : ∀ base value imm, instr ≠ .SD base value imm)
-    (hhost : ∀ dst src imm, instr ≠ .VirtualHostIO dst src imm) :
+    (hhost : instr ≠ .VirtualHostIO) :
     Preserves (execInstr instr) := by
   cases instr
   case VirtualAdviceLoad dst byteCount =>
@@ -170,7 +170,7 @@ theorem ordinary_instruction (instr : Instr)
         { s with adviceTape := tape } t v h
   all_goals try exact False.elim (hload _ _ _ _ rfl)
   all_goals try exact False.elim (hstore _ _ _ rfl)
-  all_goals try exact False.elim (hhost _ _ _ rfl)
+  all_goals try exact False.elim (hhost rfl)
   all_goals simp only [execInstr]
   all_goals try jolt_pc_auto
 
@@ -234,11 +234,11 @@ theorem instruction (instr : Instr) (s t : SailJoltState)
   cases instr with
   | LD fault dst base imm => exact load_instruction fault dst base imm s t hexec
   | SD base value imm => exact store_instruction base value imm s t hexec
-  | VirtualHostIO _ _ _ => exact hhost
+  | VirtualHostIO => exact hhost
   | _ =>
     exact ordinary_instruction _
       (by intros; intro h; cases h) (by intros; intro h; cases h)
-      (by intros; intro h; cases h) s t _ hexec
+      (by intro h; cases h) s t _ hexec
 
 theorem hostIOPCFrame_withRuntimeAdvice (instr : Instr) (advice : instr.RuntimeAdvice)
     (s t : SailJoltState) :

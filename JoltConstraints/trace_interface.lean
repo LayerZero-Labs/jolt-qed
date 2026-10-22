@@ -159,11 +159,11 @@ def JoltISA.Instr.HostIOPCFrame (instruction : JoltISA.Instr)
       postState.sail.regs.get? Register.PC = preState.sail.regs.get? Register.PC
   | _ => True
 
--- A HostIO row carries no runtime advice, so it runs exactly as it is in the bytecode.
+/-- A HostIO row carries no runtime advice, so it runs exactly as it is in the
+bytecode. For example, an advice-write host call remains operandless. -/
 theorem withRuntimeAdvice_hostIO {instruction : JoltISA.Instr}
-    (advice : instruction.RuntimeAdvice) (first : JoltISA.Dst) (second : JoltISA.Src)
-    (third : BitVec 64) (isHostIO : instruction = .VirtualHostIO first second third) :
-    instruction.withRuntimeAdvice advice = .VirtualHostIO first second third := by
+    (advice : instruction.RuntimeAdvice) (isHostIO : instruction = .VirtualHostIO) :
+    instruction.withRuntimeAdvice advice = .VirtualHostIO := by
   subst isHostIO
   rfl
 
@@ -173,9 +173,9 @@ theorem HonestTraceRow.hostIOPreservesPC {bytecode : Array JoltInstructionRow}
     bytecode[row.rowIndex].instruction.HostIOPCFrame row.preState row.postState := by
   unfold JoltISA.Instr.HostIOPCFrame
   split
-  · rename_i first second third isHostIO
+  · rename_i isHostIO
     have runs := row.executes
-    rw [withRuntimeAdvice_hostIO row.runtimeAdvice first second third isHostIO] at runs
+    rw [withRuntimeAdvice_hostIO row.runtimeAdvice isHostIO] at runs
     simp only [JoltISA.execInstr] at runs
     rw [execHostIO_keeps_sail _ _ _ runs]
   · trivial

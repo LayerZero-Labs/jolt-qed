@@ -202,7 +202,7 @@ macro "jolt_nextpc_auto" : tactic => `(tactic|
 theorem ordinary_instruction (instr : Instr)
     (hload : ∀ fault dst base imm, instr ≠ .LD fault dst base imm)
     (hstore : ∀ base value imm, instr ≠ .SD base value imm)
-    (hhost : ∀ dst src imm, instr ≠ .VirtualHostIO dst src imm)
+    (hhost : instr ≠ .VirtualHostIO)
     (hcontrol : JoltMetadata.opcodeFlag instr .Jump = false ∧
       JoltMetadata.instructionFlag instr .Branch = false) :
     Preserves (execInstr instr) := by
@@ -219,7 +219,7 @@ theorem ordinary_instruction (instr : Instr)
         { s with adviceTape := tape } t v h
   all_goals try exact False.elim (hload _ _ _ _ rfl)
   all_goals try exact False.elim (hstore _ _ _ rfl)
-  all_goals try exact False.elim (hhost _ _ _ rfl)
+  all_goals try exact False.elim (hhost rfl)
   all_goals try (simp [JoltMetadata.opcodeFlag, JoltMetadata.instructionFlag] at hcontrol)
   all_goals simp only [execInstr]
   all_goals try jolt_nextpc_auto
@@ -344,7 +344,7 @@ theorem instruction (instr : Instr) (s t : SailJoltState)
     exact load_instruction fault dst base imm s t hexec
   case SD base value imm =>
     exact store_instruction base value imm s t hexec
-  case VirtualHostIO dst src imm =>
+  case VirtualHostIO =>
     exact hhost
   all_goals try (simp [JoltMetadata.opcodeFlag] at hjump)
   all_goals try
@@ -354,7 +354,7 @@ theorem instruction (instr : Instr) (s t : SailJoltState)
   all_goals
     exact ordinary_instruction _
       (by intros; intro h; cases h) (by intros; intro h; cases h)
-      (by intros; intro h; cases h)
+      (by intro h; cases h)
       ⟨by rfl, by rfl⟩ s t _ hexec
 
 end JoltNextPCFrame

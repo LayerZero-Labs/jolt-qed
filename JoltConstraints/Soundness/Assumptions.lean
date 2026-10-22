@@ -48,15 +48,6 @@ def Rv64ProgramImage.NoStoreConditional (program : Rv64ProgramImage SourceInstru
     | .riscv (.SC_W _ _ _ _ _) | .riscv (.SC_D _ _ _ _ _) => False
     | _ => True
 
--- A source HostIO call names x0 as its destination. Rust rewrites that x0 to
--- an instruction temporary in bytecode; the temporary is handled by a separate
--- write-before-read argument, not by this source-level restriction.
-def Rv64ProgramImage.HostCallRdZero (program : Rv64ProgramImage SourceInstruction) : Prop :=
-  ∀ row ∈ program.instructions,
-    match row.instruction with
-    | .jolt (.VirtualHostIO rd _ _) => JoltISA.isX0 rd = true
-    | _ => True
-
 /-- A temporary restriction on completed relaxed executions.
 An `UntrustedAnswerTrace` records actual executed rows and independent tape
 answers; `rows.size` counts those real rows. For a verifier-admissible maximum,
@@ -100,11 +91,6 @@ structure JoltInstance.TemporaryRestrictions
   -- The local constraints do not encode host-call success.
   -- Candidate, not reproduced; to raise with a16z with the other FIXMEs.
   hostCallsSucceed : joltInstance.HostCallsSucceed
-  -- FIXME: source HostIO calls name x0, excluding an unconstrained write to
-  -- an architectural destination. The bytecode x0 rewrite still writes a
-  -- temporary; its value must be shown dead before any later read. Candidate,
-  -- not reproduced; raise with a16z in the batch and remove after resolution.
-  hostCallRdZero : joltInstance.program.HostCallRdZero
   -- FIXME: exclude a relaxed execution whose real rows fill the largest
   -- verifier-admissible power-of-two domain. Jolt's prover requires one more
   -- padding row, but its verifier can accept that full-length witness.

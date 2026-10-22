@@ -33,12 +33,12 @@ def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
   | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
   | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
-  | .VirtualAssertLTE src _ _ | .VirtualHostIO _ src _ =>
+  | .VirtualAssertLTE src _ _ =>
       some (TraceWitness.sourceRegisterAddress src)
   -- Alignment assertions can read architectural or virtual registers.
   | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
       some (TraceWitness.sourceRegisterAddress base)
-  | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualPow2I _ _ | .VirtualPow2IW _ _
+  | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
 /-- Fixed normalized register operand, with no operand represented by none.
@@ -72,7 +72,7 @@ def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualSignExtendWord _ _ _ | .VirtualZeroExtendWord _ _ _ | .VirtualMovsign _ _ _
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
   | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
-  | .VirtualHostIO _ _ _ => none
+  | .VirtualHostIO => none
 
 /-- Fixed normalized register operand, with no operand represented by none.
 Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L657-L689 -/
@@ -98,7 +98,7 @@ def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _
   | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
-  | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+  | .VirtualNegateIf dst _ _ =>
       some (TraceWitness.destinationRegisterAddress
         (TraceWitness.capturedDestination dst))
   | .LD _ dst _ _ =>
@@ -108,7 +108,7 @@ def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
   | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _
   | .VirtualAssertValidUnsignedRemainder _ _ _ | .VirtualAssertMulUNoOverflow _ _ _
-  | .VirtualAssertLTE _ _ _ => none
+  | .VirtualAssertLTE _ _ _ | .VirtualHostIO => none
 
 /-- A fixed bytecode register-selector entry. Explicit register zero is distinct
 from an absent operand; leading and trailing padding have no operands. -/

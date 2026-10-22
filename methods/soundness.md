@@ -138,12 +138,12 @@ A FIXME restriction for the issue links to its post and says the bug must be fix
 ### Register agreement must be over live registers
 
 This is a design point for the induction in `soundness_execution_prefix_agreement`.
-`RegisterAgreement` (`Layer5/Registers.lean`) compares every register, and `RegisterAgreementExceptHostTemp` (`Layer5/HostCallRegisterFrame.lean`) leaves out register 40 after a HostIO row.
-About 77 step lemmas take and return full `RegisterAgreement`, so the exception form does not compose.
-Register 40 can stay unavailable across many native rows that never write it, and two HostIO rows in a row already need the weaker form as input.
+`RegisterAgreement` (`Layer5/Registers.lean`) compares every register; HostIO now has no operands and writes no register, so its local step preserves full agreement.
+Scratch registers 40 to 47 can still differ between the witness and the honest run after a division expansion (see `methods/advice_fix_plan.md`), so live-register agreement is still needed.
+About 77 step lemmas take and return full `RegisterAgreement`, and must compose with this weaker agreement.
+A scratch register can retain a different value across native rows that never write it.
 When the induction step is written, parameterize agreement by a set of live registers: each step requires its source operands to be live and adds its destination.
 Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
-This also removes the near-duplicate write lemmas in `HostCallRegisterFrame.lean`.
 
 ## Running the Layer 6 agents (for Ari)
 

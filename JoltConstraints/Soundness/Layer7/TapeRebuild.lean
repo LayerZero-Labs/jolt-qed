@@ -679,11 +679,11 @@ private theorem swap_store_doubleword (address value : BitVec 64) :
 
 private theorem swap_execInstr_nonhost (instr : Instr)
     (notLoad : ∀ dst width, instr ≠ .VirtualAdviceLoad dst width)
-    (notHost : ∀ dst src imm, instr ≠ .VirtualHostIO dst src imm) :
+    (notHost : instr ≠ .VirtualHostIO) :
     SwapInvariant (execInstr instr) := by
   cases instr
   case VirtualAdviceLoad dst width => exact False.elim (notLoad dst width rfl)
-  case VirtualHostIO dst src imm => exact False.elim (notHost dst src imm rfl)
+  case VirtualHostIO => exact False.elim (notHost rfl)
   all_goals simp only [execInstr]
   all_goals preservation_auto [swap_read _, swap_write _ _, swap_pure _,
     swap_throw _, swap_lift _, swap_load_doubleword _, swap_store_doubleword _ _]
@@ -782,12 +782,10 @@ private theorem swap_execHostIO : SwapAppend execHostIO := by
 private theorem swap_execInstr_nonload (instruction : Instr)
     (notLoad : ∀ dst width, instruction ≠ .VirtualAdviceLoad dst width) :
     SwapAppend (execInstr instruction) := by
-  by_cases host : ∃ dst src imm, instruction = .VirtualHostIO dst src imm
-  · obtain ⟨dst, src, imm, h⟩ := host
-    subst instruction
+  by_cases host : instruction = .VirtualHostIO
+  · subst instruction
     simpa only [execInstr] using swap_execHostIO
-  · exact swapInvariant_to_append (swap_execInstr_nonhost instruction notLoad
-      (by intro dst src imm h; exact host ⟨dst, src, imm, h⟩))
+  · exact swapInvariant_to_append (swap_execInstr_nonhost instruction notLoad host)
 
 private theorem replaceDst_device_eq (dst : Dst) (state : SailJoltState)
     (value : BitVec 64) :

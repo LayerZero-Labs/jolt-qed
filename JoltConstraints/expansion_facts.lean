@@ -787,8 +787,11 @@ theorem virtualAssertEQ_native_ok (rs1 rs2 : regidx) (imm : BitVec 13) :
     ExpandedOk (.ofNative (JoltISA.Encoded.VirtualAssertEQ (.xreg rs1) (.xreg rs2) imm)) := by
   native_ok
 
-theorem virtualHostIO_native_ok (rd rs1 : regidx) (imm : BitVec 64) :
-    ExpandedOk (.ofNative (JoltISA.Instr.VirtualHostIO (.xreg rd) (.xreg rs1) imm)) := by
+/-- An operandless host call satisfies the native-row expansion checks.
+For example, it reads no instruction temporary and has no destination to rewrite.
+See jolt/crates/jolt-program/src/expand/materialize.rs:79-101 at 5def437f. -/
+theorem virtualHostIO_native_ok :
+    ExpandedOk (.ofNative JoltISA.Instr.VirtualHostIO) := by
   native_ok
 
 -- A source-only program's expansion, in every case.
@@ -906,7 +909,7 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .jolt (.AdviceLD rd), _, h => by cases h; exact ofProgram_ok _ (adviceld_ok ..)
   | .jolt (.VirtualRev8W rd rs1), _, h => by cases h; exact virtualRev8W_native_ok ..
   | .jolt (.VirtualAssertEQ rs1 rs2 imm), _, h => by cases h; exact virtualAssertEQ_native_ok ..
-  | .jolt (.VirtualHostIO rd rs1 imm), _, h => by cases h; exact virtualHostIO_native_ok ..
+  | .jolt .VirtualHostIO, _, h => by cases h; exact virtualHostIO_native_ok
 
 /-- The first read of each instruction temporary in a source expansion follows
 a write within that same expansion. Reserved virtual registers are excluded. -/
