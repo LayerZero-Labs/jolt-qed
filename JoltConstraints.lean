@@ -87,3 +87,4 @@ import JoltConstraints.Soundness.Layer5.AssertionsAlignment
 import JoltConstraints.Soundness.Layer5.AssertionMulOverflow
 import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.Soundness.Layer6.BytecodePC
+import JoltConstraints.Soundness.Layer6.TerminalNextPC

@@ -248,13 +248,17 @@ theorem selected_last_represented_row
   refine ⟨before, slot, by dsimp [before]; omega, ?_, selected, rowAt, real⟩
   simpa only [Array.getElem?_eq_getElem inRun] using congrArg some lastAt
 
-private theorem instructionTemporary_index :
+/-- An instruction temporary has one of the eight addresses 40–47.
+For example, temporary 40 has index zero. -/
+theorem instructionTemporary_index :
     ∀ register : Fin 128, IsInstructionTemporary register →
       ∃ index : Fin 8, register.val = 40 + index.val := by
   unfold IsInstructionTemporary
   decide
 
-private theorem temporary_source (source : Src) (index : Fin 8)
+/-- An operand encoded at an instruction-temporary address is that virtual register.
+For example, address 40 identifies virtual register 40, never an architectural register. -/
+theorem temporary_source (source : Src) (index : Fin 8)
     (address : TraceWitness.sourceRegisterAddress source =
       (BitVec.ofNat 7 (40 + index.val)).toFin) :
     source = .vreg (BitVec.ofNat 7 (40 + index.val)) := by
@@ -460,7 +464,7 @@ that address. For example, a `JAL +0` target at address `a` can only lead to
 padding or a row whose address is `a`.
 See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:344-352
 at 8bbb2357. -/
-private theorem stall_next_cycle_of_target
+theorem next_cycle_of_target
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -1261,7 +1265,7 @@ theorem stall_jal_step
       have targetAddress : witness.NextUnexpandedPC cycle =
           (run.bytecode[last.rowIndex].address.toNat : F) := by
         simpa only [offsetZero, add_zero, sameSource] using target
-      rcases stall_next_cycle_of_target joltField joltInstance privateInputs
+      rcases next_cycle_of_target joltField joltInstance privateInputs
         witness context equations cycle next run.bytecode[last.rowIndex].address
           targetAddress with
         isPadding | ⟨nextSlot, nextRow, nextSelected, nextRowAt, nextAddress⟩
@@ -1706,7 +1710,7 @@ theorem stall_branch_step
   have target := stall_branch_replay_target joltField joltInstance privateInputs
     witness context equations run.bytecode last cycle slot selected row rowAtContext
     currentEq branch model controls
-  rcases stall_next_cycle_of_target joltField joltInstance privateInputs
+  rcases next_cycle_of_target joltField joltInstance privateInputs
     witness context equations cycle next run.bytecode[last.rowIndex].address
       (by simpa only [sameSource] using target) with
     isPadding | ⟨nextSlot, nextRow, nextSelected, nextRowAt, nextAddress⟩
@@ -2234,7 +2238,7 @@ private theorem stall_arch_jalr_preserved_step
   have targetAddress : witness.NextUnexpandedPC cycle =
       (run.bytecode[last.rowIndex].address.toNat : F) := by
     simpa only [stableTarget] using target
-  rcases stall_next_cycle_of_target joltField joltInstance privateInputs
+  rcases next_cycle_of_target joltField joltInstance privateInputs
     witness context equations cycle next run.bytecode[last.rowIndex].address
       targetAddress with isPadding | ⟨nextSlot, nextRow, nextSelected,
         nextRowAtContext, nextAddress⟩
@@ -2448,7 +2452,7 @@ theorem stall_jalr_written_base_step
   have targetAddress : witness.NextUnexpandedPC cycle =
       (run.bytecode[last.rowIndex].address.toNat : F) := by
     simpa only [stableTarget] using target
-  rcases stall_next_cycle_of_target joltField joltInstance privateInputs
+  rcases next_cycle_of_target joltField joltInstance privateInputs
     witness context equations cycle next run.bytecode[last.rowIndex].address
       targetAddress with isPadding | ⟨nextSlot, nextRow, nextSelected,
         nextRowAtContext, nextAddress⟩
@@ -2603,7 +2607,7 @@ theorem stall_system_jalr_step
     imm (JoltISA.sourceValue (.vreg rs1) last.preState) currentJump baseAt nextPadding
   rw [stable_jalr_target joltInstance privateInputs run last atEnd stable
     (.vreg rd) (.vreg rs1) imm jump] at target
-  simpa only [bytecodeEq] using stall_next_cycle_of_target joltField joltInstance
+  simpa only [bytecodeEq] using next_cycle_of_target joltField joltInstance
     privateInputs witness context equations cycle next run.bytecode[last.rowIndex].address target
 
 /-- Every expanded JALR row uses an architectural base with an architectural
@@ -2950,7 +2954,7 @@ theorem stall_suffix_initial_jalr
         witness context equations before next slot selected run.bytecode[last.rowIndex]
         rowAtContext (TraceWitness.sourceRegisterAddress base) noWrite
       simpa only [sameAddress, false_and, ↓reduceIte] using unchanged.trans baseAt
-  rcases stall_next_cycle_of_target joltField joltInstance privateInputs witness context
+  rcases next_cycle_of_target joltField joltInstance privateInputs witness context
       equations before next run.bytecode[last.rowIndex].address target with
     padding | ⟨nextSlot, nextRow, nextSelected, nextRowAt, nextAddress⟩
   · exact False.elim (nextPadding padding)
