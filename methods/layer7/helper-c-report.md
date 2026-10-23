@@ -293,3 +293,83 @@ The profiler options only report timings and do not raise proof limits.
 Only `ProverAccepts.lean`, `StallSuffix.lean`, `LastJump.lean`, and this report were edited by this task.
 The other agents' files, `methods/soundness.md`, and `JoltConstraints/model_review.md` were left alone.
 Work stops here for review.
+
+## RAM size
+
+`JoltInstance.represented_ram_size_computes` is proved at `JoltConstraints/Soundness/Layer7/ProverAccepts.lean:278`, without changing its statement or hypotheses.
+The task stayed on `feat/soundness` in `/Users/ari.biswas/Lean/jolt-qed-public` and made no commit.
+
+I read `AGENTS.md`, `methods/layer6/reuse.md`, section "3. Checked RAM size" above, and `methods/layer7/helper-c-ram.md` before editing.
+I checked the plan's claims against the definitions and existing proofs and found no incorrect claim or missing premise.
+The address equation and selector lemmas recover a natural-number address above the layout base using the represented 64-bit address and `ram_address_value_lt_char`.
+This does not require `RamRegionFits`.
+`TraceRow.ram_address_eq` connects each recorded address to `TraceWitness.RamAddress`, and `TraceRow.ram_address_lt` supplies the 64-bit bound.
+The existing `initial_state_memory_layout` in `Soundness/Layer3/State.lean` already proves the required layout identification from `initial_state_device` and `context.publicIo`; the final proof reuses it.
+
+I checked Jolt's pinned code with `git show` at `5def437f`.
+`jolt/crates/jolt-prover/src/config.rs` (`ProverConfig::derive_from_dimensions`, `checked_remap_address`) performs the two checked subtractions, image remapping, image-end additions, and power-of-two rounding used by the model.
+`jolt/crates/jolt-program/src/preprocess/ram.rs` (`compute_min_ram_k`, `compute_max_ram_k`) supplies the verifier's checked image extent and maximum based on `(heap_end - lowest) / 8`.
+`jolt/common/src/jolt_device.rs` (`MemoryLayout::get_lowest_address`, `MemoryLayout::remap_word_address`) identifies the same lower address and zero sentinel.
+`jolt/crates/jolt-program/src/execution/trace.rs` (`RamAddressBounds::observe`, `ExecutionDimensions::from_rows`) ignores zero while collecting the minimum and maximum nonzero addresses.
+
+The proof uses the existing `ExecutionDimensions.boundsFor_fold` induction to identify the recorded nonzero endpoints.
+Their lower bounds make both checked subtractions succeed, and the upper address bound makes the highest touched word index less than `2 ^ 61`.
+It does not assume successful checking through `ExecutionDimensions.checkedTouched_fold`, whose implication runs in the opposite direction.
+Successful verifier sizing bounds the image's exclusive word end by the verifier minimum, then maximum, then `2 ^ 61`.
+Adding the prover's sentinel and rounding the maximum of that end and the touched index produces at most `2 ^ 62`, which fits the 64-bit host range.
+This proves that the modeled RAM-size computation succeeds; it does not change or establish containment for the prover's existing highest-touched-slot rounding policy.
+
+The new declarations and completed target are in namespace `JoltInstance`, all in `JoltConstraints/Soundness/Layer7/ProverAccepts.lean`.
+
+| Declaration | Line | Result |
+|---|---:|---|
+| `represented_ram_addresses_bounded` | 162 | Every recorded address is below `2 ^ 64` and is zero or at least the constraint layout's lowest address. |
+| `checked_touched_of_address_bounds` | 208 | A list satisfying those address bounds passes checked remapping, with touched index below `2 ^ 61`. |
+| `verifier_ram_image_end_bounded` | 234 | Successful ordered verifier sizes certify image remapping and addition, with exclusive image end at most `2 ^ 61`. |
+| `represented_ram_size_computes` | 278 | The original staged conclusion, proved by assembling the address, image, and rounding bounds. |
+
+The following existing private lemmas were made public in place, with explanatory docstrings and no change to their statements or proofs:
+
+| Declaration | File and line |
+|---|---|
+| `ExecutionDimensions.boundsFor_fold` | `JoltConstraints/prover_config_facts.lean:62` |
+| `ProverConfig.checkedRound_some` | `JoltConstraints/prover_config.lean:82` |
+
+Every new helper is used by the completed target, and each publicized lemma is used by a new helper.
+The list helper takes only addresses, a layout, and address bounds; the image helper takes only a program, layout, and successful ordered verifier sizes.
+No existing statement or hypothesis changed, and no definition, restriction, or language predicate changed.
+There are no new `sorry`s, explicit axioms, `bv_decide` uses, native decision proofs, or proof-limit overrides.
+The three new proof bodies have 26, 13, and 21 lines, and the target proof has 38 lines.
+A textual comparison against HEAD confirmed that the target statement is unchanged, both exposed proofs are unchanged, and the existing jump and padded-length sections are byte-for-byte unchanged.
+Only the imports and RAM-size portion of `ProverAccepts.lean` changed.
+
+The requested module build passed all 8654 jobs:
+
+```text
+lake build JoltConstraints.Soundness.Layer7.ProverAccepts
+```
+
+The final module compiled in 3.9 seconds with no new warnings.
+`git diff --check` passed for the owned files.
+No full-library build result is claimed for this task.
+
+`#print axioms JoltInstance.represented_ram_size_computes` returned exactly:
+
+```text
+propext
+Classical.choice
+Quot.sound
+```
+
+The target has no `sorryAx` or `bv_decide` dependency.
+All three new helpers have the same axiom list.
+`ExecutionDimensions.boundsFor_fold` also has that list; `ProverConfig.checkedRound_some` uses only `propext`.
+There is no remaining `sorry` in `ProverAccepts.lean`.
+
+With one worker and `-Dtrace.Elab.async=true -Dtrace.profiler=true -Dtrace.profiler.threshold=10000`, the address, touched-index, image-end, and target proofs elaborated in 0.099384, 0.037031, 0.023710, and 0.048003 seconds respectively.
+No new or changed proof took more than ten seconds.
+These profiler settings report timings without raising proof limits.
+
+This task edited only `JoltConstraints/Soundness/Layer7/ProverAccepts.lean`, the two files containing the publicized lemmas, and this report.
+The other agents' files, `methods/soundness.md`, and `JoltConstraints/model_review.md` were left alone.
+Work stops here for review, without a commit.

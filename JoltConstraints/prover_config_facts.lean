@@ -54,7 +54,12 @@ private theorem boundsFor_observe (addresses : List Nat) (bounds : Option (Nat �
           · exact Or.inr ⟨by omega, by omega⟩
         · exact Or.inr ⟨by omega, by omega⟩
 
-private theorem boundsFor_fold (addresses : List Nat) :
+/-- Folding the observed addresses records their nonzero minimum and maximum,
+or no bounds when every address is zero.
+For example, observing `[0, 16, 8]` records the bounds `(8, 16)`.
+See jolt/crates/jolt-program/src/execution/trace.rs (`RamAddressBounds::observe`)
+at 5def437f. -/
+theorem boundsFor_fold (addresses : List Nat) :
     BoundsFor addresses (addresses.foldl observe none) := by
   induction addresses using List.reverseRecOn with
   | nil => simp [BoundsFor]
