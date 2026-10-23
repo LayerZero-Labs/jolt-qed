@@ -76,41 +76,20 @@ The proof first runs with the witness's tape values fed in directly (the
 relaxed semantics of Layer 5a), then shows the run on the built tape ends
 every source instruction with the same registers and memory (Layer 7).
 
-### Current top-level status
+### Current top-level status (2026-10-23)
 
-`JoltInstance.soundness` chains four named helpers in `Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion from Layer 7 to get `InLanguage`.
-Helper A returns an `UntrustedAnswerTrace` represented at every actual row.
-`Represents.finalRam` covers every RAM index except the termination word.
-Helper B checks the output and panic words through constraint 26 and final RAM agreement, with no panic restriction.
-Its relaxed-trace frame, output-bound and decoder support statements are proved.
-The plain-`Trace` final RAM overlay and byte-store output bound are proved.
-The generic pre-state frame and shared trace and instruction frames are proved.
-The word-index geometry is proved.
-The ten Ari-approved trace-independent refactor statements are proved.
-Step (a) shares the output, prover-acceptance and spoil-assert predicates on the plain `Trace` between both languages.
-Its fixed-tape inclusion is proved, and the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` in Layer 7 is proved without `sorryAx`.
-Helper A is proved from execution-prefix agreement and the assembled stopping theorem.
-Layer 8 and Layer 7's stopping and tape rebuild are proved; Layer 7's helpers C and D are not.
-`plain_row_step_other` is proved for scalar, branch and tape-load rows without `sorryAx`; see the [completion report](layer6/plain-row-other-report.md#completion-after-the-tape-load-correction).
-`division_expansion_layout` is proved in `Layer6/DivisionLayout.lean` with its statement unchanged, and `division_block` now has no `sorryAx` dependency; see the [division layout report](layer6/plain-steps-and-layout-report.md#completion-after-the-module-placement-correction).
-Layer 6 proves `soundness_execution_prefix_agreement` by strong induction over source instructions; the step between two sources, `expansion_finish`, and the start of the run are proved.
-Helper C remains `sorry` but is no longer known false: the base verifier floor excludes short witnesses, and the approved `noMaxLengthTrace` restriction excludes a run that fills the largest permitted power-of-two domain.
-The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
-Step (c)'s five original stopping gaps are proved after Ari approved the checker integration.
-The four sequence checks, native JALR guard and singleton advice check are integrated, and the materialization lift is proved.
-`Emission.lean` has been deleted; stopping uses the single expansion checker.
-The approved shared helper `expand_program_source_of_row` is proved; row validity and JALR operand forms both use its source-expansion certificate.
-The final axiom audit finds no `sorryAx` in `soundness_stopping`; A reaches it only through execution-prefix agreement.
-The [integration report](step_c_closing_report.md) records the completed proofs, validation and declaration timings.
-The execution-prefix statement is in `Soundness/Layer6/ExecutionPrefix.lean`, and the stopping statement is in `Soundness/Layer7/Stopping.lean`.
-The prefix cuts at the first stable stall, padding, or the last witness cycle and owns RAM agreement at that boundary.
-The stopping theorem obtains nonemptiness from the proved termination-store lemma, obtains the final stall from the cut or the proved last-jump and termination lemmas, and carries cut RAM agreement to final RAM through the suffix proof.
-Step (c) is complete, with `lake build JoltBytecode JoltConstraints` passing 8800 jobs.
-The checker elaboration increase from about 11 s to 44 s is deferred cleanup under “Proofs owed.”
-The stopping rule mirrors a16z/jolt PR #2109 at merge commit `0249591a`; soundness obtains unconditional nonemptiness from the termination store.
-No additional restriction is used for the JALR self-jump case.
-The prover-acceptance helper C will use `ConstraintContext.traceLengthFloor` and `JoltInstance.NoMaxLengthTrace` to exclude its two former counterexamples; its last-jump, RAM-address and padded-length proof remains open.
-The [handoff](#layer-5b-handoff-updated-2026-10-23) records what already exists at the bottom.
+`JoltInstance.soundness` is proved, under the temporary restrictions, with no `sorry`.
+At `b9efd78`, `lake build JoltConstraints` passes (8,828 jobs), and `#print axioms JoltInstance.soundness` lists `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound` and one `bv_decide` axiom, from `branch_target_toNat`.
+The theorem chains four helpers in `Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) to get `InLanguage`.
+Helper A returns an `UntrustedAnswerTrace` represented at every actual row, from execution-prefix agreement (Layer 6, `Soundness/Layer6/ExecutionPrefix.lean`) and the stopping theorem (`Soundness/Layer7/Stopping.lean`).
+Helper B checks the output and panic words through constraint 26 and final RAM agreement, with no panic restriction; `Represents.finalRam` covers every RAM index except the termination word.
+Helper C shows Jolt's prover accepts the trace, using the base verifier's 256-cycle floor (`ConstraintContext.traceLengthFloor`) and the approved `noMaxLengthTrace` restriction.
+Helper D shows no spoil assert fails, using the checker's `noSpoilAsserts`.
+Layer 6 proves execution-prefix agreement by strong induction over source instructions; inside an expansion, registers agree only where they are live.
+The prefix cuts at the first stable stall, padding, or the last witness cycle and owns RAM agreement at that boundary; the stopping theorem carries it to final RAM.
+The stopping rule mirrors a16z/jolt PR #2109 at merge commit `0249591a`; no additional restriction is used for the JALR self-jump case.
+The reports in `methods/layer6/`, `methods/layer7/` and `methods/step_c_closing_report.md` record each step's audit, declarations and validation.
+The axiom result and the remaining cleanup are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
 
 ### When the proof uncovers an issue
 
@@ -147,45 +126,14 @@ A scratch register can retain a different value across native rows that never wr
 `BoundaryState` uses the registers that are not temporaries, and `ExpansionState` adds the temporaries already written in the unfinished source (`ExpansionLive`, `Layer6/PrefixState.lean`).
 Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
-## Running the Layer 6 agents (for Ari)
+## Remaining work (2026-10-23)
 
-Layers 5b–6 are done in stages.
-Each stage has its own plan, `methods/layer6/stage-N.md`, written only after the previous stage's report has been reviewed, and Claude gives Ari the prompt for the agent.
-Up to three agents run at once: agents 2 and 3 are strong models and take the unknown and hard work; agent 1 is a medium model and takes work that follows a known pattern.
-Agents work in one checkout on disjoint files, and Claude audits agent 1 most closely.
-Each stage ends with a report, `methods/layer6/stage-N-report.md`; read it, with Claude's audit, before the next stage starts.
+1. Remove every `bv_decide` ([plan](bv-decide-removal.md)); the soundness theorem then depends only on `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
+2. The cleanup list under "Proofs owed" in `model_review.md`: long proofs, repeated unpacking, unused declarations and checker speed.
+3. The closing report: restrictions split into static checks, run-time properties and the claim; assumptions; issues found; the SDK question.
 
-## Order of the remaining work (2026-10-23)
-
-Unknown areas come first, so that a false statement or a missing restriction shows up early, while there is time for Ari to decide on it.
-
-1. `row_step` for LD and SD on device memory: the input, advice, output, panic and termination words, under the temporary restrictions.
-   The restrictions' sufficiency for this is not yet established (see the Layer 5b checklist).
-   Stage one step statement per device region, check each against Jolt's device code at the pin, and only then prove them.
-2. Helper C's RAM-address part (every RAM address is at or above the lowest address) and padded-length part (with `NoMaxLengthTrace` and the 256-cycle floor).
-   Its last-jump part reuses `soundness_last_row_is_jump` (`Layer7/LastJump.lean`).
-3. Then the work that follows known patterns: helper D, the three remaining division lemmas, `plain_row_step_other` (the stage 6b port, the branch and `VirtualAdviceLoad` steps, and the wiring), and `row_step`'s other rows (ordinary-RAM LD and SD, HostIO, JAL, JALR).
-4. Last, the cleanup list under "Proofs owed" in `model_review.md`.
-
-## Layer 5b handoff (updated 2026-10-23)
-
-This records the step lemmas at the bottom of the proof, one file per instruction family in `JoltConstraints/Soundness/Layer5/`.
-They are used top-down by Layer 6's `plain_row_step` and `row_step`.
-Local steps exist for most row kinds, counting LD and SD for ordinary RAM only and HostIO under the restrictions.
-Missing steps: JALR, the six branches and `VirtualAdviceLoad`.
-`VirtualAdvice` has `advice_step` (`Advice.lean`), which writes the witness's range-checked word and makes no honesty claim.
-Device-memory LD and SD, and the dispatcher that `row_step` needs, remain open.
-
-Steps take `RegisterAgreementOn live` (`Registers.lean`): each needs its source registers live and adds its destination.
-The shared helpers (`RegisterAgreementOn.read`, `.write`, `.noWrite`, `.registerInputs`, `.immediateInputs`, `registerWriteOn_step`) are general, and the full-agreement versions are derived from them.
-The eight families the division expansions use are ported (stage 4a); the families for the other plain rows are being ported (stage 6b); LD, SD, HostIO and JAL port with `row_step`.
-
-`Auipc.lean` and `Jal.lean` take local PC and `nextPC` hypotheses; the execution-prefix induction supplies them, and `Jal.lean` uses the approved next-PC no-wrap fact.
-HostIO has no operands and writes no register, so `host_call_selected_step` preserves agreement, using `HostCallsSucceed` for successful execution.
-
+Agents work in one checkout on disjoint files; each task has a plan in `methods/`, and Claude audits each report before the next task starts.
 Do not add theorem premises without Ari's approval; do not use `native_decide`, `decide +kernel` or a larger `maxHeartbeats`.
-`bv_decide` is accepted temporarily under `AGENTS.md`; every use is tracked in the `bv_decide` list under "Proofs owed" in `model_review.md` and must be removed before the proof is final.
-Split difficult proofs into smaller lemmas.
 The issue write-ups remain for the agreed batch; #2044 discussion waits for Michael's comments.
 
 ## Current Jolt pin (2026-10-22)
@@ -1270,7 +1218,7 @@ Handle `n = 0` and `n = N` explicitly.
 Why: Layer 5b handles the state; this handles which bytecode row runs next.
 It supplies the `starts` and `linked` fields; Layer 7 connects the cut boundary to stall replays and then the no-op suffix.
 Uses: the PC and sequence constraints, Layer 5b.
-The plan for finishing Layers 5b–6 is in [Running the Layer 6 agents](#running-the-layer-6-agents-for-ari).
+Layers 5b–6 are proved; see [Current top-level status](#current-top-level-status-2026-10-23).
 
 **Entry and interior-slot bridge, ready for review, 2026-10-15.**
 [BytecodePC.lean](../JoltConstraints/Soundness/Layer6/BytecodePC.lean)

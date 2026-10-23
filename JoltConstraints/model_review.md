@@ -11,8 +11,8 @@ For the next soundness session, start with
 [the change of course](../methods/soundness.md#change-of-course-top-down-2026-10-20):
 since 2026-10-20 the soundness proof is built top-down from
 `JoltInstance.soundness`, with helper lemmas stated as `sorry` first.
-The [Layer 6 runbook](../methods/soundness.md#running-the-layer-6-agents-for-ari) says how the stages run, and "Proofs owed" below lists every remaining `sorry`.
-The [Layer 5b handoff](../methods/soundness.md#layer-5b-handoff-updated-2026-10-23) records the step lemmas: JALR, the six branches and `VirtualAdviceLoad` still need steps, and device-memory LD and SD remain open.
+`JoltInstance.soundness` is proved, under the temporary restrictions, with no `sorry`; see the [current status](../methods/soundness.md#current-top-level-status-2026-10-23).
+"Proofs owed" below records its axioms, the `bv_decide` uses still to remove, the cleanup list and the completeness gaps.
 
 **Rust semantics pin:** upstream `5def437f` since 2026-10-22; see [Current Jolt pin](../methods/soundness.md#current-jolt-pin-2026-10-22).
 The earlier pin, selected with Ari on 2026-10-15, was
@@ -159,24 +159,14 @@ Premises or fields of the final theorem, with their source or reason below.
 
 Sorried theorems behind the final theorems; `#print axioms` shows `sorryAx` through them.
 
-**Soundness.** `JoltInstance.soundness` (`Soundness/soundness.lean`) is a short proof from the obligations in `Soundness/TopLevel.lean` and the reverse language inclusion in `Soundness/Layer7/TapeRebuild.lean`.
-Its explicit theorem parameters are unchanged; the temporary-restriction bundle now includes `noMaxLengthTrace`.
+**Soundness.** `JoltInstance.soundness` (`Soundness/soundness.lean`) is proved, under the temporary restrictions, with no `sorry`.
+At `b9efd78`, `lake build JoltConstraints` passes (8,828 jobs) and `#print axioms JoltInstance.soundness` lists `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound` and one `bv_decide` axiom, `JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5` (see the `bv_decide` list below).
+It is a short proof from the four helpers in `Soundness/TopLevel.lean` and the reverse language inclusion in `Soundness/Layer7/TapeRebuild.lean`.
+Its explicit theorem parameters are unchanged; the temporary-restriction bundle includes `noMaxLengthTrace`.
 `RepresentsRows` in `Soundness/Layer6/ExecutionPrefix.lean` records the row count, PC, source values and RAM addresses for the relaxed trace cut at its first stable stall, padding, or final witness cycle.
 `RepresentsPrefix` adds RAM agreement at that cut for the stopping proof.
 `Represents` adds final RAM agreement for every witness RAM index except the termination word, which the device ignores as a store; B, C and D use this form without cut RAM.
-The following declarations still use `sorry`:
-
-| Declaration | What it needs |
-|---|---|
-| `JoltInstance.row_step` (`Soundness/Layer6/RowStep.lean`) | Append one row of an unfinished expansion without internal advice: dispatch plain rows to `plain_row_step`, LD and SD to `ld_ram_step`/`sd_ram_step_agreement` (ordinary RAM, to be ported to `RegisterAgreementOn`) or `ld_device_step`/`sd_device_step` (device memory), and HostIO, JAL and JALR to their steps. |
-| `JoltConstraints.Soundness.device_store_cases`, `device_output_store_image`, `device_panic_store_image`, `device_termination_store_image`, `device_load_image_bytes` (`Soundness/Layer5/DeviceMemory.lean`) | The device-level facts behind the proved `sd_device_step` and `ld_device_step`; no witness is involved, and the audit found no counterexample (device-memory report). |
-| `JoltInstance.represented_trace_ends_in_jump` (`Soundness/Layer7/ProverAccepts.lean`) | Helper C's last-row check: a branch stall cannot end a represented trace, because its replay never reaches padding or the witness's end. |
-| `JoltInstance.represented_ram_size_computes` (`Soundness/Layer7/ProverAccepts.lean`) | Helper C's RAM sizing: every nonzero address is at least the lowest address by the constraints, and the verifier bounds rule out overflow (helper C report). |
-
-`JoltInstance.plain_row_step_other` is proved for scalar, branch and tape-load rows without `sorryAx`; the [plain-row report](../methods/layer6/plain-row-other-report.md#completion-after-the-tape-load-correction) records the shared range-check lemma and checked tape widths.
-Helper D (`soundness_spoil_asserts_pass`) and helper C's padded-length part (`checked_trace_length_fits`) are proved.
-`division_expansion_layout` is proved in `Soundness/Layer6/DivisionLayout.lean`, with its original statement unchanged.
-Together with the already-proved `division_replay_complete`, it closes `division_block` without `sorryAx`; the [division layout report](../methods/layer6/plain-steps-and-layout-report.md#completion-after-the-module-placement-correction) records the declaration inventory and axiom audit.
+The last lemmas proved were `plain_row_step_other` ([plain-row report](../methods/layer6/plain-row-other-report.md#completion-after-the-tape-load-correction)) and `division_expansion_layout`, moved unchanged into `Soundness/Layer6/DivisionLayout.lean` ([division layout report](../methods/layer6/plain-steps-and-layout-report.md#completion-after-the-module-placement-correction)).
 
 Layer 6 proves `soundness_execution_prefix_agreement` by strong induction over source instructions (`Soundness/Layer6/PrefixAgreement.lean`).
 `boundary_step` crosses one source instruction, from `BoundaryState` to `BoundaryState`.
@@ -197,10 +187,9 @@ See the [step 6 declaration timings and validation report](../methods/soundness.
 
 The base verifier now rejects witness lengths below 256 (`jolt/crates/jolt-verifier/src/verifier.rs:976-991` and `jolt/crates/jolt-verifier/src/config.rs:109-120` at `5def437f`); `ConstraintContext.traceLengthFloor` mirrors that check.
 For the remaining full-length case, `NoMaxLengthTrace` excludes a relaxed run whose real rows fill the largest power-of-two domain permitted by the instance maximum.
-C remains `sorry` while its last-jump, RAM-address and padded-length obligations are proved; it is no longer known false under the revised premises.
+Helper C (`soundness_prover_accepts`) is proved from these premises, with its last-jump, RAM-address and padded-length parts in `Soundness/Layer7/ProverAccepts.lean` ([helper C report](../methods/layer7/helper-c-report.md)).
 The mismatch and temporary restriction are described in `blog/content/blog/prover-verifier-trace-length/index.md`.
 No other helper uses C.
-Its proof still needs the last-jump, RAM-address and padded-length guards from the constraints and represented rows.
 
 Helper B checks public words outside the termination word through constraint 26, `Represents.finalRam`, field-to-word injectivity and the final RAM overlay.
 Its proof is now about `UntrustedAnswerTrace` and has no direct `sorry` or panic restriction.
@@ -221,7 +210,6 @@ The five original step (c) gaps in `StallSuffix.lean` are proved, using the stre
 `Emission.lean` has been deleted, and the architectural JALR singleton fact now uses the checker.
 The approved `expand_program_source_of_row` is proved by extracting the shared traversal from `expand_program_rowOk`; both row validity and JALR operand forms use it.
 The final 2026-10-21 axiom audit finds no `sorryAx` in `soundness_stopping`.
-A reaches `sorryAx` only through `soundness_execution_prefix_agreement`.
 `lake build JoltBytecode JoltConstraints` passed with 8800 jobs.
 See the [integration report](../methods/step_c_closing_report.md) for the completed helper, build, axiom audit and declaration timings.
 The prefix owns RAM agreement at the cut, and stopping owns final RAM agreement after the constraint-level zero-update proof for repeated stall rows and padding.
@@ -246,21 +234,25 @@ Retain the shared expansion checker and avoid another per-instruction proof tabl
 This is deferred cleanup authorized by Ari; it is not a remaining logical gap in stopping.
 
 Split the Layer 6 proofs longer than about 60 lines: `division_replay_complete_transfer` (`DivisionAppend.lean`, about 315 lines, its `represents` field about 130), `division_candidate_first_pre` (about 85), `append_expansion_row`, `arithmetic_execution` and `arithmetic_plain_row_step` (`PlainRow.lean`), `arithmetic_advice_suffix_run` (`DivisionDefs.lean`), and `terminal_branch` and `terminal_branch_taken` (`TerminalNextPC.lean`).
-Unpack `JoltInstance.initial_state` once: `initial_state_device`, `initial_state_inputs` (`layout_facts.lean`) and `initial_state_empty_outputs_and_input_bound` (`Layer6/BoundaryStart.lean`) each repeat it.
+Unpack `JoltInstance.initial_state` once: `initial_state_device`, `initial_state_inputs` (`layout_facts.lean`), `initial_state_empty_outputs_and_input_bound` (`Layer6/BoundaryStart.lean`) and `initial_state_misa` (`Layer5/MisaFrame.lean`) each repeat it.
 `RawRowEntry` (`Layer6/PlainRow.lean`) repeats the entry and linkage clause of `UntrustedAnswerRun.NextStep` and `ExpansionState.next`; defining both from it changes approved definitions and waits for Ari.
-`Soundness/Layer5/ImmediatePowerMask.lean` and `XorRotation.lean` prove steps for instructions no source expansion emits (stage 6b report); once `plain_row_step_other` excludes those kinds, delete them.
+`source_expansion_split` and `expansion_block_eq` (`Layer6/DivisionLayout.lean`) repeat part of the private `expand_program_block` (`Layer6/PlainRow.lean`), which lacks the image-membership fact; generalize it and derive both.
+`source_advice_kind` (`Layer6/DivisionLayout.lean`) classifies every source instruction with a long `simp` list; a checker fact would be shorter.
+`fence_step` (`Layer5/Fence.lean`) is no longer used; delete it.
 `Soundness/Layer5/DeviceMemoryObstruction.lean` uses `decide +kernel`, which `AGENTS.md` bans; only `JoltConstraints.lean` imports it and no proof uses it, so delete it or move its finding to the docs.
 
 ### bv_decide
 
-`bv_decide` is temporarily accepted under the updated `AGENTS.md` rules.
-The uses on the step (c) proof path are tracked here for later removal.
+`bv_decide` is temporarily accepted under the `AGENTS.md` rules; every use must be removed before the proof is final ([removal plan](../methods/bv-decide-removal.md)).
+There are 21 uses; the soundness theorem reaches only the first.
 
-| Declaration | Use |
+| Declaration or file | Uses |
 |---|---|
-| `JoltConstraints.branch_target_toNat` (`Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean`) | Existing use proving `(offset.signExtend 128).setWidth 64 = offset.signExtend 64`; `soundness_stopping` and `expansion_finish` (through `terminal_branch`) depend on this lemma. |
-
-The step (c) checker integration and bytecode proofs have introduced no new uses.
+| `JoltConstraints.branch_target_toNat` (`Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean`) | One, proving `(offset.signExtend 128).setWidth 64 = offset.signExtend 64`; `soundness_stopping` and `expansion_finish` (through `terminal_branch`) depend on this lemma. |
+| `encoded_branch_offset` (`JoltBytecode/JoltISA/Values.lean`) | One, the same fact as above. |
+| `Completeness/Helpers/LookupEntryProofHelpers.lean` | Eight: window-mask entries, `halfword_aligned`, `word_aligned`, `lookupEntryCorrect_RangeCheckAligned` and byte-swap identities near `rev8w_eq`. |
+| `JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Splice.lean` | Ten: low-bit masks and byte extraction. |
+| `JoltBytecode/InstructionEquivalence/Instructions/Natives/Sd.lean` | One: `x &&& 7 = 0 → x &&& -8 = x`. |
 
 **Completeness:**
 
