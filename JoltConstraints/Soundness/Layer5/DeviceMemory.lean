@@ -113,28 +113,6 @@ structure DeviceStoreResult (trace : Trace) (step : TraceRow trace.bytecode)
       if ramLowestAddress trace.initialState.jolt_device.memory_layout + 8 * index =
           address.toNat then value else TraceWitness.finalRamWord trace index
 
-/-- Classify a checked store in a reachable device and locate its flag words.
-For example, neither an input address nor address zero can pass these checks.
-The termination-index implication relates the initial image grid to the ready device.
-See jolt/tracer/src/emulator/mmu.rs (`Mmu::assert_effective_address`) and
-jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at 5def437f. -/
-theorem device_store_cases
-    {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
-    (run : UntrustedAnswerRun inst inputs) (next : Fin run.bytecode.size)
-    (pre : SailJoltState) (ready : run.NextStep next pre) (address : BitVec 64)
-    (below : address.toNat < RAM_START_ADDRESS)
-    (checked : DoublewordAddressChecks pre.jolt_device address true)
-    (region : DeviceMemoryRegion) (inRegion : deviceMemoryRegion pre.jolt_device address.toNat = region) :
-    (region = .output ∨ region = .panic ∨ region = .termination) ∧
-    address.toNat ≠ 0 ∧
-    (region = .panic → TouchesPanic pre.jolt_device address) ∧
-    (∀ index : Nat,
-      address.toNat = ramLowestAddress run.initialState.jolt_device.memory_layout + 8 * index →
-      index = (run.initialState.jolt_device.memory_layout.termination.toNat -
-        ramLowestAddress run.initialState.jolt_device.memory_layout) / 8 →
-      TouchesTermination pre.jolt_device address) := by
-  sorry
-
 private theorem ready_observation {α : Type} (observe : SailJoltState → α)
     (advance : ∀ state address compressed,
       observe (advance_pc address compressed state) = observe state)
@@ -157,6 +135,163 @@ private theorem ready_observation {α : Type} (observe : SailJoltState → α)
     have rows : run.rows = #[] := Array.size_eq_zero_iff.mp (by omega)
     simp only [rows, Array.back?_empty] at entry
     rw [entry.2.2, advance]
+
+private theorem store_raw_panic (pre post : SailJoltState) (address : Nat) (value : BitVec 8)
+    (stored : Mmu.store_raw? pre address value = some post)
+    (away : address ≠ pre.jolt_device.memory_layout.panic.toNat) :
+    post.jolt_device.panic = pre.jolt_device.panic := by
+  simp only [Mmu.store_raw?, JoltDevice.store?, if_neg away] at stored
+  split_ifs at stored <;> cases stored <;> rfl
+
+private theorem store_doubleword_panic (pre post : SailJoltState) (address value : BitVec 64)
+    (ordered : pre.jolt_device.memory_layout.panic.toNat < pre.jolt_device.memory_layout.termination.toNat)
+    (away : ¬ TouchesPanic pre.jolt_device address)
+    (result : Result Bool ExecutionResult)
+    (stored : Mmu.store_doubleword address value pre = .ok result post) :
+    post.jolt_device.panic = pre.jolt_device.panic := by
+  have noByte : ∀ k < 8, address.toNat + k ≠ pre.jolt_device.memory_layout.panic.toNat := by
+    intro k small equal
+    apply away
+    exact ⟨k, small, by simp [JoltDevice.is_panic, equal, ordered]⟩
+  have foldKeeps : ∀ after,
+      (List.range 8).foldl (fun current k => current.bind fun s =>
+        Mmu.store_raw? s (address.toNat + k) (value.extractLsb' (8 * k) 8))
+        (some pre) = some after → after.jolt_device.panic = pre.jolt_device.panic := by
+    intro after runs
+    have kept := InstructionFrame.storeFold_rule_of_step
+      (relation := fun s t => t.jolt_device.memory_layout = s.jolt_device.memory_layout ∧
+        t.jolt_device.panic = s.jolt_device.panic)
+      address.toNat value pre (List.range 8) (by
+        intro k member before after fixed writes
+        refine ⟨(JoltIOSetupFrame.store_raw_same _ _ _ _ writes).1.trans fixed.1, ?_⟩
+        exact (store_raw_panic before after _ _ writes (by rw [fixed.1]; exact noByte k (List.mem_range.mp member))).trans fixed.2)
+      (some pre) (by intro s eq; cases eq; exact ⟨rfl, rfl⟩) after runs
+    exact kept.2
+  simp only [Mmu.store_doubleword] at stored
+  split at stored
+  · cases stored
+  · split at stored
+    · split at stored <;> cases stored
+      rfl
+    · split at stored
+      · cases stored
+        exact foldKeeps _ (by assumption)
+      · cases stored
+
+private theorem sd_store_of_run (base source : Src) (imm answer : BitVec 64)
+    (pre post : SailJoltState)
+    (runs : execWithTapeAnswer (.SD base source imm) answer pre = .ok RETIRE_SUCCESS post) :
+    ∃ result, Mmu.store_doubleword (sourceValue base pre + imm) (sourceValue source pre) pre =
+      .ok result post := by
+  simp only [execWithTapeAnswer, execInstr] at runs
+  cases baseRead : readSrc base pre with
+  | error err state => simp [bind, EStateM.bind, baseRead] at runs
+  | ok baseValue state =>
+    obtain ⟨stateSame, baseIs⟩ := readSrc_value base pre state baseValue baseRead
+    subst state
+    simp only [bind, EStateM.bind, baseRead] at runs
+    cases sourceRead : readSrc source pre with
+    | error err state => simp [sourceRead] at runs
+    | ok sourceWord state =>
+      obtain ⟨stateSame, sourceIs⟩ := readSrc_value source pre state sourceWord sourceRead
+      subst state
+      simp only [sourceRead] at runs
+      split at runs
+      · cases writes : Mmu.store_doubleword (baseValue + imm) sourceWord pre with
+        | error err state => simp [EStateM.bind, writes] at runs
+        | ok result state =>
+          cases result <;> simp only [EStateM.bind, writes, pure, EStateM.pure] at runs <;> cases runs <;>
+            exact ⟨_, by simpa only [baseIs, sourceIs] using writes⟩
+      · cases runs
+
+private theorem row_panic_of_no_store
+    {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun inst inputs) (i : Fin run.rows.size)
+    (ordered : run.rows[i].preState.jolt_device.memory_layout.panic.toNat <
+      run.rows[i].preState.jolt_device.memory_layout.termination.toNat)
+    (noStore : ¬ run.StoresPanicAt i) :
+    run.rows[i].postState.jolt_device.panic = run.rows[i].preState.jolt_device.panic := by
+  classical
+  have executed := run.executes i
+  rcases Classical.em (∃ base source imm, run.bytecode[run.rows[i].rowIndex].instruction = .SD base source imm) with store | store
+  · obtain ⟨base, source, imm, isStore⟩ := store
+    rw [withRuntimeAdvice_store _ base source imm isStore] at executed
+    obtain ⟨result, stored⟩ := sd_store_of_run base source imm _ _ _ executed
+    exact store_doubleword_panic _ _ _ _ ordered
+      (by simpa only [UntrustedAnswerRun.StoresPanicAt, isStore] using noStore) result stored
+  · have kept := execWithTapeAnswer_device_of_not_sd _ (run.answers i) (by
+      intro base source imm patched
+      unfold Instr.withRuntimeAdvice at patched
+      split at patched
+      · cases patched
+      · exact store ⟨base, source, imm, patched⟩) _ _ _ executed
+    exact congrArg JoltDevice.panic kept.symm
+
+private theorem initial_panic_false {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun inst inputs) : run.initialState.jolt_device.panic = false := by
+  have initialized := run.initialized
+  unfold JoltInstance.initial_state at initialized
+  simp only [bind, Option.bind] at initialized
+  split at initialized
+  · cases initialized
+  · repeat' split at initialized
+    all_goals first | cases initialized | skip
+    all_goals simp_all [pure, Pure.pure]
+    rw [← initialized, init_state_jolt_device]
+
+private theorem run_panic_false {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun inst inputs)
+    (noStore : ¬ ∃ i : Fin run.rows.size, run.StoresPanicAt i) :
+    (TraceWitness.finalTraceState run.toTrace).jolt_device.panic = false := by
+  let layout := run.initialState.jolt_device.memory_layout
+  have ordered : layout.panic.toNat < layout.termination.toNat :=
+    new_panic_lt_termination _ layout
+      (initial_state_device inst inputs run.initialState run.initialized).1
+  have initial := initial_panic_false run
+  have step (i : Fin run.rows.size)
+      (before : run.rows[i].preState.jolt_device.memory_layout = layout ∧
+        run.rows[i].preState.jolt_device.panic = false) :
+      run.rows[i].postState.jolt_device.memory_layout = layout ∧
+        run.rows[i].postState.jolt_device.panic = false := by
+    have same := execWithTapeAnswer_rule_of_device_relation JoltIOSetupFrame.Same
+      JoltIOSetupFrame.Same.refl (fun _ _ _ a b => a.trans b)
+      JoltIOSetupFrame.storeDeviceByte_same _ _ _ _ _ (run.executes i)
+    have unchanged := row_panic_of_no_store run i (by rw [before.1]; exact ordered)
+      (fun yes => noStore ⟨i, yes⟩)
+    exact ⟨same.1.trans before.1, unchanged.trans before.2⟩
+  have each : ∀ (i : Nat) (hi : i < run.rows.size),
+      run.rows[i].postState.jolt_device.memory_layout = layout ∧
+      run.rows[i].postState.jolt_device.panic = false := by
+    intro i
+    induction i with
+    | zero =>
+      intro hi
+      have starts := (run.starts run.rows[0] (Array.getElem?_eq_getElem hi)).2.2
+      apply step ⟨0, hi⟩
+      change run.rows[0].preState.jolt_device.memory_layout = layout ∧
+        run.rows[0].preState.jolt_device.panic = false
+      rw [starts]
+      exact ⟨rfl, initial⟩
+    | succ n ih =>
+      intro hi
+      have previous := ih (by omega)
+      have link := run.linked n run.rows[n] run.rows[n + 1]
+        (Array.getElem?_eq_getElem (by omega)) (Array.getElem?_eq_getElem hi)
+      have before : run.rows[n + 1].preState.jolt_device = run.rows[n].postState.jolt_device := by
+        split at link
+        · exact congrArg SailJoltState.jolt_device link.2
+        · obtain ⟨_, _, _, _, state⟩ := link
+          rw [state]
+          rfl
+      apply step ⟨n + 1, hi⟩
+      change run.rows[n + 1].preState.jolt_device.memory_layout = layout ∧
+        run.rows[n + 1].preState.jolt_device.panic = false
+      rw [before]
+      exact previous
+  unfold TraceWitness.finalTraceState
+  split
+  · exact (each _ (by omega)).2
+  · exact initial
 
 private theorem power_padding_small (words bytes : Nat) (positive : bytes < RAM_START_ADDRESS)
     (multiplied : bytes = words.nextPowerOfTwo * 8) :
@@ -266,6 +401,41 @@ private theorem run_inputs_fit {inst : JoltInstance SourceInstruction} {inputs :
   have capacity := new_input_size_bound _ _ built
   rw [initial_state_inputs inst inputs run.initialState run.initialized]
   exact configured.trans capacity
+
+private theorem input_end_eq_output (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) : layout.input_end = layout.output_start := by
+  unfold MemoryLayout.new at built
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  cases built
+  rfl
+
+private theorem ready_device_data {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun inst inputs) (next : Fin run.bytecode.size)
+    (pre : SailJoltState) (ready : run.NextStep next pre) :
+    pre.jolt_device = (TraceWitness.finalTraceState run.toTrace).jolt_device ∧
+    JoltIOSetupFrame.Same run.initialState.jolt_device pre.jolt_device ∧
+    MemoryLayout.new { inst.memory_config with program_size := some inst.program.program_size } =
+      some pre.jolt_device.memory_layout ∧
+    pre.jolt_device.trusted_advice.size ≤ pre.jolt_device.memory_layout.max_trusted_advice_size.toNat ∧
+    pre.jolt_device.untrusted_advice.size ≤ pre.jolt_device.memory_layout.max_untrusted_advice_size.toNat ∧
+    pre.jolt_device.inputs.size ≤ pre.jolt_device.memory_layout.max_input_size.toNat ∧
+    pre.jolt_device.outputs.size ≤ pre.jolt_device.memory_layout.max_output_size.toNat := by
+  have current := ready_observation SailJoltState.jolt_device (fun _ _ _ => rfl) run next pre ready
+  have fixed := run.final_device_same
+  rw [← current] at fixed
+  have initialized := initial_state_device inst inputs run.initialState run.initialized
+  have built : MemoryLayout.new { inst.memory_config with program_size := some inst.program.program_size } =
+      some pre.jolt_device.memory_layout := by rw [fixed.1]; exact initialized.1
+  have advice := new_advice_regions _ _ built
+  refine ⟨current, fixed, built, ?_, ?_, ?_, ?_⟩
+  · rw [fixed.2.1, initialized.2.1]
+    exact initialized.2.2.2.1.trans advice.1
+  · rw [fixed.2.2.1, initialized.2.2.1]
+    exact initialized.2.2.2.2.trans advice.2.2.1
+  · rw [fixed.1, fixed.2.2.2]
+    exact run_inputs_fit run
+  · rw [fixed.1, current]
+    exact run.final_outputs_fit_layout
 
 private theorem padded_byte_store_read {α : Type} (zero value : α)
     (bytes : Array α) (offset index : Nat) :
@@ -396,6 +566,35 @@ private theorem overlay_store_word (layout : MemoryLayout) (start : BitVec 64)
     simp [above, show index - first = chosen ↔ index = first + chosen by omega]
   · simp [above, show index ≠ first + chosen by omega]
 
+private theorem device_store_raw (state : SailJoltState) (address : Nat) (value : BitVec 8)
+    (device : JoltDevice) (afterPeripherals : 0x10002000 ≤ address)
+    (below : address < RAM_START_ADDRESS)
+    (checked : Mmu.effective_address_ok state.jolt_device address true = true)
+    (stored : state.jolt_device.store? address value = some device) :
+    Mmu.store_raw? state address value = some { state with jolt_device := device } := by
+  have outside : ¬ (address ≤ 0x0200ffff) ∧ ¬ (address ≤ 0x0fffffff) ∧
+      ¬ (address ≤ 0x100000ff) ∧ ¬ (address ≤ 0x10001fff) := by omega
+  simp [Mmu.store_raw?, Nat.not_le.mpr below, outside, checked, stored]
+
+private theorem store_doubleword_of_bytes (pre : SailJoltState) (address value : BitVec 64)
+    (states : Nat → SailJoltState) (aligned : address &&& 7 = 0)
+    (below : address.toNat < RAM_START_ADDRESS) (initial : states 0 = pre)
+    (step : ∀ k < 8, Mmu.store_raw? (states k) (address.toNat + k)
+      (value.extractLsb' (8 * k) 8) = some (states (k + 1))) :
+    Mmu.store_doubleword address value pre = .ok (.Ok true) (states 8) := by
+  have folded (count : Nat) (within : count ≤ 8) :
+      (List.range count).foldl (fun current k => current.bind fun s =>
+        Mmu.store_raw? s (address.toNat + k) (value.extractLsb' (8 * k) 8))
+        (some pre) = some (states count) := by
+    induction count with
+    | zero => simp only [List.range_zero, List.foldl_nil, initial]
+    | succ count ih =>
+      rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil,
+        ih (by omega), Option.bind_some, step count (by omega)]
+  simp only [Mmu.store_doubleword, Mmu.toNat_mod_eight_of_align aligned, ne_eq,
+    not_true_eq_false, ↓reduceIte, show ¬ RAM_START_ADDRESS ≤ address.toNat by omega,
+    folded 8 (by omega)]
+
 private theorem output_store_raw (state : SailJoltState) (address : Nat) (value : BitVec 8)
     (afterPeripherals : 0x10002000 ≤ address) (below : address < RAM_START_ADDRESS)
     (checked : Mmu.effective_address_ok state.jolt_device address true = true)
@@ -411,12 +610,10 @@ private theorem output_store_raw (state : SailJoltState) (address : Nat) (value 
           (address - state.jolt_device.memory_layout.output_start.toNat) value) } } := by
   have notPanic : address ≠ state.jolt_device.memory_layout.panic.toNat := by omega
   have beforeTermination : address < state.jolt_device.memory_layout.termination.toNat := by omega
-  have outside : ¬ (address ≤ 0x0200ffff) ∧ ¬ (address ≤ 0x0fffffff) ∧
-      ¬ (address ≤ 0x100000ff) ∧ ¬ (address ≤ 0x10001fff) := by omega
-  simp [Mmu.store_raw?, Nat.not_le.mpr below, outside, checked, JoltDevice.store?,
-    notPanic, JoltDevice.is_panic, JoltDevice.is_termination, JoltDevice.is_output,
-    Nat.not_le.mpr inOutput.2, Nat.not_le.mpr beforeTermination, inOutput.1,
-    beforeTermination]
+  apply device_store_raw state address value _ afterPeripherals below checked
+  simp [JoltDevice.store?, notPanic, JoltDevice.is_panic, JoltDevice.is_termination,
+    JoltDevice.is_output, Nat.not_le.mpr inOutput.2, Nat.not_le.mpr beforeTermination,
+    inOutput.1, beforeTermination]
 
 private theorem output_store_doubleword (state : SailJoltState) (address value : BitVec 64)
     (aligned : address &&& 7 = 0) (afterPeripherals : 0x10002000 ≤ address.toNat)
@@ -437,25 +634,18 @@ private theorem output_store_doubleword (state : SailJoltState) (address value :
     output_store_raw { state with jolt_device := { state.jolt_device with outputs := outputs } }
       (address.toNat + k) (value.extractLsb' (8 * k) 8) (by omega) (by omega)
       (checked k within) ⟨by dsimp; omega, by dsimp; omega⟩ flagsOrdered
-  have folded (count : Nat) (within : count ≤ 8) :
-      (List.range count).foldl (fun current k => current.bind fun s =>
-        Mmu.store_raw? s (address.toNat + k) (value.extractLsb' (8 * k) 8))
-        (some state) = some { state with jolt_device := { state.jolt_device with outputs :=
-          (storeOutputBytes state.jolt_device.outputs
-            (address.toNat - state.jolt_device.memory_layout.output_start.toNat) count
-            (fun k => value.extractLsb' (8 * k) 8)) } } := by
-    induction count with
-    | zero => rfl
-    | succ count ih =>
-      rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil,
-        ih (by omega), Option.bind_some, raw count (by omega)]
-      simp only [storeOutputBytes, List.range_succ, List.foldl_append,
-        List.foldl_cons, List.foldl_nil]
-      congr 3
-      rw [show address.toNat + count - state.jolt_device.memory_layout.output_start.toNat =
-        address.toNat - state.jolt_device.memory_layout.output_start.toNat + count by omega]
-  simp only [Mmu.store_doubleword, Mmu.toNat_mod_eight_of_align aligned,
-    ne_eq, not_true_eq_false, ↓reduceIte, belowStart, folded 8 (by omega)]
+  apply store_doubleword_of_bytes state address value
+    (fun count => { state with jolt_device := { state.jolt_device with outputs :=
+      (storeOutputBytes state.jolt_device.outputs
+        (address.toNat - state.jolt_device.memory_layout.output_start.toNat) count
+        (fun k => value.extractLsb' (8 * k) 8)) } }) aligned (by omega) rfl
+  intro count within
+  rw [raw count within]
+  simp only [storeOutputBytes, List.range_succ, List.foldl_append,
+    List.foldl_cons, List.foldl_nil]
+  congr 3
+  rw [show address.toNat + count - state.jolt_device.memory_layout.output_start.toNat =
+    address.toNat - state.jolt_device.memory_layout.output_start.toNat + count by omega]
 
 private theorem input_overlays_zero_at_output (config : MemoryConfig) (device : JoltDevice)
     (built : MemoryLayout.new config = some device.memory_layout)
@@ -484,6 +674,19 @@ private theorem input_overlays_zero_at_output (config : MemoryConfig) (device : 
       { device.memory_layout with input_start := device.memory_layout.output_start }
       start bytes outputAligned fits index above previous
   rw [belowOutput _ _ (by omega), belowOutput _ _ (by omega), belowOutput _ _ (by omega)]
+
+private theorem final_state_push (trace : Trace) (step : TraceRow trace.bytecode) :
+    TraceWitness.finalTraceState { trace with rows := trace.rows.push step } = step.postState := by
+  simp only [TraceWitness.finalTraceState, Array.size_push, Nat.zero_lt_succ,
+    ↓reduceDIte, Nat.add_sub_cancel, Array.getElem_push_eq]
+
+private theorem final_image_of_memory_device (trace : Trace) (step : TraceRow trace.bytecode)
+    (memory : step.postState.sail.mem = (TraceWitness.finalTraceState trace).sail.mem)
+    (device : step.postState.jolt_device = (TraceWitness.finalTraceState trace).jolt_device)
+    (index : Nat) :
+    TraceWitness.finalRamWord { trace with rows := trace.rows.push step } index =
+      TraceWitness.finalRamWord trace index := by
+  simp only [TraceWitness.finalRamWord, final_state_push, memory, device]
 
 private theorem output_image_update (trace : Trace) (step : TraceRow trace.bytecode)
     (config : MemoryConfig) (built : MemoryLayout.new config = some step.preState.jolt_device.memory_layout)
@@ -520,10 +723,7 @@ private theorem output_image_update (trace : Trace) (step : TraceRow trace.bytec
     omega
   have termZero : (some ((io.memory_layout.termination.toNat - ramLowestAddress io.memory_layout) / 8)
       == some index) = false := by simp [Ne.symm notTermination]
-  have finalPost : TraceWitness.finalTraceState { trace with rows := trace.rows.push step } =
-      step.postState := by
-    simp only [TraceWitness.finalTraceState, Array.size_push, Nat.zero_lt_succ,
-      ↓reduceDIte, Nat.add_sub_cancel, Array.getElem_push_eq]
+  have finalPost := final_state_push trace step
   unfold TraceWitness.finalRamWord
   dsimp only
   simp only [finalPost, ← readyDevice, postDevice]
@@ -565,13 +765,7 @@ theorem device_output_store_image
     ∃ post, DeviceStoreResult run.toTrace
       ⟨next, advice, pre, post⟩ address value := by
   let config := { inst.memory_config with program_size := some inst.program.program_size }
-  have readyDevice := ready_observation SailJoltState.jolt_device (fun _ _ _ => rfl)
-    run next pre ready
-  have fixed := run.final_device_same
-  rw [← readyDevice] at fixed
-  have built : MemoryLayout.new config = some pre.jolt_device.memory_layout := by
-    rw [fixed.1]
-    exact (initial_state_device inst inputs run.initialState run.initialized).1
+  obtain ⟨readyDevice, fixed, built, _, _, inputsFit, _⟩ := ready_device_data run next pre ready
   obtain ⟨above, belowWord, outputLower, beforePanic, flagsOrdered⟩ :=
     output_address_range config pre.jolt_device built address aligned inRegion
   have lowAligned := new_lowest_address_aligned config pre.jolt_device.memory_layout built
@@ -598,11 +792,120 @@ theorem device_output_store_image
       pre.jolt_device.memory_layout.input_start.toNat := by
     rw [fixed.1, fixed.2.2.1]
     exact adviceFits.2.2
-  have inputsFit : pre.jolt_device.inputs.size ≤ pre.jolt_device.memory_layout.max_input_size.toNat := by
-    rw [fixed.1, fixed.2.2.2]
-    exact run_inputs_fit run
   exact output_image_update run.toTrace ⟨next, advice, pre, post⟩ config built readyDevice fixed.1
     trustedFit untrustedFit inputsFit address value chosen addressIs beforePanic rfl
+
+private theorem flag_byte_store (device : JoltDevice) (address : Nat) (value : BitVec 8)
+    (flag : (device.is_panic address || device.is_termination address) = true) :
+    device.store? address value = some { device with panic :=
+      (device.panic || decide (address = device.memory_layout.panic.toNat)) } := by
+  unfold JoltDevice.store?
+  by_cases first : address = device.memory_layout.panic.toNat
+  · simp [first]
+  · simp [first, flag]
+
+private theorem flag_store_doubleword (config : MemoryConfig) (state : SailJoltState)
+    (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
+    (address value : BitVec 64) (flag : Bool)
+    (atFlag : address.toNat = if flag then state.jolt_device.memory_layout.panic.toNat
+      else state.jolt_device.memory_layout.termination.toNat)
+    (aligned : address &&& 7 = 0)
+    (checked : DoublewordAddressChecks state.jolt_device address true) :
+    Mmu.store_doubleword address value state = .ok (.Ok true)
+      { state with jolt_device := { state.jolt_device with panic := state.jolt_device.panic || flag } } := by
+  have io := new_io_geometry config state.jolt_device.memory_layout built
+  have order := new_io_ordered config state.jolt_device.memory_layout built
+  have low := layout_above_peripherals config state.jolt_device.memory_layout built
+  have bounds : 0x10002000 ≤ address.toNat ∧ address.toNat + 8 ≤ RAM_START_ADDRESS := by
+    cases flag <;> simp only [Bool.false_eq_true, ↓reduceIte] at atFlag <;> omega
+  simp only [DoublewordAddressChecks, show ¬ RAM_START_ADDRESS ≤ address.toNat by omega,
+    ↓reduceIte] at checked
+  have raw (k : Nat) (small : k < 8) (old : Bool) :
+      Mmu.store_raw? { state with jolt_device := { state.jolt_device with panic := old } }
+        (address.toNat + k) (value.extractLsb' (8 * k) 8) =
+        some { state with jolt_device := { state.jolt_device with panic :=
+          old || (flag && decide (k = 0)) } } := by
+    have within : (state.jolt_device.is_panic (address.toNat + k) ||
+        state.jolt_device.is_termination (address.toNat + k)) = true := by
+      simp only [JoltDevice.is_panic, JoltDevice.is_termination, Bool.or_eq_true,
+        Bool.and_eq_true, decide_eq_true_eq]
+      cases flag <;> simp only [Bool.false_eq_true, ↓reduceIte] at atFlag <;> omega
+    have hit : decide (address.toNat + k = state.jolt_device.memory_layout.panic.toNat) =
+        (flag && decide (k = 0)) := by
+      apply Bool.eq_iff_iff.mpr
+      simp only [Bool.and_eq_true, decide_eq_true_eq]
+      cases flag <;> simp only [Bool.false_eq_true, ↓reduceIte, false_and, true_and] at atFlag ⊢
+      · simp only [iff_false]
+        omega
+      · rw [atFlag]
+        simp
+    simpa only [hit] using device_store_raw
+      { state with jolt_device := { state.jolt_device with panic := old } } _ _ _
+      (by omega) (by omega) (checked k small)
+      (flag_byte_store { state.jolt_device with panic := old } _ _ within)
+  let states (count : Nat) := { state with jolt_device := { state.jolt_device with
+    panic := state.jolt_device.panic || (flag && decide (0 < count)) } }
+  have initial : states 0 = state := by simp [states]
+  have step (k : Nat) (small : k < 8) : Mmu.store_raw? (states k) (address.toNat + k)
+      (value.extractLsb' (8 * k) 8) = some (states (k + 1)) := by
+    have nextFlag : ((state.jolt_device.panic || (flag && decide (0 < k))) ||
+        (flag && decide (k = 0))) = (state.jolt_device.panic || (flag && decide (0 < k + 1))) := by
+      cases flag <;> by_cases zero : k = 0 <;> simp [zero, Nat.pos_iff_ne_zero]
+    dsimp only [states]
+    rw [raw k small, nextFlag]
+  simpa [states] using
+    store_doubleword_of_bytes state address value states aligned (by omega) initial step
+
+private theorem flag_region_address (config : MemoryConfig) (device : JoltDevice)
+    (built : MemoryLayout.new config = some device.memory_layout)
+    (address : BitVec 64) (aligned : address &&& 7 = 0) (flag : Bool)
+    (region : deviceMemoryRegion device address.toNat = if flag then .panic else .termination) :
+    address.toNat = if flag then device.memory_layout.panic.toNat else device.memory_layout.termination.toNat := by
+  have io := new_io_geometry config device.memory_layout built
+  have grid := io_grid config device.memory_layout built
+  have lowGrid := new_lowest_address_aligned config device.memory_layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at lowGrid
+  have alignedNat := Mmu.toNat_mod_eight_of_align aligned
+  simp only [ramLowestAddress] at grid
+  unfold deviceMemoryRegion at region
+  cases flag <;> simp only [Bool.false_eq_true, ↓reduceIte] at region ⊢ <;>
+    split_ifs at region <;> simp_all [JoltDevice.is_panic, JoltDevice.is_termination] <;> omega
+
+private theorem panic_image_update (trace : Trace) (step : TraceRow trace.bytecode)
+    (config : MemoryConfig) (built : MemoryLayout.new config = some step.preState.jolt_device.memory_layout)
+    (current : step.preState.jolt_device = (TraceWitness.finalTraceState trace).jolt_device)
+    (layout : step.preState.jolt_device.memory_layout = trace.initialState.jolt_device.memory_layout)
+    (post : step.postState.jolt_device = { step.preState.jolt_device with panic := true })
+    (address : BitVec 64) (atPanic : address.toNat = step.preState.jolt_device.memory_layout.panic.toNat)
+    (index : Nat)
+    (below : ramLowestAddress trace.initialState.jolt_device.memory_layout + 8 * index < RAM_START_ADDRESS)
+    (notTermination : index ≠ (trace.initialState.jolt_device.memory_layout.termination.toNat -
+      ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8) :
+    TraceWitness.finalRamWord { trace with rows := trace.rows.push step } index =
+      if ramLowestAddress trace.initialState.jolt_device.memory_layout + 8 * index = address.toNat
+      then 1 else TraceWitness.finalRamWord trace index := by
+  generalize ioIs : step.preState.jolt_device = io at *
+  have grid := io_grid config io.memory_layout built
+  have order := new_io_ordered config io.memory_layout built
+  have positive := new_lowest_address_pos config io.memory_layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at order positive
+  have panicMap := remap_at_or_above io.memory_layout io.memory_layout.panic positive (by omega)
+  have termMap := remap_at_or_above io.memory_layout io.memory_layout.termination positive (by omega)
+  rw [← layout] at below notTermination ⊢
+  have baseZero : ¬ RAM_START_ADDRESS ≤ ramLowestAddress io.memory_layout + 8 * index := by omega
+  have termOff : (some ((io.memory_layout.termination.toNat - ramLowestAddress io.memory_layout) / 8) == some index) = false := by
+    simp [Ne.symm notTermination]
+  have selected : ramLowestAddress io.memory_layout + 8 * index = address.toNat ↔
+      (io.memory_layout.panic.toNat - ramLowestAddress io.memory_layout) / 8 = index := by omega
+  unfold TraceWitness.finalRamWord
+  dsimp only
+  simp only [final_state_push, ← current, post]
+  rw [← layout]
+  simp only [show min io.memory_layout.trusted_advice_start.toNat io.memory_layout.untrusted_advice_start.toNat =
+    ramLowestAddress io.memory_layout from rfl, if_neg baseZero, termMap, panicMap,
+    termOff, Bool.and_false, Bool.not_true, Bool.false_eq_true, ↓reduceIte,
+    Option.some.injEq, selected]
+  split_ifs <;> rfl
 
 /-- Storing word 1 to panic sets the flag and writes normalized image word 1.
 For example, a second such store keeps that image word at 1.
@@ -620,7 +923,16 @@ theorem device_panic_store_image
     DeviceStoreResult run.toTrace
       ⟨next, advice, pre, { pre with jolt_device := { pre.jolt_device with panic := true } }⟩
       address 1 := by
-  sorry
+  let config := { inst.memory_config with program_size := some inst.program.program_size }
+  obtain ⟨current, fixed, built, _, _, _, _⟩ := ready_device_data run next pre ready
+  have atPanic : address.toNat = pre.jolt_device.memory_layout.panic.toNat :=
+    flag_region_address config pre.jolt_device built address aligned true inRegion
+  have stored := flag_store_doubleword config pre built address 1 true atPanic aligned checked
+  refine ⟨by simpa only [Bool.or_true] using stored, rfl, rfl, ?_⟩
+  exact panic_image_update run.toTrace
+    ⟨next, advice, pre, { pre with jolt_device := { pre.jolt_device with panic := true } }⟩
+    config built current fixed.1 rfl address atPanic
+
 
 /-- A termination SD leaves the state and every compared device image word fixed.
 For example, storing 9 changes only the excluded termination table entry.
@@ -634,7 +946,78 @@ theorem device_termination_store_image
     (inRegion : deviceMemoryRegion pre.jolt_device address.toNat = .termination)
     (advice : run.bytecode[next].instruction.RuntimeAdvice) :
     DeviceStoreResult run.toTrace ⟨next, advice, pre, pre⟩ address value := by
-  sorry
+  let config := { inst.memory_config with program_size := some inst.program.program_size }
+  obtain ⟨current, fixed, built, _, _, _, _⟩ := ready_device_data run next pre ready
+  have atTermination : address.toNat = pre.jolt_device.memory_layout.termination.toNat :=
+    flag_region_address config pre.jolt_device built address aligned false inRegion
+  have stored := flag_store_doubleword config pre built address value false atTermination aligned checked
+  refine ⟨by simpa only [Bool.or_false] using stored, rfl, rfl, ?_⟩
+  intro index belowIndex notTermination
+  have memory := ready_observation (fun state => state.sail.mem) (fun _ _ _ => rfl) run next pre ready
+  rw [final_image_of_memory_device run.toTrace ⟨next, advice, pre, pre⟩ memory current]
+  have grid := (io_grid config pre.jolt_device.memory_layout built).2.2
+  rw [fixed.1] at grid atTermination
+  rw [if_neg (by intro selected; apply notTermination; omega)]
+
+
+/-- Classify a checked store in a reachable device and locate its flag words.
+For example, neither an input address nor address zero can pass these checks.
+The termination-index implication relates the initial image grid to the ready device.
+See jolt/tracer/src/emulator/mmu.rs (`Mmu::assert_effective_address`) and
+jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at 5def437f. -/
+theorem device_store_cases
+    {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun inst inputs) (next : Fin run.bytecode.size)
+    (pre : SailJoltState) (ready : run.NextStep next pre) (address : BitVec 64)
+    (below : address.toNat < RAM_START_ADDRESS)
+    (checked : DoublewordAddressChecks pre.jolt_device address true)
+    (region : DeviceMemoryRegion) (inRegion : deviceMemoryRegion pre.jolt_device address.toNat = region) :
+    (region = .output ∨ region = .panic ∨ region = .termination) ∧
+    address.toNat ≠ 0 ∧
+    (region = .panic → TouchesPanic pre.jolt_device address) ∧
+    (∀ index : Nat,
+      address.toNat = ramLowestAddress run.initialState.jolt_device.memory_layout + 8 * index →
+      index = (run.initialState.jolt_device.memory_layout.termination.toNat -
+        ramLowestAddress run.initialState.jolt_device.memory_layout) / 8 →
+      TouchesTermination pre.jolt_device address) := by
+  obtain ⟨_, fixed, built, _, _, _, _⟩ := ready_device_data run next pre ready
+  have io := new_io_geometry _ _ built
+  have order := new_io_ordered _ _ built
+  have advice := new_advice_regions _ _ built
+  have inputEnd := congrArg BitVec.toNat (input_end_eq_output _ _ built)
+  have positive := new_lowest_address_pos _ _ built
+  have legal := checked
+  simp only [DoublewordAddressChecks, show ¬ RAM_START_ADDRESS ≤ address.toNat by omega,
+    ↓reduceIte] at legal
+  have first := legal 0 (by decide)
+  simp only [Nat.add_zero, Mmu.effective_address_ok, below, ↓reduceIte,
+    Bool.and_eq_true, Bool.or_eq_true, JoltDevice.is_output, JoltDevice.is_panic,
+    JoltDevice.is_termination, decide_eq_true_eq] at first
+  have allowed : region = .output ∨ region = .panic ∨ region = .termination := by
+    unfold deviceMemoryRegion at inRegion
+    split_ifs at inRegion <;> simp_all [JoltDevice.is_input, JoltDevice.is_trusted_advice,
+      JoltDevice.is_untrusted_advice, JoltDevice.is_panic, JoltDevice.is_termination,
+      JoltDevice.is_output] <;> omega
+  refine ⟨allowed, ?_, ?_, ?_⟩
+  · intro zero
+    have lower := new_io_ordered _ _ built
+    omega
+  · intro panic
+    refine ⟨0, by decide, ?_⟩
+    simp only [Nat.add_zero]
+    rw [panic] at inRegion
+    unfold deviceMemoryRegion at inRegion
+    split_ifs at inRegion
+    assumption
+  · intro index indexIs termination
+    have grid := io_grid _ _ built
+    have localIndex : address.toNat = ramLowestAddress pre.jolt_device.memory_layout + 8 * index := by
+      rw [fixed.1]; exact indexIs
+    have localTermination : index = (pre.jolt_device.memory_layout.termination.toNat -
+        ramLowestAddress pre.jolt_device.memory_layout) / 8 := by rw [fixed.1]; exact termination
+    refine ⟨0, by decide, ?_⟩
+    simp only [Nat.add_zero, JoltDevice.is_termination, Bool.and_eq_true, decide_eq_true_eq]
+    omega
 
 private theorem device_store_result
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
@@ -765,6 +1148,337 @@ theorem read_doubleword_of_image_bytes (readByte : Nat → Option (BitVec 8))
     reads 3 (by decide), reads 4 (by decide), reads 5 (by decide),
     reads 6 (by decide), reads 7 (by decide), TraceWitness.ramImageWord]
 
+private theorem overlay_interval (layout : MemoryLayout) (start : BitVec 64)
+    (finish address index : Nat) (bytes : Array (BitVec 8)) (previous : BitVec 64)
+    (positive : 0 < ramLowestAddress layout) (startLower : ramLowestAddress layout ≤ start.toNat)
+    (startGrid : (start.toNat - ramLowestAddress layout) % 8 = 0)
+    (addressIs : address = ramLowestAddress layout + 8 * index)
+    (fits : start.toNat + bytes.size ≤ finish)
+    (zero : start.toNat ≤ address ∧ address < finish → previous = 0) :
+    TraceWitness.overlayRamBytes layout start bytes index previous =
+      if start.toNat ≤ address ∧ address < finish then
+        TraceWitness.ramImageWord (fun k => bytes[k]?.getD 0) (address - start.toNat)
+      else previous := by
+  have mapped := remap_at_or_above layout start positive startLower
+  unfold TraceWitness.overlayRamBytes
+  rw [mapped]
+  dsimp only
+  by_cases inside : start.toNat ≤ address ∧ address < finish
+  · rw [if_pos inside]
+    have lower : (start.toNat - ramLowestAddress layout) / 8 ≤ index := by omega
+    have offset : (index - (start.toNat - ramLowestAddress layout) / 8) * 8 =
+        address - start.toNat := by omega
+    rw [offset]
+    by_cases hasBytes : address - start.toNat < bytes.size
+    · rw [if_pos ⟨lower, hasBytes⟩]
+    · rw [if_neg (by omega), zero inside]
+      symm
+      apply ramImageWord_zero
+      intro k small
+      rw [Array.getElem?_eq_none (by omega)]
+      rfl
+  · rw [if_neg inside, if_neg (by omega)]
+
+private theorem device_predicates_offset (config : MemoryConfig) (device : JoltDevice)
+    (built : MemoryLayout.new config = some device.memory_layout)
+    (address offset : Nat) (aligned : address % 8 = 0) (small : offset < 8) :
+    device.is_panic (address + offset) = device.is_panic address ∧
+    device.is_termination (address + offset) = device.is_termination address ∧
+    device.is_input (address + offset) = device.is_input address ∧
+    device.is_trusted_advice (address + offset) = device.is_trusted_advice address ∧
+    device.is_untrusted_advice (address + offset) = device.is_untrusted_advice address ∧
+    device.is_output (address + offset) = device.is_output address := by
+  have advice := new_advice_regions config device.memory_layout built
+  have input := new_outputs_after_inputs config device.memory_layout built
+  have inputEnd := congrArg BitVec.toNat (input_end_eq_output config device.memory_layout built)
+  have io := new_io_geometry config device.memory_layout built
+  have inputGrid := new_input_word_aligned config device.memory_layout built
+  have lowest := new_lowest_address_aligned config device.memory_layout built
+  have order := new_io_ordered config device.memory_layout built
+  have interval (lo hi : Nat) (loGrid : lo % 8 = 0) (hiGrid : hi % 8 = 0) :
+      (decide (lo ≤ address + offset) && decide (address + offset < hi)) =
+        (decide (lo ≤ address) && decide (address < hi)) := by
+    apply Bool.eq_iff_iff.mpr
+    simp only [Bool.and_eq_true, decide_eq_true_eq]
+    omega
+  unfold JoltDevice.is_panic JoltDevice.is_termination JoltDevice.is_input
+    JoltDevice.is_trusted_advice JoltDevice.is_untrusted_advice JoltDevice.is_output
+  exact ⟨interval _ _ (by omega) (by omega), interval _ _ (by omega) (by omega),
+    interval _ _ (by omega) (by omega), interval _ _ (by omega) (by omega),
+    interval _ _ (by omega) (by omega), interval _ _ (by omega) (by omega)⟩
+
+private theorem buffer_image_word (config : MemoryConfig) (device : JoltDevice)
+    (built : MemoryLayout.new config = some device.memory_layout)
+    (trustedFit : device.trusted_advice.size ≤ device.memory_layout.max_trusted_advice_size.toNat)
+    (untrustedFit : device.untrusted_advice.size ≤ device.memory_layout.max_untrusted_advice_size.toNat)
+    (inputFit : device.inputs.size ≤ device.memory_layout.max_input_size.toNat)
+    (outputFit : device.outputs.size ≤ device.memory_layout.max_output_size.toNat)
+    (address index : Nat) (addressIs : address = ramLowestAddress device.memory_layout + 8 * index) :
+    TraceWitness.overlayRamBytes device.memory_layout device.memory_layout.output_start device.outputs index
+      (TraceWitness.overlayRamBytes device.memory_layout device.memory_layout.input_start device.inputs index
+        (TraceWitness.overlayRamBytes device.memory_layout device.memory_layout.untrusted_advice_start device.untrusted_advice index
+          (TraceWitness.overlayRamBytes device.memory_layout device.memory_layout.trusted_advice_start device.trusted_advice index 0))) =
+      if device.memory_layout.output_start.toNat ≤ address ∧ address < device.memory_layout.panic.toNat then
+        TraceWitness.ramImageWord (fun k => device.outputs[k]?.getD 0) (address - device.memory_layout.output_start.toNat)
+      else if device.memory_layout.input_start.toNat ≤ address ∧ address < device.memory_layout.input_end.toNat then
+        TraceWitness.ramImageWord (fun k => device.inputs[k]?.getD 0) (address - device.memory_layout.input_start.toNat)
+      else if device.memory_layout.untrusted_advice_start.toNat ≤ address ∧ address < device.memory_layout.untrusted_advice_end.toNat then
+        TraceWitness.ramImageWord (fun k => device.untrusted_advice[k]?.getD 0) (address - device.memory_layout.untrusted_advice_start.toNat)
+      else if device.memory_layout.trusted_advice_start.toNat ≤ address ∧ address < device.memory_layout.trusted_advice_end.toNat then
+        TraceWitness.ramImageWord (fun k => device.trusted_advice[k]?.getD 0) (address - device.memory_layout.trusted_advice_start.toNat)
+      else 0 := by
+  have advice := new_advice_regions config device.memory_layout built
+  have input := new_outputs_after_inputs config device.memory_layout built
+  have inputEnd := congrArg BitVec.toNat (input_end_eq_output config device.memory_layout built)
+  have io := new_io_geometry config device.memory_layout built
+  have inputGrid := new_input_word_aligned config device.memory_layout built
+  have lowGrid := new_lowest_address_aligned config device.memory_layout built
+  have order := new_io_ordered config device.memory_layout built
+  have positive := new_lowest_address_pos config device.memory_layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at inputGrid lowGrid order positive
+  have lowTrusted : ramLowestAddress device.memory_layout ≤ device.memory_layout.trusted_advice_start.toNat := Nat.min_le_left _ _
+  have lowUntrusted : ramLowestAddress device.memory_layout ≤ device.memory_layout.untrusted_advice_start.toNat := Nat.min_le_right _ _
+  simp only [ramLowestAddress] at *
+  have lowestIs : ramLowestAddress device.memory_layout =
+      min device.memory_layout.trusted_advice_start.toNat device.memory_layout.untrusted_advice_start.toNat := rfl
+  let trustedValue := TraceWitness.overlayRamBytes device.memory_layout device.memory_layout.trusted_advice_start device.trusted_advice index 0
+  let untrustedValue := TraceWitness.overlayRamBytes device.memory_layout device.memory_layout.untrusted_advice_start device.untrusted_advice index trustedValue
+  let inputValue := TraceWitness.overlayRamBytes device.memory_layout device.memory_layout.input_start device.inputs index untrustedValue
+  have trusted := overlay_interval device.memory_layout device.memory_layout.trusted_advice_start
+    device.memory_layout.trusted_advice_end.toNat address index device.trusted_advice 0
+    positive lowTrusted (by omega) addressIs (by omega) (fun _ => rfl)
+  change trustedValue = _ at trusted
+  have untrusted := overlay_interval device.memory_layout device.memory_layout.untrusted_advice_start
+    device.memory_layout.untrusted_advice_end.toNat address index device.untrusted_advice trustedValue
+    positive lowUntrusted (by omega) addressIs (by omega) (by
+      intro within
+      rw [trusted, if_neg (by omega)])
+  change untrustedValue = _ at untrusted
+  have inputs := overlay_interval device.memory_layout device.memory_layout.input_start
+    device.memory_layout.input_end.toNat address index device.inputs untrustedValue
+    positive order.1 inputGrid addressIs (by omega) (by
+      intro within
+      rw [untrusted, if_neg (by omega), trusted, if_neg (by omega)])
+  change inputValue = _ at inputs
+  have outputs := overlay_interval device.memory_layout device.memory_layout.output_start
+    device.memory_layout.panic.toNat address index device.outputs inputValue
+    positive (by omega) (by omega) addressIs (by omega) (by
+      intro within
+      rw [inputs, if_neg (by omega), untrusted, if_neg (by omega), trusted, if_neg (by omega)])
+  rw [outputs, inputs, untrusted, trusted]
+
+/-- Bytes of a device load whose panic flag, if selected, is false.
+Flag regions and unmapped addresses supply zero; buffer regions use their padded
+array bytes, for example input `[7]` supplies 7 followed by zeros.
+See `jolt/common/src/jolt_device.rs` (`JoltDevice::load`) at 5def437f. -/
+private def loadImageBytes (device : JoltDevice) (address offset : Nat) : BitVec 8 :=
+  if device.is_panic address || device.is_termination address then 0
+  else if device.is_input address then device.inputs[address + offset - device.memory_layout.input_start.toNat]?.getD 0
+  else if device.is_trusted_advice address then device.trusted_advice[address + offset - device.memory_layout.trusted_advice_start.toNat]?.getD 0
+  else if device.is_untrusted_advice address then device.untrusted_advice[address + offset - device.memory_layout.untrusted_advice_start.toNat]?.getD 0
+  else if device.is_output address then device.outputs[address + offset - device.memory_layout.output_start.toNat]?.getD 0
+  else 0
+
+private theorem loadImageBytes_read (config : MemoryConfig) (device : JoltDevice)
+    (built : MemoryLayout.new config = some device.memory_layout) (address : BitVec 64)
+    (aligned : address &&& 7 = 0) (below : address.toNat < RAM_START_ADDRESS)
+    (checked : DoublewordAddressChecks device address false)
+    (notPanicked : device.is_panic address.toNat = true → device.panic = false)
+    (offset : Nat) (small : offset < 8) :
+    device.load? (address.toNat + offset) = some (loadImageBytes device address.toNat offset) := by
+  have alignedNat := Mmu.toNat_mod_eight_of_align aligned
+  have belowByte : address.toNat + offset < RAM_START_ADDRESS := by
+    have ramAligned : RAM_START_ADDRESS % 8 = 0 := by decide
+    omega
+  obtain ⟨panic, termination, input, trusted, untrusted, output⟩ :=
+    device_predicates_offset config device built address.toNat offset alignedNat small
+  have legal := checked
+  simp only [DoublewordAddressChecks, show ¬ RAM_START_ADDRESS ≤ address.toNat by omega,
+    ↓reduceIte] at legal
+  have byteLegal := legal offset small
+  simp only [Mmu.effective_address_ok, belowByte, ↓reduceIte, Bool.false_eq_true,
+    panic, termination, input, trusted, untrusted, output] at byteLegal
+  unfold JoltDevice.load? loadImageBytes
+  rw [panic, termination, input, trusted, untrusted, output]
+  split_ifs <;> simp_all
+
+private theorem loadImageBytes_word (device : JoltDevice) (address : Nat) :
+    TraceWitness.ramImageWord (loadImageBytes device address) 0 =
+      if device.is_panic address || device.is_termination address then 0
+      else if device.is_input address then
+        TraceWitness.ramImageWord (fun k => device.inputs[k]?.getD 0) (address - device.memory_layout.input_start.toNat)
+      else if device.is_trusted_advice address then
+        TraceWitness.ramImageWord (fun k => device.trusted_advice[k]?.getD 0) (address - device.memory_layout.trusted_advice_start.toNat)
+      else if device.is_untrusted_advice address then
+        TraceWitness.ramImageWord (fun k => device.untrusted_advice[k]?.getD 0) (address - device.memory_layout.untrusted_advice_start.toNat)
+      else if device.is_output address then
+        TraceWitness.ramImageWord (fun k => device.outputs[k]?.getD 0) (address - device.memory_layout.output_start.toNat)
+      else 0 := by
+  have pack (bytes : Array (BitVec 8)) (start : Nat) (lower : start ≤ address) :
+      TraceWitness.ramImageWord (fun k => bytes[address + k - start]?.getD 0) 0 =
+        TraceWitness.ramImageWord (fun k => bytes[k]?.getD 0) (address - start) := by
+    apply image_word_congr
+    intro k small
+    congr 2
+    omega
+  unfold loadImageBytes
+  split_ifs with flags input trusted untrusted output
+  · rfl
+  · apply pack
+    simp only [JoltDevice.is_input, Bool.and_eq_true, decide_eq_true_eq] at input
+    exact input.1
+  · apply pack
+    simp only [JoltDevice.is_trusted_advice, Bool.and_eq_true, decide_eq_true_eq] at trusted
+    exact trusted.1
+  · apply pack
+    simp only [JoltDevice.is_untrusted_advice, Bool.and_eq_true, decide_eq_true_eq] at untrusted
+    exact untrusted.1
+  · apply pack
+    simp only [JoltDevice.is_output, Bool.and_eq_true, decide_eq_true_eq] at output
+    exact output.1
+  · rfl
+
+private theorem loadImageBytes_image (trace : Trace) (device : JoltDevice) (config : MemoryConfig)
+    (current : device = (TraceWitness.finalTraceState trace).jolt_device)
+    (layout : device.memory_layout = trace.initialState.jolt_device.memory_layout)
+    (built : MemoryLayout.new config = some device.memory_layout)
+    (trustedFit : device.trusted_advice.size ≤ device.memory_layout.max_trusted_advice_size.toNat)
+    (untrustedFit : device.untrusted_advice.size ≤ device.memory_layout.max_untrusted_advice_size.toNat)
+    (inputFit : device.inputs.size ≤ device.memory_layout.max_input_size.toNat)
+    (outputFit : device.outputs.size ≤ device.memory_layout.max_output_size.toNat)
+    (address index : Nat) (addressIs : address = ramLowestAddress device.memory_layout + 8 * index)
+    (below : address < RAM_START_ADDRESS)
+    (notPanicked : device.is_panic address = true → device.panic = false)
+    (notTermination : index ≠ (device.memory_layout.termination.toNat - ramLowestAddress device.memory_layout) / 8) :
+    TraceWitness.ramImageWord (loadImageBytes device address) 0 = TraceWitness.finalRamWord trace index := by
+  have grid := io_grid config device.memory_layout built
+  have io := new_io_geometry config device.memory_layout built
+  have advice := new_advice_regions config device.memory_layout built
+  have input := new_outputs_after_inputs config device.memory_layout built
+  have inputEnd := congrArg BitVec.toNat (input_end_eq_output config device.memory_layout built)
+  have order := new_io_ordered config device.memory_layout built
+  have positive := new_lowest_address_pos config device.memory_layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at order positive
+  have panicMap := remap_at_or_above device.memory_layout device.memory_layout.panic positive (by omega)
+  have termMap := remap_at_or_above device.memory_layout device.memory_layout.termination positive (by omega)
+  have termFalse : device.is_termination address = false := by
+    apply Bool.eq_false_iff.mpr
+    intro within
+    simp only [JoltDevice.is_termination, Bool.and_eq_true, decide_eq_true_eq] at within
+    omega
+  have flagOff : (some ((device.memory_layout.termination.toNat - ramLowestAddress device.memory_layout) / 8) == some index) = false := by
+    simp [Ne.symm notTermination]
+  unfold TraceWitness.finalRamWord
+  dsimp only
+  rw [← current, ← layout]
+  change _ = if !device.panic && TraceWitness.remapRamAddress device.memory_layout device.memory_layout.termination == some index then 1 else _
+  rw [termMap, flagOff]
+  simp only [Bool.and_false, Bool.false_eq_true, ↓reduceIte]
+  have baseZero : ¬ RAM_START_ADDRESS ≤ min device.memory_layout.trusted_advice_start.toNat device.memory_layout.untrusted_advice_start.toNat + 8 * index := by
+    simpa only [ramLowestAddress] using (show ¬ RAM_START_ADDRESS ≤ ramLowestAddress device.memory_layout + 8 * index by omega)
+  rw [if_neg baseZero, panicMap, loadImageBytes_word]
+  by_cases panic : device.is_panic address = true
+  · have within := panic
+    simp only [JoltDevice.is_panic, Bool.and_eq_true, decide_eq_true_eq] at within
+    have indexIs : (device.memory_layout.panic.toNat - ramLowestAddress device.memory_layout) / 8 = index := by omega
+    simp [panic, notPanicked panic, indexIs]
+  · have panicIndex : (device.memory_layout.panic.toNat - ramLowestAddress device.memory_layout) / 8 ≠ index := by
+      intro equal
+      apply panic
+      simp only [JoltDevice.is_panic, Bool.and_eq_true, decide_eq_true_eq]
+      omega
+    simp only [show device.is_panic address = false from Bool.eq_false_iff.mpr panic,
+      termFalse, Bool.false_or, Bool.false_eq_true, ↓reduceIte, Option.some.injEq, panicIndex]
+    rw [buffer_image_word config device built trustedFit untrustedFit inputFit outputFit address index addressIs]
+    simp only [JoltDevice.is_input, JoltDevice.is_trusted_advice, JoltDevice.is_untrusted_advice,
+      JoltDevice.is_output, Bool.and_eq_true, decide_eq_true_eq] at panic ⊢
+    have noPanic : ¬ (device.memory_layout.panic.toNat ≤ address ∧ address < device.memory_layout.termination.toNat) := by
+      simpa [JoltDevice.is_panic] using panic
+    generalize TraceWitness.ramImageWord (fun k => device.inputs[k]?.getD 0) (address - device.memory_layout.input_start.toNat) = inputWord
+    generalize TraceWitness.ramImageWord (fun k => device.trusted_advice[k]?.getD 0) (address - device.memory_layout.trusted_advice_start.toNat) = trustedWord
+    generalize TraceWitness.ramImageWord (fun k => device.untrusted_advice[k]?.getD 0) (address - device.memory_layout.untrusted_advice_start.toNat) = untrustedWord
+    generalize TraceWitness.ramImageWord (fun k => device.outputs[k]?.getD 0) (address - device.memory_layout.output_start.toNat) = outputWord
+    split_ifs <;> first | rfl | omega
+
+private theorem load_raw_device (pre : SailJoltState) (address : Nat)
+    (below : address < RAM_START_ADDRESS) (outside : address < 8 ∨ 0x10002000 ≤ address)
+    (checked : Mmu.effective_address_ok pre.jolt_device address false = true) :
+    Mmu.load_raw? pre address = pre.jolt_device.load? address := by
+  have legal := checked
+  simp only [Mmu.effective_address_ok, below, ↓reduceIte, Bool.false_eq_true,
+    Bool.and_eq_true] at legal
+  have peripherals : ¬ ((0x1020 ≤ address && address ≤ 0x1fff) ||
+      (0x02000000 ≤ address && address ≤ 0x0200ffff) ||
+      (0x0c000000 ≤ address && address ≤ 0x0fffffff) ||
+      (0x10000000 ≤ address && address ≤ 0x100000ff) ||
+      (0x10001000 ≤ address && address ≤ 0x10001fff)) = true := by
+    simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq]
+    omega
+  simp only [Mmu.load_raw?, checked, Bool.not_true, Bool.false_eq_true, ↓reduceIte,
+    show ¬ RAM_START_ADDRESS ≤ address by omega, peripherals, legal.2]
+
+private theorem write_image_same {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun inst inputs) (next : Fin run.bytecode.size)
+    (pre : SailJoltState) (ready : run.NextStep next pre) (destination : Dst) (value : BitVec 64)
+    (advice : run.bytecode[next].instruction.RuntimeAdvice) (index : Nat) :
+    TraceWitness.finalRamWord { run.toTrace with rows := (run.rows.push
+      ⟨next, advice, pre, afterWriteDst destination value pre⟩) } index =
+      TraceWitness.finalRamWord run.toTrace index := by
+  have memory := ready_observation (fun state => state.sail.mem) (fun _ _ _ => rfl) run next pre ready
+  have device := ready_observation SailJoltState.jolt_device (fun _ _ _ => rfl) run next pre ready
+  apply final_image_of_memory_device
+  · change (afterWriteDst destination value pre).sail.mem = _
+    cases destination <;> exact memory
+  · change (afterWriteDst destination value pre).jolt_device = _
+    cases destination <;> exact device
+
+private theorem loadImageBytes_zero (device : JoltDevice) (address : Nat)
+    (region : deviceMemoryRegion device address = .panic ∨
+      deviceMemoryRegion device address = .termination ∨ deviceMemoryRegion device address = .unmapped) :
+    TraceWitness.ramImageWord (loadImageBytes device address) 0 = 0 := by
+  apply ramImageWord_zero
+  intro offset small
+  unfold deviceMemoryRegion at region
+  unfold loadImageBytes
+  split_ifs at region <;> simp_all
+
+private theorem ready_ld_panic_false {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun inst inputs) (next : Fin run.bytecode.size)
+    (pre : SailJoltState) (ready : run.NextStep next pre) (restricted : inst.PanicStoresOne)
+    (fault : LoadFaultClass) (destination : Dst) (base : Src) (imm : BitVec 64)
+    (instruction : run.bytecode[next].instruction = .LD fault destination base imm)
+    (touch : pre.jolt_device.is_panic (sourceValue base pre + imm).toNat = true) :
+    pre.jolt_device.panic = false := by
+  have noStore : ¬ ∃ i : Fin run.rows.size, run.StoresPanicAt i := by
+    intro stored
+    have rule := restricted inputs run next pre ready
+    rw [instruction] at rule
+    exact rule stored ⟨0, by decide, by simpa only [Nat.add_zero] using touch⟩
+  rw [ready_observation SailJoltState.jolt_device (fun _ _ _ => rfl) run next pre ready]
+  exact run_panic_false run noStore
+
+private theorem mapped_load_raw (config : MemoryConfig) (pre : SailJoltState) (address : BitVec 64)
+    (built : MemoryLayout.new config = some pre.jolt_device.memory_layout)
+    (mapped : address.toNat = 0 ∨ ∃ index : Nat,
+      address.toNat = ramLowestAddress pre.jolt_device.memory_layout + 8 * index)
+    (aligned : address &&& 7 = 0) (below : address.toNat < RAM_START_ADDRESS)
+    (checked : DoublewordAddressChecks pre.jolt_device address false)
+    (offset : Nat) (small : offset < 8) :
+    Mmu.load_raw? pre (address.toNat + offset) = pre.jolt_device.load? (address.toNat + offset) := by
+  have low := layout_above_peripherals config pre.jolt_device.memory_layout built
+  rw [MemoryLayout.get_lowest_address_toNat] at low
+  simp only [ramLowestAddress] at mapped
+  have alignedNat := Mmu.toNat_mod_eight_of_align aligned
+  have ramAligned : RAM_START_ADDRESS % 8 = 0 := by decide
+  have outside : address.toNat + offset < 8 ∨ 0x10002000 ≤ address.toNat + offset := by
+    rcases mapped with zero | ⟨index, indexIs⟩
+    · exact Or.inl (by omega)
+    · exact Or.inr (by omega)
+  apply load_raw_device pre _ (by omega) outside
+  simp only [DoublewordAddressChecks, show ¬ RAM_START_ADDRESS ≤ address.toNat by omega,
+    ↓reduceIte] at checked
+  exact checked offset small
+
 /-- A permitted device LD reads eight image bytes through both dispatch paths.
 `mapped` is the address-grid fact supplied by RAM selection, excluding low peripherals.
 Buffer regions use one shared byte sequence; panic and termination use their run history,
@@ -811,7 +1525,53 @@ theorem device_load_image_bytes
         { run.toTrace with rows := (run.rows.push
             ⟨next, advice, pre, afterWriteDst destination (TraceWitness.ramImageWord bytes 0) pre⟩) }
         index = TraceWitness.finalRamWord run.toTrace index) := by
-  sorry
+  let address := sourceValue base pre + imm
+  let config := { inst.memory_config with program_size := some inst.program.program_size }
+  obtain ⟨current, fixed, built, trustedFit, untrustedFit, inputFit, outputFit⟩ :=
+    ready_device_data run next pre ready
+  have notPanicked := ready_ld_panic_false run next pre ready panicStoresOne
+    fault destination base imm instructionIs
+  have reads := loadImageBytes_read config pre.jolt_device built address aligned below checked notPanicked
+  have mappedCurrent : address.toNat = 0 ∨ ∃ index : Nat,
+      address.toNat = ramLowestAddress pre.jolt_device.memory_layout + 8 * index := by
+    rw [fixed.1]
+    exact mapped
+  refine ⟨loadImageBytes pre.jolt_device address.toNat, reads, ?_, ?_, ?_, ?_,
+    write_image_same run next pre ready destination _ advice⟩
+  · intro offset small
+    rw [mapped_load_raw config pre address built mappedCurrent aligned below checked offset small]
+    exact reads offset small
+  · intro special
+    apply loadImageBytes_zero
+    simpa only [address, inRegion] using special
+  · intro zero
+    have low := layout_above_peripherals config pre.jolt_device.memory_layout built
+    have free := pre.jolt_device.low_address_free config built (by omega) 0 (by decide)
+    obtain ⟨input, trusted, untrusted, output, panic, termination, _⟩ := free
+    rw [loadImageBytes_word]
+    simp only [show address.toNat = 0 from zero, input, trusted, untrusted,
+      output, panic, termination, Bool.false_or, Bool.false_eq_true, ↓reduceIte]
+  · intro index indexIs
+    have grid := io_grid config pre.jolt_device.memory_layout built
+    have io := new_io_geometry config pre.jolt_device.memory_layout built
+    have localIndex : address.toNat = ramLowestAddress pre.jolt_device.memory_layout + 8 * index := by
+      rw [fixed.1]; exact indexIs
+    split_ifs with termination
+    · have localTermination : index = (pre.jolt_device.memory_layout.termination.toNat -
+          ramLowestAddress pre.jolt_device.memory_layout) / 8 := by rw [fixed.1]; exact termination
+      have addressIs : address.toNat = pre.jolt_device.memory_layout.termination.toNat := by omega
+      have selected : pre.jolt_device.is_termination address.toNat = true := by
+        simp only [JoltDevice.is_termination, Bool.and_eq_true, decide_eq_true_eq]
+        omega
+      refine ⟨?_, ?_⟩
+      · simp only [loadImageBytes_word, selected, Bool.or_true, ↓reduceIte]
+      · intro earlier
+        exact termination_next_ld_disjoint terminationThenStall run next pre ready earlier
+          fault destination base imm instructionIs ⟨0, by decide, by simpa only [Nat.add_zero] using selected⟩
+    · apply loadImageBytes_image run.toTrace pre.jolt_device config current fixed.1 built
+        trustedFit untrustedFit inputFit outputFit address.toNat index localIndex below notPanicked
+      simpa only [fixed.1] using termination
+
 
 private theorem device_load_read
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}

@@ -81,6 +81,32 @@ theorem writeDst_rule_of_device_relation
   InstructionFrame.writeDst_rule _ (fun _ _ => refl _) (fun _ _ _ => refl _) dst value
 
 /-- Shared instruction frame for any reflexive, transitive device relation
+whose byte-store obligation is required only for SD.
+For example, equality of device inputs is preserved even when an instruction
+updates RAM, writes an output byte, or consumes the advice tape.
+See `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`) at 5def437f. -/
+theorem execInstr_rule_of_device_relation_for_store
+    (relation : JoltDevice → JoltDevice → Prop)
+    (refl : ∀ io, relation io io)
+    (trans : ∀ a b c, relation a b → relation b c → relation a c)
+    (instr : Instr)
+    (store : ∀ base source imm, instr = .SD base source imm →
+      ∀ io io' address value,
+        JoltDevice.store? io address value = some io' → relation io io') :
+    StatePreservation.Preserves
+      (fun s t => relation s.jolt_device t.jolt_device) (execInstr instr) :=
+  InstructionFrame.execInstr_rule_of_store
+    (relation := fun s t => relation s.jolt_device t.jolt_device)
+    { refl := fun _ => refl _
+      trans := fun _ _ _ first second => trans _ _ _ first second
+      sail := fun _ _ => refl _
+      vreg := fun _ _ _ => refl _
+      append := fun _ _ => refl _ }
+    instr (fun base source imm isStore _ _ _ _ stored =>
+      store base source imm isStore _ _ _ _ stored)
+    (fun _ _ _ _ _ _ _ => refl _)
+
+/-- Shared instruction frame for any reflexive, transitive device relation
 that a successful device byte store preserves.
 For example, equality of device inputs is preserved even when an instruction
 updates RAM, writes an output byte, or consumes the advice tape. -/
@@ -93,15 +119,8 @@ theorem execInstr_rule_of_device_relation
     (instr : Instr) :
     StatePreservation.Preserves
       (fun s t => relation s.jolt_device t.jolt_device) (execInstr instr) :=
-  InstructionFrame.execInstr_rule
-    (relation := fun s t => relation s.jolt_device t.jolt_device)
-    { refl := fun _ => refl _
-      trans := fun _ _ _ first second => trans _ _ _ first second
-      sail := fun _ _ => refl _
-      vreg := fun _ _ _ => refl _
-      store := fun _ _ _ _ stored => store _ _ _ _ stored
-      append := fun _ _ => refl _ }
-    instr (fun _ _ _ _ _ _ _ => refl _)
+  execInstr_rule_of_device_relation_for_store relation refl trans instr
+    (fun _ _ _ _ => store)
 
 /-- A raw byte store preserves the device setup fields: layout, advice buffers,
 and inputs.

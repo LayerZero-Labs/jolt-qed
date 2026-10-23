@@ -589,3 +589,169 @@ There are no new uses of `bv_decide`, `native_decide`, or `decide +kernel`, no e
 This continuation retained edits only in `TapeDeviceFrame.lean`, `DeviceMemory.lean`, `RamStore.lean`, and this report.
 It did not edit `DivisionAppend.lean`, `DivisionPrograms.lean`, `RegistersReadProofHelpers.lean`, or the proof-status documents.
 No commit was made.
+
+### Approved SD frame extension and completion of the region lemmas
+
+This continuation on 2026-10-23 starts from the output proof and run-level frame refactor committed in `aab5ae6`.
+It implements the approved instruction-specific store obligation, proves panic history, and completes the four remaining region lemmas in the requested order: LD, store classification, panic store, then termination store.
+All five region lemmas and both step theorems now have axiom lists without `sorryAx`.
+There is no remaining `sorry` in `DeviceMemory.lean`.
+No staged statement was found false.
+All line numbers below describe this continuation's final working tree.
+
+#### Shared frame extension
+
+The existing instruction case proof was moved into a variant taking the non-store primitive rules and a store obligation conditional on the instruction being SD.
+The existing instruction, device-relation, and relaxed-semantics frame declarations are wrappers around the new variants.
+The existing byte-store fold proof was also generalized to accept an obligation for each offset actually in the fold; its old specialization is a wrapper.
+No second instruction case proof or second relational store-fold proof was added.
+
+The three shared files were checked using temporary copies before their source edits were applied together.
+Subsequent proof work edited only `DeviceMemory.lean`.
+
+| Declaration | File and line | Result |
+|---|---|---|
+| `InstructionFrame.NonStoreRules` | `JoltBytecode/InstructionEquivalence/ProofSupport/InstructionFrame.lean:42` | New record for reflexivity, transitivity, Sail updates, virtual-register writes, and tape appends |
+| `InstructionFrame.Rules.nonStore` | Same file, line 53 | Private conversion dropping the unconditional byte-store obligation |
+| `InstructionFrame.NonStoreRules.withStore` | Same file, line 57 | Private conversion adding the byte-store obligation when the SD branch needs it |
+| `InstructionFrame.storeFold_rule_of_step` | Same file, line 131 | New shared relation proof with a premise for each listed byte offset and reachable intermediate state |
+| `InstructionFrame.storeFold_rule` | Same file, line 151 | Existing private statement unchanged; derived from the new fold rule |
+| `InstructionFrame.execInstr_rule_of_store` | Same file, line 233 | New instruction frame with a byte-store premise only under equality with SD |
+| `InstructionFrame.execInstr_rule` | Same file, line 271 | Existing public statement unchanged; derived from the new variant |
+| `JoltIOSetupFrame.execInstr_rule_of_device_relation_for_store` | `JoltBytecode/InstructionEquivalence/ProofSupport/DeviceFrame.lean:88` | New device-relation specialization of the conditional-store instruction frame |
+| `JoltIOSetupFrame.execInstr_rule_of_device_relation` | Same file, line 113 | Existing public statement unchanged; derived from the new variant |
+| `execWithTapeAnswer_rule_of_device_relation_for_store` | `JoltConstraints/Soundness/Layer5/TapeSemantics.lean:40` | New relaxed-semantics variant, retaining the existing advice-load argument |
+| `execWithTapeAnswer_rule_of_device_relation` | Same file, line 71 | Existing public statement unchanged; derived from the new variant |
+| `execWithTapeAnswer_device_of_not_sd` | Same file, line 87 | A successful non-SD instruction preserves the whole device |
+
+There are six private statement changes in `InstructionFrame.lean`: `lift_rule` at line 88, `readSrc_rule` at line 93, `loadDoubleword_rule` at line 163, `load_rule` at line 183, `readHostBytes_rule` at line 190, and `execHostIO_rule` at line 209 now take `NonStoreRules` instead of `Rules`.
+Their proofs use no byte-store obligation.
+The existing public `Rules` record is unchanged.
+Every existing public theorem signature in all four edited Lean files was compared textually against `HEAD` and is unchanged.
+No existing public theorem gained a hypothesis.
+
+#### Panic history
+
+The local row fact `row_panic_of_no_store` proves that a row not satisfying `StoresPanicAt` preserves its panic flag.
+For SD, successful execution supplies its actual operands and MMU store, and the offset-specific fold rule shows that avoiding all panic bytes preserves the flag.
+For other instructions, the new non-SD frame gives equality of the complete devices.
+The small runtime-advice dispatch is inspected only to establish that patching advice cannot turn a non-SD instruction into SD.
+
+The strict panic-to-termination ordering comes from the generated initial layout and its preservation through the run.
+It ensures that a byte write at the exact panic address is a `TouchesPanic` access.
+Consequently, a false-to-true flag transition in a recorded row implies that row satisfies `StoresPanicAt`.
+
+`run_panic_false` carries the initialized false flag and the initial layout through the run's actual start, linkage, and execution facts.
+It proves that absence of every recorded `StoresPanicAt` leaves the final flag false.
+`ready_ld_panic_false` applies `PanicStoresOne` to the actual ready LD touching panic, rules out every earlier panic store, and transfers that final-state fact to the ready pre-state.
+No property of an isolated trace row is assumed.
+
+#### Completed region declarations
+
+All declarations in this table are in `JoltConstraints/Soundness/Layer5/DeviceMemory.lean`.
+
+| Declaration | Line | Result |
+|---|---:|---|
+| `device_output_store_image` | 757 | Previously proved; now uses the shared ready-device facts, raw-byte dispatch, and exact store-fold helper |
+| `device_load_image_bytes` | 1492 | Proved first in this continuation, including panic/termination history, device and MMU bytes, zero padding, image correspondence, and the register-write image frame |
+| `device_store_cases` | 968 | Proved next; excludes read-only/unmapped store regions, excludes zero, and locates the panic and termination touches |
+| `device_panic_store_image` | 915 | Proved next; the store sets panic and changes exactly the compared panic image word to 1 |
+| `device_termination_store_image` | 940 | Proved last; all eight writes leave the state unchanged, and the selected termination index is excluded from image comparison |
+| `ld_device_step` | 1685 | Existing statement and caller proof unchanged; now has no `sorryAx` dependency |
+| `sd_device_step` | 1795 | Existing statement and caller proof unchanged; now has no `sorryAx` dependency |
+
+`device_store_cases` was moved below the geometry helpers so its proof can use them.
+Its statement is unchanged.
+All other staged region statements are unchanged as well.
+The original `below` binders remain on the three store-image declarations, although generated flag/output geometry supplies their proofs' stronger bounds.
+The existing unused `atCut` binders remain on the two step statements.
+
+#### New private helpers in DeviceMemory.lean
+
+Every helper in this table is used by a completed region proof or another helper in its proof chain.
+The newly added proof bodies are at most sixty lines.
+
+| Declaration | Line | Purpose |
+|---|---:|---|
+| `store_raw_panic` | 139 | A successful raw byte store away from the exact panic byte preserves the flag |
+| `store_doubleword_panic` | 146 | Uses the shared offset-specific fold rule to preserve panic for an SD avoiding the panic region |
+| `sd_store_of_run` | 181 | Extracts the actual MMU store and operand values from successful relaxed SD execution |
+| `row_panic_of_no_store` | 207 | Connects a changed flag to the recorded row's SD/panic classification |
+| `initial_panic_false` | 230 | Recovers the false flag from successful initialization |
+| `run_panic_false` | 242 | Proves false panic at the final state when no recorded row stores to panic |
+| `input_end_eq_output` | 405 | Recovers the generated layout's shared input-end/output-start address |
+| `ready_device_data` | 412 | Shares the ready/final device equality, setup frame, generated layout, and all four buffer bounds |
+| `device_store_raw` | 569 | Shares the checked MMU byte-dispatch calculation above peripherals and below RAM |
+| `store_doubleword_of_bytes` | 579 | Composes a specified sequence of eight successful byte-store states |
+| `final_state_push` | 678 | Shares the existing output proof's calculation of the final state after appending a row |
+| `final_image_of_memory_device` | 683 | Gives image equality when the appended post-state preserves memory and device |
+| `flag_byte_store` | 798 | Computes a flag-region byte store for either panic or termination |
+| `flag_store_doubleword` | 807 | One Boolean-parameterized proof for both eight-byte flag stores |
+| `flag_region_address` | 859 | Uses alignment and generated geometry to locate the start of either flag word |
+| `panic_image_update` | 874 | Proves the normalized panic-word update while excluding termination |
+| `overlay_interval` | 1151 | Connects a bounded buffer overlay with its zero-padded bytes on an interval |
+| `device_predicates_offset` | 1182 | Shows all eight bytes of an aligned word have the same region predicates |
+| `buffer_image_word` | 1210 | Applies one overlay argument to all four bounded buffers |
+| `loadImageBytes` | 1274 | Defines the buffer bytes and zero flag/unmapped bytes used for the LD witness |
+| `loadImageBytes_read` | 1282 | Proves those bytes are returned by the device under the panic-history and address-check facts |
+| `loadImageBytes_word` | 1305 | Shares the byte-offset/word-packing argument across the buffer cases |
+| `loadImageBytes_image` | 1341 | Identifies the packed load with the nontermination final image word |
+| `load_raw_device` | 1403 | Connects checked, nonperipheral raw MMU reads with device reads |
+| `write_image_same` | 1420 | Proves the ready LD's destination write preserves all final image words |
+| `loadImageBytes_zero` | 1435 | Proves zero for panic, termination, and unmapped load classifications |
+| `ready_ld_panic_false` | 1445 | Applies the restriction and run history to a ready panic LD |
+| `mapped_load_raw` | 1460 | Uses zero-or-layout-grid selection to exclude MMU peripheral ranges |
+
+The pre-existing private `output_store_raw` at line 598 and `output_store_doubleword` at line 618 retain their statements and now use the shared byte and exact-fold helpers.
+The pre-existing `output_image_update` at line 691 retains its statement and uses the shared appended-state calculation.
+This avoids separate copies of those arguments for the flag stores.
+No additional Layer 5 file was edited, and no private lemma was made public in place during this continuation.
+
+The new helper premises describe the local execution, generated layout, buffer bounds, and byte or word ranges that their callers prove.
+The non-SD premise is proved by the row's instruction classification.
+No restriction, core definition, language predicate, or approved public statement changed.
+The new definitions are `NonStoreRules`, its two private proof-record conversions, and the private `loadImageBytes` function.
+No new unproved declaration was staged.
+
+#### Validation and timing
+
+The owned-module build passed:
+
+```text
+lake build JoltConstraints.Soundness.Layer5.DeviceMemory
+Build completed successfully (8651 jobs).
+```
+
+The first full build failed at `Layer6/PrefixAgreement.lean:1` because `PlainRow.olean` was missing during the concurrent rebuild.
+No source change was made in response.
+A single retry passed:
+
+```text
+lake build JoltConstraints
+Build completed successfully (8815 jobs).
+```
+
+Fresh axiom checks for all five region declarations, both step declarations, `run_panic_false`, and the new instruction/device/relaxed frame declarations returned:
+
+```text
+[propext, sys_enable_experimental_extensions, Classical.choice, Quot.sound]
+```
+
+The shared `InstructionFrame.storeFold_rule_of_step` returned `[propext, Classical.choice, Quot.sound]`.
+None of these declarations depends on `sorryAx`.
+The private panic-history declaration was checked using `open private run_panic_false from JoltConstraints.Soundness.Layer5.DeviceMemory`.
+
+The shared modules compiled in 3.7 seconds (`InstructionFrame`), 2.2 seconds (`DeviceFrame`), and 2.9 seconds (`TapeSemantics`).
+`DeviceMemory` compiled in 14 seconds in the owned-module build and 16 seconds during the final full-build retry, so this module exceeds the ten-second reporting threshold.
+A separate `lean --profile` run succeeded; it reported a 13-second import phase, a largest reported individual tactic event of 1.9 seconds, and a largest reported individual type-checking event of 1.05 seconds.
+Those profiler events are not per-declaration aggregate wall times, so no stronger per-proof timing claim is made.
+No individual proof was identified as exceeding ten seconds.
+
+There are no new uses of `bv_decide`, `native_decide`, or `decide +kernel`, no explicit axioms, and no proof-limit changes.
+There are no retained diagnostic commands or embedded proof gaps in the edited files.
+`git diff --check` passed for all four edited Lean files.
+This continuation edited only `InstructionFrame.lean`, `DeviceFrame.lean`, `Layer5/TapeSemantics.lean`, `Layer5/DeviceMemory.lean`, and this report.
+It did not edit the other agents' division files, `RegistersReadProofHelpers.lean`, or their report changes.
+The proof-status documents were left untouched because they are outside the authorized edit scope; their entries for these five obligations now need removal in an authorized status update.
+No commit was made by this task.
+Work stops after this report.
