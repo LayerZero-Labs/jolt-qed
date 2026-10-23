@@ -1,4 +1,6 @@
 import JoltConstraints.Constraints.LookupOperandData
+import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
+import JoltConstraints.Soundness.Layer4.ByteSwap
 import JoltConstraints.Soundness.Layer4.WordEntry
 import JoltConstraints.Soundness.Layer4.BitwiseEntry
 import JoltConstraints.Soundness.Layer4.ComparisonEntry
@@ -229,7 +231,11 @@ theorem windowMaskB_entry (n : Nat) :
       ((BitVec.ofNat 64 (0xFF <<< (8 * (BitVec.ofNat 64 n &&& 7).toNat))).toNat : F) := by
   have hm : ((1#128 <<< 8) - 1).setWidth 64 = BitVec.ofNat 64 0xFF := by decide
   have ho : (BitVec.ofNat 128 n &&& 7).toNat = (BitVec.ofNat 64 n &&& 7).toNat :=
-    toNat_eq_of_setWidth _ _ (by rw [ofNat64_eq_setWidth]; bv_decide)
+    toNat_eq_of_setWidth _ _ (by
+      rw [ofNat64_eq_setWidth]
+      simpa only [BitVec.ushiftRight_zero] using
+        BitVec.ushiftRight_and_setWidth (w := 128) (v := 64) _ 7 0 3
+          (by decide) (by decide) (by decide))
   simp only [windowMaskBTableEntry, BitVec.ofFin_toFin, hm, shiftLeft_ofNat_eq, ho]
 
 theorem windowMaskH_entry (n : Nat) :
@@ -237,7 +243,11 @@ theorem windowMaskH_entry (n : Nat) :
       ((BitVec.ofNat 64 (0xFFFF <<< (8 * (BitVec.ofNat 64 n &&& 6).toNat))).toNat : F) := by
   have hm : ((1#128 <<< 16) - 1).setWidth 64 = BitVec.ofNat 64 0xFFFF := by decide
   have ho : (BitVec.ofNat 128 n &&& 6).toNat = (BitVec.ofNat 64 n &&& 6).toNat :=
-    toNat_eq_of_setWidth _ _ (by rw [ofNat64_eq_setWidth]; bv_decide)
+    toNat_eq_of_setWidth _ _ (by
+      rw [ofNat64_eq_setWidth]
+      simpa only [BitVec.ushiftRight_zero] using
+        BitVec.ushiftRight_and_setWidth (w := 128) (v := 64) _ 6 0 3
+          (by decide) (by decide) (by decide))
   simp only [windowMaskHTableEntry, BitVec.ofFin_toFin, hm, shiftLeft_ofNat_eq, ho]
 
 theorem windowMaskW_entry (n : Nat) :
@@ -245,20 +255,18 @@ theorem windowMaskW_entry (n : Nat) :
       ((BitVec.ofNat 64 (0xFFFF_FFFF <<< (32 * ((BitVec.ofNat 64 n >>> 2) &&& 1).toNat))).toNat : F) := by
   have hm : ((1#128 <<< 32) - 1).setWidth 64 = BitVec.ofNat 64 0xFFFF_FFFF := by decide
   have ho : ((BitVec.ofNat 128 n >>> 2) &&& 1).toNat = ((BitVec.ofNat 64 n >>> 2) &&& 1).toNat :=
-    toNat_eq_of_setWidth _ _ (by rw [ofNat64_eq_setWidth]; bv_decide)
+    toNat_eq_of_setWidth _ _ (by
+      rw [ofNat64_eq_setWidth]
+      exact BitVec.ushiftRight_and_setWidth _ 1 2 1 (by decide) (by decide) (by decide))
   simp only [windowMaskWTableEntry, BitVec.ofFin_toFin, hm, shiftLeft_ofNat_eq, ho]
 
 theorem halfword_aligned (n : Nat) (h : BitVec.ofNat 64 n &&& 1 = 0) :
     BitVec.ofNat 128 n % 2 = 0 := by
-  rw [ofNat64_eq_setWidth] at h
-  generalize BitVec.ofNat 128 n = v at h ⊢
-  bv_decide
+  exact BitVec.ofNat_umod_pow2_eq_zero_of_low_mask n 1 (by decide) (by decide) h
 
 theorem word_aligned (n : Nat) (h : BitVec.ofNat 64 n &&& 3 = 0) :
     BitVec.ofNat 128 n % 4 = 0 := by
-  rw [ofNat64_eq_setWidth] at h
-  generalize BitVec.ofNat 128 n = v at h ⊢
-  bv_decide
+  exact BitVec.ofNat_umod_pow2_eq_zero_of_low_mask n 2 (by decide) (by decide) h
 
 end entries2
 
@@ -302,7 +310,9 @@ theorem lookupEntryCorrect_RangeCheckAligned (row : HonestTraceRow bytecode)
   simp only [rangeCheckAligned_entry, jolt_jalr_target64, BitVec.setWidth_ofNat_of_le (by norm_num : 64 ≤ 128),
     Sail.BitVec.update, Sail.BitVec.updateSubrange']
   congr 2
-  bv_decide
+  simp only [BitVec.zeroExtend_eq_setWidth, BitVec.shiftLeft_zero,
+    BitVec.setWidth_zero, BitVec.or_zero]
+  exact BitVec.and_comm _ _
 
 theorem lookupEntryCorrect_AlignAddr (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .AlignAddr) :
@@ -464,24 +474,11 @@ theorem lookupEntryCorrect_VirtualXORROTW6 (row : HonestTraceRow bytecode)
   exact xorRotW_entry 6 (by decide) _ _
 
 theorem rev8_32 (x : BitVec 32) : rev8 x = swapBytes32 x := by
-  unfold rev8
-  simp only [Id.run]
-  change IntRange.forIn' _ _ _ >>= _ = _
-  unfold IntRange.forIn'
-  simp only [Sail.BitVec.length, BitVec.length, Nat.cast_ofNat]
-  iterate 5
-    rw [IntRange.forIn'.loop]
-    simp (config := { decide := true }) only [Membership.mem, dite_true, dite_false, pure_bind,
-      bind_pure, Int.reduceAdd, Int.reduceSub, Int.reduceToNat]
-  change BitVec.updateSubrange _ _ _ _ = _
-  simp only [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Sail.BitVec.extractLsb,
-    zeros, swapBytes32, Nat.reduceSub, Nat.reduceAdd]
-  bv_decide
+  exact Soundness.rev8_32_kernel x
 
 theorem rev8w_eq (v : BitVec 64) :
     rev8w v = swapBytes32 (v.extractLsb 63 32) +++ swapBytes32 (v.extractLsb 31 0) := by
-  simp only [rev8w, swapBytes32]
-  bv_decide
+  exact Soundness.rev8w_eq_kernel v
 
 theorem lookupEntryCorrect_VirtualRev8W (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualRev8W) :

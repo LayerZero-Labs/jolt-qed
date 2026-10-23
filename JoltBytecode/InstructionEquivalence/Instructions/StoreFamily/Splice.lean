@@ -1,4 +1,5 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
+import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltBytecode.JoltISA.Values
 
 /-!
@@ -231,26 +232,33 @@ private theorem ofNat_shift_mask (mask n : Nat) :
 private theorem lowByte_zeroExtend (value : BitVec 64) :
     (Sail.BitVec.extractLsb value 7 0).zeroExtend 64 =
       value &&& (0xff : BitVec 64) := by
-  unfold Sail.BitVec.extractLsb
-  bv_decide
+  exact BitVec.setWidth_setWidth_eq_and_mask value 8
 
 private theorem lowHalfword_zeroExtend (value : BitVec 64) :
     (Sail.BitVec.extractLsb value 15 0).zeroExtend 64 =
       value &&& (0xffff : BitVec 64) := by
-  unfold Sail.BitVec.extractLsb
-  bv_decide
+  exact BitVec.setWidth_setWidth_eq_and_mask value 16
 
 private theorem lowWord_zeroExtend (value : BitVec 64) :
     (Sail.BitVec.extractLsb value 31 0).zeroExtend 64 =
       value &&& (0xffff_ffff : BitVec 64) := by
-  unfold Sail.BitVec.extractLsb
-  bv_decide
+  exact BitVec.setWidth_setWidth_eq_and_mask value 32
 
 private theorem masked_add_eq_splice (original value mask : BitVec 64)
     (hcontained : value &&& mask = value) :
     (original &&& ~~~mask) + value =
       original ^^^ ((original ^^^ value) &&& mask) := by
-  bv_decide
+  rw [BitVec.add_eq_or_of_and_eq_zero]
+  · apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    have hbit := congrArg (fun v : BitVec 64 => v.getLsbD i) hcontained
+    simp only [BitVec.getLsbD_and] at hbit
+    simp only [BitVec.getLsbD_or, BitVec.getLsbD_and, BitVec.getLsbD_xor,
+      BitVec.getLsbD_not, hi, decide_true, Bool.true_and]
+    cases hm : mask.getLsbD i <;> simp_all
+  · rw [← hcontained, BitVec.and_assoc, BitVec.and_comm (~~~mask),
+      BitVec.and_assoc, BitVec.and_not_self]
+    simp
 
 private theorem offset_toNat_eq_low_three {ea base : BitVec 64}
     (hbase : base = ea &&& (-8 : BitVec 64)) :
@@ -287,7 +295,7 @@ theorem fusedByteSplice_eq (dword value ea base : BitVec 64)
         (value &&& (0xff : BitVec 64)) <<< (off * 8) := by
     rw [← BitVec.shiftLeft_and_distrib]
     apply congrArg (fun x : BitVec 64 => x <<< (off * 8))
-    bv_decide
+    simp only [BitVec.and_assoc, BitVec.and_self]
   rw [hmask, hshift]
   rw [masked_add_eq_splice _ _ _ hcontained]
   unfold byteSplice
@@ -302,7 +310,8 @@ theorem fusedHalfwordSplice_eq (dword value ea base : BitVec 64)
         ((ea - base).toNat * 8) := by
   have hoff7 := offset_toNat_eq_low_three hsetup.base_is_aligned
   have hlow : ea &&& (7 : BitVec 64) = ea &&& (6 : BitVec 64) := by
-    bv_decide
+    exact (congrArg (· &&& 7) (BitVec.and_not_eq_self_of_and_eq_zero
+      ea 1 hsetup.halfword_aligned)).symm.trans (BitVec.and_assoc _ _ _)
   have hoff : (ea - base).toNat = (ea &&& (6 : BitVec 64)).toNat :=
     hoff7.trans (congrArg BitVec.toNat hlow)
   let off := (ea - base).toNat
@@ -326,7 +335,7 @@ theorem fusedHalfwordSplice_eq (dword value ea base : BitVec 64)
         (value &&& (0xffff : BitVec 64)) <<< (off * 8) := by
     rw [← BitVec.shiftLeft_and_distrib]
     apply congrArg (fun x : BitVec 64 => x <<< (off * 8))
-    bv_decide
+    simp only [BitVec.and_assoc, BitVec.and_self]
   rw [hmask, hshift]
   rw [masked_add_eq_splice _ _ _ hcontained]
   unfold halfwordSplice
@@ -341,14 +350,15 @@ theorem fusedWordSplice_eq (dword value ea base : BitVec 64)
         ((ea - base).toNat * 8) := by
   have hoff7 := offset_toNat_eq_low_three hsetup.base_is_aligned
   have hlow : ea &&& (7 : BitVec 64) = ea &&& (4 : BitVec 64) := by
-    bv_decide
+    exact (congrArg (· &&& 7) (BitVec.and_not_eq_self_of_and_eq_zero
+      ea 3 hsetup.word_aligned)).symm.trans (BitVec.and_assoc _ _ _)
   have hoff : (ea - base).toNat = (ea &&& (4 : BitVec 64)).toNat :=
     hoff7.trans (congrArg BitVec.toNat hlow)
   let off := (ea - base).toNat
   let word := ((ea >>> 2) &&& (1 : BitVec 64)).toNat
   have hwordBits : (ea >>> 2) &&& (1 : BitVec 64) =
       (ea &&& (4 : BitVec 64)) >>> 2 := by
-    bv_decide
+    exact (BitVec.ushiftRight_and_distrib ea 4 2).symm
   have hwordShift : 32 * word = off * 8 := by
     dsimp only [word, off]
     rw [hwordBits]
@@ -381,7 +391,7 @@ theorem fusedWordSplice_eq (dword value ea base : BitVec 64)
         (value &&& (0xffff_ffff : BitVec 64)) <<< (off * 8) := by
     rw [← BitVec.shiftLeft_and_distrib]
     apply congrArg (fun x : BitVec 64 => x <<< (off * 8))
-    bv_decide
+    simp only [BitVec.and_assoc, BitVec.and_self]
   rw [hmask, hshift]
   rw [masked_add_eq_splice _ _ _ hcontained]
   unfold wordSplice

@@ -1,3 +1,4 @@
+import JoltConstraints.Soundness.Layer4.ByteSwap
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Word
 import JoltConstraints.Soundness.Layer4.Arithmetic
@@ -55,46 +56,6 @@ private def UnaryWord.table : UnaryWord → LookupTableKind
   | .shiftMask => .ShiftRightBitmask
   | .shiftMaskW => .ShiftRightBitmaskW
   | .rev8w => .VirtualRev8W
-
-private theorem append32_eq_add (hi lo : BitVec 32) :
-    hi +++ lo = lo.setWidth 64 + (hi.setWidth 64 <<< 32) := by
-  apply BitVec.eq_of_toNat_eq
-  have hhi := hi.isLt
-  have hlo := lo.isLt
-  have sumLt : hi.toNat * 2 ^ 32 + lo.toNat < 2 ^ 64 := by omega
-  simp only [BitVec.toNat_append, BitVec.toNat_add,
-    BitVec.toNat_setWidth_of_le (by norm_num : 32 ≤ 64),
-    BitVec.toNat_shiftLeft]
-  rw [← Nat.shiftLeft_add_eq_or_of_lt hlo]
-  simp only [Nat.shiftLeft_eq]
-  omega
-
-private theorem rev8w_eq_kernel (v : BitVec 64) :
-    rev8w v = swapBytes32 (v.extractLsb 63 32) +++ swapBytes32 (v.extractLsb 31 0) := by
-  simp only [rev8w]
-  rw [show v.setWidth 32 = v.extractLsb 31 0 by rfl]
-  rw [show (v >>> 32).setWidth 32 = v.extractLsb 63 32 by rfl]
-  exact (append32_eq_add _ _).symm
-
-private theorem rev8_32_kernel (x : BitVec 32) : rev8 x = swapBytes32 x := by
-  unfold rev8
-  simp only [Id.run]
-  change IntRange.forIn' _ _ _ >>= _ = _
-  unfold IntRange.forIn'
-  simp only [Sail.BitVec.length, BitVec.length, Nat.cast_ofNat]
-  iterate 5
-    rw [IntRange.forIn'.loop]
-    simp (config := { decide := true }) only [Membership.mem, dite_true, dite_false, pure_bind,
-      bind_pure, Int.reduceAdd, Int.reduceSub, Int.reduceToNat]
-  change BitVec.updateSubrange _ _ _ _ = _
-  simp only [BitVec.updateSubrange, Sail.BitVec.updateSubrange', Sail.BitVec.extractLsb,
-    zeros, swapBytes32, Nat.reduceSub, Nat.reduceAdd]
-  apply BitVec.eq_of_getLsbD_eq
-  intro i
-  simp [BitVec.getLsbD_or, BitVec.getLsbD_and, BitVec.getLsbD_shiftLeft,
-    BitVec.getLsbD_ushiftRight]
-  intro hi
-  interval_cases i <;> simp (config := { decide := true }) at *
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
