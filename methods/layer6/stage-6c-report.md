@@ -210,3 +210,53 @@ An axiom check from a file importing only `DivisionBlock` still reports `sorryAx
 The new prefix theorem's axiom check reports only `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`.
 `git diff --check` passed before this report update.
 I did not edit the other agent's Layer 5 files or commit.
+
+## Continuation: operand projection generalized and replay frame staged
+
+I read `AGENTS.md`, the stage 6c plan, and this report before editing.
+I checked the claimed operand bridge against `rs1Value_real`, `rs2Value_real`, `RepresentsRows`, `DivisionFrame`, and the generated division program shape.
+The two operand value facts used only `Trace` fields, so their proof bodies compile unchanged after generalizing their inputs from `HonestTrace` to `Trace`.
+Existing honest-trace callers in `Rs1ValueEqRegistersRead.lean` and `Rs2ValueEqRegistersRead.lean` build through the coercion.
+
+| Declaration | Location | Change |
+| --- | --- | --- |
+| `rs1Value_real` | `RegistersReadProofHelpers.lean:146` | Statement generalized from `HonestTrace` to `Trace`; conclusion and proof unchanged; docstring added. |
+| `rs2Value_real` | `RegistersReadProofHelpers.lean:181` | Same generalization; conclusion and proof unchanged; docstring added. |
+| `divisionProgram_instrs_seq` | `DivisionPrograms.lean:293` | Existing private theorem made public in place; statement and proof unchanged; existing docstring retained. |
+| `DivisionRowsFor.at` | `DivisionPrograms.lean:301` | New private list lookup fact for the shared destination classification. |
+| `division_program_row_frame` | `DivisionPrograms.lean:317` | New public per-row consequence of the existing shared frame proof, with docstring. |
+| `division_runtime_patch`, `divisionArithmeticRow_patch` | `DivisionAppend.lean:690`, `:699` | New private bridges from runtime advice to the generated program row. |
+| `division_trace_row_frame`, `division_block_row_frame` | `DivisionAppend.lean:707`, `:745` | New private execution-to-frame adapters for candidate and replay rows. |
+| `division_replay_finalRamWord` | `DivisionAppend.lean:766` | New private proof that equal final Sail and device states, with equal initial states, give equal final RAM words. |
+| `division_segment_pre_frame`, `division_block_pre_frame` | `DivisionAppend.lean:787`, `:825` | New private induction and bytecode adapter proving the frame and Sail equality at every block-row pre-state. |
+| `division_transport_size`, `division_transport_post_at?`, `division_transport_index_at?` | `DivisionAppend.lean:876`, `:882`, `:889` | New private dependent-array transport facts. |
+| `RunExtends.prefix_get?`, `.prefix_post`, `.prefix_index` | `DivisionAppend.lean:896`, `:913`, `:925` | New private retained-prefix lookup facts. |
+| `division_source_is_compressed_eq`, `division_bytecode_at_eq` | `DivisionAppend.lean:937`, `:946` | New private equal-bytecode lookup facts. |
+| `division_candidate_first_pre` | `DivisionAppend.lean:955` | New private proof that the candidate's first appended row begins at the prepared state `pre`. |
+| `division_replay_pre_frames` | `DivisionAppend.lean:1040` | New private proof packaging candidate and replay pre-state frames at every block offset. |
+| `division_replay_complete_transfer` | `DivisionAppend.lean:1245` | New named staged remainder with a theorem-level `sorry`; its added `preFrames` and `finalRam` hypotheses are proved by the caller. |
+| `division_replay_complete` | `DivisionAppend.lean:1283` | Approved statement unchanged; now derives from the staged transfer and the proved frame and RAM facts. |
+
+The staged transfer remains unproved.
+For `RepresentsRows.rs1` and `.rs2`, its exact missing bridge is that the normalized `bytecodeRs1Register` and `bytecodeRs2Register` selectors correspond to `rs1Operand?` and `rs2Operand?` on division arithmetic rows.
+This is needed to turn the replay invariant's non-temporary-register premise into the persistence premise for the operand value read from its row pre-state.
+I tested whether the selector equalities were definitional; `rfl` failed for both.
+The repository has no existing selector-to-operand lemma.
+Proving one would require an instruction-constructor split, and `AGENTS.md` requires discussion before a brute-force case split.
+I removed the failed trial declarations and stopped before that split.
+The staged transfer also retains the row observation, stopping, termination-word, and final-register fields to be discharged after that bridge is approved.
+
+The `division_candidate_first_pre` proof is about 85 lines, above the plan's approximate 60-line preference.
+It has two cases, empty and nonempty retained prefix, and uses the same entry/linkage rule in both.
+The `division_block_pre_frame` proof is about 50 lines; the other new proof bodies are shorter than about 60 lines.
+No new `bv_decide`, `native_decide`, `decide +kernel`, proof limit, or axiom was added.
+No existing approved theorem gained a hypothesis.
+The new staged remainder has exactly the two extra facts `preFrames` and `finalRam`, both constructed in `division_replay_complete`.
+I did not edit `JoltConstraints/model_review.md` because the user's edit scope excludes it; this report records the one new `sorry` for review.
+
+`lake build JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers`, `JoltConstraints.Completeness.Rs1ValueEqRegistersRead`, and `JoltConstraints.Completeness.Rs2ValueEqRegistersRead` passed.
+`lake build JoltConstraints.Soundness.Layer6.DivisionBlock` passed with 8,684 jobs after the other agent repaired an intermediate `StallSuffix.lean` failure.
+The new `DivisionAppend` module built in 8.4 seconds, and `DivisionBlock` in 3.8 seconds; no changed-module proof took more than about ten seconds.
+`#print axioms JoltInstance.division_append_honest` still reports `sorryAx`, now through `division_replay_complete_transfer`.
+`git diff --check` passed.
+I did not edit the other agent's Layer 5 files or commit.

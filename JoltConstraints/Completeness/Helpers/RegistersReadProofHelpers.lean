@@ -140,9 +140,12 @@ theorem rs1Ra_real
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs1Operand?]
 
+/-- On a row of a trace, `Rs1Value` is its first source operand's pre-state
+value, or zero when the instruction has no first source; for example, ADD reads
+its first register operand here. -/
 theorem rs1Value_real
     {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (trace : Trace)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size) :
     TraceWitness.Rs1Value (F := F) p trace t =
       match rs1Operand?
@@ -172,9 +175,12 @@ theorem rs2Ra_real
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs2Operand?]
 
+/-- On a row of a trace, `Rs2Value` is its second source operand's pre-state
+value, or zero when the instruction has no second source; for example, ADD
+reads its second register operand here. -/
 theorem rs2Value_real
     {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (trace : Trace)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size) :
     TraceWitness.Rs2Value (F := F) p trace t =
       match rs2Operand?

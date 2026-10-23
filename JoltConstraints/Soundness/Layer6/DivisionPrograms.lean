@@ -290,13 +290,60 @@ private theorem DivisionRowsFor.take {keepSail : Bool} {rows : List Instr}
 /-- The instructions of a straight-line program are its input list.
 For example, sequencing REM's advice and multiplication rows returns those
 two instructions in that order. -/
-private theorem divisionProgram_instrs_seq (rows : List Instr) :
+theorem divisionProgram_instrs_seq (rows : List Instr) :
     (Program.seq rows).instrs = rows := by
   induction rows with
   | nil => rfl
   | cons head tail ih =>
     change head :: (Program.seq tail).instrs = head :: tail
     exact congrArg (head :: ·) ih
+
+private theorem DivisionRowsFor.at {keepSail : Bool} {rows : List Instr}
+    (safe : DivisionRowsFor keepSail rows) (offset : Nat)
+    (inside : offset < rows.length) :
+    DivisionInstructionSafeFor keepSail rows[offset] := by
+  induction rows generalizing offset with
+  | nil => simp at inside
+  | cons instr rest ih =>
+    change DivisionInstructionSafeFor keepSail instr ∧
+      DivisionRowsFor keepSail rest at safe
+    cases offset with
+    | zero => exact safe.1
+    | succ offset => exact ih safe.2 offset (by simp at inside; omega)
+
+/-- One generated division row preserves the device and persistent registers;
+unless it is the last row, it also leaves Sail unchanged.
+For example, REM's prefix multiplication may write temporary 43. -/
+theorem division_program_row_frame (kind : DivisionKind) (rd rs1 rs2 : regidx)
+    (q : BitVec 64) (offset : Nat)
+    (inside : offset < (kind.program rd rs1 rs2 q).instrs.length)
+    (pre post : SailJoltState)
+    (runs : execInstr (kind.program rd rs1 rs2 q).instrs[offset] pre =
+      .ok RETIRE_SUCCESS post) :
+    DivisionFrame pre post ∧
+      (offset + 1 < (kind.program rd rs1 rs2 q).instrs.length → post.sail = pre.sail) := by
+  let rows := (kind.program rd rs1 rs2 q).instrs
+  change offset < rows.length at inside
+  change execInstr rows[offset] pre = .ok RETIRE_SUCCESS post at runs
+  have allSafe := (division_program_rows_shape kind rd rs1 rs2 q).1
+  change DivisionRows rows at allSafe
+  have rowSafe := DivisionRowsFor.at (DivisionRows.forFalse allSafe) offset inside
+  have full := divisionFrame_instr_for false rows[offset] rowSafe.1 rowSafe.2
+    pre post _ runs
+  refine ⟨full.1, ?_⟩
+  intro proper
+  change offset + 1 < rows.length at proper
+  have prefixSafe := (division_program_rows_shape kind rd rs1 rs2 q).2
+  change DivisionRowsFor true rows.dropLast at prefixSafe
+  have dropInside : offset < rows.dropLast.length := by
+    simp [List.length_dropLast]
+    omega
+  have same : rows.dropLast[offset] = rows[offset] := by
+    simp [List.dropLast_eq_take]
+  have safe := DivisionRowsFor.at prefixSafe offset dropInside
+  rw [same] at safe
+  exact (divisionFrame_instr_for true rows[offset] safe.1 safe.2
+    pre post _ runs).2 rfl
 
 /-- Executing a proper instruction prefix of a generated division program
 preserves the device, tape, host settings, persistent virtual registers, and
