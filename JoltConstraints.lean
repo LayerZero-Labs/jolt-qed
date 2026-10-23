@@ -52,6 +52,7 @@ import JoltConstraints.Soundness.Layer5.RamInitialization
 import JoltConstraints.Soundness.Layer5.RamAgreement
 import JoltConstraints.Soundness.Layer5.LoadDoubleword
 import JoltConstraints.Soundness.Layer5.RamStoreAgreement
+import JoltConstraints.Soundness.Layer5.DeviceMemory
 import JoltConstraints.Soundness.Layer5.DeviceMemoryObstruction
 import JoltConstraints.Soundness.Layer5.AdviceExpansion
 import JoltConstraints.Soundness.Layer5.Registers
