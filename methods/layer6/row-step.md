@@ -46,3 +46,13 @@ At a source boundary this is `advance_pc`; for an interior row it is the previou
 Derive `untrusted_row_pc` and `untrusted_row_next_pc` from the extracted lemma, with their statements unchanged; you may edit `Soundness/Layer7/StallSuffix.lean` for this.
 `jal_step` and `host_call_selected_step` still take full `RegisterAgreement`; state the new steps over `RegisterAgreementOn` as the caller has it, and leave porting those two Layer 5 lemmas to the stage that proves the steps.
 `PlainRow.lean` (which defines `RawRowEntry`) imports `StallSuffix.lean`, so the extracted lemma in `StallSuffix.lean` cannot mention `RawRowEntry`: state it with the entry and linkage clause written out (as in `UntrustedAnswerRun.NextStep.ready`), and add the `RawRowEntry` form as a one-line wrapper in a Layer 6 file.
+
+## Next: prove the staged steps
+
+The staging is committed (`c155c28`); the seven steps are in `Soundness/Layer6/RowStepKinds.lean`, and the row-step report says what each needs.
+Strong agent: `jalr_row_step` first (write the missing Layer 5 JALR step over `RegisterAgreementOn` in a new `Soundness/Layer5/Jalr.lean`, from `selected_jalr_lookup_target`, `selected_jalr_next_target` and `selected_jump_link_write_value`), then the four LD and SD steps.
+For those, prove once that ordinary-RAM agreement (`OrdinaryRamAgreement`) and device agreement (`DeviceRamAgreement`) together are the cut RAM agreement of `RepresentsPrefix.cutRam`, outside the termination word, and use it in all four.
+Port `ld_ram_step` and `sd_ram_step_agreement` to `RegisterAgreementOn` as stage 6b ported the other families: change them in place, and keep a full-agreement version only where a proof still uses it.
+The device steps rely on the staged device-region lemmas, which another agent is proving; use them as they are.
+Medium agent, later: `jal_row_step` and `host_row_step`, porting `jal_step` and `host_call_selected_step` to `RegisterAgreementOn` the same way.
+Report in a new section of `methods/layer6/row-step-report.md`.
