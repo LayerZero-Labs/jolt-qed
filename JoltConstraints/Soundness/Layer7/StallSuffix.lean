@@ -965,55 +965,6 @@ private theorem tape_row_preserves_pc
       · trivial
     exact JoltPCFrame.instruction instruction before after hostFrame runs
 
-/-- Every row of an untrusted-answer run begins with PC at its bytecode source
-address. For example, the second row of an ECALL expansion still has PC at the
-ECALL address. See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
-theorem untrusted_row_pc
-    (joltInstance : JoltInstance SourceInstruction)
-    (privateInputs : JoltPrivateInputs)
-    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
-    (i : Fin run.rows.size) :
-    run.rows[i].preState.sail.regs.get? Register.PC =
-      some run.bytecode[run.rows[i].rowIndex].address := by
-  have layout := expand_program_layout joltInstance.program run.bytecode run.expands
-  have all (n : Nat) (bound : n < run.rows.size) :
-      run.rows[n].preState.sail.regs.get? Register.PC =
-        some run.bytecode[run.rows[n].rowIndex].address := by
-    induction n with
-    | zero =>
-        obtain ⟨entry, _, prepared⟩ :=
-          run.starts run.rows[0] (Array.getElem?_eq_getElem bound)
-        rw [prepared]
-        simp only [advance_pc, Std.ExtDHashMap.get?_insert, beq_iff_eq,
-          ↓reduceDIte, cast_eq]
-        exact congrArg some entry.symm
-    | succ n ih =>
-        have beforeBound : n < run.rows.size := by omega
-        have link := run.linked n run.rows[n] run.rows[n + 1]
-          (Array.getElem?_eq_getElem beforeBound)
-          (Array.getElem?_eq_getElem bound)
-        split at link
-        · rename_i continues
-          have preStateEq := link.2
-          have continuesFlag : run.bytecode[run.rows[n].rowIndex].continues = true := by
-            simpa [JoltInstructionRow.continues, bne_iff_ne] using continues
-          have sameAddress := (layout.next run.rows[n].rowIndex
-            run.rows[n + 1].rowIndex link.1 continuesFlag).1
-          have runs := run.executes ⟨n, beforeBound⟩
-          have kept := tape_row_preserves_pc
-            (run.bytecode[run.rows[n].rowIndex].instruction.withRuntimeAdvice
-              run.rows[n].runtimeAdvice) (run.answers ⟨n, beforeBound⟩)
-            run.rows[n].preState run.rows[n].postState runs
-          rw [preStateEq, sameAddress]
-          exact kept.trans (ih beforeBound)
-        · rename_i continues
-          obtain ⟨address, _, sourceAddress, _, prepared⟩ := link
-          rw [prepared]
-          simp only [advance_pc, Std.ExtDHashMap.get?_insert, beq_iff_eq,
-            ↓reduceDIte, cast_eq]
-          exact congrArg some sourceAddress.symm
-  exact all i.val i.isLt
-
 /-- Consecutive rows within one source read the same compression flag from
 that source's final row. For example, both ECALL rows use its final-row flag.
 See jolt/crates/jolt-program/src/expand/metadata.rs:46-52 at 8bbb2357. -/
@@ -1046,6 +997,154 @@ private theorem source_compressed_next
   simpa only [Fin.getElem_fin] using congrArg
     (fun position => (bytecode[position]?.map (·.is_compressed)).getD false) sameEnd
 
+private theorem prefix_back_succ {α : Type} (rows : Array α) (n : Nat)
+    (inside : n < rows.size) :
+    (rows.extract 0 (n + 1)).back? = some rows[n] := by
+  simp [Array.back?_eq_getElem?, Array.size_extract, Nat.min_eq_left (by omega : n + 1 ≤ rows.size),
+    Array.getElem?_extract, inside]
+
+private theorem untrusted_entry_at
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (n : Nat) (inside : n < run.rows.size) :
+    match (run.rows.extract 0 n).back? with
+    | none => run.bytecode[run.rows[n].rowIndex].address = joltInstance.program.entry_address ∧
+        run.bytecode[run.rows[n].rowIndex].starts_source ∧
+        run.rows[n].preState = advance_pc joltInstance.program.entry_address
+          (source_is_compressed run.bytecode run.rows[n].rowIndex) run.initialState
+    | some last =>
+      if run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 then
+        run.rows[n].rowIndex.val = last.rowIndex.val + 1 ∧ run.rows[n].preState = last.postState
+      else ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
+        run.bytecode[run.rows[n].rowIndex].address = address ∧ run.bytecode[run.rows[n].rowIndex].starts_source ∧
+        run.rows[n].preState = advance_pc address (source_is_compressed run.bytecode run.rows[n].rowIndex) last.postState := by
+  cases n with
+  | zero => simpa using run.starts run.rows[0] (Array.getElem?_eq_getElem inside)
+  | succ n =>
+    rw [prefix_back_succ run.rows n (by omega)]
+    exact run.linked n run.rows[n] run.rows[n + 1]
+      (Array.getElem?_eq_getElem (by omega)) (Array.getElem?_eq_getElem inside)
+
+private theorem prepared_pc_link
+    (image : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
+    (expanded : expand_program image = some bytecode)
+    (last : TraceRow bytecode) (next : Fin bytecode.size) (pre : SailJoltState)
+    (answer : BitVec 64)
+    (executes : JoltConstraints.Soundness.execWithTapeAnswer
+      (bytecode[last.rowIndex].instruction.withRuntimeAdvice last.runtimeAdvice)
+      answer last.preState = .ok RETIRE_SUCCESS last.postState)
+    (pc : last.preState.sail.regs.get? Register.PC = some bytecode[last.rowIndex].address)
+    (nextPC : last.preState.sail.regs.get? Register.nextPC = some (bytecode[last.rowIndex].address +
+      if source_is_compressed bytecode last.rowIndex then 2 else 4))
+    (entry : if bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 then
+        next.val = last.rowIndex.val + 1 ∧ pre = last.postState
+      else ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
+        bytecode[next].address = address ∧ bytecode[next].starts_source ∧
+        pre = advance_pc address (source_is_compressed bytecode next) last.postState) :
+    pre.sail.regs.get? Register.PC = some bytecode[next].address ∧
+      pre.sail.regs.get? Register.nextPC = some (bytecode[next].address +
+        if source_is_compressed bytecode next then 2 else 4) := by
+  split at entry
+  · rename_i continues
+    have flag : bytecode[last.rowIndex].continues = true := by
+      simpa [JoltInstructionRow.continues, bne_iff_ne] using continues
+    have layout := expand_program_layout image bytecode expanded
+    have sameAddress := (layout.next last.rowIndex next entry.1 flag).1
+    have sameCompression := source_compressed_next bytecode layout last.rowIndex next entry.1 flag
+    have ok := ExpansionRows.expand_program_rowOk image bytecode expanded bytecode[last.rowIndex]
+      (Array.getElem_mem_toList last.rowIndex.isLt)
+    have ordinary := ExpansionRows.ordinary_withRuntimeAdvice _ last.runtimeAdvice
+      (ok.ordinaryIfContinues flag)
+    rw [entry.2, sameAddress, ← sameCompression]
+    exact ⟨(tape_row_preserves_pc _ answer _ _ executes).trans pc,
+      (ordinary_tape_next_pc _ answer _ _ ordinary executes).trans nextPC⟩
+  · obtain ⟨address, _, sourceAddress, _, prepared⟩ := entry
+    rw [prepared, sourceAddress]
+    simp [advance_pc, Std.ExtDHashMap.get?_insert, beq_iff_eq]
+
+private theorem untrusted_prepared_pc_at
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (n : Nat) (within : n ≤ run.rows.size)
+    (next : Fin run.bytecode.size) (pre : SailJoltState)
+    (entry : match (run.rows.extract 0 n).back? with
+    | none => run.bytecode[next].address = joltInstance.program.entry_address ∧
+        run.bytecode[next].starts_source ∧
+        pre = advance_pc joltInstance.program.entry_address
+          (source_is_compressed run.bytecode next) run.initialState
+    | some last =>
+      if run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 then
+        next.val = last.rowIndex.val + 1 ∧ pre = last.postState
+      else ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
+        run.bytecode[next].address = address ∧ run.bytecode[next].starts_source ∧
+        pre = advance_pc address (source_is_compressed run.bytecode next) last.postState) :
+    pre.sail.regs.get? Register.PC = some run.bytecode[next].address ∧
+      pre.sail.regs.get? Register.nextPC = some (run.bytecode[next].address +
+        if source_is_compressed run.bytecode next then 2 else 4) := by
+  induction n generalizing next pre with
+  | zero =>
+    simp only [Array.extract_zero, Array.back?_empty] at entry
+    obtain ⟨address, _, prepared⟩ := entry
+    rw [prepared, address]
+    simp [advance_pc, Std.ExtDHashMap.get?_insert, beq_iff_eq]
+  | succ n ih =>
+    have inside : n < run.rows.size := by omega
+    rw [prefix_back_succ run.rows n inside] at entry
+    obtain ⟨pc, nextPC⟩ := ih (by omega) run.rows[n].rowIndex run.rows[n].preState
+      (untrusted_entry_at run n inside)
+    exact prepared_pc_link joltInstance.program run.bytecode run.expands run.rows[n] next pre
+      (run.answers ⟨n, inside⟩) (run.executes ⟨n, inside⟩) pc nextPC entry
+
+/-- The state prepared after a certified prefix has PC at the next row's source
+address and nextPC at that address plus its source length, before that row runs.
+For example, ECALL's final JALR starts with the same prepared PCs as its AUIPC.
+The entry clause is written out to avoid importing Layer 6's `RawRowEntry`.
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+theorem untrusted_prepared_pc
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (next : Fin run.bytecode.size) (pre : SailJoltState)
+    (entry : match run.rows.back? with
+    | none => run.bytecode[next].address = joltInstance.program.entry_address ∧
+        run.bytecode[next].starts_source ∧
+        pre = advance_pc joltInstance.program.entry_address
+          (source_is_compressed run.bytecode next) run.initialState
+    | some last =>
+      if run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 then
+        next.val = last.rowIndex.val + 1 ∧ pre = last.postState
+      else ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
+        ¬ last.StableStall ∧ run.bytecode[next].address = address ∧ run.bytecode[next].starts_source ∧
+        pre = advance_pc address (source_is_compressed run.bytecode next) last.postState) :
+    pre.sail.regs.get? Register.PC = some run.bytecode[next].address ∧
+      pre.sail.regs.get? Register.nextPC = some (run.bytecode[next].address +
+        if source_is_compressed run.bytecode next then 2 else 4) := by
+  apply untrusted_prepared_pc_at run run.rows.size (by omega) next pre
+  simp only [Array.extract_size]
+  cases lastIs : run.rows.back? with
+  | none => simpa only [lastIs] using entry
+  | some last =>
+    simp only [lastIs] at entry ⊢
+    split at entry
+    · rename_i continues
+      simpa only [if_pos continues] using entry
+    · rename_i terminal
+      rw [if_neg terminal]
+      obtain ⟨address, nextPC, _, sourceAddress, starts, prepared⟩ := entry
+      exact ⟨address, nextPC, sourceAddress, starts, prepared⟩
+
+/-- Every row of an untrusted-answer run begins with PC at its bytecode source
+address. For example, the second row of an ECALL expansion still has PC at the
+ECALL address. See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
+theorem untrusted_row_pc
+    (joltInstance : JoltInstance SourceInstruction)
+    (privateInputs : JoltPrivateInputs)
+    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+    (i : Fin run.rows.size) :
+    run.rows[i].preState.sail.regs.get? Register.PC =
+      some run.bytecode[run.rows[i].rowIndex].address := by
+  exact (untrusted_prepared_pc_at run i.val (Nat.le_of_lt i.isLt) _ _
+    (untrusted_entry_at run i.val i.isLt)).1
+
 /-- Every row of an untrusted-answer run begins with nextPC prepared to the
 source address plus its full 2-byte or 4-byte length. For example, an interior
 row of a compressed expansion still starts with address + 2.
@@ -1058,52 +1157,8 @@ theorem untrusted_row_next_pc
     run.rows[i].preState.sail.regs.get? Register.nextPC =
       some (run.bytecode[run.rows[i].rowIndex].address +
         if source_is_compressed run.bytecode run.rows[i].rowIndex then 2 else 4) := by
-  have layout := expand_program_layout joltInstance.program run.bytecode run.expands
-  have all (n : Nat) (bound : n < run.rows.size) :
-      run.rows[n].preState.sail.regs.get? Register.nextPC =
-        some (run.bytecode[run.rows[n].rowIndex].address +
-          if source_is_compressed run.bytecode run.rows[n].rowIndex then 2 else 4) := by
-    induction n with
-    | zero =>
-        obtain ⟨entry, _, prepared⟩ :=
-          run.starts run.rows[0] (Array.getElem?_eq_getElem bound)
-        rw [prepared]
-        simp only [advance_pc, Std.ExtDHashMap.get?_insert, beq_iff_eq,
-          ↓reduceDIte, cast_eq]
-        rw [entry]
-    | succ n ih =>
-        have beforeBound : n < run.rows.size := by omega
-        have link := run.linked n run.rows[n] run.rows[n + 1]
-          (Array.getElem?_eq_getElem beforeBound)
-          (Array.getElem?_eq_getElem bound)
-        split at link
-        · rename_i continues
-          have continuesFlag : run.bytecode[run.rows[n].rowIndex].continues = true := by
-            simpa [JoltInstructionRow.continues, bne_iff_ne] using continues
-          have sameAddress := (layout.next run.rows[n].rowIndex
-            run.rows[n + 1].rowIndex link.1 continuesFlag).1
-          have sameCompression := source_compressed_next run.bytecode layout
-            run.rows[n].rowIndex run.rows[n + 1].rowIndex link.1 continuesFlag
-          have rowOk := ExpansionRows.expand_program_rowOk joltInstance.program
-            run.bytecode run.expands run.bytecode[run.rows[n].rowIndex]
-            (Array.getElem_mem_toList run.rows[n].rowIndex.isLt)
-          have ordinaryRow := rowOk.ordinaryIfContinues continuesFlag
-          have actualOrdinary := ExpansionRows.ordinary_withRuntimeAdvice
-            run.bytecode[run.rows[n].rowIndex].instruction
-            run.rows[n].runtimeAdvice ordinaryRow
-          have kept := ordinary_tape_next_pc
-            (run.bytecode[run.rows[n].rowIndex].instruction.withRuntimeAdvice
-              run.rows[n].runtimeAdvice) (run.answers ⟨n, beforeBound⟩)
-            run.rows[n].preState run.rows[n].postState actualOrdinary
-            (run.executes ⟨n, beforeBound⟩)
-          rw [link.2, sameAddress, ← sameCompression]
-          exact kept.trans (ih beforeBound)
-        · obtain ⟨address, _, sourceAddress, _, prepared⟩ := link
-          rw [prepared]
-          simp only [advance_pc, Std.ExtDHashMap.get?_insert, beq_iff_eq,
-            ↓reduceDIte, cast_eq]
-          rw [sourceAddress]
-  exact all i.val i.isLt
+  exact (untrusted_prepared_pc_at run i.val (Nat.le_of_lt i.isLt) _ _
+    (untrusted_entry_at run i.val i.isLt)).2
 
 /-- Runtime advice changes only the value carried by VirtualAdvice, so it
 preserves both control flags. For example, patched DIV advice remains ordinary.

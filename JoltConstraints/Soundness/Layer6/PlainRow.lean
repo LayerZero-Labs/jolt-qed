@@ -858,7 +858,10 @@ theorem rawEntry_linked
     obtain ⟨address, pc, _, addressIs, starts, preIs⟩ := entry
     exact ⟨address, pc, addressIs, starts, preIs⟩
 
-private theorem rawEntry_prepared {F : Type} [Field F] {params : WitnessParams}
+/-- Entry preparation preserves live registers, memory and the device while
+updating PC bookkeeping; for example, preparing a native ADD keeps its inputs.
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+theorem rawEntry_prepared {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {t : Fin params.traceLength} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     {run : UntrustedAnswerRun joltInstance privateInputs} {next : Fin run.bytecode.size}
@@ -883,7 +886,59 @@ private theorem rawEntry_prepared {F : Type} [Field F] {params : WitnessParams}
       rw [same]
       exact ⟨agrees.advance_pc _ _, rfl, rfl⟩
 
-private theorem append_expansion_row {F : Type} [Field F] {params : WitnessParams}
+private theorem append_interior_next {F : Type} [Field F] {params : WitnessParams}
+    (joltField : JoltField F) (witness : WitnessType F params)
+    {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (context : ConstraintContext inst inputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (run : UntrustedAnswerRun inst inputs) (bytecodeEq : run.bytecode = context.bytecode)
+    (step : TraceRow run.bytecode) (answer : BitVec 64)
+    (executes : execWithTapeAnswer
+      (run.bytecode[step.rowIndex].instruction.withRuntimeAdvice step.runtimeAdvice)
+      answer step.preState = .ok RETIRE_SUCCESS step.postState)
+    (entry : RawRowEntry run step.rowIndex step.preState)
+    (bound : run.rows.size < params.traceLength) (slot : Fin (2 ^ params.logBytecodeK))
+    (slotIndex : slot.val = step.rowIndex.val + 1)
+    (selected : bytecodeRa witness slot ⟨run.rows.size, bound⟩ = 1)
+    (rowIs : bytecodeRow context.bytecode slot.val = some run.bytecode[step.rowIndex])
+    (remaining : run.bytecode[step.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0) :
+    let candidate := appendUntrustedRow run step answer executes (rawEntry_starts entry) (rawEntry_linked entry)
+    ∃ bound : candidate.rows.size < params.traceLength,
+      witness.InstructionFlags .IsNoop ⟨candidate.rows.size, bound⟩ = 0 ∧
+      ∃ (next : Fin candidate.bytecode.size) (pre : SailJoltState) (slot : Fin (2 ^ params.logBytecodeK)),
+        next.val = step.rowIndex.val + 1 ∧
+        bytecodeRa witness slot ⟨candidate.rows.size, bound⟩ = 1 ∧
+        slot.val = step.rowIndex.val + 1 + 1 ∧ RawRowEntry candidate next pre := by
+  obtain ⟨nextBound, next, nextSlot, nextIs, slotIs, chosen, realNext⟩ :=
+    interior_progress joltField witness context equations run bytecodeEq step
+      ⟨run.rows.size, bound⟩ slot slotIndex selected rowIs remaining
+  refine ⟨by simpa only [appendUntrustedRow, Array.size_push] using nextBound,
+    ?_, next, step.postState, nextSlot, nextIs, ?_, by omega, ?_⟩
+  · simpa only [appendUntrustedRow, Array.size_push] using realNext
+  · simpa only [appendUntrustedRow, Array.size_push] using chosen
+  · simp only [RawRowEntry, appendUntrustedRow, Array.back?_push, if_pos remaining]
+    exact ⟨nextIs, True.intro⟩
+
+private theorem real_push {F : Type} [Field F] {params : WitnessParams}
+    (witness : WitnessType F params) {bytecode : Array JoltInstructionRow}
+    (rows : Array (TraceRow bytecode)) (step : TraceRow bytecode)
+    (bound : rows.size < params.traceLength)
+    (before : ∀ t : Fin params.traceLength, t.val < rows.size → witness.InstructionFlags .IsNoop t = 0)
+    (current : witness.InstructionFlags .IsNoop ⟨rows.size, bound⟩ = 0) :
+    ∀ t : Fin params.traceLength, t.val < (rows.push step).size → witness.InstructionFlags .IsNoop t = 0 := by
+  intro t inside
+  simp only [Array.size_push] at inside
+  by_cases old : t.val < rows.size
+  · exact before t old
+  · have same : t = ⟨rows.size, bound⟩ := Fin.ext (show t.val = rows.size by omega)
+    simpa only [same] using current
+
+/-- Append a certified row and its next expansion invariant, with the termination
+word supplied by the row's memory rule instead of requiring a zero RAM address.
+The termination premise applies only when the appended trace has not stored to
+termination; for example, an output SD preserves that word through its RAM update.
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+theorem append_expansion_row_of_termination {F : Type} [Field F] {params : WitnessParams}
     (joltField : JoltField F) (witness : WitnessType F params)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (context : ConstraintContext joltInstance privateInputs params)
@@ -900,7 +955,16 @@ private theorem append_expansion_row {F : Type} [Field F] {params : WitnessParam
       answer step.preState = .ok RETIRE_SUCCESS step.postState)
     (entry : RawRowEntry run step.rowIndex step.preState)
     (observations : RepresentsPrefix witness {run.toTrace with rows := run.rows.push step})
-    (zero : witness.RamAddress ⟨run.rows.size, bound⟩ = 0)
+    (termination : ∀ next : run.rows.size + 1 < params.traceLength,
+      (¬ ∃ i : Fin (run.rows.push step).size,
+        match run.bytecode[(run.rows.push step)[i].rowIndex].instruction with
+        | .SD base _ imm => TouchesTermination (run.rows.push step)[i].preState.jolt_device
+            (sourceValue base (run.rows.push step)[i].preState + imm)
+        | _ => False) →
+      ∀ address : Fin params.ramSize,
+        address.val = (run.initialState.jolt_device.memory_layout.termination.toNat -
+          ramLowestAddress run.initialState.jolt_device.memory_layout) / 8 →
+        witness.RamVal address ⟨run.rows.size + 1, next⟩ = 0)
     (registers : ∀ next : run.rows.size + 1 < params.traceLength,
       RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1))
         witness ⟨run.rows.size + 1, next⟩ step.postState) :
@@ -932,10 +996,12 @@ private theorem append_expansion_row {F : Type} [Field F] {params : WitnessParam
   · exact Array.size_push step
   · refine {
       represents := observations
-      real := ?_
+      real := real_push witness run.rows step bound state.real real
       noEarlierStop := adjacent_push run.rows step (fun current _ => ¬ current.StableStall)
         state.noEarlierStop (state.notStopped unfinished)
-      terminationWord := ?_
+      terminationWord := by
+        simpa only [candidate, appendUntrustedRow, Array.size_push,
+          UntrustedAnswerRun.StoresTerminationAt] using termination
       starts := state.starts
       done_le := by omega
       retained := by have old := state.retained; change done + 1 ≤ (run.rows.push step).size; simp; omega
@@ -944,32 +1010,6 @@ private theorem append_expansion_row {F : Type} [Field F] {params : WitnessParam
       registers := ?_
       next := ?_
       notStopped := ?_ }
-    · intro t inside
-      change t.val < (run.rows.push step).size at inside
-      simp only [Array.size_push] at inside
-      by_cases old : t.val < run.rows.size
-      · exact state.real t old
-      · have same : t = ⟨run.rows.size, bound⟩ := Fin.ext (show t.val = run.rows.size by omega)
-        subst t
-        exact real
-    · intro next noStore address atTermination
-      have noEarlierStore : ¬ ∃ i : Fin run.rows.size, run.StoresTerminationAt i := by
-        rintro ⟨i, store⟩
-        apply noStore
-        refine ⟨⟨i.val, by change i.val < (run.rows.push step).size; simpa only [Array.size_push] using Nat.lt_succ_of_lt i.isLt⟩, ?_⟩
-        change (fun row : TraceRow run.bytecode =>
-          match (run.bytecode[row.rowIndex.val]'row.rowIndex.isLt).instruction with
-          | .SD base _ imm => TouchesTermination row.preState.jolt_device
-              (sourceValue base row.preState + imm)
-          | _ => False) (run.rows.push step)[i.val]
-        rw [Array.getElem_push_lt i.isLt]
-        exact store
-      have nextBound : run.rows.size + 1 < params.traceLength := by
-        simpa only [candidate, appendUntrustedRow, Array.size_push] using next
-      have unchanged := ramVal_succ_of_address_zero (two_pow_127_lt_char joltField)
-        context equations address ⟨run.rows.size, bound⟩ nextBound zero
-      simpa only [candidate, appendUntrustedRow, Array.size_push] using
-        unchanged.trans (state.terminationWord bound noEarlierStore address atTermination)
     · intro last atEnd
       change last ∈ ((run.rows.push step).extract 0 ((run.rows.push step).size - (done + 1))).back? at atEnd
       rw [order.2] at atEnd
@@ -980,27 +1020,54 @@ private theorem append_expansion_row {F : Type} [Field F] {params : WitnessParam
       rw [finalTraceState_push]
       simpa only [Array.size_push] using registers (by simpa only [candidate, appendUntrustedRow, Array.size_push] using next)
     · intro more
-      obtain ⟨nextBound, nextIndex, nextSlot, nextIs, nextSlotIs, chosen, realNext⟩ :=
-        interior_progress joltField witness context equations run bytecodeEq step
-          ⟨run.rows.size, bound⟩ slot (by omega) selected rowIs (remaining more)
-      refine ⟨by simpa only [candidate, appendUntrustedRow, Array.size_push] using nextBound,
-        ?_, nextIndex, step.postState, nextSlot, ?_, ?_, ?_, ?_⟩
-      · simpa only [candidate, appendUntrustedRow, Array.size_push] using realNext
-      · omega
-      · simpa only [candidate, appendUntrustedRow, Array.size_push] using chosen
-      · omega
-      · dsimp only [candidate, appendUntrustedRow]
-        simp only [Array.back?_push]
-        split
-        · exact ⟨nextIs, True.intro⟩
-        · rename_i last
-          exact False.elim (last (remaining more))
+      simpa only [indexIs, Nat.add_assoc] using
+        append_interior_next joltField witness context equations run bytecodeEq step answer
+          executes entry bound slot (by omega) selected rowIs (remaining more)
     · intro more last atEnd stalled
       change (run.rows.push step).back? = some last at atEnd
       rw [Array.back?_push] at atEnd
       have same : step = last := Option.some.inj atEnd
       subst last
       exact remaining more stalled.1
+
+private theorem append_expansion_row {F : Type} [Field F] {params : WitnessParams}
+    (joltField : JoltField F) (witness : WitnessType F params)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (first : Fin context.bytecode.size) (done : Nat)
+    (state : ExpansionState witness context run first done)
+    (unfinished : done < expansionRowCount context.bytecode first)
+    (bound : run.rows.size < params.traceLength)
+    (step : TraceRow run.bytecode) (answer : BitVec 64)
+    (indexIs : step.rowIndex.val = first.val + done)
+    (executes : execWithTapeAnswer
+      (run.bytecode[step.rowIndex].instruction.withRuntimeAdvice step.runtimeAdvice)
+      answer step.preState = .ok RETIRE_SUCCESS step.postState)
+    (entry : RawRowEntry run step.rowIndex step.preState)
+    (observations : RepresentsPrefix witness {run.toTrace with rows := run.rows.push step})
+    (zero : witness.RamAddress ⟨run.rows.size, bound⟩ = 0)
+    (registers : ∀ next : run.rows.size + 1 < params.traceLength,
+      RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1))
+        witness ⟨run.rows.size + 1, next⟩ step.postState) :
+    ∃ candidate : UntrustedAnswerRun joltInstance privateInputs,
+      candidate.toTrace = {run.toTrace with rows := run.rows.push step} ∧
+      (∀ index : Fin candidate.rows.size,
+        index.val = run.rows.size → candidate.answers index = answer) ∧
+      RunExtends run candidate ∧ candidate.rows.size = run.rows.size + 1 ∧
+      ExpansionState witness context candidate first (done + 1) := by
+  apply append_expansion_row_of_termination joltField witness context equations run first done
+    state unfinished bound step answer indexIs executes entry observations ?_ registers
+  intro next noStore address atTermination
+  have noEarlierStore : ¬ ∃ i : Fin run.rows.size, run.StoresTerminationAt i := by
+    rintro ⟨i, store⟩
+    apply noStore
+    refine ⟨⟨i.val, by simp only [Array.size_push]; omega⟩, ?_⟩
+    simpa only [Fin.getElem_fin, Array.getElem_push_lt i.isLt] using store
+  exact (ramVal_succ_of_address_zero (two_pow_127_lt_char joltField)
+    context equations address ⟨run.rows.size, bound⟩ next zero).trans
+      (state.terminationWord bound noEarlierStore address atTermination)
 
 /-- Inside an unfinished expansion, the next prepared state is the preceding
 row's post-state, with no source-boundary PC preparation in between.
