@@ -274,6 +274,11 @@ The step (c) checker integration and bytecode proofs have introduced no new uses
 
 ## Gaps in our model
 
+- **Odd branch offsets.** `Rv64ProgramImage` carries decoded instructions without a decoder certificate, and `RiscvInstruction.BEQ` and the other branches accept any 13-bit offset, including odd ones (`expansion_facts.lean`, `BranchOffsetOk`, imposes no evenness).
+  Jolt's decoder never produces one: B-format offsets have bit 0 clear (`jolt/tracer/src/instruction/format/format_b.rs`, `FormatB::parse`, at `5def437f`).
+  A taken odd branch fails Sail's alignment assertion in `jump_to` (plain-steps-and-layout report: `BEQ x0, x0, +1` at `0x80000000`).
+  Soundness is unaffected, because a satisfying witness can never take such a branch: its next unexpanded PC would be an odd target, but a real next row has an even address and padding or the last cycle forces zero.
+  Tightening the image to decodable instructions would follow Jolt more closely; it is not needed for the proof.
 - **Trusted base.** The semantics of each Jolt instruction are translated from Rust by
   hand. Native RV64 instructions are proved against Sail
   (`JoltBytecode/InstructionEquivalence`); virtual instructions have nothing to prove

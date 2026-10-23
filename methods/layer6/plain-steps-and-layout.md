@@ -4,7 +4,7 @@ Read `/Users/ari.biswas/Lean/jolt-qed-public/AGENTS.md`, `methods/layer6/reuse.m
 Claude wrote this plan and has made mistakes in this proof before; check each claim against the code before relying on it, and stop and report if one is wrong.
 Work in `/Users/ari.biswas/Lean/jolt-qed-public` on `feat/soundness`; do not commit.
 Other agents work in `PlainRow.lean`, `RowStepKinds.lean`, `RowStepCommon.lean`, `RowStepJalr.lean`, `RamCutAgreement.lean`, `Jal.lean`, `HostCallRegisterFrame.lean`, `LoadDoubleword.lean`, `StoreDoubleword.lean`, `RamStoreAgreement.lean` and `RamInitialization.lean`; do not edit those.
-Edit only new files `Soundness/Layer5/Branch.lean` and `Soundness/Layer5/AdviceLoad.lean`, `Soundness/Layer6/DivisionDefs.lean` (only `division_expansion_layout` and helpers for it), new Layer 6 files for those helpers, and `JoltConstraints.lean` to import new files; you may make a private lemma public in place elsewhere and say which in the report.
+Edit only new files `Soundness/Layer5/Branch.lean` and `Soundness/Layer5/AdviceLoad.lean`, `Soundness/Layer6/TerminalNextPC.lean` (public or generalize in place only), `Soundness/Layer6/DivisionDefs.lean` (only `division_expansion_layout` and helpers for it), new Layer 6 files for those helpers, and `JoltConstraints.lean` to import new files; you may make a private lemma public in place elsewhere and say which in the report.
 
 ## Part 1: two missing Layer 5 steps
 
@@ -12,8 +12,10 @@ Edit only new files `Soundness/Layer5/Branch.lean` and `Soundness/Layer5/AdviceL
 Write them, shaped like the ported steps (`binaryAssertion_step`, `advice_step`):
 
 - Branches (BEQ, BNE, BLT, BGE, BLTU, BGEU), one lemma for all six: both operands live, no register write, the row executes successfully under `execWithTapeAnswer`, and agreement holds on the same live set.
-  Check that a canonical expanded branch cannot fail Sail's target-alignment check; if it can, stop and report the exact case.
-  The witness's branch decision is in `stall_branch_lookup_decision` (`Layer7/StallSuffix.lean`); this step does not need the next PC, which `expansion_finish` handles.
+  The plan first claimed a canonical expanded branch never fails Sail's target-alignment check; that is false (report: `BEQ x0, x0, +1` passes preprocessing, and its taken target `0x80000001` fails `jump_to`'s bit-0 assertion).
+  Derive alignment from the witness instead: when the branch is taken (`stall_branch_lookup_decision`, `Layer7/StallSuffix.lean`), the constrained next unexpanded PC is source address plus offset; at the last cycle or before padding it must be zero, which a branch target cannot be (`branch_target_ne_zero`); so the next cycle is real, its row's address is even (`bytecode_address_ok`), and the target equals it.
+  `terminal_real_successor_address` and `terminal_branch_real_target` (`Soundness/Layer6/TerminalNextPC.lean`, private) already do this for a terminal branch; make them public in place and reuse them, generalizing in place if the plain step needs a weaker hypothesis.
+  An untaken branch executes without the alignment check.
 - `VirtualAdviceLoad`: as `advice_step` (`Layer5/Advice.lean`), the witness's written value is a 64-bit word `v`; executing with tape answer `v` (`execWithTapeAnswer`, `Layer5/TapeSemantics.lean`) writes `v`; the destination becomes live.
   Execution fails for a byte count other than 1, 2, 4 or 8; prove from the expansion checker that expanded bytecode never has one.
 
