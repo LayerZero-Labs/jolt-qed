@@ -45,7 +45,36 @@ theorem checked_trace_length_fits
     (notMax : rows ≠ 2 ^ Nat.log2 maximum.toNat) :
     ∃ padded, ProverConfig.checkedTraceLength rows = some padded ∧
       padded ≤ maximum.toNat := by
-  sorry
+  let maxPower := 2 ^ Nat.log2 maximum.toNat
+  have maximumPositive : maximum.toNat ≠ 0 := by omega
+  have maxPowerBound : maxPower ≤ maximum.toNat := by
+    dsimp [maxPower]
+    rw [Nat.log2_eq_log_two]
+    exact Nat.pow_log_le_self 2 maximumPositive
+  have exponentBound : logT ≤ Nat.log2 maximum.toNat := by
+    rw [Nat.log2_eq_log_two]
+    exact Nat.le_log_of_pow_le (by decide : 1 < 2) witnessBound
+  have rowsBound' : rows ≤ maxPower :=
+    rowsBound.trans (Nat.pow_le_pow_right (by decide) exponentBound)
+  have withNoopBound : rows + 1 ≤ maxPower := by
+    have different : rows ≠ maxPower := notMax
+    omega
+  have roundedExponentBound : Nat.clog 2 (rows + 1) ≤ Nat.log2 maximum.toNat :=
+    Nat.clog_le_of_le_pow withNoopBound
+  have roundedBound : 2 ^ Nat.clog 2 (rows + 1) ≤ maxPower :=
+    Nat.pow_le_pow_right (by decide) roundedExponentBound
+  have withNoopFits : rows + 1 < 2 ^ 64 :=
+    lt_of_le_of_lt (withNoopBound.trans maxPowerBound) maximum.isLt
+  have roundedFits : 2 ^ Nat.clog 2 (rows + 1) < 2 ^ 64 :=
+    lt_of_le_of_lt (roundedBound.trans maxPowerBound) maximum.isLt
+  have added : MemoryLayout.checkedAdd rows 1 = some (rows + 1) := by
+    simp only [MemoryLayout.checkedAdd, if_pos withNoopFits]
+  have rounded : JoltConstraints.VerifierSizes.checkedNextPowerOfTwo (rows + 1) =
+      some (2 ^ Nat.clog 2 (rows + 1)) := by
+    simp only [JoltConstraints.VerifierSizes.checkedNextPowerOfTwo, if_pos roundedFits]
+  refine ⟨max (2 ^ Nat.clog 2 (rows + 1)) 256, ?_, ?_⟩
+  · simp [ProverConfig.checkedTraceLength, added, rounded]
+  · exact max_le (roundedBound.trans maxPowerBound) floor
 
 /-- Represented RAM addresses and the verifier's RAM bounds make checked prover
 RAM sizing succeed for a trace with the instance's initial state.

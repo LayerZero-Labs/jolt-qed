@@ -188,3 +188,22 @@ Only `JoltConstraints/Soundness/TopLevel.lean`, the new `JoltConstraints/Soundne
 Other agents' concurrent edits and commits were left alone.
 The scope excludes `methods/soundness.md` and `JoltConstraints/model_review.md`; their next authorized update should replace C's undivided obligation with these three staged parts.
 Work stops here for review, without proving the parts.
+
+## Padded length
+
+`JoltInstance.checked_trace_length_fits` is now proved at `JoltConstraints/Soundness/Layer7/ProverAccepts.lean:40`.
+Its statement and hypotheses are unchanged, and no new declaration was added.
+The other two staged helper C obligations remain open.
+No commit was made.
+
+I checked the plan against `ProverConfig.checkedTraceLength` at `JoltConstraints/prover_config.lean:42`, `MemoryLayout.checkedAdd` at `JoltConstraints/Constraints/MemoryLayout.lean:36`, and `VerifierSizes.checkedNextPowerOfTwo` at `JoltConstraints/verifier_sizes.lean:11` before editing.
+The pinned `ProverConfig::derive_from_dimensions` in `jolt/crates/jolt-prover/src/config.rs` uses checked addition, checked next-power-of-two rounding, and the minimum padded length in that order.
+The pinned base/Dory `MIN_PADDED_TRACE_LENGTH` is 256 in `jolt/crates/jolt-verifier/src/config.rs`.
+The proof bounds the row count plus one by the largest power of two at most the public maximum, then bounds both checked operations and the 256 floor by that maximum.
+It applies equally when the public maximum is not a power of two.
+
+`lake build JoltConstraints.Soundness.Layer7.ProverAccepts` passed with 8595 jobs; its final module compiled in 3.0 seconds.
+`git diff --check` passed.
+`#print axioms JoltInstance.checked_trace_length_fits` returned `propext`, `Classical.choice`, and `Quot.sound`, without `sorryAx`.
+No changed proof took more than ten seconds, and there is no new `bv_decide`, `native_decide`, `decide +kernel`, axiom, or proof-limit override.
+I edited only `JoltConstraints/Soundness/Layer7/ProverAccepts.lean` and this report.
