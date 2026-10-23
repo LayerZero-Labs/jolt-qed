@@ -160,55 +160,73 @@ def nativeJalrBaseOk : JoltISA.Instr → Bool
   | .JALR _ (.vreg _) _ => false
   | _ => true
 
+/-- A sequence contains no equality assertion with a nonzero immediate.
+For example, an assertion comparing temporary 40 with immediate 2 fails this
+check, while a zero-immediate equality assertion passes. -/
+def noSpoilAsserts (instructions : List JoltISA.Instr) : Bool :=
+  instructions.all fun instruction =>
+    match instruction with
+    | .VirtualAssertEQ _ _ imm => imm == 0
+    | _ => true
+
 /-- All syntactic checks for one source sequence: valid rows and shifts,
 initialized temporaries, jump/store separation, virtual JALRs with unchanged
-bases, and adjacent narrow advice multiplies. For example, ECALL passes all
-checks while a sequence that stores before its final JAL does not. -/
+bases, adjacent narrow advice multiplies, and no nonzero-immediate equality
+assertion. For example, ECALL passes all checks while a sequence that stores
+before its final JAL does not. -/
 def sequenceOk (instructions : List JoltISA.Instr) : Bool :=
   rowsOk instructions && shiftsOk instructions &&
     ExpansionTempLiveness.tempsReadAfterWrite instructions &&
     jumpEndNoStore instructions && sequenceJalrsVirtual instructions &&
-    virtualJalrBaseUnwritten instructions && advicePairsOk instructions
+    virtualJalrBaseUnwritten instructions && advicePairsOk instructions &&
+    noSpoilAsserts instructions
 
 /-- Every row passes the sequence row checks; for example, ECALL contains no branch. -/
 theorem sequenceOk_rowsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : rowsOk instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.1
+  exact ok.1.1.1.1.1.1.1
 
 /-- Shifts use the required masks; for example, a register shift follows its mask producer. -/
 theorem sequenceOk_shiftsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : shiftsOk instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.2
+  exact ok.1.1.1.1.1.1.2
 
 /-- Temporary reads follow writes; for example, ECALL initializes its scratch register. -/
 theorem sequenceOk_tempsReadAfterWrite (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : ExpansionTempLiveness.tempsReadAfterWrite instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.2
+  exact ok.1.1.1.1.1.2
 
 /-- A sequence ending in a jump has no store; for example, ECALL ends in JALR. -/
 theorem sequenceOk_jumpEndNoStore (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : jumpEndNoStore instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.2
+  exact ok.1.1.1.1.2
 
 /-- Sequence JALRs have virtual operands; for example, MRET reads virtual mepc. -/
 theorem sequenceOk_sequenceJalrsVirtual (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : sequenceJalrsVirtual instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.2
+  exact ok.1.1.1.2
 
 /-- A virtual jump base is unwritten in its sequence; for example, ECALL preserves mtvec. -/
 theorem sequenceOk_virtualJalrBaseUnwritten (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : virtualJalrBaseUnwritten instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.2
+  exact ok.1.1.2
 
 /-- Narrow advice loads have the required multiply; for example, AdviceLB shifts by 56 bits. -/
 theorem sequenceOk_advicePairsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : advicePairsOk instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.2
+
+/-- A checked sequence has no spoil assert; for example, no row can compare
+temporary 40 with a nonzero immediate. -/
+theorem sequenceOk_noSpoilAsserts (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : noSpoilAsserts instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
   exact ok.2
 

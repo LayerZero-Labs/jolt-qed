@@ -23,7 +23,51 @@ theorem source_spoil_assert_read_not_temporary
     (nonzero : imm ≠ 0) :
     ∀ operand ∈ [lhs, rhs],
       ¬ IsInstructionTemporary (TraceWitness.sourceRegisterAddress operand) := by
-  sorry
+  let property : List Instr → Prop := fun instructions =>
+    ∀ instruction ∈ instructions, ∀ left right immediate,
+      instruction = .VirtualAssertEQ left right immediate → immediate ≠ 0 →
+      ∀ operand ∈ [left, right],
+        ¬ IsInstructionTemporary (TraceWitness.sourceRegisterAddress operand)
+  have checked : property (rows.map (·.instruction)) :=
+    ExpansionFacts.expand_instruction_property property
+      (by
+        intro instruction ok selected inSingleton left right immediate isAssert _ operand operandIn
+          temporary
+        have selectedEq : selected = instruction := List.mem_singleton.mp inSingleton
+        obtain ⟨index, address⟩ := instructionTemporary_index _ temporary
+        let temp : JoltISA.VReg := BitVec.ofNat 7 (40 + index.val)
+        have addressEq : TraceWitness.sourceRegisterAddress operand = temp.toFin := by
+          apply Fin.ext
+          change (TraceWitness.sourceRegisterAddress operand).val =
+            (40 + index.val) % 128
+          omega
+        have operandEq : operand = .vreg temp :=
+          temporary_source operand index addressEq
+        have read : ExpansionTempLiveness.reads temp selected = true := by
+          apply List.any_eq_true.mpr
+          refine ⟨operand, ?_, ?_⟩
+          · rw [isAssert]
+            simpa only [ExpansionTempLiveness.readSources] using operandIn
+          · simp [operandEq]
+        rw [selectedEq] at read
+        have live := ExpansionFacts.nativeRowOk_tempsReadAfterWrite instruction ok
+        have first := List.all_eq_true.mp live index.val
+          (List.mem_range.mpr index.isLt)
+        have noRead := ExpansionTempLiveness.firstAccessIsWrite_head_no_read
+          temp instruction [] first
+        rw [noRead] at read
+        cases read)
+      (by
+        intro instructions ok selected selectedIn left right immediate isAssert nonzeroImmediate
+          operand operandIn
+        have noSpoil := ExpansionFacts.sequenceOk_noSpoilAsserts instructions ok
+        have allowed := List.all_eq_true.mp noSpoil selected selectedIn
+        simp only [isAssert] at allowed
+        have zero : immediate = 0 := by simpa using allowed
+        exact (nonzeroImmediate zero).elim)
+      source rows expanded
+  exact checked row.instruction (List.mem_map_of_mem member) lhs rhs imm instructionIs
+    nonzero
 
 /-- Every spoil-assert operand in expanded bytecode lies outside instruction
 temporaries 40–47, independently of any witness or execution.

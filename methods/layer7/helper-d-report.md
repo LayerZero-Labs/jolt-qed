@@ -111,3 +111,37 @@ Only the three allowed Lean files and this requested report were edited by this 
 `methods/soundness.md` and `JoltConstraints/model_review.md` were outside the allowed edit list.
 For their next authorized update, D's outstanding obligation should be recorded as `source_spoil_assert_read_not_temporary`, with the source-expansion argument above.
 Work stops here for review of that staged statement.
+
+## Spoil-assert fact
+
+The staged source fact is now proved, and helper D no longer depends on `sorryAx`.
+No commit was made.
+
+I checked the new plan against the code before editing.
+The generated and handwritten Lean expansion programs contain no `VirtualAssertEQ`, and `git grep` found no `VirtualAssertEQ` in the pinned Jolt built-in expansion recipes under `crates/jolt-program/src/expand/` at `5def437f`.
+The native custom case in `JoltConstraints/expansions.lean:123` constructs the assertion from architectural `.xreg` operands.
+The native checker in `JoltConstraints/expansion_facts.lean:600` includes `tempsReadAfterWrite [instruction]`, whose one-row form forbids any first read of registers 40–47.
+The existing per-source checker proofs compiled without changes after the new sequence check.
+
+| Declaration | File and line | Change |
+|---|---|---|
+| `ExpansionFacts.noSpoilAsserts` | `JoltConstraints/expansion_facts.lean:166` | New sequence check requiring every `VirtualAssertEQ` immediate to be zero |
+| `ExpansionFacts.sequenceOk` | `JoltConstraints/expansion_facts.lean:177` | Definition strengthened by the new conjunct |
+| `ExpansionFacts.sequenceOk_noSpoilAsserts` | `JoltConstraints/expansion_facts.lean:228` | New projection used by the source fact |
+| `JoltInstance.source_spoil_assert_read_not_temporary` | `JoltConstraints/Soundness/Layer7/SpoilAsserts.lean:17` | Replaced its `sorry` with a proof via `expand_instruction_property`; statement unchanged |
+
+The proof bodies of the seven existing `sequenceOk` projections at `JoltConstraints/expansion_facts.lean:185`, `:191`, `:197`, `:203`, `:209`, `:215`, and `:221` were adjusted to project through the new conjunct.
+Their written statements are unchanged; because `sequenceOk` is stronger, their checker assumption is semantically stronger.
+No previously existing theorem statement or hypothesis was added or changed, and no new `bv_decide`, `native_decide`, `decide +kernel`, axiom, or resource-limit override was introduced.
+
+With `lake env lean -Dtrace.Elab.async=false -Dtrace.profiler=true -Dtrace.profiler.threshold=10000 JoltConstraints/expansion_facts.lean`, elapsed synchronous file checking was 17.081 seconds before and 17.506 seconds after the edit.
+The existing `ExpansionFacts.csrrs_ok` proof was the only declaration reported above ten seconds: 10.525 seconds before and 10.783 seconds after.
+The threshold only filtered profiler output.
+
+`lake build JoltConstraints.expansion_facts` passed with 8462 jobs, and `lake build JoltConstraints.Soundness.Layer7.SpoilAsserts` passed with 8658 jobs.
+`lake env lean JoltConstraints/Soundness/TopLevel.lean` and `git diff --check` passed.
+The full `lake build JoltConstraints` failed in the other agent's concurrent `Soundness/Layer6/DivisionAppend.lean` work because `DivisionPrograms.olean` was absent when that job started; `DivisionPrograms` built later in the same run.
+I did not edit either division file.
+
+`#print axioms JoltInstance.soundness_spoil_asserts_pass` returned `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`, with no `sorryAx`.
+`#print axioms JoltInstance.source_spoil_assert_read_not_temporary` returned `propext`, `Classical.choice`, and `Quot.sound`, with no `sorryAx`.
