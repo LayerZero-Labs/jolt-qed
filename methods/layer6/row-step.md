@@ -20,7 +20,7 @@ This stage is top-down: state one step per row kind, prove `row_step` from them,
 2. State, as lemmas with `sorry`, one row step for each kind `PlainRow` excludes, each returning the generalized contract:
    - LD and SD, split by whether the address is ordinary RAM (`ld_ram_step`, `sd_ram_step_agreement`, still on full `RegisterAgreement` and `OrdinaryRamAgreement`) or device memory (`ld_device_step`, `sd_device_step`, `DeviceMemory.lean`);
    - VirtualHostIO (`host_call_selected_step`, `HostCallsSucceed`);
-   - JAL (`jal_step`, which needs the row's PC and prepared `nextPC`; `untrusted_row_pc` and `untrusted_row_next_pc` in `StallSuffix.lean` give them);
+   - JAL (`jal_step`, which needs the prepared row's PC and `nextPC`; see the correction below);
    - JALR (no Layer 5 step exists yet).
    Give each only hypotheses `row_step` has: the assumptions, the restrictions, the run, `state`, `unfinished` and `honestAdvice`.
    Check each against "Before staging a statement" in `AGENTS.md`, and in particular that a jump inside an unfinished expansion is possible at all; if a kind cannot occur at a non-terminal or terminal row, say so and state only what can occur.
@@ -37,3 +37,11 @@ Run `#print axioms JoltInstance.row_step`; it should reach `sorryAx` only throug
 Write `methods/layer6/row-step-report.md` with each staged statement (file and line), why you believe it is true, the existing lemmas each will use, and the build and axiom results.
 Do not commit.
 Then stop.
+
+## Corrections after the first audit (row-step report)
+
+The plan first cited `untrusted_row_pc` and `untrusted_row_next_pc` for JAL's PC facts, but they need a row already in the run; the appended row is not, and its execution is what `jal_step` builds.
+Instead, extract from their inductive step a lemma about a prepared state: from `RawRowEntry run next pre` and the prefix's execution certificate, `pre`'s PC is `run.bytecode[next].address` and its `nextPC` is that address plus 2 or 4 (`source_is_compressed`).
+At a source boundary this is `advance_pc`; for an interior row it is the previous row's post-state, which keeps PC and `nextPC` (`tape_row_preserves_pc`, `ordinary_tape_next_pc`) at the same source address (`BytecodeLayout.next`, `source_compressed_next`).
+Derive `untrusted_row_pc` and `untrusted_row_next_pc` from the extracted lemma, with their statements unchanged; you may edit `Soundness/Layer7/StallSuffix.lean` for this.
+`jal_step` and `host_call_selected_step` still take full `RegisterAgreement`; state the new steps over `RegisterAgreementOn` as the caller has it, and leave porting those two Layer 5 lemmas to the stage that proves the steps.
