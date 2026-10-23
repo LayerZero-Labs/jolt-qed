@@ -723,3 +723,99 @@ No new proof requires a timing report.
 `git diff --check` passed.
 Only this report was changed in the repository by this task; all excluded files were left untouched.
 No commit was made.
+
+### Completion after the module-placement correction
+
+The approved relocation and Part 2 proof are complete on `feat/soundness`; the final working-tree review was at `c7b91ff` after the concurrent agent's commit.
+`JoltInstance.division_expansion_layout` now lives in `JoltConstraints/Soundness/Layer6/DivisionLayout.lean:226`.
+A text comparison against the saved original declaration confirms that its name, statement and docstring are unchanged.
+`DivisionBlock.lean:2` imports the new module, and `JoltConstraints.lean:94` includes it in the aggregate imports.
+The old declaration was removed from `DivisionDefs.lean`; its definitions and remaining proofs were left unchanged.
+
+#### Checked claims and proof structure
+
+`expand_program_source_of_row` supplies an actual emitting source in the image.
+The source expansion's `starts` certificate puts the selected row at offset zero, and its countdown determines the full row count.
+`source_expansion_split` locates the source's rows as a contiguous block in the materialized bytecode using `option_mapM_results`.
+`expansion_block_eq` then uses `expand_program_unique` to identify the block's starting index and prove the exact extracted instruction-list equality.
+This uses the existing expansion certificates and accepted PC-map uniqueness, without copying the private block proof in `PlainRow.lean` or identifying a block solely by address.
+
+`source_instructionAt` derives address uniqueness through `pc_map_ok_distinct_addresses` and proves that the image's address lookup returns this source.
+The short lookup proof needs no new staged fact or hypothesis.
+
+`source_advice_kind` classifies `SourceInstruction.expand` once.
+The eight division cases retain their generated programs symbolically and use the shared `division_source_kind` proof to rule out x0.
+For the remaining constructors, the generated and handwritten expansion definitions reduce to absence of internal `VirtualAdvice`.
+Conditional choices are transported through the advice observers by specialized, pre-order instances of `apply_ite`, without enumerating operand values or splitting each expansion into separate proofs.
+`VirtualAdviceLoad` is correctly excluded by `Instr.adviceValue?`.
+
+The existing eight-program evaluation in `division_program_rows_shape` was extracted into the stronger private `division_program_structure` proof.
+The original private theorem keeps its exact statement and becomes a projection of that result.
+The same evaluation now also establishes advice-word patching and the filtered count of internal-advice rows.
+The new public `division_program_advice_shape` exposes those two conclusions for nonzero destinations.
+No eight-program evaluation was copied, and `division_source_advice_single` from `DivisionAppend.lean` was not used.
+
+`expanded_division_shape` obtains `arithmetic` from the existing `division_program_rows`, `temporaries` from `sequenceOk_tempsReadAfterWrite`, and `program_eq` and `singleAdvice` from the extracted program-shape result.
+The final layout proof assembles these facts without changing its premises.
+
+The pinned-code audit read Jolt's expander in `jolt/crates/jolt-program/src/expand/mod.rs` (`expand_source_instruction_with_provider`), the division recipes including `division/rem.rs` (`expand_rem`) and `division/shared.rs` (`expand_unsigned_word_div_rem`), and `preprocess/bytecode.rs` (`BytecodePCMapper::try_new`) at `5def437f`.
+The repository-relative paths passed to `git show` omit the leading `jolt/` directory label.
+The checked recipes agree with the x0 no-op rewrite, internal advice positions, and rejection of repeated address runs used by this proof.
+No further incorrect claim in the corrected Part 2 plan was found.
+
+#### Declaration inventory
+
+All names below are in namespace `JoltInstance`, and paths are relative to `JoltConstraints/Soundness/Layer6/`.
+Every listed theorem is proved.
+
+| Declaration | File and line | Role or change |
+| --- | --- | --- |
+| `expandedInternalAdvice` (private definition) | `DivisionLayout.lean:14` | Detect internal advice in a native or sequence expansion. |
+| `SourceInternalAdvice` (private definition) | `DivisionLayout.lean:20` | Apply that detector to a source expansion. |
+| `division_source_kind` (private) | `DivisionLayout.lean:23` | A division with internal advice cannot have destination x0. |
+| `source_advice_kind` (private) | `DivisionLayout.lean:34` | The single classification of advice-bearing sources. |
+| `source_internal_advice_of_rows` (private) | `DivisionLayout.lean:78` | Transport an advice-bearing materialized row back to its source expansion. |
+| `source_expansion_split` (private) | `DivisionLayout.lean:103` | Locate the emitting source's contiguous row block. |
+| `expansion_block_eq` (private) | `DivisionLayout.lean:123` | Identify the exact extracted instruction list and row count. |
+| `source_instructionAt` (private) | `DivisionLayout.lean:164` | Address lookup returns the source, using preprocessing uniqueness. |
+| `division_source_expand` (private) | `DivisionLayout.lean:183` | Connect each division source with `ofPureProgram`. |
+| `divisionRows_arithmetic` (private) | `DivisionLayout.lean:189` | Extract arithmetic membership from the existing `DivisionRows` certificate. |
+| `expanded_division_shape` (private) | `DivisionLayout.lean:200` | Assemble all four fields of `ArithmeticAdviceSequence`. |
+| `division_expansion_layout` | `DivisionLayout.lean:226` | Moved and proved with its name, statement and docstring unchanged. |
+| `division_program_structure` (private) | `DivisionPrograms.lean:250` | Generalize the existing single evaluation to retain row safety, patching and advice count together. |
+| `division_program_rows_shape` (private) | `DivisionPrograms.lean:272` | Original statement retained; proof now projects the generalized result. |
+| `division_program_advice_shape` | `DivisionPrograms.lean:282` | New public patching and single-advice facts for a nonzero destination. |
+
+No existing private declaration was made public.
+No existing theorem statement changed, and no hypothesis was added to the layout theorem or its callers.
+The new helper's nonzero-destination premise is discharged by the source classification.
+There are no new staged gaps, `bv_decide` uses, `native_decide` uses, `decide +kernel` uses, or raised limits.
+Every new or reworked proof body is under 60 lines.
+
+#### Validation and timings
+
+Direct `lake env lean` compilation with explicit output files passed for `DivisionDefs`, `DivisionPrograms`, `DivisionLayout`, and `DivisionBlock`, in dependency order.
+No aggregate build or rebuild of the other agent's modules was requested.
+The final logs are `/private/tmp/division-layout-final-defs.log`, `/private/tmp/division-layout-final-programs.log`, `/private/tmp/division-layout-final-layout.log`, and `/private/tmp/division-layout-final-block.log`.
+The only warning in these final runs is the existing unused `nonzero` parameter in `division_append_honest` at `DivisionBlock.lean:31`; that declaration was not changed.
+
+Proof profiling used `lake env lean -j1 -Dtrace.profiler=true -Dprofiler.threshold=10` while compiling `DivisionPrograms` and `DivisionLayout`.
+The longest new proof was `source_advice_kind` at 1.642826 seconds, followed by `division_program_structure` at 1.513135 seconds.
+`division_expansion_layout` took 0.087818 seconds.
+No new or reworked proof exceeded ten seconds.
+
+`lake env lean /private/tmp/division-layout-final-axioms.lean` passed.
+The log is `/private/tmp/division-layout-final-axioms.log`.
+
+| Root | Axioms |
+| --- | --- |
+| `JoltInstance.division_expansion_layout` | `propext`, `Classical.choice`, `Quot.sound` |
+| `JoltInstance.division_program_advice_shape` | `propext`, `Quot.sound` |
+| `JoltInstance.division_block` | `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound` |
+
+None of these roots reaches `sorryAx` or a native bit-vector axiom.
+The proof-obligation list and soundness status were updated to record completion.
+The stale obligation for `division_replay_complete`, already proved at `DivisionAppend.lean:1937` before this task, was also removed from the list; its Lean code was not changed.
+`git diff --check` passed.
+The excluded Lean files and the other agent's edits, including the separate `AdviceLoad` aggregate import, were left untouched.
+No commit was made.

@@ -247,10 +247,14 @@ private theorem division_temporary_facts :
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   all_goals simp [IsInstructionTemporary, joltRegisterSlot]
 
-private theorem division_program_rows_shape (kind : DivisionKind) (rd rs1 rs2 : regidx)
+private theorem division_program_structure (kind : DivisionKind) (rd rs1 rs2 : regidx)
     (q : BitVec 64) :
-    DivisionRows (kind.program rd rs1 rs2 q).instrs ∧
-      DivisionRowsFor true (kind.program rd rs1 rs2 q).instrs.dropLast := by
+    (DivisionRows (kind.program rd rs1 rs2 q).instrs ∧
+      DivisionRowsFor true (kind.program rd rs1 rs2 q).instrs.dropLast) ∧
+    (∀ value, kind.program rd rs1 rs2 value =
+      Program.seq ((kind.program rd rs1 rs2 q).instrs.map (patchAdviceWord value))) ∧
+    (isX0 rd = false →
+      ((kind.program rd rs1 rs2 q).instrs.filter (·.adviceValue?.isSome)).length = 1) := by
   obtain ⟨t40, t41, t42, t43, t44, t45, t46, t47⟩ := division_temporary_facts
   cases kind <;>
     simp only [DivisionKind.program, divProgramAuto, divuProgramAuto, divwProgramAuto,
@@ -262,7 +266,28 @@ private theorem division_program_rows_shape (kind : DivisionKind) (rd rs1 rs2 : 
     DivisionInstructionSafeFor, DivisionDestinationSafeFor,
     Encoded.ADDI, DivisionInstructionSafe, DivisionArithmeticRow,
     Instr.destination?, DivisionDestinationSafe, List.dropLast,
+    Program.seq, patchAdviceWord, Instr.adviceValue?,
     t40, t41, t42, t43, t44, t45, t46, t47]
+
+private theorem division_program_rows_shape (kind : DivisionKind) (rd rs1 rs2 : regidx)
+    (q : BitVec 64) :
+    DivisionRows (kind.program rd rs1 rs2 q).instrs ∧
+      DivisionRowsFor true (kind.program rd rs1 rs2 q).instrs.dropLast :=
+  (division_program_structure kind rd rs1 rs2 q).1
+
+/-- Replacing the sole VirtualAdvice word in a nonzero-destination division
+produces that division's generated program for the replacement word.
+For example, REM's nine rows have one such row, and patching it with 5 gives
+`remProgramAuto rd rs1 rs2 5`; advice tape loads do not count as VirtualAdvice. -/
+theorem division_program_advice_shape (kind : DivisionKind) (rd rs1 rs2 : regidx)
+    (q : BitVec 64) (nonzero : rd ≠ .Regidx 0) :
+    (∀ value, kind.program rd rs1 rs2 value =
+      Program.seq ((kind.program rd rs1 rs2 q).instrs.map (patchAdviceWord value))) ∧
+    ((kind.program rd rs1 rs2 q).instrs.filter (·.adviceValue?.isSome)).length = 1 := by
+  have notX0 : isX0 rd = false := Bool.eq_false_iff.mpr fun zero =>
+    nonzero (ExpansionRows.regidx_zero_of_isX0 zero)
+  exact ⟨(division_program_structure kind rd rs1 rs2 q).2.1,
+    (division_program_structure kind rd rs1 rs2 q).2.2 notX0⟩
 
 /-- Every generated division program consists of safe arithmetic rows.
 For example, REM's virtual writes use instruction temporaries and its final

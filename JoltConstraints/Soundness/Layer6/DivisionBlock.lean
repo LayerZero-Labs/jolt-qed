@@ -1,5 +1,5 @@
 import JoltConstraints.Soundness.Layer6.DivisionAppend
-import JoltConstraints.Soundness.Layer6.DivisionPrograms
+import JoltConstraints.Soundness.Layer6.DivisionLayout
 
 /-! Complete the division block from witness and honest generated runs. -/
 

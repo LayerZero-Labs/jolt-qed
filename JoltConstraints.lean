@@ -59,6 +59,7 @@ import JoltConstraints.Soundness.Layer5.Registers
 import JoltConstraints.Soundness.Layer5.RegisterInputs
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer5.Advice
+import JoltConstraints.Soundness.Layer5.AdviceLoad
 import JoltConstraints.Soundness.Layer5.Branch
 import JoltConstraints.Soundness.Layer5.AddImmediate
 import JoltConstraints.Soundness.Layer5.Arithmetic
@@ -90,3 +91,4 @@ import JoltConstraints.Soundness.Layer5.AssertionMulOverflow
 import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.Soundness.Layer6.BytecodePC
 import JoltConstraints.Soundness.Layer6.TerminalNextPC
+import JoltConstraints.Soundness.Layer6.DivisionLayout

@@ -169,21 +169,20 @@ The following declarations still use `sorry`:
 | Declaration | What it needs |
 |---|---|
 | `JoltInstance.row_step` (`Soundness/Layer6/RowStep.lean`) | Append one row of an unfinished expansion without internal advice: dispatch plain rows to `plain_row_step`, LD and SD to `ld_ram_step`/`sd_ram_step_agreement` (ordinary RAM, to be ported to `RegisterAgreementOn`) or `ld_device_step`/`sd_device_step` (device memory), and HostIO, JAL and JALR to their steps. |
-| `JoltInstance.division_expansion_layout` (`Soundness/Layer6/DivisionDefs.lean`) | Identify the advice-bearing division source, its expanded rows and generated program, including the unique advice row and the temporary-write certificate. |
-| `JoltInstance.division_replay_complete` (`Soundness/Layer6/DivisionAppend.lean`) | Carry the witness block's completed `ExpansionState` over to the honest rows. Needs a prefix frame in `DivisionPrograms.lean`: every proper prefix of a generated division program leaves the Sail state unchanged (stage 6c report). |
 | `JoltConstraints.Soundness.device_store_cases`, `device_output_store_image`, `device_panic_store_image`, `device_termination_store_image`, `device_load_image_bytes` (`Soundness/Layer5/DeviceMemory.lean`) | The device-level facts behind the proved `sd_device_step` and `ld_device_step`; no witness is involved, and the audit found no counterexample (device-memory report). |
 | `JoltInstance.represented_trace_ends_in_jump` (`Soundness/Layer7/ProverAccepts.lean`) | Helper C's last-row check: a branch stall cannot end a represented trace, because its replay never reaches padding or the witness's end. |
 | `JoltInstance.represented_ram_size_computes` (`Soundness/Layer7/ProverAccepts.lean`) | Helper C's RAM sizing: every nonzero address is at least the lowest address by the constraints, and the verifier bounds rule out overflow (helper C report). |
 
 `JoltInstance.plain_row_step_other` is proved for scalar, branch and tape-load rows without `sorryAx`; the [plain-row report](../methods/layer6/plain-row-other-report.md#completion-after-the-tape-load-correction) records the shared range-check lemma and checked tape widths.
 Helper D (`soundness_spoil_asserts_pass`) and helper C's padded-length part (`checked_trace_length_fits`) are proved.
-`division_block` is proved from `division_expansion_layout`, `division_replay_complete` and proved lemmas.
+`division_expansion_layout` is proved in `Soundness/Layer6/DivisionLayout.lean`, with its original statement unchanged.
+Together with the already-proved `division_replay_complete`, it closes `division_block` without `sorryAx`; the [division layout report](../methods/layer6/plain-steps-and-layout-report.md#completion-after-the-module-placement-correction) records the declaration inventory and axiom audit.
 
 Layer 6 proves `soundness_execution_prefix_agreement` by strong induction over source instructions (`Soundness/Layer6/PrefixAgreement.lean`).
 `boundary_step` crosses one source instruction, from `BoundaryState` to `BoundaryState`.
 It opens the source (`expansion_start`), appends its rows one at a time (`row_step`) or, for a division with internal advice, as a block (`division_block`), and closes it (`expansion_finish`).
 `boundaryState_empty`, `expansion_start` and `expansion_finish` are proved; `expansion_finish` reaches the next source through `terminal_next_unexpanded_pc` (`Soundness/Layer6/TerminalNextPC.lean`).
-`division_block` is proved from the five division lemmas above and `arithmetic_advice_sequence_run`, which runs the block on the witness's own advice and is proved.
+`division_block` first uses `arithmetic_advice_sequence_run` to execute the block on the witness's own advice, then reconstructs the honest run using the proved division-program and replay lemmas.
 Inside an expansion, registers agree only where they are live (`ExpansionLive`), because a division by zero lets the witness's quotient advice differ from the honest one in instruction temporaries.
 The stage reports in `methods/layer6/` record each step's audit, declarations and validation.
 

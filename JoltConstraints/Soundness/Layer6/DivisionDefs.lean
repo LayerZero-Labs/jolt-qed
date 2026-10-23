@@ -97,30 +97,6 @@ structure ArithmeticAdviceSequence (rows : List Instr)
   arithmetic : ∀ row ∈ rows, DivisionArithmeticRow row
   temporaries : ExpansionTempLiveness.tempsReadAfterWrite rows = true
 
-/-- Identify an advice-bearing source and its generated instruction family.
-Successful preprocessing supplies address uniqueness for `instructionAt`;
-`starts` and the expansion certificate locate the whole source, not merely
-an arbitrary row with the same address.
-For example, the first REM row identifies a nonzero destination and all nine
-generated rows, irrespective of the bytecode's advice placeholder.
-See jolt/crates/jolt-program/src/expand/mod.rs
-(`expand_source_instruction_with_provider`) and division/rem.rs (`expand_rem`)
-at 5def437f. -/
-theorem division_expansion_layout
-    (image : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
-    (expanded : expand_program image = some bytecode)
-    (preprocessed : ∃ slots, preprocess bytecode = some slots)
-    (first : Fin bytecode.size) (starts : bytecode[first].starts_source = true)
-    (hasAdvice : ExpansionHasAdvice bytecode first) :
-    ∃ (kind : DivisionKind) (rd rs1 rs2 : regidx) (placeholder : BitVec 64),
-      rd ≠ .Regidx 0 ∧
-      image.instructionAt bytecode[first].address =
-        some (kind.source rd rs1 rs2 placeholder) ∧
-      (expansionInstructions bytecode first).length = expansionRowCount bytecode first ∧
-      ArithmeticAdviceSequence (expansionInstructions bytecode first)
-        (kind.program rd rs1 rs2) := by
-  sorry
-
 /-- The word encoded by a witness write at a natural-number cycle, or zero
 if the cycle is absent or its field value encodes no word.
 For example, a range-checked advice write of 5 returns the word 5. -/

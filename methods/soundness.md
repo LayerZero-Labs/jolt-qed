@@ -92,6 +92,7 @@ Its fixed-tape inclusion is proved, and the reverse inclusion `untrustedAnswerLa
 Helper A is proved from execution-prefix agreement and the assembled stopping theorem.
 Layer 8 and Layer 7's stopping and tape rebuild are proved; Layer 7's helpers C and D are not.
 `plain_row_step_other` is proved for scalar, branch and tape-load rows without `sorryAx`; see the [completion report](layer6/plain-row-other-report.md#completion-after-the-tape-load-correction).
+`division_expansion_layout` is proved in `Layer6/DivisionLayout.lean` with its statement unchanged, and `division_block` now has no `sorryAx` dependency; see the [division layout report](layer6/plain-steps-and-layout-report.md#completion-after-the-module-placement-correction).
 Layer 6 proves `soundness_execution_prefix_agreement` by strong induction over source instructions; the step between two sources, `expansion_finish`, and the start of the run are proved.
 Helper C remains `sorry` but is no longer known false: the base verifier floor excludes short witnesses, and the approved `noMaxLengthTrace` restriction excludes a run that fills the largest permitted power-of-two domain.
 The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
