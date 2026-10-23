@@ -283,7 +283,9 @@ private theorem expansion_order_push (bytecode : Array JoltInstructionRow)
   · rw [Array.size_push, show rows.size + 1 - (done + 1) = rows.size - done by omega,
       Array.extract_push_of_le (Nat.sub_le _ _)]
 
-private theorem expansionLive_after
+/-- A register live after appending a row was live before it or is that row's
+destination; for example, an advice row makes its quotient temporary live. -/
+theorem expansionLive_after
     (bytecode : Array JoltInstructionRow) (first : Fin bytecode.size) (done : Nat)
     (row : JoltInstructionRow) (atRow : bytecode[first.val + done]? = some row)
     (register : Fin 128) (live : ExpansionLive bytecode first (done + 1) register) :
@@ -407,7 +409,10 @@ private theorem trace_push_observations {F : Type} [Field F] {params : WitnessPa
     TraceWitness.Rs2Value, TraceWitness.RamAddress, dif_pos old, dif_pos larger,
     Array.getElem_push_lt old, and_self]
 
-private theorem representsRows_push {F : Type} [Field F] {params : WitnessParams}
+/-- Four observations for a new row extend representation of the old rows.
+For example, appending an LD requires its selected PC, both operand values,
+and effective RAM address at the new witness cycle. -/
+theorem representsRows_push {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) (trace : Trace) (step : TraceRow trace.bytecode)
     (old : RepresentsRows witness trace) (bound : trace.rows.size < params.traceLength)
     (pc : witness.PC ⟨trace.rows.size, bound⟩ =
@@ -467,7 +472,10 @@ theorem finalTraceState_back (trace : Trace) :
     have rows : trace.rows = #[] := Array.size_eq_zero_iff.mp zero
     simp only [rows, Array.back?_empty, Option.map_none, Option.getD_none]
 
-private theorem representsPrefix_push {F : Type} [Field F] {params : WitnessParams}
+/-- A row with zero RAM address and unchanged memory and device extends the
+represented prefix without changing its RAM image; for example, a JALR only
+updates registers and nextPC. -/
+theorem representsPrefix_push {F : Type} [Field F] {params : WitnessParams}
     (joltField : JoltField F) (witness : WitnessType F params)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (context : ConstraintContext joltInstance privateInputs params)
@@ -1030,7 +1038,10 @@ theorem append_expansion_row_of_termination {F : Type} [Field F] {params : Witne
       subst last
       exact remaining more stalled.1
 
-private theorem append_expansion_row {F : Type} [Field F] {params : WitnessParams}
+/-- Append a successful row with zero RAM address to an unfinished expansion,
+preserving its represented prefix, live registers and termination invariant.
+For example, the final JALR completes an ECALL expansion. -/
+theorem append_expansion_row {F : Type} [Field F] {params : WitnessParams}
     (joltField : JoltField F) (witness : WitnessType F params)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (context : ConstraintContext joltInstance privateInputs params)

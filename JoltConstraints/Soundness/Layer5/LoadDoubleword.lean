@@ -33,9 +33,13 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 /-- An ordinary-RAM LD succeeds with the value constrained by RamReadValue.
-The checked address is a local consequence of the tracer restriction. -/
+The checked address is a local consequence of the tracer restriction.
+Only the base must be live; for example, a preceding expansion row can initialize
+a temporary base, and LD makes its destination live after the write. -/
 theorem ld_ram_step (regionFits : joltInstance.RamRegionFits)
-    {pre : SailJoltState} (registers : RegisterAgreement witness t pre)
+    {live : Fin 128 → Prop} {pre : SailJoltState}
+    (registers : RegisterAgreementOn live witness t pre)
+    (baseLive : live (TraceWitness.sourceRegisterAddress base))
     (ram : OrdinaryRamAgreement context.io.memory_layout (fun index => witness.RamVal index t) pre)
     (inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat)
     (checked : DoublewordAddressChecks pre.jolt_device (sourceValue base pre + imm) false)
@@ -47,7 +51,9 @@ theorem ld_ram_step (regionFits : joltInstance.RamRegionFits)
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS post ∧
     (∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ post ∧
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ post ∧
       OrdinaryRamAgreement context.io.memory_layout
         (fun index => witness.RamVal index ⟨t.val + 1, next⟩) post) ∧
     (∀ _last : t.val + 1 = params.traceLength,
@@ -60,9 +66,9 @@ theorem ld_ram_step (regionFits : joltInstance.RamRegionFits)
       simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,
         Bool.and_eq_true] using (bytecodeRow_rowOk context rowIs).canonical
     exact both.2
-  have baseRead := (registers.read base canonical).1
+  have baseRead := (registers.read base canonical baseLive).1
   have baseIs := registers.rs1Value bound context equations selected rowIs base canonical
-    (by rw [instructionIs]; rfl)
+    (by rw [instructionIs]; rfl) baseLive
   have encoded := ld_address_encoded bound context equations regionFits t slot selected row rowIs
     fault destination base (sourceValue base pre) imm instructionIs baseIs
   have aligned := ramAddress_mask_aligned bound context equations t _ encoded
@@ -83,19 +89,19 @@ theorem ld_ram_step (regionFits : joltInstance.RamRegionFits)
     simpa only [DoublewordAddressChecks, inRam, ↓reduceIte] using checked
   have loaded := Mmu.load_doubleword_ram pre (sourceValue base pre + imm)
     aligned inRam legal
-  have rule : execWithTapeAnswer row.instruction answer pre =
+  have rule : execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       (do
         writeDst destination (Mmu.ram_doubleword pre.sail.mem
           (sourceValue base pre + imm).toNat)
         pure RETIRE_SUCCESS) pre := by
-    rw [instructionIs]
+    rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
     simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, baseRead,
       aligned, ↓reduceIte, loaded, pure, EStateM.pure]
   obtain ⟨output, executed, registerNext⟩ :=
-    registerWrite_step context equations selected rowIs charAbove2pow128 registers
+    registerWriteOn_step context equations selected rowIs charAbove2pow128 registers
       destination (by rw [instructionIs]; rfl)
       (Mmu.ram_doubleword pre.sail.mem (sourceValue base pre + imm).toNat)
-      written answer advice (by rw [instructionIs]; rfl) rule
+      written answer advice rule
   have postRam := ram.afterWriteDst destination
     (Mmu.ram_doubleword pre.sail.mem (sourceValue base pre + imm).toNat)
   have ramNext := postRam.noEffect context equations rfl

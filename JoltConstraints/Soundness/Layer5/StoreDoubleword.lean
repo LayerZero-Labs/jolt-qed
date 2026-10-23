@@ -45,12 +45,13 @@ theorem sd_canonical :
 
 include charAbove2pow128 context equations selected rowIs instructionIs
 
-private theorem sd_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+private theorem sd_write_value {live : Fin 128 → Prop} {pre : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RamWriteValue t = ((sourceValue source pre).toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
   have sourceIs := agrees.rs2Value bound context equations selected rowIs source
-    (sd_canonical context rowIs instructionIs).2 (by rw [instructionIs]; rfl)
+    (sd_canonical context rowIs instructionIs).2 (by rw [instructionIs]; rfl) sourceLive
   have store : witness.OpFlags .Store t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
       JoltMetadata.opcodeFlag] using
@@ -62,9 +63,14 @@ private theorem sd_write_value {pre : SailJoltState}
 /-- In the ordinary-RAM case, SD succeeds with the constrained value and exact
 byte-map update. The selected table word receives that value, all other words
 stay unchanged, and register agreement is preserved. The final-cycle case
-updates RamValFinal rather than assuming a following trace column exists. -/
+updates RamValFinal rather than assuming a following trace column exists.
+Only the base and stored-value registers must be live; for example, both may
+be temporaries initialized by earlier rows of the same expansion. -/
 theorem sd_ram_step (regionFits : joltInstance.RamRegionFits)
-    {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+    {live : Fin 128 → Prop} {pre : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t pre)
+    (baseLive : live (TraceWitness.sourceRegisterAddress base))
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source))
     (inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat)
     (checked : DoublewordAddressChecks pre.jolt_device (sourceValue base pre + imm) true)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
@@ -84,7 +90,7 @@ theorem sd_ram_step (regionFits : joltInstance.RamRegionFits)
           if index = chosen then value else Mmu.ram_doubleword pre.sail.mem
             (ramLowestAddress context.io.memory_layout + 8 * index.val)) ∧
       (∀ next : t.val + 1 < params.traceLength,
-        RegisterAgreement witness ⟨t.val + 1, next⟩ post ∧
+        RegisterAgreementOn live witness ⟨t.val + 1, next⟩ post ∧
         ∀ index, witness.RamVal index ⟨t.val + 1, next⟩ =
           if index = chosen then (value.toNat : F) else witness.RamVal index t) ∧
       (∀ _last : t.val + 1 = params.traceLength, ∀ index,
@@ -93,14 +99,14 @@ theorem sd_ram_step (regionFits : joltInstance.RamRegionFits)
   dsimp only
   have bound := two_pow_127_lt_char charAbove2pow128
   have canonical := sd_canonical context rowIs instructionIs
-  have baseRead := (agrees.read base canonical.1).1
-  have sourceRead := (agrees.read source canonical.2).1
+  have baseRead := (agrees.read base canonical.1 baseLive).1
+  have sourceRead := (agrees.read source canonical.2 sourceLive).1
   have baseIs := agrees.rs1Value bound context equations selected rowIs base canonical.1
-    (by rw [instructionIs]; rfl)
+    (by rw [instructionIs]; rfl) baseLive
   have encoded := sd_address_encoded bound context equations regionFits t slot selected row rowIs
     base source (sourceValue base pre) imm instructionIs baseIs
   have aligned := ramAddress_mask_aligned bound context equations t _ encoded
-  have stored := sd_write_value charAbove2pow128 context equations selected rowIs instructionIs agrees
+  have stored := sd_write_value charAbove2pow128 context equations selected rowIs instructionIs agrees sourceLive
   have legal : Mmu.effective_address_ok pre.jolt_device
       (sourceValue base pre + imm).toNat true = true := by
     simpa only [DoublewordAddressChecks, inRam, ↓reduceIte] using checked
@@ -118,7 +124,7 @@ theorem sd_ram_step (regionFits : joltInstance.RamRegionFits)
       (sourceValue base pre + imm) (sourceValue source pre)
       (ramLowestAddress context.io.memory_layout) chosen.val index.val addressIs
   · intro next
-    have after : RegisterAgreement witness t
+    have after : RegisterAgreementOn live witness t
         { pre with sail := { pre.sail with
           mem := Mmu.write_ram_doubleword pre.sail.mem
             (sourceValue base pre + imm).toNat (sourceValue source pre) } } :=

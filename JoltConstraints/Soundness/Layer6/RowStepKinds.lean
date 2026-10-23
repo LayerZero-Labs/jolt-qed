@@ -1,4 +1,6 @@
 import JoltConstraints.Soundness.Layer6.PlainRow
+import JoltConstraints.Soundness.Layer6.RowStepJalr
+import JoltConstraints.Soundness.Layer6.RowStepMemory
 
 /-! The small row classification and staged non-plain extension rules. -/
 
@@ -90,7 +92,8 @@ theorem ld_ram_row_step {fault : LoadFaultClass} {destination : Dst} {base : Src
     (instruction : run.bytecode[next].instruction = .LD fault destination base imm)
     (inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat) :
     PlainRowExtension witness context run first done bound := by
-  sorry
+  exact append_ld_row joltField assumptions restrictions witness context equations run first done state
+    unfinished honestAdvice bound next pre indexIs entry registers instruction
 
 /-- A device LD appends a load from below RAM and preserves the cut invariant;
 for example, an aligned input load reads the agreed input word.
@@ -100,7 +103,8 @@ theorem ld_device_row_step {fault : LoadFaultClass} {destination : Dst} {base : 
     (instruction : run.bytecode[next].instruction = .LD fault destination base imm)
     (belowRam : (sourceValue base pre + imm).toNat < RAM_START_ADDRESS) :
     PlainRowExtension witness context run first done bound := by
-  sorry
+  exact append_ld_row joltField assumptions restrictions witness context equations run first done state
+    unfinished honestAdvice bound next pre indexIs entry registers instruction
 
 /-- An ordinary-RAM SD appends its store and preserves the expansion invariant;
 for example, a store through an initialized temporary changes one RAM word.
@@ -110,7 +114,8 @@ theorem sd_ram_row_step {base source : Src} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .SD base source imm)
     (inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat) :
     PlainRowExtension witness context run first done bound := by
-  sorry
+  exact append_sd_row joltField assumptions restrictions witness context equations run first done state
+    unfinished honestAdvice bound next pre indexIs entry registers instruction
 
 /-- A device SD appends its store with the conditional termination invariant;
 for example, an output store preserves termination, while a termination store
@@ -121,7 +126,8 @@ theorem sd_device_row_step {base source : Src} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .SD base source imm)
     (belowRam : (sourceValue base pre + imm).toNat < RAM_START_ADDRESS) :
     PlainRowExtension witness context run first done bound := by
-  sorry
+  exact append_sd_row joltField assumptions restrictions witness context equations run first done state
+    unfinished honestAdvice bound next pre indexIs entry registers instruction
 
 /-- A terminal HostIO row appends the call certified by `HostCallsSucceed` and
 keeps live-register agreement; for example, an advice-write call changes the tape.
@@ -158,7 +164,8 @@ theorem jalr_row_step {destination : Dst} {base : Src} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .JALR destination base imm)
     (terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
-  sorry
+  exact append_jalr_row joltField assumptions witness context equations run first done state
+    unfinished bound next pre indexIs entry registers nextPC instruction
 
 end Steps
 

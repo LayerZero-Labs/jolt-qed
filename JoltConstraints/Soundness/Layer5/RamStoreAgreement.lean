@@ -14,7 +14,9 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
 
 /-- The ordinary-RAM SD step preserves register and RAM agreement. The
-address checks are local facts of the already approved tracer restriction. -/
+address checks are local facts of the already approved tracer restriction.
+Agreement is required only on live registers, including the base and source;
+for example, an SD through a live temporary preserves all other live values. -/
 theorem sd_ram_step_agreement
     (charAbove2pow128 : 2 ^ 128 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
@@ -25,7 +27,10 @@ theorem sd_ram_step_agreement
     {base source : Src} {imm : BitVec 64}
     (instructionIs : row.instruction = .SD base source imm)
     (regionFits : joltInstance.RamRegionFits)
-    {pre : SailJoltState} (registers : RegisterAgreement witness t pre)
+    {live : Fin 128 → Prop} {pre : SailJoltState}
+    (registers : RegisterAgreementOn live witness t pre)
+    (baseLive : live (TraceWitness.sourceRegisterAddress base))
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source))
     (ram : OrdinaryRamAgreement context.io.memory_layout (fun index => witness.RamVal index t) pre)
     (inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat)
     (checked : DoublewordAddressChecks pre.jolt_device (sourceValue base pre + imm) true)
@@ -38,7 +43,7 @@ theorem sd_ram_step_agreement
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS post ∧
     (∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ post ∧
+      RegisterAgreementOn live witness ⟨t.val + 1, next⟩ post ∧
       OrdinaryRamAgreement context.io.memory_layout
         (fun index => witness.RamVal index ⟨t.val + 1, next⟩) post) ∧
     (∀ _last : t.val + 1 = params.traceLength,
@@ -46,7 +51,7 @@ theorem sd_ram_step_agreement
   dsimp only
   obtain ⟨stored, executed, chosen, one, addressIs, memory, nextTable, finalTable⟩ :=
     sd_ram_step charAbove2pow128 context equations selected rowIs instructionIs
-      regionFits registers inRam checked answer advice
+      regionFits registers baseLive sourceLive inRam checked answer advice
   refine ⟨stored, executed, ?_, ?_⟩
   · intro next
     obtain ⟨registersNext, tableNext⟩ := nextTable next

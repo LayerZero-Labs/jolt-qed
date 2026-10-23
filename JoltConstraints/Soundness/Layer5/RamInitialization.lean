@@ -84,7 +84,10 @@ private theorem new_input_below_ram (config : MemoryConfig) (layout : MemoryLayo
     Nat.mod_eq_of_lt (a := input) (by omega)]
   exact below
 
-private theorem overlayRamBytes_below_word (layout : MemoryLayout)
+/-- A byte buffer ending before a RAM word leaves that word's previous value
+unchanged under the image overlay; for example, an input buffer below ordinary
+RAM cannot overwrite its first word. -/
+theorem overlayRamBytes_below_word (layout : MemoryLayout)
     (start : BitVec 64) (bytes : Array (BitVec 8)) (index : Nat) (previous : BitVec 64)
     (fits : start.toNat + bytes.size ≤ ramLowestAddress layout + 8 * index) :
     TraceWitness.overlayRamBytes layout start bytes index previous = previous := by

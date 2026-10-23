@@ -195,57 +195,184 @@ Work stops here for review of the seven staged steps.
 
 ## Proofs
 
-This proving pass stopped at a file-scope dependency after completing the new Layer 5 JALR execution lemma.
-The five requested Layer 6 steps remain unchanged, including their existing `sorry`s.
-No counterexample to a staged step was found in this pass.
-The remaining work has not been completed or certified by this report.
+The resumed proving pass completed `jalr_row_step`, `ld_ram_row_step`, `sd_ram_row_step`, `ld_device_row_step`, and `sd_device_row_step` with their staged statements unchanged.
+All five have no reachable `sorryAx` dependency.
+Ari authorized publicizing the five shared helpers after the first pass stopped at the edit-scope boundary.
+The Layer 5 `jalr_step` from that first pass is committed in `ea2e553`; this resumed pass made no commit.
+No false staged statement or counterexample was found during the re-audit or the proofs.
 
-### JALR execution
+### JALR and the shared append
 
-`JoltConstraints.Soundness.jalr_step` is new at `JoltConstraints/Soundness/Layer5/Jalr.lean:19`.
-It takes agreement on a live-register predicate and liveness of the JALR base, and proves the exact successful execution, the witness link write, and next-column agreement on the old live registers plus the destination.
-The target uses the old base even when destination and base alias, adds the immediate with 64-bit wrapping, and clears bit zero.
-Virtual bases use the same canonical register-read argument as architectural bases.
-The pinned check was `jolt/tracer/src/instruction/jalr.rs` (`JALR::exec`) at `5def437f`.
+`append_jalr_row` at `JoltConstraints/Soundness/Layer6/RowStepJalr.lean:13` connects the committed Layer 5 execution lemma to the shared append constructor.
+It obtains the selected slot from `ExpansionState.next`, base liveness from `expansion_sources_live`, and canonical register encodings from the checked bytecode row.
+The row's `RowOk.ends` fact supplies its zero countdown, `source_compressed_of_last` converts the prepared nextPC flag, and `terminal_link_no_wrap` uses the existing `assumptions.pcNoWrap`.
+The interpreter reads the old base before writing the link, including aliased operands and virtual bases such as ECALL's mtvec.
+The pinned execution check was `jolt/tracer/src/instruction/jalr.rs` (`JALR::exec`) at `5def437f`.
 
-The new lemma explicitly requires prepared `nextPC` and the no-wrap equality for the link.
-These are obligations already available to the staged terminal JALR caller through its preparation premise, `source_compressed_of_last`, and `terminal_link_no_wrap` with `assumptions.pcNoWrap`; no premise was added to that caller.
-The link equation reuses `selected_jump_link_write_value`.
-The register frame reuses `register42_nextPC_preserves_sourceValue`, and the write uses `RegisterAgreementOn.write`.
-There is no architectural-register-only execution assumption and no assumption of a following cycle.
+The local JALR execution and append do not assume a following witness cycle.
+`selected_jalr_next_target` requires a following real cycle, so it is not applied unconditionally.
+The terminal append invariant has no interior-next obligation, and this proof uses the interpreter's actual computed target without adding a target-equation premise.
+The zero RAM address, unchanged memory/device, register update, row observations and conditional termination invariant are passed to the existing shared append proofs.
+The staged `pc` and `terminal` premises remain in `jalr_row_step`'s statement even though the stronger implementation does not need them as separate inputs.
 
-The plan's target helpers were also checked.
-`selected_jalr_next_target` requires a following real cycle, so it cannot be applied unconditionally at the terminal witness cycle.
-The local execution lemma does not need that equation: it computes the interpreter target directly, while its next-column register conclusion is conditional on the next column existing.
-This is an interface distinction, not a discovered false staged statement.
+The following helpers were made public in place, each with a docstring.
+An exact source comparison confirmed that every statement and proof below is unchanged.
 
-### Scope dependency and remaining work
+| File | Declaration and line |
+| --- | --- |
+| `JoltConstraints/Soundness/Layer6/PlainRow.lean` | `expansionLive_after`, 288 |
+| Same file | `representsRows_push`, 415 |
+| Same file | `representsPrefix_push`, 478 |
+| Same file | `append_expansion_row`, 1044 |
+| `JoltConstraints/Soundness/Layer5/RamInitialization.lean` | `overlayRamBytes_below_word`, 90 |
 
-The existing shared append helpers are private in `JoltConstraints/Soundness/Layer6/PlainRow.lean`: `expansionLive_after` at line 286, `representsRows_push` at line 410, `representsPrefix_push` at line 470, and `append_expansion_row` at line 1033.
-The current task's edit list does not include that file.
-The proposed resolution is to make those four declarations public, adding docstrings while leaving their statements and proofs unchanged.
-This would let the JALR proof reuse the same observation, cut, liveness and termination arguments as the existing arithmetic append.
-The alternative of copying those arguments conflicts with `AGENTS.md`: “Before writing a second proof that looks like an earlier one, stop.”
-Permission for this visibility change was requested and had not been received when this section was written.
+### RAM agreement and the memory steps
 
-The RAM bridge needs the initialized run's layout and device-frame bounds in addition to the two agreement predicates, because `finalRamWord` overlays device buffers on the ordinary-RAM image.
-The existing `UntrustedAnswerRun.final_device_same` and `UntrustedAnswerRun.final_outputs_fit_layout` provide the execution-dependent frame and output bound.
-The reusable overlay-disjointness fact, `overlayRamBytes_below_word`, is private at `JoltConstraints/Soundness/Layer5/RamInitialization.lean:87`, another file outside the current edit list.
-Permission was also requested to make that declaration public with its statement and proof unchanged.
-No duplicate overlay proof was written.
+`ramAgreement_iff` at `JoltConstraints/Soundness/Layer6/RamCutAgreement.lean:86` proves once that an initialized run's image agreement outside termination is equivalent to ordinary-RAM agreement at its final state together with `DeviceRamAgreement`.
+It applies to any table column, so the same fact handles both the next `RamVal` column and `RamValFinal`.
+`finalRamWord_ordinary` proves the required image identity from the generated layout, validated input size, retained advice/input buffers, and bounded final output buffer.
+It reuses `UntrustedAnswerRun.final_device_same`, `UntrustedAnswerRun.final_outputs_fit_layout`, the existing layout facts and the newly public overlay lemma.
+The proof also excludes the panic and termination flag overlays from ordinary RAM.
+It does not assert the identity for an arbitrary trace lacking initialization and execution certificates.
 
-The live-register ports of `ld_ram_step`, `sd_ram_step`, and `sd_ram_step_agreement`, the common cut-RAM bridge, and all five requested Layer 6 proofs remain to be done.
-The device-step signatures already accept live agreement and return the conditional termination obligation needed by the general append constructor.
-Their changing proofs were read but not edited.
-The new Layer 5 JALR lemma is ready for its staged caller but is not yet wired into `jalr_row_step` because of the scope dependency above.
+`ExpansionState.memoryAt` uses the reverse direction to recover both agreements before execution, transporting ordinary RAM through `RawRowEntry`'s memory frame.
+`ordinary_memory_step` proves once that an access in ordinary RAM has no table effect on device words, preserves their image, and keeps termination zero when there was no earlier termination store.
+The load/store rules supply the ordinary-RAM update; the shared proof handles the device and termination portions.
+For device accesses, the existing `ld_device_step` and `sd_device_step` supply their corresponding memory contracts.
+Their current proofs built successfully during this task and were not edited.
 
-### Validation and changes
+`append_memory_row` constructs a certified appended run before using the common RAM bridge, so the final-image frame facts do not assume the expansion invariant being constructed.
+It combines the ordinary and device agreements at either cut, then applies `append_expansion_row_of_termination`.
+The termination obligation is conditional on the absence of an SD touching termination anywhere in the appended prefix.
+The generic `exists_fin_push` fact separates old rows from the new row without duplicating the append proof.
+`memory_step_mono` lets the ordinary-RAM rules include the newly appended row in that conditional store event.
 
-`lake build JoltConstraints.Soundness.Layer5.Jalr` passed, with the new module taking about 3.7 seconds.
-`#print axioms JoltConstraints.Soundness.jalr_step` reports `[propext, sys_enable_experimental_extensions, Classical.choice, Quot.sound]`, with no `sorryAx`.
-The audit source is `/private/tmp/row-step-proofs-jalr-audit.lean` and the build log is `/private/tmp/row-step-proofs-jalr.log`.
-No new proof exceeded ten seconds in the module build.
-There are no new uses of `bv_decide`, `native_decide`, or `decide +kernel`, no new axiom declarations, and no raised proof limits.
-No existing statement, definition, or hypothesis was changed.
-Only the new `Jalr.lean` and this report were edited by this proving pass.
-The other agents' files were not edited, and no commit was made.
+`load_row_execution` and `store_row_execution` split once on whether the actual effective address is in ordinary RAM and normalize the two Layer 5 results to a shared contract.
+`append_ld_row` and `append_sd_row` then prove the respective extension without an address-region hypothesis.
+Consequently the RAM and device stages for each instruction are applications of the same family theorem; their original region hypotheses are retained unchanged.
+All four stages use `ramAgreement_iff` through the common append proof.
+The pinned instruction checks were `jolt/tracer/src/instruction/ld.rs` (`LD::exec`) and `jolt/tracer/src/instruction/sd.rs` (`SD::exec`) at `5def437f`.
+
+### Statement changes and proof-support declarations
+
+The only existing theorem statement changes are the authorized Layer 5 live-register ports and the private helper needed by them.
+No assumption or restriction of the program, core definition, or Layer 6 staged statement was changed.
+
+| File | Declaration and line | Authorized interface change |
+| --- | --- | --- |
+| `JoltConstraints/Soundness/Layer5/LoadDoubleword.lean` | `ld_ram_step`, 39 | Replace full agreement by `RegisterAgreementOn live`; add base liveness; return agreement on `live` plus the destination. |
+| `JoltConstraints/Soundness/Layer5/StoreDoubleword.lean` | private `sd_write_value`, 48 | Replace full agreement by live agreement and require source liveness. |
+| Same file | `sd_ram_step`, 69 | Replace full agreement by live agreement; require base and source liveness; preserve the same live set. |
+| `JoltConstraints/Soundness/Layer5/RamStoreAgreement.lean` | `sd_ram_step_agreement`, 20 | Port its input and output agreement in the same way as `sd_ram_step`, passing both liveness facts to that rule. |
+
+The callers prove all added liveness premises from the existing expansion source-read certificate.
+The execution, RAM-value, memory-update, checked-address and final-column portions of these statements are unchanged.
+No full-agreement wrapper was retained because no remaining caller needs one.
+
+All new declarations below are in namespace `JoltInstance`; private helpers are marked.
+Every new helper is used by the five completed proof dependencies.
+
+| File under `JoltConstraints/Soundness/Layer6/` | Declaration and line | Role |
+| --- | --- | --- |
+| `RowStepCommon.lean` | `ExpansionState.selectedRow`, 12 | Recover the exact row and selected slot. |
+| Same file | `representsRows_push_selected`, 37 | Add the selected PC to supplied operand/RAM observations. |
+| Same file | `representsRows_push_operands`, 62 | Transport operand and effective-address values through the append, reusing `rs1Value_real` and `rs2Value_real`. |
+| `RowStepJalr.lean` | `append_jalr_row`, 13 | Complete the JALR extension. |
+| `RamCutAgreement.lean` | private `remap_below_ram`, 10 | Exclude a device flag address from an ordinary-RAM index. |
+| Same file | `finalRamWord_ordinary`, 28 | Identify the final ordinary-RAM image with the byte map. |
+| Same file | private `ordinary_index_ne_termination`, 69 | Exclude termination from the ordinary-RAM portion. |
+| Same file | `ramAgreement_iff`, 86 | Combine or split the two memory agreements. |
+| Same file | `ordinary_memory_step`, 111 | Preserve device words and conditional termination zero for a RAM access. |
+| `MemoryRowAppend.lean` | `ExpansionState.memoryAt`, 11 | Recover the prepared state's memory agreements. |
+| Same file | `memory_step_mono`, 30 | Weaken the conditional termination obligation by enlarging its store event. |
+| Same file | private `exists_fin_push`, 39 | Split a property of an appended array element into old/new cases. |
+| Same file | `append_memory_row`, 49 | Assemble the common memory-row extension. |
+| `MemoryRowExecution.lean` | `load_row_execution`, 33; `store_row_execution`, 68 | Normalize the RAM/device execution contracts for each instruction family. |
+| `RowStepMemory.lean` | `append_ld_row`, 31; `append_sd_row`, 71 | Supply the selected operands, address, execution and live-register update to the shared append. |
+| `RowStepKinds.lean` | `ld_ram_row_step`, 91; `ld_device_row_step`, 102; `sd_ram_row_step`, 113; `sd_device_row_step`, 125; `jalr_row_step`, 163 | Replace only these five staged bodies with the completed proofs. |
+
+`RowStepKinds.lean` received targeted body replacements and imports for the new modules.
+Its two terminal-stage bodies were not edited by this pass.
+The five requested staged signatures were compared exactly with the committed source and are unchanged.
+The helper visibility changes also preserve their exact original statements and proofs.
+No existing proved fact was replaced by `sorry`, and no new `sorry` was introduced.
+
+### Validation and axiom audit
+
+`lake build JoltConstraints.Soundness.Layer6.RowStep` passed with 8703 jobs, including all new modules and the live-register RAM ports.
+The final `RowStepMemory`, `RowStepKinds`, and `RowStep` compilations took about 4.7, 5.2, and 4.3 seconds respectively.
+The three ported Layer 5 modules built in about 3.7–4.7 seconds each.
+The full repository target was not run.
+The build log is `/private/tmp/row-step-proofs-build.log`.
+Whitespace checks found no errors in the edited existing files or the new modules.
+
+`#print axioms` and a recursive dependency walk were run for all five steps, `ramAgreement_iff`, and the three public Layer 5 RAM rules.
+Each reports exactly:
+
+```text
+[propext, sys_enable_experimental_extensions, Classical.choice, Quot.sound]
+```
+
+Each recursive walk found no declaration directly using `sorryAx`.
+At this audit point, `row_step` itself still reaches exactly `host_row_step`, `jal_row_step`, and the pre-existing `plain_row_step_other` as direct `sorryAx` users.
+JAL and HostIO are the other agent's work; their status may change independently after this audit.
+The audit source and output are `/private/tmp/row-step-proofs-axioms.lean` and `/private/tmp/row-step-proofs-axioms.log`.
+
+No new or ported proof exceeded ten seconds in the measured module builds.
+The publicization build of the entire `PlainRow` module took about ten seconds, so that module was also profiled with command/proof timing enabled.
+Its slowest individual proof was the unchanged private `arithmetic_row_observations`, at about 1.69 seconds; the general append constructor took about 0.41 seconds.
+The profile is `/private/tmp/row-step-proofs-plain-profile.log`.
+There are no new `bv_decide`, `native_decide`, `decide +kernel`, or axiom declarations, and no proof limits were raised.
+
+This resumed pass edited the five authorized publicizations, the three Layer 5 RAM files, the five owned `RowStepKinds` bodies and imports, the six new Layer 6 support modules, and this report section.
+`RamAgreement.lean` did not need an edit: the RAM/device bridge lives in Layer 6, above both agreement definitions.
+The committed `Jalr.lean` was reused unchanged.
+The protected files, JAL/HostIO proofs, and the other agent's report section were not edited.
+Work stops here with the five requested steps complete and no commit made.
+
+## JAL and HostIO
+
+This pass stopped during the required plan audit, before editing Lean code.
+Neither `jal_row_step` nor `host_row_step` was proved, and their staged statements and `sorry` bodies are unchanged.
+The Layer 5 ports were not started.
+
+The requested separate `RowStepTerminal.lean` cannot reuse the append observation proofs under the permitted edit scope.
+`representsRows_push` is private in `JoltConstraints/Soundness/Layer6/PlainRow.lean:410`, and `representsPrefix_push` is private there at line 470.
+Those are the only shared append lemmas that establish the `RepresentsPrefix` obligation passed to the public `append_expansion_row_of_termination` at `PlainRow.lean:941`.
+`expansionLive_after` at line 286 is private too, so the terminal step's next-register agreement cannot use the existing live-set transition from the new file.
+The previous proving pass recorded the same visibility problem for JALR, and these declarations remain private in the current code.
+The plan permits editing `Jal.lean`, `HostCallRegisterFrame.lean`, the new `RowStepTerminal.lean`, and the two `RowStepKinds.lean` bodies, but excludes `PlainRow.lean`.
+Re-proving the generic append and live-set arguments in the new file would duplicate the existing proofs, contrary to `AGENTS.md`.
+
+The proposed correction is to permit publicizing `representsRows_push`, `representsPrefix_push`, and `expansionLive_after` in `PlainRow.lean`, with their statements and proofs unchanged and docstrings added.
+The JAL and HostIO step statements need no added hypotheses: `state.next` supplies the selected slot and HostIO `NextStep`, while the terminal JAL can use prepared PC, `source_compressed_of_last`, and `assumptions.pcNoWrap`.
+This audit found a file-scope mistake in the plan, not a counterexample to either staged statement.
+No build or axiom check was run because no Lean code changed.
+No commit was made.
+
+### Resumed Layer 5 ports
+
+The earlier file-scope blocker is resolved for the resumed task: another agent has made `expansionLive_after`, `representsRows_push`, and `representsPrefix_push` public in the working tree.
+This pass did not edit `PlainRow.lean` and did not start the Layer 6 JAL or HostIO row steps.
+
+`JoltConstraints.Soundness.RegisterAgreementOn.setNextPC` is now the shared frame theorem at `JoltConstraints/Soundness/Layer5/Jal.lean:81`.
+Its statement takes `RegisterAgreementOn live` and returns agreement on the same live set after updating Sail's `nextPC`.
+The former full-agreement `RegisterAgreement.setNextPC` was removed because no proof uses it; the frame proof was generalized in place.
+
+`JoltConstraints.Soundness.jal_step` at `JoltConstraints/Soundness/Layer5/Jal.lean:97` now takes `RegisterAgreementOn live` instead of full `RegisterAgreement` and returns agreement on `live` plus the JAL destination.
+The successful execution and link-value conclusions, selected row, no-wrap, PC and nextPC premises are unchanged.
+The proof still uses the same constrained link value, `RegisterAgreementOn.write`, and the generalized nextPC frame theorem.
+No source-register liveness premise was added because JAL has no source register.
+
+`JoltConstraints.Soundness.host_call_selected_step` at `JoltConstraints/Soundness/Layer5/HostCallRegisterFrame.lean:30` now takes and returns `RegisterAgreementOn live` instead of full agreement.
+Its successful execution conclusion and all other premises, including the required following-cycle bound, are unchanged.
+The existing HostIO Sail and virtual-register frame proof is reused with `RegisterAgreementOn.noWrite`.
+No full-agreement wrapper was retained because a repository-wide call-site search found no proof using either old step signature or the old full nextPC frame theorem.
+
+`lake build JoltConstraints.Soundness.Layer5.Jal JoltConstraints.Soundness.Layer5.HostCallRegisterFrame` passed; the two module builds took 5.3 and 4.9 seconds respectively.
+`#print axioms JoltConstraints.Soundness.jal_step` and `#print axioms JoltConstraints.Soundness.host_call_selected_step` both report `[propext, sys_enable_experimental_extensions, Classical.choice, Quot.sound]`, with no `sorryAx`.
+The axiom-check source is `/private/tmp/row-step-layer5-ports-axioms.lean`.
+`git diff --check` passed for both edited Lean files.
+No new `bv_decide` use, axiom, `sorry`, or proof limit was added, and neither ported proof took more than ten seconds.
+Only `Jal.lean`, `HostCallRegisterFrame.lean`, and this report were edited by this pass.
+No commit was made.
