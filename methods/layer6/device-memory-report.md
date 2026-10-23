@@ -223,3 +223,135 @@ Only the allowed new Lean file, the root import file, and this requested report 
 No existing statement, core definition, restriction, or language predicate was changed.
 The status documents are outside this task's allowed edits; their next authorized update should record the two staged device-step families and their invariants.
 Work stops here for review, without proving the steps.
+
+## Proofs
+
+This follow-up was performed on `feat/soundness` on 2026-10-23 under `methods/layer6/device-memory-proofs.md`.
+I read the required guidance and staging report, then checked the proof plan against the current Lean definitions, restrictions, witness lemmas, and the pinned Jolt sources at `5def437f`.
+The audit found no false plan claim or counterexample to either staged step.
+The successful builds below establish the caller proofs conditional on the five new staged semantic lemmas; their region proofs remain owed.
+
+### Completed proof work
+
+I replaced the body of `sd_device_step` first and built it successfully before starting the LD proof.
+I then replaced the body of `ld_device_step`.
+Both theorem statements, including every hypothesis and conclusion, were compared textually with HEAD and are unchanged.
+Their proved bodies contain 50 and 47 lines respectively.
+The original `atCut` hypotheses remain in both statements and are unused by these local proofs.
+
+The SD proof derives canonical operands, source-column agreement, the actual address encoding and alignment, and the stored field value from existing lemmas and equations.
+It applies `PanicStoresOne` to the attempted ready row to obtain word 1 in the panic case.
+The semantic dispatcher considers output first, then panic, then termination.
+Given the staged image effects, the proved column argument preserves every ordinary-RAM word and updates exactly the selected nontermination device word.
+It preserves termination-table zero whenever neither the prefix nor the current store touches termination.
+The same column argument is used for successor columns and `RamValFinal`.
+Execution and live-register preservation follow from the semantic MMU result, the existing read and no-write lemmas, and the shared source-value frame lemma.
+
+The LD proof derives the actual address encoding and alignment using `RamRegionFits` and the existing constraint lemmas.
+Its address classification is shared with SD and proves that the address is zero or an actual selected grid word.
+For address zero it uses `ram_zero_effects`; for a selected word it uses current device agreement, or `TerminationTableZero` at termination.
+The common `read_doubleword_of_image_bytes` proves little-endian packing once and is applied to both device bytes and MMU bytes for all buffer regions.
+The resulting `RamReadValue` determines `RdWriteValue`, and `registerWriteOn_step` supplies successful execution and the enlarged live set.
+The existing zero load effects preserve both RAM columns, with the image frame supplied by the staged load lemma.
+The output SD's byte-store growth and its image correspondence remain in its staged semantic lemma.
+
+### New declarations
+
+All declarations in this table are in namespace `JoltConstraints.Soundness` in `JoltConstraints/Soundness/Layer5/DeviceMemory.lean`.
+Private helper declarations are included for review.
+
+| Declaration | Line | Status and purpose |
+|---|---:|---|
+| `DeviceStoreResult` | 99 | New proposition packaging `stored`, `sail`, `vregs`, and `image`: successful MMU store, unchanged Sail/virtual registers, and the nontermination device-image update |
+| `device_store_cases` | 119 | Staged region exclusion, nonzero address, panic touch, and termination-index identification |
+| `device_output_store_image` | 142 | Staged output-store execution and image effect, including zero-filled growth |
+| `device_panic_store_image` | 159 | Staged store of word 1, exact panic post-state, and normalized image update |
+| `device_termination_store_image` | 175 | Staged ignored termination store and unchanged compared image words |
+| `device_store_result` | 186 | Proved dispatcher over the three permitted store regions |
+| `device_store_column` | 213 | Proved ordinary/device agreement for one updated table column |
+| `device_store_agreement` | 241 | Proved successor/final-column agreement and conditional termination zero |
+| `device_address_selection` | 283 | Proved shared zero-or-selected natural-address classification |
+| `read_doubleword_of_image_bytes` | 305 | Proved common byte-packing lemma, with separate physical and image offsets |
+| `device_load_image_bytes` | 325 | Staged byte dispatch, region/history facts, image correspondence, and image frame |
+| `device_load_read` | 363 | Proved packing and transfer from device/termination agreement to `RamReadValue` |
+| `device_load_agreement` | 419 | Proved successor/final memory agreement from zero effects and unchanged memory/image |
+| `ld_device_step` | 472 | Existing statement; body now proved from the load helper chain |
+| `sd_device_step` | 582 | Existing statement; body now proved from the store helper chain |
+
+Every new helper is used by one of the two step proofs.
+All new proved bodies are at most 50 lines.
+
+### Staged obligations and their premises
+
+The plan explicitly permits staging a missing substantial fact as a named lemma and continuing with the callers.
+There are exactly five new `sorry` bodies, each the entire body of its named semantic lemma.
+The top-level step proofs and the proved helper bodies contain no embedded gaps.
+
+1. `device_store_cases` must recover the ready device's generated layout and show that checked below-RAM stores can only address output, panic, or termination.
+   It also identifies a panic touch and converts equality with the initial layout's termination index into a current-device termination touch.
+   Its premises are a real ready run, a below-RAM address, and the byte checks obtained from `sd_address_checks`.
+2. `device_output_store_image` must prove the eight successful byte writes, output growth with zero padding, and the resulting single-word image effect.
+   Its ready run is needed for the original image, unchanged layout/input/advice buffers, and reachable output bounds.
+   Alignment, byte checks, and the output-region equation are established or supplied by the caller.
+3. `device_panic_store_image` must prove the exact flag update and the normalized image value 1 while excluding termination from comparison.
+   It takes stored word 1 explicitly; the caller proves that value from the existing `PanicStoresOne` restriction.
+4. `device_termination_store_image` must prove that all eight writes are ignored and that every compared device image word is unchanged.
+   The proved table argument separately handles the selected termination word and the now-vacuous zero obligation.
+5. `device_load_image_bytes` must establish the shared buffer-byte correspondence, raw peripheral dispatch, panic history, termination history, address-zero behavior, and final-image preservation after the register write.
+   Its `mapped` premise is proved from RAM selection and natural-number field injectivity, using the actual address encoding already obtained with `RamRegionFits`.
+   It uses the existing `PanicStoresOne` and `TerminationThenStall` restrictions on the actual ready LD.
+   In the termination case it must return both readable word zero and absence of an earlier termination store; those are what permit the caller to use `terminationWord`.
+
+These semantic lemmas contain no witness or constraint-context parameter.
+The checked run supplies execution history instead of assuming properties of an isolated device.
+The existing summaries in `Layer5/TapeDeviceFrame.lean` take an `UntrustedAnswerTrace`; the staged run-level semantic proofs still need the corresponding frame reasoning for an `UntrustedAnswerRun`.
+No existing frame theorem was weakened or given a new statement to bridge that distinction.
+The audit supports the staged obligations, but this task has not proved their region arguments.
+
+### Existing lemmas made public
+
+| Declaration | File and line | Change |
+|---|---|---|
+| `sd_canonical` | `JoltConstraints/Soundness/Layer5/StoreDoubleword.lean:40` | Removed `private` and added a docstring; statement and proof unchanged |
+| `sourceValue_of_host_frame` | `JoltConstraints/Soundness/Layer5/HostCallRegisterFrame.lean:18` | Removed `private` and added a docstring; statement and proof unchanged |
+
+No existing theorem gained a premise.
+No approved statement, core definition, restriction, or language predicate changed.
+`DeviceStoreResult` is the only new proposition definition.
+The original four agreement/classification definitions in this module are unchanged.
+
+### Build, axioms, and timing
+
+Both requested builds succeeded:
+
+```text
+lake build JoltConstraints.Soundness.Layer5.DeviceMemory
+Build completed successfully (8641 jobs).
+
+lake build JoltConstraints
+Build completed successfully (8814 jobs).
+```
+
+The final full build compiled `DeviceMemory.lean` in 4.9 seconds.
+The module-only build with both completed caller bodies took 5.0 seconds for that module.
+The modified `StoreDoubleword.lean` and `HostCallRegisterFrame.lean` modules also compiled in under ten seconds.
+No new or changed proof exceeded about ten seconds.
+The full build was not blocked by the other agents' edits.
+
+The requested `#print axioms` checks for each step returned:
+
+```text
+[propext, sorryAx, sys_enable_experimental_extensions, Classical.choice, Quot.sound]
+```
+
+A transitive walk over declaration types and proof values identified the exact reachable declarations whose bodies contain `sorryAx`.
+For `sd_device_step`, these are only `device_store_cases`, `device_output_store_image`, `device_panic_store_image`, and `device_termination_store_image`.
+For `ld_device_step`, this is only `device_load_image_bytes`.
+Thus the two caller proofs reach `sorryAx` exclusively through the five newly staged lemmas listed above.
+`#print axioms read_doubleword_of_image_bytes` returned `[propext, Quot.sound]`.
+
+There are no new uses of `bv_decide`, `native_decide`, or `decide +kernel`, no explicit axioms, and no proof-limit changes.
+`git diff --check` passed for all three edited Lean files.
+Only `Layer5/DeviceMemory.lean`, the two Layer 5 files listed above, and this report were edited by this task.
+No other agents' files or status documents were edited, and no commit was made by this task.
+Work stops after this section for review of the five staged semantic obligations.

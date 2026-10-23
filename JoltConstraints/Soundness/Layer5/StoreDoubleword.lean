@@ -33,7 +33,11 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   (instructionIs : row.instruction = .SD base source imm)
 
 include context rowIs instructionIs in
-private theorem sd_canonical :
+/-- A checked SD row has canonical base and value operands.
+For example, a virtual source cannot alias architectural register x1.
+See jolt/crates/jolt-program/src/expand/allocator.rs
+(`RISCV_REGISTER_BASE`, `ExpansionAllocator::allocate`) at 5def437f. -/
+theorem sd_canonical :
     JoltRegisterEncoding.sourceIsCanonical base = true ∧
     JoltRegisterEncoding.sourceIsCanonical source = true := by
   simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,

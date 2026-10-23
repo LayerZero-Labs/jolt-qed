@@ -11,7 +11,11 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-private theorem sourceValue_of_host_frame (source : Src)
+/-- Keeping Sail state and virtual registers keeps every source value.
+For example, changing only an output buffer keeps x1 and temporary 40.
+See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`)
+at 5def437f. -/
+theorem sourceValue_of_host_frame (source : Src)
     (pre post : SailJoltState) (sail : post.sail = pre.sail)
     (vregs : post.vregs = pre.vregs) :
     sourceValue source post = sourceValue source pre := by
