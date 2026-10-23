@@ -1,0 +1,41 @@
+# Layer 6: the branch and tape-load steps, and the division layout
+
+Read `/Users/ari.biswas/Lean/jolt-qed-public/AGENTS.md`, `methods/layer6/reuse.md`, the Part A section of `methods/layer6/stage-4a-report.md`, and `methods/layer6/stage-6b-report.md` first.
+Claude wrote this plan and has made mistakes in this proof before; check each claim against the code before relying on it, and stop and report if one is wrong.
+Work in `/Users/ari.biswas/Lean/jolt-qed-public` on `feat/soundness`; do not commit.
+Other agents work in `PlainRow.lean`, `RowStepKinds.lean`, `RowStepCommon.lean`, `RowStepJalr.lean`, `RamCutAgreement.lean`, `Jal.lean`, `HostCallRegisterFrame.lean`, `LoadDoubleword.lean`, `StoreDoubleword.lean`, `RamStoreAgreement.lean` and `RamInitialization.lean`; do not edit those.
+Edit only new files `Soundness/Layer5/Branch.lean` and `Soundness/Layer5/AdviceLoad.lean`, `Soundness/Layer6/DivisionDefs.lean` (only `division_expansion_layout` and helpers for it), new Layer 6 files for those helpers, and `JoltConstraints.lean` to import new files; you may make a private lemma public in place elsewhere and say which in the report.
+
+## Part 1: two missing Layer 5 steps
+
+`plain_row_step_other` (`PlainRow.lean`) will need a step over `RegisterAgreementOn` for every plain row kind; the stage 6b report lists the branches and `VirtualAdviceLoad` as having none.
+Write them, shaped like the ported steps (`binaryAssertion_step`, `advice_step`):
+
+- Branches (BEQ, BNE, BLT, BGE, BLTU, BGEU), one lemma for all six: both operands live, no register write, the row executes successfully under `execWithTapeAnswer`, and agreement holds on the same live set.
+  Check that a canonical expanded branch cannot fail Sail's target-alignment check; if it can, stop and report the exact case.
+  The witness's branch decision is in `stall_branch_lookup_decision` (`Layer7/StallSuffix.lean`); this step does not need the next PC, which `expansion_finish` handles.
+- `VirtualAdviceLoad`: as `advice_step` (`Layer5/Advice.lean`), the witness's written value is a 64-bit word `v`; executing with tape answer `v` (`execWithTapeAnswer`, `Layer5/TapeSemantics.lean`) writes `v`; the destination becomes live.
+  Execution fails for a byte count other than 1, 2, 4 or 8; prove from the expansion checker that expanded bytecode never has one.
+
+Check both statements against "Before staging a statement" in `AGENTS.md` and against Jolt's tracer at the pin.
+
+## Part 2: `division_expansion_layout`
+
+Prove `division_expansion_layout` (`DivisionDefs.lean`) without changing its statement: the advice-bearing source at `first` is one of the eight divisions with `rd ≠ x0`, the image's instruction at its address is that source, the block is exactly the generated program's rows, and they form an `ArithmeticAdviceSequence`.
+
+- `expand_program_source_of_row` (`program_facts.lean`) gives the source and its expansion rows; `expand_program_layout` and `first`'s `starts_source` make `expansionInstructions bytecode first` exactly those rows.
+- Only the eight division expansions with `rd ≠ x0` contain `VirtualAdvice` (stage 2 report); prove that over `SourceInstruction.expand` once, not per source.
+- `Rv64ProgramImage.instructionAt` (`honest_trace.lean`) looks a source up by address; you need that two image sources never share an address, which follows from successful preprocessing (`pc_map_ok_distinct_addresses`).
+  If that fact is not a short proof from existing lemmas, stage it and report.
+- For `ArithmeticAdviceSequence`: `arithmetic` from `division_program_rows` (`DivisionPrograms.lean`), `temporaries` from the expansion checker (`sequenceOk_tempsReadAfterWrite`), and `program_eq` and `singleAdvice` by evaluating the eight generated programs once, as `division_program_rows` does.
+
+Keep each proof under about 60 lines.
+If a step needs a fact that is not a short proof and is not named here or in `reuse.md`, stage it as its own lemma with `sorry`, and stop and report.
+
+## Before you stop
+
+Build `JoltConstraints` (or your own modules if another agent's edits break it).
+Run `#print axioms` on the two new steps and on `JoltInstance.division_block`; none should reach `sorryAx` unless you staged a lemma.
+Write `methods/layer6/plain-steps-and-layout-report.md` with each new or changed declaration (file and line), each lemma made public, any proof slower than about ten seconds, and the build and axiom results.
+Do not commit.
+Then stop.
