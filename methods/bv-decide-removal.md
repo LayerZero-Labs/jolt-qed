@@ -8,7 +8,7 @@ Work in `/Users/ari.biswas/Lean/jolt-qed-public` on `feat/soundness`; do not com
 
 The soundness theorem is closed: `#print axioms JoltInstance.soundness` (full build at `b9efd78`) gives `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound` and one `bv_decide` axiom, `JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5`.
 `bv_decide` was accepted only to make progress; every use must go before the proof is final.
-There are 22 uses (`grep -rn bv_decide JoltConstraints JoltBytecode`); change no statement while removing them.
+There are 21 uses (`grep -rn bv_decide JoltConstraints JoltBytecode` also finds one comment, in `Interleave.lean`); change no statement while removing them.
 
 ## Part 1: the soundness use
 
