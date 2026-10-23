@@ -11,7 +11,11 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-private theorem ram_store_byte (state : SailState) (base value : BitVec 64)
+/-- Reading byte `offset < 8` after a doubleword store returns that byte of
+the stored word, counting from its least significant byte.
+For example, offset zero of word 257 is byte 1.
+See `jolt/tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword_raw`) at 5def437f. -/
+theorem ram_store_byte (state : SailState) (base value : BitVec 64)
     (offset : Nat) (within : offset < 8) :
     (Mmu.write_ram_doubleword state.mem base.toNat value).get? (base.toNat + offset) =
       some (value.extractLsb' (8 * offset) 8) := by
@@ -20,7 +24,11 @@ private theorem ram_store_byte (state : SailState) (base value : BitVec 64)
   rw [Mmu.write_ram_doubleword_eq]
   exact stored_dword_get?_hit state base value offset within
 
-private theorem ram_store_word (state : SailState) (base value : BitVec 64) :
+/-- Reading the eight bytes written by a doubleword store reconstructs its word.
+For example, writing 257 and reading the same word gives 257 independently of
+the old memory contents.
+See `jolt/tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword_raw`) at 5def437f. -/
+theorem ram_store_word (state : SailState) (base value : BitVec 64) :
     Mmu.ram_doubleword (Mmu.write_ram_doubleword state.mem base.toNat value) base.toNat = value := by
   have first := ram_store_byte state base value 0 (by decide)
   simp only [Nat.add_zero] at first

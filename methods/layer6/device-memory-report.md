@@ -420,3 +420,172 @@ Fresh `#print axioms` checks on all five region lemmas and both step theorems re
 The staged obligations therefore remain outstanding; the successful module build does not discharge them.
 No commit was made.
 Work stops after recording this blocker and the proposed shared-proof refactor.
+
+### Approved frame refactor and first region proof
+
+This continuation on 2026-10-23 completes the approved run-level device-frame refactor and proves `device_output_store_image`.
+It then reaches the next obligation, `device_load_image_bytes`, and stops at a further shared-proof edit boundary described below.
+No counterexample to any of the five staged region statements was found.
+The four remaining staged bodies are unchanged, and no additional gap was introduced.
+The line numbers in this subsection describe the working tree after this continuation.
+
+#### Run-level frame declarations
+
+All declarations in this table are in `JoltConstraints/Soundness/Layer5/TapeDeviceFrame.lean`.
+The shared arguments now live in the three `UntrustedAnswerRun` declarations.
+Each existing `UntrustedAnswerTrace` declaration is a one-line application of the corresponding run declaration through `trace.toUntrustedAnswerRun`.
+
+| Declaration | Line | Result |
+|---|---:|---|
+| `UntrustedAnswerRun.device_relation` | 17 | Carries a reflexive, transitive device relation preserved by successful byte stores through a prefix |
+| `UntrustedAnswerRun.final_device_same` | 59 | Preserves the initial layout, trusted advice, untrusted advice, and inputs |
+| `UntrustedAnswerRun.final_outputs_fit_layout` | 76 | Bounds final output length by the initial layout's output capacity |
+| `UntrustedAnswerTrace.device_relation` | 131 | Existing statement unchanged; derived from the run theorem |
+| `UntrustedAnswerTrace.final_device_same` | 147 | Existing statement unchanged; derived from the run theorem |
+| `UntrustedAnswerTrace.final_outputs_fit_layout` | 158 | Existing statement unchanged; derived from the run theorem |
+
+The three existing trace statements were compared textually against `HEAD` and are identical.
+The new run declarations use the same relation obligations or initialized execution-prefix fields as the shared arguments previously required.
+No acceptance, completion, or stable-stall hypothesis was added to a prefix theorem.
+
+#### Region status, in the requested proof order
+
+All declarations in this table are in `JoltConstraints/Soundness/Layer5/DeviceMemory.lean`.
+
+| Declaration | Line | Result |
+|---|---:|---|
+| `device_output_store_image` | 557 | Proved; its axiom list contains no `sorryAx` |
+| `device_load_image_bytes` | 778 | Still staged; panic-history proof needs the shared extension below |
+| `device_store_cases` | 121 | Still staged; not attempted after the LD blocker |
+| `device_panic_store_image` | 612 | Still staged; not attempted after the LD blocker |
+| `device_termination_store_image` | 628 | Still staged; not attempted after the LD blocker |
+
+The output proof transfers the initial layout, advice bounds, and input bound to the ready pre-state using the run frame and a shared observation lemma for `NextStep`.
+It proves the generated layout lies above the MMU's peripheral ranges, then establishes the exact eight-byte output update, including zero-filled growth.
+The image proof works on a generic trace with explicit device and buffer facts, compares zero-padded words once, and handles the unchanged panic image while excluding termination as the staged statement requires.
+The existing `below` premise of `device_output_store_image` remains in its statement; the generated output range supplies the stronger end-of-word bound used in the proof.
+All five region statements and both step statements were compared textually against `HEAD` and are unchanged.
+
+#### Private helpers used by the output proof
+
+These nineteen private theorems and one private definition are in `JoltConstraints/Soundness/Layer5/DeviceMemory.lean`.
+Every helper is used by the retained output proof or another helper in its proof chain.
+Each proved body is under sixty lines.
+
+| Declaration | Line | Purpose |
+|---|---:|---|
+| `ready_observation` | 138 | Transfers any observation unchanged by PC advance from the prefix's final state to the ready pre-state |
+| `power_padding_small` | 161 | Bounds power-of-two byte padding strictly below RAM |
+| `advice_start_lower` | 177 | Bounds both advice starts using their actual placement equations |
+| `layout_above_peripherals` | 194 | Shows a generated layout's lowest address is at least `0x40000000` |
+| `io_grid` | 209 | Places output, panic, and termination on the layout's eight-byte grid |
+| `remap_at_or_above` | 224 | Computes remapping for a nonzero layout and an address at or above its start |
+| `output_address_range` | 232 | Gives peripheral exclusion and word bounds for an aligned output address |
+| `run_inputs_fit` | 256 | Recovers the input-size bound from successful initialization |
+| `padded_byte_store_read` | 270 | Proves the observed-byte effect of a zero-extended array update |
+| `storeOutputBytes` | 294 | Defines a fold of successive zero-extended byte writes |
+| `storeOutputBytes_read` | 300 | Proves the byte interval changed by that fold |
+| `image_word_congr` | 321 | Transfers equality of eight bytes to equality of packed words |
+| `image_word_extract` | 330 | Reconstructs a word from its extracted bytes using the existing RAM-store packing proof |
+| `storeOutputBytes_word` | 341 | Proves the selected-word effect on zero-padded output bytes |
+| `overlay_as_padded` | 361 | Identifies an overlay above a zero base with its zero-padded byte sequence |
+| `overlay_store_word` | 384 | Transfers the selected-word effect to an overlay |
+| `output_store_raw` | 399 | Computes one checked MMU output-byte store under explicit address bounds |
+| `output_store_doubleword` | 421 | Composes the byte calculation over the eight-byte MMU fold |
+| `input_overlays_zero_at_output` | 460 | Uses advice/input bounds to show preceding overlays are zero at output words |
+| `output_image_update` | 488 | Proves the nontermination image update from explicit trace, layout, buffer, and post-device facts |
+
+The new helper premises are local facts discharged by their callers: successful layout construction and initialization, ready-state observation preservation, byte/address bounds, buffer bounds, and the explicit output update.
+No existing theorem gained a premise.
+`storeOutputBytes` is the only new definition; no existing definition, restriction, or language predicate changed.
+
+#### Existing private lemmas made public
+
+| Declaration | File and line | Change |
+|---|---|---|
+| `ram_store_byte` | `JoltConstraints/Soundness/Layer5/RamStore.lean:18` | Removed `private` in place and added a docstring |
+| `ram_store_word` | `JoltConstraints/Soundness/Layer5/RamStore.lean:31` | Removed `private` in place and added a docstring |
+
+Both statements and both proof bodies were compared textually against `HEAD` and are unchanged.
+They supply the byte-extraction and reconstruction argument reused by `image_word_extract`.
+
+#### LD panic history: goal, failed invariant, and proposed extension
+
+For an actual ready LD touching panic, `PanicStoresOne` excludes an earlier `StoresPanicAt` row.
+The missing run-history fact is then:
+
+```lean
+(¬ ∃ i : Fin run.rows.size, run.StoresPanicAt i) →
+  pre.jolt_device.panic = false
+```
+
+This fact needs the run's initialized false flag, execution certificates, links, and ready-state relation.
+It cannot be obtained by directly applying the existing device-relation frame to the relation `fun a b => a.panic = false → b.panic = false`.
+`execWithTapeAnswer_rule_of_device_relation` (`Layer5/TapeSemantics.lean:38`) requires preservation under every successful device byte store, independently of the instruction being executed.
+The same unconditional obligation appears in `InstructionFrame.Rules.store` (`JoltBytecode/InstructionEquivalence/ProofSupport/InstructionFrame.lean:31`) and `JoltIOSetupFrame.execInstr_rule_of_device_relation` (`JoltBytecode/InstructionEquivalence/ProofSupport/DeviceFrame.lean:87`).
+
+The exact failed primitive case is a device with `panic = false`, address `io.memory_layout.panic.toNat`, and stored byte zero.
+The following calculation was checked by Lean:
+
+```lean
+example (io : JoltDevice) (notPanicked : io.panic = false) :
+    io.store? io.memory_layout.panic.toNat 0 = some { io with panic := true } ∧
+    ¬ ({ io with panic := true } : JoltDevice).panic = false := by
+  simp [JoltDevice.store?]
+```
+
+This identifies a false side condition for that use of the frame theorem; it does not refute `device_load_image_bytes` or another staged region statement.
+The plan's suggested relation-preservation route therefore needs an additional connection between a device change and the actual SD row.
+The existing frame declarations alone do not supply that connection.
+
+The proposed extension is a shared instruction-frame variant whose store obligation is needed only for an SD instruction, preserving all existing public statements through wrappers.
+It would support a relaxed-execution theorem saying that a successful non-SD instruction preserves the entire device.
+The actual SD case can then relate a false-to-true panic transition to `TouchesPanic`, and the run induction can produce a recorded `StoresPanicAt` witness.
+This would require edits to `InstructionFrame.lean`, `DeviceFrame.lean`, and `Layer5/TapeSemantics.lean` beyond the currently authorized scope.
+
+`AGENTS.md`, "When stuck, discuss first" and "Making proofs general", requires discussion before repeating the instruction proof or splitting over the instruction set for this case.
+I requested approval for the shared extension and have not treated the unanswered request as approval.
+No instruction-set case split, duplicate frame proof, out-of-scope edit, or new staged history lemma was made.
+Work stops at this scope and reuse boundary.
+
+#### Builds, axioms, timing, and retained scope
+
+All requested builds succeeded in this continuation:
+
+```text
+lake build JoltConstraints.Soundness.Layer5.TapeDeviceFrame
+Build completed successfully (8532 jobs).
+
+lake build JoltConstraints.Soundness.Layer5.RamStore
+Build completed successfully (3413 jobs).
+
+lake build JoltConstraints.Soundness.Layer5.DeviceMemory
+Build completed successfully (8651 jobs).
+
+lake build JoltConstraints
+Build completed successfully (8814 jobs).
+```
+
+The changed modules compiled in 4.0 seconds, 5.6 seconds, and 6.4 seconds respectively.
+No new or changed proof was observed taking more than about ten seconds.
+The latest full build succeeded with the other agent's concurrent edits present.
+
+Fresh `#print axioms` checks for all six frame declarations and `device_output_store_image` returned:
+
+```text
+[propext, sys_enable_experimental_extensions, Classical.choice, Quot.sound]
+```
+
+Neither the frame refactor nor the completed output theorem depends on `sorryAx`.
+The checks for `sd_device_step` (`DeviceMemory.lean:1035`) and `ld_device_step` (`DeviceMemory.lean:925`) still returned:
+
+```text
+[propext, sorryAx, sys_enable_experimental_extensions, Classical.choice, Quot.sound]
+```
+
+There are exactly four remaining `sorry` bodies in `DeviceMemory.lean`, each the whole body of one unchanged staged region lemma listed above.
+There are no new uses of `bv_decide`, `native_decide`, or `decide +kernel`, no explicit axioms, and no proof-limit changes.
+`git diff --check` passed for the three edited Lean files.
+This continuation retained edits only in `TapeDeviceFrame.lean`, `DeviceMemory.lean`, `RamStore.lean`, and this report.
+It did not edit `DivisionAppend.lean`, `DivisionPrograms.lean`, `RegistersReadProofHelpers.lean`, or the proof-status documents.
+No commit was made.
