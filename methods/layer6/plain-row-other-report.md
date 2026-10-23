@@ -156,3 +156,152 @@ This task edited `PlainRow.lean`, the two new Layer 6 support files, the three L
 Concurrent changes elsewhere, including visibility changes in `PlainRow.lean` made by another agent, are not attributed to this task.
 No commit was made.
 Work stops at the plan's branch/tape dependency boundary.
+
+## Branch and tape re-audit: execution-helper destination gap
+
+This pass stops before implementation under Ari's instruction to report incorrect plan claims.
+The proposed reuse in item 3 needs an additional destination-shape fact or a generalization outside the plan's visibility-only permission for `AdviceExpansion.lean`.
+No counterexample to `branch_plain_row_step`, `tape_plain_row_step`, or an actual source expansion was found.
+
+### Exact gap and checked case
+
+`JoltConstraints.Soundness.adviceLoad_step` at `JoltConstraints/Soundness/Layer5/AdviceExpansion.lean:67` takes an architectural `rd : regidx` and executes only `.VirtualAdviceLoad (sideEffectingRdZeroDst rd) byteCount`.
+`JoltISA.sideEffectingRdZeroDst` at `JoltBytecode/JoltISA/Instruction.lean:388` produces a nonzero architectural destination or virtual register 40.
+It does not cover arbitrary canonical virtual destinations.
+
+In contrast, the selected tape row in `JoltInstance.tape_plain_row_step` at `JoltConstraints/Soundness/Layer6/PlainRow.lean:1490` supplies an arbitrary `destination : Dst`.
+Applying the proposed execution helper requires the additional fact `∃ rd, destination = sideEffectingRdZeroDst rd`.
+Neither canonicality nor `advicePairsOk` supplies this fact for full-width loads.
+Adding only the planned byte-count condition does not supply it either.
+
+The kernel-checked reproducer `/private/tmp/plain-row-tape-destination-audit.lean` establishes:
+
+```lean
+ExpansionFacts.nativeRowOk (.VirtualAdviceLoad (.vreg 41) 8) = true
+ExpansionFacts.sequenceOk [.VirtualAdviceLoad (.vreg 41) 8] = true
+¬ ∃ rd, Dst.vreg 41 = sideEffectingRdZeroDst rd
+```
+
+The accepted row already has a valid byte count, so the proposed width conjunct leaves this case accepted.
+The last proof splits only on the x0 rewrite condition, without enumerating registers or instruction kinds.
+This refutes deriving the required destination shape from the checker facts; it does not claim that an actual source expansion emits this row.
+The existing narrow-load shape extraction at `JoltConstraints/Soundness/Layer7/TapeRebuild.lean:969` requires `width.toNat < 8`, so it does not resolve the eight-byte case.
+The same reproducer verifies the already documented acceptance of `.VirtualAdviceLoad (.xreg (.Regidx 1)) 9` by both checkers.
+
+The pinned Jolt sources confirm the intended tape behavior.
+At `5def437f`, `jolt/tracer/src/instruction/virtual_advice_load.rs` (`VirtualAdviceLoad::exec`) checks byte counts 1, 2, 4 or 8 and writes the read word to the destination.
+`jolt/crates/jolt-riscv/src/instructions/virt/advice_load.rs` assigns `Advice` and `WriteLookupOutputToRD`, and `jolt/crates/jolt-lookup-tables/src/instructions/virt/advice_load.rs` assigns the `RangeCheck` lookup.
+`jolt/crates/jolt-program/src/expand/memory/shared.rs` (`expand_advice_load`) emits the source destination, with extra arithmetic rows for narrow loads.
+The Lean `adviceldProgramAuto` at `JoltBytecode/JoltISA/ExpansionsAutomated.lean:1193` uses only the rewritten source destinations, so a stronger expansion fact is plausible but is not supplied by the proposed checker argument.
+
+### Proposed correction for review
+
+Generalize `adviceLoad_step` in place to a canonical `destination : Dst`, retaining the same valid-width premise.
+Its execution conclusion would be:
+
+```lean
+execWithTapeAnswer (.VirtualAdviceLoad destination byteCount) answer pre =
+  .ok RETIRE_SUCCESS
+    (afterWriteDst destination answer
+      { pre with adviceTape :=
+          { pre.adviceTape with
+              readPosition := pre.adviceTape.readPosition + byteCount.toNat } })
+```
+
+The new local premise would be `JoltRegisterEncoding.destinationIsCanonical destination = true`, which the selected-row caller can prove from its existing row canonicality.
+`writeDst_afterWriteDst` at `JoltConstraints/Soundness/Layer5/RegisterWrite.lean:37` already supplies the general successful write, so this avoids a destination-reachability proof and a duplicate execution proof.
+Update the existing caller `narrowAdviceProgram_exec` at `AdviceExpansion.lean:96` to specialize the general helper to `sideEffectingRdZeroDst rd`, preserving that caller's statement.
+This is a proposed helper statement change, not an implemented change or an added assumption of soundness.
+It requires expanding the plan's permission beyond visibility changes in `AdviceExpansion.lean`.
+
+### Validation and unchanged work
+
+`lake build JoltConstraints` passed with 8,826 jobs; the log is `/private/tmp/plain-row-branch-tape-audit-build.log`.
+`lake env lean /private/tmp/plain-row-tape-destination-audit.lean` passed.
+Its `#print axioms JoltInstance.plain_row_step_other` still reports `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`.
+Both named stages, `branch_plain_row_step` at `PlainRow.lean:1475` and `tape_plain_row_step` at `PlainRow.lean:1490`, remain unchanged with `sorry` bodies.
+The byte-count checker change and new `AdviceLoad.lean` are not implemented.
+
+Only this report was edited in the repository by this pass.
+No declarations, hypotheses, definitions, `bv_decide` uses, proof limits, or commits were added or changed.
+There are no new repository proofs to profile; the baseline build does not establish fresh per-proof timings.
+The other agent's division files and concurrent report changes were left untouched.
+
+## Completion after the tape-load correction
+
+This pass follows Ari's correction to item 3 and completes `branch_plain_row_step` and `tape_plain_row_step` with their staged statements unchanged.
+`#print axioms JoltInstance.plain_row_step_other` now reports only `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`, with no `sorryAx`.
+No further incorrect claim or false staged statement was found in the corrected plan.
+
+### Implementation and source checks
+
+The branch case applies `branch_step` and `append_plain_execution`.
+`rawEntry_state` extracts the existing raw-entry decomposition once: the prepared state is the run's final state or its `advance_pc` preparation.
+Both `rawEntry_prepared` and the branch's compressed-instruction premise use this decomposition.
+Both `UntrustedAnswerRun.final_compressed_enabled` and `prepared_compressed_enabled` are used, so neither is deleted and `Branch.lean` is unchanged.
+A branch has no destination, so its `rowLive` predicate reduces to the previous live set.
+The branch memory/device frame uses `StatePreservation.Preserves`, `preservation_auto`, read purity and `jump_to_shape`, after classification by the existing six-branch lemma.
+It uses an execution certificate and does not infer behavior from a standalone post-state.
+
+`advicePairsOk` now requires each tape-load byte count to be 1, 2, 4 or 8.
+The existing native and sequence checkers include it, and all existing `expand_ok` proofs compile with the stronger check.
+`advicePairsOk_width` extracts the width for any member of a checked instruction list.
+`expanded_adviceLoad_width` lifts that fact through `expand_instruction_property` and `expand_program_source_of_row`, without a per-source proof or a destination-shape condition.
+`advicePairsOk_head` in tape reconstruction now projects the existing narrow-pair condition past the new width conjunct.
+
+`rangeCheck_write_value` is the single shared derivation of the witness's 64-bit written word from a selected range-check lookup and the write-lookup-output flag.
+Both `advice_step` and the new `adviceLoad_register_step` use it.
+The tape step takes any destination and derives its canonicality from the selected bytecode row.
+It advances `adviceTape.readPosition` before writing, transports register agreement to that state using the unchanged `sail` and `vregs`, and applies `writeDst_afterWriteDst` and `RegisterAgreementOn.write` there.
+It does not apply `registerWriteOn_step` or reuse `AdviceExpansion.adviceLoad_step`.
+The destination write and tape-cursor update preserve memory and `jolt_device`, supplying the shared append premises.
+`AdviceExpansion.lean` remains unchanged.
+
+The pinned checks at `5def437f` included Jolt's tracer `BEQ::exec` in `jolt/tracer/src/instruction/beq.rs`, which conditionally updates PC without a register write.
+Jolt's tracer `VirtualAdviceLoad::exec`, the advice-load lookup implementation, and `expand_advice_load` were checked in the preceding audit and agree with the corrected construction.
+This pass also checked `RangeCheckTable::materialize_entry` in `jolt/crates/jolt-lookup-tables/src/tables/range_check.rs` and the VirtualAdvice flags in `jolt/crates/jolt-riscv/src/instructions/virt/advice.rs`.
+The shared lookup returns the low 64-bit word and both advice instructions carry `WriteLookupOutputToRD`.
+
+### Declaration inventory and statement changes
+
+Locations refer to this working-tree snapshot.
+The Layer 5 declarations are in `JoltConstraints.Soundness`, the Layer 6 declarations are in `JoltInstance`, and the checker declarations are in `ExpansionFacts`.
+
+| File | Declaration and line | Change |
+| --- | --- | --- |
+| `JoltConstraints/expansion_facts.lean` | `advicePairsOk`, 138; `advicePairsOk_width`, 164 | Add the authorized byte-count check and derive member widths. |
+| `JoltConstraints/Soundness/Layer5/Advice.lean` | `rangeCheck_write_value`, 22; `advice_step`, 57 | Extract the shared value proof; retain the original step statement. |
+| `JoltConstraints/Soundness/Layer5/AdviceLoad.lean` | `expanded_adviceLoad_width`, 19; `adviceLoad_register_step`, 48 | New bytecode-only width lift and selected tape-load step. |
+| `JoltConstraints/Soundness/Layer6/PlainRow.lean` | private `rawEntry_state`, 1048; `rawEntry_prepared`, 1070 | Extract the shared state decomposition; retain the original preparation statement. |
+| Same file | private `branch_plain_metadata`, 1486; private `branch_execution_frame`, 1493 | Branch destination/advice metadata and memory/device preservation. |
+| Same file | private `branch_plain_row_step`, 1528; private `tape_plain_row_step`, 1574 | Replace both whole-declaration `sorry` bodies with proofs. |
+| Same file | `plain_row_step_other`, 1616 | Update its docstring; statement and proof body are unchanged and now have no admitted dependency. |
+| `JoltConstraints/Soundness/Layer7/TapeRebuild.lean` | private `advicePairsOk_head`, 969 | Adjust the pair-condition projection; statement unchanged. |
+
+Exact statement comparisons passed for `advice_step`, `rawEntry_prepared`, both completed stages, `plain_row_step_other`, and `advicePairsOk_head`.
+No hypothesis was added to any existing theorem.
+The new shared value lemma takes the local range-check table and write-flag equalities, both proved by its callers from their instruction identities.
+The new tape step derives width and destination canonicality internally; neither is a new soundness premise.
+The only changed definition is the authorized proof checker `advicePairsOk`; the language, semantics, restrictions and expansion invariant are unchanged.
+`JoltConstraints.lean` and `PlainRow.lean` import `AdviceLoad`, and `PlainRow.lean` also imports the existing branch step.
+The plain-row status was updated in `methods/soundness.md` and removed from the outstanding-gap table in `JoltConstraints/model_review.md`.
+
+### Validation and remaining build limitation
+
+The kernel-checked audit `/private/tmp/plain-row-complete-audit.lean` passes; its output is `/private/tmp/plain-row-complete-audit.log`.
+It checks that native and sequence entry points reject a nine-byte load, that a three-byte load fails even with a matching following multiply, and that both entry points still accept an eight-byte load into virtual register 41.
+The same audit prints axioms for the two width lemmas, the shared range-check lemma, both Layer 5 advice steps and `plain_row_step_other`; none reaches `sorryAx`.
+`lake env lean JoltConstraints/Soundness/Layer6/PlainRow.lean` passes, and the full-build attempt successfully built `PlainRow`, `RowStep`, `AdviceLoad` and `TapeRebuild`.
+The explicit targeted build `lake build JoltConstraints.Soundness.Layer6.RowStep JoltConstraints.Soundness.Layer7.TapeRebuild` passes with 8,739 jobs; its log is `/private/tmp/plain-row-complete-targeted-build.log`.
+
+`lake build JoltConstraints` was attempted, but the aggregate target does not currently pass because the other agent's `DivisionLayout.lean:46:12` reaches the recursion-depth limit in `simp`.
+An earlier attempt also reported unknown `Encoded.VirtualShiftDataB/H/W` names in that file; the other agent removed those names before the final retry.
+The final aggregate log is `/private/tmp/plain-row-complete-build-final.log`; the earlier log is `/private/tmp/plain-row-complete-build.log`.
+No division file or proof limit was edited to work around that failure.
+
+Every new or changed proof body is under sixty lines; the longest new proof is the 33-line branch append.
+Profiling all five changed Lean modules with `-j1 -Dtrace.profiler=true -Dtrace.profiler.threshold=1000` found no proof exceeding ten seconds.
+The slowest profiled proof was the existing checker theorem `ExpansionFacts.csrrs_ok`, at about 7.52 seconds; all new proofs were below the one-second reporting threshold.
+The profile logs are `/private/tmp/plain-row-complete-profile.log`, `/private/tmp/plain-row-advice-profile.log`, `/private/tmp/plain-row-advice-load-profile.log`, `/private/tmp/plain-row-checker-profile.log`, and `/private/tmp/plain-row-tape-rebuild-profile.log`.
+No new `sorry`, `bv_decide`, `native_decide`, `decide +kernel`, axiom declaration or proof-limit setting was introduced.
+No commit was made.

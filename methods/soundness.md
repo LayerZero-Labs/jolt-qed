@@ -91,7 +91,7 @@ Step (a) shares the output, prover-acceptance and spoil-assert predicates on the
 Its fixed-tape inclusion is proved, and the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` in Layer 7 is proved without `sorryAx`.
 Helper A is proved from execution-prefix agreement and the assembled stopping theorem.
 Layer 8 and Layer 7's stopping and tape rebuild are proved; Layer 7's helpers C and D are not.
-The remaining soundness `sorry`s are `row_step`, `plain_row_step_other`, five division lemmas behind the proved `division_block`, helper C `soundness_prover_accepts` and helper D `soundness_spoil_asserts_pass`.
+`plain_row_step_other` is proved for scalar, branch and tape-load rows without `sorryAx`; see the [completion report](layer6/plain-row-other-report.md#completion-after-the-tape-load-correction).
 Layer 6 proves `soundness_execution_prefix_agreement` by strong induction over source instructions; the step between two sources, `expansion_finish`, and the start of the run are proved.
 Helper C remains `sorry` but is no longer known false: the base verifier floor excludes short witnesses, and the approved `noMaxLengthTrace` restriction excludes a run that fills the largest permitted power-of-two domain.
 The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).

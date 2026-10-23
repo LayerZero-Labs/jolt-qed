@@ -169,13 +169,13 @@ The following declarations still use `sorry`:
 | Declaration | What it needs |
 |---|---|
 | `JoltInstance.row_step` (`Soundness/Layer6/RowStep.lean`) | Append one row of an unfinished expansion without internal advice: dispatch plain rows to `plain_row_step`, LD and SD to `ld_ram_step`/`sd_ram_step_agreement` (ordinary RAM, to be ported to `RegisterAgreementOn`) or `ld_device_step`/`sd_device_step` (device memory), and HostIO, JAL and JALR to their steps. |
-| `JoltInstance.plain_row_step_other` (`Soundness/Layer6/PlainRow.lean`) | The plain row kinds outside the twelve division kinds: their ported Layer 5 steps (stage 6b), new steps for the six branches and `VirtualAdviceLoad`, and the append pipeline of `arithmetic_plain_row_step` generalized to them. |
 | `JoltInstance.division_expansion_layout` (`Soundness/Layer6/DivisionDefs.lean`) | Identify the advice-bearing division source, its expanded rows and generated program, including the unique advice row and the temporary-write certificate. |
 | `JoltInstance.division_replay_complete` (`Soundness/Layer6/DivisionAppend.lean`) | Carry the witness block's completed `ExpansionState` over to the honest rows. Needs a prefix frame in `DivisionPrograms.lean`: every proper prefix of a generated division program leaves the Sail state unchanged (stage 6c report). |
 | `JoltConstraints.Soundness.device_store_cases`, `device_output_store_image`, `device_panic_store_image`, `device_termination_store_image`, `device_load_image_bytes` (`Soundness/Layer5/DeviceMemory.lean`) | The device-level facts behind the proved `sd_device_step` and `ld_device_step`; no witness is involved, and the audit found no counterexample (device-memory report). |
 | `JoltInstance.represented_trace_ends_in_jump` (`Soundness/Layer7/ProverAccepts.lean`) | Helper C's last-row check: a branch stall cannot end a represented trace, because its replay never reaches padding or the witness's end. |
 | `JoltInstance.represented_ram_size_computes` (`Soundness/Layer7/ProverAccepts.lean`) | Helper C's RAM sizing: every nonzero address is at least the lowest address by the constraints, and the verifier bounds rule out overflow (helper C report). |
 
+`JoltInstance.plain_row_step_other` is proved for scalar, branch and tape-load rows without `sorryAx`; the [plain-row report](../methods/layer6/plain-row-other-report.md#completion-after-the-tape-load-correction) records the shared range-check lemma and checked tape widths.
 Helper D (`soundness_spoil_asserts_pass`) and helper C's padded-length part (`checked_trace_length_fits`) are proved.
 `division_block` is proved from `division_expansion_layout`, `division_replay_complete` and proved lemmas.
 

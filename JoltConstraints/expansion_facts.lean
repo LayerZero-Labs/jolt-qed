@@ -123,7 +123,8 @@ def virtualJalrBaseUnwritten (instructions : List JoltISA.Instr) : Bool :=
         instructions.all fun other => !ExpansionTempLiveness.writes base other
     | _ => true
 
-/-- Every advice load of fewer than eight bytes is immediately followed by
+/-- Every advice load reads 1, 2, 4 or 8 bytes; a nine-byte load fails.
+Every advice load of fewer than eight bytes is immediately followed by
 a multiply that shifts those bytes to the high end of a 64-bit word.
 Both rows write the same nonzero architectural register, or the x0 rewrite's
 virtual register 40, and the multiply reads that register.
@@ -131,13 +132,17 @@ These are exactly the destination and source forms of `sideEffectingRdZeroDst`
 and `adviceReadSource`: for example, AdviceLB x0 loads virtual register 40,
 then multiplies that register by `slliMultiplier (BitVec.ofNat 6 56)`.
 A narrow load at the end of the list fails this check.
-See jolt/crates/jolt-program/src/expand/memory/shared.rs:137-169 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/memory/shared.rs:137-169 at 8bbb2357.
+The width check follows jolt/tracer/src/instruction/virtual_advice_load.rs
+(`VirtualAdviceLoad::exec`) at 5def437f. -/
 def advicePairsOk : List JoltISA.Instr → Bool
   | [] => true
   | instruction :: rest =>
       (match instruction with
        | .VirtualAdviceLoad dst width =>
-           if width.toNat < 8 then
+           decide (width.toNat = 1 ∨ width.toNat = 2 ∨
+             width.toNat = 4 ∨ width.toNat = 8) &&
+           (if width.toNat < 8 then
              match rest with
              | .VirtualMULI nextDst src multiplier :: _ =>
                  (match dst, nextDst, src with
@@ -149,8 +154,25 @@ def advicePairsOk : List JoltISA.Instr → Bool
                    multiplier == JoltISA.slliMultiplier
                      (BitVec.ofNat 6 (64 - 8 * width.toNat))
              | _ => false
-           else true
+           else true)
        | _ => true) && advicePairsOk rest
+
+/-- Every advice load in a checked list has a supported byte count.
+For example, the first row of AdviceLH reads two bytes.
+See jolt/tracer/src/instruction/virtual_advice_load.rs
+(`VirtualAdviceLoad::exec`) at 5def437f. -/
+theorem advicePairsOk_width (instructions : List JoltISA.Instr)
+    (ok : advicePairsOk instructions = true) {destination : JoltISA.Dst} {width : BitVec 64}
+    (member : JoltISA.Instr.VirtualAdviceLoad destination width ∈ instructions) :
+    width.toNat = 1 ∨ width.toNat = 2 ∨ width.toNat = 4 ∨ width.toNat = 8 := by
+  induction instructions with
+  | nil => cases member
+  | cons first rest ih =>
+    rcases List.mem_cons.mp member with rfl | later
+    · simp only [advicePairsOk, Bool.and_eq_true, decide_eq_true_eq] at ok
+      exact ok.1.1
+    · simp only [advicePairsOk, Bool.and_eq_true] at ok
+      exact ih ok.2 later
 
 /-- A native JALR has an architectural base; its destination may be
 architectural or virtual after the x0 rewrite.

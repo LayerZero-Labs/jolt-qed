@@ -13,6 +13,37 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
+/-- A selected range-check lookup written to RD encodes a 64-bit word.
+The table and write-flag premises describe the selected instruction, without
+requiring a particular destination or a prepared state.
+For example, both VirtualAdvice and VirtualAdviceLoad obtain their words here.
+See jolt/crates/jolt-lookup-tables/src/tables/range_check.rs
+(`RangeCheckTable::materialize_entry`) at 5def437f. -/
+theorem rangeCheck_write_value {F : Type} [Field F] {params : WitnessParams}
+    {witness : WitnessType F params}
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (charAbove2pow127 : 2 ^ 127 < ringChar F)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+    (selected : bytecodeRa witness slot t = 1)
+    {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
+    (table : JoltMetadata.lookupTable row.instruction = some .RangeCheck)
+    (writes : JoltMetadata.opcodeFlag row.instruction .WriteLookupOutputToRD = true) :
+    ∃ value : BitVec 64, witness.RdWriteValue t = (value.toNat : F) := by
+  obtain ⟨address, lookupSelected, _⟩ :=
+    instructionLookupRa_unique charAbove2pow127 context equations t
+  let value : BitVec 64 := ((BitVec.ofFin address &&& ((1#128 <<< 64) - 1)).setWidth 64)
+  have output : witness.LookupOutput t = (value.toNat : F) := by
+    simpa only [rowIs, Option.bind_some, table, lookupTableEntry, rangeCheckTableEntry] using
+      lookupOutput_of_selected_bytecode charAbove2pow127 context equations t slot selected
+        address lookupSelected
+  have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, writes] using
+      opFlag_of_selected_bytecode charAbove2pow127 context equations .WriteLookupOutputToRD t slot selected
+  exact ⟨value, (rdWriteValue_eq_lookupOutput
+    equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag).trans output⟩
+
 /-- A selected VirtualAdvice row writes a 64-bit word chosen by the witness.
 `live` names the registers already agreeing with the prepared state; the
 destination is added after the write without requiring its old value to agree.
@@ -45,19 +76,8 @@ theorem advice_step {F : Type} [Field F] {params : WitnessParams}
         RegisterAgreementOn
           (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
           witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
-  obtain ⟨address, lookupSelected, _⟩ := instructionLookupRa_unique bound context equations t
-  let value : BitVec 64 := ((BitVec.ofFin address &&& ((1#128 <<< 64) - 1)).setWidth 64)
-  have output : witness.LookupOutput t = (value.toNat : F) := by
-    simpa only [rowIs, Option.bind_some, instructionIs, JoltMetadata.lookupTable,
-      lookupTableEntry, rangeCheckTableEntry] using
-      lookupOutput_of_selected_bytecode bound context equations t slot selected address lookupSelected
-  have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
-      JoltMetadata.opcodeFlag] using
-      opFlag_of_selected_bytecode bound context equations .WriteLookupOutputToRD t slot selected
-  have encoded := (rdWriteValue_eq_lookupOutput
-    equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag).trans output
+  obtain ⟨value, encoded⟩ := rangeCheck_write_value (two_pow_127_lt_char charAbove2pow128)
+    context equations selected rowIs (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
   obtain ⟨advice, patched⟩ : ∃ advice : row.instruction.RuntimeAdvice,
       row.instruction.withRuntimeAdvice advice = .VirtualAdvice destination value imm := by
     rw [instructionIs]

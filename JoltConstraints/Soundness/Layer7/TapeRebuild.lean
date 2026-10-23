@@ -973,7 +973,7 @@ private theorem advicePairsOk_head (dst : Dst) (width : BitVec 64)
       rest = .VirtualMULI (sideEffectingRdZeroDst rd) (adviceReadSource rd)
         (slliMultiplier (BitVec.ofNat 6 (64 - 8 * width.toNat))) :: tail := by
   simp only [advicePairsOk, if_pos narrow, Bool.and_eq_true] at ok
-  have checked := ok.1
+  have checked := ok.1.2
   split at checked
   · rename_i nextDst src multiplier tail
     simp only [Bool.and_eq_true] at checked
