@@ -128,7 +128,7 @@ Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
 ## Remaining work (2026-10-23)
 
-1. Remove the one `bv_decide` on the soundness path ([plan](bv-decide-removal.md)); the soundness theorem then depends only on `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
+1. Remove every `bv_decide` ([plan](bv-decide-removal.md)), the one on the soundness path first; the soundness theorem then depends only on `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
 2. The cleanup list under "Proofs owed" in `model_review.md`: long proofs, repeated unpacking, unused declarations and checker speed.
 3. The closing report: restrictions split into static checks, run-time properties and the claim; assumptions; issues found; the SDK question.
 

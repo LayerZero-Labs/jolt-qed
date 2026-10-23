@@ -243,12 +243,17 @@ Unpack `JoltInstance.initial_state` once: `initial_state_device`, `initial_state
 
 ### bv_decide
 
-`bv_decide` is temporarily accepted under the `AGENTS.md` rules; the soundness theorem must not depend on it ([removal plan](../methods/bv-decide-removal.md)).
-The uses on the soundness path are tracked here; other uses in completeness and bytecode-equivalence proofs are outside this list.
+`bv_decide` is temporarily accepted under the `AGENTS.md` rules; every use must be removed before the proof is final ([removal plan](../methods/bv-decide-removal.md)).
+There are 21 uses; the soundness theorem reaches only the first, and Part 1 of the plan replaces it with a bit-level proof in `encoded_branch_offset`.
+The other 19 predate the 2026-10-21 rule that tracks new uses, so they were not listed here before.
 
-| Declaration | Use |
+| Declaration or file | Uses |
 |---|---|
-| `JoltConstraints.branch_target_toNat` (`Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean`) | One, proving `(offset.signExtend 128).setWidth 64 = offset.signExtend 64`; `soundness_stopping` and `expansion_finish` (through `terminal_branch`) depend on this lemma. Being replaced by a bit-level proof of the same fact in `encoded_branch_offset` (`JoltBytecode/JoltISA/Values.lean`). |
+| `JoltConstraints.branch_target_toNat` (`Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean`) | One, proving `(offset.signExtend 128).setWidth 64 = offset.signExtend 64`; `soundness_stopping` and `expansion_finish` (through `terminal_branch`) depend on this lemma. |
+| `encoded_branch_offset` (`JoltBytecode/JoltISA/Values.lean`) | One, the same fact as above. |
+| `Completeness/Helpers/LookupEntryProofHelpers.lean` | Eight: window-mask entries, `halfword_aligned`, `word_aligned`, `lookupEntryCorrect_RangeCheckAligned` and byte-swap identities near `rev8w_eq`. |
+| `JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Splice.lean` | Ten: low-bit masks and byte extraction. |
+| `JoltBytecode/InstructionEquivalence/Instructions/Natives/Sd.lean` | One: `x &&& 7 = 0 → x &&& -8 = x`. |
 
 **Completeness:**
 

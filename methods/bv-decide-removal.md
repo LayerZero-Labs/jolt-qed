@@ -1,4 +1,4 @@
-# Remove the soundness `bv_decide`
+# Remove every `bv_decide`
 
 Read `/Users/ari.biswas/Lean/jolt-qed-public/AGENTS.md` first.
 Claude wrote this plan and has made mistakes in this proof before; check each claim against the code before relying on it, and stop and report if one is wrong.
@@ -8,7 +8,8 @@ Work in `/Users/ari.biswas/Lean/jolt-qed-public` on `feat/soundness`; do not com
 
 The soundness theorem is closed: `#print axioms JoltInstance.soundness` (full build at `b9efd78`) gives `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound` and one `bv_decide` axiom, `JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5`.
 `bv_decide` was accepted only to make progress; the soundness theorem must not depend on it.
-The other 19 uses in the repository are in completeness and bytecode-equivalence proofs that the soundness theorem does not use; they are out of scope (Ari, 2026-10-23).
+The other 19 uses are older, in completeness helpers and JoltBytecode's instruction-equivalence proofs; the soundness theorem does not depend on them, but they go too (Ari, 2026-10-23).
+`LeanRV64D` has none.
 Change no statement.
 
 ## Part 1: the soundness use
@@ -17,7 +18,22 @@ Change no statement.
 `encoded_branch_offset` (`JoltBytecode/JoltISA/Values.lean`, line 145) proves the same fact by `bv_decide`, after a `change` to that form.
 Prove it once without `bv_decide` in `Values.lean` (for example by `BitVec.eq_of_getLsbD_eq` with `getLsbD_setWidth` and `getLsbD_signExtend`, or a core lemma if one exists), and use it in `branch_target_toNat`; `JoltConstraints` already imports `JoltBytecode`.
 Then build `JoltConstraints` and run `#print axioms JoltInstance.soundness`; it should list only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
-Then stop.
+Then stop for review; Part 1 is committed and pushed before Part 2 starts.
+
+## Part 2: the other uses
+
+These are on the completeness and bytecode-equivalence paths:
+
+- `JoltConstraints/Completeness/Helpers/LookupEntryProofHelpers.lean`: eight uses, for the three window-mask entries (a low-bit mask agrees at widths 64 and 128), `halfword_aligned` and `word_aligned` (alignment from the low bits), `lookupEntryCorrect_RangeCheckAligned`, and two byte-swap identities near `rev8w_eq`.
+- `JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Splice.lean`: ten uses, low-bit masks and byte extraction such as `lowByte_zeroExtend`.
+- `JoltBytecode/InstructionEquivalence/Instructions/Natives/Sd.lean`, line 83: `x &&& 7 = 0 → x &&& -8 = x`.
+
+Three need care.
+The two `hlow` facts in `fusedHalfwordSplice_eq` and `fusedWordSplice_eq` (`ea &&& 7 = ea &&& 6`, `ea &&& 7 = ea &&& 4`) are false without the store's alignment; `bv_decide` takes it from the context, so the replacement must use that hypothesis explicitly.
+`masked_add_eq_splice` has an addition; look for a core lemma that a sum of two words with no common bits is their bitwise or.
+`rev8_32` and `rev8w_eq` are byte swaps; a bit-level proof over 64 positions may become a large case split, and if it does, stop and report.
+Group these by the fact they prove, prove each shared fact once, and derive the uses from it; for example, the three window-mask uses differ only in the mask, and the alignment facts in Splice and Sd may share one lemma.
+`JoltConstraints/Soundness/Layer4/Interleave.lean` replaced earlier `bv_decide` uses with bit-level proofs (`getLsbD` simp lemmas, `interval_cases` on a small index range); follow that style where it fits.
 
 ## Rules
 
@@ -28,6 +44,7 @@ Do not edit `JoltConstraints/model_review.md` or `methods/soundness.md`; the aud
 
 ## Before you stop
 
-Build `JoltBytecode` and `JoltConstraints`, run `#print axioms JoltInstance.soundness`, and time every changed proof; list any over about ten seconds.
+Build `JoltBytecode` and `JoltConstraints`; after Part 2, `grep -rn bv_decide JoltConstraints JoltBytecode` should find only comments.
+Run `#print axioms` on `JoltInstance.soundness` (and, after Part 2, `JoltInstance.completeness`), and time every changed proof; list any over about ten seconds.
 Write `methods/bv-decide-report.md` with each changed declaration (file and line), each new lemma, the build and axiom results, and timings.
 Do not commit.
