@@ -27,3 +27,12 @@ Run `#print axioms` on both steps; they should not reach `sorryAx` unless you st
 Add a "Proofs" section to `methods/layer6/device-memory-report.md` with each new declaration (file and line), each lemma made public, any proof slower than about ten seconds, and the build and axiom results.
 Do not commit.
 Then stop.
+
+## Next: the five region lemmas
+
+The steps are proved from five staged lemmas in `DeviceMemory.lean` (report, "Staged obligations and their premises").
+Prove them in this order, hardest first: `device_output_store_image`, `device_load_image_bytes`, `device_store_cases`, `device_panic_store_image`, `device_termination_store_image`.
+Each concerns the device and the run alone, with no witness.
+The run gives the history: unchanged layout, advice and input buffers, output bounds, and panic false before any panic store; use the device-relation preservation theorems (`Layer5/TapeSemantics.lean`, `Layer5/TapeDeviceFrame.lean`) over the run's rows rather than a new frame proof.
+If one is false as stated, stop and report the exact case.
+Add the results to the report's "Proofs" section.
