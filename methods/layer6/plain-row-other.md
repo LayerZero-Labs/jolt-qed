@@ -30,3 +30,9 @@ Run `#print axioms JoltInstance.plain_row_step_other`; it should not reach `sorr
 Write `methods/layer6/plain-row-other-report.md` with each new or changed declaration (file and line), each statement change, any proof slower than about ten seconds, and the build and axiom results.
 Do not commit.
 Then stop.
+
+## Corrections after the first audit (plain-row-other report)
+
+`plain_row_ram` already handles every plain row and `ArithmeticExecution` has no division-kind premise; reuse them as they are, and generalize only the pieces that actually require `DivisionArithmeticRow`.
+`RowStepCommon.lean` imports `PlainRow.lean`, so `PlainRow.lean` cannot use it: move `ExpansionState.selectedRow`, `representsRows_push_selected` and `representsRows_push_operands` from `RowStepCommon.lean` into `PlainRow.lean` with statements and proofs unchanged, delete `RowStepCommon.lean` if it is left empty, and update its importers' import lines.
+You may edit `RowStepCommon.lean` and those import lines for this.
