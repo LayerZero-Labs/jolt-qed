@@ -160,7 +160,7 @@ Premises or fields of the final theorem, with their source or reason below.
 Sorried theorems behind the final theorems; `#print axioms` shows `sorryAx` through them.
 
 **Soundness.** `JoltInstance.soundness` (`Soundness/soundness.lean`) is proved, under the temporary restrictions, with no `sorry`.
-At `b9efd78`, `lake build JoltConstraints` passes (8,828 jobs) and `#print axioms JoltInstance.soundness` lists `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound` and one `bv_decide` axiom, `JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5` (see the `bv_decide` list below).
+At `b6949a7`, `lake build JoltBytecode JoltConstraints` passes (8,830 jobs) and `#print axioms JoltInstance.soundness` lists only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`; the one `bv_decide` it used, in `branch_target_toNat`, is replaced by a bit-level proof in `encoded_branch_offset`.
 It is a short proof from the four helpers in `Soundness/TopLevel.lean` and the reverse language inclusion in `Soundness/Layer7/TapeRebuild.lean`.
 Its explicit theorem parameters are unchanged; the temporary-restriction bundle includes `noMaxLengthTrace`.
 `RepresentsRows` in `Soundness/Layer6/ExecutionPrefix.lean` records the row count, PC, source values and RAM addresses for the relaxed trace cut at its first stable stall, padding, or final witness cycle.
@@ -244,7 +244,7 @@ Unpack `JoltInstance.initial_state` once: `initial_state_device`, `initial_state
 ### bv_decide
 
 `bv_decide` is temporarily accepted under the `AGENTS.md` rules; every use must be removed before the proof is final ([removal plan](../methods/bv-decide-removal.md)).
-There are 21 uses; the soundness theorem reaches only the first, and Part 1 of the plan replaces it with a bit-level proof in `encoded_branch_offset`.
+There were 21 uses; the soundness theorem reached only the first, and `b6949a7` removed it and its twin in `encoded_branch_offset`.
 The other 19 predate the 2026-10-21 rule that tracks new uses, so they were not listed here before.
 
 | Declaration or file | Uses |
