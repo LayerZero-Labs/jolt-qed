@@ -57,3 +57,12 @@ You may edit `PlainRow.lean`, `expansion_facts.lean`, `TapeRebuild.lean`, `Advic
 Another agent is proving `division_expansion_layout` in `DivisionDefs.lean` and new layout files; do not edit those.
 Build `JoltConstraints` (the checker change rebuilds most of it), run `#print axioms JoltInstance.plain_row_step_other` (it should not reach `sorryAx`), and add a section to `methods/layer6/plain-row-other-report.md`.
 Do not commit.
+
+### Correction to item 3 (tape-load step)
+
+`adviceLoad_step` covers only the expansion's rewritten destinations (`sideEffectingRdZeroDst rd`), but the checker accepts other destinations, for example `VirtualAdviceLoad (.vreg 41) 8`; do not reuse it, and do not prove a destination shape.
+State the step over any destination, as `advice_step` is.
+The written value: VirtualAdviceLoad and VirtualAdvice both use the range-check lookup, so extract the part of `advice_step` that derives the 64-bit written value into one lemma and use it in both steps.
+Execution: `execWithTapeAnswer` writes the destination in the pre-state with the tape cursor advanced; register agreement (`RegisterAgreementOn`) reads only `sail` and `vregs`, so it carries over to that state.
+Then follow the body of `registerWriteOn_step` (`writeDst_afterWriteDst`, then `RegisterAgreementOn.write`) on that state; `registerWriteOn_step` itself does not fit, because its `rule` premise executes from the same state it writes.
+The width check of item 2 is still needed.
