@@ -120,3 +120,93 @@ The axiom check from a file importing only `DivisionBlock` shows `division_repla
 `git diff --check` passed.
 I did not edit `DivisionPrograms.lean`, `DivisionBlock.lean`, Layer 5, `TerminalNextPC.lean`, `StallSuffix.lean`, or `LastJump.lean`.
 I made no commit.
+
+## Continuation: public frame facts and the remaining completion gap
+
+I re-read `AGENTS.md`, the stage 6c plan, and this report before this continuation.
+I checked the proposed reuse against `DivisionPrograms.lean`, `DivisionAppend.lean`, `ExpansionState`, `RepresentsRows`, and the generated division programs.
+The generated programs do place their architectural write on the last row, including the one-row `rd = x0` case.
+The existing frame facts do not express that placement.
+
+I made the existing declarations below public in place in `DivisionPrograms.lean`.
+Their statements and proof bodies are unchanged.
+Each newly public theorem received a docstring; the four definitions already had docstrings.
+
+| Declaration | Line | Change |
+| --- | ---: | --- |
+| `DivisionFrame` | 48 | Private definition made public. |
+| `divisionFrame_refl` | 57 | Private theorem made public; docstring added. |
+| `divisionFrame_trans` | 62 | Private theorem made public; docstring added. |
+| `DivisionDestinationSafe` | 75 | Private definition made public. |
+| `DivisionInstructionSafe` | 81 | Private definition made public. |
+| `divisionInstructionSafe_parts` | 89 | Private theorem made public; docstring added. |
+| `DivisionRows` | 101 | Private definition made public. |
+| `divisionFrame_instr` | 143 | Private theorem made public; docstring added. |
+| `divisionFrame_program` | 158 | Private theorem made public; docstring added. |
+| `division_program_rows` | 192 | Private theorem made public; docstring added. |
+
+`DivisionFrame` at `DivisionPrograms.lean:48` relates the device, advice tape, host settings, and persistent virtual registers, but has no Sail-state condition.
+`DivisionDestinationSafe` at `DivisionPrograms.lean:75` accepts every `.xreg` destination, and `DivisionRows` therefore permits an architectural write before the final row.
+Consequently `divisionFrame_instr` and `divisionFrame_program` cannot establish equality of candidate and replay Sail registers at an interior row.
+`RepresentsRows.rs1` and `.rs2` at `ExecutionPrefix.lean:29` and `:34` require that equality when a row reads a non-temporary architectural register.
+The precise missing fact is that every proper prefix of each generated division program leaves the Sail state equal to its entry Sail state.
+It would need a shared prefix preservation proof, including the generated program's last-write placement, before the row observations can be transferred.
+Adding that proof in `DivisionPrograms.lean` would exceed the visibility-only changes authorized for that file; reproducing its instruction-family case analysis in `DivisionAppend.lean` would duplicate the existing frame proof contrary to `AGENTS.md`.
+
+I left `division_replay_complete` at `DivisionAppend.lean:837` with its original theorem-level `sorry` and did not change its statement or add a new premise.
+I removed the exploratory private helpers from `DivisionAppend.lean` because no proved declaration used them, leaving no diff in that file.
+No new `bv_decide`, axiom, proof limit, or staged statement was added.
+
+`lake build JoltConstraints.Soundness.Layer6.DivisionBlock` passed with 8,681 jobs; its changed modules each built in under ten seconds.
+An axiom check from a file importing only `DivisionBlock` reports `sorryAx` for `JoltInstance.division_append_honest`, through the remaining `division_replay_complete` gap.
+`git diff --check` passed before this report update.
+I did not run the full aggregate build while other agents were editing Layer 5 files.
+I did not edit those files or commit.
+
+## Continuation: shared prefix frame proved, completion transfer still open
+
+I re-read `AGENTS.md`, the stage 6c plan, the reuse guide, and this report.
+I verified the frame generalization against `rX_bits_pure` in `JoltBytecode/InstructionEquivalence/ProofSupport/RegisterAccess.lean:133` and the eight generated programs in `JoltBytecode/JoltISA/ExpansionsAutomated.lean`.
+The proper-prefix claim is true: the generated program's only architectural destination is its last row, including the single-row `rd = x0` path.
+
+`DivisionPrograms.lean` now has one parameterized preservation proof.
+`keepSail = false` allows the original architectural destination class and recovers the unchanged statements of `divisionFrame_instr` and `divisionFrame_program`.
+`keepSail = true` permits only instruction-temporary destinations or no destination and also preserves the Sail state.
+The program-shape check proves full-row safety and proper-prefix safety together in one split over the eight division kinds.
+
+| Declaration | Location | Change |
+| --- | --- | --- |
+| `DivisionFrameFor`, `DivisionDestinationSafeFor`, `DivisionInstructionSafeFor`, `DivisionRowsFor` | `DivisionPrograms.lean:105` | New private parameterized frame and destination predicates. |
+| `divisionFrameFor_refl`, `divisionFrameFor_trans` | `DivisionPrograms.lean:120` | New private relation laws used by the shared proof. |
+| `divisionFrame_read`, `divisionFrame_write` | `DivisionPrograms.lean:129`, `:142` | Generalized existing private proofs over `keepSail`; their statements changed. |
+| `divisionFrame_instr_for`, `divisionFrame_program_for` | `DivisionPrograms.lean:167`, `:195` | New private shared instruction and program preservation proofs. |
+| `divisionFrame_instr`, `divisionFrame_program` | `DivisionPrograms.lean:182`, `:231` | Existing public statements unchanged; proofs now project the shared result. |
+| `DivisionRows.forFalse` | `DivisionPrograms.lean:214` | New private conversion for the original destination class. |
+| `division_program_rows_shape` | `DivisionPrograms.lean:250` | New private combined check of all rows and proper-prefix rows for all eight programs. |
+| `division_program_rows` | `DivisionPrograms.lean:270` | Existing public statement unchanged; proof now projects the combined check. |
+| `DivisionRowsFor.take`, `divisionProgram_instrs_seq` | `DivisionPrograms.lean:275`, `:293` | New private list/program facts for a proper prefix. |
+| `division_program_prefix_frame` | `DivisionPrograms.lean:306` | New proved public theorem: a successful run of any proper generated-program prefix preserves `DivisionFrame` and Sail equality. |
+| `division_expansion_instruction_at` | `DivisionAppend.lean:633` | New private shared bytecode lookup fact. |
+| `division_replay_instruction_at` | `DivisionAppend.lean:667` | Statement unchanged; proof now uses the shared lookup fact. |
+
+The new `division_program_prefix_frame` theorem has no `sorryAx` in its axiom output.
+No approved public statement, core model definition, or hypothesis changed.
+No new `bv_decide`, `native_decide`, `decide +kernel`, proof limit, or axiom was added.
+No changed-module proof took more than about ten seconds.
+
+I also proved, during exploration, that the candidate's first appended row starts at `pre`, that every candidate and replay interior pre-state retains the prefix frame, and that equal final Sail/device states give equal `finalRamWord` values.
+I removed those helpers because `division_replay_complete` still has its theorem-level `sorry`, so no proved declaration used them.
+
+The remaining obstacle is row-observation transfer in `RepresentsRows.rs1` and `.rs2`.
+The prefix frame gives equality of `sourceValue` for every non-temporary operand, but the bridge from `TraceWitness.Rs1Value` and `.Rs2Value` to that source value is proved only for `HonestTrace` by `rs1Value_real` and `rs2Value_real` in `JoltConstraints/Completeness/Helpers/RegistersReadProofHelpers.lean:143` and `:175`.
+The candidate and replay are `UntrustedAnswerRun`, so those theorems cannot be applied.
+Reproducing their instruction case proofs in `DivisionAppend.lean` would copy an existing proof, which `AGENTS.md` requires me to stop before doing.
+Generalizing the two existing facts over `Trace` in their owning file needs authorization beyond this task's two-file edit scope; I asked for that scope change and did not assume approval.
+This is a proof reuse and edit-scope blocker, not evidence that `division_replay_complete` is false.
+
+`division_replay_complete` at `DivisionAppend.lean:849` remains at its original theorem-level `sorry` with the same statement.
+`lake build JoltConstraints.Soundness.Layer6.DivisionBlock` passed with 8,681 jobs.
+An axiom check from a file importing only `DivisionBlock` still reports `sorryAx` for `JoltInstance.division_append_honest` through that gap.
+The new prefix theorem's axiom check reports only `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound`.
+`git diff --check` passed before this report update.
+I did not edit the other agent's Layer 5 files or commit.

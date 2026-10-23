@@ -630,6 +630,40 @@ private theorem division_replay_start_at
     | succ _ => rfl
   simpa only [falseFlag] using flag
 
+private theorem division_expansion_instruction_at
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : UntrustedAnswerRun joltInstance privateInputs)
+    {bytecode : Array JoltInstructionRow} (first : Fin bytecode.size)
+    (expanded : expand_program joltInstance.program = some bytecode)
+    (count : (expansionInstructions bytecode first).length = expansionRowCount bytecode first)
+    (offset : Nat) (inside : offset < expansionRowCount bytecode first)
+    (row : TraceRow trace.bytecode) (index : row.rowIndex.val = first.val + offset) :
+    (expansionInstructions bytecode first)[offset]'(by omega) =
+      trace.bytecode[row.rowIndex].instruction := by
+  have bytecodeEq : trace.bytecode = bytecode :=
+    Option.some.inj (trace.expands.symm.trans expanded)
+  have bound : first.val + offset < bytecode.size := by
+    rw [← index, ← bytecodeEq]
+    exact row.rowIndex.isLt
+  let i : Fin bytecode.size := ⟨first.val + offset, bound⟩
+  have atContext : bytecode[first.val + offset]? = some bytecode[i] := by simp [i]
+  have instrAt := expansionInstructions_at bytecode first offset inside count _ atContext
+  have rowEq : bytecode[i] = trace.bytecode[row.rowIndex] := by
+    have h := congrArg (fun b : Array JoltInstructionRow => b[first.val + offset]?) bytecodeEq
+    change trace.bytecode[first.val + offset]? = bytecode[first.val + offset]? at h
+    have traceBound : first.val + offset < trace.bytecode.size := by
+      rw [← index]
+      exact row.rowIndex.isLt
+    simp only [Array.getElem?_eq_getElem traceBound,
+      Array.getElem?_eq_getElem bound] at h
+    have finEq : (⟨first.val + offset, traceBound⟩ : Fin trace.bytecode.size) =
+        row.rowIndex := Fin.ext index.symm
+    have h' := (Option.some.inj h).symm
+    change bytecode[i] = trace.bytecode[(⟨first.val + offset, traceBound⟩ :
+      Fin trace.bytecode.size)] at h'
+    exact h'.trans (congrArg (fun j : Fin trace.bytecode.size => trace.bytecode[j]) finEq)
+  simpa only [rowEq] using instrAt
+
 private theorem division_replay_instruction_at
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run replay : UntrustedAnswerRun joltInstance privateInputs)
@@ -650,29 +684,7 @@ private theorem division_replay_instruction_at
     change replay.rows[run.rows.size + offset]? = some other at otherAt
     exact Option.some.inj (rowAt.symm.trans otherAt)
   subst other
-  have bytecodeEq : replay.bytecode = bytecode :=
-    Option.some.inj (replay.expands.symm.trans expanded)
-  have bound : first.val + offset < bytecode.size := by
-    rw [← index, ← bytecodeEq]
-    exact row.rowIndex.isLt
-  let i : Fin bytecode.size := ⟨first.val + offset, bound⟩
-  have atContext : bytecode[first.val + offset]? = some bytecode[i] := by simp [i]
-  have instrAt := expansionInstructions_at bytecode first offset inside count _ atContext
-  have rowEq : bytecode[i] = replay.bytecode[row.rowIndex] := by
-    have h := congrArg (fun b : Array JoltInstructionRow => b[first.val + offset]?) bytecodeEq
-    change replay.bytecode[first.val + offset]? = bytecode[first.val + offset]? at h
-    have replayBound : first.val + offset < replay.bytecode.size := by
-      rw [← index]
-      exact row.rowIndex.isLt
-    simp only [Array.getElem?_eq_getElem replayBound,
-      Array.getElem?_eq_getElem bound] at h
-    have finEq : (⟨first.val + offset, replayBound⟩ : Fin replay.bytecode.size) =
-        row.rowIndex := Fin.ext index.symm
-    have h' := (Option.some.inj h).symm
-    change bytecode[i] = replay.bytecode[(⟨first.val + offset, replayBound⟩ :
-      Fin replay.bytecode.size)] at h'
-    exact h'.trans (congrArg (fun j : Fin replay.bytecode.size => replay.bytecode[j]) finEq)
-  simpa only [rowEq] using instrAt
+  exact division_expansion_instruction_at replay first expanded count offset inside row index
 
 private theorem division_replay_advice_flag
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
