@@ -207,3 +207,89 @@ It applies equally when the public maximum is not a power of two.
 `#print axioms JoltInstance.checked_trace_length_fits` returned `propext`, `Classical.choice`, and `Quot.sound`, without `sorryAx`.
 No changed proof took more than ten seconds, and there is no new `bv_decide`, `native_decide`, `decide +kernel`, axiom, or proof-limit override.
 I edited only `JoltConstraints/Soundness/Layer7/ProverAccepts.lean` and this report.
+
+## Ends in a jump
+
+`JoltInstance.represented_trace_ends_in_jump` is proved at `JoltConstraints/Soundness/Layer7/ProverAccepts.lean:68`, with its statement and hypotheses unchanged.
+The work stayed on `feat/soundness` in `/Users/ari.biswas/Lean/jolt-qed-public`.
+No commit was made by this task.
+
+I checked the claims in `helper-c-jump.md` and section "1. Last jump and branch stalls" against their definitions and proofs before editing and found no incorrect claim or missing premise.
+`UntrustedAnswerTrace.stops` supplies the stable stall, and its underlying run supplies the execution certificate required by `stable_stall_control_flow` and `stall_branch_model_target`.
+`represented_last_branch_registers` uses `expanded_control_read_not_temporary` to recover the branch operands.
+`expanded_branch_same_address` uses `expanded_same_source_rows`, whose proof uses accepted PC-map address uniqueness.
+The branch model proof uses `source_is_compressed`, and neither branch initialization nor branch replay requires `NextPCNoWrap`.
+The general `stall_suffix_replays_source` still requires that premise and is not used here.
+
+At pin `5def437f`, Jolt's prover checks nonempty traces' `ends_in_jump` in `jolt/crates/jolt-prover/src/config.rs` (`ProverConfig::derive_from_dimensions`).
+The dimension summary reads the final row's Jump flag in `jolt/crates/jolt-program/src/execution/trace.rs` (`ExecutionDimensions::from_rows`).
+The corresponding Lean summary is `Trace.execution_dimensions`, and `JoltISA.Instr.is_jump` recognizes JAL and JALR.
+The branch constraint is in `jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs` (`rv64_eq_constraint_rows`), and the next-cycle address with zero at the end is in `jolt/crates/jolt-witness/src/witnesses/pc.rs` (`NextUnexpandedPc::extract`).
+I also checked `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`) at stopping-rule merge commit `0249591a`.
+
+The proof starts the branch invariant at the last represented cycle, including when the trace fills the witness.
+Each real replay has a nonzero next unexpanded PC because its target is an accepted bytecode address.
+If the next cycle were padding, `unexpanded_zero_of_padding` and `nextUnexpandedPCEqShift` would make that target zero.
+Induction therefore carries the real branch invariant through every remaining witness cycle.
+At the final cycle, the shift equation requires zero directly, contradicting the replay target.
+The existing control-flow classification then leaves JAL or JALR, and unfolding the dimension summary finishes the theorem.
+
+All declarations below are in namespace `JoltInstance`.
+Paths are relative to `JoltConstraints/Soundness/Layer7/`.
+
+| Declaration | File and line | Change |
+|---|---|---|
+| `represented_branch_stall_replays` | `ProverAccepts.lean:16` | New forward induction: every witness cycle from the final represented branch has nonzero next unexpanded PC. |
+| `represented_trace_ends_in_jump` | `ProverAccepts.lean:68` | Replaced its staged `sorry` with the proof. |
+| `selected_last_represented_row_at_end` | `StallSuffix.lean:197` | Extracted the selection proof, using `represented.rowsBound` so it also covers a full witness. |
+| `selected_last_represented_row` | `StallSuffix.lean:257` | Derived the original statement from the extracted selection lemma. |
+| `stall_branch_replay` | `StallSuffix.lean:1734` | Extracted the branch-step proof, exposing nonzero next PC and preservation at any successor cycle. |
+| `stall_branch_step` | `StallSuffix.lean:1800` | Derived the original statement from `stall_branch_replay`. |
+| `represented_last_branch_invariant` | `StallSuffix.lean:2917` | Extracted initialization at the branch's own represented cycle, without assuming a successor cycle or a stable stall. |
+| `stall_suffix_initial_branch` | `StallSuffix.lean:2956` | Reused the extracted initialization, then applied the existing branch step. |
+| `unexpanded_zero_of_padding` | `LastJump.lean:70` | Made public in place; its statement and proof are unchanged. |
+
+These are the four new declarations, three existing proofs derived from their extractions, the completed target, and the sole lemma made public.
+Every new lemma is used.
+No existing theorem statement or hypothesis changed; a textual comparison against HEAD checked this in all three Lean files.
+The original selection wrapper retains its now-unused `cutBound` parameter, preserving its statement.
+No definition, restriction, language predicate, or other approved statement changed.
+There are no new `sorry`s, explicit axioms, `bv_decide` uses, native decision proofs, or proof-limit overrides.
+All new or changed proof bodies are under 60 lines.
+
+`lake build JoltConstraints` failed in the other agents' unfinished files: `Soundness/Layer5/DeviceMemory.lean:508` and `:510`, and `Soundness/Layer6/DivisionAppend.lean:878`, at the time of the check.
+The former reported an unsolved goal and a parser error; the latter reported a dependent rewrite failure.
+The authorized scoped build passed all 8650 jobs:
+
+```text
+lake build JoltConstraints.Soundness.Layer7.ProverAccepts
+```
+
+This includes both modified supporting modules.
+The full-build attempt also rebuilt `LastJump`, `ProverAccepts`, and the existing `Stopping` caller successfully.
+`git diff --check` passed for the owned Lean files.
+
+`#print axioms JoltInstance.represented_trace_ends_in_jump` returned:
+
+```text
+propext
+sys_enable_experimental_extensions
+Classical.choice
+Quot.sound
+JoltConstraints.branch_target_toNat._native.bv_decide.ax_1_5
+```
+
+There is no `sorryAx` dependency.
+The last entry comes from the existing `bv_decide` at `JoltConstraints/Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean:104`, already listed under "bv_decide" in `JoltConstraints/model_review.md`.
+Separate axiom checks of all four new declarations and the newly public padding lemma also found no `sorryAx`.
+The remaining staged `represented_ram_size_computes` was left unchanged.
+
+With one worker and `-Dtrace.Elab.async=true -Dtrace.profiler=true -Dtrace.profiler.threshold=10000`, the target proof elaborated in 0.069 seconds and the forward replay proof in 0.037 seconds.
+The extracted selection, branch replay, and branch initialization proofs took 0.262, 0.478, and 0.162 seconds respectively.
+No new or changed proof exceeded ten seconds.
+The `StallSuffix` module build took 18 seconds in total; that is not a single proof's time.
+The profiler options only report timings and do not raise proof limits.
+
+Only `ProverAccepts.lean`, `StallSuffix.lean`, `LastJump.lean`, and this report were edited by this task.
+The other agents' files, `methods/soundness.md`, and `JoltConstraints/model_review.md` were left alone.
+Work stops here for review.
