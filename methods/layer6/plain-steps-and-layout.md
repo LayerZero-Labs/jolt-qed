@@ -41,3 +41,10 @@ Run `#print axioms` on the two new steps and on `JoltInstance.division_block`; n
 Write `methods/layer6/plain-steps-and-layout-report.md` with each new or changed declaration (file and line), each lemma made public, any proof slower than about ten seconds, and the build and axiom results.
 Do not commit.
 Then stop.
+
+## Correction after the tape-load finding
+
+The expansion checker does not check a `VirtualAdviceLoad` byte count: `nativeRowOk` and `sequenceOk` both accept `VirtualAdviceLoad x1 9`, which `execWithTapeAnswer` rejects.
+The tape-load step, with the checker change that fixes this, is reassigned to the agent proving `plain_row_step_other` (see the last section of `methods/layer6/plain-row-other.md`).
+This agent now does Part 2 only: `division_expansion_layout`.
+Do not edit `expansion_facts.lean`, `TapeRebuild.lean`, `AdviceExpansion.lean`, `PlainRow.lean` or `Layer5/AdviceLoad.lean`; the checker change will rebuild most of `JoltConstraints`, so build only your own modules while it is in progress.

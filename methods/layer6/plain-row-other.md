@@ -36,3 +36,24 @@ Then stop.
 `plain_row_ram` already handles every plain row and `ArithmeticExecution` has no division-kind premise; reuse them as they are, and generalize only the pieces that actually require `DivisionArithmeticRow`.
 `RowStepCommon.lean` imports `PlainRow.lean`, so `PlainRow.lean` cannot use it: move `ExpansionState.selectedRow`, `representsRows_push_selected` and `representsRows_push_operands` from `RowStepCommon.lean` into `PlainRow.lean` with statements and proofs unchanged, delete `RowStepCommon.lean` if it is left empty, and update its importers' import lines.
 You may edit `RowStepCommon.lean` and those import lines for this.
+
+## Next: the branch and tape-load cases (after `48d1c57`)
+
+The scalar cases are proved and committed; `branch_plain_row_step` and `tape_plain_row_step` (`PlainRow.lean`) remain.
+The other agent's tape-load step is reassigned here, because the plan's width argument was wrong: both `nativeRowOk` and `sequenceOk` accept `VirtualAdviceLoad x1 9`, which `execWithTapeAnswer` rejects.
+
+1. Prove `branch_plain_row_step` from `branch_step` (`Soundness/Layer5/Branch.lean`, committed) and `append_plain_execution`.
+   `branch_step`'s `enabled` premise comes from `UntrustedAnswerRun.final_misa` and `advance_pc_misa` (`Layer5/MisaFrame.lean`) for the prepared state in either case of `RawRowEntry`; delete whichever of `final_compressed_enabled` and `prepared_compressed_enabled` no proof uses.
+   Check that `rowLive` of a branch (no destination) is the live set itself.
+2. Add the width condition to `advicePairsOk` (`expansion_facts.lean`): a `VirtualAdviceLoad` passes only with byte count 1, 2, 4 or 8.
+   The checker is our proof tool, not part of the model; `nativeRowOk` and `sequenceOk` both include it, so `expand_ok` covers every expansion.
+   Update `advicePairsOk_head` (`Layer7/TapeRebuild.lean`) and any other proof that unfolds `advicePairsOk`, and derive the per-row fact for expanded bytecode once (as `ExpansionRows.expand_program_rowOk` derives row facts), not per source.
+3. Write the `VirtualAdviceLoad` step in a new `Soundness/Layer5/AdviceLoad.lean`, shaped like `advice_step` (`Layer5/Advice.lean`): the witness's written value is a 64-bit word `v` (both use the range-check lookup), executing with tape answer `v` writes `v`, and agreement holds on the live set plus the destination.
+   Reuse `adviceLoad_step` (`Layer5/AdviceExpansion.lean`, private; make it public in place) for the execution.
+   The tape cursor is `adviceTape`, a separate field from `jolt_device`, so `append_plain_execution`'s `device` premise holds.
+4. Prove `tape_plain_row_step` from that step and `append_plain_execution`.
+
+You may edit `PlainRow.lean`, `expansion_facts.lean`, `TapeRebuild.lean`, `AdviceExpansion.lean` (visibility only), `Layer5/Branch.lean` (only to delete the unused lemma), new `Layer5/AdviceLoad.lean`, and `JoltConstraints.lean` for the import.
+Another agent is proving `division_expansion_layout` in `DivisionDefs.lean` and new layout files; do not edit those.
+Build `JoltConstraints` (the checker change rebuilds most of it), run `#print axioms JoltInstance.plain_row_step_other` (it should not reach `sorryAx`), and add a section to `methods/layer6/plain-row-other-report.md`.
+Do not commit.
