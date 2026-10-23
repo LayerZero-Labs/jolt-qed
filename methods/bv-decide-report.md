@@ -150,3 +150,6 @@ The native SD lemma's audit lists `match_reservation`, `plat_term_write`, `prope
 After the final audit, another session removed the two wrapper declarations `JoltConstraints.rev8_32` and `JoltConstraints.rev8w_eq` and changed `lookupEntryCorrect_VirtualRev8W` (`LookupEntryProofHelpers.lean:476`) to call the shared `Soundness` lemmas directly.
 This agent preserved that edit.
 The auditor then rebuilt: `lake build JoltBytecode JoltConstraints` passed (8,832 jobs), and `#print axioms` gave the same results for `JoltInstance.soundness` and `JoltInstance.completeness` as above.
+This agent also rechecked the updated workspace: the full build passed in 26.90 seconds, and the complete axiom audit output was byte-for-byte identical to its preceding audit.
+The updated `lookupEntryCorrect_VirtualRev8W` passed its direct check and elaborated in 1.032961 seconds, still below ten seconds.
+`git diff --check` passed after the follow-up.
