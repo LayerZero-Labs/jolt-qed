@@ -275,8 +275,8 @@ private theorem terminal_jalr
 
 /-- A real successor is an accepted bytecode address and is the branch
 cycle's constrained next source PC. For example, a BEQ targeting `0x80000008`
-has a real successor at or above `RAM_START_ADDRESS`. -/
-private theorem terminal_real_successor_address
+has a real successor at or above `RAM_START_ADDRESS` with an even address. -/
+theorem terminal_real_successor_address
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -288,7 +288,7 @@ private theorem terminal_real_successor_address
     (nextReal : witness.InstructionFlags .IsNoop ⟨cycle.val + 1, next⟩ ≠ 1) :
     ∃ row : JoltInstructionRow,
       witness.NextUnexpandedPC cycle = (row.address.toNat : F) ∧
-      JoltISA.RAM_START_ADDRESS ≤ row.address.toNat := by
+      JoltISA.RAM_START_ADDRESS ≤ row.address.toNat ∧ row.address.toNat % 2 = 0 := by
   rcases next_cycle_address joltField joltInstance privateInputs witness context
     equations cycle next with padding | ⟨slot, row, _, rowAt, nextAddress⟩
   · exact False.elim (nextReal padding)
@@ -301,7 +301,7 @@ private theorem terminal_real_successor_address
     · cases preprocessed
   have addressOk := pc_map_ok_addresses context.bytecode accepted index.val index.isLt
   simp only [bytecode_address_ok, Bool.and_eq_true, decide_eq_true_eq] at addressOk
-  exact ⟨row, nextAddress, by rw [rowEq]; exact addressOk.1⟩
+  exact ⟨row, nextAddress, by rw [rowEq]; exact ⟨addressOk.1, beq_iff_eq.mp addressOk.2⟩⟩
 
 /-- A valid branch whose source and wrapped target are accepted addresses
 has the same target as the field sum of its source and signed offset.
@@ -332,7 +332,7 @@ private theorem terminal_branch_target_cast
 
 /-- A real successor satisfying the taken-branch field sum is the 64-bit
 branch target. For example, offset `-4` from `0x80000008` selects `0x80000004`. -/
-private theorem terminal_branch_real_target
+theorem terminal_branch_real_target
     {F : Type} [Field F] (joltField : JoltField F)
     (source successor : BitVec 64) (offset : BitVec 13)
     (sourceRam : JoltISA.RAM_START_ADDRESS ≤ source.toNat)
@@ -389,7 +389,7 @@ private theorem terminal_branch_real_target
 
 /-- The selected branch's witness control equals the decision made from its
 represented operands. For example, BEQ of equal words sets `ShouldBranch` to one. -/
-private theorem terminal_branch_decision
+theorem terminal_branch_decision
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -418,7 +418,7 @@ private theorem terminal_branch_decision
 
 /-- A selected taken branch makes the next unexpanded PC its address plus
 its signed immediate in the field. For example, BEQ at `a` with `+8` yields `a + 8`. -/
-private theorem terminal_taken_branch_field
+theorem terminal_taken_branch_field
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -470,7 +470,7 @@ private theorem terminal_taken_branch_target_ram
   have successorWord := terminal_branch_real_target joltField source successor.address
     offset sourceRam (by rw [← successorEq, fieldTarget])
   rw [offsetEq, ← successorWord]
-  exact successorRam
+  exact successorRam.1
 
 /-- An untaken terminal branch advances by its source length in Sail and
 the witness. For example, an untaken BEQ at `0x80000000` reaches `0x80000004`. -/

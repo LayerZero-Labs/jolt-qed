@@ -303,7 +303,9 @@ theorem temporary_source (source : Src) (index : Fin 8)
           omega
   | vreg register => exact congrArg Src.vreg (BitVec.eq_of_toFin_eq address)
 
-private theorem branch_operand_forms (instruction : Instr) (lhs rhs : Src) (imm : BitVec 128)
+/-- All six branch forms read their two named operands in order.
+For example, BEQ reads its left source as rs1 and its right source as rs2. -/
+theorem branch_operand_forms (instruction : Instr) (lhs rhs : Src) (imm : BitVec 128)
     (shapes : instruction = .BEQ lhs rhs imm ∨ instruction = .BNE lhs rhs imm ∨
       instruction = .BLT lhs rhs imm ∨ instruction = .BGE lhs rhs imm ∨
       instruction = .BLTU lhs rhs imm ∨ instruction = .BGEU lhs rhs imm) :

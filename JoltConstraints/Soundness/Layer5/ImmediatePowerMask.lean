@@ -51,7 +51,7 @@ private theorem index_mod (imm modulus : Nat) (divides : modulus ∣ 2 ^ 64) :
     Nat.mod_eq_of_lt small]
   exact normalized_mod imm modulus divides
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -136,22 +136,26 @@ private theorem immediatePowerMask_write_value :
       index_mod imm 64 (by norm_num : 64 ∣ 2 ^ 64)] using output
 
 /-- Three immediate-only rows execute with their constrained values and
-preserve register agreement. -/
+preserve agreement on the live registers and the destination.
+For example, VirtualPow2I can initialize a previously uninitialized temporary. -/
 theorem immediatePowerMask_step {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := operation.value imm
     witness.RdWriteValue t = (value.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have encoded := immediatePowerMask_write_value charAbove2pow128 context equations
     selected rowIs operation instructionIs
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice
+    (by cases operation <;> rw [instructionIs] <;> rfl)]
   cases operation <;> rw [instructionIs] <;>
     simp only [ImmediatePowerMask.instruction, ImmediatePowerMask.value,
       execWithTapeAnswer, execInstr, bind, EStateM.bind]

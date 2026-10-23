@@ -26,6 +26,20 @@ variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop}
 
 include charAbove2pow128 context equations selected rowIs instructionIs
 
+/-- FENCE retires without changing state and preserves agreement on live registers.
+For example, a live x10 keeps its value at the next witness cycle. -/
+theorem fence_register_step {pre : SailJoltState}
+    (registers : RegisterAgreementOn live witness t pre)
+    (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
+    execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
+      .ok RETIRE_SUCCESS pre ∧
+    ∀ next : t.val + 1 < params.traceLength,
+      RegisterAgreementOn live witness ⟨t.val + 1, next⟩ pre := by
+  refine ⟨?_, fun next => registers.noWrite (two_pow_127_lt_char charAbove2pow128)
+    context equations next slot selected rowIs (by rw [instructionIs]; rfl)⟩
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
+  simp only [execWithTapeAnswer, execInstr, pure, EStateM.pure]
+
 /-- A selected FENCE executes without changing state, while both agreement
 relations advance through the next or final RAM column.
 The live set contains registers already matched to the witness and stays the same.
@@ -52,12 +66,8 @@ theorem fence_step {pre : SailJoltState}
       JoltMetadata.opcodeFlag, Bool.false_eq_true] using
       opFlag_of_selected_bytecode bound context equations .Store t slot selected
   have memory := ram.noAccess bound context equations rfl noLoad noStore
-  refine ⟨?_, ?_, memory.2⟩
-  · rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl),
-      instructionIs]
-    simp only [execWithTapeAnswer, execInstr, pure, EStateM.pure]
-  · intro next
-    exact ⟨registers.noWrite bound context equations next slot selected rowIs
-      (by rw [instructionIs]; rfl), memory.1 next⟩
+  have step := fence_register_step charAbove2pow128 context equations selected rowIs
+    instructionIs registers answer advice
+  exact ⟨step.1, fun next => ⟨step.2 next, memory.1 next⟩, memory.2⟩
 
 end JoltConstraints.Soundness

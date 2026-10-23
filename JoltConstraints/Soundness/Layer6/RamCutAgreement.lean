@@ -1,4 +1,4 @@
-import JoltConstraints.Soundness.Layer6.RowStepCommon
+import JoltConstraints.Soundness.Layer6.PlainRow
 import JoltConstraints.Soundness.Layer5.DeviceMemory
 
 /-! Ordinary RAM and device words together describe the represented cut. -/

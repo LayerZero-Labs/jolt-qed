@@ -1,4 +1,11 @@
 import JoltConstraints.Soundness.Layer6.PrefixState
+import JoltConstraints.Soundness.Layer6.PlainRowOperands
+import JoltConstraints.Soundness.Layer6.PlainRowKinds
+import JoltConstraints.Soundness.Layer5.Fence
+import JoltConstraints.Completeness.Helpers.LookupEntryProofHelpers
+import JoltConstraints.Soundness.Layer5.RegisterShift
+import JoltConstraints.Soundness.Layer5.AssertionsAlignment
+import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.Soundness.Layer6.BytecodePC
 import JoltConstraints.Soundness.Layer7.StallSuffix
 import JoltConstraints.Soundness.Layer7.LastJump
@@ -450,6 +457,87 @@ theorem representsRows_push {F : Type} [Field F] {params : WitnessParams}
     · exact (old.ramAddress t before).trans (trace_push_observations trace step t before).2.2.2.symm
     · exact ram
 
+/-- The next row of an unfinished expansion occupies its selected witness slot.
+For example, bytecode row 3 is selected in slot 4. -/
+theorem ExpansionState.selectedRow
+    {F : Type} [Field F] {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    {params : WitnessParams} {witness : WitnessType F params}
+    {context : ConstraintContext inst inputs params} {run : UntrustedAnswerRun inst inputs}
+    {first : Fin context.bytecode.size} {done : Nat}
+    (state : ExpansionState witness context run first done)
+    (unfinished : done < expansionRowCount context.bytecode first)
+    (bound : run.rows.size < params.traceLength) (next : Fin run.bytecode.size)
+    (indexIs : next.val = first.val + done) :
+    context.bytecode[first.val + done]? = some run.bytecode[next] ∧
+    ∃ slot : Fin (2 ^ params.logBytecodeK),
+      bytecodeRa witness slot ⟨run.rows.size, bound⟩ = 1 ∧ slot.val = next.val + 1 ∧
+      bytecodeRow context.bytecode slot.val = some run.bytecode[next] := by
+  have bytecodeEq : run.bytecode = context.bytecode :=
+    Option.some.inj (run.expands.symm.trans context.expands)
+  have atRow : context.bytecode[first.val + done]? = some run.bytecode[next] := by
+    rw [← indexIs, ← bytecodeEq]
+    exact Array.getElem?_eq_getElem next.isLt
+  obtain ⟨_, _, _, _, slot, _, selected, slotIs, _⟩ := state.next unfinished
+  refine ⟨atRow, slot, selected, by omega, ?_⟩
+  rw [show slot.val = next.val + 1 by omega, bytecodeRow]
+  simpa only [indexIs] using atRow
+
+/-- Selection supplies the PC observation, so operand and RAM observations suffice
+to extend represented rows; for example, an LD supplies its base and address. -/
+theorem representsRows_push_selected
+    {F : Type} [Field F] (joltField : JoltField F) {params : WitnessParams}
+    (witness : WitnessType F params) {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (context : ConstraintContext inst inputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (trace : Trace) (step : TraceRow trace.bytecode)
+    (old : RepresentsRows witness trace) (bound : trace.rows.size < params.traceLength)
+    (slot : Fin (2 ^ params.logBytecodeK))
+    (selected : bytecodeRa witness slot ⟨trace.rows.size, bound⟩ = 1)
+    (slotIs : slot.val = step.rowIndex.val + 1)
+    (rs1 : witness.Rs1Value ⟨trace.rows.size, bound⟩ =
+      TraceWitness.Rs1Value params {trace with rows := trace.rows.push step} ⟨trace.rows.size, bound⟩)
+    (rs2 : witness.Rs2Value ⟨trace.rows.size, bound⟩ =
+      TraceWitness.Rs2Value params {trace with rows := trace.rows.push step} ⟨trace.rows.size, bound⟩)
+    (ram : witness.RamAddress ⟨trace.rows.size, bound⟩ =
+      TraceWitness.RamAddress params {trace with rows := trace.rows.push step} ⟨trace.rows.size, bound⟩) :
+    RepresentsRows witness {trace with rows := trace.rows.push step} := by
+  apply representsRows_push witness trace step old bound ?_ rs1 rs2 ram
+  rw [pc_of_selected_bytecode (two_pow_127_lt_char joltField) context equations _ slot selected]
+  simp only [TraceWitness.PC, TraceWitness.bytecodePc, Array.size_push, Nat.lt_add_one,
+    ↓reduceDIte, Array.getElem_push_eq, slotIs]
+
+/-- The selected row's two operand values and raw memory address supply all
+append observations; for example, LD has a first operand, no second operand,
+and an effective memory address, while JALR has no memory address. -/
+theorem representsRows_push_operands
+    {F : Type} [Field F] (joltField : JoltField F) {params : WitnessParams}
+    (witness : WitnessType F params) {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (context : ConstraintContext inst inputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (trace : Trace) (step : TraceRow trace.bytecode)
+    (old : RepresentsRows witness trace) (bound : trace.rows.size < params.traceLength)
+    (slot : Fin (2 ^ params.logBytecodeK))
+    (selected : bytecodeRa witness slot ⟨trace.rows.size, bound⟩ = 1)
+    (slotIs : slot.val = step.rowIndex.val + 1)
+    (rs1 : witness.Rs1Value ⟨trace.rows.size, bound⟩ =
+      match rs1Operand? trace.bytecode[step.rowIndex].instruction with
+      | some src => ((sourceValue src step.preState).toNat : F) | none => 0)
+    (rs2 : witness.Rs2Value ⟨trace.rows.size, bound⟩ =
+      match rs2Operand? trace.bytecode[step.rowIndex].instruction with
+      | some src => ((sourceValue src step.preState).toNat : F) | none => 0)
+    (ram : witness.RamAddress ⟨trace.rows.size, bound⟩ =
+      match TraceWitness.ramAccessAddress trace.bytecode[step.rowIndex].instruction step.preState with
+      | some address => (address.toNat : F) | none => 0) :
+    RepresentsRows witness {trace with rows := trace.rows.push step} := by
+  apply representsRows_push_selected joltField witness context equations trace step old bound slot selected slotIs
+  · rw [rs1Value_real params _ _ (by simp only [Array.size_push]; exact Nat.lt_succ_self _)]
+    simpa only [Array.getElem_push_eq] using rs1
+  · rw [rs2Value_real params _ _ (by simp only [Array.size_push]; exact Nat.lt_succ_self _)]
+    simpa only [Array.getElem_push_eq] using rs2
+  · simpa only [TraceWitness.RamAddress, Array.size_push, Nat.lt_add_one,
+      ↓reduceDIte, Array.getElem_push_eq] using ram
+
+
 /-- Appending a row makes its post-state the final trace state.
 For example, a REM advice row leaves the final trace state with its quotient write. -/
 theorem finalTraceState_push (trace : Trace) (step : TraceRow trace.bytecode) :
@@ -623,6 +711,25 @@ def runtimeAdviceFor (instruction : Instr) (word : BitVec 64) : instruction.Runt
   · exact word
   · exact ()
 
+private theorem arithmeticExecution_nonAdviceWrite {F : Type} [Field F] {params : WitnessParams}
+  {witness : WitnessType F params} {t : Fin params.traceLength} {live : Fin 128 → Prop}
+  {instruction : Instr} {pre : SailJoltState} {advice : instruction.RuntimeAdvice}
+  {destination : Dst} {value : BitVec 64}
+    (destinationIs : instruction.destination? = some destination)
+    (noAdvice : instruction.adviceValue? = none)
+    (result : witness.RdWriteValue t = (value.toNat : F) ∧
+      execWithTapeAnswer (instruction.withRuntimeAdvice advice) 0 pre =
+        .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
+      ∀ next : t.val + 1 < params.traceLength,
+        RegisterAgreementOn (fun r => live r ∨ r = TraceWitness.destinationRegisterAddress destination)
+          witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre)) :
+    ∃ (post : SailJoltState) (advice : instruction.RuntimeAdvice),
+      ArithmeticExecution witness t live instruction pre post advice := by
+  refine ⟨afterWriteDst destination value pre, advice,
+    arithmeticExecution_write advice destination destinationIs value ?_ result.2.1 result.2.2⟩
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice noAdvice, noAdvice]
+  simp
+
 private theorem arithmetic_execution {F : Type} [Field F] {params : WitnessParams}
     (joltField : JoltField F) {witness : WitnessType F params} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -638,21 +745,9 @@ private theorem arithmetic_execution {F : Type} [Field F] {params : WitnessParam
     ∃ (post : SailJoltState) (advice : row.instruction.RuntimeAdvice),
       ArithmeticExecution witness t live row.instruction pre post advice := by
   let advice := runtimeAdviceFor row.instruction 0
-  have nonAdviceWrite {destination : Dst} {value : BitVec 64}
-      (destinationIs : row.instruction.destination? = some destination)
-      (noAdvice : row.instruction.adviceValue? = none)
-      (result : witness.RdWriteValue t = (value.toNat : F) ∧
-        execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) 0 pre =
-          .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
-        ∀ next : t.val + 1 < params.traceLength,
-          RegisterAgreementOn (fun r => live r ∨ r = TraceWitness.destinationRegisterAddress destination)
-            witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre)) :
-      ∃ (post : SailJoltState) (advice : row.instruction.RuntimeAdvice),
-        ArithmeticExecution witness t live row.instruction pre post advice := by
-    refine ⟨afterWriteDst destination value pre, advice,
-      arithmeticExecution_write advice destination destinationIs value ?_ result.2.1 result.2.2⟩
-    rw [withRuntimeAdvice_eq_of_noAdvice _ advice noAdvice, noAdvice]
-    simp
+  have nonAdviceWrite := fun {destination : Dst} {value : BitVec 64} => arithmeticExecution_nonAdviceWrite
+    (witness := witness) (t := t) (live := live) (instruction := row.instruction)
+    (pre := pre) (advice := advice) (destination := destination) (value := value)
   unfold DivisionArithmeticRow at arithmetic
   split at arithmetic
   · rename_i destination placeholder imm instructionIs
@@ -722,6 +817,125 @@ private theorem arithmetic_execution {F : Type} [Field F] {params : WitnessParam
       (by rw [instructionIs]; rfl) result.2.1 result.2.2⟩
   · contradiction
 
+private theorem plainWrite_execution {F : Type} [Field F] {params : WitnessParams}
+    (joltField : JoltField F) {witness : WitnessType F params} {live : Fin 128 → Prop}
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+    (selected : bytecodeRa witness slot t = 1)
+    {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
+    (kind : PlainWriteKind) (instructionIs : row.instruction = kind.instruction)
+    {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
+    (pc : pre.sail.regs.get? Register.PC = some row.address)
+    (sourcesLive : ∀ source ∈ ExpansionTempLiveness.readSources row.instruction,
+      live (TraceWitness.sourceRegisterAddress source)) :
+    ∃ (post : SailJoltState) (advice : row.instruction.RuntimeAdvice),
+      ArithmeticExecution witness t live row.instruction pre post advice := by
+  let advice := runtimeAdviceFor row.instruction 0
+  have shape := kind.shape
+  rw [instructionIs, shape.2.2] at sourcesLive
+  cases kind <;> apply arithmeticExecution_nonAdviceWrite (advice := advice)
+    (by rw [instructionIs]; exact shape.1)
+    (by rw [instructionIs]; exact shape.2.1)
+  case arithmetic operation destination lhs rhs =>
+    exact arithmetic_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive lhs (by simp [PlainWriteKind.sources])) (sourcesLive rhs (by simp [PlainWriteKind.sources])) 0 advice
+  case word operation destination lhs rhs =>
+    exact wordArithmetic_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive lhs (by simp [PlainWriteKind.sources])) (sourcesLive rhs (by simp [PlainWriteKind.sources])) 0 advice
+  case bitwise operation destination lhs rhs =>
+    exact bitwise_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive lhs (by simp [PlainWriteKind.sources])) (sourcesLive rhs (by simp [PlainWriteKind.sources])) 0 advice
+  case comparison operation destination lhs rhs =>
+    exact comparison_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive lhs (by simp [PlainWriteKind.sources])) (sourcesLive rhs (by simp [PlainWriteKind.sources])) 0 advice
+  case virtualBinary operation destination lhs rhs =>
+    exact virtualBinary_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive lhs (by simp [PlainWriteKind.sources])) (sourcesLive rhs (by simp [PlainWriteKind.sources])) 0 advice
+  case xorRotation operation destination lhs rhs =>
+    exact xorRotation_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive lhs (by simp [PlainWriteKind.sources])) (sourcesLive rhs (by simp [PlainWriteKind.sources])) 0 advice
+  case immediate operation destination source imm =>
+    exact immediateArithmetic_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
+  case logic operation destination source imm =>
+    exact immediateLogic_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
+  case address operation destination source imm =>
+    exact addressMask_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
+  case unary operation destination source imm =>
+    exact unaryWord_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
+  case shift operation destination source imm =>
+    exact immediateShift_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
+  case power operation destination imm =>
+    exact immediatePowerMask_step joltField context equations selected rowIs operation instructionIs agrees 0 advice
+  case lui destination imm =>
+    exact lui_step joltField context equations selected rowIs instructionIs agrees 0 advice
+  case auipc destination imm =>
+    exact auipc_step joltField context equations selected rowIs instructionIs agrees pc 0 advice
+  case sltiu destination source imm =>
+    exact sltiu_step joltField context equations selected rowIs instructionIs agrees
+      (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
+  case xori destination source imm =>
+    exact xori_step joltField context equations selected rowIs instructionIs agrees
+      (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
+  case movsign destination source imm =>
+    exact movsign_step joltField context equations selected rowIs instructionIs agrees
+      (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
+
+private theorem otherScalar_execution {F : Type} [Field F] {params : WitnessParams}
+    (joltField : JoltField F) {witness : WitnessType F params} {live : Fin 128 → Prop}
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+    (selected : bytecodeRa witness slot t = 1)
+    {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
+    (kind : OtherScalarKind) (instructionIs : row.instruction = kind.instruction)
+    {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
+    (pc : pre.sail.regs.get? Register.PC = some row.address)
+    (shape : ShiftMaskOk row.instruction pre)
+    (sourcesLive : ∀ source ∈ ExpansionTempLiveness.readSources row.instruction,
+      live (TraceWitness.sourceRegisterAddress source)) :
+    ∃ (post : SailJoltState) (advice : row.instruction.RuntimeAdvice),
+      ArithmeticExecution witness t live row.instruction pre post advice := by
+  let advice := runtimeAdviceFor row.instruction 0
+  cases kind with
+  | write kind =>
+    exact plainWrite_execution joltField context equations selected rowIs
+      kind instructionIs agrees pc sourcesLive
+  | shift operation destination lhs rhs =>
+    apply arithmeticExecution_nonAdviceWrite (advice := advice)
+      (by cases operation <;> rw [instructionIs] <;> rfl)
+      (by cases operation <;> rw [instructionIs] <;> rfl)
+    exact registerShift_step joltField context equations selected rowIs operation instructionIs agrees
+      (sourcesLive lhs (by cases operation <;> simp [instructionIs, OtherScalarKind.instruction,
+        RegisterShift.instruction, ExpansionTempLiveness.readSources]))
+      (sourcesLive rhs (by cases operation <;> simp [instructionIs, OtherScalarKind.instruction,
+        RegisterShift.instruction, ExpansionTempLiveness.readSources]))
+      (by cases operation <;> simpa only [instructionIs, OtherScalarKind.instruction,
+        RegisterShift.instruction, RegisterShift.Mask, ShiftMaskOk] using shape) 0 advice
+  | assertEq lhs rhs imm =>
+    have result := binaryAssertion_step joltField context equations selected rowIs .eq instructionIs agrees
+      (sourcesLive lhs (by simp [instructionIs, OtherScalarKind.instruction, ExpansionTempLiveness.readSources]))
+      (sourcesLive rhs (by simp [instructionIs, OtherScalarKind.instruction, ExpansionTempLiveness.readSources])) 0 advice
+    exact ⟨pre, advice, arithmeticExecution_assert advice (by rw [instructionIs]; rfl)
+      (by rw [instructionIs]; rfl) result.2.1 result.2.2⟩
+  | alignment kind base imm fault =>
+    have result := alignmentAssertion_step joltField context equations selected rowIs kind instructionIs agrees
+      (sourcesLive base (by cases kind <;> simp [instructionIs, OtherScalarKind.instruction,
+        AlignmentAssertion.instruction, ExpansionTempLiveness.readSources])) 0 advice
+    exact ⟨pre, advice, arithmeticExecution_assert advice (by cases kind <;> rw [instructionIs] <;> rfl)
+      (by cases kind <;> rw [instructionIs] <;> rfl) result.2.1 result.2.2⟩
+  | fence =>
+    have result := fence_register_step joltField context equations selected rowIs instructionIs agrees 0 advice
+    exact ⟨pre, advice, arithmeticExecution_assert advice (by rw [instructionIs]; rfl)
+      (by rw [instructionIs]; rfl) result.1 result.2⟩
+
 private theorem plain_no_memory (instruction : Instr) (plain : PlainRow instruction)
     (pre : SailJoltState) :
     JoltMetadata.opcodeFlag instruction .Load = false ∧
@@ -769,45 +983,6 @@ private theorem plain_row_ram {F : Type} [Field F] {params : WitnessParams}
   simp only [Fin.getElem_fin] at noAccess
   simp only [TraceWitness.RamAddress, Array.size_push, Nat.lt_add_one,
     ↓reduceDIte, Array.getElem_push_eq, noAccess]
-
-private theorem arithmetic_row_observations {F : Type} [Field F] {params : WitnessParams}
-    (joltField : JoltField F) (witness : WitnessType F params) {live : Fin 128 → Prop}
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-    (trace : Trace) (step : TraceRow trace.bytecode) (bound : trace.rows.size < params.traceLength)
-    (slot : Fin (2 ^ params.logBytecodeK))
-    (selected : bytecodeRa witness slot ⟨trace.rows.size, bound⟩ = 1)
-    (rowIs : bytecodeRow context.bytecode slot.val = some trace.bytecode[step.rowIndex])
-    (arithmetic : DivisionArithmeticRow trace.bytecode[step.rowIndex].instruction)
-    (agrees : RegisterAgreementOn live witness ⟨trace.rows.size, bound⟩ step.preState)
-    (sourcesLive : ∀ source ∈ ExpansionTempLiveness.readSources trace.bytecode[step.rowIndex].instruction,
-      live (TraceWitness.sourceRegisterAddress source)) :
-    witness.Rs1Value ⟨trace.rows.size, bound⟩ =
-        TraceWitness.Rs1Value params {trace with rows := trace.rows.push step} ⟨trace.rows.size, bound⟩ ∧
-    witness.Rs2Value ⟨trace.rows.size, bound⟩ =
-        TraceWitness.Rs2Value params {trace with rows := trace.rows.push step} ⟨trace.rows.size, bound⟩ := by
-  have canonical := (bytecodeRow_rowOk context rowIs).canonical
-  rw [rs1Value_of_selected_bytecode (two_pow_127_lt_char joltField) context equations
-      ⟨trace.rows.size, bound⟩ slot selected,
-    rs2Value_of_selected_bytecode (two_pow_127_lt_char joltField) context equations
-      ⟨trace.rows.size, bound⟩ slot selected]
-  simp only [rowIs, Option.bind_some, TraceWitness.Rs1Value, TraceWitness.Rs2Value,
-    Array.size_push, Nat.lt_add_one, ↓reduceDIte, Array.getElem_push_eq, Fin.getElem_fin]
-  simp only [Fin.getElem_fin] at arithmetic canonical sourcesLive
-  unfold DivisionArithmeticRow at arithmetic
-  split at arithmetic
-  all_goals first
-    | exact False.elim arithmetic
-    | (rename_i instructionIs
-       simp only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,
-         Bool.and_eq_true] at canonical
-       simp only [instructionIs, bytecodeRs1Register, bytecodeRs2Register]
-       constructor <;> first
-         | exact True.intro
-         | rfl
-         | exact (agrees.read _ (by tauto)
-             (sourcesLive _ (by simp [instructionIs, ExpansionTempLiveness.readSources]))).2)
 
 /-- The entry and linkage part of `NextStep`, without honest-advice or
 no-earlier-stop requirements on the retained prefix.
@@ -1139,6 +1314,109 @@ def PlainRowExtension {F : Type} [Field F] {params : WitnessParams}
     RunExtends run candidate ∧ candidate.rows.size = run.rows.size + 1 ∧
     ExpansionState witness context candidate first (done + 1)
 
+/-- Append a plain row from its local execution and live-register result.
+The answer and its encoding are explicit so this also accommodates a tape load.
+For example, AND uses answer zero and keeps memory and device state unchanged. -/
+private theorem append_plain_execution {F : Type} [Field F] (joltField : JoltField F)
+    {inst : JoltInstance SourceInstruction} {params : WitnessParams} {inputs : JoltPrivateInputs}
+    (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
+    (state : ExpansionState witness context run first done)
+    (unfinished : done < expansionRowCount context.bytecode first)
+    (bound : run.rows.size < params.traceLength) (step : TraceRow run.bytecode) (answer : BitVec 64)
+    (indexIs : step.rowIndex.val = first.val + done)
+    (ready : RawRowEntry run step.rowIndex step.preState)
+    (plain : PlainRow run.bytecode[step.rowIndex].instruction)
+    (executes : execWithTapeAnswer
+      (run.bytecode[step.rowIndex].instruction.withRuntimeAdvice step.runtimeAdvice)
+      answer step.preState = .ok RETIRE_SUCCESS step.postState)
+    (encoded : ∀ value ∈ step.someTracerAdvice?,
+      witness.RdWriteValue ⟨run.rows.size, bound⟩ = (value.toNat : F))
+    (tape : ∀ destination width,
+      run.bytecode[step.rowIndex].instruction = .VirtualAdviceLoad destination width →
+      witness.RdWriteValue ⟨run.rows.size, bound⟩ = (answer.toNat : F))
+    (registers : ∀ next : run.rows.size + 1 < params.traceLength,
+      RegisterAgreementOn (rowLive (ExpansionLive context.bytecode first done)
+        run.bytecode[step.rowIndex].instruction) witness ⟨run.rows.size + 1, next⟩ step.postState)
+    (memory : step.postState.sail.mem = step.preState.sail.mem)
+    (device : step.postState.jolt_device = step.preState.jolt_device) :
+    PlainRowExtension witness context run first done bound := by
+  obtain ⟨atRow, slot, selected, slotIs, rowIs⟩ := state.selectedRow unfinished bound step.rowIndex indexIs
+  have prepared := rawEntry_prepared ready (state.registers bound)
+  have live := expansion_sources_live inst.program context.bytecode context.expands first state.starts
+    done unfinished _ atRow
+  obtain ⟨rs1, rs2⟩ := row_operand_observations joltField context equations selected rowIs prepared.1 live
+  obtain ⟨zero, _⟩ := plain_row_ram joltField witness context equations run.toTrace step
+    bound slot selected rowIs plain
+  have ram : witness.RamAddress ⟨run.rows.size, bound⟩ =
+      (match TraceWitness.ramAccessAddress run.bytecode[step.rowIndex].instruction step.preState with
+      | some address => (address.toNat : F) | none => 0) := by
+    rw [(plain_no_memory _ plain step.preState).2.2]
+    exact zero
+  have represented := representsRows_push_operands joltField witness context equations run.toTrace step
+    state.represents.toRepresentsRows bound slot selected slotIs rs1 rs2 ram
+  have prefixAgreement := representsPrefix_push joltField witness context equations run.toTrace step
+    state.represents bound represented zero (memory.trans prepared.2.1) (device.trans prepared.2.2)
+  have nextRegisters (nextCycle : run.rows.size + 1 < params.traceLength) :
+      RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1))
+        witness ⟨run.rows.size + 1, nextCycle⟩ step.postState :=
+    (registers nextCycle).mono (expansionLive_after context.bytecode first done _ atRow)
+  obtain ⟨candidate, traceEq, answers, extendsRun, size, after⟩ :=
+    append_expansion_row joltField witness context equations run first done state unfinished
+      bound step answer indexIs executes ready prefixAgreement zero nextRegisters
+  exact ⟨step, answer, candidate, indexIs, ready, prepared.1.present, traceEq,
+    executes, encoded, tape, answers, extendsRun, size, after⟩
+
+private theorem maskProducer_exec (previous current : Instr)
+    (fed : ExpansionFacts.masksFed previous current = true)
+    (advice : previous.RuntimeAdvice) (answer : BitVec 64) (pre post : SailJoltState)
+    (executes : execWithTapeAnswer (previous.withRuntimeAdvice advice) answer pre =
+      .ok RETIRE_SUCCESS post) : execInstr previous pre = .ok RETIRE_SUCCESS post := by
+  rw [masksFed_withRuntimeAdvice _ _ advice fed] at executes
+  have ignores : execWithTapeAnswer previous answer = execInstr previous := by
+    unfold execWithTapeAnswer
+    split
+    · simp only [ExpansionFacts.masksFed, Bool.false_eq_true] at fed
+    · rfl
+  rwa [ignores] at executes
+
+private theorem prepared_shift_mask
+    {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun inst inputs) (next : Fin run.bytecode.size)
+    (pre : SailJoltState) (entry : RawRowEntry run next pre)
+    (isShift : ExpansionFacts.isRegisterShift run.bytecode[next].instruction = true) :
+    ShiftMaskOk run.bytecode[next].instruction pre := by
+  obtain ⟨j, before, fed, notStart⟩ := ExpansionRows.expand_program_shiftPairs
+    inst.program run.bytecode run.expands next.val (by simp only [Array.length_toList]; exact next.isLt)
+      (by simpa using isShift)
+  simp only [Array.getElem_toList] at fed notStart
+  cases back : run.rows.back? with
+  | none =>
+    have start : RawRowEntry run next pre := entry
+    simp only [RawRowEntry, back] at start
+    exact Bool.noConfusion (notStart.symm.trans start.2.1)
+  | some last =>
+    have atLast := back
+    rw [Array.back?_eq_getElem?] at atLast
+    obtain ⟨inBounds, lastIs⟩ := Array.getElem?_eq_some_iff.mp atLast
+    subst last
+    let last := run.rows[run.rows.size - 1]
+    have ready := entry
+    simp only [RawRowEntry, back] at ready
+    split at ready
+    · obtain ⟨indexIs, prepared⟩ := ready
+      have same : last.rowIndex.val = j := by dsimp only [last]; omega
+      have producer : ExpansionFacts.masksFed run.bytecode[last.rowIndex].instruction
+          run.bytecode[next].instruction = true := by
+        simpa only [Fin.getElem_fin, same] using fed
+      have executes := run.executes ⟨run.rows.size - 1, inBounds⟩
+      simp only [Fin.getElem_fin] at executes
+      rw [prepared]
+      exact fed_mask _ _ producer _ _ (maskProducer_exec _ _ producer _ _ _ _ executes)
+    · obtain ⟨address, _, _, _, start, _⟩ := ready
+      exact Bool.noConfusion (notStart.symm.trans start)
+
 /-- The twelve division arithmetic kinds satisfy the plain-row extension contract
 using their live-register step rules, without the remaining-kinds gap.
 For example, a REM guard executes with its initialized quotient temporary. -/
@@ -1171,42 +1449,63 @@ theorem arithmetic_plain_row_step {F : Type} [Field F] (joltField : JoltField F)
   obtain ⟨post, advice, execution⟩ := arithmetic_execution joltField context equations
     selected rowIs kind prepared.1 live
   let step : TraceRow run.bytecode := ⟨next, advice, pre, post⟩
-  obtain ⟨rs1, rs2⟩ := arithmetic_row_observations joltField witness context equations
-    run.toTrace step bound slot selected rowIs kind prepared.1 live
-  obtain ⟨zero, ramZero⟩ := plain_row_ram joltField witness context equations run.toTrace step
-    bound slot selected rowIs kind.plain
-  have pc : witness.PC ⟨run.rows.size, bound⟩ =
-      TraceWitness.PC params {run.toTrace with rows := run.rows.push step} ⟨run.rows.size, bound⟩ := by
-    rw [pc_of_selected_bytecode (two_pow_127_lt_char joltField) context equations
-      ⟨run.rows.size, bound⟩ slot selected]
-    simp only [TraceWitness.PC, TraceWitness.bytecodePc, Array.size_push, Nat.lt_add_one,
-      ↓reduceDIte, Array.getElem_push_eq]
-    congr 1
-    exact slotIs.trans (congrArg (· + 1) indexIs.symm)
-  have represented := representsRows_push witness run.toTrace step state.represents.toRepresentsRows
-    bound pc rs1 rs2 (zero.trans ramZero.symm)
-  have prefixAgreement := representsPrefix_push joltField witness context equations run.toTrace step
-    state.represents bound represented zero (execution.memory.trans prepared.2.1)
-      (execution.device.trans prepared.2.2)
-  have registers (nextCycle : run.rows.size + 1 < params.traceLength) :
-      RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1))
-        witness ⟨run.rows.size + 1, nextCycle⟩ step.postState := by
-    apply (execution.registers nextCycle).mono
-    exact expansionLive_after context.bytecode first done _ atRow
-  obtain ⟨candidate, traceEq, answers, extendsRun, size, after⟩ :=
-    append_expansion_row joltField witness context equations run first done state unfinished
-      bound step 0 indexIs execution.executes ready prefixAgreement zero registers
-  refine ⟨step, 0, candidate, indexIs, ready, prepared.1.present, traceEq,
-    execution.executes, execution.encoded, ?_, answers, extendsRun, size, after⟩
+  apply append_plain_execution joltField witness context equations run first done state unfinished
+    bound step 0 indexIs ready kind.plain execution.executes execution.encoded ?_
+    execution.registers execution.memory execution.device
   intro destination width same
-  have impossible := kind
   change run.bytecode[next].instruction = .VirtualAdviceLoad destination width at same
-  rw [same] at impossible
-  exact False.elim impossible
+  rw [same] at kind
+  exact False.elim kind
 
-/-- The plain row kinds outside the twelve division arithmetic kinds.
-Their remaining work is to port their Layer 5 rules and supply the same append
-invariant; for example, a native AND row belongs to this remaining group. -/
+private theorem other_row_classification (instruction : Instr) (plain : PlainRow instruction)
+    (other : ¬ DivisionArithmeticRow instruction)
+    (immOk : ExpansionFacts.immShiftOk instruction = true) :
+    (∃ kind : OtherScalarKind, instruction = kind.instruction) ∨
+    JoltMetadata.instructionFlag instruction .Branch = true ∨
+    ∃ destination width, instruction = .VirtualAdviceLoad destination width := by
+  let kind := (otherScalarKind? instruction).getD .fence
+  cases instruction <;> first
+    | exact False.elim plain
+    | exact False.elim (other trivial)
+    | exact Bool.noConfusion immOk
+    | exact Or.inr (Or.inl rfl)
+    | exact Or.inr (Or.inr ⟨_, _, rfl⟩)
+    | exact Or.inl ⟨kind, rfl⟩
+
+private theorem branch_plain_row_step {F : Type} [Field F] (joltField : JoltField F)
+    {joltInstance : JoltInstance SourceInstruction} {params : WitnessParams}
+    {privateInputs : JoltPrivateInputs} (witness : WitnessType F params)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (first : Fin context.bytecode.size) (done : Nat)
+    (state : ExpansionState witness context run first done)
+    (unfinished : done < expansionRowCount context.bytecode first)
+    (bound : run.rows.size < params.traceLength)
+    (branch : ∀ row ∈ context.bytecode[first.val + done]?,
+      JoltMetadata.instructionFlag row.instruction .Branch = true) :
+    PlainRowExtension witness context run first done bound := by
+  sorry
+
+private theorem tape_plain_row_step {F : Type} [Field F] (joltField : JoltField F)
+    {joltInstance : JoltInstance SourceInstruction} {params : WitnessParams}
+    {privateInputs : JoltPrivateInputs} (witness : WitnessType F params)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (first : Fin context.bytecode.size) (done : Nat)
+    (state : ExpansionState witness context run first done)
+    (unfinished : done < expansionRowCount context.bytecode first)
+    (bound : run.rows.size < params.traceLength)
+    (tape : ∀ row ∈ context.bytecode[first.val + done]?,
+      ∃ destination width, row.instruction = .VirtualAdviceLoad destination width) :
+    PlainRowExtension witness context run first done bound := by
+  sorry
+
+/-- Append a plain row outside the twelve division arithmetic kinds.
+Scalar rows use their Layer 5 rules and the shared append invariant; branch and
+tape rows use the two remaining stages.
+For example, a native AND row reads live sources and writes its destination. -/
 theorem plain_row_step_other {F : Type} [Field F] (joltField : JoltField F)
     {joltInstance : JoltInstance SourceInstruction} {params : WitnessParams}
     {privateInputs : JoltPrivateInputs} (witness : WitnessType F params)
@@ -1220,7 +1519,38 @@ theorem plain_row_step_other {F : Type} [Field F] (joltField : JoltField F)
     (plain : ∀ row ∈ context.bytecode[first.val + done]?, PlainRow row.instruction)
     (other : ∀ row ∈ context.bytecode[first.val + done]?, ¬ DivisionArithmeticRow row.instruction) :
     PlainRowExtension witness context run first done bound := by
-  sorry
+  obtain ⟨_, _, next, pre, slot, indexIs, selected, slotIs, ready⟩ := state.next unfinished
+  obtain ⟨atRow, _, _, _, _⟩ := state.selectedRow unfinished bound next indexIs
+  have rowIs : bytecodeRow context.bytecode slot.val = some run.bytecode[next] := by
+    rw [show slot.val = next.val + 1 by omega, bytecodeRow]
+    simpa only [indexIs] using atRow
+  have immOk := (bytecodeRow_rowOk context rowIs).immShift
+  rcases other_row_classification _ (plain _ atRow) (other _ atRow) immOk with
+    ⟨kind, kindIs⟩ | branch | tape
+  · have prepared := rawEntry_prepared (show RawRowEntry run next pre from ready) (state.registers bound)
+    have live := expansion_sources_live joltInstance.program context.bytecode context.expands
+      first state.starts done unfinished _ atRow
+    have pc := (untrusted_prepared_pc run next pre ready).1
+    have shape : ShiftMaskOk run.bytecode[next].instruction pre := by
+      cases isShift : ExpansionFacts.isRegisterShift run.bytecode[next].instruction with
+      | false => exact shiftMaskOk_of_immShiftOk _ _ immOk isShift
+      | true => exact prepared_shift_mask run next pre ready isShift
+    obtain ⟨post, advice, execution⟩ := otherScalar_execution joltField context equations selected rowIs
+      kind kindIs prepared.1 pc shape live
+    let step : TraceRow run.bytecode := ⟨next, advice, pre, post⟩
+    apply append_plain_execution joltField witness context equations run first done state unfinished
+      bound step 0 indexIs ready (plain _ atRow) execution.executes execution.encoded ?_
+      execution.registers execution.memory execution.device
+    intro destination width same
+    exact False.elim (kind.noTape destination width (kindIs.symm.trans same))
+  · apply branch_plain_row_step joltField witness context equations run first done state unfinished bound
+    intro row member
+    have same := Option.some.inj (atRow.symm.trans member)
+    simpa only [← same] using branch
+  · apply tape_plain_row_step joltField witness context equations run first done state unfinished bound
+    intro row member
+    have same := Option.some.inj (atRow.symm.trans member)
+    simpa only [← same] using tape
 
 /-- Append one selected plain row of an unfinished expansion.
 For example, REM's advice and guard rows extend a witness-advice run without

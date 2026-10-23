@@ -1,5 +1,6 @@
 import JoltConstraints.Soundness.Layer6.PlainRow
 import JoltConstraints.Soundness.Layer6.RowStepJalr
+import JoltConstraints.Soundness.Layer6.RowStepTerminal
 import JoltConstraints.Soundness.Layer6.RowStepMemory
 
 /-! The small row classification and staged non-plain extension rules. -/
@@ -137,7 +138,8 @@ theorem host_row_step
     (instruction : run.bytecode[next].instruction = .VirtualHostIO)
     (terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
-  sorry
+  exact append_host_row joltField restrictions witness context equations run first done state
+    unfinished honestAdvice bound next pre indexIs entry registers instruction
 
 variable (pc : pre.sail.regs.get? Register.PC = some run.bytecode[next].address)
     (nextPC : pre.sail.regs.get? Register.nextPC = some (run.bytecode[next].address +
@@ -154,7 +156,8 @@ theorem jal_row_step {destination : Dst} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .JAL destination imm)
     (terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
-  sorry
+  exact append_jal_row joltField assumptions witness context equations run first done state
+    unfinished bound next pre indexIs entry registers pc nextPC instruction
 
 /-- A terminal JALR appends its indirect jump using a live base register;
 for example, ECALL's final JALR reads its initialized virtual mtvec base.

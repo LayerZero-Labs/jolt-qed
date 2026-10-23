@@ -376,3 +376,39 @@ The axiom-check source is `/private/tmp/row-step-layer5-ports-axioms.lean`.
 No new `bv_decide` use, axiom, `sorry`, or proof limit was added, and neither ported proof took more than ten seconds.
 Only `Jal.lean`, `HostCallRegisterFrame.lean`, and this report were edited by this pass.
 No commit was made.
+
+### JAL and HostIO Layer 6 steps
+
+`JoltInstance.jal_row_step` at `JoltConstraints/Soundness/Layer6/RowStepKinds.lean:155` and `JoltInstance.host_row_step` at line 137 are now proved with their staged statements unchanged.
+The edits in `RowStepKinds.lean` are one import and the two `sorry` bodies.
+The terminal equations remain in those statements; the new callers do not need them separately because bytecode row checks supply the jump countdown and the shared append constructor handles the extension.
+
+The JALR append proof was generalized in place rather than copied.
+`JoltInstance.append_nonmemory_row` at `JoltConstraints/Soundness/Layer6/RowStepJalr.lean:14` passes selected operand and RAM observations, unchanged memory and device, and next-column live-register agreement through the existing represented-prefix and append lemmas.
+`JoltInstance.append_jump_row` at line 89 specializes that contract to the two jump constructors and adds the link destination to the live set.
+The private `jump_traits` at line 68 proves their shared non-memory, no-advice, and destination facts by splitting only between JAL and JALR.
+The existing `JoltInstance.append_jalr_row` at line 154 retains its exact statement and derives its conclusion from `append_jump_row`; its local execution still uses `jalr_step` and base liveness.
+
+`JoltInstance.append_jal_row` at `JoltConstraints/Soundness/Layer6/RowStepTerminal.lean:14` uses the committed live-register `jal_step`, the selected slot, the row's terminal compression flag, and `assumptions.pcNoWrap` to establish its local execution before calling the shared jump append.
+It converts the prepared nextPC equation from a conditional word literal to `BitVec.ofNat` by a two-case split on the compression flag.
+No source-register premise was added.
+The pinned Jolt check was `jolt/tracer/src/instruction/jal.rs` (`JAL::exec`) at `5def437f`.
+
+`JoltInstance.append_host_row` at `JoltConstraints/Soundness/Layer6/RowStepTerminal.lean:71` builds `run.NextStep` from the staged honest-advice fact, the expansion's no-earlier-stop fact, and `RawRowEntry`.
+`host_call_exec_sail_frame` supplies execution even when the current row is the final witness cycle.
+When a following column exists, the committed `host_call_selected_step` supplies live-register agreement; execution determinism identifies its post-state with the unconditional execution.
+The existing `execWithTapeAnswer_device_of_not_sd` and HostIO Sail frame show unchanged device and memory while allowing the advice tape to change.
+The pinned Jolt check was `jolt/tracer/src/instruction/virtual_host_io.rs` (`VirtualHostIO::exec`) at `5def437f`.
+
+No existing statement, assumption, restriction, or core definition changed, and no premise was added to either staged step.
+The two new public append theorems in `RowStepJalr.lean` and the two in `RowStepTerminal.lean` have callers in this proof graph.
+No new `bv_decide`, `native_decide`, `decide +kernel`, axiom, `sorry`, or proof limit was added.
+No changed proof took more than about ten seconds in the successful module builds.
+
+`lake build JoltConstraints.Soundness.Layer6.RowStep` passed against the current source tree after the other agent's `RowStepCommon.lean` to `PlainRow.lean` helper move settled.
+During that move, one interim build failed in the other agent's unfinished `PlainRowOperands.lean`; the final build passed with 8705 jobs.
+`#print axioms` on `JoltInstance.jal_row_step`, `JoltInstance.host_row_step`, and the retained `JoltInstance.append_jalr_row` reports `[propext, sys_enable_experimental_extensions, Classical.choice, Quot.sound]` for each, with no `sorryAx`.
+The axiom-check file is `/private/tmp/row-step-jal-host-axioms.lean`.
+`git diff --check` passed.
+This pass edited only `RowStepJalr.lean`, the new `RowStepTerminal.lean`, the import and two bodies in `RowStepKinds.lean`, and this report.
+No commit was made.

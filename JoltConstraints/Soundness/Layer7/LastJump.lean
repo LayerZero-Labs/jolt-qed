@@ -113,8 +113,9 @@ private theorem branch_instruction_of_flag (instruction : JoltISA.Instr)
   cases instruction <;> simp_all [JoltMetadata.instructionFlag]
 
 /-- A decoded branch at a valid bytecode address cannot target field address
-zero: its signed 13-bit offset is smaller than the RAM start address. -/
-private theorem branch_target_ne_zero
+zero: its signed 13-bit offset is smaller than the RAM start address.
+For example, even the minimum offset from `0x80000000` stays above zero. -/
+theorem branch_target_ne_zero
     {F : Type} [Field F] (joltField : JoltField F)
     (row : JoltInstructionRow) (valid : row.Valid)
     (addressOk : bytecode_address_ok row.address = true)

@@ -59,6 +59,7 @@ import JoltConstraints.Soundness.Layer5.Registers
 import JoltConstraints.Soundness.Layer5.RegisterInputs
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer5.Advice
+import JoltConstraints.Soundness.Layer5.Branch
 import JoltConstraints.Soundness.Layer5.AddImmediate
 import JoltConstraints.Soundness.Layer5.Arithmetic
 import JoltConstraints.Soundness.Layer5.WordArithmetic
