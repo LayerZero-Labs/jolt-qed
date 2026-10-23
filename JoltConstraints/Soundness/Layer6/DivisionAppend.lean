@@ -763,6 +763,61 @@ private theorem division_block_row_frame
     (expansionInstructions bytecode first) shape step offset (by omega) instruction
   exact ⟨frame.1, fun proper => frame.2 (by omega)⟩
 
+private theorem division_block_arithmetic
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : UntrustedAnswerRun joltInstance privateInputs)
+    {bytecode : Array JoltInstructionRow} (first : Fin bytecode.size)
+    (expanded : expand_program joltInstance.program = some bytecode)
+    (count : (expansionInstructions bytecode first).length = expansionRowCount bytecode first)
+    (kind : DivisionKind) (rd rs1 rs2 : regidx)
+    (shape : ArithmeticAdviceSequence (expansionInstructions bytecode first)
+      (kind.program rd rs1 rs2))
+    (step : Fin trace.rows.size) (offset : Nat)
+    (inside : offset < expansionRowCount bytecode first)
+    (index : trace.rows[step].rowIndex.val = first.val + offset) :
+    DivisionArithmeticRow trace.bytecode[trace.rows[step].rowIndex].instruction := by
+  have instruction := division_expansion_instruction_at trace first expanded count offset
+    inside trace.rows[step] index
+  rw [← instruction]
+  exact shape.arithmetic _ (List.getElem_mem (by omega))
+
+private theorem DivisionArithmeticRow.ram_none (instruction : Instr)
+    (pre : SailJoltState) (arithmetic : DivisionArithmeticRow instruction) :
+    TraceWitness.ramAccessAddress instruction pre = none := by
+  unfold TraceWitness.ramAccessAddress
+  split <;> simp_all [DivisionArithmeticRow]
+
+private theorem DivisionArithmeticRow.ramAddress_zero
+    {F : Type} [Field F] (params : WitnessParams) (trace : Trace)
+    (t : Fin params.traceLength) (inside : t.val < trace.rows.size)
+    (arithmetic : DivisionArithmeticRow
+      trace.bytecode[(trace.rows[t.val]'inside).rowIndex].instruction) :
+    TraceWitness.RamAddress (F := F) params trace t = 0 := by
+  unfold TraceWitness.RamAddress
+  simp only [dif_pos inside]
+  have noRam := DivisionArithmeticRow.ram_none
+    trace.bytecode[(trace.rows[t.val]'inside).rowIndex].instruction
+    (trace.rows[t.val]'inside).preState arithmetic
+  change (match TraceWitness.ramAccessAddress
+    trace.bytecode[(trace.rows[t.val]'inside).rowIndex].instruction
+    (trace.rows[t.val]'inside).preState with
+    | some address => (address.toNat : F)
+    | none => 0) = 0
+  rw [noRam]
+
+private theorem DivisionArithmeticRow.notStoresTerminationAt
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : UntrustedAnswerRun joltInstance privateInputs)
+    (step : Fin trace.rows.size)
+    (arithmetic : DivisionArithmeticRow
+      trace.bytecode[trace.rows[step].rowIndex].instruction) :
+    ¬ trace.StoresTerminationAt step := by
+  intro stored
+  unfold UntrustedAnswerRun.StoresTerminationAt at stored
+  split at stored
+  · simp_all [DivisionArithmeticRow]
+  · exact stored
+
 private theorem division_replay_finalRamWord
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (candidate replay : UntrustedAnswerRun joltInstance privateInputs)
@@ -822,6 +877,33 @@ private theorem division_segment_pre_frame
       exact divisionFrame_trans pre prior.preState prior.postState priorFrame priorFrameStep
     · rw [preEq, priorSailStep, priorSail]
 
+private theorem division_ordered_interior_remaining
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : UntrustedAnswerRun joltInstance privateInputs)
+    {bytecode : Array JoltInstructionRow} (first : Fin bytecode.size)
+    (expanded : expand_program joltInstance.program = some bytecode)
+    (starts : bytecode[first].starts_source = true)
+    (base : Nat)
+    (ordered : ∀ offset < expansionRowCount bytecode first,
+      ∃ row ∈ trace.rows[base + offset]?, row.rowIndex.val = first.val + offset)
+    (k : Nat) (proper : k + 1 < expansionRowCount bytecode first)
+    (row : TraceRow trace.bytecode) (atRow : row ∈ trace.rows[base + k]?) :
+    trace.bytecode[row.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 := by
+  obtain ⟨other, otherAt, index⟩ := ordered k (by omega)
+  have same : row = other := Option.some.inj (atRow.symm.trans otherAt)
+  subst other
+  have bytecodeEq : trace.bytecode = bytecode :=
+    Option.some.inj (trace.expands.symm.trans expanded)
+  have atContext : bytecode[first.val + k]? =
+      some trace.bytecode[row.rowIndex] := by
+    have sameAt := congrArg (fun b : Array JoltInstructionRow => b[first.val + k]?) bytecodeEq
+    have atTrace : trace.bytecode[first.val + k]? =
+        some trace.bytecode[row.rowIndex] := by
+      simpa only [← index] using (Array.getElem?_eq_getElem row.rowIndex.isLt)
+    exact sameAt.symm.trans atTrace
+  exact expansion_row_remaining joltInstance.program bytecode expanded first starts k
+    proper _ atContext
+
 private theorem division_block_pre_frame
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : UntrustedAnswerRun joltInstance privateInputs)
@@ -855,21 +937,9 @@ private theorem division_block_pre_frame
     simpa only [rowEq] using frame
   have remaining (k : Nat) (proper : k + 1 < expansionRowCount bytecode first)
       (row : TraceRow trace.bytecode) (atRow : row ∈ trace.rows[base + k]?) :
-      trace.bytecode[row.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 := by
-    obtain ⟨other, otherAt, index⟩ := ordered k (by omega)
-    have same : row = other := Option.some.inj (atRow.symm.trans otherAt)
-    subst other
-    have bytecodeEq : trace.bytecode = bytecode :=
-      Option.some.inj (trace.expands.symm.trans expanded)
-    have atContext : bytecode[first.val + k]? =
-        some trace.bytecode[row.rowIndex] := by
-      have sameAt := congrArg (fun b : Array JoltInstructionRow => b[first.val + k]?) bytecodeEq
-      have atTrace : trace.bytecode[first.val + k]? =
-          some trace.bytecode[row.rowIndex] := by
-        simpa only [← index] using (Array.getElem?_eq_getElem row.rowIndex.isLt)
-      exact sameAt.symm.trans atTrace
-    exact expansion_row_remaining joltInstance.program bytecode expanded first starts k
-      proper _ atContext
+      trace.bytecode[row.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 :=
+    division_ordered_interior_remaining trace first expanded starts base ordered
+      k proper row atRow
   exact division_segment_pre_frame trace base first.val
     (expansionRowCount bytecode first) pre ordered firstPre rowFrame remaining offset inside
 
@@ -933,6 +1003,139 @@ private theorem RunExtends.prefix_index
   rw [division_transport_index_at? same extended.rows i] at mapped
   simpa only [Array.getElem?_eq_getElem extendedInside,
     Array.getElem?_eq_getElem inside, Option.map_some, Option.some.injEq] using mapped
+
+private theorem RunExtends.prefix_row_heq
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run candidate replay : UntrustedAnswerRun joltInstance privateInputs)
+    (candidateExtends : RunExtends run candidate)
+    (replayExtends : RunExtends run replay)
+    (i : Nat) (inside : i < run.rows.size)
+    (candidateInside : i < candidate.rows.size) (replayInside : i < replay.rows.size) :
+    HEq candidate.rows[i] replay.rows[i] := by
+  obtain ⟨candidateEq, candidateAt⟩ :=
+    RunExtends.prefix_get? run candidate candidateExtends i inside
+  obtain ⟨replayEq, replayAt⟩ :=
+    RunExtends.prefix_get? run replay replayExtends i inside
+  rcases run with ⟨⟨runBytecode, runRows, _⟩, _⟩
+  rcases candidate with ⟨⟨candidateBytecode, candidateRows, _⟩, _⟩
+  rcases replay with ⟨⟨replayBytecode, replayRows, _⟩, _⟩
+  dsimp only at candidateEq candidateAt replayEq replayAt candidateInside replayInside ⊢
+  subst candidateEq
+  subst replayEq
+  have h := candidateAt.trans replayAt.symm
+  have rowEq : candidateRows[i] = replayRows[i] := by
+    simpa only [Array.getElem?_eq_getElem candidateInside,
+      Array.getElem?_eq_getElem replayInside, Option.some.injEq] using h
+  rw [rowEq]
+
+private theorem RunExtends.priorBoundary
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run replay : UntrustedAnswerRun joltInstance privateInputs)
+    (extendsRun : RunExtends run replay)
+    (prior : ∀ last ∈ run.rows.back?,
+      run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0)
+    (last : TraceRow replay.bytecode)
+    (atBack : last ∈ (replay.rows.extract 0 run.rows.size).back?) :
+    replay.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0 := by
+  obtain ⟨bytecodeEq, rowsEq⟩ := extendsRun
+  rcases run with ⟨⟨runBytecode, runRows, _⟩, _⟩
+  rcases replay with ⟨⟨replayBytecode, replayRows, _⟩, _⟩
+  dsimp only at bytecodeEq rowsEq prior atBack ⊢
+  subst bytecodeEq
+  dsimp only at rowsEq prior atBack ⊢
+  rw [rowsEq] at atBack
+  exact prior last atBack
+
+private theorem division_replay_index_eq
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run candidate replay : UntrustedAnswerRun joltInstance privateInputs)
+    (first count : Nat)
+    (candidateExtends : RunExtends run candidate)
+    (replayExtends : RunExtends run replay)
+    (candidateSize : candidate.rows.size = run.rows.size + count)
+    (replaySize : replay.rows.size = run.rows.size + count)
+    (candidateOrdered : ∀ offset < count,
+      ∃ row ∈ candidate.rows[run.rows.size + offset]?,
+        row.rowIndex.val = first + offset)
+    (replayOrdered : ∀ offset < count,
+      ∃ row ∈ replay.rows[run.rows.size + offset]?,
+        row.rowIndex.val = first + offset)
+    (i : Nat) (candidateInside : i < candidate.rows.size)
+    (replayInside : i < replay.rows.size) :
+    candidate.rows[i].rowIndex.val = replay.rows[i].rowIndex.val := by
+  by_cases old : i < run.rows.size
+  · calc
+      candidate.rows[i].rowIndex.val = run.rows[i].rowIndex.val :=
+        RunExtends.prefix_index run candidate candidateExtends i old candidateInside
+      _ = replay.rows[i].rowIndex.val :=
+        (RunExtends.prefix_index run replay replayExtends i old replayInside).symm
+  · let offset := i - run.rows.size
+    have inside : offset < count := by dsimp [offset]; omega
+    obtain ⟨candidateRow, candidateAt, candidateIndex⟩ := candidateOrdered offset inside
+    obtain ⟨replayRow, replayAt, replayIndex⟩ := replayOrdered offset inside
+    have position : run.rows.size + offset = i := by dsimp [offset]; omega
+    have candidateAtI : candidate.rows[i]? = some candidateRow := by
+      simpa only [position] using candidateAt
+    have replayAtI : replay.rows[i]? = some replayRow := by
+      simpa only [position] using replayAt
+    have candidateRowEq : candidate.rows[i] = candidateRow :=
+      Option.some.inj ((Array.getElem?_eq_getElem candidateInside).symm.trans candidateAtI)
+    have replayRowEq : replay.rows[i] = replayRow :=
+      Option.some.inj ((Array.getElem?_eq_getElem replayInside).symm.trans replayAtI)
+    rw [candidateRowEq, replayRowEq]
+    omega
+
+private theorem RunExtends.prefix_observations
+    {F : Type} [Field F] {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (params : WitnessParams)
+    (run candidate replay : UntrustedAnswerRun joltInstance privateInputs)
+    (candidateExtends : RunExtends run candidate)
+    (replayExtends : RunExtends run replay)
+    (t : Fin params.traceLength) (old : t.val < run.rows.size)
+    (candidateInside : t.val < candidate.rows.size)
+    (replayInside : t.val < replay.rows.size) :
+    TraceWitness.PC (F := F) params candidate.toTrace t =
+        TraceWitness.PC (F := F) params replay.toTrace t ∧
+      TraceWitness.Rs1Value (F := F) params candidate.toTrace t =
+        TraceWitness.Rs1Value (F := F) params replay.toTrace t ∧
+      TraceWitness.Rs2Value (F := F) params candidate.toTrace t =
+        TraceWitness.Rs2Value (F := F) params replay.toTrace t ∧
+      TraceWitness.RamAddress (F := F) params candidate.toTrace t =
+        TraceWitness.RamAddress (F := F) params replay.toTrace t ∧
+      (candidate.rows[t.val].StableStall ↔ replay.rows[t.val].StableStall) ∧
+      (candidate.StoresTerminationAt ⟨t.val, candidateInside⟩ ↔
+        replay.StoresTerminationAt ⟨t.val, replayInside⟩) := by
+  have rowEq := RunExtends.prefix_row_heq run candidate replay candidateExtends
+    replayExtends t.val old candidateInside replayInside
+  obtain ⟨candidateEq, _⟩ := candidateExtends
+  obtain ⟨replayEq, _⟩ := replayExtends
+  rcases run with ⟨⟨runBytecode, runRows, _⟩, _⟩
+  rcases candidate with ⟨⟨candidateBytecode, candidateRows, _⟩, _⟩
+  rcases replay with ⟨⟨replayBytecode, replayRows, _⟩, _⟩
+  dsimp only at candidateEq replayEq rowEq candidateInside replayInside ⊢
+  subst candidateEq
+  subst replayEq
+  have sameRow : candidateRows[t.val] = replayRows[t.val] := eq_of_heq rowEq
+  have sameAt :
+      candidateRows[(⟨t.val, candidateInside⟩ : Fin candidateRows.size)] =
+        replayRows[(⟨t.val, replayInside⟩ : Fin replayRows.size)] := by
+    change candidateRows[t.val] = replayRows[t.val]
+    exact sameRow
+  constructor
+  · simp only [TraceWitness.PC, TraceWitness.bytecodePc,
+      dif_pos candidateInside, dif_pos replayInside, sameRow]
+  constructor
+  · simp only [TraceWitness.Rs1Value, dif_pos candidateInside,
+      dif_pos replayInside, sameRow]
+  constructor
+  · simp only [TraceWitness.Rs2Value, dif_pos candidateInside,
+      dif_pos replayInside, sameRow]
+  constructor
+  · simp only [TraceWitness.RamAddress, dif_pos candidateInside,
+      dif_pos replayInside, sameRow]
+  constructor
+  · simp only [TraceRow.StableStall, sameRow]
+  · simp only [UntrustedAnswerRun.StoresTerminationAt, sameAt]
 
 private theorem division_source_is_compressed_eq
     {a b : Array JoltInstructionRow} (same : a = b)
@@ -1238,6 +1441,143 @@ theorem division_replay_rows
     shape.arithmetic (kind.honestAdvice rd rs1 rs2 pre) pre middle honestPost 1
     (by omega) (by unfold expansionRowCount; omega) replayed tailRun
 
+private theorem divisionFrame_sourceValue (source : Src) (pre state : SailJoltState)
+    (frame : DivisionFrame pre state) (sail : state.sail = pre.sail)
+    (persistent : ¬ IsInstructionTemporary (TraceWitness.sourceRegisterAddress source)) :
+    sourceValue source state = sourceValue source pre := by
+  cases source with
+  | xreg register => simp only [sourceValue, sail]
+  | vreg register =>
+      change ¬ IsInstructionTemporary register.toFin at persistent
+      exact frame.2.2.2 register persistent
+
+private theorem divisionFrame_selectedOperandValue {F : Type} [Field F]
+    (operand : Instr → Option Src) (selector : Instr → Option (Fin 128))
+    (selectorEq : ∀ instruction,
+      selector instruction = (operand instruction).map TraceWitness.sourceRegisterAddress)
+    (candidateInstruction replayInstruction : Instr)
+    (instructionEq : candidateInstruction = replayInstruction)
+    (pre candidatePre replayPre : SailJoltState)
+    (candidateFrame : DivisionFrame pre candidatePre)
+    (candidateSail : candidatePre.sail = pre.sail)
+    (replayFrame : DivisionFrame pre replayPre)
+    (replaySail : replayPre.sail = pre.sail)
+    (persistent : ∀ register ∈ selector replayInstruction,
+      ¬ IsInstructionTemporary register) :
+    (match operand candidateInstruction with
+      | some source => ((sourceValue source candidatePre).toNat : F)
+      | none => 0) =
+    (match operand replayInstruction with
+      | some source => ((sourceValue source replayPre).toNat : F)
+      | none => 0) := by
+  subst candidateInstruction
+  cases h : operand replayInstruction with
+  | none => simp only [h]
+  | some source =>
+      have keep : ¬ IsInstructionTemporary (TraceWitness.sourceRegisterAddress source) := by
+        apply persistent (TraceWitness.sourceRegisterAddress source)
+        rw [selectorEq, h]
+        simp
+      simp only [h]
+      rw [divisionFrame_sourceValue source pre candidatePre candidateFrame candidateSail keep,
+        divisionFrame_sourceValue source pre replayPre replayFrame replaySail keep]
+
+private theorem division_replay_new_selected_value {F : Type} [Field F]
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run candidate replay : UntrustedAnswerRun joltInstance privateInputs)
+    (count offset : Nat) (inside : offset < count) (pre : SailJoltState)
+    (candidateSize : candidate.rows.size = run.rows.size + count)
+    (replaySize : replay.rows.size = run.rows.size + count)
+    (frames : ∀ k < count,
+      (∃ row ∈ candidate.rows[run.rows.size + k]?,
+        DivisionFrame pre row.preState ∧ row.preState.sail = pre.sail) ∧
+      (∃ row ∈ replay.rows[run.rows.size + k]?,
+        DivisionFrame pre row.preState ∧ row.preState.sail = pre.sail))
+    (operand : Instr → Option Src) (selector : Instr → Option (Fin 128))
+    (selectorEq : ∀ instruction,
+      selector instruction = (operand instruction).map TraceWitness.sourceRegisterAddress)
+    (instructionEq :
+      candidate.bytecode[(candidate.rows[run.rows.size + offset]'(by omega)).rowIndex].instruction =
+        replay.bytecode[(replay.rows[run.rows.size + offset]'(by omega)).rowIndex].instruction)
+    (persistent : ∀ register ∈
+      selector replay.bytecode[(replay.rows[run.rows.size + offset]'(by omega)).rowIndex].instruction,
+      ¬ IsInstructionTemporary register) :
+    (match operand candidate.bytecode[
+        (candidate.rows[run.rows.size + offset]'(by omega)).rowIndex].instruction with
+      | some source =>
+          ((sourceValue source (candidate.rows[run.rows.size + offset]'(by omega)).preState).toNat : F)
+      | none => 0) =
+    (match operand replay.bytecode[
+        (replay.rows[run.rows.size + offset]'(by omega)).rowIndex].instruction with
+      | some source =>
+          ((sourceValue source (replay.rows[run.rows.size + offset]'(by omega)).preState).toNat : F)
+      | none => 0) := by
+  obtain ⟨⟨candidateRow, candidateAt, candidateFrame, candidateSail⟩,
+    ⟨replayRow, replayAt, replayFrame, replaySail⟩⟩ := frames offset inside
+  have candidateBound : run.rows.size + offset < candidate.rows.size := by omega
+  have replayBound : run.rows.size + offset < replay.rows.size := by omega
+  have candidateRowEq : candidate.rows[run.rows.size + offset] = candidateRow :=
+    Option.some.inj ((Array.getElem?_eq_getElem candidateBound).symm.trans candidateAt)
+  have replayRowEq : replay.rows[run.rows.size + offset] = replayRow :=
+    Option.some.inj ((Array.getElem?_eq_getElem replayBound).symm.trans replayAt)
+  rw [← candidateRowEq] at candidateFrame candidateSail
+  rw [← replayRowEq] at replayFrame replaySail
+  exact divisionFrame_selectedOperandValue (F := F) operand selector selectorEq
+    _ _ instructionEq pre _ _ candidateFrame candidateSail replayFrame replaySail persistent
+
+private theorem division_replay_selected_value {F : Type} [Field F]
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (params : WitnessParams)
+    (run candidate replay : UntrustedAnswerRun joltInstance privateInputs)
+    (count : Nat) (pre : SailJoltState)
+    (candidateSize : candidate.rows.size = run.rows.size + count)
+    (replaySize : replay.rows.size = run.rows.size + count)
+    (frames : ∀ k < count,
+      (∃ row ∈ candidate.rows[run.rows.size + k]?,
+        DivisionFrame pre row.preState ∧ row.preState.sail = pre.sail) ∧
+      (∃ row ∈ replay.rows[run.rows.size + k]?,
+        DivisionFrame pre row.preState ∧ row.preState.sail = pre.sail))
+    (operand : Instr → Option Src) (selector : Instr → Option (Fin 128))
+    (selectorEq : ∀ instruction,
+      selector instruction = (operand instruction).map TraceWitness.sourceRegisterAddress)
+    (observe : Trace → Fin params.traceLength → F)
+    (projection : ∀ (trace : Trace) (t : Fin params.traceLength)
+      (inside : t.val < trace.rows.size),
+      observe trace t =
+        match operand trace.bytecode[(trace.rows[t.val]'inside).rowIndex].instruction with
+        | some source => ((sourceValue source (trace.rows[t.val]'inside).preState).toNat : F)
+        | none => 0)
+    (instructionEq : ∀ (t : Nat) (ci : t < candidate.rows.size)
+      (ri : t < replay.rows.size),
+      candidate.bytecode[candidate.rows[t].rowIndex].instruction =
+        replay.bytecode[replay.rows[t].rowIndex].instruction)
+    (oldEq : ∀ (t : Fin params.traceLength) (old : t.val < run.rows.size)
+      (ci : t.val < candidate.rows.size) (ri : t.val < replay.rows.size),
+      observe candidate.toTrace t = observe replay.toTrace t)
+    (t : Fin params.traceLength)
+    (candidateInside : t.val < candidate.rows.size)
+    (replayInside : t.val < replay.rows.size)
+    (persistent : ∀ register ∈
+      selector replay.bytecode[replay.rows[t.val].rowIndex].instruction,
+      ¬ IsInstructionTemporary register) :
+    observe candidate.toTrace t = observe replay.toTrace t := by
+  by_cases old : t.val < run.rows.size
+  · exact oldEq t old candidateInside replayInside
+  · let offset := t.val - run.rows.size
+    have offsetInside : offset < count := by
+      dsimp [offset]
+      rw [replaySize] at replayInside
+      omega
+    have position : run.rows.size + offset = t.val := by dsimp [offset]; omega
+    have selectedEq := division_replay_new_selected_value (F := F)
+      run candidate replay count offset offsetInside pre candidateSize replaySize frames
+      operand selector selectorEq
+      (by simpa only [position] using instructionEq t.val candidateInside replayInside)
+      (by simpa only [position] using persistent)
+    rw [projection candidate.toTrace t candidateInside,
+      projection replay.toTrace t replayInside]
+    simpa only [position] using selectedEq
+
 /-- The remaining observation, stopping, and register transfer after both runs'
 block pre-states have the prefix frame and their final RAM images agree.
 For example, REM with different internal quotients has the same persistent
@@ -1273,7 +1613,321 @@ private theorem division_replay_complete_transfer
         TraceWitness.finalRamWord replay.toTrace address) :
     ExpansionState witness context replay first
       (expansionRowCount context.bytecode first) := by
-  sorry
+  have candidateOrdered : ∀ offset < expansionRowCount context.bytecode first,
+      ∃ row ∈ candidate.rows[run.rows.size + offset]?,
+        row.rowIndex.val = first.val + offset := by
+    intro offset inside
+    have base : candidate.rows.size - expansionRowCount context.bytecode first =
+        run.rows.size := by rw [candidateSize]; omega
+    simpa only [base] using complete.ordered offset inside
+  have equalSize : candidate.rows.size = replay.rows.size := by
+    rw [candidateSize, replayed.size]
+  have rowIndexEq (t : Nat) (candidateInside : t < candidate.rows.size)
+      (replayInside : t < replay.rows.size) :
+      candidate.rows[t].rowIndex.val = replay.rows[t].rowIndex.val :=
+    division_replay_index_eq run candidate replay first.val
+      (expansionRowCount context.bytecode first) candidateExtends replayed.extendsRun
+      candidateSize replayed.size candidateOrdered replayed.ordered
+      t candidateInside replayInside
+  have instructionEq (t : Nat) (candidateInside : t < candidate.rows.size)
+      (replayInside : t < replay.rows.size) :
+      candidate.bytecode[candidate.rows[t].rowIndex].instruction =
+        replay.bytecode[replay.rows[t].rowIndex].instruction := by
+    exact congrArg JoltInstructionRow.instruction
+      (division_bytecode_at_eq
+        (candidateExtends.choose.trans replayed.extendsRun.choose.symm)
+        candidate.rows[t].rowIndex replay.rows[t].rowIndex
+        (rowIndexEq t candidateInside replayInside))
+  refine {
+    represents := by
+      have initialEq : candidate.initialState = replay.initialState :=
+        Option.some.inj (candidate.initialized.symm.trans replay.initialized)
+      refine {
+        toRepresentsRows := {
+          rowsBound := by rw [← equalSize]; exact complete.represents.rowsBound
+          pc := by
+            intro t inside
+            have candidateInside : t.val < candidate.rows.size := by
+              rw [equalSize]
+              exact inside
+            have indexEq := rowIndexEq t.val candidateInside inside
+            have value := complete.represents.pc t candidateInside
+            rw [value]
+            unfold TraceWitness.PC TraceWitness.bytecodePc
+            simp only [dif_pos candidateInside, dif_pos inside, indexEq]
+          rs1 := by
+            intro t inside persistent
+            have candidateInside : t.val < candidate.rows.size := by
+              rw [equalSize]
+              exact inside
+            have candidatePersistent : ∀ register ∈
+                JoltConstraints.bytecodeRs1Register
+                  candidate.bytecode[candidate.rows[t.val].rowIndex].instruction,
+                ¬ IsInstructionTemporary register := by
+              rw [instructionEq t.val candidateInside inside]
+              exact persistent
+            have candidateValue := complete.represents.rs1 t candidateInside candidatePersistent
+            rw [candidateValue]
+            exact division_replay_selected_value params run candidate replay
+              (expansionRowCount context.bytecode first) pre candidateSize replayed.size
+              preFrames JoltConstraints.rs1Operand? JoltConstraints.bytecodeRs1Register
+              JoltConstraints.bytecodeRs1Register_eq_rs1Operand
+              (TraceWitness.Rs1Value (F := F) params)
+              (JoltConstraints.rs1Value_real (F := F) params)
+              instructionEq
+              (fun t old ci ri => (RunExtends.prefix_observations (F := F) params
+                run candidate replay candidateExtends replayed.extendsRun t old ci ri).2.1)
+              t candidateInside inside persistent
+          rs2 := by
+            intro t inside persistent
+            have candidateInside : t.val < candidate.rows.size := by
+              rw [equalSize]
+              exact inside
+            have candidatePersistent : ∀ register ∈
+                JoltConstraints.bytecodeRs2Register
+                  candidate.bytecode[candidate.rows[t.val].rowIndex].instruction,
+                ¬ IsInstructionTemporary register := by
+              rw [instructionEq t.val candidateInside inside]
+              exact persistent
+            have candidateValue := complete.represents.rs2 t candidateInside candidatePersistent
+            rw [candidateValue]
+            exact division_replay_selected_value params run candidate replay
+              (expansionRowCount context.bytecode first) pre candidateSize replayed.size
+              preFrames JoltConstraints.rs2Operand? JoltConstraints.bytecodeRs2Register
+              JoltConstraints.bytecodeRs2Register_eq_rs2Operand
+              (TraceWitness.Rs2Value (F := F) params)
+              (JoltConstraints.rs2Value_real (F := F) params)
+              instructionEq
+              (fun t old ci ri => (RunExtends.prefix_observations (F := F) params
+                run candidate replay candidateExtends replayed.extendsRun t old ci ri).2.2.1)
+              t candidateInside inside persistent
+          ramAddress := by
+            intro t inside
+            have candidateInside : t.val < candidate.rows.size := by
+              rw [equalSize]
+              exact inside
+            have candidateValue := complete.represents.ramAddress t candidateInside
+            rw [candidateValue]
+            by_cases old : t.val < run.rows.size
+            · exact (RunExtends.prefix_observations (F := F) params run candidate replay
+                candidateExtends replayed.extendsRun t old candidateInside inside).2.2.2.1
+            · let offset := t.val - run.rows.size
+              have offsetInside : offset < expansionRowCount context.bytecode first := by
+                dsimp [offset]
+                rw [replayed.size] at inside
+                omega
+              have position : run.rows.size + offset = t.val := by dsimp [offset]; omega
+              obtain ⟨row, rowAt, rowIndex⟩ := replayed.ordered offset offsetInside
+              have rowAtT : replay.rows[t.val]? = some row := by
+                simpa only [position] using rowAt
+              have rowEq : replay.rows[t.val] = row :=
+                Option.some.inj ((Array.getElem?_eq_getElem inside).symm.trans rowAtT)
+              have replayArithmetic : DivisionArithmeticRow
+                  replay.bytecode[replay.rows[t.val].rowIndex].instruction := by
+                have index : replay.rows[(⟨t.val, inside⟩ : Fin replay.rows.size)].rowIndex.val =
+                    first.val + offset := by
+                  change replay.rows[t.val].rowIndex.val = first.val + offset
+                  rw [rowEq]
+                  exact rowIndex
+                exact division_block_arithmetic replay first context.expands count
+                  kind rd rs1 rs2 shape ⟨t.val, inside⟩ offset offsetInside
+                  index
+              have candidateArithmetic : DivisionArithmeticRow
+                  candidate.bytecode[candidate.rows[t.val].rowIndex].instruction := by
+                rw [instructionEq t.val candidateInside inside]
+                exact replayArithmetic
+              rw [DivisionArithmeticRow.ramAddress_zero (F := F) params candidate.toTrace
+                t candidateInside candidateArithmetic,
+                DivisionArithmeticRow.ramAddress_zero (F := F) params replay.toTrace
+                  t inside replayArithmetic]
+        }
+        cutRam := by
+          constructor
+          · intro bound address outside
+            have candidateBound : candidate.rows.size < params.traceLength := by
+              rw [equalSize]
+              exact bound
+            have candidateOutside : address.val ≠
+                (candidate.initialState.jolt_device.memory_layout.termination.toNat -
+                  JoltConstraints.ramLowestAddress candidate.initialState.jolt_device.memory_layout) / 8 := by
+              rw [initialEq]
+              exact outside
+            have value := complete.represents.cutRam.1 candidateBound address candidateOutside
+            have indexEq :
+                (⟨candidate.rows.size, candidateBound⟩ : Fin params.traceLength) =
+                  ⟨replay.rows.size, bound⟩ := Fin.ext equalSize
+            rw [indexEq] at value
+            exact value.trans (by rw [finalRam])
+          · intro full address outside
+            have candidateFull : candidate.rows.size = params.traceLength := by
+              rw [equalSize]
+              exact full
+            have candidateOutside : address.val ≠
+                (candidate.initialState.jolt_device.memory_layout.termination.toNat -
+                  JoltConstraints.ramLowestAddress candidate.initialState.jolt_device.memory_layout) / 8 := by
+              rw [initialEq]
+              exact outside
+            have value := complete.represents.cutRam.2 candidateFull address candidateOutside
+            exact value.trans (by rw [finalRam])
+      }
+    real := by
+      intro t inside
+      exact complete.real t (by rw [candidateSize, ← replayed.size]; exact inside)
+    noEarlierStop := by
+      intro i current next currentAt nextAt
+      have replayInside : i < replay.rows.size :=
+        (Array.getElem?_eq_some_iff.mp currentAt).1
+      have replayNextInside : i + 1 < replay.rows.size :=
+        (Array.getElem?_eq_some_iff.mp nextAt).1
+      by_cases old : i < run.rows.size
+      · have candidateInside : i < candidate.rows.size := by
+          rw [equalSize]
+          exact replayInside
+        have candidateNextInside : i + 1 < candidate.rows.size := by
+          rw [equalSize]
+          exact replayNextInside
+        have candidateNo := complete.noEarlierStop i
+          candidate.rows[i] candidate.rows[i + 1]
+          (Array.getElem?_eq_getElem candidateInside)
+          (Array.getElem?_eq_getElem candidateNextInside)
+        have indexBound : i < params.traceLength := by
+          have bound := complete.represents.rowsBound
+          omega
+        let t : Fin params.traceLength := ⟨i, indexBound⟩
+        have stableEq := (RunExtends.prefix_observations (F := F) params run
+          candidate replay candidateExtends replayed.extendsRun t old
+          candidateInside replayInside).2.2.2.2.1
+        have currentEq : current = replay.rows[i] :=
+          (Array.getElem?_eq_some_iff.mp currentAt).2.symm
+        intro stable
+        rw [currentEq] at stable
+        exact candidateNo (stableEq.mpr stable)
+      · let offset := i - run.rows.size
+        have proper : offset + 1 < expansionRowCount context.bytecode first := by
+          dsimp [offset]
+          rw [replayed.size] at replayNextInside
+          omega
+        have position : run.rows.size + offset = i := by dsimp [offset]; omega
+        have atBlock : current ∈ replay.rows[run.rows.size + offset]? := by
+          simpa only [position] using currentAt
+        have remaining := division_ordered_interior_remaining replay first
+          context.expands state.starts run.rows.size replayed.ordered
+          offset proper current atBlock
+        intro stable
+        exact remaining stable.1
+    terminationWord := by
+      intro bound noReplayStore address atTermination
+      have candidateBound : candidate.rows.size < params.traceLength := by
+        rw [equalSize]
+        exact bound
+      have noCandidateStore : ¬ ∃ i : Fin candidate.rows.size,
+          candidate.StoresTerminationAt i := by
+        rintro ⟨i, stored⟩
+        have replayInside : i.val < replay.rows.size := by
+          rw [← equalSize]
+          exact i.isLt
+        by_cases old : i.val < run.rows.size
+        · have tBound : i.val < params.traceLength := by
+            have rowsBound := complete.represents.rowsBound
+            omega
+          let t : Fin params.traceLength := ⟨i.val, tBound⟩
+          have storeEq := (RunExtends.prefix_observations (F := F) params
+            run candidate replay candidateExtends replayed.extendsRun t old
+            i.isLt replayInside).2.2.2.2.2
+          have replayStore : replay.StoresTerminationAt ⟨i.val, replayInside⟩ :=
+            storeEq.mp stored
+          exact noReplayStore ⟨⟨i.val, replayInside⟩, replayStore⟩
+        · let offset := i.val - run.rows.size
+          have offsetInside : offset < expansionRowCount context.bytecode first := by
+            dsimp [offset]
+            omega
+          have position : run.rows.size + offset = i.val := by dsimp [offset]; omega
+          obtain ⟨row, rowAt, rowIndex⟩ := candidateOrdered offset offsetInside
+          have rowAtI : candidate.rows[i.val]? = some row := by
+            simpa only [position] using rowAt
+          have rowEq : candidate.rows[i] = row :=
+            Option.some.inj ((Array.getElem?_eq_getElem i.isLt).symm.trans rowAtI)
+          have arithmetic := division_block_arithmetic candidate first context.expands
+            count kind rd rs1 rs2 shape i offset offsetInside
+            (by rw [rowEq]; exact rowIndex)
+          exact (DivisionArithmeticRow.notStoresTerminationAt candidate i arithmetic) stored
+      have initialEq : candidate.initialState = replay.initialState :=
+        Option.some.inj (candidate.initialized.symm.trans replay.initialized)
+      have candidateAtTermination : address.val =
+          (candidate.initialState.jolt_device.memory_layout.termination.toNat -
+            JoltConstraints.ramLowestAddress candidate.initialState.jolt_device.memory_layout) / 8 := by
+        rw [initialEq]
+        exact atTermination
+      have value := complete.terminationWord candidateBound noCandidateStore
+        address candidateAtTermination
+      have indexEq :
+          (⟨candidate.rows.size, candidateBound⟩ : Fin params.traceLength) =
+            ⟨replay.rows.size, bound⟩ := Fin.ext equalSize
+      rw [indexEq] at value
+      exact value
+    starts := state.starts
+    done_le := Nat.le_refl _
+    retained := by rw [replayed.size]; omega
+    ordered := by
+      intro offset inside
+      have base : replay.rows.size - expansionRowCount context.bytecode first =
+          run.rows.size := by rw [replayed.size]; omega
+      simpa only [base] using replayed.ordered offset inside
+    priorBoundary := by
+      intro last atBack
+      have base : replay.rows.size - expansionRowCount context.bytecode first =
+          run.rows.size := by rw [replayed.size]; omega
+      rw [base] at atBack
+      have prior : ∀ row ∈ run.rows.back?,
+          run.bytecode[row.rowIndex].virtual_sequence_remaining.getD 0 = 0 := by
+        intro row atRow
+        apply state.priorBoundary row
+        simpa only [Nat.sub_zero,
+          Array.extract_eq_self_of_le (Nat.le_refl run.rows.size)] using atRow
+      exact RunExtends.priorBoundary run replay replayed.extendsRun prior last atBack
+    registers := by
+      intro bound
+      have equalSize : candidate.rows.size = replay.rows.size := by
+        rw [candidateSize, replayed.size]
+      have candidateBound : candidate.rows.size < params.traceLength := by
+        rw [equalSize]
+        exact bound
+      have agreed := complete.registers candidateBound
+      have finalFrame : DivisionFrame
+          (TraceWitness.finalTraceState candidate.toTrace) honestPost :=
+        ⟨same.device, same.tape, same.host, same.virtualRegisters⟩
+      refine ⟨?_, ?_⟩
+      · rw [replayed.finalPost, same.sail]
+        exact agreed.present
+      · intro register live
+        have persistent : ¬ IsInstructionTemporary register := by
+          rcases live with keep | ⟨unfinished, _⟩
+          · exact keep
+          · omega
+        have candidateLive : ExpansionLive context.bytecode first
+            (expansionRowCount context.bytecode first) register := Or.inl persistent
+        have value := agreed.values register candidateLive
+        have sameColumn :
+            (⟨candidate.rows.size, candidateBound⟩ : Fin params.traceLength) =
+              ⟨replay.rows.size, bound⟩ := Fin.ext equalSize
+        rw [sameColumn] at value
+        have decoded : TraceWitness.sourceRegisterAddress
+            (JoltRegisterEncoding.source (BitVec.ofFin register)) = register := by
+          simpa using JoltConstraints.Soundness.source_encode_decode (BitVec.ofFin register)
+        have keepSource : ¬ IsInstructionTemporary
+            (TraceWitness.sourceRegisterAddress
+              (JoltRegisterEncoding.source (BitVec.ofFin register))) := by
+          rw [decoded]
+          exact persistent
+        have sourceEq := divisionFrame_sourceValue
+          (JoltRegisterEncoding.source (BitVec.ofFin register))
+          (TraceWitness.finalTraceState candidate.toTrace) honestPost
+          finalFrame same.sail keepSource
+        rw [replayed.finalPost]
+        exact value.trans (congrArg (fun word : BitVec 64 => (word.toNat : F)) sourceEq.symm)
+    next := by intro impossible; omega
+    notStopped := by intro impossible; omega
+  }
 
 /-- Transfer a completed witness division block's observation, RAM, register,
 and stopping invariants to its honest replay, using their equal final states

@@ -260,3 +260,40 @@ The new `DivisionAppend` module built in 8.4 seconds, and `DivisionBlock` in 3.8
 `#print axioms JoltInstance.division_append_honest` still reports `sorryAx`, now through `division_replay_complete_transfer`.
 `git diff --check` passed.
 I did not edit the other agent's Layer 5 files or commit.
+
+## Continuation: selector bridge and completed replay transfer
+
+I read `AGENTS.md` and this report before editing.
+The approved constructor split confirms that each normalized bytecode source selector equals the address of the corresponding `rs1Operand?` or `rs2Operand?`.
+The two equalities use `cases instruction <;> rfl`, as authorized.
+I added the `BytecodeReadSelectors` import to `RegistersReadProofHelpers.lean` for these declarations.
+
+| Declaration | Location | Change |
+| --- | --- | --- |
+| `bytecodeRs1Register_eq_rs1Operand` | `RegistersReadProofHelpers.lean:80` | New public equality with a docstring; one approved constructor split. |
+| `bytecodeRs2Register_eq_rs2Operand` | `RegistersReadProofHelpers.lean:87` | New public equality with a docstring; one approved constructor split. |
+| `division_block_arithmetic` | `DivisionAppend.lean:766` | New private lookup of the arithmetic-row classification at an executed block row. |
+| `DivisionArithmeticRow.ram_none`, `.ramAddress_zero`, `.notStoresTerminationAt` | `DivisionAppend.lean:784`, `:790`, `:808` | New private consequences excluding RAM access and termination stores on division rows. |
+| `division_ordered_interior_remaining` | `DivisionAppend.lean:880` | New private shared countdown fact for every proper block prefix; `division_block_pre_frame` now uses it. |
+| `RunExtends.prefix_row_heq`, `.priorBoundary` | `DivisionAppend.lean:1007`, `:1031` | New private exact-prefix transport facts. |
+| `division_replay_index_eq`, `RunExtends.prefix_observations` | `DivisionAppend.lean:1049`, `:1088` | New private row-index and exact-prefix transfers for PC, register reads, RAM address, stall, and termination-store status. |
+| `divisionFrame_sourceValue`, `divisionFrame_selectedOperandValue` | `DivisionAppend.lean:1444`, `:1454` | New private shared non-temporary operand preservation facts. |
+| `division_replay_new_selected_value`, `division_replay_selected_value` | `DivisionAppend.lean:1485`, `:1528` | New private common transfer for first and second source-register observations. |
+| `division_replay_complete_transfer` | `DivisionAppend.lean:1585` | Proved its previously staged statement without changing its hypotheses or conclusion. |
+
+The completed transfer proves all `ExpansionState` fields, including both source values, RAM address, no earlier stable stall, the termination word, the prior boundary, and final persistent registers.
+Its old-row facts come from the exact retained prefix; its new-row facts come from the division arithmetic classification, the shared prefix frame, and the final-state agreement.
+The proof body of `division_replay_complete_transfer` is about 315 lines, above the stage plan's approximate 60-line target; its `represents` field alone is about 130 lines.
+This is a proof-organization issue for review; the theorem is kernel checked and has no `sorry`.
+
+No approved statement changed and no premise was added to an existing theorem.
+No new `bv_decide`, `native_decide`, `decide +kernel`, proof limit, axiom, or `sorry` was added.
+`JoltConstraints/model_review.md:174` still lists `division_replay_complete` as owed; it was outside this task's edit scope and now needs a separate status update.
+The changed `DivisionAppend` module took about ten seconds in the isolated build; no individual new proof was observed taking more than about ten seconds.
+
+`lake build JoltConstraints.Soundness.Layer6.DivisionBlock` passed with 8,684 jobs.
+Intermediate isolated builds failed while another agent's unfinished `StallSuffix.lean` and then `PlainRow.lean` did not compile; the final isolated build passed after those edits settled.
+An axiom check importing only `DivisionBlock` reports `propext`, `sys_enable_experimental_extensions`, `Classical.choice`, and `Quot.sound` for `JoltInstance.division_append_honest`, with no `sorryAx`.
+`git diff --check` passed.
+I did not edit `DivisionPrograms.lean`, the other agents' files, or any Layer 5 file.
+I did not run the aggregate build or commit.

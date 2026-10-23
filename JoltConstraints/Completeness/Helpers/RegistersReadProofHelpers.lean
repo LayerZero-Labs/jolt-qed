@@ -1,4 +1,5 @@
 import JoltConstraints.Completeness.Helpers.RegistersValHistoryProofHelpers
+import JoltConstraints.Constraints.BytecodeReadSelectors
 import JoltConstraints.honest_witness
 
 /-!
@@ -73,6 +74,20 @@ def rs2Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
   | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
   | .VirtualHostIO => none
+
+/-- The normalized first-register selector is the address of `rs1Operand?`,
+when present; for example, ADD selects the address of its first source. -/
+theorem bytecodeRs1Register_eq_rs1Operand (instruction : JoltISA.Instr) :
+    bytecodeRs1Register instruction =
+      (rs1Operand? instruction).map TraceWitness.sourceRegisterAddress := by
+  cases instruction <;> rfl
+
+/-- The normalized second-register selector is the address of `rs2Operand?`,
+when present; for example, ADD selects the address of its second source. -/
+theorem bytecodeRs2Register_eq_rs2Operand (instruction : JoltISA.Instr) :
+    bytecodeRs2Register instruction =
+      (rs2Operand? instruction).map TraceWitness.sourceRegisterAddress := by
+  cases instruction <;> rfl
 
 theorem rs1Operand_canonical
     (instr : JoltISA.Instr) (src : JoltISA.Src)
