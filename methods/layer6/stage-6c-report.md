@@ -29,43 +29,94 @@ No premise or staged statement changed.
 
 | Declaration | Location | Change |
 | --- | --- | --- |
-| `division_source_advice_single` | `DivisionAppend.lean:13` | New private proof of the singleton division advice list. |
-| `division_block_later_not_start` | `DivisionAppend.lean:19` | New private proof from countdown and bytecode layout. |
-| `expansion_start_of_segment` | `DivisionAppend.lean:51` | New private general start-index proof. |
-| `division_replay_start_flag` | `DivisionAppend.lean:90` | New private replay start-flag proof. |
-| `division_replay_start_at` | `DivisionAppend.lean:148` | New private expansion-start proof. |
-| `division_replay_instruction_at` | `DivisionAppend.lean:177` | New private bytecode-to-instruction proof. |
-| `division_replay_advice_flag` | `DivisionAppend.lean:221` | New private advice-flag proof. |
-| `division_replay_advice_before_zero` | `DivisionAppend.lean:241` | New private single-advice index proof. |
-| `division_replay_first_source` | `DivisionAppend.lean:284` | New private first-row pre-state and source proof. |
-| `division_replay_honest_new` | `DivisionAppend.lean:405` | Existing staged theorem proved; statement unchanged. |
+| `division_source_advice_single` | `DivisionAppend.lean:201` | New private proof of the singleton division advice list. |
+| `division_block_later_not_start` | `DivisionAppend.lean:207` | New private proof from countdown and bytecode layout. |
+| `expansion_start_of_segment` | `DivisionAppend.lean:239` | New private general start-index proof. |
+| `division_replay_start_flag` | `DivisionAppend.lean:546` | New private replay start-flag proof. |
+| `division_replay_start_at` | `DivisionAppend.lean:604` | New private expansion-start proof. |
+| `division_replay_instruction_at` | `DivisionAppend.lean:633` | New private bytecode-to-instruction proof. |
+| `division_replay_advice_flag` | `DivisionAppend.lean:677` | New private advice-flag proof. |
+| `division_replay_advice_before_zero` | `DivisionAppend.lean:697` | New private single-advice index proof. |
+| `division_replay_first_source` | `DivisionAppend.lean:740` | New private first-row pre-state and source proof. |
+| `division_replay_honest_new` | `DivisionAppend.lean:866` | Existing staged theorem proved; statement unchanged. |
 | `expansion_row_remaining` | `PlainRow.lean:250` | Existing private theorem made public in place with a docstring; statement and proof unchanged. |
 | `single_advice_index` | `DivisionDefs.lean:152` | Existing private theorem made public in place with a docstring; statement and proof unchanged. |
 | `expansionInstructions_at` | `DivisionDefs.lean:218` | Existing private theorem made public in place with a docstring; statement and proof unchanged. |
 
-The three visibility changes are the only changes outside `DivisionAppend.lean`.
+At that review, the three visibility changes were the only changes outside `DivisionAppend.lean`.
 No new `bv_decide`, `native_decide`, `decide +kernel`, axiom, proof limit, or hypothesis was added.
 No individual changed module build exceeded ten seconds: `PlainRow` took 8.7 seconds, `DivisionDefs` 4.5 seconds, and `DivisionAppend` 6.3 seconds on the targeted build.
 
-## Remaining row-construction blocker
+## Earlier row-construction blocker, now resolved
 
-`division_replay_rows` at `DivisionAppend.lean:349` and `division_replay_complete` at `DivisionAppend.lean:376` retain their existing theorem-level `sorry`s.
-I stopped while starting `division_replay_rows`, before attempting `division_replay_complete`.
-The immediate goal is to construct, for an arbitrary bytecode instruction and honest word `q`, a value `advice : instruction.RuntimeAdvice` satisfying `instruction.withRuntimeAdvice advice = patchAdviceWord q instruction`.
-That value is needed to make a `TraceRow` that `appendUntrustedRow` can certify.
-I tried a private definition with a VirtualAdvice branch returning `q` and a wildcard branch returning `()`, followed by a proof that the patched instruction agrees.
-Lean rejected the wildcard branch because its dependent result type remained `instruction.RuntimeAdvice`, and a `split <;> rfl` proof did not close the other branch.
-I removed that incomplete definition and proof.
-A broad constructor split would violate the `AGENTS.md` instruction to discuss such a split first.
-The proposed next step is a narrow, proved helper that constructs runtime advice and proves the patch equation by classifying VirtualAdvice separately from the remaining instructions, followed by the planned row induction.
-No new `sorry` or false statement was introduced for this blocker.
+At the previous review, `division_replay_rows` and `division_replay_complete` retained their theorem-level `sorry`s.
+The immediate gap was constructing an instruction-indexed runtime advice value whose patched instruction is `patchAdviceWord q instruction`.
+The user approved generalizing the existing two-branch `zeroRuntimeAdvice` definition in place and using the existing patch lemmas.
+The resulting constructor and patch proof now compile, and `division_replay_rows` is proved.
 
-## Validation and repository state
+## Previous validation and repository state
 
 `lake build JoltConstraints.Soundness.Layer6.DivisionBlock` passed with 8,680 jobs.
 `lake build JoltConstraints` also passed with 8,811 jobs while the other agent's edits were present.
 The axiom check from a file importing only `DivisionBlock` reports no `sorryAx` for `division_replay_honest_new`.
-`#print axioms JoltInstance.division_append_honest` still reports `sorryAx`; a direct dependency traversal identifies exactly `division_replay_rows` and `division_replay_complete` as its remaining direct `sorryAx` users.
+At that revision, `#print axioms JoltInstance.division_append_honest` reported `sorryAx` through `division_replay_rows` and `division_replay_complete`.
 `git diff --check` passed.
 I did not edit Layer 5, `TerminalNextPC.lean`, `StallSuffix.lean`, `LastJump.lean`, or the other agent's new files.
 No commit was made.
+
+## Continuation: replay rows proved
+
+I re-read `AGENTS.md`, `methods/layer6/reuse.md`, this stage plan, and this report before continuing.
+The user's correction about the dependent runtime advice split matches `PlainRow.lean` and `DivisionDefs.lean`.
+The staged statements of `division_replay_rows`, `division_replay_complete`, and `division_replay_honest_new` were not changed.
+
+`division_replay_rows` at `DivisionAppend.lean:805` is now proved.
+The proof splits the honest program run at its first instruction, appends a certified row, and then inducts over the remaining instructions.
+For every interior append it derives the predecessor from the replay's last row, proves the countdown is nonzero, and links the next row's pre-state to the previous post-state.
+The `runtimeAdviceFor` value patches the VirtualAdvice row to the honest word, and other arithmetic rows ignore it.
+The invariant records the exact bytecode index, initial pre-state, final post-state, and advice observation of each appended row.
+
+| Declaration | Location | Change |
+| --- | --- | --- |
+| `runtimeAdviceFor` | `PlainRow.lean:612` | Generalized the existing private `zeroRuntimeAdvice` in place to take a word; made it public with a docstring. Its existing caller passes zero. |
+| `finalTraceState_back` | `PlainRow.lean:457` | Made the existing private fact public in place with a docstring; statement and proof unchanged. |
+| `rawEntry_starts` | `PlainRow.lean:828` | Made the existing private fact public in place with a docstring; statement and proof unchanged. |
+| `rawEntry_linked` | `PlainRow.lean:842` | Made the existing private fact public in place with a docstring; statement and proof unchanged. |
+| `runtimeAdviceFor_patch` | `DivisionAppend.lean:13` | New private proof that the generalized advice constructs `patchAdviceWord q`. |
+| `runtimeAdviceFor_observation` | `DivisionAppend.lean:25` | New private proof of the advice observation. |
+| `divisionReplayStep` | `DivisionAppend.lean:33` | New private row constructor. |
+| `divisionReplayStep_exec` | `DivisionAppend.lean:39` | New private execution certificate using `arithmetic_exec_eq`. |
+| `division_replay_append_one` | `DivisionAppend.lean:61` | New private certified append and row observation. |
+| `division_replay_interior_entry` | `DivisionAppend.lean:91` | New private countdown linkage fact. |
+| `division_next_step_raw_entry` | `DivisionAppend.lean:113` | New private adapter from `NextStep` to `RawRowEntry`. |
+| `division_replay_first_row` | `DivisionAppend.lean:129` | New private split and append of the first instruction. |
+| `DivisionReplayRows.push` | `DivisionAppend.lean:278` | New private append preservation proof. |
+| `division_replay_next_entry` | `DivisionAppend.lean:355` | New private predecessor and prepared state proof. |
+| `division_replay_first_state` | `DivisionAppend.lean:406` | New private one-row replay invariant. |
+| `division_replay_suffix` | `DivisionAppend.lean:470` | New private instruction-list induction. |
+| `division_replay_rows` | `DivisionAppend.lean:805` | Existing staged theorem proved; statement unchanged. |
+
+`patchAdviceWord_runtime` at `DivisionDefs.lean:186` and `runtime_advice_isSome` at `DivisionDefs.lean:206` were already public in the current revision and were reused without a new diff to that file.
+No new `bv_decide`, `native_decide`, `decide +kernel`, axiom, proof limit, or hypothesis was added.
+The `DivisionReplayRows.push`, first-row, and suffix helper proofs exceed the plan's approximate 60-line preference; they are separated by purpose, and I did not compress them into broad tactic splits.
+No individual changed-module proof exceeded about ten seconds in the targeted builds.
+
+## Completion transfer blocked by existing private frame proof
+
+The plan's instruction to prove the division frame once over the instruction list is outdated against the current code.
+`DivisionPrograms.lean:45` defines `DivisionFrame`, and `DivisionPrograms.lean:122`, `:134`, and `:177` already prove the per-instruction frame, program frame, and generated-program row safety, respectively.
+Those declarations are private, and `DivisionPrograms.lean` belongs to the other agent's edit scope.
+The completion transfer needs these frame facts for candidate and replay prefixes before the last architectural write, so reproducing the frame proof in `DivisionAppend.lean` would violate the repository instruction to extract shared work before writing a second similar proof.
+I stopped before changing `division_replay_complete` at `DivisionAppend.lean:837`; it retains its existing theorem-level `sorry`.
+A reusable public prefix frame theorem from the owning file, with its supporting relation exposed as needed, is the concrete dependency for continuing this proof.
+I did not add a premise to `division_replay_complete` or stage an unproved duplicate frame lemma.
+
+## Current validation
+
+`lake build JoltConstraints.Soundness.Layer6.DivisionBlock` passed with 8,681 jobs.
+`lake build JoltConstraints` passed with 8,814 jobs while the other agent's Layer 5 edits were present.
+The axiom check from a file importing only `DivisionBlock` shows `division_replay_rows` has no `sorryAx`.
+`division_append_honest` still has `sorryAx`, now through the remaining `division_replay_complete` gap.
+`git diff --check` passed.
+I did not edit `DivisionPrograms.lean`, `DivisionBlock.lean`, Layer 5, `TerminalNextPC.lean`, `StallSuffix.lean`, or `LastJump.lean`.
+I made no commit.

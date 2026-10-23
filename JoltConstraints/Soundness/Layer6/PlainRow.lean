@@ -452,7 +452,9 @@ theorem finalTraceState_push (trace : Trace) (step : TraceRow trace.bytecode) :
   simp only [TraceWitness.finalTraceState, Array.size_push, Nat.zero_lt_succ,
     ↓reduceDIte, Nat.add_sub_cancel, Array.getElem_push_eq]
 
-private theorem finalTraceState_back (trace : Trace) :
+/-- The trace's final state is its last row's post-state, or its initial state
+when there is no row. For example, after a REM row it is that row's post-state. -/
+theorem finalTraceState_back (trace : Trace) :
     TraceWitness.finalTraceState trace =
       (trace.rows.back?.map (·.postState)).getD trace.initialState := by
   unfold TraceWitness.finalTraceState
@@ -604,12 +606,13 @@ private theorem arithmeticExecution_assert {F : Type} [Field F] {params : Witnes
     · rw [destinationIs] at written
       cases written
 
-/-- A well-typed placeholder for ignored runtime advice.
-For example, MUL uses the unit value; VirtualAdvice has word placeholder zero. -/
-private def zeroRuntimeAdvice (instruction : Instr) : instruction.RuntimeAdvice := by
+/-- A well-typed runtime advice value for one instruction.
+VirtualAdvice receives `word`; every other instruction receives the unit value.
+For example, REM's VirtualAdvice can receive quotient 5, while MUL ignores it. -/
+def runtimeAdviceFor (instruction : Instr) (word : BitVec 64) : instruction.RuntimeAdvice := by
   unfold Instr.RuntimeAdvice
   split
-  · exact 0
+  · exact word
   · exact ()
 
 private theorem arithmetic_execution {F : Type} [Field F] {params : WitnessParams}
@@ -626,7 +629,7 @@ private theorem arithmetic_execution {F : Type} [Field F] {params : WitnessParam
       live (TraceWitness.sourceRegisterAddress source)) :
     ∃ (post : SailJoltState) (advice : row.instruction.RuntimeAdvice),
       ArithmeticExecution witness t live row.instruction pre post advice := by
-  let advice := zeroRuntimeAdvice row.instruction
+  let advice := runtimeAdviceFor row.instruction 0
   have nonAdviceWrite {destination : Dst} {value : BitVec 64}
       (destinationIs : row.instruction.destination? = some destination)
       (noAdvice : row.instruction.adviceValue? = none)
@@ -820,7 +823,9 @@ def RawRowEntry {joltInstance : JoltInstance SourceInstruction} {privateInputs :
         run.bytecode[next].starts_source ∧
         pre = advance_pc address (source_is_compressed run.bytecode next) last.postState
 
-private theorem rawEntry_starts
+/-- A raw entry into an empty run supplies Jolt's prepared initial state.
+For example, the first DIV row starts at the program entry after PC preparation. -/
+theorem rawEntry_starts
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     {run : UntrustedAnswerRun joltInstance privateInputs} {next : Fin run.bytecode.size}
     {pre : SailJoltState} (entry : RawRowEntry run next pre) (empty : run.rows.size = 0) :
@@ -832,7 +837,9 @@ private theorem rawEntry_starts
     Array.back?_eq_none_iff.mpr (Array.size_eq_zero_iff.mp empty)
   simpa only [RawRowEntry, lastIs] using entry
 
-private theorem rawEntry_linked
+/-- A raw entry supplies the predecessor linkage needed to append one row.
+For example, REM's second row follows its first row's post-state. -/
+theorem rawEntry_linked
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     {run : UntrustedAnswerRun joltInstance privateInputs} {next : Fin run.bytecode.size}
     {pre : SailJoltState} (entry : RawRowEntry run next pre) :

@@ -10,6 +10,194 @@ namespace JoltInstance
 open JoltConstraints.Soundness
 open Sail PreSail LeanRV64D.Functions JoltISA
 
+private theorem runtimeAdviceFor_patch (instruction : Instr) (q : BitVec 64) :
+    instruction.withRuntimeAdvice (runtimeAdviceFor instruction q) =
+      patchAdviceWord q instruction := by
+  apply patchAdviceWord_runtime
+  intro value present
+  unfold runtimeAdviceFor at present
+  unfold Instr.RuntimeAdvice at present
+  split at present
+  · simp only [Instr.withRuntimeAdvice, Instr.adviceValue?] at present
+    exact (Option.some.inj present).symm
+  · simp_all [Instr.withRuntimeAdvice, Instr.adviceValue?]
+
+private theorem runtimeAdviceFor_observation (instruction : Instr) (q : BitVec 64) :
+    (instruction.withRuntimeAdvice (runtimeAdviceFor instruction q)).adviceValue? =
+      if instruction.adviceValue?.isSome then some q else none := by
+  have sameFlag := runtime_advice_isSome instruction (runtimeAdviceFor instruction q)
+  rw [runtimeAdviceFor_patch]
+  unfold patchAdviceWord
+  split <;> simp_all [Instr.adviceValue?]
+
+private def divisionReplayStep
+    {bytecode : Array JoltInstructionRow} (next : Fin bytecode.size)
+    (pre post : SailJoltState) (q : BitVec 64) : TraceRow bytecode :=
+  { rowIndex := next, runtimeAdvice := runtimeAdviceFor bytecode[next].instruction q,
+    preState := pre, postState := post }
+
+private theorem divisionReplayStep_exec
+    {bytecode : Array JoltInstructionRow} (next : Fin bytecode.size)
+    (pre post : SailJoltState) (q : BitVec 64)
+    (arithmetic : DivisionArithmeticRow bytecode[next].instruction)
+    (executes : execInstr (patchAdviceWord q bytecode[next].instruction) pre =
+      .ok RETIRE_SUCCESS post) :
+    execWithTapeAnswer
+      (bytecode[next].instruction.withRuntimeAdvice
+        (divisionReplayStep next pre post q).runtimeAdvice) 0 pre =
+      .ok RETIRE_SUCCESS post := by
+  have arithmeticPatched : DivisionArithmeticRow
+      (patchAdviceWord q bytecode[next].instruction) := by
+    unfold patchAdviceWord
+    split
+    · exact True.intro
+    · exact arithmetic
+  change execWithTapeAnswer
+    (bytecode[next].instruction.withRuntimeAdvice
+      (runtimeAdviceFor bytecode[next].instruction q)) 0 pre = .ok RETIRE_SUCCESS post
+  rw [runtimeAdviceFor_patch, arithmetic_exec_eq _ arithmeticPatched]
+  exact executes
+
+private theorem division_replay_append_one
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (next : Fin run.bytecode.size) (pre post : SailJoltState) (q : BitVec 64)
+    (entry : RawRowEntry run next pre)
+    (arithmetic : DivisionArithmeticRow run.bytecode[next].instruction)
+    (executes : execInstr (patchAdviceWord q run.bytecode[next].instruction) pre =
+      .ok RETIRE_SUCCESS post) :
+    ∃ extended : UntrustedAnswerRun joltInstance privateInputs,
+      RunExtends run extended ∧ extended.rows.size = run.rows.size + 1 ∧
+      TraceWitness.finalTraceState extended.toTrace = post ∧
+      ∃ step ∈ extended.rows[run.rows.size]?,
+        step.rowIndex.val = next.val ∧ step.preState = pre ∧ step.postState = post ∧
+        step.someTracerAdvice? =
+          if run.bytecode[next].instruction.adviceValue?.isSome then some q else none := by
+  let step := divisionReplayStep next pre post q
+  have relaxed : execWithTapeAnswer
+      (run.bytecode[step.rowIndex].instruction.withRuntimeAdvice step.runtimeAdvice) 0 pre =
+      .ok RETIRE_SUCCESS post := by
+    exact divisionReplayStep_exec next pre post q arithmetic executes
+  let extended := appendUntrustedRow run step 0 relaxed
+    (rawEntry_starts entry) (rawEntry_linked entry)
+  refine ⟨extended, ⟨rfl, by simp [extended, appendUntrustedRow]⟩,
+    by simp [extended, appendUntrustedRow], ?_, step, ?_, rfl, rfl, rfl, ?_⟩
+  · simpa only [extended, appendUntrustedRow, finalTraceState_push] using
+      (show step.postState = post by rfl)
+  · change (run.rows.push step)[run.rows.size]? = some step
+    exact Array.getElem?_push_size
+  · exact runtimeAdviceFor_observation _ q
+
+private theorem division_replay_interior_entry
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (first : Fin run.bytecode.size) (starts : run.bytecode[first].starts_source = true)
+    (offset : Nat) (positive : 0 < offset)
+    (inside : offset < expansionRowCount run.bytecode first)
+    (previous : TraceRow run.bytecode) (atBack : run.rows.back? = some previous)
+    (previousIndex : previous.rowIndex.val = first.val + offset - 1)
+    (next : Fin run.bytecode.size) (nextIndex : next.val = first.val + offset)
+    (pre : SailJoltState) (preEq : pre = previous.postState) :
+    RawRowEntry run next pre := by
+  have atPrevious : run.bytecode[first.val + (offset - 1)]? =
+      some run.bytecode[previous.rowIndex] := by
+    rw [show first.val + (offset - 1) = previous.rowIndex.val by omega]
+    simp
+  have remaining := expansion_row_remaining joltInstance.program run.bytecode
+    run.expands first starts (offset - 1) (by omega) _ atPrevious
+  unfold RawRowEntry
+  rw [atBack]
+  simp only [if_pos remaining]
+  exact ⟨by omega, preEq⟩
+
+private theorem division_next_step_raw_entry
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (next : Fin run.bytecode.size) (pre : SailJoltState)
+    (entry : run.NextStep next pre) : RawRowEntry run next pre := by
+  unfold RawRowEntry
+  have ready := entry.ready
+  cases lastAt : run.rows.back? with
+  | none => simpa only [lastAt] using ready
+  | some last =>
+      simp only [lastAt] at ready ⊢
+      by_cases remaining : run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0
+      · simpa only [if_pos remaining] using ready
+      · simp only [if_neg remaining] at ready ⊢
+        exact ready
+
+private theorem division_replay_first_row
+    {joltInstance : JoltInstance SourceInstruction}
+    {params : WitnessParams} {privateInputs : JoltPrivateInputs}
+    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (first : Fin context.bytecode.size)
+    (kind : DivisionKind) (rd rs1 rs2 : regidx)
+    (count : (expansionInstructions context.bytecode first).length =
+      expansionRowCount context.bytecode first)
+    (shape : ArithmeticAdviceSequence (expansionInstructions context.bytecode first)
+      (kind.program rd rs1 rs2))
+    (pre post : SailJoltState)
+    (entry : ∃ next : Fin run.bytecode.size, next.val = first.val ∧ run.NextStep next pre)
+    (honestRun : Program.Run
+      (kind.program rd rs1 rs2 (kind.honestAdvice rd rs1 rs2 pre)) pre post) :
+    ∃ (middle : SailJoltState) (firstRun : UntrustedAnswerRun joltInstance privateInputs),
+      RunExtends run firstRun ∧ firstRun.rows.size = run.rows.size + 1 ∧
+      TraceWitness.finalTraceState firstRun.toTrace = middle ∧
+      Program.Run (Program.seq (((expansionInstructions context.bytecode first).drop 1).map
+        (patchAdviceWord (kind.honestAdvice rd rs1 rs2 pre)))) middle post ∧
+      ∃ step ∈ firstRun.rows[run.rows.size]?,
+        step.rowIndex.val = first.val ∧ step.preState = pre ∧ step.postState = middle ∧
+        step.someTracerAdvice? = if context.bytecode[first].instruction.adviceValue?.isSome
+          then some (kind.honestAdvice rd rs1 rs2 pre) else none := by
+  let q := kind.honestAdvice rd rs1 rs2 pre
+  let instructions := expansionInstructions context.bytecode first
+  have positive : 0 < instructions.length := by
+    change 0 < (expansionInstructions context.bytecode first).length
+    rw [count]
+    unfold expansionRowCount
+    omega
+  have listEq : instructions = instructions[0] :: instructions.drop 1 := by
+    simpa only [List.drop_zero] using List.drop_eq_getElem_cons (l := instructions) (i := 0) positive
+  have runList : Program.Run (Program.seq (instructions.map (patchAdviceWord q))) pre post := by
+    simpa only [instructions, q, shape.program_eq] using honestRun
+  rw [listEq, List.map_cons] at runList
+  obtain ⟨middle, head, tail⟩ := execProgram_instr_run_retire_inv
+    (patchAdviceWord q instructions[0])
+    (Program.seq ((instructions.drop 1).map (patchAdviceWord q))) pre post runList
+  obtain ⟨next, nextIndex, ready⟩ := entry
+  have bytecodeEq : run.bytecode = context.bytecode :=
+    Option.some.inj (run.expands.symm.trans context.expands)
+  have atBytecode : context.bytecode[first.val]? = some run.bytecode[next] := by
+    rw [← nextIndex]
+    have h := congrArg (fun b : Array JoltInstructionRow => b[next.val]?) bytecodeEq
+    change run.bytecode[next.val]? = context.bytecode[next.val]? at h
+    simp only [Array.getElem?_eq_getElem next.isLt] at h
+    exact h.symm
+  have instrEq := expansionInstructions_at context.bytecode first 0
+    (by unfold expansionRowCount; omega)
+    count _ (by simpa only [Nat.add_zero] using atBytecode)
+  have firstRowEq : context.bytecode[first] = run.bytecode[next] := by
+    rw [Array.getElem?_eq_getElem first.isLt] at atBytecode
+    exact Option.some.inj atBytecode
+  have arithmetic : DivisionArithmeticRow run.bytecode[next].instruction := by
+    rw [← instrEq]
+    exact shape.arithmetic _ (List.getElem_mem _)
+  have headRun : execInstr (patchAdviceWord q run.bytecode[next].instruction) pre =
+      .ok RETIRE_SUCCESS middle := by
+    dsimp only [instructions] at head
+    rw [instrEq] at head
+    exact head
+  obtain ⟨firstRun, extendsRun, size, finalPost, step, stepAt, index, firstPre,
+    firstPost, advice⟩ :=
+    division_replay_append_one run next pre middle q
+      (division_next_step_raw_entry run next pre ready) arithmetic headRun
+  refine ⟨middle, firstRun, extendsRun, size, finalPost, ?_, step, stepAt, ?_,
+    firstPre, firstPost, ?_⟩
+  · simpa only [instructions, q] using tail
+  · exact index.trans nextIndex
+  · simpa only [q, firstRowEq] using advice
+
 private theorem division_source_advice_single (kind : DivisionKind)
     (rd rs1 rs2 : regidx) (placeholder : BitVec 64) (pre : SailJoltState) :
     (kind.source rd rs1 rs2 placeholder).honestTracerAdvice pre =
@@ -86,6 +274,274 @@ structure DivisionReplayRows
   adviceAtOffset : ∀ offset < count, ∀ row ∈ replay.rows[run.rows.size + offset]?,
     row.someTracerAdvice? =
       if replay.bytecode[row.rowIndex].instruction.adviceValue?.isSome then some advice else none
+
+private theorem DivisionReplayRows.push
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (base current : UntrustedAnswerRun joltInstance privateInputs)
+    {bytecode : Array JoltInstructionRow} (first : Fin bytecode.size)
+    (done : Nat) (positive : 0 < done) (pre middle post : SailJoltState)
+    (q : BitVec 64) (replayed : DivisionReplayRows base current first done pre middle q)
+    (step : TraceRow current.bytecode) (answer : BitVec 64)
+    (executes : execWithTapeAnswer
+      (current.bytecode[step.rowIndex].instruction.withRuntimeAdvice step.runtimeAdvice)
+      answer step.preState = .ok RETIRE_SUCCESS step.postState)
+    (starts : current.rows.size = 0 →
+      current.bytecode[step.rowIndex].address = joltInstance.program.entry_address ∧
+      current.bytecode[step.rowIndex].starts_source ∧
+      step.preState = advance_pc joltInstance.program.entry_address
+        (source_is_compressed current.bytecode step.rowIndex) current.initialState)
+    (linked : ∀ last ∈ current.rows.back?,
+      if current.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 then
+        step.rowIndex.val = last.rowIndex.val + 1 ∧ step.preState = last.postState
+      else ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
+        current.bytecode[step.rowIndex].address = address ∧
+        current.bytecode[step.rowIndex].starts_source ∧
+        step.preState = advance_pc address
+          (source_is_compressed current.bytecode step.rowIndex) last.postState)
+    (index : step.rowIndex.val = first.val + done)
+    (postEq : step.postState = post)
+    (adviceEq : step.someTracerAdvice? =
+      if current.bytecode[step.rowIndex].instruction.adviceValue?.isSome then some q else none) :
+    DivisionReplayRows base (appendUntrustedRow current step answer executes starts linked)
+      first (done + 1) pre post q := by
+  let extended := appendUntrustedRow current step answer executes starts linked
+  have extendedSize : extended.rows.size = current.rows.size + 1 := by
+    simp only [extended, appendUntrustedRow, Array.size_push]
+  have before (offset : Nat) (old : offset < done) :
+      base.rows.size + offset < current.rows.size := by
+    rw [replayed.size]
+    omega
+  refine ⟨replayed.extendsRun.trans ⟨rfl, by simp [extended, appendUntrustedRow]⟩,
+    by rw [extendedSize, replayed.size]; omega, ?_, ?_, ?_, ?_⟩
+  · intro offset inside
+    by_cases old : offset < done
+    · obtain ⟨row, atRow, idx⟩ := replayed.ordered offset old
+      refine ⟨row, ?_, idx⟩
+      change row ∈ (current.rows.push step)[base.rows.size + offset]?
+      simpa only [Array.getElem?_push_lt (before offset old),
+        Array.getElem?_eq_getElem (before offset old)] using atRow
+    · have same : offset = done := by omega
+      subst offset
+      refine ⟨step, ?_, index⟩
+      change (current.rows.push step)[base.rows.size + done]? = some step
+      rw [← replayed.size]
+      exact Array.getElem?_push_size
+  · intro row atRow
+    have firstBefore : base.rows.size < current.rows.size := by rw [replayed.size]; omega
+    have oldAt : row ∈ current.rows[base.rows.size]? := by
+      change row ∈ (current.rows.push step)[base.rows.size]? at atRow
+      simpa only [Array.getElem?_push_lt firstBefore,
+        Array.getElem?_eq_getElem firstBefore] using atRow
+    exact replayed.firstPre row oldAt
+  · simpa only [extended, appendUntrustedRow, finalTraceState_push, postEq]
+  · intro offset inside row atRow
+    by_cases old : offset < done
+    · have oldAt : row ∈ current.rows[base.rows.size + offset]? := by
+        change row ∈ (current.rows.push step)[base.rows.size + offset]? at atRow
+        simpa only [Array.getElem?_push_lt (before offset old),
+          Array.getElem?_eq_getElem (before offset old)] using atRow
+      exact replayed.adviceAtOffset offset old row oldAt
+    · have same : offset = done := by omega
+      subst offset
+      have rowIs : row = step := by
+        change (current.rows.push step)[base.rows.size + done]? = some row at atRow
+        have atStep : (current.rows.push step)[base.rows.size + done]? = some step := by
+          rw [← replayed.size]
+          exact Array.getElem?_push_size
+        exact Option.some.inj (atRow.symm.trans atStep)
+      subst row
+      exact adviceEq
+
+private theorem division_replay_next_entry
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (base current : UntrustedAnswerRun joltInstance privateInputs)
+    {bytecode : Array JoltInstructionRow} (first : Fin bytecode.size)
+    (expanded : expand_program joltInstance.program = some bytecode)
+    (starts : bytecode[first].starts_source = true)
+    (done : Nat) (positive : 0 < done)
+    (inside : done < expansionRowCount bytecode first)
+    (pre middle : SailJoltState) (q : BitVec 64)
+    (replayed : DivisionReplayRows base current first done pre middle q) :
+    ∃ next : Fin current.bytecode.size,
+      next.val = first.val + done ∧ RawRowEntry current next middle := by
+  have bytecodeEq : current.bytecode = bytecode :=
+    Option.some.inj (current.expands.symm.trans expanded)
+  have bound : first.val + done < current.bytecode.size := by
+    have endBound := (expand_program_layout joltInstance.program bytecode expanded).endInBounds first
+    rw [bytecodeEq]
+    unfold expansionRowCount at inside
+    omega
+  let next : Fin current.bytecode.size := ⟨first.val + done, bound⟩
+  let first' : Fin current.bytecode.size := ⟨first.val, by omega⟩
+  have firstRow : current.bytecode[first'] = bytecode[first] := by
+    have h := congrArg (fun b : Array JoltInstructionRow => b[first.val]?) bytecodeEq
+    change current.bytecode[first.val]? = bytecode[first.val]? at h
+    have left : current.bytecode[first.val]? = some current.bytecode[first'] :=
+      Array.getElem?_eq_getElem first'.isLt
+    rw [left, Array.getElem?_eq_getElem first.isLt] at h
+    exact Option.some.inj h
+  have currentStarts : current.bytecode[first'].starts_source = true := by
+    rw [firstRow]
+    exact starts
+  obtain ⟨previous, atPrevious, previousIndex⟩ := replayed.ordered (done - 1) (by omega)
+  have atBack : current.rows.back? = some previous := by
+    rw [Array.back?_eq_getElem?]
+    have equal : current.rows.size - 1 = base.rows.size + (done - 1) := by
+      rw [replayed.size]
+      omega
+    rw [equal]
+    exact atPrevious
+  have postEq : middle = previous.postState := by
+    rw [← replayed.finalPost, finalTraceState_back]
+    simp only [UntrustedAnswerRun.toTrace, atBack, Option.map_some, Option.getD_some]
+  refine ⟨next, rfl, ?_⟩
+  have inside' : done < expansionRowCount current.bytecode first' := by
+    unfold expansionRowCount at inside ⊢
+    rw [firstRow]
+    exact inside
+  exact division_replay_interior_entry current first' currentStarts done positive
+    inside' previous atBack (by change previous.rowIndex.val = first.val + done - 1; omega)
+    next rfl middle postEq
+
+private theorem division_replay_first_state
+    {joltInstance : JoltInstance SourceInstruction}
+    {params : WitnessParams} {privateInputs : JoltPrivateInputs}
+    (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
+    (run : UntrustedAnswerRun joltInstance privateInputs)
+    (first : Fin context.bytecode.size)
+    (kind : DivisionKind) (rd rs1 rs2 : regidx)
+    (count : (expansionInstructions context.bytecode first).length =
+      expansionRowCount context.bytecode first)
+    (shape : ArithmeticAdviceSequence (expansionInstructions context.bytecode first)
+      (kind.program rd rs1 rs2))
+    (pre post : SailJoltState)
+    (entry : ∃ next : Fin run.bytecode.size, next.val = first.val ∧ run.NextStep next pre)
+    (honestRun : Program.Run
+      (kind.program rd rs1 rs2 (kind.honestAdvice rd rs1 rs2 pre)) pre post) :
+    ∃ (middle : SailJoltState) (firstRun : UntrustedAnswerRun joltInstance privateInputs),
+      DivisionReplayRows run firstRun first 1 pre middle
+        (kind.honestAdvice rd rs1 rs2 pre) ∧
+      Program.Run (Program.seq (((expansionInstructions context.bytecode first).drop 1).map
+        (patchAdviceWord (kind.honestAdvice rd rs1 rs2 pre)))) middle post := by
+  obtain ⟨middle, firstRun, extendsRun, size, finalPost, tail, step, stepAt,
+    index, firstPre, firstPost, advice⟩ :=
+    division_replay_first_row context run first kind rd rs1 rs2 count shape
+      pre post entry honestRun
+  have bytecodeEq : firstRun.bytecode = context.bytecode :=
+    Option.some.inj (firstRun.expands.symm.trans context.expands)
+  refine ⟨middle, firstRun, ?_, tail⟩
+  refine ⟨extendsRun, size, ?_, ?_, finalPost, ?_⟩
+  · intro offset inside
+    have zero : offset = 0 := by omega
+    subst offset
+    exact ⟨step, by simpa only [Nat.add_zero] using stepAt,
+      by simpa only [Nat.add_zero] using index⟩
+  · intro row atRow
+    have rowIs : row = step := by
+      change firstRun.rows[run.rows.size]? = some row at atRow
+      change firstRun.rows[run.rows.size]? = some step at stepAt
+      exact Option.some.inj (atRow.symm.trans stepAt)
+    subst row
+    exact firstPre
+  · intro offset inside row atRow
+    have zero : offset = 0 := by omega
+    subst offset
+    have rowIs : row = step := by
+      change firstRun.rows[run.rows.size]? = some row at atRow
+      change firstRun.rows[run.rows.size]? = some step at stepAt
+      exact Option.some.inj (atRow.symm.trans stepAt)
+    subst row
+    have first' : step.rowIndex.val = first.val := index
+    have instructionEq : firstRun.bytecode[step.rowIndex].instruction =
+        context.bytecode[first].instruction := by
+      have h := congrArg (fun b : Array JoltInstructionRow => b[first.val]?) bytecodeEq
+      change firstRun.bytecode[first.val]? = context.bytecode[first.val]? at h
+      have bound : first.val < firstRun.bytecode.size := by rw [bytecodeEq]; exact first.isLt
+      have left : firstRun.bytecode[first.val]? =
+          some firstRun.bytecode[(⟨first.val, bound⟩ : Fin firstRun.bytecode.size)] :=
+        Array.getElem?_eq_getElem bound
+      rw [left,
+        Array.getElem?_eq_getElem first.isLt] at h
+      have finEq : step.rowIndex = (⟨first.val, bound⟩ : Fin firstRun.bytecode.size) :=
+        Fin.ext first'
+      simpa only [finEq] using congrArg JoltInstructionRow.instruction (Option.some.inj h)
+    simpa only [instructionEq] using advice
+
+private theorem division_replay_suffix
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (base current : UntrustedAnswerRun joltInstance privateInputs)
+    {bytecode : Array JoltInstructionRow} (first : Fin bytecode.size)
+    (expanded : expand_program joltInstance.program = some bytecode)
+    (starts : bytecode[first].starts_source = true)
+    (count : (expansionInstructions bytecode first).length =
+      expansionRowCount bytecode first)
+    (arithmetic : ∀ row ∈ expansionInstructions bytecode first, DivisionArithmeticRow row)
+    (q : BitVec 64) (pre middle post : SailJoltState)
+    (done : Nat) (positive : 0 < done)
+    (within : done ≤ expansionRowCount bytecode first)
+    (replayed : DivisionReplayRows base current first done pre middle q)
+    (tailRun : Program.Run (Program.seq (((expansionInstructions bytecode first).drop done).map
+      (patchAdviceWord q))) middle post) :
+    ∃ finalRun : UntrustedAnswerRun joltInstance privateInputs,
+      DivisionReplayRows base finalRun first (expansionRowCount bytecode first)
+        pre post q := by
+  generalize left : expansionRowCount bytecode first - done = remaining
+  induction remaining generalizing done current middle with
+  | zero =>
+    have full : done = expansionRowCount bytecode first := by omega
+    have empty : (expansionInstructions bytecode first).drop done = [] := by
+      apply List.drop_eq_nil_of_le
+      rw [count]
+      omega
+    rw [empty] at tailRun
+    have same : middle = post := by
+      simp [Program.seq, Program.Run, execProgram] at tailRun
+      cases tailRun
+      rfl
+    subst done
+    subst post
+    exact ⟨current, replayed⟩
+  | succ remaining ih =>
+    have inside : done < expansionRowCount bytecode first := by omega
+    have headBound : done < (expansionInstructions bytecode first).length := by
+      rw [count]
+      exact inside
+    rw [List.drop_eq_getElem_cons headBound, List.map_cons] at tailRun
+    obtain ⟨nextPost, headRun, restRun⟩ := execProgram_instr_run_retire_inv
+      (patchAdviceWord q (expansionInstructions bytecode first)[done])
+      (Program.seq (((expansionInstructions bytecode first).drop (done + 1)).map
+        (patchAdviceWord q))) middle post tailRun
+    obtain ⟨next, nextIndex, entry⟩ := division_replay_next_entry base current first
+      expanded starts done positive inside pre middle q replayed
+    have bytecodeEq : current.bytecode = bytecode :=
+      Option.some.inj (current.expands.symm.trans expanded)
+    have atBytecode : bytecode[first.val + done]? = some current.bytecode[next] := by
+      rw [← nextIndex]
+      have h := congrArg (fun b : Array JoltInstructionRow => b[next.val]?) bytecodeEq
+      change current.bytecode[next.val]? = bytecode[next.val]? at h
+      rw [Array.getElem?_eq_getElem next.isLt] at h
+      exact h.symm
+    have instrAt := expansionInstructions_at bytecode first done inside count _ atBytecode
+    have rowArithmetic : DivisionArithmeticRow current.bytecode[next].instruction := by
+      rw [← instrAt]
+      exact arithmetic _ (List.getElem_mem _)
+    have executes : execInstr (patchAdviceWord q current.bytecode[next].instruction)
+        middle = .ok RETIRE_SUCCESS nextPost := by
+      rw [instrAt] at headRun
+      exact headRun
+    let step := divisionReplayStep next middle nextPost q
+    have relaxed := divisionReplayStep_exec next middle nextPost q rowArithmetic executes
+    let extended := appendUntrustedRow current step 0 relaxed
+      (rawEntry_starts entry) (rawEntry_linked entry)
+    have nextReplayed : DivisionReplayRows base extended first (done + 1)
+        pre nextPost q := by
+      apply DivisionReplayRows.push base current first done positive pre middle nextPost q
+        replayed step 0 relaxed (rawEntry_starts entry) (rawEntry_linked entry)
+      · exact nextIndex
+      · rfl
+      · exact runtimeAdviceFor_observation _ q
+    exact ih extended nextPost (done + 1) (by omega) (by omega) nextReplayed
+      restRun (by omega)
 
 private theorem division_replay_start_flag
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -366,7 +822,12 @@ theorem division_replay_rows
     ∃ replay : UntrustedAnswerRun joltInstance privateInputs,
       DivisionReplayRows run replay first (expansionRowCount context.bytecode first)
         pre honestPost (kind.honestAdvice rd rs1 rs2 pre) := by
-  sorry
+  obtain ⟨middle, firstRun, replayed, tailRun⟩ :=
+    division_replay_first_state context run first kind rd rs1 rs2 count shape
+      pre honestPost entry honestRun
+  exact division_replay_suffix run firstRun first context.expands state.starts count
+    shape.arithmetic (kind.honestAdvice rd rs1 rs2 pre) pre middle honestPost 1
+    (by omega) (by unfold expansionRowCount; omega) replayed tailRun
 
 /-- Transfer a completed witness division block's observation, RAM, register,
 and stopping invariants to its honest replay, using their equal final states
