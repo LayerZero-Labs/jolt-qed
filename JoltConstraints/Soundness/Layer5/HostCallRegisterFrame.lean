@@ -3,7 +3,7 @@ import JoltConstraints.Soundness.Layer5.Registers
 
 /-! A successful operandless HostIO row preserves Sail state and virtual
 registers. Its absent destination leaves the witness register table unchanged,
-so the local step preserves full register agreement. -/
+so the local step preserves live-register agreement. -/
 
 set_option autoImplicit false
 
@@ -21,8 +21,8 @@ theorem sourceValue_of_host_frame (source : Src)
     sourceValue source post = sourceValue source pre := by
   cases source <;> simp only [sourceValue, sail, vregs]
 
-/-- A selected operandless HostIO row executes and preserves full register
-agreement: every register-table value still matches the execution state.
+/-- A selected operandless HostIO row executes and preserves live-register
+agreement: every live register-table value still matches the execution state.
 For example, an advice-write call may append to the tape without changing any
 register. The slot equation links the selected witness slot to the next
 expanded row. See jolt/tracer/src/instruction/virtual_host_io.rs:9-38 and
@@ -46,12 +46,12 @@ theorem host_call_selected_step
     {row : JoltInstructionRow}
     (rowIs : bytecodeRow context.bytecode slot.val = some row)
     (instruction : row.instruction = .VirtualHostIO)
-    (agrees : RegisterAgreement witness t pre)
+    {live : Fin 128 → Prop} (agrees : RegisterAgreementOn live witness t pre)
     (advice : run.bytecode[nextRow].instruction.RuntimeAdvice) (answer : BitVec 64) :
     ∃ post, execWithTapeAnswer
         (run.bytecode[nextRow].instruction.withRuntimeAdvice advice) answer pre =
         .ok RETIRE_SUCCESS post ∧
-      RegisterAgreement witness ⟨t.val + 1, nextCycle⟩ post := by
+      RegisterAgreementOn live witness ⟨t.val + 1, nextCycle⟩ post := by
   have sameBytecode : run.bytecode = context.bytecode :=
     Option.some.inj (run.expands.symm.trans context.expands)
   have rowAt : bytecodeRow run.bytecode slot.val = some row := by

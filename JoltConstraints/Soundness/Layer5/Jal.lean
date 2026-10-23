@@ -76,22 +76,24 @@ private theorem sourceValue_setNextPC (source : Src) (target : BitVec 64)
       simp_all only [sourceValue, System.setNextPCState, Std.ExtDHashMap.get?_insert,
         beq_iff_eq, reduceCtorEq, ↓reduceDIte]
 
-/-- Updating Sail's `nextPC` leaves every architectural and virtual register
-value unchanged. This frame fact is shared by jumps and branches. -/
-theorem RegisterAgreement.setNextPC
+/-- Updating Sail's `nextPC` preserves agreement on every live register.
+For example, a JAL updating nextPC keeps the value of a live temporary 40. -/
+theorem RegisterAgreementOn.setNextPC
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
-    {t : Fin params.traceLength} {state : SailJoltState}
-    (agrees : RegisterAgreement witness t state) (target : BitVec 64) :
-    RegisterAgreement witness t
+    {t : Fin params.traceLength} {state : SailJoltState} {live : Fin 128 → Prop}
+    (agrees : RegisterAgreementOn live witness t state) (target : BitVec 64) :
+    RegisterAgreementOn live witness t
       { state with sail := System.setNextPCState state.sail target } := by
   refine ⟨insert_keeps_present _ _ _ agrees.present, ?_⟩
-  intro register
+  intro register member
   rw [sourceValue_setNextPC]
-  exact agrees.values register
+  exact agrees.values register member
 
 /-- A selected JAL row writes the constrained return address, executes the
-wrapped jump, and preserves next-cycle register agreement. The local PC,
-advanced `nextPC`, and no-wrap facts belong to the global execution prefix. -/
+wrapped jump, and extends live-register agreement by its destination.
+For example, `jal x1, 8` makes x1 agree with the link after the jump.
+The local PC, advanced `nextPC`, and no-wrap facts belong to the global
+execution prefix. -/
 theorem jal_step
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -104,7 +106,8 @@ theorem jal_step
     {dst : Dst} {imm : BitVec 64}
     (instruction : row.instruction = .JAL dst imm)
     (noWrap : row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64)
-    {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+    {live : Fin 128 → Prop} {pre : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t pre)
     (pc : pre.sail.regs.get? Register.PC = some row.address)
     (nextPC : pre.sail.regs.get? Register.nextPC =
       some (row.address + BitVec.ofNat 64 (if row.is_compressed then 2 else 4)))
@@ -117,7 +120,9 @@ theorem jal_step
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS post ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ post := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress dst)
+        witness ⟨t.val + 1, next⟩ post := by
   dsimp only
   have encoded := jal_write_value charAbove2pow128 context equations selected rowIs
     instruction noWrap
@@ -139,7 +144,7 @@ theorem jal_step
       readPC, written]
     rfl
   · intro next
-    apply RegisterAgreement.setNextPC
+    apply RegisterAgreementOn.setNextPC
     exact agrees.write charAbove2pow128 context equations next slot selected rowIs
       (by rw [instruction]; rfl) _ encoded written
 
