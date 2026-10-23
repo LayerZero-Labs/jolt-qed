@@ -192,3 +192,60 @@ There are no new `bv_decide`, `native_decide`, `decide +kernel`, or axiom declar
 Only `RowStep.lean`, the new `RowStepKinds.lean`, the permitted extractions/publicization in `PlainRow.lean`, the PC extraction in `StallSuffix.lean`, and this report were edited by this task.
 The other agents' files were not edited, and no commit was made.
 Work stops here for review of the seven staged steps.
+
+## Proofs
+
+This proving pass stopped at a file-scope dependency after completing the new Layer 5 JALR execution lemma.
+The five requested Layer 6 steps remain unchanged, including their existing `sorry`s.
+No counterexample to a staged step was found in this pass.
+The remaining work has not been completed or certified by this report.
+
+### JALR execution
+
+`JoltConstraints.Soundness.jalr_step` is new at `JoltConstraints/Soundness/Layer5/Jalr.lean:19`.
+It takes agreement on a live-register predicate and liveness of the JALR base, and proves the exact successful execution, the witness link write, and next-column agreement on the old live registers plus the destination.
+The target uses the old base even when destination and base alias, adds the immediate with 64-bit wrapping, and clears bit zero.
+Virtual bases use the same canonical register-read argument as architectural bases.
+The pinned check was `jolt/tracer/src/instruction/jalr.rs` (`JALR::exec`) at `5def437f`.
+
+The new lemma explicitly requires prepared `nextPC` and the no-wrap equality for the link.
+These are obligations already available to the staged terminal JALR caller through its preparation premise, `source_compressed_of_last`, and `terminal_link_no_wrap` with `assumptions.pcNoWrap`; no premise was added to that caller.
+The link equation reuses `selected_jump_link_write_value`.
+The register frame reuses `register42_nextPC_preserves_sourceValue`, and the write uses `RegisterAgreementOn.write`.
+There is no architectural-register-only execution assumption and no assumption of a following cycle.
+
+The plan's target helpers were also checked.
+`selected_jalr_next_target` requires a following real cycle, so it cannot be applied unconditionally at the terminal witness cycle.
+The local execution lemma does not need that equation: it computes the interpreter target directly, while its next-column register conclusion is conditional on the next column existing.
+This is an interface distinction, not a discovered false staged statement.
+
+### Scope dependency and remaining work
+
+The existing shared append helpers are private in `JoltConstraints/Soundness/Layer6/PlainRow.lean`: `expansionLive_after` at line 286, `representsRows_push` at line 410, `representsPrefix_push` at line 470, and `append_expansion_row` at line 1033.
+The current task's edit list does not include that file.
+The proposed resolution is to make those four declarations public, adding docstrings while leaving their statements and proofs unchanged.
+This would let the JALR proof reuse the same observation, cut, liveness and termination arguments as the existing arithmetic append.
+The alternative of copying those arguments conflicts with `AGENTS.md`: “Before writing a second proof that looks like an earlier one, stop.”
+Permission for this visibility change was requested and had not been received when this section was written.
+
+The RAM bridge needs the initialized run's layout and device-frame bounds in addition to the two agreement predicates, because `finalRamWord` overlays device buffers on the ordinary-RAM image.
+The existing `UntrustedAnswerRun.final_device_same` and `UntrustedAnswerRun.final_outputs_fit_layout` provide the execution-dependent frame and output bound.
+The reusable overlay-disjointness fact, `overlayRamBytes_below_word`, is private at `JoltConstraints/Soundness/Layer5/RamInitialization.lean:87`, another file outside the current edit list.
+Permission was also requested to make that declaration public with its statement and proof unchanged.
+No duplicate overlay proof was written.
+
+The live-register ports of `ld_ram_step`, `sd_ram_step`, and `sd_ram_step_agreement`, the common cut-RAM bridge, and all five requested Layer 6 proofs remain to be done.
+The device-step signatures already accept live agreement and return the conditional termination obligation needed by the general append constructor.
+Their changing proofs were read but not edited.
+The new Layer 5 JALR lemma is ready for its staged caller but is not yet wired into `jalr_row_step` because of the scope dependency above.
+
+### Validation and changes
+
+`lake build JoltConstraints.Soundness.Layer5.Jalr` passed, with the new module taking about 3.7 seconds.
+`#print axioms JoltConstraints.Soundness.jalr_step` reports `[propext, sys_enable_experimental_extensions, Classical.choice, Quot.sound]`, with no `sorryAx`.
+The audit source is `/private/tmp/row-step-proofs-jalr-audit.lean` and the build log is `/private/tmp/row-step-proofs-jalr.log`.
+No new proof exceeded ten seconds in the module build.
+There are no new uses of `bv_decide`, `native_decide`, or `decide +kernel`, no new axiom declarations, and no raised proof limits.
+No existing statement, definition, or hypothesis was changed.
+Only the new `Jalr.lean` and this report were edited by this proving pass.
+The other agents' files were not edited, and no commit was made.
