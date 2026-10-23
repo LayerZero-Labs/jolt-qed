@@ -355,3 +355,68 @@ There are no new uses of `bv_decide`, `native_decide`, or `decide +kernel`, no e
 Only `Layer5/DeviceMemory.lean`, the two Layer 5 files listed above, and this report were edited by this task.
 No other agents' files or status documents were edited, and no commit was made by this task.
 Work stops after this section for review of the five staged semantic obligations.
+
+### Region-lemma follow-up: stopped at the shared-proof edit boundary
+
+This follow-up on 2026-10-23 read `AGENTS.md`, `methods/layer6/reuse.md`, this report's "Proofs" section, and the proof plan's "Next: the five region lemmas" section.
+The work began with `device_output_store_image`, as requested.
+The code inspection found no counterexample to a staged statement, but none of the five region proofs was completed.
+Their statements and bodies remain unchanged.
+
+| Declaration in `JoltConstraints/Soundness/Layer5/DeviceMemory.lean` | Line | Status |
+|---|---:|---|
+| `device_output_store_image` | 142 | Still staged; local byte-store calculations checked, run/image argument unfinished |
+| `device_load_image_bytes` | 325 | Still staged; proof not started |
+| `device_store_cases` | 119 | Still staged; proof not started |
+| `device_panic_store_image` | 159 | Still staged; proof not started |
+| `device_termination_store_image` | 175 | Still staged; proof not started |
+
+#### Goal and reason for stopping
+
+The output proof needs the prefix's initial-to-final device frame and output-size bound, followed by a bridge from the final recorded state to the ready pre-state.
+In particular, the outstanding run facts include:
+
+```lean
+JoltIOSetupFrame.Same run.initialState.jolt_device
+  (TraceWitness.finalTraceState run.toTrace).jolt_device
+
+(TraceWitness.finalTraceState run.toTrace).jolt_device.outputs.size ≤
+  run.initialState.jolt_device.memory_layout.max_output_size.toNat
+```
+
+`UntrustedAnswerTrace.device_relation`, `UntrustedAnswerTrace.final_device_same`, and `UntrustedAnswerTrace.final_outputs_fit_layout` in `JoltConstraints/Soundness/Layer5/TapeDeviceFrame.lean:13`, `:52`, and `:64` already prove the corresponding completed-trace facts.
+Inspection of their proofs shows that they use fields available on `UntrustedAnswerRun`, without using completion or verifier-acceptance fields.
+Their current signatures nevertheless require `UntrustedAnswerTrace`.
+An arbitrary ready prefix cannot be supplied as that argument: `UntrustedAnswerTrace` additionally requires acceptance, valid inputs, a nonempty trace, and a final stable stall, among other fields (`JoltConstraints/Soundness/Layer5/TapeTrace.lean:60`).
+
+The plain-trace relation theorem and the relaxed instruction relation theorem are available, as the plan says.
+Adapting them again inside `DeviceMemory.lean` would repeat the start/link/execution adapter already proved in `TapeDeviceFrame.lean`, and the output-bound argument would likewise repeat its existing proof.
+`AGENTS.md`, "When stuck, discuss first" and "Making proofs general", requires stopping before copying an existing proof and extracting the shared proof instead.
+The requested edit scope allows changes to other Layer 5 files only to expose private lemmas in place; these three declarations are already public.
+I requested permission to refactor that shared proof, and stopped without treating the unanswered request as approval.
+This is an edit-scope and proof-reuse blocker, not evidence that a region statement is false.
+
+The proposed refactor is to add `UntrustedAnswerRun.device_relation`, `UntrustedAnswerRun.final_device_same`, and `UntrustedAnswerRun.final_outputs_fit_layout` in `TapeDeviceFrame.lean`, move the shared arguments to those run-level declarations, and derive the existing completed-trace declarations from them.
+All three existing public statements would stay unchanged, as would the five region statements.
+The ready-state bridge and region arguments would then remain in `DeviceMemory.lean`.
+This proposal has not been implemented.
+
+#### Calculations checked and retained changes
+
+Temporary proofs in `DeviceMemory.lean` checked that a zero-extended array update changes exactly one observed byte, that a fold of successive updates changes exactly its byte interval, and that the MMU's eight-byte output-store fold produces the corresponding output array when explicit range and address-check premises hold.
+These calculations did not establish the run invariants or the final-image correspondence, and therefore did not prove `device_output_store_image`.
+The temporary helpers were removed because no retained proof used them, as `AGENTS.md` requires.
+`git diff --exit-code -- JoltConstraints/Soundness/Layer5/DeviceMemory.lean` passed after removing them.
+Only this report has a retained edit from this follow-up.
+No statement, hypothesis, definition, restriction, or existing proof was changed, and no lemma was made public.
+There are no new retained uses of `bv_decide`, `native_decide`, `decide +kernel`, axioms, or proof-limit overrides, and no retained new proof timing to report.
+
+#### Validation
+
+`lake build JoltConstraints` failed in the other agent's unfinished `JoltConstraints/Soundness/Layer6/DivisionAppend.lean:994`, where an array-prefix equality did not simplify to the expected indexed equality.
+That file and `DivisionPrograms.lean` were not edited by this task.
+The authorized fallback, `lake build JoltConstraints.Soundness.Layer5.DeviceMemory`, passed all 8641 jobs with the same five staged-lemma warnings.
+Fresh `#print axioms` checks on all five region lemmas and both step theorems returned `[propext, sorryAx, sys_enable_experimental_extensions, Classical.choice, Quot.sound]` for each declaration.
+The staged obligations therefore remain outstanding; the successful module build does not discharge them.
+No commit was made.
+Work stops after recording this blocker and the proposed shared-proof refactor.
