@@ -79,7 +79,7 @@ every source instruction with the same registers and memory (Layer 7).
 ### Current top-level status (2026-10-23)
 
 `JoltInstance.soundness` is proved, under the temporary restrictions, with no `sorry`.
-At `b6949a7`, `lake build JoltBytecode JoltConstraints` passes (8,830 jobs), and `#print axioms JoltInstance.soundness` lists only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
+`lake build JoltBytecode JoltConstraints` passes (8,832 jobs), and `#print axioms JoltInstance.soundness` lists only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
 The theorem chains four helpers in `Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) to get `InLanguage`.
 Helper A returns an `UntrustedAnswerTrace` represented at every actual row, from execution-prefix agreement (Layer 6, `Soundness/Layer6/ExecutionPrefix.lean`) and the stopping theorem (`Soundness/Layer7/Stopping.lean`).
 Helper B checks the output and panic words through constraint 26 and final RAM agreement, with no panic restriction; `Represents.finalRam` covers every RAM index except the termination word.
@@ -128,9 +128,8 @@ Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
 ## Remaining work (2026-10-23)
 
-1. Remove the 19 older `bv_decide` uses in completeness helpers and JoltBytecode ([plan](bv-decide-removal.md), Part 2); the soundness-path use is removed.
-2. The cleanup list under "Proofs owed" in `model_review.md`: long proofs, repeated unpacking, unused declarations and checker speed.
-3. The closing report: restrictions split into static checks, run-time properties and the claim; assumptions; issues found; the SDK question.
+1. The cleanup list under "Proofs owed" in `model_review.md`: long proofs, repeated unpacking, unused declarations and checker speed.
+2. The closing report: restrictions split into static checks, run-time properties and the claim; assumptions; issues found; the SDK question.
 
 Agents work in one checkout on disjoint files; each task has a plan in `methods/`, and Claude audits each report before the next task starts.
 Do not add theorem premises without Ari's approval; do not use `native_decide`, `decide +kernel` or a larger `maxHeartbeats`.

@@ -12,7 +12,7 @@ For the next soundness session, start with
 since 2026-10-20 the soundness proof is built top-down from
 `JoltInstance.soundness`, with helper lemmas stated as `sorry` first.
 `JoltInstance.soundness` is proved, under the temporary restrictions, with no `sorry`; see the [current status](../methods/soundness.md#current-top-level-status-2026-10-23).
-"Proofs owed" below records its axioms, the `bv_decide` uses still to remove, the cleanup list and the completeness gaps.
+"Proofs owed" below records its axioms, the cleanup list and the completeness gaps; no `bv_decide` remains in the repository.
 
 **Rust semantics pin:** upstream `5def437f` since 2026-10-22; see [Current Jolt pin](../methods/soundness.md#current-jolt-pin-2026-10-22).
 The earlier pin, selected with Ari on 2026-10-15, was
@@ -160,7 +160,7 @@ Premises or fields of the final theorem, with their source or reason below.
 Sorried theorems behind the final theorems; `#print axioms` shows `sorryAx` through them.
 
 **Soundness.** `JoltInstance.soundness` (`Soundness/soundness.lean`) is proved, under the temporary restrictions, with no `sorry`.
-At `b6949a7`, `lake build JoltBytecode JoltConstraints` passes (8,830 jobs) and `#print axioms JoltInstance.soundness` lists only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`; the one `bv_decide` it used, in `branch_target_toNat`, is replaced by a bit-level proof in `encoded_branch_offset`.
+`lake build JoltBytecode JoltConstraints` passes (8,832 jobs) and `#print axioms JoltInstance.soundness` lists only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
 It is a short proof from the four helpers in `Soundness/TopLevel.lean` and the reverse language inclusion in `Soundness/Layer7/TapeRebuild.lean`.
 Its explicit theorem parameters are unchanged; the temporary-restriction bundle includes `noMaxLengthTrace`.
 `RepresentsRows` in `Soundness/Layer6/ExecutionPrefix.lean` records the row count, PC, source values and RAM addresses for the relaxed trace cut at its first stable stall, padding, or final witness cycle.
@@ -243,17 +243,11 @@ Unpack `JoltInstance.initial_state` once: `initial_state_device`, `initial_state
 
 ### bv_decide
 
-`bv_decide` is temporarily accepted under the `AGENTS.md` rules; every use must be removed before the proof is final ([removal plan](../methods/bv-decide-removal.md)).
-There were 21 uses; the soundness theorem reached only the first, and `b6949a7` removed it and its twin in `encoded_branch_offset`.
-The other 19 predate the 2026-10-21 rule that tracks new uses, so they were not listed here before.
-
-| Declaration or file | Uses |
-|---|---|
-| `JoltConstraints.branch_target_toNat` (`Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean`) | One, proving `(offset.signExtend 128).setWidth 64 = offset.signExtend 64`; `soundness_stopping` and `expansion_finish` (through `terminal_branch`) depend on this lemma. |
-| `encoded_branch_offset` (`JoltBytecode/JoltISA/Values.lean`) | One, the same fact as above. |
-| `Completeness/Helpers/LookupEntryProofHelpers.lean` | Eight: window-mask entries, `halfword_aligned`, `word_aligned`, `lookupEntryCorrect_RangeCheckAligned` and byte-swap identities near `rev8w_eq`. |
-| `JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Splice.lean` | Ten: low-bit masks and byte extraction. |
-| `JoltBytecode/InstructionEquivalence/Instructions/Natives/Sd.lean` | One: `x &&& 7 = 0 → x &&& -8 = x`. |
+No `bv_decide` remains in `JoltBytecode` or `JoltConstraints`, and `LeanRV64D` never had one ([report](../methods/bv-decide-report.md)).
+There were 21 uses.
+The soundness theorem reached one, in `branch_target_toNat`; it and its twin in `encoded_branch_offset` now have a bit-level proof.
+The other 19, in the lookup-entry helpers, `Splice.lean` and `Sd.lean`, predated the 2026-10-21 tracking rule; shared lemmas in `JoltBytecode/InstructionEquivalence/ProofSupport/BitVecMasks.lean` and `Soundness/Layer4/ByteSwap.lean` replace them.
+`#print axioms JoltInstance.completeness` lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`; its `sorryAx` comes from the gaps below.
 
 **Completeness:**
 
