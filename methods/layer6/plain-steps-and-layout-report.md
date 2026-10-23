@@ -663,3 +663,63 @@ The user-authorized files changed in this continuation are `Layer5/Branch.lean`,
 Other agents' files were left untouched, including the concurrent Fence, PlainRow, division, register-helper, and row-step work.
 No commit was made.
 Work stops here for review of the exact checker counterexample and the proposed source-expansion proof route.
+
+## Division layout
+
+Part 2 was audited on `feat/soundness` at `95c69bc`.
+The requested `AGENTS.md`, Part 2 and the correction section of `plain-steps-and-layout.md`, `reuse.md`, and Part A of `stage-4a-report.md` were read.
+Proof work stopped at a dependency error in the prescribed reuse route.
+`division_expansion_layout` remains unchanged, including its existing `sorry`.
+This finding concerns the plan's module dependencies; it is not a counterexample to the theorem's statement.
+
+### Dependency error
+
+Part 2 at `methods/layer6/plain-steps-and-layout.md:32` prescribes obtaining the `arithmetic` field from `division_program_rows` in `DivisionPrograms.lean`.
+The requested theorem is in `JoltConstraints/Soundness/Layer6/DivisionDefs.lean:109`, but `DivisionPrograms.lean:1` imports `DivisionDefs.lean`.
+Importing `DivisionPrograms` into `DivisionDefs` would therefore create a cycle.
+The named fact exists and is proved, but it cannot be used at the requested theorem's current location.
+
+| Declaration or dependency | File and line | Checked fact |
+| --- | --- | --- |
+| `ArithmeticAdviceSequence.arithmetic` | `JoltConstraints/Soundness/Layer6/DivisionDefs.lean:97` | Requires every row of the block to satisfy `DivisionArithmeticRow`. |
+| `JoltInstance.division_expansion_layout` | `JoltConstraints/Soundness/Layer6/DivisionDefs.lean:109` | The existing staged target is upstream of `DivisionPrograms`. |
+| Import of `DivisionDefs` | `JoltConstraints/Soundness/Layer6/DivisionPrograms.lean:1` | Makes reuse in the reverse direction cyclic. |
+| `JoltInstance.division_program_rows_shape` (private) | `JoltConstraints/Soundness/Layer6/DivisionPrograms.lean:250` | Already evaluates the eight generated programs to prove the shared row classification and prefix safety. |
+| `JoltInstance.division_program_rows` | `JoltConstraints/Soundness/Layer6/DivisionPrograms.lean:270` | Extracts the full-program classification from that existing proof. |
+| `JoltInstance.division_block` | `JoltConstraints/Soundness/Layer6/DivisionBlock.lean:76` | Uses the staged layout theorem. |
+
+The standalone diagnostic `/private/tmp/division-layout-import-check.lean` imports only `DivisionDefs` and queries the Lean environment.
+It reports `division_expansion_layout available: true` and `division_program_rows available: false`.
+Its log is `/private/tmp/division-layout-import-check.log`.
+No tactic proof was attempted after finding the dependency error.
+The outstanding arithmetic obligation is still `∀ row ∈ rows, DivisionArithmeticRow row` for the identified generated block.
+Copying the existing eight-program classification would conflict with the repository's reuse rule, and the plan's allowed file edits do not include relocating that proof from `DivisionPrograms`.
+
+The proposed repair is to move `division_expansion_layout`, with its name and statement unchanged, into a new `DivisionLayout.lean` importing `DivisionPrograms`, and import the new module from `DivisionBlock.lean`.
+This would make the prescribed reuse possible without changing core definitions or theorem hypotheses.
+It requires revising the requested location and authorizing the additional `DivisionBlock` import edit, so it was not performed.
+There is no new mathematical gap to stage for this dependency issue.
+The remaining source-classification and exact-block arguments have not been fully audited or proved; this report does not certify the rest of the plan.
+
+### Validation and scope
+
+`lake env lean JoltConstraints/Soundness/Layer6/DivisionDefs.lean` passed, with the existing `sorry` warning at line 109.
+The log is `/private/tmp/division-layout-defs-check.log`.
+Only the owned source module was checked directly; no aggregate build or dependency rebuild was requested while the checker work is in progress.
+
+`lake env lean /private/tmp/division-layout-axioms.lean` passed using the existing compiled imports.
+The log is `/private/tmp/division-layout-axioms.log`.
+Its exact axiom results are:
+
+| Root | Axioms |
+| --- | --- |
+| `JoltInstance.division_expansion_layout` | `propext`, `sorryAx`, `Quot.sound` |
+| `JoltInstance.division_program_rows` | `propext`, `Quot.sound` |
+| `JoltInstance.division_block` | `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice`, `Quot.sound` |
+
+No Lean declaration was added, changed, relocated, or made public.
+There are no statement changes, added hypotheses, new staged lemmas, new `bv_decide` uses, `native_decide` uses, `decide +kernel` uses, or raised limits.
+No new proof requires a timing report.
+`git diff --check` passed.
+Only this report was changed in the repository by this task; all excluded files were left untouched.
+No commit was made.

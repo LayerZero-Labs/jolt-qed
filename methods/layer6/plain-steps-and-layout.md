@@ -48,3 +48,9 @@ The expansion checker does not check a `VirtualAdviceLoad` byte count: `nativeRo
 The tape-load step, with the checker change that fixes this, is reassigned to the agent proving `plain_row_step_other` (see the last section of `methods/layer6/plain-row-other.md`).
 This agent now does Part 2 only: `division_expansion_layout`.
 Do not edit `expansion_facts.lean`, `TapeRebuild.lean`, `AdviceExpansion.lean`, `PlainRow.lean` or `Layer5/AdviceLoad.lean`; the checker change will rebuild most of `JoltConstraints`, so build only your own modules while it is in progress.
+
+## Correction: module placement of `division_expansion_layout`
+
+`division_program_rows` (`DivisionPrograms.lean`) cannot be used in `DivisionDefs.lean`, because `DivisionPrograms.lean` imports `DivisionDefs.lean`.
+Move `division_expansion_layout`, with its name, statement and docstring unchanged, into a new `Soundness/Layer6/DivisionLayout.lean` that imports `DivisionPrograms`; import the new module from `DivisionBlock.lean` and add it to `JoltConstraints.lean`.
+Helpers for the layout proof go in `DivisionLayout.lean` or new files; you may make a private lemma in `DivisionPrograms.lean` public in place (for example `division_program_rows_shape`) and extract a general lemma from an existing proof there rather than copy it.
