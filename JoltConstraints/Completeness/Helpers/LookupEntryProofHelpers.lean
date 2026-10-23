@@ -473,20 +473,14 @@ theorem lookupEntryCorrect_VirtualXORROTW6 (row : HonestTraceRow bytecode)
   lookup_cases
   exact xorRotW_entry 6 (by decide) _ _
 
-theorem rev8_32 (x : BitVec 32) : rev8 x = swapBytes32 x := by
-  exact Soundness.rev8_32_kernel x
-
-theorem rev8w_eq (v : BitVec 64) :
-    rev8w v = swapBytes32 (v.extractLsb 63 32) +++ swapBytes32 (v.extractLsb 31 0) := by
-  exact Soundness.rev8w_eq_kernel v
-
 theorem lookupEntryCorrect_VirtualRev8W (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualRev8W) :
     LookupEntryCorrect F .VirtualRev8W row := by
   lookup_cases
-  simp only [virtualRev8WTableEntry, BitVec.ofFin_toFin, jolt_virtual_rev8w_value, rev8_32,
-    Sail.BitVec.extractLsb, BitVec.setWidth_setWidth_of_le _ (by norm_num : 64 ≤ 128)]
-  rw [BitVec.setWidth_eq, rev8w_eq]
+  simp only [virtualRev8WTableEntry, BitVec.ofFin_toFin, jolt_virtual_rev8w_value,
+    Soundness.rev8_32_kernel, Sail.BitVec.extractLsb,
+    BitVec.setWidth_setWidth_of_le _ (by norm_num : 64 ≤ 128)]
+  rw [BitVec.setWidth_eq, Soundness.rev8w_eq_kernel]
 
 
 /-! ## Shift masks
