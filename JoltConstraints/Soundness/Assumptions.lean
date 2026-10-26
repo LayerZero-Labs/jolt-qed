@@ -57,7 +57,7 @@ For a maximum of 1024, a 1024-row trace is excluded, while a 256-row trace is
 allowed: Jolt's prover pads the latter to 512.
 Jolt's verifier can accept a full-length witness, but its prover adds a padding
 row and would exceed the maximum. See
-`blog/content/blog/prover-verifier-trace-length/index.md` and
+`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/prover-verifier-trace-length/index.md` and
 `jolt/crates/jolt-prover/src/config.rs:63-70,116-119` at `5def437f`. -/
 def JoltInstance.NoMaxLengthTrace
     (joltInstance : JoltInstance SourceInstruction) : Prop :=
@@ -95,7 +95,7 @@ structure JoltInstance.TemporaryRestrictions
   -- verifier-admissible power-of-two domain. Jolt's prover requires one more
   -- padding row, but its verifier can accept that full-length witness.
   -- Remove when Jolt resolves the mismatch described in
-  -- blog/content/blog/prover-verifier-trace-length/index.md.
+  -- LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/prover-verifier-trace-length/index.md.
   noMaxLengthTrace : joltInstance.NoMaxLengthTrace
   -- FIXME: once the program has stored to the termination word, its next jump is
   -- the stall (a JAL with offset 0), and it never loads the termination word again
@@ -104,10 +104,10 @@ structure JoltInstance.TemporaryRestrictions
   terminationThenStall : joltInstance.TerminationThenStall
   -- FIXME: every store to the panic word stores 1, and no load reads the panic
   -- word after such a store. Excludes a store of 0 being proved as "no panic"
-  -- (blog/content/blog/completeness-and-soundness/index.md). A Jolt bug: it must
+  -- (LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md). A Jolt bug: it must
   -- be fixed in Jolt and cannot remain a restriction.
   panicStoresOne : joltInstance.PanicStoresOne
   -- FIXME: the claim says "no panic". Excludes a "panicked" claim proved from an
-  -- execution cut short at a jump (blog/content/blog/proof-stops-at-any-jump/index.md).
+  -- execution cut short at a jump (LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md).
   -- A Jolt bug: it must be fixed in Jolt and cannot remain a restriction.
   claimsNoPanic : joltInstance.ClaimsNoPanic

@@ -12,7 +12,7 @@ Read these before beginning work:
 2. [The completeness proof and bug-finding workflow](./constraint_proving.md).
 3. [Known model gaps and proof obligations](../JoltConstraints/model_review.md).
 
-The local `blog/` is stale; use the published article for background.
+The issue writeups live in `LayerZero-Research/LZ-Notes` under `content/projects/jolt-qed/blog/`.
 
 ## Change of course: top-down (2026-10-20)
 
@@ -110,7 +110,7 @@ If the Lean definitions match Jolt's code, decide which kind of issue it is:
 
 An issue is confirmed only once reproduced against Jolt's actual prover and verifier; the write-up says whether it was.
 
-Write each issue up as its own post; `blog/README.md` says where posts live.
+Write each issue up as its own post in `LayerZero-Research/LZ-Notes` under `content/projects/jolt-qed/blog/`.
 Posts go to a16z privately, never as public GitHub issues.
 A post has: background with quoted Jolt code and a reference link; each constraint as one plain sentence followed by its formula, without references; an example in real RISC-V, with no pseudo-instructions, and made-up addresses in label, PC and instruction columns; the cheating witness; the constraints that matter checked one by one with the values filled in; the final check against the false claim; the false claim and the true claim; and the core issue.
 Write plain prose, one sentence per line, with no status labels, and check every quoted line at the pin.
@@ -1178,9 +1178,9 @@ Blocked parts and their status:
 - The panic word, where Jolt's tracer sets its flag on any store and loads the flag in every byte, while the RAM table keeps the stored bytes: `PanicStoresOne` (added 2026-10-20).
   Every store to the panic word stores 1, and no load reads the panic word after such a store.
   Before any store, the device and the table both read 0.
-  Write-up: `blog/content/blog/completeness-and-soundness/index.md`.
+  Write-up: `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`.
 - Stopping early on a "panicked" claim, where the witness's last cycle before the padding can be any JAL or JALR: `ClaimsNoPanic` (added 2026-10-20), which limits the theorem to "no panic" claims.
-  Write-up: `blog/content/blog/proof-stops-at-any-jump/index.md`.
+  Write-up: `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`.
 - Both are Jolt bugs that must be fixed in Jolt; neither may remain a restriction.
 
 Remaining proof work, which no restriction may replace:
@@ -1280,7 +1280,7 @@ Helper B (`soundness_matches_outputs`) proves this layer without `sorryAx`.
 Translate the agreed RAM encoding on the public I/O region into the final device's output bytes and panic flag.
 Then use `RamOutputEqPublicIo` to prove that the final device has the instance's output bytes, after trimming trailing zeros, and its panic flag.
 For an empty trace, use the initial device.
-In the panic-store discrepancy in B6, a store of 0 to the panic word sets Jolt's tracer's flag but leaves 0 in the RAM table, so a false "no panic" claim passes (`blog/content/blog/completeness-and-soundness/index.md`).
+In the panic-store discrepancy in B6, a store of 0 to the panic word sets Jolt's tracer's flag but leaves 0 in the RAM table, so a false "no panic" claim passes (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`).
 It no longer blocks this step: B needs no panic restriction, and the burden now sits in the execution prefix's `cutRam` at the panic word, where the temporary `PanicStoresOne` restriction excludes it.
 Why: this gives `matches_outputs` for the relaxed trace. The rebuilt run has the same final device, so it carries over to Layer 7's `HonestTrace`, which proves the theorem's existential conclusion.
 Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputEqPublicIo`, device semantics.
@@ -2378,10 +2378,10 @@ privately, as Markdown files over a Slack channel, not as public GitHub issues
    - `TerminationThenStall`: B6's stopping case, and the termination word's
      device/table mismatch.
    - `PanicStoresOne`: a store of 0 proved as "no panic", and loads of the panic word after a store.
-     Written up in `blog/content/blog/completeness-and-soundness/index.md`.
+     Written up in `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`.
    - `ClaimsNoPanic`: stopping early on a "panicked" claim.
-     Written up in `blog/content/blog/proof-stops-at-any-jump/index.md`.
-   - Each finding gets its own post under `blog/content/blog/`.
+     Written up in `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`.
+   - Each finding gets its own post under `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/`.
 
 ## First milestone
 
