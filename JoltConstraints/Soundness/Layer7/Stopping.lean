@@ -12,8 +12,8 @@ namespace JoltInstance
 /-- The retained run ends in a stable stall and has at least one row, and
 its final RAM agrees with the witness outside the synthetic termination word.
 For example, an SDK exit stores 1 to termination and finishes with `j .`.
-See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 8bbb2357 and
-PR #2109 head d2995380, jolt/tracer/src/emulator/cpu.rs:553-578. -/
+See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 5def437f and
+PR #2109 merge commit 0249591a, jolt/tracer/src/emulator/cpu.rs:553-576. -/
 theorem soundness_stopping {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)

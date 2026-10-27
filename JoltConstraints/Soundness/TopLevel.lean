@@ -11,7 +11,10 @@ import JoltConstraints.Completeness.Helpers.RamOutputProofHelpers
 import JoltConstraints.Completeness.All
 import JoltConstraints.language
 import JoltConstraints.Soundness.Layer5.TapeTrace
+import JoltConstraints.Soundness.Layer6.PrefixAgreement
 import JoltConstraints.Soundness.Layer7.Stopping
+import JoltConstraints.Soundness.Layer7.ProverAccepts
+import JoltConstraints.Soundness.Layer7.SpoilAsserts
 import JoltConstraints.Soundness.Layer8.OutputWords
 import JoltConstraints.witness_helpers.pc
 import JoltConstraints.witness_helpers.rs1_value
@@ -142,25 +145,16 @@ theorem soundness_matches_outputs {F : Type} [Field F] (joltField : JoltField F)
     joltInstance privateInputs context trace finalFrame
       trace.final_outputs_fit_layout runPublicWord
 
-/-- ⚠️ DANGER ⚠️ KNOWN FALSE, ASSUMED ON PURPOSE ⚠️
-This statement is false in two cases. It is left as `sorry` deliberately, with
-Ari's permission (2026-10-20), until a16z answers the question in
-`blog/content/blog/prover-verifier-trace-length/index.md`:
-- The instance maximum is below 256: Jolt's prover refuses every trace, because
-  it never uses fewer than 256 cycles, while the verifier accepts shorter
-  witnesses.
-- The execution fills every cycle of the witness, and the witness length is the
-  largest power of two within the maximum: Jolt's prover adds one row, needs
-  twice that length and refuses, while the verifier accepts the witness.
-In both cases the claim itself is true; only Jolt's prover acceptance, which is
-part of L, fails. Nothing else in the proof uses this lemma, so it cannot hide
-another issue. Once a16z answers, either add a restriction or change L's length
-rule, and remove this warning.
-
-C. The represented rows and verifier bounds give Jolt prover acceptance: the
-last-jump check, the RAM-address check and the padded length. -/
+/-- C. The represented rows and verifier bounds give Jolt prover acceptance.
+The proof uses the last-jump check, the RAM-address check, and the padded
+length derived from the 256-cycle verifier floor, the witness length bound and
+`NoMaxLengthTrace`. For example, under a maximum of 1024, a 256-row run may
+be padded to 512, while the restriction excludes a 1024-row run.
+See jolt/crates/jolt-prover/src/config.rs
+(`ProverConfig::derive_from_dimensions`) at 5def437f. -/
 theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
+    (noMaxLengthTrace : joltInstance.NoMaxLengthTrace)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
@@ -170,10 +164,34 @@ theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (bytecodeEq : trace.bytecode = context.bytecode)
     (represented : Represents witness trace.toUntrustedAnswerRun.toTrace) :
     (trace.prover_config joltInstance).isSome := by
-  sorry
+  have jump := represented_trace_ends_in_jump joltField joltInstance privateInputs
+    witness context equations trace bytecodeEq represented.toRepresentsRows
+  obtain ⟨padded, padding, fits⟩ := checked_trace_length_fits trace.rows.size
+    params.logT joltInstance.max_padded_trace_length represented.rowsBound
+    context.traceLengthBound (context.traceLengthFloor.trans context.traceLengthBound)
+    (noMaxLengthTrace privateInputs trace)
+  obtain ⟨ramK, ramSize⟩ := represented_ram_size_computes joltField joltInstance
+    privateInputs witness context equations trace.toUntrustedAnswerRun.toTrace
+    trace.initialized represented.rowsBound represented.ramAddress
+  unfold Trace.prover_config ProverConfig.deriveFromDimensions
+  change (do
+    guard (trace.rows.size = 0 ∨ trace.execution_dimensions.ends_in_jump = true)
+    let traceLength ← ProverConfig.checkedTraceLength trace.rows.size
+    let ramSize ← ProverConfig.checkedRamSize trace.execution_dimensions
+      trace.initialState.jolt_device.memory_layout
+      (min_bytecode_address joltInstance.program.memory_init)
+      (program_image_len_words joltInstance.program.memory_init)
+    guard (traceLength ≤ joltInstance.max_padded_trace_length.toNat)
+    pure ({ trace_length := traceLength, ram_K := ramSize } : ProverConfig)).isSome
+  simp only [jump]
+  simp [padding, ramSize, fits]
 
-/-- D. Each executed spoil assert uses its row's pre-state operands. The row
-observations and lookup constraints must rule out a failing assertion. -/
+/-- D. Each executed spoil assert uses its row's pre-state operands.
+Representation supplies those operands because they are not instruction
+temporaries, and the lookup and Assert constraints force equality.
+For example, a custom equality assertion with immediate 2 must have equal sides.
+See jolt/tracer/src/instruction/virtual_assert_eq.rs (`VirtualAssertEQ::exec`)
+at 5def437f. -/
 theorem soundness_spoil_asserts_pass {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -185,6 +203,7 @@ theorem soundness_spoil_asserts_pass {F : Type} [Field F] (joltField : JoltField
     (bytecodeEq : trace.bytecode = context.bytecode)
     (represented : Represents witness trace.toUntrustedAnswerRun.toTrace) :
     trace.SpoilAssertsPass := by
-  sorry
+  exact represented_spoil_asserts_pass joltField joltInstance privateInputs witness
+    context equations trace.toUntrustedAnswerRun bytecodeEq represented.toRepresentsRows
 
 end JoltInstance

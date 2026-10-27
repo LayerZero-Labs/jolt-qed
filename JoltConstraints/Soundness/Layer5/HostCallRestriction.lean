@@ -4,8 +4,8 @@ import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 /-! Temporary program restriction for host calls (VirtualHostIO rows).
 
 VirtualHostIO has no opcode circuit flags and no lookup table, so its local
-constraints do not encode host-call failure or side effects. Its encoded `rd`
-still participates in the register selectors. Jolt's tracer runs the call in
+constraints do not encode host-call failure or side effects. Its operandless
+row selects no register read or write. Jolt's tracer runs the call in
 live mode, which a proved run uses, and there an invalid cycle-marker or print
 event panics. The model's `JoltISA.execHostIOWith` keeps those failures. It
 checks message-pointer overflow only when `hostIO.overflowChecks` is enabled;
@@ -13,10 +13,10 @@ the initialized soundness run has that setting disabled. A message that cannot
 be read does not fail the call: the handler's trap is ignored. This is a
 candidate found by reading the code; no satisfying witness has been built.
 SDK guests pass only valid constant events.
-At public pin 8bbb2357:
+At public pin 5def437f:
 See : jolt/crates/jolt-riscv/src/instructions/virt/host_io.rs:3-6
-See : jolt/tracer/src/instruction/virtual_host_io.rs:19-39
-See : jolt/tracer/src/emulator/cpu.rs:1056-1105 -/
+See : jolt/tracer/src/instruction/virtual_host_io.rs:9-38
+See : jolt/tracer/src/emulator/cpu.rs:1079-1128 -/
 
 set_option autoImplicit false
 
@@ -36,7 +36,7 @@ def JoltInstance.HostCallsSucceed (joltInstance : JoltInstance SourceInstruction
     (next : Fin run.bytecode.size) (pre : SailJoltState),
     run.NextStep next pre →
       match run.bytecode[next].instruction with
-      | .VirtualHostIO _ _ _ => ∃ post, execHostIO pre = .ok RETIRE_SUCCESS post
+      | .VirtualHostIO => ∃ post, execHostIO pre = .ok RETIRE_SUCCESS post
       | _ => True
 
 namespace JoltConstraints.Soundness
@@ -46,15 +46,16 @@ open Sail PreSail LeanRV64D.Functions JoltISA
 /-- The program restriction supplies successful live HostIO execution for an
 attempted row. HostIO can append to the advice tape, but cannot change Sail
 registers, RAM bytes or virtual registers. The register-table increment still
-needs a separate argument. -/
+needs a separate argument. For example, an advice-write call may append bytes
+while preserving every register. -/
 theorem host_call_exec_sail_frame
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (restricted : joltInstance.HostCallsSucceed)
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (next : Fin run.bytecode.size) (pre : SailJoltState)
     (ready : run.NextStep next pre)
-    (dst : JoltISA.Dst) (src : JoltISA.Src) (imm answer : BitVec 64)
-    (instruction : run.bytecode[next].instruction = .VirtualHostIO dst src imm)
+    (answer : BitVec 64)
+    (instruction : run.bytecode[next].instruction = .VirtualHostIO)
     (advice : run.bytecode[next].instruction.RuntimeAdvice) :
     ∃ post, execWithTapeAnswer
         (run.bytecode[next].instruction.withRuntimeAdvice advice) answer pre =

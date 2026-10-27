@@ -221,7 +221,7 @@ theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
 -- Each advice region, holding at most its configured maximum, ends at or before the
 -- inputs start: the advice bytes never reach the public inputs.
 -- See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
---       jolt/tracer/src/lib.rs:379-390 (create_emulator checks the advice sizes)
+--       jolt/tracer/src/lib.rs:366-377 (create_emulator checks the advice sizes)
 theorem new_advice_below_input (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) (trustedSize untrustedSize : Nat)
     (trustedFits : trustedSize ≤ config.max_trusted_advice_size.toNat)
@@ -476,6 +476,35 @@ theorem new_outputs_after_inputs (config : MemoryConfig) (layout : MemoryLayout)
     Nat.mod_eq_of_lt (a := inputEnd) (by omega), Nat.mod_eq_of_lt (a := input) (by omega)]
   omega
 
+/-- A successful layout reserves at least the configured maximum number of input
+bytes, rounding the reservation up to an eight-byte boundary.
+For example, a configured maximum of nine bytes occupies sixteen layout bytes.
+See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at 5def437f. -/
+theorem new_input_size_bound (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    config.max_input_size.toNat ≤ layout.max_input_size.toNat := by
+  unfold MemoryLayout.new at built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨input, inputRounded, built⟩ := built
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  cases built
+  have inputGe := (alignUp8_some inputRounded).1
+  have inputLt : input < 2 ^ 64 := by
+    unfold MemoryLayout.alignUp8 at inputRounded
+    split at inputRounded
+    · cases inputRounded
+      exact BitVec.isLt _
+    · obtain ⟨eq, bound⟩ := checkedAdd_some inputRounded
+      omega
+  simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt inputLt]
+  exact inputGe
+
 /-- A word index counts 8-byte words up from the lowest address:
 `(address - lowest) / 8`.
 In a successful layout the output, panic and termination word indices follow
@@ -502,7 +531,7 @@ theorem new_io_word_geometry (config : MemoryConfig) (layout : MemoryLayout)
 
 -- With the lowest address above 8, as validate_inputs requires, no device region covers
 -- an address below 8, and the I/O region ends above it.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:992-1005 (validate_ram_remap_base)
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:999-1016 (validate_ram_remap_base)
 theorem JoltDevice.low_address_free (device : JoltDevice) (config : MemoryConfig)
     (built : MemoryLayout.new config = some device.memory_layout)
     (aboveEight : 8 < device.memory_layout.get_lowest_address.toNat)
@@ -535,7 +564,7 @@ theorem init_state_jolt_device (entryAddress : BitVec 64) (ram : Array (BitVec 8
 
 -- The starting device holds the fixed trusted advice and the prover's untrusted
 -- advice. create_emulator checks both against the configured maximums.
--- See : jolt/tracer/src/lib.rs:364-408 (create_emulator)
+-- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
 theorem initial_state_device {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :
@@ -580,7 +609,7 @@ theorem initial_state_lowest_address_pos {Source : Type} (joltInstance : JoltIns
   exact new_lowest_address_pos _ _ layoutBuilt
 
 -- The starting device holds the instance's inputs.
--- See : jolt/tracer/src/lib.rs:398-399 (create_emulator)
+-- See : jolt/tracer/src/lib.rs:385-386 (create_emulator)
 theorem initial_state_inputs {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :

@@ -14,6 +14,13 @@ The state of the proof lives in the repository, not in any one session:
 - `methods/soundness.md`: the plan, the layers, and the current status.
 - `JoltConstraints/model_review.md`, "Proofs owed": every remaining `sorry` and what it needs.
 
+## Review
+
+Claude, in a separate session, is the auditor.
+It reviews every staged statement and every report before Ari approves it.
+It checks for drift from Jolt's Rust code, false or weak statements, new assumptions, proof quality against this file, and whether the docs match the code.
+Write your reports so they can be checked: name each declaration with its file and line, and list every statement change, added hypothesis, `bv_decide` use and any proof slower than about ten seconds.
+
 ## When stuck, discuss first
 
 Stop and bring the problem to Ari before doing any of the following:
@@ -41,9 +48,8 @@ If you believe a staged statement is false, stop and report the exact missing fa
 - `bv_decide` is accepted for now, to make progress; it will be removed later.
   List every new use in your report, and add it to the `bv_decide` list in "Proofs owed" (`JoltConstraints/model_review.md`).
 - Delete every lemma no proof uses.
-- Report each new declaration's elaboration time.
-  Aim for about one second or less.
-  A slower proof is acceptable only if it is significantly simpler than any faster one; say so in your report, with the time and why the faster version would be worse.
+- For now (Ari, 2026-10-22), correctness comes before speed: the first goal is to learn whether the soundness theorem is true.
+  There is no time target for proofs; list any proof that takes more than about ten seconds in your report, so it can be sped up later.
   This never allows raising `maxHeartbeats`, `native_decide` or `decide +kernel`.
 - Commit only when Ari asks, and add no Co-Authored-By lines.
 - Keep git worktrees under `/Users/ari.biswas/Lean/`, never in `/private/tmp`, which macOS clears.
@@ -63,7 +69,6 @@ If you believe a staged statement is false, stop and report the exact missing fa
    - the Layer 1 to 4 witness lemmas under `JoltConstraints/Soundness/`.
 6. Treat these as signs that a lemma is missing:
    - a proof longer than about 60 lines;
-   - an elaboration time over about one second, unless the proof is already as simple as it can be;
    - a blanket `cases … <;> simp_all` with `all_goals try`;
    - a block of near-identical declarations.
 
@@ -82,13 +87,15 @@ Each of these has made a staged statement false before.
 ## Writing
 
 - Give every definition and public theorem a docstring that defines each term it uses and gives a concrete example.
-- Cite Jolt's code as `jolt/<path>:<lines>` at the pinned commit.
+- Cite Jolt's code by file and function or item name at the pinned commit, for example `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`).
+  Add line numbers only where they help someone find the code.
+  When the pin moves, update a citation only if the cited code itself changed; do not spend work refreshing line numbers of unchanged code.
 - In prose, name the actor: Jolt's tracer, prover or verifier, not "Rust".
 - In Markdown files, put each sentence on its own line.
 
 ## Sources
 
 - Jolt's Rust code: `/Users/ari.biswas/Work-with-A16z/jolt`.
-  The model is pinned to the commit recorded in `methods/soundness.md` (currently `8bbb2357`), which may not be the checked-out HEAD.
+  The model is pinned to the commit recorded in `methods/soundness.md` (currently `5def437f`), which may not be the checked-out HEAD.
   Read pinned files with `git -C /Users/ari.biswas/Work-with-A16z/jolt show <pin>:<path>`.
-- The stopping rule follows a16z/jolt PR #2109 (head `d2995380`) until it merges: `gh pr diff 2109 --repo a16z/jolt`.
+- The stopping rule follows a16z/jolt PR #2109 at merge commit `0249591a`.

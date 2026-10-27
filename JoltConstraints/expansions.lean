@@ -122,6 +122,5 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .VirtualRev8W rd rs1 => some (.ofNative (.VirtualRev8W (.xreg rd) (.xreg rs1)))
     | .VirtualAssertEQ rs1 rs2 imm =>
         some (.ofNative (JoltISA.Encoded.VirtualAssertEQ (.xreg rs1) (.xreg rs2) imm))
-    -- FormatI immediates are sign-extended (jolt/tracer/src/instruction/format/format_i.rs:18-24).
-    | .VirtualHostIO rd rs1 imm =>
-        some (.ofNative (.VirtualHostIO (.xreg rd) (.xreg rs1) (sign_extend (m := 64) imm)))
+    -- No operands: jolt/crates/jolt-program/src/image/decode.rs:335-339 at 5def437f.
+    | .VirtualHostIO => some (.ofNative .VirtualHostIO)

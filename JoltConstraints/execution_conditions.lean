@@ -4,7 +4,7 @@ set_option autoImplicit false
 
 /-- Rust's source-level stopping rule: the completed source instruction jumps
 to its own address and would do so on re-execution.
-See : a16z/jolt PR #2109, head d2995380, `Cpu::tick`. -/
+See : a16z/jolt PR #2109, merge commit 0249591a, `Cpu::tick`. -/
 structure HonestTrace.Terminated {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Prop where

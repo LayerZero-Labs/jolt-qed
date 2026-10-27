@@ -16,7 +16,7 @@ set_option autoImplicit false
 
 -- In the bytecode, a VirtualAdvice instruction's value is a placeholder. The tracer
 -- supplies the real value when it runs the instruction, and the trace row records it.
--- Rust: [runtime advice patching](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/instruction/mod.rs#L215-L241).
+-- Jolt tracer: [runtime advice patching](https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/tracer/src/instruction/mod.rs#L215-L241).
 -- The unified Rust row retains the result through its captured destination value.
 def JoltISA.Instr.RuntimeAdvice : JoltISA.Instr → Type
   | .VirtualAdvice .. => BitVec 64

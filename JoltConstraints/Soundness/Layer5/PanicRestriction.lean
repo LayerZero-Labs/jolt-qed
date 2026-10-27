@@ -1,8 +1,8 @@
 import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
 
 /-! Temporary restrictions for the two known panic issues, written up in
-`blog/content/blog/completeness-and-soundness/index.md` and
-`blog/content/blog/proof-stops-at-any-jump/index.md`.
+`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md` and
+`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`.
 
 Jolt's tracer sets its panic flag on any store to the panic address, whatever
 value is stored, and then loads every byte of the panic word as that flag. The
@@ -19,7 +19,7 @@ The SDK's panic path stores the byte 1 once; its SB expansion loads the panic
 word only before that store, when the device and the table both read 0.
 At public pin 8bbb2357:
 See : jolt/common/src/jolt_device.rs:121-148, 175-178
-See : jolt/crates/jolt-program/src/preprocess/public_io.rs:42-52
+See : jolt/crates/jolt-program/src/preprocess/public_io.rs:42-56
 See : jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:312-317, 392-394
 See : jolt/jolt-sdk/src/runtime/exit.rs:34-40
 See : jolt/jolt-sdk/macros/src/lib.rs:899-903 -/
@@ -48,7 +48,7 @@ def UntrustedAnswerRun.StoresPanicAt
 end JoltConstraints.Soundness
 
 /-- FIXME: Temporary program restriction for the panic word's device/table
-mismatch (`blog/content/blog/completeness-and-soundness/index.md`). This is a
+mismatch (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`). This is a
 Jolt bug that must be fixed in Jolt; it cannot remain a restriction. Remove it
 once Jolt's constraints treat the panic word as Jolt's tracer does, the model
 reflects that, and the unrestricted proof is established. This is not a
@@ -77,7 +77,7 @@ def JoltInstance.PanicStoresOne (joltInstance : JoltInstance SourceInstruction) 
       | _ => True
 
 /-- FIXME: Temporary restriction to "no panic" claims, for stopping early on a
-"panicked" claim (`blog/content/blog/proof-stops-at-any-jump/index.md`). This is
+"panicked" claim (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`). This is
 a Jolt bug that must be fixed in Jolt; it cannot remain a restriction. Remove it
 once Jolt's constraints require the last cycle before the padding to be a PC
 stall, the model reflects that, and the unrestricted proof is established. This

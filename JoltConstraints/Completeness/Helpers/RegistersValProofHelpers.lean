@@ -640,7 +640,7 @@ theorem register42_instruction_preserves_other
         have hp := register42_write_retire_preserves_other dst src written
           { s with adviceTape := tape } t (hne dst rfl) hready h
         exact hp.trans (by cases src <;> rfl)
-  case VirtualHostIO dst operand imm =>
+  case VirtualHostIO =>
     have hrun : JoltISA.execHostIO s = .ok (.Retire_Success ()) t := by
       simpa only [JoltISA.execInstr] using hexec
     have hsail := JoltHostFrame.execHostIO_frame s t (.Retire_Success ()) hrun

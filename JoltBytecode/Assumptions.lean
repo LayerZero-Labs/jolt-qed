@@ -212,7 +212,7 @@ structure JoltRamStoreOk (addr : BitVec 64) (js : SailJoltState) : Prop where
 
 /-- The current generated-Sail privilege register is Machine mode.
 
-Rust source: `tracer/src/emulator/cpu.rs:329-353`
+Jolt source: `jolt/tracer/src/emulator/cpu.rs:443-449` at `5def437f`
 ```rust
 privilege_mode: PrivilegeMode::Machine,
 ```
@@ -224,7 +224,7 @@ structure CurPrivilegeMachine (s : SailState) : Prop where
 /-- The generated `misa` CSR is present and has the U extension bit set.
 
 Rust source:
-`/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/cpu.rs:399`.
+`jolt/tracer/src/emulator/cpu.rs:471` at `5def437f`.
 Generated Sail source: `LeanRV64D/Types.lean:381-382`.
 
 Rust initializes `misa` to `0x800000008014312f`; generated Sail's

@@ -43,12 +43,12 @@ noncomputable def Rs1Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLengt
       | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
       | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
       | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
-      | .VirtualAssertLTE src _ _ | .VirtualHostIO _ src _ =>
+      | .VirtualAssertLTE src _ _ =>
           if address = sourceRegisterAddress src then 1 else 0
       -- Alignment assertions can read architectural or virtual registers.
       | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
           if address = sourceRegisterAddress base then 1 else 0
-      | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualPow2I _ _ | .VirtualPow2IW _ _
+      | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
       | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => 0
     else 0
 

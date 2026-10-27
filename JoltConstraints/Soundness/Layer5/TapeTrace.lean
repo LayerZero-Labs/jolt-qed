@@ -27,11 +27,11 @@ structure UntrustedAnswerRun (joltInstance : JoltInstance SourceInstruction)
       (bytecode[rows[step].rowIndex].instruction.withRuntimeAdvice rows[step].runtimeAdvice)
       (answers step) rows[step].preState = .ok (.Retire_Success ()) rows[step].postState
   -- Jolt's tracer starts from the emulator create_emulator builds.
-  -- See : jolt/tracer/src/lib.rs:89-97, 364-408 (create_emulator)
+  -- See : jolt/tracer/src/lib.rs:89-97, 351-395 at 5def437f (create_emulator)
   initialized : joltInstance.initial_state privateInputs = some initialState
   -- The trace begins where the program begins: Jolt's first tick runs the
   -- instruction at the entry address, with the PC already advanced past it.
-  -- See : jolt/tracer/src/lib.rs:327-337, jolt/tracer/src/emulator/cpu.rs:622-632
+  -- See : jolt/tracer/src/lib.rs:321-325, jolt/tracer/src/emulator/cpu.rs:581-620,657-679
   starts : ∀ first ∈ rows[0]?,
     bytecode[first.rowIndex].address = joltInstance.program.entry_address ∧
     bytecode[first.rowIndex].starts_source ∧
@@ -42,7 +42,7 @@ structure UntrustedAnswerRun (joltInstance : JoltInstance SourceInstruction)
   -- its last row, the next row is the first row of the instruction at nextPC, and
   -- the PC is moved to that instruction before it starts.
   -- See : jolt/tracer/src/instruction/mod.rs:679-687 (rows of one instruction, in order)
-  --       jolt/tracer/src/emulator/cpu.rs:622-632 (the next instruction is fetched at the PC)
+  --       jolt/tracer/src/emulator/cpu.rs:581-620,657-679 (the next instruction is fetched at the PC)
   linked : ∀ (i : Nat) (current next : TraceRow bytecode),
     rows[i]? = some current → rows[i + 1]? = some next →
     if bytecode[current.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 then
@@ -64,14 +64,14 @@ structure UntrustedAnswerTrace (joltInstance : JoltInstance SourceInstruction)
   -- See : jolt/crates/jolt-prover/src/preprocessing.rs:43-50
   accepted : joltInstance.bytecode.isSome
   -- Jolt's verifier rejects an instance whose inputs or layout fail its checks.
-  -- See : jolt/crates/jolt-verifier/src/verifier.rs:356-383
+  -- See : jolt/crates/jolt-verifier/src/verifier.rs:357-380
   valid_inputs : joltInstance.validate_inputs = true
   -- At every step of the trace, the advice value recorded (`someTracerAdvice?`) is
   -- the value the honest tracer gives it (`honestTracerAdviceAtStepN`).
   advice_from_honest_tracer : ∀ n : Fin rows.size,
     rows[n].someTracerAdvice? = honestTracerAdviceAtStepN joltInstance.program rows n
   -- The tracer stops at a self-jump only when re-execution jumps there again.
-  -- See : a16z/jolt PR #2109, head d2995380, `Cpu::tick`.
+  -- See : a16z/jolt PR #2109, merge commit 0249591a, `Cpu::tick`.
   stops : ∀ last ∈ rows.back?, last.StableStall
   -- No earlier row meets that stopping rule.
   runs_until_stop : ∀ (i : Nat) (current next : TraceRow bytecode),
@@ -80,7 +80,7 @@ structure UntrustedAnswerTrace (joltInstance : JoltInstance SourceInstruction)
   -- Language membership has no empty trace because this field requires it;
   -- `prover_config` itself allows trace length zero. Soundness obtains this
   -- bound from the termination store.
-  -- See : a16z/jolt PR #2109, head d2995380.
+  -- See : a16z/jolt PR #2109, merge commit 0249591a.
   nonempty : 0 < rows.size
 
 instance {joltInstance : JoltInstance SourceInstruction}

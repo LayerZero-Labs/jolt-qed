@@ -1,6 +1,6 @@
 import JoltConstraints.program
 
--- Source audit: public pin 8bbb2357, base/Dory full-program mode.
+-- Source audit: public pin 5def437f, base/Dory full-program mode.
 -- See methods/model_update.md, chunks 4–6, for the setup-bound source chain.
 set_option autoImplicit false
 
@@ -35,7 +35,7 @@ def maxRamSize (layout : MemoryLayout) : Option Nat := do
   let totalBytes ← MemoryLayout.checkedSub layout.heap_end.toNat layout.get_lowest_address.toNat
   checkedNextPowerOfTwo (totalBytes / 8)
 
-/-- `committed_log_k_chunk` in `crates/jolt-prover/src/config.rs:208-234`: the width of
+/-- `committed_log_k_chunk` in `jolt/crates/jolt-prover/src/config.rs:206-214` at 5def437f: the width of
 the honest prover's one-hot chunks over `2^logT` cycles, 4 below 2^25 cycles, else 8. -/
 def committedLogKChunk (logT : Nat) : Nat := if logT < 25 then 4 else 8
 

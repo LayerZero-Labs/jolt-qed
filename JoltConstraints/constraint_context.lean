@@ -26,6 +26,11 @@ structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
   publicIo : joltInstance.public_io = some io
   validInputs : joltInstance.validate_inputs = true
   traceLengthBound : params.traceLength ≤ joltInstance.max_padded_trace_length.toNat
+  -- Jolt's base verifier rejects a 128-cycle proof even if the instance maximum
+  -- permits it; Akita's 4096-cycle floor is outside this model.
+  -- See jolt/crates/jolt-verifier/src/verifier.rs:976-991 and
+  -- jolt/crates/jolt-verifier/src/config.rs:109-120 at 5def437f.
+  traceLengthFloor : 256 ≤ params.traceLength
   bytecodeDomain : params.BytecodeDomainFor bytecode.size
   ramSizeBounds : joltInstance.ram_size_in_bounds params.ramSize = true
   oneHotFitsSetup : joltInstance.one_hot_fits_setup params.logT params.chunkBits = true

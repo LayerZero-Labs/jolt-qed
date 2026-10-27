@@ -25,7 +25,7 @@ open Sail PreSail LeanRV64D.Functions JoltISA
 /-- The prefix uses honest internal runtime advice, has not continued past a
 stable stall, and is about to attempt `next` in `pre`. The row need not succeed.
 The boundary cases follow the entry and linkage rules of UntrustedAnswerRun.
-The stopping rule follows a16z/jolt PR #2109, head d2995380. -/
+The stopping rule follows a16z/jolt PR #2109, merge commit 0249591a. -/
 structure UntrustedAnswerRun.NextStep
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)

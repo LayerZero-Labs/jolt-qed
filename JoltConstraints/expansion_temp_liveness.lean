@@ -27,7 +27,7 @@ def readSources : Instr → List Src
   | .VirtualAlignAddr _ src _ | .VirtualWindowMaskB _ src _
   | .VirtualWindowMaskH _ src _ | .VirtualWindowMaskW _ src _
   | .VirtualSignExtendWord _ src _ | .VirtualZeroExtendWord _ src _
-  | .VirtualMovsign _ src _ | .LD _ _ src _ | .VirtualHostIO _ src _
+  | .VirtualMovsign _ src _ | .LD _ _ src _
   | .VirtualAssertHalfwordAlignment src _ _
   | .VirtualAssertWordAlignment src _ _ => [src]
   | .ADD _ lhs rhs | .ADDW _ lhs rhs | .SUB _ lhs rhs | .SUBW _ lhs rhs
@@ -53,7 +53,7 @@ def readSources : Instr → List Src
   | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE
   | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _
-  | .VirtualAdviceLoad _ _ => []
+  | .VirtualAdviceLoad _ _ | .VirtualHostIO => []
 
 def reads (register : JoltISA.VReg) (row : Instr) : Bool :=
   (readSources row).any fun source =>
@@ -76,17 +76,10 @@ def firstAccessIsWrite (register : JoltISA.VReg) : List Instr → Bool
 
 /-- Every short-lived instruction temporary is initialized before use within
 one source instruction's expansion. This is independent of the starting value
-of each temporary, including a value written by an earlier HostIO call. -/
+of each temporary, for example quotient advice left by an earlier REM expansion. -/
 def tempsReadAfterWrite (rows : List Instr) : Bool :=
   (List.range 8).all fun index =>
     firstAccessIsWrite (BitVec.ofNat 7 (40 + index)) rows
-
-/-- The per-expansion check includes the HostIO rewrite register. -/
-theorem hostTemp_firstAccessIsWrite (rows : List Instr)
-    (ok : tempsReadAfterWrite rows = true) :
-    firstAccessIsWrite rdZeroRewriteVReg rows = true := by
-  have checked := List.all_eq_true.mp ok 0 (by simp)
-  simpa only [Nat.add_zero] using checked
 
 /-- A pending temporary is not read by the first row of an expansion. -/
 theorem firstAccessIsWrite_head_no_read (register : JoltISA.VReg) (row : Instr)
@@ -114,30 +107,5 @@ theorem firstAccessIsWrite_tail (register : JoltISA.VReg) (row : Instr)
 def ExpandedTempsOk : ExpandedSource → Prop
   | .native row => tempsReadAfterWrite [row] = true
   | .sequence rows => tempsReadAfterWrite rows = true
-
-def firstRow? : ExpandedSource → Option Instr
-  | .native row => some row
-  | .sequence rows => rows.head?
-
-/-- The first row of a checked source expansion does not read the HostIO
-rewrite register before it can be written. -/
-theorem hostTemp_firstRow_noRead (expanded : ExpandedSource)
-    (ok : ExpandedTempsOk expanded) (row : Instr)
-    (first : firstRow? expanded = some row) :
-    reads rdZeroRewriteVReg row = false := by
-  cases expanded with
-  | native instruction =>
-    simp only [firstRow?, Option.some.injEq] at first
-    subst row
-    exact firstAccessIsWrite_head_no_read _ _ []
-      (hostTemp_firstAccessIsWrite [instruction] ok)
-  | sequence rows =>
-    cases rows with
-    | nil => simp [firstRow?] at first
-    | cons instruction rest =>
-      simp only [firstRow?, List.head?_cons, Option.some.injEq] at first
-      subst row
-      exact firstAccessIsWrite_head_no_read _ _ rest
-        (hostTemp_firstAccessIsWrite (instruction :: rest) ok)
 
 end ExpansionTempLiveness

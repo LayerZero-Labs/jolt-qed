@@ -11,7 +11,7 @@ open scoped BigOperators
 
 /-- Constraint (47) in `constraints.md` (stages 6a–6b):
 each instruction flag is selected from the fixed bytecode table.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L559-L594 -/
+Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L620-L655 -/
 def instructionFlagsEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
     (bytecode : Array JoltInstructionRow) (witness : WitnessType F params) : Prop :=
   ∀ (flag : InstructionFlags) (t : Fin params.traceLength),

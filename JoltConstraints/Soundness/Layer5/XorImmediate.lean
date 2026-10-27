@@ -18,7 +18,7 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-  {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+  {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
   (selected : bytecodeRa witness slot t = 1)
   {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
   {destination : Dst} {source : Src} {imm : BitVec 64}
@@ -34,20 +34,22 @@ private theorem xori_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem xori_inputs {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.LeftInstructionInput t = ((sourceValue source pre).toNat : F) ∧
     witness.RightInstructionInput t = (imm.toNat : F) := by
   exact agrees.immediateInputs (two_pow_127_lt_char charAbove2pow128)
     context equations selected rowIs source imm
     (xori_canonical context rowIs instructionIs).2
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
-    (by rw [instructionIs]; rfl)
+    (by rw [instructionIs]; rfl) sourceLive
 
 private theorem xori_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t = ((sourceValue source pre ^^^ imm).toNat : F) := by
   obtain ⟨left, right⟩ :=
-    xori_inputs charAbove2pow128 context equations selected rowIs instructionIs agrees
+    xori_inputs charAbove2pow128 context equations selected rowIs instructionIs agrees sourceLive
   exact lookupWrite_value_of_raf_zero (two_pow_127_lt_char charAbove2pow128)
     context equations selected rowIs (sourceValue source pre) imm _ .Xor
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
@@ -56,23 +58,29 @@ private theorem xori_write_value {pre : SailJoltState}
       selected (sourceValue source pre) imm)
 
 /-- XORI writes its constrained bitwise result and preserves register agreement.
-Source/destination aliases are allowed; execution also covers the final cycle. -/
-theorem xori_step {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+Source/destination aliases are allowed; execution also covers the final cycle.
+The source is live; the destination joins the live set after the row.
+For example, XORI can read a live source and initialize a temporary. -/
+theorem xori_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := sourceValue source pre ^^^ imm
     witness.RdWriteValue t = (value.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have sourceCanonical := (xori_canonical context rowIs instructionIs).2
   have encoded := xori_write_value charAbove2pow128 context equations
-    selected rowIs instructionIs agrees
-  have read := (agrees.read source sourceCanonical).1
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    selected rowIs instructionIs agrees sourceLive
+  have read := (agrees.read source sourceCanonical sourceLive).1
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by rw [instructionIs]; rfl) _ encoded answer advice
-    (by rw [instructionIs]; rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice
+    (by rw [instructionIs]; rfl)]
   rw [instructionIs]
   simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, read, jolt_xor_value]
 

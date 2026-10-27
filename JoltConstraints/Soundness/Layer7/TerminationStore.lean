@@ -120,7 +120,7 @@ theorem UntrustedAnswerRun.truncate_linked
 
 /-- The first `n` rows form an untrusted-answer run with literally the same
 bytecode, initial state and answers. For example, cutting at 4 retains rows 0–3.
-See jolt/tracer/src/emulator/cpu.rs:622-632 at 8bbb2357. -/
+See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
 noncomputable def UntrustedAnswerRun.truncate
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)
@@ -254,7 +254,7 @@ theorem honestTracerAdviceAtStepN_extract
 
 /-- Each retained row uses the layout fixed by the emulator's initial device.
 For example, an SD at row 3 interprets the termination region using the same
-layout as row 0. See jolt/tracer/src/emulator/cpu.rs:622-632 at 8bbb2357. -/
+layout as row 0. See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
 theorem UntrustedAnswerRun.preState_layout
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -299,7 +299,7 @@ theorem UntrustedAnswerRun.preState_layout
 
 /-- A no-panic public I/O image assigns one to its termination word.
 For example, the SDK exit claim uses word value 1 at its termination address.
-See jolt/crates/jolt-program/src/preprocess/public_io.rs:47-52 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/preprocess/public_io.rs:51-56 at 5def437f. -/
 theorem ramPublicIoWord_termination (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout)
     (io : JoltDevice) (sameLayout : io.memory_layout = layout)
@@ -320,7 +320,7 @@ theorem ramPublicIoWord_termination (config : MemoryConfig) (layout : MemoryLayo
 
 /-- The termination word lies inside the verifier's masked public I/O interval.
 For example, the SDK exit word is checked by constraint 26.
-See jolt/crates/jolt-program/src/preprocess/public_io.rs:47-52 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/preprocess/public_io.rs:51-56 at 5def437f. -/
 theorem ramPublicIoMask_termination {F : Type} [Field F]
     (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout)
@@ -402,6 +402,51 @@ private theorem termination_word_absolute
     omega
   omega
 
+/-- An initial RAM word at or after the output region and before ordinary RAM is
+zero when the advice and input buffers end before its byte address.
+For example, both the panic and termination words start at zero.
+See jolt/crates/jolt-witness/src/backend/trace/ram.rs (`initial_ram_state`)
+at 5def437f. -/
+theorem initialRamWord_after_output_zero
+    (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout)
+    (state : SailJoltState)
+    (sameLayout : state.jolt_device.memory_layout = layout)
+    (adviceBelow : state.jolt_device.AdviceBelowInput)
+    (inputFits : state.jolt_device.inputs.size ≤ layout.max_input_size.toNat)
+    (word : Nat)
+    (afterOutput : layout.output_start.toNat ≤ ramLowestAddress layout + 8 * word)
+    (beforeRam : ramLowestAddress layout + 8 * word < JoltISA.RAM_START_ADDRESS) :
+    TraceWitness.initialRamWordFromState state word = 0 := by
+  obtain ⟨_, trustedBelow, untrustedBelow⟩ := adviceBelow
+  rw [sameLayout] at trustedBelow untrustedBelow
+  obtain ⟨outputStart, _⟩ := new_outputs_after_inputs config layout built
+  have trustedEnd : layout.trusted_advice_start.toNat +
+      state.jolt_device.trusted_advice.size ≤
+      ramLowestAddress layout + 8 * word := by omega
+  have untrustedEnd : layout.untrusted_advice_start.toNat +
+      state.jolt_device.untrusted_advice.size ≤
+      ramLowestAddress layout + 8 * word := by omega
+  have inputEnd : layout.input_start.toNat + state.jolt_device.inputs.size ≤
+      ramLowestAddress layout + 8 * word := by omega
+  have belowRam : ¬ JoltISA.RAM_START_ADDRESS ≤
+      ramLowestAddress layout + 8 * word := by omega
+  unfold TraceWitness.initialRamWordFromState
+  rw [sameLayout]
+  dsimp only
+  rw [overlayRamBytes_after_end layout layout.input_start state.jolt_device.inputs
+      _ _ inputEnd]
+  rw [overlayRamBytes_after_end layout layout.untrusted_advice_start
+      state.jolt_device.untrusted_advice _ _ untrustedEnd]
+  rw [overlayRamBytes_after_end layout layout.trusted_advice_start
+      state.jolt_device.trusted_advice _ _ trustedEnd]
+  change (if JoltISA.RAM_START_ADDRESS ≤ ramLowestAddress layout +
+      8 * word then
+      TraceWitness.ramImageWord (fun i => (state.sail.mem.get? i).getD 0)
+        (ramLowestAddress layout + 8 * word)
+    else 0) = 0
+  rw [if_neg belowRam]
+
 /-- The initial RAM image contains zero at the termination word because the
 advice and input buffers end before it. For example, SDK exit changes that
 word from its initial zero to one with a store. -/
@@ -414,51 +459,14 @@ private theorem initialRamWord_termination_zero
     (inputFits : state.jolt_device.inputs.size ≤ layout.max_input_size.toNat) :
     TraceWitness.initialRamWordFromState state
       ((layout.termination.toNat - ramLowestAddress layout) / 8) = 0 := by
-  obtain ⟨_, trustedBelow, untrustedBelow⟩ := adviceBelow
-  rw [sameLayout] at trustedBelow untrustedBelow
-  obtain ⟨_, inputLeOutput, outputLePanic, panicLeTerm, _⟩ :=
-    new_io_ordered config layout built
-  obtain ⟨outputStart, _⟩ := new_outputs_after_inputs config layout built
-  obtain ⟨_, _, _, _, ioEndBound⟩ := new_io_geometry config layout built
   have absolute := termination_word_absolute config layout built
-  have trustedEnd : layout.trusted_advice_start.toNat +
-      state.jolt_device.trusted_advice.size ≤
-      ramLowestAddress layout +
-        8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) := by
-    rw [absolute]
+  obtain ⟨_, _, outputLePanic, panicLeTerm, _⟩ := new_io_ordered config layout built
+  obtain ⟨_, _, _, ioEndIs, ioEndBound⟩ := new_io_geometry config layout built
+  apply initialRamWord_after_output_zero config layout built state sameLayout adviceBelow inputFits
+  · rw [absolute]
     omega
-  have untrustedEnd : layout.untrusted_advice_start.toNat +
-      state.jolt_device.untrusted_advice.size ≤
-      ramLowestAddress layout +
-        8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) := by
-    rw [absolute]
+  · rw [absolute]
     omega
-  have inputEnd : layout.input_start.toNat + state.jolt_device.inputs.size ≤
-      ramLowestAddress layout +
-        8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) := by
-    rw [absolute]
-    omega
-  have belowRam : ¬ JoltISA.RAM_START_ADDRESS ≤
-      ramLowestAddress layout +
-        8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) := by
-    rw [absolute]
-    omega
-  unfold TraceWitness.initialRamWordFromState
-  rw [sameLayout]
-  dsimp only
-  rw [overlayRamBytes_after_end layout layout.input_start state.jolt_device.inputs
-      _ _ inputEnd]
-  rw [overlayRamBytes_after_end layout layout.untrusted_advice_start
-      state.jolt_device.untrusted_advice _ _ untrustedEnd]
-  rw [overlayRamBytes_after_end layout layout.trusted_advice_start
-      state.jolt_device.trusted_advice _ _ trustedEnd]
-  change (if JoltISA.RAM_START_ADDRESS ≤ ramLowestAddress layout +
-      8 * ((layout.termination.toNat - ramLowestAddress layout) / 8) then
-      TraceWitness.ramImageWord (fun i => (state.sail.mem.get? i).getD 0)
-        (ramLowestAddress layout +
-          8 * ((layout.termination.toNat - ramLowestAddress layout) / 8))
-    else 0) = 0
-  rw [if_neg belowRam]
 
 /-- The verifier's public I/O layout is the layout built from the instance.
 For example, its termination address is the one used by the RAM constraints. -/
@@ -480,7 +488,7 @@ private theorem context_layout_built
 
 /-- The verifier's initial RAM value at the termination word is zero.
 For example, constraint 38 starts the SDK exit word at zero before its SD. -/
-private theorem context_initial_termination_zero
+theorem context_initial_termination_zero
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {params : WitnessParams}
     (context : ConstraintContext joltInstance privateInputs params) :
@@ -803,7 +811,7 @@ open JoltConstraints.Soundness
 /-- A no-panic claim forces a completed SD to touch the termination word in
 the retained run. For example, storing 1 to the SDK exit word supplies this row.
 The final public word is set in
-jolt/crates/jolt-program/src/preprocess/public_io.rs:47-52 at 8bbb2357;
+jolt/crates/jolt-program/src/preprocess/public_io.rs:51-56 at 5def437f;
 the store is emitted in jolt/jolt-sdk/macros/src/lib.rs:880-887. -/
 theorem soundness_termination_store_exists
     {F : Type} [Field F] (joltField : JoltField F)
@@ -905,8 +913,8 @@ private theorem truncate_no_earlier_stall
 /-- Truncating a run before its existing row `i` produces an initialized
 prefix ready to execute that row, with honest advice and no earlier stall.
 For example, truncating before row 4 leaves rows 0 through 3.
-See jolt/tracer/src/emulator/cpu.rs:622-632 at 8bbb2357 and
-PR #2109 head d2995380, jolt/tracer/src/emulator/cpu.rs:553-578. -/
+See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f and
+PR #2109 merge commit 0249591a, jolt/tracer/src/emulator/cpu.rs:553-576. -/
 theorem soundness_prefix_next_step
     (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs)
@@ -972,7 +980,7 @@ theorem soundness_prefix_next_step
 
 /-- A termination store occurs before a final row that is a JAL or JALR.
 For example, the SDK exit store precedes its final `j .` row.
-See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 8bbb2357. -/
+See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 5def437f. -/
 private theorem store_precedes_last_jump
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -1013,8 +1021,8 @@ private theorem store_precedes_last_jump
 /-- Once a completed termination store precedes the final jump, the temporary
 exit restriction makes that jump `JAL +0`, and execution makes it a stable stall.
 For example, the SDK's `j .` after its exit store is the final row.
-See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 8bbb2357 and
-PR #2109 head d2995380, jolt/crates/jolt-riscv/src/row.rs:105-132. -/
+See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 5def437f and
+PR #2109 merge commit 0249591a, jolt/crates/jolt-riscv/src/row.rs:106-130. -/
 theorem soundness_termination_last_stall
     (joltInstance : JoltInstance SourceInstruction)
     (restricted : joltInstance.TerminationThenStall)

@@ -142,7 +142,10 @@ def jolt_addiw_value (x : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
 @[simp] theorem encoded_branch_offset (imm : BitVec 13) :
     (sign_extend (m := 128) imm).setWidth 64 = sign_extend (m := 64) imm := by
   change (imm.signExtend 128).setWidth 64 = imm.signExtend 64
-  bv_decide
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [BitVec.getLsbD_setWidth, BitVec.getLsbD_signExtend,
+    hi, show i < 128 by omega, decide_true, Bool.true_and]
 
 /-- RV64 `ADDW` value. -/
 def jolt_addw_value (x y : BitVec 64) : BitVec 64 :=

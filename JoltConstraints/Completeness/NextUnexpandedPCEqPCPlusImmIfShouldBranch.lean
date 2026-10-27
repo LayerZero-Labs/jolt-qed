@@ -101,7 +101,8 @@ theorem branch_target_toNat (address : BitVec 64) (offset : BitVec 13)
       (address + (offset.signExtend 128).setWidth 64).toNat) :
     ((address + (offset.signExtend 128).setWidth 64).toNat : Int) =
       address.toNat + (offset.signExtend 128).toInt := by
-  have extended : (offset.signExtend 128).setWidth 64 = offset.signExtend 64 := by bv_decide
+  have extended : (offset.signExtend 128).setWidth 64 = offset.signExtend 64 :=
+    encoded_branch_offset offset
   have sameInt : (offset.signExtend 128).toInt = offset.toInt :=
     BitVec.toInt_signExtend_of_le (by decide)
   have sameInt64 : (offset.signExtend 64).toInt = offset.toInt :=

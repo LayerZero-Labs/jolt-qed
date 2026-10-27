@@ -48,7 +48,7 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-  {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+  {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
   (selected : bytecodeRa witness slot t = 1)
   {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
   (operation : WordArithmetic) {destination : Dst} {lhs rhs : Src}
@@ -67,7 +67,9 @@ private theorem wordArithmetic_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem wordArithmetic_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (lhsLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rhsLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue lhs pre) (sourceValue rhs pre)).toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
@@ -76,7 +78,7 @@ private theorem wordArithmetic_write_value {pre : SailJoltState}
     lhs rhs canonical.1.2 canonical.2
     (by cases operation <;> rw [instructionIs] <;> rfl)
     (by cases operation <;> rw [instructionIs] <;> rfl)
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+    (by cases operation <;> rw [instructionIs] <;> rfl) lhsLive rhsLive
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, WordArithmetic.instruction,
@@ -112,24 +114,31 @@ private theorem wordArithmetic_write_value {pre : SailJoltState}
     simpa only [WordArithmetic.value, jolt_mulhu_value, JoltISA.mulWide] using output
 
 /-- All four word-arithmetic rows execute with their constrained result and
-preserve register agreement at the next cycle. -/
-theorem wordArithmetic_step {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+preserve register agreement at the next cycle.
+Both sources are live; the destination joins the live set after the row.
+For example, ADDW can read two live sources and initialize a temporary. -/
+theorem wordArithmetic_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
+    (lhsLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rhsLive : live (TraceWitness.sourceRegisterAddress rhs))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := operation.value (sourceValue lhs pre) (sourceValue rhs pre)
     witness.RdWriteValue t = (value.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have canonical := wordArithmetic_canonical context rowIs operation instructionIs
-  have leftRead := (agrees.read lhs canonical.1.2).1
-  have rightRead := (agrees.read rhs canonical.2).1
+  have leftRead := (agrees.read lhs canonical.1.2 lhsLive).1
+  have rightRead := (agrees.read rhs canonical.2 rhsLive).1
   have encoded := wordArithmetic_write_value charAbove2pow128 context equations selected rowIs
-    operation instructionIs agrees
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    operation instructionIs agrees lhsLive rhsLive
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice
+    (by cases operation <;> rw [instructionIs] <;> rfl)]
   cases operation <;> rw [instructionIs] <;>
     simp only [WordArithmetic.instruction, WordArithmetic.value,
       execWithTapeAnswer, execInstr, bind, EStateM.bind, leftRead, rightRead]

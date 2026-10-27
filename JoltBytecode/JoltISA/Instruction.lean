@@ -143,11 +143,11 @@ inductive Instr where
   | SD (base value : Src) (imm : BitVec 64)
   | VirtualAdvice (dst : Dst) (value : BitVec 64) (imm : BitVec 64 := 0)
   | VirtualAdviceLoad (dst : Dst) (byteCount : BitVec 64)
-  -- Rust captures src before execution and dst afterward, even though HOST_IO
-  -- does not write dst. Preserve the final row's operands, including rd=x0 rewrites.
-  -- Rust: [VirtualHostIO format](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_host_io.rs:8).
-  -- Rust: [FormatI capture](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_i.rs:72).
-  | VirtualHostIO (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
+  /-- A host call with no normalized register operands or immediate.
+  For example, an advice-write call reads x10–x12 implicitly and writes no register.
+  See jolt/tracer/src/instruction/virtual_host_io.rs:9-38 and
+  jolt/tracer/src/instruction/format/format_no_operands.rs:6-29 at 5def437f. -/
+  | VirtualHostIO
   | VirtualAssertEQ (lhs rhs : Src) (imm: BitVec 128)
   | VirtualAssertValidDiv0 (divisor quotient : Src) (imm : BitVec 128 := 0)
   | VirtualNegateIf (dst : Dst) (signSource value : Src)
@@ -159,7 +159,7 @@ inductive Instr where
 /-! Decode source operands before constructing final rows. These are abbreviations,
 not extra execution rules: every resulting instruction runs through execInstr.
 AUIPC's encoded upper immediate is shifted once here, just as in Rust's decoder.
-Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/image/decode.rs#L471-L485
+Jolt: jolt/crates/jolt-program/src/image/decode.rs:253-256,513-520 at 5def437f.
 -/
 namespace Encoded
 
@@ -433,11 +433,11 @@ def Instr.destination? : Instr → Option Dst
   | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _ | .VirtualShiftDataW dst _ _
   | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
-  | .VirtualHostIO dst _ _ | .VirtualNegateIf dst _ _ =>
+  | .VirtualNegateIf dst _ _ =>
       some dst
   | .LD _ dst _ _ => some dst
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _
-  | .BGEU _ _ _ | .FENCE | .VirtualAssertHalfwordAlignment _ _ _
+  | .BGEU _ _ _ | .FENCE | .VirtualHostIO | .VirtualAssertHalfwordAlignment _ _ _
   | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _ | .VirtualAssertEQ _ _ _
   | .VirtualAssertValidDiv0 _ _ _ | .VirtualAssertValidUnsignedRemainder _ _ _
   | .VirtualAssertMulUNoOverflow _ _ _ | .VirtualAssertLTE _ _ _ => none
@@ -452,8 +452,6 @@ def Instr.rewriteNative (instruction : Instr) : Instr :=
   | .LD fault dst base imm => .LD fault (sideEffectingDst dst) base imm
   | .VirtualAdviceLoad dst byteCount =>
       .VirtualAdviceLoad (sideEffectingDst dst) byteCount
-  | .VirtualHostIO dst src imm =>
-      .VirtualHostIO (sideEffectingDst dst) src imm
   | instruction =>
       match instruction.destination? with
       | some (.xreg rd) =>

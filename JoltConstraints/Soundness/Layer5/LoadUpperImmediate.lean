@@ -16,7 +16,7 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -54,18 +54,23 @@ private theorem lui_write_value : witness.RdWriteValue t = (imm.toNat : F) := by
   simpa only [zero_add] using output
 
 /-- LUI writes its immediate to the destination register.
-Runtime advice is applied as in the trace; execution includes the last cycle. -/
-theorem lui_step {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+Runtime advice is applied as in the trace; execution includes the last cycle.
+The live set contains registers already matched to the witness; the destination joins it.
+For example, LUI can initialize a destination absent from the incoming live set. -/
+theorem lui_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     witness.RdWriteValue t = (imm.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination imm pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination imm pre) := by
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination imm pre) := by
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by rw [instructionIs]; rfl) imm
     (lui_write_value charAbove2pow128 context equations selected rowIs instructionIs)
-    answer advice (by rw [instructionIs]; rfl)
+    answer advice
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl)]
   rw [instructionIs]
   rfl
 

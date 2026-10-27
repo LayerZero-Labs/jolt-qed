@@ -86,7 +86,8 @@ private theorem wordShiftMask_toNat (s : Nat) (sLt : s < 32) :
   simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not]
   omega
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop}
+  {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -110,7 +111,9 @@ private theorem registerShift_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem registerShift_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
+    (lhsLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rhsLive : live (TraceWitness.sourceRegisterAddress rhs))
     (mask : operation.Mask (sourceValue rhs pre)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue lhs pre) (sourceValue rhs pre)).toNat : F) := by
@@ -120,7 +123,7 @@ private theorem registerShift_write_value {pre : SailJoltState}
     lhs rhs canonical.1.2 canonical.2
     (by cases operation <;> rw [instructionIs] <;> rfl)
     (by cases operation <;> rw [instructionIs] <;> rfl)
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+    (by cases operation <;> rw [instructionIs] <;> rfl) lhsLive rhsLive
   apply lookupWrite_value_of_raf_zero bound context equations selected rowIs
     (sourceValue lhs pre) (sourceValue rhs pre) _ operation.table
     (by cases operation <;> rw [instructionIs] <;> rfl)
@@ -163,9 +166,13 @@ private theorem registerShift_write_value {pre : SailJoltState}
       wordShiftMask_toNat s sLt, ExpansionFacts.ctz_wordShiftMask s sLt] using output
 
 /-- A register-fed shift executes with its table-constrained result once its
-immediately preceding mask producer has established the mask shape. -/
+immediately preceding mask producer has established the mask shape.
+Both sources are live; the destination joins the live set after the row.
+For example, VirtualSRL reads a live value and a live mask temporary. -/
 theorem registerShift_step {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
+    (lhsLive : live (TraceWitness.sourceRegisterAddress lhs))
+    (rhsLive : live (TraceWitness.sourceRegisterAddress rhs))
     (mask : operation.Mask (sourceValue rhs pre))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := operation.value (sourceValue lhs pre) (sourceValue rhs pre)
@@ -173,16 +180,19 @@ theorem registerShift_step {pre : SailJoltState}
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have canonical := registerShift_canonical context rowIs operation instructionIs
-  have lhsRead := (agrees.read lhs canonical.1.2).1
-  have rhsRead := (agrees.read rhs canonical.2).1
+  have lhsRead := (agrees.read lhs canonical.1.2 lhsLive).1
+  have rhsRead := (agrees.read rhs canonical.2 rhsLive).1
   have encoded := registerShift_write_value charAbove2pow128 context equations
-    selected rowIs operation instructionIs agrees mask
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    selected rowIs operation instructionIs agrees lhsLive rhsLive mask
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
-    (by cases operation <;> rw [instructionIs] <;> rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice
+    (by cases operation <;> rw [instructionIs] <;> rfl)]
   cases operation <;> rw [instructionIs] <;>
     simp only [RegisterShift.instruction, RegisterShift.value,
       execWithTapeAnswer, execInstr, bind, EStateM.bind, lhsRead, rhsRead]
@@ -276,7 +286,10 @@ theorem registerShift_mask_after_producer (producer : UnaryWord)
       UnaryWord.instruction, RegisterShift.instruction, Bool.false_eq_true] at fed
 
 /-- Apply the shift step directly after its paired mask producer, using the
-post-state supplied by the producer step. No mask-shape assumption is added. -/
+post-state supplied by the producer step. No mask-shape assumption is added.
+The producer adds its written mask register to the live set, so the shift
+can read it without an extra liveness premise.
+For example, VirtualShiftRightBitmask can feed VirtualSRL through one live temporary. -/
 theorem registerShift_step_after_producer (producer : UnaryWord)
     (written : JoltISA.VReg) (producerSource : Src) (producerImm : BitVec 64)
     (rhsIs : rhs = .vreg written)
@@ -284,8 +297,13 @@ theorem registerShift_step_after_producer (producer : UnaryWord)
       (producer.instruction (.vreg written) producerSource producerImm)
       (operation.instruction destination lhs rhs) = true)
     (before : SailJoltState)
-    (agrees : RegisterAgreement witness t
+    (agrees : RegisterAgreementOn
+      (fun register => live register ∨
+        register = TraceWitness.destinationRegisterAddress (.vreg written)) witness t
       (afterWriteDst (.vreg written) (producer.value (sourceValue producerSource before)) before))
+    (lhsLive : live (TraceWitness.sourceRegisterAddress lhs) ∨
+      TraceWitness.sourceRegisterAddress lhs =
+        TraceWitness.destinationRegisterAddress (.vreg written))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let pre := afterWriteDst (.vreg written)
       (producer.value (sourceValue producerSource before)) before
@@ -294,11 +312,18 @@ theorem registerShift_step_after_producer (producer : UnaryWord)
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => (live register ∨
+          register = TraceWitness.destinationRegisterAddress (.vreg written)) ∨
+          register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   subst rhs
   have mask := registerShift_mask_after_producer producer written producerSource
     producerImm destination lhs operation fed before
+  have rhsLive : (fun register => live register ∨
+      register = TraceWitness.destinationRegisterAddress (.vreg written))
+      (TraceWitness.sourceRegisterAddress (.vreg written)) := Or.inr rfl
   exact registerShift_step charAbove2pow128 context equations selected rowIs
-    operation instructionIs agrees mask answer advice
+    operation instructionIs agrees lhsLive rhsLive mask answer advice
 
 end JoltConstraints.Soundness

@@ -99,7 +99,7 @@ def store_raw? (state : SailJoltState) (ea : Nat) (value : BitVec 8) : Option Sa
 
 -- Rust backs RAM with whole 64-bit units: the total memory size rounded up to a
 -- multiple of 8. Reading past them panics.
--- See : jolt/tracer/src/emulator/mod.rs:242-248 (init_memory)
+-- See : jolt/tracer/src/emulator/mod.rs:219-225 at 5def437f (init_memory)
 --       jolt/tracer/src/emulator/memory.rs:49-51, 64-69 (init_with_capacity, access_u64)
 def ram_backing_end (device : JoltDevice) : Nat :=
   RAM_START_ADDRESS + 8 * ((device.memory_layout.get_total_memory_size.toNat + 7) / 8)

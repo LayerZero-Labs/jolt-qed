@@ -95,10 +95,10 @@ theorem selected_next_of_remaining
   exact selected_next_of_nonlast_virtual charAbove2pow127 context equations
     t next slot selected virtual nonlast
 
-/-- If the next selected row is interior to an expansion and the current slot
-is a real row, the current row must be its immediate predecessor. The real-row
-condition excludes padding, which also sets `DoNotUpdateUnexpandedPC`. -/
-theorem selected_interior_predecessor
+/-- An interior next row requires the current real row to retain a positive
+sequence countdown.
+For example, a second REM row cannot follow a completed ADDI row. -/
+theorem selected_interior_current_remaining
     (t : Fin params.traceLength) (next : t.val + 1 < params.traceLength)
     (slot nextSlot : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness slot t = 1)
@@ -107,7 +107,7 @@ theorem selected_interior_predecessor
     (rowIs : bytecodeRow context.bytecode slot.val = some row)
     (nextRowIs : bytecodeRow context.bytecode nextSlot.val = some nextRow)
     (interior : nextRow.starts_source = false) :
-    nextSlot.val = slot.val + 1 := by
+    row.virtual_sequence_remaining.getD 0 ≠ 0 := by
   have interiorFlags : nextRow.virtual_sequence_remaining.isNone = false ∧
       nextRow.is_first_in_sequence = false := by
     simpa only [JoltInstructionRow.starts_source, Bool.or_eq_false_iff] using interior
@@ -136,13 +136,28 @@ theorem selected_interior_predecessor
     rw [nextVirtual, nextFirst] at relation
     simp only [sub_zero, one_mul] at relation
     exact (sub_eq_zero.mp relation).symm
-  have remaining : row.virtual_sequence_remaining.getD 0 ≠ 0 := by
-    rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
-      .DoNotUpdateUnexpandedPC t slot selected] at doNot
-    simp only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag] at doNot
-    by_contra zero
-    simp only [zero, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte] at doNot
-    exact zero_ne_one doNot
+  rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
+    .DoNotUpdateUnexpandedPC t slot selected] at doNot
+  simp only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag] at doNot
+  by_contra zero
+  simp only [zero, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte] at doNot
+  exact zero_ne_one doNot
+
+/-- If the next selected row is interior to an expansion and the current slot
+is a real row, the current row must be its immediate predecessor. The real-row
+condition excludes padding, which also sets `DoNotUpdateUnexpandedPC`. -/
+theorem selected_interior_predecessor
+    (t : Fin params.traceLength) (next : t.val + 1 < params.traceLength)
+    (slot nextSlot : Fin (2 ^ params.logBytecodeK))
+    (selected : bytecodeRa witness slot t = 1)
+    (nextSelected : bytecodeRa witness nextSlot ⟨t.val + 1, next⟩ = 1)
+    {row nextRow : JoltInstructionRow}
+    (rowIs : bytecodeRow context.bytecode slot.val = some row)
+    (nextRowIs : bytecodeRow context.bytecode nextSlot.val = some nextRow)
+    (interior : nextRow.starts_source = false) :
+    nextSlot.val = slot.val + 1 := by
+  have remaining := selected_interior_current_remaining charAbove2pow127 context equations
+    t next slot nextSlot selected nextSelected rowIs nextRowIs interior
   obtain ⟨chosen, chosenSelected, before⟩ :=
     selected_next_of_remaining charAbove2pow127 context equations
       t next slot selected rowIs remaining

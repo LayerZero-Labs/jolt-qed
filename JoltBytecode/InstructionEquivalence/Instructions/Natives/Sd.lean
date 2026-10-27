@@ -1,5 +1,6 @@
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
+import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 
@@ -80,7 +81,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
       simpa [ea, load_effective_address, Memory.effectiveAddr12] using hwrite
     have hclear : ∀ x : BitVec 64, x &&& 7 = 0 → x &&& (-8 : BitVec 64) = x := by
       intro x hx
-      bv_decide
+      exact BitVec.and_not_eq_self_of_and_eq_zero x 7 hx
     have hbase_eq : compute_aligned_dword_base_address h.rs1_val imm = ea := by
       simpa [compute_aligned_dword_base_address, ea] using hclear ea halign_ea
     have hjolt : Assumptions.JoltRamStoreOk ea js := by

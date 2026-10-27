@@ -1,4 +1,5 @@
 import JoltConstraints.Completeness.Helpers.RegistersValHistoryProofHelpers
+import JoltConstraints.Constraints.BytecodeReadSelectors
 import JoltConstraints.honest_witness
 
 /-!
@@ -39,9 +40,9 @@ def rs1Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
   | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
   | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
-  | .VirtualAssertLTE src _ _ | .VirtualHostIO _ src _
+  | .VirtualAssertLTE src _ _
   | .VirtualAssertHalfwordAlignment src _ _ | .VirtualAssertWordAlignment src _ _ => some src
-  | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualPow2I _ _ | .VirtualPow2IW _ _
+  | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
 /-- Second source register read by an instruction, matching `TraceWitness.Rs2Ra`. -/
@@ -72,7 +73,21 @@ def rs2Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualSignExtendWord _ _ _ | .VirtualZeroExtendWord _ _ _ | .VirtualMovsign _ _ _
   | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
   | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
-  | .VirtualHostIO _ _ _ => none
+  | .VirtualHostIO => none
+
+/-- The normalized first-register selector is the address of `rs1Operand?`,
+when present; for example, ADD selects the address of its first source. -/
+theorem bytecodeRs1Register_eq_rs1Operand (instruction : JoltISA.Instr) :
+    bytecodeRs1Register instruction =
+      (rs1Operand? instruction).map TraceWitness.sourceRegisterAddress := by
+  cases instruction <;> rfl
+
+/-- The normalized second-register selector is the address of `rs2Operand?`,
+when present; for example, ADD selects the address of its second source. -/
+theorem bytecodeRs2Register_eq_rs2Operand (instruction : JoltISA.Instr) :
+    bytecodeRs2Register instruction =
+      (rs2Operand? instruction).map TraceWitness.sourceRegisterAddress := by
+  cases instruction <;> rfl
 
 theorem rs1Operand_canonical
     (instr : JoltISA.Instr) (src : JoltISA.Src)
@@ -140,9 +155,12 @@ theorem rs1Ra_real
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs1Operand?]
 
+/-- On a row of a trace, `Rs1Value` is its first source operand's pre-state
+value, or zero when the instruction has no first source; for example, ADD reads
+its first register operand here. -/
 theorem rs1Value_real
     {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (trace : Trace)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size) :
     TraceWitness.Rs1Value (F := F) p trace t =
       match rs1Operand?
@@ -172,9 +190,12 @@ theorem rs2Ra_real
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs2Operand?]
 
+/-- On a row of a trace, `Rs2Value` is its second source operand's pre-state
+value, or zero when the instruction has no second source; for example, ADD
+reads its second register operand here. -/
 theorem rs2Value_real
     {F : Type} [Field F] (p : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (trace : Trace)
     (t : Fin p.traceLength) (hb : t.val < trace.rows.size) :
     TraceWitness.Rs2Value (F := F) p trace t =
       match rs2Operand?

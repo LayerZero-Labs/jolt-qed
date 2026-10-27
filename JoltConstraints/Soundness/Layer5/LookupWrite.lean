@@ -61,7 +61,39 @@ omit charAbove2pow127 in
 /-- Finish a register-writing step from its constrained value and read/write
 equation. Canonicality proves that the write succeeds; no successful execution
 is assumed. Runtime advice is applied exactly as in UntrustedAnswerRun.executes.
+The destination becomes live; for example, a VirtualAdvice write initializes
+temporary 40 even when its incoming value does not agree.
 The write and execution conclusions also cover the last cycle. -/
+theorem registerWriteOn_step {live : Fin 128 → Prop} (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
+    (destination : Dst) (destinationIs : row.instruction.destination? = some destination)
+    (value : BitVec 64) (encoded : witness.RdWriteValue t = (value.toNat : F))
+    (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice)
+    (rule : execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
+      (do writeDst destination value; pure RETIRE_SUCCESS) pre) :
+    witness.RdWriteValue t = (value.toNat : F) ∧
+    execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
+      .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
+    ∀ next : t.val + 1 < params.traceLength,
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+  have canonical := instruction_destination_canonical _ _
+    (bytecodeRow_rowOk context rowIs).canonical destinationIs
+  have written := writeDst_afterWriteDst destination canonical value pre
+  refine ⟨encoded, ?_, ?_⟩
+  · rw [rule]
+    simp only [bind, EStateM.bind, written, pure, EStateM.pure]
+  · intro next
+    exact agrees.write charAbove2pow128 context equations next slot selected rowIs
+      destinationIs value encoded written
+
+omit charAbove2pow127 in
+/-- Finish a register-writing step from its constrained value and read/write
+equation. Canonicality proves that the write succeeds; no successful execution
+is assumed. Runtime advice is applied exactly as in UntrustedAnswerRun.executes.
+The write and execution conclusions also cover the last cycle.
+For example, AND uses this full-agreement wrapper to finish its row step. -/
 theorem registerWrite_step (charAbove2pow128 : 2 ^ 128 < ringChar F)
     {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
     (destination : Dst) (destinationIs : row.instruction.destination? = some destination)
@@ -75,14 +107,9 @@ theorem registerWrite_step (charAbove2pow128 : 2 ^ 128 < ringChar F)
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
       RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
-  have canonical := instruction_destination_canonical _ _
-    (bytecodeRow_rowOk context rowIs).canonical destinationIs
-  have written := writeDst_afterWriteDst destination canonical value pre
-  refine ⟨encoded, ?_, ?_⟩
-  · rw [withRuntimeAdvice_eq_of_noAdvice _ advice absent, rule]
-    simp only [bind, EStateM.bind, written, pure, EStateM.pure]
-  · intro next
-    exact agrees.write charAbove2pow128 context equations next slot selected rowIs
-      destinationIs value encoded written
+  obtain ⟨valueEq, runs, nextAgrees⟩ := registerWriteOn_step context equations selected rowIs
+    charAbove2pow128 (agrees.toOn (fun _ => True)) destination destinationIs value encoded
+    answer advice (by rw [withRuntimeAdvice_eq_of_noAdvice _ advice absent]; exact rule)
+  exact ⟨valueEq, runs, fun next => (nextAgrees next).toFull (fun _ => Or.inl True.intro)⟩
 
 end JoltConstraints.Soundness

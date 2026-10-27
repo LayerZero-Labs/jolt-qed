@@ -34,14 +34,17 @@ noncomputable def execWithTapeAnswer (instruction : Instr) (answer : BitVec 64) 
   | instruction => execInstr instruction
 
 /-- Every relaxed instruction preserves a reflexive, transitive device
-relation that successful device byte stores preserve. -/
-theorem execWithTapeAnswer_rule_of_device_relation
+relation whose byte-store obligation applies only when the instruction is SD.
+For example, a relaxed advice load preserves equality of the entire device.
+See `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`) at 5def437f. -/
+theorem execWithTapeAnswer_rule_of_device_relation_for_store
     (relation : JoltDevice → JoltDevice → Prop)
     (refl : ∀ io, relation io io)
     (trans : ∀ a b c, relation a b → relation b c → relation a c)
-    (store : ∀ io io' address value,
-      JoltDevice.store? io address value = some io' → relation io io')
-    (instruction : Instr) (answer : BitVec 64) :
+    (instruction : Instr) (answer : BitVec 64)
+    (store : ∀ base source imm, instruction = .SD base source imm →
+      ∀ io io' address value,
+        JoltDevice.store? io address value = some io' → relation io io') :
     StatePreservation.Preserves
       (fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
       (execWithTapeAnswer instruction answer) := by
@@ -61,7 +64,35 @@ theorem execWithTapeAnswer_rule_of_device_relation
           after.jolt_device := keeps _ _ _ runs
       exact kept
     · cases runs
-  all_goals exact JoltIOSetupFrame.execInstr_rule_of_device_relation relation refl trans store _
+  all_goals exact JoltIOSetupFrame.execInstr_rule_of_device_relation_for_store relation refl trans _ store
+
+/-- Every relaxed instruction preserves a reflexive, transitive device
+relation that successful device byte stores preserve. -/
+theorem execWithTapeAnswer_rule_of_device_relation
+    (relation : JoltDevice → JoltDevice → Prop)
+    (refl : ∀ io, relation io io)
+    (trans : ∀ a b c, relation a b → relation b c → relation a c)
+    (store : ∀ io io' address value,
+      JoltDevice.store? io address value = some io' → relation io io')
+    (instruction : Instr) (answer : BitVec 64) :
+    StatePreservation.Preserves
+      (fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
+      (execWithTapeAnswer instruction answer) := by
+  exact execWithTapeAnswer_rule_of_device_relation_for_store relation refl trans
+    instruction answer (fun _ _ _ _ => store)
+
+/-- A successful relaxed instruction other than SD preserves its entire device.
+For example, LD and VirtualAdviceLoad leave the panic flag and output bytes fixed.
+See `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`) at 5def437f. -/
+theorem execWithTapeAnswer_device_of_not_sd (instruction : Instr) (answer : BitVec 64)
+    (notStore : ∀ base source imm, instruction ≠ .SD base source imm) :
+    StatePreservation.Preserves
+      (fun s t : SailJoltState => s.jolt_device = t.jolt_device)
+      (execWithTapeAnswer instruction answer) := by
+  apply execWithTapeAnswer_rule_of_device_relation_for_store Eq (fun _ => rfl)
+    (fun _ _ _ first second => first.trans second)
+  intro base source imm isStore
+  exact False.elim (notStore base source imm isStore)
 
 /-- The answer supplied by the existing fixed-tape interpreter, or zero for an
 instruction with no tape answer or a read that fails. -/

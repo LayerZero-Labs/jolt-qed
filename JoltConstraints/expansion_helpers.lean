@@ -12,7 +12,7 @@ open Sail PreSail LeanRV64D.Functions
 
 -- Jolt's own source instructions: custom opcode 0x5B, decoded alongside RISC-V.
 -- Inline (opcodes 0x0B and 0x2B) is out of scope.
--- See : jolt/crates/jolt-program/src/image/decode.rs:71-72, 192-212 (decode_custom)
+-- See : jolt/crates/jolt-program/src/image/decode.rs:71-72, 192-210 at 5def437f (decode_custom)
 --       jolt/tracer/src/instruction/format/ (operand formats)
 inductive JoltCustomInstruction where
   | AdviceLB (rd : regidx)                                -- FormatAdviceLoadI
@@ -21,7 +21,11 @@ inductive JoltCustomInstruction where
   | AdviceLD (rd : regidx)
   | VirtualRev8W (rd rs1 : regidx)                        -- FormatT
   | VirtualAssertEQ (rs1 rs2 : regidx) (imm : BitVec 13)  -- FormatB
-  | VirtualHostIO (rd rs1 : regidx) (imm : BitVec 12)     -- FormatI
+  /-- A successfully decoded host call, with no normalized operands.
+  For example, nonzero encoded rs1 and immediate fields are ignored; nonzero rd
+  is rejected before constructing this instruction.
+  See jolt/crates/jolt-program/src/image/decode.rs:204-209,335-339 at 5def437f. -/
+  | VirtualHostIO
 
 -- An expandable instruction: one instruction of the guest program, RISC-V or one of
 -- Jolt's custom instructions.

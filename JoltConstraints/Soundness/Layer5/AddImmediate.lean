@@ -13,7 +13,7 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
-variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
@@ -48,22 +48,24 @@ private theorem addi_metadata :
   · simp only [rowIs, Option.bind_some, instructionIs, JoltMetadata.lookupTable]
 
 private theorem addi_inputs {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.LeftInstructionInput t = ((sourceValue source pre).toNat : F) ∧
     witness.RightInstructionInput t = (imm.toNat : F) := by
   exact agrees.immediateInputs (two_pow_127_lt_char charAbove2pow128)
     context equations selected rowIs source imm
     (addi_canonical context rowIs instructionIs).2
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
-    (by rw [instructionIs]; rfl)
+    (by rw [instructionIs]; rfl) sourceLive
 
 private theorem addi_write_value {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t = ((sourceValue source pre + imm).toNat : F) := by
   obtain ⟨addFlag, writeFlag, table⟩ :=
     addi_metadata charAbove2pow128 context equations selected rowIs instructionIs
   obtain ⟨left, right⟩ :=
-    addi_inputs charAbove2pow128 context equations selected rowIs instructionIs agrees
+    addi_inputs charAbove2pow128 context equations selected rowIs instructionIs agrees sourceLive
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   exact lookupOutput_rangeCheck_add charAbove2pow128 context equations t slot
     selected table addFlag (sourceValue source pre) imm left right
@@ -72,23 +74,28 @@ private theorem addi_write_value {pre : SailJoltState}
 concrete destination-write state. Register agreement holds at the next cycle
 whenever that column exists. Execution and the write value also cover the last
 cycle. Runtime advice is applied exactly as in the trace definition; both
-internal advice and the arbitrary tape answer are ignored by ADDI. -/
-theorem addi_step {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
+internal advice and the arbitrary tape answer are ignored by ADDI.
+The source register must be live, and the destination is added to the live set.
+For example, a division row can initialize a dead temporary from live operands. -/
+theorem addi_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let value := sourceValue source pre + imm
     witness.RdWriteValue t = (value.toNat : F) ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS (afterWriteDst destination value pre) ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
+      RegisterAgreementOn
+        (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
+        witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have sourceCanonical := (addi_canonical context rowIs instructionIs).2
   have encoded := addi_write_value charAbove2pow128 context equations
-    selected rowIs instructionIs agrees
-  have read := (agrees.read source sourceCanonical).1
-  apply registerWrite_step context equations selected rowIs charAbove2pow128 agrees
+    selected rowIs instructionIs agrees sourceLive
+  have read := (agrees.read source sourceCanonical sourceLive).1
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
     destination (by rw [instructionIs]; rfl) _ encoded answer advice
-    (by rw [instructionIs]; rfl)
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl)]
   rw [instructionIs]
   simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, read, addWide_low]
 

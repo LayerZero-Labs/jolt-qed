@@ -14,7 +14,7 @@ historical and does not claim a completed audit of the new pin.
 For the current plan and the fresh-session starting point, use
 [the change of course](./soundness.md#change-of-course-top-down-2026-10-20)
 (the soundness proof is now built top-down), the
-[Layer 5b handoff](./soundness.md#layer-5b-handoff-updated-2026-10-20) and the
+[current status](./soundness.md#current-top-level-status-2026-10-23) and the
 [open-issues record](../JoltConstraints/model_review.md). The checkout and
 restriction descriptions below document this earlier review.
 

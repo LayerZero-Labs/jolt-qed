@@ -54,8 +54,7 @@ def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   | .VirtualAlignAddr dst src _ | .VirtualWindowMaskB dst src _
   | .VirtualWindowMaskH dst src _ | .VirtualWindowMaskW dst src _
   | .VirtualSignExtendWord dst src _ | .VirtualZeroExtendWord dst src _
-  | .VirtualMovsign dst src _ | .LD _ dst src _
-  | .VirtualHostIO dst src _ =>
+  | .VirtualMovsign dst src _ | .LD _ dst src _ =>
       destinationIsCanonical dst && sourceIsCanonical src
   -- Two sources and one destination.
   | .ADD dst lhs rhs | .ADDW dst lhs rhs | .SUB dst lhs rhs | .SUBW dst lhs rhs
@@ -88,6 +87,6 @@ def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
       destinationIsCanonical dst
   | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
       sourceIsCanonical base
-  | .FENCE => true
+  | .FENCE | .VirtualHostIO => true
 
 end JoltRegisterEncoding

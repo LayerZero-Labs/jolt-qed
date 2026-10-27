@@ -123,7 +123,8 @@ def virtualJalrBaseUnwritten (instructions : List JoltISA.Instr) : Bool :=
         instructions.all fun other => !ExpansionTempLiveness.writes base other
     | _ => true
 
-/-- Every advice load of fewer than eight bytes is immediately followed by
+/-- Every advice load reads 1, 2, 4 or 8 bytes; a nine-byte load fails.
+Every advice load of fewer than eight bytes is immediately followed by
 a multiply that shifts those bytes to the high end of a 64-bit word.
 Both rows write the same nonzero architectural register, or the x0 rewrite's
 virtual register 40, and the multiply reads that register.
@@ -131,13 +132,17 @@ These are exactly the destination and source forms of `sideEffectingRdZeroDst`
 and `adviceReadSource`: for example, AdviceLB x0 loads virtual register 40,
 then multiplies that register by `slliMultiplier (BitVec.ofNat 6 56)`.
 A narrow load at the end of the list fails this check.
-See jolt/crates/jolt-program/src/expand/memory/shared.rs:137-169 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/memory/shared.rs:137-169 at 8bbb2357.
+The width check follows jolt/tracer/src/instruction/virtual_advice_load.rs
+(`VirtualAdviceLoad::exec`) at 5def437f. -/
 def advicePairsOk : List JoltISA.Instr → Bool
   | [] => true
   | instruction :: rest =>
       (match instruction with
        | .VirtualAdviceLoad dst width =>
-           if width.toNat < 8 then
+           decide (width.toNat = 1 ∨ width.toNat = 2 ∨
+             width.toNat = 4 ∨ width.toNat = 8) &&
+           (if width.toNat < 8 then
              match rest with
              | .VirtualMULI nextDst src multiplier :: _ =>
                  (match dst, nextDst, src with
@@ -149,8 +154,25 @@ def advicePairsOk : List JoltISA.Instr → Bool
                    multiplier == JoltISA.slliMultiplier
                      (BitVec.ofNat 6 (64 - 8 * width.toNat))
              | _ => false
-           else true
+           else true)
        | _ => true) && advicePairsOk rest
+
+/-- Every advice load in a checked list has a supported byte count.
+For example, the first row of AdviceLH reads two bytes.
+See jolt/tracer/src/instruction/virtual_advice_load.rs
+(`VirtualAdviceLoad::exec`) at 5def437f. -/
+theorem advicePairsOk_width (instructions : List JoltISA.Instr)
+    (ok : advicePairsOk instructions = true) {destination : JoltISA.Dst} {width : BitVec 64}
+    (member : JoltISA.Instr.VirtualAdviceLoad destination width ∈ instructions) :
+    width.toNat = 1 ∨ width.toNat = 2 ∨ width.toNat = 4 ∨ width.toNat = 8 := by
+  induction instructions with
+  | nil => cases member
+  | cons first rest ih =>
+    rcases List.mem_cons.mp member with rfl | later
+    · simp only [advicePairsOk, Bool.and_eq_true, decide_eq_true_eq] at ok
+      exact ok.1.1
+    · simp only [advicePairsOk, Bool.and_eq_true] at ok
+      exact ih ok.2 later
 
 /-- A native JALR has an architectural base; its destination may be
 architectural or virtual after the x0 rewrite.
@@ -160,55 +182,73 @@ def nativeJalrBaseOk : JoltISA.Instr → Bool
   | .JALR _ (.vreg _) _ => false
   | _ => true
 
+/-- A sequence contains no equality assertion with a nonzero immediate.
+For example, an assertion comparing temporary 40 with immediate 2 fails this
+check, while a zero-immediate equality assertion passes. -/
+def noSpoilAsserts (instructions : List JoltISA.Instr) : Bool :=
+  instructions.all fun instruction =>
+    match instruction with
+    | .VirtualAssertEQ _ _ imm => imm == 0
+    | _ => true
+
 /-- All syntactic checks for one source sequence: valid rows and shifts,
 initialized temporaries, jump/store separation, virtual JALRs with unchanged
-bases, and adjacent narrow advice multiplies. For example, ECALL passes all
-checks while a sequence that stores before its final JAL does not. -/
+bases, adjacent narrow advice multiplies, and no nonzero-immediate equality
+assertion. For example, ECALL passes all checks while a sequence that stores
+before its final JAL does not. -/
 def sequenceOk (instructions : List JoltISA.Instr) : Bool :=
   rowsOk instructions && shiftsOk instructions &&
     ExpansionTempLiveness.tempsReadAfterWrite instructions &&
     jumpEndNoStore instructions && sequenceJalrsVirtual instructions &&
-    virtualJalrBaseUnwritten instructions && advicePairsOk instructions
+    virtualJalrBaseUnwritten instructions && advicePairsOk instructions &&
+    noSpoilAsserts instructions
 
 /-- Every row passes the sequence row checks; for example, ECALL contains no branch. -/
 theorem sequenceOk_rowsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : rowsOk instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.1
+  exact ok.1.1.1.1.1.1.1
 
 /-- Shifts use the required masks; for example, a register shift follows its mask producer. -/
 theorem sequenceOk_shiftsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : shiftsOk instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.2
+  exact ok.1.1.1.1.1.1.2
 
 /-- Temporary reads follow writes; for example, ECALL initializes its scratch register. -/
 theorem sequenceOk_tempsReadAfterWrite (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : ExpansionTempLiveness.tempsReadAfterWrite instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.2
+  exact ok.1.1.1.1.1.2
 
 /-- A sequence ending in a jump has no store; for example, ECALL ends in JALR. -/
 theorem sequenceOk_jumpEndNoStore (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : jumpEndNoStore instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.2
+  exact ok.1.1.1.1.2
 
 /-- Sequence JALRs have virtual operands; for example, MRET reads virtual mepc. -/
 theorem sequenceOk_sequenceJalrsVirtual (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : sequenceJalrsVirtual instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.2
+  exact ok.1.1.1.2
 
 /-- A virtual jump base is unwritten in its sequence; for example, ECALL preserves mtvec. -/
 theorem sequenceOk_virtualJalrBaseUnwritten (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : virtualJalrBaseUnwritten instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.2
+  exact ok.1.1.2
 
 /-- Narrow advice loads have the required multiply; for example, AdviceLB shifts by 56 bits. -/
 theorem sequenceOk_advicePairsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : advicePairsOk instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.2
+
+/-- A checked sequence has no spoil assert; for example, no row can compare
+temporary 40 with a nonzero immediate. -/
+theorem sequenceOk_noSpoilAsserts (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : noSpoilAsserts instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
   exact ok.2
 
@@ -787,8 +827,11 @@ theorem virtualAssertEQ_native_ok (rs1 rs2 : regidx) (imm : BitVec 13) :
     ExpandedOk (.ofNative (JoltISA.Encoded.VirtualAssertEQ (.xreg rs1) (.xreg rs2) imm)) := by
   native_ok
 
-theorem virtualHostIO_native_ok (rd rs1 : regidx) (imm : BitVec 64) :
-    ExpandedOk (.ofNative (JoltISA.Instr.VirtualHostIO (.xreg rd) (.xreg rs1) imm)) := by
+/-- An operandless host call satisfies the native-row expansion checks.
+For example, it reads no instruction temporary and has no destination to rewrite.
+See jolt/crates/jolt-program/src/expand/materialize.rs:79-101 at 5def437f. -/
+theorem virtualHostIO_native_ok :
+    ExpandedOk (.ofNative JoltISA.Instr.VirtualHostIO) := by
   native_ok
 
 -- A source-only program's expansion, in every case.
@@ -906,7 +949,7 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .jolt (.AdviceLD rd), _, h => by cases h; exact ofProgram_ok _ (adviceld_ok ..)
   | .jolt (.VirtualRev8W rd rs1), _, h => by cases h; exact virtualRev8W_native_ok ..
   | .jolt (.VirtualAssertEQ rs1 rs2 imm), _, h => by cases h; exact virtualAssertEQ_native_ok ..
-  | .jolt (.VirtualHostIO rd rs1 imm), _, h => by cases h; exact virtualHostIO_native_ok ..
+  | .jolt .VirtualHostIO, _, h => by cases h; exact virtualHostIO_native_ok
 
 /-- The first read of each instruction temporary in a source expansion follows
 a write within that same expansion. Reserved virtual registers are excluded. -/

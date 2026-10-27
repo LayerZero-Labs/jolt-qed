@@ -49,7 +49,7 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   (charAbove2pow128 : 2 ^ 128 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-  {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+  {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
   (selected : bytecodeRa witness slot t = 1)
   {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
   (kind : AlignmentAssertion) {base : Src} {imm : BitVec 64} {fault : ExceptionType}
@@ -66,14 +66,15 @@ private theorem alignmentAssertion_canonical :
 include charAbove2pow128 context equations selected rowIs instructionIs
 
 private theorem alignmentAssertion_passes {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre) :
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress base)) :
     (BitVec.ofNat 128 (addWide (sourceValue base pre) imm)).toNat % kind.modulus = 0 := by
   have bound := two_pow_127_lt_char charAbove2pow128
   obtain ⟨left, right⟩ := agrees.immediateInputs bound context equations selected rowIs
     base imm (alignmentAssertion_canonical context rowIs kind instructionIs)
     (by cases kind <;> rw [instructionIs] <;> rfl)
     (by cases kind <;> rw [instructionIs] <;> rfl)
-    (by cases kind <;> rw [instructionIs] <;> rfl)
+    (by cases kind <;> rw [instructionIs] <;> rfl) sourceLive
   have active : witness.OpFlags .AddOperands t = 1 := by
     have flag := opFlag_of_selected_bytecode bound context equations .AddOperands t slot selected
     cases kind <;>
@@ -103,19 +104,22 @@ private theorem alignmentAssertion_passes {pre : SailJoltState}
         AlignmentAssertion.instruction, JoltMetadata.lookupTable])
     exact predicate_of_assert equations.assertLookupOne t assertion _ output
 
-/-- The selected alignment lookup forces successful, state-preserving execution. -/
+/-- The selected alignment lookup forces successful, state-preserving execution.
+The base register is live, and this assertion preserves the live set.
+For example, a halfword alignment check reads a live base and writes no register. -/
 theorem alignmentAssertion_step {pre : SailJoltState}
-    (agrees : RegisterAgreement witness t pre)
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress base))
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     (BitVec.ofNat 128 (addWide (sourceValue base pre) imm)).toNat % kind.modulus = 0 ∧
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS pre ∧
     ∀ next : t.val + 1 < params.traceLength,
-      RegisterAgreement witness ⟨t.val + 1, next⟩ pre := by
+      RegisterAgreementOn live witness ⟨t.val + 1, next⟩ pre := by
   have canonical := alignmentAssertion_canonical context rowIs kind instructionIs
-  have read := (agrees.read base canonical).1
+  have read := (agrees.read base canonical sourceLive).1
   have passes := alignmentAssertion_passes charAbove2pow128 context equations
-    selected rowIs kind instructionIs agrees
+    selected rowIs kind instructionIs agrees sourceLive
   refine ⟨passes, ?_, ?_⟩
   · rw [withRuntimeAdvice_eq_of_noAdvice _ advice
       (by cases kind <;> rw [instructionIs] <;> rfl), instructionIs]

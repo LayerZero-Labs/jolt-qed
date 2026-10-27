@@ -12,7 +12,7 @@ Read these before beginning work:
 2. [The completeness proof and bug-finding workflow](./constraint_proving.md).
 3. [Known model gaps and proof obligations](../JoltConstraints/model_review.md).
 
-The local `blog/` is stale; use the published article for background.
+The issue writeups live in `LayerZero-Research/LZ-Notes` under `content/projects/jolt-qed/blog/`.
 
 ## Change of course: top-down (2026-10-20)
 
@@ -76,45 +76,27 @@ The proof first runs with the witness's tape values fed in directly (the
 relaxed semantics of Layer 5a), then shows the run on the built tape ends
 every source instruction with the same registers and memory (Layer 7).
 
-### Current top-level status
+### Current top-level status (2026-10-23)
 
-`JoltInstance.soundness` chains four named helpers in `Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion from Layer 7 to get `InLanguage`.
-Helper A returns an `UntrustedAnswerTrace` represented at every actual row.
-`Represents.finalRam` covers every RAM index except the termination word.
-Helper B checks the output and panic words through constraint 26 and final RAM agreement, with no panic restriction.
-Its relaxed-trace frame, output-bound and decoder support statements are proved.
-The plain-`Trace` final RAM overlay and byte-store output bound are proved.
-The generic pre-state frame and shared trace and instruction frames are proved.
-The word-index geometry is proved.
-The ten Ari-approved trace-independent refactor statements are proved.
-Step (a) shares the output, prover-acceptance and spoil-assert predicates on the plain `Trace` between both languages.
-Its fixed-tape inclusion is proved, and Ari approved the reverse-inclusion statement now staged with `sorry` in Layer 7.
-Helper A is proved from execution-prefix agreement, which remains staged with `sorry`, and the assembled stopping theorem.
-Helpers C and D still use `sorry`.
-Helper C keeps its approved ⚠️ DANGER status and the same two counterexamples.
-The exact obligations and validation are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
-Step (c)'s five original stopping gaps are proved after Ari approved the checker integration.
-The four sequence checks, native JALR guard and singleton advice check are integrated, and the materialization lift is proved.
-`Emission.lean` has been deleted; stopping uses the single expansion checker.
-The approved shared helper `expand_program_source_of_row` is proved; row validity and JALR operand forms both use its source-expansion certificate.
-The final axiom audit finds no `sorryAx` in `soundness_stopping`; A reaches it only through execution-prefix agreement.
-The [integration report](step_c_closing_report.md) records the completed proofs, validation and declaration timings.
-The execution-prefix statement is in `Soundness/Layer6/ExecutionPrefix.lean`, and the stopping statement is in `Soundness/Layer7/Stopping.lean`.
-The prefix cuts at the first stable stall, padding, or the last witness cycle and owns RAM agreement at that boundary.
-The stopping theorem obtains nonemptiness from the proved termination-store lemma, obtains the final stall from the cut or the proved last-jump and termination lemmas, and carries cut RAM agreement to final RAM through the suffix proof.
-Step (c) is complete, with `lake build JoltBytecode JoltConstraints` passing 8800 jobs.
-The checker elaboration increase from about 11 s to 44 s is deferred cleanup under “Proofs owed.”
-The stopping rule mirrors a16z/jolt PR #2109 at head d2995380; soundness obtains unconditional nonemptiness from the termination store.
-No additional restriction is used for the JALR self-jump case.
-The prover-acceptance helper C is known false when the instance maximum is below 256, or when execution fills every cycle of a witness whose length is the largest power of two within the maximum, and is assumed on purpose until a16z answers; see its ⚠️ DANGER docstring.
-The [handoff](#layer-5b-handoff-updated-2026-10-20) records what already exists at the bottom.
+`JoltInstance.soundness` is proved, under the temporary restrictions, with no `sorry`.
+`lake build JoltBytecode JoltConstraints` passes (8,832 jobs), and `#print axioms JoltInstance.soundness` lists only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
+The theorem chains four helpers in `Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) to get `InLanguage`.
+Helper A returns an `UntrustedAnswerTrace` represented at every actual row, from execution-prefix agreement (Layer 6, `Soundness/Layer6/ExecutionPrefix.lean`) and the stopping theorem (`Soundness/Layer7/Stopping.lean`).
+Helper B checks the output and panic words through constraint 26 and final RAM agreement, with no panic restriction; `Represents.finalRam` covers every RAM index except the termination word.
+Helper C shows Jolt's prover accepts the trace, using the base verifier's 256-cycle floor (`ConstraintContext.traceLengthFloor`) and the approved `noMaxLengthTrace` restriction.
+Helper D shows no spoil assert fails, using the checker's `noSpoilAsserts`.
+Layer 6 proves execution-prefix agreement by strong induction over source instructions; inside an expansion, registers agree only where they are live.
+The prefix cuts at the first stable stall, padding, or the last witness cycle and owns RAM agreement at that boundary; the stopping theorem carries it to final RAM.
+The stopping rule mirrors a16z/jolt PR #2109 at merge commit `0249591a`; no additional restriction is used for the JALR self-jump case.
+The reports in `methods/layer6/`, `methods/layer7/` and `methods/step_c_closing_report.md` record each step's audit, declarations and validation.
+The axiom result and the remaining cleanup are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
 
 ### When the proof uncovers an issue
 
 Proving top-down will uncover more issues.
 When a statement cannot be proved, name the exact missing fact or counterexample, and stop to ask Ari before changing anything.
 Do not add a restriction, change L, or keep a known-false statement without Ari's decision.
-The only known-false statement allowed is helper C, marked ⚠️ DANGER with Ari's permission.
+No currently staged statement is known false; stop and report any counterexample before proceeding.
 
 First rule out a translation issue.
 Our constraints, Jolt's tracer semantics, the device and the prover's sizing are Lean translations of Jolt's Rust code.
@@ -128,7 +110,7 @@ If the Lean definitions match Jolt's code, decide which kind of issue it is:
 
 An issue is confirmed only once reproduced against Jolt's actual prover and verifier; the write-up says whether it was.
 
-Write each issue up as its own post; `blog/README.md` says where posts live.
+Write each issue up as its own post in `LayerZero-Research/LZ-Notes` under `content/projects/jolt-qed/blog/`.
 Posts go to a16z privately, never as public GitHub issues.
 A post has: background with quoted Jolt code and a reference link; each constraint as one plain sentence followed by its formula, without references; an example in real RISC-V, with no pseudo-instructions, and made-up addresses in label, PC and instruction columns; the cheating witness; the constraints that matter checked one by one with the values filled in; the final check against the false claim; the false claim and the true claim; and the core issue.
 Write plain prose, one sentence per line, with no status labels, and check every quoted line at the pin.
@@ -136,97 +118,31 @@ A FIXME restriction for the issue links to its post and says the bug must be fix
 
 ### Register agreement must be over live registers
 
-This is a design point for helper A's induction step.
-`RegisterAgreement` (`Layer5/Registers.lean`) compares every register, and `RegisterAgreementExceptHostTemp` (`Layer5/HostCallRegisterFrame.lean`) leaves out register 40 after a HostIO row.
-About 77 step lemmas take and return full `RegisterAgreement`, so the exception form does not compose.
-Register 40 can stay unavailable across many native rows that never write it, and two HostIO rows in a row already need the weaker form as input.
-When the induction step is written, parameterize agreement by a set of live registers: each step requires its source operands to be live and adds its destination.
+This is a design point for the induction in `soundness_execution_prefix_agreement`.
+`RegisterAgreement` (`Layer5/Registers.lean`) compares every register; HostIO now has no operands and writes no register, so its local step preserves full agreement.
+Scratch registers 40 to 47 can still differ between the witness and the honest run after a division expansion (see `methods/advice_fix_report.md`), so live-register agreement is still needed.
+A scratch register can retain a different value across native rows that never write it.
+`RegisterAgreementOn live` (`Layer5/Registers.lean`) is agreement on a set of live registers: each step requires its source operands to be live and adds its destination.
+`BoundaryState` uses the registers that are not temporaries, and `ExpansionState` adds the temporaries already written in the unfinished source (`ExpansionLive`, `Layer6/PrefixState.lean`).
 Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
-This also removes the near-duplicate write lemmas in `HostCallRegisterFrame.lean`.
 
-## Layer 5b handoff (updated 2026-10-20)
+## Remaining work (2026-10-23)
 
-This records what exists at the bottom of the proof. The order of work is now
-top-down ([Change of course](#change-of-course-top-down-2026-10-20)); the step
-lemmas below will be checked against the statements that come down from the
-main theorem. The latest commit is `e115a7d`; the HostIO-expansion and JAL
-work after it is not yet committed. See also the
-[closing checklist](#layer-5b-one-execution-step). The root build passes with
-the HostIO and JAL steps (8788 jobs).
-Local execution steps cover 77 of 88 native row kinds, counting LD and SD for
-ordinary RAM only and HostIO under the existing restrictions; two more kinds
-are proved unreachable. Nine kinds still need steps: JALR, the six branches,
-`VirtualAdviceLoad` and `VirtualAdvice`. Device-memory agreement and the
-dispatcher remain open.
+1. The cleanup list under "Proofs owed" in `model_review.md`: long proofs, repeated unpacking, unused declarations and checker speed.
+2. The closing report: restrictions split into static checks, run-time properties and the claim; assumptions; issues found; the SDK question.
 
-`Layer5/Auipc.lean` proves a selected AUIPC row's constrained wrapped
-PC-plus-immediate write, successful interpreter step, and next-cycle register
-agreement. Its local PC hypothesis connects Jolt's row address to the Sail PC
-read by the Lean interpreter; the global induction must establish it. The
-proof was checked against AUIPC's tracer, flag and lookup implementations at
-public Rust pin `8bbb2357`. No theorem premise, `sorry`, native decision proof
-or heartbeat override was added. The step's axiom audit lists only `propext`,
-`Classical.choice`, `Quot.sound` and the existing
-`sys_enable_experimental_extensions`.
+Agents work in one checkout on disjoint files; each task has a plan in `methods/`, and Claude audits each report before the next task starts.
+Do not add theorem premises without Ari's approval; do not use `native_decide`, `decide +kernel` or a larger `maxHeartbeats`.
+The issue write-ups remain for the agreed batch; #2044 discussion waits for Michael's comments.
 
-`Layer5/Jal.lean` proves a selected JAL row's constrained return-address
-write, wrapped jump execution, and next-cycle register agreement. It handles
-compressed and ordinary rows, including the destination-zero rewrite. Its
-local hypotheses identify Sail's PC and already advanced `nextPC` with the
-selected row, and require the program's approved next-PC no-wrap fact. The
-global execution-prefix induction must supply those facts; they are not new
-soundness premises. Its axiom audit lists only `propext`, `Classical.choice`,
-`Quot.sound` and the existing `sys_enable_experimental_extensions`.
+## Current Jolt pin (2026-10-22)
 
-The selected-row HostIO step now uses `HostCallsSucceed` for successful live
-execution. `Layer5/HostCallExpansion.lean` transfers `HostCallRdZero` from
-source instructions to every expanded HostIO row: generated sequences contain
-no HostIO, and a direct source HostIO with `rd = x0` rewrites to temporary 40.
-The step preserves register agreement except at temporary 40. The global
-register-agreement induction must keep that temporary unavailable until its
-next write; this is not yet proved. `ExpansionFacts.expand_temps_ok` shows the
-next expansion writes it before reading it.
-The pinned Rust allocator uses temps 40–47, disjoint from LR/SC reservations
-32 and 33. The [detailed checklist](#layer-5b-one-execution-step)
-separates proof work from the temporary restrictions.
+The current Jolt source pin is [`5def437f21a0006e13c063a03f0b5a7c9b93cd6f`](https://github.com/a16z/jolt/commit/5def437f21a0006e13c063a03f0b5a7c9b93cd6f).
+The source-only audit is in [the pin update report](./pin_update_report.md); the prior pin's validated migration remains below as historical evidence.
 
-`Layer5/Registers.lean` states `RegisterAgreement` for every register, which
-a HostIO row with an unconstrained rewritten destination cannot preserve.
-The induction must track temporary 40 as unavailable until its next write;
-persistent registers 32–39 remain in agreement.
+## Historical Jolt pin and migration (2026-10-15)
 
-`execHostIO_keeps_state` and `host_call_exec_sail_frame` prove that successful
-HostIO execution preserves Sail state and virtual registers.
-`Layer5/HostCallRegisterFrame.lean` proves that every register-table entry
-except the selected destination still agrees with execution. It also proves
-that a source HostIO with `rd = x0` targets `rdZeroRewriteVReg`, and that this
-register is 40. Its selected-row step proves successful execution and the
-next-cycle agreement outside temporary 40. The remaining task is to carry
-that one unavailable temporary through the execution-prefix induction and
-use per-expansion write-before-read to restore agreement before it is read.
-This is proof work; no further premise has been added.
-`RegisterAgreementExceptHostTemp` now states the agreement that remains after
-HostIO: all register entries except temporary 40. Local lemmas preserve it
-through rows without destinations and constrained writes, and restore full
-agreement when a constrained row writes 40. The expansion liveness proof now
-shows that operands in the first row of the next source expansion are readable
-under this weaker agreement. The execution-prefix induction still has to
-identify that expansion's selected rows and carry the liveness fact through
-interior rows before the first write.
-Axiom audits of the new
-HostIO declarations show only `propext`, `Classical.choice`, `Quot.sound` and,
-for the live-call bridge, the existing `sys_enable_experimental_extensions`.
-
-Keep Rust semantic reads at public pin `8bbb2357`. Preserve the unrelated
-untracked blog and bug-report drafts. Do not add theorem premises without
-Ari's approval; do not use `bv_decide`, `native_decide` or a larger
-`maxHeartbeats`. Split difficult proofs into smaller lemmas. The issue
-write-ups remain for the agreed batch; #2044 discussion waits for Michael's
-comments.
-
-## Current Jolt pin and migration (2026-10-15)
-
-Ari selected the latest pulled version. Rust semantic citations use the public
+Ari selected the latest pulled version on 2026-10-15. That migration used the public
 upstream pin [`8bbb2357890928d8f83b00ca542879077c4d3d28`](https://github.com/a16z/jolt/commit/8bbb2357890928d8f83b00ca542879077c4d3d28).
 The local merge `1c8aaff2` and generator commit `7dfe8a0f` are unpublished;
 their separate tooling provenance and a reproducible generator patch are in
@@ -241,9 +157,9 @@ The PR sections below describe the previous model's incremental updates.
 
 The earlier warning about removing bytecode chunks was too broad: upstream
 removed precommitted program-table chunking, while the bytecode selector chunks
-used by Layer 1 remain. Device-memory agreement, stopping before the PC stall,
-and fixed-tape reconstruction remain separate open proof obligations. New
-premises still require Ari's approval.
+used by Layer 1 remain.
+Stopping before the PC stall and fixed-tape reconstruction are now proved in Layer 7; device-memory agreement remains a separate open proof obligation.
+New premises still require Ari's approval.
 
 ## PR #2049 ISA update (2026-10-15)
 
@@ -451,7 +367,9 @@ since fixed that mismatch. `LR.W` and `LR.D` remain allowed.
 `NoStoreConditional` is a restriction on this theorem, not a check made by
 Jolt's verifier. Its `FIXME` now calls for removal after the remaining SC
 device-memory cases and global expansion composition are proved.
-The language and instance are unchanged by it. Stopping and panic remain open obligations; this restriction only excludes the SC cases.
+The language and instance are unchanged by it.
+Stopping is proved in Layer 7, and the panic cases are covered by the temporary `PanicStoresOne` and `ClaimsNoPanic` restrictions; using `PanicStoresOne` for the panic word's cut RAM agreement in the execution-prefix proof is still owed.
+This restriction only excludes the SC cases.
 Ari approved `TracerAddressChecks`, a temporary program restriction for both
 LD and SD. It covers the input/advice-store counterexample reported in
 [a16z/jolt#2044](https://github.com/a16z/jolt/issues/2044), following
@@ -476,8 +394,9 @@ as each case is resolved, the model reflects its resolution, and the correspondi
 unrestricted proof is established. This replaces the earlier restriction on
 input/advice stores alone; the theorem does not accumulate both premises.
 It assumes precisely these address assertions, not successful LD/SD execution
-or table agreement. Alignment, raw peripheral dispatch, and the known panic,
-termination and stopping discrepancies remain separate proof obligations.
+or table agreement.
+Alignment and raw peripheral dispatch remain separate proof obligations.
+The known panic, termination and stopping discrepancies are covered by the `PanicStoresOne`, `ClaimsNoPanic` and `TerminationThenStall` restrictions, and stopping is proved in Layer 7.
 On 2026-10-10, Ari also decided to treat every advice-tape answer as untrusted for the planned soundness theorem, pending a16z's confirmation. Retain the fixed-tape specification for completeness and add the relaxed specification alongside it, as recorded in Layer 5a.
 On 2026-10-15, Ari decided the theorem keeps the fixed-tape language. Jolt's tracer reads one tape, in order; "untrusted" means the prover chooses its contents, which the ∃ over private inputs already allows. The relaxed specification stays, as a proof device.
 On 2026-10-10, Ari chose to model Akita separately. The current theorem covers the base constraint relation over fields with characteristic above `2^128`, including BN254. Akita's prime is smaller and its extra lookup-address guard is outside this relation. The audit in Layer 4 records that distinction.
@@ -504,7 +423,9 @@ The proof runs on these answers under the relaxed semantics (Layer 5a), then reb
 
 PR #2049 removed `bytes_remaining()`, the only instruction that could see the tape's length. Before it, the answers could disagree with every tape (Layer 5a, historical candidate).
 
-At each step that uses runtime advice, we must prove that the value in `w` agrees with the honest tracer's computation.
+The relaxed run uses the honest tracer's runtime advice.
+In a division expansion, the witness's advice may differ; the `*Program_sound` theorems still give the honest machine state after the expansion.
+`RepresentsRows` does not compare instruction temporaries, so `rem a0, a1, zero` can use witness advice 5 and honest advice 0 while preserving the required observations.
 At the previous model revision `43cc043`, SC.W could report failure where
 Jolt's tracer reported success. The current model uses PR #2039's deterministic
 comparison. `NoStoreConditional` remains pending the SC device-memory cases
@@ -521,9 +442,8 @@ It connects the prefix and its current state to these witness columns:
 
 `OrdinaryRamAgreement` compares every ordinary-RAM table entry with the
 interpreter's byte-map word. Device-region entries need a separate relation,
-as described below. The register table is compared in full except after a
-HostIO row, when its rewrite temporary is unavailable until its next write
-(see the Layer 5b handoff).
+as described below.
+The register table is compared over [live registers](#register-agreement-must-be-over-live-registers); this supersedes leaving out a HostIO row's rewrite temporary until its next write.
 The columns not listed above need not be unique.
 Individual helpers that accept a plain `Trace`, such as `TraceWitness.PC`, can be reused when stating agreement.
 
@@ -552,8 +472,8 @@ additional inline instruction kinds, revisit this distinction. This source
 audit resolves the TODO in `metadata.lean`; it is not the Layer 6 suffix proof.
 
 This definition does not establish the shape of the suffix after the retained prefix.
-Layer 6 proves that every retained cycle selects a real bytecode row and that the witness may repeat the stable source instruction before padding begins.
-Layer 7 proves that repeated stall rows leave RAM unchanged and that the retained run stops at its final row.
+Layer 6 must prove that every retained cycle selects a real bytecode row; this is part of `soundness_execution_prefix_agreement`.
+Layer 7 (`Layer7/StallSuffix.lean`) proves that the witness may repeat the stable source instruction before padding begins, that repeated stall rows leave RAM unchanged, and that the retained run stops at its final row.
 The case with no padding includes the last witness cycle in the retained prefix when no stable stall occurs earlier.
 
 ### Agreement is proved by induction on the step
@@ -573,8 +493,9 @@ same equality.
 The predicate records successful execution and linkage of the prefix, agreement with the witness columns for its executed rows, and the runtime-advice equality required by `advice_from_honest_tracer` for each of those rows.
 State agreement is retained through the endpoint `t = n`:
 
-- For `t ≤ n` and `t < N`, compare `RegistersVal r t` with the corresponding register value in `state` for every register `r` except an unavailable HostIO temporary. Compare `RamVal a t` with `state` for every ordinary-RAM index `a`; device indices need the separate relation below.
-- For `t = n = N`, compare `RamValFinal a` with the final state's RAM encoding for every ordinary-RAM index `a`. There is no `RegistersVal` column at cycle `N`.
+- For `t ≤ n` and `t < N`, compare `RegistersVal r t` with the corresponding register value in `state` for every [live register](#register-agreement-must-be-over-live-registers) `r`. Compare `RamVal a t` with `state` for every ordinary-RAM index `a`; device indices need the separate relation below.
+- At the cut, `RepresentsPrefix.cutRam` requires RAM agreement for every RAM index except the termination word, including input, advice, output and panic words.
+- For `t = n = N`, compare `RamValFinal a` with the final state's RAM encoding for every RAM index `a` except the termination word. There is no `RegistersVal` column at cycle `N`.
 
 Also retain `AllRegistersPresent state.sail`: agreement with `sourceValue`
 alone would not ensure a successful read, because that function defaults missing
@@ -604,7 +525,9 @@ There are two induction obligations:
 1. **Initialization:** the constraints select the entry slot, zero the register table, and supply the initial RAM. Use `initial_state_sourceValue` to show that the initial state's general-purpose and virtual registers are also zero. For `n > 0`, apply the entry instruction's `advance_pc` and prove that it preserves these register and RAM values. For `n = 0`, keep the initial state. Establish agreement for the empty prefix.
 2. **Extension:** for `t < n`, use agreement at `t` and the required advice compatibility to prove that the step succeeds under the untrusted-answer semantics and returns a post-state matching the step's writes. Prove the new row's runtime-advice equality and preserve those for earlier rows, together with the tape-answer facts. If `t + 1 < n`, use the next slot and pre-state specified above to establish agreement at `t + 1`. If `t + 1 = n`, retain the post-state and establish the endpoint table comparisons above.
 
-At a tape-reading step, recover a 64-bit answer from the witness and use it directly; agreement with one tape comes later, when Layer 7 rebuilds it. At an internal runtime-advice step (`VirtualAdvice`), prove that the value agrees with the honest tracer.
+At a tape-reading step, recover a 64-bit answer from the witness and use it directly; agreement with one tape comes later, when Layer 7 rebuilds it.
+At an internal runtime-advice step (`VirtualAdvice`), the relaxed run uses the honest tracer's advice, which need not equal the witness's advice.
+For division expansions, the `*Program_sound` theorems give agreement with the honest machine state after the expansion, and `RepresentsRows` omits temporary-register comparisons within it.
 Local extension lemmas may take these facts as hypotheses; their application must justify them from the constraints, possibly using other rows of the same expansion.
 These proofs work with the prefix and its state, before a completed relaxed trace exists.
 
@@ -682,7 +605,9 @@ stays in `JoltConstraints/Soundness/soundness.lean`.
 Algebraic helpers shared across layers live in `JoltConstraints/Soundness/Helpers/`.
 Layer 5 has two parts: 5a adds the relaxed semantics for tape answers, used inside the proof, and
 5b proves execution steps, one file per instruction family in `Layer5/`.
-Layers 0–4 and 5a are proved; Layers 5b–8 are in progress or planned.
+Layers 0–4, 5a and 8 are proved.
+Layer 7 is proved except its two acceptance helpers, C (`soundness_prover_accepts`) and D (`soundness_spoil_asserts_pass`).
+Layers 5b–6 remain, as `soundness_execution_prefix_agreement`.
 
 Layers 0 to 4 prove field bounds, selection, table histories and lookup facts.
 Layer 5a adds the untrusted-answer semantics alongside the fixed-tape semantics and proves inclusion; the execution-prefix induction in Layers 5b and 6 then takes tape answers from the witness.
@@ -777,7 +702,7 @@ Reuse `sum_before_succ` from
 for the RAM prefix sums; Layer 2 already uses this shared lemma for registers.
 Cycles that do not touch memory and the remapping of addresses to RAM indices must be accounted for.
 Prove the last-cycle update into `RamValFinal`, as well as updates between `RamVal` columns.
-If the per-word increments `RamRa a t * RamInc t` vanish for `n ≤ t < N`, prove `RamVal a n = RamValFinal a` when `n < N`; Layer 6 must discharge that condition for padding.
+If the per-word increments `RamRa a t * RamInc t` vanish for `n ≤ t < N`, prove `RamVal a n = RamValFinal a` when `n < N`; the Layer 7 stopping proof discharges that condition for stall replays and padding.
 Also prove that `advance_pc` preserves the RAM encoding used in agreement.
 The initial state's layout must equal the context's public layout, so the RAM
 indices in the initial-state and address-remapping lemmas refer to the same base.
@@ -881,10 +806,10 @@ right instruction input. Choose the address supplied by
 `rangeCheck_entry` to obtain its low 64 bits. This proves that the lookup output
 encodes a word; no input-determined `encoded` hypothesis is available for
 `lookupOutput_rangeCheck_of_identity`. At the lookup level, any 64-bit word is
-possible; constraints elsewhere in the program may restrict it. Layers 5–7
-must separately prove that runtime advice (`VirtualAdvice`) equals the honest
-tracer's result. Tape answers (`VirtualAdviceLoad`) need no
-such proof: they are untrusted under the Layer 5a decision.
+possible; constraints elsewhere in the program may restrict it.
+Layers 5–7 construct the relaxed run with honest runtime advice (`VirtualAdvice`), while the witness's division advice may differ.
+The `*Program_sound` theorems give the honest machine state after each division expansion, and `RepresentsRows` does not compare instruction temporaries.
+Tape answers (`VirtualAdviceLoad`) are untrusted under the Layer 5a decision.
 
 **Field-scope audit before this layer:** an identity-RAF row
 (`InstructionRafFlag = 1`) equates the full lookup address with the right operand
@@ -950,7 +875,8 @@ does not read the tape bytes or enforce exhaustion.
 A free answer must be allowed to be any 64-bit word, because the constraints only range-check the advice row's value; the honest `readAdviceTape` result has zero high bits for a narrow read.
 Check that each narrow-load expansion uses only the low bytes of that row's value, so the guest still sees a value of the declared width.
 Prove that every fixed-tape run gives an untrusted-answer run by taking its actual read values as the answers, preserving the executed rows, register and RAM values, outputs and stopping behaviour.
-This proves inclusion of the fixed-tape language in the relaxed language. The reverse direction, rebuilding one tape, is planned for Layer 7 and is not assumed.
+This proves inclusion of the fixed-tape language in the relaxed language.
+The reverse direction, rebuilding one tape, is proved in Layer 7 (`untrustedAnswerLanguage_implies_inLanguage`).
 
 **Shared trace requirements.** `UntrustedAnswerRun` and `UntrustedAnswerTrace`
 currently duplicate the linkage, initialization, preprocessing, internal-advice
@@ -1039,9 +965,8 @@ constraints. Consistent RAM history alone does not establish either one.
 The source audit below records the historical findings at Jolt revision
 `43cc043332762034b5f65379441576e06e7a3890`. The current device/MMU source
 was rechecked at `8bbb2357` in [migration chunk 6](./model_update.md#chunk-6-source-recheck-and-historical-citations);
-the existing discussion is unchanged. The address-check and termination
-restrictions discussed there have since been added; the panic restrictions
-remain open.
+the existing discussion is unchanged.
+The address-check and termination restrictions discussed there have since been added, and the panic restrictions `PanicStoresOne` and `ClaimsNoPanic` were added on 2026-10-20.
 
 **Termination-device restriction added; execution proof still open.** Banning
 all termination accesses would exclude normal SDK exits: the SDK writes byte 1,
@@ -1058,10 +983,10 @@ panic paths and other exit paths must also be checked. The RAM invariant would
 need to distinguish the termination table entry from readable device memory.
 The restriction and its application lemmas build through `JoltConstraints`
 (8782 jobs). `termination_next_jal_stalls` proves a zero-offset JAL actually
-leaves `nextPC` at its own address. The execution-prefix induction and the
-last-real-row argument remain open. `#print axioms` for that lemma and
+leaves `nextPC` at its own address. `#print axioms` for that lemma and
 `termination_next_ld_disjoint` lists only `propext`, `Classical.choice`,
 `Quot.sound`, and the existing `sys_enable_experimental_extensions`.
+The execution-prefix induction remains open; the last-real-row argument is proved in `Layer7/LastJump.lean` and `Layer7/TerminationStore.lean`.
 
 Any proposed restriction must be a property of the program under every allowed
 private input and every reachable prefix of relaxed execution, including
@@ -1085,8 +1010,8 @@ permanent requirement on guest programs.
 
 The local store/load discrepancy does not by itself demonstrate an accepted
 cheating proof. No complete satisfying witness for that consequence has been
-constructed. This restriction does not resolve the panic or input/advice-store
-obligations, or stopping for "panicked" claims.
+constructed.
+This restriction does not resolve the panic or input/advice-store obligations, or stopping for "panicked" claims; those are covered by `PanicStoresOne`, `TracerAddressChecks` and `ClaimsNoPanic`.
 
 **Panic: known B6 case, also an obstacle in Layer 5b.** In
 `common/src/jolt_device.rs:121–155`, a write to the first panic byte sets the
@@ -1247,18 +1172,15 @@ Blocked parts and their status:
   Narrow or remove it as the address cases documented above are resolved.
 - Host calls that fail in Jolt's tracer but pass the constraints as no-op
   rows: `HostCallsSucceed`.
-- Host calls whose source destination is an architectural register, which the
-  constraints let a witness change while Jolt's tracer leaves it alone:
-  `HostCallRdZero`.
 - The termination word, where the device ignores stores and loads 0 while the
   RAM table keeps the stored bytes: `TerminationThenStall`, whose load clause
   forbids loading that word after storing to it.
 - The panic word, where Jolt's tracer sets its flag on any store and loads the flag in every byte, while the RAM table keeps the stored bytes: `PanicStoresOne` (added 2026-10-20).
   Every store to the panic word stores 1, and no load reads the panic word after such a store.
   Before any store, the device and the table both read 0.
-  Write-up: `blog/content/blog/completeness-and-soundness/index.md`.
+  Write-up: `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`.
 - Stopping early on a "panicked" claim, where the witness's last cycle before the padding can be any JAL or JALR: `ClaimsNoPanic` (added 2026-10-20), which limits the theorem to "no panic" claims.
-  Write-up: `blog/content/blog/proof-stops-at-any-jump/index.md`.
+  Write-up: `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`.
 - Both are Jolt bugs that must be fixed in Jolt; neither may remain a restriction.
 
 Remaining proof work, which no restriction may replace:
@@ -1271,17 +1193,18 @@ Remaining proof work, which no restriction may replace:
   `VirtualAdvice`.
 - Device memory for the input, advice, output and termination regions.
 - Apply the proved per-expansion write-before-read fact
-  (`ExpansionFacts.expand_temps_ok`) in the global register-agreement induction,
-  keeping a HostIO `x0` rewrite's unconstrained temporary unavailable until
-  its next write. The pinned allocator uses 40–47, not reservation
+  (`ExpansionFacts.expand_temps_ok`) in the global register-agreement induction.
+  Under [live-register agreement](#register-agreement-must-be-over-live-registers), a HostIO `x0` rewrite's unconstrained temporary is not live until its next write.
+  The pinned allocator uses 40–47, not reservation
   registers 32 and 33 (`crates/jolt-program/src/expand/materialize.rs:79-90`,
   `expand/allocator.rs:115-139`).
 - The dispatcher, shared with Layer 6.
 
-Runtime advice honesty must not become a restriction. If the DIV/REM assertions
-do not force each `VirtualAdvice` value to equal Jolt's tracer's value, that is
-a soundness bug to report, not something to assume. The bytecode project covers
-DIV, DIVU and DIVW; the other five are unchecked.
+Runtime advice honesty must not become a restriction.
+The relaxed run uses the honest tracer's advice, but a witness may use different division advice with the same architectural result: for example, every quotient advice value passes `rem a0, a1, zero`.
+This non-uniqueness is not a soundness bug.
+The bytecode project's eight `*Program_sound` theorems establish advice uniqueness for DIV, DIVU and DIVW, and the final Sail state for REM, REMU, REMW, REMUW and DIVUW.
+`RepresentsRows` excludes instruction-temporary comparisons; expansion liveness ensures that a later expansion overwrites each temporary before reading it.
 
 Do not add a new FIXME restriction for unfinished proof work.
 
@@ -1289,12 +1212,12 @@ Do not add a new FIXME restriction for unfinished proof work.
 
 What: prove entry selection and the two next-slot rules in `Agrees` for every retained cycle up to and including the first stable stall, or up to padding or the final witness cycle when no stall occurs.
 After the cut, the witness may repeat the stall's whole source expansion before padding begins.
-Prove directly from the witness constraints that every later real row stays within the stall's source instruction and that those rows have no RAM update; then prove the padding suffix preserves the tables.
-For RAM, prove that `RamRa a t * RamInc t = 0` during stall replays and padding, for every RAM index `a`; the unselected `RamInc t` need not itself be zero.
+That stall-replay suffix, padding persistence and the zero per-word RAM updates `RamRa a t * RamInc t = 0` after the cut are proved in Layer 7 (`Layer7/StallSuffix.lean`, using `padding_persists` and `padding_from` in `Layer6/BytecodePC.lean`).
 Handle `n = 0` and `n = N` explicitly.
 Why: Layer 5b handles the state; this handles which bytecode row runs next.
-It supplies the `starts` and `linked` fields and connects the cut boundary to stall replays and then the no-op suffix.
+It supplies the `starts` and `linked` fields; Layer 7 connects the cut boundary to stall replays and then the no-op suffix.
 Uses: the PC and sequence constraints, Layer 5b.
+Layers 5b–6 are proved; see [Current top-level status](#current-top-level-status-2026-10-23).
 
 **Entry and interior-slot bridge, ready for review, 2026-10-15.**
 [BytecodePC.lean](../JoltConstraints/Soundness/Layer6/BytecodePC.lean)
@@ -1316,16 +1239,16 @@ premise, `sorry`, native decision proof or heartbeat setting was added.
 This is a bytecode/PC bridge, not yet the `Agrees` induction: entry selection
 has not established that a nonzero entry starts a source instruction, and the
 execution-prefix invariant must still identify the register shift's pre-state
-with its producer's post-state. The padding suffix and source-boundary
-transition remain to be proved before the dispatcher can use these lemmas.
+with its producer's post-state.
+Padding persistence is now proved (`padding_persists`, `padding_from`); the source-boundary transition remains to be proved before the dispatcher can use these lemmas.
 
 **Entry address zero:** neither the [program image type nor entry preprocessing](../JoltConstraints/program.lean) excludes it; `get_first_pc` maps it to slot 0.
 The earlier tracer initialized `prev_pc` to 0 and could produce no rows at entry address 0.
-PR #2109, head d2995380, starts `prev_pc` unset, but a first fetch at address 0 may still fail because address 0 is not program memory.
+PR #2109, merged as `0249591a`, starts `Cpu.stalled` as false (`jolt/tracer/src/emulator/cpu.rs:441-453` at `5def437f`), but a first fetch at address 0 may still fail because address 0 is not program memory.
 `get_first_pc` still maps address 0 to the no-op entry, as checked in `crates/jolt-program/src/preprocess/bytecode.rs:224-232`.
 We have not established whether `AllConstraints` admits such an instance.
-The proof must rule out a satisfying witness with no executable entry row using the existing constraints or identify a counterexample.
-It must not assume a positive entry address; a completed soundness run has at least one row because its termination store executes.
+Soundness does not need to rule it out: the cut allows a zero-row prefix, and the completed run's nonemptiness comes from the proved `soundness_termination_store_exists`.
+The proof does not assume a positive entry address; a completed soundness run has at least one row because its termination store executes.
 
 ### Layer 7: the relaxed trace and the rebuilt tape
 
@@ -1333,9 +1256,9 @@ What: use the prefix constructed on the supplied untrusted advice and the tape a
 Take the successful execution, linkage and runtime-advice equalities from `Agrees w n prefix state` for the relaxed trace's counterparts of the `HonestTrace` fields.
 L also requires two facts about the rebuilt trace: Jolt's prover accepts it (it ends in a jump, its RAM addresses are at or above the lowest address, and its padded length is at most the maximum), and none of its spoil asserts fails.
 The required stopping obligations are `stops` (the final source instruction is a stable self-jump), `runs_until_stop` (no earlier source instruction is a stable self-jump), and unconditional `nonempty`, derived from the termination store.
-The rule follows a16z/jolt PR #2109 at head d2995380: a self-jumping JALR with destination equal to its nonzero base register continues if re-execution would jump elsewhere.
+The rule follows a16z/jolt PR #2109 at merge commit `0249591a`: a self-jumping JALR with destination equal to its nonzero base register continues if re-execution would jump elsewhere.
 The execution prefix is cut at its first stable self-jump, or at padding or the last witness cycle if no stable stall occurs.
-The stopping proof must show the cut ends at a stable stall and that later witness rows stay on its source instruction with zero RAM updates.
+The stopping proof `soundness_stopping` (`Layer7/Stopping.lean`, with `StallSuffix.lean`, `LastJump.lean` and `TerminationStore.lean`) proves the cut ends at a stable stall and that later witness rows stay on its source instruction with zero RAM updates; it does not depend on `sorryAx`.
 The execution-prefix lemma owns RAM agreement at the cut, and the stopping lemma owns the final RAM comparison.
 The temporary `TerminationThenStall` and `ClaimsNoPanic` restrictions still address the separate B6 early-end case described in [the earlier review](./review_completeness_and_soundness.md#b6-the-soundness-statement).
 Take the instance facts, including `initialized`, from the context; Layer 5a left `JoltPrivateInputs` unchanged. `accepted` follows from `expands` and `entryIsRust`.
@@ -1343,7 +1266,7 @@ Then rebuild one tape from the answers' low bytes, in read order, and run the pr
 Why: once all these obligations are resolved, the constructed prefix can be packaged as a relaxed trace, and the rebuilt tape turns it into an `HonestTrace`, the form the theorem concludes.
 Uses: the context, Layers 5 and 6, stopping proofs.
 
-The tape-rebuild closing plan's steps 1–6 are complete on `feat/layer7-tape-rebuild` as of 2026-10-21.
+The tape-rebuild closing plan's steps 1–6 are complete as of 2026-10-21, and `feat/layer7-tape-rebuild` is merged into `feat/soundness`.
 `rebuild_rows` constructs all six fields directly, using a shared masking proof for every narrow width.
 `narrow_load_shape` is proved from the advice-pair checker added in `de5aff70de66d290ceaeb6e7357ba352b855c5d0` and the generic adjacent-row lift.
 The same lift now proves register-shift pairs.
@@ -1352,12 +1275,13 @@ See the [step 6 validation and declaration timings](#tape-rebuild-step-6-2026-10
 
 ### Layer 8: outputs
 
-What: use the endpoint RAM comparison in `Agrees w n prefix state`.
-If `n < N`, carry that comparison from `RamVal a n` to `RamValFinal a` using Layer 3's suffix lemma and Layer 6's zero per-word increments on padding; if `n = N`, agreement already compares `RamValFinal` with the final state.
+What: use `Represents.finalRam`, which the Layer 7 stopping proof obtains by carrying the cut RAM comparison to `RamValFinal` across stall replays and padding.
+Helper B (`soundness_matches_outputs`) proves this layer without `sorryAx`.
 Translate the agreed RAM encoding on the public I/O region into the final device's output bytes and panic flag.
 Then use `RamOutputEqPublicIo` to prove that the final device has the instance's output bytes, after trimming trailing zeros, and its panic flag.
 For an empty trace, use the initial device.
-The panic-store discrepancy in B6 is an open obstacle to this step: a store of 0 to the panic word sets Jolt's tracer's flag but leaves 0 in the RAM table, so a false "no panic" claim passes (`blog/content/blog/completeness-and-soundness/index.md`). The temporary `PanicStoresOne` restriction excludes it.
+In the panic-store discrepancy in B6, a store of 0 to the panic word sets Jolt's tracer's flag but leaves 0 in the RAM table, so a false "no panic" claim passes (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`).
+It no longer blocks this step: B needs no panic restriction, and the burden now sits in the execution prefix's `cutRam` at the panic word, where the temporary `PanicStoresOne` restriction excludes it.
 Why: this gives `matches_outputs` for the relaxed trace. The rebuilt run has the same final device, so it carries over to Layer 7's `HonestTrace`, which proves the theorem's existential conclusion.
 Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputEqPublicIo`, device semantics.
 
@@ -1392,8 +1316,8 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
   as `and_entry`; separately prove the connection to arbitrary witness operands.
 - **Local execution does not establish honest advice or termination.** Running a
   `VirtualAdvice` row with a supplied value does not show that the honest tracer
-  supplies that value. Likewise, the shape of padding and the stopping rule need
-  proofs before interpreting the witness as a complete relaxed trace.
+  supplies that value.
+  The shape of padding and the stopping rule, needed before interpreting the witness as a complete relaxed trace, are now proved in Layer 7.
 
 ### Current status and known obstacles
 
@@ -1598,10 +1522,9 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
   agreement survives preparing the first instruction's PC.
   All eighteen public Layer 3 lemmas build at the default heartbeat limit and
   have only subsets of the three standard axioms. No soundness or instance
-  premise was added. The suffix-zero hypothesis remains for Layer 6 to discharge
-  using its padding-suffix proof, `ramAddress_zero_of_padding`, and
-  `ram_zero_effects`. Read agreement after execution, including device regions,
-  remains in Layer 5b; output and panic agreement remain in Layer 8.
+  premise was added.
+  The Layer 7 stopping proof discharges the suffix-zero hypothesis.
+  Read agreement after execution, including device regions, remains in Layer 5b; output and panic agreement are proved in Layer 8.
   The history equations were rechecked against Jolt revision
   `8bbb2357890928d8f83b00ca542879077c4d3d28`:
   `crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs` batches the
@@ -1625,11 +1548,11 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
   including the unselected zero case. The old predicate and next-step helper
   are deleted. The module note, `model_review.md` and B6 of
   `review_completeness_and_soundness.md` now describe the layout premise.
-  The main theorem still has its existing `sorry`; compiling it is not a proof
-  of soundness.
+  The main theorem depends on `sorry` only through `soundness_execution_prefix_agreement`, `soundness_prover_accepts` and `soundness_spoil_asserts_pass`; compiling it is not a proof of soundness.
   The Noop decoder/expansion audit above resolves the metadata TODO for the
-  modeled instruction set. Padding suffix and stopping remain open in Layers
-  6–7. The remaining Layer 3 lemmas keep their planned callers in Layers 5b,
+  modeled instruction set.
+  The padding suffix and stopping are proved in Layer 7.
+  The remaining Layer 3 lemmas keep their planned callers in Layers 5b,
   6 and 8.
 - **Proved and reviewed, Layer 4(a):**
   [Layer4/Table.lean](../JoltConstraints/Soundness/Layer4/Table.lean) collapses
@@ -1831,8 +1754,10 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
 
   The updated advice contract is recorded in `model_review.md`.
   PR #2049 removes the length-query candidate; no complete satisfying witness
-  for that historical example was constructed. Fixed-tape soundness remains
-  open. Layer 5a was reviewed before starting 5b. `CodeUnchanged`
+  for that historical example was constructed.
+  The reverse inclusion into the fixed-tape language is now proved in Layer 7.
+  Layer 5a was reviewed before starting 5b.
+  `CodeUnchanged`
   needs no relaxed counterpart for bytecode execution.
 - **Layer 5b, address chunk proved and ready for review:**
   [Layer3/Layout.lean](../JoltConstraints/Soundness/Layer3/Layout.lean) defines
@@ -2400,8 +2325,8 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
   existing `sys_enable_experimental_extensions`.
 - **Language decision, 2026-10-15:** Ari decided the theorem keeps
   `JoltInstance.InLanguage`. Jolt's tracer reads one tape whose contents the
-  prover chooses; the relaxed semantics is a proof device. Rebuilding one tape
-  from the witness's answers is planned for Layer 7 and not yet proved.
+  prover chooses; the relaxed semantics is a proof device.
+  Rebuilding one tape from the witness's answers is proved in Layer 7.
   `JoltInstance.soundness` and `JoltInstance.completeness` now take bundled
   assumptions (`Soundness/Assumptions.lean`, `Completeness/Assumptions.lean`;
   commit `8f6d59f`).
@@ -2409,8 +2334,8 @@ stay explicit open questions rather than `sorry`'d facts; in particular, whether
   requires that Jolt's prover accepts the trace and that no spoil assert fails.
   Completeness now takes only `CompletenessAssumptions` and `InLanguage`, and
   concludes that some private inputs and witness satisfy `AllConstraints`;
-  `HonestTrace.ProverAccepts` is removed. Soundness must now also prove those two
-  facts (Layer 7).
+  `HonestTrace.ProverAccepts` is removed.
+  Soundness must now also prove those two facts; they are helpers C and D in `TopLevel.lean`.
 
 ## Questions for a16z
 
@@ -2424,9 +2349,8 @@ privately, as Markdown files over a Slack channel, not as public GitHub issues
    and not tied to reads. The revised documentation says tape length and
    exhaustion are tracer bookkeeping, not proof guarantees. Our ISA now
    includes that removal. The original 3-then-100 example remains historical
-   audit evidence, without a complete satisfying witness. Fixed-tape and
-   relaxed execution remain separate specifications; the theorem still needs
-   to state and prove the chosen guarantee.
+   audit evidence, without a complete satisfying witness.
+   Fixed-tape and relaxed execution remain separate specifications; both language inclusions between them are proved.
 2. **Can we assume the RAM region `[lowest, lowest + 8·maxRamSize)` fits below `2^64`?**
    This bounds the verifier's maximum padded RAM domain, including every byte
    of its last word. We use it with the RAM-size check and the address
@@ -2454,10 +2378,10 @@ privately, as Markdown files over a Slack channel, not as public GitHub issues
    - `TerminationThenStall`: B6's stopping case, and the termination word's
      device/table mismatch.
    - `PanicStoresOne`: a store of 0 proved as "no panic", and loads of the panic word after a store.
-     Written up in `blog/content/blog/completeness-and-soundness/index.md`.
+     Written up in `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`.
    - `ClaimsNoPanic`: stopping early on a "panicked" claim.
-     Written up in `blog/content/blog/proof-stops-at-any-jump/index.md`.
-   - Each finding gets its own post under `blog/content/blog/`.
+     Written up in `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`.
+   - Each finding gets its own post under `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/`.
 
 ## First milestone
 
@@ -2496,9 +2420,8 @@ proved as well. The six remaining assertion rows have steps too. Layer 6's
 bytecode/PC bridge proves entry selection, next-slot selection inside an
 expansion, and the link from a register shift to the row producing its mask.
 Temporary restrictions now also cover host calls and the termination word.
-Layer 5b still needs `VirtualHostIO`, the state part of eight PC rows,
-`VirtualAdviceLoad`, `VirtualAdvice`, device accesses and the composition; see
-Closing Layer 5b under [Layer 5b](#layer-5b-one-execution-step).
+`VirtualHostIO` and JAL now have steps.
+Layer 5b still needs JALR, the six branches, `VirtualAdviceLoad`, `VirtualAdvice`, device accesses and the composition; see Closing Layer 5b under [Layer 5b](#layer-5b-one-execution-step).
 The separate Akita model remains future work.
 
 
@@ -2513,18 +2436,18 @@ The shared arithmetic proof handles all narrow widths, including the x0 destinat
 The seven unused expansion-specific or width-specific lemmas and two unused replay helpers were removed.
 The existing long tape-growth proof was split into its used frame lemmas, and pending-load shape arguments share one bytecode helper.
 The protected statements and definitions are unchanged.
-Step 6 has not been attempted; it needs the step (c) Part 1 commit and the generalized adjacent-row property lift.
+Step 6, done later, proved `narrow_load_shape`; see [Tape rebuild: step 6](#tape-rebuild-step-6-2026-10-21).
 
 Validation used an isolated copy of the build cache because this worktree's `.lake` links to the main worktree's cache.
 `lake -f /private/tmp/tape-rebuild-lakefile.toml build JoltConstraints.Soundness.Layer7.TapeRebuild` passed all 8,591 jobs, rebuilding this worktree's changed dependencies.
 The temporary configuration changes only the build directory.
 The complete `TapeRebuild.lean` check took **8.52 seconds** wall time; Lake reported **9.2 seconds** for its build job.
 `git diff --check` passed.
-The only file warnings are the staged `narrow_load_shape` gap and two existing `simpa` style suggestions.
+The only file warnings were the staged `narrow_load_shape` gap and two existing `simpa` style suggestions.
 
-`#print axioms untrustedAnswerLanguage_implies_inLanguage` reports `propext`, `Classical.choice`, `Quot.sound`, the existing `sys_enable_experimental_extensions`, and `sorryAx`.
-A second `Lean.CollectAxioms` traversal with `narrow_load_shape` already visited reports the same axioms except `sorryAx`.
-Thus the staged bytecode shape is the only remaining route to `sorryAx` in the reverse inclusion.
+At that point `#print axioms untrustedAnswerLanguage_implies_inLanguage` reported `propext`, `Classical.choice`, `Quot.sound`, the existing `sys_enable_experimental_extensions`, and `sorryAx`.
+A second `Lean.CollectAxioms` traversal with `narrow_load_shape` already visited reported the same axioms except `sorryAx`.
+Thus the staged bytecode shape was then the only route to `sorryAx` in the reverse inclusion; step 6 removed it.
 
 No existing private helper gained hypotheses.
 The new `lowAnswer_muli` and `exec_muli_truncated` helpers require `0 < width` and `width < 8`.
@@ -2617,8 +2540,8 @@ The slowest new or changed declaration was `replayRow_executes_nonload` at **574
 `materialized_pairs` derives the earlier row's continuation and the later row's false `starts_source` flag from `ExpandedRows` countdown and start metadata.
 `expand_program_pairs` transports these local pairs through concatenation, so a pair cannot cross a source boundary.
 The file imports only `program_facts`; it does not depend on `expand_ok`, `shiftsOk`, or an advice checker.
-`trace_interface.lean` is unchanged; moving `ShiftPairs` onto this lift waits for step (c).
-`narrow_load_shape` remains staged until `expand_ok` supplies `advicePairsOk`.
+`trace_interface.lean` was unchanged at this point.
+Step 6 later moved `ShiftPairs` onto this lift and proved `narrow_load_shape` once `expand_ok` supplied `advicePairsOk`.
 
 The isolated Lake target `JoltConstraints.Soundness.Layer7.AdjacentRows` builds.
 `#print axioms expand_program_pairs` reports only `propext`, `Classical.choice`, and `Quot.sound`, with no `sorryAx`.
@@ -2652,7 +2575,7 @@ The isolated Lake build of `JoltConstraints.Soundness.Layer7.TapeRebuild` and `J
 This rebuilt the existing device-frame callers, including `TapeSemantics`, `memory_presence`, and the atomic-instruction proofs.
 `git diff --check` passed.
 The shared instruction theorem and both instances have only `propext`, `Classical.choice`, `Quot.sound`, and the existing `sys_enable_experimental_extensions` as axioms, with no `sorryAx`.
-The reverse inclusion's dependency audit still finds `sorryAx` only through `narrow_load_shape`.
+At this point the reverse inclusion's dependency audit still found `sorryAx` only through `narrow_load_shape`; step 6 removed it.
 No limit was raised and no new `bv_decide`, `native_decide`, or `decide +kernel` was used.
 
 All times below use Lean's `#time` with `Elab.async=false`, after loading imports.
