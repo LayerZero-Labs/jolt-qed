@@ -5,6 +5,50 @@ goal is to establish that a witness produced from a Rust-accepted execution
 satisfies the corresponding Jolt constraint. A Lean predicate matching a Rust
 equation is only the starting point; it does not establish completeness.
 
+## Current state (2026-11-02)
+
+Start with [soundness.md](soundness.md#current-state-2026-11-02) for the pins and build status, and with [constraints.md](../JoltConstraints/constraints.md#migration-outline) for the migration order.
+The bytecode library builds with its seven existing `sorry`s, but the constraints do not build against the migrated bytecode.
+Do not read an old `DONE` label as a claim about `c6703570`.
+An equation definition, a proof body in source, a successful module build and a source-correspondence audit are different evidence; report which of these you have actually checked.
+
+Read target files without editing the Jolt checkout:
+
+```sh
+git -C /Users/ari.biswas/Work-with-A16z/jolt show c6703570:<path>
+```
+
+The target sources for the migration are:
+
+| Concern | Target Jolt source |
+|---|---|
+| Shared lane rows | `crates/jolt-program/src/expand/memory/shared.rs` (`LaneWindow`) |
+| Floor memory execution | `tracer/src/instruction/floor_access.rs` |
+| Flag order and row metadata | `crates/jolt-riscv/src/flags.rs`, `instructions/i/ld.rs`, `instructions/virt/{load,store,shift_data}_{b,h,w}.rs` |
+| RAM-address equation and right-lookup routing | `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs` |
+| Right instruction input | `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs` |
+| Bytecode flag reads | `crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs` |
+| Offset semantics and enum order | `crates/jolt-lookup-tables/src/tables/address_offset.rs`, `tables/mod.rs` |
+
+The RAM-address equation uses field arithmetic, while the tracer computes a wrapping 64-bit effective address.
+An AddressOffset output is an offset inside the doubleword, not the containing doubleword address.
+For word width the output is `ea & 4`, so an effective address of 12 gives RAM address 8 (`12 - 4`).
+An effective address of 10 keeps a low bit; the RAM-address relation must reject that access rather than treat it as aligned.
+Keep alignment, wrapping and tracer address permission as separate obligations.
+
+The generated SB program has six rows: `VirtualLoadB`, `VirtualWindowMaskB`, `ANDN`, `VirtualShiftDataB`, `ADD` and `VirtualStoreB` (`JoltBytecode/JoltISA/ExpansionsAutomated.lean`, `sbProgramAuto`).
+Read `LaneWindow.lean` and the generated program rather than reconstructing the sequence from memory.
+
+Rules that apply to every migration proof:
+
+- Keep the main statements, `InLanguage`, the assumptions and the restrictions fixed.
+- Helper statements may change within the approved scope; do not add a premise to an existing theorem without Ari's permission.
+- The four completeness obligations (01), (37), (38) and `corrected_witness_params_ram_bounds` stay as they are.
+  Add no new `sorry`, and never replace a proved fact with `sorry`.
+- Do not use `native_decide` or `decide +kernel`, and do not raise `maxHeartbeats`.
+- Before a Lake build, run `pgrep -fl lake` and wait if another build is active; build serially.
+- A bytecode-only build is not evidence for a constraints theorem.
+
 ## Vocabulary for source instructions and final rows
 
 Use these terms consistently when comparing Rust and Lean:
@@ -88,7 +132,7 @@ certificate. For a row `trace.rows[i]`, use:
 
 | Row fact | Available fact |
 | --- | --- |
-| `rowIndex`, `HonestTrace.rowValid` | The selected bytecode row and its `Valid` certificate (`trace_interface.lean`). It rests on the sorried `expand_program_rows_valid` until `expand` is defined. |
+| `rowIndex`, `HonestTrace.rowValid` | The selected bytecode row and its `Valid` certificate (`trace_interface.lean`), from the proved `expand_program_rows_valid`. |
 | `runtimeAdvice`, `HonestTrace.advice_from_honest_tracer` | The per-execution advice, and the fact that it is the value the honest tracer (Jolt's tracer) patches in. |
 | `preState`, `postState`, `HonestTrace.executes` | Full states and successful `execInstr` execution of the selected final instruction **with its runtime advice**. Start here when a frame or state-transition fact appears missing. |
 | `HonestTraceRow.hostIOPreservesPC` | An explicit HostIO **PC-only** certificate. It does not state anything about `nextPC`. |
@@ -100,10 +144,10 @@ these before introducing any new condition:
 | Trace fact | Available fact |
 | --- | --- |
 | `rows`, `HonestTrace.rowAssumptions` | The execution rows and each row's `TraceAssumptions` at `preState`: architectural register readability (`trace_interface.lean`). A new condition must hold at every Rust-reachable pre-state, not just be convenient. |
-| `HonestTrace.noEarlyNextPCChange`, `HonestTrace.registerOperandsCanonical` | Facts about what `expand` emits (`trace_interface.lean`), from the sorried `expand_program_rows_valid`. Check which property is actually needed. |
+| `HonestTrace.noEarlyNextPCChange`, `HonestTrace.registerOperandsCanonical` | Facts about what `expand` emits (`trace_interface.lean`), from `expand_program_rows_valid`. Check which property is actually needed. |
 | `initialized`, `HonestTrace.startsAtEntry`, `HonestTrace.startsAtInitial` | Initial-state shape, first bytecode entry, and first row's prepared state. |
 | `linked`, `HonestTrace.linkedState`, `HonestTrace.successor` | Consecutive state preparation and the next row's index or source address after a final row. |
-| `stops`, `runs_until_stop`, `nonempty` | Rust's PC-stall stopping rule, and a nonempty run when the entry address is nonzero. |
+| `stops`, `runs_until_stop`, `nonempty` | Jolt's tracer's stopping rule (a self-jump that would repeat, a16z/jolt PR #2109), and a nonempty run. |
 
 `HonestTrace.Terminated` (`execution_conditions.lean`) packages `stops` for a
 nonempty trace; `HonestTrace.terminated` derives it. Whether the code in memory
@@ -120,7 +164,7 @@ lemmas for registers, translation, and memory. Match every helper's exact
 premises to the trace.
 
 For reusable frame facts, check
-[`NextPCFrame.lean`](../JoltConstraints/Completeness/Helpers/NextPCFrame.lean) and
+[`nextpc_frame.lean`](../JoltConstraints/nextpc_frame.lean) (formerly `Completeness/Helpers/NextPCFrame.lean`) and
 [`HostIOFrame.lean`](../JoltConstraints/Completeness/Helpers/HostIOFrame.lean).
 The latter proves that a HostIO call leaves Sail state unchanged (its byte reads
 go through `JoltISA.Mmu.load`, which changes no state) and derives the HostIO

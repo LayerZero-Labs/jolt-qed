@@ -1,6 +1,11 @@
 # Jolt constraints
 
 Source: the base RV64 relations at [public Rust pin `8bbb2357`](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs). GitHub links are documentation pointers; reviews of current behavior must scan the local Jolt checkout.
+On 2026-10-29 all 62 equations, the per-instruction flag tables and the 55 lookup tables were rechecked against Jolt's base verifier at the current pin `5def437f` and match (`reports/2026-10-29-soundness-statement-audit.md`).
+
+Status at 2026-11-02: the checkboxes below describe the Lean model at the pin `5def437f`.
+The working tree targets `c6703570`, and the constraints migration has not started.
+A `DONE` label does not describe the target until the [migration outline](#migration-outline) is complete.
 
 A checked box means the stated honest-witness theorem is proved in Lean without
 `sorryAx`. The status labels are `DONE:` for a checked proof, `TODO:` for
@@ -8,8 +13,7 @@ unfinished proof or correspondence work, and `FIXME:` for a confirmed issue.
 This tracks proof status under each theorem's stated premises; it does not by
 itself establish that all Rust executions satisfy those premises. The Lean
 source and `#print axioms` were checked for the original 62 numbered targets.
-The current checklist has 57 checked targets, one `TODO:` target, and four
-`FIXME:` targets.
+The current checklist has 59 checked targets and three `FIXME:` targets.
 
 Each checklist item links to its constraint definition and matching completeness
 module. [AllConstraints](Constraints/All.lean) bundles the 62 relations, and
@@ -17,22 +21,22 @@ module. [AllConstraints](Constraints/All.lean) bundles the 62 relations, and
 under the stated conditions.
 
 The `FIXME:` targets are (01), blocked by the confirmed
-[wrapping-load completeness bug](../bug-report/ram-address-wrap.md); (16),
-whose [taken self-branch counterexample](../bug-report/self-branch.md) leaves
-its unrestricted target as a statement rather than a theorem; (37),
+[wrapping-load completeness bug](../bug-report/ram-address-wrap.md); (37),
 blocked by the confirmed
 [termination-word RAM history bug](../bug-report/ram-val-termination/README.md);
 and (38), blocked by [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951)
 item 1: a run that never stores to the termination word.
-The `TODO:` target is (39); it still needs Rust–Lean correspondence checks.
+Constraint (16)'s theorem assumes the trace's last row is a jump, which Jolt's prover requires; without it, a [taken self-branch](../bug-report/self-branch.md) as the last row is a counterexample.
+Constraint (39)'s lookup tables were checked against Jolt's on 2026-10-29.
+The checked boxes for (16) and (39) rest on a `sorry` search of the code, not on a fresh `#print axioms`.
 
 Constraint (12) has a proved conditional completeness theorem requiring
 equality-assertion operands to match;
 Rust's intentionally unsatisfiable spoil execution makes the unrestricted claim
 false. Constraint (13) has a proved theorem for valid Lean trace rows; the
 historical Rust counterexample was fixed in Jolt, as recorded in the
-[CSRRS report](../bug-report/issue.md). Deriving Lean's program-row validity
-certificate from every Rust expansion remains separate work. Constraint (15)
+[CSRRS report](../bug-report/issue.md). `expand_program_rows_valid` derives
+Lean's program-row validity certificate from `SourceInstruction.expand`. Constraint (15)
 has a proved honest-witness theorem for padded traces; its proof has no
 `sorryAx` dependency. Some other targets need additional program/trace
 validity conditions.
@@ -60,16 +64,102 @@ destination recorded in the final bytecode row, including x0. The
 captured RAM value to equal its captured destination value; it rejects a raw
 `LD x0` of a nonzero word without rewriting that destination.
 
-At `8bbb2357`, the 62 modeled equations are unchanged from the prior model:
-23 of the 25 cited Rust source files are byte-identical; the remaining two
-are accounted for in [chunk 5 of the migration record](../methods/model_update.md#chunk-5-constraint-and-bytecode-correspondence).
-The axiom-policy repair is separate: the main completeness theorem still has
-eight existing native bit-vector axioms, recorded for repair after migration review.
 A checked box above only excludes `sorryAx` from that particular target.
 
 The current model audit and changes to previously accepted definitions are recorded in
 [model_review.md](model_review.md). Matching constraint equations does not
 certify every current completeness statement.
+
+## Migration outline
+
+This outline covers the move from the pin `5def437f` to the migration target `c6703570`.
+All eleven items are pending; each entry describes work to implement and review, not a change already present in `JoltConstraints`.
+The target's facts below were read from `git show c6703570:<path>` in the local Jolt checkout, which is `origin/main` of the fork `abiswas3/jolt`.
+
+Current state, which the outline starts from:
+
+- `witness.lean:21` declares six instruction flags and `LookupTableKind` still has the three alignment constructors.
+- `metadata.lean`, `register_encoding.lean`, and several witness helpers still reference the retired instructions.
+- `JoltBytecode` builds with the new floor rows and shift-data instructions; the constraints do not build against it.
+
+1. **Flag set.**
+   Append `RightOperandIsRdWriteValue` after `IsNoop` in `InstructionFlags` (`witness.lean:21`), matching `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`).
+   The target has seven instruction flags; the Lean type has six.
+2. **RAM-address equation, Jolt R1CS row 0, Lean (01).**
+   Rename `ramAddrEqRs1PlusImmIfLoadStore` and its references to `RamAddrEqRs1PlusImmMinusLookupIfLoadStore`.
+   Its target right side is `Rs1Value + Imm - LookupOutput`, from the row's comment in `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`.
+3. **Right-input routing, (33) and (11).**
+   Add the summand `RightOperandIsRdWriteValue * RdWriteValue` to (33), as in `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs`.
+   Recheck (11) and its proofs against that input definition.
+   Do not add the term again to (11) as a separate term, or it counts twice.
+4. **Bytecode flag reads, (46) and (47).**
+   Extend the instruction-flag domain, the metadata and `Constraints/BytecodeReadData.lean`, and recheck both reads against `crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs`.
+   `RightOperandIsRdWriteValue` belongs to (47), not to (46)'s circuit flags.
+   In the target's stage-3 combination it has gamma power 7, with `VirtualInstruction` and `IsFirstInSequence` at powers 8 and 9.
+5. **Lookup tables.**
+   Replace `AlignAddr`, `HalfwordAlignment` and `WordAlignment` in `witness.lean` and `lookup_table.lean` with `AddressOffsetB`, `AddressOffsetH` and `AddressOffsetW`.
+   Match `crates/jolt-lookup-tables/src/tables/mod.rs` and `address_offset.rs`.
+   The target has 55 tables; the three new ones are at zero-based indices 52, 53 and 54.
+6. **Lookup-entry theorems.**
+   Retire `lookupEntryCorrect_AlignAddr` (line 317), `lookupEntryCorrect_HalfwordAlignment` (line 780) and `lookupEntryCorrect_WordAlignment` (line 795) in `Completeness/Helpers/LookupEntryProofHelpers.lean`.
+   Add proved `lookupEntryCorrect_AddressOffsetB/H/W` theorems with the same shape and the target table semantics, without new premises or `sorry`.
+   Update the dispatch branches at lines 891, 892 and 924.
+7. **Metadata and row observations.**
+   Give LD `RightOperandIsRdWriteValue` (`crates/jolt-riscv/src/instructions/i/ld.rs`).
+   Give floor loads `[Load, AddOperands]` and floor stores `[Store, AddOperands]`, each with `[LeftOperandIsRs1Value, RightOperandIsImm]` and the width's AddressOffset table (`instructions/virt/{load,store}_{b,h,w}.rs`).
+   Give `VirtualShiftDataB/H/W` `RightOperandIsImm` alongside their existing `LeftOperandIsRs1Value` and `RightOperandIsRs2Value`, and normalize their immediate.
+   Remove the retired row cases.
+   Check `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs` for the table assignments.
+   Repair the related operand encodings, witness helpers and `TraceRow.ram_address`, so observations describe the new memory rows.
+8. **Address helper uses.**
+   Replace the four constraint-side uses of `jolt_virtual_align_addr_value64` with reasoning about AddressOffset and the floor rows.
+   They are at `Completeness/Helpers/LookupEntryProofHelpers.lean:321`, `Soundness/Layer5/AddressMasks.lean:32` and `:124`, and `witness_helpers/lookup_output.lean:81`.
+   Do not replace an aligned address by an offset without checking the equation that consumes it.
+9. **Classifier theorems: helper statements.**
+   Extend `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` to cover the floor constructors, keeping their hypotheses.
+   The seven call sites are in [model_review.md](model_review.md#classifier-call-sites).
+10. **Tracer address checks: approved temporary premise, added in the migration.**
+    Ari approved on 2026-11-02 extending `TracerAddressChecks` to floor-row accesses as a temporary premise, added only to fit the new ISA; temporary premises are removed eventually, so that fit is acceptable.
+    `Soundness/Layer5/MemoryAccessRestriction.lean` checks only LD and SD and returns `True` for every other row.
+    The predicate for a floor row follows `tracer/src/instruction/floor_access.rs` (`addresses`, lines 59–75 at `c6703570`).
+    There, the recorded address is `ea - (ea & offset_mask)`, which the tracer asserts is a multiple of 8, outside its test-only misaligned mode.
+    The accessed doubleword is `ea & !7`.
+    Check the doubleword rules in `Mmu.load_doubleword` and `Mmu.store_doubleword` before writing the predicate.
+    The premise must carry the FIXME comment described in [soundness.md](../methods/soundness.md), Layer 5b, and be narrowed or removed as each case is resolved.
+    Confirm the intended extension against `tracer/src/instruction/floor_access.rs` and the doubleword MMU checks before changing this restriction.
+    For a floor row, distinguish the effective address, the recorded RAM address, the containing doubleword address and the alignment condition.
+11. **Soundness and completeness proof repair.**
+    Keep the main statements, `InLanguage`, the assumptions and the restrictions fixed; repair their dependencies after the definitions are audited.
+    Preserve the four completeness obligations (01), (37), (38) and the RAM-bounds theorem, and add no new `sorry`.
+    Reuse the frame, layout, row-composition and splice lemmas, then rebuild both libraries before declaring the migration complete.
+
+Checked equation changes, written as the target's relations at one cycle:
+
+```text
+Current (01):   (Load + Store) * (RamAddress - Rs1Value - Imm) = 0
+Target  (01):   (Load + Store) * (RamAddress - Rs1Value - Imm + LookupOutput) = 0
+
+Current (33):   RightInstructionInput = RightOperandIsRs2Value * Rs2Value
+                                      + RightOperandIsImm * Imm
+Target  (33):   RightInstructionInput = RightOperandIsRs2Value * Rs2Value
+                                      + RightOperandIsImm * Imm
+                                      + RightOperandIsRdWriteValue * RdWriteValue
+```
+
+For (11), write `g = 1 - AddOperands - SubtractOperands - MultiplyOperands - Advice`; the relation is `g * (RightLookupOperand - RightInstructionInput) = 0`, in both current and target form.
+Expanding the target (33) into (11) includes the new contribution once.
+
+The AddressOffset tables output an offset inside a doubleword, `index & (8 - WIDTH)`:
+
+| Table | Width in bytes | Lookup output |
+|---|---:|---|
+| `AddressOffsetB` | 1 | `index & 7` |
+| `AddressOffsetH` | 2 | `index & 6` |
+| `AddressOffsetW` | 4 | `index & 4` |
+
+The floor loads use `Rs1Value + Imm` for their AddressOffset lookup; LD selects the new source flag instead.
+The target R1CS comment explains why subtracting the allowed offset leaves a misaligned low bit in `RamAddress`, which the RAM-address relation must reject.
+Do not assume natural alignment follows from evaluating the lookup table.
 
 ## Notation
 
@@ -104,7 +194,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (13) DONE: [Write lookup output to the destination](Constraints/RdWriteEqLookupIfWriteLookupToRd.lean) · [completeness](Completeness/RdWriteEqLookupIfWriteLookupToRd.lean)
 - [x] (14) DONE: [Jump return address](Constraints/RdWriteEqPCPlusConstIfJump.lean) · [completeness](Completeness/RdWriteEqPCPlusConstIfJump.lean)
 - [x] (15) DONE: [Next address after a jump](Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean) · [completeness](Completeness/NextUnexpandedPCEqLookupIfShouldJump.lean)
-- [ ] (16) FIXME: [Next address after a taken branch](Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean) · [completeness](Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean)
+- [x] (16) DONE: [Next address after a taken branch](Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean) · [completeness](Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean)
 - [x] (17) DONE: [Next address for other rows](Constraints/NextUnexpandedPCUpdateOtherwise.lean) · [completeness](Completeness/NextUnexpandedPCUpdateOtherwise.lean)
 - [x] (18) DONE: [Next expanded PC within a virtual sequence](Constraints/NextPCEqPCPlusOneIfInline.lean) · [completeness](Completeness/NextPCEqPCPlusOneIfInline.lean)
 - [x] (19) DONE: [Start virtual sequences at their beginning](Constraints/MustStartSequenceFromBeginning.lean) · [completeness](Completeness/MustStartSequenceFromBeginning.lean)
@@ -304,7 +394,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## InstructionReadRaf — stage 5
 
-- [ ] (39) TODO: [Lookup output from the selected table](Constraints/LookupOutputEqInstructionReadRaf.lean) · [completeness](Completeness/LookupOutputEqInstructionReadRaf.lean)
+- [x] (39) DONE: [Lookup output from the selected table](Constraints/LookupOutputEqInstructionReadRaf.lean) · [completeness](Completeness/LookupOutputEqInstructionReadRaf.lean)
 - [x] (40) DONE: [Left lookup operand reconstruction](Constraints/LeftLookupOperandEqInstructionRaf.lean) · [completeness](Completeness/LeftLookupOperandEqInstructionRaf.lean)
 - [x] (41) DONE: [Right lookup operand reconstruction](Constraints/RightLookupOperandEqInstructionRaf.lean) · [completeness](Completeness/RightLookupOperandEqInstructionRaf.lean)
 
