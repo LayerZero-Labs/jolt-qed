@@ -15,11 +15,15 @@ flowchart LR
     classDef inprogress fill:#fef3c7,stroke:#d97706,stroke-width:3px,stroke-dasharray:8 4,color:#92400e
     classDef pending fill:#f3f4f6,stroke:#9ca3af,stroke-width:2px,color:#6b7280
 
-    class A complete
-    class B inprogress
+    class A,B inprogress
     class C,D,E pending
 
 ```
+
+As of 2026-11-02, `lake build JoltBytecode` passes with seven existing admitted cases.
+The recorded Jolt pin remains `5def437f`; the working model targets `c6703570`, and alignment is under audit.
+The constraints migration is pending, so the default `lake build` does not currently pass.
+See [current status](methods/soundness.md) and [proof obligations](JoltConstraints/model_review.md).
 
 A self contained manuscript describing the efforts of formally verifying bytecode expansion is available [here](./jolt-qed.pdf)
 
@@ -32,8 +36,11 @@ Loosely, it says given a RISC-V instruction, here is
 2. Here is the theorem statement we wish to prove.
 3. Here is the proof for the above theorem statement. 
 
-There were 67 expandable RISC-V instructions. 
-Only 60 of them were proven. Details about why the remaining seven instructions were unprovable is given in Section 7 of the pre-print.
+The current `RiscvInstruction` type has 91 constructors, covering native instructions and instructions that expand into sequences.
+Seven equivalence cases remain admitted: ECALL, EBREAK, LR.W, SC.W, LR.D, SC.D, and MRET.
+The first six have `sorry` in the dispatcher; MRET's `sorry` is in `JoltBytecode/InstructionEquivalence/Instructions/System/Mret.lean`.
+All seven were already present at Lean HEAD `7096dca`.
+The current source and proof-debt inventory determine the status of this working tree.
 
 ## Trusted Reference Model and Provenance
 
@@ -69,12 +76,12 @@ This strategy has proven to be extremely valuable so far, and saved us a lot of 
 On the other hand, we found that agents were not as good at designing definitions from scratch (this could change as models improve, or if we used a better setup). 
 It took a lot of back and forth, and iterations for the ISA to reach its current state.
 So for the Jolt-ISA definition, almost all of it was written by hand, then the AI-agents was asked to do formatting, and check against the rust code. 
-As an effort to enforce human eyes on all critical components of the code, all comments and documentation about the ISA are hand-written.
+Current code and ISA comments also include agent-authored changes; the review and generality requirements are recorded in [AGENTS.md](AGENTS.md).
 We found AI agents were particularly bad at writing clear documentation. 
 
-This project was completed over a span of two and a half months, during which we learned a great deal about Lean. 
-Different proofs were written at different phases.
-This means that some theorems are simpler and easier to follow than others (though all pass, so this does not a security concern).
+Different proofs were written at different phases of the project.
+This means that some theorems are simpler and easier to follow than others.
+A successful build checks Lean proof terms against their statements; it does not establish that admitted cases are proved or that the model matches the target Jolt source.
 The goal was always to first have a passing proof for the correct theorem statement.
 Often we let an AI agent loose to close the theorem by whatever means necessary. 
 Then, we explored the output and made proofs simpler, and more readable (akin to how one would proof things on paper, though this is not always possible).
