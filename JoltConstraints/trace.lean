@@ -8,7 +8,6 @@ translation of its packed storage or every row accepted by its checked construct
 Rust stores optional captures separately from encoded operands; missing captures
 have zero values. Lean derives observations from pre/post states. Constructor
 checks are producer checks, not additional verifier constraints or theorem premises.
-See `methods/model_update.md`, chunk 3, for the correspondence and its limits.
 -/
 import JoltConstraints.program
 

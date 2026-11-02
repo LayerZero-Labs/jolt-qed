@@ -7,7 +7,7 @@ inlines, are outside that type. Guests using them are outside this theorem's sco
 Akita's extra constraints are to be modeled separately; PCS security is out of scope.
 The top-level proof is a short chain of named helpers. B6's known
 counterexamples are excluded by temporary restrictions
-(methods/review_completeness_and_soundness.md, B6).
+(their FIXMEs in Soundness/Assumptions.lean).
 -/
 import JoltConstraints.Soundness.TopLevel
 import JoltConstraints.Soundness.Layer7.TapeRebuild

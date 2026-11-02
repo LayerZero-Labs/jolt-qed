@@ -35,6 +35,10 @@ noncomputable section
 
 namespace JoltISA
 
+/-- Execute one Jolt row on the combined Sail, virtual-register and device state.
+The result records retirement or an architectural exception.
+For example, `VirtualLoadW` at effective address 12 reads the entire doubleword
+at address 8 and writes it to the row's destination. -/
 def execInstr : Instr → JoltMonad ExecutionResult
   | .ADDI dst src imm => do
       let x ← readSrc src
@@ -357,10 +361,6 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let y ← readSrc rhs
       writeDst dst (jolt_sltu_value x y)
       pure RETIRE_SUCCESS
-  | .VirtualAlignAddr dst base imm => do
-      let baseValue ← readSrc base
-      writeDst dst (jolt_virtual_align_addr_value64 baseValue imm)
-      pure RETIRE_SUCCESS
   | .VirtualWindowMaskB dst base imm => do
       let baseValue ← readSrc base
       writeDst dst (jolt_virtual_window_mask_b_value64 baseValue imm)
@@ -383,19 +383,25 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let y ← readSrc mask
       writeDst dst (jolt_virtual_pext_signed_value x y)
       pure RETIRE_SUCCESS
-  | .VirtualShiftDataB dst value address => do
+  | .VirtualShiftDataB dst value address imm => do
+      -- Mirrors VirtualShiftDataB::exec in tracer/src/instruction/virtual_shift_data_b.rs.
       let x ← readSrc value
-      let ea ← readSrc address
+      let addressValue ← readSrc address
+      let ea := addressValue + imm
       writeDst dst (jolt_virtual_shift_data_b_value x ea)
       pure RETIRE_SUCCESS
-  | .VirtualShiftDataH dst value address => do
+  | .VirtualShiftDataH dst value address imm => do
+      -- Mirrors VirtualShiftDataH::exec in tracer/src/instruction/virtual_shift_data_h.rs.
       let x ← readSrc value
-      let ea ← readSrc address
+      let addressValue ← readSrc address
+      let ea := addressValue + imm
       writeDst dst (jolt_virtual_shift_data_h_value x ea)
       pure RETIRE_SUCCESS
-  | .VirtualShiftDataW dst value address => do
+  | .VirtualShiftDataW dst value address imm => do
+      -- Mirrors VirtualShiftDataW::exec in tracer/src/instruction/virtual_shift_data_w.rs.
       let x ← readSrc value
-      let ea ← readSrc address
+      let addressValue ← readSrc address
+      let ea := addressValue + imm
       writeDst dst (jolt_virtual_shift_data_w_value x ea)
       pure RETIRE_SUCCESS
   | .VirtualSignExtendWord dst src _ => do
@@ -410,20 +416,69 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc src
       writeDst dst (jolt_movsign_value x)
       pure RETIRE_SUCCESS
-  | .VirtualAssertHalfwordAlignment base imm fault => do
+  | .VirtualLoadB _ dst base imm _ => do
+      -- Mirrors floor_access::load in tracer/src/instruction/floor_access.rs (Byte).
       let baseValue ← readSrc base
-      let addr := BitVec.ofNat 64 (addWide baseValue imm)
-      if addr &&& (1 : BitVec 64) = 0 then
-        pure RETIRE_SUCCESS
-      else
-        pure (ExecutionResult.Memory_Exception (Virtaddr addr, fault))
-  | .VirtualAssertWordAlignment base imm fault => do
+      let ea := baseValue + imm
+      match ← Mmu.load_doubleword (ea &&& ~~~(7 : BitVec 64)) with
+      | .Ok dword =>
+          writeDst dst dword
+          pure RETIRE_SUCCESS
+      | .Err e => pure e
+  | .VirtualLoadH _ dst base imm fault => do
+      -- Mirrors floor_access::load in tracer/src/instruction/floor_access.rs (Halfword).
       let baseValue ← readSrc base
-      let addr := BitVec.ofNat 64 (addWide baseValue imm)
-      if addr &&& (3 : BitVec 64) = 0 then
-        pure RETIRE_SUCCESS
+      let ea := baseValue + imm
+      if ea &&& (1 : BitVec 64) = 0 then
+        match ← Mmu.load_doubleword (ea &&& ~~~(7 : BitVec 64)) with
+        | .Ok dword =>
+            writeDst dst dword
+            pure RETIRE_SUCCESS
+        | .Err e => pure e
       else
-        pure (ExecutionResult.Memory_Exception (Virtaddr addr, fault))
+        pure (ExecutionResult.Memory_Exception (Virtaddr ea, fault))
+  | .VirtualLoadW _ dst base imm fault => do
+      -- Mirrors floor_access::load in tracer/src/instruction/floor_access.rs (Word).
+      let baseValue ← readSrc base
+      let ea := baseValue + imm
+      if ea &&& (3 : BitVec 64) = 0 then
+        match ← Mmu.load_doubleword (ea &&& ~~~(7 : BitVec 64)) with
+        | .Ok dword =>
+            writeDst dst dword
+            pure RETIRE_SUCCESS
+        | .Err e => pure e
+      else
+        pure (ExecutionResult.Memory_Exception (Virtaddr ea, fault))
+  | .VirtualStoreB base value imm _ => do
+      -- Mirrors floor_access::store in tracer/src/instruction/floor_access.rs (Byte).
+      let baseValue ← readSrc base
+      let ea := baseValue + imm
+      let stored ← readSrc value
+      match ← Mmu.store_doubleword (ea &&& ~~~(7 : BitVec 64)) stored with
+      | .Ok _ => pure RETIRE_SUCCESS
+      | .Err e => pure e
+  | .VirtualStoreH base value imm fault => do
+      -- Mirrors floor_access::store in tracer/src/instruction/floor_access.rs (Halfword).
+      let baseValue ← readSrc base
+      let ea := baseValue + imm
+      if ea &&& (1 : BitVec 64) = 0 then
+        let stored ← readSrc value
+        match ← Mmu.store_doubleword (ea &&& ~~~(7 : BitVec 64)) stored with
+        | .Ok _ => pure RETIRE_SUCCESS
+        | .Err e => pure e
+      else
+        pure (ExecutionResult.Memory_Exception (Virtaddr ea, fault))
+  | .VirtualStoreW base value imm fault => do
+      -- Mirrors floor_access::store in tracer/src/instruction/floor_access.rs (Word).
+      let baseValue ← readSrc base
+      let ea := baseValue + imm
+      if ea &&& (3 : BitVec 64) = 0 then
+        let stored ← readSrc value
+        match ← Mmu.store_doubleword (ea &&& ~~~(7 : BitVec 64)) stored with
+        | .Ok _ => pure RETIRE_SUCCESS
+        | .Err e => pure e
+      else
+        pure (ExecutionResult.Memory_Exception (Virtaddr ea, fault))
   | .LD faultClass dst base imm => do
       let baseValue ← readSrc base
       let addr := (baseValue + imm)

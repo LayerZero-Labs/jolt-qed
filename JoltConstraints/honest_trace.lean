@@ -287,7 +287,7 @@ structure ProverConfig where
 -- It guards the last jump, trace maximum and accessed addresses, then rounds
 -- past the highest touched slot. Unlike Jolt at 5def437f, it uses `touched + 1`.
 -- Trace.prover_config in prover_config.lean models Rust's checked policy.
--- Completeness uses this corrected variant; see methods/model_update.md, chunk 4.
+-- Completeness uses this corrected variant; see bug-report/ram-k-off-by-one.
 def HonestTrace.corrected_prover_config {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Option ProverConfig := do

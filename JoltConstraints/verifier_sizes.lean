@@ -1,7 +1,6 @@
 import JoltConstraints.program
 
 -- Source audit: public pin 5def437f, base/Dory full-program mode.
--- See methods/model_update.md, chunks 4–6, for the setup-bound source chain.
 set_option autoImplicit false
 
 namespace JoltConstraints.VerifierSizes

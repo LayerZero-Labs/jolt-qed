@@ -286,6 +286,10 @@ containing doubleword. -/
 abbrev jolt_virtual_align_addr_value64 (base : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
   (BitVec.ofNat 64 (JoltISA.addWide base imm)) &&& ~~~(7 : BitVec 64)
 
+/-- Address of the doubleword containing `base + sext(imm)`, with addition
+wrapping at 64 bits and `sext` sign-extending the 12-bit immediate.
+For example, base 8 and immediate 5 give address 8.
+Retained as an address calculation used by the load-family proofs. -/
 def jolt_virtual_align_addr_value (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   (BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))) &&& ~~~(7 : BitVec 64)
 
@@ -324,17 +328,26 @@ def jolt_virtual_window_mask_w_value (base : BitVec 64) (imm : BitVec 12) : BitV
   let word := ((ea >>> 2) &&& (1 : BitVec 64)).toNat
   BitVec.ofNat 64 (0xFFFF_FFFF <<< (32 * word))
 
-/-- RV64 `VirtualShiftDataB` value. -/
+/-- Move the low byte of `value` into the lane selected by effective address
+`address`, after the caller has added the immediate with 64-bit wrapping.
+For example, value 0xAB at effective address 9 gives 0xAB00.
+Used by VirtualShiftDataB::exec in tracer/src/instruction/virtual_shift_data_b.rs. -/
 def jolt_virtual_shift_data_b_value (value address : BitVec 64) : BitVec 64 :=
   let offset := (address &&& (7 : BitVec 64)).toNat
   (value &&& (0xFF : BitVec 64)) <<< (8 * offset)
 
-/-- RV64 `VirtualShiftDataH` value. Bit zero of the effective address is ignored. -/
+/-- Move the low halfword of `value` into the lane selected by effective address
+`address`, after the caller has added the immediate with 64-bit wrapping.
+Bit zero is ignored; for example, value 0xABCD at address 10 gives 0xABCD0000.
+Used by VirtualShiftDataH::exec in tracer/src/instruction/virtual_shift_data_h.rs. -/
 def jolt_virtual_shift_data_h_value (value address : BitVec 64) : BitVec 64 :=
   let offset := (address &&& (6 : BitVec 64)).toNat
   (value &&& (0xFFFF : BitVec 64)) <<< (8 * offset)
 
-/-- RV64 `VirtualShiftDataW` value. Only effective-address bit two selects the lane. -/
+/-- Move the low word of `value` into the lane selected by effective address
+`address`, after the caller has added the immediate with 64-bit wrapping.
+Only bit two selects the lane; for example, value 1 at address 12 gives 2^32.
+Used by VirtualShiftDataW::exec in tracer/src/instruction/virtual_shift_data_w.rs. -/
 def jolt_virtual_shift_data_w_value (value address : BitVec 64) : BitVec 64 :=
   let offset := (address &&& (4 : BitVec 64)).toNat
   (value &&& (0xFFFF_FFFF : BitVec 64)) <<< (8 * offset)

@@ -3,8 +3,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.JoltISA.VirtualRegisters
 import JoltBytecode.InstructionEquivalence.ProofSupport.ValueLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.VirtualRegisters
-import JoltBytecode.InstructionEquivalence.ProofSupport.ExpansionLayouts
+import JoltBytecode.JoltISA.Expansions.AtomicRegisters
 import JoltBytecode.InstructionEquivalence.ProofSupport.ProtectedVRegWrites
+import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 
 set_option linter.unusedVariables false
 
@@ -168,6 +169,10 @@ private theorem inlineTmp_le6_not_protected (n : Nat) (h : n ≤ 6) :
 def VRegWritesNoProtectedVReg (vr : VReg) : Prop :=
   ¬ IsProtectedJoltRegister vr
 
+/-- A sufficient condition that a row preserves protected virtual registers,
+the registers mirrored in Sail's state.
+For example, a floor store satisfies the condition because it writes no register;
+a floor load satisfies it when its destination is not protected. -/
 def InstrWritesNoProtectedVReg : Instr → Prop
   | .ADDI dst _ _ => DstWritesNoProtectedVReg dst
   | .ADDIW dst _ _ => DstWritesNoProtectedVReg dst
@@ -232,22 +237,25 @@ def InstrWritesNoProtectedVReg : Instr → Prop
   | .VirtualXORROTW22 _ _ _ => False
   | .VirtualXORROTW19 _ _ _ => False
   | .VirtualXORROTW6 _ _ _ => False
-  | .VirtualAlignAddr dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualWindowMaskB dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualWindowMaskH dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualWindowMaskW dst _ _ => DstWritesNoProtectedVReg dst
-  | .VirtualShiftDataB dst _ _ => DstWritesNoProtectedVReg dst
-  | .VirtualShiftDataH dst _ _ => DstWritesNoProtectedVReg dst
-  | .VirtualShiftDataW dst _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualShiftDataB dst _ _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualShiftDataH dst _ _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualShiftDataW dst _ _ _ => DstWritesNoProtectedVReg dst
   | .VirtualPext dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualPextSigned dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualSignExtendWord dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualZeroExtendWord dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualMovsign dst _ _ => DstWritesNoProtectedVReg dst
-  | .VirtualAssertHalfwordAlignment _ _ _ => True
-  | .VirtualAssertWordAlignment _ _ _ => True
   | .LD _ dst _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualLoadB _ dst _ _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualLoadH _ dst _ _ _ => DstWritesNoProtectedVReg dst
+  | .VirtualLoadW _ dst _ _ _ => DstWritesNoProtectedVReg dst
   | .SD _ _ _ => True
+  | .VirtualStoreB _ _ _ _ => True
+  | .VirtualStoreH _ _ _ _ => True
+  | .VirtualStoreW _ _ _ _ => True
   | .VirtualAdvice dst _ _ => DstWritesNoProtectedVReg dst
   | .VirtualAdviceLoad dst _ => DstWritesNoProtectedVReg dst
   | .VirtualHostIO => False
@@ -773,6 +781,89 @@ private theorem sd_preserves_protected
       simp only at hrun
       cases hrun
 
+/-- A floor load preserves protected registers when its destination is safe.
+`mask` selects the effective-address bits required to be zero; for example,
+mask 1 gives the halfword check and mask 0 accepts every byte address.
+`fault` is returned when that check fails.
+The memory read and destination write follow `floor_access::load` in
+`tracer/src/instruction/floor_access.rs`. -/
+private theorem floorLoad_preserves_protected
+    (mask : BitVec 64) (dst : Dst) (base : Src) (imm : BitVec 64)
+    (fault : ExceptionType) (hsafe : DstWritesNoProtectedVReg dst) :
+    StatePreservation.Preserves
+      (fun (before after : SailJoltState) => ∀ vr, IsProtectedJoltRegister vr →
+        after.vregs vr = before.vregs vr)
+      (do
+        let baseValue ← readSrc base
+        let ea := baseValue + imm
+        if ea &&& mask = 0 then
+          match ← Mmu.load_doubleword (ea &&& ~~~(7 : BitVec 64)) with
+          | .Ok dword =>
+              writeDst dst dword
+              pure RETIRE_SUCCESS
+          | .Err e => pure e
+        else
+          pure (ExecutionResult.Memory_Exception (Virtaddr ea, fault))) := by
+  let relation := fun (before after : SailJoltState) =>
+    ∀ vr, IsProtectedJoltRegister vr → after.vregs vr = before.vregs vr
+  have trans : ∀ s t u, relation s t → relation t u → relation s u :=
+    fun _ _ _ first second vr hp => (second vr hp).trans (first vr hp)
+  have read_rule (src : Src) : StatePreservation.Preserves relation (readSrc src) := by
+    intro s t value runs vr _
+    exact congrFun (readSrc_preserves_vregs runs) vr
+  have load_rule (address : BitVec 64) :
+      StatePreservation.Preserves relation (Mmu.load_doubleword address) := by
+    intro s t value runs vr _
+    exact congrFun (load_doubleword_preserves_vregs runs) vr
+  have write_rule (value : BitVec 64) :
+      StatePreservation.Preserves relation (writeDst dst value) := by
+    intro s t result runs
+    cases result
+    exact writeDst_preserves_protected hsafe runs
+  change StatePreservation.Preserves relation _
+  dsimp only
+  preservation_auto [read_rule _, load_rule _, write_rule _,
+    StatePreservation.pure_rule (fun _ _ _ => rfl) _]
+    using (StatePreservation.bind_rule trans)
+
+/-- A floor store preserves protected registers for every effective address.
+`mask` selects the required zero address bits and `fault` is returned on failure;
+for example, mask 3 checks word alignment and mask 0 accepts byte addresses.
+The complete value read from `value` is stored in the containing doubleword,
+following `floor_access::store` in `tracer/src/instruction/floor_access.rs`. -/
+private theorem floorStore_preserves_protected
+    (mask : BitVec 64) (base value : Src) (imm : BitVec 64)
+    (fault : ExceptionType) :
+    StatePreservation.Preserves
+      (fun (before after : SailJoltState) => ∀ vr, IsProtectedJoltRegister vr →
+        after.vregs vr = before.vregs vr)
+      (do
+        let baseValue ← readSrc base
+        let ea := baseValue + imm
+        if ea &&& mask = 0 then
+          let stored ← readSrc value
+          match ← Mmu.store_doubleword (ea &&& ~~~(7 : BitVec 64)) stored with
+          | .Ok _ => pure RETIRE_SUCCESS
+          | .Err e => pure e
+        else
+          pure (ExecutionResult.Memory_Exception (Virtaddr ea, fault))) := by
+  let relation := fun (before after : SailJoltState) =>
+    ∀ vr, IsProtectedJoltRegister vr → after.vregs vr = before.vregs vr
+  have trans : ∀ s t u, relation s t → relation t u → relation s u :=
+    fun _ _ _ first second vr hp => (second vr hp).trans (first vr hp)
+  have read_rule (src : Src) : StatePreservation.Preserves relation (readSrc src) := by
+    intro s t result runs vr _
+    exact congrFun (readSrc_preserves_vregs runs) vr
+  have store_rule (address stored : BitVec 64) :
+      StatePreservation.Preserves relation (Mmu.store_doubleword address stored) := by
+    intro s t result runs vr _
+    exact congrFun (store_doubleword_preserves_vregs runs) vr
+  change StatePreservation.Preserves relation _
+  dsimp only
+  preservation_auto [read_rule _, store_rule _ _,
+    StatePreservation.pure_rule (fun _ _ _ => rfl) _]
+    using (StatePreservation.bind_rule trans)
+
 theorem execInstr_preserves_protected
     {instr : Instr} {js js' : SailJoltState} {result : ExecutionResult}
     (hsafe : InstrWritesNoProtectedVReg instr)
@@ -905,19 +996,17 @@ theorem execInstr_preserves_protected
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualSRAW dst value bitmask =>
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualAlignAddr dst base imm =>
-      exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualWindowMaskB dst base imm =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualWindowMaskH dst base imm =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualWindowMaskW dst base imm =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualShiftDataB dst value address =>
+  | VirtualShiftDataB dst value address imm =>
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualShiftDataH dst value address =>
+  | VirtualShiftDataH dst value address imm =>
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualShiftDataW dst value address =>
+  | VirtualShiftDataW dst value address imm =>
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualPext dst value mask =>
       exact binaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
@@ -929,12 +1018,24 @@ theorem execInstr_preserves_protected
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualMovsign dst src _ =>
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
-  | VirtualAssertHalfwordAlignment base imm fault =>
-      exact alignmentAssert_preserves_protected
-        (mask := (1 : BitVec 64)) (by simpa [execInstr] using hrun)
-  | VirtualAssertWordAlignment base imm fault =>
-      exact alignmentAssert_preserves_protected
-        (mask := (3 : BitVec 64)) (by simpa [execInstr] using hrun)
+  | VirtualLoadB faultClass dst base imm fault =>
+      exact floorLoad_preserves_protected 0 dst base imm fault hsafe js js' result
+        (by simpa [execInstr] using hrun)
+  | VirtualLoadH faultClass dst base imm fault =>
+      exact floorLoad_preserves_protected 1 dst base imm fault hsafe js js' result
+        (by simpa [execInstr] using hrun)
+  | VirtualLoadW faultClass dst base imm fault =>
+      exact floorLoad_preserves_protected 3 dst base imm fault hsafe js js' result
+        (by simpa [execInstr] using hrun)
+  | VirtualStoreB base value imm fault =>
+      exact floorStore_preserves_protected 0 base value imm fault js js' result
+        (by simpa [execInstr] using hrun)
+  | VirtualStoreH base value imm fault =>
+      exact floorStore_preserves_protected 1 base value imm fault js js' result
+        (by simpa [execInstr] using hrun)
+  | VirtualStoreW base value imm fault =>
+      exact floorStore_preserves_protected 3 base value imm fault js js' result
+        (by simpa [execInstr] using hrun)
   | LD faultClass dst base imm =>
       exact ld_preserves_protected hsafe
         (by simpa [execInstr] using hrun)

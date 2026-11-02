@@ -6,6 +6,8 @@ Authors: Ari
 
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.Expansions.ALU
+import JoltBytecode.JoltISA.Expansions.AtomicRegisters
+import JoltBytecode.JoltISA.Expansions.LaneWindow
 import JoltBytecode.JoltISA.VirtualRegisters
 
 /-!
@@ -84,57 +86,61 @@ expansions. -/
 def amoDstFor (rd : regidx) : Dst :=
   sideEffectingRdZeroDst rd
 
-/-- Rust AMO scratch slot `n`, shifted when `rd = x0` consumes the first
-temporary. -/
-def amoVRegFor (rd : regidx) (n : Nat) : VReg :=
-  if isX0 rd then inlineTmp (n + 1) else inlineTmp n
-
-def amoOldVRegFor (rd : regidx) : VReg := amoVRegFor rd 0
-def amoNewVRegFor (rd : regidx) : VReg := amoVRegFor rd 1
-def amoTmpVRegFor (rd : regidx) : VReg := amoVRegFor rd 2
-def amoMaskVRegFor (rd : regidx) : VReg := amoVRegFor rd 2
-def amoDwordVRegFor (rd : regidx) : VReg := amoVRegFor rd 3
-def amoShiftVRegFor (rd : regidx) : VReg := amoVRegFor rd 4
-def amoInlineTmpVRegFor (rd : regidx) : VReg := amoVRegFor rd 5
-
-def amoDoubleBinopNewVRegFor (rd : regidx) : VReg := amoVRegFor rd 0
-def amoDoubleBinopOldVRegFor (rd : regidx) : VReg := amoVRegFor rd 1
-
 def amoWordSwapMaskVRegFor (rd : regidx) : VReg := amoVRegFor rd 0
 def amoWordSwapDwordVRegFor (rd : regidx) : VReg := amoVRegFor rd 1
 def amoWordSwapShiftVRegFor (rd : regidx) : VReg := amoVRegFor rd 2
 def amoWordSwapOldVRegFor (rd : regidx) : VReg := amoVRegFor rd 3
 def amoWordSwapInlineTmpVRegFor (rd : regidx) : VReg := amoVRegFor rd 4
 
-def amoWordSelectOldVRegFor (rd : regidx) : VReg := amoVRegFor rd 0
-def amoWordSelectDwordVRegFor (rd : regidx) : VReg := amoVRegFor rd 1
-def amoWordSelectShiftVRegFor (rd : regidx) : VReg := amoVRegFor rd 2
-def amoWordSelectNewVRegFor (rd : regidx) : VReg := amoVRegFor rd 3
-def amoWordSelectMaskVRegFor (rd : regidx) : VReg := amoVRegFor rd 4
-def amoWordSelectInlineTmpVRegFor (rd : regidx) : VReg := amoVRegFor rd 5
-
-/-- Shared Rust `amo_pre64`: assert word alignment, load the containing
-doubleword, then extract the addressed word into `old`.
-
-The final argument is the scratch register allocated by the recursive `SRL`
-inline expansion at that call site. -/
+/-- Open a word lane and extract its sign-extended value, following
+`LaneWindow::open` and `LaneWindow::extract` in
+`crates/jolt-program/src/expand/memory/shared.rs`.
+For example, an address ending in 4 selects the upper word of `dword`.
+The three scratch registers hold the old word, containing doubleword and mask. -/
 def amoPre64ProgramWithScratch
-    (rs1 : regidx) (old dword shift inlineTmp : VReg) (tail : Program) :
+    (rs1 : regidx) (old dword lane : VReg) (tail : Program) :
     Program :=
-  .instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
-  .instr (JoltISA.Encoded.ANDI (.vreg shift) (.xreg rs1) (-8 : BitVec 12)) <|
-  .instr (JoltISA.Encoded.LD .amo (.vreg dword) (.vreg shift) (0 : BitVec 12)) <|
-  .instr (.VirtualMULI (.vreg shift) (.xreg rs1) (8 : BitVec 64)) <|
-  .instr (.VirtualShiftRightBitmask (.vreg inlineTmp) (.vreg shift)) <|
-  .instr (.VirtualSRL (.vreg old) (.vreg dword) (.vreg inlineTmp)) <|
-  tail
+  laneWindowOpen .word (.vreg dword) (.vreg lane) (.xreg rs1) 0 .amo
+    (ExceptionType.E_SAMO_Addr_Align ()) <|
+  laneWindowExtract (.vreg dword) (.vreg lane) (.vreg old) true tail
 
-/-- Word-binop instance of Rust `amo_pre64`, where the recursive `SRL`
-scratch is the first register after `v_rd`, `v_rs2`, `v_mask`, `v_dword`, and
-`v_shift`. -/
-def amoPre64Program (rs1 : regidx) (old dword shift : VReg) (tail : Program) :
+/-- Shared word-AMO prelude with explicit scratch registers.
+For example, binops and swaps use the same three-row load, mask and extract. -/
+def amoPre64Program (rs1 : regidx) (old dword lane : VReg) (tail : Program) :
     Program :=
-  amoPre64ProgramWithScratch rs1 old dword shift amoInlineTmpVReg tail
+  amoPre64ProgramWithScratch rs1 old dword lane tail
+
+/-- Containing-doubleword register in `expand_amo_w` and `expand_amo_minmax_w`
+in `crates/jolt-program/src/expand/memory/shared.rs`; for a nonzero destination
+this is the first temporary. -/
+def amoWordDwordVRegFor (rd : regidx) : VReg := amoVRegFor rd 0
+
+/-- Lane-mask register allocated second by the shared word-AMO expansion.
+For example, it holds `0xffffffff00000000` for the upper word. -/
+def amoWordLaneVRegFor (rd : regidx) : VReg := amoVRegFor rd 1
+
+/-- Old-word register allocated third by the shared word-AMO expansion.
+For example, a loaded word of `0xffffffff` is held sign-extended to 64 bits. -/
+def amoWordOldVRegFor (rd : regidx) : VReg := amoVRegFor rd 2
+
+/-- Result register allocated fourth by the shared word-AMO expansion.
+For example, ADD writes the sum of the old word and `rs2` here. -/
+def amoWordNewVRegFor (rd : regidx) : VReg := amoVRegFor rd 3
+
+/-- Comparison flag allocated fifth by the shared word-AMO select expansion.
+For example, one means that a min operation selects the new value. -/
+def amoWordTakeVRegFor (rd : regidx) : VReg := amoVRegFor rd 4
+
+/-- Merge a new word through `LaneWindow::merge`, then copy the already
+sign-extended old word to the destination, as in `expand_amo_w` in
+`crates/jolt-program/src/expand/memory/shared.rs`.
+For example, a swap passes its architectural source as `newValue`. -/
+def amoWordMergeProgram (rs1 rd : regidx) (newValue : Src)
+    (dword lane old : VReg) : Program :=
+  laneWindowMerge .word (.vreg dword) (.vreg lane) (.xreg rs1) 0 newValue
+    (ExceptionType.E_SAMO_Addr_Align ()) <|
+  .instr (Encoded.ADDI (amoDstFor rd) (.vreg old) 0) <|
+  .done RETIRE_SUCCESS
 
 /-- Shared Rust `amo_post64`: splice `newValue` into the containing doubleword,
 store it back, and sign-extend the old word into `rd`.
@@ -193,61 +199,36 @@ def amoDoubleSelectProgram
   .instr (JoltISA.Encoded.ADDI dst (.vreg old) (0 : BitVec 12)) <|
   .done RETIRE_SUCCESS
 
+/-- Shared `expand_amo_w` shape in `crates/jolt-program/src/expand/memory/shared.rs`.
+For example, supplying `Instr.ADD` gives the word-add expansion. -/
 def amoWordBinopProgram
     (op : Dst → Src → Src → Instr) (rs2 rs1 rd : regidx) : Program :=
-  let old := amoOldVRegFor rd
-  let new := amoNewVRegFor rd
-  let mask := amoMaskVRegFor rd
-  let dword := amoDwordVRegFor rd
-  let shift := amoShiftVRegFor rd
-  let tmp := amoInlineTmpVRegFor rd
-  amoPre64ProgramWithScratch rs1 old dword shift tmp <|
+  let old := amoWordOldVRegFor rd
+  let new := amoWordNewVRegFor rd
+  let dword := amoWordDwordVRegFor rd
+  let lane := amoWordLaneVRegFor rd
+  amoPre64Program rs1 old dword lane <|
   .instr (op (.vreg new) (.vreg old) (.xreg rs2)) <|
-  amoPost64ProgramWithScratch rs1 rd (.vreg new)
-    dword shift mask old tmp
+  amoWordMergeProgram rs1 rd (.vreg new) dword lane old
 
-def amoWordSelectProgram
-    (extend : Dst → Src → Instr) (cmpInstr : Dst → Src → Src → Instr)
-    (cmpLhs cmpRhs : Src) (rs2 rs1 rd : regidx) : Program :=
-  let old := amoOldVRegFor rd
-  let new := amoNewVRegFor rd
-  let mask := amoMaskVRegFor rd
-  let dword := amoDwordVRegFor rd
-  let shift := amoShiftVRegFor rd
-  let tmp := amoInlineTmpVRegFor rd
-  amoPre64ProgramWithScratch rs1 old dword shift tmp <|
-  .instr (extend (.vreg new) (.xreg rs2)) <|
-  .instr (extend (.vreg mask) (.vreg old)) <|
-  .instr (cmpInstr (.vreg mask) cmpLhs cmpRhs) <|
-  .instr (.SUB (.vreg new) (.xreg rs2) (.vreg old)) <|
-  .instr (.MUL (.vreg new) (.vreg new) (.vreg mask)) <|
-  .instr (.ADD (.vreg new) (.vreg new) (.vreg old)) <|
-  amoPost64ProgramWithScratch rs1 rd (.vreg new)
-    dword shift mask old tmp
-
-/-- Rust-shaped RV64 word min/max helper.
-
-Rust allocates `v_rd`, `v_dword`, and `v_shift`, runs `amo_pre64`, then reuses
-the recursive prelude scratch as `v_rs2` and allocates `v0` for the comparison
-flag and later postlude mask. -/
+/-- Shared `expand_amo_minmax_w` shape in
+`crates/jolt-program/src/expand/memory/shared.rs`, parameterized by the source
+extension, comparison and comparison operands.
+For example, signed min compares the extended new word against the old word. -/
 def amoWordSelectRustProgram
     (extend : Dst → Src → Instr) (cmpInstr : Dst → Src → Src → Instr)
     (cmpLhs cmpRhs : Src) (rs2 rs1 rd : regidx) : Program :=
-  let old := amoWordSelectOldVRegFor rd
-  let dword := amoWordSelectDwordVRegFor rd
-  let shift := amoWordSelectShiftVRegFor rd
-  let new := amoWordSelectNewVRegFor rd
-  let mask := amoWordSelectMaskVRegFor rd
-  let tmp := amoWordSelectInlineTmpVRegFor rd
-  amoPre64ProgramWithScratch rs1
-    old dword shift new <|
+  let old := amoWordOldVRegFor rd
+  let dword := amoWordDwordVRegFor rd
+  let lane := amoWordLaneVRegFor rd
+  let new := amoWordNewVRegFor rd
+  let take := amoWordTakeVRegFor rd
+  amoPre64Program rs1 old dword lane <|
   .instr (extend (.vreg new) (.xreg rs2)) <|
-  .instr (extend (.vreg mask) (.vreg old)) <|
-  .instr (cmpInstr (.vreg mask) cmpLhs cmpRhs) <|
+  .instr (cmpInstr (.vreg take) cmpLhs cmpRhs) <|
   .instr (.SUB (.vreg new) (.xreg rs2) (.vreg old)) <|
-  .instr (.MUL (.vreg new) (.vreg new) (.vreg mask)) <|
+  .instr (.MUL (.vreg new) (.vreg new) (.vreg take)) <|
   .instr (.ADD (.vreg new) (.vreg new) (.vreg old)) <|
-  amoPost64ProgramWithScratch rs1 rd (.vreg new)
-    dword shift mask old tmp
+  amoWordMergeProgram rs1 rd (.vreg new) dword lane old
 
 end JoltISA
