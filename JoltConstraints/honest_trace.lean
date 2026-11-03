@@ -87,20 +87,6 @@ structure ValidRun (joltInstance : JoltInstance SourceInstruction)
         next.preState = advance_pc address (source_is_compressed bytecode next.rowIndex)
           current.postState
 
--- No run of the program changes its own code: whenever an instruction starts, the
--- bytes at its address are the ones the program was loaded with. Rust's tracer reads
--- and decodes each instruction from memory as it starts (cpu.rs:631-637, 695-717;
--- stores clear its decode cache, mmu.rs:646, 689, 710, 731), while the proof checks
--- the bytecode, so the two run the same instructions exactly when this holds.
--- Assumed: a16z told us on 2026-10-07 that Jolt can assume a program does not change
--- its own code (a16z/jolt#1952; model_review.md, Assumptions).
-def JoltInstance.CodeUnchanged (joltInstance : JoltInstance SourceInstruction) : Prop :=
-  ∀ (privateInputs : JoltPrivateInputs) (run : ValidRun joltInstance privateInputs),
-    ∀ row ∈ run.rows, run.bytecode[row.rowIndex].starts_source →
-      ∀ offset < (if source_is_compressed run.bytecode row.rowIndex then 2 else 4),
-        row.preState.sail.mem.get? (run.bytecode[row.rowIndex].address.toNat + offset) =
-          run.initialState.sail.mem.get? (run.bytecode[row.rowIndex].address.toNat + offset)
-
 -- The value written by a VirtualAdvice instruction; none for any other instruction.
 def JoltISA.Instr.adviceValue? : JoltISA.Instr → Option (BitVec 64)
   | .VirtualAdvice _ value _ => some value
@@ -207,9 +193,10 @@ def honestTracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
 
 -- The rows Rust's tracer records when it runs the instance's program on these
 -- private inputs: a valid run that uses Rust's runtime advice and stops where
--- Rust's tracer stops. Whether the code in memory stays the bytecode is not a
--- field; it follows from the instance assumption `CodeUnchanged`
--- (`HonestTrace.code_unchanged`).
+-- Rust's tracer stops. The trace executes the expanded bytecode, while Jolt's
+-- tracer decodes each instruction from memory as it starts; the two agree because
+-- a16z confirmed on 2026-10-07 that a program does not change its own code
+-- (a16z/jolt#1952). That is a modeling assumption, not a premise of any theorem.
 -- See : jolt/tracer/src/lib.rs:74-130 (trace)
 structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) extends ValidRun joltInstance privateInputs where
@@ -240,16 +227,6 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
 instance {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} :
     CoeOut (HonestTrace joltInstance privateInputs) Trace :=
   ⟨fun trace => trace.toValidRun.toTrace⟩
-
--- An honest trace never runs changed code, given the instance assumption.
-theorem HonestTrace.code_unchanged {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (codeUnchanged : joltInstance.CodeUnchanged) :
-    ∀ row ∈ trace.rows, trace.bytecode[row.rowIndex].starts_source →
-      ∀ offset < (if source_is_compressed trace.bytecode row.rowIndex then 2 else 4),
-        row.preState.sail.mem.get? (trace.bytecode[row.rowIndex].address.toNat + offset) =
-          trace.initialState.sail.mem.get? (trace.bytecode[row.rowIndex].address.toNat + offset) :=
-  codeUnchanged privateInputs trace.toValidRun
 
 -- Recover the certified view of a recorded row for execution proofs.
 abbrev HonestTrace.row {joltInstance : JoltInstance SourceInstruction}

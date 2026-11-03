@@ -227,7 +227,7 @@ We aim to preserve the supplied untrusted advice in RAM and choose the tape answ
 The premises are bundled in
 [Soundness/Assumptions.lean](../JoltConstraints/Soundness/Assumptions.lean):
 `JoltField F` (`2^128 < ringChar F`); `JoltInstance.SoundnessAssumptions`
-(`NextPCNoWrap`, `CodeUnchanged`, `RamRegionFits`); and the temporary
+(`NextPCNoWrap`, `RamRegionFits`); and the temporary
 `JoltInstance.TemporaryRestrictions` (`TracerAddressChecks`,
 `HostCallsSucceed`, `NoMaxLengthTrace`, `TerminationThenStall`, `PanicStoresOne`,
 `ClaimsNoPanic`).
@@ -243,7 +243,7 @@ to both fixed-tape and independent-answer execution. The former run-based
 RAM no-wrap predicate and its next-step helper have been deleted.
 On 2026-10-10, Ari approved excluding `SC.W` and `SC.D` from every source row while their advice mismatch was unresolved ([a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)).
 PR #2039 fixed that mismatch, the SC rows go through the ordinary row steps, and no proof used the restriction, so Ari removed it on 2026-11-03.
-No proof uses `CodeUnchanged` (code search, 2026-10-29), so it can be dropped from the statement with Ari's approval.
+No proof used the premise `CodeUnchanged`, so Ari removed it on 2026-11-03; that a program does not change its own code (a16z/jolt#1952) remains a modeling assumption, recorded in `model_review.md`.
 Stopping is proved in Layer 7, and the panic cases are covered by the temporary `PanicStoresOne` and `ClaimsNoPanic` restrictions.
 Ari approved `TracerAddressChecks`, a temporary program restriction for both
 LD and SD. It covers the input/advice-store counterexample reported in
@@ -769,12 +769,8 @@ over either fixed-tape or relaxed runs: the no-wrap fact is derived only at
 satisfying LD/SD cycles, by the integer argument in Layer 3 above.
 The bound and its use in the proof are recorded in `model_review.md`.
 
-`CodeUnchanged` needs no relaxed counterpart for this proof. Both trace
-specifications execute the expanded bytecode rather than fetching instructions
-from memory, and no proved soundness lemma uses `CodeUnchanged`. The premise
-justifies relating the model to Jolt's tracer; it does not block the relaxed
-bytecode-execution proof. Its existing definition and place in the main theorem
-are retained. Whether it belongs in that theorem is a separate scope question.
+Both trace specifications execute the expanded bytecode rather than fetching instructions from memory.
+That a program does not change its own code is what relates this to Jolt's tracer; it is a modeling assumption, not a premise.
 After reviewing Layer 5a, Ari approved this premise replacement and continuing
 with Layer 5b. The later approved device-store restriction is recorded above
 and in Layer 5b below.

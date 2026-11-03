@@ -32,9 +32,6 @@ structure JoltInstance.SoundnessAssumptions
   -- No instruction's next PC, its address plus its length (2 or 4), passes 2^64.
   -- Confirmed by a16z on 2026-10-07: an ELF that breaks this is illegal.
   pcNoWrap : joltInstance.program.NextPCNoWrap
-  -- No run of the program changes its own code.
-  -- Confirmed by a16z on 2026-10-07 (a16z/jolt#1952).
-  codeUnchanged : joltInstance.CodeUnchanged
   -- The whole maximum padded RAM region, including all eight bytes of every word,
   -- lies below 2^64. Approved by Ari on 2026-10-10.
   -- NOTE: to confirm with a16z.
