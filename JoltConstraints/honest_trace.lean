@@ -237,8 +237,8 @@ abbrev HonestTrace.row {joltInstance : JoltInstance SourceInstruction}
 
 -- The word offset of a RAM address: its distance from the layout's lowest address,
 -- in 64-bit words. Zero means no access. This helper alone truncates subtraction;
--- its callers check addresses. It gives `Trace.highest_ram_slot` and the corrected
--- sizing policy below; Jolt's prover's checked path is in prover_config.lean.
+-- its callers check addresses. It gives `Trace.highest_ram_slot`; Jolt's prover's
+-- checked path is in prover_config.lean.
 def remap_address (layout : MemoryLayout) (address : Nat) : Option Nat :=
   if address = 0 then none
   else some ((address - layout.get_lowest_address.toNat) / 8)
@@ -260,30 +260,6 @@ def JoltISA.Instr.is_jump : JoltISA.Instr → Bool
 structure ProverConfig where
   trace_length : Nat
   ram_K : Nat
-
--- Intentional corrected mathematical policy, preserved from the previous model.
--- It guards the last jump, trace maximum and accessed addresses, then rounds
--- past the highest touched slot. Unlike Jolt at 5def437f, it uses `touched + 1`,
--- the fix a16z/jolt#1951 item 4 proposes; see bug-report/ram-k-off-by-one.
--- Trace.prover_config in prover_config.lean models Jolt's prover's checked policy.
--- Since 2026-11-03 completeness uses Jolt's own sizes (`HonestTrace.witness_params`)
--- and no proof uses this definition.
-def HonestTrace.corrected_prover_config {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
-    Option ProverConfig := do
-  guard (trace.rows.back?.all fun last => trace.bytecode[last.rowIndex].instruction.is_jump)
-  let layout := trace.initialState.jolt_device.memory_layout
-  let trace_length := padded_trace_length trace.rows.size
-  guard (trace_length ≤ joltInstance.max_padded_trace_length.toNat)
-  let addresses := trace.rows.toList.filterMap (·.ram_address)
-  guard (addresses.all fun address => address == 0 || layout.get_lowest_address.toNat ≤ address)
-  let touched := ((addresses.filterMap (remap_address layout)).max?).getD 0
-  let image := joltInstance.program.memory_init
-  let image_end := (remap_address layout (min_bytecode_address image)).getD 0 +
-    program_image_len_words image + 1
-  -- #1951 item 4: Rust still rounds `touched`, which need not contain that slot.
-  -- This correction is intentional; bug-report/ram-k-off-by-one records it.
-  pure { trace_length := trace_length, ram_K := 2 ^ Nat.clog 2 (max (touched + 1) image_end) }
 
 -- Rust only proves a run in which every spoil assert that runs has equal sides. A
 -- spoil assert is a VirtualAssertEQ with a nonzero immediate; when its sides differ,

@@ -37,6 +37,8 @@ When Rust is fixed, `slot1024` should print `ram_K=2048` and both tables `ok`.
 The Lean model at the time of this report (`HonestTrace.prover_config`) used the fixed formula,
 marked `FIXME`.
 
-Migration note (2026-10-15): that definition is now named
+Migration note (2026-10-15): that definition was renamed
 `HonestTrace.corrected_prover_config`; `HonestTrace.prover_config` separately
-models the checked Rust formula at `8bbb2357`, where the discrepancy remains.
+models the checked formula of Jolt's prover, where the discrepancy remains.
+Since 2026-11-03, completeness uses Jolt's own sizes, and the corrected
+definition has been deleted.
