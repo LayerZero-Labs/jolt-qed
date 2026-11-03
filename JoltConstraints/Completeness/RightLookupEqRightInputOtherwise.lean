@@ -19,6 +19,9 @@ def shiftDataAddress? : JoltISA.Instr → Option (JoltISA.Src × BitVec 64)
   | .VirtualShiftDataW _ _ address imm => some (address, imm)
   | _ => none
 
+end JoltConstraints
+
+open JoltConstraints in
 /-- Constraint (11) has the form
 `g · (RightLookupOperand t - RightInstructionInput t) = 0`,
 where `g = 1 - AddOperands - SubtractOperands - MultiplyOperands - Advice`.
@@ -43,7 +46,7 @@ Rust, at `c6703570`:
   (`LookupQuery::to_lookup_operands`, `(y as u64) as u128`).
 - Both read by Jolt's prover in `crates/jolt-witness/src/witnesses/operands.rs`
   (`RightInstructionInput`, `RightLookupOperand`). -/
-theorem _root_.HonestTrace.shiftData_address_noWrap
+theorem HonestTrace.shiftData_address_noWrap
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Nat) (inBounds : t < trace.rows.size)
     {address : JoltISA.Src} {imm : BitVec 64}
@@ -52,6 +55,8 @@ theorem _root_.HonestTrace.shiftData_address_noWrap
     let sum := ((JoltISA.sourceValue address (trace.rows[t]'inBounds).preState).toNat : Int) + imm.toInt
     0 ≤ sum ∧ sum < 2 ^ 64 := by
   sorry
+
+namespace JoltConstraints
 
 /-- A ShiftData row's wrapped address casts to its right instruction input;
 for example, address 10 and immediate -2 both encode field value 8.

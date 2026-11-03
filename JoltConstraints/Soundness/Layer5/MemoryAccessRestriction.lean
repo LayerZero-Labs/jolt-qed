@@ -69,20 +69,21 @@ def DoublewordAddressChecks (device : JoltDevice) (address : BitVec 64)
 
 end JoltConstraints.Soundness
 
-/-- FIXME: Temporary program restriction, approved by Ari, for
-https://github.com/a16z/jolt/issues/2044 (following #2041) and four separate
-candidates in methods/soundness.md: stores at zero, the I/O padding gap,
-stores to the stack canary, and accesses at or above heap_end. Narrow or remove
-this premise as each case is resolved, its resolution is reflected in the
-model, and the corresponding unrestricted proof is established. This is not
-a verifier check; the four additional candidates have no complete witnesses yet.
+/-- FIXME: Temporary program restriction, approved by Ari, for https://github.com/a16z/jolt/issues/2044 (following #2041) and four separate candidates in methods/soundness.md: stores at zero, the I/O padding gap, stores to the stack canary, and accesses at or above heap_end.
+Narrow or remove this premise as each case is resolved, its resolution is reflected in the model, and the corresponding unrestricted proof is established.
+This is not a verifier check; the four additional candidates have no complete witnesses yet.
+The extension to VirtualLoadB/H/W and VirtualStoreB/H/W was approved by Ari on 2026-11-02 and is added only to fit the new ISA.
 
-For every private input and relaxed execution prefix, the next attempted LD
-or SD passes Mmu.effective_address_ok at the addresses checked by the tracer.
-LD and SD are the only memory accesses after expansion, so this also covers
-the accesses generated for narrower instructions and atomics.
-The predicate depends on program execution, not on a purported satisfying
-witness, and does not assume that the next row successfully executes. -/
+For every private input and relaxed execution prefix, the next attempted LD, SD, VirtualLoadB/H/W or VirtualStoreB/H/W passes Mmu.effective_address_ok at the addresses used by its doubleword MMU operation.
+Here a relaxed prefix is an UntrustedAnswerRun, and NextStep supplies its honest internal runtime advice, stopping and next-row conditions without assuming that the next row succeeds.
+The effective address ea is the wrapping 64-bit sum of the base register value and immediate.
+LD and SD check ea; each floor row checks the containing doubleword at ea &&& ~~~7.
+DoublewordAddressChecks uses read permissions for loads and write permissions for stores, checking only the starting address in RAM and all eight byte addresses below RAM.
+For example, VirtualLoadH with ea = 10 accesses the doubleword at 8, so it checks read permissions at 8 through 15 below RAM.
+The recorded RAM address of a floor row is ea - (ea &&& mask), with masks 7, 6 and 4 for B, H and W; it equals the accessed doubleword when the row's natural-alignment condition holds.
+Alignment, register availability, unsupported peripheral dispatch and device-value agreement remain separate proof obligations.
+The predicate depends on program execution, not on a purported satisfying witness, and does not assume that the next row successfully executes.
+Jolt's tracer at c6703570: tracer/src/instruction/floor_access.rs (addresses, load, store) and tracer/src/emulator/mmu.rs (Mmu::load_doubleword, Mmu::store_doubleword, Mmu::assert_effective_address). -/
 def JoltInstance.TracerAddressChecks
     (joltInstance : JoltInstance SourceInstruction) : Prop :=
   ∀ (privateInputs : JoltPrivateInputs)
@@ -94,6 +95,12 @@ def JoltInstance.TracerAddressChecks
           pre.jolt_device (JoltISA.sourceValue base pre + imm) false
       | .SD base _ imm => JoltConstraints.Soundness.DoublewordAddressChecks
           pre.jolt_device (JoltISA.sourceValue base pre + imm) true
+      | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _
+      | .VirtualLoadW _ _ base imm _ => JoltConstraints.Soundness.DoublewordAddressChecks
+          pre.jolt_device ((JoltISA.sourceValue base pre + imm) &&& ~~~(7 : BitVec 64)) false
+      | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _
+      | .VirtualStoreW base _ imm _ => JoltConstraints.Soundness.DoublewordAddressChecks
+          pre.jolt_device ((JoltISA.sourceValue base pre + imm) &&& ~~~(7 : BitVec 64)) true
       | _ => True
 
 namespace JoltConstraints.Soundness

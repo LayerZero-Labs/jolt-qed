@@ -19,6 +19,9 @@ def floorAccess? : JoltISA.Instr → Option (JoltISA.Src × BitVec 64)
   | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ => some (base, imm)
   | _ => none
 
+end JoltConstraints
+
+open JoltConstraints in
 /-- Constraint (08) has the form
 `AddOperands t · (RightLookupOperand t - LeftInstructionInput t - RightInstructionInput t) = 0`.
 When the instruction at cycle `t` is `VirtualLoadB/H/W` or `VirtualStoreB/H/W`,
@@ -44,7 +47,7 @@ Rust, at `c6703570`:
   (`to_instruction_inputs`, `to_lookup_operands`).
 - Read by Jolt's prover in `crates/jolt-witness/src/witnesses/operands.rs`
   (`LeftInstructionInput`, `RightInstructionInput`, `RightLookupOperand`). -/
-theorem _root_.HonestTrace.floorAccess_address_nonneg
+theorem HonestTrace.floorAccess_address_nonneg
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Nat) (inBounds : t < trace.rows.size)
     {base : JoltISA.Src} {imm : BitVec 64}
@@ -53,6 +56,8 @@ theorem _root_.HonestTrace.floorAccess_address_nonneg
     0 ≤ ((JoltISA.sourceValue base (trace.rows[t]'inBounds).preState).toNat : Int) +
       imm.toInt := by
   sorry
+
+namespace JoltConstraints
 
 /-- A floor row's 128-bit lookup index casts to the sum of its instruction
 inputs; for example, base 10 with immediate -2 yields field value 8.
