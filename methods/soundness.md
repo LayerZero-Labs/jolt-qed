@@ -228,7 +228,7 @@ The premises are bundled in
 [Soundness/Assumptions.lean](../JoltConstraints/Soundness/Assumptions.lean):
 `JoltField F` (`2^128 < ringChar F`); `JoltInstance.SoundnessAssumptions`
 (`NextPCNoWrap`, `CodeUnchanged`, `RamRegionFits`); and the temporary
-`JoltInstance.TemporaryRestrictions` (`NoStoreConditional`, `TracerAddressChecks`,
+`JoltInstance.TemporaryRestrictions` (`TracerAddressChecks`,
 `HostCallsSucceed`, `NoMaxLengthTrace`, `TerminationThenStall`, `PanicStoresOne`,
 `ClaimsNoPanic`).
 On 2026-10-10, Ari approved `RamRegionFits`: for the instance's layout and
@@ -241,13 +241,9 @@ every in-domain word. Layer 5b recovers integer address sums from satisfying
 constraints, including the unselected address-zero case; the argument applies
 to both fixed-tape and independent-answer execution. The former run-based
 RAM no-wrap predicate and its next-step helper have been deleted.
-On 2026-10-10, Ari approved excluding `SC.W` and `SC.D` from every source row,
-including unreachable rows, while their advice mismatch was unresolved
-([a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)). PR #2039 has
-since fixed that mismatch. `LR.W` and `LR.D` remain allowed.
-`NoStoreConditional` is a restriction on this theorem, not a check made by
-Jolt's verifier.
-No proof uses it or `CodeUnchanged` (code search, 2026-10-29): the SC rows go through the ordinary row steps, so both can be dropped from the statement with Ari's approval.
+On 2026-10-10, Ari approved excluding `SC.W` and `SC.D` from every source row while their advice mismatch was unresolved ([a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)).
+PR #2039 fixed that mismatch, the SC rows go through the ordinary row steps, and no proof used the restriction, so Ari removed it on 2026-11-03.
+No proof uses `CodeUnchanged` (code search, 2026-10-29), so it can be dropped from the statement with Ari's approval.
 Stopping is proved in Layer 7, and the panic cases are covered by the temporary `PanicStoresOne` and `ClaimsNoPanic` restrictions.
 Ari approved `TracerAddressChecks`, a temporary program restriction for both
 LD and SD. It covers the input/advice-store counterexample reported in
@@ -309,7 +305,7 @@ In a division expansion, the witness's advice may differ; the `*Program_sound` t
 `RepresentsRows` does not compare instruction temporaries, so `rem a0, a1, zero` can use witness advice 5 and honest advice 0 while preserving the required observations.
 At the previous model revision `43cc043`, SC.W could report failure where
 Jolt's tracer reported success. The current model uses PR #2039's deterministic
-comparison, and no proof uses `NoStoreConditional`.
+comparison, and no restriction excludes the SC rows.
 
 ### The witness proves facts about the execution prefix
 
@@ -1053,7 +1049,7 @@ with the state-transition lemma.
   Write-up: `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`.
 - Both are Jolt bugs that must be fixed in Jolt; neither may remain a restriction.
 
-No proof uses `NoStoreConditional`: SC.W and SC.D go through the ordinary row steps.
+SC.W and SC.D go through the ordinary row steps, so no restriction excludes them.
 The global register-agreement induction uses the per-expansion write-before-read fact `ExpansionFacts.expand_temps_ok`; Jolt's allocator gives instruction temporaries 40–47, disjoint from the reservation registers 32 and 33.
 
 Runtime advice honesty must not become a restriction.

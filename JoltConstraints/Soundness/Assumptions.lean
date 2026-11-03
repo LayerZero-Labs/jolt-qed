@@ -40,14 +40,6 @@ structure JoltInstance.SoundnessAssumptions
   -- NOTE: to confirm with a16z.
   ramRegionFits : joltInstance.RamRegionFits
 
--- No source row is SC.W or SC.D, including unreachable rows. LR.W and LR.D remain
--- allowed. Used only by `JoltInstance.TemporaryRestrictions`.
-def Rv64ProgramImage.NoStoreConditional (program : Rv64ProgramImage SourceInstruction) : Prop :=
-  ∀ row ∈ program.instructions,
-    match row.instruction with
-    | .riscv (.SC_W _ _ _ _ _) | .riscv (.SC_D _ _ _ _ _) => False
-    | _ => True
-
 /-- A temporary restriction on completed relaxed executions.
 An `UntrustedAnswerTrace` records actual executed rows and independent tape
 answers; `rows.size` counts those real rows. For a verifier-admissible maximum,
@@ -65,20 +57,11 @@ def JoltInstance.NoMaxLengthTrace
     (trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs),
     trace.rows.size ≠ 2 ^ Nat.log2 joltInstance.max_padded_trace_length.toNat
 
--- Temporary program restrictions. Most exclude programs that expose reported
--- or suspected Jolt bugs; NoStoreConditional now remains only for unfinished
--- proof composition after PR #2039 fixed its original upstream issue. None is
--- a check Jolt's verifier makes. Remove bug restrictions once Jolt and the
--- model are fixed and the unrestricted proof is established; remove
--- NoStoreConditional when the remaining SC proof work is complete.
+-- Temporary program restrictions. Each excludes programs that expose reported
+-- or suspected Jolt bugs. None is a check Jolt's verifier makes. Remove each
+-- once Jolt and the model are fixed and the unrestricted proof is established.
 structure JoltInstance.TemporaryRestrictions
     (joltInstance : JoltInstance SourceInstruction) : Prop where
-  -- FIXME: no source row is SC.W or SC.D (a16z/jolt#2037).
-  -- Fixed upstream by a16z/jolt#2039 (merged 2026-10-12) and already in the model.
-  -- Local steps cover every SC row; LD and SD only for ordinary RAM. Remove
-  -- this restriction once Layer 5b also handles their device cases
-  -- and composes SC expansions in the global execution-prefix induction.
-  noStoreConditional : joltInstance.program.NoStoreConditional
   -- FIXME: every load and store the program attempts passes Jolt's tracer address
   -- checks (a16z/jolt#2044, plus four candidates in methods/soundness.md: stores
   -- at zero, the I/O gap, stack-canary stores, and accesses at or above heap_end).
