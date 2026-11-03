@@ -7,7 +7,8 @@ Status at 2026-11-03: Step 1 definitions were reviewed and remain uncommitted.
 Step 2 repairs target `c6703570`; see [the completeness migration report](../reports/2026-11-03-constraints-migration-completeness.md).
 `lake build JoltConstraints.Completeness` and the assembled `Completeness.completeness` module both pass after the approved `WordEntry` repair.
 Step 5 restates `JoltInstance.completeness` for the honest witness at the sizes Jolt's prover picks; see [the Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
-At those sizes the verifier's RAM bounds are proved, and Jolt's undersized RAM table (#1951 item 4) is the one known-false lemma `HonestTrace.prover_config_holds_highest_slot`.
+At those sizes the verifier's RAM bounds are proved.
+The RAM sizes follow the fix that #1951 item 4 proposes, which [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) makes in Jolt; the model follows that PR ahead of its merge, and `HonestTrace.prover_config_holds_highest_slot` is proved.
 The full soundness migration remains Step 3.
 A `DONE` label records the individual theorem's proof status, not completion of the [migration outline](#migration-outline).
 

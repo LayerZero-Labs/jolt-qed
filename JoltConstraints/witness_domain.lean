@@ -95,8 +95,8 @@ theorem HonestTrace.witness_params_ram_size {joltInstance : JoltInstance SourceI
 /-- Jolt's witness sizes hold every RAM access of the honest trace
 (`WitnessParams.RamFits`): each LD, SD or floor-row address is 0 (no access) or remaps to
 a word index below `config.ram_K` (`HonestTrace.prover_config_ram_fits`).
-That bound uses the known-false `HonestTrace.prover_config_holds_highest_slot`
-(a16z/jolt#1951 item 4).
+That bound uses `HonestTrace.prover_config_holds_highest_slot`, which holds under the
+fix of a16z/jolt#1951 item 4 that Jolt's prover model follows.
 For example, with lowest address `0x7fff8000`, an SD at `0x80000010` uses word 4098,
 which must be below `config.ram_K`. -/
 theorem HonestTrace.witness_params_ram_fits {joltInstance : JoltInstance SourceInstruction}

@@ -54,18 +54,22 @@ theorem TraceRow.ram_address_lt {bytecode : Array JoltInstructionRow}
   split at touches <;> cases touches
   all_goals exact BitVec.isLt _
 
-/-- The word index `(address - lowest) / 8` of an address at most `bound` is at most the
-word index of `bound`, where `lowest` is the layout's lowest address and address 0 (no
-access) counts as index 0.
-For example, with lowest address 16, an address 40 at most a bound 48 has index
-`3 ≤ (48 - 16) / 8 = 4`. -/
-theorem remap_address_le (layout : MemoryLayout) (address bound : Nat) (atMost : address ≤ bound) :
-    (remap_address layout address).getD 0 ≤ (bound - layout.get_lowest_address.toNat) / 8 := by
+/-- The word index `(address - lowest) / 8` of an address below `bound` is below the number
+of words that start below `bound`, `⌈(bound - lowest) / 8⌉ = (bound - lowest + 7) / 8`,
+where `lowest` is the layout's lowest address, below `bound`; address 0 (no access) and
+an address below `lowest` count as index 0.
+For example, with lowest address 16, an address 40 below a bound 44 has index
+`3 < (44 - 16 + 7) / 8 = 4`. -/
+theorem remap_address_lt (layout : MemoryLayout) (address bound : Nat)
+    (lowestBelow : layout.get_lowest_address.toNat < bound) (below : address < bound) :
+    (remap_address layout address).getD 0 <
+      (bound - layout.get_lowest_address.toNat + 7) / 8 := by
   unfold remap_address
   split
-  · exact Nat.zero_le _
   · dsimp only [Option.getD]
-    exact Nat.div_le_div_right (by omega)
+    omega
+  · dsimp only [Option.getD]
+    omega
 
 /-- The program image's lowest address, `min_bytecode_address`, is below any positive
 `bound` that every image address is below; an empty image gives 0.

@@ -28,11 +28,17 @@ def minRamSize {Source : Type} (program : Rv64ProgramImage Source)
   let some ioEnd ← remapWordAddress layout JoltISA.RAM_START_ADDRESS | none
   checkedNextPowerOfTwo (max bytecodeEnd ioEnd)
 
-/-- `compute_max_ram_k` in `crates/jolt-program/src/preprocess/ram.rs`.
-The division by eight precedes rounding, exactly as in Rust. -/
+/-- `compute_max_ram_k` in `crates/jolt-program/src/preprocess/ram.rs` at 5def437f,
+with the fix that a16z/jolt#1951 item 4 proposes, made in Jolt by a16z/jolt#2250
+(open; the model follows it ahead of its merge):
+`totalBytes = heap_end - lowest` is rounded up to whole words,
+`total_bytes.div_ceil(8) = (totalBytes + 7) / 8`, before rounding to a power of two,
+so the word that straddles `heap_end` counts.
+For example, `totalBytes = 8 * 1024 + 4` gives `1025` words and maximum `2048`,
+where the pinned verifier's `total_bytes / 8 = 1024` gives `1024`. -/
 def maxRamSize (layout : MemoryLayout) : Option Nat := do
   let totalBytes ← MemoryLayout.checkedSub layout.heap_end.toNat layout.get_lowest_address.toNat
-  checkedNextPowerOfTwo (totalBytes / 8)
+  checkedNextPowerOfTwo ((totalBytes + 7) / 8)
 
 /-- `committed_log_k_chunk` in `jolt/crates/jolt-prover/src/config.rs:206-214` at 5def437f: the width of
 the honest prover's one-hot chunks over `2^logT` cycles, 4 below 2^25 cycles, else 8. -/
