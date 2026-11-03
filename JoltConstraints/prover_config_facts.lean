@@ -197,7 +197,8 @@ theorem HonestTrace.prover_config_last_jump
 layout; it is 0 when the run touches no nonzero address.
 For example, with lowest address `0x7fff8000`, a run whose only access is an SD at
 `0x80000010` touches word `0x8010 / 8 = 4098`.
-This is the `touched` that Jolt's prover rounds up to pick its RAM size.
+This is the `touched` of Jolt's prover; under the fix of a16z/jolt#1951 item 4, the
+prover rounds up `touched + 1` to pick its RAM size.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
 `checked_remap_address`) at c6703570. -/
 def Trace.highest_ram_slot (trace : Trace) : Nat :=
@@ -207,12 +208,13 @@ def Trace.highest_ram_slot (trace : Trace) : Nat :=
 /-- Jolt's RAM size for the honest trace, unfolded. When Jolt's prover accepts the trace
 (`proverAccepts`), it remaps the program image's lowest address to a word index
 `imageStart` (none for address 0), and `config.ram_K` is the power of two that rounds up
-the larger of the highest touched word (`Trace.highest_ram_slot`) and the image's end,
-`imageStart + program_image_len_words + 1`; both that end and `config.ram_K` fit in 64 bits.
-For example, a run touching word 1000 with an image ending at word 40 gets
-`ram_K = 1024`.
+the larger of one more than the highest touched word (`Trace.highest_ram_slot`) and the
+image's end, `imageStart + program_image_len_words + 1`; both that end and `config.ram_K`
+fit in 64 bits.
+For example, a run touching word 1024 with an image ending at word 40 gets
+`ram_K = pow2(1025) = 2048`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`checked_remap_address`) at c6703570. -/
+`checked_remap_address`) at c6703570, with the fix of a16z/jolt#1951 item 4. -/
 theorem HonestTrace.prover_config_ram_K
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -221,7 +223,7 @@ theorem HonestTrace.prover_config_ram_K
       JoltConstraints.VerifierSizes.remapWordAddress trace.initialState.jolt_device.memory_layout
         (min_bytecode_address joltInstance.program.memory_init) = some imageStart ∧
       imageStart.getD 0 + program_image_len_words joltInstance.program.memory_init + 1 < 2 ^ 64 ∧
-      config.ram_K = 2 ^ Nat.clog 2 (max (trace : Trace).highest_ram_slot
+      config.ram_K = 2 ^ Nat.clog 2 (max ((trace : Trace).highest_ram_slot + 1)
         (imageStart.getD 0 + program_image_len_words joltInstance.program.memory_init + 1)) ∧
       config.ram_K < 2 ^ 64 := by
   have checked := (ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts).2.2.1
@@ -239,18 +241,15 @@ theorem HonestTrace.prover_config_ram_K
   rw [sizeIs, ← touchedIs]
   rfl
 
-/-- FIXME: false until a16z/jolt#1951 item 4 is fixed (`bug-report/ram-k-off-by-one/`).
-Jolt's RAM table holds the highest RAM word the run touches: when Jolt's prover accepts
+/-- Jolt's RAM table holds the highest RAM word the run touches: when Jolt's prover accepts
 the honest trace (`proverAccepts`), the highest touched word index
 `h = Trace.highest_ram_slot` is below Jolt's RAM size `K = config.ram_K`.
 A table of `K` words holds indices `0` to `K - 1`, so this needs `h < K`.
-Jolt's prover picks `K = pow2(max(h, imageEnd))` (`HonestTrace.prover_config_ram_K`),
-which is `h` itself when `h` is a power of two at least the image's end.
-For example, `h = 1024` with an image ending at most at word 1024 gives
-`K = pow2(1024) = 1024`, which holds indices `0` to `1023` but not word 1024, so Jolt's
-witness cannot place that run's highest access.
-Ari decided on 2026-11-03 to leave this known-false fact as a gap; the proof uses it
-only through `HonestTrace.prover_config_ram_fits`.
+Under the fix that a16z/jolt#1951 item 4 proposes, Jolt's prover picks
+`K = pow2(max(h + 1, imageEnd))` (`HonestTrace.prover_config_ram_K`), which is at least
+`h + 1`.
+For example, `h = 1024` with an image ending at word 40 gives `K = pow2(1025) = 2048`,
+which holds word 1024; the pinned prover's `pow2(max(h, imageEnd)) = 1024` does not.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
 at c6703570 and https://github.com/a16z/jolt/issues/1951 (item 4). -/
 theorem HonestTrace.prover_config_holds_highest_slot
@@ -258,7 +257,10 @@ theorem HonestTrace.prover_config_holds_highest_slot
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
     (proverAccepts : trace.prover_config joltInstance = some config) :
     (trace : Trace).highest_ram_slot < config.ram_K := by
-  sorry
+  obtain ⟨_, _, _, sizeIs, _⟩ := trace.prover_config_ram_K config proverAccepts
+  rw [sizeIs]
+  exact Nat.lt_of_lt_of_le (Nat.lt_succ_self _)
+    ((Nat.le_max_left _ _).trans (Nat.le_pow_clog (by decide : 1 < 2) _))
 
 /-- When Jolt's prover accepts the honest trace (`proverAccepts`), every memory address
 a row touches (`TraceRow.ram_address`) is 0 (no access), or is at or above the layout's
@@ -266,8 +268,8 @@ lowest address and has a word index (`remap_address`) below Jolt's RAM size
 `config.ram_K`.
 For example, with lowest address `0x7fff8000`, an SD at `0x80000010` has word index 4098,
 which must be below `config.ram_K`.
-The bound on the word index uses the known-false
-`HonestTrace.prover_config_holds_highest_slot` (a16z/jolt#1951 item 4).
+The bound on the word index uses `HonestTrace.prover_config_holds_highest_slot`, which
+holds under the fix of a16z/jolt#1951 item 4.
 See jolt/crates/jolt-prover/src/config.rs (`checked_remap_address`) and
 jolt/crates/jolt-witness/src/backend/trace/ram.rs (`remapped_ram_address`) at c6703570. -/
 theorem HonestTrace.prover_config_ram_fits

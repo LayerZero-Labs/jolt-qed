@@ -180,8 +180,7 @@ config `config` (`proverAccepts`), the honest witness at Jolt's witness sizes
 bytecode `slots`, the verifier's entry slot `entry` and the public I/O `io` the verifier
 checks the proof against.
 It needs the existing premises below and inherits the gaps listed in `model_review.md`
-("Proofs owed"), including the known-false `HonestTrace.prover_config_holds_highest_slot`
-(a16z/jolt#1951 item 4).
+("Proofs owed").
 For example, a 300-row run that touches RAM word 1000 is checked on a 512-cycle witness
 with a 1024-word RAM table. -/
 theorem HonestTrace.allConstraints_prover_sizes
