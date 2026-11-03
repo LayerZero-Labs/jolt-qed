@@ -36,10 +36,12 @@ def destinationIsCanonical : JoltISA.Dst → Bool
       | .xreg _ => false
       | _ => true
 
-/-- Every register operand in a fixed bytecode row uses its canonical ISA
-representation. Check captured operands too, even if execution ignores them.
-This inspects syntax only; instruction execution remains in `JoltISA.execInstr`.
-Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/instruction/format -/
+/-- Whether every encoded register uses its canonical ISA storage slot,
+including captured operands that execution ignores.
+For example, a floor load checks its destination and base, while a floor
+store checks its base and stored-value source.
+Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
+(`FormatLoad`, `FormatS`, `FormatShiftData`) at `c6703570`. -/
 def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   match instruction with
   -- One source and one destination.
@@ -51,10 +53,11 @@ def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   | .VirtualSRLI dst src _ | .VirtualSRAI dst src _
   | .VirtualSRLIW dst src _ | .VirtualSRAIW dst src _
   | .VirtualROTRI dst src _ | .VirtualROTRIW dst src _ | .VirtualRev8W dst src _
-  | .VirtualAlignAddr dst src _ | .VirtualWindowMaskB dst src _
+  | .VirtualWindowMaskB dst src _
   | .VirtualWindowMaskH dst src _ | .VirtualWindowMaskW dst src _
   | .VirtualSignExtendWord dst src _ | .VirtualZeroExtendWord dst src _
-  | .VirtualMovsign dst src _ | .LD _ dst src _ =>
+  | .VirtualMovsign dst src _ | .LD _ dst src _
+  | .VirtualLoadB _ dst src _ _ | .VirtualLoadH _ dst src _ _ | .VirtualLoadW _ dst src _ _ =>
       destinationIsCanonical dst && sourceIsCanonical src
   -- Two sources and one destination.
   | .ADD dst lhs rhs | .ADDW dst lhs rhs | .SUB dst lhs rhs | .SUBW dst lhs rhs
@@ -70,12 +73,13 @@ def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   | .VirtualXORROTW7 dst lhs rhs | .VirtualXORROTW22 dst lhs rhs
   | .VirtualXORROTW19 dst lhs rhs | .VirtualXORROTW6 dst lhs rhs
   | .VirtualPext dst lhs rhs | .VirtualPextSigned dst lhs rhs
-  | .VirtualShiftDataB dst lhs rhs | .VirtualShiftDataH dst lhs rhs
-  | .VirtualShiftDataW dst lhs rhs | .VirtualNegateIf dst lhs rhs =>
+  | .VirtualShiftDataB dst lhs rhs _ | .VirtualShiftDataH dst lhs rhs _
+  | .VirtualShiftDataW dst lhs rhs _ | .VirtualNegateIf dst lhs rhs =>
       destinationIsCanonical dst && sourceIsCanonical lhs && sourceIsCanonical rhs
   -- Two sources and no destination.
   | .BEQ lhs rhs _ | .BNE lhs rhs _ | .BLT lhs rhs _ | .BGE lhs rhs _
   | .BLTU lhs rhs _ | .BGEU lhs rhs _ | .SD lhs rhs _
+  | .VirtualStoreB lhs rhs _ _ | .VirtualStoreH lhs rhs _ _ | .VirtualStoreW lhs rhs _ _
   | .VirtualAssertEQ lhs rhs _ | .VirtualAssertValidDiv0 lhs rhs _
   | .VirtualAssertValidUnsignedRemainder lhs rhs _
   | .VirtualAssertMulUNoOverflow lhs rhs _ | .VirtualAssertLTE lhs rhs _ =>
@@ -85,8 +89,6 @@ def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   | .VirtualPow2I dst _ | .VirtualPow2IW dst _ | .VirtualShiftRightBitmaskI dst _
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       destinationIsCanonical dst
-  | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
-      sourceIsCanonical base
   | .FENCE | .VirtualHostIO => true
 
 end JoltRegisterEncoding

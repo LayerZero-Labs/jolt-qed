@@ -1,4 +1,5 @@
 import JoltConstraints.metadata
+import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
@@ -199,9 +200,15 @@ macro "jolt_nextpc_auto" : tactic => `(tactic|
   | split
   | refine bind_rule ?_ (fun x => ?_))
 
+/-- A non-memory, non-host row with neither a jump nor a branch flag preserves
+Sail's nextPC register for every successful computation result.
+For example, ADD writes its destination without changing nextPC.
+The load/store flags exclude both native and floor rows, which `instruction`
+handles separately; Jolt's tracer uses the memory rows in
+`tracer/src/instruction/floor_access.rs` (`load`, `store`) at `c6703570`. -/
 theorem ordinary_instruction (instr : Instr)
-    (hload : ∀ fault dst base imm, instr ≠ .LD fault dst base imm)
-    (hstore : ∀ base value imm, instr ≠ .SD base value imm)
+    (hload : JoltMetadata.opcodeFlag instr .Load = false)
+    (hstore : JoltMetadata.opcodeFlag instr .Store = false)
     (hhost : instr ≠ .VirtualHostIO)
     (hcontrol : JoltMetadata.opcodeFlag instr .Jump = false ∧
       JoltMetadata.instructionFlag instr .Branch = false) :
@@ -217,8 +224,7 @@ theorem ordinary_instruction (instr : Instr)
       simp only [hr] at h
       exact (bind_rule (write_rule dst value) (fun _ => pure_rule _))
         { s with adviceTape := tape } t v h
-  all_goals try exact False.elim (hload _ _ _ _ rfl)
-  all_goals try exact False.elim (hstore _ _ _ rfl)
+  all_goals try (simp only [JoltMetadata.opcodeFlag, Bool.true_eq_false] at hload hstore)
   all_goals try exact False.elim (hhost rfl)
   all_goals try (simp [JoltMetadata.opcodeFlag, JoltMetadata.instructionFlag] at hcontrol)
   all_goals simp only [execInstr]
@@ -284,48 +290,74 @@ theorem branch_not_taken (instr : Instr) (s t : SailJoltState)
     cases hright
     rfl
 
-theorem memory_write {addr data : BitVec 64} {s t : SailJoltState}
-    {v : Result Bool ExecutionResult}
-    (hr : Mmu.store_doubleword addr data s = .ok v t) :
-    t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
-  rw [(Mmu.store_doubleword_regs hr).1]
+/-- A doubleword load preserves nextPC, even when it returns an MMU error.
+For example, loading the containing doubleword at address 8 cannot change nextPC.
+Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::load_doubleword`) at `c6703570`. -/
+theorem load_doubleword_rule (address : BitVec 64) :
+    Preserves (Mmu.load_doubleword address) := by
+  intro s t result runs
+  rw [Mmu.load_doubleword_state runs]
 
+/-- A doubleword store preserves nextPC while updating memory or device state.
+For example, storing a merged byte lane at address 8 cannot change nextPC.
+Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`) at `c6703570`. -/
+theorem store_doubleword_rule (address value : BitVec 64) :
+    Preserves (Mmu.store_doubleword address value) := by
+  intro s t result runs
+  rw [(Mmu.store_doubleword_regs runs).1]
+
+/-- A retired LD preserves nextPC; for example, LD into x5 changes x5 but
+leaves Sail's nextPC register intact.
+Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `c6703570`. -/
 theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
     (imm : BitVec 64) (s t : SailJoltState)
     (hexec : execInstr (.LD fault dst base imm) s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
-  have hx := lookup_read_bind base _ _ _ _ hexec
-  by_cases halign : (sourceValue base s + imm) &&& 7 = 0
-  · simp only [halign, ↓reduceIte] at hx
-    cases hr : Mmu.load_doubleword (sourceValue base s + imm) s with
-    | error e s' => simp only [bind, EStateM.bind, hr] at hx; cases hx
-    | ok v s' =>
-      have hstate := Mmu.load_doubleword_state hr
-      subst s'
-      simp only [bind, EStateM.bind, hr] at hx
-      cases v with
-      | Ok value =>
-        exact (bind_rule (write_rule dst value) (fun _ => pure_rule _)) s t _ hx
-      | Err e => cases hx; rfl
-  · simp only [halign, ↓reduceIte, pure, EStateM.pure] at hx
-    cases hx
+  have keeps : Preserves (execInstr (.LD fault dst base imm)) := by
+    simp only [execInstr]
+    preservation_auto [read_rule _, write_rule _ _, pure_rule _,
+      load_doubleword_rule _] using bind_rule
+  exact keeps s t _ hexec
 
+/-- A retired SD preserves nextPC; for example, writing a doubleword to RAM
+changes its bytes but leaves Sail's nextPC register intact.
+Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) at `c6703570`. -/
 theorem store_instruction (base value : Src) (imm : BitVec 64)
     (s t : SailJoltState)
     (hexec : execInstr (.SD base value imm) s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
-  have hx := lookup_read_bind base _ _ _ _ hexec
-  have hx := lookup_read_bind value _ _ _ _ hx
-  by_cases halign : (sourceValue base s + imm) &&& 7 = 0
-  · simp only [halign, ↓reduceIte] at hx
-    cases hr : Mmu.store_doubleword (sourceValue base s + imm) (sourceValue value s) s with
-    | error e s' => simp only [bind, EStateM.bind, hr] at hx; cases hx
-    | ok v s' =>
-      have hp := memory_write hr
-      simp only [bind, EStateM.bind, hr] at hx
-      cases v <;> cases hx <;> exact hp
-  · simp only [halign, ↓reduceIte, pure, EStateM.pure] at hx
-    cases hx
+  have keeps : Preserves (execInstr (.SD base value imm)) := by
+    simp only [execInstr]
+    preservation_auto [read_rule _, pure_rule _, store_doubleword_rule _ _] using bind_rule
+  exact keeps s t _ hexec
+
+/-- Each floor load preserves nextPC, for all three width classes and all
+successful computation results, including modeled memory exceptions.
+For example, VirtualLoadH at effective address 10 loads from 8 without changing nextPC.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+theorem floor_load_instruction (instr : Instr) (faultClass : LoadFaultClass)
+    (dst : Dst) (base : Src) (imm : BitVec 64) (fault : ExceptionType)
+    (selected : instr = .VirtualLoadB faultClass dst base imm fault ∨
+      instr = .VirtualLoadH faultClass dst base imm fault ∨
+      instr = .VirtualLoadW faultClass dst base imm fault) :
+    Preserves (execInstr instr) := by
+  rcases selected with rfl | rfl | rfl <;> simp only [execInstr]
+  all_goals preservation_auto [read_rule _, write_rule _ _, pure_rule _,
+    load_doubleword_rule _] using bind_rule
+
+/-- Each floor store preserves nextPC, for all three width classes and all
+successful computation results, including modeled memory exceptions.
+For example, VirtualStoreW at effective address 12 writes to 8 without changing nextPC.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+theorem floor_store_instruction (instr : Instr) (base value : Src)
+    (imm : BitVec 64) (fault : ExceptionType)
+    (selected : instr = .VirtualStoreB base value imm fault ∨
+      instr = .VirtualStoreH base value imm fault ∨
+      instr = .VirtualStoreW base value imm fault) :
+    Preserves (execInstr instr) := by
+  rcases selected with rfl | rfl | rfl <;> simp only [execInstr]
+  all_goals preservation_auto [read_rule _, pure_rule _, store_doubleword_rule _ _]
+    using bind_rule
 
 def HostIOFrame (instr : Instr) (s t : SailJoltState) : Prop :=
   match instr with
@@ -333,28 +365,33 @@ def HostIOFrame (instr : Instr) (s t : SailJoltState) : Prop :=
       t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC
   | _ => True
 
+/-- A retired non-jump row preserves nextPC when its branch is not taken and
+its host-call frame holds; for example, a floor load needs no extra premise.
+Memory rows are classified once by their flags and use shared MMU frame rules.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`)
+at `c6703570`. -/
 theorem instruction (instr : Instr) (s t : SailJoltState)
     (hjump : JoltMetadata.opcodeFlag instr .Jump = false)
     (hnot : BranchTaken instr s = false)
     (hhost : HostIOFrame instr s t)
     (hexec : execInstr instr s = .ok (.Retire_Success ()) t) :
     t.sail.regs.get? Register.nextPC = s.sail.regs.get? Register.nextPC := by
-  cases instr
-  case LD fault dst base imm =>
-    exact load_instruction fault dst base imm s t hexec
-  case SD base value imm =>
-    exact store_instruction base value imm s t hexec
-  case VirtualHostIO =>
+  by_cases hload : JoltMetadata.opcodeFlag instr .Load = true
+  · obtain ⟨faultClass, dst, base, imm, selected⟩ := JoltMetadata.opcodeFlag_load_cases instr hload
+    rcases selected with rfl | ⟨fault, selected⟩
+    · exact load_instruction faultClass dst base imm s t hexec
+    · exact floor_load_instruction instr faultClass dst base imm fault selected s t _ hexec
+  by_cases hstore : JoltMetadata.opcodeFlag instr .Store = true
+  · obtain ⟨base, value, imm, selected⟩ := JoltMetadata.opcodeFlag_store_cases instr hstore
+    rcases selected with rfl | ⟨fault, selected⟩
+    · exact store_instruction base value imm s t hexec
+    · exact floor_store_instruction instr base value imm fault selected s t _ hexec
+  by_cases host : instr = .VirtualHostIO
+  · subst instr
     exact hhost
-  all_goals try (simp [JoltMetadata.opcodeFlag] at hjump)
-  all_goals try
-    (have hstate := branch_not_taken _ s t (by rfl) hnot hexec
-     subst t
-     rfl)
-  all_goals
-    exact ordinary_instruction _
-      (by intros; intro h; cases h) (by intros; intro h; cases h)
-      (by intro h; cases h)
-      ⟨by rfl, by rfl⟩ s t _ hexec
+  by_cases branch : JoltMetadata.instructionFlag instr .Branch = true
+  · rw [branch_not_taken instr s t branch hnot hexec]
+  exact ordinary_instruction instr (by simpa using hload) (by simpa using hstore)
+    host ⟨hjump, by simpa using branch⟩ s t _ hexec
 
 end JoltNextPCFrame

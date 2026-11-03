@@ -16,15 +16,19 @@ inductive CircuitFlags where
   | IsCompressed | IsFirstInSequence | IsLastInSequence
   deriving DecidableEq, Fintype
 
--- Rust: crates/jolt-riscv/src/flags.rs::InstructionFlags.
--- Names are quite self explanatory.
+/-- Operand-routing and branch/no-op flags in Jolt's prover.
+For example, LD selects its captured destination with `RightOperandIsRdWriteValue`.
+Jolt's prover: `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`) at `c6703570`. -/
 inductive InstructionFlags where
   | LeftOperandIsPC | RightOperandIsImm
   | LeftOperandIsRs1Value | RightOperandIsRs2Value | Branch | IsNoop
+  | RightOperandIsRdWriteValue
   deriving DecidableEq, Fintype
 
--- Rust: crates/jolt-lookup-tables/src/tables/mod.rs::LookupTableKind<64>.
--- These is the List of names of all the Lookup tables in Jolt.
+/-- The 55 lookup tables, in the order used by Jolt's prover.
+For example, `AddressOffsetH` returns an effective address masked with 6.
+Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs`
+(`LookupTableKind<64>`) at `c6703570`. -/
 inductive LookupTableKind where
   | RangeCheck
   | RangeCheckAligned
@@ -43,8 +47,6 @@ inductive LookupTableKind where
   | UnsignedLessThanEqual
   | ValidUnsignedRemainder
   | ValidDiv0
-  | HalfwordAlignment
-  | WordAlignment
   | LowerHalfWord
   | SignExtendWord
   | Pow2
@@ -76,11 +78,13 @@ inductive LookupTableKind where
   | Pext
   | WindowMaskB
   | WindowMaskH
-  | AlignAddr
   | ShiftDataB
   | ShiftDataH
   | ShiftDataW
   | VirtualXORROTL1
+  | AddressOffsetB
+  | AddressOffsetH
+  | AddressOffsetW
   deriving DecidableEq, Fintype
 
 -- These are the things God gives before we can begin Jolt. Some are free params, some are derived from the users program.

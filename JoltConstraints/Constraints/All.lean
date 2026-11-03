@@ -29,7 +29,7 @@ import JoltConstraints.Constraints.NextUnexpandedPCUpdateOtherwise
 import JoltConstraints.Constraints.OpFlagsEqBytecodeRead
 import JoltConstraints.Constraints.PCEqBytecodeRead
 import JoltConstraints.Constraints.ProductEqLeftInputMulRightInput
-import JoltConstraints.Constraints.RamAddrEqRs1PlusImmIfLoadStore
+import JoltConstraints.Constraints.RamAddrEqRs1PlusImmMinusLookupIfLoadStore
 import JoltConstraints.Constraints.RamAddrEqZeroIfNotLoadStore
 import JoltConstraints.Constraints.RamAddressEqRamRaf
 import JoltConstraints.Constraints.RamHammingWeightBooleanity
@@ -76,7 +76,7 @@ structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
     (entry : Fin (2 ^ params.logBytecodeK))
     (witness : WitnessType F params) : Prop where
   -- Stage 1: base RV64 relations
-  ramAddrEqRs1PlusImmIfLoadStore : JoltConstraints.ramAddrEqRs1PlusImmIfLoadStore witness
+  ramAddrEqRs1PlusImmMinusLookupIfLoadStore : JoltConstraints.ramAddrEqRs1PlusImmMinusLookupIfLoadStore witness
   ramAddrEqZeroIfNotLoadStore : JoltConstraints.ramAddrEqZeroIfNotLoadStore witness
   ramReadEqRamWriteIfLoad : JoltConstraints.ramReadEqRamWriteIfLoad witness
   ramReadEqRdWriteIfLoad : JoltConstraints.ramReadEqRdWriteIfLoad witness

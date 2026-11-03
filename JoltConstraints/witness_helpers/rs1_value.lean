@@ -9,10 +9,12 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [Rs1Value](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/registers.rs).
--- Rust: [RegisterStateR::capture_pre](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/instruction/registers/r.rs#L67-L79).
--- Read the first source from the pre-state, even when it is also the destination.
--- Instructions without this operand and padding positions contribute zero.
+/-- The first source value from the pre-state, cast to the field.
+Absent operands and padding contribute zero.
+For example, a floor load reads its base even if it overwrites that register.
+Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
+(`RegisterStateLoad`), `virtual_store_{b,h,w}.rs` (`RegisterStateS`) and
+`format/format_shift_data.rs` (`FormatShiftData`) at `c6703570`. -/
 noncomputable def Rs1Value [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     -- The witness includes padding beyond the actual execution rows.
@@ -36,18 +38,17 @@ noncomputable def Rs1Value [Field F] (trace : Trace) : Fin p.traceLength → F :
       | .VirtualXORROTW16 _ src _ | .VirtualXORROTW12 _ src _ | .VirtualXORROTW8 _ src _
       | .VirtualXORROTW7 _ src _ | .VirtualXORROTW22 _ src _ | .VirtualXORROTW19 _ src _
       | .VirtualXORROTW6 _ src _ | .OR _ src _ | .XOR _ src _ | .AND _ src _ | .SLT _ src _
-      | .SLTU _ src _ | .VirtualAlignAddr _ src _ | .VirtualWindowMaskB _ src _
+      | .SLTU _ src _ | .VirtualWindowMaskB _ src _
       | .VirtualWindowMaskH _ src _ | .VirtualWindowMaskW _ src _ | .VirtualPext _ src _
-      | .VirtualPextSigned _ src _ | .VirtualShiftDataB _ src _ | .VirtualShiftDataH _ src _
-      | .VirtualShiftDataW _ src _ | .VirtualSignExtendWord _ src _ | .VirtualZeroExtendWord _ src _
-      | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
+      | .VirtualPextSigned _ src _ | .VirtualShiftDataB _ src _ _ | .VirtualShiftDataH _ src _ _
+      | .VirtualShiftDataW _ src _ _ | .VirtualSignExtendWord _ src _ | .VirtualZeroExtendWord _ src _
+      | .VirtualMovsign _ src _ | .LD _ _ src _
+      | .VirtualLoadB _ _ src _ _ | .VirtualLoadH _ _ src _ _ | .VirtualLoadW _ _ src _ _ | .SD src _ _
+      | .VirtualStoreB src _ _ _ | .VirtualStoreH src _ _ _ | .VirtualStoreW src _ _ _ | .VirtualAssertEQ src _ _
       | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
       | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
       | .VirtualAssertLTE src _ _ =>
           ((JoltISA.sourceValue src row.preState).toNat : F)
-      -- Alignment assertions can read architectural or virtual registers.
-      | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
-          ((JoltISA.sourceValue base row.preState).toNat : F)
       | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
       | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => 0
     else 0

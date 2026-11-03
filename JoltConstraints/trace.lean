@@ -39,19 +39,28 @@ structure TraceRow (bytecode : Array JoltInstructionRow) where
   preState : SailJoltState
   postState : SailJoltState
 
--- The memory address one Jolt row reads or writes. For an LD or SD row it is the
--- value in the base register before the row runs, plus the immediate (wrapping at
--- 64 bits). Any other row does not read or write memory: none. After expansion,
--- LD and SD are the only rows that touch memory (LB, SB, ... become sequences
--- around them).
--- Rust: [LD effective address](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/instruction/ld.rs#L19-L35)
--- and [SD effective address](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/instruction/sd.rs#L22-L35).
--- JoltTraceRow stores that observation; its constructor does not check the sum.
+/-- The recorded byte address of a memory row, as a natural number.
+LD/SD record `ea = base + imm` wrapping at 64 bits; floor rows subtract
+`ea &&& mask`, with B/H/W masks 7/6/4, and other rows return `none`.
+For example, a word floor row at `ea = 12` records `some 8`.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`) and
+`crates/jolt-riscv/src/trace_row.rs` (`ram_address`);
+Jolt's prover: `crates/jolt-program/src/execution/trace.rs`
+(`ExecutionDimensions::from_rows`) at `c6703570`. -/
 def TraceRow.ram_address {bytecode : Array JoltInstructionRow}
     (row : TraceRow bytecode) : Option Nat :=
   match bytecode[row.rowIndex].instruction with
   | .LD _ _ base imm | .SD base _ imm =>
       some (JoltISA.sourceValue base row.preState + imm).toNat
+  | .VirtualLoadB _ _ base imm _ | .VirtualStoreB base _ imm _ =>
+      let ea := JoltISA.sourceValue base row.preState + imm
+      some (ea - (ea &&& 7)).toNat
+  | .VirtualLoadH _ _ base imm _ | .VirtualStoreH base _ imm _ =>
+      let ea := JoltISA.sourceValue base row.preState + imm
+      some (ea - (ea &&& 6)).toNat
+  | .VirtualLoadW _ _ base imm _ | .VirtualStoreW base _ imm _ =>
+      let ea := JoltISA.sourceValue base row.preState + imm
+      some (ea - (ea &&& 4)).toNat
   | _ => none
 
 -- A candidate execution: its bytecode, recorded transitions and initial state.

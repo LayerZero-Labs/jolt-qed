@@ -1,6 +1,6 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-11-02
+updated: 2026-11-03
 rust: 5def437f21a0006e13c063a03f0b5a7c9b93cd6f
 alignment_target: c6703570588e88033b8722bd4dec47c7f46f3b16
 lean_head: 7096dcaeb62e4a49d259b511dce76c3bc77bae5f
@@ -43,7 +43,7 @@ If one is still open when the main proofs pass, escalate it.
 
 | Issue | What breaks | In our model |
 |---|---|---|
-| [#1949](https://github.com/a16z/jolt/issues/1949) | A load/store address that wraps past 2^64 breaks the RAM-address constraint | (01) stays `sorry`; a fix PR is announced in the issue |
+| [#1949](https://github.com/a16z/jolt/issues/1949) | Address sums that wrap break (01), floor-row addition in (08), and ShiftData right-input equality in (11) | (01) and the two honest-row address-bound lemmas remain `sorry`, as approved by Ari on 2026-11-03 |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 1 | A run that does not panic and never stores to the termination word: an SDK guest exiting through `platform_exit` or `std::process::exit`, or a bare ELF that reaches `j .` first. The tracer records no write to the word, but `jolt-witness`'s `final_ram_state` sets its `RamValFinal` slot to 1 from the panic flag alone, while initial RAM and the increments give 0 | (38) stays `sorry`. The fix proposed in the issue changes only the SDK's exit paths, so a bare ELF stays unprovable |
 | [#1950](https://github.com/a16z/jolt/issues/1950), [#1951](https://github.com/a16z/jolt/issues/1951) item 2 | A store to the termination word is recorded but the device ignores it, so a later load reads 0 (`bug-report/ram-val-termination/`) | (37) stays `sorry`; `Trace.matches_outputs` leaves the termination word out, and `Represents.finalRam` excludes it |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the checked prover configuration rejects it | such runs have no checked `Trace.prover_config` |
@@ -95,11 +95,15 @@ On 2026-10-23, `lake build JoltBytecode JoltConstraints` passed (8,832 jobs) and
 That check used the old definitions; the working tree's `JoltConstraints` does not build now (see the constraints migration below), so this proof is not verified against the migrated bytecode.
 The proof's structure is in `methods/soundness.md`, "The argument in brief".
 
-**Completeness.** `#print axioms JoltInstance.completeness` lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`; its `sorryAx` comes from these gaps:
+**Completeness.** On 2026-11-03, the migrated `#print axioms JoltInstance.completeness` lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
+The migrated completeness root and assembled theorem now build after the approved `WordEntry` repair.
+The working tree has these six completeness gaps, including Ari's two approved #1949 wrap lemmas; see the [Step 2 report](../reports/2026-11-03-constraints-migration-completeness.md).
 
 | Theorem | What it needs |
 |---|---|
-| (01) `honestWitness_ramAddrEqRs1PlusImmIfLoadStore` | false until #1949 is fixed |
+| (01) `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` (`Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean:33`) | false until #1949 is fixed |
+| (08) `HonestTrace.floorAccess_address_nonneg` (`Completeness/RightLookupAdd.lean:47`) | false until #1949 is fixed: the signed base-plus-immediate sum must be nonnegative on an actual floor row of an honest trace |
+| (11) `HonestTrace.shiftData_address_noWrap` (`Completeness/RightLookupEqRightInputOtherwise.lean:46`) | false until #1949 is fixed: the signed address-plus-immediate sum must lie in `[0, 2^64)` on an actual ShiftData row of an honest trace |
 | (37) `honestWitness_ramValEqInitialPlusPrefixRamInc` | false until #1950 is fixed |
 | (38) `honestWitness_ramValFinalEqInitialPlusRamInc` | false until #1951 item 1 is fixed |
 | `HonestTrace.corrected_witness_params_ram_bounds` (`Completeness/Helpers/VerifierSizes.lean`) | The empty program is excluded by the `ImageNonempty` assumption. Lower half: proved once the minimum computes successfully; still to prove that both bounds compute successfully. Upper half: false until #1951 item 4 is fixed, because the verifier's maximum rounds the word count down |
@@ -130,12 +134,17 @@ These are source debt, not permission to add such tactics or raise limits during
 - Raised heartbeat limits: `set_option maxHeartbeats 1000000` at `JoltConstraints/Completeness/Helpers/LookupWriteProofHelpers.lean:4`, and `400000` at `JoltConstraints/Completeness/Helpers/TracePCProofHelpers.lean:7`.
 - No executable `bv_decide` use remains in `JoltBytecode/` or `JoltConstraints/`; the only textual match is a comment in `Soundness/Layer4/Interleave.lean:17`.
 
-### Constraints migration (not started)
+### Constraints migration (2026-11-03)
 
-The `c6703570` migration of the constraints has not started.
-Its eleven items, with the verified target facts, are in [constraints.md](constraints.md#migration-outline).
-Ari approved retiring the three alignment lookup-entry theorems (item 6); that retirement is not executed yet.
-Until the migration is done, `JoltConstraints` does not build, and no completeness or soundness claim is re-verified against the target.
+Step 1 definitions targeting `c6703570` were reviewed and remain uncommitted.
+Step 2 retires the three alignment lookup-entry theorems and supplies width-parametric AddressOffset proofs.
+The affected completeness proofs are migrated, with the two approved address-wrap obligations recorded above.
+The approved `WordEntry` repair removes the retired `alignAddr_entry` theorem, and the completeness root and assembled theorem build.
+The wrap gaps now have the approved honest-row statements; their field equalities are proved, and the unrestricted bitvector admissions are deleted.
+All other soundness migration remains Step 3.
+See the [Step 2 report](../reports/2026-11-03-constraints-migration-completeness.md) for declarations, build results and remaining failures.
+The eleven migration items are in [constraints.md](constraints.md#migration-outline).
+The assembled completeness proof builds with the six listed gaps; soundness is not yet re-verified against the target.
 
 ### Cleanup
 
@@ -180,27 +189,22 @@ Until the migration is done, `JoltConstraints` does not build, and no completene
 
 ## Classifier call sites
 
-`JoltMetadata.opcodeFlag_load_requiresLD` (`metadata.lean:215`) and `opcodeFlag_store_requiresSD` (`metadata.lean:220`) conclude that a flagged instruction is LD or SD, respectively.
-Once the six floor rows receive their target flags, these conclusions must also cover the floor constructors.
-They are helper statements, so generalizing them needs no approval and adds no premise.
-Each caller should use one shared classification, not a new whole-instruction case split.
+Step 1 replaced `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` by `opcodeFlag_load_cases` and `opcodeFlag_store_cases`, covering LD/SD and the floor rows with unchanged hypotheses.
+Step 2 migrated both completeness load callers through `Completeness/Helpers/MemoryValueFacts.lean` and the store caller in `Completeness/Rs2EqRamWriteIfStore.lean`.
+These proofs use the shared classification and retain their original premises.
+The remaining old-classifier calls are in soundness and await Step 3.
 
-| Classifier | Call site |
+| Classifier | Remaining call site |
 |---|---|
-| Load | `Completeness/RamReadEqRamWriteIfLoad.lean:27` |
-| Load | `Completeness/RamReadEqRdWriteIfLoad.lean:27` |
 | Load | `Soundness/Layer6/PlainRow.lean:949` |
-| Store | `Completeness/Rs2EqRamWriteIfStore.lean:27` |
 | Store | `Soundness/Layer6/PlainRow.lean:954` |
 | Store | `Soundness/Layer7/TerminationStore.lean:703` |
 | Store | `Soundness/Layer7/StallSuffix.lean:3305` |
 
-## Correspondence still to audit (2026-11-02)
+## Correspondence migration (2026-11-03)
 
-- `witness.lean:21` declares six instruction flags; the target has seven, with `RightOperandIsRdWriteValue` appended after `IsNoop`.
-  Its `LookupTableKind` still has `AlignAddr`, `HalfwordAlignment` and `WordAlignment`, which the target replaces with `AddressOffsetB/H/W`.
-- `metadata.lean`, `register_encoding.lean`, and several witness helpers still refer to the retired instructions.
-- `TraceRow.ram_address` (`trace.lean:50`) recognizes only `LD` and `SD`.
-  Floor-row observations, operand selectors, and lookup inputs and outputs must agree with the target tracer and witness, not merely make pattern matches exhaustive.
+- Step 1 migrated the seven instruction flags, AddressOffset tables, metadata, register selectors and floor-row observations; Ari reviewed those definitions.
+- Step 2 migrates the completeness proofs with no new premises and only the approved (08) and (11) wrap gaps.
+  Its AddressOffset dispatch and constraint (39) now build after the approved `Soundness.Layer4.WordEntry` repair.
 - `TracerAddressChecks` (`Soundness/Layer5/MemoryAccessRestriction.lean:97`) returns `True` for every row other than LD and SD.
   Its comment at line 82, that LD and SD are the only memory accesses after expansion, is stale.

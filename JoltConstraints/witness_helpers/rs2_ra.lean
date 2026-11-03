@@ -9,10 +9,12 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [materialize_register_read_write_virtual](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
--- Select the instruction's second source register, including an explicit x0.
--- Selection uses the encoded integer operand, independently of capture presence.
--- An absent operand and a padding position select no register.
+/-- The indicator of the encoded second source register.
+Absent operands and padding contribute zero.
+For example, a floor store selects its value source and a floor load selects none.
+Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
+(`RegisterStateLoad`), `virtual_store_{b,h,w}.rs` (`RegisterStateS`) and
+`format/format_shift_data.rs` (`FormatShiftData`) at `c6703570`. -/
 noncomputable def Rs2Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLength → F :=
   fun address t =>
     -- The witness includes padding beyond the actual execution rows.
@@ -31,8 +33,9 @@ noncomputable def Rs2Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLengt
       | .VirtualXORROTW8 _ _ src | .VirtualXORROTW7 _ _ src | .VirtualXORROTW22 _ _ src
       | .VirtualXORROTW19 _ _ src | .VirtualXORROTW6 _ _ src | .OR _ _ src | .XOR _ _ src
       | .AND _ _ src | .SLT _ _ src | .SLTU _ _ src | .VirtualPext _ _ src
-      | .VirtualPextSigned _ _ src | .VirtualShiftDataB _ _ src | .VirtualShiftDataH _ _ src
-      | .VirtualShiftDataW _ _ src | .SD _ src _ | .VirtualAssertEQ _ src _
+      | .VirtualPextSigned _ _ src | .VirtualShiftDataB _ _ src _ | .VirtualShiftDataH _ _ src _
+      | .VirtualShiftDataW _ _ src _ | .SD _ src _
+      | .VirtualStoreB _ src _ _ | .VirtualStoreH _ src _ _ | .VirtualStoreW _ src _ _ | .VirtualAssertEQ _ src _
       | .VirtualAssertValidDiv0 _ src _ | .VirtualNegateIf _ _ src
       | .VirtualAssertValidUnsignedRemainder _ src _ | .VirtualAssertMulUNoOverflow _ src _
       | .VirtualAssertLTE _ src _ =>
@@ -43,10 +46,11 @@ noncomputable def Rs2Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLengt
       | .VirtualPow2I _ _ | .VirtualPow2IW _ _ | .VirtualShiftRightBitmask _ _ _
       | .VirtualShiftRightBitmaskI _ _ | .VirtualShiftRightBitmaskW _ _ _ | .VirtualSRLI _ _ _
       | .VirtualSRAI _ _ _ | .VirtualSRLIW _ _ _ | .VirtualSRAIW _ _ _ | .VirtualROTRI _ _ _
-      | .VirtualROTRIW _ _ _ | .VirtualRev8W _ _ _ | .VirtualAlignAddr _ _ _
+      | .VirtualROTRIW _ _ _ | .VirtualRev8W _ _ _
       | .VirtualWindowMaskB _ _ _ | .VirtualWindowMaskH _ _ _ | .VirtualWindowMaskW _ _ _
       | .VirtualSignExtendWord _ _ _ | .VirtualZeroExtendWord _ _ _ | .VirtualMovsign _ _ _
-      | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
+      | .LD _ _ _ _
+      | .VirtualLoadB _ _ _ _ _ | .VirtualLoadH _ _ _ _ _ | .VirtualLoadW _ _ _ _ _
       | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
       | .VirtualHostIO => 0
     else 0

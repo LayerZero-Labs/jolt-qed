@@ -7,8 +7,11 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-/-- Assemble the individual honest-witness completeness results. It inherits the
-`sorry`s listed in model_review.md (Proofs owed). -/
+/-- Assemble the 62 honest-witness equations, for example the RAM-address
+equation (01) and operand selection (33), under their existing trace premises.
+The bundle inherits the gaps listed in `model_review.md`, "Proofs owed".
+Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
+(`rv64_trace_constraints`) at `c6703570`. -/
 theorem honestWitness_constraintEquations
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
@@ -34,7 +37,7 @@ theorem honestWitness_constraintEquations
   have hlayout := (finalTraceState_ioSame trace).1
   refine {
     -- Stage 1: base RV64 relations
-    ramAddrEqRs1PlusImmIfLoadStore := honestWitness_ramAddrEqRs1PlusImmIfLoadStore params trace ramFits traceFits bytecodeDomain
+    ramAddrEqRs1PlusImmMinusLookupIfLoadStore := honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore params trace ramFits traceFits bytecodeDomain
     ramAddrEqZeroIfNotLoadStore := honestWitness_ramAddrEqZeroIfNotLoadStore params trace ramFits traceFits bytecodeDomain
     ramReadEqRamWriteIfLoad := honestWitness_ramReadEqRamWriteIfLoad params trace ramFits traceFits bytecodeDomain
     ramReadEqRdWriteIfLoad := honestWitness_ramReadEqRdWriteIfLoad params trace ramFits traceFits bytecodeDomain

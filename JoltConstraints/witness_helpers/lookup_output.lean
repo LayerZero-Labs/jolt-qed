@@ -8,10 +8,13 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [per-instruction lookup outputs](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions).
--- Reuse the pure calculations called by execInstr, including when rd = x0
--- discards the computed value. Jumps output their target, not their link value.
--- Advice is the exception: Rust explicitly reads the captured post-state rd.
+/-- The lookup result for a trace row, as an unsigned 64-bit word.
+Sources come from the pre-state; advice uses the captured post-state destination.
+Floor rows return their address offset, while LD and SD return zero.
+For example, a halfword floor row at effective address 10 returns 2.
+Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
+(`floor_access!`) and `instructions/virt/shift_data_{b,h,w}.rs`
+(`to_lookup_output`) at `c6703570`. -/
 noncomputable def rowLookupOutput {bytecode : Array JoltInstructionRow}
     (row : TraceRow bytecode) : BitVec 64 :=
   let bytecodeRow := getElem bytecode row.rowIndex.val row.rowIndex.isLt
@@ -78,15 +81,23 @@ noncomputable def rowLookupOutput {bytecode : Array JoltInstructionRow}
   | .VirtualXORROTW22 _ lhs rhs => jolt_virtual_xorrotw_value 22 (source lhs) (source rhs)
   | .VirtualXORROTW19 _ lhs rhs => jolt_virtual_xorrotw_value 19 (source lhs) (source rhs)
   | .VirtualXORROTW6 _ lhs rhs => jolt_virtual_xorrotw_value 6 (source lhs) (source rhs)
-  | .VirtualAlignAddr _ base imm => jolt_virtual_align_addr_value64 (source base) imm
   | .VirtualWindowMaskB _ base imm => jolt_virtual_window_mask_b_value64 (source base) imm
   | .VirtualWindowMaskH _ base imm => jolt_virtual_window_mask_h_value64 (source base) imm
   | .VirtualWindowMaskW _ base imm => jolt_virtual_window_mask_w_value64 (source base) imm
   | .VirtualPext _ src mask => jolt_virtual_pext_value (source src) (source mask)
   | .VirtualPextSigned _ src mask => jolt_virtual_pext_signed_value (source src) (source mask)
-  | .VirtualShiftDataB _ src address => jolt_virtual_shift_data_b_value (source src) (source address)
-  | .VirtualShiftDataH _ src address => jolt_virtual_shift_data_h_value (source src) (source address)
-  | .VirtualShiftDataW _ src address => jolt_virtual_shift_data_w_value (source src) (source address)
+  | .VirtualShiftDataB _ src address imm =>
+      jolt_virtual_shift_data_b_value (source src) (source address + imm)
+  | .VirtualLoadB _ _ base imm _ | .VirtualStoreB base _ imm _ =>
+      (source base + imm) &&& 7
+  | .VirtualShiftDataH _ src address imm =>
+      jolt_virtual_shift_data_h_value (source src) (source address + imm)
+  | .VirtualLoadH _ _ base imm _ | .VirtualStoreH base _ imm _ =>
+      (source base + imm) &&& 6
+  | .VirtualShiftDataW _ src address imm =>
+      jolt_virtual_shift_data_w_value (source src) (source address + imm)
+  | .VirtualLoadW _ _ base imm _ | .VirtualStoreW base _ imm _ =>
+      (source base + imm) &&& 4
   | .VirtualSignExtendWord _ src _ => jolt_virtual_sign_extend_word_value (source src)
   | .VirtualZeroExtendWord _ src _ => jolt_virtual_zero_extend_word_value (source src)
   | .VirtualMovsign _ src _ => jolt_movsign_value (source src)
@@ -94,7 +105,6 @@ noncomputable def rowLookupOutput {bytecode : Array JoltInstructionRow}
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       TraceWitness.capturedDestinationValue dst row.postState
   -- For an honest row, successful execution certifies these enforced assertions.
-  | .VirtualAssertHalfwordAlignment .. | .VirtualAssertWordAlignment ..
   | .VirtualAssertValidDiv0 .. | .VirtualAssertValidUnsignedRemainder ..
   | .VirtualAssertMulUNoOverflow .. | .VirtualAssertLTE .. => 1
   -- Rust permits a nonzero immediate to suppress this assertion. Such a row

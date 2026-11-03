@@ -165,12 +165,14 @@ noncomputable def rangeCheckAlignedTableEntry {F : Type} [Field F]
   let index := BitVec.ofFin address
   (((index &&& ((1#128 <<< 64) - 1)).setWidth 64 &&& ~~~1#64).toNat : F)
 
-/-- The ALIGN_ADDR table: the low 64 bits with bits 0–2 cleared.
-Rust: crates/jolt-lookup-tables/src/tables/align_addr.rs. -/
-noncomputable def alignAddrTableEntry {F : Type} [Field F]
-    (address : Fin (2 ^ 128)) : F :=
-  let index := BitVec.ofFin address
-  (((index &&& ((1#128 <<< 64) - 1)).setWidth 64 &&& ~~~7#64).toNat : F)
+/-- The offset within a doubleword allowed by a `width`-byte floor access.
+The 128-bit lookup `address` is masked with `8 - width`; widths 1, 2 and 4
+give masks 7, 6 and 4, so width 2 at address 11 gives 2.
+Jolt's prover: `crates/jolt-lookup-tables/src/tables/address_offset.rs`
+(`AddressOffsetTable::materialize_entry`) at `c6703570`. -/
+noncomputable def addressOffsetTableEntry {F : Type} [Field F]
+    (width : Nat) (address : Fin (2 ^ 128)) : F :=
+  ((BitVec.ofFin address &&& BitVec.ofNat 128 (8 - width)).toNat : F)
 
 /-- The UPPER_WORD table: the high 64 bits of the address.
 Rust: crates/jolt-lookup-tables/src/tables/upper_word.rs. -/
@@ -238,20 +240,6 @@ noncomputable def shiftRightBitmaskWTableEntry {F : Type} [Field F]
   let index := BitVec.ofFin address
   let shift := (index % 32).toNat
   ((((1#128 <<< 32) - (1#128 <<< shift)).setWidth 64).toNat : F)
-
-/-- The HALFWORD_ALIGNMENT table: `1` if the address is a multiple of 2.
-Rust: crates/jolt-lookup-tables/src/tables/halfword_alignment.rs. -/
-noncomputable def halfwordAlignmentTableEntry {F : Type} [Field F]
-    (address : Fin (2 ^ 128)) : F :=
-  let index := BitVec.ofFin address
-  if index % 2 = 0 then 1 else 0
-
-/-- The WORD_ALIGNMENT table: `1` if the address is a multiple of 4.
-Rust: crates/jolt-lookup-tables/src/tables/word_alignment.rs. -/
-noncomputable def wordAlignmentTableEntry {F : Type} [Field F]
-    (address : Fin (2 ^ 128)) : F :=
-  let index := BitVec.ofFin address
-  if index % 4 = 0 then 1 else 0
 
 /-- The MULU_NO_OVERFLOW table: `1` if the high 64 bits of the address are zero.
 Rust: crates/jolt-lookup-tables/src/tables/mulu_no_overflow.rs. -/
@@ -566,7 +554,10 @@ noncomputable def pextSignedTableEntry {F : Type} [Field F]
   ((pextSigned x y).toNat : F)
 
 /-- `Table_q(x)` from constraint (39) in `constraints.md`: the fixed table's
-field value at the 128-bit Boolean address `x`. -/
+field value at the 128-bit Boolean address `x`.
+For example, `AddressOffsetW` at address 12 gives 4.
+Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs` (`LookupTableKind`)
+and `tables/address_offset.rs` (`materialize_entry`) at `c6703570`. -/
 noncomputable def lookupTableEntry {F : Type} [Field F]
     (table : LookupTableKind) (address : Fin (2 ^ 128)) : F :=
   match table with
@@ -588,8 +579,6 @@ noncomputable def lookupTableEntry {F : Type} [Field F]
   | .UnsignedLessThanEqual => unsignedLessThanEqualTableEntry address
   | .ValidUnsignedRemainder => validUnsignedRemainderTableEntry address
   | .ValidDiv0 => validDiv0TableEntry address
-  | .HalfwordAlignment => halfwordAlignmentTableEntry address
-  | .WordAlignment => wordAlignmentTableEntry address
   | .LowerHalfWord => lowerHalfWordTableEntry address
   | .SignExtendWord => signExtendWordTableEntry address
   | .Pow2 => pow2TableEntry address
@@ -621,9 +610,11 @@ noncomputable def lookupTableEntry {F : Type} [Field F]
   | .Pext => pextTableEntry address
   | .WindowMaskB => windowMaskBTableEntry address
   | .WindowMaskH => windowMaskHTableEntry address
-  | .AlignAddr => alignAddrTableEntry address
   | .ShiftDataB => shiftDataBTableEntry address
   | .ShiftDataH => shiftDataHTableEntry address
   | .ShiftDataW => shiftDataWTableEntry address
+  | .AddressOffsetB => addressOffsetTableEntry 1 address
+  | .AddressOffsetH => addressOffsetTableEntry 2 address
+  | .AddressOffsetW => addressOffsetTableEntry 4 address
 
 end JoltConstraints

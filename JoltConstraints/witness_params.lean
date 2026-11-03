@@ -37,20 +37,17 @@ theorem min?_getD_lt (numbers : List Nat) (bound : Nat) (positive : 0 < bound)
   | none => exact positive
   | some number => exact allBelow number (List.min?_mem smallest)
 
--- A row's memory address is a 64-bit value.
+/-- Every recorded RAM byte address fits in 64 bits, including a floor row's
+`ea - (ea &&& mask)`; for example, a byte floor row at effective address 11
+records 8, which is still below `2^64`.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`) and
+`crates/jolt-riscv/src/trace_row.rs` (`ram_address`) at `c6703570`. -/
 theorem TraceRow.ram_address_lt {bytecode : Array JoltInstructionRow}
     (row : TraceRow bytecode) (address : Nat) (touches : row.ram_address = some address) :
     address < 2 ^ 64 := by
   unfold TraceRow.ram_address at touches
-  split at touches
-  · -- LD
-    cases touches
-    exact BitVec.isLt _
-  · -- SD
-    cases touches
-    exact BitVec.isLt _
-  · -- no other instruction touches memory
-    cases touches
+  split at touches <;> cases touches
+  all_goals exact BitVec.isLt _
 
 -- The slot of an address below 2^64 is below 2^61: it counts 64-bit steps.
 theorem remap_address_lt (layout : MemoryLayout) (address : Nat) (fits : address < 2 ^ 64) :

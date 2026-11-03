@@ -33,7 +33,12 @@ theorem lookup_destination_writable (bc : JoltInstructionRow) (valid : bc.Valid)
     | true => exact False.elim (hnoop (valid.x0DestinationIsNoOp rd hdst hz))
 
 /-- The instruction-level connection between execution and lookup capture.
-The PC hypothesis is supplied by the trace boundary invariant. -/
+The PC hypothesis is supplied by the trace boundary invariant.
+For example, ShiftData captures the stored value shifted by its effective address;
+floor loads do not set WriteLookupOutputToRD and are excluded by `hflag`.
+Jolt's prover: `crates/jolt-riscv/src/instructions/virt/load_b.rs`;
+Jolt's tracer: `tracer/src/instruction/virtual_shift_data_b.rs` (`exec`)
+at `c6703570`. -/
 theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionRow}
     (row : HonestTraceRow bytecode) (valid : bytecode[row.rowIndex].Valid)
     (hpc : row.preState.sail.regs.get? Register.PC =
@@ -686,17 +691,6 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       have hread2 := lookup_read_bind rhs _ _ _ _ hread
       exact congrArg (fun v : BitVec 64 => (v.toNat : F))
         (lookup_write_retire dst _ _ _ (hw dst rfl) hread2)
-    | VirtualAlignAddr dst base imm =>
-      simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
-      rw [hi] at hexec
-      simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-      simp only [TraceWitness.rowLookupOutput, show
-        bytecode[row.rowIndex.val].instruction = _ from hi,
-        hi, TraceWitness.rdValue]
-      obtain ⟨advice, hexec⟩ := hexec
-      have hread := lookup_read_bind base _ _ _ _ hexec
-      exact congrArg (fun v : BitVec 64 => (v.toNat : F))
-        (lookup_write_retire dst _ _ _ (hw dst rfl) hread)
     | VirtualWindowMaskB dst base imm =>
       simp only [hi, JoltISA.Instr.destination?, Option.some.injEq] at hw
       rw [hi] at hexec

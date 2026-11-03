@@ -1,7 +1,6 @@
 import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.Constraints.RightLookupOperandEqInstructionRaf
-import JoltConstraints.Constraints.LookupOperandData
-import JoltConstraints.Completeness.Helpers.InstructionReadSelection
+import JoltConstraints.Soundness.Layer4.Interleave
 
 set_option autoImplicit false
 
@@ -9,9 +8,23 @@ namespace JoltConstraints
 
 open scoped BigOperators
 
+/-- A combined index selects all 128 bits; otherwise its even bits give the
+right operand, for example 2 from the interleaving of 1 and 2.
+Jolt's verifier: `crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs`
+(`ReadRaf::output_expression`) at `c6703570`. -/
+private theorem rightLookupRaf_select {F : Type} [Field F]
+    (combined : Bool) (index : BitVec 128) :
+    (if combined then (index.toNat : F) else ((uninterleave index.toFin).2.toNat : F)) =
+      (1 - if combined then 1 else 0) * lookupAddressRight index.toFin +
+        (if combined then 1 else 0) * (index.toNat : F) := by
+  cases combined <;> simp [lookupAddressRight_eq_uninterleave]
+
 /-- Completeness of constraint (41) for the honest witness.
 Uses the address-chunk selection and operand-encoding correspondence.
-The entire 128-bit address is cast into F, preserving arithmetic carry. -/
+For example, an addition row selects the full 128-bit index, while LD selects
+its even bits, which encode the captured destination.
+Jolt's prover: `crates/jolt-witness/src/witnesses/operands.rs`
+(`RightLookupOperand`) at `c6703570`. -/
 theorem honestWitness_rightLookupOperandEqInstructionRaf
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
@@ -28,28 +41,9 @@ theorem honestWitness_rightLookupOperandEqInstructionRaf
         (HonestTrace.honestWitness (F := F) params trace).InstructionRafFlag t *
           (address.val : F)) t]
   by_cases inBounds : t.val < trace.rows.size
-  · -- Combined operands use the full index; ordinary operands deinterleave it.
-    -- Unfolding lookupAddressRight drops the index's bound proof, so the row's
-    -- instruction can be generalized and split by constructor.
-    simp only [HonestTrace.honestWitness, TraceWitness.RightLookupOperand,
-      TraceWitness.InstructionRafFlag, TraceWitness.lookupIndex,
-      TraceWitness.RightInstructionInput, TraceWitness.Imm, TraceWitness.Rs2Value,
-      lookupAddressRight, inBounds, dite_true]
-    generalize (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex.val]'
-      (trace.rows[t.val]'inBounds).rowIndex.isLt).instruction = instruction
-    -- RAF rows keep the full index on both sides. Interleaved rows recover the
-    -- immediate or rs2, while FENCE, LD, SD, and HostIO have zero input and index.
-    cases instruction <;>
-      simp only [JoltMetadata.hasCombinedLookupOperands, JoltMetadata.instructionRafFlag,
-        JoltMetadata.opcodeFlag, JoltMetadata.instructionFlag, JoltMetadata.immediate,
-        TraceWitness.instructionLookupIndex, Int.cast_natCast,
-        Bool.false_eq_true, Bool.or_false, Bool.or_true, ↓reduceIte, sub_zero, sub_self,
-        one_mul, zero_mul, zero_add, add_zero]
-    -- simp rewrites each ite condition but not its Decidable instance, so the
-    -- interleaved rows are closed by exact, up to unfolding the lookup index.
-    all_goals first
-      | exact (sum_interleave_even_bits _ _).symm
-      | simp
+  · simp only [HonestTrace.honestWitness, TraceWitness.RightLookupOperand,
+      TraceWitness.InstructionRafFlag, inBounds, dite_true]
+    exact rightLookupRaf_select _ _
   · simp [HonestTrace.honestWitness, TraceWitness.RightLookupOperand,
       TraceWitness.InstructionRafFlag, TraceWitness.lookupIndex,
       lookupAddressRight, inBounds]

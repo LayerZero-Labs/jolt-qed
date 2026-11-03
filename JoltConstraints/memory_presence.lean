@@ -492,37 +492,121 @@ theorem HonestTrace.panic_lt_termination {joltInstance : JoltInstance SourceInst
       rw [same]
       exact previous
 
--- The old word exists for a store at row i of an initialized, linked honest trace.
--- No statement is made for an isolated row with an arbitrary pre-state.
-theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (i : Nat) (inBounds : i < trace.rows.size) (base value : JoltISA.Src) (imm : BitVec 64)
-    (isStore : trace.bytecode[trace.rows[i].rowIndex].instruction = .SD base value imm) :
-    (JoltISA.trace_doubleword? trace.rows[i].preState
-      (JoltISA.sourceValue base trace.rows[i].preState + imm)).isSome = true := by
-  have atPosition := Array.getElem?_eq_getElem inBounds
-  have present := trace.ram_present i trace.rows[i] atPosition
-  have ordered := trace.panic_lt_termination i trace.rows[i] atPosition
-  have runs := trace.executes trace.rows[i] (Array.getElem_mem inBounds)
-  rw [withRuntimeAdvice_store _ base value imm isStore] at runs
-  simp only [JoltISA.execInstr] at runs
-  cases baseRead : JoltISA.readSrc base trace.rows[i].preState with
+/-- A successful register-read/store sequence has an old word at its accessed
+address, provided initialized RAM bytes remain present and panic precedes termination.
+`addressOf` maps the effective address to the accessed address; the two masks
+allow an alignment check before or after reading the value source.
+For example, SD uses `id`, mask 0 before the read and mask 7 after it.
+Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) and
+`tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+private theorem store_sequence_old_present (base value : JoltISA.Src) (imm : BitVec 64)
+    (addressOf : BitVec 64 → BitVec 64) (beforeMask afterMask : BitVec 64)
+    (fault : ExceptionType) (state after : SailJoltState)
+    (present : RamBytesPresent state)
+    (ordered : state.jolt_device.memory_layout.panic.toNat <
+      state.jolt_device.memory_layout.termination.toNat)
+    (runs : (do
+      let baseValue ← JoltISA.readSrc base
+      let ea := baseValue + imm
+      if ea &&& beforeMask = 0 then
+        let stored ← JoltISA.readSrc value
+        if ea &&& afterMask = 0 then
+          match ← JoltISA.Mmu.store_doubleword (addressOf ea) stored with
+          | .Ok _ => pure RETIRE_SUCCESS
+          | .Err e => pure e
+        else pure (ExecutionResult.Memory_Exception (virtaddr.Virtaddr ea, fault))
+      else pure (ExecutionResult.Memory_Exception (virtaddr.Virtaddr ea, fault))) state =
+        .ok RETIRE_SUCCESS after) :
+    (JoltISA.trace_doubleword? state
+      (addressOf (JoltISA.sourceValue base state + imm))).isSome = true := by
+  cases baseRead : JoltISA.readSrc base state with
   | error failure middle => simp only [bind, EStateM.bind, baseRead] at runs; cases runs
   | ok baseValue middle =>
     obtain ⟨middleSame, baseIs⟩ := readSrc_value base _ _ _ baseRead
     simp only [bind, EStateM.bind, baseRead] at runs
     rw [middleSame] at runs
-    cases valueRead : JoltISA.readSrc value trace.rows[i].preState with
-    | error failure middle => rw [valueRead] at runs; cases runs
-    | ok storedValue middle =>
-      obtain ⟨storedSame, _⟩ := readSrc_value value _ _ _ valueRead
-      rw [valueRead] at runs
-      dsimp only at runs
-      split at runs
-      · rw [storedSame, baseIs] at runs
-        cases stored : JoltISA.Mmu.store_doubleword
-            (JoltISA.sourceValue base trace.rows[i].preState + imm) storedValue trace.rows[i].preState with
-        | error failure after => simp only [EStateM.bind, stored] at runs; cases runs
-        | ok result after =>
-          exact store_doubleword_old_present _ _ _ _ _ present ordered stored
-      · cases runs
+    split at runs
+    · cases valueRead : JoltISA.readSrc value state with
+      | error failure middle => simp only [EStateM.bind, valueRead] at runs; cases runs
+      | ok storedValue middle =>
+        obtain ⟨storedSame, _⟩ := readSrc_value value _ _ _ valueRead
+        simp only [EStateM.bind, valueRead] at runs
+        split at runs
+        · rw [storedSame, baseIs] at runs
+          cases stored : JoltISA.Mmu.store_doubleword
+              (addressOf (JoltISA.sourceValue base state + imm)) storedValue state with
+          | error failure final => simp only [EStateM.bind, stored] at runs; cases runs
+          | ok result final =>
+            exact store_doubleword_old_present _ _ _ _ _ present ordered stored
+        · cases runs
+    · cases runs
+
+/-- Runtime advice leaves SD and floor stores unchanged; for example,
+VirtualStoreH still stores its source register, not an advice value.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) and
+`tracer/src/instruction/sd.rs` (`SD::exec`) at `c6703570`. -/
+private theorem store_runtime_advice {instruction : JoltISA.Instr}
+    (advice : instruction.RuntimeAdvice) (base value : JoltISA.Src) (imm : BitVec 64)
+    (fault : ExceptionType)
+    (selected : instruction = .SD base value imm ∨
+      instruction = .VirtualStoreB base value imm fault ∨
+      instruction = .VirtualStoreH base value imm fault ∨
+      instruction = .VirtualStoreW base value imm fault) :
+    instruction.withRuntimeAdvice advice = instruction := by
+  rcases selected with rfl | rfl | rfl | rfl <;> rfl
+
+/-- The old doubleword exists at the accessed address of an SD or floor-store
+row in an initialized, linked honest trace.
+`isStore` identifies both the store and its accessed address; floor stores
+clear all three low bits, so a byte floor store at effective address 11 reads
+its old word at 8.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (i : Nat) (inBounds : i < trace.rows.size) (address : BitVec 64)
+    (isStore : match trace.bytecode[trace.rows[i].rowIndex].instruction with
+      | .SD base _ imm => address = JoltISA.sourceValue base trace.rows[i].preState + imm
+      | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _
+      | .VirtualStoreW base _ imm _ =>
+          address = (JoltISA.sourceValue base trace.rows[i].preState + imm) &&& ~~~7
+      | _ => False) :
+    (JoltISA.trace_doubleword? trace.rows[i].preState address).isSome = true := by
+  have atPosition := Array.getElem?_eq_getElem inBounds
+  have present := trace.ram_present i trace.rows[i] atPosition
+  have ordered := trace.panic_lt_termination i trace.rows[i] atPosition
+  have runs := trace.executes trace.rows[i] (Array.getElem_mem inBounds)
+  have andZero (ea : BitVec 64) : ea &&& 0 = 0 := BitVec.and_zero
+  split at isStore
+  · rename_i base value imm selected
+    subst address
+    rw [store_runtime_advice _ base value imm (ExceptionType.E_SAMO_Addr_Align ())
+      (Or.inl selected), selected] at runs
+    simp only [JoltISA.execInstr] at runs
+    refine store_sequence_old_present base value imm id 0 7
+      (ExceptionType.E_SAMO_Addr_Align ()) trace.rows[i].preState trace.rows[i].postState present ordered ?_
+    simpa only [andZero, ↓reduceIte, id_eq] using runs
+  · rename_i base value imm fault selected
+    subst address
+    rw [store_runtime_advice _ base value imm fault
+      (Or.inr (Or.inl selected)), selected] at runs
+    simp only [JoltISA.execInstr] at runs
+    refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 0 0
+      fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
+    simpa only [andZero, ↓reduceIte] using runs
+  · rename_i base value imm fault selected
+    subst address
+    rw [store_runtime_advice _ base value imm fault
+      (Or.inr (Or.inr (Or.inl selected))), selected] at runs
+    simp only [JoltISA.execInstr] at runs
+    refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 1 0
+      fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
+    simpa only [andZero, ↓reduceIte] using runs
+  · rename_i base value imm fault selected
+    subst address
+    rw [store_runtime_advice _ base value imm fault
+      (Or.inr (Or.inr (Or.inr selected))), selected] at runs
+    simp only [JoltISA.execInstr] at runs
+    refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 3 0
+      fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
+    simpa only [andZero, ↓reduceIte] using runs
+  · exact False.elim isStore
