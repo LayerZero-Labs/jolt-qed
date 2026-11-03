@@ -43,7 +43,7 @@ Rules that apply to every migration proof:
 
 - Keep the main statements, `InLanguage`, the assumptions and the restrictions fixed.
 - Helper statements may change within the approved scope; do not add a premise to an existing theorem without Ari's permission.
-- The four completeness obligations (01), (37), (38) and `corrected_witness_params_ram_bounds` stay as they are.
+- The completeness obligations (01), (37), (38) and `HonestTrace.prover_config_holds_highest_slot` (#1951 item 4) stay as they are; the RAM-bounds theorem `HonestTrace.witness_params_ram_bounds` is proved since Step 5.
   Add no new `sorry`, and never replace a proved fact with `sorry`.
 - Do not use `native_decide` or `decide +kernel`, and do not raise `maxHeartbeats`.
 - Before a Lake build, run `pgrep -fl lake` and wait if another build is active; build serially.

@@ -258,9 +258,10 @@ abbrev HonestTrace.row {joltInstance : JoltInstance SourceInstruction}
   { toTraceRow := trace.rows[i]
     executes := trace.executes _ (Array.getElem_mem inBounds) }
 
--- The word offset used by the corrected sizing policy below. Zero means no
--- access. This helper alone truncates subtraction; its caller checks addresses.
--- The checked Rust path is in prover_config.lean.
+-- The word offset of a RAM address: its distance from the layout's lowest address,
+-- in 64-bit words. Zero means no access. This helper alone truncates subtraction;
+-- its callers check addresses. It gives `Trace.highest_ram_slot` and the corrected
+-- sizing policy below; Jolt's prover's checked path is in prover_config.lean.
 def remap_address (layout : MemoryLayout) (address : Nat) : Option Nat :=
   if address = 0 then none
   else some ((address - layout.get_lowest_address.toNat) / 8)
@@ -285,9 +286,11 @@ structure ProverConfig where
 
 -- Intentional corrected mathematical policy, preserved from the previous model.
 -- It guards the last jump, trace maximum and accessed addresses, then rounds
--- past the highest touched slot. Unlike Jolt at 5def437f, it uses `touched + 1`.
--- Trace.prover_config in prover_config.lean models Rust's checked policy.
--- Completeness uses this corrected variant; see bug-report/ram-k-off-by-one.
+-- past the highest touched slot. Unlike Jolt at 5def437f, it uses `touched + 1`,
+-- the fix a16z/jolt#1951 item 4 proposes; see bug-report/ram-k-off-by-one.
+-- Trace.prover_config in prover_config.lean models Jolt's prover's checked policy.
+-- Since 2026-11-03 completeness uses Jolt's own sizes (`HonestTrace.witness_params`)
+-- and no proof uses this definition.
 def HonestTrace.corrected_prover_config {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Option ProverConfig := do

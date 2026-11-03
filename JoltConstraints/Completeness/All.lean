@@ -29,7 +29,7 @@ theorem honestWitness_constraintEquations
     (noWrap : joltInstance.program.NextPCNoWrap)
     (lastIsJump : (trace.rows.back?.all fun last =>
       trace.bytecode[last.rowIndex].instruction.is_jump) = true)
-    -- the chunk widths Rust's prover picks; Rust's sizes satisfy this
+    -- the chunk widths Jolt's prover picks; Jolt's sizes satisfy this
     (chunkConfig : params.ProverChunkConfig) :
     ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace)
       (TraceWitness.finalTraceState trace).jolt_device entry
@@ -174,27 +174,32 @@ theorem HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstructio
   · rw [Array.getElem?_eq_none (by omega)]
     rfl
 
--- Completeness at the corrected mathematical sizes, under the existing premises
--- below and the documented sorrys (model_review.md, Proofs owed). Acceptance here
--- is by corrected_prover_config: its RAM formula uses `touched + 1`, unlike Rust
--- at 8bbb2357. No completeness claim for Rust's undersized RAM policy follows.
--- The public I/O is the verifier's, when the instance claims the run's outputs.
-theorem HonestTrace.allConstraints_corrected_sizes
+/-- Completeness at Jolt's sizes: when Jolt's prover accepts the honest trace with
+config `config` (`proverAccepts`), the honest witness at Jolt's witness sizes
+(`HonestTrace.witness_params`) satisfies every constraint, against Jolt's preprocessed
+bytecode `slots`, the verifier's entry slot `entry` and the public I/O `io` the verifier
+checks the proof against.
+It needs the existing premises below and inherits the gaps listed in `model_review.md`
+("Proofs owed"), including the known-false `HonestTrace.prover_config_holds_highest_slot`
+(a16z/jolt#1951 item 4).
+For example, a 300-row run that touches RAM word 1000 is checked on a 512-cycle witness
+with a 1024-word RAM table. -/
+theorem HonestTrace.allConstraints_prover_sizes
     {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
-    -- The corrected sizing policy accepts the run and picks these sizes
-    (config : ProverConfig) (accepted : trace.corrected_prover_config = some config)
-    -- Rust's preprocessed bytecode, and the entry slot its verifier uses
+    -- Jolt's prover accepts the run and picks these sizes
+    (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config)
+    -- Jolt's preprocessed bytecode, and the entry slot its verifier uses
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
-    (entry : Fin (2 ^ (trace.corrected_witness_params config accepted).logBytecodeK))
+    (entry : Fin (2 ^ (trace.witness_params config proverAccepts).logBytecodeK))
     (entryIsRust : get_first_pc slots joltInstance.program.entry_address = some entry.val)
     -- assumed: no spoil assert fails
     (spoilAssertsPass : trace.SpoilAssertsPass)
     -- assumed: a legal ELF's PC does not wrap (a16z confirmed)
     (noWrap : joltInstance.program.NextPCNoWrap)
     -- assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program is
-    -- never empty, so its memory image loads at least one byte. Rust's prover does not
+    -- never empty, so its memory image loads at least one byte. Jolt's prover does not
     -- reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
     (imageNonempty : joltInstance.program.ImageNonempty)
     -- the instance claims the outputs the run produced
@@ -202,7 +207,7 @@ theorem HonestTrace.allConstraints_corrected_sizes
     -- the public I/O the verifier checks the proof against
     (io : JoltDevice) (publicIo : joltInstance.public_io = some io) :
     AllConstraints joltInstance privateInputs
-      (trace.honestWitness (F := F) (trace.corrected_witness_params config accepted)) := by
+      (trace.honestWitness (F := F) (trace.witness_params config proverAccepts)) := by
   refine ⟨{
     bytecode := trace.bytecode
     initialRam := TraceWitness.initialRamWord trace
@@ -213,40 +218,40 @@ theorem HonestTrace.allConstraints_corrected_sizes
     publicIo := publicIo
     validInputs := trace.valid_inputs
     traceLengthBound := by
-      obtain ⟨isPadded, bounded⟩ := trace.corrected_prover_config_trace_length config accepted
-      simpa only [trace.corrected_witness_params_trace_length config accepted, isPadded] using bounded
+      obtain ⟨isPadded, bounded⟩ := trace.prover_config_trace_length config proverAccepts
+      simpa only [trace.witness_params_trace_length config proverAccepts, isPadded] using bounded
     traceLengthFloor := by
-      obtain ⟨base | akita, _⟩ := trace.corrected_witness_params_padded config accepted
+      obtain ⟨base | akita, _⟩ := trace.witness_params_padded config proverAccepts
       · rw [base, WitnessParams.proverTraceLength]
         exact Nat.le_max_left _ _
       · rw [akita, WitnessParams.proverTraceLength]
         exact le_trans (by decide : 256 ≤ 2 ^ 12) (Nat.le_max_left _ _)
-    bytecodeDomain := trace.corrected_witness_params_bytecode_domain config accepted
-    ramSizeBounds := trace.corrected_witness_params_ram_bounds config accepted imageNonempty
+    bytecodeDomain := trace.witness_params_bytecode_domain config proverAccepts
+    ramSizeBounds := trace.witness_params_ram_bounds config proverAccepts imageNonempty
     oneHotFitsSetup := by
       cases hasLayout : joltInstance.memory_layout with
       | none =>
         unfold JoltInstance.public_io at publicIo
         rw [hasLayout] at publicIo
         contradiction
-      | some layout => exact trace.corrected_witness_params_one_hot_fits_setup config accepted layout hasLayout
+      | some layout => exact trace.witness_params_one_hot_fits_setup config proverAccepts layout hasLayout
     entryIsRust := ⟨slots, preprocessed, entryIsRust⟩ }, ?_⟩
   change ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace) io entry
-    (trace.honestWitness (F := F) (trace.corrected_witness_params config accepted))
-  have all := honestWitness_constraintEquations (F := F) (trace.corrected_witness_params config accepted) trace
-    (trace.corrected_witness_params_ram_fits config accepted)
-    (trace.corrected_witness_params_padded config accepted)
-    (trace.corrected_witness_params_bytecode_domain config accepted)
+    (trace.honestWitness (F := F) (trace.witness_params config proverAccepts))
+  have all := honestWitness_constraintEquations (F := F) (trace.witness_params config proverAccepts) trace
+    (trace.witness_params_ram_fits config proverAccepts)
+    (trace.witness_params_padded config proverAccepts)
+    (trace.witness_params_bytecode_domain config proverAccepts)
     entry
     (trace.entry_slot slots preprocessed entry.val entryIsRust)
     trace.ram_accesses_valid
     (trace.assert_eq_passes spoilAssertsPass)
     trace.advice_below_input
     trace.initialRegistersZero
-    (trace.corrected_witness_params_ram_chunks_pos config accepted)
+    (trace.witness_params_ram_chunks_pos config proverAccepts)
     noWrap
-    (trace.corrected_prover_config_last_jump config accepted)
-    (trace.corrected_witness_params_chunk_config config accepted)
+    (trace.prover_config_last_jump config proverAccepts)
+    (trace.witness_params_chunk_config config proverAccepts)
   -- the verifier's I/O: the instance's layout, inputs, trimmed outputs and panic flag
   obtain ⟨layoutBuilt, _⟩ := initial_state_device joltInstance privateInputs trace.initialState
     trace.initialized

@@ -6,6 +6,8 @@ On 2026-10-29 all 62 equations, the per-instruction flag tables and the 55 looku
 Status at 2026-11-03: Step 1 definitions were reviewed and remain uncommitted.
 Step 2 repairs target `c6703570`; see [the completeness migration report](../reports/2026-11-03-constraints-migration-completeness.md).
 `lake build JoltConstraints.Completeness` and the assembled `Completeness.completeness` module both pass after the approved `WordEntry` repair.
+Step 5 restates `JoltInstance.completeness` for the honest witness at the sizes Jolt's prover picks; see [the Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
+At those sizes the verifier's RAM bounds are proved, and Jolt's undersized RAM table (#1951 item 4) is the one known-false lemma `HonestTrace.prover_config_holds_highest_slot`.
 The full soundness migration remains Step 3.
 A `DONE` label records the individual theorem's proof status, not completion of the [migration outline](#migration-outline).
 
@@ -138,6 +140,7 @@ Current definition state after Step 1:
 11. **Soundness and completeness proof repair.**
     Keep the main statements, `InLanguage`, the assumptions and the restrictions fixed; repair their dependencies after the definitions are audited.
     Preserve the four existing completeness obligations (01), (37), (38) and the RAM-bounds theorem.
+    Step 5 proved the RAM-bounds theorem at Jolt's sizes (`HonestTrace.witness_params_ram_bounds`) and added the known-false #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot`, as Ari decided on 2026-11-03.
     Ari approved the additional #1949 wrap lemmas for (08) and (11) on 2026-11-03; each is now restricted to a matching row of an honest trace.
     The old arbitrary-bitvector admissions were deleted, and the field equalities are proved from the approved row bounds.
     No other new `sorry` was needed in Step 2.
