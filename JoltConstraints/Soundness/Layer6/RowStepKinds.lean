@@ -24,23 +24,29 @@ theorem RawRowEntry.prepared_pc
         if source_is_compressed run.bytecode next then 2 else 4) :=
   untrusted_prepared_pc run next pre entry
 
-/-- Every row is plain or one of the five excluded kinds.
-For example, AND is plain, while LD has an explicit load branch here. -/
+/-- Every row is plain, a load row, a store row, HostIO, JAL or JALR.
+Load and store rows are classified by their Load and Store flags.
+For example, AND is plain, while LD and VirtualLoadH are load rows. -/
 theorem row_kind (instruction : Instr) :
     PlainRow instruction ∨
-    (∃ fault destination base imm, instruction = .LD fault destination base imm) ∨
-    (∃ base source imm, instruction = .SD base source imm) ∨
+    (∃ width destination base imm, LoadRow instruction width destination base imm) ∨
+    (∃ width base source imm, StoreRow instruction width base source imm) ∨
     instruction = .VirtualHostIO ∨
     (∃ destination imm, instruction = .JAL destination imm) ∨
     (∃ destination base imm, instruction = .JALR destination base imm) := by
+  by_cases load : JoltMetadata.opcodeFlag instruction .Load = true
+  · exact Or.inr (Or.inl (loadRow_of_flag instruction load))
+  by_cases store : JoltMetadata.opcodeFlag instruction .Store = true
+  · exact Or.inr (Or.inr (Or.inl (storeRow_of_flag instruction store)))
   unfold PlainRow
   split
-  · exact Or.inr (Or.inl ⟨_, _, _, _, rfl⟩)
-  · exact Or.inr (Or.inr (Or.inl ⟨_, _, _, rfl⟩))
-  · exact Or.inr (Or.inr (Or.inr (Or.inl rfl)))
-  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨_, _, rfl⟩))))
-  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨_, _, _, rfl⟩))))
-  · exact Or.inl True.intro
+  all_goals first
+    | exact Or.inl True.intro
+    | exact (load rfl).elim
+    | exact (store rfl).elim
+    | exact Or.inr (Or.inr (Or.inr (Or.inl rfl)))
+    | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨_, _, rfl⟩))))
+    | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨_, _, _, rfl⟩))))
 
 /-- A non-ordinary row can be selected in an unfinished block only as its final
 row; for example, ECALL's JALR is selected after its preceding setup rows.
@@ -83,52 +89,6 @@ variable {F : Type} [Field F] (joltField : JoltField F)
       witness ⟨run.rows.size, bound⟩ pre)
 
 include joltField assumptions restrictions equations state unfinished honestAdvice indexIs entry registers
-
-/-- An ordinary-RAM LD appends its executed row and preserves the expansion
-invariant using only live register agreement; for example, LD may read a base
-temporary initialized by an earlier expansion row.
-The future proof ports `ld_ram_step` and supplies the shared append contract.
-See jolt/tracer/src/instruction/ld.rs (`LD::exec`) at 5def437f. -/
-theorem ld_ram_row_step {fault : LoadFaultClass} {destination : Dst} {base : Src} {imm : BitVec 64}
-    (instruction : run.bytecode[next].instruction = .LD fault destination base imm)
-    (inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat) :
-    PlainRowExtension witness context run first done bound := by
-  exact append_ld_row joltField assumptions restrictions witness context equations run first done state
-    unfinished honestAdvice bound next pre indexIs entry registers instruction
-
-/-- A device LD appends a load from below RAM and preserves the cut invariant;
-for example, an aligned input load reads the agreed input word.
-The future proof uses `ld_device_step` with the prefix's restrictions and live base.
-See jolt/common/src/jolt_device.rs (`JoltDevice::load`) at 5def437f. -/
-theorem ld_device_row_step {fault : LoadFaultClass} {destination : Dst} {base : Src} {imm : BitVec 64}
-    (instruction : run.bytecode[next].instruction = .LD fault destination base imm)
-    (belowRam : (sourceValue base pre + imm).toNat < RAM_START_ADDRESS) :
-    PlainRowExtension witness context run first done bound := by
-  exact append_ld_row joltField assumptions restrictions witness context equations run first done state
-    unfinished honestAdvice bound next pre indexIs entry registers instruction
-
-/-- An ordinary-RAM SD appends its store and preserves the expansion invariant;
-for example, a store through an initialized temporary changes one RAM word.
-The future proof ports `sd_ram_step_agreement` to live source registers.
-See jolt/tracer/src/instruction/sd.rs (`SD::exec`) at 5def437f. -/
-theorem sd_ram_row_step {base source : Src} {imm : BitVec 64}
-    (instruction : run.bytecode[next].instruction = .SD base source imm)
-    (inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat) :
-    PlainRowExtension witness context run first done bound := by
-  exact append_sd_row joltField assumptions restrictions witness context equations run first done state
-    unfinished honestAdvice bound next pre indexIs entry registers instruction
-
-/-- A device SD appends its store with the conditional termination invariant;
-for example, an output store preserves termination, while a termination store
-ends the obligation that its table word remain zero.
-The future proof uses `sd_device_step` and the generalized append constructor.
-See jolt/common/src/jolt_device.rs (`JoltDevice::store`) at 5def437f. -/
-theorem sd_device_row_step {base source : Src} {imm : BitVec 64}
-    (instruction : run.bytecode[next].instruction = .SD base source imm)
-    (belowRam : (sourceValue base pre + imm).toNat < RAM_START_ADDRESS) :
-    PlainRowExtension witness context run first done bound := by
-  exact append_sd_row joltField assumptions restrictions witness context equations run first done state
-    unfinished honestAdvice bound next pre indexIs entry registers instruction
 
 /-- A terminal HostIO row appends the call certified by `HostCallsSucceed` and
 keeps live-register agreement; for example, an advice-write call changes the tape.

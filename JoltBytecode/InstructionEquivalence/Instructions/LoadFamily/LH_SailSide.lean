@@ -1,5 +1,5 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
-import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
+import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.FloorLoad
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Windows
 import JoltBytecode.InstructionEquivalence.ProofSupport.StateLemmas
@@ -17,42 +17,6 @@ set_option autoImplicit true
 noncomputable section
 
 namespace LH_SailSide
-
-/-- A failed leading halfword load-alignment assertion stops the structured
-program with Sail's load-address-alignment exception. -/
-theorem assertHalfwordBlockMisaligned (tail : JoltISA.Program)
-    (imm : BitVec 12) (rs1 : regidx)
-    (js : SailJoltState)
-    (val : BitVec 64) (hrx : rX_bits rs1 js.sail = .ok val js.sail)
-    (hmis : load_effective_address val imm &&& (1 : BitVec 64) ≠ 0) :
-    (JoltISA.execProgram
-      (.instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm
-        (ExceptionType.E_Load_Addr_Align ())) tail)).run js =
-      .ok (ExecutionResult.Memory_Exception
-        (Virtaddr (load_effective_address val imm),
-          ExceptionType.E_Load_Addr_Align ())) js := by
-  let e :=
-    (Virtaddr (load_effective_address val imm),
-      ExceptionType.E_Load_Addr_Align ())
-  have hassert :
-      (JoltISA.execInstr
-        (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm
-          (ExceptionType.E_Load_Addr_Align ()))).run js =
-        .ok (ExecutionResult.Memory_Exception e) js := by
-    simpa [e, load_effective_address] using
-      (JoltISA.virtual_assert_halfword_alignment_run_misaligned
-        (base := rs1)
-        (imm := imm)
-        (fault := ExceptionType.E_Load_Addr_Align ())
-        (js := js)
-        (baseValue := val)
-        (h_read := hrx)
-        (h_misaligned := by simpa [load_effective_address] using hmis))
-  simpa [e] using
-    (JoltISA.execProgram_instr_run_memory_exception
-      (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm
-        (ExceptionType.E_Load_Addr_Align ()))
-      tail js js e hassert)
 
 /-- The halfword selected by an aligned load fits inside its enclosing
 dword. -/

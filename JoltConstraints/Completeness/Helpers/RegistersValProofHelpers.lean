@@ -1,6 +1,7 @@
 import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltConstraints.Completeness.Helpers.HostIOFrame
+import JoltConstraints.Completeness.Helpers.FloorMemory
 
 /-!
 Instruction-level register frames for the honest register-history witness.
@@ -483,6 +484,31 @@ theorem register42_branch_preserves_sourceValue
   · cases h
     rfl
 
+/-- Loading a doubleword and writing its destination preserves any other source
+register; for example, loading x1 leaves x2 unchanged.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+theorem register42_load_word_preserves_other
+    (address : BitVec 64) (dst : JoltISA.Dst) (src : JoltISA.Src)
+    (s t : SailJoltState) (hne : src ≠ register42_dstAsSrc dst)
+    (hready : ∀ rd, Assumptions.XRegReadable rd s.sail)
+    (runs : (do
+      match ← JoltISA.Mmu.load_doubleword address with
+      | .Ok value => JoltISA.writeDst dst value; pure RETIRE_SUCCESS
+      | .Err error => pure error) s = .ok (.Retire_Success ()) t) :
+    JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
+  cases hr : JoltISA.Mmu.load_doubleword address s with
+  | error e state => simp only [bind, EStateM.bind, hr] at runs; cases runs
+  | ok value state =>
+      have unchanged := JoltISA.Mmu.load_doubleword_state hr
+      subst state
+      simp only [bind, EStateM.bind, hr] at runs
+      cases value with
+      | Ok word => exact register42_write_retire_preserves_other dst src word s t hne hready runs
+      | Err error => cases runs; rfl
+
+/-- LD preserves sources other than its destination; for example, LD into x1
+leaves x2 unchanged when both registers are readable.
+Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `c6703570`. -/
 theorem register42_load_preserves_other
     (fault : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
     (base src : JoltISA.Src) (imm : BitVec 64)
@@ -495,20 +521,31 @@ theorem register42_load_preserves_other
   have h := lookup_read_bind base _ s t _ hexec
   by_cases halign : (JoltISA.sourceValue base s + imm) &&& 7 = 0
   · simp only [halign, ↓reduceIte] at h
-    cases hr : JoltISA.Mmu.load_doubleword (JoltISA.sourceValue base s + imm) s with
-    | error e state => simp only [bind, EStateM.bind, hr] at h; cases h
-    | ok v state =>
-        have hstate := JoltISA.Mmu.load_doubleword_state hr
-        subst state
-        simp only [bind, EStateM.bind, hr] at h
-        cases v with
-        | Ok value =>
-            exact register42_write_retire_preserves_other dst src value s t
-              hne hready h
-        | Err e => cases h; rfl
+    exact register42_load_word_preserves_other _ dst src s t hne hready h
   · simp only [halign, ↓reduceIte, pure, EStateM.pure] at h
     cases h
 
+/-- A doubleword store preserves every register; for example, storing x1
+changes memory but leaves the captured source x1 unchanged.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+theorem register42_store_word_preserves_sourceValue
+    (address value : BitVec 64) (src : JoltISA.Src) (s t : SailJoltState)
+    (runs : (do
+      match ← JoltISA.Mmu.store_doubleword address value with
+      | .Ok _ => pure RETIRE_SUCCESS
+      | .Err error => pure error) s = .ok (.Retire_Success ()) t) :
+    JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
+  cases hr : JoltISA.Mmu.store_doubleword address value s with
+  | error e state => simp only [bind, EStateM.bind, hr] at runs; cases runs
+  | ok result state =>
+      have frame : JoltISA.sourceValue src state = JoltISA.sourceValue src s := by
+        obtain ⟨hregs, hvregs⟩ := JoltISA.Mmu.store_doubleword_regs hr
+        simp only [JoltISA.sourceValue, hregs, hvregs]
+      simp only [bind, EStateM.bind, hr] at runs
+      cases result <;> cases runs <;> exact frame
+
+/-- SD preserves every source register, such as its base x2 when storing x1.
+Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) at `c6703570`. -/
 theorem register42_store_preserves_sourceValue
     (base stored src : JoltISA.Src) (imm : BitVec 64)
     (s t : SailJoltState)
@@ -519,16 +556,7 @@ theorem register42_store_preserves_sourceValue
   have h := lookup_read_bind stored _ s t _ h
   by_cases halign : (JoltISA.sourceValue base s + imm) &&& 7 = 0
   · simp only [halign, ↓reduceIte] at h
-    cases hr : JoltISA.Mmu.store_doubleword (JoltISA.sourceValue base s + imm)
-        (JoltISA.sourceValue stored s) s with
-    | error e state => simp only [bind, EStateM.bind, hr] at h; cases h
-    | ok v state =>
-        have hframe :
-            JoltISA.sourceValue src state = JoltISA.sourceValue src s := by
-          obtain ⟨hregs, hvregs⟩ := JoltISA.Mmu.store_doubleword_regs hr
-          simp only [JoltISA.sourceValue, hregs, hvregs]
-        simp only [bind, EStateM.bind, hr] at h
-        cases v <;> cases h <;> exact hframe
+    exact register42_store_word_preserves_sourceValue _ _ src s t h
   · simp only [halign, ↓reduceIte, pure, EStateM.pure] at h
     cases h
 
@@ -614,6 +642,10 @@ theorem execHostIO_frame : Preserves JoltISA.execHostIO := by
 
 end Register42VRegs
 
+/-- A retired instruction preserves every readable source except its destination;
+for example, a floor LoadH into x1 preserves x2, and StoreH preserves both.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`)
+at `c6703570`. -/
 theorem register42_instruction_preserves_other
     (instr : JoltISA.Instr) (src : JoltISA.Src)
     (s t : SailJoltState)
@@ -629,6 +661,30 @@ theorem register42_instruction_preserves_other
       (hne dst rfl) hready hexec
   case SD base stored imm =>
     exact register42_store_preserves_sourceValue base stored src imm s t hexec
+  case VirtualLoadB faultClass dst base imm fault =>
+    exact register42_load_word_preserves_other _ dst src s t (hne dst rfl) hready
+      (JoltConstraints.floor_load_access _ faultClass dst base imm 0 fault
+        (Or.inl ⟨rfl, rfl⟩) () s t hexec).2
+  case VirtualStoreB base value imm fault =>
+    exact register42_store_word_preserves_sourceValue _ _ src s t
+      (JoltConstraints.floor_store_access _ base value imm 0 fault
+        (Or.inl ⟨rfl, rfl⟩) () s t hexec).2
+  case VirtualLoadH faultClass dst base imm fault =>
+    exact register42_load_word_preserves_other _ dst src s t (hne dst rfl) hready
+      (JoltConstraints.floor_load_access _ faultClass dst base imm 1 fault
+        (Or.inr (Or.inl ⟨rfl, rfl⟩)) () s t hexec).2
+  case VirtualStoreH base value imm fault =>
+    exact register42_store_word_preserves_sourceValue _ _ src s t
+      (JoltConstraints.floor_store_access _ base value imm 1 fault
+        (Or.inr (Or.inl ⟨rfl, rfl⟩)) () s t hexec).2
+  case VirtualLoadW faultClass dst base imm fault =>
+    exact register42_load_word_preserves_other _ dst src s t (hne dst rfl) hready
+      (JoltConstraints.floor_load_access _ faultClass dst base imm 3 fault
+        (Or.inr (Or.inr ⟨rfl, rfl⟩)) () s t hexec).2
+  case VirtualStoreW base value imm fault =>
+    exact register42_store_word_preserves_sourceValue _ _ src s t
+      (JoltConstraints.floor_store_access _ base value imm 3 fault
+        (Or.inr (Or.inr ⟨rfl, rfl⟩)) () s t hexec).2
   case VirtualAdviceLoad dst byteCount =>
     cases hr : JoltISA.readAdviceTape s.adviceTape byteCount with
     | none => simp only [JoltISA.execInstr, hr] at hexec; cases hexec

@@ -1,6 +1,17 @@
 import JoltBytecode.JoltISA.Expansions.Store
 import JoltBytecode.InstructionEquivalence.ProofSupport.ExpansionBlocks.ALU
-import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.ADDI
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.AND
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.ANDN
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.ANDI
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Add
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.LD
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.LUI
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.ORI
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.VirtualMULI
+import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.XOR
+import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.FloorLoad
+import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Splice
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
@@ -8,8 +19,12 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 /-!
 # Program blocks for store-family Jolt-ISA proofs
 
-The store-family programs have the same shape as load programs until the
-middle dword operation:
+The current store programs use `LaneWindow.open` and `LaneWindow.merge`:
+a floor load, window mask, clear, shift, add, and floor store.
+`laneStoreProgram_run` composes their row proofs for all three widths.
+The existing splice identities remain in `StoreFamily/Splice.lean`.
+
+The retained legacy helpers describe this older shape:
 
 * compute `ea = rs1 + imm` in virtual register `v0`;
 * compute the enclosing dword address in virtual register `v1`;
@@ -612,417 +627,245 @@ theorem setupBlock (rest : JoltISA.Program)
   · simp [js_load, js1, base]
   · simp [js_load, dword, base]
 
-/-- Successful leading halfword store-alignment assertion followed by the
-common setup block.  The assertion does not change state on the aligned path. -/
-theorem assertHalfwordSetupBlockAligned (rest : JoltISA.Program)
-    (imm : BitVec 12) (rs1 : regidx)
-    (js : SailJoltState)
-    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
-    (hmprv : Assumptions.MstatusMprvZero js.sail)
-    (val : BitVec 64) (hrx : rX_bits rs1 js.sail = .ok val js.sail)
-    (halign : load_effective_address val imm &&& (1 : BitVec 64) = 0)
-    (h_base_aligned :
-      AlignedDwordAccess (compute_aligned_dword_base_address val imm))
-    (hbytes :
-      MemBytesPresentAt js.sail (compute_aligned_dword_base_address val imm) 8)
-    (hpmp :
-      Assumptions.LoadPmpOk (compute_aligned_dword_base_address val imm) 8 js.sail)
-    (hmmio :
-      Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail)
-    (hjolt : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address val imm) js) :
-    ∃ js_load : SailJoltState,
-      (JoltISA.execProgram
-        (.instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
-         .instr (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
-         .instr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
-         .instr (JoltISA.Encoded.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) rest)).run js =
-        (JoltISA.execProgram rest).run js_load ∧
-      js_load.sail = js.sail ∧
-      js_load.vregs JoltISA.inlineTmp0 = load_effective_address val imm ∧
-      js_load.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm ∧
-      js_load.vregs JoltISA.inlineTmp2 =
-        loaded_dword_at js.sail (compute_aligned_dword_base_address val imm)
-          hbytes h_base_aligned.no_ovf ∧
-      js_load.jolt_device = js.jolt_device := by
-  have hassert :
-      (JoltISA.execInstr
-        (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
-        .ok RETIRE_SUCCESS js := by
-    exact JoltISA.virtual_assert_halfword_alignment_run_aligned rs1 imm
-      (ExceptionType.E_SAMO_Addr_Align ())
-      js val hrx (by simpa [load_effective_address] using halign)
-  rcases setupBlock rest imm rs1 js hpriv hmprv val hrx h_base_aligned hbytes hpmp hmmio hjolt with
-    ⟨js_load, hrun, hsail, hv0, hv1, hv2, hdev⟩
-  refine ⟨js_load, ?_, hsail, hv0, hv1, hv2, hdev⟩
-  rw [JoltISA.execProgram_instr_run_retire _ _ js js hassert]
-  exact hrun
+/-- The mask row emitted by `LaneWindow.open` for the selected width.
+For example, word width emits `VirtualWindowMaskW`.
+Jolt: `crates/jolt-program/src/expand/memory/shared.rs` (`LaneWindow::open`). -/
+private def fusedWindowInstr (width : JoltISA.AccessWidth) (lane : JoltISA.Dst)
+    (base : JoltISA.Src) (imm : BitVec 64) : JoltISA.Instr :=
+  match JoltISA.laneWindowOpen width lane lane base imm .normal
+      (ExceptionType.E_SAMO_Addr_Align ()) (.done RETIRE_SUCCESS) with
+  | .instr _ (.instr instruction _) => instruction
+  | _ => .FENCE
 
-/-- Successful leading word store-alignment assertion followed by the common
-setup block.  The assertion does not change state on the aligned path. -/
-theorem assertWordSetupBlockAligned (rest : JoltISA.Program)
-    (imm : BitVec 12) (rs1 : regidx)
-    (js : SailJoltState)
-    (hpriv : Assumptions.CurPrivilegeMachine js.sail)
-    (hmprv : Assumptions.MstatusMprvZero js.sail)
-    (val : BitVec 64) (hrx : rX_bits rs1 js.sail = .ok val js.sail)
-    (halign : load_effective_address val imm &&& (3 : BitVec 64) = 0)
-    (h_base_aligned :
-      AlignedDwordAccess (compute_aligned_dword_base_address val imm))
-    (hbytes :
-      MemBytesPresentAt js.sail (compute_aligned_dword_base_address val imm) 8)
-    (hpmp :
-      Assumptions.LoadPmpOk (compute_aligned_dword_base_address val imm) 8 js.sail)
-    (hmmio :
-      Assumptions.NotReadableMmio (compute_aligned_dword_base_address val imm) 8 js.sail)
-    (hjolt : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address val imm) js) :
-    ∃ js_load : SailJoltState,
-      (JoltISA.execProgram
-        (.instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ())) <|
-         .instr (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
-         .instr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
-         .instr (JoltISA.Encoded.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) rest)).run js =
-        (JoltISA.execProgram rest).run js_load ∧
-      js_load.sail = js.sail ∧
-      js_load.vregs JoltISA.inlineTmp0 = load_effective_address val imm ∧
-      js_load.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm ∧
-      js_load.vregs JoltISA.inlineTmp2 =
-        loaded_dword_at js.sail (compute_aligned_dword_base_address val imm)
-          hbytes h_base_aligned.no_ovf ∧
-      js_load.jolt_device = js.jolt_device := by
-  have hassert :
-      (JoltISA.execInstr
-        (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
-        .ok RETIRE_SUCCESS js := by
-    exact JoltISA.virtual_assert_word_alignment_run_aligned rs1 imm
-      (ExceptionType.E_SAMO_Addr_Align ())
-      js val hrx (by simpa [load_effective_address] using halign)
-  rcases setupBlock rest imm rs1 js hpriv hmprv val hrx h_base_aligned hbytes hpmp hmmio hjolt with
-    ⟨js_load, hrun, hsail, hv0, hv1, hv2, hdev⟩
-  refine ⟨js_load, ?_, hsail, hv0, hv1, hv2, hdev⟩
-  rw [JoltISA.execProgram_instr_run_retire _ _ js js hassert]
-  exact hrun
+/-- The shift row emitted by `LaneWindow.merge`, including its address immediate.
+For example, base 7 and immediate 1 select byte lane zero.
+Jolt: `crates/jolt-program/src/expand/memory/shared.rs` (`LaneWindow::merge`). -/
+private def fusedShiftInstr (width : JoltISA.AccessWidth) (lane : JoltISA.Dst)
+    (value base : JoltISA.Src) (imm : BitVec 64) : JoltISA.Instr :=
+  match JoltISA.laneWindowMerge width lane lane base imm value
+      (ExceptionType.E_SAMO_Addr_Align ()) (.done RETIRE_SUCCESS) with
+  | .instr _ (.instr instruction _) => instruction
+  | _ => .FENCE
 
-/-- A failed halfword store-alignment assertion stops the structured program
-before any read-modify-write work can occur. -/
-theorem assertHalfwordBlockMisaligned (tail : JoltISA.Program)
-    (imm : BitVec 12) (rs1 : regidx)
-    (js : SailJoltState)
-    (val : BitVec 64) (hrx : rX_bits rs1 js.sail = .ok val js.sail)
-    (hmis : load_effective_address val imm &&& (1 : BitVec 64) ≠ 0) :
-    (JoltISA.execProgram
-      (.instr (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
-        tail)).run js =
-      .ok (ExecutionResult.Memory_Exception
-        (Virtaddr (load_effective_address val imm), ExceptionType.E_SAMO_Addr_Align ())) js := by
-  let e :=
-    (Virtaddr (load_effective_address val imm), ExceptionType.E_SAMO_Addr_Align ())
-  have hassert :
-      (JoltISA.execInstr
-        (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
-        .ok (ExecutionResult.Memory_Exception e) js := by
-    simpa [e, load_effective_address] using
-      (JoltISA.virtual_assert_halfword_alignment_run_misaligned rs1 imm
-        (ExceptionType.E_SAMO_Addr_Align ())
-        js val hrx (by simpa [load_effective_address] using hmis))
-  simpa [e] using
-    (JoltISA.execProgram_instr_run_memory_exception
-      (JoltISA.Encoded.VirtualAssertHalfwordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
-      tail js js e hassert)
-
-/-- A failed word store-alignment assertion stops the structured program before
-any read-modify-write work can occur. -/
-theorem assertWordBlockMisaligned (tail : JoltISA.Program)
-    (imm : BitVec 12) (rs1 : regidx)
-    (js : SailJoltState)
-    (val : BitVec 64) (hrx : rX_bits rs1 js.sail = .ok val js.sail)
-    (hmis : load_effective_address val imm &&& (3 : BitVec 64) ≠ 0) :
-    (JoltISA.execProgram
-      (.instr (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
-        tail)).run js =
-      .ok (ExecutionResult.Memory_Exception
-        (Virtaddr (load_effective_address val imm), ExceptionType.E_SAMO_Addr_Align ())) js := by
-  let e :=
-    (Virtaddr (load_effective_address val imm), ExceptionType.E_SAMO_Addr_Align ())
-  have hassert :
-      (JoltISA.execInstr
-        (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))).run js =
-        .ok (ExecutionResult.Memory_Exception e) js := by
-    simpa [e, load_effective_address] using
-      (JoltISA.virtual_assert_word_alignment_run_misaligned rs1 imm
-        (ExceptionType.E_SAMO_Addr_Align ())
-        js val hrx (by simpa [load_effective_address] using hmis))
-  simpa [e] using
-    (JoltISA.execProgram_instr_run_memory_exception
-      (JoltISA.Encoded.VirtualAssertWordAlignment rs1 imm (ExceptionType.E_SAMO_Addr_Align ()))
-      tail js js e hassert)
-
-private inductive FusedStoreWidth where
-  | byte
-  | halfword
-  | word
-
-private def fusedWindowInstr (width : FusedStoreWidth) : JoltISA.Instr :=
-  match width with
-  | .byte => .VirtualWindowMaskB (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) 0
-  | .halfword => .VirtualWindowMaskH (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) 0
-  | .word => .VirtualWindowMaskW (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) 0
-
-private def fusedShiftInstr (width : FusedStoreWidth) (rs2 : regidx) : JoltISA.Instr :=
-  match width with
-  | .byte => .VirtualShiftDataB (.vreg JoltISA.inlineTmp3) (.xreg rs2) (.vreg JoltISA.inlineTmp0)
-  | .halfword => .VirtualShiftDataH (.vreg JoltISA.inlineTmp3) (.xreg rs2) (.vreg JoltISA.inlineTmp0)
-  | .word => .VirtualShiftDataW (.vreg JoltISA.inlineTmp3) (.xreg rs2) (.vreg JoltISA.inlineTmp0)
-
-private def fusedWindowValue (width : FusedStoreWidth) (ea : BitVec 64) : BitVec 64 :=
+private def fusedWindowValue (width : JoltISA.AccessWidth) (ea : BitVec 64) : BitVec 64 :=
   match width with
   | .byte => jolt_virtual_window_mask_b_value ea 0
   | .halfword => jolt_virtual_window_mask_h_value ea 0
   | .word => jolt_virtual_window_mask_w_value ea 0
 
-private def fusedShiftValue (width : FusedStoreWidth)
+private def fusedShiftValue (width : JoltISA.AccessWidth)
     (value ea : BitVec 64) : BitVec 64 :=
   match width with
   | .byte => jolt_virtual_shift_data_b_value value ea
   | .halfword => jolt_virtual_shift_data_h_value value ea
   | .word => jolt_virtual_shift_data_w_value value ea
 
-private theorem fusedSpliceBlock (rest : JoltISA.Program)
-    (width : FusedStoreWidth) (rs2 : regidx)
-    (js js_load : SailJoltState) (ea base dword rs2_val : BitVec 64)
-    (hload_sail : js_load.sail = js.sail)
-    (hload_v0 : js_load.vregs JoltISA.inlineTmp0 = ea)
-    (hload_v1 : js_load.vregs JoltISA.inlineTmp1 = base)
-    (hload_v2 : js_load.vregs JoltISA.inlineTmp2 = dword)
-    (hrs2 : rX_bits rs2 js.sail = .ok rs2_val js.sail) :
-    ∃ js_splice : SailJoltState,
-      (JoltISA.execProgram
-        (.instr (fusedWindowInstr width) <|
-         .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-           (.vreg JoltISA.inlineTmp3)) <|
-         .instr (fusedShiftInstr width rs2) <|
-         .instr (.ADD (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-           (.vreg JoltISA.inlineTmp3)) rest)).run js_load =
-        (JoltISA.execProgram rest).run js_splice ∧
-      js_splice.sail = js.sail ∧
-      js_splice.vregs JoltISA.inlineTmp1 = base ∧
-      js_splice.vregs JoltISA.inlineTmp2 =
-        (dword &&& ~~~(fusedWindowValue width ea)) +
-          fusedShiftValue width rs2_val ea ∧
-      js_splice.jolt_device = js_load.jolt_device := by
-  let mask := fusedWindowValue width ea
-  let shifted := fusedShiftValue width rs2_val ea
-  let js_mask : SailJoltState :=
-    { js_load with
-      vregs := fun r =>
-        if r = JoltISA.inlineTmp3 then mask else js_load.vregs r }
-  let js_clear : SailJoltState :=
-    { js_mask with
-      vregs := fun r =>
-        if r = JoltISA.inlineTmp2 then dword &&& ~~~mask else js_mask.vregs r }
-  let js_shift : SailJoltState :=
-    { js_clear with
-      vregs := fun r =>
-        if r = JoltISA.inlineTmp3 then shifted else js_clear.vregs r }
-  let js_splice : SailJoltState :=
-    { js_shift with
-      vregs := fun r =>
-        if r = JoltISA.inlineTmp2 then (dword &&& ~~~mask) + shifted
-        else js_shift.vregs r }
-  have hwindow :
-      (JoltISA.execInstr (fusedWindowInstr width)).run js_load =
-        .ok RETIRE_SUCCESS js_mask := by
-    cases width with
-    | byte =>
-        simpa [fusedWindowInstr, fusedWindowValue, js_mask, mask, hload_v0] using
-          (JoltISA.virtual_window_mask_b_run_vreg_vreg
-            JoltISA.inlineTmp3 JoltISA.inlineTmp0 0 js_load
-            (by unfold WritableVReg; decide))
-    | halfword =>
-        simpa [fusedWindowInstr, fusedWindowValue, js_mask, mask, hload_v0] using
-          (JoltISA.virtual_window_mask_h_run_vreg_vreg
-            JoltISA.inlineTmp3 JoltISA.inlineTmp0 0 js_load
-            (by unfold WritableVReg; decide))
-    | word =>
-        simpa [fusedWindowInstr, fusedWindowValue, js_mask, mask, hload_v0] using
-          (JoltISA.virtual_window_mask_w_run_vreg_vreg
-            JoltISA.inlineTmp3 JoltISA.inlineTmp0 0 js_load
-            (by unfold WritableVReg; decide))
-  have handn :
-      (JoltISA.execInstr
-        (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-          (.vreg JoltISA.inlineTmp3))).run js_mask =
-        .ok RETIRE_SUCCESS js_clear := by
-    simpa [js_clear, js_mask, hload_v2, mask] using
-      (JoltISA.andn_run_vreg_vreg_vreg JoltISA.inlineTmp2
-        JoltISA.inlineTmp2 JoltISA.inlineTmp3 js_mask
-        (by unfold WritableVReg; decide))
-  have hrs2_clear :
-      rX_bits rs2 js_clear.sail = .ok rs2_val js_clear.sail := by
-    simpa [js_clear, js_mask, hload_sail] using hrs2
-  have hshift :
-      (JoltISA.execInstr (fusedShiftInstr width rs2)).run js_clear =
-        .ok RETIRE_SUCCESS js_shift := by
-    cases width with
-    | byte =>
-        simpa [fusedShiftInstr, fusedShiftValue, js_shift, shifted,
-          js_clear, js_mask, hload_v0] using
-          (JoltISA.virtual_shift_data_b_run_vreg_xreg_vreg
-            JoltISA.inlineTmp3 rs2 JoltISA.inlineTmp0 js_clear rs2_val hrs2_clear
-            (by unfold WritableVReg; decide))
-    | halfword =>
-        simpa [fusedShiftInstr, fusedShiftValue, js_shift, shifted,
-          js_clear, js_mask, hload_v0] using
-          (JoltISA.virtual_shift_data_h_run_vreg_xreg_vreg
-            JoltISA.inlineTmp3 rs2 JoltISA.inlineTmp0 js_clear rs2_val hrs2_clear
-            (by unfold WritableVReg; decide))
-    | word =>
-        simpa [fusedShiftInstr, fusedShiftValue, js_shift, shifted,
-          js_clear, js_mask, hload_v0] using
-          (JoltISA.virtual_shift_data_w_run_vreg_xreg_vreg
-            JoltISA.inlineTmp3 rs2 JoltISA.inlineTmp0 js_clear rs2_val hrs2_clear
-            (by unfold WritableVReg; decide))
-  have hadd :
-      (JoltISA.execInstr
-        (.ADD (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-          (.vreg JoltISA.inlineTmp3))).run js_shift =
-        .ok RETIRE_SUCCESS js_splice := by
-    simpa [js_splice, js_shift, js_clear, js_mask, hload_v2, mask, shifted] using
-      (JoltISA.add_run_vreg_vreg_vreg JoltISA.inlineTmp2
-        JoltISA.inlineTmp2 JoltISA.inlineTmp3 js_shift
-        (by unfold WritableVReg; decide))
-  refine ⟨js_splice, ?_, ?_, ?_, ?_, rfl⟩
-  · rw [JoltISA.execProgram_instr_run_retire _ _ js_load js_mask hwindow]
-    rw [JoltISA.execProgram_instr_run_retire _ _ js_mask js_clear handn]
-    rw [JoltISA.execProgram_instr_run_retire _ _ js_clear js_shift hshift]
-    rw [JoltISA.execProgram_instr_run_retire _ _ js_shift js_splice hadd]
-  · simp [js_splice, js_shift, js_clear, js_mask, hload_sail]
-  · simp [js_splice, js_shift, js_clear, js_mask, hload_v1]
-  · simp [js_splice, mask, shifted]
+/-- Clear the addressed lane and add the shifted low bytes of `value`.
+For example, byte width at address 9 replaces byte one of `dword`.
+The width-specific identities with byte, halfword and word splices are proved
+in `StoreSplice.fusedByteSplice_eq`, `fusedHalfwordSplice_eq`, and `fusedWordSplice_eq`. -/
+def fusedSpliceValue (width : JoltISA.AccessWidth) (dword value ea : BitVec 64) : BitVec 64 :=
+  (dword &&& ~~~(fusedWindowValue width ea)) + fusedShiftValue width value ea
 
-/-- Fused byte-store mask, clear, shift, and add block. -/
-theorem fusedByteSpliceBlock (rest : JoltISA.Program)
-    (imm : BitVec 12) (rs2 : regidx)
-    (js js_load : SailJoltState) (val rs2_val dword : BitVec 64)
-    (hsetup : StoreSplice.ByteStoreFacts
-      (load_effective_address val imm)
-      (compute_aligned_dword_base_address val imm))
-    (hload_sail : js_load.sail = js.sail)
-    (hload_v0 : js_load.vregs JoltISA.inlineTmp0 = load_effective_address val imm)
-    (hload_v1 : js_load.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm)
-    (hload_v2 : js_load.vregs JoltISA.inlineTmp2 = dword)
-    (hrs2 : rX_bits rs2 js.sail = .ok rs2_val js.sail) :
-    ∃ js_splice : SailJoltState,
-      (JoltISA.execProgram
-        (.instr (JoltISA.Encoded.VirtualWindowMaskB (.vreg JoltISA.inlineTmp3)
-          (.vreg JoltISA.inlineTmp0) 0) <|
-         .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-           (.vreg JoltISA.inlineTmp3)) <|
-         .instr (.VirtualShiftDataB (.vreg JoltISA.inlineTmp3) (.xreg rs2)
-           (.vreg JoltISA.inlineTmp0)) <|
-         .instr (.ADD (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-           (.vreg JoltISA.inlineTmp3)) rest)).run js_load =
-        (JoltISA.execProgram rest).run js_splice ∧
-      js_splice.sail = js.sail ∧
-      js_splice.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm ∧
-      js_splice.vregs JoltISA.inlineTmp2 =
-        StoreSplice.byteSplice dword (Sail.BitVec.extractLsb rs2_val 7 0)
-          (((load_effective_address val imm -
-            compute_aligned_dword_base_address val imm).toNat) * 8) ∧
-      js_splice.jolt_device = js_load.jolt_device := by
-  rcases fusedSpliceBlock rest .byte rs2 js js_load
-      (load_effective_address val imm) (compute_aligned_dword_base_address val imm)
-      dword rs2_val hload_sail hload_v0 hload_v1 hload_v2 hrs2 with
-    ⟨js_splice, hrun, hsail, hv1, hv2, hdev⟩
-  refine ⟨js_splice, by simpa [fusedWindowInstr, fusedShiftInstr] using hrun,
-    hsail, hv1, ?_, hdev⟩
-  rw [hv2]
-  exact StoreSplice.fusedByteSplice_eq dword rs2_val
-    (load_effective_address val imm) (compute_aligned_dword_base_address val imm) hsetup
+private theorem fusedWindow_run (width : JoltISA.AccessWidth) (lane : JoltISA.VReg)
+    (rs1 : regidx) (imm baseValue : BitVec 64) (js : SailJoltState)
+    (hread : rX_bits rs1 js.sail = .ok baseValue js.sail)
+    (hwritable : WritableVReg lane) :
+    (JoltISA.execInstr (fusedWindowInstr width (.vreg lane) (.xreg rs1) imm)).run js =
+      .ok RETIRE_SUCCESS (stateAfterVRegWrite js lane (fusedWindowValue width (baseValue + imm))) := by
+  unfold WritableVReg at hwritable
+  cases width <;>
+    simp [fusedWindowInstr, JoltISA.laneWindowOpen, JoltISA.execInstr,
+      JoltISA.readSrc, liftSail, hread, JoltISA.writeDst, writeVReg, hwritable,
+      stateAfterVRegWrite, bind, EStateM.bind, EStateM.run, pure, EStateM.pure,
+      modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
+      fusedWindowValue, jolt_virtual_window_mask_b_value,
+      jolt_virtual_window_mask_h_value, jolt_virtual_window_mask_w_value,
+      jolt_virtual_window_mask_b_value64, jolt_virtual_window_mask_h_value64,
+      jolt_virtual_window_mask_w_value64, JoltISA.addWide, sign_extend, Sail.BitVec.signExtend]
 
-/-- Fused halfword-store mask, clear, shift, and add block. -/
-theorem fusedHalfwordSpliceBlock (rest : JoltISA.Program)
-    (imm : BitVec 12) (rs2 : regidx)
-    (js js_load : SailJoltState) (val rs2_val dword : BitVec 64)
-    (hsetup : StoreSplice.HalfwordStoreFacts
-      (load_effective_address val imm)
-      (compute_aligned_dword_base_address val imm))
-    (hload_sail : js_load.sail = js.sail)
-    (hload_v0 : js_load.vregs JoltISA.inlineTmp0 = load_effective_address val imm)
-    (hload_v1 : js_load.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm)
-    (hload_v2 : js_load.vregs JoltISA.inlineTmp2 = dword)
-    (hrs2 : rX_bits rs2 js.sail = .ok rs2_val js.sail) :
-    ∃ js_splice : SailJoltState,
-      (JoltISA.execProgram
-        (.instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg JoltISA.inlineTmp3)
-          (.vreg JoltISA.inlineTmp0) 0) <|
-         .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-           (.vreg JoltISA.inlineTmp3)) <|
-         .instr (.VirtualShiftDataH (.vreg JoltISA.inlineTmp3) (.xreg rs2)
-           (.vreg JoltISA.inlineTmp0)) <|
-         .instr (.ADD (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-           (.vreg JoltISA.inlineTmp3)) rest)).run js_load =
-        (JoltISA.execProgram rest).run js_splice ∧
-      js_splice.sail = js.sail ∧
-      js_splice.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm ∧
-      js_splice.vregs JoltISA.inlineTmp2 =
-        StoreSplice.halfwordSplice dword (Sail.BitVec.extractLsb rs2_val 15 0)
-          (((load_effective_address val imm -
-            compute_aligned_dword_base_address val imm).toNat) * 8) ∧
-      js_splice.jolt_device = js_load.jolt_device := by
-  rcases fusedSpliceBlock rest .halfword rs2 js js_load
-      (load_effective_address val imm) (compute_aligned_dword_base_address val imm)
-      dword rs2_val hload_sail hload_v0 hload_v1 hload_v2 hrs2 with
-    ⟨js_splice, hrun, hsail, hv1, hv2, hdev⟩
-  refine ⟨js_splice, by simpa [fusedWindowInstr, fusedShiftInstr] using hrun,
-    hsail, hv1, ?_, hdev⟩
-  rw [hv2]
-  exact StoreSplice.fusedHalfwordSplice_eq dword rs2_val
-    (load_effective_address val imm) (compute_aligned_dword_base_address val imm) hsetup
+private theorem fusedShift_run (width : JoltISA.AccessWidth) (lane : JoltISA.VReg)
+    (rs2 rs1 : regidx) (imm value baseValue : BitVec 64) (js : SailJoltState)
+    (hvalue : rX_bits rs2 js.sail = .ok value js.sail)
+    (hbase : rX_bits rs1 js.sail = .ok baseValue js.sail)
+    (hwritable : WritableVReg lane) :
+    (JoltISA.execInstr (fusedShiftInstr width (.vreg lane) (.xreg rs2) (.xreg rs1) imm)).run js =
+      .ok RETIRE_SUCCESS (stateAfterVRegWrite js lane (fusedShiftValue width value (baseValue + imm))) := by
+  unfold WritableVReg at hwritable
+  cases width <;>
+    simp only [fusedShiftInstr, JoltISA.laneWindowMerge, JoltISA.execInstr,
+      JoltISA.readSrc, liftSail, bind, EStateM.bind, EStateM.run, hvalue, hbase,
+      JoltISA.writeDst, writeVReg, hwritable, ↓reduceIte, stateAfterVRegWrite,
+      pure, EStateM.pure, modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
+      fusedShiftValue]
 
-/-- Fused word-store mask, clear, shift, and add block. -/
-theorem fusedWordSpliceBlock (rest : JoltISA.Program)
-    (imm : BitVec 12) (rs2 : regidx)
-    (js js_load : SailJoltState) (val rs2_val dword : BitVec 64)
-    (hsetup : StoreSplice.WordStoreFacts
-      (load_effective_address val imm)
-      (compute_aligned_dword_base_address val imm))
-    (hload_sail : js_load.sail = js.sail)
-    (hload_v0 : js_load.vregs JoltISA.inlineTmp0 = load_effective_address val imm)
-    (hload_v1 : js_load.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm)
-    (hload_v2 : js_load.vregs JoltISA.inlineTmp2 = dword)
-    (hrs2 : rX_bits rs2 js.sail = .ok rs2_val js.sail) :
-    ∃ js_splice : SailJoltState,
-      (JoltISA.execProgram
-        (.instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg JoltISA.inlineTmp3)
-          (.vreg JoltISA.inlineTmp0) 0) <|
-         .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-           (.vreg JoltISA.inlineTmp3)) <|
-         .instr (.VirtualShiftDataW (.vreg JoltISA.inlineTmp3) (.xreg rs2)
-           (.vreg JoltISA.inlineTmp0)) <|
-         .instr (.ADD (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2)
-           (.vreg JoltISA.inlineTmp3)) rest)).run js_load =
-        (JoltISA.execProgram rest).run js_splice ∧
+/-- The four mask-and-splice rows, before the final floor store.
+For example, word width clears a four-byte lane before adding its replacement. -/
+private def fusedSpliceProgram (width : JoltISA.AccessWidth)
+    (dword lane : JoltISA.VReg) (rs1 rs2 : regidx) (imm : BitVec 64) : JoltISA.Program :=
+  .instr (fusedWindowInstr width (.vreg lane) (.xreg rs1) imm) <|
+  .instr (.ANDN (.vreg dword) (.vreg dword) (.vreg lane)) <|
+  .instr (fusedShiftInstr width (.vreg lane) (.xreg rs2) (.xreg rs1) imm) <|
+  .instr (.ADD (.vreg dword) (.vreg dword) (.vreg lane)) <| .done RETIRE_SUCCESS
+
+private theorem fusedSpliceBlock (width : JoltISA.AccessWidth)
+    (dword lane : JoltISA.VReg) (hne : dword ≠ lane)
+    (hdwrite : WritableVReg dword) (hlwrite : WritableVReg lane)
+    (rs1 rs2 : regidx) (imm baseValue value : BitVec 64) (js : SailJoltState)
+    (hbase : rX_bits rs1 js.sail = .ok baseValue js.sail)
+    (hvalue : rX_bits rs2 js.sail = .ok value js.sail) :
+    ∃ js_splice,
+      JoltISA.Program.Run (fusedSpliceProgram width dword lane rs1 rs2 imm) js js_splice ∧
       js_splice.sail = js.sail ∧
-      js_splice.vregs JoltISA.inlineTmp1 = compute_aligned_dword_base_address val imm ∧
-      js_splice.vregs JoltISA.inlineTmp2 =
-        StoreSplice.wordSplice dword (Sail.BitVec.extractLsb rs2_val 31 0)
-          (((load_effective_address val imm -
-            compute_aligned_dword_base_address val imm).toNat) * 8) ∧
-      js_splice.jolt_device = js_load.jolt_device := by
-  rcases fusedSpliceBlock rest .word rs2 js js_load
-      (load_effective_address val imm) (compute_aligned_dword_base_address val imm)
-      dword rs2_val hload_sail hload_v0 hload_v1 hload_v2 hrs2 with
-    ⟨js_splice, hrun, hsail, hv1, hv2, hdev⟩
-  refine ⟨js_splice, by simpa [fusedWindowInstr, fusedShiftInstr] using hrun,
-    hsail, hv1, ?_, hdev⟩
-  rw [hv2]
-  exact StoreSplice.fusedWordSplice_eq dword rs2_val
-    (load_effective_address val imm) (compute_aligned_dword_base_address val imm) hsetup
+      js_splice.vregs dword = fusedSpliceValue width (js.vregs dword) value (baseValue + imm) ∧
+      js_splice.jolt_device = js.jolt_device := by
+  let mask := fusedWindowValue width (baseValue + imm)
+  let shifted := fusedShiftValue width value (baseValue + imm)
+  let cleared := js.vregs dword &&& ~~~mask
+  let js_mask := stateAfterVRegWrite js lane mask
+  let js_clear := stateAfterVRegWrite js_mask dword cleared
+  let js_shift := stateAfterVRegWrite js_clear lane shifted
+  let js_splice := stateAfterVRegWrite js_shift dword (cleared + shifted)
+  have hmask := fusedWindow_run width lane rs1 imm baseValue js hbase hlwrite
+  have handn : (JoltISA.execInstr (.ANDN (.vreg dword) (.vreg dword) (.vreg lane))).run js_mask =
+      .ok RETIRE_SUCCESS js_clear := by
+    simpa [js_clear, js_mask, cleared, stateAfterVRegWrite, hne] using
+      JoltISA.andn_run_vreg_vreg_vreg dword dword lane js_mask hdwrite
+  have hshift := fusedShift_run width lane rs2 rs1 imm value baseValue js_clear hvalue hbase hlwrite
+  have hadd : (JoltISA.execInstr (.ADD (.vreg dword) (.vreg dword) (.vreg lane))).run js_shift =
+      .ok RETIRE_SUCCESS js_splice := by
+    simpa [js_splice, js_shift, js_clear, stateAfterVRegWrite, hne] using
+      JoltISA.add_run_vreg_vreg_vreg dword dword lane js_shift hdwrite
+  refine ⟨js_splice, ?_, rfl, ?_, rfl⟩
+  · exact (LoadFamily.singleRow_run hmask).append
+      ((LoadFamily.singleRow_run handn).append
+        ((LoadFamily.singleRow_run hshift).append (LoadFamily.singleRow_run hadd)))
+  · simp [js_splice, stateAfterVRegWrite, cleared, mask, shifted, fusedSpliceValue]
+
+/-- The final row of `LaneWindow.merge`, which writes the containing doubleword.
+For example, word width writes back at address 8 for an effective address of 12.
+Jolt: `crates/jolt-program/src/expand/memory/shared.rs` (`LaneWindow::merge`). -/
+private def floorStoreRow (width : JoltISA.AccessWidth) (base : JoltISA.Src)
+    (value : JoltISA.VReg) (imm : BitVec 64) (fault : ExceptionType) : JoltISA.Instr :=
+  match JoltISA.laneWindowMerge width (.vreg value) (.vreg value)
+      base imm (.vreg value) fault (.done RETIRE_SUCCESS) with
+  | .instr _ (.instr _ (.instr _ (.instr instruction _))) => instruction
+  | _ => .FENCE
+
+private theorem floorStore_run (width : JoltISA.AccessWidth) (rs1 : regidx)
+    (value : JoltISA.VReg) (imm baseValue : BitVec 64) (fault : ExceptionType)
+    (js js' : SailJoltState)
+    (hread : rX_bits rs1 js.sail = .ok baseValue js.sail)
+    (halign : (baseValue + imm) &&& LoadFamily.alignmentMask width = 0)
+    (hmem : JoltISA.Mmu.store_doubleword ((baseValue + imm) &&& ~~~(7 : BitVec 64))
+      (js.vregs value) js = .ok (.Ok true) js') :
+    (JoltISA.execInstr (floorStoreRow width (.xreg rs1) value imm fault)).run js =
+      .ok RETIRE_SUCCESS js' := by
+  have hrow : floorStoreRow width (.xreg rs1) value imm fault =
+      match width with
+      | .byte => .VirtualStoreB (.xreg rs1) (.vreg value) imm fault
+      | .halfword => .VirtualStoreH (.xreg rs1) (.vreg value) imm fault
+      | .word => .VirtualStoreW (.xreg rs1) (.vreg value) imm fault := by
+    cases width <;> rfl
+  rw [hrow]
+  cases width <;>
+    simp only [LoadFamily.alignmentMask] at halign <;>
+    simp only [JoltISA.execInstr,
+      JoltISA.readSrc, liftSail, bind, EStateM.bind, EStateM.run, hread]
+  all_goals
+    simp only [halign, ↓reduceIte, readVReg, get, getThe, MonadStateOf.get,
+      EStateM.get, pure, EStateM.pure, bind, EStateM.bind, hmem]
+
+/-- The six rows of a narrow store, built from `LaneWindow.open` and `merge`.
+For example, word width gives the generated `SW` program, using scratch registers
+40 and 41 for the doubleword and lane respectively.
+Jolt: `crates/jolt-program/src/expand/memory/shared.rs` (`expand_narrow_store`). -/
+def laneStoreProgram (width : JoltISA.AccessWidth) (rs1 rs2 : regidx)
+    (imm : BitVec 64) : JoltISA.Program :=
+  JoltISA.laneWindowOpen width (.vreg 40) (.vreg 41) (.xreg rs1) imm .normal
+    (ExceptionType.E_SAMO_Addr_Align ())
+    (JoltISA.laneWindowMerge width (.vreg 40) (.vreg 41) (.xreg rs1) imm (.xreg rs2)
+      (ExceptionType.E_SAMO_Addr_Align ()) (.done RETIRE_SUCCESS))
+
+private theorem laneStoreProgram_rows (width : JoltISA.AccessWidth) (rs1 rs2 : regidx)
+    (imm : BitVec 64) :
+    laneStoreProgram width rs1 rs2 imm =
+      (JoltISA.Program.instr (LoadFamily.floorLoadRow width (.vreg 40) (.xreg rs1) imm .normal
+        (ExceptionType.E_SAMO_Addr_Align ())) (.done RETIRE_SUCCESS)).append
+      ((fusedSpliceProgram width 40 41 rs1 rs2 imm).append
+        (.instr (floorStoreRow width (.xreg rs1) 40 imm
+          (ExceptionType.E_SAMO_Addr_Align ())) (.done RETIRE_SUCCESS))) := by
+  cases width <;> rfl
+
+/-- A narrow store writes the shared splice of the loaded doubleword to RAM.
+Only the selected width's alignment is required; for example, a halfword at
+address 10 reads and writes the enclosing doubleword at address 8.
+Jolt: `crates/jolt-program/src/expand/memory/shared.rs` (`expand_narrow_store`). -/
+theorem laneStoreProgram_run (width : JoltISA.AccessWidth) (imm : BitVec 12)
+    (rs1 rs2 : regidx) (js : SailJoltState) (baseValue value : BitVec 64)
+    (hbase : rX_bits rs1 js.sail = .ok baseValue js.sail)
+    (hvalue : rX_bits rs2 js.sail = .ok value js.sail)
+    (halign : load_effective_address baseValue imm &&& LoadFamily.alignmentMask width = 0)
+    (haligned : AlignedDwordAccess (compute_aligned_dword_base_address baseValue imm))
+    (hbytes : MemBytesPresentAt js.sail (compute_aligned_dword_base_address baseValue imm) 8)
+    (hram : JoltISA.RAM_START_ADDRESS ≤ (compute_aligned_dword_base_address baseValue imm).toNat)
+    (hload : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address baseValue imm) js)
+    (hstore : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address baseValue imm) js) :
+    ∃ js', JoltISA.Program.Run (laneStoreProgram width rs1 rs2 (sign_extend (m := 64) imm)) js js' ∧
+      js'.sail = state_after_dword_store js.sail (compute_aligned_dword_base_address baseValue imm)
+        (fusedSpliceValue width
+          (loaded_dword_at js.sail (compute_aligned_dword_base_address baseValue imm) hbytes haligned.no_ovf)
+          value (load_effective_address baseValue imm)) := by
+  let base := compute_aligned_dword_base_address baseValue imm
+  let dword := loaded_dword_at js.sail base hbytes haligned.no_ovf
+  let js_load := stateAfterVRegWrite js (40 : JoltISA.VReg) dword
+  have hmem : JoltISA.Mmu.load_doubleword base js = .ok (.Ok dword) js := by
+    rw [JoltISA.Mmu.load_doubleword_ram js base haligned.align hram
+      (JoltISA.Mmu.effective_address_ok_of_load hram hload),
+      JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail base hbytes haligned.no_ovf]
+  have hfirst := LoadFamily.floorLoad_run width 40 rs1 (sign_extend (m := 64) imm)
+    baseValue dword .normal (ExceptionType.E_SAMO_Addr_Align ()) js hbase halign hmem
+    (by unfold WritableVReg; decide)
+  obtain ⟨js_splice, hsplice, hsail, hdword, hdevice⟩ :=
+    fusedSpliceBlock width 40 41 (by decide) (by unfold WritableVReg; decide)
+      (by unfold WritableVReg; decide) rs1 rs2 (sign_extend (m := 64) imm)
+      baseValue value js_load hbase hvalue
+  have hstore' : Assumptions.JoltRamStoreOk base js_splice :=
+    ⟨by rw [hdevice]; exact hstore.below_heap_end,
+     by rw [hdevice]; exact hstore.outside_canary⟩
+  have hmem' : JoltISA.Mmu.store_doubleword base (js_splice.vregs 40) js_splice =
+      .ok (.Ok true) { js_splice with sail := state_after_dword_store js_splice.sail base (js_splice.vregs 40) } := by
+    rw [JoltISA.Mmu.store_doubleword_ram js_splice base (js_splice.vregs 40)
+      haligned.align hram (JoltISA.Mmu.effective_address_ok_of_store hram hstore'),
+      JoltISA.Mmu.write_ram_doubleword_eq]
+  have hlast := floorStore_run width rs1 40 (sign_extend (m := 64) imm) baseValue
+    (ExceptionType.E_SAMO_Addr_Align ()) js_splice _ (by rw [hsail]; exact hbase) halign hmem'
+  refine ⟨{ js_splice with sail := state_after_dword_store js_splice.sail base (js_splice.vregs 40) }, ?_, ?_⟩
+  · rw [laneStoreProgram_rows]
+    exact (LoadFamily.singleRow_run hfirst).append (hsplice.append (LoadFamily.singleRow_run hlast))
+  · change state_after_dword_store js_splice.sail base (js_splice.vregs 40) = _
+    rw [hsail, hdword]
+    simp only [js_load, stateAfterVRegWrite, ↓reduceIte]
+    rfl
+
+/-- Misalignment stops the first floor load, before any store row runs.
+For example, a word store at address 10 reports the store-alignment exception.
+Both halfword and word stores use the load family's width-generic proof. -/
+theorem laneStoreProgram_misaligned (width : JoltISA.AccessWidth) (imm : BitVec 12)
+    (rs1 rs2 : regidx) (js : SailJoltState) (baseValue : BitVec 64)
+    (hread : rX_bits rs1 js.sail = .ok baseValue js.sail)
+    (hmis : load_effective_address baseValue imm &&& LoadFamily.alignmentMask width ≠ 0) :
+    (JoltISA.execProgram (laneStoreProgram width rs1 rs2 (sign_extend (m := 64) imm))).run js =
+      .ok (ExecutionResult.Memory_Exception
+        (Virtaddr (load_effective_address baseValue imm), ExceptionType.E_SAMO_Addr_Align ())) js := by
+  rw [laneStoreProgram_rows]
+  exact LoadFamily.floorLoadBlock_misaligned width _ (.vreg 40) rs1
+    (sign_extend (m := 64) imm) baseValue .normal (ExceptionType.E_SAMO_Addr_Align ()) js hread hmis
 
 /-- Byte-store splice block.
 
 Starting from the setup boundary (`v0 = ea`, `v1 = base`, `v2 = dword`), the
-Rust-faithful `SB` middle sequence materializes a one-byte mask, shifts the low
+legacy `SB` middle sequence materializes a one-byte mask, shifts the low
 byte of `rs2` into the target lane, and leaves the spliced dword in `v2`. -/
 theorem byteSpliceBlock (rest : JoltISA.Program)
     (imm : BitVec 12) (rs2 : regidx)

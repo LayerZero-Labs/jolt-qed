@@ -69,16 +69,6 @@ theorem rangeCheckAligned_entry (v : BitVec 128) :
     simp only [BitVec.setWidth_and, mask, BitVec.and_allOnes]
   simp only [BitVec.ofFin_toFin, h]
 
-/-- AlignAddr takes the low 64 bits and clears the three lowest bits. -/
-theorem alignAddr_entry (v : BitVec 128) :
-    alignAddrTableEntry (F := F) v.toFin =
-      ((v.setWidth 64 &&& ~~~7#64).toNat : F) := by
-  unfold alignAddrTableEntry
-  have h : (v &&& ((1#128 <<< 64) - 1)).setWidth 64 = v.setWidth 64 := by
-    have mask : (((1#128 <<< 64) - 1).setWidth 64) = BitVec.allOnes 64 := by decide
-    simp only [BitVec.setWidth_and, mask, BitVec.and_allOnes]
-  simp only [BitVec.ofFin_toFin, h]
-
 /-- An exactly encoded modulus gives the same remainder as natural-number division. -/
 theorem umod_toNat (v : BitVec 128) (m : Nat) (hm : m < 2 ^ 128) :
     (v % BitVec.ofNat 128 m).toNat = v.toNat % m := by

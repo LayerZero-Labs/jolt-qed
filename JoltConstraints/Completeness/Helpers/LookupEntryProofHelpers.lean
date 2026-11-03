@@ -1,3 +1,4 @@
+import JoltConstraints.Completeness.Helpers.AddressOffsetEntry
 import JoltConstraints.Constraints.LookupOperandData
 import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltConstraints.Soundness.Layer4.ByteSwap
@@ -260,14 +261,6 @@ theorem windowMaskW_entry (n : Nat) :
       exact BitVec.ushiftRight_and_setWidth _ 1 2 1 (by decide) (by decide) (by decide))
   simp only [windowMaskWTableEntry, BitVec.ofFin_toFin, hm, shiftLeft_ofNat_eq, ho]
 
-theorem halfword_aligned (n : Nat) (h : BitVec.ofNat 64 n &&& 1 = 0) :
-    BitVec.ofNat 128 n % 2 = 0 := by
-  exact BitVec.ofNat_umod_pow2_eq_zero_of_low_mask n 1 (by decide) (by decide) h
-
-theorem word_aligned (n : Nat) (h : BitVec.ofNat 64 n &&& 3 = 0) :
-    BitVec.ofNat 128 n % 4 = 0 := by
-  exact BitVec.ofNat_umod_pow2_eq_zero_of_low_mask n 2 (by decide) (by decide) h
-
 end entries2
 
 theorem mulWide_lt (x y : BitVec 64) : JoltISA.mulWide x y < 2 ^ 128 := by
@@ -314,13 +307,35 @@ theorem lookupEntryCorrect_RangeCheckAligned (row : HonestTraceRow bytecode)
     BitVec.setWidth_zero, BitVec.or_zero]
   exact BitVec.and_comm _ _
 
-theorem lookupEntryCorrect_AlignAddr (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .AlignAddr) :
-    LookupEntryCorrect F .AlignAddr row := by
+/-- The honest floor byte rows select the AddressOffsetB entry;
+for example, effective address 15 returns offset 7.
+Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
+(`floor_access!`) at `c6703570`. -/
+theorem lookupEntryCorrect_AddressOffsetB (row : HonestTraceRow bytecode)
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .AddressOffsetB) :
+    LookupEntryCorrect F .AddressOffsetB row := by
   lookup_cases
-  simp only [alignAddr_entry, jolt_virtual_align_addr_value64,
-    BitVec.setWidth_ofNat_of_le (by norm_num : 64 ≤ 128)]
-  rfl
+  all_goals exact addressOffset_entry 1 _ _
+
+/-- The honest floor halfword rows select the AddressOffsetH entry;
+for example, effective address 14 returns offset 6.
+Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
+(`floor_access!`) at `c6703570`. -/
+theorem lookupEntryCorrect_AddressOffsetH (row : HonestTraceRow bytecode)
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .AddressOffsetH) :
+    LookupEntryCorrect F .AddressOffsetH row := by
+  lookup_cases
+  all_goals exact addressOffset_entry 2 _ _
+
+/-- The honest floor word rows select the AddressOffsetW entry;
+for example, effective address 12 returns offset 4.
+Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
+(`floor_access!`) at `c6703570`. -/
+theorem lookupEntryCorrect_AddressOffsetW (row : HonestTraceRow bytecode)
+    (h : JoltMetadata.lookupTable (rowInstruction row) = some .AddressOffsetW) :
+    LookupEntryCorrect F .AddressOffsetW row := by
+  lookup_cases
+  all_goals exact addressOffset_entry 4 _ _
 
 theorem lookupEntryCorrect_SignMask (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .SignMask) :
@@ -777,36 +792,6 @@ theorem lookupEntryCorrect_UnsignedLessThanEqual (row : HonestTraceRow bytecode)
     simp
   · exact absurd h2 (by simp [throw, throwThe, MonadExceptOf.throw, EStateM.throw])
 
-theorem lookupEntryCorrect_HalfwordAlignment (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .HalfwordAlignment) :
-    LookupEntryCorrect F .HalfwordAlignment row := by
-  have hexec := row_executes_exists row
-  lookup_cases
-  rw [hi] at hexec
-  obtain ⟨_, hexec⟩ := hexec
-  simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-  have h1 := lookup_read_bind _ _ _ _ _ hexec
-  split_ifs at h1 with hc
-  · simp only [halfwordAlignmentTableEntry, BitVec.ofFin_toFin]
-    rw [if_pos (halfword_aligned _ hc)]
-    simp
-  · exact absurd h1 (by simp [pure, EStateM.pure])
-
-theorem lookupEntryCorrect_WordAlignment (row : HonestTraceRow bytecode)
-    (h : JoltMetadata.lookupTable (rowInstruction row) = some .WordAlignment) :
-    LookupEntryCorrect F .WordAlignment row := by
-  have hexec := row_executes_exists row
-  lookup_cases
-  rw [hi] at hexec
-  obtain ⟨_, hexec⟩ := hexec
-  simp only [JoltISA.Instr.withRuntimeAdvice, JoltISA.execInstr] at hexec
-  have h1 := lookup_read_bind _ _ _ _ _ hexec
-  split_ifs at h1 with hc
-  · simp only [wordAlignmentTableEntry, BitVec.ofFin_toFin]
-    rw [if_pos (word_aligned _ hc)]
-    simp
-  · exact absurd h1 (by simp [pure, EStateM.pure])
-
 theorem lookupEntryCorrect_MulUNoOverflow (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .MulUNoOverflow) :
     LookupEntryCorrect F .MulUNoOverflow row := by
@@ -863,9 +848,10 @@ theorem rowLookupOutput_eq_zero_of_lookupTable_none (row : HonestTraceRow byteco
     simp only [hi, JoltMetadata.lookupTable, reduceCtorEq] at h <;>
     simp only [hi]
 
-/-- Dispatcher: the honest entry of the row's lookup table equals the honest
-lookup output. The shift tables need the row's mask to be a bitmask
-(`shiftMaskOk_of_honest`). -/
+/-- Dispatch the honest entry proof for the selected table, including floor
+address offsets; for example, a LoadH row selects AddressOffsetH.
+Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs` (`LookupTableKind`)
+and `instructions/virt/floor_access.rs` (`floor_access!`) at `c6703570`. -/
 theorem lookupEntryCorrect_of_lookupTable (row : HonestTraceRow bytecode) (k : LookupTableKind)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some k)
     (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
@@ -888,8 +874,6 @@ theorem lookupEntryCorrect_of_lookupTable (row : HonestTraceRow bytecode) (k : L
   | .UnsignedLessThanEqual => lookupEntryCorrect_UnsignedLessThanEqual row h
   | .ValidUnsignedRemainder => lookupEntryCorrect_ValidUnsignedRemainder row h
   | .ValidDiv0 => lookupEntryCorrect_ValidDiv0 row h
-  | .HalfwordAlignment => lookupEntryCorrect_HalfwordAlignment row h
-  | .WordAlignment => lookupEntryCorrect_WordAlignment row h
   | .LowerHalfWord => lookupEntryCorrect_LowerHalfWord row h
   | .SignExtendWord => lookupEntryCorrect_SignExtendWord row h
   | .Pow2 => lookupEntryCorrect_Pow2 row h
@@ -921,7 +905,9 @@ theorem lookupEntryCorrect_of_lookupTable (row : HonestTraceRow bytecode) (k : L
   | .Pext => lookupEntryCorrect_Pext row h
   | .WindowMaskB => lookupEntryCorrect_WindowMaskB row h
   | .WindowMaskH => lookupEntryCorrect_WindowMaskH row h
-  | .AlignAddr => lookupEntryCorrect_AlignAddr row h
+  | .AddressOffsetB => lookupEntryCorrect_AddressOffsetB row h
+  | .AddressOffsetH => lookupEntryCorrect_AddressOffsetH row h
+  | .AddressOffsetW => lookupEntryCorrect_AddressOffsetW row h
   | .ShiftDataB => lookupEntryCorrect_ShiftDataB row h
   | .ShiftDataH => lookupEntryCorrect_ShiftDataH row h
   | .ShiftDataW => lookupEntryCorrect_ShiftDataW row h

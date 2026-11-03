@@ -25,7 +25,7 @@ jth virtual address chunk, most significant first. All arithmetic is in F.
 
 /-- Completeness of the lookup-output constraint. The execution-row case
 reduces to `lookupEntryCorrect_of_lookupTable` (one lemma per lookup table in
-`LookupEntryProofHelpers.lean`); some of those remain `sorry`, see there. -/
+`LookupEntryProofHelpers.lean`). -/
 theorem honestWitness_lookupOutputEqInstructionReadRaf
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

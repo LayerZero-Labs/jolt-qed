@@ -5,17 +5,18 @@ set_option autoImplicit false
 
 namespace JoltMetadata
 
--- Rust: [format normalization](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format).
--- Jolt: decoded operands, jolt/crates/jolt-program/src/image/decode.rs:253-342 at 5def437f.
--- Preserve the normalized row immediate, including fields ignored by execution.
--- I/U/J and alignment formats widen a u64 to i128. Loads/stores and branches
--- retain a signed offset. AdviceLoad carries its byte count, not its loaded value.
+/-- The normalized immediate, retaining signed offsets for memory rows,
+branches and ShiftData and unsigned 64-bit encodings for I/U/J rows.
+For example, a floor load or ShiftData with offset -2 contributes -2.
+Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
+(`NormalizedOperands::from`); Jolt's expander:
+`crates/jolt-program/src/expand/memory/shared.rs` (`LaneWindow::open`, `merge`)
+at `c6703570`. -/
 def immediate (instruction : JoltISA.Instr) : Int :=
   match instruction with
   | .ADDI _ _ imm | .ADDIW _ _ imm | .ANDI _ _ imm | .ORI _ _ imm | .XORI _ _ imm
-  | .SLTI _ _ imm | .SLTIU _ _ imm | .JALR _ _ imm | .VirtualAlignAddr _ _ imm
-  | .VirtualWindowMaskB _ _ imm | .VirtualWindowMaskH _ _ imm | .VirtualWindowMaskW _ _ imm
-  | .VirtualAssertHalfwordAlignment _ imm _ | .VirtualAssertWordAlignment _ imm _ =>
+  | .SLTI _ _ imm | .SLTIU _ _ imm | .JALR _ _ imm
+  | .VirtualWindowMaskB _ _ imm | .VirtualWindowMaskH _ _ imm | .VirtualWindowMaskW _ _ imm =>
       imm.toNat
   | .JAL _ imm => imm.toNat
   | .AUIPC _ imm => imm.toNat
@@ -28,7 +29,11 @@ def immediate (instruction : JoltISA.Instr) : Int :=
   | .VirtualSRLI _ _ imm | .VirtualSRAI _ _ imm | .VirtualSRLIW _ _ imm
   | .VirtualSRAIW _ _ imm | .VirtualROTRI _ _ imm | .VirtualROTRIW _ _ imm =>
       (BitVec.ofNat 64 imm).toNat
-  | .LD _ _ _ imm | .SD _ _ imm => imm.toInt
+  | .LD _ _ _ imm | .SD _ _ imm
+  | .VirtualLoadB _ _ _ imm _ | .VirtualLoadH _ _ _ imm _ | .VirtualLoadW _ _ _ imm _
+  | .VirtualStoreB _ _ imm _ | .VirtualStoreH _ _ imm _ | .VirtualStoreW _ _ imm _
+  | .VirtualShiftDataB _ _ _ imm | .VirtualShiftDataH _ _ _ imm
+  | .VirtualShiftDataW _ _ _ imm => imm.toInt
   | .BEQ _ _ imm | .BNE _ _ imm | .BLT _ _ imm | .BGE _ _ imm
   | .BLTU _ _ imm | .BGEU _ _ imm | .VirtualAssertEQ _ _ imm => imm.toInt
   | .VirtualAssertValidDiv0 _ _ imm | .VirtualAssertValidUnsignedRemainder _ _ imm
@@ -40,12 +45,14 @@ def immediate (instruction : JoltISA.Instr) : Int :=
   | .VirtualXORROTW16 .. | .VirtualXORROTW12 .. | .VirtualXORROTW8 .. | .VirtualXORROTW7 ..
   | .VirtualXORROTW22 .. | .VirtualXORROTW19 .. | .VirtualXORROTW6 ..
   | .OR .. | .XOR .. | .AND .. | .SLT .. | .SLTU .. | .VirtualPext .. | .VirtualPextSigned ..
-  | .VirtualShiftDataB .. | .VirtualShiftDataH .. | .VirtualShiftDataW ..
   | .VirtualNegateIf .. | .VirtualHostIO => 0
 
--- Rust: crates/jolt-riscv/src/instructions/{i,m,virt,assert}/*.rs (instruction flags).
--- Rust: crates/jolt-riscv/src/lib.rs::jolt_instruction.
--- We want to know if the Jolt Instruction flips a particular flag on.
+/-- Whether a row selects an instruction-input source or a branch/no-op flag.
+For example, LD selects its captured destination and ShiftData selects both
+its second source and its immediate.
+Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and
+`instructions/virt/{load,store,shift_data}_{b,h,w}.rs` (`jolt_instruction!`)
+at `c6703570`. -/
 def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bool :=
   match flag with
   -- All the instructions for which the left operand (first source) is the program counter
@@ -60,9 +67,11 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
       | .LUI .. | .AUIPC .. | .JAL .. | .JALR .. | .VirtualMULI .. | .VirtualMULIW ..
       | .VirtualPow2I .. | .VirtualPow2IW .. | .VirtualShiftRightBitmaskI ..
       | .VirtualSRLI .. | .VirtualSRAI .. | .VirtualSRLIW .. | .VirtualSRAIW ..
-      | .VirtualROTRI .. | .VirtualROTRIW .. | .VirtualAlignAddr .. | .VirtualWindowMaskB ..
+      | .VirtualROTRI .. | .VirtualROTRIW .. | .VirtualWindowMaskB ..
       | .VirtualWindowMaskH .. | .VirtualWindowMaskW .. | .VirtualMovsign ..
-      | .VirtualAssertHalfwordAlignment .. | .VirtualAssertWordAlignment .. => true
+      | .VirtualLoadB .. | .VirtualLoadH .. | .VirtualLoadW ..
+      | .VirtualStoreB .. | .VirtualStoreH .. | .VirtualStoreW ..
+      | .VirtualShiftDataB .. | .VirtualShiftDataH .. | .VirtualShiftDataW .. => true
       | _ => false
   -- The left operand (first source) is a general purpose xreg
   | .LeftOperandIsRs1Value =>
@@ -78,14 +87,16 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
       | .VirtualXORROT16 .. | .VirtualXORROT63 .. | .VirtualXORROTL1 .. | .VirtualXORROTW16 ..
       | .VirtualXORROTW12 .. | .VirtualXORROTW8 .. | .VirtualXORROTW7 ..
       | .VirtualXORROTW22 .. | .VirtualXORROTW19 .. | .VirtualXORROTW6 .. | .OR .. | .XOR ..
-      | .AND .. | .SLT .. | .SLTU .. | .VirtualAlignAddr .. | .VirtualWindowMaskB ..
+      | .AND .. | .SLT .. | .SLTU .. | .VirtualWindowMaskB ..
       | .VirtualWindowMaskH .. | .VirtualWindowMaskW .. | .VirtualPext ..
       | .VirtualPextSigned .. | .VirtualShiftDataB .. | .VirtualShiftDataH ..
       | .VirtualShiftDataW .. | .VirtualSignExtendWord .. | .VirtualZeroExtendWord ..
-      | .VirtualMovsign .. | .VirtualAssertHalfwordAlignment ..
-      | .VirtualAssertWordAlignment .. | .VirtualAssertEQ .. | .VirtualAssertValidDiv0 ..
+      | .VirtualMovsign ..
+      | .VirtualAssertEQ .. | .VirtualAssertValidDiv0 ..
       | .VirtualNegateIf .. | .VirtualAssertValidUnsignedRemainder ..
-      | .VirtualAssertMulUNoOverflow .. | .VirtualAssertLTE .. => true
+      | .VirtualAssertMulUNoOverflow .. | .VirtualAssertLTE ..
+      | .VirtualLoadB .. | .VirtualLoadH .. | .VirtualLoadW ..
+      | .VirtualStoreB .. | .VirtualStoreH .. | .VirtualStoreW .. => true
       | _ => false
   --  The right operand (second source) is a general purpose xreg
   | .RightOperandIsRs2Value =>
@@ -114,10 +125,16 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
   -- expand/operands.rs::noop_for emits ADDI x0, x0, 0, whose IsNoop is false.
   -- Padding flags are supplied separately by bytecodeInstructionFlag.
   | .IsNoop => false
+  | .RightOperandIsRdWriteValue =>
+      match instruction with
+      | .LD .. => true
+      | _ => false
 
--- Rust: crates/jolt-riscv/src/instructions/{i,m,virt,assert}/*.rs (circuit flags).
--- Rust: crates/jolt-riscv/src/lib.rs::jolt_instruction.
--- Same business as above, but instead with circuit flags
+/-- The circuit flags fixed by an instruction, before sequence stamping.
+For example, a floor load sets `Load` and `AddOperands`; LD sets only `Load`.
+Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and
+`instructions/virt/{load,store,shift_data}_{b,h,w}.rs` (`jolt_instruction!`)
+at `c6703570`. -/
 def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
   match flag with
   -- TODO: Why is this virtual shit flipping off Add operands? Double check with rust code
@@ -126,10 +143,11 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
       | .ADDI .. | .ADDIW .. | .LUI .. | .AUIPC .. | .JAL .. | .JALR .. | .ADD .. | .ADDW ..
       | .VirtualPow2 .. | .VirtualPow2W .. | .VirtualPow2I .. | .VirtualPow2IW ..
       | .VirtualShiftRightBitmask .. | .VirtualShiftRightBitmaskI ..
-      | .VirtualShiftRightBitmaskW .. | .VirtualRev8W .. | .VirtualAlignAddr ..
+      | .VirtualShiftRightBitmaskW .. | .VirtualRev8W ..
       | .VirtualWindowMaskB .. | .VirtualWindowMaskH .. | .VirtualWindowMaskW ..
       | .VirtualSignExtendWord .. | .VirtualZeroExtendWord ..
-      | .VirtualAssertHalfwordAlignment .. | .VirtualAssertWordAlignment .. => true
+      | .VirtualLoadB .. | .VirtualLoadH .. | .VirtualLoadW ..
+      | .VirtualStoreB .. | .VirtualStoreH .. | .VirtualStoreW .. => true
       | _ => false
   | .SubtractOperands =>
       match instruction with
@@ -142,11 +160,11 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
       | _ => false
   | .Load =>
       match instruction with
-      | .LD .. => true
+      | .LD .. | .VirtualLoadB .. | .VirtualLoadH .. | .VirtualLoadW .. => true
       | _ => false
   | .Store =>
       match instruction with
-      | .SD .. => true
+      | .SD .. | .VirtualStoreB .. | .VirtualStoreH .. | .VirtualStoreW .. => true
       | _ => false
   | .Jump =>
       match instruction with
@@ -166,7 +184,7 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
       | .VirtualXORROT63 .. | .VirtualXORROTL1 .. | .VirtualXORROTW16 .. | .VirtualXORROTW12 ..
       | .VirtualXORROTW8 .. | .VirtualXORROTW7 .. | .VirtualXORROTW22 ..
       | .VirtualXORROTW19 .. | .VirtualXORROTW6 .. | .OR .. | .XOR .. | .AND .. | .SLT ..
-      | .SLTU .. | .VirtualAlignAddr .. | .VirtualWindowMaskB .. | .VirtualWindowMaskH ..
+      | .SLTU .. | .VirtualWindowMaskB .. | .VirtualWindowMaskH ..
       | .VirtualWindowMaskW .. | .VirtualPext .. | .VirtualPextSigned ..
       | .VirtualShiftDataB .. | .VirtualShiftDataH .. | .VirtualShiftDataW ..
       | .VirtualSignExtendWord .. | .VirtualZeroExtendWord .. | .VirtualMovsign ..
@@ -178,7 +196,6 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
   -- Instructions that panic the verifier.
   | .Assert =>
       match instruction with
-      | .VirtualAssertHalfwordAlignment .. | .VirtualAssertWordAlignment ..
       | .VirtualAssertEQ .. | .VirtualAssertValidDiv0 ..
       | .VirtualAssertValidUnsignedRemainder .. | .VirtualAssertMulUNoOverflow ..
       | .VirtualAssertLTE .. => true
@@ -212,18 +229,40 @@ def circuitFlag (row : JoltInstructionRow) (flag : CircuitFlags) : Bool :=
   | .IsFirstInSequence => row.is_first_in_sequence
   | _ => opcodeFlag row.instruction flag
 
-theorem opcodeFlag_load_requiresLD (instruction : JoltISA.Instr)
+/-- A load-flagged row is LD or a floor load of class B, H or W.
+For example, a `VirtualLoadH` satisfies the second alternative with its fault code.
+Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and
+`instructions/virt/load_{b,h,w}.rs` (`jolt_instruction!`) at `c6703570`. -/
+theorem opcodeFlag_load_cases (instruction : JoltISA.Instr)
     (h : opcodeFlag instruction .Load = true) :
-    ∃ faultClass dst base imm, instruction = .LD faultClass dst base imm := by
-  cases instruction <;> simp_all [opcodeFlag]
+    ∃ faultClass dst base imm,
+      instruction = .LD faultClass dst base imm ∨
+      ∃ fault, instruction = .VirtualLoadB faultClass dst base imm fault ∨
+        instruction = .VirtualLoadH faultClass dst base imm fault ∨
+        instruction = .VirtualLoadW faultClass dst base imm fault := by
+  simp only [opcodeFlag] at h
+  split at h <;> simp_all
 
-theorem opcodeFlag_store_requiresSD (instruction : JoltISA.Instr)
+/-- A store-flagged row is SD or a floor store of class B, H or W.
+For example, a `VirtualStoreW` satisfies the last alternative with its fault code.
+Jolt's prover: `crates/jolt-riscv/src/instructions/i/sd.rs` and
+`instructions/virt/store_{b,h,w}.rs` (`jolt_instruction!`) at `c6703570`. -/
+theorem opcodeFlag_store_cases (instruction : JoltISA.Instr)
     (h : opcodeFlag instruction .Store = true) :
-    ∃ base value imm, instruction = .SD base value imm := by
-  cases instruction <;> simp_all [opcodeFlag]
+    ∃ base value imm,
+      instruction = .SD base value imm ∨
+      ∃ fault, instruction = .VirtualStoreB base value imm fault ∨
+        instruction = .VirtualStoreH base value imm fault ∨
+        instruction = .VirtualStoreW base value imm fault := by
+  simp only [opcodeFlag] at h
+  split at h <;> simp_all
 
--- Rust: crates/jolt-lookup-tables/src/instructions/{riscv,virt}/::impl_lookup_table.
--- Map from instruction to Lookup tables (TODO: double check this connection)
+/-- The table selected by an instruction, or `none` when it has no table.
+For example, a halfword floor load or store selects `AddressOffsetH`,
+while LD and SD select no table.
+Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
+(`floor_access!`) and `instructions/riscv/{ld,sd}.rs` (`impl_lookup_table!`)
+at `c6703570`. -/
 def lookupTable (instruction : JoltISA.Instr) : Option LookupTableKind :=
   match instruction with
   | .ADDI .. | .LUI .. | .AUIPC .. | .JAL .. | .ADD .. | .SUB .. | .MUL ..
@@ -266,7 +305,9 @@ def lookupTable (instruction : JoltISA.Instr) : Option LookupTableKind :=
   | .VirtualXORROTW22 .. => some .VirtualXORROTW22
   | .VirtualXORROTW19 .. => some .VirtualXORROTW19
   | .VirtualXORROTW6 .. => some .VirtualXORROTW6
-  | .VirtualAlignAddr .. => some .AlignAddr
+  | .VirtualLoadB .. | .VirtualStoreB .. => some .AddressOffsetB
+  | .VirtualLoadH .. | .VirtualStoreH .. => some .AddressOffsetH
+  | .VirtualLoadW .. | .VirtualStoreW .. => some .AddressOffsetW
   | .VirtualWindowMaskB .. => some .WindowMaskB
   | .VirtualWindowMaskH .. => some .WindowMaskH
   | .VirtualWindowMaskW .. => some .WindowMaskW
@@ -277,8 +318,6 @@ def lookupTable (instruction : JoltISA.Instr) : Option LookupTableKind :=
   | .VirtualShiftDataW .. => some .ShiftDataW
   | .VirtualZeroExtendWord .. => some .LowerHalfWord
   | .VirtualMovsign .. => some .SignMask
-  | .VirtualAssertHalfwordAlignment .. => some .HalfwordAlignment
-  | .VirtualAssertWordAlignment .. => some .WordAlignment
   | .VirtualAssertValidDiv0 .. => some .ValidDiv0
   | .VirtualNegateIf .. => some .VirtualNegateIf
   | .VirtualAssertValidUnsignedRemainder .. => some .ValidUnsignedRemainder

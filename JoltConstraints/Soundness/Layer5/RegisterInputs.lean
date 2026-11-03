@@ -100,7 +100,8 @@ theorem RegisterAgreementOn.registerInputs {live : Fin 128 → Prop} {pre : Sail
     rhs rightCanonical rightOperand rightLive
   simp only [Prod.mk.injEq] at selection
   obtain ⟨rs1, pc, rs2, imm⟩ := selection
-  simpa only [rs1, pc, rs2, imm, Bool.false_eq_true, ↓reduceIte, add_zero, left, right] using
+  have rd := rdWriteInput_false_of_rs1Input row.instruction rs1
+  simpa only [rs1, pc, rs2, imm, rd, Bool.false_eq_true, ↓reduceIte, add_zero, left, right] using
     instructionInputs_of_selected_bytecode charAbove2pow127 context equations t slot selected row rowIs
 
 /-- Two selected register operands supply both instruction inputs.
@@ -148,7 +149,8 @@ theorem RegisterAgreementOn.immediateInputs {live : Fin 128 → Prop} {pre : Sai
       imm_of_selected_bytecode charAbove2pow127 context equations t slot selected
   simp only [Prod.mk.injEq] at selection
   obtain ⟨rs1, pc, rs2, immFlag⟩ := selection
-  simpa only [rs1, pc, rs2, immFlag, Bool.false_eq_true, ↓reduceIte,
+  have rd := rdWriteInput_false_of_rs1Input row.instruction rs1
+  simpa only [rs1, pc, rs2, immFlag, rd, Bool.false_eq_true, ↓reduceIte,
     add_zero, zero_add, left, immediate] using
     instructionInputs_of_selected_bytecode charAbove2pow127 context equations t slot selected row rowIs
 

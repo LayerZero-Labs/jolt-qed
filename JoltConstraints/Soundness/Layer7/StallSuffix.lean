@@ -861,7 +861,8 @@ theorem stall_branch_lookup_decision
     simpa only [flags.1, ↓reduceIte, flags.2.2.2.1, Bool.false_eq_true,
       add_zero, rs1] using inputs.1
   have right : witness.RightInstructionInput cycle = (rhs.toNat : F) := by
-    simpa only [flags.2.1, ↓reduceIte, flags.2.2.2.2, Bool.false_eq_true,
+    have rd := JoltConstraints.Soundness.rdWriteInput_false_of_rs1Input row.instruction flags.1
+    simpa only [flags.2.1, ↓reduceIte, flags.2.2.2.2, rd, Bool.false_eq_true,
       add_zero, rs2] using inputs.2
   have raf : witness.InstructionRafFlag cycle = 0 := by
     simpa [JoltConstraints.bytecodeRafFlag, present, flags.2.2.1] using
@@ -3282,7 +3283,7 @@ theorem stall_suffix_replays_source
 
 /-- If a stable stall ends in JAL, JALR or branch, every bytecode row at that
 source address has no Store flag. For example, ECALL's virtual rows and final
-JALR contain no SD row.
+JALR contain neither SD nor a floor-store row.
 See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:1-52
 at 8bbb2357. -/
 theorem stable_stall_source_no_store
@@ -3302,11 +3303,12 @@ theorem stable_stall_source_no_store
     cases store : JoltMetadata.opcodeFlag bytecode[last.rowIndex].instruction .Store with
     | false => rfl
     | true =>
-        obtain ⟨base, value, imm, stored⟩ := JoltMetadata.opcodeFlag_store_requiresSD _ store
-        rcases control with ⟨dst, off, jump⟩ | ⟨dst, src, off, jump⟩ | branch
-        · rw [stored] at jump; cases jump
-        · rw [stored] at jump; cases jump
-        · simp only [stored, JoltMetadata.instructionFlag] at branch; cases branch
+        obtain ⟨base, value, imm, stored⟩ := JoltMetadata.opcodeFlag_store_cases _ store
+        rcases stored with stored | ⟨fault, stored | stored | stored⟩ <;>
+          rcases control with ⟨dst, off, jump⟩ | ⟨dst, src, off, jump⟩ | branch
+        all_goals first
+          | rw [stored] at jump; cases jump
+          | simp only [stored, JoltMetadata.instructionFlag] at branch; cases branch
   rw [ExpansionFacts.circuitFlag_store_eq_opcodeFlag]
   by_cases branch : JoltMetadata.instructionFlag bytecode[last.rowIndex].instruction .Branch = true
   · rw [expanded_branch_same_address joltInstance.program bytecode expanded accepted

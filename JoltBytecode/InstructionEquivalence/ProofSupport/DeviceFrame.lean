@@ -81,16 +81,24 @@ theorem writeDst_rule_of_device_relation
   InstructionFrame.writeDst_rule _ (fun _ _ => refl _) (fun _ _ _ => refl _) dst value
 
 /-- Shared instruction frame for any reflexive, transitive device relation
-whose byte-store obligation is required only for SD.
+whose byte-store obligations are supplied for SD and the floor-addressed
+VirtualStoreB, VirtualStoreH, and VirtualStoreW rows.
 For example, equality of device inputs is preserved even when an instruction
 updates RAM, writes an output byte, or consumes the advice tape.
-See `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`) at 5def437f. -/
+See the tracer's `SD::exec` in `tracer/src/instruction/sd.rs` and `store` in
+`tracer/src/instruction/floor_access.rs`. -/
 theorem execInstr_rule_of_device_relation_for_store
     (relation : JoltDevice → JoltDevice → Prop)
     (refl : ∀ io, relation io io)
     (trans : ∀ a b c, relation a b → relation b c → relation a c)
     (instr : Instr)
     (store : ∀ base source imm, instr = .SD base source imm →
+      ∀ io io' address value,
+        JoltDevice.store? io address value = some io' → relation io io')
+    (floorStore : ∀ base source imm fault,
+      (instr = .VirtualStoreB base source imm fault ∨
+       instr = .VirtualStoreH base source imm fault ∨
+       instr = .VirtualStoreW base source imm fault) →
       ∀ io io' address value,
         JoltDevice.store? io address value = some io' → relation io io') :
     StatePreservation.Preserves
@@ -104,6 +112,8 @@ theorem execInstr_rule_of_device_relation_for_store
       append := fun _ _ => refl _ }
     instr (fun base source imm isStore _ _ _ _ stored =>
       store base source imm isStore _ _ _ _ stored)
+    (fun base source imm fault isStore _ _ _ _ stored =>
+      floorStore base source imm fault isStore _ _ _ _ stored)
     (fun _ _ _ _ _ _ _ => refl _)
 
 /-- Shared instruction frame for any reflexive, transitive device relation
@@ -120,7 +130,7 @@ theorem execInstr_rule_of_device_relation
     StatePreservation.Preserves
       (fun s t => relation s.jolt_device t.jolt_device) (execInstr instr) :=
   execInstr_rule_of_device_relation_for_store relation refl trans instr
-    (fun _ _ _ _ => store)
+    (fun _ _ _ _ => store) (fun _ _ _ _ _ => store)
 
 /-- A raw byte store preserves the device setup fields: layout, advice buffers,
 and inputs.
@@ -131,7 +141,10 @@ theorem store_raw_same (s s' : SailJoltState) (ea : Nat) (value : BitVec 8)
     (fun _ _ => Same.refl _) (fun _ _ _ _ stored => storeDeviceByte_same _ _ _ _ stored)
     s s' ea value h
 
-/-- Every Jolt ISA instruction preserves the device setup fields. -/
+/-- Every Jolt ISA instruction preserves the device setup fields: memory layout,
+advice buffers, and inputs.
+For example, a floor-addressed word store preserves the input array; both its
+store obligation and SD's use `storeDeviceByte_same`. -/
 theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) :=
   execInstr_rule_of_device_relation Same Same.refl
     (fun _ _ _ first next => first.trans next) storeDeviceByte_same instr

@@ -53,15 +53,25 @@ def checkedTouched (bounds : Option (Nat × Nat)) (layout : MemoryLayout) : Opti
     let offset ← MemoryLayout.checkedSub hi layout.get_lowest_address.toNat
     pure (offset / 8)
 
-/-- Rust's RAM policy, including the existing off-by-one discrepancy: the
-highest touched slot is rounded directly, without adding one. -/
+/-- Jolt's prover's RAM size, with the fix that a16z/jolt#1951 item 4 proposes
+and that a16z/jolt#2250 makes in Jolt (open; the model follows it ahead of its merge):
+`touched` is the word index of the highest touched
+address, `imageEnd` is the image's first word index plus its word count plus one,
+and the RAM size is the power of two that rounds up `max (touched + 1) imageEnd`,
+so the table holds word `touched`.
+For example, `touched = 1024` with `imageEnd = 40` gives `pow2(1025) = 2048`, where
+the pinned prover rounds `max touched imageEnd` and gets 1024.
+The issue's proposed line for Jolt's prover is
+`let ram_K = (touched + 1).max(image_end).next_power_of_two()`; the checked rounding
+of jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at
+5def437f is kept. `touched + 1` cannot overflow, since `touched < 2^61`. -/
 def checkedRamSize (dimensions : ExecutionDimensions) (layout : MemoryLayout)
     (minBytecodeAddress imageWords : Nat) : Option Nat := do
   let touched ← checkedTouched dimensions.ram_bounds layout
   let imageStart ← JoltConstraints.VerifierSizes.remapWordAddress layout minBytecodeAddress
   let imageEnd ← MemoryLayout.checkedAdd (imageStart.getD 0) imageWords
   let imageEnd ← MemoryLayout.checkedAdd imageEnd 1
-  JoltConstraints.VerifierSizes.checkedNextPowerOfTwo (max touched imageEnd)
+  JoltConstraints.VerifierSizes.checkedNextPowerOfTwo (max (touched + 1) imageEnd)
 
 /-- The two size fields returned by Rust's `derive_from_dimensions`. Its final
 power-of-two checks cannot fail after checked rounding and the 256 floor. The
@@ -122,8 +132,10 @@ theorem deriveFromDimensions_sizes (dimensions : ExecutionDimensions) (layout : 
 
 end ProverConfig
 
-/-- Rust's checked sizing policy. Completeness currently uses the separately
-named `corrected_prover_config`, whose RAM domain contains the highest slot. -/
+/-- Jolt's prover's checked sizing policy. Completeness uses its sizes
+(`HonestTrace.witness_params`); its RAM size follows the fix that a16z/jolt#1951
+item 4 proposes, so its RAM domain holds the highest touched slot
+(`HonestTrace.prover_config_holds_highest_slot`). -/
 def Trace.prover_config (joltInstance : JoltInstance SourceInstruction)
     (trace : Trace) : Option ProverConfig :=
   ProverConfig.deriveFromDimensions trace.execution_dimensions

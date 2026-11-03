@@ -1,5 +1,4 @@
 import JoltConstraints.prover_config
-import JoltConstraints.witness_params
 
 set_option autoImplicit false
 
@@ -151,40 +150,167 @@ private theorem HonestTrace.prover_config_addresses_ok
     (trace.rows.toList.filterMap (fun (row : TraceRow trace.bytecode) => row.ram_address))
       trace.initialState.jolt_device.memory_layout touched touchChecked).1
 
-/-- If Jolt's prover accepts the honest trace, so does the corrected policy. Both
-make the same last-jump, padded-length and address checks; they differ only in
-the RAM size they pick. -/
-theorem HonestTrace.corrected_prover_config_isSome
+/-- When Jolt's prover accepts the honest trace (`proverAccepts`), the length it pads to,
+`config.trace_length`, is the run's padded length `padded_trace_length trace.rows.size`
+(the power of two above the row count, at least 256), and it is at most the instance's
+maximum padded length.
+For example, a 300-row run pads to 512, and the instance's maximum must be at least 512.
+See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
+`ProverConfig::from_padded_dimensions`) at c6703570. -/
+theorem HonestTrace.prover_config_trace_length
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
-    (accepted : trace.prover_config joltInstance = some config) :
-    trace.corrected_prover_config.isSome := by
-  obtain ⟨jump, lengthChecked, _, lengthBound⟩ :=
-    ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config accepted
-  have lengthIs := ProverConfig.checkedTraceLength_eq_padded _ _ lengthChecked
-  change config.trace_length = padded_trace_length trace.rows.size at lengthIs
-  have addressesOk := trace.prover_config_addresses_ok config accepted
-  have lastJump : (trace.rows.back?.all fun last =>
+    (proverAccepts : trace.prover_config joltInstance = some config) :
+    config.trace_length = padded_trace_length trace.rows.size ∧
+    config.trace_length ≤ joltInstance.max_padded_trace_length.toNat := by
+  obtain ⟨_, lengthChecked, _, lengthBound⟩ :=
+    ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts
+  exact ⟨ProverConfig.checkedTraceLength_eq_padded _ _ lengthChecked, lengthBound⟩
+
+/-- When Jolt's prover accepts the honest trace (`proverAccepts`), the trace's last row,
+if it has one, is a jump: its bytecode instruction is a JAL or a JALR (`is_jump`).
+For example, a run whose last row is a self-jump `j .` passes; a run ending in an ADD
+is rejected (a16z/jolt#1968).
+See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
+`TraceDoesNotEndInJump`) at c6703570. -/
+theorem HonestTrace.prover_config_last_jump
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (proverAccepts : trace.prover_config joltInstance = some config) :
+    (trace.rows.back?.all fun last =>
       trace.bytecode[last.rowIndex].instruction.is_jump) = true := by
-    rcases jump with empty | jump
-    · change trace.rows.size = 0 at empty
-      have emptyRows := Array.size_eq_zero_iff.mp empty
-      rw [emptyRows]
-      rfl
-    · change (trace.rows.back?.any fun last =>
-        trace.bytecode[last.rowIndex].instruction.is_jump) = true at jump
-      cases last : trace.rows.back? with
-      | none => rfl
-      | some row => simpa only [last, Option.any_some, Option.all_some] using jump
-  have addressCheck : (trace.rows.toList.filterMap (·.ram_address)).all
-      (fun address => address == 0 ||
-        trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address) = true := by
-    apply List.all_eq_true.mpr
-    intro a member
-    simpa only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] using addressesOk a member
-  have paddedBound : padded_trace_length trace.rows.size ≤
-      joltInstance.max_padded_trace_length.toNat := by
-    omega
-  unfold HonestTrace.corrected_prover_config
-  simp only [lastJump, addressCheck, guard, paddedBound, ↓reduceIte, pure_bind]
+  obtain ⟨jump, _⟩ := ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts
+  rcases jump with empty | jump
+  · change trace.rows.size = 0 at empty
+    have emptyRows := Array.size_eq_zero_iff.mp empty
+    rw [emptyRows]
+    rfl
+  · change (trace.rows.back?.any fun last =>
+      trace.bytecode[last.rowIndex].instruction.is_jump) = true at jump
+    cases last : trace.rows.back? with
+    | none => rfl
+    | some row => simpa only [last, Option.any_some, Option.all_some] using jump
+
+/-- The highest RAM word index a run touches: the largest word index
+`(address - lowest) / 8` over the run's nonzero recorded RAM addresses
+(`TraceRow.ram_address`), where `lowest` is the lowest address of the run's memory
+layout; it is 0 when the run touches no nonzero address.
+For example, with lowest address `0x7fff8000`, a run whose only access is an SD at
+`0x80000010` touches word `0x8010 / 8 = 4098`.
+This is the `touched` of Jolt's prover; under the fix of a16z/jolt#1951 item 4, the
+prover rounds up `touched + 1` to pick its RAM size.
+See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
+`checked_remap_address`) at c6703570. -/
+def Trace.highest_ram_slot (trace : Trace) : Nat :=
+  ((trace.rows.toList.filterMap (·.ram_address)).filterMap
+    (remap_address trace.initialState.jolt_device.memory_layout)).max?.getD 0
+
+/-- Jolt's RAM size for the honest trace, unfolded. When Jolt's prover accepts the trace
+(`proverAccepts`), it remaps the program image's lowest address to a word index
+`imageStart` (none for address 0), and `config.ram_K` is the power of two that rounds up
+the larger of one more than the highest touched word (`Trace.highest_ram_slot`) and the
+image's end, `imageStart + program_image_len_words + 1`; both that end and `config.ram_K`
+fit in 64 bits.
+For example, a run touching word 1024 with an image ending at word 40 gets
+`ram_K = pow2(1025) = 2048`.
+See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
+`checked_remap_address`) at c6703570, with the fix of a16z/jolt#1951 item 4. -/
+theorem HonestTrace.prover_config_ram_K
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (proverAccepts : trace.prover_config joltInstance = some config) :
+    ∃ imageStart : Option Nat,
+      JoltConstraints.VerifierSizes.remapWordAddress trace.initialState.jolt_device.memory_layout
+        (min_bytecode_address joltInstance.program.memory_init) = some imageStart ∧
+      imageStart.getD 0 + program_image_len_words joltInstance.program.memory_init + 1 < 2 ^ 64 ∧
+      config.ram_K = 2 ^ Nat.clog 2 (max ((trace : Trace).highest_ram_slot + 1)
+        (imageStart.getD 0 + program_image_len_words joltInstance.program.memory_init + 1)) ∧
+      config.ram_K < 2 ^ 64 := by
+  have checked := (ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts).2.2.1
+  unfold ProverConfig.checkedRamSize at checked
+  simp only [bind_some_iff] at checked
+  obtain ⟨touched, touchChecked, imageStart, remapped, imageEnd, added, imageEnd', addedOne,
+    rounded⟩ := checked
+  have touchedIs := (ExecutionDimensions.checkedTouched_fold
+    (trace.rows.toList.filterMap (fun (row : TraceRow trace.bytecode) => row.ram_address))
+      trace.initialState.jolt_device.memory_layout touched touchChecked).2
+  obtain ⟨rfl, _⟩ := checkedAdd_some added
+  obtain ⟨rfl, endFits⟩ := checkedAdd_some addedOne
+  obtain ⟨sizeIs, sizeFits⟩ := ProverConfig.checkedRound_some _ _ rounded
+  refine ⟨imageStart, remapped, endFits, ?_, sizeFits⟩
+  rw [sizeIs, ← touchedIs]
   rfl
+
+/-- Jolt's RAM table holds the highest RAM word the run touches: when Jolt's prover accepts
+the honest trace (`proverAccepts`), the highest touched word index
+`h = Trace.highest_ram_slot` is below Jolt's RAM size `K = config.ram_K`.
+A table of `K` words holds indices `0` to `K - 1`, so this needs `h < K`.
+Under the fix that a16z/jolt#1951 item 4 proposes, Jolt's prover picks
+`K = pow2(max(h + 1, imageEnd))` (`HonestTrace.prover_config_ram_K`), which is at least
+`h + 1`.
+For example, `h = 1024` with an image ending at word 40 gives `K = pow2(1025) = 2048`,
+which holds word 1024; the pinned prover's `pow2(max(h, imageEnd)) = 1024` does not.
+See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
+at c6703570 and https://github.com/a16z/jolt/issues/1951 (item 4). -/
+theorem HonestTrace.prover_config_holds_highest_slot
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (proverAccepts : trace.prover_config joltInstance = some config) :
+    (trace : Trace).highest_ram_slot < config.ram_K := by
+  obtain ⟨_, _, _, sizeIs, _⟩ := trace.prover_config_ram_K config proverAccepts
+  rw [sizeIs]
+  exact Nat.lt_of_lt_of_le (Nat.lt_succ_self _)
+    ((Nat.le_max_left _ _).trans (Nat.le_pow_clog (by decide : 1 < 2) _))
+
+/-- When Jolt's prover accepts the honest trace (`proverAccepts`), every memory address
+a row touches (`TraceRow.ram_address`) is 0 (no access), or is at or above the layout's
+lowest address and has a word index (`remap_address`) below Jolt's RAM size
+`config.ram_K`.
+For example, with lowest address `0x7fff8000`, an SD at `0x80000010` has word index 4098,
+which must be below `config.ram_K`.
+The bound on the word index uses `HonestTrace.prover_config_holds_highest_slot`, which
+holds under the fix of a16z/jolt#1951 item 4.
+See jolt/crates/jolt-prover/src/config.rs (`checked_remap_address`) and
+jolt/crates/jolt-witness/src/backend/trace/ram.rs (`remapped_ram_address`) at c6703570. -/
+theorem HonestTrace.prover_config_ram_fits
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (proverAccepts : trace.prover_config joltInstance = some config)
+    (row : TraceRow trace.bytecode) (inTrace : row ∈ trace.rows) (address : Nat)
+    (touches : row.ram_address = some address) :
+    address = 0 ∨
+      (trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤ address ∧
+        ∃ slot, remap_address trace.initialState.jolt_device.memory_layout address = some slot ∧
+          slot < config.ram_K) := by
+  -- the address is one of the run's addresses, so it passed the prover's address check
+  have member : address ∈ trace.rows.toList.filterMap (·.ram_address) :=
+    List.mem_filterMap.mpr ⟨row, Array.mem_toList_iff.mpr inTrace, touches⟩
+  by_cases zero : address = 0
+  · exact Or.inl zero
+  · have above := (trace.prover_config_addresses_ok config proverAccepts address member).resolve_left zero
+    -- its slot is at most the highest touched slot, which Jolt's table is taken to hold
+    have slotIs : remap_address trace.initialState.jolt_device.memory_layout address =
+        some ((address - trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat) / 8) := by
+      unfold remap_address
+      rw [if_neg zero]
+    have atMost := List.le_max?_getD_of_mem (k := 0)
+      (List.mem_filterMap.mpr ⟨address, member, slotIs⟩)
+    exact Or.inr ⟨above, _, slotIs,
+      Nat.lt_of_le_of_lt atMost (trace.prover_config_holds_highest_slot config proverAccepts)⟩
+
+/-- When Jolt's prover accepts the honest trace (`proverAccepts`), its RAM size
+`config.ram_K` is at least 2: the program image's end is at least 2, since the image
+spans at least one word and the prover adds one more.
+So a RAM word index splits into at least one chunk.
+For example, an image starting at word 0 with one word ends at 2, and `ram_K ≥ 2`.
+See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
+at c6703570. -/
+theorem HonestTrace.prover_config_ram_K_ge_two
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (proverAccepts : trace.prover_config joltInstance = some config) :
+    2 ≤ config.ram_K := by
+  obtain ⟨_, _, _, sizeIs, _⟩ := trace.prover_config_ram_K config proverAccepts
+  have imageWords := program_image_len_words_pos joltInstance.program.memory_init
+  rw [sizeIs]
+  exact (by omega : 2 ≤ max _ _).trans (Nat.le_pow_clog (by decide : 1 < 2) _)

@@ -27,15 +27,15 @@ variable {F : Type} [Field F] (joltField : JoltField F)
 
 include joltField assumptions restrictions equations ready selected slotIs rowIs registers ram device termination sameDevice
 
-/-- A load in either address region executes with the same register-write and
-memory-agreement contract; for example, an input LD and a RAM LD both preserve
-the memory image and add the destination to the live registers. -/
+/-- A load row in either address region executes with the same register-write
+and memory-agreement contract at its accessed doubleword; for example, an input
+LD, a RAM LD and a RAM VirtualLoadH all preserve the memory image and add the
+destination to the live registers. -/
 theorem load_row_execution
-    {fault : LoadFaultClass} {destination : Dst} {base : Src} {imm : BitVec 64}
-    (instruction : run.bytecode[next].instruction = .LD fault destination base imm)
+    {width : MemoryWidth} {destination : Dst} {base : Src} {imm : BitVec 64}
+    (loadRow : LoadRow run.bytecode[next].instruction width destination base imm)
     (baseLive : live (TraceWitness.sourceRegisterAddress base))
-    (encoded : witness.RamAddress t = ((sourceValue base pre + imm).toNat : F))
-    (atCut : t.val = run.rows.size) :
+    (encoded : witness.RamAddress t = ((width.accessed (sourceValue base pre + imm)).toNat : F)) :
     ∃ value : BitVec 64,
       let post := afterWriteDst destination value pre
       let step : TraceRow run.bytecode := ⟨next, advice, pre, post⟩
@@ -47,31 +47,32 @@ theorem load_row_execution
       DeviceMemoryStepAgreement witness t run.toTrace step
         (∃ i : Fin run.rows.size, run.StoresTerminationAt i) := by
   have layoutEq := initial_state_memory_layout context run.initialized
-  by_cases inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat
-  · obtain ⟨_, executes, nextRam, finalRam⟩ := ld_ram_step joltField context equations selected rowIs
-      instruction assumptions.ramRegionFits registers baseLive ram inRam
-      (ld_address_checks restrictions.tracerAddressChecks run next pre ready _ _ _ _ instruction) 0 advice
+  by_cases inRam : RAM_START_ADDRESS ≤ (width.accessed (sourceValue base pre + imm)).toNat
+  · obtain ⟨_, executes, nextRam, finalRam⟩ := load_ram_step joltField context equations selected rowIs
+      loadRow assumptions.ramRegionFits registers baseLive ram inRam
+      (loadRow.address_checks restrictions.tracerAddressChecks run next pre ready) 0 advice
     refine ⟨_, executes, fun next => (nextRam next).1, ?_⟩
     exact ordinary_memory_step joltField witness context equations run _ t _ encoded inRam device
       termination (by cases destination <;> exact sameDevice) (fun next => (nextRam next).2) finalRam
   · have bytecodeEq : run.bytecode = context.bytecode := Option.some.inj (run.expands.symm.trans context.expands)
-    obtain ⟨value, _, _, _, _, executes, nextRegisters, memory⟩ := ld_device_step joltField witness context
+    obtain ⟨value, _, _, _, _, executes, nextRegisters, memory⟩ := load_device_step joltField witness context
       equations assumptions.ramRegionFits restrictions.tracerAddressChecks restrictions.panicStoresOne
-      restrictions.terminationThenStall run bytecodeEq t atCut next pre ready slot selected slotIs
-      _ _ _ _ instruction live registers baseLive (by rw [layoutEq]; exact ram) device termination
+      restrictions.terminationThenStall run bytecodeEq t next pre ready slot selected slotIs
+      loadRow live registers baseLive (by rw [layoutEq]; exact ram) device termination
       (Nat.lt_of_not_ge inRam) _ rfl 0 advice
     exact ⟨value, executes, nextRegisters, memory⟩
 
-/-- A store in either address region preserves the old live registers and both
-memory agreements, with termination zero conditional on old and new stores.
-For example, a RAM SD updates the byte map and an output SD updates the device. -/
+/-- A store row in either address region preserves the old live registers and
+both memory agreements at its accessed doubleword, with termination zero
+conditional on old and new stores.
+For example, a RAM SD updates the byte map and an output VirtualStoreB updates
+the device. -/
 theorem store_row_execution
-    {base source : Src} {imm : BitVec 64}
-    (instruction : run.bytecode[next].instruction = .SD base source imm)
+    {width : MemoryWidth} {base source : Src} {imm : BitVec 64}
+    (storeRow : StoreRow run.bytecode[next].instruction width base source imm)
     (baseLive : live (TraceWitness.sourceRegisterAddress base))
     (sourceLive : live (TraceWitness.sourceRegisterAddress source))
-    (encoded : witness.RamAddress t = ((sourceValue base pre + imm).toNat : F))
-    (atCut : t.val = run.rows.size) :
+    (encoded : witness.RamAddress t = ((width.accessed (sourceValue base pre + imm)).toNat : F)) :
     ∃ post : SailJoltState,
       let step : TraceRow run.bytecode := ⟨next, advice, pre, post⟩
       execWithTapeAnswer (run.bytecode[next].instruction.withRuntimeAdvice advice) 0 pre =
@@ -80,20 +81,21 @@ theorem store_row_execution
         RegisterAgreementOn live witness ⟨t.val + 1, bound⟩ post) ∧
       DeviceMemoryStepAgreement witness t run.toTrace step
         ((∃ i : Fin run.rows.size, run.StoresTerminationAt i) ∨
-          TouchesTermination pre.jolt_device (sourceValue base pre + imm)) := by
+          TouchesTermination pre.jolt_device (width.accessed (sourceValue base pre + imm))) := by
   have layoutEq := initial_state_memory_layout context run.initialized
-  by_cases inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat
-  · obtain ⟨_, executes, nextRam, finalRam⟩ := sd_ram_step_agreement joltField context equations selected rowIs
-      instruction assumptions.ramRegionFits registers baseLive sourceLive ram inRam
-      (sd_address_checks restrictions.tracerAddressChecks run next pre ready _ _ _ instruction) 0 advice
+  by_cases inRam : RAM_START_ADDRESS ≤ (width.accessed (sourceValue base pre + imm)).toNat
+  · obtain ⟨_, executes, nextRam, finalRam⟩ := store_ram_step_agreement joltField context equations
+      selected rowIs storeRow assumptions.ramRegionFits registers baseLive sourceLive ram inRam
+      (storeRow.address_checks restrictions.tracerAddressChecks run next pre ready) 0 advice
     refine ⟨_, executes, fun next => (nextRam next).1, ?_⟩
     exact memory_step_mono (ordinary_memory_step joltField witness context equations run _ t _ encoded
       inRam device termination sameDevice (fun next => (nextRam next).2) finalRam) Or.inl
   · have bytecodeEq : run.bytecode = context.bytecode := Option.some.inj (run.expands.symm.trans context.expands)
-    obtain ⟨post, _, _, _, _, _, executes, nextRegisters, memory⟩ := sd_device_step joltField witness context
-      equations assumptions.ramRegionFits restrictions.tracerAddressChecks restrictions.panicStoresOne
-      run bytecodeEq t atCut next pre ready slot selected slotIs _ _ _ instruction live registers
-      baseLive sourceLive (by rw [layoutEq]; exact ram) device termination (Nat.lt_of_not_ge inRam) _ rfl 0 advice
+    obtain ⟨post, _, _, _, _, _, executes, nextRegisters, memory⟩ := store_device_step joltField witness
+      context equations assumptions.ramRegionFits restrictions.tracerAddressChecks
+      restrictions.panicStoresOne run bytecodeEq t next pre ready slot selected slotIs storeRow live
+      registers baseLive sourceLive (by rw [layoutEq]; exact ram) device termination
+      (Nat.lt_of_not_ge inRam) _ rfl 0 advice
     exact ⟨post, executes, nextRegisters, memory⟩
 end
 end JoltInstance

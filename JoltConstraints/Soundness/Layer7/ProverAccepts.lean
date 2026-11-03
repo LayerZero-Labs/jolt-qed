@@ -244,7 +244,8 @@ theorem verifier_ram_image_end_bounded {Source : Type}
   unfold JoltConstraints.VerifierSizes.maxRamSize at maximumComputed
   obtain ⟨totalBytes, subtracted, rounded⟩ := Option.bind_eq_some_iff.mp maximumComputed
   obtain ⟨rfl, _⟩ := checkedSub_some subtracted
-  have wordsBound : (layout.heap_end.toNat - layout.get_lowest_address.toNat) / 8 ≤ 2 ^ 61 := by
+  have wordsBound :
+      (layout.heap_end.toNat - layout.get_lowest_address.toNat + 7) / 8 ≤ 2 ^ 61 := by
     have fits := layout.heap_end.isLt
     omega
   have maximumBound : maximum ≤ 2 ^ 61 := by
@@ -321,11 +322,11 @@ theorem represented_ram_size_computes
         verifier_ram_image_end_bounded joltInstance.program layout minSize maxSize
           minimumComputed maximumComputed ordered
       have sentinelFits : finish + 1 < 2 ^ 64 := by omega
-      have totalBound : max touched (finish + 1) ≤ 2 ^ 62 := by omega
-      have roundedBound : 2 ^ Nat.clog 2 (max touched (finish + 1)) ≤ 2 ^ 62 :=
+      have totalBound : max (touched + 1) (finish + 1) ≤ 2 ^ 62 := by omega
+      have roundedBound : 2 ^ Nat.clog 2 (max (touched + 1) (finish + 1)) ≤ 2 ^ 62 :=
         Nat.pow_le_pow_right (by decide) (Nat.clog_le_of_le_pow totalBound)
-      have roundedFits : 2 ^ Nat.clog 2 (max touched (finish + 1)) < 2 ^ 64 := by omega
-      refine ⟨2 ^ Nat.clog 2 (max touched (finish + 1)), ?_⟩
+      have roundedFits : 2 ^ Nat.clog 2 (max (touched + 1) (finish + 1)) < 2 ^ 64 := by omega
+      refine ⟨2 ^ Nat.clog 2 (max (touched + 1) (finish + 1)), ?_⟩
       simp only [ProverConfig.checkedRamSize, bind_some_iff]
       refine ⟨touched, touchedComputed, start, remapped, finish, added, finish + 1, ?_, ?_⟩
       · simp only [MemoryLayout.checkedAdd, if_pos sentinelFits]

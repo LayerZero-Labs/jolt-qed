@@ -29,6 +29,8 @@ variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop}
 
 include charAbove2pow128 context equations selected rowIs instructionIs
 
+/-- The AUIPC lookup writes the current address plus its immediate modulo 2^64;
+for example, address 8 and immediate 4096 write 4104. -/
 private theorem auipc_write_value :
     witness.RdWriteValue t = ((row.address + imm).toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
@@ -48,7 +50,7 @@ private theorem auipc_write_value :
   have inputs : witness.LeftInstructionInput t = (row.address.toNat : F) ∧
       witness.RightInstructionInput t = (imm.toNat : F) := by
     simpa only [instructionIs, JoltMetadata.instructionFlag, Bool.false_eq_true,
-      ↓reduceIte, zero_add, address, immediate] using
+      ↓reduceIte, zero_add, add_zero, address, immediate] using
       instructionInputs_of_selected_bytecode bound context equations t slot selected row rowIs
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   exact lookupOutput_rangeCheck_add charAbove2pow128 context equations t slot selected

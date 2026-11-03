@@ -13,8 +13,12 @@ namespace ExpansionTempLiveness
 
 open JoltISA
 
-/-- The explicit operands read by a final row. A destination is not a read
-unless it also occurs as a source operand. -/
+/-- The explicit source registers read by a final row.
+A destination counts only when it is also a source; for example, a floor
+load reads `[base]`, and a floor store reads `[base, value]`.
+Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
+(`RegisterStateLoad`) and `virtual_store_{b,h,w}.rs` (`RegisterStateS`)
+at `c6703570`. -/
 def readSources : Instr → List Src
   | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _
   | .XORI _ src _ | .SLTI _ src _ | .SLTIU _ src _ | .JALR _ src _
@@ -24,12 +28,11 @@ def readSources : Instr → List Src
   | .VirtualSRLI _ src _ | .VirtualSRAI _ src _
   | .VirtualSRLIW _ src _ | .VirtualSRAIW _ src _
   | .VirtualROTRI _ src _ | .VirtualROTRIW _ src _ | .VirtualRev8W _ src _
-  | .VirtualAlignAddr _ src _ | .VirtualWindowMaskB _ src _
+  | .VirtualWindowMaskB _ src _
   | .VirtualWindowMaskH _ src _ | .VirtualWindowMaskW _ src _
   | .VirtualSignExtendWord _ src _ | .VirtualZeroExtendWord _ src _
   | .VirtualMovsign _ src _ | .LD _ _ src _
-  | .VirtualAssertHalfwordAlignment src _ _
-  | .VirtualAssertWordAlignment src _ _ => [src]
+  | .VirtualLoadB _ _ src _ _ | .VirtualLoadH _ _ src _ _ | .VirtualLoadW _ _ src _ _ => [src]
   | .ADD _ lhs rhs | .ADDW _ lhs rhs | .SUB _ lhs rhs | .SUBW _ lhs rhs
   | .MUL _ lhs rhs | .MULW _ lhs rhs | .MULHU _ lhs rhs | .ANDN _ lhs rhs
   | .OR _ lhs rhs | .XOR _ lhs rhs | .AND _ lhs rhs
@@ -43,10 +46,11 @@ def readSources : Instr → List Src
   | .VirtualXORROTW7 _ lhs rhs | .VirtualXORROTW22 _ lhs rhs
   | .VirtualXORROTW19 _ lhs rhs | .VirtualXORROTW6 _ lhs rhs
   | .VirtualPext _ lhs rhs | .VirtualPextSigned _ lhs rhs
-  | .VirtualShiftDataB _ lhs rhs | .VirtualShiftDataH _ lhs rhs
-  | .VirtualShiftDataW _ lhs rhs | .VirtualNegateIf _ lhs rhs
+  | .VirtualShiftDataB _ lhs rhs _ | .VirtualShiftDataH _ lhs rhs _
+  | .VirtualShiftDataW _ lhs rhs _ | .VirtualNegateIf _ lhs rhs
   | .BEQ lhs rhs _ | .BNE lhs rhs _ | .BLT lhs rhs _ | .BGE lhs rhs _
   | .BLTU lhs rhs _ | .BGEU lhs rhs _ | .SD lhs rhs _
+  | .VirtualStoreB lhs rhs _ _ | .VirtualStoreH lhs rhs _ _ | .VirtualStoreW lhs rhs _ _
   | .VirtualAssertEQ lhs rhs _ | .VirtualAssertValidDiv0 lhs rhs _
   | .VirtualAssertValidUnsignedRemainder lhs rhs _
   | .VirtualAssertMulUNoOverflow lhs rhs _ | .VirtualAssertLTE lhs rhs _ => [lhs, rhs]

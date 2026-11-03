@@ -2,13 +2,10 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Word
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
-/-! Address alignment and byte, halfword, and word lane-mask rows use the
+/-! Byte, halfword, and word lane-mask rows use the
 checked wide sum of the base register and decoded immediate as the lookup index.
-At public pin 8bbb2357:
-See : jolt/tracer/src/instruction/virtual_align_addr.rs:20-28
-See : jolt/tracer/src/instruction/virtual_window_mask_b.rs:20-27
-See : jolt/tracer/src/instruction/virtual_window_mask_h.rs:20-31
-See : jolt/tracer/src/instruction/virtual_window_mask_w.rs:20-31 -/
+Jolt's tracer at c6703570: `tracer/src/instruction/virtual_window_mask_b.rs`
+(`VirtualWindowMaskB::exec`), and the corresponding H/W implementations. -/
 
 set_option autoImplicit false
 
@@ -16,26 +13,29 @@ namespace JoltConstraints.Soundness
 
 open Sail PreSail LeanRV64D.Functions JoltISA
 
+/-- The three lane-mask widths; for example, `halfword` selects two bytes. -/
 inductive AddressMask where
-  | align | byte | halfword | word
+  | byte | halfword | word
 
+/-- Construct a lane-mask row from its destination, base and immediate.
+For example, `byte` constructs VirtualWindowMaskB. -/
 def AddressMask.instruction (operation : AddressMask)
     (destination : Dst) (source : Src) (imm : BitVec 64) : Instr :=
   match operation with
-  | .align => .VirtualAlignAddr destination source imm
   | .byte => .VirtualWindowMaskB destination source imm
   | .halfword => .VirtualWindowMaskH destination source imm
   | .word => .VirtualWindowMaskW destination source imm
 
+/-- The lane mask computed from the base and immediate; for example, a byte
+mask at effective address 2 is `0xFF0000`. -/
 def AddressMask.value (operation : AddressMask) (source imm : BitVec 64) : BitVec 64 :=
   match operation with
-  | .align => jolt_virtual_align_addr_value64 source imm
   | .byte => jolt_virtual_window_mask_b_value64 source imm
   | .halfword => jolt_virtual_window_mask_h_value64 source imm
   | .word => jolt_virtual_window_mask_w_value64 source imm
 
+/-- Select the width's lookup table; for example, `byte` uses WindowMaskB. -/
 private def AddressMask.table : AddressMask → LookupTableKind
-  | .align => .AlignAddr
   | .byte => .WindowMaskB
   | .halfword => .WindowMaskH
   | .word => .WindowMaskW
@@ -76,6 +76,8 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   (instructionIs : row.instruction = operation.instruction destination source imm)
 
 include context rowIs instructionIs in
+/-- The selected mask row has canonical register operands, meaning valid
+architectural or virtual indices; for example, x1 and temporary 41 are canonical. -/
 private theorem addressMask_canonical :
     JoltRegisterEncoding.destinationIsCanonical destination = true ∧
     JoltRegisterEncoding.sourceIsCanonical source = true := by
@@ -86,6 +88,8 @@ private theorem addressMask_canonical :
 
 include charAbove2pow128 context equations selected rowIs instructionIs
 
+/-- The selected lane-mask lookup fixes the destination value.
+For example, a byte mask at effective address 2 writes `0xFF0000`. -/
 private theorem addressMask_write_value {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
@@ -118,11 +122,6 @@ private theorem addressMask_write_value {pre : SailJoltState}
     (sourceValue source pre) imm left right
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   cases operation with
-  | align =>
-    have output := lookupOutput_alignAddr_of_identity charAbove2pow128 context equations
-      t slot selected _ raf encoded table
-    simpa only [AddressMask.value, jolt_virtual_align_addr_value64,
-      BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using output
   | byte =>
     have output := lookupOutput_windowMaskB_of_identity charAbove2pow128 context equations
       t slot selected _ raf encoded table
@@ -151,7 +150,7 @@ private theorem addressMask_write_value {pre : SailJoltState}
     simpa only [AddressMask.value, jolt_virtual_window_mask_w_value64,
       BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using output
 
-/-- Alignment and byte/halfword/word masks execute with their constrained values
+/-- Byte/halfword/word masks execute with their constrained values
 and preserve register agreement at the next cycle.
 The source is live; the destination joins the live set after the row.
 For example, a window mask can read a live base and initialize a temporary. -/

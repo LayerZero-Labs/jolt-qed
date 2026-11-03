@@ -1,7 +1,6 @@
 import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.Constraints.LeftLookupOperandEqInstructionRaf
 import JoltConstraints.Constraints.LookupOperandData
-import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 
 set_option autoImplicit false
 
@@ -11,7 +10,9 @@ open scoped BigOperators
 
 /-- Completeness of constraint (40) for the honest witness.
 Uses the address-chunk selection and operand-encoding correspondence.
-This equation does not require any lookup-table output to be implemented. -/
+For example, LD interleaves zero on the left with its captured destination.
+Jolt's prover: `crates/jolt-lookup-tables/src/instructions/riscv/ld.rs`
+(`LookupQuery`) at `c6703570`. -/
 theorem honestWitness_leftLookupOperandEqInstructionRaf
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
@@ -27,7 +28,7 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
       (1 - (HonestTrace.honestWitness (F := F) params trace).InstructionRafFlag t) *
         lookupAddressLeft address) t]
   by_cases inBounds : t.val < trace.rows.size
-  · -- The selected index must deinterleave to Rust's captured left operand.
+  · -- The selected index must deinterleave to Jolt's tracer's captured left operand.
     -- Unfolding lookupAddressLeft drops the index's bound proof, so the row's
     -- instruction can be generalized and split by constructor.
     simp only [HonestTrace.honestWitness, TraceWitness.LeftLookupOperand,
@@ -37,7 +38,7 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
     generalize (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex.val]'
       (trace.rows[t.val]'inBounds).rowIndex.isLt).instruction = instruction
     -- RAF rows are zero on both sides. Interleaved rows recover rs1, while
-    -- FENCE, LD, SD, and HostIO have a zero left input and a zero index.
+    -- LD interleaves a zero left operand; FENCE, SD, and HostIO have zero indices.
     cases instruction <;>
       simp only [JoltMetadata.hasCombinedLookupOperands, JoltMetadata.instructionRafFlag,
         JoltMetadata.opcodeFlag, JoltMetadata.instructionFlag,
@@ -48,6 +49,7 @@ theorem honestWitness_leftLookupOperandEqInstructionRaf
     -- interleaved rows are closed by exact, up to unfolding the lookup index.
     all_goals first
       | exact (sum_interleave_odd_bits _ _).symm
+      | simpa using (sum_interleave_odd_bits (F := F) 0 _).symm
       | simp
   · simp [HonestTrace.honestWitness, TraceWitness.LeftLookupOperand,
       TraceWitness.InstructionRafFlag, TraceWitness.lookupIndex,

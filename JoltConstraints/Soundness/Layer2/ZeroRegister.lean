@@ -26,6 +26,9 @@ variable (charAbove2pow127 : 2 ^ 127 < ringChar F)
 
 include charAbove2pow127 context equations selected present noOp
 
+/-- The canonical no-op reads x0 and immediate zero, so both instruction inputs
+are zero when the x0 table entry is zero; for example, padding's ADDI x0,x0,0
+does not select the destination-value input used by LD. -/
 private theorem canonicalNoOp_inputs (zero : witness.RegistersVal 0 t = 0) :
     witness.LeftInstructionInput t = 0 ∧ witness.RightInstructionInput t = 0 := by
   have source := rs1Value_of_selected_bytecode charAbove2pow127 context equations t chosen selected
@@ -43,7 +46,8 @@ private theorem canonicalNoOp_inputs (zero : witness.RegistersVal 0 t = 0) :
     simp [bytecodeInstructionFlag, present, noOp, JoltISA.Instr.canonicalNoOp,
       JoltMetadata.instructionFlag, sourceZero]
   · rw [equations.rightInstructionInputEqSelection t, flags .RightOperandIsRs2Value t chosen selected,
-      flags .RightOperandIsImm t chosen selected]
+      flags .RightOperandIsImm t chosen selected,
+      flags .RightOperandIsRdWriteValue t chosen selected]
     simp [bytecodeInstructionFlag, present, noOp, JoltISA.Instr.canonicalNoOp,
       JoltMetadata.instructionFlag, immediateZero]
 

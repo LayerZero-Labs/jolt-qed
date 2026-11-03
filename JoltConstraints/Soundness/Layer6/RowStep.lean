@@ -59,22 +59,16 @@ private theorem row_extension {F : Type} [Field F] (joltField : JoltField F)
     expansion_nonordinary_terminal inst.program context.bytecode context.expands first state.starts
       done unfinished _ atRow nonordinary
   rcases row_kind run.bytecode[next].instruction with
-    plain | ⟨fault, destination, base, imm, kind⟩ | ⟨base, source, imm, kind⟩ |
+    plain | ⟨width, destination, base, imm, kind⟩ | ⟨width, base, source, imm, kind⟩ |
       kind | ⟨destination, imm, kind⟩ | ⟨destination, base, imm, kind⟩
   · apply plain_row_step joltField witness context equations run first done state unfinished bound
     intro row member
     have same := Option.some.inj (atRow.symm.trans member)
     simpa only [← same] using plain
-  · by_cases inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat
-    · exact ld_ram_row_step joltField assumptions restrictions witness context equations run first done
-        state unfinished honest bound next pre indexIs ready registers kind inRam
-    · exact ld_device_row_step joltField assumptions restrictions witness context equations run first done
-        state unfinished honest bound next pre indexIs ready registers kind (by omega)
-  · by_cases inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat
-    · exact sd_ram_row_step joltField assumptions restrictions witness context equations run first done
-        state unfinished honest bound next pre indexIs ready registers kind inRam
-    · exact sd_device_row_step joltField assumptions restrictions witness context equations run first done
-        state unfinished honest bound next pre indexIs ready registers kind (by omega)
+  · exact append_load_row joltField assumptions restrictions witness context equations run first done
+      state unfinished honest bound next pre indexIs ready registers kind
+  · exact append_store_row joltField assumptions restrictions witness context equations run first done
+      state unfinished honest bound next pre indexIs ready registers kind
   · exact host_row_step joltField assumptions restrictions witness context equations run first done
       state unfinished honest bound next pre indexIs ready registers kind
       (terminal (by rw [kind]; rfl))

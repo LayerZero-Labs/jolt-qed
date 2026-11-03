@@ -21,7 +21,9 @@ def Dst.WritesProtectedVReg : Dst → Prop
   | .xreg _ => False
 
 /-- Determine whether a Jolt instruction can write a protected virtual
-register. -/
+register, meaning a virtual register mirrored in Sail's state.
+For example, a floor load can write one when its destination is protected,
+whereas a floor store writes no register. -/
 def Instr.WritesProtectedVReg : Instr → Prop
   | .ADDI dst _ _
   | .ADDIW dst _ _
@@ -79,22 +81,24 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .AND dst _ _
   | .SLT dst _ _
   | .SLTU dst _ _
-  | .VirtualAlignAddr dst _ _
   | .VirtualWindowMaskB dst _ _
   | .VirtualWindowMaskH dst _ _
   | .VirtualWindowMaskW dst _ _
   | .VirtualPext dst _ _
   | .VirtualPextSigned dst _ _
-  | .VirtualShiftDataB dst _ _
-  | .VirtualShiftDataH dst _ _
-  | .VirtualShiftDataW dst _ _
+  | .VirtualShiftDataB dst _ _ _
+  | .VirtualShiftDataH dst _ _ _
+  | .VirtualShiftDataW dst _ _ _
   | .VirtualSignExtendWord dst _ _
   | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _
   | .VirtualAdvice dst _ _
   | .VirtualAdviceLoad dst _
   | .VirtualNegateIf dst _ _ => dst.WritesProtectedVReg
-  | .LD _ dst _ _ => dst.WritesProtectedVReg
+  | .LD _ dst _ _
+  | .VirtualLoadB _ dst _ _ _
+  | .VirtualLoadH _ dst _ _ _
+  | .VirtualLoadW _ dst _ _ _ => dst.WritesProtectedVReg
   | .BEQ _ _ _
   | .BNE _ _ _
   | .BLT _ _ _
@@ -102,9 +106,10 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .BLTU _ _ _
   | .BGEU _ _ _
   | .FENCE
-  | .VirtualAssertHalfwordAlignment _ _ _
-  | .VirtualAssertWordAlignment _ _ _
   | .SD _ _ _
+  | .VirtualStoreB _ _ _ _
+  | .VirtualStoreH _ _ _ _
+  | .VirtualStoreW _ _ _ _
   | .VirtualHostIO
   | .VirtualAssertEQ _ _ _
   | .VirtualAssertValidDiv0 _ _ _

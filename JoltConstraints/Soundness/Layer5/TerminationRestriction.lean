@@ -31,7 +31,9 @@ open Sail PreSail LeanRV64D.Functions JoltISA
 def TouchesTermination (device : JoltDevice) (address : BitVec 64) : Prop :=
   ∃ offset < 8, device.is_termination (address.toNat + offset) = true
 
-/-- Completed row `i` of the run is an SD that touches the termination region. -/
+/-- Completed row `i` of the run is a store whose accessed doubleword touches
+the termination region: an SD at `base + imm`, or a VirtualStoreB/H/W at the
+containing doubleword `(base + imm) &&& ~~~7`. -/
 def UntrustedAnswerRun.StoresTerminationAt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs) (i : Fin run.rows.size) : Prop :=
@@ -39,6 +41,9 @@ def UntrustedAnswerRun.StoresTerminationAt
   | .SD base _ imm =>
       TouchesTermination run.rows[i].preState.jolt_device
         (sourceValue base run.rows[i].preState + imm)
+  | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ =>
+      TouchesTermination run.rows[i].preState.jolt_device
+        ((sourceValue base run.rows[i].preState + imm) &&& ~~~7)
   | _ => False
 
 end JoltConstraints.Soundness
@@ -49,6 +54,8 @@ other FIXMEs. Remove once Jolt either makes the constraints stop only at the PC
 stall and agree with the device on the termination word, or documents this
 exit discipline as a requirement; the model must reflect that, and the
 unrestricted proof must be established. This is not a verifier check.
+The extension to VirtualLoadB/H/W and VirtualStoreB/H/W was approved by Ari on
+2026-11-03, only to fit the new ISA.
 
 For every private input and relaxed execution prefix that has already completed
 a store touching the termination region, the next attempted row is:
@@ -67,6 +74,9 @@ def JoltInstance.TerminationThenStall (joltInstance : JoltInstance SourceInstruc
       | .JALR _ _ _ => False
       | .LD _ _ base imm => ¬ JoltConstraints.Soundness.TouchesTermination
           pre.jolt_device (JoltISA.sourceValue base pre + imm)
+      | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _ | .VirtualLoadW _ _ base imm _ =>
+          ¬ JoltConstraints.Soundness.TouchesTermination pre.jolt_device
+            ((JoltISA.sourceValue base pre + imm) &&& ~~~7)
       | _ => True
 
 namespace JoltConstraints.Soundness
@@ -98,20 +108,6 @@ theorem termination_next_no_jalr
   have rule := restricted privateInputs run next pre ready stored
   rw [instruction] at rule
   exact rule
-
-/-- A later attempted load cannot touch any byte of the termination word. -/
-theorem termination_next_ld_disjoint
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (restricted : joltInstance.TerminationThenStall)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (next : Fin run.bytecode.size) (pre : SailJoltState)
-    (ready : run.NextStep next pre) (stored : ∃ i, run.StoresTerminationAt i)
-    (fault : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
-    (base : JoltISA.Src) (imm : BitVec 64)
-    (instruction : run.bytecode[next].instruction = .LD fault dst base imm) :
-    ¬ TouchesTermination pre.jolt_device (JoltISA.sourceValue base pre + imm) := by
-  have rule := restricted privateInputs run next pre ready stored
-  simpa only [instruction] using rule
 
 /-- Executing a zero-offset JAL sets the next PC to the current instruction's
 address. This is the local stall fact needed after the termination restriction

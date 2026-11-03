@@ -223,15 +223,24 @@ private theorem execHostIO_rule (rules : NonStoreRules relation) :
       using (StatePreservation.bind_rule rules.trans)
 
 /-- Every successful instruction preserves a relation satisfying the non-store
-primitive rules, its tape-read obligation, and a byte-store obligation only for SD.
-For example, a non-SD instruction preserves equality of the whole device.
-See `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`) at 5def437f.
+primitive rules, its tape-read obligation, and byte-store obligations for SD and
+the floor-addressed VirtualStoreB, VirtualStoreH, and VirtualStoreW rows.
+For example, equality of device inputs is preserved by all four store kinds.
+Each uses `Mmu.store_doubleword`, as in the tracer's `SD::exec` in
+`tracer/src/instruction/sd.rs` and `store` in `tracer/src/instruction/floor_access.rs`.
 For example, a device relation permits every tape read; tape growth uses this
 theorem only when `instr` is not an advice load, making `read` vacuous.
 The read obligation describes only consuming the tape; destination writes use
 the same register-write rule as other instructions. -/
 theorem execInstr_rule_of_store (rules : NonStoreRules relation) (instr : Instr)
     (store : ∀ base source imm, instr = .SD base source imm →
+      ∀ state device address value,
+        JoltDevice.store? state.jolt_device address value = some device →
+        relation state { state with jolt_device := device })
+    (floorStore : ∀ base source imm fault,
+      (instr = .VirtualStoreB base source imm fault ∨
+       instr = .VirtualStoreH base source imm fault ∨
+       instr = .VirtualStoreW base source imm fault) →
       ∀ state device address value,
         JoltDevice.store? state.jolt_device address value = some device →
         relation state { state with jolt_device := device })
@@ -260,6 +269,12 @@ theorem execInstr_rule_of_store (rules : NonStoreRules relation) (instr : Instr)
     StatePreservation.get_rule rules.refl, lift_rule rules _, loadDoubleword_rule rules _,
     storeDoubleword_rule (rules.withStore (store _ _ _ rfl)) _ _, execHostIO_rule rules]
     using (StatePreservation.bind_rule rules.trans)
+  all_goals exact storeDoubleword_rule (rules.withStore
+    (floorStore _ _ _ _ (by
+      first
+      | exact Or.inl rfl
+      | exact Or.inr (Or.inl rfl)
+      | exact Or.inr (Or.inr rfl)))) _ _
 
 
 /-- Every successful instruction preserves a relation satisfying `rules` and
@@ -274,6 +289,6 @@ theorem execInstr_rule (rules : Rules relation) (instr : Instr)
         relation state { state with adviceTape := tape }) :
     StatePreservation.Preserves relation (execInstr instr) := by
   exact execInstr_rule_of_store rules.nonStore instr
-    (fun _ _ _ _ => rules.store) read
+    (fun _ _ _ _ => rules.store) (fun _ _ _ _ _ => rules.store) read
 
 end InstructionFrame

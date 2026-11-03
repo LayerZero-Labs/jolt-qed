@@ -111,8 +111,10 @@ theorem append_host_row
     simpa only [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instruction]; rfl),
       instruction] using executes
   have device : post.jolt_device = pre.jolt_device :=
-    (execWithTapeAnswer_device_of_not_sd .VirtualHostIO 0
-      (by intro base source imm; nofun)) pre post RETIRE_SUCCESS hostExec |>.symm
+    (execWithTapeAnswer_device_of_not_store .VirtualHostIO 0
+      (by intro base source imm; nofun)
+      (by intro base source imm fault; rintro (h | h | h) <;> cases h))
+      pre post RETIRE_SUCCESS hostExec |>.symm
   let step : TraceRow run.bytecode := ⟨next, advice, pre, post⟩
   have after (h : run.rows.size + 1 < params.traceLength) :
       RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1)) witness

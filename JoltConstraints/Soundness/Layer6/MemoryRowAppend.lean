@@ -26,7 +26,7 @@ theorem ExpansionState.memoryAt
   exact ram index inRam
 
 /-- Enlarging the recorded store event weakens only the conditional obligation
-that termination remain zero; for example, include a newly appended SD. -/
+that termination remain zero; for example, include a newly appended store row. -/
 theorem memory_step_mono
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {t : Fin params.traceLength} {trace : Trace} {step : TraceRow trace.bytecode} {old new : Prop}
@@ -44,8 +44,9 @@ private theorem exists_fin_push {α : Type} (rows : Array α) (step : α) (prope
   simp
 
 /-- A successful memory row with both memory agreements extends the expansion.
-The store event includes old SDs and the newly appended row, so an output SD
-preserves termination zero while a termination SD discharges that obligation. -/
+The store event includes old termination stores and the newly appended row
+(`storeTouches TouchesTermination`), so an output SD preserves termination zero
+while a termination SD or floor store discharges that obligation. -/
 theorem append_memory_row
     {F : Type} [Field F] (joltField : JoltField F) {params : WitnessParams}
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
@@ -68,10 +69,7 @@ theorem append_memory_row
           register = TraceWitness.destinationRegisterAddress dst)
         witness ⟨run.rows.size + 1, next⟩ step.postState)
     (memory : DeviceMemoryStepAgreement witness ⟨run.rows.size, bound⟩ run.toTrace step
-      ((∃ i : Fin run.rows.size, run.StoresTerminationAt i) ∨
-        match run.bytecode[step.rowIndex].instruction with
-        | .SD base _ imm => TouchesTermination step.preState.jolt_device (sourceValue base step.preState + imm)
-        | _ => False)) :
+      ((∃ i : Fin run.rows.size, run.StoresTerminationAt i) ∨ storeTouches TouchesTermination step)) :
     PlainRowExtension witness context run first done bound := by
   let extended := appendUntrustedRow run step 0 executes (rawEntry_starts entry) (rawEntry_linked entry)
   have image (values : Fin params.ramSize → F)
@@ -94,10 +92,7 @@ theorem append_memory_row
     (fun next noStore => (memory.1 next).2.2 (by
       intro stored
       apply noStore
-      apply (exists_fin_push run.rows step (fun row =>
-        match run.bytecode[row.rowIndex].instruction with
-        | .SD base _ imm => TouchesTermination row.preState.jolt_device (sourceValue base row.preState + imm)
-        | _ => False)).mpr
+      apply (exists_fin_push run.rows step (storeTouches TouchesTermination)).mpr
       exact stored))
     (fun next => (registers next).mono (expansionLive_after context.bytecode first done _ atRow))
   refine ⟨step, 0, candidate, indexIs, entry, present, traceEq, executes, ?_, ?_,

@@ -15,13 +15,15 @@ def interleaveLookupOperands (left right : BitVec 64) : BitVec 128 :=
       address + (if left.getLsbD bit then 2 ^ (2 * bit + 1) else 0) +
         (if right.getLsbD bit then 2 ^ (2 * bit) else 0)) 0
 
--- Rust: [LookupQuery](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/traits.rs:93).
--- Rust: [instruction implementations](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions).
--- Extract the exact 128-bit lookup address before any field conversion.
--- Two-input tables interleave their operands. Arithmetic tables use the full
--- shared ISA calculation, even for W instructions whose output keeps 32 bits.
--- Advice uses the captured post-state destination. Loads/stores have index 0:
--- their memory address belongs to RamRaChunk, not InstructionRaChunk.
+/-- The 128-bit lookup index before field conversion, using pre-state sources
+and captured post-state destinations.
+Arithmetic rows combine operands; other rows interleave two 64-bit inputs.
+For example, a floor load with base 10 and immediate -2 has index 8;
+LD interleaves zero with its loaded destination.
+Jolt's prover: `crates/jolt-lookup-tables/src/traits.rs` (`LookupQuery`),
+`instructions/virt/floor_access.rs` (`floor_access!`),
+`instructions/virt/shift_data_{b,h,w}.rs` (`to_instruction_inputs`), and
+`instructions/riscv/{ld,sd}.rs` (`LookupQuery`) at `c6703570`. -/
 noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
     (address : BitVec 64) (preState postState : SailJoltState) : BitVec 128 :=
   let source := fun src => JoltISA.sourceValue src preState
@@ -30,7 +32,7 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   -- particular, -1 contributes 2^64 - 1; a carry into bit 64 is retained.
   -- Rust: [ADDI](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/addi.rs:18).
   | .ADDI _ src imm | .ADDIW _ src imm | .JALR _ src imm
-  | .VirtualAlignAddr _ src imm | .VirtualWindowMaskB _ src imm
+  | .VirtualWindowMaskB _ src imm
   | .VirtualWindowMaskH _ src imm | .VirtualWindowMaskW _ src imm =>
       BitVec.ofNat 128 (JoltISA.addWide (source src) imm)
   | .ADD _ lhs rhs | .ADDW _ lhs rhs =>
@@ -50,9 +52,13 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
       BitVec.ofNat 128 (JoltISA.addWide address imm)
   -- Rust: [JAL](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jal.rs:18).
   | .JAL _ imm => BitVec.ofNat 128 (JoltISA.addWide address imm)
-  -- Rust: [FormatAssert normalization](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format/format_assert_align.rs:107).
-  | .VirtualAssertHalfwordAlignment base imm _ | .VirtualAssertWordAlignment base imm _ =>
-      BitVec.ofNat 128 (JoltISA.addWide (source base) imm)
+  | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _
+  | .VirtualLoadW _ _ base imm _ | .VirtualStoreB base _ imm _
+  | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ =>
+      BitVec.ofInt 128 ((source base).toNat + imm.toInt)
+  | .VirtualShiftDataB _ value address imm | .VirtualShiftDataH _ value address imm
+  | .VirtualShiftDataW _ value address imm =>
+      interleaveLookupOperands (source value) (source address + imm)
   | .ANDI _ src imm | .ORI _ src imm | .XORI _ src imm | .SLTI _ src imm | .SLTIU _ src imm =>
       interleaveLookupOperands (source src) imm
   | .BEQ lhs rhs _ | .BNE lhs rhs _ | .BLT lhs rhs _ | .BGE lhs rhs _
@@ -60,7 +66,6 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   | .XOR _ lhs rhs | .AND _ lhs rhs | .SLT _ lhs rhs | .SLTU _ lhs rhs
   | .VirtualSRL _ lhs rhs | .VirtualSRA _ lhs rhs | .VirtualSRLW _ lhs rhs
   | .VirtualSRAW _ lhs rhs | .VirtualPext _ lhs rhs | .VirtualPextSigned _ lhs rhs
-  | .VirtualShiftDataB _ lhs rhs | .VirtualShiftDataH _ lhs rhs | .VirtualShiftDataW _ lhs rhs
   | .VirtualXORROT32 _ lhs rhs | .VirtualXORROT24 _ lhs rhs | .VirtualXORROT16 _ lhs rhs
   | .VirtualXORROT63 _ lhs rhs
   | .VirtualXORROTL1 _ lhs rhs | .VirtualXORROTW16 _ lhs rhs | .VirtualXORROTW12 _ lhs rhs
@@ -82,7 +87,8 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   | .VirtualMovsign _ src imm => interleaveLookupOperands (source src) imm
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       (capturedDestinationValue dst postState).setWidth 128
-  | .FENCE | .LD _ _ _ _ | .SD _ _ _ | .VirtualHostIO => 0
+  | .LD _ dst _ _ => interleaveLookupOperands 0 (capturedDestinationValue dst postState)
+  | .FENCE | .SD _ _ _ | .VirtualHostIO => 0
 
 -- Rust: [LookupIndex](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:45).
 -- Both committed and virtual instruction address chunks use this same index.

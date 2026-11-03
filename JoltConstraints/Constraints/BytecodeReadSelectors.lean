@@ -7,8 +7,10 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-/-- Fixed normalized register operand, with no operand represented by none.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L657-L689 -/
+/-- The encoded first source register, with an absent operand represented by `none`.
+For example, a floor load selects its base.
+Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
+(`NormalizedOperands::from`) at `c6703570`. -/
 def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _ | .XORI _ src _
@@ -26,23 +28,24 @@ def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualXORROTW16 _ src _ | .VirtualXORROTW12 _ src _ | .VirtualXORROTW8 _ src _
   | .VirtualXORROTW7 _ src _ | .VirtualXORROTW22 _ src _ | .VirtualXORROTW19 _ src _
   | .VirtualXORROTW6 _ src _ | .OR _ src _ | .XOR _ src _ | .AND _ src _ | .SLT _ src _
-  | .SLTU _ src _ | .VirtualAlignAddr _ src _ | .VirtualWindowMaskB _ src _
+  | .SLTU _ src _ | .VirtualWindowMaskB _ src _
   | .VirtualWindowMaskH _ src _ | .VirtualWindowMaskW _ src _ | .VirtualPext _ src _
-  | .VirtualPextSigned _ src _ | .VirtualShiftDataB _ src _ | .VirtualShiftDataH _ src _
-  | .VirtualShiftDataW _ src _ | .VirtualSignExtendWord _ src _ | .VirtualZeroExtendWord _ src _
-  | .VirtualMovsign _ src _ | .LD _ _ src _ | .SD src _ _ | .VirtualAssertEQ src _ _
+  | .VirtualPextSigned _ src _ | .VirtualShiftDataB _ src _ _ | .VirtualShiftDataH _ src _ _
+  | .VirtualShiftDataW _ src _ _ | .VirtualSignExtendWord _ src _ | .VirtualZeroExtendWord _ src _
+  | .VirtualMovsign _ src _ | .LD _ _ src _
+  | .VirtualLoadB _ _ src _ _ | .VirtualLoadH _ _ src _ _ | .VirtualLoadW _ _ src _ _ | .SD src _ _
+  | .VirtualStoreB src _ _ _ | .VirtualStoreH src _ _ _ | .VirtualStoreW src _ _ _ | .VirtualAssertEQ src _ _
   | .VirtualAssertValidDiv0 src _ _ | .VirtualNegateIf _ src _
   | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
   | .VirtualAssertLTE src _ _ =>
       some (TraceWitness.sourceRegisterAddress src)
-  -- Alignment assertions can read architectural or virtual registers.
-  | .VirtualAssertHalfwordAlignment base _ _ | .VirtualAssertWordAlignment base _ _ =>
-      some (TraceWitness.sourceRegisterAddress base)
   | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
-/-- Fixed normalized register operand, with no operand represented by none.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L657-L689 -/
+/-- The encoded second source register, with an absent operand represented by `none`.
+For example, a floor store selects its value source and a floor load has none.
+Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
+(`NormalizedOperands::from`) at `c6703570`. -/
 def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .BEQ _ src _ | .BNE _ src _ | .BLT _ src _ | .BGE _ src _ | .BLTU _ src _ | .BGEU _ src _
@@ -55,8 +58,9 @@ def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualXORROTW8 _ _ src | .VirtualXORROTW7 _ _ src | .VirtualXORROTW22 _ _ src
   | .VirtualXORROTW19 _ _ src | .VirtualXORROTW6 _ _ src | .OR _ _ src | .XOR _ _ src
   | .AND _ _ src | .SLT _ _ src | .SLTU _ _ src | .VirtualPext _ _ src
-  | .VirtualPextSigned _ _ src | .VirtualShiftDataB _ _ src | .VirtualShiftDataH _ _ src
-  | .VirtualShiftDataW _ _ src | .SD _ src _ | .VirtualAssertEQ _ src _
+  | .VirtualPextSigned _ _ src | .VirtualShiftDataB _ _ src _ | .VirtualShiftDataH _ _ src _
+  | .VirtualShiftDataW _ _ src _ | .SD _ src _
+  | .VirtualStoreB _ src _ _ | .VirtualStoreH _ src _ _ | .VirtualStoreW _ src _ _ | .VirtualAssertEQ _ src _
   | .VirtualAssertValidDiv0 _ src _ | .VirtualNegateIf _ _ src
   | .VirtualAssertValidUnsignedRemainder _ src _ | .VirtualAssertMulUNoOverflow _ src _
   | .VirtualAssertLTE _ src _ =>
@@ -67,15 +71,18 @@ def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualPow2I _ _ | .VirtualPow2IW _ _ | .VirtualShiftRightBitmask _ _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualShiftRightBitmaskW _ _ _ | .VirtualSRLI _ _ _
   | .VirtualSRAI _ _ _ | .VirtualSRLIW _ _ _ | .VirtualSRAIW _ _ _ | .VirtualROTRI _ _ _
-  | .VirtualROTRIW _ _ _ | .VirtualRev8W _ _ _ | .VirtualAlignAddr _ _ _
+  | .VirtualROTRIW _ _ _ | .VirtualRev8W _ _ _
   | .VirtualWindowMaskB _ _ _ | .VirtualWindowMaskH _ _ _ | .VirtualWindowMaskW _ _ _
   | .VirtualSignExtendWord _ _ _ | .VirtualZeroExtendWord _ _ _ | .VirtualMovsign _ _ _
-  | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .LD _ _ _ _
+  | .LD _ _ _ _
+  | .VirtualLoadB _ _ _ _ _ | .VirtualLoadH _ _ _ _ _ | .VirtualLoadW _ _ _ _ _
   | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
   | .VirtualHostIO => none
 
-/-- Fixed normalized register operand, with no operand represented by none.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L657-L689 -/
+/-- The encoded destination register, with an absent operand represented by `none`.
+For example, a floor load selects its destination and a floor store has none.
+Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
+(`NormalizedOperands::from`) at `c6703570`. -/
 def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
@@ -93,19 +100,21 @@ def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualXORROTW16 dst _ _ | .VirtualXORROTW12 dst _ _ | .VirtualXORROTW8 dst _ _
   | .VirtualXORROTW7 dst _ _ | .VirtualXORROTW22 dst _ _ | .VirtualXORROTW19 dst _ _
   | .VirtualXORROTW6 dst _ _ | .OR dst _ _ | .XOR dst _ _ | .AND dst _ _ | .SLT dst _ _
-  | .SLTU dst _ _ | .VirtualAlignAddr dst _ _ | .VirtualWindowMaskB dst _ _
+  | .SLTU dst _ _ | .VirtualWindowMaskB dst _ _
   | .VirtualWindowMaskH dst _ _ | .VirtualWindowMaskW dst _ _ | .VirtualPext dst _ _
-  | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _
-  | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
+  | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ _ | .VirtualShiftDataH dst _ _ _
+  | .VirtualShiftDataW dst _ _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
   | .VirtualNegateIf dst _ _ =>
       some (TraceWitness.destinationRegisterAddress
         (TraceWitness.capturedDestination dst))
-  | .LD _ dst _ _ =>
+  | .LD _ dst _ _
+  | .VirtualLoadB _ dst _ _ _ | .VirtualLoadH _ dst _ _ _ | .VirtualLoadW _ dst _ _ _ =>
       some (TraceWitness.destinationRegisterAddress
         (TraceWitness.capturedDestination dst))
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
-  | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
+  | .SD _ _ _
+  | .VirtualStoreB _ _ _ _ | .VirtualStoreH _ _ _ _ | .VirtualStoreW _ _ _ _
   | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _
   | .VirtualAssertValidUnsignedRemainder _ _ _ | .VirtualAssertMulUNoOverflow _ _ _
   | .VirtualAssertLTE _ _ _ | .VirtualHostIO => none

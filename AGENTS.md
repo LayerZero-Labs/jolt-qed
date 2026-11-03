@@ -13,6 +13,13 @@ The state of the proof lives in the repository, not in any one session:
 
 - `methods/soundness.md`: the plan, the layers, and the current status.
 - `JoltConstraints/model_review.md`, "Proofs owed": every remaining `sorry` and what it needs.
+- `reports/`: dated audit reports, named `YYYY-MM-DD-<topic>.md`.
+  Read the newest before starting.
+  `reports/2026-10-29-soundness-statement-audit.md` checks the soundness statement against Jolt at `5def437f`.
+
+File every audit or closing report in `reports/`, never in `methods/`.
+State the date, the Jolt commit and the Lean commit it checked.
+Git keeps old reports; delete a plan or report once its content is in the code or in the three places above.
 
 ## Review
 

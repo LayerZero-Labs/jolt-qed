@@ -1,6 +1,5 @@
 import JoltBytecode.JoltISA.Expansions.Store
 import JoltBytecode.JoltISA.ExpansionsAutomated
-import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Windows
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
@@ -11,14 +10,14 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 /-!
 # SH: top-down store-halfword equivalence
 
-`SH` has the same read-modify-write skeleton as `SB`, but it has a leading
-alignment assertion and replaces two bytes of the enclosing dword.  This file
+`SH` uses the same floor-load and floor-store structure as `SB`, and
+replaces two bytes of the enclosing doubleword.  This file
 keeps the same proof architecture visible:
 
 * aligned Jolt execution reduces to a dword write of a pure halfword splice;
 * the pure bridge identifies that dword write with a native halfword store;
 * native Sail execution reduces to the same canonical state; and
-* the misaligned path stops before setup and matches Sail's alignment error.
+* the misaligned floor load stops before reading memory and matches Sail's alignment error.
 -/
 
 set_option linter.unusedVariables false
@@ -48,8 +47,8 @@ def shSplicedDword (imm : BitVec 12) (rs1_val rs2_val dword_orig : BitVec 64) :
 
 /-- **Jolt-side aligned reduction for SH.**
 
-The leading assertion succeeds, so the rest of the program is the common setup
-block followed by the halfword splice block and final `SD`. -/
+The aligned floor load opens a halfword lane window; the merge rows splice
+in the new halfword and write back the containing doubleword. -/
 theorem shProgramAuto_reduces_to_dword_store (imm : BitVec 12) (rs2 rs1 : regidx)
     (js : SailJoltState)
     (hpriv : Assumptions.CurPrivilegeMachine js.sail)
@@ -96,57 +95,18 @@ theorem shProgramAuto_reduces_to_dword_store (imm : BitVec 12) (rs2 rs1 : regidx
           (shSplicedDword imm rs1_val rs2_val
             (loaded_dword_at js.sail (compute_aligned_dword_base_address rs1_val imm)
               hbytes h_base_aligned.no_ovf)) := by
-  let writeTail : JoltISA.Program :=
-    .instr (JoltISA.Encoded.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0) <| .done RETIRE_SUCCESS
-  let spliceTail : JoltISA.Program :=
-    .instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) 0) <|
-    .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp3)) <|
-    .instr (.VirtualShiftDataH (.vreg JoltISA.inlineTmp3) (.xreg rs2) (.vreg JoltISA.inlineTmp0)) <|
-    .instr (.ADD (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp3)) <|
-    writeTail
-  let base := compute_aligned_dword_base_address rs1_val imm
-  let dword_orig :=
-    loaded_dword_at js.sail (compute_aligned_dword_base_address rs1_val imm)
-      hbytes h_base_aligned.no_ovf
-  let dword_new := shSplicedDword imm rs1_val rs2_val dword_orig
-  let finalSail := state_after_dword_store js.sail base dword_new
-  rcases StoreProgramBlocks.assertHalfwordSetupBlockAligned spliceTail
-      imm rs1 js hpriv hmprv rs1_val hrs1 hsetup.halfword_aligned
-      h_base_aligned hbytes hload_pmp hread_mmio hjolt_load with
-    ⟨js_load, hsetup_run, hload_sail, hload_v0, hload_v1, hload_v2, hload_dev⟩
-  rcases StoreProgramBlocks.fusedHalfwordSpliceBlock writeTail imm rs2 js js_load
-      rs1_val rs2_val dword_orig hsetup hload_sail hload_v0 hload_v1
-      (by simpa [dword_orig] using hload_v2) hrs2 with
-    ⟨js_splice, hsplice_run, hsplice_sail, hsplice_v1, hsplice_v2, hsplice_dev⟩
-  have hdword_new : js_splice.vregs JoltISA.inlineTmp2 = dword_new := by
-    simpa [dword_new, shSplicedDword] using hsplice_v2
-  have hwrite_for_sd :
-      vmem_write_addr (Virtaddr base) 8 dword_new
-        (Store Data) false false false js_splice.sail =
-      .ok (Ok true) finalSail := by
-    rw [hsplice_sail]
-    simpa [base, dword_new, finalSail] using hwrite_dword
-  rcases StoreProgramBlocks.sdWriteBlock (.done RETIRE_SUCCESS)
-      js_splice base dword_new finalSail hsplice_v1 hdword_new
-      (by simpa [base] using StoreSplice.dword_base_aligns rs1_val imm)
-      hwrite_for_sd hread_mmio.ram
-      (by rw [hsplice_sail]; exact hpriv) (by rw [hsplice_sail]; exact hmprv)
-      (by rw [hsplice_sail]; exact hstore_pmp) (by rw [hsplice_sail]; exact hwrite_mmio)
-      ⟨by rw [hsplice_dev, hload_dev]; exact hjolt_store.below_heap_end,
-       by rw [hsplice_dev, hload_dev]; exact hjolt_store.outside_canary⟩ with
-    ⟨js_write, hsd_run, hsail_write, _hvregs_write⟩
-  refine ⟨js_write, ?_, ?_⟩
-  · calc
-      (JoltISA.execProgram (JoltISA.shProgramAuto rs1 rs2 imm)).run js =
-          (JoltISA.execProgram spliceTail).run js_load := by
-            simpa [JoltISA.shProgramAuto, spliceTail, writeTail] using hsetup_run
-      _ = (JoltISA.execProgram writeTail).run js_splice := by
-            simpa [spliceTail, writeTail] using hsplice_run
-      _ = (JoltISA.execProgram (.done RETIRE_SUCCESS)).run js_write := by
-            simpa [writeTail] using hsd_run
-      _ = .ok RETIRE_SUCCESS js_write := by
-            rfl
-  · simpa [finalSail, base, dword_new] using hsail_write
+  have hsplice := StoreSplice.fusedHalfwordSplice_eq
+    (loaded_dword_at js.sail (compute_aligned_dword_base_address rs1_val imm)
+      hbytes h_base_aligned.no_ovf)
+    rs2_val (load_effective_address rs1_val imm)
+    (compute_aligned_dword_base_address rs1_val imm) hsetup
+  obtain ⟨js', hrun, hsail⟩ := StoreProgramBlocks.laneStoreProgram_run .halfword
+    imm rs1 rs2 js rs1_val rs2_val hrs1 hrs2 hsetup.halfword_aligned
+    h_base_aligned hbytes hread_mmio.ram hjolt_load hjolt_store
+  refine ⟨js', hrun, ?_⟩
+  rw [hsail]
+  exact congrArg (state_after_dword_store js.sail
+    (compute_aligned_dword_base_address rs1_val imm)) hsplice
 
 /-- **Pure bridge for SH.**
 
@@ -289,8 +249,8 @@ theorem execute_SH_reduces (imm : BitVec 12) (rs2 rs1 : regidx)
 
 /-- **Jolt-side misaligned SH reduction.**
 
-The leading `VirtualAssertHalfwordAlignment` is the whole proof: it returns the
-Sail store/AMO alignment exception and does not run the setup block. -/
+The leading `VirtualLoadH` returns the Sail store/AMO alignment exception
+without running the continuation. -/
 theorem shProgramAuto_concrete_misaligned (imm : BitVec 12) (rs2 rs1 : regidx)
     (js : SailJoltState) (rs1_val : BitVec 64)
     (hrs1 : rX_bits rs1 js.sail = .ok rs1_val js.sail)
@@ -299,19 +259,7 @@ theorem shProgramAuto_concrete_misaligned (imm : BitVec 12) (rs2 rs1 : regidx)
       .ok (ExecutionResult.Memory_Exception
         (Virtaddr (load_effective_address rs1_val imm),
           ExceptionType.E_SAMO_Addr_Align ())) js := by
-  let tail : JoltISA.Program :=
-    .instr (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1) imm) <|
-    .instr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12)) <|
-    .instr (JoltISA.Encoded.LD .normal (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp1) 0) <|
-    .instr (JoltISA.Encoded.VirtualWindowMaskH (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) 0) <|
-    .instr (.ANDN (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp3)) <|
-    .instr (.VirtualShiftDataH (.vreg JoltISA.inlineTmp3) (.xreg rs2) (.vreg JoltISA.inlineTmp0)) <|
-    .instr (.ADD (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp2) (.vreg JoltISA.inlineTmp3)) <|
-    .instr (JoltISA.Encoded.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0) <|
-    .done RETIRE_SUCCESS
-  have h := StoreProgramBlocks.assertHalfwordBlockMisaligned tail
-    imm rs1 js rs1_val hrs1 hmis
-  simpa [JoltISA.shProgramAuto, tail] using h
+  exact StoreProgramBlocks.laneStoreProgram_misaligned .halfword imm rs1 rs2 js rs1_val hrs1 hmis
 
 /-- **Sail-side misaligned SH reduction.**
 

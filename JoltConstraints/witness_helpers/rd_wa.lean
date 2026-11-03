@@ -8,10 +8,12 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [materialize_register_read_write_virtual](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
--- Select the instruction's normalized integer destination.
--- Absent destinations, including HostIO, and padding select no register.
--- See jolt/crates/jolt-program/src/image/decode.rs:335-339 at 5def437f.
+/-- The indicator of the encoded destination register.
+Absent operands and padding contribute zero.
+For example, a floor load selects its destination and a floor store selects none.
+Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
+(`RegisterStateLoad`), `virtual_store_{b,h,w}.rs` (`RegisterStateS`) and
+`format/format_shift_data.rs` (`FormatShiftData`) at `c6703570`. -/
 noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
     (trace : Trace) :
     Fin 128 → Fin p.traceLength → F :=
@@ -36,17 +38,19 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       | .VirtualXORROTW16 dst _ _ | .VirtualXORROTW12 dst _ _ | .VirtualXORROTW8 dst _ _
       | .VirtualXORROTW7 dst _ _ | .VirtualXORROTW22 dst _ _ | .VirtualXORROTW19 dst _ _
       | .VirtualXORROTW6 dst _ _ | .OR dst _ _ | .XOR dst _ _ | .AND dst _ _ | .SLT dst _ _
-      | .SLTU dst _ _ | .VirtualAlignAddr dst _ _ | .VirtualWindowMaskB dst _ _
+      | .SLTU dst _ _ | .VirtualWindowMaskB dst _ _
       | .VirtualWindowMaskH dst _ _ | .VirtualWindowMaskW dst _ _ | .VirtualPext dst _ _
-      | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _
-      | .VirtualShiftDataW dst _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
+      | .VirtualPextSigned dst _ _ | .VirtualShiftDataB dst _ _ _ | .VirtualShiftDataH dst _ _ _
+      | .VirtualShiftDataW dst _ _ _ | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
       | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
       | .VirtualNegateIf dst _ _ =>
           if address = destinationRegisterAddress (capturedDestination dst) then 1 else 0
-      | .LD _ dst _ _ =>
+      | .LD _ dst _ _
+      | .VirtualLoadB _ dst _ _ _ | .VirtualLoadH _ dst _ _ _ | .VirtualLoadW _ dst _ _ _ =>
           if address = destinationRegisterAddress (capturedDestination dst) then 1 else 0
       | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _ | .FENCE
-      | .VirtualAssertHalfwordAlignment _ _ _ | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _
+      | .SD _ _ _
+      | .VirtualStoreB _ _ _ _ | .VirtualStoreH _ _ _ _ | .VirtualStoreW _ _ _ _
       | .VirtualAssertEQ _ _ _ | .VirtualAssertValidDiv0 _ _ _
       | .VirtualAssertValidUnsignedRemainder _ _ _ | .VirtualAssertMulUNoOverflow _ _ _
       | .VirtualAssertLTE _ _ _ | .VirtualHostIO => 0

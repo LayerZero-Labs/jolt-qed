@@ -29,6 +29,7 @@ variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop}
 
 include charAbove2pow128 context equations selected rowIs instructionIs
 
+/-- The LUI lookup writes its unsigned immediate; for example, immediate 4096 writes 4096. -/
 private theorem lui_write_value : witness.RdWriteValue t = (imm.toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
   have flags := opFlag_of_selected_bytecode bound context equations
@@ -44,7 +45,7 @@ private theorem lui_write_value : witness.RdWriteValue t = (imm.toNat : F) := by
   have inputs : witness.LeftInstructionInput t = 0 ∧
       witness.RightInstructionInput t = (imm.toNat : F) := by
     simpa only [instructionIs, JoltMetadata.instructionFlag, Bool.false_eq_true,
-      ↓reduceIte, zero_add, immediate] using
+      ↓reduceIte, zero_add, add_zero, immediate] using
       instructionInputs_of_selected_bytecode bound context equations t slot selected row rowIs
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   have output := lookupOutput_rangeCheck_add charAbove2pow128 context equations t slot

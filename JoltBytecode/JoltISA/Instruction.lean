@@ -125,20 +125,39 @@ inductive Instr where
   | AND  (dst : Dst) (lhs rhs : Src)
   | SLT  (dst : Dst) (lhs rhs : Src)
   | SLTU (dst : Dst) (lhs rhs : Src)
-  | VirtualAlignAddr (dst : Dst) (base : Src) (imm : BitVec 64)
   | VirtualWindowMaskB (dst : Dst) (base : Src) (imm : BitVec 64)
   | VirtualWindowMaskH (dst : Dst) (base : Src) (imm : BitVec 64)
   | VirtualWindowMaskW (dst : Dst) (base : Src) (imm : BitVec 64)
   | VirtualPext (dst : Dst) (value mask : Src)
   | VirtualPextSigned (dst : Dst) (value mask : Src)
-  | VirtualShiftDataB (dst : Dst) (value address : Src)
-  | VirtualShiftDataH (dst : Dst) (value address : Src)
-  | VirtualShiftDataW (dst : Dst) (value address : Src)
+  /-- Byte store-data shifter. `value` is the stored register, `address` the
+  base register, and `imm` the store offset. The lane is chosen from
+  `ea = address + imm`, so `(value & 0xFF) << (8 * (ea mod 8))` is the byte in
+  its lane. Rust: `crates/jolt-riscv/src/instructions/virt/shift_data_b.rs`. -/
+  | VirtualShiftDataB (dst : Dst) (value address : Src) (imm : BitVec 64)
+  | VirtualShiftDataH (dst : Dst) (value address : Src) (imm : BitVec 64)
+  | VirtualShiftDataW (dst : Dst) (value address : Src) (imm : BitVec 64)
   | VirtualSignExtendWord (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualZeroExtendWord (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
   | VirtualMovsign (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
-  | VirtualAssertHalfwordAlignment (base : Src) (imm : BitVec 64) (fault : ExceptionType)
-  | VirtualAssertWordAlignment (base : Src) (imm : BitVec 64) (fault : ExceptionType)
+  /-- Floor-addressed doubleword load for byte accesses. `dst` receives the
+  doubleword containing `ea = base + imm`, that is the word at `ea & ~7`.
+  Example: with `base = 0x80000003` and `imm = 0`, the row loads the word at
+  `0x80000000`. Rust: `crates/jolt-riscv/src/instructions/virt/load_b.rs` and
+  `tracer/src/instruction/floor_access.rs` (`load`). The halfword and word rows
+  (`VirtualLoadH`, `VirtualLoadW`) raise `fault` when `ea` is not a multiple of 2
+  or 4 in the Lean model; Jolt's tracer panics there instead, so an honest trace
+  has no such row. -/
+  | VirtualLoadB (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 64) (fault : ExceptionType)
+  | VirtualLoadH (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 64) (fault : ExceptionType)
+  | VirtualLoadW (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 64) (fault : ExceptionType)
+  /-- Floor-addressed doubleword store, the write side of `VirtualLoadB`. `value`
+  is written to the doubleword containing `ea = base + imm`. Rust:
+  `crates/jolt-riscv/src/instructions/virt/store_b.rs` and
+  `tracer/src/instruction/floor_access.rs` (`store`). -/
+  | VirtualStoreB (base value : Src) (imm : BitVec 64) (fault : ExceptionType)
+  | VirtualStoreH (base value : Src) (imm : BitVec 64) (fault : ExceptionType)
+  | VirtualStoreW (base value : Src) (imm : BitVec 64) (fault : ExceptionType)
   | LD (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 64)
   | SD (base value : Src) (imm : BitVec 64)
   | VirtualAdvice (dst : Dst) (value : BitVec 64) (imm : BitVec 64 := 0)
@@ -187,9 +206,6 @@ abbrev SLTIU (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
 abbrev JALR (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
   .JALR dst src (sign_extend (m := 64) imm)
 
-abbrev VirtualAlignAddr (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
-  .VirtualAlignAddr dst src (sign_extend (m := 64) imm)
-
 abbrev VirtualWindowMaskB (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
   .VirtualWindowMaskB dst src (sign_extend (m := 64) imm)
 
@@ -226,11 +242,35 @@ abbrev BGEU (lhs rhs : Src) (imm : BitVec 13) : Instr :=
 abbrev VirtualAssertEQ (lhs rhs : Src) (imm : BitVec 13) : Instr :=
   .VirtualAssertEQ lhs rhs (sign_extend (m := 128) imm)
 
-abbrev VirtualAssertHalfwordAlignment (base : regidx) (imm : BitVec 12) (fault : ExceptionType) : Instr :=
-  .VirtualAssertHalfwordAlignment (.xreg base) (sign_extend (m := 64) imm) fault
+abbrev VirtualLoadB (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 12)
+    (fault : ExceptionType) : Instr :=
+  .VirtualLoadB faultClass dst base (sign_extend (m := 64) imm) fault
 
-abbrev VirtualAssertWordAlignment (base : regidx) (imm : BitVec 12) (fault : ExceptionType) : Instr :=
-  .VirtualAssertWordAlignment (.xreg base) (sign_extend (m := 64) imm) fault
+abbrev VirtualLoadH (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 12)
+    (fault : ExceptionType) : Instr :=
+  .VirtualLoadH faultClass dst base (sign_extend (m := 64) imm) fault
+
+abbrev VirtualLoadW (faultClass : LoadFaultClass) (dst : Dst) (base : Src) (imm : BitVec 12)
+    (fault : ExceptionType) : Instr :=
+  .VirtualLoadW faultClass dst base (sign_extend (m := 64) imm) fault
+
+abbrev VirtualStoreB (base value : Src) (imm : BitVec 12) (fault : ExceptionType) : Instr :=
+  .VirtualStoreB base value (sign_extend (m := 64) imm) fault
+
+abbrev VirtualStoreH (base value : Src) (imm : BitVec 12) (fault : ExceptionType) : Instr :=
+  .VirtualStoreH base value (sign_extend (m := 64) imm) fault
+
+abbrev VirtualStoreW (base value : Src) (imm : BitVec 12) (fault : ExceptionType) : Instr :=
+  .VirtualStoreW base value (sign_extend (m := 64) imm) fault
+
+abbrev VirtualShiftDataB (dst : Dst) (value address : Src) (imm : BitVec 12) : Instr :=
+  .VirtualShiftDataB dst value address (sign_extend (m := 64) imm)
+
+abbrev VirtualShiftDataH (dst : Dst) (value address : Src) (imm : BitVec 12) : Instr :=
+  .VirtualShiftDataH dst value address (sign_extend (m := 64) imm)
+
+abbrev VirtualShiftDataW (dst : Dst) (value address : Src) (imm : BitVec 12) : Instr :=
+  .VirtualShiftDataW dst value address (sign_extend (m := 64) imm)
 
 abbrev AUIPC (dst : Dst) (imm : BitVec 20) : Instr :=
   .AUIPC dst (sign_extend (m := 64) (imm +++ (0 : BitVec 12)))
@@ -427,18 +467,19 @@ def Instr.destination? : Instr → Option Dst
   | .VirtualXORROTW16 dst _ _ | .VirtualXORROTW12 dst _ _ | .VirtualXORROTW8 dst _ _
   | .VirtualXORROTW7 dst _ _ | .VirtualXORROTW22 dst _ _ | .VirtualXORROTW19 dst _ _
   | .VirtualXORROTW6 dst _ _ | .OR dst _ _ | .XOR dst _ _ | .AND dst _ _
-  | .SLT dst _ _ | .SLTU dst _ _ | .VirtualAlignAddr dst _ _
+  | .SLT dst _ _ | .SLTU dst _ _
   | .VirtualWindowMaskB dst _ _ | .VirtualWindowMaskH dst _ _
   | .VirtualWindowMaskW dst _ _ | .VirtualPext dst _ _ | .VirtualPextSigned dst _ _
-  | .VirtualShiftDataB dst _ _ | .VirtualShiftDataH dst _ _ | .VirtualShiftDataW dst _ _
+  | .VirtualShiftDataB dst _ _ _ | .VirtualShiftDataH dst _ _ _ | .VirtualShiftDataW dst _ _ _
   | .VirtualSignExtendWord dst _ _ | .VirtualZeroExtendWord dst _ _
   | .VirtualMovsign dst _ _ | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _
   | .VirtualNegateIf dst _ _ =>
       some dst
-  | .LD _ dst _ _ => some dst
+  | .LD _ dst _ _ | .VirtualLoadB _ dst _ _ _ | .VirtualLoadH _ dst _ _ _
+  | .VirtualLoadW _ dst _ _ _ => some dst
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _
-  | .BGEU _ _ _ | .FENCE | .VirtualHostIO | .VirtualAssertHalfwordAlignment _ _ _
-  | .VirtualAssertWordAlignment _ _ _ | .SD _ _ _ | .VirtualAssertEQ _ _ _
+  | .BGEU _ _ _ | .FENCE | .VirtualHostIO | .SD _ _ _ | .VirtualAssertEQ _ _ _
+  | .VirtualStoreB _ _ _ _ | .VirtualStoreH _ _ _ _ | .VirtualStoreW _ _ _ _
   | .VirtualAssertValidDiv0 _ _ _ | .VirtualAssertValidUnsignedRemainder _ _ _
   | .VirtualAssertMulUNoOverflow _ _ _ | .VirtualAssertLTE _ _ _ => none
 

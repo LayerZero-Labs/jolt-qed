@@ -56,15 +56,6 @@ theorem lookupOutput_rangeCheckAligned_of_identity
     t slot selected value raf encoded, table]
   exact rangeCheckAligned_entry value
 
-/-- AlignAddr clears the low three address bits. -/
-theorem lookupOutput_alignAddr_of_identity
-    (table : (bytecodeRow context.bytecode slot.val).bind
-      (fun row => JoltMetadata.lookupTable row.instruction) = some .AlignAddr) :
-    witness.LookupOutput t = ((value.setWidth 64 &&& ~~~7#64).toNat : F) := by
-  rw [lookupOutput_of_identity charAbove2pow128 context equations
-    t slot selected value raf encoded, table]
-  exact alignAddr_entry value
-
 /-- Pow2 produces one set bit at the index modulo 64. -/
 theorem lookupOutput_pow2_of_identity
     (table : (bytecodeRow context.bytecode slot.val).bind

@@ -8,6 +8,18 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
+/-- An instruction selecting rs1 as its left input cannot select the destination
+value as its right input: only LD selects that destination value, and LD does
+not select rs1 as an instruction input.
+For example, ADD and ADDI both have the destination-value flag false. -/
+theorem rdWriteInput_false_of_rs1Input (instruction : JoltISA.Instr)
+    (source : JoltMetadata.instructionFlag instruction .LeftOperandIsRs1Value = true) :
+    JoltMetadata.instructionFlag instruction .RightOperandIsRdWriteValue = false := by
+  simp only [JoltMetadata.instructionFlag]
+  split
+  · simp [JoltMetadata.instructionFlag] at source
+  · rfl
+
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow127 : 2 ^ 127 < ringChar F)
@@ -16,8 +28,12 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
 
 include charAbove2pow127 context equations
 
-/-- The selected instruction determines whether each input comes from a source
-register, the PC, an immediate, or zero. The source columns are still field values. -/
+/-- The selected instruction determines each input as a sum of its flagged
+source columns, which are still field values.
+For example, LD selects RdWriteValue, while VirtualShiftDataB selects Rs2Value
+plus the signed immediate.
+See Jolt's verifier at c6703570, `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs`
+(`InputVirtualization::unbatched_relation`). -/
 theorem instructionInputs_of_selected_bytecode
     (t : Fin params.traceLength) (slot : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness slot t = 1) (row : JoltInstructionRow)
@@ -31,7 +47,9 @@ theorem instructionInputs_of_selected_bytecode
       (if JoltMetadata.instructionFlag row.instruction .RightOperandIsRs2Value then
         witness.Rs2Value t else 0) +
       (if JoltMetadata.instructionFlag row.instruction .RightOperandIsImm then
-        witness.Imm t else 0) := by
+        witness.Imm t else 0) +
+      (if JoltMetadata.instructionFlag row.instruction .RightOperandIsRdWriteValue then
+        witness.RdWriteValue t else 0) := by
   rw [equations.leftInstructionInputEqSelection t, equations.rightInstructionInputEqSelection t]
   simp_rw [instructionFlag_of_selected_bytecode charAbove2pow127 context equations
     _ t slot selected]

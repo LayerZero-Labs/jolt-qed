@@ -138,6 +138,24 @@ theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
   cases h
   rfl
 
+/-- A doubleword load preserves the PC because it preserves the entire state;
+for example, the word read by LoadB cannot change the instruction address.
+Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::load_doubleword`) at `c6703570`. -/
+theorem load_doubleword_rule (address : BitVec 64) : Preserves (Mmu.load_doubleword address) := by
+  intro s t value runs
+  rw [Mmu.load_doubleword_state runs]
+
+/-- A doubleword store preserves registers, including PC; for example, a merged
+byte store updates memory while retaining the current instruction address.
+Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`) at `c6703570`. -/
+theorem store_doubleword_rule (address value : BitVec 64) :
+    Preserves (Mmu.store_doubleword address value) := by
+  intro s t result runs
+  rw [(Mmu.store_doubleword_regs runs).1]
+
+/-- Compose PC frame rules through instruction actions; for example, a floor
+load composes a source read, MMU load, and destination write.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
 macro "jolt_pc_auto" : tactic => `(tactic|
   repeat' first
   | exact read_rule _
@@ -145,6 +163,8 @@ macro "jolt_pc_auto" : tactic => `(tactic|
   | exact pure_rule _
   | exact throw_rule _
   | exact get_rule
+  | exact load_doubleword_rule _
+  | exact store_doubleword_rule _ _
   | exact lift_rule (PCFrame.read_rule _)
   | exact lift_rule (PCFrame.write_rule _ _ (by decide))
   | exact lift_rule (PCFrame.jump_rule _)
@@ -152,6 +172,10 @@ macro "jolt_pc_auto" : tactic => `(tactic|
   | split
   | refine bind_rule ?_ (fun x => ?_))
 
+/-- Every non-native-memory, non-host row preserves PC, including floor
+memory rows; for example, VirtualStoreW preserves PC through its MMU write.
+The native LD/SD and host cases are handled by their callers' separate branches.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`) at `c6703570`. -/
 theorem ordinary_instruction (instr : Instr)
     (hload : ∀ fault dst base imm, instr ≠ .LD fault dst base imm)
     (hstore : ∀ base value imm, instr ≠ .SD base value imm)

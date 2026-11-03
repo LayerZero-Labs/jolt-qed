@@ -1,6 +1,6 @@
 import JoltConstraints.Soundness.Layer4.Identity
 
-/-! Alignment and product-bound assertions at a recovered wide address. -/
+/-! Product-bound assertions at a recovered wide address. -/
 
 set_option autoImplicit false
 
@@ -17,24 +17,6 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   (encoded : witness.RightLookupOperand t = (value.toNat : F))
 
 include charAbove2pow128 context equations selected raf encoded
-
-/-- HalfwordAlignment tests divisibility of the wide address by two. -/
-theorem lookupOutput_halfwordAlignment_of_identity
-    (table : (bytecodeRow context.bytecode slot.val).bind
-      (fun row => JoltMetadata.lookupTable row.instruction) = some .HalfwordAlignment) :
-    witness.LookupOutput t = (if value.toNat % 2 = 0 then 1 else 0) := by
-  rw [lookupOutput_of_identity charAbove2pow128 context equations
-    t slot selected value raf encoded, table]
-  simp [lookupTableEntry, halfwordAlignmentTableEntry, ← BitVec.toNat_inj]
-
-/-- WordAlignment tests divisibility of the wide address by four. -/
-theorem lookupOutput_wordAlignment_of_identity
-    (table : (bytecodeRow context.bytecode slot.val).bind
-      (fun row => JoltMetadata.lookupTable row.instruction) = some .WordAlignment) :
-    witness.LookupOutput t = (if value.toNat % 4 = 0 then 1 else 0) := by
-  rw [lookupOutput_of_identity charAbove2pow128 context equations
-    t slot selected value raf encoded, table]
-  simp [lookupTableEntry, wordAlignmentTableEntry, ← BitVec.toNat_inj]
 
 /-- MulUNoOverflow tests that the recovered wide product fits in 64 bits. -/
 theorem lookupOutput_mulUNoOverflow_of_identity

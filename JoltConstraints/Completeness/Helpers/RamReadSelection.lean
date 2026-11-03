@@ -1,7 +1,9 @@
 import JoltConstraints.Constraints.RamReadData
 import JoltConstraints.Completeness.Helpers.RamAccesses
 import JoltConstraints.Completeness.Helpers.IOSetupFrame
-import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
+import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
+import JoltConstraints.Completeness.Helpers.FloorMemory
+import JoltConstraints.Completeness.Helpers.MemoryValueFacts
 
 set_option autoImplicit false
 
@@ -25,7 +27,29 @@ theorem HonestTrace.preState_layout {joltInstance : JoltInstance SourceInstructi
   rw [sameLayout]
   exact ⟨_, initialLayout, valid.1.1⟩
 
--- An LD row at address 0 captures 0 as the value it loads.
+/-- Retiring after a write of zero captures zero even for x0, which always
+reads zero; for example, a load from the zero address captures zero in x0.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+private theorem captured_zero_retire (dst : JoltISA.Dst) (pre post : SailJoltState)
+    (runs : (do JoltISA.writeDst dst 0; pure LeanRV64D.Functions.RETIRE_SUCCESS) pre =
+      .ok (.Retire_Success ()) post) :
+    TraceWitness.capturedDestinationValue dst post = 0 := by
+  cases dst with
+  | vreg register => exact lookup_write_retire (.vreg register) 0 pre post trivial runs
+  | xreg register =>
+    by_cases zeroRegister : JoltISA.isX0 register = true
+    · obtain ⟨bits⟩ := register
+      unfold JoltISA.isX0 at zeroRegister
+      simp only [decide_eq_true_eq] at zeroRegister
+      unfold TraceWitness.capturedDestinationValue TraceWitness.capturedDestination
+        JoltISA.sourceValue
+      dsimp only
+      rw [zeroRegister]
+    · exact lookup_write_retire (.xreg register) 0 pre post (by simpa using zeroRegister) runs
+
+/-- An LD row at address zero captures zero, including when its destination is x0.
+For example, LD from base zero with immediate zero reads the special zero word.
+Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `c6703570`. -/
 theorem HonestTrace.load_zero_captured {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (inTrace : i < trace.rows.size) (faultClass : JoltISA.LoadFaultClass)
@@ -38,19 +62,10 @@ theorem HonestTrace.load_zero_captured {joltInstance : JoltInstance SourceInstru
   have runs := (trace.row i inTrace).executes
   rw [withRuntimeAdvice_load _ faultClass dst base imm isLoad] at runs
   have written := execInstr_load_zero faultClass dst base imm _ _ config built aboveEight atZero runs
-  cases dst with
-  | vreg register => exact jump_write_capture (.vreg register) 0 _ _ trivial written
-  | xreg register =>
-    by_cases zeroRegister : JoltISA.isX0 register = true
-    · -- x0 always reads 0
-      obtain ⟨bits⟩ := register
-      unfold JoltISA.isX0 at zeroRegister
-      simp only [decide_eq_true_eq] at zeroRegister
-      unfold TraceWitness.capturedDestinationValue TraceWitness.capturedDestination
-        JoltISA.sourceValue
-      dsimp only
-      rw [zeroRegister]
-    · exact jump_write_capture (.xreg register) 0 _ _ (by simpa using zeroRegister) written
+  apply captured_zero_retire dst (trace.rows[i].preState) (trace.rows[i].postState)
+  simp only [bind, EStateM.bind]
+  rw [written]
+  rfl
 
 -- No SD row stores at address 0.
 theorem HonestTrace.store_nonzero {joltInstance : JoltInstance SourceInstruction}
@@ -64,8 +79,181 @@ theorem HonestTrace.store_nonzero {joltInstance : JoltInstance SourceInstruction
   rw [withRuntimeAdvice_store _ base value imm isStore] at runs
   exact execInstr_store_nonzero base value imm _ _ config built aboveEight runs
 
--- Every memory access in an honest trace is a whole number of 64-bit words above the
--- lowest address: LD and SD retire only at multiples of 8, and the lowest address is one.
+/-- A computation that returns ran its first step without an error: if `first >>= next`
+returns from state `pre`, so does `first`.
+For example, a retired floor load ran its doubleword load without an error. -/
+theorem bind_ok_first {ε σ α β : Type} (first : EStateM ε σ α) (next : α → EStateM ε σ β)
+    (pre post : σ) (value : β) (ran : (first >>= next) pre = .ok value post) :
+    ∃ result middle, first pre = .ok result middle := by
+  cases firstRan : first pre with
+  | ok result middle => exact ⟨result, middle, rfl⟩
+  | error failure middle =>
+    simp only [bind, EStateM.bind, firstRan] at ran
+    cases ran
+
+/-- A doubleword load that returns at an address `address` at or above `RAM_START_ADDRESS`
+read below the layout's `heap_end`: Jolt's tracer asserts that the start address is below
+it.
+For example, a load at `heap_end` itself fails the assertion.
+See jolt/tracer/src/emulator/mmu.rs (`Mmu::load_doubleword`, `assert_effective_address`)
+at c6703570. -/
+theorem JoltISA.Mmu.load_doubleword_below_heap_end (address : BitVec 64) (state : SailJoltState)
+    (inRam : JoltISA.RAM_START_ADDRESS ≤ address.toNat)
+    (loaded : ∃ result after, JoltISA.Mmu.load_doubleword address state = .ok result after) :
+    address.toNat < state.jolt_device.memory_layout.heap_end.toNat := by
+  obtain ⟨result, after, loaded⟩ := loaded
+  unfold JoltISA.Mmu.load_doubleword at loaded
+  simp only [if_pos inRam] at loaded
+  split at loaded
+  · cases loaded
+  · split at loaded
+    · rename_i valid
+      simpa only [JoltISA.Mmu.effective_address_ok, if_neg (Nat.not_lt.mpr inRam),
+        Bool.false_eq_true, ↓reduceIte, decide_eq_true_eq] using valid
+    · cases loaded
+
+/-- A doubleword store that returns at an address `address` at or above
+`RAM_START_ADDRESS` wrote below the layout's `heap_end`: Jolt's tracer asserts that the
+start address is below it.
+For example, a store at `heap_end` itself fails the assertion.
+See jolt/tracer/src/emulator/mmu.rs (`Mmu::store_doubleword`, `assert_effective_address`)
+at c6703570. -/
+theorem JoltISA.Mmu.store_doubleword_below_heap_end (address value : BitVec 64)
+    (state : SailJoltState) (inRam : JoltISA.RAM_START_ADDRESS ≤ address.toNat)
+    (stored : ∃ result after, JoltISA.Mmu.store_doubleword address value state = .ok result after) :
+    address.toNat < state.jolt_device.memory_layout.heap_end.toNat := by
+  obtain ⟨result, after, stored⟩ := stored
+  unfold JoltISA.Mmu.store_doubleword at stored
+  simp only [if_pos inRam] at stored
+  split at stored
+  · cases stored
+  · split at stored
+    · rename_i valid
+      simp only [JoltISA.Mmu.effective_address_ok, if_neg (Nat.not_lt.mpr inRam),
+        ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at valid
+      exact valid.2
+    · cases stored
+
+/-- An LD that retires ran its doubleword load at `base + imm` without an error.
+For example, `LD x5, 8(x6)` with `x6 = 0x80000000` ran the load at `0x80000008`.
+See jolt/tracer/src/instruction/ld.rs (`LD::exec`) at c6703570. -/
+theorem execInstr_load_access (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
+    (base : JoltISA.Src) (imm : BitVec 64) (state after : SailJoltState)
+    (runs : JoltISA.execInstr (.LD faultClass dst base imm) state =
+      .ok (.Retire_Success ()) after) :
+    ∃ result middle,
+      JoltISA.Mmu.load_doubleword (JoltISA.sourceValue base state + imm) state = .ok result middle := by
+  simp only [JoltISA.execInstr] at runs
+  have step := lookup_read_bind base _ state after _ runs
+  split at step
+  · exact bind_ok_first _ _ _ _ _ step
+  · cases step
+
+/-- An SD that retires ran its doubleword store at `base + imm` without an error.
+For example, `SD x5, 8(x6)` with `x6 = 0x80000000` ran the store at `0x80000008`.
+See jolt/tracer/src/instruction/sd.rs (`SD::exec`) at c6703570. -/
+theorem execInstr_store_access (base value : JoltISA.Src) (imm : BitVec 64)
+    (state after : SailJoltState)
+    (runs : JoltISA.execInstr (.SD base value imm) state = .ok (.Retire_Success ()) after) :
+    ∃ result middle,
+      JoltISA.Mmu.store_doubleword (JoltISA.sourceValue base state + imm)
+        (JoltISA.sourceValue value state) state = .ok result middle := by
+  simp only [JoltISA.execInstr] at runs
+  have step := lookup_read_bind base _ state after _ runs
+  have stored := lookup_read_bind value _ state after _ step
+  split at stored
+  · exact bind_ok_first _ _ _ _ _ stored
+  · cases stored
+
+/-- A retired floor load records an aligned doubleword, captures zero when that recorded
+address is zero, and reads below `heap_end` when the recorded address is in RAM (at or
+above `RAM_START_ADDRESS`); for example, LoadH at ea 2 reads word zero.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `addresses`)
+at `c6703570`. -/
+theorem HonestTrace.floor_load_properties {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (i : Nat) (ht : i < trace.rows.size) (faultClass : JoltISA.LoadFaultClass)
+    (dst : JoltISA.Dst) (base : JoltISA.Src) (imm mask offset : BitVec 64) (fault : ExceptionType)
+    (partition : mask ||| offset = 7)
+    (selected : (trace.bytecode[(trace.rows[i]'ht).rowIndex].instruction =
+        .VirtualLoadB faultClass dst base imm fault ∧ mask = 0) ∨
+      (trace.bytecode[(trace.rows[i]'ht).rowIndex].instruction =
+        .VirtualLoadH faultClass dst base imm fault ∧ mask = 1) ∨
+      (trace.bytecode[(trace.rows[i]'ht).rowIndex].instruction =
+        .VirtualLoadW faultClass dst base imm fault ∧ mask = 3)) :
+    let ea := JoltISA.sourceValue base (trace.rows[i]'ht).preState + imm
+    (ea - (ea &&& offset)).toNat % 8 = 0 ∧
+      (ea - (ea &&& offset) = 0 →
+        TraceWitness.capturedDestinationValue dst (trace.rows[i]'ht).postState = 0) ∧
+      (JoltISA.RAM_START_ADDRESS ≤ (ea - (ea &&& offset)).toNat →
+        (ea - (ea &&& offset)).toNat <
+          (trace.rows[i]'ht).preState.jolt_device.memory_layout.heap_end.toNat) := by
+  obtain ⟨config, built, aboveEight⟩ := trace.preState_layout i ht
+  have facts := floor_load_access _ faultClass dst base imm mask fault selected
+    (trace.row i ht).runtimeAdvice _ _ (trace.row i ht).executes
+  dsimp only [HonestTrace.row] at facts
+  have recorded := floor_recorded_address _ mask offset partition facts.1
+  refine ⟨?_, ?_, ?_⟩
+  · rw [recorded]
+    exact toNat_mod_eight _ (align_down_8_and_7_eq_zero _)
+  · intro zero
+    rw [recorded] at zero
+    have access := facts.2
+    rw [zero] at access
+    simp only [bind, EStateM.bind,
+      JoltISA.Mmu.load_doubleword_zero _ config built aboveEight] at access
+    exact captured_zero_retire dst _ _ access
+  · intro inRam
+    rw [recorded] at inRam ⊢
+    exact JoltISA.Mmu.load_doubleword_below_heap_end _ _ inRam
+      (bind_ok_first _ _ _ _ _ facts.2)
+
+/-- A retired floor store records a nonzero aligned doubleword, and writes below
+`heap_end` when the recorded address is in RAM (at or above `RAM_START_ADDRESS`); for
+example, StoreB at ea 9 records 8, while a store into word zero cannot retire.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`, `addresses`)
+at `c6703570`. -/
+theorem HonestTrace.floor_store_properties {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (i : Nat) (ht : i < trace.rows.size) (base value : JoltISA.Src)
+    (imm mask offset : BitVec 64) (fault : ExceptionType) (partition : mask ||| offset = 7)
+    (selected : (trace.bytecode[(trace.rows[i]'ht).rowIndex].instruction =
+        .VirtualStoreB base value imm fault ∧ mask = 0) ∨
+      (trace.bytecode[(trace.rows[i]'ht).rowIndex].instruction =
+        .VirtualStoreH base value imm fault ∧ mask = 1) ∨
+      (trace.bytecode[(trace.rows[i]'ht).rowIndex].instruction =
+        .VirtualStoreW base value imm fault ∧ mask = 3)) :
+    let ea := JoltISA.sourceValue base (trace.rows[i]'ht).preState + imm
+    (ea - (ea &&& offset)).toNat % 8 = 0 ∧ ea - (ea &&& offset) ≠ 0 ∧
+      (JoltISA.RAM_START_ADDRESS ≤ (ea - (ea &&& offset)).toNat →
+        (ea - (ea &&& offset)).toNat <
+          (trace.rows[i]'ht).preState.jolt_device.memory_layout.heap_end.toNat) := by
+  obtain ⟨config, built, aboveEight⟩ := trace.preState_layout i ht
+  have facts := floor_store_access _ base value imm mask fault selected
+    (trace.row i ht).runtimeAdvice _ _ (trace.row i ht).executes
+  dsimp only [HonestTrace.row] at facts
+  have recorded := floor_recorded_address _ mask offset partition facts.1
+  refine ⟨?_, ?_, ?_⟩
+  · rw [recorded]
+    exact toNat_mod_eight _ (align_down_8_and_7_eq_zero _)
+  · intro zero
+    rw [recorded] at zero
+    have access := facts.2
+    obtain ⟨failure, fails⟩ := JoltISA.Mmu.store_doubleword_zero
+      (trace.rows[i]'ht).preState config built aboveEight (JoltISA.sourceValue value (trace.rows[i].preState))
+    rw [zero] at access
+    simp only [bind, EStateM.bind] at access
+    rw [fails] at access
+    cases access
+  · intro inRam
+    rw [recorded] at inRam ⊢
+    exact JoltISA.Mmu.store_doubleword_below_heap_end _ _ _ inRam
+      (bind_ok_first _ _ _ _ _ facts.2)
+
+/-- Each recorded RAM address lies on the doubleword grid used by the RAM witness.
+Native rows retire at multiples of eight; floor rows record their containing word,
+for example LoadH at effective address ten records eight.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`) at `c6703570`. -/
 theorem HonestTrace.ram_accesses_valid {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     ramAccessesValid trace := by
@@ -93,7 +281,97 @@ theorem HonestTrace.ram_accesses_valid {joltInstance : JoltInstance SourceInstru
       cases accesses
       unfold ramLowestAddress
       omega
+    · rename_i faultClass dst base imm fault selected
+      have aligned := (trace.floor_load_properties i.val i.isLt faultClass dst base imm
+        0 7 fault rfl (Or.inl ⟨selected, rfl⟩)).1
+      cases accesses
+      unfold ramLowestAddress
+      omega
+    · rename_i base value imm fault selected
+      have aligned := (trace.floor_store_properties i.val i.isLt base value imm
+        0 7 fault rfl (Or.inl ⟨selected, rfl⟩)).1
+      cases accesses
+      unfold ramLowestAddress
+      omega
+    · rename_i faultClass dst base imm fault selected
+      have aligned := (trace.floor_load_properties i.val i.isLt faultClass dst base imm
+        1 6 fault rfl (Or.inr (Or.inl ⟨selected, rfl⟩))).1
+      cases accesses
+      unfold ramLowestAddress
+      omega
+    · rename_i base value imm fault selected
+      have aligned := (trace.floor_store_properties i.val i.isLt base value imm
+        1 6 fault rfl (Or.inr (Or.inl ⟨selected, rfl⟩))).1
+      cases accesses
+      unfold ramLowestAddress
+      omega
+    · rename_i faultClass dst base imm fault selected
+      have aligned := (trace.floor_load_properties i.val i.isLt faultClass dst base imm
+        3 4 fault rfl (Or.inr (Or.inr ⟨selected, rfl⟩))).1
+      cases accesses
+      unfold ramLowestAddress
+      omega
+    · rename_i base value imm fault selected
+      have aligned := (trace.floor_store_properties i.val i.isLt base value imm
+        3 4 fault rfl (Or.inr (Or.inr ⟨selected, rfl⟩))).1
+      cases accesses
+      unfold ramLowestAddress
+      omega
     · cases accesses
+
+/-- Every RAM address the honest trace records (`TraceRow.ram_address`) at or above
+`RAM_START_ADDRESS` is below the starting layout's `heap_end`: each LD, SD and floor row
+retired its doubleword access, and Jolt's tracer asserts that an access in RAM starts
+below `heap_end`.
+For example, an SD at `heap_end - 8` can be recorded, but no row records `heap_end`.
+See jolt/tracer/src/emulator/mmu.rs (`assert_effective_address`) and
+jolt/tracer/src/instruction/floor_access.rs (`addresses`) at c6703570. -/
+theorem HonestTrace.ram_address_below_heap_end {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (i : Nat) (inTrace : i < trace.rows.size) (address : Nat)
+    (touches : (trace.rows[i]'inTrace).ram_address = some address)
+    (inRam : JoltISA.RAM_START_ADDRESS ≤ address) :
+    address < trace.initialState.jolt_device.memory_layout.heap_end.toNat := by
+  rw [← (trace_preState_ioSame trace i inTrace).1]
+  have runs := (trace.row i inTrace).executes
+  dsimp only [HonestTrace.row] at runs
+  unfold TraceRow.ram_address at touches
+  split at touches
+  · rename_i faultClass dst base imm isLoad
+    cases touches
+    rw [withRuntimeAdvice_load _ faultClass dst base imm isLoad] at runs
+    exact JoltISA.Mmu.load_doubleword_below_heap_end _ _ inRam
+      (execInstr_load_access faultClass dst base imm _ _ runs)
+  · rename_i base value imm isStore
+    cases touches
+    rw [withRuntimeAdvice_store _ base value imm isStore] at runs
+    exact JoltISA.Mmu.store_doubleword_below_heap_end _ _ _ inRam
+      (execInstr_store_access base value imm _ _ runs)
+  · rename_i faultClass dst base imm fault selected
+    cases touches
+    exact (trace.floor_load_properties i inTrace faultClass dst base imm 0 7 fault rfl
+      (Or.inl ⟨selected, rfl⟩)).2.2 inRam
+  · rename_i base value imm fault selected
+    cases touches
+    exact (trace.floor_store_properties i inTrace base value imm 0 7 fault rfl
+      (Or.inl ⟨selected, rfl⟩)).2.2 inRam
+  · rename_i faultClass dst base imm fault selected
+    cases touches
+    exact (trace.floor_load_properties i inTrace faultClass dst base imm 1 6 fault rfl
+      (Or.inr (Or.inl ⟨selected, rfl⟩))).2.2 inRam
+  · rename_i base value imm fault selected
+    cases touches
+    exact (trace.floor_store_properties i inTrace base value imm 1 6 fault rfl
+      (Or.inr (Or.inl ⟨selected, rfl⟩))).2.2 inRam
+  · rename_i faultClass dst base imm fault selected
+    cases touches
+    exact (trace.floor_load_properties i inTrace faultClass dst base imm 3 4 fault rfl
+      (Or.inr (Or.inr ⟨selected, rfl⟩))).2.2 inRam
+  · rename_i base value imm fault selected
+    cases touches
+    exact (trace.floor_store_properties i inTrace base value imm 3 4 fault rfl
+      (Or.inr (Or.inr ⟨selected, rfl⟩))).2.2 inRam
+  · cases touches
 
 namespace JoltConstraints
 
@@ -151,8 +429,10 @@ theorem ramAccess_remapped_some (params : WitnessParams)
   · refine ⟨b, ?_⟩
     simp [TraceWitness.remappedRamAddress, ht, hraw, hremap]
 
--- A row that accesses address 0 is a load of 0, since no SD row stores there, so its
--- read and write values are 0.
+/-- A memory row recording address zero has zero RAM read and write cells.
+Stores cannot retire there; for example, LoadH at effective address two reads
+the special zero doubleword and leaves it unchanged.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`) at `c6703570`. -/
 theorem ramValues_zero_at_zero {F : Type} [Field F]
     (params : WitnessParams) {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Fin params.traceLength)
@@ -163,34 +443,57 @@ theorem ramValues_zero_at_zero {F : Type} [Field F]
       (getElem trace.rows t.val ht).preState = some 0) :
     HonestWitness.RamReadValue (F := F) params trace t = 0 ∧
       TraceWitness.RamWriteValue (F := F) params trace t = 0 := by
+  have loadZero
+      (load : JoltMetadata.opcodeFlag trace.bytecode[(trace.rows[t.val]'ht).rowIndex].instruction
+        .Load = true) (rd : TraceWitness.RdWriteValue (F := F) params trace t = 0) :
+      HonestWitness.RamReadValue (F := F) params trace t = 0 ∧
+        TraceWitness.RamWriteValue (F := F) params trace t = 0 :=
+    ⟨(ramReadValue_of_load params trace t ht load).trans rd,
+      (ramWriteValue_of_load params trace t ht load).trans rd⟩
   unfold TraceWitness.ramAccessAddress at atZero
   split at atZero
-  · -- an LD loads 0
-    rename_i faultClass dst base imm isLoad
-    have loaded := trace.load_zero_captured t.val ht faultClass dst base imm isLoad
+  · rename_i faultClass dst base imm selected
+    have loaded := trace.load_zero_captured t.val ht faultClass dst base imm selected
       (Option.some.inj atZero)
-    -- the read and write values are both the loaded value
-    have readZero : HonestWitness.RamReadValue (F := F) params trace t = 0 := by
-      unfold HonestWitness.RamReadValue
-      rw [dif_pos ht]
-      dsimp only
-      split
-      · rw [isLoad]
-        simp [TraceWitness.rdValue, loaded]
-      · rename_i storeIs
-        rw [isLoad] at storeIs
-        cases storeIs
-      · rfl
-    have writeZero : TraceWitness.RamWriteValue (F := F) params trace t = 0 := by
-      unfold TraceWitness.RamWriteValue
-      rw [dif_pos ht]
-      dsimp only
-      rw [isLoad]
-      simp [TraceWitness.rdValue, loaded]
-    exact ⟨readZero, writeZero⟩
-  · -- no SD stores at address 0
-    rename_i base value imm isStore
-    exact absurd (Option.some.inj atZero) (trace.store_nonzero t.val ht base value imm isStore)
+    apply loadZero
+    · simp [selected, JoltMetadata.opcodeFlag]
+    · simp [TraceWitness.RdWriteValue, TraceWitness.rdValue, ht, selected, loaded]
+  · rename_i base value imm selected
+    exact False.elim ((trace.store_nonzero t.val ht base value imm selected)
+      (Option.some.inj atZero))
+  · rename_i faultClass dst base imm fault selected
+    have property := (trace.floor_load_properties t.val ht faultClass dst base imm
+      0 7 fault rfl (Or.inl ⟨selected, rfl⟩)).2.1
+    have loaded := property (Option.some.inj atZero)
+    apply loadZero
+    · simp [selected, JoltMetadata.opcodeFlag]
+    · simp [TraceWitness.RdWriteValue, TraceWitness.rdValue, ht, selected, loaded]
+  · rename_i base value imm fault selected
+    have property := (trace.floor_store_properties t.val ht base value imm
+      0 7 fault rfl (Or.inl ⟨selected, rfl⟩)).2.1
+    exact False.elim (property (Option.some.inj atZero))
+  · rename_i faultClass dst base imm fault selected
+    have property := (trace.floor_load_properties t.val ht faultClass dst base imm
+      1 6 fault rfl (Or.inr (Or.inl ⟨selected, rfl⟩))).2.1
+    have loaded := property (Option.some.inj atZero)
+    apply loadZero
+    · simp [selected, JoltMetadata.opcodeFlag]
+    · simp [TraceWitness.RdWriteValue, TraceWitness.rdValue, ht, selected, loaded]
+  · rename_i base value imm fault selected
+    have property := (trace.floor_store_properties t.val ht base value imm
+      1 6 fault rfl (Or.inr (Or.inl ⟨selected, rfl⟩))).2.1
+    exact False.elim (property (Option.some.inj atZero))
+  · rename_i faultClass dst base imm fault selected
+    have property := (trace.floor_load_properties t.val ht faultClass dst base imm
+      3 4 fault rfl (Or.inr (Or.inr ⟨selected, rfl⟩))).2.1
+    have loaded := property (Option.some.inj atZero)
+    apply loadZero
+    · simp [selected, JoltMetadata.opcodeFlag]
+    · simp [TraceWitness.RdWriteValue, TraceWitness.rdValue, ht, selected, loaded]
+  · rename_i base value imm fault selected
+    have property := (trace.floor_store_properties t.val ht base value imm
+      3 4 fault rfl (Or.inr (Or.inr ⟨selected, rfl⟩))).2.1
+    exact False.elim (property (Option.some.inj atZero))
   · cases atZero
 
 theorem ramReadValue_zero_of_noaccess {F : Type} [Field F]
@@ -267,7 +570,9 @@ theorem ramWriteValue_zero_of_remapped_none {F : Type} [Field F]
           contradiction
   · simp [TraceWitness.RamWriteValue, ht]
 
-/-- The captured write value differs from the read value only on stores. -/
+/-- A RAM write cell equals its read cell plus the store increment.
+For example, replacing word three by five gives increment two; loads give zero.
+Jolt's prover: `crates/jolt-witness/src/witnesses/increments.rs` (`RamInc`) at `c6703570`. -/
 theorem ramWriteValue_eq_read_add_inc {F : Type} [Field F]
     (params : WitnessParams) {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Fin params.traceLength) :
@@ -280,9 +585,11 @@ theorem ramWriteValue_eq_read_add_inc {F : Type} [Field F]
     all_goals simp [TraceWitness.RamWriteValue, HonestWitness.RamReadValue,
       HonestWitness.RamInc, JoltMetadata.circuitFlag, hi, ht]
     all_goals split <;> simp_all [JoltMetadata.opcodeFlag]
-    case h_3 =>
-      rename_i bad
-      exact False.elim (bad _ _ _ _ rfl rfl rfl rfl)
+    all_goals
+      rename_i excluded
+      first
+      | exact False.elim (excluded _ _ _ _ rfl rfl rfl rfl)
+      | exact False.elim (excluded _ _ _ _ _ rfl rfl rfl rfl rfl)
   · simp [TraceWitness.RamWriteValue, HonestWitness.RamReadValue,
       HonestWitness.RamInc, ht]
 

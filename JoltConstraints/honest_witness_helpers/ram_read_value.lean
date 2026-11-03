@@ -12,12 +12,14 @@ open TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [RamReadValue](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/ram.rs).
--- Rust: [trace_store](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/tracer/src/emulator/mmu.rs).
--- A load supplies its captured destination value. A store supplies the old word
--- from the full pre-state. HonestTrace.store_word_present proves its presence
--- from initialization and the preceding steps of this trace.
--- Other instructions and padding contribute zero.
+/-- The pre-access doubleword, cast to the field, with zero for other rows
+and padding.
+Loads use their captured destination; stores read the old word whose presence
+follows from this honest trace's initialization and execution.
+For example, a floor store at effective address 11 reads the old doubleword at 8.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`);
+Jolt's prover: `crates/jolt-witness/src/witnesses/ram.rs` (`RamReadValue`)
+at `c6703570`. -/
 noncomputable def RamReadValue [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>
@@ -25,13 +27,25 @@ noncomputable def RamReadValue [Field F] {joltInstance : JoltInstance SourceInst
       let row := trace.row t.val inBounds
       let instruction :=
         (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
+      let oldWord (address : BitVec 64)
+          (isStore : match instruction with
+            | .SD base _ imm => address = JoltISA.sourceValue base row.preState + imm
+            | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _
+            | .VirtualStoreW base _ imm _ =>
+                address = (JoltISA.sourceValue base row.preState + imm) &&& ~~~7
+            | _ => False) : F :=
+        let word := (JoltISA.trace_doubleword? row.preState address).get
+          (trace.store_word_present t.val inBounds address isStore)
+        (word.toNat : F)
       match hInstr : instruction with
-      | .LD _ _ _ _ => rdValue instruction row.postState
-      | .SD base value imm =>
-          let address := ((JoltISA.sourceValue base row.preState) + imm)
-          let word := (JoltISA.trace_doubleword? row.preState address).get
-            (trace.store_word_present t.val inBounds base value imm hInstr)
-          (word.toNat : F)
+      | .LD _ _ _ _ | .VirtualLoadB .. | .VirtualLoadH .. | .VirtualLoadW .. =>
+          rdValue instruction row.postState
+      | .SD base _ imm =>
+          oldWord (JoltISA.sourceValue base row.preState + imm) (by simp only [hInstr])
+      | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _
+      | .VirtualStoreW base _ imm _ =>
+          oldWord ((JoltISA.sourceValue base row.preState + imm) &&& ~~~7)
+            (by simp only [hInstr])
       | _ => 0
     else 0
 

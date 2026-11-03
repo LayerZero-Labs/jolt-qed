@@ -813,10 +813,10 @@ private theorem DivisionArithmeticRow.notStoresTerminationAt
       trace.bytecode[trace.rows[step].rowIndex].instruction) :
     ¬ trace.StoresTerminationAt step := by
   intro stored
-  unfold UntrustedAnswerRun.StoresTerminationAt at stored
-  split at stored
-  · simp_all [DivisionArithmeticRow]
-  · exact stored
+  obtain ⟨width, base, value, imm, ⟨fault, same⟩, _⟩ :=
+    (storeTouches_iff _ _).mp ((storesTerminationAt_iff trace step).mp stored)
+  rw [same] at arithmetic
+  cases width <;> exact arithmetic
 
 private theorem division_replay_finalRamWord
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
