@@ -18,9 +18,11 @@ The latest check of the soundness statement against Jolt's code is `reports/2026
 **Migration target:** `c6703570588e88033b8722bd4dec47c7f46f3b16`, the local `origin/main` of the fork `abiswas3/jolt`; this is not a pin update.
 Older findings below keep the revision at which they were established.
 
-The completeness theorem is `JoltInstance.completeness` (`Completeness/completeness.lean`): every instance in `JoltInstance.InLanguage` (`language.lean`) has private inputs and a witness that satisfy `AllConstraints`, given `JoltInstance.CompletenessAssumptions`.
-Its workhorse is `HonestTrace.allConstraints_corrected_sizes` (`Completeness/All.lean`), which builds the witness at corrected sizes, because Jolt's own RAM size can be one slot too small (#1951 item 4).
-`Trace.prover_config` models Jolt's checked sizing policy; when it accepts, so does the corrected policy (`HonestTrace.corrected_prover_config_isSome`).
+The completeness theorem is `JoltInstance.completeness` (`Completeness/completeness.lean`): for every instance that meets `JoltInstance.CompletenessAssumptions`, and every honest trace that meets the three conditions of `JoltInstance.InLanguage` (`language.lean`) with Jolt's prover config `config`, the honest witness at Jolt's own sizes (`HonestTrace.witness_params`) satisfies `AllConstraints`.
+The earlier existential form, some private inputs and some witness, is `JoltInstance.completeness_someWitness`, proved from it by unpacking `InLanguage`.
+Its workhorse is `HonestTrace.allConstraints_prover_sizes` (`Completeness/All.lean`).
+`Trace.prover_config` models Jolt's checked sizing policy, and `HonestTrace.witness_params` takes its trace length and RAM size.
+Jolt's RAM size can be one slot too small (#1951 item 4); that one fact is the known-false `HonestTrace.prover_config_holds_highest_slot`.
 
 **Source-language scope.** Completeness and soundness cover programs represented by `SourceInstruction`: the modeled RISC-V instructions and the listed Jolt custom instructions at opcode `0x5B`.
 Jolt's inline/precompile opcodes `0x0B` and `0x2B`, including the SHA-256 and Keccak inlines, and its field-inline opcode `0x7B` are outside this type.
@@ -47,7 +49,7 @@ If one is still open when the main proofs pass, escalate it.
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 1 | A run that does not panic and never stores to the termination word: an SDK guest exiting through `platform_exit` or `std::process::exit`, or a bare ELF that reaches `j .` first. The tracer records no write to the word, but `jolt-witness`'s `final_ram_state` sets its `RamValFinal` slot to 1 from the panic flag alone, while initial RAM and the increments give 0 | (38) stays `sorry`. The fix proposed in the issue changes only the SDK's exit paths, so a bare ELF stays unprovable |
 | [#1950](https://github.com/a16z/jolt/issues/1950), [#1951](https://github.com/a16z/jolt/issues/1951) item 2 | A store to the termination word is recorded but the device ignores it, so a later load reads 0 (`bug-report/ram-val-termination/`) | (37) stays `sorry`; `Trace.matches_outputs` leaves the termination word out, and `Represents.finalRam` excludes it |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the checked prover configuration rejects it | such runs have no checked `Trace.prover_config` |
-| [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` is one slot too small when the highest touched slot is a power of two (`bug-report/ram-k-off-by-one/`). The verifier's maximum is also one word short: `compute_max_ram_k` rounds `total_bytes / 8` down. When `heap_end` is not a multiple of 8 (`program_size` is not rounded), a program may access the word that straddles `heap_end`, and an honest run that does so gets no proof. The issue proposes `touched + 1` together with `div_ceil(8)` | `Trace.prover_config` preserves Jolt's formula. The separate `HonestTrace.corrected_prover_config` uses `touched + 1` for completeness. The discrepancy blocks the upper half of the verifier's RAM-size check (`ramSizeBounds`, via `HonestTrace.corrected_witness_params_ram_bounds`) |
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` is one slot too small when the highest touched slot is a power of two (`bug-report/ram-k-off-by-one/`). The verifier's maximum is also one word short: `compute_max_ram_k` rounds `total_bytes / 8` down. When `heap_end` is not a multiple of 8 (`program_size` is not rounded), a program may access the word that straddles `heap_end`, and an honest run that does so gets no proof. The issue proposes `touched + 1` together with `div_ceil(8)` | `Trace.prover_config` preserves Jolt's formula, and completeness uses Jolt's sizes. The first half breaks only `HonestTrace.prover_config_holds_highest_slot` (the highest touched word is below `ram_K`), which stays `sorry`, as Ari decided on 2026-11-03. At Jolt's sizes the verifier's RAM bounds are proved (`HonestTrace.witness_params_ram_bounds`), since `touched` is at most the word index of `heap_end`; the maximum's rounding down matters only together with the proposed `touched + 1`, which is why the issue pairs it with `div_ceil(8)`. The corrected policy `HonestTrace.corrected_prover_config` (`touched + 1`) is kept as a definition but no proof uses it |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 5 | Jolt's tracer loads only some ELF section kinds into RAM; preprocessing loads every section | Lean uses preprocessing's `memory_init` for both (`initialRam`, `program.lean`); see finding 3 of the 2026-10-29 report |
 
 ## Device memory
@@ -82,7 +84,7 @@ Premises or fields of the final theorems, with their source or reason.
 | A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | Modeling assumption, not a theorem premise: traces execute the expanded bytecode, while Jolt's tracer decodes each instruction from memory (`HonestTrace` docstring, `honest_trace.lean`) | a16z, 2026-10-07. The unused premise `codeUnchanged` was removed from soundness on 2026-11-03 with Ari's approval |
 | A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | ASSUMPTION in `finalRamWord` | a16z, 2026-10-07 |
 | No spoil assert fails | `Trace.SpoilAssertsPass`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): a spoiled run is meant to have no proof (`jolt-platform/src/spoil.rs`) |
-| Jolt's prover accepts the trace | `(trace.prover_config joltInstance).isSome`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): Jolt's prover refuses other traces (`ProverConfig::derive_from_dimensions`). Completeness uses the corrected sizes, so Jolt's undersized RAM ([#1951](https://github.com/a16z/jolt/issues/1951) item 4) needs no premise |
+| Jolt's prover accepts the trace | `(trace.prover_config joltInstance).isSome`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): Jolt's prover refuses other traces (`ProverConfig::derive_from_dimensions`). `JoltInstance.completeness` takes the accepted config `config` and uses Jolt's sizes; Jolt's undersized RAM ([#1951](https://github.com/a16z/jolt/issues/1951) item 4) is the known-false `HonestTrace.prover_config_holds_highest_slot`, not a premise |
 
 `TracerAddressChecks` quantifies over every private input and relaxed prefix with honest internal runtime advice and checks the next attempted row without assuming that execution succeeds.
 It checks permissions at the starting address in RAM and at every accessed byte below RAM; floor rows use `ea &&& ~~~7`.
@@ -99,9 +101,11 @@ No soundness proof has a `sorry`, and no blocker lemma was staged.
 The proof's structure is in `methods/soundness.md`, "The argument in brief".
 See the [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md).
 
-**Completeness.** On 2026-11-03, the migrated `#print axioms JoltInstance.completeness` lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
-The migrated completeness root and assembled theorem now build after the approved `WordEntry` repair.
-The working tree has these six completeness gaps, including Ari's two approved #1949 wrap lemmas; see the [Step 2 report](../reports/2026-11-03-constraints-migration-completeness.md).
+**Completeness.** On 2026-11-03 (Step 5), `JoltInstance.completeness` states that the honest witness at the sizes Jolt's prover picks satisfies `AllConstraints`; the earlier existential statement is `JoltInstance.completeness_someWitness`.
+`#print axioms` for both lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
+`lake build JoltConstraints.Completeness` and `lake build JoltConstraints.Completeness.completeness` pass.
+The working tree has these six completeness gaps, including Ari's two approved #1949 wrap lemmas and the #1951 item 4 lemma Ari approved on 2026-11-03; see the [Step 2 report](../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
+The verifier's RAM bounds at Jolt's sizes, `HonestTrace.witness_params_ram_bounds` (`Completeness/Helpers/VerifierSizes.lean:374`), are proved, including that both bounds compute.
 
 | Theorem | What it needs |
 |---|---|
@@ -110,7 +114,7 @@ The working tree has these six completeness gaps, including Ari's two approved #
 | (11) `HonestTrace.shiftData_address_noWrap` (`Completeness/RightLookupEqRightInputOtherwise.lean:49`) | false until #1949 is fixed: the signed address-plus-immediate sum must lie in `[0, 2^64)` on an actual ShiftData row of an honest trace |
 | (37) `honestWitness_ramValEqInitialPlusPrefixRamInc` | false until #1950 is fixed |
 | (38) `honestWitness_ramValFinalEqInitialPlusRamInc` | false until #1951 item 1 is fixed |
-| `HonestTrace.corrected_witness_params_ram_bounds` (`Completeness/Helpers/VerifierSizes.lean`) | The empty program is excluded by the `ImageNonempty` assumption. Lower half: proved once the minimum computes successfully; still to prove that both bounds compute successfully. Upper half: false until #1951 item 4 is fixed, because the verifier's maximum rounds the word count down |
+| `HonestTrace.prover_config_holds_highest_slot` (`prover_config_facts.lean:256`) | false until #1951 item 4 is fixed: Jolt's RAM size `K = pow2(max(h, imageEnd))` is the highest touched word index `h` itself when `h` is a power of two at least the image's end, so `h < K` fails and the RAM table misses word `h`; used only through `HonestTrace.prover_config_ram_fits` |
 
 No `bv_decide` remains in `JoltBytecode` or `JoltConstraints`; all 21 uses were replaced on 2026-10-23.
 
@@ -149,6 +153,7 @@ Ari approved on 2026-11-03 extending `PanicStoresOne`, `TerminationThenStall`, `
 The main theorem, `InLanguage`, assumptions and completeness files are unchanged by Step 4.
 The eleven migration items are in [constraints.md](constraints.md#migration-outline).
 See the [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md).
+Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every corrected-size helper to them; see the [Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
 
 ### Cleanup
 

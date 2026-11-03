@@ -122,8 +122,10 @@ theorem deriveFromDimensions_sizes (dimensions : ExecutionDimensions) (layout : 
 
 end ProverConfig
 
-/-- Rust's checked sizing policy. Completeness currently uses the separately
-named `corrected_prover_config`, whose RAM domain contains the highest slot. -/
+/-- Jolt's prover's checked sizing policy. Completeness uses its sizes
+(`HonestTrace.witness_params`); its RAM domain misses the highest touched slot when
+that slot is a power of two (a16z/jolt#1951 item 4,
+`HonestTrace.prover_config_holds_highest_slot`). -/
 def Trace.prover_config (joltInstance : JoltInstance SourceInstruction)
     (trace : Trace) : Option ProverConfig :=
   ProverConfig.deriveFromDimensions trace.execution_dimensions
