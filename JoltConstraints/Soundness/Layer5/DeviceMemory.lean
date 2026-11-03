@@ -57,7 +57,8 @@ def DeviceRamAgreement {F : Type} [Field F] {size : Nat}
 
 /-- The table entry at the layout's termination index is zero.
 The execution invariant requires this only before a termination store has occurred;
-for example, the LD in an exit SB expansion then reads zero before its SD.
+for example, the VirtualLoadB in an exit SB expansion then reads zero before
+its VirtualStoreB.
 This condition does not equate the table with the synthetic final termination word.
 See jolt/common/src/jolt_device.rs (`JoltDevice::load`, `JoltDevice::store`)
 and jolt/crates/jolt-witness/src/backend/trace/ram.rs (`final_ram_state`)
@@ -70,11 +71,12 @@ def TerminationTableZero {F : Type} [Field F] {size : Nat}
 
 /-- Memory agreement after appending one executed row to a prefix.
 `storedTermination` records whether the extended prefix has touched termination
-with an SD; its negation requires the next termination table entry to remain zero.
+with a store row (SD or VirtualStoreB/H/W); its negation requires the next
+termination table entry to remain zero.
 Both the next-cycle and final table agree on ordinary RAM and nontermination
 device words, using the appended trace's final image.
 For example, an output SD changes its selected output word, while a termination
-SD may change the excluded table word without changing the device.
+store may change the excluded table word without changing the device.
 See jolt/crates/jolt-witness/src/backend/trace/ram.rs (`final_ram_state`) and
 jolt/common/src/jolt_device.rs (`JoltDevice::store`) at 5def437f. -/
 def DeviceMemoryStepAgreement {F : Type} [Field F] {params : WitnessParams}
@@ -92,7 +94,8 @@ def DeviceMemoryStepAgreement {F : Type} [Field F] {params : WitnessParams}
       witness.RamValFinal step.postState ∧
     DeviceRamAgreement witness.RamValFinal extended)
 
-/-- The semantic effect needed from a device SD, independently of a witness.
+/-- The semantic effect needed from a device store row (SD or
+VirtualStoreB/H/W) at its accessed doubleword `address`, independently of a witness.
 The MMU succeeds, Sail and virtual registers stay fixed, and each nontermination
 device image word is updated exactly when its byte address is `address`.
 For example, an output store changes one image word even when it grows the buffer.
@@ -178,32 +181,36 @@ private theorem store_doubleword_panic (pre post : SailJoltState) (address value
         exact foldKeeps _ (by assumption)
       · cases stored
 
-private theorem sd_store_of_run (base source : Src) (imm answer : BitVec 64)
+/-- A non-store row keeps its device after runtime advice is applied: only
+VirtualAdvice changes under advice, and it is not a store.
+For example, an LD with its unused advice placeholder leaves the device fixed. -/
+private theorem device_of_not_store_flag (instruction : Instr) (advice : instruction.RuntimeAdvice)
+    (answer : BitVec 64) (noStore : JoltMetadata.opcodeFlag instruction .Store = false)
     (pre post : SailJoltState)
-    (runs : execWithTapeAnswer (.SD base source imm) answer pre = .ok RETIRE_SUCCESS post) :
-    ∃ result, Mmu.store_doubleword (sourceValue base pre + imm) (sourceValue source pre) pre =
-      .ok result post := by
-  simp only [execWithTapeAnswer, execInstr] at runs
-  cases baseRead : readSrc base pre with
-  | error err state => simp [bind, EStateM.bind, baseRead] at runs
-  | ok baseValue state =>
-    obtain ⟨stateSame, baseIs⟩ := readSrc_value base pre state baseValue baseRead
-    subst state
-    simp only [bind, EStateM.bind, baseRead] at runs
-    cases sourceRead : readSrc source pre with
-    | error err state => simp [sourceRead] at runs
-    | ok sourceWord state =>
-      obtain ⟨stateSame, sourceIs⟩ := readSrc_value source pre state sourceWord sourceRead
-      subst state
-      simp only [sourceRead] at runs
-      split at runs
-      · cases writes : Mmu.store_doubleword (baseValue + imm) sourceWord pre with
-        | error err state => simp [EStateM.bind, writes] at runs
-        | ok result state =>
-          cases result <;> simp only [EStateM.bind, writes, pure, EStateM.pure] at runs <;> cases runs <;>
-            exact ⟨_, by simpa only [baseIs, sourceIs] using writes⟩
-      · cases runs
+    (runs : execWithTapeAnswer (instruction.withRuntimeAdvice advice) answer pre =
+      .ok RETIRE_SUCCESS post) :
+    post.jolt_device = pre.jolt_device := by
+  have patchedFlag : JoltMetadata.opcodeFlag (instruction.withRuntimeAdvice advice) .Store = false := by
+    unfold Instr.withRuntimeAdvice
+    split
+    · rfl
+    · exact noStore
+  have kept := execWithTapeAnswer_device_of_not_store _ answer
+    (by
+      intro base source imm patched
+      rw [patched] at patchedFlag
+      cases patchedFlag)
+    (by
+      intro base source imm fault patched
+      rcases patched with patched | patched | patched <;> rw [patched] at patchedFlag <;>
+        cases patchedFlag)
+    _ _ _ runs
+  exact kept.symm
 
+/-- A row that completes no panic store keeps the device's panic flag: a store
+row writes its accessed doubleword away from the panic word, and every other row
+keeps the whole device. For example, an output SD leaves the flag false.
+Jolt's tracer at c6703570: `common/src/jolt_device.rs` (`JoltDevice::store`). -/
 private theorem row_panic_of_no_store
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun inst inputs) (i : Fin run.rows.size)
@@ -211,21 +218,18 @@ private theorem row_panic_of_no_store
       run.rows[i].preState.jolt_device.memory_layout.termination.toNat)
     (noStore : ¬ run.StoresPanicAt i) :
     run.rows[i].postState.jolt_device.panic = run.rows[i].preState.jolt_device.panic := by
-  classical
   have executed := run.executes i
-  rcases Classical.em (∃ base source imm, run.bytecode[run.rows[i].rowIndex].instruction = .SD base source imm) with store | store
-  · obtain ⟨base, source, imm, isStore⟩ := store
-    rw [withRuntimeAdvice_store _ base source imm isStore] at executed
-    obtain ⟨result, stored⟩ := sd_store_of_run base source imm _ _ _ executed
+  cases store : JoltMetadata.opcodeFlag run.bytecode[run.rows[i].rowIndex].instruction .Store with
+  | false =>
+    exact congrArg JoltDevice.panic
+      (device_of_not_store_flag _ _ (run.answers i) store _ _ executed)
+  | true =>
+    obtain ⟨width, base, source, imm, storeRow⟩ := storeRow_of_flag _ store
+    obtain ⟨result, stored⟩ := storeRow.store_of_run _ _ _ _ executed
     exact store_doubleword_panic _ _ _ _ ordered
-      (by simpa only [UntrustedAnswerRun.StoresPanicAt, isStore] using noStore) result stored
-  · have kept := execWithTapeAnswer_device_of_not_sd _ (run.answers i) (by
-      intro base source imm patched
-      unfold Instr.withRuntimeAdvice at patched
-      split at patched
-      · cases patched
-      · exact store ⟨base, source, imm, patched⟩) _ _ _ executed
-    exact congrArg JoltDevice.panic kept.symm
+      (fun touch => noStore ((storesPanicAt_iff run i).mpr ((storeTouches_iff _ _).mpr
+        ⟨width, base, source, imm, storeRow, touch⟩)))
+      result stored
 
 private theorem initial_panic_false {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun inst inputs) : run.initialState.jolt_device.panic = false := by
@@ -748,7 +752,7 @@ private theorem output_image_update (trace : Trace) (step : TraceRow trace.bytec
       omega
     simpa only [selected] using effect
 
-/-- An aligned output SD has the single-word image effect, including zero-filled
+/-- An aligned output store has the single-word image effect, including zero-filled
 growth of the output buffer; for example, storing to the second word of an empty
 buffer fills its first word with zeros.
 The ready run supplies buffer bounds and the initial-to-current device frame.
@@ -934,7 +938,7 @@ theorem device_panic_store_image
     config built current fixed.1 rfl address atPanic
 
 
-/-- A termination SD leaves the state and every compared device image word fixed.
+/-- A termination store leaves the state and every compared device image word fixed.
 For example, storing 9 changes only the excluded termination table entry.
 See jolt/common/src/jolt_device.rs (`JoltDevice::store`) at 5def437f. -/
 theorem device_termination_store_image
@@ -1442,18 +1446,18 @@ private theorem loadImageBytes_zero (device : JoltDevice) (address : Nat)
   unfold loadImageBytes
   split_ifs at region <;> simp_all
 
-private theorem ready_ld_panic_false {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
+/-- A ready load at `address` reads an unset panic flag when it touches the
+panic word: `panicFree`, from the panic restriction, rules out any earlier panic
+store. For example, the SDK panic SB's VirtualLoadB runs before its store. -/
+private theorem ready_load_panic_false {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun inst inputs) (next : Fin run.bytecode.size)
-    (pre : SailJoltState) (ready : run.NextStep next pre) (restricted : inst.PanicStoresOne)
-    (fault : LoadFaultClass) (destination : Dst) (base : Src) (imm : BitVec 64)
-    (instruction : run.bytecode[next].instruction = .LD fault destination base imm)
-    (touch : pre.jolt_device.is_panic (sourceValue base pre + imm).toNat = true) :
+    (pre : SailJoltState) (ready : run.NextStep next pre) (address : BitVec 64)
+    (panicFree : (∃ i : Fin run.rows.size, run.StoresPanicAt i) →
+      ¬ TouchesPanic pre.jolt_device address)
+    (touch : pre.jolt_device.is_panic address.toNat = true) :
     pre.jolt_device.panic = false := by
-  have noStore : ¬ ∃ i : Fin run.rows.size, run.StoresPanicAt i := by
-    intro stored
-    have rule := restricted inputs run next pre ready
-    rw [instruction] at rule
-    exact rule stored ⟨0, by decide, by simpa only [Nat.add_zero] using touch⟩
+  have noStore : ¬ ∃ i : Fin run.rows.size, run.StoresPanicAt i := fun stored =>
+    panicFree stored ⟨0, by decide, by simpa only [Nat.add_zero] using touch⟩
   rw [ready_observation SailJoltState.jolt_device (fun _ _ _ => rfl) run next pre ready]
   exact run_panic_false run noStore
 
@@ -1479,10 +1483,13 @@ private theorem mapped_load_raw (config : MemoryConfig) (pre : SailJoltState) (a
     ↓reduceIte] at checked
   exact checked offset small
 
-/-- A permitted device LD reads eight image bytes through both dispatch paths.
+/-- A permitted device load of the doubleword at `address` reads eight image
+bytes through both dispatch paths.
 `mapped` is the address-grid fact supplied by RAM selection, excluding low peripherals.
 Buffer regions use one shared byte sequence; panic and termination use their run history,
 and unmapped accesses must be at zero.
+`panicFree` and `terminationFree` come from the panic and termination restrictions:
+no panic or termination load follows a completed store to that word.
 At termination the readable word is zero and no earlier termination store exists.
 For example, an input buffer `[7]` supplies byte 7 followed by seven zero bytes.
 Writing the resulting register keeps every final image word unchanged.
@@ -1493,29 +1500,27 @@ theorem device_load_image_bytes
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun inst inputs) (next : Fin run.bytecode.size)
     (pre : SailJoltState) (ready : run.NextStep next pre)
-    (panicStoresOne : inst.PanicStoresOne) (terminationThenStall : inst.TerminationThenStall)
-    (fault : LoadFaultClass) (destination : Dst) (base : Src) (imm : BitVec 64)
-    (instructionIs : run.bytecode[next].instruction = .LD fault destination base imm)
-    (aligned : (sourceValue base pre + imm) &&& 7 = 0)
-    (below : (sourceValue base pre + imm).toNat < RAM_START_ADDRESS)
-    (checked : DoublewordAddressChecks pre.jolt_device (sourceValue base pre + imm) false)
-    (mapped : (sourceValue base pre + imm).toNat = 0 ∨ ∃ index : Nat,
-      (sourceValue base pre + imm).toNat =
-        ramLowestAddress run.initialState.jolt_device.memory_layout + 8 * index)
+    (destination : Dst) (address : BitVec 64)
+    (panicFree : (∃ i : Fin run.rows.size, run.StoresPanicAt i) →
+      ¬ TouchesPanic pre.jolt_device address)
+    (terminationFree : (∃ i : Fin run.rows.size, run.StoresTerminationAt i) →
+      ¬ TouchesTermination pre.jolt_device address)
+    (aligned : address &&& 7 = 0)
+    (below : address.toNat < RAM_START_ADDRESS)
+    (checked : DoublewordAddressChecks pre.jolt_device address false)
+    (mapped : address.toNat = 0 ∨ ∃ index : Nat,
+      address.toNat = ramLowestAddress run.initialState.jolt_device.memory_layout + 8 * index)
     (region : DeviceMemoryRegion)
-    (inRegion : deviceMemoryRegion pre.jolt_device (sourceValue base pre + imm).toNat = region)
+    (inRegion : deviceMemoryRegion pre.jolt_device address.toNat = region)
     (advice : run.bytecode[next].instruction.RuntimeAdvice) :
     ∃ bytes : Nat → BitVec 8,
-      (∀ offset < 8, pre.jolt_device.load? ((sourceValue base pre + imm).toNat + offset) =
-        some (bytes offset)) ∧
-      (∀ offset < 8, Mmu.load_raw? pre ((sourceValue base pre + imm).toNat + offset) =
-        some (bytes offset)) ∧
+      (∀ offset < 8, pre.jolt_device.load? (address.toNat + offset) = some (bytes offset)) ∧
+      (∀ offset < 8, Mmu.load_raw? pre (address.toNat + offset) = some (bytes offset)) ∧
       ((region = .panic ∨ region = .termination ∨ region = .unmapped) →
         TraceWitness.ramImageWord bytes 0 = 0) ∧
-      ((sourceValue base pre + imm).toNat = 0 → TraceWitness.ramImageWord bytes 0 = 0) ∧
+      (address.toNat = 0 → TraceWitness.ramImageWord bytes 0 = 0) ∧
       (∀ index : Nat,
-        (sourceValue base pre + imm).toNat =
-          ramLowestAddress run.initialState.jolt_device.memory_layout + 8 * index →
+        address.toNat = ramLowestAddress run.initialState.jolt_device.memory_layout + 8 * index →
         if index = (run.initialState.jolt_device.memory_layout.termination.toNat -
             ramLowestAddress run.initialState.jolt_device.memory_layout) / 8 then
           TraceWitness.ramImageWord bytes 0 = 0 ∧
@@ -1525,12 +1530,10 @@ theorem device_load_image_bytes
         { run.toTrace with rows := (run.rows.push
             ⟨next, advice, pre, afterWriteDst destination (TraceWitness.ramImageWord bytes 0) pre⟩) }
         index = TraceWitness.finalRamWord run.toTrace index) := by
-  let address := sourceValue base pre + imm
   let config := { inst.memory_config with program_size := some inst.program.program_size }
   obtain ⟨current, fixed, built, trustedFit, untrustedFit, inputFit, outputFit⟩ :=
     ready_device_data run next pre ready
-  have notPanicked := ready_ld_panic_false run next pre ready panicStoresOne
-    fault destination base imm instructionIs
+  have notPanicked := ready_load_panic_false run next pre ready address panicFree
   have reads := loadImageBytes_read config pre.jolt_device built address aligned below checked notPanicked
   have mappedCurrent : address.toNat = 0 ∨ ∃ index : Nat,
       address.toNat = ramLowestAddress pre.jolt_device.memory_layout + 8 * index := by
@@ -1543,7 +1546,7 @@ theorem device_load_image_bytes
     exact reads offset small
   · intro special
     apply loadImageBytes_zero
-    simpa only [address, inRegion] using special
+    simpa only [inRegion] using special
   · intro zero
     have low := layout_above_peripherals config pre.jolt_device.memory_layout built
     have free := pre.jolt_device.low_address_free config built (by omega) 0 (by decide)
@@ -1566,13 +1569,15 @@ theorem device_load_image_bytes
       refine ⟨?_, ?_⟩
       · simp only [loadImageBytes_word, selected, Bool.or_true, ↓reduceIte]
       · intro earlier
-        exact termination_next_ld_disjoint terminationThenStall run next pre ready earlier
-          fault destination base imm instructionIs ⟨0, by decide, by simpa only [Nat.add_zero] using selected⟩
+        exact terminationFree earlier ⟨0, by decide, by simpa only [Nat.add_zero] using selected⟩
     · apply loadImageBytes_image run.toTrace pre.jolt_device config current fixed.1 built
         trustedFit untrustedFit inputFit outputFit address.toNat index localIndex below notPanicked
       simpa only [fixed.1] using termination
 
-
+/-- A permitted device load of the doubleword at `address` reads one word through
+both dispatch paths, and that word is the table value RamReadValue.
+The hypotheses are those of `device_load_image_bytes` plus RAM agreement.
+For example, a load of the first input word reads the input buffer's word. -/
 private theorem device_load_read
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
@@ -1580,23 +1585,25 @@ private theorem device_load_read
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (t : Fin params.traceLength) (run : UntrustedAnswerRun inst inputs)
     (next : Fin run.bytecode.size) (pre : SailJoltState) (ready : run.NextStep next pre)
-    (panicStoresOne : inst.PanicStoresOne) (terminationThenStall : inst.TerminationThenStall)
-    (fault : LoadFaultClass) (destination : Dst) (base : Src) (imm : BitVec 64)
-    (instructionIs : run.bytecode[next].instruction = .LD fault destination base imm)
-    (encoded : witness.RamAddress t = ((sourceValue base pre + imm).toNat : F))
-    (aligned : (sourceValue base pre + imm) &&& 7 = 0)
-    (below : (sourceValue base pre + imm).toNat < RAM_START_ADDRESS)
-    (checked : DoublewordAddressChecks pre.jolt_device (sourceValue base pre + imm) false)
+    (destination : Dst) (address : BitVec 64)
+    (panicFree : (∃ i : Fin run.rows.size, run.StoresPanicAt i) →
+      ¬ TouchesPanic pre.jolt_device address)
+    (terminationFree : (∃ i : Fin run.rows.size, run.StoresTerminationAt i) →
+      ¬ TouchesTermination pre.jolt_device address)
+    (encoded : witness.RamAddress t = (address.toNat : F))
+    (aligned : address &&& 7 = 0)
+    (below : address.toNat < RAM_START_ADDRESS)
+    (checked : DoublewordAddressChecks pre.jolt_device address false)
     (device : DeviceRamAgreement (fun index => witness.RamVal index t) run.toTrace)
     (terminationWord : (¬ ∃ i : Fin run.rows.size, run.StoresTerminationAt i) →
       TerminationTableZero run.initialState.jolt_device.memory_layout
         (fun index => witness.RamVal index t))
     (region : DeviceMemoryRegion)
-    (inRegion : deviceMemoryRegion pre.jolt_device (sourceValue base pre + imm).toNat = region)
+    (inRegion : deviceMemoryRegion pre.jolt_device address.toNat = region)
     (advice : run.bytecode[next].instruction.RuntimeAdvice) :
     ∃ value : BitVec 64,
-      read_doubleword? pre.jolt_device.load? (sourceValue base pre + imm).toNat = some value ∧
-      read_doubleword? (Mmu.load_raw? pre) (sourceValue base pre + imm).toNat = some value ∧
+      read_doubleword? pre.jolt_device.load? address.toNat = some value ∧
+      read_doubleword? (Mmu.load_raw? pre) address.toNat = some value ∧
       ((region = .panic ∨ region = .termination ∨ region = .unmapped) → value = 0) ∧
       witness.RamReadValue t = (value.toNat : F) ∧
       (∀ index : Nat, TraceWitness.finalRamWord
@@ -1605,13 +1612,12 @@ private theorem device_load_read
         TraceWitness.finalRamWord run.toTrace index) := by
   have selection := device_address_selection bound context equations t _ encoded
   rw [← initial_state_memory_layout context run.initialized] at selection
-  have mapped : (sourceValue base pre + imm).toNat = 0 ∨ ∃ index : Nat,
-      (sourceValue base pre + imm).toNat =
-        ramLowestAddress run.initialState.jolt_device.memory_layout + 8 * index :=
+  have mapped : address.toNat = 0 ∨ ∃ index : Nat,
+      address.toNat = ramLowestAddress run.initialState.jolt_device.memory_layout + 8 * index :=
     selection.imp id (fun ⟨chosen, _, addressIs⟩ => ⟨chosen.val, addressIs⟩)
   obtain ⟨bytes, deviceBytes, rawBytes, specialZero, zeroWord, word, image⟩ :=
-    device_load_image_bytes run next pre ready panicStoresOne terminationThenStall
-      fault destination base imm instructionIs aligned below checked mapped region inRegion advice
+    device_load_image_bytes run next pre ready destination address panicFree terminationFree
+      aligned below checked mapped region inRegion advice
   refine ⟨TraceWitness.ramImageWord bytes 0, ?_, ?_, specialZero, ?_, image⟩
   · exact read_doubleword_of_image_bytes _ bytes _ 0 (by simpa only [Nat.zero_add] using deviceBytes)
   · exact read_doubleword_of_image_bytes _ bytes _ 0 (by simpa only [Nat.zero_add] using rawBytes)
@@ -1671,18 +1677,22 @@ private theorem device_load_agreement
         equations.ramValFinalEqInitialPlusRamInc index t last, zero, add_zero]
     exact ⟨ramFinal last, same.symm ▸ deviceSame⟩
 
-/-- An LD step for each `region`, using a reachable ready prefix and
+/-- A load-row step for each `region`, using a reachable ready prefix and
 agreement only on the live registers, including its base operand.
-The value read is the device doubleword and its field encoding is `RdWriteValue`.
+The row is LD or VirtualLoadB/H/W; it loads its accessed doubleword
+`width.accessed (base + imm)` from the device, and that value's field encoding
+is `RdWriteValue`.
 Panic and termination loads are permitted only before their respective stores,
 and an admissible unmapped load is at address zero; all three cases read zero.
-For example, loading a one-byte input `[7]` at its aligned start reads word 7.
+For example, loading a one-byte input `[7]` at its aligned start reads word 7,
+and VirtualLoadB one byte later reads the same word.
 The appended trace keeps device and ordinary RAM agreement and the termination
 invariant, and the destination becomes live in the next register column.
 See jolt/tracer/src/instruction/ld.rs (`LD::exec`),
+jolt/tracer/src/instruction/floor_access.rs (`load`) at c6703570,
 jolt/tracer/src/emulator/mmu.rs (`Mmu::load_doubleword_raw`, `Mmu::load_raw`),
 and jolt/common/src/jolt_device.rs (`JoltDevice::load`) at 5def437f. -/
-theorem ld_device_step
+theorem load_device_step
     {F : Type} [Field F] (joltField : JoltField F)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     {params : WitnessParams} (witness : WitnessType F params)
@@ -1695,13 +1705,13 @@ theorem ld_device_step
     (terminationThenStall : joltInstance.TerminationThenStall)
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (bytecodeEq : run.bytecode = context.bytecode)
-    (t : Fin params.traceLength) (atCut : t.val = run.rows.size)
+    (t : Fin params.traceLength)
     (next : Fin run.bytecode.size) (pre : SailJoltState)
     (ready : run.NextStep next pre)
     (slot : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness slot t = 1) (slotIs : slot.val = next.val + 1)
-    (fault : LoadFaultClass) (destination : Dst) (base : Src) (imm : BitVec 64)
-    (instructionIs : run.bytecode[next].instruction = .LD fault destination base imm)
+    {width : MemoryWidth} {destination : Dst} {base : Src} {imm : BitVec 64}
+    (loadRow : LoadRow run.bytecode[next].instruction width destination base imm)
     (live : Fin 128 → Prop) (registers : RegisterAgreementOn live witness t pre)
     (baseLive : live (TraceWitness.sourceRegisterAddress base))
     (ram : OrdinaryRamAgreement run.initialState.jolt_device.memory_layout
@@ -1710,17 +1720,19 @@ theorem ld_device_step
     (terminationWord : (¬ ∃ i : Fin run.rows.size, run.StoresTerminationAt i) →
       TerminationTableZero run.initialState.jolt_device.memory_layout
         (fun index => witness.RamVal index t))
-    (belowRam : (sourceValue base pre + imm).toNat < RAM_START_ADDRESS)
+    (belowRam : (width.accessed (sourceValue base pre + imm)).toNat < RAM_START_ADDRESS)
     (region : DeviceMemoryRegion)
-    (inRegion : deviceMemoryRegion pre.jolt_device (sourceValue base pre + imm).toNat = region)
+    (inRegion : deviceMemoryRegion pre.jolt_device
+      (width.accessed (sourceValue base pre + imm)).toNat = region)
     (answer : BitVec 64) (advice : run.bytecode[next].instruction.RuntimeAdvice) :
     ∃ value : BitVec 64,
       let post := afterWriteDst destination value pre
       let step : TraceRow run.bytecode :=
         { rowIndex := next, runtimeAdvice := advice, preState := pre, postState := post }
-      read_doubleword? pre.jolt_device.load? (sourceValue base pre + imm).toNat = some value ∧
+      read_doubleword? pre.jolt_device.load?
+        (width.accessed (sourceValue base pre + imm)).toNat = some value ∧
       ((region = .panic ∨ region = .termination ∨ region = .unmapped) → value = 0) ∧
-      witness.RamAddress t = ((sourceValue base pre + imm).toNat : F) ∧
+      witness.RamAddress t = ((width.accessed (sourceValue base pre + imm)).toNat : F) ∧
       witness.RdWriteValue t = (value.toNat : F) ∧
       execWithTapeAnswer (run.bytecode[next].instruction.withRuntimeAdvice advice) answer pre =
         .ok RETIRE_SUCCESS post ∧
@@ -1735,51 +1747,44 @@ theorem ld_device_step
   have rowIs : bytecodeRow context.bytecode slot.val = some run.bytecode[next] := by
     rw [← bytecodeEq, slotIs]
     simp [bytecodeRow]
-  have canonical : JoltRegisterEncoding.sourceIsCanonical base = true := by
-    have both : JoltRegisterEncoding.destinationIsCanonical destination = true ∧
-        JoltRegisterEncoding.sourceIsCanonical base = true := by
-      simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true]
-        using (bytecodeRow_rowOk context rowIs).canonical
-    exact both.2
-  have baseIs := registers.rs1Value bound context equations selected rowIs base canonical
-    (by rw [instructionIs]; rfl) baseLive
-  have encoded := ld_address_encoded bound context equations regionFits t slot selected
-    _ rowIs fault destination base (sourceValue base pre) imm instructionIs baseIs
+  have facts := loadRow.metadata
+  have canonical := loadRow.canonical context rowIs
+  have baseIs := registers.rs1Value bound context equations selected rowIs base canonical.2
+    facts.rs1Register baseLive
+  obtain ⟨encoded, naturallyAligned, -⟩ := AccessRow.address_encoded joltField context equations
+    selected rowIs loadRow.access regionFits (sourceValue base pre) baseIs
   have aligned := ramAddress_mask_aligned bound context equations t _ encoded
-  have checked := ld_address_checks addressChecks run next pre ready
-    fault destination base imm instructionIs
+  have checked := loadRow.address_checks addressChecks run next pre ready
   obtain ⟨value, deviceRead, rawRead, specialZero, readValue, sameImage⟩ :=
-    device_load_read bound context equations t run next pre ready panicStoresOne
-      terminationThenStall fault destination base imm instructionIs encoded aligned belowRam
-      checked device terminationWord region inRegion advice
-  have loadFlag : witness.OpFlags .Load t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
-      JoltMetadata.opcodeFlag] using
+    device_load_read bound context equations t run next pre ready destination _
+      (loadRow.panic_free panicStoresOne run next pre ready)
+      (loadRow.termination_free terminationThenStall run next pre ready)
+      encoded aligned belowRam checked device terminationWord region inRegion advice
+  have loadOne : witness.OpFlags .Load t = 1 := by
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load] using
       opFlag_of_selected_bytecode bound context equations .Load t slot selected
   have written : witness.RdWriteValue t = (value.toNat : F) := by
     have relation := equations.ramReadEqRdWriteIfLoad t
-    rw [loadFlag, one_mul, readValue] at relation
+    rw [loadOne, one_mul, readValue] at relation
     exact (sub_eq_zero.mp relation).symm
-  have loaded : Mmu.load_doubleword (sourceValue base pre + imm) pre =
+  have loaded : Mmu.load_doubleword (width.accessed (sourceValue base pre + imm)) pre =
       .ok (.Ok value) pre := by
     simp only [Mmu.load_doubleword, Mmu.toNat_mod_eight_of_align aligned,
       ne_self_iff_false, ↓reduceIte, Nat.not_le.mpr belowRam, rawRead]
-  have rule : execWithTapeAnswer (run.bytecode[next].instruction.withRuntimeAdvice advice)
-      answer pre = (do writeDst destination value; pure RETIRE_SUCCESS) pre := by
-    have baseRead := (registers.read base canonical baseLive).1
-    rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
-    simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, baseRead,
-      aligned, ↓reduceIte, loaded, pure, EStateM.pure]
+  have baseRead := (registers.read base canonical.2 baseLive).1
   obtain ⟨output, executed, registerNext⟩ := registerWriteOn_step context equations selected rowIs
-    joltField registers destination (by rw [instructionIs]; rfl) value written answer advice rule
+    joltField registers destination facts.destinationIs value written answer advice
+    (loadRow.exec_rule pre baseRead naturallyAligned value loaded answer advice)
   refine ⟨value, deviceRead, specialZero, encoded, output, executed, registerNext, ?_⟩
   exact device_load_agreement context equations t run.toTrace
     ⟨next, advice, pre, afterWriteDst destination value pre⟩
     (initial_state_memory_layout context run.initialized) ram device _ terminationWord
     (by cases destination <;> rfl) sameImage
-    (fun index => ram_write_effect_zero_of_load bound context equations t loadFlag index)
+    (fun index => ram_write_effect_zero_of_load bound context equations t loadOne index)
 
-/-- An SD step for each device `region`.
+/-- A store-row step for each device `region`.
+The row is SD or VirtualStoreB/H/W; it stores its value source to its accessed
+doubleword `width.accessed (base + imm)`.
 The address restriction excludes trusted advice, untrusted advice, inputs and
 unmapped addresses; the remaining cases are output, panic and termination.
 An output store writes its eight little-endian bytes and zero-fills output gaps.
@@ -1790,9 +1795,10 @@ when the output buffer was empty.
 The live registers and both memory agreements persist, and termination stays
 zero whenever neither the old prefix nor this store touched it.
 See jolt/tracer/src/instruction/sd.rs (`SD::exec`),
+jolt/tracer/src/instruction/floor_access.rs (`store`) at c6703570,
 jolt/tracer/src/emulator/mmu.rs (`Mmu::store_doubleword_raw`, `Mmu::store_raw`),
 and jolt/common/src/jolt_device.rs (`JoltDevice::store`) at 5def437f. -/
-theorem sd_device_step
+theorem store_device_step
     {F : Type} [Field F] (joltField : JoltField F)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     {params : WitnessParams} (witness : WitnessType F params)
@@ -1804,13 +1810,13 @@ theorem sd_device_step
     (panicStoresOne : joltInstance.PanicStoresOne)
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (bytecodeEq : run.bytecode = context.bytecode)
-    (t : Fin params.traceLength) (atCut : t.val = run.rows.size)
+    (t : Fin params.traceLength)
     (next : Fin run.bytecode.size) (pre : SailJoltState)
     (ready : run.NextStep next pre)
     (slot : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness slot t = 1) (slotIs : slot.val = next.val + 1)
-    (base source : Src) (imm : BitVec 64)
-    (instructionIs : run.bytecode[next].instruction = .SD base source imm)
+    {width : MemoryWidth} {base source : Src} {imm : BitVec 64}
+    (storeRow : StoreRow run.bytecode[next].instruction width base source imm)
     (live : Fin 128 → Prop) (registers : RegisterAgreementOn live witness t pre)
     (baseLive : live (TraceWitness.sourceRegisterAddress base))
     (sourceLive : live (TraceWitness.sourceRegisterAddress source))
@@ -1820,9 +1826,10 @@ theorem sd_device_step
     (terminationWord : (¬ ∃ i : Fin run.rows.size, run.StoresTerminationAt i) →
       TerminationTableZero run.initialState.jolt_device.memory_layout
         (fun index => witness.RamVal index t))
-    (belowRam : (sourceValue base pre + imm).toNat < RAM_START_ADDRESS)
+    (belowRam : (width.accessed (sourceValue base pre + imm)).toNat < RAM_START_ADDRESS)
     (region : DeviceMemoryRegion)
-    (inRegion : deviceMemoryRegion pre.jolt_device (sourceValue base pre + imm).toNat = region)
+    (inRegion : deviceMemoryRegion pre.jolt_device
+      (width.accessed (sourceValue base pre + imm)).toNat = region)
     (answer : BitVec 64) (advice : run.bytecode[next].instruction.RuntimeAdvice) :
     ∃ post : SailJoltState,
       let step : TraceRow run.bytecode :=
@@ -1831,7 +1838,7 @@ theorem sd_device_step
       (region = .panic → sourceValue source pre = 1 ∧
         post = { pre with jolt_device := { pre.jolt_device with panic := true } }) ∧
       (region = .termination → post = pre) ∧
-      witness.RamAddress t = ((sourceValue base pre + imm).toNat : F) ∧
+      witness.RamAddress t = ((width.accessed (sourceValue base pre + imm)).toNat : F) ∧
       witness.RamWriteValue t = ((sourceValue source pre).toNat : F) ∧
       execWithTapeAnswer (run.bytecode[next].instruction.withRuntimeAdvice advice) answer pre =
         .ok RETIRE_SUCCESS post ∧
@@ -1839,54 +1846,41 @@ theorem sd_device_step
         RegisterAgreementOn live witness ⟨t.val + 1, bound⟩ post) ∧
       DeviceMemoryStepAgreement witness t run.toTrace step
         ((∃ i : Fin run.rows.size, run.StoresTerminationAt i) ∨
-          TouchesTermination pre.jolt_device (sourceValue base pre + imm)) := by
+          TouchesTermination pre.jolt_device (width.accessed (sourceValue base pre + imm))) := by
   have bound := two_pow_127_lt_char joltField
   have rowIs : bytecodeRow context.bytecode slot.val = some run.bytecode[next] := by
     rw [← bytecodeEq, slotIs]
     simp [bytecodeRow]
-  have canonical := sd_canonical context rowIs instructionIs
+  have facts := storeRow.metadata
+  have canonical := storeRow.canonical context rowIs
   have baseIs := registers.rs1Value bound context equations selected rowIs base canonical.1
-    (by rw [instructionIs]; rfl) baseLive
-  have encoded := sd_address_encoded bound context equations regionFits t slot selected
-    _ rowIs base source (sourceValue base pre) imm instructionIs baseIs
+    facts.rs1Register baseLive
+  obtain ⟨encoded, naturallyAligned, -⟩ := AccessRow.address_encoded joltField context equations
+    selected rowIs storeRow.access regionFits (sourceValue base pre) baseIs
   have aligned := ramAddress_mask_aligned bound context equations t _ encoded
-  have sourceIs := registers.rs2Value bound context equations selected rowIs source canonical.2
-    (by rw [instructionIs]; rfl) sourceLive
-  have store : witness.OpFlags .Store t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
-      JoltMetadata.opcodeFlag] using
-      opFlag_of_selected_bytecode bound context equations .Store t slot selected
-  have stored : witness.RamWriteValue t = ((sourceValue source pre).toNat : F) := by
-    have relation := equations.rs2EqRamWriteIfStore t
-    rw [store, one_mul, sourceIs] at relation
-    exact (sub_eq_zero.mp relation).symm
-  have checked := sd_address_checks addressChecks run next pre ready base source imm instructionIs
+  have stored := store_write_value joltField context equations selected rowIs storeRow
+    registers sourceLive
+  have checked := storeRow.address_checks addressChecks run next pre ready
   obtain ⟨allowed, nonzero, panicTouch, terminationTouch⟩ :=
     device_store_cases run next pre ready _ belowRam checked region inRegion
-  have panicOne : region = .panic → sourceValue source pre = 1 := by
-    intro isPanic
-    have rule := panicStoresOne privateInputs run next pre ready
-    rw [instructionIs] at rule
-    exact rule (panicTouch isPanic)
+  have panicOne : region = .panic → sourceValue source pre = 1 := fun isPanic =>
+    storeRow.panic_value panicStoresOne run next pre ready (panicTouch isPanic)
   obtain ⟨post, panicPost, terminationPost, result⟩ := device_store_result run next pre ready
     _ (sourceValue source pre) aligned belowRam checked region inRegion allowed panicOne advice
   obtain ⟨chosen, one, addressIs⟩ :=
     (device_address_selection bound context equations t _ encoded).resolve_left nonzero
   rw [← initial_state_memory_layout context run.initialized] at addressIs
   refine ⟨post, allowed, panicPost, terminationPost, encoded, stored, ?_, ?_, ?_⟩
-  · have baseRead := (registers.read base canonical.1 baseLive).1
-    have sourceRead := (registers.read source canonical.2 sourceLive).1
-    rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
-    simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, baseRead, sourceRead,
-      aligned, ↓reduceIte, result.stored, pure, EStateM.pure]
+  · exact storeRow.exec_rule pre post (registers.read base canonical.1 baseLive).1
+      (registers.read source canonical.2 sourceLive).1 naturallyAligned true result.stored
+      answer advice
   · intro nextCycle
     have after : RegisterAgreementOn live witness t post := by
       refine ⟨result.sail ▸ registers.present, ?_⟩
       intro register member
       rw [sourceValue_of_host_frame _ pre post result.sail result.vregs]
       exact registers.values register member
-    exact after.noWrite bound context equations nextCycle slot selected rowIs
-      (by rw [instructionIs]; rfl)
+    exact after.noWrite bound context equations nextCycle slot selected rowIs facts.noDestination
   · exact device_store_agreement bound context equations t run.toTrace
       ⟨next, advice, pre, post⟩ _ _ result chosen one addressIs belowRam stored ram device
       _ terminationWord (terminationTouch chosen.val addressIs)

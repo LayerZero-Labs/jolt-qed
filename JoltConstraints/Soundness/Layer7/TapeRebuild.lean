@@ -1740,8 +1740,10 @@ theorem rebuild_matches_outputs
   simpa only [deviceEq] using outputs
 
 /-- The row slot and the base-register value agree, so RAM accesses use the
-same address in the original run and the replay. For example, an LD with
-base value 24 and immediate 8 accesses address 32 in both runs. -/
+same recorded address in the original run and the replay for all memory widths.
+For example, a floor halfword row at effective address 10 records 8 in both runs.
+The sole possible pre-state discrepancy belongs to a VirtualMULI row, which
+has no RAM address, so all memory rows share the same register-agreement argument. -/
 private theorem RebuildAgreement.ram_address_eq
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -1753,39 +1755,19 @@ private theorem RebuildAgreement.ram_address_eq
     (oldAt : original.rows[i]? = some old)
     (newAt : replay.rows[i]? = some new) :
     old.ram_address = new.ram_address := by
+  classical
   obtain ⟨sameIndex, _, _, samePre, _⟩ := agreement.rows i old new oldAt newAt
   have sameSlot := agreement.slot_eq old new sameIndex
-  unfold TraceRow.ram_address
-  rw [sameSlot]
-  split <;> try rfl
-  · rename_i instr faultClass dst base imm heq
-    have oldInstr : original.bytecode[old.rowIndex].instruction =
-        .LD faultClass dst base imm := by
-      rw [sameSlot]
-      exact heq
-    have slotInstruction :
-        (original.bytecode[old.rowIndex.val]?.map (·.instruction)) =
-          some (.LD faultClass dst base imm) := by
-      simpa only [Array.getElem?_eq_getElem old.rowIndex.isLt,
-        Option.map_some, Fin.getElem_fin, Option.some.injEq] using oldInstr
-    have sameState := samePre.pre_same_of_ne_muli
-      (.LD faultClass dst base imm) slotInstruction (by intros; simp)
-    rw [heq]
-    simp [sameState.sourceValue_eq base]
-  · rename_i instr base value imm heq
-    have oldInstr : original.bytecode[old.rowIndex].instruction =
-        .SD base value imm := by
-      rw [sameSlot]
-      exact heq
-    have slotInstruction :
-        (original.bytecode[old.rowIndex.val]?.map (·.instruction)) =
-          some (.SD base value imm) := by
-      simpa only [Array.getElem?_eq_getElem old.rowIndex.isLt,
-        Option.map_some, Fin.getElem_fin, Option.some.injEq] using oldInstr
-    have sameState := samePre.pre_same_of_ne_muli
-      (.SD base value imm) slotInstruction (by intros; simp)
-    rw [heq]
-    simp [sameState.sourceValue_eq base]
+  rcases Classical.em (∃ dst src imm,
+      original.bytecode[old.rowIndex].instruction = .VirtualMULI dst src imm) with muli | muli
+  · obtain ⟨dst, src, imm, instruction⟩ := muli
+    simp only [TraceRow.ram_address, ← sameSlot, instruction]
+  · have slotInstruction : (original.bytecode[old.rowIndex.val]?.map (·.instruction)) =
+        some original.bytecode[old.rowIndex].instruction := by
+      simp only [Array.getElem?_eq_getElem old.rowIndex.isLt, Option.map_some, Fin.getElem_fin]
+    have sameState := samePre.pre_same_of_ne_muli _ slotInstruction
+      (fun dst src imm instruction => muli ⟨dst, src, imm, instruction⟩)
+    simp only [TraceRow.ram_address, ← sameSlot, sameState.sourceValue_eq]
 
 /-- Replay preserves row count, the final jump flag and observed RAM bounds. -/
 theorem RebuildAgreement.execution_dimensions_eq

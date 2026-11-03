@@ -2,6 +2,7 @@ import JoltConstraints.Soundness.Layer7.StallSuffix
 import JoltConstraints.Soundness.Layer7.LastJump
 import JoltConstraints.Soundness.Layer5.TerminationRestriction
 import JoltConstraints.Soundness.Layer5.PanicRestriction
+import JoltConstraints.Soundness.Layer5.MemoryRows
 import JoltConstraints.Soundness.Layer3.Address
 import JoltConstraints.Completeness.Helpers.IOSetupFrame
 
@@ -152,23 +153,9 @@ theorem UntrustedAnswerRun.truncate_storesTerminationAt
   have hrow : (run.rows.extract 0 n)[j] = run.rows[i] := by
     change (run.rows.extract 0 n)[i.val]'j.isLt = run.rows[i.val]'i.isLt
     simp only [Array.getElem_extract, Nat.zero_add]
-  change (match run.bytecode[(run.rows.extract 0 n)[j].rowIndex].instruction with
-    | .SD base _ imm => TouchesTermination (run.rows.extract 0 n)[j].preState.jolt_device
-        (sourceValue base (run.rows.extract 0 n)[j].preState + imm)
-    | _ => False)
-  have hs := congrArg (fun row : TraceRow run.bytecode =>
-    match run.bytecode[row.rowIndex].instruction with
-    | .SD base _ imm => TouchesTermination row.preState.jolt_device
-        (sourceValue base row.preState + imm)
-    | _ => False) hrow
-  change (match run.bytecode[(run.rows.extract 0 n)[j].rowIndex].instruction with
-    | .SD base _ imm => TouchesTermination (run.rows.extract 0 n)[j].preState.jolt_device
-        (sourceValue base (run.rows.extract 0 n)[j].preState + imm)
-    | _ => False) = (match run.bytecode[run.rows[i].rowIndex].instruction with
-    | .SD base _ imm => TouchesTermination run.rows[i].preState.jolt_device
-        (sourceValue base run.rows[i].preState + imm)
-    | _ => False) at hs
-  exact Eq.mpr hs stored
+  change storeTouches TouchesTermination (run.rows.extract 0 n)[j]
+  rw [hrow]
+  exact (storesTerminationAt_iff run i).mp stored
 
 /-- Reading row `k` before the cut gives the same optional row in the prefix.
 For example, row 1 is unchanged by a cut after row 3. -/
@@ -641,9 +628,9 @@ private theorem termination_effect_in_run
         assumptions.pcNoWrap privateInputs witness context equations run bytecodeEq
         represented.toRepresentsRows nonempty stops cycle after address)
 
-/-- A nonzero RAM effect in a represented cycle selects an SD instruction.
-For example, an LD cannot change its selected RAM word. -/
-private theorem termination_effect_is_sd
+/-- A nonzero RAM effect in a represented cycle selects a store row: SD or a
+floor store. For example, an LD cannot change its selected RAM word. -/
+private theorem termination_effect_is_store
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -657,8 +644,8 @@ private theorem termination_effect_is_sd
     (address : Fin params.ramSize)
     (cycle : Fin params.traceLength) (inRun : cycle.val < run.rows.size)
     (effect : witness.RamRa address cycle * witness.RamInc cycle ≠ 0) :
-    ∃ base value imm,
-      run.bytecode[run.rows[cycle.val].rowIndex].instruction = .SD base value imm := by
+    ∃ width base value imm,
+      StoreRow run.bytecode[run.rows[cycle.val].rowIndex].instruction width base value imm := by
   let i : Fin run.rows.size := ⟨cycle.val, inRun⟩
   let row := run.bytecode[run.rows[i].rowIndex]
   have charAbove := two_pow_127_lt_char joltField
@@ -699,13 +686,13 @@ private theorem termination_effect_is_sd
       exact effect ((ram_zero_effects charAbove context equations cycle addressZero).2.2 address)
   have opcodeStore : JoltMetadata.opcodeFlag row.instruction .Store = true := by
     simpa only [JoltMetadata.circuitFlag] using isStore
-  obtain ⟨base, value, imm, instructionIs⟩ :=
-    JoltMetadata.opcodeFlag_store_requiresSD row.instruction opcodeStore
-  exact ⟨base, value, imm, instructionIs⟩
+  exact storeRow_of_flag row.instruction opcodeStore
 
-/-- A selected SD at the termination word writes a byte address inside the
-termination region. For example, the SDK's final SD touches that device word. -/
-private theorem termination_sd_touches_termination
+/-- A selected store row at the termination word accesses a byte address inside
+the termination region. The recorded RAM address is a multiple of 8, so it is
+the row's accessed doubleword.
+For example, the SDK's final VirtualStoreB touches that device word. -/
+private theorem termination_store_touches_termination
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -721,26 +708,31 @@ private theorem termination_sd_touches_termination
         ramLowestAddress context.io.memory_layout) / 8)
     (cycle : Fin params.traceLength) (inRun : cycle.val < run.rows.size)
     (selectedRam : witness.RamRa address cycle = 1)
-    (base value : Src) (imm : BitVec 64)
-    (instructionAt : run.bytecode[run.rows[cycle.val].rowIndex].instruction =
-      .SD base value imm) :
+    {width : MemoryWidth} {base value : Src} {imm : BitVec 64}
+    (storeRow : StoreRow run.bytecode[run.rows[cycle.val].rowIndex].instruction
+      width base value imm) :
     TouchesTermination run.rows[cycle.val].preState.jolt_device
-      (sourceValue base run.rows[cycle.val].preState + imm) := by
+      (width.accessed (sourceValue base run.rows[cycle.val].preState + imm)) := by
   let i : Fin run.rows.size := ⟨cycle.val, inRun⟩
   have charAbove := two_pow_127_lt_char joltField
-  let raw := sourceValue base run.rows[i].preState + imm
-  have encoded : witness.RamAddress cycle = (raw.toNat : F) := by
+  let ea := sourceValue base run.rows[i].preState + imm
+  have recordedEncoded : witness.RamAddress cycle = ((width.recorded ea).toNat : F) := by
     rw [represented.ramAddress cycle inRun]
     unfold TraceWitness.RamAddress
     simp only [dif_pos inRun]
     change (match TraceWitness.ramAccessAddress
       run.bytecode[run.rows[i].rowIndex].instruction run.rows[i].preState with
       | some address => (address.toNat : F)
-      | none => 0) = (raw.toNat : F)
-    have atI : run.bytecode[run.rows[i].rowIndex].instruction = .SD base value imm :=
-      instructionAt
-    rw [atI]
-    rfl
+      | none => 0) = ((width.recorded ea).toNat : F)
+    have access : TraceWitness.ramAccessAddress run.bytecode[run.rows[i].rowIndex].instruction
+        run.rows[i].preState = some (width.recorded ea) :=
+      storeRow.access.ramAccessAddress _
+    rw [access]
+  have same := width.recorded_eq_accessed ea (width.aligned_of_recorded ea
+    (ramAddress_aligned charAbove context equations cycle _ recordedEncoded))
+  let raw := width.accessed ea
+  have encoded : witness.RamAddress cycle = (raw.toNat : F) := by
+    rw [recordedEncoded, same]
   have rawAddress := ramAddress_eq_of_selected charAbove context equations
     cycle address selectedRam raw encoded
   have built := context_layout_built context
@@ -764,8 +756,9 @@ private theorem termination_sd_touches_termination
   rw [rowLayout, rawTermination, ioEnd]
   omega
 
-/-- A nonzero write to the selected termination word is an executed SD touching
-that word. For example, the SDK's termination store reaches the device region. -/
+/-- A nonzero write to the selected termination word is an executed store row
+touching that word. For example, the SDK's termination store reaches the device
+region. -/
 private theorem termination_effect_store_row
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -784,23 +777,19 @@ private theorem termination_effect_store_row
     (cycle : Fin params.traceLength) (inRun : cycle.val < run.rows.size)
     (effect : witness.RamRa address cycle * witness.RamInc cycle ≠ 0) :
     run.StoresTerminationAt ⟨cycle.val, inRun⟩ := by
-  obtain ⟨base, value, imm, instructionAt⟩ :=
-    termination_effect_is_sd joltField joltInstance privateInputs witness
+  obtain ⟨width, base, value, imm, storeRow⟩ :=
+    termination_effect_is_store joltField joltInstance privateInputs witness
       context equations run bytecodeEq represented.toRepresentsRows
       address cycle inRun effect
   have selectedRam : witness.RamRa address cycle = 1 := by
     rcases ramRa_zero_or_one context equations address cycle with zero | one
     · exact False.elim (effect (by simp [zero]))
     · exact one
-  let i : Fin run.rows.size := ⟨cycle.val, inRun⟩
-  change run.StoresTerminationAt i
-  unfold UntrustedAnswerRun.StoresTerminationAt
-  have atI : run.bytecode[run.rows[i].rowIndex].instruction =
-      .SD base value imm := instructionAt
-  rw [atI]
-  exact termination_sd_touches_termination joltField joltInstance privateInputs witness
-    context equations run represented.toRepresentsRows address atTermination cycle
-    inRun selectedRam base value imm instructionAt
+  exact (storesTerminationAt_iff run _).mpr ((storeTouches_iff _ _).mpr
+    ⟨width, base, value, imm, storeRow,
+      termination_store_touches_termination joltField joltInstance privateInputs witness
+        context equations run represented.toRepresentsRows address atTermination cycle
+        inRun selectedRam storeRow⟩)
 
 end JoltConstraints.Soundness
 
@@ -808,8 +797,9 @@ namespace JoltInstance
 
 open JoltConstraints.Soundness
 
-/-- A no-panic claim forces a completed SD to touch the termination word in
-the retained run. For example, storing 1 to the SDK exit word supplies this row.
+/-- A no-panic claim forces a completed store row (SD or a floor store) to touch
+the termination word in the retained run. For example, storing 1 to the SDK exit
+word supplies this row.
 The final public word is set in
 jolt/crates/jolt-program/src/preprocess/public_io.rs:51-56 at 5def437f;
 the store is emitted in jolt/jolt-sdk/macros/src/lib.rs:880-887. -/
@@ -1004,19 +994,10 @@ private theorem store_precedes_last_jump
     (fun row : TraceRow run.bytecode => run.bytecode[row.rowIndex].instruction) hrow
   change run.bytecode[run.rows[i].rowIndex].instruction =
     run.bytecode[last.rowIndex].instruction at hInstr
-  have hStore : ∃ base value imm, run.bytecode[run.rows[i].rowIndex].instruction =
-      .SD base value imm := by
-    unfold JoltConstraints.Soundness.UntrustedAnswerRun.StoresTerminationAt at stored
-    split at stored
-    · rename_i base value imm heq
-      exact ⟨base, value, imm, heq⟩
-    · contradiction
-  rcases hStore with ⟨base, value, imm, hStore⟩
-  rcases lastKind with ⟨dst, off, hJump⟩ | ⟨dst, src, off, hJump⟩
-  · rw [hStore, hJump] at hInstr
-    cases hInstr
-  · rw [hStore, hJump] at hInstr
-    cases hInstr
+  obtain ⟨width, base, value, imm, ⟨fault, hStore⟩, _⟩ :=
+    (storeTouches_iff _ _).mp ((storesTerminationAt_iff run i).mp stored)
+  rcases lastKind with ⟨dst, off, hJump⟩ | ⟨dst, src, off, hJump⟩ <;>
+    rw [hStore, hJump] at hInstr <;> cases width <;> cases hInstr
 
 /-- Once a completed termination store precedes the final jump, the temporary
 exit restriction makes that jump `JAL +0`, and execution makes it a stable stall.

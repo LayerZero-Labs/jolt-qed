@@ -31,6 +31,9 @@ private theorem division_source_kind (kind : DivisionKind) (rd rs1 rs2 : regidx)
     SourceInstruction.expand, ExpandedSource.ofPureProgram, isX0,
     Instr.canonicalNoOp, Instr.adviceValue?] at advice
 
+/-- A source expansion containing internal advice is one of the division
+families with a nonzero architectural destination; for example, DIV x1,x2,x3
+uses advice, while the floor-memory rows in an SB expansion do not. -/
 private theorem source_advice_kind (source : SourceInstruction)
     (advice : SourceInternalAdvice source) :
     ∃ (kind : DivisionKind) (rd rs1 rs2 : regidx) (q : BitVec 64),
@@ -57,9 +60,10 @@ private theorem source_advice_kind (source : SourceInstruction)
         Encoded.JAL, Encoded.JALR, Encoded.BEQ, Encoded.BNE, Encoded.BLT,
         Encoded.BGE, Encoded.BLTU, Encoded.BGEU, Encoded.SLTI, Encoded.SLTIU,
         Encoded.XORI, Encoded.ORI, Encoded.ANDI, Encoded.VirtualAssertEQ,
-        Encoded.VirtualAlignAddr, Encoded.VirtualWindowMaskB, Encoded.VirtualWindowMaskH,
-        Encoded.VirtualWindowMaskW, Encoded.VirtualAssertHalfwordAlignment,
-        Encoded.VirtualAssertWordAlignment,
+        Encoded.VirtualWindowMaskB, Encoded.VirtualWindowMaskH, Encoded.VirtualWindowMaskW,
+        Encoded.VirtualLoadB, Encoded.VirtualLoadH, Encoded.VirtualLoadW,
+        Encoded.VirtualStoreB, Encoded.VirtualStoreH, Encoded.VirtualStoreW,
+        Encoded.VirtualShiftDataB, Encoded.VirtualShiftDataH, Encoded.VirtualShiftDataW,
         lbProgramAuto, lbuProgramAuto, lhProgramAuto, lhuProgramAuto, lwProgramAuto,
         lwuProgramAuto, sbProgramAuto, shProgramAuto, swProgramAuto,
         slliProgramAuto, srliProgramAuto, sraiProgramAuto, sllProgramAuto, srlProgramAuto,

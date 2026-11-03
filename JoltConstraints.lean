@@ -45,6 +45,7 @@ import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Soundness.Layer5.NarrowAdvice
 import JoltConstraints.Soundness.Layer5.MemoryAddress
 import JoltConstraints.Soundness.Layer5.RamAlignment
+import JoltConstraints.Soundness.Layer5.MemoryRows
 import JoltConstraints.Soundness.Layer5.RamStore
 import JoltConstraints.Soundness.Layer5.StoreDoubleword
 import JoltConstraints.Soundness.Layer5.PowerOfTwo
@@ -86,7 +87,6 @@ import JoltConstraints.Soundness.Layer5.XorImmediate
 import JoltConstraints.Soundness.Layer5.SetLessThanImmediate
 import JoltConstraints.Soundness.Layer5.AssertLessThanEqual
 import JoltConstraints.Soundness.Layer5.AssertionsBinary
-import JoltConstraints.Soundness.Layer5.AssertionsAlignment
 import JoltConstraints.Soundness.Layer5.AssertionMulOverflow
 import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.Soundness.Layer6.BytecodePC

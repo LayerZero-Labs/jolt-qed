@@ -15,7 +15,6 @@ import JoltConstraints.Soundness.Layer5.Auipc
 import JoltConstraints.Soundness.Layer5.SetLessThanImmediate
 import JoltConstraints.Soundness.Layer5.XorImmediate
 import JoltConstraints.Soundness.Layer5.Movsign
-import JoltConstraints.Soundness.Layer5.AssertionsAlignment
 import JoltConstraints.Soundness.Layer5.RegisterShift
 import JoltConstraints.expansion_temp_liveness
 
@@ -161,7 +160,6 @@ inductive OtherScalarKind where
   | write (kind : PlainWriteKind)
   | shift (operation : RegisterShift) (destination : Dst) (lhs rhs : Src)
   | assertEq (lhs rhs : Src) (imm : BitVec 128)
-  | alignment (kind : AlignmentAssertion) (base : Src) (imm : BitVec 64) (fault : ExceptionType)
   | fence
 
 /-- Recover a scalar row's instruction.
@@ -170,7 +168,6 @@ def OtherScalarKind.instruction : OtherScalarKind → Instr
   | .write kind => kind.instruction
   | .shift operation destination lhs rhs => operation.instruction destination lhs rhs
   | .assertEq lhs rhs imm => .VirtualAssertEQ lhs rhs imm
-  | .alignment kind base imm fault => kind.instruction base imm fault
   | .fence => .FENCE
 
 /-- Scalar rows do not read tape; for example, a register shift ignores its answer. -/
@@ -179,7 +176,6 @@ theorem OtherScalarKind.noTape (kind : OtherScalarKind) (destination : Dst) (wid
   cases kind with
   | write kind => exact kind.noTape destination width
   | shift operation dst lhs rhs => cases operation <;> intro impossible <;> cases impossible
-  | alignment kind base imm fault => cases kind <;> intro impossible <;> cases impossible
   | assertEq lhs rhs imm => intro impossible; cases impossible
   | fence => intro impossible; cases impossible
 
@@ -199,9 +195,9 @@ def otherScalarKind? : Instr → Option OtherScalarKind
   | .SLTU destination lhs rhs => some (.write (.comparison .unsigned destination lhs rhs))
   | .VirtualPext destination lhs rhs => some (.write (.virtualBinary .pext destination lhs rhs))
   | .VirtualPextSigned destination lhs rhs => some (.write (.virtualBinary .pextSigned destination lhs rhs))
-  | .VirtualShiftDataB destination lhs rhs => some (.write (.virtualBinary .shiftDataB destination lhs rhs))
-  | .VirtualShiftDataH destination lhs rhs => some (.write (.virtualBinary .shiftDataH destination lhs rhs))
-  | .VirtualShiftDataW destination lhs rhs => some (.write (.virtualBinary .shiftDataW destination lhs rhs))
+  | .VirtualShiftDataB destination lhs rhs imm => some (.write (.virtualBinary (.shiftDataB imm) destination lhs rhs))
+  | .VirtualShiftDataH destination lhs rhs imm => some (.write (.virtualBinary (.shiftDataH imm) destination lhs rhs))
+  | .VirtualShiftDataW destination lhs rhs imm => some (.write (.virtualBinary (.shiftDataW imm) destination lhs rhs))
   | .VirtualXORROT32 destination lhs rhs => some (.write (.xorRotation .r32 destination lhs rhs))
   | .VirtualXORROT24 destination lhs rhs => some (.write (.xorRotation .r24 destination lhs rhs))
   | .VirtualXORROT16 destination lhs rhs => some (.write (.xorRotation .r16 destination lhs rhs))
@@ -220,7 +216,6 @@ def otherScalarKind? : Instr → Option OtherScalarKind
   | .ANDI destination source imm => some (.write (.logic .andi destination source imm))
   | .ORI destination source imm => some (.write (.logic .ori destination source imm))
   | .SLTI destination source imm => some (.write (.logic .slti destination source imm))
-  | .VirtualAlignAddr destination source imm => some (.write (.address .align destination source imm))
   | .VirtualWindowMaskB destination source imm => some (.write (.address .byte destination source imm))
   | .VirtualWindowMaskH destination source imm => some (.write (.address .halfword destination source imm))
   | .VirtualWindowMaskW destination source imm => some (.write (.address .word destination source imm))
@@ -246,8 +241,6 @@ def otherScalarKind? : Instr → Option OtherScalarKind
   | .VirtualSRLW destination lhs rhs => some (.shift .srlw destination lhs rhs)
   | .VirtualSRAW destination lhs rhs => some (.shift .sraw destination lhs rhs)
   | .VirtualAssertEQ lhs rhs imm => some (.assertEq lhs rhs imm)
-  | .VirtualAssertHalfwordAlignment base imm fault => some (.alignment .halfword base imm fault)
-  | .VirtualAssertWordAlignment base imm fault => some (.alignment .word base imm fault)
   | .FENCE => some (.fence)
   | _ => none
 

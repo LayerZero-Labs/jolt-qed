@@ -35,7 +35,9 @@ open Sail PreSail LeanRV64D.Functions JoltISA
 def TouchesPanic (device : JoltDevice) (address : BitVec 64) : Prop :=
   ∃ offset < 8, device.is_panic (address.toNat + offset) = true
 
-/-- Completed row `i` of the run is an SD that touches the panic region. -/
+/-- Completed row `i` of the run is a store whose accessed doubleword touches
+the panic region: an SD at `base + imm`, or a VirtualStoreB/H/W at the
+containing doubleword `(base + imm) &&& ~~~7`. -/
 def UntrustedAnswerRun.StoresPanicAt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs) (i : Fin run.rows.size) : Prop :=
@@ -43,6 +45,9 @@ def UntrustedAnswerRun.StoresPanicAt
   | .SD base _ imm =>
       TouchesPanic run.rows[i].preState.jolt_device
         (sourceValue base run.rows[i].preState + imm)
+  | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ =>
+      TouchesPanic run.rows[i].preState.jolt_device
+        ((sourceValue base run.rows[i].preState + imm) &&& ~~~7)
   | _ => False
 
 end JoltConstraints.Soundness
@@ -53,6 +58,8 @@ Jolt bug that must be fixed in Jolt; it cannot remain a restriction. Remove it
 once Jolt's constraints treat the panic word as Jolt's tracer does, the model
 reflects that, and the unrestricted proof is established. This is not a
 verifier check.
+The extension to VirtualLoadB/H/W and VirtualStoreB/H/W was approved by Ari on
+2026-11-03, only to fit the new ISA.
 
 For every private input and relaxed execution prefix, the next attempted row is:
 - if a store touching the panic region, one that stores the word 1;
@@ -74,6 +81,15 @@ def JoltInstance.PanicStoresOne (joltInstance : JoltInstance SourceInstruction) 
           (∃ i, run.StoresPanicAt i) →
             ¬ JoltConstraints.Soundness.TouchesPanic pre.jolt_device
               (JoltISA.sourceValue base pre + imm)
+      | .VirtualStoreB base value imm _ | .VirtualStoreH base value imm _
+      | .VirtualStoreW base value imm _ =>
+          JoltConstraints.Soundness.TouchesPanic pre.jolt_device
+              ((JoltISA.sourceValue base pre + imm) &&& ~~~7) →
+            JoltISA.sourceValue value pre = 1
+      | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _ | .VirtualLoadW _ _ base imm _ =>
+          (∃ i, run.StoresPanicAt i) →
+            ¬ JoltConstraints.Soundness.TouchesPanic pre.jolt_device
+              ((JoltISA.sourceValue base pre + imm) &&& ~~~7)
       | _ => True
 
 /-- FIXME: Temporary restriction to "no panic" claims, for stopping early on a

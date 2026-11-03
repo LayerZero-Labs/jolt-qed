@@ -51,6 +51,53 @@ The statement of `JoltInstance.soundness`, `JoltInstance.InLanguage` and the sou
    `TracerAddressChecks` gives the address checks for the word at `ea &&& ~~~7`.
    Constraint (01), the AddressOffset lookup and the RAM address checks together should pin the accessed word; Jolt's own argument is the comment on row 0 in `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`.
 
+5. Panic and termination restrictions, approved by Ari on 2026-11-03.
+   `PanicStoresOne` and `TerminationThenStall`, and their history predicates `StoresPanicAt` and `StoresTerminationAt`, name only LD and SD; the new loads and stores also touch the panic and termination words.
+   Extend them exactly as follows, where each new arm checks the 8-byte word the row accesses, `ea &&& ~~~7`, and change nothing else.
+   Add one sentence to each restriction's FIXME docstring: the extension to `VirtualLoadB/H/W` and `VirtualStoreB/H/W` was approved by Ari on 2026-11-03, only to fit the new ISA.
+
+   In `Soundness/Layer5/PanicRestriction.lean`, `UntrustedAnswerRun.StoresPanicAt`, before `| _ => False`:
+
+   ```lean
+   | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ =>
+       TouchesPanic run.rows[i].preState.jolt_device
+         ((sourceValue base run.rows[i].preState + imm) &&& ~~~7)
+   ```
+
+   In the same file, `JoltInstance.PanicStoresOne`, before `| _ => True`:
+
+   ```lean
+   | .VirtualStoreB base value imm _ | .VirtualStoreH base value imm _
+   | .VirtualStoreW base value imm _ =>
+       JoltConstraints.Soundness.TouchesPanic pre.jolt_device
+           ((JoltISA.sourceValue base pre + imm) &&& ~~~7) →
+         JoltISA.sourceValue value pre = 1
+   | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _ | .VirtualLoadW _ _ base imm _ =>
+       (∃ i, run.StoresPanicAt i) →
+         ¬ JoltConstraints.Soundness.TouchesPanic pre.jolt_device
+           ((JoltISA.sourceValue base pre + imm) &&& ~~~7)
+   ```
+
+   In `Soundness/Layer5/TerminationRestriction.lean`, `UntrustedAnswerRun.StoresTerminationAt`, before `| _ => False`:
+
+   ```lean
+   | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ =>
+       TouchesTermination run.rows[i].preState.jolt_device
+         ((sourceValue base run.rows[i].preState + imm) &&& ~~~7)
+   ```
+
+   In the same file, `JoltInstance.TerminationThenStall`, before `| _ => True`:
+
+   ```lean
+   | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _ | .VirtualLoadW _ _ base imm _ =>
+       ¬ JoltConstraints.Soundness.TouchesTermination pre.jolt_device
+         ((JoltISA.sourceValue base pre + imm) &&& ~~~7)
+   ```
+
+   Adjust only the Lean details needed to make these build, and keep their meaning.
+   Then finish the blocked proofs from them: `row_panic_of_no_store` (`Soundness/Layer5/DeviceMemory.lean`), `termination_effect_is_sd` (`Soundness/Layer7/TerminationStore.lean`) and the `DeviceMemoryStepAgreement` facts they feed.
+   A theorem whose conclusion now names only SD may need to name the new stores too; that is a helper change under "Approved without asking".
+
 ## Approved without asking
 
 Ari has approved, in advance, any proof repair, and any new or changed helper lemma, when both of these hold:
@@ -79,6 +126,7 @@ A blocker is:
 - No `sorry` except a blocker lemma as described above.
 - Do not commit; Ari commits.
 - Builds are allowed to check a change: first check for a running Lake process (`pgrep -fl lake`), then build serially.
+  Never start a build while another is running, even one you started yourself.
 - Give every new or changed declaration a docstring that defines its terms and gives a concrete example.
 - List every proof that takes more than about ten seconds.
 - In Markdown, one sentence per line; in prose, name the actor (Jolt's tracer, prover or verifier), not "Rust".

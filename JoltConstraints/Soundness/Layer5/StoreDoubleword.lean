@@ -1,19 +1,17 @@
-import JoltConstraints.Soundness.Layer5.RamAlignment
 import JoltConstraints.Soundness.Layer5.RamStore
-import JoltConstraints.Soundness.Layer5.LookupWrite
-import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
+import JoltConstraints.Soundness.Layer5.MemoryRows
 import JoltConstraints.Soundness.Layer3.Updates
 
-/-! Connect a selected SD row to an actual ordinary-RAM write. Register
-agreement supplies both operands; the constraints force the address, alignment,
-stored value and single-word table update. The address checks are the local
-facts supplied by the existing TracerAddressChecks restriction through
-sd_address_checks. The ordinary-RAM case starts at RAM_START_ADDRESS; device
-stores need a separate argument about their effects.
-At public pin 8bbb2357:
-See : jolt/tracer/src/instruction/sd.rs:19-30
-See : jolt/tracer/src/emulator/mmu.rs:429-435
-See : jolt/tracer/src/emulator/mmu.rs:721-740 -/
+/-! Connect a selected store row to an actual ordinary-RAM write. The rows are
+SD and the floor stores VirtualStoreB/H/W, classified by `StoreRow`. Register
+agreement supplies both operands; the constraints force the accessed doubleword,
+natural alignment, stored value and single-word table update. The address checks
+are the local facts supplied by the existing TracerAddressChecks restriction
+through `StoreRow.address_checks`. The ordinary-RAM case starts at
+RAM_START_ADDRESS; device stores need a separate argument about their effects.
+Jolt's tracer at c6703570: `tracer/src/instruction/sd.rs` (`SD::exec`),
+`tracer/src/instruction/floor_access.rs` (`store`) and
+`tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`). -/
 
 set_option autoImplicit false
 
@@ -29,52 +27,57 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
   (selected : bytecodeRa witness slot t = 1)
   {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
-  {base source : Src} {imm : BitVec 64}
-  (instructionIs : row.instruction = .SD base source imm)
+  {width : MemoryWidth} {base source : Src} {imm : BitVec 64}
+  (storeRow : StoreRow row.instruction width base source imm)
 
-include context rowIs instructionIs in
-/-- A checked SD row has canonical base and value operands.
+include context rowIs storeRow in
+/-- A selected store row has canonical base and value operands.
 For example, a virtual source cannot alias architectural register x1.
 See jolt/crates/jolt-program/src/expand/allocator.rs
 (`RISCV_REGISTER_BASE`, `ExpansionAllocator::allocate`) at 5def437f. -/
-theorem sd_canonical :
+theorem StoreRow.canonical :
     JoltRegisterEncoding.sourceIsCanonical base = true ∧
     JoltRegisterEncoding.sourceIsCanonical source = true := by
-  simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,
-    Bool.and_eq_true] using (bytecodeRow_rowOk context rowIs).canonical
+  have valid := (bytecodeRow_rowOk context rowIs).canonical
+  rw [storeRow.metadata.canonical] at valid
+  simpa only [Bool.and_eq_true] using valid
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128 context equations selected rowIs storeRow
 
-private theorem sd_write_value {live : Fin 128 → Prop} {pre : SailJoltState}
+/-- A selected store row writes its live value source to RamWriteValue.
+For example, VirtualStoreB writes the merged doubleword in its second source. -/
+theorem store_write_value {live : Fin 128 → Prop} {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RamWriteValue t = ((sourceValue source pre).toNat : F) := by
   have bound := two_pow_127_lt_char charAbove2pow128
+  have facts := storeRow.metadata
   have sourceIs := agrees.rs2Value bound context equations selected rowIs source
-    (sd_canonical context rowIs instructionIs).2 (by rw [instructionIs]; rfl) sourceLive
+    (storeRow.canonical context rowIs).2 facts.rs2Register sourceLive
   have store : witness.OpFlags .Store t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
-      JoltMetadata.opcodeFlag] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.store] using
       opFlag_of_selected_bytecode bound context equations .Store t slot selected
   have relation := equations.rs2EqRamWriteIfStore t
   rw [store, one_mul, sourceIs] at relation
   exact (sub_eq_zero.mp relation).symm
 
-/-- In the ordinary-RAM case, SD succeeds with the constrained value and exact
-byte-map update. The selected table word receives that value, all other words
-stay unchanged, and register agreement is preserved. The final-cycle case
-updates RamValFinal rather than assuming a following trace column exists.
+/-- In the ordinary-RAM case, a store row succeeds with the constrained value and
+exact byte-map update at its accessed doubleword. The selected table word
+receives that value, all other words stay unchanged, and register agreement is
+preserved. The final-cycle case updates RamValFinal rather than assuming a
+following trace column exists.
 Only the base and stored-value registers must be live; for example, both may
 be temporaries initialized by earlier rows of the same expansion. -/
-theorem sd_ram_step (regionFits : joltInstance.RamRegionFits)
+theorem store_ram_step (regionFits : joltInstance.RamRegionFits)
     {live : Fin 128 → Prop} {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (baseLive : live (TraceWitness.sourceRegisterAddress base))
     (sourceLive : live (TraceWitness.sourceRegisterAddress source))
-    (inRam : RAM_START_ADDRESS ≤ (sourceValue base pre + imm).toNat)
-    (checked : DoublewordAddressChecks pre.jolt_device (sourceValue base pre + imm) true)
+    (inRam : RAM_START_ADDRESS ≤ (width.accessed (sourceValue base pre + imm)).toNat)
+    (checked : DoublewordAddressChecks pre.jolt_device
+      (width.accessed (sourceValue base pre + imm)) true)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
-    let address := sourceValue base pre + imm
+    let address := width.accessed (sourceValue base pre + imm)
     let value := sourceValue source pre
     let post := { pre with sail := { pre.sail with
       mem := Mmu.write_ram_doubleword pre.sail.mem address.toNat value } }
@@ -98,39 +101,38 @@ theorem sd_ram_step (regionFits : joltInstance.RamRegionFits)
           if index = chosen then (value.toNat : F) else witness.RamVal index t) := by
   dsimp only
   have bound := two_pow_127_lt_char charAbove2pow128
-  have canonical := sd_canonical context rowIs instructionIs
+  have facts := storeRow.metadata
+  have canonical := storeRow.canonical context rowIs
   have baseRead := (agrees.read base canonical.1 baseLive).1
   have sourceRead := (agrees.read source canonical.2 sourceLive).1
   have baseIs := agrees.rs1Value bound context equations selected rowIs base canonical.1
-    (by rw [instructionIs]; rfl) baseLive
-  have encoded := sd_address_encoded bound context equations regionFits t slot selected row rowIs
-    base source (sourceValue base pre) imm instructionIs baseIs
-  have aligned := ramAddress_mask_aligned bound context equations t _ encoded
-  have stored := sd_write_value charAbove2pow128 context equations selected rowIs instructionIs agrees sourceLive
+    facts.rs1Register baseLive
+  obtain ⟨encoded, aligned, -⟩ := AccessRow.address_encoded charAbove2pow128 context equations
+    selected rowIs storeRow.access regionFits (sourceValue base pre) baseIs
+  have wordAligned := ramAddress_mask_aligned bound context equations t _ encoded
+  have stored := store_write_value charAbove2pow128 context equations selected rowIs storeRow
+    agrees sourceLive
   have legal : Mmu.effective_address_ok pre.jolt_device
-      (sourceValue base pre + imm).toNat true = true := by
+      (width.accessed (sourceValue base pre + imm)).toNat true = true := by
     simpa only [DoublewordAddressChecks, inRam, ↓reduceIte] using checked
-  have write := Mmu.store_doubleword_ram pre (sourceValue base pre + imm)
-    (sourceValue source pre) aligned inRam legal
+  have write := Mmu.store_doubleword_ram pre (width.accessed (sourceValue base pre + imm))
+    (sourceValue source pre) wordAligned inRam legal
   have nonzero := ramAddress_nonzero_of_inRam bound t _ encoded inRam
   obtain ⟨chosen, one, _⟩ := ramRa_unique_of_address_ne_zero bound context equations t nonzero
   have addressIs := ramAddress_eq_of_selected bound context equations t chosen one _ encoded
-  refine ⟨stored, ?_, chosen, one, addressIs, ?_, ?_, ?_⟩
-  · rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
-    simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, baseRead, sourceRead,
-      aligned, ↓reduceIte, write, pure, EStateM.pure]
+  refine ⟨stored, storeRow.exec_rule pre _ baseRead sourceRead aligned _ write answer advice,
+    chosen, one, addressIs, ?_, ?_, ?_⟩
   · intro index
     simpa only [Fin.val_inj] using ram_store_index pre.sail
-      (sourceValue base pre + imm) (sourceValue source pre)
+      (width.accessed (sourceValue base pre + imm)) (sourceValue source pre)
       (ramLowestAddress context.io.memory_layout) chosen.val index.val addressIs
   · intro next
     have after : RegisterAgreementOn live witness t
         { pre with sail := { pre.sail with
           mem := Mmu.write_ram_doubleword pre.sail.mem
-            (sourceValue base pre + imm).toNat (sourceValue source pre) } } :=
+            (width.accessed (sourceValue base pre + imm)).toNat (sourceValue source pre) } } :=
       ⟨agrees.present, agrees.values⟩
-    refine ⟨after.noWrite bound context equations next slot selected rowIs
-      (by rw [instructionIs]; rfl), ?_⟩
+    refine ⟨after.noWrite bound context equations next slot selected rowIs facts.noDestination, ?_⟩
     intro index
     rw [ramVal_succ_of_selected bound context equations index t next chosen one, stored]
   · intro last index

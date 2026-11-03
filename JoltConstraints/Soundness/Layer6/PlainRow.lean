@@ -4,7 +4,6 @@ import JoltConstraints.Soundness.Layer6.PlainRowKinds
 import JoltConstraints.Soundness.Layer5.Fence
 import JoltConstraints.Completeness.Helpers.LookupEntryProofHelpers
 import JoltConstraints.Soundness.Layer5.RegisterShift
-import JoltConstraints.Soundness.Layer5.AssertionsAlignment
 import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.Soundness.Layer6.BytecodePC
 import JoltConstraints.Soundness.Layer7.StallSuffix
@@ -22,6 +21,7 @@ import JoltConstraints.Soundness.Layer5.AssertionMulOverflow
 import JoltConstraints.Soundness.Layer5.AssertLessThanEqual
 import JoltConstraints.Soundness.Layer3.Access
 import JoltConstraints.Soundness.Layer3.Updates
+import JoltConstraints.Soundness.Layer5.MemoryRows
 
 /-! Append a non-memory, non-host, non-jump row without requiring honest advice. -/
 
@@ -45,10 +45,12 @@ def DivisionArithmeticRow : Instr → Prop
 
 /-- The row kinds handled without a memory/host-call restriction or a jump rule.
 For example, VirtualAdvice and an unsigned division guard are plain rows;
-LD, SD, VirtualHostIO, JAL and JALR are excluded. -/
+LD, SD, all floor loads/stores, VirtualHostIO, JAL and JALR are excluded. -/
 def PlainRow (instruction : Instr) : Prop :=
   match instruction with
-  | .LD .. | .SD .. | .VirtualHostIO | .JAL .. | .JALR .. => False
+  | .LD .. | .SD .. | .VirtualLoadB .. | .VirtualLoadH .. | .VirtualLoadW ..
+  | .VirtualStoreB .. | .VirtualStoreH .. | .VirtualStoreW ..
+  | .VirtualHostIO | .JAL .. | .JALR .. => False
   | _ => True
 
 /-- Every division arithmetic row is plain; for example, REM's MUL needs no
@@ -889,6 +891,8 @@ private theorem plainWrite_execution {F : Type} [Field F] {params : WitnessParam
     exact movsign_step joltField context equations selected rowIs instructionIs agrees
       (sourcesLive source (by simp [PlainWriteKind.sources])) 0 advice
 
+/-- A classified scalar row executes with answer zero and preserves register
+agreement; for example, FENCE preserves the state and a mask row writes its lookup. -/
 private theorem otherScalar_execution {F : Type} [Field F] {params : WitnessParams}
     (joltField : JoltField F) {witness : WitnessType F params} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -927,17 +931,13 @@ private theorem otherScalar_execution {F : Type} [Field F] {params : WitnessPara
       (sourcesLive rhs (by simp [instructionIs, OtherScalarKind.instruction, ExpansionTempLiveness.readSources])) 0 advice
     exact ⟨pre, advice, arithmeticExecution_assert advice (by rw [instructionIs]; rfl)
       (by rw [instructionIs]; rfl) result.2.1 result.2.2⟩
-  | alignment kind base imm fault =>
-    have result := alignmentAssertion_step joltField context equations selected rowIs kind instructionIs agrees
-      (sourcesLive base (by cases kind <;> simp [instructionIs, OtherScalarKind.instruction,
-        AlignmentAssertion.instruction, ExpansionTempLiveness.readSources])) 0 advice
-    exact ⟨pre, advice, arithmeticExecution_assert advice (by cases kind <;> rw [instructionIs] <;> rfl)
-      (by cases kind <;> rw [instructionIs] <;> rfl) result.2.1 result.2.2⟩
   | fence =>
     have result := fence_register_step joltField context equations selected rowIs instructionIs agrees 0 advice
     exact ⟨pre, advice, arithmeticExecution_assert advice (by rw [instructionIs]; rfl)
       (by rw [instructionIs]; rfl) result.1 result.2⟩
 
+/-- A plain row has neither a memory flag nor a recorded RAM address.
+For example, ADD is plain, while native SD and floor VirtualStoreB are excluded. -/
 private theorem plain_no_memory (instruction : Instr) (plain : PlainRow instruction)
     (pre : SailJoltState) :
     JoltMetadata.opcodeFlag instruction .Load = false ∧
@@ -946,14 +946,14 @@ private theorem plain_no_memory (instruction : Instr) (plain : PlainRow instruct
   refine ⟨?_, ?_, ?_⟩
   · apply Bool.eq_false_iff.mpr
     intro flag
-    obtain ⟨fault, destination, base, imm, same⟩ := JoltMetadata.opcodeFlag_load_requiresLD instruction flag
-    rw [same] at plain
-    exact plain
+    obtain ⟨fault, destination, base, imm, same⟩ := JoltMetadata.opcodeFlag_load_cases instruction flag
+    rcases same with same | ⟨exception, same | same | same⟩ <;>
+      rw [same] at plain <;> exact plain
   · apply Bool.eq_false_iff.mpr
     intro flag
-    obtain ⟨base, value, imm, same⟩ := JoltMetadata.opcodeFlag_store_requiresSD instruction flag
-    rw [same] at plain
-    exact plain
+    obtain ⟨base, value, imm, same⟩ := JoltMetadata.opcodeFlag_store_cases instruction flag
+    rcases same with same | ⟨exception, same | same | same⟩ <;>
+      rw [same] at plain <;> exact plain
   · unfold TraceWitness.ramAccessAddress
     split <;> first | rfl | exact False.elim plain
 
@@ -1151,10 +1151,7 @@ theorem append_expansion_row_of_termination {F : Type} [Field F] {params : Witne
     (observations : RepresentsPrefix witness {run.toTrace with rows := run.rows.push step})
     (termination : ∀ next : run.rows.size + 1 < params.traceLength,
       (¬ ∃ i : Fin (run.rows.push step).size,
-        match run.bytecode[(run.rows.push step)[i].rowIndex].instruction with
-        | .SD base _ imm => TouchesTermination (run.rows.push step)[i].preState.jolt_device
-            (sourceValue base (run.rows.push step)[i].preState + imm)
-        | _ => False) →
+        storeTouches TouchesTermination (run.rows.push step)[i]) →
       ∀ address : Fin params.ramSize,
         address.val = (run.initialState.jolt_device.memory_layout.termination.toNat -
           ramLowestAddress run.initialState.jolt_device.memory_layout) / 8 →
@@ -1195,7 +1192,7 @@ theorem append_expansion_row_of_termination {F : Type} [Field F] {params : Witne
         state.noEarlierStop (state.notStopped unfinished)
       terminationWord := by
         simpa only [candidate, appendUntrustedRow, Array.size_push,
-          UntrustedAnswerRun.StoresTerminationAt] using termination
+          storesTerminationAt_iff] using termination
       starts := state.starts
       done_le := by omega
       retained := by have old := state.retained; change done + 1 ≤ (run.rows.push step).size; simp; omega
@@ -1261,7 +1258,8 @@ theorem append_expansion_row {F : Type} [Field F] {params : WitnessParams}
     rintro ⟨i, store⟩
     apply noStore
     refine ⟨⟨i.val, by simp only [Array.size_push]; omega⟩, ?_⟩
-    simpa only [Fin.getElem_fin, Array.getElem_push_lt i.isLt] using store
+    simpa only [Fin.getElem_fin, Array.getElem_push_lt i.isLt] using
+      (storesTerminationAt_iff run i).mp store
   exact (ramVal_succ_of_address_zero (two_pow_127_lt_char joltField)
     context equations address ⟨run.rows.size, bound⟩ next zero).trans
       (state.terminationWord bound noEarlierStore address atTermination)

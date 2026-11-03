@@ -102,34 +102,3 @@ def JoltInstance.TracerAddressChecks
       | .VirtualStoreW base _ imm _ => JoltConstraints.Soundness.DoublewordAddressChecks
           pre.jolt_device ((JoltISA.sourceValue base pre + imm) &&& ~~~(7 : BitVec 64)) true
       | _ => True
-
-namespace JoltConstraints.Soundness
-
-/-- Obtain the tracer's load-address checks before executing a selected LD.
-The restriction does not require that load to have successfully executed. -/
-theorem ld_address_checks
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (restricted : joltInstance.TracerAddressChecks)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (next : Fin run.bytecode.size) (pre : SailJoltState)
-    (ready : run.NextStep next pre) (fault : JoltISA.LoadFaultClass)
-    (destination : JoltISA.Dst) (base : JoltISA.Src) (imm : BitVec 64)
-    (instruction : run.bytecode[next].instruction = .LD fault destination base imm) :
-    DoublewordAddressChecks pre.jolt_device (JoltISA.sourceValue base pre + imm) false := by
-  have checked := restricted privateInputs run next pre ready
-  simpa only [instruction] using checked
-
-/-- Obtain the tracer's store-address checks before executing a selected SD.
-The restriction does not require that store to have successfully executed. -/
-theorem sd_address_checks
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (restricted : joltInstance.TracerAddressChecks)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (next : Fin run.bytecode.size) (pre : SailJoltState)
-    (ready : run.NextStep next pre) (base value : JoltISA.Src) (imm : BitVec 64)
-    (instruction : run.bytecode[next].instruction = .SD base value imm) :
-    DoublewordAddressChecks pre.jolt_device (JoltISA.sourceValue base pre + imm) true := by
-  have checked := restricted privateInputs run next pre ready
-  simpa only [instruction] using checked
-
-end JoltConstraints.Soundness

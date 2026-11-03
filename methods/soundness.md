@@ -1,9 +1,9 @@
 ---
 title: Plan for deterministic, non-succinct soundness
-updated: 2026-11-02
+updated: 2026-11-03
 rust_pin: 5def437f21a0006e13c063a03f0b5a7c9b93cd6f
 alignment_target: c6703570588e88033b8722bd4dec47c7f46f3b16
-lean_head: 7096dcaeb62e4a49d259b511dce76c3bc77bae5f
+lean_head: e29949809bbf2c54c315c2ca55ae3b90c7fd37a6
 ---
 
 Our goal is to make Jolt secure through formal verification. Each intermediate
@@ -20,30 +20,23 @@ Read these before beginning work:
 
 The issue writeups live in `LayerZero-Research/LZ-Notes` under `content/projects/jolt-qed/blog/`.
 
-## Current state (2026-11-02)
+## Current state (2026-11-03)
 
-This section says what is verified now.
-The older sections describe the proof as it stood at Lean HEAD `7096dca`.
+The older sections describe the proof as it stood at Lean commit `7096dca`.
+The Step 4 starting commit is `e29949809bbf2c54c315c2ca55ae3b90c7fd37a6`, on `review/audit-completeness-soundness`.
+The Step 4 proof repairs are uncommitted and await review.
 
-- The Jolt pin is still `5def437f`.
-  The migration target is `c6703570`, the local `origin/main` of the fork `abiswas3/jolt`.
-  This is a migration target, not a pin update.
-- Upstream [a16z/jolt#2132](https://github.com/a16z/jolt/pull/2132), which made sub-word loads and stores floor-addressed, merged as `629b7d95` on 2026-10-27.
-  The target contains it.
-- The Lean HEAD is `7096dca`, plus uncommitted working-tree changes, including the bytecode migration below.
-- `lake build JoltBytecode` passed on 2026-11-02 with exit 0 and 8459 jobs.
-  The bytecode source has exactly seven `sorry` occurrences: six cases in `JoltBytecode/RiscvInstruction.lean` (ECALL, EBREAK, LR.W, SC.W, LR.D, SC.D at lines 805–819), and the MRET proof at `JoltBytecode/InstructionEquivalence/Instructions/System/Mret.lean:162`.
-  All seven are present at `7096dca` too.
-- `JoltConstraints` does not build against the migrated bytecode.
-  The default `lake build` includes it (`lakefile.toml`).
-  `JoltConstraints/register_encoding.lean:54` still uses the removed `JoltISA.Instr.VirtualAlignAddr` constructor, and other files use the removed constructors and the three retired alignment lookup tables.
-- So `JoltInstance.soundness` was last verified at `7096dca`, against the old definitions; the axiom check was on 2026-10-23.
-  Its statement and proof body are unchanged in this working tree, but its dependencies must be repaired after the constraints migration.
-- The constraints migration has not started.
-  Its eleven items are in [constraints.md](../JoltConstraints/constraints.md#migration-outline).
-- Ari approved, on 2026-11-02, a temporary premise extending `TracerAddressChecks` to floor-row accesses, added only to fit the new ISA.
-  No decision is open on it; it is added in the migration, with the FIXME comment, and item 10 of the [outline](../JoltConstraints/constraints.md#migration-outline) gives the tracer rule it must follow.
-  The classifier theorems are helper statements, so the migration may generalize them without asking; see [model_review.md](../JoltConstraints/model_review.md#classifier-call-sites).
+- The Jolt pin remains `5def437f`; `c6703570` is the migration target, not a pin update.
+- Steps 1–3 are committed: migrated definitions, completeness repairs, and the approved extension of `TracerAddressChecks` to the containing doubleword of floor loads and stores.
+- Step 4 repairs the six initial failing modules and their callers: destination-value input routing, ShiftData's signed immediate, retired alignment rows, plain-row classification, stall flags and tape replay addresses.
+- Ari approved on 2026-11-03 extending `PanicStoresOne`, `TerminationThenStall`, `StoresPanicAt` and `StoresTerminationAt` to `VirtualLoadB/H/W` and `VirtualStoreB/H/W` at their containing doubleword `ea &&& ~~~7`; no other restriction or assumption changed, and the statements of `JoltInstance.soundness` and `InLanguage` are unchanged.
+- `Soundness/Layer5/MemoryRows.lean` classifies LD, SD and the six floor rows once by width (`MemoryWidth`, `LoadRow`, `StoreRow`).
+  `AccessRow.address_encoded` proves from constraint (01), the AddressOffset lookup, RAM selection and `RamRegionFits` that the RAM address is the accessed doubleword and that the effective address is naturally aligned for its width.
+  The Layer 5 load and store steps, the Layer 6 row extension and the Layer 7 termination-store proofs now cover every memory row through this classification.
+- `lake build JoltConstraints` passes (8,837 jobs), and `#print axioms JoltInstance.soundness` lists `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`, as at `7096dca`.
+  No soundness proof has a `sorry`.
+- The six completeness admissions and seven bytecode admissions remain unchanged; see [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
+- The [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md) lists every repair, statement change and validation result.
 
 Bytecode migration in the working tree:
 
@@ -65,7 +58,7 @@ How to start, with no prior context:
 1. This section, then the open proof obligations under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
 2. The migration order in [constraints.md](../JoltConstraints/constraints.md#migration-outline).
 3. The proof method in [constraint_proving.md](constraint_proving.md).
-4. The newest dated report in `reports/`, currently [`2026-11-02-doc-refresh-check.md`](../reports/2026-11-02-doc-refresh-check.md).
+4. The newest dated report in `reports/`, currently [`2026-11-03-constraints-migration-soundness.md`](../reports/2026-11-03-constraints-migration-soundness.md).
 
 ## Change of course: top-down (2026-10-20)
 
@@ -194,7 +187,7 @@ The issue write-ups remain for the agreed batch; #2044 discussion waits for Mich
 
 The current Jolt source pin is [`5def437f21a0006e13c063a03f0b5a7c9b93cd6f`](https://github.com/a16z/jolt/commit/5def437f21a0006e13c063a03f0b5a7c9b93cd6f).
 The statement was checked against this commit in `reports/2026-10-29-soundness-statement-audit.md`.
-The working-tree migration target is `c6703570` (see [Current state](#current-state-2026-11-02)); the pin does not change until Ari decides.
+The working-tree migration target is `c6703570` (see [Current state](#current-state-2026-11-03)); the pin does not change until Ari decides.
 
 ## Soundness statement
 
@@ -622,9 +615,10 @@ derives `encoded` as follows. Write `base` for a 64-bit base-register value,
 3. The layout bound gives `0 ≤ S < 2^64` for a selected word; the zero case
    has the same bounds. Thus `((base + imm).toNat : Int) = S`.
 4. Substitute that integer equality into the field equation to obtain
-   `encoded`. `ld_address_encoded` and `sd_address_encoded` discharge the flag
-   and immediate facts from the selected row; source agreement remains an
-   execution-induction obligation.
+   `encoded`. Since the `c6703570` migration, `AccessRow.address_encoded`
+   (`Layer5/MemoryRows.lean`) does this for LD, SD and the floor rows,
+   discharging the flag, immediate and AddressOffset facts from the selected
+   row; source agreement remains an execution-induction obligation.
 
 For example, base `2^64 - 8` with immediate 8 gives `S = 2^64`. Under the new
 layout premise, no satisfying LD/SD cycle can have these operand values. The
@@ -980,8 +974,9 @@ and at each of eight byte addresses for device memory. This is the distinction
 in `Mmu.load_doubleword` and `Mmu.store_doubleword`, matching Jolt's
 `mmu.rs:619–635,729–748`. Requiring all eight ordinary RAM bytes to pass would
 strengthen the tracer's rule at an unaligned heap or canary boundary.
-`ld_address_checks` and `sd_address_checks` extract these facts before their
-respective execution proofs. They do not take successful execution as a hypothesis.
+`LoadRow.address_checks` and `StoreRow.address_checks` (`Layer5/MemoryRows.lean`)
+extract these facts before their respective execution proofs. They do not take
+successful execution as a hypothesis.
 
 The SDK's
 generated return stores byte 1 to termination (`jolt-sdk/macros/src/lib.rs:882`),
@@ -1011,12 +1006,13 @@ register-value linkage, and apply `narrowAdvice_value` at widths 8, 16 and 32.
 using local expansion row indices. Layer 6 establishes that the witness
 selects these rows in order, relates its answer to the first row, and keeps
 register and RAM table agreement through their intermediate states.
-For an LD or SD step, use `ld_address_encoded` or `sd_address_encoded`
+For a load or store row (LD, SD or a floor row), use `AccessRow.address_encoded`
 with the approved `RamRegionFits` premise and the source-column agreement
-from the induction. These address lemmas already derive the signed integer
-equality, nonwrapping bound and machine-address encoding. For ordinary RAM,
-`ld_ram_step` and `sd_ram_step_agreement` then prove the access succeeds and
-matches the RAM table; device accesses are proved in `Layer5/DeviceMemory.lean`.
+from the induction. It derives the signed integer equality, nonwrapping bound,
+natural alignment and the accessed doubleword's encoding. For ordinary RAM,
+`load_ram_step` and `store_ram_step_agreement` then prove the access succeeds and
+matches the RAM table; device accesses are proved in `Layer5/DeviceMemory.lean`
+(`load_device_step`, `store_device_step`).
 Preserve the tape-answer facts and the runtime-advice equalities in `Agrees`; prove that appending a row leaves the earlier rows' `honestTracerAdviceAtStepN` values unchanged.
 Why: this supplies the transition for the induction step and the proof required by the eventual `executes` field.
 Uses: Layers 0 to 4, Layer 5a, instruction semantics, runtime-advice compatibility.
