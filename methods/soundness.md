@@ -227,7 +227,7 @@ We aim to preserve the supplied untrusted advice in RAM and choose the tape answ
 The premises are bundled in
 [Soundness/Assumptions.lean](../JoltConstraints/Soundness/Assumptions.lean):
 `JoltField F` (`2^128 < ringChar F`); `JoltInstance.SoundnessAssumptions`
-(`NextPCNoWrap`, `RamRegionFits`); and the temporary
+(`RamRegionFits`); and the temporary
 `JoltInstance.TemporaryRestrictions` (`TracerAddressChecks`,
 `HostCallsSucceed`, `NoMaxLengthTrace`, `TerminationThenStall`, `PanicStoresOne`,
 `ClaimsNoPanic`).

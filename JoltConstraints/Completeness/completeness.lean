@@ -93,8 +93,8 @@ theorem JoltInstance.completeness {F : Type} [Field F]
   obtain ⟨io, publicIo⟩ := trace.exists_public_io
   exact trace.allConstraints_prover_sizes config proverAccepts slots preprocessed
     ⟨TraceWitness.bytecodePc trace 0, trace.entry_lt_bytecode_domain config proverAccepts⟩
-    (trace.first_pc_eq_entry slots preprocessed) spoilAssertsPass assumptions.pcNoWrap
-    assumptions.imageNonempty claimsRunOutputs io publicIo
+    (trace.first_pc_eq_entry slots preprocessed) spoilAssertsPass
+    joltInstance.program.next_pc_no_wrap assumptions.imageNonempty claimsRunOutputs io publicIo
 
 /-- Completeness, existential form: every instance in Jolt's language
 (`JoltInstance.InLanguage`) that meets `JoltInstance.CompletenessAssumptions` has private

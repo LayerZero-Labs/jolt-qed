@@ -125,8 +125,8 @@ private theorem nextUnexpandedPC_eq_current_of_continues
 /-- Completeness target for a complete Rust trace, with its mandatory padding.
 A nonempty trace stops as Rust's tracer does (`HonestTrace.terminated`), for every
 opcode allowed by Rust's repeated-PC stopping rule.
-There is no jump-only premise. `noWrap` is the image's `NextPCNoWrap`, an
-assumption (a16z confirmed on 2026-10-07; see program.lean).
+There is no jump-only premise. `noWrap` is the image's `NextPCNoWrap`, which
+every image meets because Jolt's ELF decoder enforces it (`next_pc_no_wrap`, program.lean).
 The proof derives the final-row nextPC frame from `row.executes` and the
 existing assumption bundle, including live HostIO byte reads. -/
 theorem honestWitness_nextUnexpandedPCUpdateOtherwise
