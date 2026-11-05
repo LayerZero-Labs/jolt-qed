@@ -75,7 +75,7 @@ theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
     simpa only [Nat.sub_zero] using finish count 0 run rfl initial boundary.honestAdvice
   obtain ⟨run', size, state, advice⟩ := complete
   have positive : 0 < count := Nat.zero_lt_succ _
-  exact ⟨run', by omega, expansion_finish joltField joltInstance assumptions
+  exact ⟨run', by omega, expansion_finish joltField joltInstance
     privateInputs witness context equations run' first state advice⟩
 
 /-- Reconstruct witness rows through the first stable stall, or through padding
