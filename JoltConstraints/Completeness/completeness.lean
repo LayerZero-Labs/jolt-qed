@@ -75,9 +75,9 @@ Then the honest witness at Jolt's witness sizes (`HonestTrace.witness_params`) s
 For example, a 300-row run that touches RAM word 1000 is accepted on a 512-cycle witness
 with a 1024-word RAM table.
 It inherits the gaps in `model_review.md` ("Proofs owed").
-The models of Jolt's prover and verifier RAM sizes follow the fix that a16z/jolt#1951
-item 4 proposes (`touched + 1` and `div_ceil(8)`), so Jolt's RAM table holds the highest
-touched word (`HonestTrace.prover_config_holds_highest_slot`). -/
+Jolt's prover and verifier RAM sizes include the fix of a16z/jolt#2250 (`touched + 1` and
+`div_ceil(8)`), so Jolt's RAM table holds the highest touched word
+(`HonestTrace.prover_config_holds_highest_slot`). -/
 theorem JoltInstance.completeness {F : Type} [Field F]
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.CompletenessAssumptions)

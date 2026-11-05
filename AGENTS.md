@@ -103,6 +103,6 @@ Each of these has made a staged statement false before.
 ## Sources
 
 - Jolt's Rust code: `/Users/ari.biswas/Work-with-A16z/jolt`.
-  The model is pinned to the commit recorded in `methods/soundness.md` (currently `5def437f`), which may not be the checked-out HEAD.
+  The model is pinned to the commit recorded in `methods/soundness.md` (currently `c97e9300`), which may not be the checked-out HEAD.
   Read pinned files with `git -C /Users/ari.biswas/Work-with-A16z/jolt show <pin>:<path>`.
 - The stopping rule follows a16z/jolt PR #2109 at merge commit `0249591a`.

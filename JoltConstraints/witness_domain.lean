@@ -72,7 +72,7 @@ theorem MemoryLayout.get_lowest_address_toNat (layout : MemoryLayout) :
 `config.ram_K` is a power of two.
 For example, a run touching word 1000 gets `ram_K = 1024 = 2^10`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`ProverConfig::from_padded_dimensions`) at c6703570. -/
+`ProverConfig::from_padded_dimensions`) at c97e9300. -/
 theorem HonestTrace.prover_config_ram_K_pow {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config) :
