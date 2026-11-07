@@ -62,7 +62,7 @@ theorem honestWitness_mustStartSequenceFromBeginning
         have hflag' : JoltMetadata.circuitFlag
             trace.bytecode[trace.rows[t.val].rowIndex] .DoNotUpdateUnexpandedPC =
               true := by
-          simpa only [bytecodeRow, row] using hflag
+          simpa only [bytecodeRow, row] using! hflag
         dsimp [mustStartSequenceFromBeginning, HonestTrace.honestWitness,
           TraceWitness.OpFlags]
         simp only [dif_pos ht]

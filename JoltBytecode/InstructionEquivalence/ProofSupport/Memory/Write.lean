@@ -151,6 +151,12 @@ theorem mem_write_ea_plain_dword_ok
       .ok (Ok ()) s
   rfl
 
+/-- A plain store is not a store-conditional. Rewriting with this, rather than
+unfolding `is_store_conditional`, keeps the `Decidable` instance of the
+surrounding `if` in step with its condition. -/
+private theorem is_store_conditional_store {k : Type} (a : k) :
+    is_store_conditional (MemoryAccessType.Store a) = false := rfl
+
 /-- Collapse Sail's virtual dword store pipeline once translation, effective
 address write, and physical value write have been reduced. -/
 theorem vmem_write_addr_dword_store_bridge
@@ -216,10 +222,10 @@ theorem vmem_write_addr_dword_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk,
     bind, EStateM.bind, EStateM.map,
-    Functor.map, htranslate, hea_int, hwrite_int,
+    Functor.map, htranslate, hea, hwrite, hea_int, hwrite_int,
     ExceptT.bind, ExceptT.bindCont, ExceptT.map,
     Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
-    is_store_conditional, BEq.beq, Bool.false_and, Bool.false_eq_true,
+    is_store_conditional_store, ↓reduceIte, BEq.beq, Bool.false_and, Bool.false_eq_true,
     if_true, pure, EStateM.pure, ExceptT.pure]
 
 /-- Under exact aligned flat-memory evidence, Sail's virtual dword
@@ -774,7 +780,7 @@ theorem vmem_write_addr_byte_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
   have hwrite_int :
       mem_write_value (physaddr.Physaddr addr) (Int.toNat 1) data
         (Store Data) false false false s =
@@ -817,7 +823,7 @@ theorem vmem_write_addr_halfword_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
   have hea_int :
       mem_write_ea (physaddr.Physaddr addr) (Int.toNat 2)
         false false false s =
@@ -833,7 +839,7 @@ theorem vmem_write_addr_halfword_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_halfword_store s addr data)
     exact hwrite
-  simp only [EStateM.bind, EStateM.map, hea_int, hwrite_int]
+  simp only [EStateM.bind, EStateM.map, hea, hwrite, hea_int, hwrite_int]
   rfl
 
 theorem vmem_write_addr_word_store_bridge
@@ -867,7 +873,7 @@ theorem vmem_write_addr_word_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
   have hea_int :
       mem_write_ea (physaddr.Physaddr addr) (Int.toNat 4)
         false false false s =
@@ -883,7 +889,7 @@ theorem vmem_write_addr_word_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_word_store s addr data)
     exact hwrite
-  simp only [EStateM.bind, EStateM.map, hea_int, hwrite_int]
+  simp only [EStateM.bind, EStateM.map, hea, hwrite, hea_int, hwrite_int]
   rfl
 
 theorem vmem_write_addr_byte_store_reduces

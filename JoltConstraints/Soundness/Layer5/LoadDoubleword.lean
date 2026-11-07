@@ -84,7 +84,7 @@ theorem load_ram_step (regionFits : joltInstance.RamRegionFits)
   obtain ⟨chosen, one, _⟩ := ramRa_unique_of_address_ne_zero bound context equations t nonzero
   have read := OrdinaryRamAgreement.read bound context equations ram chosen one _ encoded inRam
   have loadOne : witness.OpFlags .Load t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load] using!
       opFlag_of_selected_bytecode bound context equations .Load t slot selected
   have written : witness.RdWriteValue t =
       ((Mmu.ram_doubleword pre.sail.mem

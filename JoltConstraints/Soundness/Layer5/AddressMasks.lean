@@ -108,12 +108,12 @@ private theorem addressMask_write_value {pre : SailJoltState}
       .WriteLookupOutputToRD t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
-        AddressMask.instruction, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        AddressMask.instruction, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   have active : witness.OpFlags .AddOperands t = 1 := by
     have flag := opFlag_of_selected_bytecode bound context equations .AddOperands t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
-        AddressMask.instruction, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        AddressMask.instruction, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   have table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some operation.table := by
     cases operation <;>
@@ -132,7 +132,7 @@ private theorem addressMask_write_value {pre : SailJoltState}
     simp only [BitVec.ofNat_eq_ofNat] at output
     rw [lane] at output
     simpa only [AddressMask.value, jolt_virtual_window_mask_b_value64,
-      BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using output
+      BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using! output
   | halfword =>
     have output := lookupOutput_windowMaskH_of_identity charAbove2pow128 context equations
       t slot selected _ raf encoded table
@@ -141,7 +141,7 @@ private theorem addressMask_write_value {pre : SailJoltState}
     simp only [BitVec.ofNat_eq_ofNat] at output
     rw [lane] at output
     simpa only [AddressMask.value, jolt_virtual_window_mask_h_value64,
-      BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using output
+      BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using! output
   | word =>
     have output := lookupOutput_windowMaskW_of_identity charAbove2pow128 context equations
       t slot selected _ raf encoded table
@@ -150,7 +150,7 @@ private theorem addressMask_write_value {pre : SailJoltState}
     simp only [BitVec.ofNat_eq_ofNat] at lane output
     rw [lane] at output
     simpa only [AddressMask.value, jolt_virtual_window_mask_w_value64,
-      BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using output
+      BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using! output
 
 /-- Byte/halfword/word masks execute with their constrained values
 and preserve register agreement at the next cycle.

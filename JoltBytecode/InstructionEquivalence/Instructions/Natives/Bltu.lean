@@ -35,21 +35,23 @@ theorem bltuInstr_eq_sail
  simp only [EStateM.run, bind, EStateM.bind]
  simp only [h.rs1_read, h.rs2_read]
  simp only [pure, EStateM.pure]
- -- LHS
- simp only [JoltISA.execInstr, encoded_branch_offset, JoltISA.branchDecisionPure,
-   bind, EStateM.bind, pure,
-   JoltISA.readSrc_xreg_run_of_read rs1 js h.rs1_val h.rs1_read,
-   JoltISA.readSrc_xreg_run_of_read rs2 js h.rs2_val h.rs2_read]
- cases h_taken : zopz0zI_u h.rs1_val h.rs2_val
- · -- not taken
-   simp only [Bool.false_eq_true, if_false]
-   exact Projection.systemProjectResult_pure_retire js h.linkedCSRs
+ -- LHS. Split on the branch condition first and resolve both `if`s in the same
+ -- `simp` call that unfolds `branchDecisionPure`, so no stale `Decidable`
+ -- instance is left behind.
+ rcases Bool.eq_false_or_eq_true (zopz0zI_u h.rs1_val h.rs2_val) with h_taken | h_taken
+ all_goals
+   simp only [JoltISA.execInstr, encoded_branch_offset, JoltISA.branchDecisionPure,
+     bind, EStateM.bind, pure,
+     JoltISA.readSrc_xreg_run_of_read rs1 js h.rs1_val h.rs1_read,
+     JoltISA.readSrc_xreg_run_of_read rs2 js h.rs2_val h.rs2_read,
+     h_taken, Bool.false_eq_true, ↓reduceIte]
  · -- taken
-   simp only [if_true]
-   simpa only [Projection.liftSail_bind] using
+   simpa only [Projection.liftSail_bind] using!
      (Projection.systemProjectResult_liftSail_eq_of_preservesSystemProjectRegs
        h.linkedCSRs
        (branchJump_preservesSystemProjectRegs imm js))
+ · -- not taken
+   exact Projection.systemProjectResult_pure_retire js h.linkedCSRs
 
 end Natives
 

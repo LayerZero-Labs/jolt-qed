@@ -133,7 +133,7 @@ private theorem jump_row_target {joltInstance : JoltInstance SourceInstruction} 
       row.preState row.postState hpc hnext hexec
     simpa only [TraceWitness.rowLookupOutput, show
       trace.bytecode[row.rowIndex.val].instruction = .JAL dst imm from hinst,
-      JoltISA.addWide_low] using htarget
+      JoltISA.addWide_low] using! htarget
   · have hexec := row.executes
     change JoltISA.execInstr (bc.instruction.withRuntimeAdvice row.runtimeAdvice)
       row.preState = .ok (.Retire_Success ()) row.postState at hexec

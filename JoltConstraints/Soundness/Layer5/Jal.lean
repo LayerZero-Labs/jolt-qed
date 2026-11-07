@@ -36,10 +36,10 @@ private theorem jal_write_value
   have flags := opFlag_of_selected_bytecode bound context equations
   have jumpFlag : witness.OpFlags .Jump t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag,
-      instruction, JoltMetadata.opcodeFlag] using flags .Jump t slot selected
+      instruction, JoltMetadata.opcodeFlag] using! flags .Jump t slot selected
   have compressedFlag : witness.OpFlags .IsCompressed t =
       if row.is_compressed then 1 else 0 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag] using!
       flags .IsCompressed t slot selected
   have address : witness.UnexpandedPC t = (row.address.toNat : F) := by
     simpa only [bytecodeAddress, rowIs] using
@@ -57,7 +57,7 @@ private theorem jal_write_value
     simp only [notCompressed, Bool.false_eq_true, ↓reduceIte] at relation ⊢
     have sum : (row.address + BitVec.ofNat 64 4).toNat = row.address.toNat + 4 := by
       simp only [BitVec.toNat_add, BitVec.toNat_ofNat]
-      rw [Nat.mod_eq_of_lt (by simpa only [notCompressed, ↓reduceIte] using noWrap)]
+      rw [Nat.mod_eq_of_lt (by simpa only [notCompressed, ↓reduceIte] using! noWrap)]
     rw [sum, Nat.cast_add]
     linear_combination relation
 

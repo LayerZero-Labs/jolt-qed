@@ -61,11 +61,11 @@ theorem fence_step {pre : SailJoltState}
   have bound := two_pow_127_lt_char charAbove2pow128
   have noLoad : witness.OpFlags .Load t = 0 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
-      JoltMetadata.opcodeFlag, Bool.false_eq_true] using
+      JoltMetadata.opcodeFlag, Bool.false_eq_true] using!
       opFlag_of_selected_bytecode bound context equations .Load t slot selected
   have noStore : witness.OpFlags .Store t = 0 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
-      JoltMetadata.opcodeFlag, Bool.false_eq_true] using
+      JoltMetadata.opcodeFlag, Bool.false_eq_true] using!
       opFlag_of_selected_bytecode bound context equations .Store t slot selected
   have memory := ram.noAccess bound context equations rfl noLoad noStore
   have step := fence_register_step charAbove2pow128 context equations selected rowIs

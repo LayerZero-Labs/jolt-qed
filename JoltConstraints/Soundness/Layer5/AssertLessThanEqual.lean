@@ -51,11 +51,11 @@ private theorem assertLTE_passes {pre : SailJoltState}
     (by rw [instructionIs]; rfl) leftLive rightLive
   have raf : witness.InstructionRafFlag t = 0 := by
     simpa only [bytecodeRafFlag, rowIs, instructionIs, JoltMetadata.instructionRafFlag,
-      JoltMetadata.opcodeFlag, Bool.or_self] using
+      JoltMetadata.opcodeFlag, Bool.or_self] using!
       instructionRafFlag_of_selected_bytecode bound context equations t slot selected
   have active : witness.OpFlags .Assert t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
-      JoltMetadata.opcodeFlag] using
+      JoltMetadata.opcodeFlag] using!
       opFlag_of_selected_bytecode bound context equations .Assert t slot selected
   obtain ⟨leftLookup, rightLookup⟩ :=
     lookupOperands_eq_inputs_of_raf_zero bound context equations t raf

@@ -83,13 +83,13 @@ private theorem immediateArithmetic_write_value {pre : SailJoltState}
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
         ImmediateArithmetic.instruction, JoltMetadata.circuitFlag,
-        JoltMetadata.opcodeFlag] using flag
+        JoltMetadata.opcodeFlag] using! flag
   have active : witness.OpFlags operation.flag t = 1 := by
     have flag := opFlag_of_selected_bytecode bound context equations operation.flag t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
         ImmediateArithmetic.instruction, ImmediateArithmetic.flag,
-        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   have table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some operation.table := by
     cases operation <;>

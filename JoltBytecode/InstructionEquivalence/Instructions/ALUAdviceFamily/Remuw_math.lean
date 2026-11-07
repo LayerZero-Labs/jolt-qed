@@ -139,7 +139,7 @@ private lemma zeroExtend32_eq_zero_iff_remuw (x : BitVec 32) :
     change Sail.BitVec.extractLsb (zero_extend (m := 64) x) 31 0 =
       Sail.BitVec.extractLsb (0#64) 31 0 at hx
     rw [extractLsb_zeroExtend_32_64_remuw] at hx
-    simpa using hx
+    simpa using! hx
   · intro h
     rw [h]
     unfold zero_extend Sail.BitVec.zeroExtend

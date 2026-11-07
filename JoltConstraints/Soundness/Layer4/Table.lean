@@ -53,11 +53,19 @@ theorem instructionRafFlag_one_of_arithmetic (t : Fin params.traceLength)
   cases present : bytecodeRow context.bytecode slot.val with
   | none => simp [bytecodeCircuitFlag, present] at active
   | some row =>
-    simp only [bytecodeCircuitFlag, present, JoltMetadata.circuitFlag] at active
-    simp only [bytecodeRafFlag, present, JoltMetadata.instructionRafFlag]
+    -- Read each flag off its `if` without unfolding under it, so no stale
+    -- `Decidable` instance is left behind.
+    simp only [bytecodeCircuitFlag, present] at active
+    simp only [bytecodeRafFlag, present]
+    have flagOf : ∀ b : Bool, ((if b = true then (1 : F) else 0) = 1) → b = true := by
+      intro b h; cases b <;> simp_all
+    suffices hraf : JoltMetadata.instructionRafFlag row.instruction = true by simp [hraf]
     rcases active with add | sub | mul
-    · split at add <;> simp_all
-    · split at sub <;> simp_all
-    · split at mul <;> simp_all
+    · have h := flagOf _ add; simp only [JoltMetadata.circuitFlag] at h
+      simp [JoltMetadata.instructionRafFlag, h]
+    · have h := flagOf _ sub; simp only [JoltMetadata.circuitFlag] at h
+      simp [JoltMetadata.instructionRafFlag, h]
+    · have h := flagOf _ mul; simp only [JoltMetadata.circuitFlag] at h
+      simp [JoltMetadata.instructionRafFlag, h]
 
 end JoltConstraints.Soundness

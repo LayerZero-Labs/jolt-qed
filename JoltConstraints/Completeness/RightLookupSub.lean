@@ -57,7 +57,7 @@ theorem honestWitness_rightLookupSub
         all_goals simp [subWide_cast]
       simp [HonestTrace.honestWitness, TraceWitness.OpFlags,
         JoltMetadata.circuitFlag, h, heq]
-      exact fun _ => by ring
+      exact Or.inr (by ring)
     · simp [HonestTrace.honestWitness,
         TraceWitness.OpFlags, JoltMetadata.circuitFlag, h, hs, bytecodeRow, row]
   · simp [HonestTrace.honestWitness, TraceWitness.OpFlags, h]

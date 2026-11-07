@@ -46,7 +46,7 @@ theorem execute_STORE_byte_eq_state_after_byte_store
       .ok () js.sail := by
     rfl
   have hrs2' : EStateM.run (rX_bits rs2) js.sail = .ok rs2_val js.sail := by
-    simpa using hrs2
+    simpa using! hrs2
   change EStateM.run
       ((LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
         (rX_bits rs2).bind fun rs2_val' =>
@@ -67,7 +67,7 @@ theorem execute_STORE_byte_eq_state_after_byte_store
         js.sail =
       .ok (Ok true)
         (state_after_byte_store js.sail ea (Sail.BitVec.extractLsb rs2_val 7 0)) := by
-    simpa using hwrite
+    simpa using! hwrite
   rw [run_bind_pure]
   rw [run_bind_eq_ok hwrite']
   rfl
@@ -96,7 +96,7 @@ theorem execute_STORE_halfword_eq_state_after_halfword_store
       .ok () js.sail := by
     rfl
   have hrs2' : EStateM.run (rX_bits rs2) js.sail = .ok rs2_val js.sail := by
-    simpa using hrs2
+    simpa using! hrs2
   change EStateM.run
       ((LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
         (rX_bits rs2).bind fun rs2_val' =>
@@ -117,7 +117,7 @@ theorem execute_STORE_halfword_eq_state_after_halfword_store
         js.sail =
       .ok (Ok true)
         (state_after_halfword_store js.sail ea (Sail.BitVec.extractLsb rs2_val 15 0)) := by
-    simpa using hwrite
+    simpa using! hwrite
   rw [run_bind_pure]
   rw [run_bind_eq_ok hwrite']
   rfl
@@ -146,7 +146,7 @@ theorem execute_STORE_word_eq_state_after_word_store
       .ok () js.sail := by
     rfl
   have hrs2' : EStateM.run (rX_bits rs2) js.sail = .ok rs2_val js.sail := by
-    simpa using hrs2
+    simpa using! hrs2
   change EStateM.run
       ((LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
         (rX_bits rs2).bind fun rs2_val' =>
@@ -167,7 +167,7 @@ theorem execute_STORE_word_eq_state_after_word_store
         js.sail =
       .ok (Ok true)
         (state_after_word_store js.sail ea (Sail.BitVec.extractLsb rs2_val 31 0)) := by
-    simpa using hwrite
+    simpa using! hwrite
   rw [run_bind_pure]
   rw [run_bind_eq_ok hwrite']
   rfl

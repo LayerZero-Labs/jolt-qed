@@ -18,11 +18,10 @@ private theorem compressed_enabled_of_misa (state : SailState)
     (misa : state.regs.get? Register.misa = some 0x800000008014312f) :
     currentlyEnabled extension.Ext_Zca state = .ok true state := by
   have read := readReg_eq_of_get? Register.misa state _ misa
-  unfold currentlyEnabled
-  unfold currentlyEnabled
-  simp only [bind, EStateM.bind, read, pure, EStateM.pure]
-  congr 1
-  simp [hartSupports, _get_Misa_C, LeanRV64D.Functions.not,
+  -- `<&&>` short-circuits, so `hartSupports` must be evaluated before `misa` is read.
+  simp only [currentlyEnabled, andM, toBool, hartSupports, bind, pure, EStateM.bind,
+    EStateM.pure]
+  simp [EStateM.bind, EStateM.pure, read, _get_Misa_C, LeanRV64D.Functions.not,
     LeanRV64D.Functions.xlen, Sail.BitVec.extractLsb]
 
 /-- The final state of an initialized relaxed run still enables compressed
@@ -133,11 +132,13 @@ private theorem jump_even (target : BitVec 64) (state : SailState)
     jump_to target state = .ok RETIRE_SUCCESS (System.setNextPCState state target) := by
   have bit0 : BitVec.access target 0 = 0#1 := by
     simp [Sail.BitVec.access, BitVec.getElem_eq_testBit_toNat, Nat.testBit_zero, even]
+  -- `<&&>` short-circuits: `Ext_Zca` is read only when bit 1 is set.
+  cases bit1 : bit_to_bool (BitVec.access target 1) <;>
   simp [jump_to, ext_control_check_pc, SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run,
     LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift, MonadLift.monadLift, monadLift, liftM,
-    Functor.map, EStateM.map, bind, EStateM.bind, pure, EStateM.pure,
-    enabled, bit0, LeanRV64D.Functions.not, set_next_pc, LeanRV64D.writeReg, System.setNextPCState]
+    Functor.map, EStateM.map, bind, EStateM.bind, pure, EStateM.pure, andM, toBool, bit1,
+    enabled, bit0, LeanRV64D.Functions.not, set_next_pc, LeanRV64D.writeReg, System.setNextPCState] <;>
   rfl
 
 /-- A selected conditional branch retires and preserves agreement on `live`.

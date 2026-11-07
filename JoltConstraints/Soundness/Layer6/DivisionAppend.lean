@@ -18,12 +18,16 @@ private theorem runtimeAdviceFor_patch (instruction : Instr) (q : BitVec 64) :
       patchAdviceWord q instruction := by
   apply patchAdviceWord_runtime
   intro value present
-  unfold runtimeAdviceFor at present
-  unfold Instr.RuntimeAdvice at present
-  split at present
-  · simp only [Instr.withRuntimeAdvice, Instr.adviceValue?] at present
+  -- Case on the advice slot rather than unfolding `runtimeAdviceFor`, whose
+  -- tactic-built body does not reduce under Lean 4.35's `split`.
+  cases hadv : instruction.adviceValue? with
+  | none =>
+    rw [withRuntimeAdvice_eq_of_noAdvice instruction _ hadv, hadv] at present
+    simp at present
+  | some _ =>
+    cases instruction <;> simp only [Instr.adviceValue?, reduceCtorEq] at hadv
+    change some q = some value at present
     exact (Option.some.inj present).symm
-  · simp_all [Instr.withRuntimeAdvice, Instr.adviceValue?]
 
 private theorem runtimeAdviceFor_observation (instruction : Instr) (q : BitVec 64) :
     (instruction.withRuntimeAdvice (runtimeAdviceFor instruction q)).adviceValue? =
@@ -197,7 +201,7 @@ private theorem division_replay_first_row
       (division_next_step_raw_entry run next pre ready) arithmetic headRun
   refine ⟨middle, firstRun, extendsRun, size, finalPost, ?_, step, stepAt, ?_,
     firstPre, firstPost, ?_⟩
-  · simpa only [instructions, q] using tail
+  · simpa only [instructions, q] using! tail
   · exact index.trans nextIndex
   · simpa only [q, firstRowEq] using advice
 
@@ -467,7 +471,7 @@ private theorem division_replay_first_state
         Array.getElem?_eq_getElem first.isLt] at h
       have finEq : step.rowIndex = (⟨first.val, bound⟩ : Fin firstRun.bytecode.size) :=
         Fin.ext first'
-      simpa only [finEq] using congrArg JoltInstructionRow.instruction (Option.some.inj h)
+      simpa only [finEq] using! congrArg JoltInstructionRow.instruction (Option.some.inj h)
     simpa only [instructionEq] using advice
 
 private theorem division_replay_suffix
@@ -871,7 +875,7 @@ private theorem division_segment_pre_frame
     have priorFrameStep := (rowFrame previous priorInside prior priorAt).1
     have priorSailStep := (rowFrame previous priorInside prior priorAt).2 (by omega)
     have linked := trace.linked (base + previous) prior row priorAt
-      (by simpa only [Nat.add_assoc] using rowAt)
+      (by simpa only [Nat.add_assoc] using! rowAt)
     rw [if_pos (remaining previous (by omega) prior priorAt)] at linked
     have preEq : row.preState = prior.postState := linked.2
     refine ⟨row, by simpa only [Nat.add_assoc] using rowAt, ?_, ?_⟩
@@ -901,7 +905,7 @@ private theorem division_ordered_interior_remaining
     have sameAt := congrArg (fun b : Array JoltInstructionRow => b[first.val + k]?) bytecodeEq
     have atTrace : trace.bytecode[first.val + k]? =
         some trace.bytecode[row.rowIndex] := by
-      simpa only [← index] using (Array.getElem?_eq_getElem row.rowIndex.isLt)
+      simpa only [← index] using! (Array.getElem?_eq_getElem row.rowIndex.isLt)
     exact sameAt.symm.trans atTrace
   exact expansion_row_remaining joltInstance.program bytecode expanded first starts k
     proper _ atContext
@@ -1077,9 +1081,9 @@ private theorem division_replay_index_eq
     obtain ⟨replayRow, replayAt, replayIndex⟩ := replayOrdered offset inside
     have position : run.rows.size + offset = i := by dsimp [offset]; omega
     have candidateAtI : candidate.rows[i]? = some candidateRow := by
-      simpa only [position] using candidateAt
+      simpa only [position] using! candidateAt
     have replayAtI : replay.rows[i]? = some replayRow := by
-      simpa only [position] using replayAt
+      simpa only [position] using! replayAt
     have candidateRowEq : candidate.rows[i] = candidateRow :=
       Option.some.inj ((Array.getElem?_eq_getElem candidateInside).symm.trans candidateAtI)
     have replayRowEq : replay.rows[i] = replayRow :=
@@ -1204,7 +1208,7 @@ private theorem division_candidate_first_pre
       change run.rows[run.rows.size - 1]? = some run.rows[run.rows.size - 1]
       exact Array.getElem?_eq_getElem (by omega)
     have rowAtNext : candidate.rows[i + 1]? = some row := by
-      simpa only [show i + 1 = run.rows.size by dsimp [i]; omega] using atRow
+      simpa only [show i + 1 = run.rows.size by dsimp [i]; omega] using! atRow
     have postEq : prior.postState = last.postState :=
       RunExtends.prefix_post run candidate extendsRun i oldInside candidateInside
     have priorIndex : prior.rowIndex.val = last.rowIndex.val :=
@@ -1721,7 +1725,7 @@ private theorem division_replay_complete_transfer
               have position : run.rows.size + offset = t.val := by dsimp [offset]; omega
               obtain ⟨row, rowAt, rowIndex⟩ := replayed.ordered offset offsetInside
               have rowAtT : replay.rows[t.val]? = some row := by
-                simpa only [position] using rowAt
+                simpa only [position] using! rowAt
               have rowEq : replay.rows[t.val] = row :=
                 Option.some.inj ((Array.getElem?_eq_getElem inside).symm.trans rowAtT)
               have replayArithmetic : DivisionArithmeticRow
@@ -1811,7 +1815,7 @@ private theorem division_replay_complete_transfer
           omega
         have position : run.rows.size + offset = i := by dsimp [offset]; omega
         have atBlock : current ∈ replay.rows[run.rows.size + offset]? := by
-          simpa only [position] using currentAt
+          simpa only [position] using! currentAt
         have remaining := division_ordered_interior_remaining replay first
           context.expands state.starts run.rows.size replayed.ordered
           offset proper current atBlock
@@ -1846,7 +1850,7 @@ private theorem division_replay_complete_transfer
           have position : run.rows.size + offset = i.val := by dsimp [offset]; omega
           obtain ⟨row, rowAt, rowIndex⟩ := candidateOrdered offset offsetInside
           have rowAtI : candidate.rows[i.val]? = some row := by
-            simpa only [position] using rowAt
+            simpa only [position] using! rowAt
           have rowEq : candidate.rows[i] = row :=
             Option.some.inj ((Array.getElem?_eq_getElem i.isLt).symm.trans rowAtI)
           have arithmetic := division_block_arithmetic candidate first context.expands
@@ -1999,7 +2003,7 @@ theorem division_replay_honest_new
       simpa only [replayed.size] using n.isLt
     omega
   obtain ⟨row, rowAt, index⟩ := replayed.ordered offset inside
-  have nRow : replay.rows[n.val]? = some row := by simpa only [position] using rowAt
+  have nRow : replay.rows[n.val]? = some row := by simpa only [position] using! rowAt
   have rowEq : replay.rows[n] = row := by
     rw [Array.getElem?_eq_getElem n.isLt] at nRow
     exact Option.some.inj nRow

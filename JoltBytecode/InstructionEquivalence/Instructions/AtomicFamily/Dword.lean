@@ -3172,10 +3172,10 @@ theorem execute_AMO_dword_non_cas_aligned_core
       ExceptT.pure, ExceptT.lift, MonadLift.monadLift, liftM, monadLift,
       Functor.map, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
       MonadExceptOf.throw, ext_data_get_addr, hrs1, haddr0,
-      h_vaddr_aligned, LeanRV64D.Functions.not, Bool.not_true,
+      h_vaddr_aligned, sail_not_true, ↓reduceIte,
       Bool.false_eq_true, if_false, if_true, htranslate, amo_dword_width8_true, hrs2,
       hea, hread, hrd_read, hcas_check, Bool.false_and,
-      instBEqAmoop.beq, BEq.beq]
+      instBEqAmoop.beq, BEq.beq, andM, toBool]
     rw [hwrite_value]
     simp only [EStateM.bind, EStateM.map, ExceptT.bindCont, EStateM.pure,
       hwriteback_loaded_direct, hwriteback_state]
@@ -3337,7 +3337,7 @@ theorem execute_AMO_dword_misaligned
     ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift, MonadLift.monadLift, liftM, monadLift,
     Functor.map, ext_data_get_addr, hrs1, haddr0, hnot_aligned,
-    LeanRV64D.Functions.not, Bool.not_false, if_true]
+    sail_not_false, ↓reduceIte]
 
 /-- Shared misaligned public branch for dword AMO double-binop expansions. -/
 theorem amo_dword_double_binop_program_eq_sail_misaligned

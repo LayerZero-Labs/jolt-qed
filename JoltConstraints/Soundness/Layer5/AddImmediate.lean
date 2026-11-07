@@ -44,9 +44,9 @@ private theorem addi_metadata :
     context equations
   refine ⟨?_, ?_, ?_⟩
   · simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
-      JoltMetadata.opcodeFlag] using flags .AddOperands t slot selected
+      JoltMetadata.opcodeFlag] using! flags .AddOperands t slot selected
   · simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
-      JoltMetadata.opcodeFlag] using flags .WriteLookupOutputToRD t slot selected
+      JoltMetadata.opcodeFlag] using! flags .WriteLookupOutputToRD t slot selected
   · simp only [rowIs, Option.bind_some, instructionIs, JoltMetadata.lookupTable]
 
 private theorem addi_inputs {pre : SailJoltState}

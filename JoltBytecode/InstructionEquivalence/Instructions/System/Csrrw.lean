@@ -344,7 +344,7 @@ private theorem csrrwProgram_project_run
             (systemCSR_vreg_writable csr)
         rw [addi_zero_value] at hRun
         simpa [csrrwAfterReadWrite, joltSetVReg, vregWrite, jsAfterRd,
-          oldCsr] using hRun
+          oldCsr] using! hRun
       rw [JoltISA.execProgram_instr_run_retire _ _ js jsAfterRd hRdRun]
       rw [JoltISA.execProgram_instr_run_retire _ _ jsAfterRd
         (csrrwAfterReadWrite js csr rd oldCsr rs1Val) hCsrRun]
@@ -365,7 +365,7 @@ private theorem csrrwProgram_project_run
           JoltISA.addi_run_vreg_xreg JoltISA.systemScratchVReg rs1
             (0 : BitVec 12) js rs1Val hSource systemScratch_vreg_writable
         rw [addi_zero_value] at hRun
-        simpa [jsScratch, joltSetVReg, vregWrite] using hRun
+        simpa [jsScratch, joltSetVReg, vregWrite] using! hRun
       have hScratchCsr :
           jsScratch.vregs (JoltISA.SystemCSR.vreg csr) = oldCsr := by
         simpa [jsScratch, joltSetVReg, oldCsr] using
@@ -405,7 +405,7 @@ private theorem csrrwProgram_project_run
             (systemCSR_vreg_writable csr)
         rw [addi_zero_value] at hRun
         simpa [csrrwAfterSameReg, joltSetVReg, vregWrite, jsAfterRd,
-          jsScratch, oldCsr, hScratchVal] using hRun
+          jsScratch, oldCsr, hScratchVal] using! hRun
       rw [JoltISA.execProgram_instr_run_retire _ _ js jsScratch hScratchRun]
       rw [JoltISA.execProgram_instr_run_retire _ _ jsScratch jsAfterRd hRdRun]
       rw [JoltISA.execProgram_instr_run_retire _ _ jsAfterRd
@@ -422,7 +422,7 @@ private theorem csrrwProgram_project_run
         JoltISA.addi_run_vreg_xreg (JoltISA.SystemCSR.vreg csr) rs1
           (0 : BitVec 12) js rs1Val hSource (systemCSR_vreg_writable csr)
       rw [addi_zero_value] at hRun
-      simpa [csrrwAfterCsrWrite, joltSetVReg, vregWrite] using hRun
+      simpa [csrrwAfterCsrWrite, joltSetVReg, vregWrite] using! hRun
     rw [JoltISA.execProgram_instr_run_retire _ _ js
       (csrrwAfterCsrWrite js csr rs1Val) hCsrRun]
     simp only [JoltISA.execProgram_done, EStateM.run, pure, EStateM.pure,
@@ -517,13 +517,14 @@ private theorem execute_CSRReg_CSRRW_machine_run
   simp only [bind, EStateM.bind, pure, get, getThe, MonadStateOf.get, EStateM.get]
   simp only [EStateM.pure, hCurPrivProject]
   simp only [hCheck]
-  simp only [LeanRV64D.Functions.not]
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
+  simp only [sail_not_true, sail_not_false, Bool.false_eq_true, ↓reduceIte]
   simp only [EStateM.bind, EStateM.get]
   simp only [hCurPrivProject, EStateM.pure]
-  simp only [ext_check_CSR, Bool.not_true, Bool.false_eq_true, if_false, EStateM.bind]
+  simp only [ext_check_CSR_true, sail_not_true, Bool.false_eq_true, ↓reduceIte, EStateM.bind]
   cases hRd : rd == zreg
-  · simp only [Bool.false_eq_true, if_false, csr_access_type]
+  · have hAccess : ∀ b, csr_access_type csrop.CSRRW false b = .CSRReadWrite := by
+      intro b; cases b <;> rfl
+    simp only [Bool.false_eq_true, ↓reduceIte, hAccess]
     have hReadAccess :
         (CSRAccessType.CSRReadWrite != CSRAccessType.CSRWrite) = true := by decide
     simp only [hReadAccess, if_true]
@@ -535,7 +536,9 @@ private theorem execute_CSRReg_CSRRW_machine_run
     simp only [hCallback]
     rw [wX_bits_stateAfterWrite rd oldCsr sAfterCsrWrite]
     simp only [EStateM.pure]
-  · simp only [if_true, csr_access_type]
+  · have hAccess : ∀ b, csr_access_type csrop.CSRRW true b = .CSRWrite := by
+      intro b; cases b <;> rfl
+    simp only [↓reduceIte, hAccess]
     have hReadAccess : ¬ ((CSRAccessType.CSRWrite != CSRAccessType.CSRWrite) = true) := by decide
     simp only [hReadAccess, Bool.false_eq_true, if_false, EStateM.pure]
     have hWriteAccess :
@@ -557,8 +560,8 @@ private theorem check_CSR_systemCSR_machine_run
     unfold check_CSR check_CSR_priv check_CSR_access is_CSR_accessible
       stateen_allows_CSR_access privLevel_to_CSR_privbits csrPriv csrAccess
       JoltISA.SystemCSR.address zopz0zKzJ_u <;>
-    simp [bind, EStateM.bind, pure, EStateM.pure]
-  all_goals decide
+    simp [bind, EStateM.bind, pure, EStateM.pure, andM, toBool]
+  all_goals first | decide | rfl
 
 private theorem write_CSR_mtvec_direct_run
     (js : SailJoltState) (value : BitVec 64)

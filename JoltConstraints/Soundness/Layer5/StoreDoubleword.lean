@@ -57,7 +57,7 @@ theorem store_write_value {live : Fin 128 → Prop} {pre : SailJoltState}
   have sourceIs := agrees.rs2Value bound context equations selected rowIs source
     (storeRow.canonical context rowIs).2 facts.rs2Register sourceLive
   have store : witness.OpFlags .Store t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.store] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.store] using!
       opFlag_of_selected_bytecode bound context equations .Store t slot selected
   have relation := equations.rs2EqRamWriteIfStore t
   rw [store, one_mul, sourceIs] at relation

@@ -267,9 +267,7 @@ theorem execHostIOWith_frame
   dsimp only
   split
   · exact pure_rule _
-  · refine bind_rule (pure_rule _) (fun _ => ?_)
-    refine bind_rule (read_rule _) (fun callId => ?_)
-    repeat' first
+  · repeat' first
       | exact readHostBytes_frame loadByte hload _ _ _ _ _
       | exact read_rule _
       | exact pure_rule _

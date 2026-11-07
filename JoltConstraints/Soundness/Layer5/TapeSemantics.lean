@@ -35,6 +35,35 @@ noncomputable def execWithTapeAnswer (instruction : Instr) (answer : BitVec 64) 
         .error (Error.Assertion "VirtualAdviceLoad: invalid width") state
   | instruction => execInstr instruction
 
+/-- `execWithTapeAnswer` by its defining match. Lean 4.35 generates the default
+equation lemmas for this overlapping match over `Instr` very slowly (minutes per
+use); this single lemma replaces them, and `simp` reduces the match on a
+concrete instruction directly. -/
+theorem execWithTapeAnswer_def (instruction : Instr) (answer : BitVec 64) :
+    execWithTapeAnswer instruction answer =
+      match instruction with
+      | .VirtualAdviceLoad destination byteCount => fun state =>
+          if byteCount.toNat = 1 ∨ byteCount.toNat = 2 ∨
+              byteCount.toNat = 4 ∨ byteCount.toNat = 8 then
+            (do
+              writeDst destination answer
+              pure RETIRE_SUCCESS)
+              { state with adviceTape :=
+                { state.adviceTape with readPosition := state.adviceTape.readPosition + byteCount.toNat } }
+          else
+            .error (Error.Assertion "VirtualAdviceLoad: invalid width") state
+      | instruction => execInstr instruction := rfl
+
+attribute [eqns execWithTapeAnswer_def] execWithTapeAnswer
+
+/-- Off tape reads the relaxed interpreter is the existing interpreter. Proved
+per constructor, which avoids the slow default equation lemmas. -/
+theorem execWithTapeAnswer_of_ne (instruction : Instr) (answer : BitVec 64)
+    (notAdvice : ∀ destination byteCount,
+      instruction ≠ .VirtualAdviceLoad destination byteCount) :
+    execWithTapeAnswer instruction answer = execInstr instruction := by
+  cases instruction <;> first | rfl | exact absurd rfl (notAdvice _ _)
+
 /-- Every relaxed instruction preserves a reflexive, transitive device
 relation whose byte-store obligations cover SD and all floor stores.
 For example, a relaxed advice load preserves equality of the entire device.

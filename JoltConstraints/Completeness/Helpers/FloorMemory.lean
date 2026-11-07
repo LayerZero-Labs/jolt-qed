@@ -52,7 +52,7 @@ theorem floor_load_access (instruction : Instr) (faultClass : LoadFaultClass)
       | .Ok word => writeDst dst word; pure RETIRE_SUCCESS
       | .Err error => pure error) pre post
   rcases selected with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
-    simpa only [Instr.withRuntimeAdvice, execInstr, show (0 : BitVec 64) = 0#64 from rfl, BitVec.and_zero, ↓reduceIte] using runs
+    simpa only [Instr.withRuntimeAdvice, execInstr, show (0 : BitVec 64) = 0#64 from rfl, BitVec.and_zero, ↓reduceIte] using! runs
 
 /-- A floor store checks alignment then writes its captured second source to
 the containing doubleword; for example W checks bits zero and one.
@@ -79,7 +79,7 @@ theorem floor_store_access (instruction : Instr) (base value : Src)
       | .Err error => pure error) pre post
   have guardedRun := guarded (by
     rcases selected with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
-      simpa only [Instr.withRuntimeAdvice, execInstr, show (0 : BitVec 64) = 0#64 from rfl, BitVec.and_zero, ↓reduceIte] using runs)
+      simpa only [Instr.withRuntimeAdvice, execInstr, show (0 : BitVec 64) = 0#64 from rfl, BitVec.and_zero, ↓reduceIte] using! runs)
   exact ⟨guardedRun.1, lookup_read_bind value _ _ _ _ guardedRun.2⟩
 
 /-- The recorded floor address is the containing doubleword when the natural

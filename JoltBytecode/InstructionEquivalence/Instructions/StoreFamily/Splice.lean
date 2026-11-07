@@ -894,7 +894,7 @@ theorem dword_store_splice_eq_byte_store_populated
           toNat_base_add_small base k hk hsetup.no_ovf
         have hpresent :
             MemBytePresentAt s (base + BitVec.ofNat 64 k).toNat := by
-          simpa [haddr] using Option.ne_none_iff_exists'.mp (hpop k hk)
+          simpa [haddr] using! Option.ne_none_iff_exists'.mp (hpop k hk)
         have hload' : loaded_byte_at s (base + BitVec.ofNat 64 k) hpresent =
             dword_byte dword_orig k := by
           simpa using (hload k hk).symm
@@ -954,7 +954,7 @@ theorem dword_store_splice_eq_halfword_store_populated
           toNat_base_add_small base k hk hsetup.no_ovf
         have hpresent :
             MemBytePresentAt s (base + BitVec.ofNat 64 k).toNat := by
-          simpa [haddr] using Option.ne_none_iff_exists'.mp (hpop k hk)
+          simpa [haddr] using! Option.ne_none_iff_exists'.mp (hpop k hk)
         have hload' : loaded_byte_at s (base + BitVec.ofNat 64 k) hpresent =
             dword_byte dword_orig k := by
           simpa using (hload k hk).symm
@@ -1013,7 +1013,7 @@ theorem dword_store_splice_eq_word_store_populated
           toNat_base_add_small base k hk hsetup.no_ovf
         have hpresent :
             MemBytePresentAt s (base + BitVec.ofNat 64 k).toNat := by
-          simpa [haddr] using Option.ne_none_iff_exists'.mp (hpop k hk)
+          simpa [haddr] using! Option.ne_none_iff_exists'.mp (hpop k hk)
         have hload' : loaded_byte_at s (base + BitVec.ofNat 64 k) hpresent =
             dword_byte dword_orig k := by
           simpa using (hload k hk).symm

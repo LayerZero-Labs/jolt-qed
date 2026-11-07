@@ -1022,29 +1022,29 @@ theorem execInstr_preserves_protected
       exact unaryWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
   | VirtualLoadB faultClass dst base imm fault =>
       exact floorLoad_preserves_protected 0 dst base imm fault hsafe js js' result
-        (by simpa [execInstr] using hrun)
+        (by simpa [execInstr] using! hrun)
   | VirtualLoadH faultClass dst base imm fault =>
       exact floorLoad_preserves_protected 1 dst base imm fault hsafe js js' result
-        (by simpa [execInstr] using hrun)
+        (by simpa [execInstr] using! hrun)
   | VirtualLoadW faultClass dst base imm fault =>
       exact floorLoad_preserves_protected 3 dst base imm fault hsafe js js' result
-        (by simpa [execInstr] using hrun)
+        (by simpa [execInstr] using! hrun)
   | VirtualStoreB base value imm fault =>
       exact floorStore_preserves_protected 0 base value imm fault js js' result
-        (by simpa [execInstr] using hrun)
+        (by simpa [execInstr] using! hrun)
   | VirtualStoreH base value imm fault =>
       exact floorStore_preserves_protected 1 base value imm fault js js' result
-        (by simpa [execInstr] using hrun)
+        (by simpa [execInstr] using! hrun)
   | VirtualStoreW base value imm fault =>
       exact floorStore_preserves_protected 3 base value imm fault js js' result
-        (by simpa [execInstr] using hrun)
+        (by simpa [execInstr] using! hrun)
   | LD faultClass dst base imm =>
       exact ld_preserves_protected hsafe
-        (by simpa [execInstr] using hrun)
+        (by simpa [execInstr] using! hrun)
   | SD base value imm =>
-      exact sd_preserves_protected (by simpa [execInstr] using hrun)
+      exact sd_preserves_protected (by simpa [execInstr] using! hrun)
   | VirtualAdvice dst value _ =>
-      exact dstWrite_preserves_protected hsafe (by simpa [execInstr] using hrun)
+      exact dstWrite_preserves_protected hsafe (by simpa [execInstr] using! hrun)
   | VirtualAdviceLoad dst byteCount =>
       cases hread : readAdviceTape js.adviceTape byteCount with
       | none => simp [execInstr, EStateM.run, hread] at hrun
@@ -1081,7 +1081,7 @@ theorem execInstr_preserves_protected
       exact binaryReadIfPureElseThrow_preserves_protected
         (p := fun x y => x.toNat * y.toNat < 2 ^ 64)
         (msg := "VirtualAssertMulUNoOverflow")
-        (by simpa [execInstr] using hrun)
+        (by simpa [execInstr] using! hrun)
   | VirtualAssertLTE lhs rhs _ =>
       exact binaryReadIfPureElseThrow_preserves_protected
         (p := fun x y => x.toNat ≤ y.toNat)

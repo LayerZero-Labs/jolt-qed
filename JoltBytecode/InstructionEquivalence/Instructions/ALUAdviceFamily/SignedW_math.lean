@@ -93,7 +93,7 @@ theorem signExtend32_eq_zero_iff (x : BitVec 32) :
   · intro h
     have hlow := congrArg
       (fun z : BitVec 64 => Sail.BitVec.extractLsb z 31 0) h
-    simpa only [extractLsb_signExtend32] using hlow
+    simpa only [extractLsb_signExtend32] using! hlow
   · intro h
     subst x
     decide
@@ -174,7 +174,7 @@ theorem sail_divw_value_of_normal_signedw (dividend divisor : BitVec 64)
   have hyInt : y.toInt ≠ 0 := by
     intro h
     apply hne
-    exact BitVec.eq_of_toInt_eq (by simpa only [hy] using h)
+    exact BitVec.eq_of_toInt_eq (by simpa only [hy] using! h)
   have hpair : x ≠ BitVec.intMin 32 ∨ y ≠ (-1 : BitVec 32) := by
     by_cases hxmin : x = BitVec.intMin 32
     · exact Or.inr (fun hyneg => hnoOverflow ⟨hxmin, hyneg⟩)
@@ -196,7 +196,7 @@ theorem sail_divw_value_of_normal_signedw (dividend divisor : BitVec 64)
     show decide _ = false
     apply decide_eq_false
     push_neg
-    simpa using hquotientLt
+    simpa using! hquotientLt
   simp only [show LeanRV64D.Functions.not false = true from rfl,
     Bool.true_and, hgeFalse, Bool.false_eq_true, ↓reduceIte]
   rw [trunc32_eq_intCast_signedw, ← hsdivInt]
@@ -288,7 +288,7 @@ theorem sail_remw_value_of_normal_signedw (dividend divisor : BitVec 64)
   have hyInt : y.toInt ≠ 0 := by
     intro h
     apply hne
-    exact BitVec.eq_of_toInt_eq (by simpa only [y] using h)
+    exact BitVec.eq_of_toInt_eq (by simpa only [y] using! h)
   unfold sail_remw_value
   change sign_extend (m := 64) (to_bits_truncate (l := 32)
     (if decide (y.toInt = 0) then x.toInt else Int.tmod x.toInt y.toInt)) = _

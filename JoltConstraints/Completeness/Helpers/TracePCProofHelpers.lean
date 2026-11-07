@@ -33,6 +33,14 @@ theorem read_rule (r : Register) : Preserves (LeanRV64D.readReg r) := by
   cases readReg_pure r s v t h
   rfl
 
+-- Sail's short-circuiting `<&&>` runs its second operand only after `true`.
+theorem andM_rule {m n : SailM Bool} (hm : Preserves m) (hn : Preserves n) :
+    Preserves (m <&&> n) :=
+  bind_rule hm fun b => by
+    cases b
+    · exact pure_rule false
+    · exact hn
+
 theorem write_rule (r : Register) (v : RegisterType r)
     (hne : r ≠ Register.PC) : Preserves (LeanRV64D.writeReg r v) := by
   intro s t x h
@@ -51,26 +59,29 @@ theorem jump_rule (target : BitVec 64) : Preserves (jump_to target) := by
       ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift, ExceptT.lift,
       ExceptT.mk, EStateM.map, Functor.map] at h
     have hzca : Preserves (currentlyEnabled extension.Ext_Zca) := by
-      unfold currentlyEnabled
-      apply bind_rule
-      · unfold currentlyEnabled
-        exact bind_rule (read_rule Register.misa) (fun _ => pure_rule _)
-      · intro zca
-        exact pure_rule _
-    cases hz : currentlyEnabled extension.Ext_Zca s with
-    | error e s' => simp only [hz] at h; cases h
-    | ok zca s' =>
-      have hp := hzca s s' zca hz
-      by_cases halign : bit_to_bool (BitVec.access target 1) = true ∧
-          LeanRV64D.Functions.not zca = true
-      all_goals
-        simp only [hz, ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift,
-          ExceptT.lift, ExceptT.mk, EStateM.map, Functor.map,
-          Bool.and_eq_true, halign, ↓reduceIte,
-          set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind, pure, EStateM.pure] at h
-        cases h
-        simpa only [Std.ExtDHashMap.get?_insert, beq_iff_eq,
-          reduceCtorEq, ↓reduceDIte] using hp
+      simp only [currentlyEnabled]
+      exact andM_rule (pure_rule _) (bind_rule (andM_rule (pure_rule _)
+        (bind_rule (read_rule Register.misa) fun _ => pure_rule _)) fun _ => pure_rule _)
+    -- `<&&>` short-circuits: `Ext_Zca` is read only when bit 1 is set.
+    cases bit1 : bit_to_bool (BitVec.access target 1)
+    · simp only [andM, toBool, bit1, ExceptT.bindCont, EStateM.map, Bool.false_eq_true,
+        ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
+        pure, EStateM.pure] at h
+      cases h
+      simp only [Std.ExtDHashMap.get?_insert, beq_iff_eq, reduceCtorEq, ↓reduceDIte]
+    · simp only [andM, toBool, bit1, bind, EStateM.bind, pure, EStateM.pure,
+        ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.mk, EStateM.map] at h
+      cases hz : currentlyEnabled extension.Ext_Zca s with
+      | error e s' => simp only [hz] at h; cases h
+      | ok zca s' =>
+        have hp := hzca s s' zca hz
+        cases zca <;>
+          simp only [hz, sail_not_true, sail_not_false, ExceptT.bindCont, EStateM.map,
+            Bool.false_eq_true, ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind,
+            EStateM.bind, pure, EStateM.pure] at h <;>
+          cases h <;>
+          simpa only [Std.ExtDHashMap.get?_insert, beq_iff_eq,
+            reduceCtorEq, ↓reduceDIte] using hp
   · simp only [hbit, ↓reduceIte, throw, throwThe] at h
     cases h
 

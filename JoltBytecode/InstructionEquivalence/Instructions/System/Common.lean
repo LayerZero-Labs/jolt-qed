@@ -33,6 +33,11 @@ noncomputable section
 
 namespace System
 
+/-- The extension CSR check accepts every access. Stated for the same reason as
+`sail_not_true` in ProofSupport/Lemmas.lean. -/
+theorem ext_check_CSR_true (csrno : BitVec 12) (p : Privilege) (access : CSRAccessType) :
+    ext_check_CSR csrno p access = true := rfl
+
 /-- Jolt's concrete MRET return target: `JALR` reads virtual `mepc` and clears
 bit 0. -/
 def mretReturnTarget (js : SailJoltState) : BitVec 64 :=
@@ -565,8 +570,9 @@ theorem currentlyEnabled_Ext_C_run
     (currentlyEnabled extension.Ext_C) s =
       .ok (hartSupports extension.Ext_C && ((_get_Misa_C misa) == 1#1)) s := by
   unfold currentlyEnabled LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg
-  simp only [hmisa, bind, EStateM.bind, pure, EStateM.pure,
-    MonadStateOf.get, EStateM.get, getThe, get]
+  cases hartSupports extension.Ext_C <;>
+    simp only [andM, toBool, hmisa, bind, EStateM.bind, pure, EStateM.pure,
+      MonadStateOf.get, EStateM.get, getThe, get, Bool.true_and, Bool.false_and]
 
 /-- Literal callback map lookup for the generated `mstatus` CSR name. -/
 theorem csr_name_map_backwards_mstatus_run (s : SailState) :
@@ -625,7 +631,7 @@ theorem long_csr_write_callback_mstatus_run
     (s : SailState) (value : BitVec 64) :
     long_csr_write_callback "mstatus" "mstatush" value s = .ok () s := by
   unfold long_csr_write_callback
-  rw [csr_name_write_callback_mstatus_run]
+  exact csr_name_write_callback_mstatus_run s _
 
 end System
 

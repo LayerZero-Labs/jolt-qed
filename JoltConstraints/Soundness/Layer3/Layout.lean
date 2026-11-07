@@ -107,7 +107,7 @@ theorem public_io_words_fit_ram
           obtain ⟨offsetIs, _⟩ := checkedSub_some subtracted
           rw [MemoryLayout.get_lowest_address_toNat] at offsetIs
           rw [← layoutEq]
-          simpa [← ioEndEq, offsetIs] using ioEndBound.trans minimumBound
+          simpa [← ioEndEq, offsetIs] using! ioEndBound.trans minimumBound
 
 /-- All eight bytes of every in-domain word fit below `2^64`, including the
 last word when the region's exclusive endpoint equals `2^64`. -/

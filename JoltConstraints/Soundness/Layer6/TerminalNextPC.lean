@@ -43,7 +43,7 @@ private theorem terminal_last_setup
       context equations run bytecodeEq represented last atEnd nextBound
   let index : Fin run.rows.size := ⟨before.val, by omega⟩
   have rowEq : run.rows[index] = last := by
-    have atIndex : run.rows[index]? = some last := by simpa only [index] using lastAt
+    have atIndex : run.rows[index]? = some last := by simpa only [index] using! lastAt
     exact (Array.getElem?_eq_some_iff.mp atIndex).2
   have beforeEq : before = cycle := Fin.ext (by omega)
   have selectedCycle : JoltConstraints.bytecodeRa witness slot cycle = 1 := by
@@ -260,7 +260,7 @@ private theorem terminal_jalr
       some run.bytecode[last.rowIndex] := by
     simpa only [bytecodeEq] using rowAt
   have atCycleRow : run.rows[cycle.val] = last := by
-    simpa only [← cycleIndex] using rowEq
+    simpa only [← cycleIndex] using! rowEq
   have baseAt := represented_last_jalr_base joltField joltInstance privateInputs
     witness context equations run bytecodeEq represented last dst base imm jump
     cycle inRun atCycleRow slot selected rowAtRun
@@ -667,7 +667,7 @@ private theorem terminal_branch
       run bytecodeEq represented last atEnd cycle atCycle nextBound
   have inRun : cycle.val < run.rows.size := by omega
   have atCycleRow : run.rows[cycle.val] = last := by
-    simpa only [← cycleIndex] using rowEq
+    simpa only [← cycleIndex] using! rowEq
   obtain ⟨lhs, rhs, imm, shapes⟩ :=
     branch_instruction_of_flag run.bytecode[last.rowIndex].instruction branch
   have decision := terminal_branch_prepared_decision joltField joltInstance
@@ -683,7 +683,7 @@ private theorem terminal_branch
   | false =>
       have branchZero : witness.ShouldBranch cycle = 0 := by
         rw [taken] at decision
-        simpa only [↓reduceIte] using decision
+        simpa only [↓reduceIte] using! decision
       have same := JoltNextPCFrame.branch_not_taken _ _ _ branch taken runs
       exact terminal_branch_untaken joltField joltInstance noWrap privateInputs
         witness context equations run last terminal cycle slot selected rowAt

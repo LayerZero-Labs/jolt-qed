@@ -329,7 +329,7 @@ private theorem represented_last_boundary
         witness.UnexpandedPC cycle = (run.bytecode[last.rowIndex].address.toNat : F) ∧
         witness.NextUnexpandedPC cycle = 0 := by
   have lastAt : run.rows[run.rows.size - 1]? = some last := by
-    simpa only [Array.back?_eq_getElem?] using atEnd
+    simpa only [Array.back?_eq_getElem?] using! atEnd
   obtain ⟨lastIn, lastEq⟩ := Array.getElem?_eq_some_iff.mp lastAt
   let cycle : Fin params.traceLength :=
     ⟨run.rows.size - 1, by have := represented.rowsBound; omega⟩
@@ -555,6 +555,8 @@ theorem selected_terminal_nonjump_flags
       (JoltConstraints.Soundness.two_pow_127_lt_char joltField)
       context equations .IsCompressed cycle slot selected]
     simp [JoltConstraints.bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag]
+    -- the two sides differ only in their `Decidable` instances
+    rfl
   exact ⟨jumpZero, doNotZero, compressed⟩
 
 /-- A nonzero ShouldBranch value on a selected row implies the row has the

@@ -132,7 +132,7 @@ theorem amomaxudProgram_eq_sail
       JoltISA.amoTmpVRegFor, JoltISA.amoVRegFor,
       JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst,
       JoltISA.rdZeroRewriteVReg,
-      hrd, Bool.false_eq_true, if_false, if_true] using hcore
+      hrd, Bool.false_eq_true, if_false, if_true] using! hcore
 
 end AtomicFamily
 

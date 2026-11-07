@@ -344,7 +344,7 @@ private theorem adjacent_push {α : Type} (rows : Array α) (step : α)
     subst next
     apply last current
     rw [Array.back?_eq_getElem?]
-    simpa only [show rows.size - 1 = index by omega] using currentOld
+    simpa only [show rows.size - 1 = index by omega] using! currentOld
 
 /-- Append a certified execution using an arbitrary tape answer.
 The entry and linkage hypotheses connect the new row to the retained prefix.
@@ -537,11 +537,11 @@ theorem representsRows_push_operands
     RepresentsRows witness {trace with rows := trace.rows.push step} := by
   apply representsRows_push_selected joltField witness context equations trace step old bound slot selected slotIs
   · rw [rs1Value_real params _ _ (by simp only [Array.size_push]; exact Nat.lt_succ_self _)]
-    simpa only [Array.getElem_push_eq] using rs1
+    simpa only [Array.getElem_push_eq] using! rs1
   · rw [rs2Value_real params _ _ (by simp only [Array.size_push]; exact Nat.lt_succ_self _)]
-    simpa only [Array.getElem_push_eq] using rs2
+    simpa only [Array.getElem_push_eq] using! rs2
   · simpa only [TraceWitness.RamAddress, Array.size_push, Nat.lt_add_one,
-      ↓reduceDIte, Array.getElem_push_eq] using ram
+      ↓reduceDIte, Array.getElem_push_eq] using! ram
 
 
 /-- Appending a row makes its post-state the final trace state.
@@ -1213,7 +1213,7 @@ theorem append_expansion_row_of_termination {F : Type} [Field F] {params : Witne
       rw [finalTraceState_push]
       simpa only [Array.size_push] using registers (by simpa only [candidate, appendUntrustedRow, Array.size_push] using next)
     · intro more
-      simpa only [indexIs, Nat.add_assoc] using
+      simpa only [indexIs, Nat.add_assoc] using!
         append_interior_next joltField witness context equations run bytecodeEq step answer
           executes entry bound slot (by omega) selected rowIs (remaining more)
     · intro more last atEnd stalled
@@ -1281,7 +1281,7 @@ theorem ExpansionState.interior_pre {F : Type} [Field F] {params : WitnessParams
   obtain ⟨last, atLast, indexIs⟩ := state.ordered (done - 1) (by omega)
   have back : run.rows.back? = some last := by
     rw [Array.back?_eq_getElem?]
-    simpa only [show run.rows.size - done + (done - 1) = run.rows.size - 1 by omega] using atLast
+    simpa only [show run.rows.size - done + (done - 1) = run.rows.size - 1 by omega] using! atLast
   have bytecodeEq : run.bytecode = context.bytecode :=
     Option.some.inj (run.expands.symm.trans context.expands)
   have atRow : context.bytecode[first.val + (done - 1)]? = some run.bytecode[last.rowIndex] := by
@@ -1385,11 +1385,10 @@ private theorem maskProducer_exec (previous current : Instr)
     (executes : execWithTapeAnswer (previous.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS post) : execInstr previous pre = .ok RETIRE_SUCCESS post := by
   rw [masksFed_withRuntimeAdvice _ _ advice fed] at executes
-  have ignores : execWithTapeAnswer previous answer = execInstr previous := by
-    unfold execWithTapeAnswer
-    split
-    · simp only [ExpansionFacts.masksFed, Bool.false_eq_true] at fed
-    · rfl
+  have ignores : execWithTapeAnswer previous answer = execInstr previous :=
+    execWithTapeAnswer_of_ne previous answer fun _ _ isAdvice => by
+      subst isAdvice
+      simp only [ExpansionFacts.masksFed, Bool.false_eq_true] at fed
   rwa [ignores] at executes
 
 private theorem prepared_shift_mask

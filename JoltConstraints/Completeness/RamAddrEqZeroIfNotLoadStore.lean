@@ -31,7 +31,7 @@ theorem honestWitness_ramAddrEqZeroIfNotLoadStore
   intro t
   by_cases inBounds : t.val < trace.rows.size
   · simpa [HonestTrace.honestWitness, TraceWitness.OpFlags,
-      TraceWitness.RamAddress, JoltMetadata.circuitFlag, inBounds] using
+      TraceWitness.RamAddress, JoltMetadata.circuitFlag, inBounds] using!
         (ramAddressZeroWhenNotMemory (F := F)
           (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
           (trace.rows[t.val]'inBounds).preState)

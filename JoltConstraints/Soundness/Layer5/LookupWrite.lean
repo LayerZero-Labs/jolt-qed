@@ -45,10 +45,10 @@ theorem lookupWrite_value_of_raf_zero (lhs rhs value : BitVec 64) (table : Looku
       witness.LookupOutput t = (value.toNat : F)) :
     witness.RdWriteValue t = (value.toNat : F) := by
   have raf : witness.InstructionRafFlag t = 0 := by
-    simpa only [bytecodeRafFlag, rowIs, rafFlag] using
+    simpa only [bytecodeRafFlag, rowIs, rafFlag] using!
       instructionRafFlag_of_selected_bytecode charAbove2pow127 context equations t slot selected
   have writes : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, writeFlag] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, writeFlag] using!
       opFlag_of_selected_bytecode charAbove2pow127 context equations
         .WriteLookupOutputToRD t slot selected
   have selectedTable : (bytecodeRow context.bytecode slot.val).bind

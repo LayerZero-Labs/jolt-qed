@@ -216,9 +216,7 @@ private theorem execHostIO_rule (rules : NonStoreRules relation) :
   dsimp only
   split
   · exact StatePreservation.pure_rule rules.refl _
-  · refine StatePreservation.bind_rule rules.trans
-      (StatePreservation.pure_rule rules.refl _) (fun _ => ?_)
-    refine StatePreservation.bind_rule rules.trans (readSrc_rule rules _) (fun callId => ?_)
+  · refine StatePreservation.bind_rule rules.trans (readSrc_rule rules _) (fun callId => ?_)
     preservation_auto [readHostBytes_rule rules _ _ _ _ _, readSrc_rule rules _,
       StatePreservation.pure_rule rules.refl _, StatePreservation.throw_rule relation _,
       StatePreservation.modify_rule _ (fun state => rules.append state _)]

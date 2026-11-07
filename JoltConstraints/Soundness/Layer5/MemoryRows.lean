@@ -589,7 +589,7 @@ private theorem AccessRow.lookup_offset (baseValue : BitVec 64)
   simp only [Prod.mk.injEq] at inputFlags
   obtain ⟨rs1Flag, pcFlag, rs2Flag, immFlag, rdFlag⟩ := inputFlags
   have add : witness.OpFlags .AddOperands t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, addFlag] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, addFlag] using!
       opFlag_of_selected_bytecode bound context equations .AddOperands t slot selected
   have raf := instructionRafFlag_one_of_arithmetic bound context equations t (Or.inl add)
   have immediateIs : witness.Imm t = (imm.toInt : F) := by
@@ -612,9 +612,9 @@ private theorem AccessRow.lookup_offset (baseValue : BitVec 64)
   · simp only [lookupTableEntry, addressOffsetTableEntry] at output
     cases width
     · exact False.elim (native rfl)
-    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 7 (by norm_num)] using output
-    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 6 (by norm_num)] using output
-    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 4 (by norm_num)] using output
+    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 7 (by norm_num)] using! output
+    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 6 (by norm_num)] using! output
+    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 4 (by norm_num)] using! output
   · intro sum sumSmall sumIs
     have same : chosen.val = sum := natCast_injective_below_char
       (lt_trans chosen.isLt charAbove2pow128) (lt_trans sumSmall (two_pow_64_lt_char bound))

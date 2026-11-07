@@ -586,7 +586,7 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
     simp only [JoltISA.execInstr] at runs
     refine store_sequence_old_present base value imm id 0 7
       (ExceptionType.E_SAMO_Addr_Align ()) trace.rows[i].preState trace.rows[i].postState present ordered ?_
-    simpa only [andZero, ↓reduceIte, id_eq] using runs
+    simpa only [andZero, ↓reduceIte, id_eq] using! runs
   · rename_i base value imm fault selected
     subst address
     rw [store_runtime_advice _ base value imm fault
@@ -594,7 +594,7 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
     simp only [JoltISA.execInstr] at runs
     refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 0 0
       fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
-    simpa only [andZero, ↓reduceIte] using runs
+    simpa only [andZero, ↓reduceIte] using! runs
   · rename_i base value imm fault selected
     subst address
     rw [store_runtime_advice _ base value imm fault
@@ -602,7 +602,7 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
     simp only [JoltISA.execInstr] at runs
     refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 1 0
       fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
-    simpa only [andZero, ↓reduceIte] using runs
+    simpa only [andZero, ↓reduceIte] using! runs
   · rename_i base value imm fault selected
     subst address
     rw [store_runtime_advice _ base value imm fault
@@ -610,5 +610,5 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
     simp only [JoltISA.execInstr] at runs
     refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 3 0
       fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
-    simpa only [andZero, ↓reduceIte] using runs
+    simpa only [andZero, ↓reduceIte] using! runs
   · exact False.elim isStore

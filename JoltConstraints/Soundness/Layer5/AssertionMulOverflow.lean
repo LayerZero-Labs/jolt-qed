@@ -51,11 +51,11 @@ private theorem mulAssertion_passes {pre : SailJoltState}
     (by rw [instructionIs]; rfl) leftLive rightLive
   have active : witness.OpFlags .MultiplyOperands t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
-      JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using
+      JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using!
       opFlag_of_selected_bytecode bound context equations .MultiplyOperands t slot selected
   have assertion : witness.OpFlags .Assert t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
-      JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using
+      JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using!
       opFlag_of_selected_bytecode bound context equations .Assert t slot selected
   have raf := instructionRafFlag_one_of_arithmetic bound context equations t
     (Or.inr (Or.inr active))

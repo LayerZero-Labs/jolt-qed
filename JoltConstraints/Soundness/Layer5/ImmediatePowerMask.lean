@@ -102,14 +102,14 @@ private theorem immediatePowerMask_write_value :
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
         ImmediatePowerMask.instruction, JoltMetadata.circuitFlag,
-        JoltMetadata.opcodeFlag] using flag
+        JoltMetadata.opcodeFlag] using! flag
   have active : witness.OpFlags .AddOperands t = 1 := by
     have flag := opFlag_of_selected_bytecode bound context equations
       .AddOperands t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
         ImmediatePowerMask.instruction, JoltMetadata.circuitFlag,
-        JoltMetadata.opcodeFlag] using flag
+        JoltMetadata.opcodeFlag] using! flag
   have table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some operation.table := by
     cases operation <;>

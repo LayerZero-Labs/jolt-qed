@@ -37,10 +37,10 @@ private theorem lui_write_value : witness.RdWriteValue t = (imm.toNat : F) := by
   have flags := opFlag_of_selected_bytecode bound context equations
   have addFlag : witness.OpFlags .AddOperands t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
-      JoltMetadata.opcodeFlag] using flags .AddOperands t slot selected
+      JoltMetadata.opcodeFlag] using! flags .AddOperands t slot selected
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
-      JoltMetadata.opcodeFlag] using flags .WriteLookupOutputToRD t slot selected
+      JoltMetadata.opcodeFlag] using! flags .WriteLookupOutputToRD t slot selected
   have immediate : witness.Imm t = (imm.toNat : F) := by
     simpa only [bytecodeImmediate, rowIs, instructionIs, JoltMetadata.immediate,
       Int.cast_natCast] using imm_of_selected_bytecode bound context equations t slot selected

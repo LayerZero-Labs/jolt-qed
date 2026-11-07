@@ -39,10 +39,10 @@ private theorem auipc_write_value :
   have flags := opFlag_of_selected_bytecode bound context equations
   have addFlag : witness.OpFlags .AddOperands t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
-      JoltMetadata.opcodeFlag] using flags .AddOperands t slot selected
+      JoltMetadata.opcodeFlag] using! flags .AddOperands t slot selected
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
-      JoltMetadata.opcodeFlag] using flags .WriteLookupOutputToRD t slot selected
+      JoltMetadata.opcodeFlag] using! flags .WriteLookupOutputToRD t slot selected
   have address : witness.UnexpandedPC t = (row.address.toNat : F) := by
     simpa only [bytecodeAddress, rowIs] using
       unexpandedPC_of_selected_bytecode bound context equations t slot selected

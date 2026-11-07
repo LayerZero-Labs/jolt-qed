@@ -139,7 +139,7 @@ theorem srlwProgram_eq_sail
         .ok RETIRE_SUCCESS js_tmp := by
     unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst liftSail
     simp only [h_read_rs2, bind, EStateM.bind]
-    simpa only [js_tmp, mask] using
+    simpa only [js_tmp, mask] using!
       JoltISA.writeVReg_retire_run_of_writable tmp mask js htmp
   have h_second :
       JoltISA.execInstr (.VirtualSRLW (.xreg rd) (.xreg rs1) (.vreg tmp)) js_tmp =

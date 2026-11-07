@@ -625,7 +625,7 @@ theorem execute_AMO_word_misaligned
     ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift, MonadLift.monadLift, liftM, monadLift,
     Functor.map, ext_data_get_addr, hrs1, haddr0, hnot_aligned,
-    LeanRV64D.Functions.not, Bool.not_false, if_true]
+    sail_not_false, ↓reduceIte]
 
 /-- The generated word-width cast leaves an already-32-bit value unchanged. -/
 theorem amo_word_setWidth_4x8_eq_self (value : BitVec 32) :
@@ -970,10 +970,10 @@ theorem execute_AMO_word_non_cas_aligned_core
       ExceptT.pure, ExceptT.lift, MonadLift.monadLift, liftM, monadLift,
       Functor.map, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
       MonadExceptOf.throw, ext_data_get_addr, hrs1, haddr0,
-      h_vaddr_aligned, LeanRV64D.Functions.not, Bool.not_true,
+      h_vaddr_aligned, sail_not_true, ↓reduceIte,
       Bool.false_eq_true, if_false, if_true, htranslate,
       amo_word_width4_true, hrs2, hea, hread, hrd_read, hcas_check,
-      Bool.false_and, instBEqAmoop.beq, BEq.beq]
+      Bool.false_and, instBEqAmoop.beq, BEq.beq, andM, toBool]
     rw [hwrite_value]
     simp only [EStateM.bind, EStateM.map, ExceptT.bindCont,
       hwriteback_loaded_direct, hwriteback_state, EStateM.pure]

@@ -84,7 +84,7 @@ private theorem wordArithmetic_write_value {pre : SailJoltState}
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, WordArithmetic.instruction,
-        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using
+        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using!
         opFlag_of_selected_bytecode bound context equations .WriteLookupOutputToRD t slot selected
   have table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some operation.table := by
@@ -95,7 +95,7 @@ private theorem wordArithmetic_write_value {pre : SailJoltState}
     have flag := opFlag_of_selected_bytecode bound context equations operation.flag t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, WordArithmetic.instruction,
-        WordArithmetic.flag, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        WordArithmetic.flag, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   cases operation with
   | addw =>

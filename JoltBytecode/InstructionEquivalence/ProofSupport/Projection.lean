@@ -211,6 +211,21 @@ theorem bind_preservesSystemProjectRegs
       simp only [bind, EStateM.bind, hm_run, ResultPreservesSystemProjectRegs]
       exact hm
 
+/-- Sail's short-circuit `<&&>` runs its right operand only after the left one
+returns `true`. -/
+theorem andM_preservesSystemProjectRegs
+    {x y : SailM Bool}
+    {s0 : SailState}
+    (hx : ResultPreservesSystemProjectRegs s0 (x s0))
+    (hy : ∀ s1, x s0 = .ok true s1 → ResultPreservesSystemProjectRegs s1 (y s1)) :
+    ResultPreservesSystemProjectRegs s0 (((x <&&> y) : SailM Bool) s0) :=
+  bind_preservesSystemProjectRegs (f := fun b => match toBool b with
+      | true => y
+      | false => pure b) hx fun b s1 hrun => by
+    cases b
+    · exact pure_preservesSystemProjectRegs s1 false
+    · exact hy s1 hrun
+
 /- Primitive Sail computations used by branch instructions. -/
 
 theorem readReg_preservesSystemProjectRegs
@@ -259,14 +274,13 @@ theorem set_next_pc_preservesSystemProjectRegs
 private theorem currentlyEnabled_Ext_Zca_preservesSystemProjectRegs
     (s : SailState) :
     ResultPreservesSystemProjectRegs s ((currentlyEnabled extension.Ext_Zca) s) := by
-  simpa [currentlyEnabled, Functor.map, bind] using
+  simp only [currentlyEnabled]
+  exact andM_preservesSystemProjectRegs (pure_preservesSystemProjectRegs s _) fun s1 _ =>
     bind_preservesSystemProjectRegs
-    (bind_preservesSystemProjectRegs
-      (readReg_preservesSystemProjectRegs Register.misa s)
-      (fun _ s1 _ =>
-        pure_preservesSystemProjectRegs s1 _))
-    (fun _ s1 _ =>
-      pure_preservesSystemProjectRegs s1 _)
+      (andM_preservesSystemProjectRegs (pure_preservesSystemProjectRegs s1 _) fun s2 _ =>
+        bind_preservesSystemProjectRegs (readReg_preservesSystemProjectRegs Register.misa s2)
+          fun _ s3 _ => pure_preservesSystemProjectRegs s3 _)
+      fun _ s4 _ => pure_preservesSystemProjectRegs s4 _
 
 theorem jump_to_preservesSystemProjectRegs
     (target : BitVec 64)
@@ -278,48 +292,63 @@ theorem jump_to_preservesSystemProjectRegs
     ExceptT.pure, bind, EStateM.bind, pure, EStateM.pure,
     LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert]
   by_cases hbit0 : (BitVec.access target 0 == 0#1) = true
-  · cases hzca : (currentlyEnabled extension.Ext_Zca) s with
-    | error e s1 =>
-        have hpres := currentlyEnabled_Ext_Zca_preservesSystemProjectRegs s
-        unfold ResultPreservesSystemProjectRegs at hpres
-        rw [hzca] at hpres
-        simpa [hbit0, pure, EStateM.pure, bind, EStateM.bind,
-          ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift,
-          ExceptT.lift, ExceptT.mk, EStateM.map, Functor.map, hzca,
-          ResultPreservesSystemProjectRegs] using hpres
-    | ok zca s1 =>
-        have hpres_zca := currentlyEnabled_Ext_Zca_preservesSystemProjectRegs s
-        have hzcapres : PreservesSystemProjectRegs s s1 := by
-          unfold ResultPreservesSystemProjectRegs at hpres_zca
-          rw [hzca] at hpres_zca
-          exact hpres_zca
-        by_cases halign :
-            bit_to_bool (BitVec.access target 1) = true ∧
-              LeanRV64D.Functions.not zca = true
-        · simpa [hbit0, pure, EStateM.pure, bind, EStateM.bind,
-            ExceptT.bindCont, hzca, halign, liftM, monadLift,
-            MonadLift.monadLift, ExceptT.lift, ExceptT.mk, EStateM.map,
-            Functor.map, ResultPreservesSystemProjectRegs] using hzcapres
-        ·
-          have hset := set_next_pc_preservesSystemProjectRegs target s1
-          unfold ResultPreservesSystemProjectRegs at hset
-          cases hsetpc : set_next_pc target s1 with
-          | error e s2 =>
-              rw [hsetpc] at hset
-              simpa [hbit0, pure, EStateM.pure, bind, EStateM.bind,
-                ExceptT.bindCont, hzca, halign, liftM, monadLift,
-                MonadLift.monadLift, ExceptT.lift, ExceptT.mk, EStateM.map,
-                Functor.map, hsetpc, ResultPreservesSystemProjectRegs] using
-                preservesSystemProjectRegs_trans hzcapres hset
-          | ok _ s2 =>
-              rw [hsetpc] at hset
-              simpa [hbit0, pure, EStateM.pure, bind, EStateM.bind,
-                ExceptT.bindCont, hzca, halign, liftM, monadLift,
-                MonadLift.monadLift, ExceptT.lift, ExceptT.mk, EStateM.map,
-                Functor.map, hsetpc, ResultPreservesSystemProjectRegs] using
-                preservesSystemProjectRegs_trans hzcapres hset
+  · -- `<&&>` short-circuits: `Ext_Zca` is queried only when bit 1 is set.
+    cases hbit1 : bit_to_bool (BitVec.access target 1)
+    · have hset := set_next_pc_preservesSystemProjectRegs target s
+      unfold ResultPreservesSystemProjectRegs at hset
+      cases hsetpc : set_next_pc target s with
+      | error e s2 =>
+          rw [hsetpc] at hset
+          simpa [andM, toBool, ExceptT.bind, ExceptT.pure, hbit1, hbit0, pure, EStateM.pure, bind, EStateM.bind,
+            ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift, ExceptT.lift,
+            ExceptT.mk, EStateM.map, Functor.map, hsetpc,
+            ResultPreservesSystemProjectRegs] using! hset
+      | ok _ s2 =>
+          rw [hsetpc] at hset
+          simpa [andM, toBool, ExceptT.bind, ExceptT.pure, hbit1, hbit0, pure, EStateM.pure, bind, EStateM.bind,
+            ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift, ExceptT.lift,
+            ExceptT.mk, EStateM.map, Functor.map, hsetpc,
+            ResultPreservesSystemProjectRegs] using! hset
+    · cases hzca : (currentlyEnabled extension.Ext_Zca) s with
+      | error e s1 =>
+          have hpres := currentlyEnabled_Ext_Zca_preservesSystemProjectRegs s
+          unfold ResultPreservesSystemProjectRegs at hpres
+          rw [hzca] at hpres
+          simpa [andM, toBool, ExceptT.bind, ExceptT.pure, hbit1, hbit0, pure, EStateM.pure, bind, EStateM.bind,
+            ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift,
+            ExceptT.lift, ExceptT.mk, EStateM.map, Functor.map, hzca,
+            ResultPreservesSystemProjectRegs] using! hpres
+      | ok zca s1 =>
+          have hpres_zca := currentlyEnabled_Ext_Zca_preservesSystemProjectRegs s
+          have hzcapres : PreservesSystemProjectRegs s s1 := by
+            unfold ResultPreservesSystemProjectRegs at hpres_zca
+            rw [hzca] at hpres_zca
+            exact hpres_zca
+          by_cases halign : LeanRV64D.Functions.not zca = true
+          · simpa [andM, toBool, ExceptT.bind, ExceptT.pure, hbit1, hbit0, pure, EStateM.pure, bind, EStateM.bind,
+              ExceptT.bindCont, hzca, halign, liftM, monadLift,
+              MonadLift.monadLift, ExceptT.lift, ExceptT.mk, EStateM.map,
+              Functor.map, ResultPreservesSystemProjectRegs] using! hzcapres
+          ·
+            have hset := set_next_pc_preservesSystemProjectRegs target s1
+            unfold ResultPreservesSystemProjectRegs at hset
+            cases hsetpc : set_next_pc target s1 with
+            | error e s2 =>
+                rw [hsetpc] at hset
+                simpa [andM, toBool, ExceptT.bind, ExceptT.pure, hbit1, hbit0, pure, EStateM.pure, bind, EStateM.bind,
+                  ExceptT.bindCont, hzca, halign, liftM, monadLift,
+                  MonadLift.monadLift, ExceptT.lift, ExceptT.mk, EStateM.map,
+                  Functor.map, hsetpc, ResultPreservesSystemProjectRegs] using!
+                  preservesSystemProjectRegs_trans hzcapres hset
+            | ok _ s2 =>
+                rw [hsetpc] at hset
+                simpa [andM, toBool, ExceptT.bind, ExceptT.pure, hbit1, hbit0, pure, EStateM.pure, bind, EStateM.bind,
+                  ExceptT.bindCont, hzca, halign, liftM, monadLift,
+                  MonadLift.monadLift, ExceptT.lift, ExceptT.mk, EStateM.map,
+                  Functor.map, hsetpc, ResultPreservesSystemProjectRegs] using!
+                  preservesSystemProjectRegs_trans hzcapres hset
   · simpa [hbit0, pure, EStateM.pure, bind, EStateM.bind, throw, throwThe,
-      MonadExceptOf.throw, EStateM.throw, ResultPreservesSystemProjectRegs] using
+      MonadExceptOf.throw, EStateM.throw, ResultPreservesSystemProjectRegs] using!
       preservesSystemProjectRegs_refl s
 
 /-- Writing an integer register preserves the six CSRs overlaid by system projection. -/
@@ -387,12 +416,15 @@ theorem jump_to_of_aligned (target : BitVec 64) (s : SailState)
       unfold jump_to ext_control_check_pc SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
       unfold set_next_pc System.setNextPCState redirect_callback
       unfold LeanRV64D.sail_assert Sail.ConcurrencyInterfaceV1.PreSail.sail_assert LeanRV64D.writeReg Sail.ConcurrencyInterfaceV1.PreSail.writeReg
-      simp only [hbit0, hzca, hAlignOk, Bool.false_eq_true, if_true,
-        if_false, bind, EStateM.bind, pure, EStateM.pure,
-        ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
-        ExceptT.pure, ExceptT.lift, MonadLift.monadLift, monadLift, liftM,
-        EStateM.map, Functor.map, modify, modifyGet, MonadStateOf.modifyGet,
-        EStateM.modifyGet]
+      -- `<&&>` short-circuits: `Ext_Zca` is queried only when bit 1 is set.
+      cases hbit1 : bit_to_bool (BitVec.access target 1) <;>
+        simp only [hbit1, Bool.true_and] at hAlignOk <;>
+        simp only [andM, toBool, hbit1, hbit0, hzca, hAlignOk, Bool.false_eq_true,
+          ↓reduceIte, bind, EStateM.bind, pure, EStateM.pure,
+          ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
+          ExceptT.pure, ExceptT.lift, MonadLift.monadLift, monadLift, liftM,
+          EStateM.map, Functor.map, modify, modifyGet, MonadStateOf.modifyGet,
+          EStateM.modifyGet]
 
 /-- Writing an integer register commutes with writing `nextPC`. -/
 theorem stateAfterWrite_setNextPCState (s : SailState) (rd : regidx) (value target : BitVec 64) :

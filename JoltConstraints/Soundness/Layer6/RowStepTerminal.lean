@@ -46,7 +46,7 @@ theorem append_jal_row
       some (run.bytecode[next].address +
         BitVec.ofNat 64 (if run.bytecode[next].is_compressed then 2 else 4)) := by
     cases isCompressed : run.bytecode[next].is_compressed <;>
-      simpa only [isCompressed, Bool.false_eq_true, ↓reduceIte] using nextPC
+      simpa only [isCompressed, Bool.false_eq_true, ↓reduceIte] using! nextPC
   let advice := runtimeAdviceFor run.bytecode[next].instruction 0
   obtain ⟨_, executes, registerNext⟩ := jal_step joltField context equations selected rowIs
     instruction noWrap registers pc nextPCLink 0 advice
@@ -96,10 +96,10 @@ theorem append_host_row
   have zero : witness.RamAddress ⟨run.rows.size, bound⟩ = 0 := by
     apply ramAddress_zero_of_not_load_store equations.ramAddrEqZeroIfNotLoadStore
     · simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag,
-        instruction, JoltMetadata.opcodeFlag] using opFlag_of_selected_bytecode
+        instruction, JoltMetadata.opcodeFlag] using! opFlag_of_selected_bytecode
           (two_pow_127_lt_char joltField) context equations .Load ⟨run.rows.size, bound⟩ slot selected
     · simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag,
-        instruction, JoltMetadata.opcodeFlag] using opFlag_of_selected_bytecode
+        instruction, JoltMetadata.opcodeFlag] using! opFlag_of_selected_bytecode
           (two_pow_127_lt_char joltField) context equations .Store ⟨run.rows.size, bound⟩ slot selected
   have rs1 : witness.Rs1Value ⟨run.rows.size, bound⟩ = 0 := by
     simpa only [rowIs, Option.bind_some, instruction, bytecodeRs1Register] using

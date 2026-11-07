@@ -24,8 +24,7 @@ theorem execute_ITYPE_ADDI_factored
   simp only [execute_ITYPE]
   simp only [bind_pure_comp]
   simp only [map_eq_pure_bind]
-  simp only [bind_assoc]
-  simp only [pure_bind]
+  simp only [bind_assoc, pure_bind]
 
 /-- RHS as final state: running native Sail `ADDI` reads `rs1 = v1`, then leaves
 the Sail state as `s` with `rd` overwritten by `v1 + sign_extend imm`. -/

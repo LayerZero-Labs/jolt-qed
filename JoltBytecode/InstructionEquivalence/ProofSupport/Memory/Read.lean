@@ -281,10 +281,6 @@ theorem vmem_read_addr_byte_bridge (addr : BitVec 64) (offset : BitVec 64) (s : 
         Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
         liftM, monadLift, Functor.map,
         ha.split, htranslate, h_mem]
-  change 0#8 ||| value.shiftLeft 0 = value
-  rw [BitVec.shiftLeft_eq]
-  rw [BitVec.shiftLeft_zero]
-  rw [BitVec.zero_or]
 
 theorem vmem_read_byte_reduces (imm : BitVec 12) (rs1 : regidx)
     (s : SailState)
@@ -333,10 +329,6 @@ theorem vmem_read_addr_halfword_bridge (addr : BitVec 64) (offset : BitVec 64) (
         Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
         liftM, monadLift, Functor.map,
         ha.split, htranslate, h_mem]
-  change 0#16 ||| value.shiftLeft 0 = value
-  rw [BitVec.shiftLeft_eq]
-  rw [BitVec.shiftLeft_zero]
-  rw [BitVec.zero_or]
 
 theorem vmem_read_addr_word_bridge (addr : BitVec 64) (offset : BitVec 64) (s : SailState)
     (hpriv : Assumptions.CurPrivilegeMachine s)
@@ -364,10 +356,6 @@ theorem vmem_read_addr_word_bridge (addr : BitVec 64) (offset : BitVec 64) (s : 
         Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
         liftM, monadLift, Functor.map,
         ha.split, htranslate, h_mem]
-  change 0#32 ||| value.shiftLeft 0 = value
-  rw [BitVec.shiftLeft_eq]
-  rw [BitVec.shiftLeft_zero]
-  rw [BitVec.zero_or]
 
 theorem read_ram_eq_loaded_dword (addr : BitVec 64) (s : SailState)
     (hbytes : MemBytesPresentAt s addr 8)

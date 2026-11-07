@@ -75,7 +75,7 @@ private theorem vmem_read_dword_reduces (imm : BitVec 12) (rs1 : regidx)
         (sign_extend (m := 64) imm) 8 (Load Data) false false false s =
       .ok (Ok (loaded_dword_at s (load_effective_address val imm)
         hbytes haligned.no_ovf)) s := by
-    simpa [load_effective_address, Memory.effectiveAddr12] using haddr
+    simpa [load_effective_address, Memory.effectiveAddr12] using! haddr
   unfold vmem_read
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,

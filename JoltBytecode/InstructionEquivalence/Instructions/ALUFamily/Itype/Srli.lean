@@ -88,8 +88,7 @@ theorem execute_SHIFTIOP_SRLI_factored (shamt : BitVec 6) (rs1 rd : regidx) :
   simp only [execute_SHIFTIOP]
   simp only [bind_pure_comp]
   simp only [map_eq_pure_bind]
-  simp only [bind_assoc]
-  simp only [pure_bind, srli_sail_operation]
+  simp only [bind_assoc, pure_bind, srli_sail_operation]
 
 /-- Program-level concrete theorem for `SRLI`.
 

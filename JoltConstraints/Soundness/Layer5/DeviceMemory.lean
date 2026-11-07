@@ -1763,7 +1763,7 @@ theorem load_device_step
       (loadRow.termination_free terminationThenStall run next pre ready)
       encoded aligned belowRam checked device terminationWord region inRegion advice
   have loadOne : witness.OpFlags .Load t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load] using!
       opFlag_of_selected_bytecode bound context equations .Load t slot selected
   have written : witness.RdWriteValue t = (value.toNat : F) := by
     have relation := equations.ramReadEqRdWriteIfLoad t

@@ -450,35 +450,35 @@ private theorem division_honest_concrete (kind : DivisionKind) (rd rs1 rs2 : reg
   cases kind with
   | div =>
     simpa [DivisionKind.program, DivisionKind.honestAdvice, DivisionKind.source,
-      DivisionKind.result, SourceInstruction.honestTracerAdvice] using
+      DivisionKind.result, SourceInstruction.honestTracerAdvice] using!
       divProgram_concrete rs2 rs1 rd pre dividend divisor hrs1 hrs2 nonzero
   | divu =>
     simpa [DivisionKind.program, DivisionKind.honestAdvice, DivisionKind.source,
-      DivisionKind.result, SourceInstruction.honestTracerAdvice] using
+      DivisionKind.result, SourceInstruction.honestTracerAdvice] using!
       divuProgram_concrete rs2 rs1 rd pre dividend divisor hrs1 hrs2 nonzero
   | divw =>
     simpa [DivisionKind.program, DivisionKind.honestAdvice, DivisionKind.source,
-      DivisionKind.result, SourceInstruction.honestTracerAdvice] using
+      DivisionKind.result, SourceInstruction.honestTracerAdvice] using!
       divwProgram_concrete rs2 rs1 rd pre dividend divisor hrs1 hrs2 nonzero
   | divuw =>
     simpa [DivisionKind.program, DivisionKind.honestAdvice, DivisionKind.source,
-      DivisionKind.result, SourceInstruction.honestTracerAdvice] using
+      DivisionKind.result, SourceInstruction.honestTracerAdvice] using!
       divuwProgram_concrete rs2 rs1 rd pre dividend divisor hrs1 hrs2 nonzero
   | rem =>
     simpa [DivisionKind.program, DivisionKind.honestAdvice, DivisionKind.source,
-      DivisionKind.result, SourceInstruction.honestTracerAdvice] using
+      DivisionKind.result, SourceInstruction.honestTracerAdvice] using!
       remProgram_concrete rs2 rs1 rd pre dividend divisor hrs1 hrs2 nonzero
   | remu =>
     simpa [DivisionKind.program, DivisionKind.honestAdvice, DivisionKind.source,
-      DivisionKind.result, SourceInstruction.honestTracerAdvice] using
+      DivisionKind.result, SourceInstruction.honestTracerAdvice] using!
       remuProgram_concrete rs2 rs1 rd pre dividend divisor hrs1 hrs2 nonzero
   | remw =>
     simpa [DivisionKind.program, DivisionKind.honestAdvice, DivisionKind.source,
-      DivisionKind.result, SourceInstruction.honestTracerAdvice] using
+      DivisionKind.result, SourceInstruction.honestTracerAdvice] using!
       remwProgram_concrete rs2 rs1 rd pre dividend divisor hrs1 hrs2 nonzero
   | remuw =>
     simpa [DivisionKind.program, DivisionKind.honestAdvice, DivisionKind.source,
-      DivisionKind.result, SourceInstruction.honestTracerAdvice] using
+      DivisionKind.result, SourceInstruction.honestTracerAdvice] using!
       remuwProgram_concrete rs2 rs1 rd pre dividend divisor hrs1 hrs2 nonzero
 
 /-- An honest generated division run has the same final state as a witness run

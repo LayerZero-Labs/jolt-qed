@@ -73,12 +73,12 @@ theorem binaryAssertion_passes_of_inputs (leftWord rightWord : BitVec 64)
     have flag := instructionRafFlag_of_selected_bytecode bound context equations t slot selected
     cases kind <;>
       simpa only [bytecodeRafFlag, rowIs, instructionIs, BinaryAssertion.instruction,
-        JoltMetadata.instructionRafFlag, JoltMetadata.opcodeFlag, Bool.or_self] using flag
+        JoltMetadata.instructionRafFlag, JoltMetadata.opcodeFlag, Bool.or_self] using! flag
   have active : witness.OpFlags .Assert t = 1 := by
     have flag := opFlag_of_selected_bytecode bound context equations .Assert t slot selected
     cases kind <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, BinaryAssertion.instruction,
-        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   obtain ⟨leftLookup, rightLookup⟩ :=
     lookupOperands_eq_inputs_of_raf_zero bound context equations t raf
   have accepted := lookupOutput_one_of_assert equations.assertLookupOne t active
@@ -158,14 +158,14 @@ theorem binaryAssertion_step {pre : SailJoltState}
     | div0 =>
       simp only [BinaryAssertion.instruction, BinaryAssertion.Passes] at passes ⊢
       have noBad : ¬ (sourceValue lhs pre = 0#64 ∧ sourceValue rhs pre ≠ -1) := by
-        simpa only using passes
+        simpa only using! passes
       simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind,
         leftRead, rightRead, if_neg noBad, pure, EStateM.pure]
     | remainder =>
       simp only [BinaryAssertion.instruction, BinaryAssertion.Passes] at passes ⊢
       have succeeds : sourceValue rhs pre = 0#64 ∨
           (sourceValue lhs pre).toNat < (sourceValue rhs pre).toNat := by
-        simpa only [BitVec.lt_def] using passes
+        simpa only [BitVec.lt_def] using! passes
       simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind,
         leftRead, rightRead, if_pos succeeds, pure, EStateM.pure]
   · intro next

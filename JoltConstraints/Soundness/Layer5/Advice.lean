@@ -41,7 +41,7 @@ theorem rangeCheck_write_value {F : Type} [Field F] {params : WitnessParams}
       lookupOutput_of_selected_bytecode charAbove2pow127 context equations t slot selected
         address lookupSelected
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, writes] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, writes] using!
       opFlag_of_selected_bytecode charAbove2pow127 context equations .WriteLookupOutputToRD t slot selected
   exact ⟨value, (rdWriteValue_eq_lookupOutput
     equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag).trans output⟩

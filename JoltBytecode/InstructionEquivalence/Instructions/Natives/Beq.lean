@@ -43,7 +43,7 @@ theorem beqInstr_eq_sail
   by_cases h_eq : h.rs1_val = h.rs2_val
   · -- taken
     simp only [beq_iff_eq, h_eq, ↓reduceIte]
-    simpa only [Projection.liftSail_bind] using
+    simpa only [Projection.liftSail_bind] using!
       (Projection.systemProjectResult_liftSail_eq_of_preservesSystemProjectRegs
         h.linkedCSRs
         (branchJump_preservesSystemProjectRegs imm js))

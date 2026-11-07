@@ -34,7 +34,7 @@ theorem honestWitness_leftLookupEqLeftInputOtherwise
   by_cases inBounds : t.val < trace.rows.size
   · simpa [HonestTrace.honestWitness, TraceWitness.OpFlags,
       TraceWitness.LeftLookupOperand, TraceWitness.LeftInstructionInput,
-      JoltMetadata.circuitFlag, inBounds] using
+      JoltMetadata.circuitFlag, inBounds] using!
         (leftLookupOtherwiseForOpcode (F := F)
           (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
           (TraceWitness.UnexpandedPC params trace t)

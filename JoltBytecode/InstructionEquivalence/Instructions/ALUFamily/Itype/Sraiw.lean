@@ -177,7 +177,7 @@ theorem sraiwProgram_eq_sail (shamt : BitVec 5) (rs1 rd : regidx) (js : SailJolt
   unfold liftSail
   simp only [bind, EStateM.bind]
   simp only [h_read_rs1, h_value, h_write]
-  simpa only [JoltISA.execProgram_done, pure, EStateM.pure, EStateM.run] using
+  simpa only [JoltISA.execProgram_done, pure, EStateM.pure, EStateM.run] using!
     Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'
       (sraiw_sail_operation shamt v) h.linkedCSRs h_write
 

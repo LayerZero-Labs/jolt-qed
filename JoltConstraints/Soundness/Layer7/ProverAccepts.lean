@@ -195,7 +195,7 @@ theorem represented_ram_addresses_bounded
     have rawZero : raw = (0 : BitVec 64) :=
       JoltConstraints.Soundness.word_eq_of_field_eq charBound
         (by simpa using encoded.symm.trans vanishes)
-    exact zero (by simpa only [rawZero, BitVec.toNat_zero] using rawEq.symm)
+    exact zero (by simpa only [rawZero, BitVec.toNat_zero] using! rawEq.symm)
   obtain ⟨chosen, selected, _⟩ := JoltConstraints.Soundness.ramRa_unique_of_address_ne_zero
     charBound context equations cycle nonzero
   have addressEq := JoltConstraints.Soundness.ramAddress_eq_of_selected

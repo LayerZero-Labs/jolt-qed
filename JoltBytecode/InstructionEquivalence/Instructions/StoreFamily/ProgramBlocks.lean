@@ -567,7 +567,7 @@ theorem setupBlock (rest : JoltISA.Program)
       (JoltISA.execInstr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12))).run js0 =
         .ok RETIRE_SUCCESS js1 := by
     simpa [js0, js1, ea, base, compute_aligned_dword_base_address,
-      load_effective_address, h8] using
+      load_effective_address, h8] using!
       (JoltISA.andi_run_vreg_vreg JoltISA.inlineTmp1 JoltISA.inlineTmp0
         (-8 : BitVec 12) js0 (by unfold WritableVReg; decide))
   have h_base_aligned : AlignedDwordAccess base := by

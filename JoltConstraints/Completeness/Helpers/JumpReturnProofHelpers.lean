@@ -38,7 +38,7 @@ theorem jump_sourceLength_next {joltInstance : JoltInstance SourceInstruction} {
     have hle : (1 : BitVec 16) ≤
         trace.bytecode[i].virtual_sequence_remaining.getD 0 := by
       rw [BitVec.le_def]
-      simpa using hpositive
+      simpa using! hpositive
     rw [BitVec.toNat_sub_of_le hle]
     change i.val + (trace.bytecode[i].virtual_sequence_remaining.getD 0).toNat =
       j.val + ((trace.bytecode[i].virtual_sequence_remaining.getD 0).toNat - 1)

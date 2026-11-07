@@ -18,6 +18,14 @@ set_option autoImplicit true
 
 noncomputable section
 
+/-- Sail's `not` on literals. Rewriting with these, rather than unfolding `not`,
+keeps the `Decidable` instance of an enclosing `if` in step with its condition
+(Lean 4.35 rejects the mismatched term that unfolding leaves behind). -/
+theorem sail_not_true : LeanRV64D.Functions.not true = false := rfl
+
+/-- See `sail_not_true`. -/
+theorem sail_not_false : LeanRV64D.Functions.not false = true := rfl
+
 namespace JoltISA
 
 -- TODO: Not sure if we need this as simp lemmas to clean up proof but to be seen.
@@ -62,7 +70,7 @@ theorem execProgram_instr_run_retire_inv (instr : Instr) (rest : Program)
       cases result <;> simp only [pure, EStateM.pure] at h
       case Retire_Success u =>
         cases u
-        exact ⟨js₁, by simpa [EStateM.run] using hinstr, h⟩
+        exact ⟨js₁, by simpa [EStateM.run, RETIRE_SUCCESS] using hinstr, h⟩
       all_goals cases h
   | error e js₁ =>
       simp only [hinstr] at h

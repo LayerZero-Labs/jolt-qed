@@ -60,8 +60,7 @@ theorem execute_RTYPE_SRA_factored
   simp only [execute_RTYPE]
   simp only [bind_pure_comp]
   simp only [map_eq_pure_bind]
-  simp only [bind_assoc]
-  simp only [pure_bind, sra_sail_operation]
+  simp only [bind_assoc, pure_bind, sra_sail_operation]
 
 /-- Program-level concrete theorem for `SRA`.
 

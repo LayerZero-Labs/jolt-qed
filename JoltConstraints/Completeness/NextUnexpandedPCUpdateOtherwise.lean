@@ -184,6 +184,7 @@ theorem honestWitness_nextUnexpandedPCUpdateOtherwise
       have hJumpField : TraceWitness.OpFlags (F := F) params trace .Jump t =
           if JoltMetadata.opcodeFlag bc.instruction .Jump then 1 else 0 := by
         simp [TraceWitness.OpFlags, ht, JoltMetadata.circuitFlag, row, bc]
+        rfl
       have hShouldField : TraceWitness.ShouldBranch (F := F) params trace t =
           if JoltNextPCFrame.BranchTaken bc.instruction row.preState
             then 1 else 0 := by
@@ -196,6 +197,7 @@ theorem honestWitness_nextUnexpandedPCUpdateOtherwise
       have hCompressedField : TraceWitness.OpFlags (F := F) params trace
           .IsCompressed t = if bc.is_compressed then 1 else 0 := by
         simp [TraceWitness.OpFlags, ht, JoltMetadata.circuitFlag, row, bc]
+        rfl
       by_cases hjump : JoltMetadata.opcodeFlag bc.instruction .Jump = true
       · have hnotBranch := branchTaken_false_of_jump bc.instruction
           row.preState hjump

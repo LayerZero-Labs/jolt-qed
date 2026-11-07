@@ -24,9 +24,9 @@ theorem virtual_assert_mulu_no_overflow_run_ok (lhs : VReg) (rhs : regidx)
     (execInstr (.VirtualAssertMulUNoOverflow (.vreg lhs) (.xreg rhs))).run js =
       .ok RETIRE_SUCCESS js := by
   unfold execInstr readSrc readVReg liftSail
-  simp only [mulWide, hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos hguard]
+  rw [if_pos (show mulWide _ _ < 2 ^ 64 from hguard)]
   rfl
 
 /-- Failed real-source unsigned multiplication overflow assertion. -/
@@ -37,9 +37,9 @@ theorem virtual_assert_mulu_no_overflow_run_err (lhs : VReg) (rhs : regidx)
     (execInstr (.VirtualAssertMulUNoOverflow (.vreg lhs) (.xreg rhs))).run js =
       .error (Error.Assertion "VirtualAssertMulUNoOverflow") js := by
   unfold execInstr readSrc readVReg liftSail
-  simp only [mulWide, hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg hguard]
+  rw [if_neg (show ¬mulWide _ _ < 2 ^ 64 from hguard)]
   rfl
 
 /-- Successful virtual-source unsigned multiplication overflow assertion. -/
@@ -49,9 +49,9 @@ theorem virtual_assert_mulu_no_overflow_v_run_ok (lhs rhs : VReg)
     (execInstr (.VirtualAssertMulUNoOverflow (.vreg lhs) (.vreg rhs))).run js =
       .ok RETIRE_SUCCESS js := by
   unfold execInstr readSrc readVReg
-  simp only [mulWide, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos hguard]
+  rw [if_pos (show mulWide _ _ < 2 ^ 64 from hguard)]
   rfl
 
 /-- Failed virtual-source unsigned multiplication overflow assertion. -/
@@ -61,9 +61,9 @@ theorem virtual_assert_mulu_no_overflow_v_run_err (lhs rhs : VReg)
     (execInstr (.VirtualAssertMulUNoOverflow (.vreg lhs) (.vreg rhs))).run js =
       .error (Error.Assertion "VirtualAssertMulUNoOverflow") js := by
   unfold execInstr readSrc readVReg
-  simp only [mulWide, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
+  simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg hguard]
+  rw [if_neg (show ¬mulWide _ _ < 2 ^ 64 from hguard)]
   rfl
 
 end JoltISA

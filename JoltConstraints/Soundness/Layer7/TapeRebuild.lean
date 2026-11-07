@@ -163,7 +163,8 @@ private theorem UntrustedAnswerRun.postCursor_step
         (withRuntimeAdvice_eq_adviceLoad_iff instruction advice dst width).1 h⟩
     have oldRun : execInstr (instruction.withRuntimeAdvice advice)
         run.rows[step].preState = .ok (.Retire_Success ()) run.rows[step].postState := by
-      simpa only [execWithTapeAnswer, instruction, advice] using runs
+      rw [execWithTapeAnswer_of_ne _ _ notPatched] at runs
+      exact runs
     have growth := execInstr_tapeGrowth (instruction.withRuntimeAdvice advice)
       notPatched run.rows[step].preState run.rows[step].postState _ oldRun
     have noBytes : answerBytesAt run step = [] := by
@@ -192,10 +193,7 @@ private theorem execWithTapeAnswer_bytes_extend
   · have growth := execInstr_tapeGrowth instruction
       (by intro dst width h; exact load ⟨dst, width, h⟩)
         pre post _ (by
-          simp only [execWithTapeAnswer] at runs
-          split at runs
-          · exact False.elim (load ⟨_, _, rfl⟩)
-          · exact runs)
+          rwa [execWithTapeAnswer_of_ne _ _ fun dst width h => load ⟨dst, width, h⟩] at runs)
     exact growth.2
 
 private theorem UntrustedAnswerRun.initial_bytes_prefix
@@ -618,9 +616,10 @@ private theorem swap_write (dst : Dst) (value : BitVec 64) :
 private theorem swap_load (address : BitVec 64) :
     SwapInvariant (Mmu.load address) := by
   intro s b
+  have same : Mmu.load? (swapBytes s b) address.toNat = Mmu.load? s address.toNat := rfl
   unfold Mmu.load
-  simp only [Mmu.load?, Mmu.load_raw?, swapBytes, swapResult]
-  split <;> rfl
+  simp only [same]
+  cases Mmu.load? s address.toNat <;> rfl
 
 private theorem swap_load_doubleword (address : BitVec 64) :
     SwapInvariant (Mmu.load_doubleword address) := by
@@ -637,8 +636,7 @@ private theorem swap_store_raw (s : SailJoltState) (b : Array (BitVec 8))
     Mmu.store_raw? (swapBytes s b) ea v =
       (Mmu.store_raw? s ea v).map (swapBytes · b) := by
   simp [Mmu.store_raw?, swapBytes]
-  split_ifs <;> simp
-  congr 1
+  split_ifs <;> simp_all <;> rfl
 
 private theorem swap_store_fold (b : Array (BitVec 8)) (ea : Nat)
     (value : BitVec 64) (l : List Nat) (start : Option SailJoltState) :
@@ -729,7 +727,7 @@ private theorem swapInvariant_to_append {α : Type} {m : JoltMonad α}
     simpa [swapBytes] using
       congrArg (fun state : SailJoltState => state.adviceTape.bytes) stateEq
   refine ⟨#[], ?_, by simpa using bytes⟩
-  simpa [runs] using inv s b
+  simpa [runs] using! inv s b
 
 private theorem swapAppend_bind {α β : Type} {m : JoltMonad α}
     {f : α → JoltMonad β} (hm : SwapAppend m)
@@ -774,9 +772,7 @@ private theorem swap_execHostIO : SwapAppend execHostIO := by
   dsimp only
   split
   · exact swapInvariant_to_append (swap_pure _)
-  · refine swapAppend_bind (swapInvariant_to_append (swap_pure _)) (fun _ => ?_)
-    refine swapAppend_bind (swapInvariant_to_append (swap_read _)) (fun callId => ?_)
-    preservation_auto [swapInvariant_to_append (swap_read _),
+  · preservation_auto [swapInvariant_to_append (swap_read _),
       swapInvariant_to_append (swap_readHostBytes _ _ _ _ _),
       swapInvariant_to_append (swap_pure _), swapInvariant_to_append (swap_throw _),
       swapAppend_append _] using swapAppend_bind
@@ -1459,8 +1455,7 @@ private theorem replayRow_executes_nonload
       .ok (.Retire_Success ()) run.rows[step].postState := by
     have executes := run.executes step
     change execWithTapeAnswer instruction _ _ = _ at executes
-    simp only [execWithTapeAnswer] at executes
-    exact executes
+    rwa [execWithTapeAnswer_of_ne _ _ patchedNotLoad] at executes
   have rebased := exec_rebased _ (swap_execInstr_nonload instruction patchedNotLoad)
     _ (rebuiltTape run) _ _ (run.initial_bytes_prefix step) _ runs
   have noPost : narrowLoadAt? run.bytecode run.rows[step].rowIndex.val = none := by
@@ -1544,16 +1539,17 @@ private theorem replayRow_linked
   have link := run.linked i.val run.rows[i] run.rows[j] (by simp) atNext
   simp only [replayRow]
   by_cases continues : run.bytecode[run.rows[i].rowIndex].virtual_sequence_remaining.getD 0 ≠ 0
-  · simp only [if_pos continues] at link ⊢
+  · simp only [continues, ne_eq, not_false_eq_true, ↓reduceIte] at link ⊢
     refine ⟨link.1, ?_⟩
     change replayState run (pendingBefore? run.bytecode run.rows[j].rowIndex.val) run.rows[j].preState = _
     rw [link.1, link.2]
     simp only [pendingBefore?, Nat.add_eq_zero_iff, Nat.one_ne_zero, and_false, ↓reduceIte,
       Nat.add_sub_cancel]
-  · simp only [if_neg continues] at link ⊢
+  · have stops := not_not.mp continues
+    simp only [stops, ne_eq, not_true_eq_false, ↓reduceIte] at link ⊢
     obtain ⟨address, nextPC, target, starts, preState⟩ := link
     have noPost := narrowLoadAt?_none_of_ends _ _ run.expands _ run.rows[i].rowIndex.isLt
-      (by simpa only [not_not] using continues)
+      (by simpa only [not_not] using! continues)
     have noPre := pendingBefore?_none_of_start _ _ run.expands _ run.rows[j].rowIndex.isLt starts
     refine ⟨address, (replayState_nextPC _ _ _).trans nextPC, target, starts, ?_⟩
     simp only [noPre, noPost, replayState]
@@ -1951,7 +1947,7 @@ private theorem RebuildAgreement.startFlagAt_eq
     stepNOfTraceIsStartOfNewExpansion original.rows i =
       stepNOfTraceIsStartOfNewExpansion replay.rows i := by
   simp only [stepNOfTraceIsStartOfNewExpansion]
-  simpa only [Option.map_map] using congrArg
+  simpa only [Option.map_map] using! congrArg
     (fun slot : Option JoltInstructionRow =>
       (slot.map JoltInstructionRow.starts_source).getD false)
     (agreement.observedSlotAt i)
@@ -1964,7 +1960,7 @@ private theorem RebuildAgreement.adviceFlagAt_eq
     (agreement : RebuildAgreement original replay) (i : Nat) :
     stepNOfTraceIsAdvice original.rows i = stepNOfTraceIsAdvice replay.rows i := by
   simp only [stepNOfTraceIsAdvice]
-  simpa only [Option.bind_map] using congrArg
+  simpa only [Option.bind_map] using! congrArg
     (fun slot : Option JoltInstructionRow =>
       (slot.bind fun row => row.instruction.adviceValue?).isSome)
     (agreement.observedSlotAt i)
