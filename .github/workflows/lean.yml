@@ -19,7 +19,7 @@ jobs:
     # Keep this job name stable: the proposed main rules require `build`.
     name: build
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,20 +28,44 @@ jobs:
           # commits must be available to git rather than using a shallow clone.
           fetch-depth: 0
       # LeanRV64D is generated Sail output and is treated as trusted input.
-      # Reject additions, edits, deletions, and renames affecting either the
-      # root module or anything below LeanRV64D/ before attempting the build.
+      # A PR may change it only by regenerating it from the pinned inputs in
+      # sail-import/PROVENANCE.toml. When a PR touches the root module, anything
+      # below LeanRV64D/, the pinned inputs or the scripts that use them, CI
+      # rebuilds the pinned Sail compiler, regenerates the model and requires
+      # the checked-in tree to be byte-for-byte identical.
       # This checks PRs; the main rules must enforce it and disallow direct pushes.
       - name: Protect generated Sail sources
+        id: sail
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if ! git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/; then
-            echo "::error::Generated Sail sources are trusted and must not be changed."
-            git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/ \
+              sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh; then
+            echo "regenerate=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D/LICENSE; then
+            echo "::error::LeanRV64D/LICENSE is not generated and must not be changed."
             exit 1
           fi
+          echo "Generated Sail sources or their pinned inputs changed:"
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/ \
+            sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh | head -50
+          echo "regenerate=true" >> "$GITHUB_OUTPUT"
+      - name: Install the Sail compiler's build dependencies
+        if: steps.sail.outputs.regenerate == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends opam ocaml z3 libgmp-dev pkg-config m4
+          opam init -y --bare --disable-sandboxing
+          opam switch create sail ocaml-system
+      - name: Regenerate the Sail model and compare
+        if: steps.sail.outputs.regenerate == 'true'
+        env:
+          OPAMSWITCH: sail
+        run: scripts/check-sail-model.sh "$RUNNER_TEMP/sail-check"
       - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
         with:
           build: true

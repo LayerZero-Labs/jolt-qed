@@ -3,6 +3,9 @@
 # Regenerate with:
 #   scripts/regen-sail-model.sh SAIL_BIN SAIL_RISCV_DIR OUT_DIR <modules below>
 # then copy OUT_DIR/Lean_RV64D/LeanRV64D/ and LeanRV64D.lean over the tree.
+# scripts/check-sail-model.sh WORK_DIR rebuilds everything below from these pins
+# and checks that the checked-in tree is identical; CI runs it on every PR that
+# changes the model or these inputs.
 
 [model]
 repository = "https://github.com/abiswas3/sail-riscv"
