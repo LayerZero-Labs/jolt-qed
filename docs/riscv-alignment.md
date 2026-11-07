@@ -113,7 +113,8 @@ Two differences remain between Jolt and this policy, and neither changes the arc
   The only effect is that Jolt's store checks apply to a failed SC, so Jolt rejects some runs that Sail would complete; that costs Jolt completeness, not soundness.
 - A misaligned LR or SC makes Jolt's tracer panic (`mmu.rs`, `load_word`), so no Jolt trace contains one.
   The specification requires an address-misaligned or access-fault exception (`unpriv/zalrsc.adoc` `norm:lr_sc_alignment`), and LR raises the load exception (`priv/machine.adoc` `norm:mcause_exccode_ld_ldrsv`).
-  jolt-qed's generated LR programs currently tag their alignment exception as `E_SAMO_Addr_Align`; step d changes that tag to `E_Load_Addr_Align`, so that the instruction-level theorem agrees with Sail on misaligned addresses too.
+  So a misaligned LR or SC has no Jolt step, and the theorems state it that way: the instruction theorems assume natural alignment, and the whole-run theorem never meets the case.
+  jolt-qed's generated LR programs still use the older `VirtualLoadW .amo` row, which jolt-qed maps to `E_SAMO_Addr_Align`; Jolt's LR on `main` is a plain `LW`, and step d regenerates the LR programs from it.
 
 ## 4. EBREAK halts the run
 
@@ -137,7 +138,7 @@ The relation between a Jolt state and a Sail state compares:
 
 - the PC and the 31 general-purpose registers;
 - RAM bytes, and the I/O window through the device relation of section 2;
-- the six CSRs, read from Jolt's virtual registers `v34`-`v39`;
+- the six CSRs, read from Jolt's virtual registers `v34`-`v39` through the relations of section 6;
 - the reservation, read from `v32` and `v33` (section 3);
 - Jolt's platform state, the advice tape and the device, which only the custom instructions of section 7 and the I/O window touch.
 
@@ -150,7 +151,9 @@ A generic lifting lemma turns each existing `execute_X` theorem into a `try_step
 The six CSRs Jolt accepts behave as follows on an M-only hart with Zca and without F, S, U, V, H, Zicfilp and Smdbltrp.
 The Jolt-changes stream implements these sequences in Jolt; step b checks them against the regenerated model.
 
-- `mstatus`: a write of `v` stores `0x1800 | (v & 0x88)`.
+- `mstatus`: Jolt keeps only MIE and MPIE in `v39`, and every read returns `v39 | 0x1800`.
+  The relation is `mstatus = v39 | 0x1800` with the invariant `v39 & ~0x88 = 0`; both hold at reset, where `v39 = 0` and Sail's `mstatus = 0x1800`.
+  A write of `v` stores `v & 0x88` in `v39`, so the architectural value becomes `0x1800 | (v & 0x88)`.
   MPP is always 3 (`norm:mstatus_xpp_warl`).
   MIE (bit 3) and MPIE (bit 7) are writable.
   FS is read-only zero because neither F nor S is implemented (`priv/machine.adoc` `norm:mstatus_fs_acc2`), so SD is zero too (`norm:mstatus_sd_rdonly0`).
@@ -161,6 +164,10 @@ The Jolt-changes stream implements these sequences in Jolt; step b checks them a
   Every trap a Jolt run can take is synchronous, and synchronous exceptions go to the base in both modes (`norm:mtvec_mode_vectored_op`), which is what Jolt's `JALR v40, v34, 0` reaches: the JALR clears bit 0, and bit 1 is 0 in both legal modes.
 - `mepc`: a write of `v` stores `v & ~1`, because with Zca IALIGN is 16 (`norm:mepc_align`).
 - `mcause`, `mtval`, `mscratch`: stored as written.
+
+The other five relations are equality, `mtvec = v34`, `mscratch = v35`, `mepc = v36`, `mcause = v37` and `mtval = v38`, with the invariants `v34[1] = 0` and `v36[0] = 0`.
+The reset values must match as well: Sail must reset `mstatus` to `0x1800`.
+The current configuration resets MPP to U and UXL = SXL = 2, because U- and S-mode are on (difftest findings a2 and UXL/SXL); turning both off in step b gives MPP = M (`norm:mstatus_xpp_warl`) and UXL = SXL = 0.
 
 The Sail model at `266473f8` keeps FS writable unless Zfinx is on, which contradicts `norm:mstatus_fs_acc2`, and then computes SD from it.
 Upstream fixed this in `81184531` by legalizing FS through the platform's supported values; step b backports that fix, and the `mstatus` mask above holds only with it.
