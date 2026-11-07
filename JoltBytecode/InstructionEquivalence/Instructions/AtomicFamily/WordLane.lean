@@ -8,11 +8,13 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.ANDN
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Add
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 
+open LeanRV64D
+
 /-! Execution of the shared word lane used by atomic expansions.
 The row order follows `LaneWindow` in
 `crates/jolt-program/src/expand/memory/shared.rs`. -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr
 
 namespace AtomicFamily

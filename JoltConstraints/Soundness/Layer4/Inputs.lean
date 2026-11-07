@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer4.Table
 
+open LeanRV64D
+
 /-! Connect instruction inputs to their selected bytecode sources and show that
 interleaved lookup operands preserve those inputs. Agreement of the source
 columns with the run's state is the later Layer 5b obligation. -/

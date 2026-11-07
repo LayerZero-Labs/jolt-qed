@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer4.RotateEntry
 
+open LeanRV64D
+
 /-! XOR-rotation lookup outputs, including the 32-bit variants. -/
 
 set_option autoImplicit false

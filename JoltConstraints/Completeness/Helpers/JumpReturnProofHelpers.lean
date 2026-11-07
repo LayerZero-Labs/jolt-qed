@@ -3,9 +3,11 @@ import JoltConstraints.metadata
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 theorem jump_prepareSource_nextPC {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (i : Fin trace.bytecode.size)
@@ -143,14 +145,14 @@ theorem jump_jal_link (dst : JoltISA.Dst) (imm : BitVec 64)
     (hexec : JoltISA.execInstr (.JAL dst imm) preState =
       .ok (.Retire_Success ()) postState) :
     TraceWitness.capturedDestinationValue dst postState = link := by
-  have hread : liftSail (Sail.readReg Register.nextPC) preState =
+  have hread : liftSail (LeanRV64D.readReg Register.nextPC) preState =
       .ok link preState := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC preState.sail link hnext]
   simp only [JoltISA.execInstr, bind, EStateM.bind, hread] at hexec
-  cases hpc : Sail.readReg Register.PC preState.sail with
+  cases hpc : LeanRV64D.readReg Register.PC preState.sail with
   | error err state =>
-    have hpcLift : liftSail (Sail.readReg Register.PC) preState =
+    have hpcLift : liftSail (LeanRV64D.readReg Register.PC) preState =
         .error err { preState with sail := state } := by
       simp [liftSail, hpc]
     simp only [hpcLift] at hexec
@@ -159,7 +161,7 @@ theorem jump_jal_link (dst : JoltISA.Dst) (imm : BitVec 64)
     have hstate : state = preState.sail :=
       readReg_pure Register.PC preState.sail pc state hpc
     subst state
-    have hpcLift : liftSail (Sail.readReg Register.PC) preState =
+    have hpcLift : liftSail (LeanRV64D.readReg Register.PC) preState =
         .ok pc preState := by
       simp [liftSail, hpc]
     simp only [hpcLift] at hexec
@@ -169,7 +171,7 @@ theorem jump_jal_link (dst : JoltISA.Dst) (imm : BitVec 64)
       cases hexec
     | ok result mid =>
       cases result
-      have hpcWrite : liftSail (Sail.writeReg Register.nextPC (pc + imm)) mid =
+      have hpcWrite : liftSail (LeanRV64D.writeReg Register.nextPC (pc + imm)) mid =
           .ok () { mid with sail := { mid.sail with
             regs := mid.sail.regs.insert Register.nextPC (pc + imm) } } := by
         rfl
@@ -185,7 +187,7 @@ theorem jump_jalr_link (dst : JoltISA.Dst) (base : JoltISA.Src)
     (hexec : JoltISA.execInstr (.JALR dst base imm) preState =
       .ok (.Retire_Success ()) postState) :
     TraceWitness.capturedDestinationValue dst postState = link := by
-  have hread : liftSail (Sail.readReg Register.nextPC) preState =
+  have hread : liftSail (LeanRV64D.readReg Register.nextPC) preState =
       .ok link preState := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC preState.sail link hnext]
@@ -200,7 +202,7 @@ theorem jump_jalr_link (dst : JoltISA.Dst) (base : JoltISA.Src)
     let afterPC : SailJoltState :=
       { state with sail := { state.sail with
         regs := state.sail.regs.insert Register.nextPC target } }
-    have hpcWrite : liftSail (Sail.writeReg Register.nextPC target) state =
+    have hpcWrite : liftSail (LeanRV64D.writeReg Register.nextPC target) state =
         .ok () afterPC := by
       rfl
     rw [hpcWrite] at hexec

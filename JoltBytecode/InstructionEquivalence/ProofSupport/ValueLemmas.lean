@@ -1,5 +1,7 @@
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 /-!
 # Proof-theory lemmas about `JoltISA/Values` helpers
 
@@ -11,7 +13,7 @@ equivalence machinery.
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 

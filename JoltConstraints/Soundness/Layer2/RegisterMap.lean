@@ -3,6 +3,8 @@ import JoltConstraints.witness_helpers.register_address
 import JoltConstraints.constraint_context
 import JoltConstraints.Constraints.BytecodeReadSelectors
 
+open LeanRV64D
+
 /-! Register addresses identify operands only when their representations are
 canonical: x0–x31 use architectural registers, and addresses 32–127 use virtual
 registers. The raw constructors can alias, so decoding an encoded operand

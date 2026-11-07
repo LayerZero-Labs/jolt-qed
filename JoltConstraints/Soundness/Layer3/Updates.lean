@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer3.History
 import JoltConstraints.Soundness.Layer1.RamReads
 
+open LeanRV64D
+
 /-! Selection turns RAM history increments into updates of one word. A zero
 raw address has no selected word and no effect, even if `RamInc` is nonzero.
 The same statements apply at the last cycle, updating `RamValFinal`. -/

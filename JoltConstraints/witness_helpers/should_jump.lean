@@ -1,6 +1,8 @@
 import JoltConstraints.witness_helpers.op_flags
 import JoltConstraints.witness_helpers.instruction_flags
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

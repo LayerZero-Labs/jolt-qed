@@ -1,12 +1,14 @@
 import JoltConstraints.Soundness.Layer4.Interleave
 
+open LeanRV64D
+
 /-! Pure XOR-rotation identities, shared with completeness. -/
 
 set_option autoImplicit false
 
 namespace JoltConstraints
 
-open TraceWitness Sail PreSail LeanRV64D.Functions
+open TraceWitness Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 variable {F : Type} [Field F]
 

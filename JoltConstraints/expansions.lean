@@ -5,9 +5,11 @@ them. Natives (everything Rust's `is_source_only` leaves out) are one row throug
 -/
 import JoltConstraints.expansion_helpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 -- The final rows for one source instruction; none where Lean has no expansion yet.
 -- See : jolt/crates/jolt-program/src/expand/mod.rs:126-170 (expand_source_instruction_with_provider)

@@ -9,6 +9,8 @@ set_option autoImplicit false
 -- Rust: crates/jolt-riscv/src/flags.rs::CircuitFlags.
 -- TODO: For each constructor write a simple english description
 -- of what it means.
+-- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
+set_option backward.isDefEq.respectTransparency false in
 inductive CircuitFlags where
   | AddOperands | SubtractOperands | MultiplyOperands
   | Load | Store | Jump | WriteLookupOutputToRD
@@ -16,6 +18,8 @@ inductive CircuitFlags where
   | IsCompressed | IsFirstInSequence | IsLastInSequence
   deriving DecidableEq, Fintype
 
+-- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
+set_option backward.isDefEq.respectTransparency false in
 /-- Operand-routing and branch/no-op flags in Jolt's prover.
 For example, LD selects its captured destination with `RightOperandIsRdWriteValue`.
 Jolt's prover: `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`) at `c6703570`. -/
@@ -25,6 +29,8 @@ inductive InstructionFlags where
   | RightOperandIsRdWriteValue
   deriving DecidableEq, Fintype
 
+-- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
+set_option backward.isDefEq.respectTransparency false in
 /-- The 55 lookup tables, in the order used by Jolt's prover.
 For example, `AddressOffsetH` returns an effective address masked with 6.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs`

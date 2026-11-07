@@ -1,10 +1,12 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.MonadReduction
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open Std.Do
 open virtaddr MemoryAccessType mem_payload
 
@@ -40,13 +42,13 @@ theorem execute_STORE_byte_eq_state_after_byte_store
   unfold execute_STORE
   rw [show (1 ≤b _root_.LeanRV64D.Functions.xlen_bytes) = true by rfl]
   have hassert :
-      EStateM.run (Sail.assert true "extensions/I/base_insts.sail:320.28-320.29") js.sail =
+      EStateM.run (LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29") js.sail =
       .ok () js.sail := by
     rfl
   have hrs2' : EStateM.run (rX_bits rs2) js.sail = .ok rs2_val js.sail := by
     simpa using hrs2
   change EStateM.run
-      ((Sail.assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
+      ((LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
         (rX_bits rs2).bind fun rs2_val' =>
           (EStateM.pure (Sail.BitVec.extractLsb rs2_val' 7 0)).bind fun y =>
             (vmem_write rs1 (sign_extend (m := 64) imm) 1 y (Store Data) false false false).bind fun res =>
@@ -90,13 +92,13 @@ theorem execute_STORE_halfword_eq_state_after_halfword_store
   unfold execute_STORE
   rw [show (2 ≤b _root_.LeanRV64D.Functions.xlen_bytes) = true by rfl]
   have hassert :
-      EStateM.run (Sail.assert true "extensions/I/base_insts.sail:320.28-320.29") js.sail =
+      EStateM.run (LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29") js.sail =
       .ok () js.sail := by
     rfl
   have hrs2' : EStateM.run (rX_bits rs2) js.sail = .ok rs2_val js.sail := by
     simpa using hrs2
   change EStateM.run
-      ((Sail.assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
+      ((LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
         (rX_bits rs2).bind fun rs2_val' =>
           (EStateM.pure (Sail.BitVec.extractLsb rs2_val' 15 0)).bind fun y =>
             (vmem_write rs1 (sign_extend (m := 64) imm) 2 y (Store Data) false false false).bind fun res =>
@@ -140,13 +142,13 @@ theorem execute_STORE_word_eq_state_after_word_store
   unfold execute_STORE
   rw [show (4 ≤b _root_.LeanRV64D.Functions.xlen_bytes) = true by rfl]
   have hassert :
-      EStateM.run (Sail.assert true "extensions/I/base_insts.sail:320.28-320.29") js.sail =
+      EStateM.run (LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29") js.sail =
       .ok () js.sail := by
     rfl
   have hrs2' : EStateM.run (rX_bits rs2) js.sail = .ok rs2_val js.sail := by
     simpa using hrs2
   change EStateM.run
-      ((Sail.assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
+      ((LeanRV64D.sail_assert true "extensions/I/base_insts.sail:320.28-320.29").bind fun _ =>
         (rX_bits rs2).bind fun rs2_val' =>
           (EStateM.pure (Sail.BitVec.extractLsb rs2_val' 31 0)).bind fun y =>
             (vmem_write rs1 (sign_extend (m := 64) imm) 4 y (Store Data) false false false).bind fun res =>

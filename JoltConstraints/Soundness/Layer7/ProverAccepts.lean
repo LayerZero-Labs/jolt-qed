@@ -4,6 +4,8 @@ import JoltConstraints.prover_config_facts
 import JoltConstraints.Soundness.Layer3.Address
 import JoltConstraints.Soundness.Layer3.State
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltInstance

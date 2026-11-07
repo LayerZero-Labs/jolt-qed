@@ -9,6 +9,8 @@ import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Remw
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Remuw
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionFrame
 
+open LeanRV64D
+
 /-! Results and honest reruns of the eight generated division programs. -/
 
 set_option autoImplicit false
@@ -16,7 +18,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem division_source_read (pre : SailJoltState)
     (present : AllRegistersPresent pre.sail) (rs : regidx) :

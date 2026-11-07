@@ -1,13 +1,15 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Lemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
 
+open LeanRV64D
+
 /-!
 # SD instruction semantics
 
 Run lemmas for the Jolt ISA `SD` instruction.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true

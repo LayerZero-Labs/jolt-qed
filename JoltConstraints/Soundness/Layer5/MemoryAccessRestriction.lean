@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer5.TapeTrace
 
+open LeanRV64D
+
 /-! Temporary program restriction for https://github.com/a16z/jolt/issues/2044
 (reproduction following #2041) and the separate candidates recorded in
 methods/soundness.md: stores at zero, the I/O padding gap, stores to the stack
@@ -20,7 +22,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The prefix uses honest internal runtime advice, has not continued past a
 stable stall, and is about to attempt `next` in `pre`. The row need not succeed.

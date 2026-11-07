@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
 import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 
+open LeanRV64D
+
 /-! Temporary program restriction for host calls (VirtualHostIO rows).
 
 VirtualHostIO has no opcode circuit flags and no lookup table, so its local
@@ -20,7 +22,7 @@ See : jolt/tracer/src/emulator/cpu.rs:1079-1128 -/
 
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions JoltISA in
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA in
 /-- FIXME: Temporary program restriction for host calls whose failures are not
 encoded by the local constraints. To raise with a16z together
 with the other FIXMEs. Remove once Jolt either constrains host calls or makes
@@ -41,7 +43,7 @@ def JoltInstance.HostCallsSucceed (joltInstance : JoltInstance SourceInstruction
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The program restriction supplies successful live HostIO execution for an
 attempted row. HostIO can append to the advice tape, but cannot change Sail

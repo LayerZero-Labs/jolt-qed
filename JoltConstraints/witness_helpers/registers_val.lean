@@ -1,6 +1,8 @@
 import JoltConstraints.witness_helpers.rd_wa
 import JoltConstraints.witness_helpers.rd_write_value
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

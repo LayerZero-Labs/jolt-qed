@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer6.BytecodePC
 import JoltConstraints.Soundness.Layer7.TerminationStore
 import JoltConstraints.Soundness.Layer3.State
 
+open LeanRV64D
+
 /-! Staged initialization of the empty run and the next source expansion. -/
 
 set_option autoImplicit false

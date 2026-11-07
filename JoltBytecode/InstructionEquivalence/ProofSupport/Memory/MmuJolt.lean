@@ -1,5 +1,7 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Basic
 
+open LeanRV64D
+
 /-
 Facts about Jolt's own memory access (`JoltISA.Mmu`, following Rust's MMU) that
 need no Sail reasoning: what LD and SD do when Rust's checks pass.
@@ -7,7 +9,7 @@ need no Sail reasoning: what LD and SD do when Rust's checks pass.
 
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA.Mmu
 

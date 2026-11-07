@@ -6,6 +6,8 @@ Authors: Ari
 
 import JoltBytecode.JoltISA.VirtualRegisters
 import JoltBytecode.JoltISA.DeviceMemory
+
+open LeanRV64D
 /-!
 # Jolt proof assumptions
 
@@ -20,7 +22,7 @@ in the rust code. Till then, those assumptions are fine.
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true

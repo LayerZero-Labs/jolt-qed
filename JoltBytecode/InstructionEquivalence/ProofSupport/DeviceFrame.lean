@@ -2,6 +2,8 @@ import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionFrame
 import Batteries.Data.Array.Lemmas
 
+open LeanRV64D
+
 /-
 Every Jolt ISA instruction leaves the device's memory layout, inputs and advice
 buffers unchanged; Rust fixes them in `create_emulator` and never updates them.
@@ -9,7 +11,7 @@ buffers unchanged; Rust fixes them in `create_emulator` and never updates them.
 
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltIOSetupFrame
 

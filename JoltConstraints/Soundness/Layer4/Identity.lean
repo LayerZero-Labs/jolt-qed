@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer4.Table
 
+open LeanRV64D
+
 /-! Recover a full 128-bit lookup address from its field encoding when the
 instruction uses identity RAF. This is where the stronger field bound is needed. -/
 

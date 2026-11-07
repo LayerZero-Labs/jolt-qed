@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer4.RangeCheck
 
+open LeanRV64D
+
 /-! Recover the wide addition, biased subtraction, and multiplication addresses
 from the arithmetic constraints. RangeCheck then returns their low 64 bits.
 The inputs are arbitrary 64-bit words whose field encodings agree with the

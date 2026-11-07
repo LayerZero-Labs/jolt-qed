@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.RamAgreement
 import JoltConstraints.Soundness.Layer5.MemoryRows
 
+open LeanRV64D
+
 /-! A selected load row in ordinary RAM reads the interpreter's word at its
 accessed doubleword through the agreed table, writes it to its destination, and
 leaves the RAM table unchanged. The rows are LD and the floor loads
@@ -13,7 +15,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

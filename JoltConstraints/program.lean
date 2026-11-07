@@ -10,6 +10,8 @@ import JoltConstraints.expansions
 import Mathlib.Tactic.DeriveFintype
 import Mathlib.Data.Nat.Log
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 set_option maxRecDepth 4096 in
@@ -235,6 +237,8 @@ def expand_program (image : Rv64ProgramImage SourceInstruction) :
 
 -- One slot of Rust's preprocessed bytecode.
 -- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:279-293 (noop_instruction)
+-- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
+set_option backward.isDefEq.respectTransparency false in
 inductive BytecodeSlot where
   | noop
   | row (row : JoltInstructionRow)

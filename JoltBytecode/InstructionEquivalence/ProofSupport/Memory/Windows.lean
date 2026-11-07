@@ -1,6 +1,8 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Basic
 import Mathlib.Tactic
 
+open LeanRV64D
+
 /-!
 # Memory window derivations
 
@@ -11,7 +13,7 @@ projected directly from the top-level assumption bundles.
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true

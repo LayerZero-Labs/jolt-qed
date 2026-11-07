@@ -4,6 +4,8 @@ import JoltConstraints.Constraints.BytecodeReadSelectors
 import JoltConstraints.honest_witness
 import JoltConstraints.ProgramLayout
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

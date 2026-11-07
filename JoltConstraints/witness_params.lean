@@ -6,6 +6,8 @@ import JoltConstraints.trace_facts
 import JoltConstraints.prover_config_facts
 import JoltConstraints.witness
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 /-- When Jolt's prover accepts the honest trace (`proverAccepts`), the base-two logarithm

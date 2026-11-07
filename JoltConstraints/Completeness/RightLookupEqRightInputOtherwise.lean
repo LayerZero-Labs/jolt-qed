@@ -5,6 +5,8 @@ import JoltConstraints.honest_witness
 import JoltConstraints.Completeness.Helpers.AddressSum
 import JoltConstraints.Soundness.Layer4.Interleave
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

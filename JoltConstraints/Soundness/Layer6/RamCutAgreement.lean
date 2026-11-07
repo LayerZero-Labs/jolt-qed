@@ -1,11 +1,13 @@
 import JoltConstraints.Soundness.Layer6.PlainRow
 import JoltConstraints.Soundness.Layer5.DeviceMemory
 
+open LeanRV64D
+
 /-! Ordinary RAM and device words together describe the represented cut. -/
 set_option autoImplicit false
 namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem remap_below_ram (layout : MemoryLayout) (address : BitVec 64)
     (index : Nat) (below : address.toNat < RAM_START_ADDRESS)

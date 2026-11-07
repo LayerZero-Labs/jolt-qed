@@ -3,10 +3,12 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Windows
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.VirtualPext
 import Mathlib.Tactic.IntervalCases
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

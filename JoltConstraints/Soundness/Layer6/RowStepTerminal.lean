@@ -2,11 +2,13 @@ import JoltConstraints.Soundness.Layer6.RowStepJalr
 import JoltConstraints.Soundness.Layer5.Jal
 import JoltConstraints.Soundness.Layer5.HostCallRegisterFrame
 
+open LeanRV64D
+
 /-! The terminal direct jump and host-call row extensions. -/
 set_option autoImplicit false
 namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Append a terminal direct jump from its prepared PC and live-register state.
 For example, `jal x1, 8` writes its source link into x1 before the next source.

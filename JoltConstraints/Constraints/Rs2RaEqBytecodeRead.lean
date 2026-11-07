@@ -3,6 +3,8 @@ import Mathlib.Algebra.Field.Defs
 import JoltConstraints.Constraints.BytecodeReadSelectors
 import JoltConstraints.witness_helpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

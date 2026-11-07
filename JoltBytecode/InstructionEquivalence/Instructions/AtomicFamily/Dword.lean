@@ -16,9 +16,11 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true
@@ -2957,10 +2959,10 @@ theorem amo_dword_write_ram_conditional_eq_state_after_dword_store
       (physaddr.Physaddr addr) 8 data default_meta s =
     .ok true (state_after_dword_store s addr data) := by
   simp only [LeanRV64D.Functions.write_ram,
-    Sail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.writeBytes,
-    PreSail.writeByte,
+    LeanRV64D.ConcurrencyInterfaceV1.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeBytes,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeByte,
     state_after_dword_store,
     dword_byte]
   rfl
@@ -3162,13 +3164,13 @@ theorem execute_AMO_dword_non_cas_aligned_core
     simp only [amoDwordSailResult] at hwrite_value
     unfold execute_AMO
     simp only [bind, pure]
-    unfold Sail.assert LeanRV64D.Functions.xlen_bytes
-    simp only [amo_dword_width_assert_true, PreSail.assert, pure, EStateM.run, if_true]
-    unfold SailME.run PreSail.PreSailME.run
+    unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
+    simp only [amo_dword_width_assert_true, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, pure, EStateM.run, if_true]
+    unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
     simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
       ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
       ExceptT.pure, ExceptT.lift, MonadLift.monadLift, liftM, monadLift,
-      Functor.map, SailME.throw, PreSail.PreSailME.throw,
+      Functor.map, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
       MonadExceptOf.throw, ext_data_get_addr, hrs1, haddr0,
       h_vaddr_aligned, LeanRV64D.Functions.not, Bool.not_true,
       Bool.false_eq_true, if_false, if_true, htranslate, amo_dword_width8_true, hrs2,
@@ -3319,12 +3321,12 @@ theorem execute_AMO_dword_misaligned
         (Virtaddr addr, ExceptionType.E_SAMO_Addr_Align ())) js.sail := by
   unfold execute_AMO
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   have hwidth_assert :
       (8 ≤b (((8 : Nat) : Int) * (2 : Int)).toNat) = true := by
     decide
-  simp only [hwidth_assert, PreSail.assert, pure, EStateM.run, if_true]
-  unfold SailME.run PreSail.PreSailME.run
+  simp only [hwidth_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, pure, EStateM.run, if_true]
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have haddr0 : addr + zeros (n := 64) = addr := by
     unfold zeros
     exact BitVec.add_zero addr

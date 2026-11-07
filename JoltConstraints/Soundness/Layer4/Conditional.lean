@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer4.ConditionalEntry
 
+open LeanRV64D
+
 /-! Conditional, division-check and store-lane lookup outputs. -/
 
 set_option autoImplicit false

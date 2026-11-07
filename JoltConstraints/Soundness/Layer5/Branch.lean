@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.MisaFrame
 import JoltConstraints.Soundness.Layer5.Jal
 import JoltConstraints.Soundness.Layer6.TerminalNextPC
 
+open LeanRV64D
+
 /-! The execution-state invariant needed to turn witness-derived even branch
 targets into successful Sail jumps. Witness register agreement alone does not
 constrain Sail's compressed-instruction configuration. -/
@@ -10,7 +12,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem compressed_enabled_of_misa (state : SailState)
     (misa : state.regs.get? Register.misa = some 0x800000008014312f) :
@@ -63,7 +65,7 @@ private theorem branch_shape (instruction : Instr) (lhs rhs : Src) (imm : BitVec
       let x ← readSrc lhs
       let y ← readSrc rhs
       if branchDecisionPure instruction x y then
-        let pc ← liftSail (Sail.readReg Register.PC)
+        let pc ← liftSail (LeanRV64D.readReg Register.PC)
         liftSail (jump_to (pc + imm.setWidth 64))
       else pure RETIRE_SUCCESS) := by
   rcases shapes with rfl | rfl | rfl | rfl | rfl | rfl
@@ -131,11 +133,11 @@ private theorem jump_even (target : BitVec 64) (state : SailState)
     jump_to target state = .ok RETIRE_SUCCESS (System.setNextPCState state target) := by
   have bit0 : BitVec.access target 0 = 0#1 := by
     simp [Sail.BitVec.access, BitVec.getElem_eq_testBit_toNat, Nat.testBit_zero, even]
-  simp [jump_to, ext_control_check_pc, SailME.run, PreSail.PreSailME.run,
-    Sail.assert, PreSail.assert, ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
+  simp [jump_to, ext_control_check_pc, SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run,
+    LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift, MonadLift.monadLift, monadLift, liftM,
     Functor.map, EStateM.map, bind, EStateM.bind, pure, EStateM.pure,
-    enabled, bit0, LeanRV64D.Functions.not, set_next_pc, Sail.writeReg, System.setNextPCState]
+    enabled, bit0, LeanRV64D.Functions.not, set_next_pc, LeanRV64D.writeReg, System.setNextPCState]
   rfl
 
 /-- A selected conditional branch retires and preserves agreement on `live`.
@@ -188,7 +190,7 @@ theorem branch_step {F : Type} [Field F] {params : WitnessParams}
   by_cases taken : branchDecisionPure row.instruction (sourceValue lhs pre) (sourceValue rhs pre) = true
   · have even := branch_target_even joltField context equations selected rowIs branch shapes
       (by simpa only [taken, if_true] using decision)
-    have readPC : liftSail (Sail.readReg Register.PC) pre = .ok row.address pre := by
+    have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok row.address pre := by
       unfold liftSail
       rw [readReg_eq_of_get? Register.PC pre.sail row.address pc]
     refine ⟨{ pre with sail := System.setNextPCState pre.sail (row.address + imm.setWidth 64) },

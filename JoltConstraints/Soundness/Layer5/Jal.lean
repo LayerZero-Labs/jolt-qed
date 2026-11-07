@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! A selected JAL row writes the return address and updates Sail's `nextPC`.
 The jump constraint supplies the return address, including compressed rows;
 the execution-prefix induction must connect the selected row's address to
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem jal_write_value
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
@@ -63,7 +65,7 @@ end JoltConstraints.Soundness
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem sourceValue_setNextPC (source : Src) (target : BitVec 64)
     (state : SailJoltState) :
@@ -130,11 +132,11 @@ theorem jal_step
     (bytecodeRow_rowOk context rowIs).canonical (by rw [instruction]; rfl)
   have written := writeDst_afterWriteDst dst canonical
     (row.address + BitVec.ofNat 64 (if row.is_compressed then 2 else 4)) pre
-  have readNext : liftSail (Sail.readReg Register.nextPC) pre =
+  have readNext : liftSail (LeanRV64D.readReg Register.nextPC) pre =
       .ok (row.address + BitVec.ofNat 64 (if row.is_compressed then 2 else 4)) pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail _ nextPC]
-  have readPC : liftSail (Sail.readReg Register.PC) pre = .ok row.address pre := by
+  have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok row.address pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.PC pre.sail _ pc]
   refine ⟨encoded, ?_, ?_⟩

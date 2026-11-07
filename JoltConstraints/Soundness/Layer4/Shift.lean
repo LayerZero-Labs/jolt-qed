@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer4.ShiftEntry
 
+open LeanRV64D
+
 /-! Shift lookup outputs on right-shift masks. Mask shape is a local obligation
 for the expansion proof; no executed trace is assumed here. -/
 

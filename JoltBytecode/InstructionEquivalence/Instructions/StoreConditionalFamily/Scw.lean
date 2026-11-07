@@ -1,5 +1,7 @@
 import JoltBytecode.JoltISA.Core
 
+open LeanRV64D
+
 /-!
 # SC.W proof boundary
 
@@ -47,7 +49,7 @@ bit.
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

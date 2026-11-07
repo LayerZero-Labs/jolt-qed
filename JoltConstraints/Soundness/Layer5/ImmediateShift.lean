@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Shift
 
+open LeanRV64D
+
 /-! Immediate right shifts use a checked bitmask in their bytecode row. The
 expansion's `immShiftOk` fact supplies the mask shape required by Layer 4.
 At public pin 8bbb2357:
@@ -13,7 +15,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 inductive ImmediateShift where
   | srl | sra | srlw | sraw

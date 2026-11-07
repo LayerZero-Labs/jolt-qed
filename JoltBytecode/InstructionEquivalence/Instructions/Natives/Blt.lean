@@ -3,7 +3,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -22,7 +24,7 @@ def bltInstrEqSailStatement
     ((execute_BTYPE imm rs2 rs1 bop.BLT).run js.sail)
 
 abbrev branchJumpSailStep (imm : BitVec 13) : SailM ExecutionResult := do
-  let pc ← Sail.readReg Register.PC
+  let pc ← LeanRV64D.readReg Register.PC
   jump_to (pc + sign_extend (m := 64) imm)
 
 /-- The branch jump block does not touch the six Sail registers used by

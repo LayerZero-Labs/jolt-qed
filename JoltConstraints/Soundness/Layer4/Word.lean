@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Identity
 import JoltConstraints.Soundness.Layer4.WordEntry
 
+open LeanRV64D
+
 /-! Identity-RAF table outputs: word slices, sign extension, powers and masks.
 The wide address is retained until each table performs its own truncation. -/
 

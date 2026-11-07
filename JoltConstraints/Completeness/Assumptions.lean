@@ -4,6 +4,8 @@ about the trace: what Jolt says it proves is part of `JoltInstance.InLanguage`.
 -/
 import JoltConstraints.honest_trace
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- What the completeness theorem assumes about the instance. a16z has confirmed both.

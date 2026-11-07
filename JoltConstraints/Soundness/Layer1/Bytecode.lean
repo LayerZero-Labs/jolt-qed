@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer0.Words
 import JoltConstraints.Soundness.Layer1.Addresses
 import JoltConstraints.program_facts
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints.Soundness

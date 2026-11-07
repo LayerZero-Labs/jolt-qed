@@ -1,6 +1,8 @@
 import JoltConstraints.Constraints.LookupOperandData
 import JoltConstraints.lookup_table
 
+open LeanRV64D
+
 /-! Pure identities for the interleaved lookup address, shared with completeness.
 Odd positions hold the left operand and even positions the right, counting from
 bit zero at the least significant end. The bit-unpacking implementation mirrors

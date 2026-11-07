@@ -1,5 +1,7 @@
 import JoltConstraints.Constraints.RamReadData
 
+open LeanRV64D
+
 /-!
 Rust's `MemoryLayout::new`, restricted to the advice and input regions, and a
 proof that every device it lays out satisfies `JoltDevice.AdviceBelowInput`.

@@ -2,13 +2,15 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 import JoltBytecode.InstructionEquivalence.Instructions.System.Common
 import JoltBytecode.Bundles
 
+open LeanRV64D
+
 /-!
 # Projection proof facts
 
 These are proof-facing facts about `System.systemProject`.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -215,8 +217,8 @@ theorem readReg_preservesSystemProjectRegs
     (reg : Register)
     (s : SailState) :
     ResultPreservesSystemProjectRegs s
-      (((Sail.readReg reg : SailM (RegisterType reg)) s)) := by
-  unfold Sail.readReg PreSail.readReg
+      (((LeanRV64D.readReg reg : SailM (RegisterType reg)) s)) := by
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg
   simp only [bind, EStateM.bind, get, getThe, MonadStateOf.get, EStateM.get]
   cases hread : s.regs.get? reg with
   | some value =>
@@ -247,7 +249,7 @@ theorem set_next_pc_preservesSystemProjectRegs
     (s : SailState) :
     ResultPreservesSystemProjectRegs s ((set_next_pc target) s) := by
   unfold set_next_pc redirect_callback
-  unfold Sail.writeReg PreSail.writeReg
+  unfold LeanRV64D.writeReg Sail.ConcurrencyInterfaceV1.PreSail.writeReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, modify, modifyGet,
     MonadStateOf.modifyGet, EStateM.modifyGet, ResultPreservesSystemProjectRegs]
   change PreservesSystemProjectRegs s (System.setNextPCState s target)
@@ -271,10 +273,10 @@ theorem jump_to_preservesSystemProjectRegs
     (s : SailState) :
     ResultPreservesSystemProjectRegs s ((jump_to target) s) := by
   unfold jump_to ext_control_check_pc
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp only [ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, bind, EStateM.bind, pure, EStateM.pure,
-    Sail.assert, PreSail.assert]
+    LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert]
   by_cases hbit0 : (BitVec.access target 0 == 0#1) = true
   · cases hzca : (currentlyEnabled extension.Ext_Zca) s with
     | error e s1 =>
@@ -382,9 +384,9 @@ theorem jump_to_of_aligned (target : BitVec 64) (s : SailState)
             simp [bit_to_bool, bool_bit_backwards, LeanRV64D.Functions.not,
               Sail.BitVec.access, Sail.BitVec.updateSubrange,
               Sail.BitVec.updateSubrange', zeros]
-      unfold jump_to ext_control_check_pc SailME.run PreSail.PreSailME.run
+      unfold jump_to ext_control_check_pc SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
       unfold set_next_pc System.setNextPCState redirect_callback
-      unfold Sail.assert PreSail.assert Sail.writeReg PreSail.writeReg
+      unfold LeanRV64D.sail_assert Sail.ConcurrencyInterfaceV1.PreSail.sail_assert LeanRV64D.writeReg Sail.ConcurrencyInterfaceV1.PreSail.writeReg
       simp only [hbit0, hzca, hAlignOk, Bool.false_eq_true, if_true,
         if_false, bind, EStateM.bind, pure, EStateM.pure,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,

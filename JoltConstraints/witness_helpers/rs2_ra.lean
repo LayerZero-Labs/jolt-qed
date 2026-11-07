@@ -3,6 +3,8 @@ import JoltConstraints.witness
 import JoltConstraints.trace
 import JoltConstraints.witness_helpers.register_address
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

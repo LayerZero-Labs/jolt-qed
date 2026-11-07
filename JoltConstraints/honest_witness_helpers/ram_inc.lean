@@ -3,6 +3,8 @@ import JoltConstraints.metadata
 import JoltConstraints.honest_witness_helpers.ram_read_value
 import JoltConstraints.witness_helpers.ram_write_value
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace HonestWitness

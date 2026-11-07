@@ -3,6 +3,8 @@ import JoltConstraints.Completeness
 import JoltConstraints.Completeness.Helpers.VerifierSizes
 import JoltConstraints.prover_config_facts
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

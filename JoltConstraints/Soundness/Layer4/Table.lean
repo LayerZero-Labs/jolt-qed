@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer1.BytecodeReads
 import JoltConstraints.Soundness.Layer1.InstructionReads
 
+open LeanRV64D
+
 /-! Identify the lookup table from the bytecode slot selected at a cycle.
 An instruction with no table, or a padding slot, has lookup output zero.
 These facts concern an arbitrary satisfying witness, without an execution trace. -/

@@ -5,11 +5,13 @@ import JoltConstraints.Soundness.Layer5.HostCallRegisterFrame
 import JoltConstraints.Soundness.Layer5.TapeDeviceFrame
 import JoltConstraints.Completeness.Helpers.RamOutputProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The disjoint device cases for a doubleword access below `RAM_START_ADDRESS`.
 `unmapped` means none of the six device regions contains the starting address.

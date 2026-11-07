@@ -100,6 +100,8 @@ import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LHU_main
 import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LW_main
 import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LWU_main
 
+open LeanRV64D
+
 /-!
 # RISC-V Instructions
 
@@ -109,7 +111,7 @@ what the equivalence proposition is, what assumptions are needed,
 and finally where the proof is.
 -/
 
-open Sail PreSail
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
 
 /-- A CSR address is the 12-bit `csr` field used by Zicsr instructions. -/
 abbrev CsrAddr := BitVec 12

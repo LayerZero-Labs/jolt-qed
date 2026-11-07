@@ -3,6 +3,8 @@ import Mathlib.Data.Nat.GCD.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import JoltConstraints.witness_helpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

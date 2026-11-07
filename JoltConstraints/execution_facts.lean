@@ -10,9 +10,11 @@ import Mathlib.Tactic.IntervalCases
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace SailAndVRegsUnchanged
 
@@ -219,7 +221,7 @@ theorem bind_rule {Value Next : Type} {first : SailM Value} {next : Value → Sa
     simp only [bind, EStateM.bind, firstRun] at runs
     exact (keepsNext value middle after result runs).trans (keepsFirst sail middle value firstRun)
 
-theorem read_rule (register : Register) : Preserves (Sail.readReg register) := by
+theorem read_rule (register : Register) : Preserves (LeanRV64D.readReg register) := by
   intro sail after value runs
   exact readReg_pure register sail value after runs
 
@@ -241,11 +243,11 @@ theorem jump_to_shape (target : BitVec 64) (sail after : SailState)
     (result : ExecutionResult) (runs : jump_to target sail = .ok result after) :
     after = sail ∨ after = { sail with regs := sail.regs.insert Register.nextPC target } := by
   unfold jump_to ext_control_check_pc at runs
-  simp only [SailME.run, PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
+  simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
     bind, EStateM.bind, pure, EStateM.pure,
-    Sail.assert, PreSail.assert] at runs
+    LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at runs
   by_cases evenTarget : (BitVec.access target 0 == 0#1) = true
   · simp only [evenTarget, ↓reduceIte, pure, EStateM.pure, EStateM.bind,
       ExceptT.bindCont, EStateM.map] at runs
@@ -260,7 +262,7 @@ theorem jump_to_shape (target : BitVec 64) (sail after : SailState)
           LeanRV64D.Functions.not zca = true
       all_goals
         simp only [zcaRun, ExceptT.bindCont, EStateM.map, Bool.and_eq_true, misaligned,
-          ↓reduceIte, set_next_pc, Sail.writeReg, bind, EStateM.bind,
+          ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
           pure, EStateM.pure] at runs
         cases runs
         first
@@ -274,11 +276,11 @@ theorem jump_to_retires (target : BitVec 64) (sail after : SailState)
     (runs : jump_to target sail = .ok (.Retire_Success ()) after) :
     after = { sail with regs := sail.regs.insert Register.nextPC target } := by
   unfold jump_to ext_control_check_pc at runs
-  simp only [SailME.run, PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
+  simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
     bind, EStateM.bind, pure, EStateM.pure,
-    Sail.assert, PreSail.assert] at runs
+    LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at runs
   by_cases evenTarget : (BitVec.access target 0 == 0#1) = true
   · simp only [evenTarget, ↓reduceIte, pure, EStateM.pure, EStateM.bind,
       ExceptT.bindCont, EStateM.map] at runs
@@ -293,7 +295,7 @@ theorem jump_to_retires (target : BitVec 64) (sail after : SailState)
           LeanRV64D.Functions.not zca = true
       all_goals
         simp only [zcaRun, ExceptT.bindCont, EStateM.map, Bool.and_eq_true, misaligned,
-          ↓reduceIte, set_next_pc, Sail.writeReg, bind, EStateM.bind,
+          ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
           pure, EStateM.pure] at runs
         cases runs
       rfl
@@ -358,13 +360,13 @@ theorem lift_rule {Value : Type} {step : SailM Value} (keeps : SailPreserves ste
     cases runs
     exact kept
 
-theorem readReg_rule (register : Register) : Preserves (liftSail (Sail.readReg register)) :=
+theorem readReg_rule (register : Register) : Preserves (liftSail (LeanRV64D.readReg register)) :=
   lift_rule (fun sail after value runs present => by
     rw [readReg_pure register sail value after runs]
     exact present)
 
 theorem writeReg_rule (register : Register) (value : RegisterType register) :
-    Preserves (liftSail (Sail.writeReg register value)) :=
+    Preserves (liftSail (LeanRV64D.writeReg register value)) :=
   lift_rule (fun sail after result runs present => by
     cases runs
     exact insert_keeps_present _ _ _ present)
@@ -548,9 +550,9 @@ theorem HonestTrace.registers_present {joltInstance : JoltInstance SourceInstruc
 -- A successful Sail register read returns the value stored for that register.
 theorem readReg_value (register : Register) (sail after : SailState)
     (value : RegisterType register)
-    (runs : (Sail.readReg register : SailM (RegisterType register)) sail = .ok value after) :
+    (runs : (LeanRV64D.readReg register : SailM (RegisterType register)) sail = .ok value after) :
     sail.regs.get? register = some value := by
-  unfold Sail.readReg PreSail.readReg at runs
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg at runs
   simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get, pure] at runs
   generalize lookup : sail.regs.get? register = stored at runs
   cases stored with

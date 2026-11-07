@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Rotate
 
+open LeanRV64D
+
 /-! One execution argument for the twelve XOR-rotation rows. Their lookup
 tables already give the exact interpreter values at the recovered operands.
 At public pin 8bbb2357:
@@ -12,7 +14,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 inductive XorRotation where
   | r32 | r24 | r16 | r63 | l1

@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Arithmetic
 import JoltConstraints.Soundness.Layer4.Word
 
+open LeanRV64D
+
 /-! Word arithmetic and high-product results from the recovered wide addresses. -/
 
 set_option autoImplicit false

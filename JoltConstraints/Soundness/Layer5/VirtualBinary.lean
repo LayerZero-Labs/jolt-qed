@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer4.Pext
 import JoltConstraints.Soundness.Layer4.Conditional
 import JoltConstraints.Soundness.Layer5.MemoryAddress
 
+open LeanRV64D
+
 /-! Shared step for extraction, store-lane shifting and conditional negation.
 Their existing interleaved table rules give the interpreter value for arbitrary
 source words, so no lane-mask shape is assumed by these row proofs.
@@ -17,7 +19,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Extraction and conditional-negation operations, and lane shifts carrying
 their signed address immediate; for example, `shiftDataH 2` shifts using address + 2. -/

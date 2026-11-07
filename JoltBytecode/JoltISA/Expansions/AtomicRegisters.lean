@@ -1,6 +1,8 @@
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.VirtualRegisters
 
+open LeanRV64D
+
 /-!
 # Legacy AMO register selectors used by protected-register proofs
 
@@ -9,7 +11,7 @@ For example, `amoOldVRegFor rd` selects slot zero, or slot one when rewriting
 an architectural zero destination consumes the first temporary.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

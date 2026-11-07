@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer1.Ram
 
+open LeanRV64D
+
 /-! A selected RAM index determines the address, read, and write columns.
 `ramRa_unique_of_address_ne_zero` supplies a selected index for nonzero
 `RamAddress`; `ram_zero_effects` handles zero addresses. These are witness

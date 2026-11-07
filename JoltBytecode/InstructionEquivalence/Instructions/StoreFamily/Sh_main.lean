@@ -7,6 +7,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.StoreExec
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.ProgramBlocks
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 
+open LeanRV64D
+
 /-!
 # SH: top-down store-halfword equivalence
 
@@ -23,7 +25,7 @@ keeps the same proof architecture visible:
 set_option linter.unusedVariables false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true
@@ -278,12 +280,12 @@ theorem execute_SH_misaligned (imm : BitVec 12) (rs2 rs1 : regidx)
   let ea := load_effective_address rs1_val imm
   unfold execute_STORE
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind, pure, EStateM.pure,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure, EStateM.pure,
        EStateM.run, if_true]
   unfold vmem_write
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have hmis' :
       access_causes_misaligned_exception (Virtaddr ea) 2 false = true := by
     simpa [ea] using access_misaligned_2_unaligned_true ea hmis

@@ -2,6 +2,8 @@ import JoltConstraints.Constraints.RamValEqInitialPlusPrefixRamInc
 import JoltConstraints.Constraints.RamValFinalEqInitialPlusRamInc
 import JoltConstraints.Soundness.Helpers.PrefixSum
 
+open LeanRV64D
+
 /-! RAM histories for an arbitrary satisfying witness. These lemmas use only
 the two history equations, independently of address selection or execution.
 The final column includes the last cycle's increment. -/

@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.WordArithmetic
 
+open LeanRV64D
+
 /-! Shared register step for ADDW, SUBW, MULW and MULHU. The arithmetic
 flags produce a wide lookup operand; the existing word-table rules truncate
 or select the high word exactly as the interpreter does.
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 inductive WordArithmetic where
   | addw | subw | mulw | mulhu

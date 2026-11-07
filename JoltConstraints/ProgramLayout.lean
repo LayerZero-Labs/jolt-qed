@@ -6,6 +6,8 @@ here is assumed.
 import JoltConstraints.program_facts
 import JoltConstraints.honest_trace
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- Every expanded program is its instructions' rows laid end to end, and each

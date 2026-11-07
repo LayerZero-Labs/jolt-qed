@@ -63,6 +63,8 @@ import JoltConstraints.Constraints.ShouldBranchEqLookupOutputMulBranch
 import JoltConstraints.Constraints.ShouldJumpEqJumpMulNotNextIsNoop
 import JoltConstraints.Constraints.UnexpandedPCEqBytecodeRead
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

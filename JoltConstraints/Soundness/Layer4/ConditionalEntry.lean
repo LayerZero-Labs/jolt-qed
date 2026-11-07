@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer4.Interleave
 
+open LeanRV64D
+
 /-! Pure conditional, assertion and store-lane table identities. -/
 
 set_option autoImplicit false

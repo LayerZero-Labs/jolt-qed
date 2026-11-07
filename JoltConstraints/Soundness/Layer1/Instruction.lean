@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer1.Addresses
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Fintype.EquivFin
 
+open LeanRV64D
+
 /-! `InstructionRa` is the lookup selector over `virtualChunkBits` bits. It is
 not committed: the constraints rebuild it from the committed small chunks.
 This use of "virtual" in the parameter name is unrelated to virtual instructions. -/

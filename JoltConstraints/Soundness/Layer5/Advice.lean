@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 
+open LeanRV64D
+
 /-! Internal VirtualAdvice obtains its word from the witness's selected
 RangeCheck entry, independently of honest division advice.
 See jolt/crates/jolt-lookup-tables/src/instructions/virt/advice.rs
@@ -11,7 +13,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- A selected range-check lookup written to RD encodes a 64-bit word.
 The table and write-flag premises describe the selected instruction, without

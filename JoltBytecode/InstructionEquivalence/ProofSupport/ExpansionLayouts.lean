@@ -5,6 +5,8 @@ import JoltBytecode.JoltISA.Expansions.Atomics
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.VirtualRegisters
 
+open LeanRV64D
+
 /-!
 # Proof-side allocator-layout characterisations for Jolt ISA expansion programs
 

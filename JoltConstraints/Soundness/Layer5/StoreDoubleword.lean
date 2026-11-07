@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.RamStore
 import JoltConstraints.Soundness.Layer5.MemoryRows
 import JoltConstraints.Soundness.Layer3.Updates
 
+open LeanRV64D
+
 /-! Connect a selected store row to an actual ordinary-RAM write. The rows are
 SD and the floor stores VirtualStoreB/H/W, classified by `StoreRow`. Register
 agreement supplies both operands; the constraints force the accessed doubleword,
@@ -17,7 +19,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.TapeDeviceFrame
 import JoltConstraints.Soundness.Layer3.Layout
 import JoltConstraints.Completeness.Helpers.RamOutputProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints.Soundness

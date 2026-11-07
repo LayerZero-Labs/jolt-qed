@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer5.RegisterWrite
 import JoltConstraints.Soundness.Layer3.Access
 import JoltConstraints.Soundness.Layer3.Address
 
+open LeanRV64D
+
 /-! Agreement between an ordinary-RAM table column and the interpreter's
 byte-map words. The fixed layout identifies the table's address grid. This
 relation says nothing about device words below RAM_START_ADDRESS. It is an
@@ -13,7 +15,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {size : Nat}
 

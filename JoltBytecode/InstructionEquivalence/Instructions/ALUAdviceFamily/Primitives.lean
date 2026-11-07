@@ -1,6 +1,8 @@
 import JoltBytecode.JoltISA.Values
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 
+open LeanRV64D
+
 /-!
 # ALU advice-family shared imports
 

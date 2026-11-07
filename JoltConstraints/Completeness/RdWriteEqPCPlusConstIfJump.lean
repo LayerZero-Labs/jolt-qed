@@ -7,6 +7,8 @@ import JoltConstraints.honest_witness
 import JoltConstraints.execution_conditions
 import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

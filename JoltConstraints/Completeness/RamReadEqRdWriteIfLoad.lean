@@ -3,6 +3,8 @@ import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.Completeness.Helpers.MemoryValueFacts
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

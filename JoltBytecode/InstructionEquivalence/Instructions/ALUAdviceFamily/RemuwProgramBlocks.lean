@@ -3,10 +3,12 @@ import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Primitiv
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.DivuwProgramBlocks
 import JoltBytecode.InstructionEquivalence.ProofSupport.ProgramComposition
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option linter.unusedSimpArgs false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 

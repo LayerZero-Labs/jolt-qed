@@ -1,10 +1,12 @@
 import JoltConstraints.Soundness.Layer6.MemoryRowAppend
 
+open LeanRV64D
+
 /-! Load and store executions with a uniform memory agreement result. -/
 set_option autoImplicit false
 namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 section
 variable {F : Type} [Field F] (joltField : JoltField F)

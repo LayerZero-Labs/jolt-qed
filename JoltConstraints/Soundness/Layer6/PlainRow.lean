@@ -23,6 +23,8 @@ import JoltConstraints.Soundness.Layer3.Access
 import JoltConstraints.Soundness.Layer3.Updates
 import JoltConstraints.Soundness.Layer5.MemoryRows
 
+open LeanRV64D
+
 /-! Append a non-memory, non-host, non-jump row without requiring honest advice. -/
 
 set_option autoImplicit false
@@ -30,7 +32,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The twelve row kinds used by the eight division expansions.
 This excludes memory accesses, tape loads, branches, jumps and HostIO.
@@ -1505,7 +1507,7 @@ private theorem branch_execution_frame (instruction : Instr)
       (kept : StatePreservation.Preserves (fun s t : SailState => t.mem = s.mem) step) :
       StatePreservation.Preserves relation (liftSail step) :=
     StatePreservation.liftSail_rule (fun _ _ same => ⟨same, rfl⟩) kept
-  have readPC := lifted (Sail.readReg Register.PC)
+  have readPC := lifted (LeanRV64D.readReg Register.PC)
     (fun s t v runs => by rw [readReg_pure Register.PC s v t runs])
   have jump (target : BitVec 64) : StatePreservation.Preserves relation (liftSail (jump_to target)) := by
     apply lifted

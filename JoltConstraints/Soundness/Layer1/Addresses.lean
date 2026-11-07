@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer1.Chunks
 import JoltConstraints.Soundness.Layer1.Products
 import JoltConstraints.witness_helpers.address_chunk
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints.Soundness

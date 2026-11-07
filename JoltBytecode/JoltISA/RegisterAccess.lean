@@ -7,6 +7,8 @@ Authors: Ari
 import JoltBytecode.JoltISA.Core
 import JoltBytecode.JoltISA.Instruction
 
+open LeanRV64D
+
 /-!
 # Accessing data in registers
 
@@ -24,7 +26,7 @@ in `InstructionEquivalence/ProofSupport/RegisterAccess.lean`.
 
 set_option linter.unusedVariables true
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 

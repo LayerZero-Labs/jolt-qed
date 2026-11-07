@@ -1,10 +1,12 @@
 import JoltConstraints.Soundness.Layer6.RamCutAgreement
 
+open LeanRV64D
+
 /-! Shared assembly of load/store execution into a represented row extension. -/
 set_option autoImplicit false
 namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The cut image supplies ordinary RAM at the prepared state and device words
 at the retained prefix; for example, both are available before an LD. -/

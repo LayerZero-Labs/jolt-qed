@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer3.State
 import JoltConstraints.Soundness.Layer5.PowerOfTwo
 
+open LeanRV64D
+
 /-! Ordinary RAM in the initial witness is the interpreter's byte map, which
 contains the program image and reads absent bytes as zero. Advice and input
 overlays cannot reach it: their size checks and the checked layout place their

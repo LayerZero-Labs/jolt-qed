@@ -2,6 +2,8 @@ import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 import Batteries.Data.Array.Lemmas
 
+open LeanRV64D
+
 /-! A shared frame for Jolt instructions, parameterized by a state relation.
 The state-changing primitives are Sail updates, virtual-register writes, device
 stores, tape appends, and tape reads.
@@ -11,7 +13,7 @@ See `jolt/tracer/src/emulator/mmu.rs:644-667`,
 
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 namespace InstructionFrame
 

@@ -1,5 +1,7 @@
 import JoltConstraints.program_facts
 
+open LeanRV64D
+
 /-! Transport local instruction-pair facts through materialization and concatenation.
 No expansion checker is imported: its list property is a parameter.
 Jolt's materializer stamps each sequence before concatenating the program rows;

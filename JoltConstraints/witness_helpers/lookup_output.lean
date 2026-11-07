@@ -4,6 +4,8 @@ import JoltConstraints.trace
 import JoltConstraints.witness_helpers.destination_capture
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

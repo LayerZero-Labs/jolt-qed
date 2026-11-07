@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer1.RamReads
 import JoltConstraints.Soundness.Layer0.Words
 
+open LeanRV64D
+
 /-! Relate a selected RAM index to an actual 64-bit byte address. A witness
 address column is a field element; the `encoded` hypothesis identifies it with
 a machine address when applying these lemmas during the execution proof.

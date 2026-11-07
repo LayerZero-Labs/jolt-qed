@@ -1,5 +1,7 @@
 import JoltConstraints.prover_config
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace ExecutionDimensions

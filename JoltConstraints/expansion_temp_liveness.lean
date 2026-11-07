@@ -7,6 +7,8 @@ See : jolt/crates/jolt-program/src/expand/allocator.rs:1-15, 115-139, 184-199
 -/
 import JoltConstraints.expansions
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace ExpansionTempLiveness

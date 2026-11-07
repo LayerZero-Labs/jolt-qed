@@ -5,6 +5,8 @@ import JoltConstraints.Constraints.InstructionLookupRa
 import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.Completeness.Helpers.LookupEntryProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

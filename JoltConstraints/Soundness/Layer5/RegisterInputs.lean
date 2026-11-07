@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.Registers
 import JoltConstraints.Soundness.Layer4.Inputs
 
+open LeanRV64D
+
 /-! Recover register and immediate inputs from the selected row and register
 agreement. Instruction families discharge the syntactic operand, canonicality
 and selection facts; the same proofs serve arithmetic, bitwise and assertion rows. -/
@@ -9,7 +11,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

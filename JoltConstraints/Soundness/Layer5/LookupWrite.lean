@@ -4,6 +4,8 @@ import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.Soundness.Layer5.TapeSemantics
 import JoltConstraints.Soundness.Layer4.Outputs
 
+open LeanRV64D
+
 /-! Shared steps for instructions that write a lookup result to a register.
 Instruction families prove their operand selection, metadata, table meaning and
 read/write equation. These local facts are discharged by each caller; none is
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

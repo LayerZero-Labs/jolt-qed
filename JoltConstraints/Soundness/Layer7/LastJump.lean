@@ -1,9 +1,11 @@
 import JoltConstraints.Soundness.Layer6.ExecutionPrefix
 import JoltConstraints.Soundness.Layer6.BytecodePC
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 namespace JoltInstance
 

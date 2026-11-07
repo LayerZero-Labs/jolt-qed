@@ -2,13 +2,15 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer7.StallSuffix
 import JoltConstraints.Completeness.Helpers.RegistersValProofHelpers
 
+open LeanRV64D
+
 /-! Live-register execution of JALR, including virtual bases and aliased operands. -/
 
 set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- A selected JALR reads its live base before writing the link, clears target
 bit zero, and extends register agreement by its destination.
@@ -65,7 +67,7 @@ theorem jalr_step
     exact registers.values register isLive
   have written := writeDst_afterWriteDst destination canonical.1
     (row.address + if row.is_compressed then 2 else 4) middle
-  have readNext : liftSail (Sail.readReg Register.nextPC) pre =
+  have readNext : liftSail (LeanRV64D.readReg Register.nextPC) pre =
       .ok (row.address + if row.is_compressed then 2 else 4) pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail _ nextPC]

@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! A selected LUI row writes its already-decoded immediate. The lookup
 checks the sum of zero and that word; no source register is read. This covers
 a LUI row of the expanded bytecode, whether it represents a source instruction
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

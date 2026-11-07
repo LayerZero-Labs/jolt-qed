@@ -2,6 +2,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 /-!
 # Pure splice facts for store-family expansions
 
@@ -22,7 +24,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.unnecessarySeqFocus false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

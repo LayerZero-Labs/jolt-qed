@@ -8,6 +8,8 @@ Authors: Ari
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.SystemCSR
 
+open LeanRV64D
+
 /-!
 # System-instruction Jolt expansion programs
 
@@ -27,7 +29,7 @@ The reserved virtual registers follow `tracer/src/utils/virtual_registers.rs`:
 * `v40`: first scratch register allocated for an instruction expansion
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

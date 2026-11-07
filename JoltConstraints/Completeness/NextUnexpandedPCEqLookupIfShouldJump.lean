@@ -7,9 +7,11 @@ import JoltConstraints.honest_witness
 import JoltConstraints.execution_conditions
 import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltConstraints
 
@@ -39,10 +41,10 @@ private theorem jal_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
     (hexec : JoltISA.execInstr (.JAL dst imm) pre =
       .ok (.Retire_Success ()) post) :
     post.sail.regs.get? Register.nextPC = some (address + imm) := by
-  have hreadNext : liftSail (Sail.readReg Register.nextPC) pre = .ok link pre := by
+  have hreadNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail link hnext]
-  have hreadPC : liftSail (Sail.readReg Register.PC) pre = .ok address pre := by
+  have hreadPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok address pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.PC pre.sail address hpc]
   simp only [JoltISA.execInstr, bind, EStateM.bind, hreadNext, hreadPC] at hexec
@@ -50,7 +52,7 @@ private theorem jal_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
   | error err state => simp only [hwrite] at hexec; cases hexec
   | ok result mid =>
     cases result
-    have hpcWrite : liftSail (Sail.writeReg Register.nextPC (address + imm)) mid =
+    have hpcWrite : liftSail (LeanRV64D.writeReg Register.nextPC (address + imm)) mid =
         .ok () { mid with sail := { mid.sail with
           regs := mid.sail.regs.insert Register.nextPC (address + imm) } } := by rfl
     simp only [hwrite, hpcWrite, pure, EStateM.pure] at hexec
@@ -64,7 +66,7 @@ private theorem jalr_target (dst : JoltISA.Dst) (base : JoltISA.Src)
       .ok (.Retire_Success ()) post) :
     post.sail.regs.get? Register.nextPC =
       some (jolt_jalr_target64 (JoltISA.sourceValue base pre) imm) := by
-  have hreadNext : liftSail (Sail.readReg Register.nextPC) pre = .ok link pre := by
+  have hreadNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail link hnext]
   simp only [JoltISA.execInstr, bind, EStateM.bind, hreadNext] at hexec
@@ -78,7 +80,7 @@ private theorem jalr_target (dst : JoltISA.Dst) (base : JoltISA.Src)
     let afterPC : SailJoltState :=
       { pre with sail := { pre.sail with
         regs := pre.sail.regs.insert Register.nextPC target } }
-    have hpcWrite : liftSail (Sail.writeReg Register.nextPC target) pre =
+    have hpcWrite : liftSail (LeanRV64D.writeReg Register.nextPC target) pre =
         .ok () afterPC := by rfl
     simp only [hread] at hexec
     rw [hpcWrite] at hexec

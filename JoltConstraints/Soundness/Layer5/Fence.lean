@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer5.Registers
 import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.Soundness.Layer5.LookupWrite
 
+open LeanRV64D
+
 /-! FENCE has no destination and no RAM effect. Its selected row therefore
 preserves both register and ordinary-RAM agreement.
 At public pin 8bbb2357:
@@ -12,7 +14,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

@@ -3,6 +3,8 @@ import JoltConstraints.witness
 import JoltConstraints.trace
 import JoltBytecode.JoltISA.RegisterAccess
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

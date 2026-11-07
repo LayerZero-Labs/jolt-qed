@@ -1,5 +1,7 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Lemmas
 
+open LeanRV64D
+
 /-!
 TODO: Consolidate these tactics.
 # Program composition lemmas
@@ -11,7 +13,7 @@ unfolding the whole program into one long instruction chain.
 -/
 
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Bitwise
 
+open LeanRV64D
+
 /-! Shared execution proof for two-register AND, OR and ANDN. Each consumes
 the existing interleaved lookup-table rule and the common destination write.
 At public pin 8bbb2357:
@@ -12,7 +14,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Two-register bitwise row kinds covered by the shared step. -/
 inductive BitwiseBinary where

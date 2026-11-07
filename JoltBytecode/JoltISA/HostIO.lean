@@ -1,11 +1,13 @@
 import JoltBytecode.JoltISA.RegisterAccess
 import JoltBytecode.JoltISA.DeviceMemory
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltISA
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 -- Rust: jolt-platform/src/{advice,cycle_tracking,print}.rs.
 def hostAdviceWriteCall : BitVec 32 := 0xADBABE

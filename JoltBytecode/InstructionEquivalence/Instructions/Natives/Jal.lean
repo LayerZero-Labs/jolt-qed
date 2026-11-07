@@ -1,7 +1,9 @@
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -29,11 +31,11 @@ theorem jalNative_run (imm : BitVec 21) (rd : regidx) (js : SailJoltState)
   unfold JoltISA.jalNativeInstr
   simp only [EStateM.run, JoltISA.execInstr]
   -- nextPC represents Rust's already advanced cpu.pc.
-  have hReadRustPC : liftSail (Sail.readReg Register.nextPC) js = .ok rustPC js := by
+  have hReadRustPC : liftSail (LeanRV64D.readReg Register.nextPC) js = .ok rustPC js := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC js.sail rustPC hNextPC]
   -- PC represents self.address, the decoded instruction's address.
-  have hReadAddress : liftSail (Sail.readReg Register.PC) js =
+  have hReadAddress : liftSail (LeanRV64D.readReg Register.PC) js =
       .ok instructionAddress js := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.PC js.sail instructionAddress hPC]

@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Word
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! Byte, halfword, and word lane-mask rows use the
 checked wide sum of the base register and decoded immediate as the lookup index.
 Jolt's tracer at c6703570: `tracer/src/instruction/virtual_window_mask_b.rs`
@@ -11,7 +13,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The three lane-mask widths; for example, `halfword` selects two bytes. -/
 inductive AddressMask where

@@ -2,6 +2,8 @@ import Mathlib.Tactic.Ring
 import JoltConstraints.lookup_table
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 /-!
 # PEXT table identities for arbitrary operand words
 

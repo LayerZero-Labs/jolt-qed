@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer6.PlainRow
 import JoltBytecode.InstructionEquivalence.ProofSupport.ProgramComposition
 
+open LeanRV64D
+
 /-! Staged reconstruction of a whole division expansion with honest advice. -/
 
 set_option autoImplicit false
@@ -8,7 +10,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The eight source operations implemented by division expansions.
 For example, `rem` selects the nine-row signed remainder program even when

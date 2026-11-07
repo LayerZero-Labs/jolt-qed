@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Word
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! Immediate powers of two and right-shift masks use a zero left arithmetic
 input and the normalized 64-bit immediate as the right input.
 At public pin 8bbb2357:
@@ -13,7 +15,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 inductive ImmediatePowerMask where
   | pow2I | pow2IW | shiftMaskI

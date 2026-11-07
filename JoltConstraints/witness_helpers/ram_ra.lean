@@ -1,6 +1,8 @@
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness_helpers.ram_ra_chunk
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

@@ -4,6 +4,8 @@ import JoltConstraints.Soundness.Layer6.RowStep
 import JoltConstraints.Soundness.Layer6.ExpansionFinish
 import JoltConstraints.Soundness.Layer6.BytecodePC
 
+open LeanRV64D
+
 /-! Execution-prefix reconstruction from the staged boundary and expansion lemmas. -/
 
 set_option autoImplicit false

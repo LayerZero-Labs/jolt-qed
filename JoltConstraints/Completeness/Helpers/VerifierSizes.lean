@@ -2,6 +2,8 @@ import JoltConstraints.verifier_sizes
 import JoltConstraints.witness_domain
 import JoltConstraints.Completeness.Helpers.RamReadSelection
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

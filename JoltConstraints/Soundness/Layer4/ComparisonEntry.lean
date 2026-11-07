@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer4.Interleave
 
+open LeanRV64D
+
 /-! Comparison table identities shared with completeness. BitVec order is unsigned; signed comparisons use toInt.
 These identities hold for arbitrary words and require no execution trace. -/
 

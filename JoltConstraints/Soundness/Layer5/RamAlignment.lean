@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.MemoryAddress
 import JoltConstraints.Soundness.Layer3.State
 
+open LeanRV64D
+
 /-! RAM selection forces doubleword alignment; an encoded address is either
 zero or an aligned layout base plus eight times an index. LD/SD therefore need
 no additional alignment premise. This does not establish address legality or

@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer1.InstructionReads
 
+open LeanRV64D
+
 /-! The one lookup fact needed before the register induction: identity RAF
 with right operand zero selects address zero, whose RangeCheck output is zero.
 General lookup semantics remain a Layer 4 obligation. -/

@@ -3,6 +3,8 @@ import JoltConstraints.Constraints.RamOutputEqPublicIo
 import JoltConstraints.Completeness.Helpers.IOSetupFrame
 import JoltConstraints.Constraints.MemoryLayout
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

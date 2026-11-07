@@ -5,6 +5,8 @@ Authors: Ari
 -/
 import JoltBytecode.JoltISA.Core
 
+open LeanRV64D
+
 /-!
 # Rust virtual-register allocation layout
 

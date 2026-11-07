@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer6.RowStepJalr
 import JoltConstraints.Soundness.Layer6.RowStepTerminal
 import JoltConstraints.Soundness.Layer6.RowStepMemory
 
+open LeanRV64D
+
 /-! The small row classification and staged non-plain extension rules. -/
 
 set_option autoImplicit false
@@ -10,7 +12,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Preparation after a certified prefix fixes PC and nextPC before the new row
 executes; for example, ECALL's final JALR still has ECALL's prepared source PCs.

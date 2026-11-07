@@ -1,5 +1,7 @@
 import JoltConstraints.program
 
+open LeanRV64D
+
 -- Source audit: public pin 5def437f, base/Dory full-program mode.
 set_option autoImplicit false
 

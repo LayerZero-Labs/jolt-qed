@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Comparison
 import JoltBytecode.InstructionEquivalence.ProofSupport.ValueLemmas
 
+open LeanRV64D
+
 /-! Execute a selected SLTIU row from the unsigned comparison lookup.
 The immediate is the row's decoded 64-bit word. In particular, immediate one
 tests for zero after the XOR in SC's expansion. -/
@@ -10,7 +12,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

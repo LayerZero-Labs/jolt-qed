@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! One register-step proof for ADD, SUB and MUL. They share source recovery,
 RangeCheck lookup consumption and register updates. Only the arithmetic flag,
 the existing Layer 4 rule and the interpreter's operation vary.
@@ -16,7 +18,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The three full-word arithmetic operations with two register operands. -/
 inductive RegisterArithmetic where

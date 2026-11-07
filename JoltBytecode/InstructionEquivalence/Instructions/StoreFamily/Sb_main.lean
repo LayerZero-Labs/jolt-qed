@@ -7,6 +7,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.StoreExec
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.ProgramBlocks
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 
+open LeanRV64D
+
 /-!
 # SB: store-byte equivalence
 
@@ -21,7 +23,7 @@ Jolt: `crates/jolt-program/src/expand/memory/shared.rs` (`expand_narrow_store`).
 set_option linter.unusedVariables false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true

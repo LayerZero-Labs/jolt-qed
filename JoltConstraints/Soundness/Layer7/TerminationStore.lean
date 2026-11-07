@@ -6,9 +6,11 @@ import JoltConstraints.Soundness.Layer5.MemoryRows
 import JoltConstraints.Soundness.Layer3.Address
 import JoltConstraints.Completeness.Helpers.IOSetupFrame
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 namespace JoltConstraints.Soundness
 

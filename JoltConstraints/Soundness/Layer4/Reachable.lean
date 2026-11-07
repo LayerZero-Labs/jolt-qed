@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer2.RegisterMap
 
+open LeanRV64D
+
 /-! The two plain rotate tables are not selected by the currently modeled
 source programs. Jolt's inline expansion helpers can emit them, but those
 additional source instruction kinds are outside this SourceInstruction type.

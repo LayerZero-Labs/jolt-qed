@@ -8,6 +8,8 @@ Authors: Ari
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.VirtualRegisters
 
+open LeanRV64D
+
 /-!
 # Jolt ISA ALU expansions Helpers
 
@@ -17,7 +19,7 @@ theorem proving more ergonomic.
 
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

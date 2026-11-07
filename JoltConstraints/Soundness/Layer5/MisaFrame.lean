@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.execution_facts
 import JoltConstraints.witness_helpers.ram_state
 
+open LeanRV64D
+
 /-! Sail's instruction-set configuration is initialized once and preserved by
 Jolt execution, including independent tape answers.
 Jolt's CSR instructions use virtual registers rather than Sail's CSR map.
@@ -13,7 +15,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Equality of the optional Sail `misa` values in two Jolt states.
 For example, changing only nextPC preserves this relation. -/
@@ -41,11 +43,11 @@ private theorem lift_rule {α : Type} {step : SailM α}
   StatePreservation.liftSail_rule (fun _ _ same => same) keeps
 
 private theorem readReg_rule (r : Register) :
-    StatePreservation.Preserves SameMisa (liftSail (Sail.readReg r)) :=
+    StatePreservation.Preserves SameMisa (liftSail (LeanRV64D.readReg r)) :=
   lift_rule (fun s t v runs => by rw [readReg_pure r s v t runs])
 
 private theorem writeNextPC_rule (value : BitVec 64) :
-    StatePreservation.Preserves SameMisa (liftSail (Sail.writeReg Register.nextPC value)) :=
+    StatePreservation.Preserves SameMisa (liftSail (LeanRV64D.writeReg Register.nextPC value)) :=
   lift_rule (fun s t v runs => by cases runs; simp [Std.ExtDHashMap.get?_insert])
 
 private theorem write_rule (dst : Dst) (value : BitVec 64) :

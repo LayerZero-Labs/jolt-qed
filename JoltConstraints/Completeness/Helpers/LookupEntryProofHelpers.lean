@@ -11,6 +11,8 @@ import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupPextProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupShiftProofHelpers
 
+open LeanRV64D
+
 /-!
 # Per-table obligations for constraint (39)
 
@@ -32,7 +34,7 @@ set_option autoImplicit false
 namespace JoltConstraints
 
 open TraceWitness
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 /-- The expanded instruction executed by a trace row. -/
 abbrev rowInstruction {bytecode : Array JoltInstructionRow} (row : HonestTraceRow bytecode) : JoltISA.Instr :=

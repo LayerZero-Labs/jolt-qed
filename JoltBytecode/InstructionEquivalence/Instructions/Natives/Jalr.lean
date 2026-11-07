@@ -1,7 +1,9 @@
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -30,7 +32,7 @@ theorem jalrNative_run (imm : BitVec 12) (rs1 rd : regidx) (js : SailJoltState)
   unfold JoltISA.jalrNativeInstr
   simp only [EStateM.run, JoltISA.execInstr]
   -- Save Rust's old cpu.pc before reading rs1 or writing either destination.
-  have hReadRustPC : liftSail (Sail.readReg Register.nextPC) js = .ok rustPC js := by
+  have hReadRustPC : liftSail (LeanRV64D.readReg Register.nextPC) js = .ok rustPC js := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC js.sail rustPC hNextPC]
   have hReadBase : JoltISA.readSrc (.xreg rs1) js = .ok baseValue js := by
@@ -39,7 +41,7 @@ theorem jalrNative_run (imm : BitVec 12) (rs1 rd : regidx) (js : SailJoltState)
     jolt_jalr_target64, JoltISA.addWide_low]
   -- Rust first updates cpu.pc, then writes the saved value to the destination.
   have hWritePC :
-      liftSail (Sail.writeReg Register.nextPC
+      liftSail (LeanRV64D.writeReg Register.nextPC
         (BitVec.update (baseValue + sign_extend (m := 64) imm) 0 0#1)) js =
       .ok () { js with
         sail := System.setNextPCState js.sail

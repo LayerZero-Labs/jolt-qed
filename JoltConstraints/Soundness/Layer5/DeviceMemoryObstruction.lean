@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer3.Updates
 import JoltConstraints.Soundness.Layer3.Layout
 
+open LeanRV64D
+
 /-! The known termination-device discrepancy obstructs the proposed full RAM
 agreement invariant in Layer 5b. This file proves the execution behavior for
 a layout produced by `MemoryLayout.new`, within the approved RAM-region bound,
@@ -16,7 +18,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness.DeviceMemoryObstruction
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- A small configuration with one output word and no advice, stack or heap. -/
 def config : MemoryConfig := {

@@ -1,9 +1,11 @@
 import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open JoltISA
 
 namespace JoltConstraints

@@ -1,5 +1,7 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 
+open LeanRV64D
+
 /-!
 # `SailJoltState` bookkeeping lemmas
 
@@ -10,7 +12,7 @@ equivalence family.
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 

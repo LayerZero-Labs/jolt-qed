@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer4.Interleave
 
+open LeanRV64D
+
 /-! Bitwise table identities shared with completeness.
 These identities hold for arbitrary words and require no execution trace. -/
 

@@ -7,9 +7,11 @@ import JoltConstraints.execution_conditions
 import JoltConstraints.Completeness.NextUnexpandedPCUpdateOtherwise
 import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltConstraints
 
@@ -52,7 +54,7 @@ theorem execInstr_branch_target (instr : JoltISA.Instr) (lhs rhs : JoltISA.Src)
     (pcIs : state.sail.regs.get? Register.PC = some address)
     (runs : JoltISA.execInstr instr state = .ok (.Retire_Success ()) after) :
     after.sail.regs.get? Register.nextPC = some (address + imm.setWidth 64) := by
-  have readPC : liftSail (Sail.readReg Register.PC) state = .ok address state := by
+  have readPC : liftSail (LeanRV64D.readReg Register.PC) state = .ok address state := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.PC state.sail address pcIs]
   rcases isBranch with rfl | rfl | rfl | rfl | rfl | rfl

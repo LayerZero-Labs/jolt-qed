@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer2.RegisterMap
 
+open LeanRV64D
+
 /-! A concrete post-state for a destination write. Expanded bytecode uses
 canonical operands, so a virtual destination cannot name a protected index
 below 32. Architectural x0 writes follow Sail and leave x0 unchanged. -/
@@ -8,7 +10,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The state after a destination write: architectural writes use Sail's
 register update and virtual writes replace one virtual-register value. -/

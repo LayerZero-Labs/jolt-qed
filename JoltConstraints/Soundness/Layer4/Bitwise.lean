@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer4.BitwiseEntry
 
+open LeanRV64D
+
 /-! Interpret bitwise lookup outputs at the recovered operands.
 The selected bytecode row supplies the table. RAF zero and operand agreement
 are local obligations for the instruction proofs. -/

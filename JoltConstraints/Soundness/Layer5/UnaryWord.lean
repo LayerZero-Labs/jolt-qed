@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Word
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! Shared step for unary word operations whose AddOperands flag uses the
 source value as the lookup index, without interleaving. The row immediate is ignored by both
 the circuit's operand selection and the interpreter.
@@ -19,7 +21,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Unary word operations whose lookup index is the source value. -/
 inductive UnaryWord where

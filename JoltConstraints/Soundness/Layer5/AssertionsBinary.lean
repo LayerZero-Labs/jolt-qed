@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.AssertLessThanEqual
 import JoltConstraints.Soundness.Layer4.Conditional
 
+open LeanRV64D
+
 /-! Three two-register assertion rows. The selected lookup and Assert flag force
 each condition before execution; no successful-assertion premise is assumed.
 At public pin 8bbb2357:
@@ -12,7 +14,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The equality and division/remainder guard rows. -/
 inductive BinaryAssertion where

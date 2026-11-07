@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.TapeSemantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.ExpansionBlocks.ALU
 
+open LeanRV64D
+
 /-! The arithmetic identity for narrow-advice post-processing: a left shift
 followed by an arithmetic right shift discards the high bits before sign
 extension. AdviceExpansion.lean proves that the generated AdviceLB/LH/LW

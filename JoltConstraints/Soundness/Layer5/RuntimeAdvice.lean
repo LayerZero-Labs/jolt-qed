@@ -1,6 +1,8 @@
 import JoltConstraints.honest_trace
 import JoltConstraints.expansions
 
+open LeanRV64D
+
 /-! Runtime-advice agreement is automatic for rows other than VirtualAdvice.
 PR #2039 removes every such row from both SC expansions. These facts do not
 interpret virtual registers as emulator reservations. -/
@@ -9,7 +11,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Supplying internal runtime advice leaves a row unchanged when it is not a
 VirtualAdvice instruction. This connects ordinary step rules to trace execution. -/

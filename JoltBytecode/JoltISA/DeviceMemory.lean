@@ -1,11 +1,13 @@
 import JoltBytecode.JoltISA.Core
 import JoltBytecode.JoltISA.MemoryAccess
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltISA
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 -- Reads 64 bits from the 8 addresses starting at `address`, using `byte` to read

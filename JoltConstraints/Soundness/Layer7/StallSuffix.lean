@@ -12,9 +12,11 @@ import JoltConstraints.Soundness.Layer4.Arithmetic
 import JoltConstraints.trace_interface
 import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 namespace JoltInstance
 
@@ -713,10 +715,10 @@ theorem stall_jal_exec_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
     (nextPC : pre.sail.regs.get? Register.nextPC = some link)
     (runs : JoltISA.execInstr (.JAL dst imm) pre = .ok RETIRE_SUCCESS post) :
     post.sail.regs.get? Register.nextPC = some (address + imm) := by
-  have readNext : liftSail (Sail.readReg Register.nextPC) pre = .ok link pre := by
+  have readNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail link nextPC]
-  have readPC : liftSail (Sail.readReg Register.PC) pre = .ok address pre := by
+  have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok address pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.PC pre.sail address pc]
   simp only [JoltISA.execInstr, bind, EStateM.bind, readNext, readPC] at runs
@@ -724,7 +726,7 @@ theorem stall_jal_exec_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
   | error error state => simp only [written] at runs; cases runs
   | ok result middle =>
       cases result
-      simp only [written, liftSail, Sail.writeReg, pure, EStateM.pure] at runs
+      simp only [written, liftSail, LeanRV64D.writeReg, pure, EStateM.pure] at runs
       cases runs
       simp only [Std.ExtDHashMap.get?_insert, beq_iff_eq, ↓reduceDIte, cast_eq]
 
@@ -1887,7 +1889,7 @@ theorem tape_jalr_target
       answer pre = .ok (.Retire_Success ()) post) :
     post.sail.regs.get? Register.nextPC =
       some (jolt_jalr_target64 (JoltISA.sourceValue base pre) imm) := by
-  have hreadNext : liftSail (Sail.readReg Register.nextPC) pre = .ok link pre := by
+  have hreadNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail link hnext]
   simp only [JoltConstraints.Soundness.execWithTapeAnswer, JoltISA.execInstr,
@@ -1902,7 +1904,7 @@ theorem tape_jalr_target
     let afterPC : SailJoltState :=
       { pre with sail := { pre.sail with
         regs := pre.sail.regs.insert Register.nextPC target } }
-    have hpcWrite : liftSail (Sail.writeReg Register.nextPC target) pre =
+    have hpcWrite : liftSail (LeanRV64D.writeReg Register.nextPC target) pre =
         .ok () afterPC := by rfl
     simp only [hread] at runs
     rw [hpcWrite] at runs

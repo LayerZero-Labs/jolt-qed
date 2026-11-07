@@ -2,6 +2,8 @@ import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.Constraints.LeftLookupOperandEqInstructionRaf
 import JoltConstraints.Constraints.LookupOperandData
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

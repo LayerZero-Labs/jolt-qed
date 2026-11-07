@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer7.StallSuffix
 import JoltConstraints.Soundness.Layer7.LastJump
 
+open LeanRV64D
+
 /-! The next source address at a terminal row with a real successor. -/
 
 set_option autoImplicit false
@@ -8,7 +10,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The final retained cycle selects the executed row and has its prepared PC
 and link value. For example, a terminal ADDI row has its source address in PC. -/

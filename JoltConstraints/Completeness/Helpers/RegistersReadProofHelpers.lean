@@ -2,6 +2,8 @@ import JoltConstraints.Completeness.Helpers.RegistersValHistoryProofHelpers
 import JoltConstraints.Constraints.BytecodeReadSelectors
 import JoltConstraints.honest_witness
 
+open LeanRV64D
+
 /-!
 Source-register reads for the honest register witness.
 Each real row selects at most one first and one second source register.

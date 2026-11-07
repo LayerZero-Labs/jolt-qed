@@ -3,6 +3,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.ValueLemmas
 import Mathlib
 
+open LeanRV64D
+
 /-!
 # M-extension expansion block semantics
 
@@ -11,7 +13,7 @@ lowered to real Jolt ISA rows.  In particular, nested `MULH` expansions must
 use the scratch virtual registers allocated at the call site.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 set_option linter.unusedVariables false

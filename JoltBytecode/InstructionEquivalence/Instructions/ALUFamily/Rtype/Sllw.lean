@@ -8,9 +8,11 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Virtua
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import Mathlib.Data.Nat.Bitwise
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 

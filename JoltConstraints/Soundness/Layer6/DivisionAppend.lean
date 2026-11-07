@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer6.DivisionPrograms
 import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.Soundness.Layer7.TerminationStore
 
+open LeanRV64D
+
 /-! Reconstruction of an honest division expansion's trace rows. -/
 
 set_option autoImplicit false
@@ -9,7 +11,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem runtimeAdviceFor_patch (instruction : Instr) (q : BitVec 64) :
     instruction.withRuntimeAdvice (runtimeAdviceFor instruction q) =

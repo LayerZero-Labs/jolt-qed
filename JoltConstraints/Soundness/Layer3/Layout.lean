@@ -3,6 +3,8 @@ import JoltConstraints.Constraints.RamReadData
 import JoltConstraints.layout_facts
 import JoltConstraints.witness_domain
 
+open LeanRV64D
+
 /-! The approved layout restriction and its consequence for a witness's RAM
 domain. These facts depend only on the instance and verifier size checks. -/
 

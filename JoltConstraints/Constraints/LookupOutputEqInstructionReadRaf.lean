@@ -2,6 +2,8 @@ import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.Constraints.InstructionLookupRa
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

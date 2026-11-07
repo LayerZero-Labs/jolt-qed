@@ -4,6 +4,8 @@ Each one is proved from how program.lean builds the rows.
 -/
 import JoltConstraints.program
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- Every row an instruction expands to carries that instruction's address.

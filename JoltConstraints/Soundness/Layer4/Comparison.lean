@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer4.ComparisonEntry
 
+open LeanRV64D
+
 /-! Interpret comparison lookup outputs at the recovered operands.
 The selected bytecode row supplies the table. RAF zero and operand agreement
 are local obligations for the instruction proofs. -/

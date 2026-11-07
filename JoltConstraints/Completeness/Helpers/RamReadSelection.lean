@@ -5,6 +5,8 @@ import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.Completeness.Helpers.FloorMemory
 import JoltConstraints.Completeness.Helpers.MemoryValueFacts
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 open JoltConstraints

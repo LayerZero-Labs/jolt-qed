@@ -1,6 +1,8 @@
 import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 
+open LeanRV64D
+
 /-!
 # Basic Jolt ISA semantic lemmas
 
@@ -9,7 +11,7 @@ facts about the generic interpreter rather than unfolding it ad hoc.
 -/
 
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true

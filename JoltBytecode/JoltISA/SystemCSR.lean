@@ -5,6 +5,8 @@ Authors: Ari
 -/
 import JoltBytecode.JoltISA.VirtualRegisters
 
+open LeanRV64D
+
 /-!
 # Supported System CSR whitelist
 

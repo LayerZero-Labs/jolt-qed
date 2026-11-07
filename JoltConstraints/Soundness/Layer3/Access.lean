@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer1.BytecodeReads
 import JoltConstraints.Soundness.Layer1.RamReads
 
+open LeanRV64D
+
 /-! Consequences of the memory-operation flags. Non-memory cycles have no RAM
 address, padding has those flags unset, and loads contribute no write increment.
 Flag equalities for executed instructions come from Layer 1's bytecode reads. -/

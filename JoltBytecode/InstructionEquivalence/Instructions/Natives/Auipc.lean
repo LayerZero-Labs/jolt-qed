@@ -3,7 +3,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 set_option linter.unusedSimpArgs false
@@ -98,7 +100,7 @@ theorem auipcInstr_eq_sail
     unfold JoltISA.execInstr execute_UTYPE JoltISA.writeDst liftSail get_arch_pc
     simp only [JoltISA.addWide_low]
     simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
-    cases hpc : Sail.readReg Register.PC js.sail with
+    cases hpc : LeanRV64D.readReg Register.PC js.sail with
     | error e s1 =>
         simp only [hpc, EStateM.run]
     | ok pc s1 =>

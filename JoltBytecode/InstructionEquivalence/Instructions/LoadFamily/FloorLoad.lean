@@ -3,7 +3,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 import JoltBytecode.InstructionEquivalence.ProofSupport.StateLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.ProgramComposition
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 namespace LoadFamily

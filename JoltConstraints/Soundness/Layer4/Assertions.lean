@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer4.Identity
 
+open LeanRV64D
+
 /-! Product-bound assertions at a recovered wide address. -/
 
 set_option autoImplicit false

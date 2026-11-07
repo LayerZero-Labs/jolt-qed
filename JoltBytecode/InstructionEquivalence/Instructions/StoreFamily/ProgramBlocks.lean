@@ -16,6 +16,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Splice
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 
+open LeanRV64D
+
 /-!
 # Program blocks for store-family Jolt-ISA proofs
 
@@ -39,7 +41,7 @@ Rust program top-to-bottom while keeping each proof phase small enough to read.
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true

@@ -10,6 +10,8 @@ import JoltBytecode.JoltISA.Expansions.AtomicRegisters
 import JoltBytecode.JoltISA.Expansions.LaneWindow
 import JoltBytecode.JoltISA.VirtualRegisters
 
+open LeanRV64D
+
 /-!
 # Atomic Jolt expansion programs
 
@@ -17,7 +19,7 @@ Small wrappers around atomic expansions that make proof writing a little bit mor
 ergonomic.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

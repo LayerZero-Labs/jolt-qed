@@ -8,6 +8,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Lemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.ValueLemmas
 
+open LeanRV64D
+
 /-!
 # ALU expansion block semantics
 
@@ -16,7 +18,7 @@ lowered to real Jolt ISA rows.  They keep instruction-equivalence proofs from
 depending on source-level pseudo-instructions that are not part of `JoltISA.Instr`.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

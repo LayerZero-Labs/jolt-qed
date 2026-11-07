@@ -7,6 +7,8 @@ import JoltConstraints.Completeness.Helpers.FloorMemory
 import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.expansion_temp_liveness
 
+open LeanRV64D
+
 /-! Native and floor-addressed memory rows, classified once by their width.
 A memory row is a load (LD, VirtualLoadB/H/W) or a store (SD, VirtualStoreB/H/W).
 Its effective address is `ea = base + imm`.
@@ -25,7 +27,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The width class of a memory row.
 `double` is a native LD or SD, which accesses the eight bytes at its effective

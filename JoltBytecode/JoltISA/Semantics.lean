@@ -11,6 +11,8 @@ import JoltBytecode.JoltISA.DeviceMemory
 import JoltBytecode.JoltISA.AdviceTape
 import JoltBytecode.JoltISA.HostIO
 
+open LeanRV64D
+
 /-!
 # Jolt ISA semantics
 
@@ -26,7 +28,7 @@ Rust expansion lists.
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true
@@ -84,24 +86,24 @@ def execInstr : Instr → JoltMonad ExecutionResult
       -- (the decoded instruction's address), and Sail nextPC represents cpu.pc
       -- (already advanced by the source instruction's length before exec).
       -- This is a state representation, not a claim that Rust has a nextPC field.
-      let rustPC ← liftSail (Sail.readReg Register.nextPC)
-      let instructionAddress ← liftSail (Sail.readReg Register.PC)
+      let rustPC ← liftSail (LeanRV64D.readReg Register.nextPC)
+      let instructionAddress ← liftSail (LeanRV64D.readReg Register.PC)
       -- Rust writes the old cpu.pc to the expanded destination first.
       -- Rust's diagnostic track_call bookkeeping is outside this architectural model.
       writeDst dst rustPC
       -- Rust: cpu.pc = self.address.wrapping_add(imm).
       -- BitVec addition wraps at 64 bits; Rust performs no alignment check here.
       -- Update nextPC, which represents cpu.pc, leaving the instruction address intact.
-      liftSail (Sail.writeReg Register.nextPC (instructionAddress + imm))
+      liftSail (LeanRV64D.writeReg Register.nextPC (instructionAddress + imm))
       pure RETIRE_SUCCESS
   | .JALR dst base imm => do
       -- Rust: tracer/src/instruction/jalr.rs::JALR::exec.
       -- nextPC represents the already advanced cpu.pc, as for JAL.
-      let rustPC ← liftSail (Sail.readReg Register.nextPC)
+      let rustPC ← liftSail (LeanRV64D.readReg Register.nextPC)
       let target ← readSrc base
       -- Rust reads rs1 before writing rd, including when rd and rs1 alias.
       -- It clears target bit 0 and writes cpu.pc without Sail's alignment check.
-      liftSail (Sail.writeReg Register.nextPC (jolt_jalr_target64 target imm))
+      liftSail (LeanRV64D.writeReg Register.nextPC (jolt_jalr_target64 target imm))
       -- Rust writes the saved old cpu.pc to rd after updating cpu.pc.
       writeDst dst rustPC
       pure RETIRE_SUCCESS
@@ -109,7 +111,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc lhs
       let y ← readSrc rhs
       if branchDecisionPure (.BEQ lhs rhs imm) x y then
-        let pc ← liftSail (Sail.readReg Register.PC)
+        let pc ← liftSail (LeanRV64D.readReg Register.PC)
         liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
@@ -117,7 +119,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc lhs
       let y ← readSrc rhs
       if branchDecisionPure (.BNE lhs rhs imm) x y then
-        let pc ← liftSail (Sail.readReg Register.PC)
+        let pc ← liftSail (LeanRV64D.readReg Register.PC)
         liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
@@ -125,7 +127,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc lhs
       let y ← readSrc rhs
       if branchDecisionPure (.BLT lhs rhs imm) x y then
-        let pc ← liftSail (Sail.readReg Register.PC)
+        let pc ← liftSail (LeanRV64D.readReg Register.PC)
         liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
@@ -133,7 +135,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc lhs
       let y ← readSrc rhs
       if branchDecisionPure (.BGE lhs rhs imm) x y then
-        let pc ← liftSail (Sail.readReg Register.PC)
+        let pc ← liftSail (LeanRV64D.readReg Register.PC)
         liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
@@ -141,7 +143,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc lhs
       let y ← readSrc rhs
       if branchDecisionPure (.BLTU lhs rhs imm) x y then
-        let pc ← liftSail (Sail.readReg Register.PC)
+        let pc ← liftSail (LeanRV64D.readReg Register.PC)
         liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS
@@ -149,7 +151,7 @@ def execInstr : Instr → JoltMonad ExecutionResult
       let x ← readSrc lhs
       let y ← readSrc rhs
       if branchDecisionPure (.BGEU lhs rhs imm) x y then
-        let pc ← liftSail (Sail.readReg Register.PC)
+        let pc ← liftSail (LeanRV64D.readReg Register.PC)
         liftSail (jump_to (pc + imm.setWidth 64))
       else
         pure RETIRE_SUCCESS

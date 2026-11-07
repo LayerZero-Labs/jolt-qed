@@ -2,6 +2,8 @@ import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 import Mathlib.Tactic
 
+open LeanRV64D
+
 /-! Untrusted-answer semantics for tape reads.
 Each answer is a full 64-bit word. Width checks and cursor increments remain,
 but tape contents and exhaustion do not constrain the answer.
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Execute one instruction with an independent tape answer. Non-tape
 instructions ignore the answer and use the existing interpreter. -/

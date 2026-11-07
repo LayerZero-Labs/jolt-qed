@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer6.PrefixState
 import JoltConstraints.Soundness.Layer6.TerminalNextPC
 
+open LeanRV64D
+
 /-! Staged transition from a completed source expansion to the next boundary. -/
 
 set_option autoImplicit false

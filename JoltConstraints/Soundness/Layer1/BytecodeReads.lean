@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer1.Bytecode
 
+open LeanRV64D
+
 /-! Each lemma reads a witness column at the slot selected by the bytecode
 selector. `bytecodeRa_unique` supplies such a slot at every cycle, including
 padding. Register results retain the fixed table's distinction between x0

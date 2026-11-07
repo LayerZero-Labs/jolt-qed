@@ -1,7 +1,9 @@
 import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
-open Sail PreSail LeanRV64D.Functions
+
+open LeanRV64D
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 set_option autoImplicit false
 set_option linter.unusedSimpArgs false
 set_option maxHeartbeats 400000
@@ -26,13 +28,13 @@ theorem bind_rule {α β : Type} {m : SailM α} {f : α → SailM β}
     simp only [bind, EStateM.bind, hr] at h
     exact (hf x s' t v h).trans (hm s s' x hr)
 
-theorem read_rule (r : Register) : Preserves (Sail.readReg r) := by
+theorem read_rule (r : Register) : Preserves (LeanRV64D.readReg r) := by
   intro s t v h
   cases readReg_pure r s v t h
   rfl
 
 theorem write_rule (r : Register) (v : RegisterType r)
-    (hne : r ≠ Register.PC) : Preserves (Sail.writeReg r v) := by
+    (hne : r ≠ Register.PC) : Preserves (LeanRV64D.writeReg r v) := by
   intro s t x h
   cases h
   simp only [Std.ExtDHashMap.get?_insert, beq_iff_eq, hne, ↓reduceDIte]
@@ -40,10 +42,10 @@ theorem write_rule (r : Register) (v : RegisterType r)
 theorem jump_rule (target : BitVec 64) : Preserves (jump_to target) := by
   intro s t v h
   unfold jump_to ext_control_check_pc at h
-  simp only [SailME.run, PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
+  simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
-    bind, EStateM.bind, pure, EStateM.pure, Sail.assert, PreSail.assert] at h
+    bind, EStateM.bind, pure, EStateM.pure, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at h
   by_cases hbit : (BitVec.access target 0 == 0#1) = true
   · simp only [hbit, ↓reduceIte, pure, EStateM.pure, bind, EStateM.bind,
       ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift, ExceptT.lift,
@@ -65,7 +67,7 @@ theorem jump_rule (target : BitVec 64) : Preserves (jump_to target) := by
         simp only [hz, ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift,
           ExceptT.lift, ExceptT.mk, EStateM.map, Functor.map,
           Bool.and_eq_true, halign, ↓reduceIte,
-          set_next_pc, Sail.writeReg, bind, EStateM.bind, pure, EStateM.pure] at h
+          set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind, pure, EStateM.pure] at h
         cases h
         simpa only [Std.ExtDHashMap.get?_insert, beq_iff_eq,
           reduceCtorEq, ↓reduceDIte] using hp

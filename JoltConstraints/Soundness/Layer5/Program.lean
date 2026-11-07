@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer5.TapeSemantics
 
+open LeanRV64D
+
 /-! Execute a generated expansion using the same per-row answer rule as
 UntrustedAnswerRun. Row indices here are local to the expansion. Answers on
 non-tape rows are ignored, and a failed or non-retiring row stops execution. -/
@@ -8,7 +10,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Run a straight-line expansion, supplying one independent answer per row. -/
 noncomputable def execProgramWithTapeAnswers :

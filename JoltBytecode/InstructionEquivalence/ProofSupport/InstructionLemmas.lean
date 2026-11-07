@@ -32,3 +32,5 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Virtua
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.VirtualWindowMask
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.XOR
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.XORI
+
+open LeanRV64D

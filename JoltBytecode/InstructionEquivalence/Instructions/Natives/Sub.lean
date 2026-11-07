@@ -3,7 +3,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Sub
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
