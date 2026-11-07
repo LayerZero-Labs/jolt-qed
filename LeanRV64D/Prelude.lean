@@ -1,4 +1,4 @@
-import LeanRV64D.Flow
+import LeanRV64D.LeanRV64D
 import LeanRV64D.Vector
 
 set_option maxHeartbeats 1_000_000_000
@@ -7,11 +7,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -252,7 +255,7 @@ def ones {n : _} : (BitVec n) :=
 def trunc {m : _} (v : (BitVec k_n)) : (BitVec m) :=
   (Sail.BitVec.truncate v m)
 
-/-- Type quantifiers: k_ex807803_ : Bool -/
+/-- Type quantifiers: k_ex254671_ : Bool -/
 def bool_bit_forwards (arg_ : Bool) : (BitVec 1) :=
   match arg_ with
   | true => 1#1
@@ -263,7 +266,7 @@ def bool_bit_backwards (arg_ : (BitVec 1)) : Bool :=
   | 1 => true
   | _ => false
 
-/-- Type quantifiers: k_ex807804_ : Bool -/
+/-- Type quantifiers: k_ex254672_ : Bool -/
 def bool_bit_forwards_matches (arg_ : Bool) : Bool :=
   match arg_ with
   | true => true
@@ -275,32 +278,32 @@ def bool_bit_backwards_matches (arg_ : (BitVec 1)) : Bool :=
   | 0 => true
   | _ => false
 
-/-- Type quantifiers: k_ex807805_ : Bool -/
+/-- Type quantifiers: k_ex254673_ : Bool -/
 def bool_int_forwards (arg_ : Bool) : Int :=
   match arg_ with
   | false => 0
   | true => 1
 
-/-- Type quantifiers: arg_ : Nat, arg_ ∈ {0, 1} -/
+/-- Type quantifiers: arg_ : Nat, List.elem arg_ [0, 1] -/
 def bool_int_backwards (arg_ : Nat) : Bool :=
   match arg_ with
   | 0 => false
   | _ => true
 
-/-- Type quantifiers: k_ex807809_ : Bool -/
+/-- Type quantifiers: k_ex254675_ : Bool -/
 def bool_int_forwards_matches (arg_ : Bool) : Bool :=
   match arg_ with
   | false => true
   | true => true
 
-/-- Type quantifiers: arg_ : Nat, arg_ ∈ {0, 1} -/
+/-- Type quantifiers: arg_ : Nat, List.elem arg_ [0, 1] -/
 def bool_int_backwards_matches (arg_ : Nat) : Bool :=
   match arg_ with
   | 0 => true
   | 1 => true
   | _ => false
 
-/-- Type quantifiers: k_ex807811_ : Bool -/
+/-- Type quantifiers: k_ex254677_ : Bool -/
 def bool_to_bit (x : Bool) : (BitVec 1) :=
   (bool_bit_forwards x)
 
@@ -314,7 +317,7 @@ def to_bits {l : _} (n : Nat) : (BitVec l) :=
 /-- Type quantifiers: n : Int, l : Nat, l ≥ 0, l ≥ 0 -/
 def to_bits_checked {l : _} (n : Int) : SailM (BitVec l) := do
   let bv := (get_slice_int l n 0)
-  assert ((BitVec.toNatInt bv) == n) (HAppend.hAppend "Couldn't convert integer "
+  sail_assert ((BitVec.toNatInt bv) == n) (HAppend.hAppend "Couldn't convert integer "
     (HAppend.hAppend (Int.repr n)
       (HAppend.hAppend " to " (HAppend.hAppend (Int.repr l) " bits without overflow."))))
   (pure bv)
@@ -338,8 +341,8 @@ def Signedness_of_num (arg_ : Nat) : Signedness :=
 
 def num_of_Signedness (arg_ : Signedness) : Int :=
   match arg_ with
-  | Signed => 0
-  | Unsigned => 1
+  | .Signed => 0
+  | .Unsigned => 1
 
 def undefined_VectorHalf (_ : Unit) : SailM VectorHalf := do
   (internal_pick [High, Low])
@@ -352,8 +355,8 @@ def VectorHalf_of_num (arg_ : Nat) : VectorHalf :=
 
 def num_of_VectorHalf (arg_ : VectorHalf) : Int :=
   match arg_ with
-  | High => 0
-  | Low => 1
+  | .High => 0
+  | .Low => 1
 
 /-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n > 0 -/
 def zopz0zI_s (x : (BitVec k_n)) (y : (BitVec k_n)) : Bool :=
@@ -387,7 +390,7 @@ def zopz0zIzJ_u (x : (BitVec k_n)) (y : (BitVec k_n)) : Bool :=
 def zopz0zKzJ_u (x : (BitVec k_n)) (y : (BitVec k_n)) : Bool :=
   ((BitVec.toNatInt x) ≥b (BitVec.toNatInt y))
 
-/-- Type quantifiers: k_ex807885_ : Bool, k_ex807884_ : Bool -/
+/-- Type quantifiers: k_ex254682_ : Bool, k_ex254681_ : Bool -/
 def zopz0zJzJzK (x : Bool) (y : Bool) : Bool :=
   ((not x) || y)
 

@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -212,7 +215,7 @@ def cbop_zicbop_of_num (arg_ : Nat) : cbop_zicbop :=
 
 def num_of_cbop_zicbop (arg_ : cbop_zicbop) : Int :=
   match arg_ with
-  | PREFETCH_I => 0
-  | PREFETCH_R => 1
-  | PREFETCH_W => 2
+  | .PREFETCH_I => 0
+  | .PREFETCH_R => 1
+  | .PREFETCH_W => 2
 

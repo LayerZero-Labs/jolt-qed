@@ -12,11 +12,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -204,16 +207,16 @@ open AmocasOddRegisterReservedBehavior
 
 def float_class_onehot_bits_forwards (arg_ : float_class) : (BitVec 10) :=
   match arg_ with
-  | float_class_negative_inf => 0b0000000001#10
-  | float_class_negative_normal => 0b0000000010#10
-  | float_class_negative_subnormal => 0b0000000100#10
-  | float_class_negative_zero => 0b0000001000#10
-  | float_class_positive_zero => 0b0000010000#10
-  | float_class_positive_subnormal => 0b0000100000#10
-  | float_class_positive_normal => 0b0001000000#10
-  | float_class_positive_inf => 0b0010000000#10
-  | float_class_snan => 0b0100000000#10
-  | float_class_qnan => 0b1000000000#10
+  | .float_class_negative_inf => 0b0000000001#10
+  | .float_class_negative_normal => 0b0000000010#10
+  | .float_class_negative_subnormal => 0b0000000100#10
+  | .float_class_negative_zero => 0b0000001000#10
+  | .float_class_positive_zero => 0b0000010000#10
+  | .float_class_positive_subnormal => 0b0000100000#10
+  | .float_class_positive_normal => 0b0001000000#10
+  | .float_class_positive_inf => 0b0010000000#10
+  | .float_class_snan => 0b0100000000#10
+  | .float_class_qnan => 0b1000000000#10
 
 def float_class_onehot_bits_backwards (arg_ : (BitVec 10)) : SailM float_class := do
   match arg_ with
@@ -229,21 +232,21 @@ def float_class_onehot_bits_backwards (arg_ : (BitVec 10)) : SailM float_class :
   | 0b1000000000 => (pure float_class_qnan)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def float_class_onehot_bits_forwards_matches (arg_ : float_class) : Bool :=
   match arg_ with
-  | float_class_negative_inf => true
-  | float_class_negative_normal => true
-  | float_class_negative_subnormal => true
-  | float_class_negative_zero => true
-  | float_class_positive_zero => true
-  | float_class_positive_subnormal => true
-  | float_class_positive_normal => true
-  | float_class_positive_inf => true
-  | float_class_snan => true
-  | float_class_qnan => true
+  | .float_class_negative_inf => true
+  | .float_class_negative_normal => true
+  | .float_class_negative_subnormal => true
+  | .float_class_negative_zero => true
+  | .float_class_positive_zero => true
+  | .float_class_positive_subnormal => true
+  | .float_class_positive_normal => true
+  | .float_class_positive_inf => true
+  | .float_class_snan => true
+  | .float_class_qnan => true
 
 def float_class_onehot_bits_backwards_matches (arg_ : (BitVec 10)) : Bool :=
   match arg_ with

@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -200,7 +203,7 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, is_fp_bits(k_n) -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, (is_fp_bits k_n) -/
 def float_is_lt_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : Bool :=
   let fp_0 := (float_decompose op_0)
   let fp_1 := (float_decompose op_1)
@@ -214,28 +217,28 @@ def float_is_lt_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : Bool :=
   then diff_sign_lt
   else same_sign_lt
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, is_fp_bits(k_n) -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, (is_fp_bits k_n) -/
 def float_is_eq_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : Bool :=
   let is_zero := ((float_is_zero op_0) && (float_is_zero op_1))
   ((op_0 == op_1) || is_zero)
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, is_fp_bits(k_n) -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, (is_fp_bits k_n) -/
 def float_is_ne_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : Bool :=
   (! (float_is_eq_internal op_0 op_1))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, is_fp_bits(k_n) -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, (is_fp_bits k_n) -/
 def float_is_le_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : Bool :=
   ((float_is_eq_internal op_0 op_1) || (float_is_lt_internal op_0 op_1))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, is_fp_bits(k_n) -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, (is_fp_bits k_n) -/
 def float_is_gt_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : Bool :=
   (! (float_is_le_internal op_0 op_1))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, is_fp_bits(k_n) -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, (is_fp_bits k_n) -/
 def float_is_ge_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : Bool :=
   (! (float_is_lt_internal op_0 op_1))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_propagate_nan (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : ((BitVec k_n) × (BitVec 5)) :=
   let is_snan := ((float_is_snan op_0) || (float_is_snan op_1))
   let flags :=
@@ -251,7 +254,7 @@ def float_propagate_nan (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : ((BitVec k
     else op_1
   ((op ||| mask), flags)
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_rounding_increment (sign : (BitVec 1)) (op : (BitVec k_n)) (rounding_mode : (BitVec 5)) : (BitVec k_n) :=
   let bitsize := (Sail.BitVec.length op)
   let fp := (float_decompose op)
@@ -270,7 +273,7 @@ def float_rounding_increment (sign : (BitVec 1)) (op : (BitVec k_n)) (rounding_m
     then (BitVec.zero (Sail.BitVec.length op))
     else (one <<< ((Sail.BitVec.length fp.exp) -i 2)))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_compose_after_round (sign : (BitVec 1)) (exp : (BitVec k_n)) (mantissa : (BitVec k_n)) (increment : (BitVec k_n)) (rounding_mode : (BitVec 5)) : ((BitVec k_n) × (BitVec 5)) :=
   let bitsize := (Sail.BitVec.length mantissa)
   let fp := (float_decompose mantissa)
@@ -305,7 +308,7 @@ def float_compose_after_round (sign : (BitVec 1)) (exp : (BitVec k_n)) (mantissa
   let exp_and_mantissa := (Sail.BitVec.truncate (exp_shift + mantissa_new) (bitsize -i 1))
   ((sign +++ exp_and_mantissa), eflag)
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_get_sign_with_all_ones_exp (sign : (BitVec 1)) (op : (BitVec k_n)) : (BitVec k_n) :=
   let bitsize := (Sail.BitVec.length op)
   let fp := (float_decompose op)
@@ -314,7 +317,7 @@ def float_get_sign_with_all_ones_exp (sign : (BitVec 1)) (op : (BitVec k_n)) : (
   let all_ones_exp := (all_ones <<< (Sail.BitVec.length fp.mantissa))
   (sign +++ (Sail.BitVec.truncate all_ones_exp (bitsize -i 1)))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_round_and_compose (sign : (BitVec 1)) (exp : (BitVec k_n)) (mantissa : (BitVec k_n)) (rounding_mode : (BitVec 5)) : ((BitVec k_n) × (BitVec 5)) :=
   let op := mantissa
   let fp := (float_decompose op)
@@ -340,7 +343,7 @@ def float_round_and_compose (sign : (BitVec 1)) (exp : (BitVec k_n)) (mantissa :
     ((result - tail), fp_eflag_overflow_and_inexact))
   else (float_compose_after_round sign exp mantissa increment rounding_mode)
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_add_same_exp_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : SailM ((BitVec k_n) × (BitVec 5)) := do
   let fp_0 := (float_decompose op_0)
   let fp_1 := (float_decompose op_1)
@@ -368,12 +371,12 @@ def float_add_same_exp_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : Sa
       let rm ← do (float_get_rounding ())
       (pure (float_round_and_compose sign exp mantissa rm)))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_add_same_exp (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : SailM ((BitVec k_n) × (BitVec 5)) := do
   let bitsize := (Sail.BitVec.length op_0)
   let fp_0 := (float_decompose op_0)
   let fp_1 := (float_decompose op_1)
-  assert (fp_0.exp == fp_1.exp) "The exp of floating point must be same."
+  sail_assert (fp_0.exp == fp_1.exp) "The exp of floating point must be same."
   let is_exp_0_all_ones := (is_all_ones fp_0.exp)
   let is_mantissa_all_zeros := (is_all_zeros (fp_0.mantissa ||| fp_1.mantissa))
   if ((is_all_zeros fp_0.exp) : Bool)
@@ -388,12 +391,12 @@ def float_add_same_exp (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : SailM ((Bit
           then (pure (float_propagate_nan op_0 op_1))
           else (float_add_same_exp_internal op_0 op_1)))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_add_less_than_exp (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : SailM ((BitVec k_n) × (BitVec 5)) := do
   let bitsize := (Sail.BitVec.length op_0)
   let fp_0 := (float_decompose op_0)
   let fp_1 := (float_decompose op_1)
-  assert ((BitVec.toNatInt fp_0.exp) <b (BitVec.toNatInt fp_1.exp)) "The exp of floating point op_0 must be less than op_1."
+  sail_assert ((BitVec.toNatInt fp_0.exp) <b (BitVec.toNatInt fp_1.exp)) "The exp of floating point op_0 must be less than op_1."
   let is_exp_all_ones := (is_all_ones fp_1.exp)
   let mantissa_shift := (fp_1.mantissa <<< ((Sail.BitVec.length fp_1.exp) -i 2))
   let is_nan := (! (is_all_zeros mantissa_shift))
@@ -405,33 +408,33 @@ def float_add_less_than_exp (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : SailM 
       then (pure ((float_get_sign_with_all_ones_exp fp_0.sign op_0), fp_eflag_none))
       else
         (do
-          assert false "Not implemented yet."
+          sail_assert false "Not implemented yet."
           throw Error.Exit))
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_add_diff_exp (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : SailM ((BitVec k_n) × (BitVec 5)) := do
   let bitsize := (Sail.BitVec.length op_0)
   let fp_0 := (float_decompose op_0)
   let fp_1 := (float_decompose op_1)
-  assert (fp_0.exp != fp_1.exp) "The exp of floating point cannot be same."
+  sail_assert (fp_0.exp != fp_1.exp) "The exp of floating point cannot be same."
   if (((BitVec.toNatInt fp_0.exp) <b (BitVec.toNatInt fp_1.exp)) : Bool)
   then (float_add_less_than_exp op_0 op_1)
   else
     (do
-      assert false "Not implemented yet."
+      sail_assert false "Not implemented yet."
       throw Error.Exit)
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_add_internal (op_0 : (BitVec k_n)) (op_1 : (BitVec k_n)) : SailM ((BitVec k_n) × (BitVec 5)) := do
   let fp_0 := (float_decompose op_0)
   let fp_1 := (float_decompose op_1)
-  assert ((fp_0.sign ^^^ fp_1.sign) == (0#1 : (BitVec 1))) "The sign of float add operand 0 and operand 1 must be the same."
+  sail_assert ((fp_0.sign ^^^ fp_1.sign) == (0#1 : (BitVec 1))) "The sign of float add operand 0 and operand 1 must be the same."
   if ((fp_0.exp == fp_1.exp) : Bool)
   then (float_add_same_exp op_0 op_1)
   else (float_add_diff_exp op_0 op_1)
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32, 64, 128} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32, 64, 128] -/
 def float_sub_internal (_op_0 : (BitVec k_n)) (_op_1 : (BitVec k_n)) : SailM ((BitVec k_n) × (BitVec 5)) := do
-  assert false "Not implemented yet."
+  sail_assert false "Not implemented yet."
   throw Error.Exit
 

@@ -1,8 +1,7 @@
-import LeanRV64D.Flow
+import LeanRV64D.LeanRV64D
 import LeanRV64D.Arith
 import LeanRV64D.Prelude
 import LeanRV64D.Vlen
-import LeanRV64D.Types
 import LeanRV64D.VextRegs
 
 set_option maxHeartbeats 1_000_000_000
@@ -11,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -201,26 +203,26 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: SEW : Nat, LMUL_pow : Int, ((- 3)) ≤ LMUL_pow ∧ LMUL_pow ≤ 3, SEW ∈
-  {8, 16, 32, 64} -/
+/-- Type quantifiers: SEW : Nat, LMUL_pow : Int, ((- 3)) ≤ LMUL_pow ∧ LMUL_pow ≤ 3, List.elem
+  SEW [8, 16, 32, 64] -/
 def get_num_elem (LMUL_pow : Int) (SEW : Nat) : SailM Nat := do
-  assert (vlen ≥b SEW) "extensions/V/vext_control.sail:38.20-38.21"
+  sail_assert (vlen ≥b SEW) "extensions/V/vext_control.sail:38.20-38.21"
   (pure (Int.tdiv ((2 ^i (Max.max 0 LMUL_pow)) *i vlen) SEW))
 
-/-- Type quantifiers: index : Nat, EEW : Nat, EEW ≥ 0, is_sew_bitsize(EEW), 0 ≤ index -/
+/-- Type quantifiers: index : Nat, EEW : Nat, EEW ≥ 0, (is_sew_bitsize EEW), 0 ≤ index -/
 def read_single_element (EEW : Nat) (index : Nat) (vrid : vregidx) : SailM (BitVec EEW) := do
-  assert (EEW ≤b vlen) "extensions/V/vext_control.sail:45.20-45.21"
+  sail_assert (EEW ≤b vlen) "extensions/V/vext_control.sail:45.20-45.21"
   let _ : Unit := (static_assert ((Int.tmod vlen EEW) == 0))
   let elem_per_reg := (Int.tdiv vlen EEW)
   let reg_in_group := (Int.tdiv index elem_per_reg)
-  assert (reg_in_group <b 8) "extensions/V/vext_control.sail:53.25-53.26"
+  sail_assert (reg_in_group <b 8) "extensions/V/vext_control.sail:53.25-53.26"
   let vrid := (vregidx_offset_range vrid reg_in_group)
   let index := (Int.tmod index elem_per_reg)
   let offset := (index *i EEW)
   (pure (Sail.BitVec.extractLsb (← (rV_bits vrid)) ((offset +i EEW) -i 1) offset))
 
 /-- Type quantifiers: num_elem : Nat, num_elem ≥ 0, SEW : Nat, SEW ≥ 0, LMUL_pow : Int, num_elem
-  ≥ 0 ∧ is_sew_bitsize(SEW) -/
+  ≥ 0 ∧ (is_sew_bitsize SEW) -/
 def read_vreg (num_elem : Nat) (SEW : Nat) (LMUL_pow : Int) (vrid : vregidx) : SailM (Vector (BitVec SEW) num_elem) := do
   let vrid_val := (BitVec.toNatInt (vregidx_bits vrid))
   let LMUL_pow_reg :=
@@ -229,11 +231,11 @@ def read_vreg (num_elem : Nat) (SEW : Nat) (LMUL_pow : Int) (vrid : vregidx) : S
     else LMUL_pow
   let LMUL := (2 ^i LMUL_pow_reg)
   let vrid_end := (vrid_val +i LMUL)
-  assert (vrid_end ≤b 32) (HAppend.hAppend "Invalid register group: group "
+  sail_assert (vrid_end ≤b 32) (HAppend.hAppend "Invalid register group: group "
     (HAppend.hAppend (Int.repr vrid_val)
       (HAppend.hAppend " ends at "
         (HAppend.hAppend (Int.repr vrid_end) " and overflows the largest register number (32)."))))
-  assert ((Int.tmod vrid_val LMUL) == 0) (HAppend.hAppend "Invalid register group: group "
+  sail_assert ((Int.tmod vrid_val LMUL) == 0) (HAppend.hAppend "Invalid register group: group "
     (HAppend.hAppend (Int.repr vrid_val)
       (HAppend.hAppend " is not a multiple of its EMUL " (HAppend.hAppend (Int.repr LMUL) "."))))
   let result : (Vector (BitVec SEW) num_elem) := (vectorInit (zeros (n := SEW)))
@@ -245,13 +247,13 @@ def read_vreg (num_elem : Nat) (SEW : Nat) (LMUL_pow : Int) (vrid : vregidx) : S
     loop_vars ← do (pure (vectorUpdate result i (← (read_single_element SEW i vrid))))
   (pure loop_vars)
 
-/-- Type quantifiers: index : Nat, EEW : Nat, EEW ≥ 0, is_sew_bitsize(EEW), 0 ≤ index -/
+/-- Type quantifiers: index : Nat, EEW : Nat, EEW ≥ 0, (is_sew_bitsize EEW), 0 ≤ index -/
 def write_single_element (EEW : Nat) (index : Nat) (vrid : vregidx) (value : (BitVec EEW)) : SailM Unit := do
-  assert (EEW ≤b vlen) "extensions/V/vext_control.sail:87.20-87.21"
+  sail_assert (EEW ≤b vlen) "extensions/V/vext_control.sail:87.20-87.21"
   let _ : Unit := (static_assert ((Int.tmod vlen EEW) == 0))
   let elem_per_reg := (Int.tdiv vlen EEW)
   let reg_in_group := (Int.tdiv index elem_per_reg)
-  assert (reg_in_group <b 8) "extensions/V/vext_control.sail:95.25-95.26"
+  sail_assert (reg_in_group <b 8) "extensions/V/vext_control.sail:95.25-95.26"
   let vrid := (vregidx_offset_range vrid reg_in_group)
   let index := (Int.tmod index elem_per_reg)
   let offset := (index *i EEW)
@@ -259,13 +261,13 @@ def write_single_element (EEW : Nat) (index : Nat) (vrid : vregidx) (value : (Bi
     (Sail.BitVec.updateSubrange (← (rV_bits vrid)) ((offset +i EEW) -i 1) offset value))
 
 /-- Type quantifiers: LMUL_pow : Int, num_elem : Nat, num_elem ≥ 0, SEW : Nat, SEW ≥ 0, num_elem
-  ≥ 0 ∧ is_sew_bitsize(SEW), ((- 3)) ≤ LMUL_pow ∧ LMUL_pow ≤ 3 -/
+  ≥ 0 ∧ (is_sew_bitsize SEW), ((- 3)) ≤ LMUL_pow ∧ LMUL_pow ≤ 3 -/
 def write_vreg (num_elem : Nat) (SEW : Nat) (LMUL_pow : Int) (vrid : vregidx) (vec : (Vector (BitVec SEW) num_elem)) : SailM Unit := do
   let group_size := (2 ^i (Max.max LMUL_pow 0))
-  assert (SEW ≤b vlen) "extensions/V/vext_control.sail:122.20-122.21"
+  sail_assert (SEW ≤b vlen) "extensions/V/vext_control.sail:122.20-122.21"
   let _ : Unit := (static_assert ((Int.tmod vlen SEW) == 0))
   let elem_per_reg := (Int.tdiv vlen SEW)
-  assert ((num_elem == (group_size *i elem_per_reg)) || (num_elem == ((2 *i group_size) *i elem_per_reg))) "extensions/V/vext_control.sail:137.90-137.91"
+  sail_assert ((num_elem == (group_size *i elem_per_reg)) || (num_elem == ((2 *i group_size) *i elem_per_reg))) "extensions/V/vext_control.sail:137.90-137.91"
   let loop_reg_in_group_lower := 0
   let loop_reg_in_group_upper := (group_size -i 1)
   let mut loop_vars := ()
@@ -304,6 +306,6 @@ def read_vmask_carry (num_elem : Nat) (vm : (BitVec 1)) (vrid : vregidx) : SailM
 
 /-- Type quantifiers: num_elem : Nat, num_elem ≥ 0, num_elem > 0 -/
 def write_vmask (num_elem : Nat) (vrid : vregidx) (v : (BitVec num_elem)) : SailM Unit := do
-  assert ((0 <b num_elem) && (num_elem ≤b vlen)) "extensions/V/vext_control.sail:162.40-162.41"
+  sail_assert ((0 <b num_elem) && (num_elem ≤b vlen)) "extensions/V/vext_control.sail:162.40-162.41"
   (wV_bits vrid (Sail.BitVec.updateSubrange (← (rV_bits vrid)) (num_elem -i 1) 0 v))
 

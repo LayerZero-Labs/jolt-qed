@@ -8,11 +8,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -209,6 +212,6 @@ def test_mstatus_sxl_uxl_reset_values (_ : Unit) : SailM Unit := do
     | 64 => (pure 0b10#2)
     | _ => (internal_error "unit_tests/test_mstatus.sail" 15 "unsupported xlen") ) : SailM
     (BitVec 2) )
-  assert ((Sail.BitVec.extractLsb mstatush_val 3 2) == expected_xl) "unit_tests/test_mstatus.sail:18.44-18.45"
-  assert ((Sail.BitVec.extractLsb mstatush_val 1 0) == expected_xl) "unit_tests/test_mstatus.sail:20.44-20.45"
+  sail_assert ((Sail.BitVec.extractLsb mstatush_val 3 2) == expected_xl) "unit_tests/test_mstatus.sail:18.44-18.45"
+  sail_assert ((Sail.BitVec.extractLsb mstatush_val 1 0) == expected_xl) "unit_tests/test_mstatus.sail:20.44-20.45"
 

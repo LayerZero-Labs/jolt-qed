@@ -9,11 +9,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -212,10 +215,10 @@ def stateen_bit_of_num (arg_ : Nat) : stateen_bit :=
 
 def num_of_stateen_bit (arg_ : stateen_bit) : Int :=
   match arg_ with
-  | STATEEN_FCSR => 0
-  | STATEEN_SRMCFG => 1
-  | STATEEN_ENVCFG => 2
-  | STATEEN_SE => 3
+  | .STATEEN_FCSR => 0
+  | .STATEEN_SRMCFG => 1
+  | .STATEEN_ENVCFG => 2
+  | .STATEEN_SE => 3
 
 /-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 63 -/
 def stateen_bit_index_backwards (arg_ : Nat) : SailM stateen_bit := do
@@ -226,15 +229,15 @@ def stateen_bit_index_backwards (arg_ : Nat) : SailM stateen_bit := do
   | 1 => (pure STATEEN_FCSR)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def stateen_bit_index_forwards_matches (arg_ : stateen_bit) : Bool :=
   match arg_ with
-  | STATEEN_SE => true
-  | STATEEN_ENVCFG => true
-  | STATEEN_SRMCFG => true
-  | STATEEN_FCSR => true
+  | .STATEEN_SE => true
+  | .STATEEN_ENVCFG => true
+  | .STATEEN_SRMCFG => true
+  | .STATEEN_FCSR => true
 
 /-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 63 -/
 def stateen_bit_index_backwards_matches (arg_ : Nat) : Bool :=
@@ -552,7 +555,8 @@ def legalize_mstateen0 (m : (BitVec 64)) (v : (BitVec 64)) : SailM (BitVec 64) :
             then (pure (_get_Mstateen0_SRMCFG v))
             else (pure 0#1)))
         (← do
-          if (((hartSupports Ext_Zfinx) && ((_get_Misa_F (← readReg misa)) == 0#1)) : Bool)
+          if ((←((pure (hartSupports Ext_Zfinx)) <&&> (do
+               (pure ((_get_Misa_F (← readReg misa)) == 0#1))))) : Bool)
           then (pure (_get_Mstateen0_FCSR v))
           else (pure 0#1))) 0#1))
 
@@ -591,7 +595,8 @@ def legalize_hstateen0 (h : (BitVec 64)) (v : (BitVec 64)) : SailM (BitVec 64) :
             then (pure (_get_Hstateen0_ENVCFG v))
             else (pure 0#1)))
         (← do
-          if (((hartSupports Ext_Zfinx) && ((_get_Misa_F (← readReg misa)) == 0#1)) : Bool)
+          if ((←((pure (hartSupports Ext_Zfinx)) <&&> (do
+               (pure ((_get_Misa_F (← readReg misa)) == 0#1))))) : Bool)
           then (pure (_get_Hstateen0_FCSR v))
           else (pure 0#1))) 0#1))
 
@@ -627,7 +632,8 @@ def legalize_sstateen0 (s : (BitVec 32)) (v : (BitVec 32)) : SailM (BitVec 32) :
     (pure (_update_Sstateen0_C
         (_update_Sstateen0_FCSR s
           (← do
-            if (((hartSupports Ext_Zfinx) && ((_get_Misa_F (← readReg misa)) == 0#1)) : Bool)
+            if ((←((pure (hartSupports Ext_Zfinx)) <&&> (do
+                 (pure ((_get_Misa_F (← readReg misa)) == 0#1))))) : Bool)
             then (pure (_get_Sstateen0_FCSR v))
             else (pure 0#1))) 0#1))
   (pure (Mk_Sstateen0 (legalized &&& (Sail.BitVec.extractLsb mask 31 0))))

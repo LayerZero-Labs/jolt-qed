@@ -2,26 +2,8 @@ import LeanRV64D.Flow
 import LeanRV64D.Common
 import LeanRV64D.Prelude
 import LeanRV64D.Xlen
-import LeanRV64D.RvfiDii
 import LeanRV64D.Extensions
 import LeanRV64D.Types
-import LeanRV64D.Regs
-import LeanRV64D.SysRegs
-import LeanRV64D.InterruptRegs
-import LeanRV64D.PmpRegs
-import LeanRV64D.FdextRegs
-import LeanRV64D.VextRegs
-import LeanRV64D.Smcntrpmf
-import LeanRV64D.ZicfilpRegs
-import LeanRV64D.SysControl
-import LeanRV64D.Platform
-import LeanRV64D.Pma
-import LeanRV64D.VmemTlb
-import LeanRV64D.Vmem
-import LeanRV64D.ZicsrInsts
-import LeanRV64D.Zihpm
-import LeanRV64D.Ssqosid
-import LeanRV64D.Step
 import LeanRV64D.Main
 
 set_option maxHeartbeats 1_000_000_000
@@ -30,11 +12,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -220,151 +205,8 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-def initialize_registers (_ : Unit) : SailM Unit := do
-  writeReg rvfi_instruction (← (undefined_RVFI_DII_Instruction_Packet ()))
-  writeReg rvfi_inst_data (← (undefined_RVFI_DII_Execution_Packet_InstMetaData ()))
-  writeReg rvfi_pc_data (← (undefined_RVFI_DII_Execution_Packet_PC ()))
-  writeReg rvfi_int_data (← (undefined_RVFI_DII_Execution_Packet_Ext_Integer ()))
-  writeReg rvfi_int_data_present (← (undefined_bool ()))
-  writeReg rvfi_mem_data (← (undefined_RVFI_DII_Execution_Packet_Ext_MemAccess ()))
-  writeReg rvfi_mem_data_present (← (undefined_bool ()))
-  writeReg PC (← (undefined_bitvector 64))
-  writeReg nextPC (← (undefined_bitvector 64))
-  writeReg x1 (← (undefined_bitvector 64))
-  writeReg x2 (← (undefined_bitvector 64))
-  writeReg x3 (← (undefined_bitvector 64))
-  writeReg x4 (← (undefined_bitvector 64))
-  writeReg x5 (← (undefined_bitvector 64))
-  writeReg x6 (← (undefined_bitvector 64))
-  writeReg x7 (← (undefined_bitvector 64))
-  writeReg x8 (← (undefined_bitvector 64))
-  writeReg x9 (← (undefined_bitvector 64))
-  writeReg x10 (← (undefined_bitvector 64))
-  writeReg x11 (← (undefined_bitvector 64))
-  writeReg x12 (← (undefined_bitvector 64))
-  writeReg x13 (← (undefined_bitvector 64))
-  writeReg x14 (← (undefined_bitvector 64))
-  writeReg x15 (← (undefined_bitvector 64))
-  writeReg x16 (← (undefined_bitvector 64))
-  writeReg x17 (← (undefined_bitvector 64))
-  writeReg x18 (← (undefined_bitvector 64))
-  writeReg x19 (← (undefined_bitvector 64))
-  writeReg x20 (← (undefined_bitvector 64))
-  writeReg x21 (← (undefined_bitvector 64))
-  writeReg x22 (← (undefined_bitvector 64))
-  writeReg x23 (← (undefined_bitvector 64))
-  writeReg x24 (← (undefined_bitvector 64))
-  writeReg x25 (← (undefined_bitvector 64))
-  writeReg x26 (← (undefined_bitvector 64))
-  writeReg x27 (← (undefined_bitvector 64))
-  writeReg x28 (← (undefined_bitvector 64))
-  writeReg x29 (← (undefined_bitvector 64))
-  writeReg x30 (← (undefined_bitvector 64))
-  writeReg x31 (← (undefined_bitvector 64))
-  writeReg cur_privilege (← (undefined_Privilege ()))
-  writeReg cur_inst (← (undefined_bitvector 64))
-  writeReg mtvec (← (undefined_Mtvec ()))
-  writeReg mcause (← (undefined_Mcause ()))
-  writeReg mepc (← (undefined_bitvector 64))
-  writeReg mtval (← (undefined_bitvector 64))
-  writeReg mscratch (← (undefined_bitvector 64))
-  writeReg scounteren (← (undefined_Counteren ()))
-  writeReg mcounteren (← (undefined_Counteren ()))
-  writeReg mcountinhibit (← (undefined_Counterin ()))
-  writeReg mcycle (← (undefined_bitvector 64))
-  writeReg mtime (← (undefined_bitvector 64))
-  writeReg minstret (← (undefined_bitvector 64))
-  writeReg minstret_increment (← (undefined_bool ()))
-  writeReg stvec (← (undefined_Mtvec ()))
-  writeReg sscratch (← (undefined_bitvector 64))
-  writeReg sepc (← (undefined_bitvector 64))
-  writeReg scause (← (undefined_Mcause ()))
-  writeReg stval (← (undefined_bitvector 64))
-  writeReg tselect (← (undefined_bitvector 64))
-  writeReg mie (← (undefined_Minterrupts ()))
-  writeReg mip (← (undefined_Minterrupts ()))
-  writeReg medeleg (← (undefined_Medeleg ()))
-  writeReg mideleg (← (undefined_Minterrupts ()))
-  writeReg pmpcfg_n (← (undefined_vector 64 (← (undefined_Pmpcfg_ent ()))))
-  writeReg pmpaddr_n (← (undefined_vector 64 (← (undefined_bitvector 64))))
-  writeReg f0 (← (undefined_bitvector (8 *i 8)))
-  writeReg f1 (← (undefined_bitvector (8 *i 8)))
-  writeReg f2 (← (undefined_bitvector (8 *i 8)))
-  writeReg f3 (← (undefined_bitvector (8 *i 8)))
-  writeReg f4 (← (undefined_bitvector (8 *i 8)))
-  writeReg f5 (← (undefined_bitvector (8 *i 8)))
-  writeReg f6 (← (undefined_bitvector (8 *i 8)))
-  writeReg f7 (← (undefined_bitvector (8 *i 8)))
-  writeReg f8 (← (undefined_bitvector (8 *i 8)))
-  writeReg f9 (← (undefined_bitvector (8 *i 8)))
-  writeReg f10 (← (undefined_bitvector (8 *i 8)))
-  writeReg f11 (← (undefined_bitvector (8 *i 8)))
-  writeReg f12 (← (undefined_bitvector (8 *i 8)))
-  writeReg f13 (← (undefined_bitvector (8 *i 8)))
-  writeReg f14 (← (undefined_bitvector (8 *i 8)))
-  writeReg f15 (← (undefined_bitvector (8 *i 8)))
-  writeReg f16 (← (undefined_bitvector (8 *i 8)))
-  writeReg f17 (← (undefined_bitvector (8 *i 8)))
-  writeReg f18 (← (undefined_bitvector (8 *i 8)))
-  writeReg f19 (← (undefined_bitvector (8 *i 8)))
-  writeReg f20 (← (undefined_bitvector (8 *i 8)))
-  writeReg f21 (← (undefined_bitvector (8 *i 8)))
-  writeReg f22 (← (undefined_bitvector (8 *i 8)))
-  writeReg f23 (← (undefined_bitvector (8 *i 8)))
-  writeReg f24 (← (undefined_bitvector (8 *i 8)))
-  writeReg f25 (← (undefined_bitvector (8 *i 8)))
-  writeReg f26 (← (undefined_bitvector (8 *i 8)))
-  writeReg f27 (← (undefined_bitvector (8 *i 8)))
-  writeReg f28 (← (undefined_bitvector (8 *i 8)))
-  writeReg f29 (← (undefined_bitvector (8 *i 8)))
-  writeReg f30 (← (undefined_bitvector (8 *i 8)))
-  writeReg f31 (← (undefined_bitvector (8 *i 8)))
-  writeReg fcsr (← (undefined_Fcsr ()))
-  writeReg vr0 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr1 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr2 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr3 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr4 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr5 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr6 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr7 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr8 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr9 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr10 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr11 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr12 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr13 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr14 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr15 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr16 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr17 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr18 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr19 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr20 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr21 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr22 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr23 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr24 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr25 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr26 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr27 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr28 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr29 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr30 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vr31 (← (undefined_bitvector (2 ^i 8)))
-  writeReg vstart (← (undefined_bitvector 64))
-  writeReg vl (← (undefined_bitvector 64))
-  writeReg vtype (← (undefined_Vtype ()))
-  writeReg vcsr (← (undefined_Vcsr ()))
-  writeReg mcyclecfg (← (undefined_CountSmcntrpmf ()))
-  writeReg minstretcfg (← (undefined_CountSmcntrpmf ()))
-  writeReg elp (← (undefined_bitvector 1))
-  writeReg mtimecmp (← (undefined_bitvector 64))
-  writeReg stimecmp (← (undefined_bitvector 64))
-  writeReg satp (← (undefined_bitvector 64))
-  writeReg mhpmevent (← (undefined_vector 32 (← (undefined_HpmEvent ()))))
-  writeReg mhpmcounter (← (undefined_vector 32 (← (undefined_bitvector 64))))
-  writeReg srmcfg (← (undefined_Srmcfg ()))
+def initialize_registers (_ : Unit) : Unit :=
+  ()
 
 def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg fp_rounding_global fp_rounding_default
@@ -454,11 +296,12 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg tlb (vectorInit none)
   writeReg ssp (zeros (n := 64))
   writeReg hart_state (HART_ACTIVE ())
-  (initialize_registers ())
+  (pure (initialize_registers ()))
 
 end LeanRV64D.Functions
 
+open LeanRV64D
 open LeanRV64D.Functions
 
 def main (_ : List String) : IO UInt32 := do
-  main_of_sail_main ⟨default, (), default, default, default, default⟩ (sail_model_init >=> sail_main)
+  main_of_sail_main default (sail_model_init >=> sail_main)

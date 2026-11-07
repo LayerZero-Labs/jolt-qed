@@ -16,11 +16,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -239,7 +242,7 @@ def require_Sv39 (ext_name : String) : Bool :=
   else true
 
 def require_virtual_memory (ext_name : String) : SailM Bool := do
-  assert (xlen == 64) "postlude/validate_config.sail:37.19-37.20"
+  sail_assert (xlen == 64) "postlude/validate_config.sail:37.19-37.20"
   (pure (require_Sv39 ext_name))
 
 def check_mmu_config (_ : Unit) : SailM Bool := do
@@ -283,18 +286,14 @@ def check_mmu_config (_ : Unit) : SailM Bool := do
     else valid
   let valid ← (( do
     if ((true : Bool) : Bool)
-    then
-      (do
-        (pure (valid && (← (require_virtual_memory "Ssccptr")))))
+    then (do (pure valid) <&&> (do (require_virtual_memory "Ssccptr")))
     else (pure valid) ) : SailM Bool )
   let valid : Bool :=
     if ((true : Bool) : Bool)
     then (valid && (require_Sv39 "Svnapot"))
     else valid
   if ((true : Bool) : Bool)
-  then
-    (do
-      (pure (valid && (← (require_virtual_memory "Svvptc")))))
+  then (do (pure valid) <&&> (do (require_virtual_memory "Svvptc")))
   else (pure valid)
 
 def check_vlen_elen (_ : Unit) : Bool :=
@@ -505,7 +504,7 @@ def check_vext_config (_ : Unit) : Bool :=
     valid)
   else valid
 
-/-- Type quantifiers: k_ex931045_ : Bool, k_ex931044_ : Bool, k_ex931043_ : Bool, k_ex931042_ : Bool -/
+/-- Type quantifiers: k_ex256192_ : Bool, k_ex256191_ : Bool, k_ex256190_ : Bool, k_ex256189_ : Bool -/
 def check_pma_regions (pmas : (List PMA_Region)) (prev_base : (BitVec 64)) (prev_size : (BitVec 64)) (check_ziccamoa : Bool) (check_ziccamoc : Bool) (check_ziccrse : Bool) (check_ssccptr : Bool) : Bool := ExceptM.run do
   match pmas with
   | [] => (pure true)
@@ -615,7 +614,7 @@ def check_pmp (_ : Unit) : Bool :=
     valid)
   else valid
 
-/-- Type quantifiers: k_ex931122_ : Bool -/
+/-- Type quantifiers: k_ex256193_ : Bool -/
 def check_required_sstvala_option (name : String) (value : Bool) : Bool :=
   if ((not value) : Bool)
   then
@@ -832,7 +831,9 @@ def check_stateen_config (_ : Unit) : Bool :=
     else valid)
 
 def config_is_valid (_ : Unit) : SailM Bool := do
-  (pure ((check_privs ()) && ((← (check_mmu_config ())) && ((← (check_mem_layout ())) && ((check_vlen_elen
-              ()) && ((check_vext_config ()) && ((check_pmp ()) && ((check_misc_extension_dependencies
-                    ()) && ((check_extension_param_constraints ()) && (check_stateen_config ()))))))))))
+  (pure (check_privs ())) <&&> (do
+    (check_mmu_config ()) <&&> (do
+      (pure ((← (check_mem_layout ())) && ((check_vlen_elen ()) && ((check_vext_config ()) && ((check_pmp
+                  ()) && ((check_misc_extension_dependencies ()) && ((check_extension_param_constraints
+                      ()) && (check_stateen_config ()))))))))))
 

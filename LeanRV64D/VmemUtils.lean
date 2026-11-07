@@ -13,11 +13,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -246,7 +249,7 @@ def split_misaligned (vaddr : virtaddr) (width : Nat) : SailM (Int × Int) := do
         (do
           let bytes_per_access := (2 ^i (BitVec.countTrailingZeros vaddr_bits))
           let num_accesses := (Int.tdiv width bytes_per_access)
-          assert (width == (num_accesses *i bytes_per_access)) "sys/vmem_utils.sail:97.51-97.52"
+          sail_assert (width == (num_accesses *i bytes_per_access)) "sys/vmem_utils.sail:97.51-97.52"
           (pure (num_accesses, bytes_per_access))))
 
 /-- Type quantifiers: n : Int -/
@@ -255,12 +258,12 @@ def misaligned_order (n : Int) : (Int × Int × Int) :=
   then ((n -i 1), 0, (Neg.neg 1))
   else (0, (n -i 1), 1)
 
-/-- Type quantifiers: k_ex828053_ : Bool, width : Nat, width ∈ {1, 2, 4, 8} -/
+/-- Type quantifiers: k_ex256113_ : Bool, width : Nat, List.elem width [1, 2, 4, 8] -/
 def access_causes_misaligned_exception (vaddr : virtaddr) (width : Nat) (must_be_aligned : Bool) : Bool :=
   ((not (is_aligned_vaddr vaddr width)) && ((not plat_enable_misaligned_access) || must_be_aligned))
 
-/-- Type quantifiers: k_ex828067_ : Bool, k_ex828066_ : Bool, k_ex828065_ : Bool, width : Nat, width
-  ≥ 0, is_mem_width(width) -/
+/-- Type quantifiers: k_ex256119_ : Bool, k_ex256118_ : Bool, k_ex256117_ : Bool, width : Nat, width
+  ≥ 0, (is_mem_width width) -/
 def vmem_read_addr (vaddr : virtaddr) (offset : (BitVec 64)) (width : Nat) (access : (MemoryAccessType mem_payload)) (aq : Bool) (rl : Bool) (res : Bool) : SailM (Result (BitVec (8 * width)) ExecutionResult) := SailME.run do
   if ((access_causes_misaligned_exception vaddr width res) : Bool)
   then (pure (Err (Memory_Exception (vaddr, (E_Load_Addr_Align ())))))
@@ -275,7 +278,7 @@ def vmem_read_addr (vaddr : virtaddr) (offset : (BitVec 64)) (width : Nat) (acce
       let (data, finished, i) ← (( do
         let loop_vars ← untilFuelM (fuel :=n) (fun (data, finished, i) => (pure finished)) (data, finished, i)
           fun (data, finished, i) => do
-            assert true "loop dummy assert"
+            sail_assert true "loop dummy assert"
             let offset := i
             let vaddr := (BitVec.addInt vaddr (offset *i bytes))
             let data ← (( do
@@ -308,8 +311,8 @@ def vmem_read_addr (vaddr : virtaddr) (offset : (BitVec 64)) (width : Nat) (acce
         ((BitVec (8 * n * bytes)) × Bool × Nat) )
       (pure (Ok data)))
 
-/-- Type quantifiers: k_ex828099_ : Bool, k_ex828098_ : Bool, k_ex828097_ : Bool, width : Nat, width
-  ≥ 0, is_mem_width(width) -/
+/-- Type quantifiers: k_ex256127_ : Bool, k_ex256126_ : Bool, k_ex256125_ : Bool, width : Nat, width
+  ≥ 0, (is_mem_width width) -/
 def vmem_write_addr (vaddr : virtaddr) (width : Nat) (data : (BitVec (8 * width))) (access : (MemoryAccessType mem_payload)) (aq : Bool) (rl : Bool) (res : Bool) : SailM (Result Bool ExecutionResult) := SailME.run do
   if ((access_causes_misaligned_exception vaddr width res) : Bool)
   then (pure (Err (Memory_Exception (vaddr, (E_SAMO_Addr_Align ())))))
@@ -324,7 +327,7 @@ def vmem_write_addr (vaddr : virtaddr) (width : Nat) (data : (BitVec (8 * width)
       let (finished, i, write_success) ← (( do
         let loop_vars ← untilFuelM (fuel :=n) (fun (finished, i, write_success) => (pure finished)) (finished, i, write_success)
           fun (finished, i, write_success) => do
-            assert true "loop dummy assert"
+            sail_assert true "loop dummy assert"
             let offset := i
             let vaddr := (BitVec.addInt vaddr (offset *i bytes))
             let write_success ← (( do
@@ -333,7 +336,7 @@ def vmem_write_addr (vaddr : virtaddr) (width : Nat) (data : (BitVec (8 * width)
                 SailME.throw ((Err (Memory_Exception ((Virtaddr vaddr), e))) : (Result Bool ExecutionResult))
               | .Ok (paddr, _) =>
                 (do
-                  assert (res == (is_store_conditional access)) "sys/vmem_utils.sail:215.50-215.51"
+                  sail_assert (res == (is_store_conditional access)) "sys/vmem_utils.sail:215.50-215.51"
                   if ((res && (not (match_reservation (bits_of_physaddr paddr)))) : Bool)
                   then
                     (do
@@ -370,8 +373,8 @@ def vmem_write_addr (vaddr : virtaddr) (width : Nat) (data : (BitVec (8 * width)
         (pure loop_vars) ) : SailME (Result Bool ExecutionResult) (Bool × Nat × Bool) )
       (pure (Ok write_success)))
 
-/-- Type quantifiers: k_ex828146_ : Bool, k_ex828145_ : Bool, k_ex828144_ : Bool, width : Nat, width
-  ≥ 0, is_mem_width(width) -/
+/-- Type quantifiers: k_ex256135_ : Bool, k_ex256134_ : Bool, k_ex256133_ : Bool, width : Nat, width
+  ≥ 0, (is_mem_width width) -/
 def vmem_read (rs : regidx) (offset : (BitVec 64)) (width : Nat) (access : (MemoryAccessType mem_payload)) (aq : Bool) (rl : Bool) (res : Bool) : SailM (Result (BitVec (8 * width)) ExecutionResult) := SailME.run do
   let vaddr ← (( do
     match (← (ext_data_get_addr rs offset access width)) with
@@ -381,8 +384,8 @@ def vmem_read (rs : regidx) (offset : (BitVec 64)) (width : Nat) (access : (Memo
     ) : SailME (Result (BitVec (8 * width)) ExecutionResult) virtaddr )
   (vmem_read_addr vaddr offset width access aq rl res)
 
-/-- Type quantifiers: k_ex828156_ : Bool, k_ex828155_ : Bool, k_ex828154_ : Bool, width : Nat, width
-  ≥ 0, is_mem_width(width) -/
+/-- Type quantifiers: k_ex256143_ : Bool, k_ex256142_ : Bool, k_ex256141_ : Bool, width : Nat, width
+  ≥ 0, (is_mem_width width) -/
 def vmem_write (rs_addr : regidx) (offset : (BitVec 64)) (width : Nat) (data : (BitVec (8 * width))) (access : (MemoryAccessType mem_payload)) (aq : Bool) (rl : Bool) (res : Bool) : SailM (Result Bool ExecutionResult) := SailME.run do
   let vaddr ← (( do
     match (← (ext_data_get_addr rs_addr offset access width)) with

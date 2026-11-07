@@ -12,11 +12,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -261,7 +264,7 @@ def reg_abi_name_raw_backwards (arg_ : String) : SailM (BitVec 5) := do
   | "t6" => (pure 0b11111#5)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def reg_abi_name_raw_forwards_matches (arg_ : (BitVec 5)) : Bool :=
@@ -374,7 +377,7 @@ def reg_arch_name_raw_backwards (arg_ : String) : SailM (BitVec 5) := do
   | "x31" => (pure 0b11111#5)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def reg_arch_name_raw_forwards_matches (arg_ : (BitVec 5)) : Bool :=
@@ -473,7 +476,7 @@ def reg_name_backwards (arg_ : String) : SailM regidx := do
       | .some result => (pure result)
       | _ =>
         (do
-          assert false "Pattern match failure at unknown location"
+          sail_assert false "Pattern match failure at unknown location"
           throw Error.Exit))
 
 def reg_name_forwards_matches (arg_ : regidx) : Bool :=
@@ -533,7 +536,7 @@ def sp_reg_name_backwards (arg_ : String) : SailM Unit := do
   | "x2" => (pure ())
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def sp_reg_name_forwards_matches (arg_ : Unit) : Bool :=
@@ -578,7 +581,7 @@ def creg_name_backwards (arg_ : String) : SailM cregidx := do
   | .some result => (pure result)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def creg_name_forwards_matches (arg_ : cregidx) : Bool :=

@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -206,13 +209,13 @@ def encdec_zicondop_backwards (arg_ : (BitVec 3)) : SailM zicondop := do
   | 0b111 => (pure CZERO_NEZ)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def encdec_zicondop_forwards_matches (arg_ : zicondop) : Bool :=
   match arg_ with
-  | CZERO_EQZ => true
-  | CZERO_NEZ => true
+  | .CZERO_EQZ => true
+  | .CZERO_NEZ => true
 
 def encdec_zicondop_backwards_matches (arg_ : (BitVec 3)) : Bool :=
   match arg_ with
@@ -226,13 +229,13 @@ def zicond_mnemonic_backwards (arg_ : String) : SailM zicondop := do
   | "czero.nez" => (pure CZERO_NEZ)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def zicond_mnemonic_forwards_matches (arg_ : zicondop) : Bool :=
   match arg_ with
-  | CZERO_EQZ => true
-  | CZERO_NEZ => true
+  | .CZERO_EQZ => true
+  | .CZERO_NEZ => true
 
 def zicond_mnemonic_backwards_matches (arg_ : String) : Bool :=
   match arg_ with

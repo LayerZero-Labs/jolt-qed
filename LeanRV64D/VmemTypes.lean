@@ -6,11 +6,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -208,15 +211,15 @@ def mem_payload_of_num (arg_ : Nat) : mem_payload :=
 
 def num_of_mem_payload (arg_ : mem_payload) : Int :=
   match arg_ with
-  | Data => 0
-  | PageTableEntry => 1
-  | ShadowStack => 2
+  | .Data => 0
+  | .PageTableEntry => 1
+  | .ShadowStack => 2
 
 def mem_payload_name_forwards (arg_ : mem_payload) : String :=
   match arg_ with
-  | Data => "Data"
-  | PageTableEntry => "PageTableEntry"
-  | ShadowStack => "ShadowStack"
+  | .Data => "Data"
+  | .PageTableEntry => "PageTableEntry"
+  | .ShadowStack => "ShadowStack"
 
 def mem_payload_name_backwards (arg_ : String) : SailM mem_payload := do
   match arg_ with
@@ -225,14 +228,14 @@ def mem_payload_name_backwards (arg_ : String) : SailM mem_payload := do
   | "ShadowStack" => (pure ShadowStack)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def mem_payload_name_forwards_matches (arg_ : mem_payload) : Bool :=
   match arg_ with
-  | Data => true
-  | PageTableEntry => true
-  | ShadowStack => true
+  | .Data => true
+  | .PageTableEntry => true
+  | .ShadowStack => true
 
 def mem_payload_name_backwards_matches (arg_ : String) : Bool :=
   match arg_ with
@@ -247,35 +250,34 @@ def mem_payload_str_backwards (arg_ : String) : SailM mem_payload := do
   | ".ss" => (pure ShadowStack)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def mem_payload_str_forwards_matches (arg_ : mem_payload) : Bool :=
   match arg_ with
-  | Data => true
-  | PageTableEntry => true
-  | ShadowStack => true
+  | .Data => true
+  | .PageTableEntry => true
+  | .ShadowStack => true
 
 def mem_payload_str_backwards_matches (arg_ : String) : Bool :=
   match arg_ with
-  | "" => true
   | "" => true
   | ".ss" => true
   | _ => false
 
 def is_shadow_stack_access (access : (MemoryAccessType mem_payload)) : SailM Bool := do
   match access with
-  | .Load ShadowStack => (pure true)
-  | .Store ShadowStack => (pure true)
-  | .Atomic (_, ShadowStack, ShadowStack) => (pure true)
+  | .Load .ShadowStack => (pure true)
+  | .Store .ShadowStack => (pure true)
+  | .Atomic (_, .ShadowStack, .ShadowStack) => (pure true)
   | .InstructionFetch () => (pure false)
-  | .Load Data => (pure false)
-  | .Load PageTableEntry => (pure false)
-  | .LoadReserved Data => (pure false)
-  | .Store Data => (pure false)
-  | .Store PageTableEntry => (pure false)
-  | .StoreConditional Data => (pure false)
-  | .Atomic (_, Data, Data) => (pure false)
+  | .Load .Data => (pure false)
+  | .Load .PageTableEntry => (pure false)
+  | .LoadReserved .Data => (pure false)
+  | .Store .Data => (pure false)
+  | .Store .PageTableEntry => (pure false)
+  | .StoreConditional .Data => (pure false)
+  | .Atomic (_, .Data, .Data) => (pure false)
   | .CacheAccess _ => (pure false)
   | .LoadReserved p =>
     (internal_error "core/vmem_types.sail" 82
@@ -293,7 +295,7 @@ def is_shadow_stack_access (access : (MemoryAccessType mem_payload)) : SailM Boo
 
 def is_shadow_stack_amo (access : (MemoryAccessType mem_payload)) : SailM Bool := do
   match access with
-  | .Atomic (_, ShadowStack, ShadowStack) => (pure true)
+  | .Atomic (_, .ShadowStack, .ShadowStack) => (pure true)
   | .LoadReserved p =>
     (internal_error "core/vmem_types.sail" 91
       (HAppend.hAppend "Invalid payload ("

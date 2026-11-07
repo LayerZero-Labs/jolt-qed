@@ -11,6 +11,7 @@ import LeanRV64D.Defs
 
 open Sail
 open ConcurrencyInterfaceV1
+open LeanRV64D
 
 def print_bits (_ : String) (_ : BitVec n) : Unit := ()
 def print_string (_ : String) (_ : String) : Unit := ()
@@ -112,6 +113,6 @@ axiom riscv_f64roundToInt : BitVec 3 → BitVec 64 → Bool → (BitVec 5 × Bit
 
 -- Termination of currentlyEnabled
 instance : SizeOf extension where
-  sizeOf := extension.toCtorIdx
+  sizeOf := extension.ctorIdx
 
 macro_rules | `(tactic| decreasing_trivial) => `(tactic| decide)

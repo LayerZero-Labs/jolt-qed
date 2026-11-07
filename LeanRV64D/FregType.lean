@@ -6,11 +6,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -198,13 +201,13 @@ open AmocasOddRegisterReservedBehavior
 
 def zero_freg : fregtype := (zeros (n := (8 *i 8)))
 
-def FRegStr (r : (BitVec (if ( true  : Bool) then 8 else 4 * 8))) : String :=
+def FRegStr (r : (BitVec ((if ( true  : Bool) then 8 else 4) * 8))) : String :=
   (BitVec.toFormatted r)
 
-def fregval_from_freg (r : (BitVec (if ( true  : Bool) then 8 else 4 * 8))) : (BitVec (if ( true  : Bool) then 8 else 4 * 8)) :=
+def fregval_from_freg (r : (BitVec ((if ( true  : Bool) then 8 else 4) * 8))) : (BitVec ((if ( true  : Bool) then 8 else 4) * 8)) :=
   r
 
-def fregval_into_freg (v : (BitVec (if ( true  : Bool) then 8 else 4 * 8))) : (BitVec (if ( true  : Bool) then 8 else 4 * 8)) :=
+def fregval_into_freg (v : (BitVec ((if ( true  : Bool) then 8 else 4) * 8))) : (BitVec ((if ( true  : Bool) then 8 else 4) * 8)) :=
   v
 
 def undefined_f_madd_op_H (_ : Unit) : SailM f_madd_op_H := do
@@ -220,10 +223,10 @@ def f_madd_op_H_of_num (arg_ : Nat) : f_madd_op_H :=
 
 def num_of_f_madd_op_H (arg_ : f_madd_op_H) : Int :=
   match arg_ with
-  | FMADD_H => 0
-  | FMSUB_H => 1
-  | FNMSUB_H => 2
-  | FNMADD_H => 3
+  | .FMADD_H => 0
+  | .FMSUB_H => 1
+  | .FNMSUB_H => 2
+  | .FNMADD_H => 3
 
 def undefined_f_bin_rm_op_H (_ : Unit) : SailM f_bin_rm_op_H := do
   (internal_pick [FADD_H, FSUB_H, FMUL_H, FDIV_H])
@@ -238,10 +241,10 @@ def f_bin_rm_op_H_of_num (arg_ : Nat) : f_bin_rm_op_H :=
 
 def num_of_f_bin_rm_op_H (arg_ : f_bin_rm_op_H) : Int :=
   match arg_ with
-  | FADD_H => 0
-  | FSUB_H => 1
-  | FMUL_H => 2
-  | FDIV_H => 3
+  | .FADD_H => 0
+  | .FSUB_H => 1
+  | .FMUL_H => 2
+  | .FDIV_H => 3
 
 def undefined_f_un_rm_ff_op_H (_ : Unit) : SailM f_un_rm_ff_op_H := do
   (internal_pick [FSQRT_H, FCVT_H_S, FCVT_H_D, FCVT_S_H, FCVT_D_H])
@@ -257,11 +260,11 @@ def f_un_rm_ff_op_H_of_num (arg_ : Nat) : f_un_rm_ff_op_H :=
 
 def num_of_f_un_rm_ff_op_H (arg_ : f_un_rm_ff_op_H) : Int :=
   match arg_ with
-  | FSQRT_H => 0
-  | FCVT_H_S => 1
-  | FCVT_H_D => 2
-  | FCVT_S_H => 3
-  | FCVT_D_H => 4
+  | .FSQRT_H => 0
+  | .FCVT_H_S => 1
+  | .FCVT_H_D => 2
+  | .FCVT_S_H => 3
+  | .FCVT_D_H => 4
 
 def undefined_f_un_rm_fx_op_H (_ : Unit) : SailM f_un_rm_fx_op_H := do
   (internal_pick [FCVT_W_H, FCVT_WU_H, FCVT_L_H, FCVT_LU_H])
@@ -276,10 +279,10 @@ def f_un_rm_fx_op_H_of_num (arg_ : Nat) : f_un_rm_fx_op_H :=
 
 def num_of_f_un_rm_fx_op_H (arg_ : f_un_rm_fx_op_H) : Int :=
   match arg_ with
-  | FCVT_W_H => 0
-  | FCVT_WU_H => 1
-  | FCVT_L_H => 2
-  | FCVT_LU_H => 3
+  | .FCVT_W_H => 0
+  | .FCVT_WU_H => 1
+  | .FCVT_L_H => 2
+  | .FCVT_LU_H => 3
 
 def undefined_f_un_rm_xf_op_H (_ : Unit) : SailM f_un_rm_xf_op_H := do
   (internal_pick [FCVT_H_W, FCVT_H_WU, FCVT_H_L, FCVT_H_LU])
@@ -294,10 +297,10 @@ def f_un_rm_xf_op_H_of_num (arg_ : Nat) : f_un_rm_xf_op_H :=
 
 def num_of_f_un_rm_xf_op_H (arg_ : f_un_rm_xf_op_H) : Int :=
   match arg_ with
-  | FCVT_H_W => 0
-  | FCVT_H_WU => 1
-  | FCVT_H_L => 2
-  | FCVT_H_LU => 3
+  | .FCVT_H_W => 0
+  | .FCVT_H_WU => 1
+  | .FCVT_H_L => 2
+  | .FCVT_H_LU => 3
 
 def undefined_f_un_x_op_H (_ : Unit) : SailM f_un_x_op_H := do
   (internal_pick [FCLASS_H, FMV_X_H])
@@ -310,8 +313,8 @@ def f_un_x_op_H_of_num (arg_ : Nat) : f_un_x_op_H :=
 
 def num_of_f_un_x_op_H (arg_ : f_un_x_op_H) : Int :=
   match arg_ with
-  | FCLASS_H => 0
-  | FMV_X_H => 1
+  | .FCLASS_H => 0
+  | .FMV_X_H => 1
 
 def undefined_f_un_f_op_H (_ : Unit) : SailM f_un_f_op_H := do
   (internal_pick [FMV_H_X])
@@ -323,7 +326,7 @@ def f_un_f_op_H_of_num (arg_ : Nat) : f_un_f_op_H :=
 
 def num_of_f_un_f_op_H (arg_ : f_un_f_op_H) : Int :=
   match arg_ with
-  | FMV_H_X => 0
+  | .FMV_H_X => 0
 
 def undefined_f_bin_f_op_H (_ : Unit) : SailM f_bin_f_op_H := do
   (internal_pick [FSGNJ_H, FSGNJN_H, FSGNJX_H, FMIN_H, FMAX_H])
@@ -339,11 +342,11 @@ def f_bin_f_op_H_of_num (arg_ : Nat) : f_bin_f_op_H :=
 
 def num_of_f_bin_f_op_H (arg_ : f_bin_f_op_H) : Int :=
   match arg_ with
-  | FSGNJ_H => 0
-  | FSGNJN_H => 1
-  | FSGNJX_H => 2
-  | FMIN_H => 3
-  | FMAX_H => 4
+  | .FSGNJ_H => 0
+  | .FSGNJN_H => 1
+  | .FSGNJX_H => 2
+  | .FMIN_H => 3
+  | .FMAX_H => 4
 
 def undefined_f_bin_x_op_H (_ : Unit) : SailM f_bin_x_op_H := do
   (internal_pick [FEQ_H, FLT_H, FLE_H])
@@ -357,9 +360,9 @@ def f_bin_x_op_H_of_num (arg_ : Nat) : f_bin_x_op_H :=
 
 def num_of_f_bin_x_op_H (arg_ : f_bin_x_op_H) : Int :=
   match arg_ with
-  | FEQ_H => 0
-  | FLT_H => 1
-  | FLE_H => 2
+  | .FEQ_H => 0
+  | .FLT_H => 1
+  | .FLE_H => 2
 
 def undefined_rounding_mode (_ : Unit) : SailM rounding_mode := do
   (internal_pick [RM_RNE, RM_RTZ, RM_RDN, RM_RUP, RM_RMM, RM_DYN])
@@ -376,12 +379,12 @@ def rounding_mode_of_num (arg_ : Nat) : rounding_mode :=
 
 def num_of_rounding_mode (arg_ : rounding_mode) : Int :=
   match arg_ with
-  | RM_RNE => 0
-  | RM_RTZ => 1
-  | RM_RDN => 2
-  | RM_RUP => 3
-  | RM_RMM => 4
-  | RM_DYN => 5
+  | .RM_RNE => 0
+  | .RM_RTZ => 1
+  | .RM_RDN => 2
+  | .RM_RUP => 3
+  | .RM_RMM => 4
+  | .RM_DYN => 5
 
 def undefined_f_madd_op_S (_ : Unit) : SailM f_madd_op_S := do
   (internal_pick [FMADD_S, FMSUB_S, FNMSUB_S, FNMADD_S])
@@ -396,10 +399,10 @@ def f_madd_op_S_of_num (arg_ : Nat) : f_madd_op_S :=
 
 def num_of_f_madd_op_S (arg_ : f_madd_op_S) : Int :=
   match arg_ with
-  | FMADD_S => 0
-  | FMSUB_S => 1
-  | FNMSUB_S => 2
-  | FNMADD_S => 3
+  | .FMADD_S => 0
+  | .FMSUB_S => 1
+  | .FNMSUB_S => 2
+  | .FNMADD_S => 3
 
 def undefined_f_bin_rm_op_S (_ : Unit) : SailM f_bin_rm_op_S := do
   (internal_pick [FADD_S, FSUB_S, FMUL_S, FDIV_S])
@@ -414,10 +417,10 @@ def f_bin_rm_op_S_of_num (arg_ : Nat) : f_bin_rm_op_S :=
 
 def num_of_f_bin_rm_op_S (arg_ : f_bin_rm_op_S) : Int :=
   match arg_ with
-  | FADD_S => 0
-  | FSUB_S => 1
-  | FMUL_S => 2
-  | FDIV_S => 3
+  | .FADD_S => 0
+  | .FSUB_S => 1
+  | .FMUL_S => 2
+  | .FDIV_S => 3
 
 def undefined_f_un_rm_ff_op_S (_ : Unit) : SailM f_un_rm_ff_op_S := do
   (internal_pick [FSQRT_S])
@@ -429,7 +432,7 @@ def f_un_rm_ff_op_S_of_num (arg_ : Nat) : f_un_rm_ff_op_S :=
 
 def num_of_f_un_rm_ff_op_S (arg_ : f_un_rm_ff_op_S) : Int :=
   match arg_ with
-  | FSQRT_S => 0
+  | .FSQRT_S => 0
 
 def undefined_f_un_rm_fx_op_S (_ : Unit) : SailM f_un_rm_fx_op_S := do
   (internal_pick [FCVT_W_S, FCVT_WU_S, FCVT_L_S, FCVT_LU_S])
@@ -444,10 +447,10 @@ def f_un_rm_fx_op_S_of_num (arg_ : Nat) : f_un_rm_fx_op_S :=
 
 def num_of_f_un_rm_fx_op_S (arg_ : f_un_rm_fx_op_S) : Int :=
   match arg_ with
-  | FCVT_W_S => 0
-  | FCVT_WU_S => 1
-  | FCVT_L_S => 2
-  | FCVT_LU_S => 3
+  | .FCVT_W_S => 0
+  | .FCVT_WU_S => 1
+  | .FCVT_L_S => 2
+  | .FCVT_LU_S => 3
 
 def undefined_f_un_rm_xf_op_S (_ : Unit) : SailM f_un_rm_xf_op_S := do
   (internal_pick [FCVT_S_W, FCVT_S_WU, FCVT_S_L, FCVT_S_LU])
@@ -462,10 +465,10 @@ def f_un_rm_xf_op_S_of_num (arg_ : Nat) : f_un_rm_xf_op_S :=
 
 def num_of_f_un_rm_xf_op_S (arg_ : f_un_rm_xf_op_S) : Int :=
   match arg_ with
-  | FCVT_S_W => 0
-  | FCVT_S_WU => 1
-  | FCVT_S_L => 2
-  | FCVT_S_LU => 3
+  | .FCVT_S_W => 0
+  | .FCVT_S_WU => 1
+  | .FCVT_S_L => 2
+  | .FCVT_S_LU => 3
 
 def undefined_f_un_op_f_S (_ : Unit) : SailM f_un_op_f_S := do
   (internal_pick [FMV_W_X])
@@ -477,7 +480,7 @@ def f_un_op_f_S_of_num (arg_ : Nat) : f_un_op_f_S :=
 
 def num_of_f_un_op_f_S (arg_ : f_un_op_f_S) : Int :=
   match arg_ with
-  | FMV_W_X => 0
+  | .FMV_W_X => 0
 
 def undefined_f_un_op_x_S (_ : Unit) : SailM f_un_op_x_S := do
   (internal_pick [FCLASS_S, FMV_X_W])
@@ -490,8 +493,8 @@ def f_un_op_x_S_of_num (arg_ : Nat) : f_un_op_x_S :=
 
 def num_of_f_un_op_x_S (arg_ : f_un_op_x_S) : Int :=
   match arg_ with
-  | FCLASS_S => 0
-  | FMV_X_W => 1
+  | .FCLASS_S => 0
+  | .FMV_X_W => 1
 
 def undefined_f_bin_op_f_S (_ : Unit) : SailM f_bin_op_f_S := do
   (internal_pick [FSGNJ_S, FSGNJN_S, FSGNJX_S, FMIN_S, FMAX_S])
@@ -507,11 +510,11 @@ def f_bin_op_f_S_of_num (arg_ : Nat) : f_bin_op_f_S :=
 
 def num_of_f_bin_op_f_S (arg_ : f_bin_op_f_S) : Int :=
   match arg_ with
-  | FSGNJ_S => 0
-  | FSGNJN_S => 1
-  | FSGNJX_S => 2
-  | FMIN_S => 3
-  | FMAX_S => 4
+  | .FSGNJ_S => 0
+  | .FSGNJN_S => 1
+  | .FSGNJX_S => 2
+  | .FMIN_S => 3
+  | .FMAX_S => 4
 
 def undefined_f_bin_op_x_S (_ : Unit) : SailM f_bin_op_x_S := do
   (internal_pick [FEQ_S, FLT_S, FLE_S])
@@ -525,9 +528,9 @@ def f_bin_op_x_S_of_num (arg_ : Nat) : f_bin_op_x_S :=
 
 def num_of_f_bin_op_x_S (arg_ : f_bin_op_x_S) : Int :=
   match arg_ with
-  | FEQ_S => 0
-  | FLT_S => 1
-  | FLE_S => 2
+  | .FEQ_S => 0
+  | .FLT_S => 1
+  | .FLE_S => 2
 
 def undefined_f_madd_op_D (_ : Unit) : SailM f_madd_op_D := do
   (internal_pick [FMADD_D, FMSUB_D, FNMSUB_D, FNMADD_D])
@@ -542,10 +545,10 @@ def f_madd_op_D_of_num (arg_ : Nat) : f_madd_op_D :=
 
 def num_of_f_madd_op_D (arg_ : f_madd_op_D) : Int :=
   match arg_ with
-  | FMADD_D => 0
-  | FMSUB_D => 1
-  | FNMSUB_D => 2
-  | FNMADD_D => 3
+  | .FMADD_D => 0
+  | .FMSUB_D => 1
+  | .FNMSUB_D => 2
+  | .FNMADD_D => 3
 
 def undefined_f_bin_rm_op_D (_ : Unit) : SailM f_bin_rm_op_D := do
   (internal_pick [FADD_D, FSUB_D, FMUL_D, FDIV_D])
@@ -560,10 +563,10 @@ def f_bin_rm_op_D_of_num (arg_ : Nat) : f_bin_rm_op_D :=
 
 def num_of_f_bin_rm_op_D (arg_ : f_bin_rm_op_D) : Int :=
   match arg_ with
-  | FADD_D => 0
-  | FSUB_D => 1
-  | FMUL_D => 2
-  | FDIV_D => 3
+  | .FADD_D => 0
+  | .FSUB_D => 1
+  | .FMUL_D => 2
+  | .FDIV_D => 3
 
 def undefined_f_un_rm_ff_op_D (_ : Unit) : SailM f_un_rm_ff_op_D := do
   (internal_pick [FSQRT_D, FCVT_S_D, FCVT_D_S])
@@ -577,9 +580,9 @@ def f_un_rm_ff_op_D_of_num (arg_ : Nat) : f_un_rm_ff_op_D :=
 
 def num_of_f_un_rm_ff_op_D (arg_ : f_un_rm_ff_op_D) : Int :=
   match arg_ with
-  | FSQRT_D => 0
-  | FCVT_S_D => 1
-  | FCVT_D_S => 2
+  | .FSQRT_D => 0
+  | .FCVT_S_D => 1
+  | .FCVT_D_S => 2
 
 def undefined_f_un_rm_fx_op_D (_ : Unit) : SailM f_un_rm_fx_op_D := do
   (internal_pick [FCVT_W_D, FCVT_WU_D, FCVT_L_D, FCVT_LU_D])
@@ -594,10 +597,10 @@ def f_un_rm_fx_op_D_of_num (arg_ : Nat) : f_un_rm_fx_op_D :=
 
 def num_of_f_un_rm_fx_op_D (arg_ : f_un_rm_fx_op_D) : Int :=
   match arg_ with
-  | FCVT_W_D => 0
-  | FCVT_WU_D => 1
-  | FCVT_L_D => 2
-  | FCVT_LU_D => 3
+  | .FCVT_W_D => 0
+  | .FCVT_WU_D => 1
+  | .FCVT_L_D => 2
+  | .FCVT_LU_D => 3
 
 def undefined_f_un_rm_xf_op_D (_ : Unit) : SailM f_un_rm_xf_op_D := do
   (internal_pick [FCVT_D_W, FCVT_D_WU, FCVT_D_L, FCVT_D_LU])
@@ -612,10 +615,10 @@ def f_un_rm_xf_op_D_of_num (arg_ : Nat) : f_un_rm_xf_op_D :=
 
 def num_of_f_un_rm_xf_op_D (arg_ : f_un_rm_xf_op_D) : Int :=
   match arg_ with
-  | FCVT_D_W => 0
-  | FCVT_D_WU => 1
-  | FCVT_D_L => 2
-  | FCVT_D_LU => 3
+  | .FCVT_D_W => 0
+  | .FCVT_D_WU => 1
+  | .FCVT_D_L => 2
+  | .FCVT_D_LU => 3
 
 def undefined_f_bin_f_op_D (_ : Unit) : SailM f_bin_f_op_D := do
   (internal_pick [FSGNJ_D, FSGNJN_D, FSGNJX_D, FMIN_D, FMAX_D])
@@ -631,11 +634,11 @@ def f_bin_f_op_D_of_num (arg_ : Nat) : f_bin_f_op_D :=
 
 def num_of_f_bin_f_op_D (arg_ : f_bin_f_op_D) : Int :=
   match arg_ with
-  | FSGNJ_D => 0
-  | FSGNJN_D => 1
-  | FSGNJX_D => 2
-  | FMIN_D => 3
-  | FMAX_D => 4
+  | .FSGNJ_D => 0
+  | .FSGNJN_D => 1
+  | .FSGNJX_D => 2
+  | .FMIN_D => 3
+  | .FMAX_D => 4
 
 def undefined_f_bin_x_op_D (_ : Unit) : SailM f_bin_x_op_D := do
   (internal_pick [FEQ_D, FLT_D, FLE_D])
@@ -649,9 +652,9 @@ def f_bin_x_op_D_of_num (arg_ : Nat) : f_bin_x_op_D :=
 
 def num_of_f_bin_x_op_D (arg_ : f_bin_x_op_D) : Int :=
   match arg_ with
-  | FEQ_D => 0
-  | FLT_D => 1
-  | FLE_D => 2
+  | .FEQ_D => 0
+  | .FLT_D => 1
+  | .FLE_D => 2
 
 def undefined_f_un_x_op_D (_ : Unit) : SailM f_un_x_op_D := do
   (internal_pick [FCLASS_D, FMV_X_D])
@@ -664,8 +667,8 @@ def f_un_x_op_D_of_num (arg_ : Nat) : f_un_x_op_D :=
 
 def num_of_f_un_x_op_D (arg_ : f_un_x_op_D) : Int :=
   match arg_ with
-  | FCLASS_D => 0
-  | FMV_X_D => 1
+  | .FCLASS_D => 0
+  | .FMV_X_D => 1
 
 def undefined_f_un_f_op_D (_ : Unit) : SailM f_un_f_op_D := do
   (internal_pick [FMV_D_X])
@@ -677,5 +680,5 @@ def f_un_f_op_D_of_num (arg_ : Nat) : f_un_f_op_D :=
 
 def num_of_f_un_f_op_D (arg_ : f_un_f_op_D) : Int :=
   match arg_ with
-  | FMV_D_X => 0
+  | .FMV_D_X => 0
 

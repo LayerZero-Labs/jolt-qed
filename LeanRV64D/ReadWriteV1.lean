@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -212,9 +215,9 @@ def Access_variety_of_num (arg_ : Nat) : Access_variety :=
 
 def num_of_Access_variety (arg_ : Access_variety) : Int :=
   match arg_ with
-  | AV_plain => 0
-  | AV_exclusive => 1
-  | AV_atomic_rmw => 2
+  | .AV_plain => 0
+  | .AV_exclusive => 1
+  | .AV_atomic_rmw => 2
 
 def undefined_Access_strength (_ : Unit) : SailM Access_strength := do
   (internal_pick [AS_normal, AS_rel_or_acq, AS_acq_rcpc])
@@ -228,9 +231,9 @@ def Access_strength_of_num (arg_ : Nat) : Access_strength :=
 
 def num_of_Access_strength (arg_ : Access_strength) : Int :=
   match arg_ with
-  | AS_normal => 0
-  | AS_rel_or_acq => 1
-  | AS_acq_rcpc => 2
+  | .AS_normal => 0
+  | .AS_rel_or_acq => 1
+  | .AS_acq_rcpc => 2
 
 def undefined_Explicit_access_kind (_ : Unit) : SailM Explicit_access_kind := do
   (pure { variety := ← (undefined_Access_variety ())
@@ -242,7 +245,7 @@ def mem_read_request_is_exclusive (request : (Mem_read_request k_n k_vasize k_pa
   match request.access_kind with
   | .AK_explicit eak =>
     (match eak.variety with
-    | AV_exclusive => true
+    | .AV_exclusive => true
     | _ => false)
   | _ => false
 
@@ -263,11 +266,11 @@ def mem_write_request_is_exclusive (request : (Mem_write_request k_n k_vasize k_
   match request.access_kind with
   | .AK_explicit eak =>
     (match eak.variety with
-    | AV_exclusive => true
+    | .AV_exclusive => true
     | _ => false)
   | _ => false
 
-/-- Type quantifiers: x_0 : Nat, x_0 ≥ 0, x_0 ∈ {32, 64} -/
+/-- Type quantifiers: x_0 : Nat, x_0 ≥ 0, List.elem x_0 [32, 64] -/
 def sail_address_announce (x_0 : Nat) (x_1 : (BitVec x_0)) : Unit :=
   ()
 

@@ -6,11 +6,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -209,17 +212,17 @@ def seed_opst_of_num (arg_ : Nat) : seed_opst :=
 
 def num_of_seed_opst (arg_ : seed_opst) : Int :=
   match arg_ with
-  | BIST => 0
-  | ES16 => 1
-  | WAIT => 2
-  | DEAD => 3
+  | .BIST => 0
+  | .ES16 => 1
+  | .WAIT => 2
+  | .DEAD => 3
 
 def opst_code_forwards (arg_ : seed_opst) : (BitVec 2) :=
   match arg_ with
-  | BIST => 0b00#2
-  | WAIT => 0b01#2
-  | ES16 => 0b10#2
-  | DEAD => 0b11#2
+  | .BIST => 0b00#2
+  | .WAIT => 0b01#2
+  | .ES16 => 0b10#2
+  | .DEAD => 0b11#2
 
 def opst_code_backwards (arg_ : (BitVec 2)) : seed_opst :=
   match arg_ with
@@ -230,10 +233,10 @@ def opst_code_backwards (arg_ : (BitVec 2)) : seed_opst :=
 
 def opst_code_forwards_matches (arg_ : seed_opst) : Bool :=
   match arg_ with
-  | BIST => true
-  | WAIT => true
-  | ES16 => true
-  | DEAD => true
+  | .BIST => true
+  | .WAIT => true
+  | .ES16 => true
+  | .DEAD => true
 
 def opst_code_backwards_matches (arg_ : (BitVec 2)) : Bool :=
   match arg_ with

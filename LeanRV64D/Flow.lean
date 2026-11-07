@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -200,30 +203,30 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_ex806413_ : Bool, k_ex806412_ : Bool -/
+/-- Type quantifiers: k_ex254493_ : Bool, k_ex254492_ : Bool -/
 def neq_bool (x : Bool) (y : Bool) : Bool :=
   (! (x == y))
 
 def num_of_AtomicSupport (arg_ : AtomicSupport) : Int :=
   match arg_ with
-  | AMONone => 0
-  | AMOSwap => 1
-  | AMOLogical => 2
-  | AMOArithmetic => 3
-  | AMOCASW => 4
-  | AMOCASD => 5
-  | AMOCASQ => 6
+  | .AMONone => 0
+  | .AMOSwap => 1
+  | .AMOLogical => 2
+  | .AMOArithmetic => 3
+  | .AMOCASW => 4
+  | .AMOCASD => 5
+  | .AMOCASQ => 6
 
 def pma_atomicity_support_le (x : AtomicSupport) (y : AtomicSupport) : Bool :=
   ((num_of_AtomicSupport x) ≤b (num_of_AtomicSupport y))
 
 def num_of_vector_support (arg_ : vector_support) : Int :=
   match arg_ with
-  | Disabled => 0
-  | Integer => 1
-  | Float_single => 2
-  | Float_double => 3
-  | Full => 4
+  | .Disabled => 0
+  | .Integer => 1
+  | .Float_single => 2
+  | .Float_double => 3
+  | .Full => 4
 
 def vector_support_le (x : vector_support) (y : vector_support) : Bool :=
   ((num_of_vector_support x) ≤b (num_of_vector_support y))
@@ -245,8 +248,4 @@ def pma_atomicity_support_gt (x : AtomicSupport) (y : AtomicSupport) : Bool :=
 
 def vector_support_gt (x : vector_support) (y : vector_support) : Bool :=
   ((num_of_vector_support x) >b (num_of_vector_support y))
-
-/-- Type quantifiers: x : Int -/
-def __id (x : Int) : Int :=
-  x
 

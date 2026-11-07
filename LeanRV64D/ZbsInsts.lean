@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -208,15 +211,15 @@ def zbs_iop_mnemonic_backwards (arg_ : String) : SailM biop_zbs := do
   | "bseti" => (pure BSETI)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def zbs_iop_mnemonic_forwards_matches (arg_ : biop_zbs) : Bool :=
   match arg_ with
-  | BCLRI => true
-  | BEXTI => true
-  | BINVI => true
-  | BSETI => true
+  | .BCLRI => true
+  | .BEXTI => true
+  | .BINVI => true
+  | .BSETI => true
 
 def zbs_iop_mnemonic_backwards_matches (arg_ : String) : Bool :=
   match arg_ with
@@ -234,15 +237,15 @@ def zbs_rtype_mnemonic_backwards (arg_ : String) : SailM brop_zbs := do
   | "bset" => (pure BSET)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def zbs_rtype_mnemonic_forwards_matches (arg_ : brop_zbs) : Bool :=
   match arg_ with
-  | BCLR => true
-  | BEXT => true
-  | BINV => true
-  | BSET => true
+  | .BCLR => true
+  | .BEXT => true
+  | .BINV => true
+  | .BSET => true
 
 def zbs_rtype_mnemonic_backwards_matches (arg_ : String) : Bool :=
   match arg_ with

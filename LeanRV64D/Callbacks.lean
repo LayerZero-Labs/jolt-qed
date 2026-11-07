@@ -8,11 +8,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -198,7 +201,7 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, k_n ∈ {16, 32} -/
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, List.elem k_n [16, 32] -/
 def fetch_callback (x_0 : (BitVec k_n)) : Unit :=
   ()
 
@@ -228,7 +231,7 @@ def csr_full_read_callback (x_0 : String) (x_1 : (BitVec 12)) (x_2 : (BitVec 64)
 def redirect_callback (x_0 : (BitVec 64)) : Unit :=
   ()
 
-/-- Type quantifiers: k_ex819821_ : Bool -/
+/-- Type quantifiers: k_ex255824_ : Bool -/
 def trap_callback (x_0 : Bool) (x_1 : (BitVec 6)) : Unit :=
   ()
 
@@ -590,7 +593,7 @@ def csr_name_map_backwards (arg_ : String) : SailM (BitVec 12) := do
   | .some result => (pure result)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def csr_name_write_callback (name : String) (value : (BitVec 64)) : SailM Unit := do

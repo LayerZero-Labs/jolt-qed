@@ -7,11 +7,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -249,7 +252,7 @@ def aes_mixcolumn_inv (x : (BitVec 32)) : (BitVec 32) :=
   (b3 +++ (b2 +++ (b1 +++ b0)))
 
 def aes_decode_rcon (r : (BitVec 4)) : SailM (BitVec 32) := do
-  assert (zopz0zI_u r 0xA#4) "extensions/K/types_kext.sail:77.18-77.19"
+  sail_assert (zopz0zI_u r 0xA#4) "extensions/K/types_kext.sail:77.18-77.19"
   match r with
   | 0x0 => (pure 0x00000001#32)
   | 0x1 => (pure 0x00000002#32)

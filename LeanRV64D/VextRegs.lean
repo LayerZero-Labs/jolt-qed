@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -208,6 +211,14 @@ def vregno_to_vregidx (app_0 : vregno) : vregidx :=
   let .Vregno b := app_0
   (Vregidx (to_bits (l := 5) b))
 
+def vregidx_bits (app_0 : vregidx) : (BitVec 5) :=
+  let .Vregidx b := app_0
+  b
+
+def encdec_vreg_forwards (arg_ : vregidx) : (BitVec 5) :=
+  match arg_ with
+  | .Vregidx r => r
+
 def encdec_vreg_backwards (arg_ : (BitVec 5)) : vregidx :=
   match arg_ with
   | r => (Vregidx r)
@@ -224,6 +235,41 @@ def vreg_write_callback (x_0 : vregidx) (x_1 : (BitVec (2 ^ 8))) : Unit :=
   ()
 
 def zvreg : vregidx := (Vregidx 0b00000#5)
+
+def vreg_name_raw_forwards (arg_ : (BitVec 5)) : String :=
+  match arg_ with
+  | 0b00000 => "v0"
+  | 0b00001 => "v1"
+  | 0b00010 => "v2"
+  | 0b00011 => "v3"
+  | 0b00100 => "v4"
+  | 0b00101 => "v5"
+  | 0b00110 => "v6"
+  | 0b00111 => "v7"
+  | 0b01000 => "v8"
+  | 0b01001 => "v9"
+  | 0b01010 => "v10"
+  | 0b01011 => "v11"
+  | 0b01100 => "v12"
+  | 0b01101 => "v13"
+  | 0b01110 => "v14"
+  | 0b01111 => "v15"
+  | 0b10000 => "v16"
+  | 0b10001 => "v17"
+  | 0b10010 => "v18"
+  | 0b10011 => "v19"
+  | 0b10100 => "v20"
+  | 0b10101 => "v21"
+  | 0b10110 => "v22"
+  | 0b10111 => "v23"
+  | 0b11000 => "v24"
+  | 0b11001 => "v25"
+  | 0b11010 => "v26"
+  | 0b11011 => "v27"
+  | 0b11100 => "v28"
+  | 0b11101 => "v29"
+  | 0b11110 => "v30"
+  | _ => "v31"
 
 def vreg_name_raw_backwards (arg_ : String) : SailM (BitVec 5) := do
   match arg_ with
@@ -261,7 +307,7 @@ def vreg_name_raw_backwards (arg_ : String) : SailM (BitVec 5) := do
   | "v31" => (pure 0b11111#5)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def vreg_name_raw_forwards_matches (arg_ : (BitVec 5)) : Bool :=
@@ -336,6 +382,10 @@ def vreg_name_raw_backwards_matches (arg_ : String) : Bool :=
   | "v31" => true
   | _ => false
 
+def vreg_name_forwards (arg_ : vregidx) : String :=
+  match arg_ with
+  | .Vregidx i => (vreg_name_raw_forwards i)
+
 def vreg_name_backwards (arg_ : String) : SailM vregidx := do
   let head_exp_ := arg_
   match (← do
@@ -349,7 +399,7 @@ def vreg_name_backwards (arg_ : String) : SailM vregidx := do
   | .some result => (pure result)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def vreg_name_forwards_matches (arg_ : vregidx) : Bool :=
@@ -408,7 +458,7 @@ def rV (app_0 : vregno) : SailM (BitVec (2 ^ 8)) := do
   | _ => readReg vr31
 
 def dirty_v_context (_ : Unit) : SailM Unit := do
-  assert (hartSupports Ext_Zve32x) "extensions/V/vext_regs.sail:138.33-138.34"
+  sail_assert (hartSupports Ext_Zve32x) "extensions/V/vext_regs.sail:138.33-138.34"
   writeReg mstatus (Sail.BitVec.updateSubrange (← readReg mstatus) 10 9 (extStatus_to_bits Dirty))
   writeReg mstatus (Sail.BitVec.updateSubrange (← readReg mstatus) (64 -i 1) (64 -i 1) 1#1)
   (long_csr_write_callback "mstatus" "mstatush" (← readReg mstatus))
@@ -530,6 +580,9 @@ def _set_Vtype_vill (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec (64 - 1 - (
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Vtype_vill r v)
 
+def _get_Vtype_vlmul (v : (BitVec 64)) : (BitVec 3) :=
+  (Sail.BitVec.extractLsb v 2 0)
+
 def _update_Vtype_vlmul (v : (BitVec 64)) (x : (BitVec 3)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 2 0 x)
 
@@ -546,6 +599,9 @@ def _update_Vtype_vma (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
 def _set_Vtype_vma (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Vtype_vma r v)
+
+def _get_Vtype_vsew (v : (BitVec 64)) : (BitVec 3) :=
+  (Sail.BitVec.extractLsb v 5 3)
 
 def _update_Vtype_vsew (v : (BitVec 64)) (x : (BitVec 3)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 5 3 x)
@@ -570,8 +626,21 @@ def is_invalid_sew_pow (v : (BitVec 3)) : Bool :=
 def is_invalid_lmul_pow (v : (BitVec 3)) : Bool :=
   (v == 0b100#3)
 
+def get_sew_pow (_ : Unit) : SailM Nat := do
+  let sew_pow ← do (pure (BitVec.toNatInt (_get_Vtype_vsew (← readReg vtype))))
+  sail_assert (sew_pow <b 4) "Reserved SEW stored in vtype register. This should be impossible."
+  (pure (sew_pow +i 3))
+
+def get_sew (_ : Unit) : SailM Int := do
+  (pure (2 ^i (← (get_sew_pow ()))))
+
 def get_sew_bytes (_ : Unit) : SailM Int := do
   (pure (Int.tdiv (← (get_sew ())) 8))
+
+def get_lmul_pow (_ : Unit) : SailM Int := do
+  let lmul_pow ← do (pure (BitVec.toInt (_get_Vtype_vlmul (← readReg vtype))))
+  sail_assert (lmul_pow >b (Neg.neg 4)) "Reserved LMUL stored in vtype register. This should be impossible."
+  (pure lmul_pow)
 
 def undefined_agtype (_ : Unit) : SailM agtype := do
   (internal_pick [UNDISTURBED, AGNOSTIC])
@@ -584,8 +653,8 @@ def agtype_of_num (arg_ : Nat) : agtype :=
 
 def num_of_agtype (arg_ : agtype) : Int :=
   match arg_ with
-  | UNDISTURBED => 0
-  | AGNOSTIC => 1
+  | .UNDISTURBED => 0
+  | .AGNOSTIC => 1
 
 def decode_agtype (ag : (BitVec 1)) : agtype :=
   match ag with

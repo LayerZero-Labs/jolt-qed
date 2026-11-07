@@ -1,11 +1,9 @@
 import LeanRV64D.Prelude
 import LeanRV64D.Regs
-import LeanRV64D.SysRegs
 import LeanRV64D.ZicfilpRegs
 import LeanRV64D.SysControl
 import LeanRV64D.Vmem
 import LeanRV64D.StepExt
-import LeanRV64D.Step
 import LeanRV64D.ValidateConfig
 
 set_option maxHeartbeats 1_000_000_000
@@ -14,11 +12,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -212,7 +213,7 @@ def reset (_ : Unit) : SailM Unit := do
   (pure (ext_reset ()))
 
 def init_model (config_filename : String) : SailM Unit := do
-  assert (← (config_is_valid ())) (HAppend.hAppend
+  sail_assert (← (config_is_valid ())) (HAppend.hAppend
     (if ((config_filename == "") : Bool)
     then "Default config"
     else (HAppend.hAppend "Config in " config_filename)) " is invalid.")

@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -220,19 +223,19 @@ def float_class_of_num (arg_ : Nat) : float_class :=
 
 def num_of_float_class (arg_ : float_class) : Int :=
   match arg_ with
-  | float_class_negative_inf => 0
-  | float_class_negative_normal => 1
-  | float_class_negative_subnormal => 2
-  | float_class_negative_zero => 3
-  | float_class_positive_zero => 4
-  | float_class_positive_subnormal => 5
-  | float_class_positive_normal => 6
-  | float_class_positive_inf => 7
-  | float_class_snan => 8
-  | float_class_qnan => 9
+  | .float_class_negative_inf => 0
+  | .float_class_negative_normal => 1
+  | .float_class_negative_subnormal => 2
+  | .float_class_negative_zero => 3
+  | .float_class_positive_zero => 4
+  | .float_class_positive_subnormal => 5
+  | .float_class_positive_normal => 6
+  | .float_class_positive_inf => 7
+  | .float_class_snan => 8
+  | .float_class_qnan => 9
 
-/-- Type quantifiers: k_ex807782_ : Nat, k_ex807782_ ∈ {16, 32, 64, 128} -/
-def float_classify (f : (BitVec k_ex807782_)) : SailM float_class := do
+/-- Type quantifiers: k_ex254668_ : Nat, List.elem k_ex254668_ [16, 32, 64, 128] -/
+def float_classify (f : (BitVec k_ex254668_)) : SailM float_class := do
   if ((float_is_snan f) : Bool)
   then (pure float_class_snan)
   else
@@ -269,6 +272,6 @@ def float_classify (f : (BitVec k_ex807782_)) : SailM float_class := do
                         else (pure float_class_negative_inf))
                       else
                         (do
-                          assert false "float_classify internal logic error"
+                          sail_assert false "float_classify internal logic error"
                           throw Error.Exit))))))
 
