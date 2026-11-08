@@ -6,9 +6,10 @@
 #
 # Runs, in order: the comparator's self-test (test_difftest.py), build.sh,
 # the reproducers in guest/repro/, riscv-tests, random guests of the base mix,
-# random guests of the system mix, and the ACT4 architectural tests. Each set keeps its results in its own directory under
-# WORK_DIR (see the README), and the last line of each set's output is
-# collected in WORK_DIR/summary.txt, which is printed at the end.
+# random guests of the system mix, and the ACT4 architectural tests. Each set
+# keeps its results in its own directory under WORK_DIR (see the README), and
+# the last line of each set's output is collected in WORK_DIR/summary.txt,
+# which is printed at the end.
 #
 # Environment (besides those of build.sh and run.sh):
 #   SEEDS         random guests per mix (default 1000)
