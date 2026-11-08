@@ -9,8 +9,18 @@
 //!   csr   machine CSRs Jolt keeps in virtual registers 34..39, when changed
 //!   resv  LR/SC reservation registers 32 (word) and 33 (doubleword), when changed
 //!   mem   RAM writes as [address, pre, post] (doubleword granularity)
-//! The last line is {"end": ...}: "tohost" with the HTIF payload, "halt" for
-//! a self-loop (Jolt's termination), "limit", or "panic" with the message.
+//! The last line is {"end": ...}, one of
+//!   "tohost"        the guest wrote an HTIF exit command (device 0, command 0,
+//!                   payload bit 0 set) to `tohost`; "value" is the doubleword
+//!   "stall-tohost"  the guest stalled (a jump to itself) after writing some
+//!                   other non-zero value to `tohost`; "value" is that value
+//!   "halt"          the guest stalled with `tohost` zero or absent
+//!   "panic"         the tracer panicked; "msg" is the message
+//!   "limit"         the guest ran for the instruction limit.
+//! These follow `Emulator::run_test` in Jolt's tracer: it exits on an HTIF
+//! exit command, and on a stall reports an exit code of 0 when `tohost` is zero
+//! and 1 (a failure) otherwise. Any other `tohost` write is not an exit, and
+//! the guest goes on.
 //!
 //! Usage: jolt-trace ELF [--limit N]
 
@@ -37,10 +47,12 @@ fn hex(v: u64) -> String {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let elf = args.get(1).expect("usage: jolt-trace ELF [--limit N]");
-    let limit: u64 = match args.get(2).map(String::as_str) {
-        Some("--limit") => args[3].parse().expect("--limit takes a number"),
-        _ => 100_000,
+    let limit: u64 = match (args.get(2).map(String::as_str), args.get(3), args.len()) {
+        (None, _, 2) => 100_000,
+        (Some("--limit"), Some(n), 4) => n.parse().expect("--limit takes a positive number"),
+        _ => panic!("usage: jolt-trace ELF [--limit N]"),
     };
+    assert!(limit > 0, "--limit takes a positive number");
 
     // Silence the tracer's own panic message; the panic is reported as JSON.
     std::panic::set_hook(Box::new(|_| {}));
@@ -58,7 +70,16 @@ fn main() {
 
     for step in 0..limit {
         if emu.get_cpu().has_stalled() {
-            println!("{{\"end\":\"halt\",\"pc\":{}}}", hex(emu.get_cpu().read_pc()));
+            let value = if tohost != 0 {
+                emu.get_mut_cpu().get_mut_mmu().load_doubleword_raw(tohost)
+            } else {
+                0
+            };
+            if value != 0 {
+                println!("{{\"end\":\"stall-tohost\",\"value\":{}}}", hex(value));
+            } else {
+                println!("{{\"end\":\"halt\",\"pc\":{}}}", hex(emu.get_cpu().read_pc()));
+            }
             return;
         }
         let pc = emu.get_cpu().read_pc();
@@ -116,7 +137,8 @@ fn main() {
 
         if tohost != 0 {
             let value = emu.get_mut_cpu().get_mut_mmu().load_doubleword_raw(tohost);
-            if value != 0 {
+            // device (bits 63..56) 0, command (55..48) 0, payload bit 0 set.
+            if value >> 48 == 0 && value & 1 == 1 {
                 println!("{{\"end\":\"tohost\",\"value\":{}}}", hex(value));
                 return;
             }

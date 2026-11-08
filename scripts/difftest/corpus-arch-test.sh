@@ -56,7 +56,13 @@ else
     { tail -20 "$work/arch-test-generate.log"; echo "corpus-arch-test: ELF generation failed" >&2; exit 2; }
 fi
 
+# List the ELFs into a file first, so that a failing find stops the script.
+list="$work/arch-test-elfs.txt"
+find "$elf_dir" -name '*.elf' ! -name '*.sig.elf' > "$list.unsorted" ||
+  { echo "corpus-arch-test: cannot list the ELFs under $elf_dir" >&2; exit 2; }
+LC_ALL=C sort "$list.unsorted" > "$list"
+rm -f "$list.unsorted"
 elfs=()
-while IFS= read -r elf; do elfs+=("$elf"); done < <(find "$elf_dir" -name '*.elf' ! -name '*.sig.elf' | sort)
+while IFS= read -r elf; do elfs+=("$elf"); done < "$list"
 [[ ${#elfs[@]} -gt 0 ]] || { echo "corpus-arch-test: no ELFs under $elf_dir" >&2; exit 2; }
 RESULTS=arch-test-results "$HERE/run.sh" "$work" "${elfs[@]}"

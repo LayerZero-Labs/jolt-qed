@@ -4,9 +4,9 @@
 # Usage:
 #   scripts/difftest/all.sh WORK_DIR
 #
-# Runs, in order: build.sh, the reproducers in guest/repro/, riscv-tests,
-# random guests of the base mix, random guests of the system mix, and the ACT4
-# architectural tests. Each set keeps its results in its own directory under
+# Runs, in order: the comparator's self-test (test_difftest.py), build.sh,
+# the reproducers in guest/repro/, riscv-tests, random guests of the base mix,
+# random guests of the system mix, and the ACT4 architectural tests. Each set keeps its results in its own directory under
 # WORK_DIR (see the README), and the last line of each set's output is
 # collected in WORK_DIR/summary.txt, which is printed at the end.
 #
@@ -16,9 +16,9 @@
 #   ACT4_ELF_DIR  directory of ready ACT4 ELFs; without it they are generated
 #                 with Docker (see corpus-arch-test.sh)
 #
-# The exit status is 2 when a set could not be run (or the build failed), 1
-# when every set ran and some guest differs, and 0 otherwise. A set that
-# cannot run does not stop the sets after it.
+# The exit status is 2 when the self-test or the build fails or a set cannot
+# run, 1 when every set ran and some guest differs, and 0 otherwise. A set
+# that cannot run does not stop the sets after it.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -29,6 +29,8 @@ seeds="${SEEDS:-1000}" length="${LENGTH:-200}"
 summary="$work/summary.txt"
 : > "$summary"
 
+python3 "$HERE/test_difftest.py" > "$work/self-test.log" 2>&1 ||
+  { tail -20 "$work/self-test.log" >&2; echo "difftest/all: self-test failed" >&2; exit 2; }
 "$HERE/build.sh" "$work" || { echo "difftest/all: build failed" >&2; exit 2; }
 
 worst=0

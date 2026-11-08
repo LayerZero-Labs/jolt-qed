@@ -1,6 +1,7 @@
 /* (c) Odd mepc, read back, then MRET to it.
- * Sail clears bit 0 (IALIGN = 16); Jolt stores the raw value and MRET jumps to
- * it (JALR clears bit 0 of the target, so control flow still agrees). */
+ * Sail clears bit 0 (IALIGN = 16). Jolt main (9407f93fb) stores the raw value,
+ * and MRET jumps to it (JALR clears bit 0 of the target, so control flow still
+ * agrees). */
 #include "../common.h"
 GUEST_START
   la t0, 2f

@@ -1,6 +1,6 @@
 /* (d) SC.W with no reservation.
  * Spec (Sail): fails, rd = 1, no memory write.
- * Jolt: rd = 1 and a store of the old value. */
+ * Jolt main (9407f93fb): rd = 1 and a store of the old value. */
 #include "../common.h"
 GUEST_START
   la a2, scratch

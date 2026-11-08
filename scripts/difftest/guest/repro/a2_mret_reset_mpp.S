@@ -1,6 +1,7 @@
 /* (a, variant) MRET with mstatus as left by reset (no MPP write).
- * Sail resets MPP to U when U-mode is enabled, so MRET drops to U-mode and the
- * following CSR read traps as an illegal instruction. Jolt stays in M-mode. */
+ * With U-mode enabled, Sail resets MPP to U, so MRET drops to U-mode and the
+ * following CSR read traps as an illegal instruction. Jolt has only M-mode.
+ * On an M-only configuration MPP reads as M and both stay in M-mode. */
   .section .text.init
   .globl _start
 _start:

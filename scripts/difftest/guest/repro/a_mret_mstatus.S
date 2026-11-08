@@ -1,6 +1,6 @@
 /* (a) MRET from M with MPP = M, MPIE = 1, MIE = 0.
  * Spec (Sail): MIE := MPIE, MPIE := 1, MPP := least privileged mode (U here).
- * Jolt: MRET is JALR to mepc and leaves mstatus unchanged. */
+ * Jolt main (9407f93fb): MRET is JALR to mepc and leaves mstatus unchanged. */
 #include "../common.h"
 GUEST_START
   li t0, 0x80          /* MPIE */

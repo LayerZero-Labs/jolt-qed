@@ -3,27 +3,34 @@
 
     gen-random.py SEED [LENGTH [MIX]] > guest.S
 
-The guest sets every integer register except x0, s0 and s1 to a random value,
-then runs LENGTH random items and exits through `tohost`. Memory accesses are
-aligned and stay inside a 256-byte random buffer that s0 points to (s1 points
-64 bytes into it); s0 and s1 are never written. Control flow only goes
-forwards, so every guest runs straight through. The same SEED, LENGTH and MIX
-always give the same guest.
+The guest installs a trap handler, sets every integer register except x0, s0
+and s1 to a random value, then runs LENGTH random items and exits through
+`tohost` with code 0. An item is one instruction or a short sequence (see
+below). Memory accesses are aligned and stay inside a 256-byte random buffer
+that s0 points to (s1 points 64 bytes into it); s0 and s1 are never written.
+Control flow only goes forwards, and the guest stays in M-mode with
+mstatus.MPRV clear, so every guest runs straight through. The handler returns
+past an ECALL from M-mode and exits with code 2 on any other trap, so a guest
+that does not run straight through cannot pass for one that does. The same
+SEED, LENGTH and MIX always give the same guest.
 
-MIX chooses what the items are:
+MIX chooses what the items are. In both mixes about 8% of items are a forward
+branch or jump to a label one to three items ahead: a conditional branch,
+C.BEQZ or C.BNEZ, JAL or C.J, or JALR after an `la` of the target.
 
-base    (default) one instruction each, drawn from RV64I, M, A, C and Zicsr:
+base    (default) otherwise one instruction from RV64I, M, A, C and Zicsr:
         arithmetic and logic, loads and stores, AMOs and single LR or SC
-        instructions, forward branches and jumps, and all six CSR
-        instructions on mscratch, which both simulators treat as a plain
-        read/write register. Nothing traps.
+        instructions, and all six CSR instructions on mscratch, which both
+        simulators treat as a plain read/write register. Nothing traps.
 system  weighted towards the machine-mode system state: all six CSR
         instructions on mstatus, mscratch, mepc, mcause and mtval with random
-        operands, reads of mtvec and writes of its MODE field, ECALL into a
-        handler that returns past it with MRET, MRET on its own (to the next
-        instruction, through mepc), and LR ... SC sequences that mostly
-        reuse the LR's address and width. The rest are base instructions.
-        x31 is clobbered by the handler and by the MRET sequences.
+        operands, reads of mtvec and writes of its MODE field, ECALL, MRET on
+        its own (to the next instruction, through mepc), and LR ... SC
+        sequences that mostly reuse the LR's address and width. The rest are
+        base instructions. Each mstatus instruction is followed by setting
+        MPP to M and clearing MPRV, and each lone MRET is preceded by setting
+        MPP to M, so that MRET returns to M-mode on a model with U-mode too;
+        these writes, the MRET sequences and the handler clobber x31.
 """
 
 import random
@@ -50,6 +57,9 @@ MIXES = ("base", "system")
 BRANCHES = ["beq", "bne", "blt", "bge", "bltu", "bgeu"]
 C_ALU = ["c.sub", "c.xor", "c.or", "c.and", "c.subw", "c.addw"]
 BUF = 256
+# Keep MRET in M-mode and data accesses untranslated: MPP := M, MPRV := 0.
+SET_MPP_M = ["li x31, 0x1800", "csrs mstatus, x31"]
+RESTORE_MSTATUS = SET_MPP_M + ["li x31, 0x20000", "csrc mstatus, x31"]
 
 
 def x(r):
@@ -143,21 +153,25 @@ class Gen:
         return "c.nop"
 
     def csr(self):
-        """A random CSR instruction on one of the CSRs both simulators model.
+        """A random CSR instruction on one of the CSRs both simulators model,
+        as a list of lines.
 
-        mtvec only has its MODE field written, so ECALL keeps reaching the
-        handler; its BASE is the handler address throughout."""
+        mtvec only has its MODE field written, so traps keep reaching the
+        handler; its BASE is the handler address throughout. An mstatus
+        instruction is followed by RESTORE_MSTATUS."""
         rng = self.rng
         rd, rs1 = rng.choice(REGS), rng.randrange(32)
         op = rng.choice(CSR_OPS)
         if rng.random() < 0.1:
             if rng.random() < 0.5:
-                return f"{rng.choice(['csrrs', 'csrrc'])} {x(rd)}, mtvec, x0"
-            return f"{rng.choice(['csrrsi', 'csrrci'])} {x(rd)}, mtvec, {rng.randrange(4)}"
+                return [f"{rng.choice(['csrrs', 'csrrc'])} {x(rd)}, mtvec, x0"]
+            return [f"{rng.choice(['csrrsi', 'csrrci'])} {x(rd)}, mtvec, {rng.randrange(4)}"]
         csr = rng.choice(SYS_CSRS)
         if rng.random() < 0.5:
-            return f"{op} {x(rd)}, {csr}, {x(rs1)}"
-        return f"{op}i {x(rd)}, {csr}, {rng.randrange(32)}"
+            line = f"{op} {x(rd)}, {csr}, {x(rs1)}"
+        else:
+            line = f"{op}i {x(rd)}, {csr}, {rng.randrange(32)}"
+        return [line] + (RESTORE_MSTATUS if csr == "mstatus" else [])
 
     def lrsc(self):
         """LR, up to three other instructions, then SC: usually at the LR's
@@ -186,13 +200,14 @@ class Gen:
         rng = self.rng
         k = rng.random()
         if k < 0.30:
-            return [self.csr()]
+            return self.csr()
         if k < 0.38:
             return ["ecall"]
         if k < 0.42:
-            # MRET to the next instruction: x31 = target, mepc = x31.
+            # MRET to the next instruction, in M-mode: MPP = M, mepc = target.
             lab = self.label()
-            return [f"la x31, {lab}", "csrw mepc, x31", "mret", f"{lab}:"]
+            return [SET_MPP_M[0], SET_MPP_M[1], f"la x31, {lab}", "csrw mepc, x31", "mret",
+                    f"{lab}:"]
         if k < 0.57:
             return self.lrsc()
         return [self.straight()]
@@ -242,15 +257,16 @@ def main():
              "GUEST_START",
              "  la s0, rbuf",
              "  addi s1, s0, 64"]
-    if mix == "system":
-        lines += ["  la t0, .Lreturn_handler", "  csrw mtvec, t0"]
+    lines += ["  la t0, .Lreturn_handler", "  csrw mtvec, t0"]
     lines += [f"  li {x(r)}, 0x{rng.getrandbits(64):x}" for r in REGS if r != 0]
     lines += ["  " + i if not i.endswith(":") else i for i in g.body(length, mix)]
     lines += ["  GUEST_EXIT(0)"]
-    if mix == "system":
-        # ECALL handler: return past the 4-byte ECALL.
-        lines += ["  .align 2", ".Lreturn_handler:", "  csrr x31, mepc",
-                  "  addi x31, x31, 4", "  csrw mepc, x31", "  mret"]
+    # Trap handler: return past an ECALL from M-mode (mcause 11, 4 bytes);
+    # exit with code 2 on any other trap.
+    lines += ["  .align 2", ".Lreturn_handler:", "  csrr x31, mcause",
+              "  addi x31, x31, -11", "  bnez x31, .Lunexpected_trap",
+              "  csrr x31, mepc", "  addi x31, x31, 4", "  csrw mepc, x31", "  mret",
+              ".Lunexpected_trap:", "  GUEST_EXIT(2)"]
     lines += ["GUEST_END", "  .data", "  .align 6", "rbuf:"]
     data = [rng.getrandbits(64) for _ in range(BUF // 8)]
     lines += [f"  .dword 0x{v:016x}" for v in data]

@@ -1,5 +1,5 @@
 /* (c) Write all ones to mstatus and read it back.
- * Sail legalizes (WARL); Jolt stores the raw value. */
+ * Sail legalizes (WARL); Jolt main (9407f93fb) stores the raw value. */
 #include "../common.h"
 GUEST_START
   li t0, -1
