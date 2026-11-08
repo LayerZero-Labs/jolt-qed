@@ -276,7 +276,7 @@ def pte_is_invalid (pte_flags : (BitVec 8)) (pte_ext : (BitVec 10)) : SailM Bool
                     (pure (not (← (currentlyEnabled Ext_Svrsw60t59b))))))) || ((_get_PTE_Ext_reserved
                       pte_ext) != (zeros (n := 5)))))))))))
 
-/-- Type quantifiers: k_ex256076_ : Bool, k_ex256075_ : Bool -/
+/-- Type quantifiers: k_ex256090_ : Bool, k_ex256089_ : Bool -/
 def check_PTE_permission (access : (MemoryAccessType mem_payload)) (priv : Privilege) (mxr : Bool) (do_sum : Bool) (pte_flags : (BitVec 8)) (_ext : (BitVec 10)) (_ext_ptw : Unit) : SailM PTE_Check := SailME.run do
   let pte_U := (bit_to_bool (_get_PTE_Flags_U pte_flags))
   let pte_R := (bit_to_bool (_get_PTE_Flags_R pte_flags))

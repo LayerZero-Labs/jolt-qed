@@ -20,7 +20,8 @@ project_file_sha256 = "818fc3305955e3664b7a642d1899004ebb7960f54021db79538a68173
 #    platform.reservation.{require_exact_reservation_addr, invalidate_on_xret}
 #    of upstream sail-riscv and a new require_width_within (an SC must be no
 #    wider than its LR); MRET and SRET cancel the reservation when
-#    invalidate_on_xret is set;
+#    invalidate_on_xret is set; cancelling clears the address and width too,
+#    so "no reservation" has one representation;
 #  - the mstatus.FS legal-values policy base.mstatus.fs_legal_states, backported
 #    from upstream sail-riscv 81184531;
 #  - mstatus.MPP resets to M on a hart without U-mode (it reset to 0, an
@@ -35,7 +36,7 @@ patches = [
 ]
 patch_sha256 = [
   "095a3d4b82574d45735622339bcf6674e0d58c8975c04634c983876ec8d3b767",
-  "8aa306cdeff92cb64206d5cb4cc367ff80be87c03bf3d196629f610cbae273e9",
+  "ce32c09799caa7b39fb5b628ca5355cd83ccb2a825bb6b35a98e2664bcb45cf9",
 ]
 
 [compiler]
@@ -92,4 +93,4 @@ selected = [
 [output]
 # sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
 # followed by LeanRV64D.lean.
-tree_sha256 = "d4cabe3cfafcaa89be6dc35adb2f78283599ca629614d10da6fc72d679ec73d6"
+tree_sha256 = "27471fe06810a2da84a8c68b584461df404f9d32250725d6c2a8385ca0e25ac9"

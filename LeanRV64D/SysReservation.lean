@@ -225,6 +225,8 @@ def match_reservation (addr : (BitVec (if ( 64 = 32  : Bool) then 34 else 64))) 
 
 def cancel_reservation (_ : Unit) : SailM Unit := do
   writeReg reservation_valid false
+  writeReg reservation_addr (zeros (n := 64))
+  writeReg reservation_width 0
 
 def valid_reservation (_ : Unit) : SailM Bool := do
   readReg reservation_valid

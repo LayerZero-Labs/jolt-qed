@@ -154,10 +154,10 @@ index f2b6c91..6bbec3e 100644
    }
  
 diff --git a/model/sys/sys_reservation.sail b/model/sys/sys_reservation.sail
-index cba2540..10409c1 100644
+index cba2540..86973bb 100644
 --- a/model/sys/sys_reservation.sail
 +++ b/model/sys/sys_reservation.sail
-@@ -8,16 +8,55 @@
+@@ -8,16 +8,62 @@
  
  // Reservation handling for LR/SC.
  //
@@ -184,6 +184,8 @@ index cba2540..10409c1 100644
 +// - Every SC that does not raise an exception cancels the reservation (see
 +//   the STORECON execute clause), as does reset.  xRET cancels it only if
 +//   plat_reservation_invalidate_on_xret is set.
++//
++// - Cancelling clears all three registers back to their reset values.
 +//
 +// All of these are choices the Zalrsc specification permits for a single hart.
 +
@@ -215,7 +217,12 @@ index cba2540..10409c1 100644
 +
 +val cancel_reservation : unit -> unit
 +function cancel_reservation() = {
-+  reservation_valid = false
++  reservation_valid = false;
++  // The address and width are read only together with reservation_valid, so
++  // clearing them changes no behaviour; it gives "no reservation" a single
++  // representation, the reset value of the three registers.
++  reservation_addr = zeros();
++  reservation_width = 0
 +}
  
 -val load_reservation = impure {interpreter: "Platform.load_reservation", cpp: "load_reservation", c: "load_reservation", lem: "load_reservation"} : forall 'n, 0 < 'n < max_mem_access . (/* addr */ physaddrbits, /* width */ int('n)) -> unit
