@@ -119,7 +119,24 @@ Two differences remain between Jolt and this policy, and neither changes the arc
 - A misaligned LR or SC makes Jolt's tracer panic (`mmu.rs`, `load_word`), so no Jolt trace contains one.
   The specification requires an address-misaligned or access-fault exception (`unpriv/zalrsc.adoc` `norm:lr_sc_alignment`), and LR raises the load exception (`priv/machine.adoc` `norm:mcause_exccode_ld_ldrsv`).
   So a misaligned LR or SC has no Jolt step, and the theorems state it that way: the instruction theorems assume natural alignment, and the whole-run theorem never meets the case.
-  jolt-qed's generated LR programs still use the older `VirtualLoadW .amo` row, which jolt-qed maps to `E_SAMO_Addr_Align`; Jolt's LR on `main` is a plain `LW`, and step d regenerates the LR programs from it.
+  jolt-qed's generated LR and SC programs mark their inner load with `LoadFaultClass.amo`, which only selects the exception class reported on a misaligned access (`JoltBytecode/JoltISA/Instruction.lean`); on an aligned access the row is the same as the plain `LW`/`LD` that Jolt's LR and SC emit on `main`.
+  Decision (step d): keep the programs as generated. With alignment a hypothesis of the LR/SC theorems, the marker is never consulted, and the row sequences otherwise match `lrw.rs`, `lrd.rs`, `scw.rs` and `scd.rs` row for row.
+
+The Jolt state relates to the model's three registers as follows, with `w = v32` and `d = v33`:
+
+| Sail register | Value |
+| --- | --- |
+| `reservation_valid` | `w ≠ 0` |
+| `reservation_addr` | `w` |
+| `reservation_width` | `0` if `w = 0`, else `8` if `d = w`, else `4` |
+
+with the invariant `d = 0 ∨ d = w`, which LR.W (`w := a`, `d := 0`), LR.D (`w := d := a`) and SC (`w := d := 0`) keep, and no other instruction writes either register.
+Under it, SC.W succeeds in Jolt exactly when `w = a'` and SC.D exactly when `d = a'`; since `a' ≥ 0x8000_0000 > 0`, these are rule 2 for widths 4 and 8.
+
+For the relation to be a function of `(w, d)`, "no reservation" must have one Sail representation.
+Upstream's `cancel_reservation` clears only `reservation_valid` and leaves a stale address and width, which no Jolt state can name.
+Decision (step d): the model patch makes `cancel_reservation` also reset the address to 0 and the width to 0.
+The address and width are read only together with `reservation_valid` (`match_reservation`), so this changes no behaviour, and the three registers then hold their reset values after every cancel, as after reset.
 
 ## 4. EBREAK halts the run
 
@@ -162,6 +179,9 @@ The files are under `JoltBytecode/Step/`.
 - `Lift.lean` defines one Jolt step, `joltStep len bits prog`: Sail's prelude, the Jolt rows `prog`, then Sail's finish.
   The prelude and a retiring finish touch no CSR that Jolt keeps in virtual registers (`OverlayLocal`), so they commute with the CSR projection `systemProject`.
   `joltStep_base` and `joltStep_compressed` then give: if the rows agree with `execute ast` on the projected state after the prelude, and `ast` retires, the Jolt step projects to `try_step`.
+  For a compressed parcel, `ast` is the base instruction the parcel abbreviates, not the compressed AST Sail decodes: Sail's `C_ADDI` executes as `pure (ExecuteAs (ITYPE …))`, and `try_step` then runs the `ITYPE`.
+  `joltStep_compressed` takes the decoded compressed AST `cast` and the base AST `base` together with the fact that they agree under `executeFull` (step e proves it for every parcel Jolt accepts).
+  Decision: an earlier version required `Matches i cast` for the compressed AST itself, which no Jolt instruction satisfies, so that theorem was vacuous.
 - `Instructions.lean` restates every wired instruction theorem in that form: `joltRun_eq_execute` relates `joltRun i` to `execute ast` for each `ast` with `Matches i ast`.
   It covers 83 instructions: all except ECALL, EBREAK, LR, SC (no theorem yet) and MRET (its theorem ends in `sorry`); step d adds them with the jolt-changes sequences.
   It calls the instruction theorems directly, not through the dispatcher, so `#print axioms` on it and on the step corollaries lists only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (through the generic CSR read).

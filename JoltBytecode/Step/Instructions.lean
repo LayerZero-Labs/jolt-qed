@@ -698,25 +698,27 @@ theorem joltStep_eq_try_step_base (n : Nat) (i : RiscvInstruction) (hi : i.Lifte
     (joltRun_eq_execute i hi ast hm _ h hadv) hretire
 
 /-- **One Sail step per lifted instruction, compressed encodings.** As
-`joltStep_eq_try_step_base`, for a 16-bit parcel. -/
+`joltStep_eq_try_step_base`, for a 16-bit parcel that Sail decodes to the
+compressed AST `cast`, which runs as the base AST `base` that `i` stands for. -/
 theorem joltStep_eq_try_step_compressed (n : Nat) (i : RiscvInstruction) (hi : i.Lifted)
     (js : SailJoltState) (hinv : Step.StepInvariant (System.systemProject js))
     (inc : Bool) (hinc : should_inc_minstret Privilege.Machine js.sail = .ok inc js.sail)
     (pc : BitVec 64) (hpc : js.sail.regs.get? Register.PC = some pc)
-    (c : BitVec 16) (ast : instruction) (hm : Matches i ast)
+    (c : BitVec 16) (cast base : instruction) (hm : Matches i base)
     (hfetch : fetch () (Step.setReg (System.systemProject js) Register.minstret_increment inc) =
       .ok (.F_RVC c) (Step.setReg (System.systemProject js) Register.minstret_increment inc))
     (hdec : ext_decode_compressed c
         (Step.setReg (System.systemProject js) Register.minstret_increment inc) =
-      .ok ast (Step.setReg (System.systemProject js) Register.minstret_increment inc))
+      .ok cast (Step.setReg (System.systemProject js) Register.minstret_increment inc))
+    (hexec : ∀ s', Step.StepInvariant s' → Step.executeFull cast s' = Step.executeFull base s')
     (h : equivAssumptions i (Step.preludeJolt js inc pc 2))
     (hadv : AdviceHonest i (Step.preludeJolt js inc pc 2) h)
-    (hretire : ∀ r s', execute ast (System.systemProject (Step.preludeJolt js inc pc 2)) =
+    (hretire : ∀ r s', execute base (System.systemProject (Step.preludeJolt js inc pc 2)) =
       .ok r s' → r = RETIRE_SUCCESS) :
     System.systemProjectResult (Step.joltStep 2 (zero_extend (m := 32) c) (joltRun i) js) =
       try_step n false (System.systemProject js) :=
-  Step.joltStep_compressed n js hinv inc hinc pc hpc c ast hfetch hdec (joltRun i)
-    (joltRun_eq_execute i hi ast hm _ h hadv) hretire
+  Step.joltStep_compressed n js hinv inc hinc pc hpc c cast base hfetch hdec hexec (joltRun i)
+    (joltRun_eq_execute i hi base hm _ h hadv) hretire
 
 /-- Every instruction's rows write only `Step.JoltWritable` registers. -/
 theorem joltRun_regFrame (i : RiscvInstruction) (js : SailJoltState) :

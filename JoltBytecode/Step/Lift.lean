@@ -312,29 +312,49 @@ theorem joltStep_base (n : Nat) (js : SailJoltState)
       w ast hfetch hdec)
     hprog hretire
 
-/-- **Step theorem, compressed instructions.** As `joltStep_base`, for a
-16-bit parcel `h` and a fall-through address two bytes on. -/
+/-- A compressed instruction runs as the base instruction it abbreviates: when
+`cast` and `base` agree under `executeFull` on every state satisfying the step
+invariant, `try_step`'s execute-and-finish part agrees too. For example Sail's
+`C_ADDI` executes as `pure (ExecuteAs (ITYPE …))`. -/
+theorem executeAndFinish_congr (cast base : instruction) (bits : BitVec 32) (s : SailState)
+    (hinv : StepInvariant s)
+    (hexec : ∀ s', StepInvariant s' → executeFull cast s' = executeFull base s') :
+    executeAndFinish cast bits s = executeAndFinish base bits s := by
+  unfold executeAndFinish
+  simp only [bind, EStateM.bind]
+  rw [hexec s hinv]
+
+/-- **Step theorem, compressed instructions.** On a state satisfying
+`StepInvariant`, where `try_step` fetches the parcel `h` and decodes it to the
+compressed AST `cast`, which runs as the base AST `base`, one Jolt step running
+`prog` projects to `try_step`, provided `prog` agrees with `execute base` after
+the prelude (fall-through address two bytes on) and `base` retires. -/
 theorem joltStep_compressed (n : Nat) (js : SailJoltState)
     (hinv : StepInvariant (System.systemProject js))
     (inc : Bool) (hinc : should_inc_minstret Privilege.Machine js.sail = .ok inc js.sail)
     (pc : BitVec 64) (hpc : js.sail.regs.get? Register.PC = some pc)
-    (h : BitVec 16) (ast : instruction)
+    (h : BitVec 16) (cast base : instruction)
     (hfetch : fetch () (setReg (System.systemProject js) Register.minstret_increment inc) =
       .ok (.F_RVC h) (setReg (System.systemProject js) Register.minstret_increment inc))
     (hdec : ext_decode_compressed h
         (setReg (System.systemProject js) Register.minstret_increment inc) =
-      .ok ast (setReg (System.systemProject js) Register.minstret_increment inc))
+      .ok cast (setReg (System.systemProject js) Register.minstret_increment inc))
+    (hexec : ∀ s', StepInvariant s' → executeFull cast s' = executeFull base s')
     (prog : JoltMonad ExecutionResult)
     (hprog : System.systemProjectResult (prog (preludeJolt js inc pc 2)) =
-      execute ast (System.systemProject (preludeJolt js inc pc 2)))
-    (hretire : ∀ r s', execute ast (System.systemProject (preludeJolt js inc pc 2)) =
+      execute base (System.systemProject (preludeJolt js inc pc 2)))
+    (hretire : ∀ r s', execute base (System.systemProject (preludeJolt js inc pc 2)) =
       .ok r s' → r = RETIRE_SUCCESS) :
     System.systemProjectResult (joltStep 2 (zero_extend (m := 32) h) prog js) =
-      try_step n false (System.systemProject js) :=
-  joltStep_eq_try_step n js 2 _ ast prog inc pc hinc hpc
-    (try_step_compressed n _ hinv inc (should_inc_minstret_systemProject js inc hinc) pc
-      (by rw [systemProject_get?_of_not_overlaid js (by simp [Overlaid])]; exact hpc)
-      h ast hfetch hdec)
-    hprog hretire
+      try_step n false (System.systemProject js) := by
+  have hpcp : (System.systemProject js).regs.get? Register.PC = some pc := by
+    rw [systemProject_get?_of_not_overlaid js (by simp [Overlaid])]; exact hpc
+  have hinvp : StepInvariant (preludeState (System.systemProject js) inc pc 2) :=
+    (hinv.setReg Register.minstret_increment inc (by simp [invariantReg])).setReg
+      Register.nextPC _ (by simp [invariantReg])
+  refine joltStep_eq_try_step n js 2 _ base prog inc pc hinc hpc ?_ hprog hretire
+  rw [try_step_compressed n _ hinv inc (should_inc_minstret_systemProject js inc hinc) pc hpcp
+    h cast hfetch hdec]
+  exact executeAndFinish_congr cast base _ _ hinvp hexec
 
 end Step
