@@ -151,6 +151,33 @@ It also requires the invariants: privilege is Machine, `mie = 0`, `misa` is fixe
 Counters and Sail-internal registers are not compared.
 A generic lifting lemma turns each existing `execute_X` theorem into a `try_step` theorem, by discharging fetch and decode for the instruction's encoding and the PC update once.
 
+### What step c proves
+
+The files are under `JoltBytecode/Step/`.
+
+- `TryStep.lean` splits `try_step` on Jolt's hart.
+  Under `StepInvariant`, when fetch returns a 32-bit word or a 16-bit parcel that decodes to `ast`, `try_step` equals the prelude (`minstret_increment`, then `nextPC := PC + len`), then `execute ast`, then the finish (`stepFinish`, a verbatim copy of `try_step`'s tail).
+  `StepInvariant` says: every register is present, the hart is active in M-mode, `mie = 0`, `mideleg = 0`, `misa.C = 1`, and no landing pad is expected.
+  With `mie = 0` the interrupt dispatch finds nothing pending; with `misa.C = 1` compressed parcels are legal.
+- `Lift.lean` defines one Jolt step, `joltStep len bits prog`: Sail's prelude, the Jolt rows `prog`, then Sail's finish.
+  The prelude and a retiring finish touch no CSR that Jolt keeps in virtual registers (`OverlayLocal`), so they commute with the CSR projection `systemProject`.
+  `joltStep_base` and `joltStep_compressed` then give: if the rows agree with `execute ast` on the projected state after the prelude, and `ast` retires, the Jolt step projects to `try_step`.
+- `Instructions.lean` restates every wired instruction theorem in that form: `joltRun_eq_execute` relates `joltRun i` to `execute ast` for each `ast` with `Matches i ast`.
+  It covers 83 instructions: all except ECALL, EBREAK, LR, SC (no theorem yet) and MRET (its theorem ends in `sorry`); step d adds them with the jolt-changes sequences.
+  It calls the instruction theorems directly, not through the dispatcher, so `#print axioms` on it and on the step corollaries lists only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (through the generic CSR read).
+  FENCE matches every Sail FENCE, since Jolt runs all of them as one no-op row.
+  Atomics match with their own `aq` and `rl` bits: `AmoFlags.lean` proves that Sail's AMO semantics does not depend on them, because they reach the memory interface only as the request's `access_kind`, which the sequential memory model ignores.
+  The division and remainder expansions need their advice operand to be the honest value (`AdviceHonest`); the soundness half of those theorems shows a retiring run with `rd ≠ 0` has no other choice.
+  `joltStep_eq_try_step_base` and `joltStep_eq_try_step_compressed` combine this with the step theorem.
+- `Frame.lean` proves that Jolt rows write only `x1`-`x31` and `nextPC` among Sail's registers, and remove none, on success and on error.
+- `Invariant.lean` proves that a retiring Jolt step preserves `StepInvariant`: the prelude writes `minstret_increment` and `nextPC`, the rows stay in their frame, and the finish writes `PC` and `minstret`.
+  `RiscvInstruction.joltStep_stepInvariant` states it per instruction.
+
+Counters are unobservable: no Jolt row reads `minstret`, `minstret_increment` or `mcycle`, and the bookkeeping that writes them is Sail's own code run on the embedded state, so the two sides cannot disagree on them.
+
+The step theorems keep three hypotheses that step f discharges from the run: the instruction's assumption bundle at the state after the prelude (its parts are classified in section 8), Sail's fetch and decode results at that state (step e relates them to Jolt's decoder), and that `execute ast` retires.
+A step that traps is the subject of step d: ECALL, misaligned accesses and failed CSR accesses enter Sail's trap handler, which writes `mepc`, `mcause`, `mtval` and `mstatus`.
+
 ## 6. CSR legalization
 
 The six CSRs Jolt accepts behave as follows on an M-only hart with Zca and without F, S, U, V, H, Zicfilp and Smdbltrp.
@@ -210,9 +237,9 @@ After the regeneration of step b each of them is one of:
 | PMP half of `LoadPmpOk`, `StorePmpOk`, `AtomicPmpOk` and their windows | configuration fact | No PMP entries: `HartConfig.pmpCheck_run` |
 | PMA half of the same | invariant | `pma_regions` equals the configured list (only reset writes it) and the address is in RAM |
 | `NotReadableMmio`, `NotWritableMmio` and their windows | invariant | The CLINT lies below RAM, and `htif_tohost_base` is `none` (only the C++ ELF loader sets it) |
-| `CurPrivilegeMachine` | invariant | No mode below M exists, so every trap and MRET lands in M |
+| `CurPrivilegeMachine` | invariant | No mode below M exists, so every trap and MRET lands in M; carried by `Step.StepInvariant.machine` and preserved by every retiring step (`Step.joltStep_stepInvariant`) |
 | `MstatusMprvZero` | invariant | MPRV resets to 0 and is read-only zero without U-mode |
-| `SailRegReadable`, `XRegReadable`, the source-read bundles | invariant | Every register is present in the initial state and no step removes one |
+| `SailRegReadable`, `XRegReadable`, the source-read bundles | invariant | Every register is present in the initial state and no step removes one (`Step.StepInvariant.present`, kept by `Step.RegFrame.present` and the Sail frames) |
 | `DwordPresent` | invariant | The initial state's memory map covers RAM and the I/O window |
 | `MstatusVRegMatchesSail` and the five other `…VRegMatchesSail` | relation | Section 6 |
 | `JoltRamLoadOk`, `JoltRamStoreOk` | Jolt fact | Jolt's MMU panics at or above `heap_end` and on stores into the stack canary |

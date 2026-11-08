@@ -372,8 +372,8 @@ def stepFinish (step_val : Step) : SailM Bool := do
       (tick_pc ())
       let retired : Bool :=
         match step_val with
-        | .Step_Execute (.Retire_Success (), g__0) => true
-        | .Step_Execute (.Enter_Wait wr, g__1) =>
+        | .Step_Execute (.Retire_Success (), _) => true
+        | .Step_Execute (.Enter_Wait wr, _) =>
           (if ((wait_is_nop wr) : Bool)
           then true
           else false)
@@ -438,7 +438,7 @@ theorem try_step_base (n : Nat) (s : SailState) (hinv : StepInvariant s)
     | ExecuteAs other =>
       simp only [EStateM.map]
       cases execute other s1 <;> rfl
-    | _ => first | rfl | (simp only [EStateM.map]; rfl)
+    | _ => rfl
 
 /-- One `try_step` of a compressed instruction: as `try_step_base`, with the
 fall-through address two bytes on. -/
@@ -476,7 +476,7 @@ theorem try_step_compressed (n : Nat) (s : SailState) (hinv : StepInvariant s)
     | ExecuteAs other =>
       simp only [EStateM.map]
       cases execute other s1 <;> rfl
-    | _ => first | rfl | (simp only [EStateM.map]; rfl)
+    | _ => rfl
 
 end Step
 
