@@ -6,7 +6,7 @@
 #
 # Generates COUNT guests (default 100, at least 1) with gen-random.py, from
 # seeds FIRST_SEED (default 0) onwards, each LENGTH items long (default 200),
-# and runs them. MIX (default base) is gen-random.py's instruction mix; the
+# and runs them. Each of the three numbers has at most nine digits. MIX (default base) is gen-random.py's instruction mix; the
 # guests go to WORK_DIR/random-src/ and the results to WORK_DIR/random-results/,
 # or to random-MIX-src/ and random-MIX-results/ for another mix. Every random
 # guest exits with code 0 unless it takes a trap it did not expect, so the
@@ -18,7 +18,9 @@ work="${1:?usage: corpus-random.sh WORK_DIR [FIRST_SEED [COUNT [LENGTH]]]}"
 first="${2:-0}" count="${3:-100}" length="${4:-200}"
 mix="${MIX:-base}"
 for v in "$first" "$count" "$length"; do
-  [[ "$v" =~ ^[0-9]+$ ]] || { echo "corpus-random: '$v' is not a number" >&2; exit 2; }
+  # At most nine digits, so that FIRST_SEED + COUNT cannot overflow.
+  [[ "$v" =~ ^[0-9]{1,9}$ ]] ||
+    { echo "corpus-random: '$v' is not a number of at most nine digits" >&2; exit 2; }
 done
 first=$((10#$first)) count=$((10#$count)) length=$((10#$length))
 [[ $count -ge 1 ]] || { echo "corpus-random: COUNT must be at least 1" >&2; exit 2; }
@@ -33,4 +35,6 @@ for ((seed = first; seed < first + count; seed++)); do
     { echo "corpus-random: gen-random.py failed for seed $seed" >&2; exit 2; }
   guests+=("$src/random-$seed.S")
 done
+[[ ${#guests[@]} -eq $count ]] ||
+  { echo "corpus-random: generated ${#guests[@]} guests, expected $count" >&2; exit 2; }
 EXPECT_CODE=0 RESULTS="$dir-results" "$HERE/run.sh" "$work" "${guests[@]}"

@@ -65,7 +65,7 @@ EXIT = '{"end":"tohost","value":"0x0000000000000001"}'
 STORE_EXIT = [f"mem[W,0x{HTIF:016X}] <- 0x0000000000000001"]
 
 
-def straight(n, x=None):
+def straight(n):
     """n `addi` steps from 0x80000000, the same in both traces, then an SD of
     the exit command to tohost."""
     s, j = [], []
@@ -81,7 +81,9 @@ def straight(n, x=None):
 
 class Difftest(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.mkdtemp(prefix="difftest-test-")
+        tmp = tempfile.TemporaryDirectory(prefix="difftest-test-")
+        self.addCleanup(tmp.cleanup)
+        self.dir = tmp.name
         self.elf = os.path.join(self.dir, "guest.elf")
         with open(self.elf, "wb") as f:
             f.write(elf_bytes())
@@ -195,6 +197,57 @@ class Difftest(unittest.TestCase):
         status, out = self.run_case(sail_trace(s + tail), "\n".join(j + [EXIT]) + "\n")
         self.assertEqual(status, 0, out)
 
+    def tail_case(self, tail):
+        s, j = straight(3)
+        return sail_trace(s + tail), "\n".join(j + [EXIT]) + "\n"
+
+    def test_tail_with_jump(self):
+        tail = [sail_step(4, 0x80000010, "auipc x30, 0x1", 0x00001F17, ["x30 <- 0x0000000080001010"]),
+                sail_step(5, 0x90000000, "sw x0, -0x10(x30)", 0xFE0F2823,
+                          [f"mem[W,0x{HTIF + 4:016X}] <- 0x00000000"])]
+        status, out = self.run_case(*self.tail_case(tail))
+        self.assertEqual(status, 1, out)
+
+    def test_tail_with_unchanged_csr_write(self):
+        tail = [sail_step(4, 0x80000010, "auipc x30, 0x1", 0x00001F17,
+                          ["x30 <- 0x0000000080001010", "CSR mscratch (0x340) <- 0x0000000000000000"]),
+                sail_step(5, 0x80000014, "sw x0, -0x10(x30)", 0xFE0F2823,
+                          [f"mem[W,0x{HTIF + 4:016X}] <- 0x00000000"])]
+        status, out = self.run_case(*self.tail_case(tail))
+        self.assertEqual(status, 1, out)
+
+    def test_tail_without_store(self):
+        tail = [sail_step(4, 0x80000010, "fence rw, rw", 0x0330000F)]
+        status, out = self.run_case(*self.tail_case(tail))
+        self.assertEqual(status, 1, out)
+
+    def test_tail_register_not_used_as_base(self):
+        tail = [sail_step(4, 0x80000010, "auipc x29, 0x1", 0x00001E97, ["x29 <- 0x0000000080001010"]),
+                sail_step(5, 0x80000014, "sw x0, 0x4(x30)", 0x000F2223,
+                          [f"mem[W,0x{HTIF + 4:016X}] <- 0x00000000"])]
+        status, out = self.run_case(*self.tail_case(tail))
+        self.assertEqual(status, 1, out)
+
+    def test_reset_register_rewritten(self):
+        # Sail's reset sets x11; then Sail writes the same value again while
+        # Jolt writes 0. The write ends the reset exemption.
+        s, j = straight(2)
+        s[1] = s[1] + ["x11 <- 0x0000000000001000"]
+        sail = sail_trace(s).replace("Entry point: 0x80000000",
+                                     "Entry point: 0x80000000\nx11 <- 0x0000000000001000")
+        rec = json.loads(j[1])
+        rec["x"]["11"] = "0x0000000000000000"
+        j[1] = json.dumps(rec)
+        status, out = self.run_case(sail, "\n".join(j + [EXIT]) + "\n")
+        self.assertEqual(status, 1, out)
+
+    def test_reset_register_unread(self):
+        s, j = straight(2)
+        sail = sail_trace(s).replace("Entry point: 0x80000000",
+                                     "Entry point: 0x80000000\nx11 <- 0x0000000000001000")
+        status, out = self.run_case(sail, "\n".join(j + [EXIT]) + "\n")
+        self.assertEqual(status, 0, out)
+
     def test_both_reach_limit(self):
         s, j = straight(3)
         status, out = self.run_case(sail_trace(s[:3], end=None),
@@ -223,31 +276,54 @@ class Difftest(unittest.TestCase):
         status, out = self.run_case(sail, "\n".join(lines) + "\n")
         self.assertEqual(status, 1, out)
 
-    def policy_case(self, extra_x=None, jolt_end=EXIT, jolt_next=None):
-        """LR.W at BUF, then SC.D at BUF: Sail succeeds, Jolt fails."""
+    def policy_case(self, extra_x=None, jolt_end=EXIT, jolt_next=None, reset=()):
+        """Both runs set x8 = BUF, x5 = 0x42 and x9 = BUF, then LR.W at (x9)
+        and SC.D of x5 at (x8): Sail's SC succeeds, Jolt's fails. RESET lists
+        registers among x8 (the SC address), x5 (the SC value) and x9 (the LR
+        address) that the guest does not set; Sail's reset sets them instead,
+        so only Sail has the value."""
         pc = 0x80000000
-        s = [sail_step(0, pc, "lr.w x6, (x8)", 0x1004232F, ["x6 <- 0x0000000000000000"]),
-             sail_step(1, pc + 4, "sc.d x7, x5, (x8)", 0x1854332F,
-                       ["x7 <- 0x0000000000000000", f"mem[W,0x{BUF:016X}] <- 0x0000000000000042"]),
-             sail_step(2, pc + 8, "sd x31, 0x0(x30)", 0x01FF3023, STORE_EXIT)]
-        # The SC's address (x8 = BUF) and value (x5 = 0x42) come from Sail's
-        # reset registers, which are notes, so the canned traces stay short.
+        init = {8: BUF, 5: 0x42, 9: BUF}
+        common = [r for r in (8, 5, 9) if r not in reset]
+        s, j = [], []
+        for n, r in enumerate(common):
+            s.append(sail_step(n, pc, f"addi x{r}, x0, 0x1", effects=[f"x{r} <- 0x{init[r]:016X}"]))
+            j.append(jolt_step(n, pc, pc + 4, x={r: init[r]}))
+            pc += 4
+        n = len(common)
+        s += [sail_step(n, pc, "lr.w x6, (x9)", 0x1004A32F, ["x6 <- 0x0000000000000000"]),
+              sail_step(n + 1, pc + 4, "sc.d x7, x5, (x8)", 0x1854332F,
+                        ["x7 <- 0x0000000000000000", f"mem[W,0x{BUF:016X}] <- 0x0000000000000042"]),
+              sail_step(n + 2, pc + 8, "sd x31, 0x0(x30)", 0x01FF3023, STORE_EXIT)]
         sail = sail_trace(s).replace(
             "Entry point: 0x80000000",
-            f"Entry point: 0x80000000\nx8 <- 0x{BUF:016X}\nx5 <- 0x0000000000000042")
+            "\n".join(["Entry point: 0x80000000"] +
+                      [f"x{r} <- 0x{init[r]:016X}" for r in (8, 5, 9) if r in reset]))
         x = {7: 1}
         x.update(extra_x or {})
-        j = [jolt_step(0, pc, pc + 4),
-             jolt_step(1, pc + 4, jolt_next or pc + 8, x=x),
-             jolt_step(2, pc + 8, pc + 12, mem=[(HTIF, 0, 1)])]
+        j += [jolt_step(n, pc, pc + 4),
+              jolt_step(n + 1, pc + 4, jolt_next or pc + 8, x=x),
+              jolt_step(n + 2, pc + 8, pc + 12, mem=[(HTIF, 0, 1)])]
         return sail, "\n".join(j + [jolt_end]) + "\n"
 
     def test_policy(self):
         status, out = self.run_case(*self.policy_case())
         self.assertEqual(status, 3, out)
 
+    def test_policy_sc_address_differs(self):
+        status, out = self.run_case(*self.policy_case(reset=[8]))
+        self.assertEqual(status, 1, out)
+
+    def test_policy_sc_value_differs(self):
+        status, out = self.run_case(*self.policy_case(reset=[5]))
+        self.assertEqual(status, 1, out)
+
+    def test_policy_lr_address_differs(self):
+        status, out = self.run_case(*self.policy_case(reset=[9]))
+        self.assertEqual(status, 1, out)
+
     def test_policy_with_unrelated_difference(self):
-        status, out = self.run_case(*self.policy_case(extra_x={9: 5}))
+        status, out = self.run_case(*self.policy_case(extra_x={10: 5}))
         self.assertEqual(status, 1, out)
 
     def test_policy_with_next_pc_difference(self):
@@ -255,7 +331,8 @@ class Difftest(unittest.TestCase):
         self.assertEqual(status, 1, out)
 
     def test_policy_then_panic(self):
-        panic = '{"end":"panic","step":2,"pc":"0x0000000080000008","msg":"decode"}'
+        # Jolt panics at the exit store, step 5 at 0x80000014.
+        panic = '{"end":"panic","step":5,"pc":"0x0000000080000014","msg":"decode"}'
         sail, jolt = self.policy_case()
         lines = jolt.splitlines()
         status, out = self.run_case(sail, "\n".join(lines[:-2] + [panic]) + "\n")

@@ -34,13 +34,15 @@ Some things are notes, not differences:
   * Sail privilege-mode changes and traps;
   * Jolt RAM writes at instructions where Sail stores nothing;
   * up to four instructions Sail retires after Jolt's last one, when both
-    runs end with the same exit code, Jolt's last instruction stored to
-    `tohost`, and those instructions are straight-line, do not trap, write no
-    CSR and store only to the `tohost` doubleword. Jolt stops at the first
-    store that makes `tohost` an exit command; Sail's HTIF device acts on a
-    store to the high half, so riscv-tests, which store the low half first and
-    then compute the address of the high half, retire two more instructions
-    in Sail. Their register writes are listed.
+    runs end with the same exit code and Jolt's last instruction stored to
+    `tohost`. Those instructions must follow on from Jolt's last one without
+    control flow, traps or CSR writes; each must be a store into the `tohost`
+    doubleword or compute the base address of such a later store; and the
+    last must be such a store. Jolt stops at the first store that makes
+    `tohost` an exit command; Sail's HTIF device acts on a store to the high
+    half, so riscv-tests, which store the low half first and then compute the
+    address of the high half, retire two more instructions in Sail. Their
+    register writes are listed.
 
 LR/SC reservations are a spec-legal policy choice. Jolt reserves the exact
 address and fails an SC wider than its LR. Sail's emulator may be more
@@ -49,6 +51,7 @@ the width). A run is labelled POLICY, and compared no further, when its first
 difference is an aligned SC that
   * follows an aligned LR in the same 8-byte granule, with no trap and no
     other SC in between, at another address or of a smaller width,
+  * reads the same address and value in both runs, as did the LR's address,
   * succeeds in Sail (rd = 0 and a store of rs2 at the SC address) and fails
     in Jolt (rd = 1 and no memory change),
   * and differs in nothing else, including the next pc;
@@ -365,6 +368,10 @@ def jolt_bytes(writes):
 LRSC_RE = re.compile(r"^(lr|sc)\.([wd])(?:\.\w+)*\s+x(\d+),\s*(?:x(\d+),\s*)?\(x(\d+)\)$")
 # Instructions after which the next pc is not pc + length.
 CONTROL_RE = re.compile(r"^(c\.)?(j|jal|jalr|jr|ret|b\w+|mret|sret|ecall|ebreak|wfi)\b")
+# A store, with its base register.
+STORE_RE = re.compile(r"^(?:c\.)?s[bhwd]\s+x\d+,\s*-?(?:0x[0-9a-f]+|\d+)\(x(\d+)\)$")
+# Instructions that form an address in a register, without reading memory.
+ADDRESS_RE = re.compile(r"^(?:c\.)?(auipc|lui|addi|li)\s+x(\d+),")
 
 
 def fall_through(step):
@@ -396,12 +403,12 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
     cs, cj = {c: s_reset["csr"].get(c, 0) for c in CSRS}, {c: 0 for c in CSRS}
     reported = {}
     diffs, notes = [], list(sail["notes"])
-    # Registers that differ at reset are a note: a guest sees one only by
-    # reading it, which shows in a compared register, memory or control flow.
-    for r in range(1, 32):
-        if xs[r]:
-            notes.append(f"reset: x{r} Sail 0x{xs[r]:x}, Jolt 0x0")
-            reported[("x", r)] = (xs[r], 0)
+    # Registers that differ at reset are a note, until either run writes
+    # them: a guest sees one only by reading it, which shows in a compared
+    # register, memory or control flow.
+    exempt_x = {r for r in range(1, 32) if xs[r]}
+    for r in sorted(exempt_x):
+        notes.append(f"reset: x{r} Sail 0x{xs[r]:x}, Jolt 0x0")
 
     def view_of(cj):
         return dict(cj, mstatus=cj["mstatus"] | mstatus_or)
@@ -438,11 +445,17 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
                 if pair is not None:
                     step.append((key, text))
 
+        # An LR or SC's operands, read before its effects; same_operands says
+        # whether both runs read the same address (and, for an SC, value).
         lrsc = LRSC_RE.match(s.insn)
         if lrsc:
-            addr, width = xs[int(lrsc[5])], 4 if lrsc[2] == "w" else 8
+            rs1 = int(lrsc[5])
+            addr, width = xs[rs1], 4 if lrsc[2] == "w" else 8
+            same_operands = xs[rs1] == xj[rs1]
             if lrsc[1] == "sc":
-                stored = xs[int(lrsc[4])] & ((1 << (8 * width)) - 1)
+                rs2 = int(lrsc[4])
+                stored = xs[rs2] & ((1 << (8 * width)) - 1)
+                same_operands = same_operands and xs[rs2] == xj[rs2]
         if s.priv != "M":
             notes.append(f"{where}: Sail runs in privilege {s.priv}")
         if s.trap:
@@ -451,8 +464,9 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
             xs[r] = v
         for r, v in j.x.items():
             xj[r] = v
+        exempt_x -= set(s.x) | set(j.x)
         for r in range(1, 32):
-            pair = (xs[r], xj[r]) if xs[r] != xj[r] else None
+            pair = (xs[r], xj[r]) if xs[r] != xj[r] and r not in exempt_x else None
             report(("x", r), pair, f"{where}: x{r} Sail 0x{xs[r]:x}, Jolt 0x{xj[r]:x}")
         for c, v in s.csr.items():
             if c in cs:
@@ -483,7 +497,7 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
         elif s_next is not None and s_next != j.next:
             step.append(("next", f"{where}: next pc Sail 0x{s_next:x}, Jolt 0x{j.next:x}"))
 
-        if lrsc and lrsc[1] == "sc" and not diffs and step and is_policy_sc(
+        if lrsc and lrsc[1] == "sc" and same_operands and not diffs and step and is_policy_sc(
                 lrsc, addr, width, stored, resv, s, changed_j, xs, xj, step):
             policy = (f"{where}: SC succeeds in Sail and fails in Jolt after an LR "
                       f"of {resv[1]} bytes at 0x{resv[0]:x} (spec-legal reservation "
@@ -495,7 +509,7 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
         if s.trap or s.event:
             resv = None
         elif lrsc:
-            resv = (addr, width) if lrsc[1] == "lr" else None
+            resv = (addr, width) if lrsc[1] == "lr" and same_operands else None
         if any(tag == "next" for tag, _ in step):
             stopped = "next pc"
             n = i + 1
@@ -505,7 +519,7 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
         tail_ok = False
         if len(s_steps) > n and s_end["kind"] == j_end["kind"] == "tohost" \
                 and s_end["code"] == j_end["code"]:
-            tail_ok = valid_tail(s_steps[n:], j_steps, sail["htif"], xs, cs, mem_s, notes)
+            tail_ok = valid_tail(s_steps[n:], j_steps, sail["htif"], xs, notes)
         if tail_ok:
             notes.append(f"Sail retired {len(s_steps) - n} more instruction(s) after Jolt's "
                          "exit, writing only tohost, before the same tohost exit")
@@ -530,7 +544,9 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
 
 def is_policy_sc(lrsc, addr, width, stored, resv, s, changed_j, xs, xj, step):
     """Whether this SC's differences are exactly those of a spec-legal
-    reservation policy: Sail keeps a reservation that Jolt does not have."""
+    reservation policy: Sail keeps a reservation that Jolt does not have.
+    The caller has checked that both runs read the same SC operands, and
+    `resv` is set only by an LR whose address both runs read the same."""
     rd = int(lrsc[3])
     if not resv or addr % width or resv[0] % resv[1] or s.trap:
         return False
@@ -544,25 +560,42 @@ def is_policy_sc(lrsc, addr, width, stored, resv, s, changed_j, xs, xj, step):
     return tags == {"mem"}
 
 
-def valid_tail(tail, j_steps, htif, xs, cs, mem_s, notes):
-    """Whether the instructions Sail retires after Jolt's exit store are a
-    plausible end of the same exit: at most MAX_TAIL straight-line M-mode
-    instructions with no trap and no CSR write, storing only to the tohost
-    doubleword. Their register writes are listed as notes; Jolt never runs
-    them. Jolt's last instruction must itself have written tohost."""
-    if htif is None or not j_steps:
+def valid_tail(tail, j_steps, htif, xs, notes):
+    """Whether the instructions Sail retires after Jolt's exit store finish
+    the same HTIF exit: at most MAX_TAIL M-mode instructions that follow on
+    from Jolt's last one and from each other, with no trap, no CSR write and
+    no control flow. Each is either a store into the tohost doubleword, or an
+    address computation (AUIPC, LUI, ADDI, LI) into a register that a later
+    store of the tail uses as its base. The last one is such a store, which
+    is what makes Sail act on tohost. Jolt's last instruction must itself have
+    written tohost. The registers the tail writes are listed as notes; Jolt
+    never runs those instructions."""
+    if htif is None or not j_steps or not tail or len(tail) > MAX_TAIL:
         return False
     if not any(a <= htif < a + 8 for a, _, _ in j_steps[-1].writes):
         return False
-    if len(tail) > MAX_TAIL:
+    pc = j_steps[-1].next
+    for k, s in enumerate(tail):
+        if s.pc != pc or s.trap or s.event or s.priv != "M" or s.csr:
+            return False
+        pc = fall_through(s)
+        if pc is None or (s.next is not None and s.next != pc):
+            return False
+        store, address = STORE_RE.match(s.insn), ADDRESS_RE.match(s.insn)
+        if store:
+            if s.x or not s.writes or any(
+                    not htif <= a < htif + 8 for a in sail_bytes(s.writes)):
+                return False
+        elif address:
+            rd = int(address[2])
+            later_bases = {m[1] for m in map(STORE_RE.match, (t.insn for t in tail[k + 1:])) if m}
+            if s.writes or set(s.x) != {rd} or str(rd) not in later_bases:
+                return False
+        else:
+            return False
+    if not STORE_RE.match(tail[-1].insn):
         return False
     for s in tail:
-        if s.trap or s.event or s.priv != "M" or CONTROL_RE.match(s.insn):
-            return False
-        if any(c in cs and cs[c] != v for c, v in s.csr.items()):
-            return False
-        if any(not htif <= a < htif + 8 for a in sail_bytes(s.writes)):
-            return False
         for r, v in s.x.items():
             if xs[r] != v:
                 notes.append(f"pc=0x{s.pc:x} [{s.insn}]: after Jolt's exit Sail sets x{r} = 0x{v:x}")

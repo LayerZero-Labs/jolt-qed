@@ -25,24 +25,30 @@ reported once. Comparison stops at the first control-flow difference.
 
 A run is complete only when it stops through an HTIF exit command: a store
 that makes `tohost` hold device 0, command 0 and a payload with bit 0 set.
-The exit code is the payload shifted right by one. Sail's HTIF device and
-Jolt's tracer (`Emulator::run_test`) both decode `tohost` this way, and
-`jolt-trace` stops on the same condition. A run that reaches the instruction
-limit, panics, stops at a jump to itself, or crashes is not complete.
+The exit code is the payload shifted right by one. Jolt's tracer
+(`Emulator::run_test`) decodes `tohost` this way, and `jolt-trace` stops on
+the same condition. Sail's HTIF device does not check the command byte: it
+also exits on a store to device 0 with another command and an odd payload,
+such as `0x0001000000000001`. Jolt does not exit there, so such a guest
+differs. A run that reaches the instruction limit, panics, stops at a jump to
+itself, or crashes is not complete.
 
 The following are listed as notes and are not counted as differences:
 
 - Integer registers that differ at reset (Sail's reset sets `a0` and `a1`),
-  and CSR bits that differ at reset for as long as both runs keep their reset
-  values. A guest sees them only by reading them, and the register, memory or
-  control flow that the value reaches is compared.
+  until either run writes them, and CSR bits that differ at reset for as long
+  as both runs keep their reset values. A guest sees them only by reading
+  them, and the register, memory or control flow that the value reaches is
+  compared.
 - Sail traps and privilege changes.
 - Jolt RAM writes where Sail stores nothing.
 - Up to four instructions that Sail retires after Jolt's last one, when both
-  runs exit with the same code, Jolt's last instruction stored to `tohost`,
-  and those instructions are straight-line, do not trap, write no CSR and
-  store only to the `tohost` doubleword. Jolt stops at the first store that
-  makes `tohost` an exit command. Sail's HTIF device acts on a store to the
+  runs exit with the same code and Jolt's last instruction stored to
+  `tohost`. Those instructions must follow on from Jolt's last one with no
+  jump, trap or CSR write. Each must be a store into the `tohost` doubleword,
+  or an AUIPC, LUI, ADDI or LI into the base register of a later such store,
+  and the last must be a store. Jolt stops at the first store that makes
+  `tohost` an exit command. Sail's HTIF device acts on a store to the
   high half of `tohost`, so riscv-tests, which store the low half first, retire
   two more instructions in Sail. The registers those instructions write are
   listed.
@@ -57,7 +63,8 @@ Each guest gets one of three verdicts, or a harness error:
   LR and fails an SC wider than the LR. Unpatched sail-riscv reserves the
   8-byte granule and does not check the width. The specification allows both.
   The SC and its LR must be aligned and in the same 8-byte granule, with no
-  trap and no other SC between them. Sail's SC must write 0 to `rd` and store
+  trap and no other SC between them. Both runs must read the same LR address
+  and the same SC address and value. Sail's SC must write 0 to `rd` and store
   `rs2` at its address, and Jolt's must write 1 to `rd` and change no memory.
   Nothing else at that instruction may differ, including the next address.
   With a model patched to Jolt's policy, no guest gets this verdict.
