@@ -37,8 +37,10 @@ def elf_bytes():
 
 
 def sail_step(n, pc, insn, enc=0x00000013, effects=()):
+    # Sail prints a compressed encoding (low bits not 0b11) with four digits.
+    text = f"0x{enc:08X}" if enc & 3 == 3 else f"0x{enc:04X}"
     lines = [f"mem[X,0x{pc:016X}] -> 0x{enc & 0xFFFF:04X}",
-             f"[{n}] [M]: 0x{pc:016X} (0x{enc:08X}) {insn}    _start+{pc - 0x80000000}"]
+             f"[{n}] [M]: 0x{pc:016X} ({text}) {insn}    _start+{pc - 0x80000000}"]
     return lines + list(effects)
 
 
@@ -227,6 +229,35 @@ class Difftest(unittest.TestCase):
                           [f"mem[W,0x{HTIF + 4:016X}] <- 0x00000000"])]
         status, out = self.run_case(*self.tail_case(tail))
         self.assertEqual(status, 1, out)
+
+    def test_tail_other_htif_command(self):
+        # Jolt exits on the low word; Sail's high-word store makes tohost
+        # 0x0001000000000001 (command 1), which Jolt would not take as an exit.
+        tail = [sail_step(4, 0x80000010, "auipc x30, 0x1", 0x00001F17, ["x30 <- 0x0000000080001010"]),
+                sail_step(5, 0x80000014, "sw x31, -0xc(x30)", 0xFFFF2A23,
+                          [f"mem[W,0x{HTIF + 4:016X}] <- 0x00010000"])]
+        status, out = self.run_case(*self.tail_case(tail))
+        self.assertEqual(status, 1, out)
+
+    def test_tail_clears_exit(self):
+        tail = [sail_step(4, 0x80000010, "auipc x30, 0x1", 0x00001F17, ["x30 <- 0x0000000080001010"]),
+                sail_step(5, 0x80000014, "sw x0, -0x10(x30)", 0xFE0F2823,
+                          [f"mem[W,0x{HTIF:016X}] <- 0x00000000"])]
+        status, out = self.run_case(*self.tail_case(tail))
+        self.assertEqual(status, 1, out)
+
+    def test_tail_unaligned_htif_store(self):
+        tail = [sail_step(4, 0x80000010, "auipc x30, 0x1", 0x00001F17, ["x30 <- 0x0000000080001010"]),
+                sail_step(5, 0x80000014, "sh x0, -0xa(x30)", 0xFE0F1B23,
+                          [f"mem[W,0x{HTIF + 6:016X}] <- 0x0000"])]
+        status, out = self.run_case(*self.tail_case(tail))
+        self.assertEqual(status, 1, out)
+
+    def test_tail_compressed_stack_store(self):
+        tail = [sail_step(4, 0x80000010, "c.swsp x0, 0x4(x2)", 0xC202,
+                          [f"mem[W,0x{HTIF + 4:016X}] <- 0x00000000"])]
+        status, out = self.run_case(*self.tail_case(tail))
+        self.assertEqual(status, 0, out)
 
     def test_reset_register_rewritten(self):
         # Sail's reset sets x11; then Sail writes the same value again while

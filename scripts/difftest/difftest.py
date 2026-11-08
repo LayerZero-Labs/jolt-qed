@@ -302,7 +302,7 @@ def run_jolt(binary, elf, limit, timeout, log):
                 end = {"kind": kind}
                 if kind == "tohost":
                     value = hexval(rec, "value")
-                    if value >> 48 or not value & 1:
+                    if not is_exit_command(value):
                         raise HarnessError(f"jolt-trace: 0x{value:x} is not an HTIF exit command")
                     end["code"] = (value & ((1 << 48) - 1)) >> 1
                 elif kind == "stall-tohost":
@@ -369,7 +369,7 @@ LRSC_RE = re.compile(r"^(lr|sc)\.([wd])(?:\.\w+)*\s+x(\d+),\s*(?:x(\d+),\s*)?\(x
 # Instructions after which the next pc is not pc + length.
 CONTROL_RE = re.compile(r"^(c\.)?(j|jal|jalr|jr|ret|b\w+|mret|sret|ecall|ebreak|wfi)\b")
 # A store, with its base register.
-STORE_RE = re.compile(r"^(?:c\.)?s[bhwd]\s+x\d+,\s*-?(?:0x[0-9a-f]+|\d+)\(x(\d+)\)$")
+STORE_RE = re.compile(r"^(?:c\.)?s[bhwd](?:sp)?\s+x\d+,\s*-?(?:0x[0-9a-f]+|\d+)\(x(\d+)\)$")
 # Instructions that form an address in a register, without reading memory.
 ADDRESS_RE = re.compile(r"^(?:c\.)?(auipc|lui|addi|li)\s+x(\d+),")
 
@@ -519,7 +519,7 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
         tail_ok = False
         if len(s_steps) > n and s_end["kind"] == j_end["kind"] == "tohost" \
                 and s_end["code"] == j_end["code"]:
-            tail_ok = valid_tail(s_steps[n:], j_steps, sail["htif"], xs, notes)
+            tail_ok = valid_tail(s_steps[n:], j_steps, sail["htif"], xs, mem_s, mem_j, notes)
         if tail_ok:
             notes.append(f"Sail retired {len(s_steps) - n} more instruction(s) after Jolt's "
                          "exit, writing only tohost, before the same tohost exit")
@@ -560,21 +560,33 @@ def is_policy_sc(lrsc, addr, width, stored, resv, s, changed_j, xs, xj, step):
     return tags == {"mem"}
 
 
-def valid_tail(tail, j_steps, htif, xs, notes):
+def tohost_value(mem, htif):
+    return sum(mem.get(htif + k, 0) << (8 * k) for k in range(8))
+
+
+def is_exit_command(value):
+    """An HTIF exit command: device 0, command 0, payload bit 0 set."""
+    return value >> 48 == 0 and value & 1 == 1
+
+
+def valid_tail(tail, j_steps, htif, xs, mem_s, mem_j, notes):
     """Whether the instructions Sail retires after Jolt's exit store finish
     the same HTIF exit: at most MAX_TAIL M-mode instructions that follow on
     from Jolt's last one and from each other, with no trap, no CSR write and
-    no control flow. Each is either a store into the tohost doubleword, or an
-    address computation (AUIPC, LUI, ADDI, LI) into a register that a later
-    store of the tail uses as its base. The last one is such a store, which
-    is what makes Sail act on tohost. Jolt's last instruction must itself have
-    written tohost. The registers the tail writes are listed as notes; Jolt
+    no control flow. Each is either a store into tohost that Sail's HTIF
+    device accepts (four bytes at either half, or eight bytes at its start),
+    or an address computation (AUIPC, LUI, ADDI, LI) into a register that a
+    later store of the tail uses as its base. The last one is such a store,
+    which is what makes Sail act on tohost. Jolt's last instruction must
+    itself have written tohost, and after the tail Sail's tohost must hold
+    the same exit command as Jolt's. The registers the tail writes are listed as notes; Jolt
     never runs those instructions."""
     if htif is None or not j_steps or not tail or len(tail) > MAX_TAIL:
         return False
     if not any(a <= htif < a + 8 for a, _, _ in j_steps[-1].writes):
         return False
     pc = j_steps[-1].next
+    mem = {a: mem_s.get(a, 0) for a in range(htif, htif + 8)}
     for k, s in enumerate(tail):
         if s.pc != pc or s.trap or s.event or s.priv != "M" or s.csr:
             return False
@@ -584,8 +596,9 @@ def valid_tail(tail, j_steps, htif, xs, notes):
         store, address = STORE_RE.match(s.insn), ADDRESS_RE.match(s.insn)
         if store:
             if s.x or not s.writes or any(
-                    not htif <= a < htif + 8 for a in sail_bytes(s.writes)):
+                    (a, w) not in ((htif, 4), (htif + 4, 4), (htif, 8)) for a, w, _ in s.writes):
                 return False
+            mem.update(sail_bytes(s.writes))
         elif address:
             rd = int(address[2])
             later_bases = {m[1] for m in map(STORE_RE.match, (t.insn for t in tail[k + 1:])) if m}
@@ -594,6 +607,9 @@ def valid_tail(tail, j_steps, htif, xs, notes):
         else:
             return False
     if not STORE_RE.match(tail[-1].insn):
+        return False
+    value = tohost_value(mem, htif)
+    if not is_exit_command(value) or value != tohost_value(mem_j, htif):
         return False
     for s in tail:
         for r, v in s.x.items():

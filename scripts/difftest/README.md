@@ -210,7 +210,7 @@ named by the letter of the question it settles:
 | `e_lr_misaligned.S`, `e2_sc_misaligned.S` | misaligned LR.W and SC.W |
 | `f_mstatus_fs.S` | setting `mstatus.FS` |
 | `g_ebreak.S` | EBREAK |
-| `h_clui_reserved.S` | the reserved compressed parcel `0x6001` (C.LUI with `rd` = `x0` and `nzimm` = 0), written to RAM and executed |
+| `h_clui_reserved.S` | the reserved compressed parcel `0x6001` (C.LUI with `rd` = `x0` and `nzimm` = 0) |
 | `x_csr_forms.S` | CSRRC on `mscratch`, which Jolt main (9407f93fb) does not decode |
 
 The comments in each file describe the behaviour of Jolt main (9407f93fb)
