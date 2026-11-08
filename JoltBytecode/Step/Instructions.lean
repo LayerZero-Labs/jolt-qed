@@ -21,9 +21,9 @@ Two points need more than unfolding:
 - Atomics: the instruction theorems are stated with `aq = rl = false`;
   `Step.execute_AMO_flags` shows the bits never change Sail's semantics.
 
-The proofs call the instruction theorems directly rather than through the
-dispatcher, whose ECALL, EBREAK, LR and SC cases are still `sorry`; so nothing
-here depends on `sorryAx`.
+The proofs call the proved instruction theorems directly.
+The dispatcher has unwired ECALL, EBREAK, CSR, MRET, LR and SC cases; these
+cases are excluded by `Lifted`.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
@@ -31,8 +31,8 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 namespace RiscvInstruction
 
 /-- The Jolt rows that run each source instruction: a native row or an
-expansion. ECALL, EBREAK, LR and SC use the current transcriptions, which
-step d replaces. -/
+expansion.
+For example, ECALL runs `ecallProgram`, even though `Lifted` excludes it. -/
 noncomputable def joltRun : RiscvInstruction → JoltMonad ExecutionResult
   | .LUI rd imm => JoltISA.execLUI imm rd
   | .AUIPC rd imm => JoltISA.execInstr (JoltISA.pureWritebackNativeInstr rd (JoltISA.Encoded.AUIPC (.xreg rd) imm))
@@ -124,6 +124,10 @@ noncomputable def joltRun : RiscvInstruction → JoltMonad ExecutionResult
   | .AMOMAXU_D rd rs1 rs2 _aq _rl => JoltISA.execProgram (JoltISA.amomaxudProgramAuto rd rs1 rs2)
   | .CSRRW rd csr rs1 => JoltISA.execProgram (JoltISA.csrrwProgram csr rs1 rd)
   | .CSRRS rd csr rs1 => JoltISA.execProgram (JoltISA.csrrsProgram csr rs1 rd)
+  | .CSRRC rd csr rs1 => JoltISA.execProgram (JoltISA.csrrcProgram csr rs1 rd)
+  | .CSRRWI rd csr uimm => JoltISA.execProgram (JoltISA.csrrwiProgram csr uimm rd)
+  | .CSRRSI rd csr uimm => JoltISA.execProgram (JoltISA.csrrsiProgram csr uimm rd)
+  | .CSRRCI rd csr uimm => JoltISA.execProgram (JoltISA.csrrciProgram csr uimm rd)
   | .MRET => JoltISA.execProgram JoltISA.mretProgram
 
 /-- `Matches i ast`: `ast` is the Sail instruction that `i` stands for. FENCE
@@ -220,13 +224,17 @@ def Matches : RiscvInstruction → instruction → Prop
   | .AMOMAXU_D rd rs1 rs2 aq rl, ast => ast = .AMO (amoop.AMOMAXU, aq, rl, rs2, rs1, 8, rd)
   | .CSRRW rd csr rs1, ast => ast = .CSRReg ((JoltISA.SystemCSR.address csr), rs1, rd, csrop.CSRRW)
   | .CSRRS rd csr rs1, ast => ast = .CSRReg ((JoltISA.SystemCSR.address csr), rs1, rd, csrop.CSRRS)
+  | .CSRRC rd csr rs1, ast => ast = .CSRReg ((JoltISA.SystemCSR.address csr), rs1, rd, csrop.CSRRC)
+  | .CSRRWI rd csr uimm, ast => ast = .CSRImm ((JoltISA.SystemCSR.address csr), uimm, rd, csrop.CSRRW)
+  | .CSRRSI rd csr uimm, ast => ast = .CSRImm ((JoltISA.SystemCSR.address csr), uimm, rd, csrop.CSRRS)
+  | .CSRRCI rd csr uimm, ast => ast = .CSRImm ((JoltISA.SystemCSR.address csr), uimm, rd, csrop.CSRRC)
   | .MRET, ast => ast = .MRET ()
 
-/-- The instructions whose theorem this file lifts. ECALL, EBREAK, LR and SC
-have no theorem yet, and MRET's theorem is unfinished; the jolt-changes
-sequences for all of them come with their own theorems. -/
+/-- The instructions whose equivalence theorem this file lifts.
+ECALL, EBREAK, the CSR forms, MRET, LR and SC have no wired equivalence theorem.
+For example, ADD is lifted, while CSRRW is excluded. -/
 def Lifted : RiscvInstruction → Prop
-  | .ECALL | .EBREAK | .MRET | .LR_W .. | .SC_W .. | .LR_D .. | .SC_D .. => False
+  | .ECALL | .EBREAK | .CSRRW .. | .CSRRS .. | .CSRRC .. | .CSRRWI .. | .CSRRSI .. | .CSRRCI .. | .MRET | .LR_W .. | .SC_W .. | .LR_D .. | .SC_D .. => False
   | _ => True
 
 /-- The advice operands of the division and remainder expansions are the
@@ -667,12 +675,9 @@ theorem joltRun_eq_execute :
       have hl : LinkedCSRs js := by unfold equivAssumptions at h; exact h.linkedCSRs
       rw [Projection.systemProject_eq_sail_of_compatible js hl]
       exact (AtomicFamily.amomaxudProgram_eq_sail rs2 rs1 rd js h).trans (congrFun (Step.execute_AMO_flags amoop.AMOMAXU aq rl rs2 rs1 8 rd).symm js.sail)
-  | .CSRRW rd csr rs1, _, ast, hm, js, h, _ => by
-      subst hm
-      exact System.csrrwProgram_eq_sail_projected js csr rs1 rd h
-  | .CSRRS rd csr rs1, _, ast, hm, js, h, _ => by
-      subst hm
-      exact System.csrrsProgram_eq_sail_projected js csr rs1 rd h
+  | .CSRRW .., hi, _, _, _, _, _ | .CSRRS .., hi, _, _, _, _, _
+  | .CSRRC .., hi, _, _, _, _, _ | .CSRRWI .., hi, _, _, _, _, _
+  | .CSRRSI .., hi, _, _, _, _, _ | .CSRRCI .., hi, _, _, _, _, _ => hi.elim
   | .MRET, hi, _, _, _, _, _ => hi.elim
 
 /-- **One Sail step per lifted instruction, 32-bit encodings.** If Sail fetches

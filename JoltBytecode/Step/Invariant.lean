@@ -175,11 +175,11 @@ theorem StepInvariant.preludeState {s : SailState} (hinv : StepInvariant s)
 
 /-! ## A Jolt step preserves the invariant -/
 
-/-- Every overlaid CSR is present in the projected state. -/
+/-- Every overlaid system register is present in the projected state. -/
 theorem systemProject_overlaid_present (js : SailJoltState) {r : Register} (hr : Overlaid r) :
     Assumptions.SailRegReadable r (System.systemProject js) := by
   constructor
-  rcases hr with rfl | rfl | rfl | rfl | rfl | rfl <;>
+  rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
     simp [System.systemProject, Std.ExtDHashMap.get?_insert]
 
 theorem not_overlaid_of_invariantReg {r : Register} (hr : invariantReg r) : ¬ Overlaid r := by

@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Ari 
 -/
 
-import JoltBytecode.JoltISA.VirtualRegisters
+import JoltBytecode.JoltISA.SystemProjection
 import JoltBytecode.JoltISA.DeviceMemory
 
 open LeanRV64D
@@ -238,11 +238,12 @@ structure MstatusMprvZero (s : SailState) : Prop where
 
 -- vreg == sail.csr begins  here 
 
-/-- Sail `mstatus` agrees with Jolt's persistent `mstatus` virtual register. -/
+/-- Sail `mstatus` agrees with Jolt's v39 with MPP forced to Machine.
+For example, v39 = 0 corresponds to Sail mstatus = 0x1800. -/
 structure MstatusVRegMatchesSail (js : SailJoltState) : Prop where
   value_eq :
     js.sail.regs.get? Register.mstatus =
-      some (js.vregs JoltISA.mstatusVReg)
+      some (js.vregs JoltISA.mstatusVReg ||| 0x1800#64)
 
 /-- Sail `mtvec` agrees with Jolt's persistent trap-handler virtual register. -/
 structure MtvecVRegMatchesSail (js : SailJoltState) : Prop where
@@ -277,16 +278,29 @@ structure MtvalVRegMatchesSail (js : SailJoltState) : Prop where
 -- vreg == sail.csr ends here 
 
 
-/-- A value written to `mtvec` uses Direct mode, so Sail's `legalize_tvec`
-accepts it unchanged.
+/-- Sail's reservation registers agree with Jolt's reservation virtual registers.
+For example, v32 = v33 = 0 means no live reservation. -/
+structure ReservationVRegsMatchSail (js : SailJoltState) : Prop where
+  valid_eq :
+    js.sail.regs.get? Register.reservation_valid =
+      some (js.vregs JoltISA.reservationWReg != 0#64)
+  addr_eq :
+    js.sail.regs.get? Register.reservation_addr = some (js.vregs JoltISA.reservationWReg)
+  width_eq :
+    js.sail.regs.get? Register.reservation_width =
+      some (System.reservationWidth (js.vregs JoltISA.reservationWReg)
+        (js.vregs JoltISA.reservationDReg))
 
-The ZeroOS/Jolt boot path writes `_trap_handler` to `mtvec` with `csrw mtvec,
-t0`; ZeroOS defines `_trap_handler` under `.align 2`, which gives 4-byte
-alignment, so the lower two bits are `00`. 
--/
-structure MtvecWriteDirectMode (value : BitVec 64) : Prop where
-  mode_eq : _get_Mtvec_Mode value = 0b00#2
-
+/-- The values Jolt's own sequences keep in its system virtual registers.
+Only MIE and MPIE can be set in v39, mtvec mode bit 1 and mepc bit 0 are clear,
+and v33 is zero or equals v32; for example, all-zero registers are legal. -/
+structure JoltSystemVRegsLegal (js : SailJoltState) : Prop where
+  mstatus_bits : js.vregs JoltISA.mstatusVReg &&& ~~~(0x88#64) = 0#64
+  mtvec_mode : (js.vregs JoltISA.trapHandlerVReg).getLsbD 1 = false
+  mepc_align : (js.vregs JoltISA.mepcVReg).getLsbD 0 = false
+  reservation_pair :
+    js.vregs JoltISA.reservationDReg = 0#64 ∨
+      js.vregs JoltISA.reservationDReg = js.vregs JoltISA.reservationWReg
 
 /-- A stored `mepc` value is already aligned for Sail's read-side `align_pc`.
 
@@ -296,34 +310,6 @@ relevant invariant is `mepc[0] = 0`.
 structure MepcReadAligned (value : BitVec 64) (s : SailState) : Prop where
   value_eq : align_pc value s = .ok value s
 
-/-- A value written to `mepc` is already legal, so Sail's `legalize_xepc`
-accepts it unchanged.
-
-This is the write-side counterpart of `MepcReadAligned`: CSRRW writes the new
-`rs1` value, so the assumption must be about that source value rather than only
-the old stored `mepc`.
--/
-structure MepcWriteLegalized (value : BitVec 64) : Prop where
-  value_eq : legalize_xepc value = value
-
-/-- A value written to `mstatus` is already legal in the current Sail state, so
-
-This assumption is the proof boundary that the ZeroOS/Jolt `mstatus` value is
-stable under that generated-Sail legalizer. -/
-structure MstatusWriteLegalized
-    (old value : BitVec 64) (s : SailState) : Prop where
-  value_eq : legalize_mstatus old value s = .ok value s
-
-/-- Jolt's fixed `mstatus` virtual register has `MPP = Machine`.
-
-Rust source:
-`/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/mret.rs:7-18`;
--/
-structure MstatusMppMachine (js : SailJoltState) : Prop where
-  value_eq :
-    _get_Mstatus_MPP (js.vregs JoltISA.mstatusVReg) =
-      privLevel_to_bits Privilege.Machine
-
 end Assumptions
 
 export Assumptions (
@@ -331,8 +317,6 @@ export Assumptions (
   MstatusMprvZero
   XRegReadable
   SailRegReadable
-  MtvecWriteDirectMode
-  MstatusMppMachine
   DwordPresent
   LoadPmpOk
   LoadPmpOkWindow

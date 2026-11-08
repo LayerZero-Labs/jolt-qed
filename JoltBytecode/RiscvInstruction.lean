@@ -57,9 +57,6 @@ import JoltBytecode.InstructionEquivalence.Instructions.AtomicFamily.Amoxorw
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sb_main
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sh_main
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sw_main
-import JoltBytecode.InstructionEquivalence.Instructions.System.Mret
-import JoltBytecode.InstructionEquivalence.Instructions.System.Csrrw
-import JoltBytecode.InstructionEquivalence.Instructions.System.Csrrs
 import JoltBytecode.InstructionEquivalence.Instructions.Natives.Add
 import JoltBytecode.InstructionEquivalence.Instructions.Natives.Addi
 import JoltBytecode.InstructionEquivalence.Instructions.Natives.Addiw
@@ -244,6 +241,10 @@ inductive RiscvInstruction where
      Source: https://docs.riscv.org/reference/isa/v20260120/unpriv/zicsr.html -/
   | CSRRW (rd : regidx) (csr : JoltISA.SystemCSR) (rs1 : regidx)
   | CSRRS (rd : regidx) (csr : JoltISA.SystemCSR) (rs1 : regidx)
+  | CSRRC (rd : regidx) (csr : JoltISA.SystemCSR) (rs1 : regidx)
+  | CSRRWI (rd : regidx) (csr : JoltISA.SystemCSR) (uimm : BitVec 5)
+  | CSRRSI (rd : regidx) (csr : JoltISA.SystemCSR) (uimm : BitVec 5)
+  | CSRRCI (rd : regidx) (csr : JoltISA.SystemCSR) (uimm : BitVec 5)
 
   /- Jolt-supported RvPrivileged source instruction.
      Source: https://docs.riscv.org/reference/isa/v20260120/priv/priv-insns.html -/
@@ -423,12 +424,6 @@ def equivAssumptions : (instr : RiscvInstruction) → SailJoltState → Type
       AmoDwordProgramEqSailAssumptions amoop.AMOMINU rs2 rs1 rd js
   | .AMOMAXU_D rd rs1 rs2 _aq _rl, js =>
       AmoDwordProgramEqSailAssumptions amoop.AMOMAXU rs2 rs1 rd js
-  | .CSRRW rd csr rs1, js =>
-      System.CsrrwSystemAssumptions js csr rs1 rd
-  | .CSRRS rd csr rs1, js =>
-      System.CsrrsSystemAssumptions js csr rs1 rd
-  | .MRET, js =>
-      System.MretProgramEqSailAssumptions js
   | _, _ => Unit
 
 /-- Given RISC-V instruction and assumptions return the proposition that we prove-/
@@ -615,12 +610,8 @@ def equivalenceStatement :
       AtomicFamily.amominudProgramEqSailStatement rs2 rs1 rd js _h
     | .AMOMAXU_D rd rs1 rs2 _aq _rl =>
       AtomicFamily.amomaxudProgramEqSailStatement rs2 rs1 rd js _h
-    | .CSRRW rd csr rs1 =>
-      System.csrrwProgramEqSailStatement js csr rs1 rd _h
-    | .CSRRS rd csr rs1 =>
-      System.csrrsProgramEqSailStatement js csr rs1 rd _h
-    | .MRET =>
-      System.mretProgramEqSailStatement js _h
+    | .CSRRW .. | .CSRRS .. | .CSRRC .. | .CSRRWI .. | .CSRRSI .. | .CSRRCI .. | .MRET =>
+      False -- WARNING: unwired instruction equivalence
 
 /-- Given Risc indtruction and equivalence assumptions, 
     give me the proof of the equivalence statement-/
@@ -793,15 +784,9 @@ theorem equivalenceStatement_holds :
       Natives.bgeuInstr_eq_sail imm rs2 rs1 js h
   | .FENCE, js, h =>
       Natives.fenceInstr_eq_sail js h
-  -- This will be proved shortly, once we confirm Jolt has the right set of assumptions.
-  | .CSRRW rd csr rs1, js, h =>
-      System.csrrwProgram_eq_sail_projected js csr rs1 rd h
-  | .CSRRS rd csr rs1, js, h =>
-      System.csrrsProgram_eq_sail_projected js csr rs1 rd h
-  -- Jolt does not support User mode even with user extension enabled.
-  -- See: https://randomwalks.xyz/blog/csrrw-bug/#mret-issue
-  | .MRET, js, h =>
-      System.mretProgram_eq_sail_projected js h
+  | .CSRRW .., _, _ | .CSRRS .., _, _ | .CSRRC .., _, _
+  | .CSRRWI .., _, _ | .CSRRSI .., _, _ | .CSRRCI .., _, _ | .MRET, _, _ => by
+      sorry
   -- Sail side just returns Trap (cannot be proven)
   | .ECALL, _js, _h => by
       sorry

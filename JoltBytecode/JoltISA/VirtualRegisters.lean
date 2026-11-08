@@ -296,13 +296,12 @@ def joltRegisterSailTarget? (r : VReg) : Option Register :=
 def joltRegisterCsrAddress? (r : VReg) : Option (BitVec 12) :=
   (joltRegisterSlot r).csrAddress?
 
-/-- TODO: Docs -/
+/-- Persistent system slots that instruction-local scratch writes must preserve.
+For example, reservationW (v32) and mstatus (v39) are protected. -/
 def JoltRegisterSlot.isProtected : JoltRegisterSlot → Bool
   | .xreg _ => false
-  -- LR/SC reservation virtual registers are Jolt bookkeeping, not RISC-visible
-  -- architectural state. LR/SC proofs will need their own reservation contract.
-  | .reservationW => false
-  | .reservationD => false
+  | .reservationW => true
+  | .reservationD => true
   | .mtvec => true
   | .mscratch => true
   | .mepc => true

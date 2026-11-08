@@ -71,7 +71,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
       have hregs : js'.sail.regs = js.sail.regs := by
         simp only [js', state_after_dword_store]
       have hprojected : Projection.ProjectedVRegsPreserved js js' :=
-        ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+        ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       simpa [js'] using
         Projection.systemProject_eq_sail_of_projected_vregs_preserved_of_sail_regs_eq
           js js' hregs hprojected h.linkedCSRs

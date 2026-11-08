@@ -185,7 +185,8 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
         JoltISA.inlineRegisterBase, JoltISA.riscvRegisterBase,
         JoltISA.riscvRegisterCount, JoltISA.numReservedVirtualRegisters,
         JoltISA.trapHandlerVReg, JoltISA.mscratchVReg, JoltISA.mepcVReg,
-        JoltISA.mcauseVReg, JoltISA.mtvalVReg, JoltISA.mstatusVReg]
+        JoltISA.mcauseVReg, JoltISA.mtvalVReg, JoltISA.mstatusVReg,
+        JoltISA.reservationWReg, JoltISA.reservationDReg]
     have hproject : System.systemProject js' = js.sail := by
       have hregs : js'.sail.regs = js.sail.regs := rfl
       exact

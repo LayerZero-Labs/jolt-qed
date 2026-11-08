@@ -114,6 +114,10 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     -- Zicsr and machine mode
     | .CSRRW rd csr rs1 => some (.ofProgram (JoltISA.csrrwProgram csr rs1 rd))
     | .CSRRS rd csr rs1 => some (.ofProgram (JoltISA.csrrsProgram csr rs1 rd))
+    | .CSRRC rd csr rs1 => some (.ofProgram (JoltISA.csrrcProgram csr rs1 rd))
+    | .CSRRWI rd csr uimm => some (.ofProgram (JoltISA.csrrwiProgram csr uimm rd))
+    | .CSRRSI rd csr uimm => some (.ofProgram (JoltISA.csrrsiProgram csr uimm rd))
+    | .CSRRCI rd csr uimm => some (.ofProgram (JoltISA.csrrciProgram csr uimm rd))
     | .MRET => some (.ofProgram JoltISA.mretProgram)
   | .jolt instruction =>
     match instruction with

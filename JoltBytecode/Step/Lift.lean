@@ -16,7 +16,7 @@ instruction counter of its own, and no Jolt row reads `minstret`,
 `minstret_increment` or any other counter, so this bookkeeping changes nothing
 Jolt observes.
 
-The bookkeeping touches none of the six CSRs that `System.systemProject`
+The bookkeeping touches none of the nine system registers that `System.systemProject`
 takes from Jolt's virtual registers (`OverlayLocal`), so it commutes with the
 projection. `joltStep_eq_try_step` is the generic lifting lemma: if the Jolt
 rows agree with `execute` after the prelude and the instruction retires, the
@@ -33,25 +33,31 @@ namespace Step
 
 /-! ## The CSR overlay -/
 
-/-- The six registers whose values `System.systemProject` takes from Jolt's
-virtual registers. -/
+/-- The six CSRs and three reservation registers supplied by Jolt's virtual
+registers in `System.systemProject`.
+For example, Sail reservation_width is derived from v32 and v33. -/
 def Overlaid (r : Register) : Prop :=
   r = Register.mtvec ∨ r = Register.mscratch ∨ r = Register.mepc ∨
-    r = Register.mcause ∨ r = Register.mtval ∨ r = Register.mstatus
+    r = Register.mcause ∨ r = Register.mtval ∨ r = Register.mstatus ∨
+    r = Register.reservation_valid ∨ r = Register.reservation_addr ∨
+    r = Register.reservation_width
 
-/-- Outside the six overlaid CSRs, the projection reads the embedded Sail state. -/
+/-- Outside the nine overlaid registers, the projection reads the embedded Sail state. -/
 theorem systemProject_get?_of_not_overlaid (js : SailJoltState) {r : Register}
     (hr : ¬ Overlaid r) :
     (System.systemProject js).regs.get? r = js.sail.regs.get? r := by
   simp only [Overlaid, not_or] at hr
-  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := hr
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hr
   unfold System.systemProject
   simp only [System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h1),
     System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h2),
     System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h3),
     System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h4),
     System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h5),
-    System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h6)]
+    System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h6),
+    System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h7),
+    System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h8),
+    System.extDHashMap_get?_insert_of_ne _ _ (Ne.symm h9)]
 
 /-- Writing a register outside the overlay commutes with the projection. -/
 theorem systemProject_setReg (js : SailJoltState) (r : Register) (v : RegisterType r)
@@ -59,14 +65,17 @@ theorem systemProject_setReg (js : SailJoltState) (r : Register) (v : RegisterTy
     System.systemProject { js with sail := setReg js.sail r v } =
       setReg (System.systemProject js) r v := by
   simp only [Overlaid, not_or] at hr
-  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := hr
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := hr
   unfold System.systemProject setReg
   rw [System.extDHashMap_insert_comm_of_ne (h := h1),
     System.extDHashMap_insert_comm_of_ne (h := h2),
     System.extDHashMap_insert_comm_of_ne (h := h3),
     System.extDHashMap_insert_comm_of_ne (h := h4),
     System.extDHashMap_insert_comm_of_ne (h := h5),
-    System.extDHashMap_insert_comm_of_ne (h := h6)]
+    System.extDHashMap_insert_comm_of_ne (h := h6),
+    System.extDHashMap_insert_comm_of_ne (h := h7),
+    System.extDHashMap_insert_comm_of_ne (h := h8),
+    System.extDHashMap_insert_comm_of_ne (h := h9)]
 
 /-! ## Sail computations that commute with the overlay -/
 

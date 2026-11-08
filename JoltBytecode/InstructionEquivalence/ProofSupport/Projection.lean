@@ -30,15 +30,29 @@ theorem projectResult_liftSail (m : SailM α) (js : SailJoltState) :
   unfold liftSail
   cases m js.sail <;> rfl
 
-/-- The persistent CSR virtual registers materialized by `systemProject` are
-unchanged between two Jolt states. -/
+/-- The eight persistent virtual registers used by `systemProject` are unchanged.
+For example, preserving v32 and v33 preserves all three projected reservation
+values, and preserving v39 preserves the projected machine-mode mstatus. -/
 def ProjectedVRegsPreserved (before after : SailJoltState) : Prop :=
   after.vregs JoltISA.trapHandlerVReg = before.vregs JoltISA.trapHandlerVReg ∧
   after.vregs JoltISA.mscratchVReg = before.vregs JoltISA.mscratchVReg ∧
   after.vregs JoltISA.mepcVReg = before.vregs JoltISA.mepcVReg ∧
   after.vregs JoltISA.mcauseVReg = before.vregs JoltISA.mcauseVReg ∧
   after.vregs JoltISA.mtvalVReg = before.vregs JoltISA.mtvalVReg ∧
-  after.vregs JoltISA.mstatusVReg = before.vregs JoltISA.mstatusVReg
+  after.vregs JoltISA.mstatusVReg = before.vregs JoltISA.mstatusVReg ∧
+  after.vregs JoltISA.reservationWReg = before.vregs JoltISA.reservationWReg ∧
+  after.vregs JoltISA.reservationDReg = before.vregs JoltISA.reservationDReg
+
+/-- Preserving the eight projected virtual registers preserves their legality.
+For example, an unchanged all-zero system register file stays legal. -/
+theorem joltSystemVRegsLegal_of_projectedVRegsPreserved {before after : SailJoltState}
+    (h : Assumptions.JoltSystemVRegsLegal before) (hp : ProjectedVRegsPreserved before after) :
+    Assumptions.JoltSystemVRegsLegal after := by
+  rcases hp with ⟨ht, _, he, _, _, hm, hw, hd⟩
+  exact ⟨by simpa only [hm] using h.mstatus_bits,
+    by simpa only [ht] using h.mtvec_mode,
+    by simpa only [he] using h.mepc_align,
+    by simpa only [hw, hd] using h.reservation_pair⟩
 
 theorem systemProject_rdZeroRewriteVReg (js : SailJoltState) (value : BitVec 64) :
     System.systemProject
@@ -51,7 +65,9 @@ theorem systemProject_rdZeroRewriteVReg (js : SailJoltState) (value : BitVec 64)
     if_neg (show JoltISA.mepcVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
     if_neg (show JoltISA.mcauseVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
     if_neg (show JoltISA.mtvalVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
-    if_neg (show JoltISA.mstatusVReg ≠ JoltISA.rdZeroRewriteVReg by decide)]
+    if_neg (show JoltISA.mstatusVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    if_neg (show JoltISA.reservationWReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    if_neg (show JoltISA.reservationDReg ≠ JoltISA.rdZeroRewriteVReg by decide)]
 
 /-- Under the linked-CSR invariant, `systemProject` agrees with the old plain
 projection on the initial state. -/
@@ -72,9 +88,10 @@ theorem systemProject_eq_sail_of_compatible
 /-!
 ## System-Project Frame Lemmas
 
-These lemmas state that a Sail computation preserves the six generated-Sail
+These lemmas state that a Sail computation preserves the nine generated-Sail
 registers overwritten by `System.systemProject`: `mstatus`, `mtvec`,
-`mscratch`, `mepc`, `mcause`, and `mtval`.
+`mscratch`, `mepc`, `mcause`, `mtval`, `reservation_valid`,
+`reservation_addr`, and `reservation_width`.
 
 Instruction proofs can use this as a frame rule: prove the Sail monad does not
 touch those registers, then the projection bridge says `systemProject` is a
@@ -109,8 +126,9 @@ theorem liftSail_bind
   simp only [bind, EStateM.bind]
   cases hm : m js.sail <;> rfl
 
-/-- The six Sail registers that `System.systemProject` overwrites are unchanged
-between `s0` and `s1`. -/
+/-- The nine Sail registers overlaid by `System.systemProject` are unchanged
+between `s0` and `s1`: six CSRs and the reservation valid flag, address and width.
+For example, an integer-register write preserves all nine values. -/
 structure PreservesSystemProjectRegs (s0 s1 : SailState) : Prop where
   mstatus :
     s1.regs.get? Register.mstatus = s0.regs.get? Register.mstatus
@@ -124,8 +142,14 @@ structure PreservesSystemProjectRegs (s0 s1 : SailState) : Prop where
     s1.regs.get? Register.mcause = s0.regs.get? Register.mcause
   mtval :
     s1.regs.get? Register.mtval = s0.regs.get? Register.mtval
+  reservation_valid :
+    s1.regs.get? Register.reservation_valid = s0.regs.get? Register.reservation_valid
+  reservation_addr :
+    s1.regs.get? Register.reservation_addr = s0.regs.get? Register.reservation_addr
+  reservation_width :
+    s1.regs.get? Register.reservation_width = s0.regs.get? Register.reservation_width
 
-/-- A monadic result preserves the six system-project registers if its final
+/-- A monadic result preserves the nine system-project registers if its final
 state, whether success or error, preserves them. -/
 def ResultPreservesSystemProjectRegs
     (s0 : SailState)
@@ -145,7 +169,10 @@ theorem preservesSystemProjectRegs_refl
       mscratch := ?_
       mepc := ?_
       mcause := ?_
-      mtval := ?_ }
+      mtval := ?_
+      reservation_valid := ?_
+      reservation_addr := ?_
+      reservation_width := ?_ }
   all_goals
     rfl
 
@@ -160,16 +187,22 @@ theorem preservesSystemProjectRegs_trans
       mscratch := ?_
       mepc := ?_
       mcause := ?_
-      mtval := ?_ }
+      mtval := ?_
+      reservation_valid := ?_
+      reservation_addr := ?_
+      reservation_width := ?_ }
   · exact h12.mstatus.trans h01.mstatus
   · exact h12.mtvec.trans h01.mtvec
   · exact h12.mscratch.trans h01.mscratch
   · exact h12.mepc.trans h01.mepc
   · exact h12.mcause.trans h01.mcause
   · exact h12.mtval.trans h01.mtval
+  · exact h12.reservation_valid.trans h01.reservation_valid
+  · exact h12.reservation_addr.trans h01.reservation_addr
+  · exact h12.reservation_width.trans h01.reservation_width
 
 /- Generic monad-frame lemmas. These are the pieces that let us prove a compound
-Sail monad preserves the six registers by proving each monadic line preserves
+Sail monad preserves the nine registers by proving each monadic line preserves
 them. -/
 
 theorem pure_preservesSystemProjectRegs
@@ -254,7 +287,10 @@ theorem setNextPCState_preservesSystemProjectRegs
       mscratch := ?_
       mepc := ?_
       mcause := ?_
-      mtval := ?_ }
+      mtval := ?_
+      reservation_valid := ?_
+      reservation_addr := ?_
+      reservation_width := ?_ }
   all_goals
     unfold System.setNextPCState
     rw [System.extDHashMap_get?_insert_of_ne (h := by decide)]
@@ -351,24 +387,36 @@ theorem jump_to_preservesSystemProjectRegs
       MonadExceptOf.throw, EStateM.throw, ResultPreservesSystemProjectRegs] using!
       preservesSystemProjectRegs_refl s
 
-/-- Writing an integer register preserves the six CSRs overlaid by system projection. -/
-theorem stateAfterWrite_preservesSystemProjectRegs
-    (s : SailState)
-    (rd : regidx)
-    (value : BitVec 64) :
-    PreservesSystemProjectRegs s (stateAfterWrite s rd value) := by
-  refine
-    { mstatus := ?_
-      mtvec := ?_
-      mscratch := ?_
-      mepc := ?_
-      mcause := ?_
-      mtval := ?_ }
-  all_goals
-    reg_cases rd <;>
-      simp_all [stateAfterWrite, wX_update_regs, Std.ExtDHashMap.get?_insert]
+/-- An integer-register write leaves a map entry outside x1 through x31 unchanged.
+For example, its mstatus lookup is unchanged for every destination register. -/
+private theorem wX_update_regs_get?_of_not_xreg
+    (regs : Std.ExtDHashMap Register RegisterType) (rd : regidx) (value : BitVec 64)
+    (reg : Register) (outside : reg ∉
+      [Register.x1, Register.x2, Register.x3, Register.x4, Register.x5, Register.x6,
+       Register.x7, Register.x8, Register.x9, Register.x10, Register.x11, Register.x12,
+       Register.x13, Register.x14, Register.x15, Register.x16, Register.x17, Register.x18,
+       Register.x19, Register.x20, Register.x21, Register.x22, Register.x23, Register.x24,
+       Register.x25, Register.x26, Register.x27, Register.x28, Register.x29, Register.x30,
+       Register.x31]) :
+    (wX_update_regs rd value regs).get? reg = regs.get? reg := by
+  obtain ⟨i⟩ := rd
+  unfold wX_update_regs
+  dsimp only
+  split <;> first
+  | rfl
+  | apply System.extDHashMap_get?_insert_of_ne
+    intro same
+    apply outside
+    rw [← same]
+    simp
 
-/-- Sail integer-register writes preserve the six CSRs overlaid by system projection. -/
+/-- Writing an integer register preserves the nine system registers overlaid by system projection. -/
+theorem stateAfterWrite_preservesSystemProjectRegs
+    (s : SailState) (rd : regidx) (value : BitVec 64) :
+    PreservesSystemProjectRegs s (stateAfterWrite s rd value) := by
+  constructor <;> exact wX_update_regs_get?_of_not_xreg s.regs rd value _ (by decide)
+
+/-- Sail integer-register writes preserve the nine system registers overlaid by system projection. -/
 theorem wX_bits_preservesSystemProjectRegs
     (rd : regidx)
     (value : BitVec 64)
@@ -435,7 +483,7 @@ theorem stateAfterWrite_setNextPCState (s : SailState) (rd : regidx) (value targ
   reg_cases rd <;>
     simp_all [wX_update_regs, System.extDHashMap_insert_comm_of_ne]
 
-/- Projection bridge: preserving these six Sail registers is exactly what is
+/- Projection bridge: preserving these nine Sail registers is exactly what is
 needed to keep Jolt's linked CSR virtual registers linked after changing only
 the embedded Sail state. -/
 
@@ -446,14 +494,17 @@ theorem linkedCSRs_of_preservesSystemProjectRegs
     (hpres : PreservesSystemProjectRegs js.sail s1) :
     LinkedCSRs ({ js with sail := s1 } : SailJoltState) := by
   rcases hlinked with
-    ⟨hmstatus, hmtvec, hmscratch, hmepc, hmcause, hmtval⟩
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+    ⟨hmstatus, hmtvec, hmscratch, hmepc, hmcause, hmtval, hreservation⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · exact ⟨by rw [hpres.mstatus, hmstatus.value_eq]⟩
   · exact ⟨by rw [hpres.mtvec, hmtvec.value_eq]⟩
   · exact ⟨by rw [hpres.mscratch, hmscratch.value_eq]⟩
   · exact ⟨by rw [hpres.mepc, hmepc.value_eq]⟩
   · exact ⟨by rw [hpres.mcause, hmcause.value_eq]⟩
   · exact ⟨by rw [hpres.mtval, hmtval.value_eq]⟩
+  · exact ⟨by rw [hpres.reservation_valid, hreservation.valid_eq],
+      by rw [hpres.reservation_addr, hreservation.addr_eq],
+      by rw [hpres.reservation_width, hreservation.width_eq]⟩
 
 /--
 When the sail csrs start as equal to corresponding vregs in `js`
@@ -489,8 +540,8 @@ theorem systemProjectResult_liftSail_eq_of_preservesSystemProjectRegs
         js s1 hlinked hpres]
 
 /-- Generic equivalence rule for a Jolt computation that runs a lifted Sail
-computation. Initial CSR agreement and preservation of the six overlaid Sail
-CSRs ensure that system projection returns the same result, including failures.
+computation. Initial CSR agreement and preservation of the nine overlaid Sail
+registers ensure that system projection returns the same result, including failures.
 The execution equality must be proved independently; this rule does not assume
 that an arbitrary Jolt instruction implements the corresponding Sail instruction. -/
 theorem systemProjectResult_eq_of_eq_liftSail
@@ -511,7 +562,7 @@ theorem systemProject_stateAfterWrite
   System.systemProject_stateAfterWrite js rd value
 
 /-- If an instruction updates only the embedded Sail state and preserves the
-CSR virtual registers projected by `systemProject`, then projection commutes with
+system virtual registers projected by `systemProject`, then projection commutes with
 that architectural x-register write. -/
 theorem systemProject_stateAfterWrite_of_projected_vregs_preserved
     (before after : SailJoltState) (rd : regidx) (value : BitVec 64)
@@ -522,13 +573,13 @@ theorem systemProject_stateAfterWrite_of_projected_vregs_preserved
       System.systemProject after =
         System.systemProject { before with sail := stateAfterWrite before.sail rd value } := by
     rcases hprojected with
-      ⟨hmtvec, hmscratch, hmepc, hmcause, hmtval, hmstatus⟩
+      ⟨hmtvec, hmscratch, hmepc, hmcause, hmtval, hmstatus, hresW, hresD⟩
     unfold System.systemProject
-    simp only [hsail, hmtvec, hmscratch, hmepc, hmcause, hmtval, hmstatus]
+    simp only [hsail, hmtvec, hmscratch, hmepc, hmcause, hmtval, hmstatus, hresW, hresD]
   rw [hsame]
   exact systemProject_stateAfterWrite before rd value
 
-/-- If a transition preserves the projected CSR virtual registers and leaves
+/-- If a transition preserves the projected system virtual registers and leaves
 the generated Sail register map unchanged, then linked CSRs remain linked after
 the transition. This is the store-family projection bridge: stores update
 memory, not registers. -/
@@ -539,22 +590,25 @@ theorem systemProject_eq_project_of_projected_vregs_preserved_of_sail_regs_eq
     (hlinked : LinkedCSRs before) :
     System.systemProject after = project after := by
   rcases hprojected with
-    ⟨hmtvec, hmscratch, hmepc, hmcause, hmtval, hmstatus⟩
+    ⟨hmtvec, hmscratch, hmepc, hmcause, hmtval, hmstatus, hresW, hresD⟩
   rcases hlinked with
     ⟨hmstatusLinked, hmtvecLinked, hmscratchLinked, hmepcLinked,
-      hmcauseLinked, hmtvalLinked⟩
+      hmcauseLinked, hmtvalLinked, hreservationLinked⟩
   have hlinked_after : LinkedCSRs after := by
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · exact ⟨by rw [hregs, hmstatus, hmstatusLinked.value_eq]⟩
     · exact ⟨by rw [hregs, hmtvec, hmtvecLinked.value_eq]⟩
     · exact ⟨by rw [hregs, hmscratch, hmscratchLinked.value_eq]⟩
     · exact ⟨by rw [hregs, hmepc, hmepcLinked.value_eq]⟩
     · exact ⟨by rw [hregs, hmcause, hmcauseLinked.value_eq]⟩
     · exact ⟨by rw [hregs, hmtval, hmtvalLinked.value_eq]⟩
+    · exact ⟨by rw [hregs, hresW, hreservationLinked.valid_eq],
+        by rw [hregs, hresW, hreservationLinked.addr_eq],
+        by rw [hregs, hresW, hresD, hreservationLinked.width_eq]⟩
   exact systemProject_eq_project_of_compatible after hlinked_after
 
 /-- Instruction-facing store-family projection bridge: if the transition
-preserves projected CSR virtual registers and leaves the Sail register map
+preserves projected system virtual registers and leaves the Sail register map
 unchanged, `systemProject` agrees with the final embedded Sail state. -/
 theorem systemProject_eq_sail_of_projected_vregs_preserved_of_sail_regs_eq
     (before after : SailJoltState)
@@ -577,7 +631,7 @@ theorem systemProject_eq_sail_of_memory_update_then_write
     System.systemProject after = after.sail := by
   let afterStore : SailJoltState := { before with sail := stored }
   have hstoreProjected : ProjectedVRegsPreserved before afterStore := by
-    exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   have hwriteProjected : ProjectedVRegsPreserved afterStore after := by
     exact hprojected
   have hstoreProject : System.systemProject afterStore = stored := by
@@ -612,7 +666,7 @@ theorem systemProjectResult_pure_retire_after_xreg_write
       ProjectedVRegsPreserved js
         ({ js with sail := s' } : SailJoltState) := by
     unfold ProjectedVRegsPreserved
-    exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   simp only [pure, EStateM.pure, System.systemProjectResult]
   rw [systemProject_stateAfterWrite_of_projected_vregs_preserved
     js ({ js with sail := s' } : SailJoltState) rd value
@@ -621,8 +675,8 @@ theorem systemProjectResult_pure_retire_after_xreg_write
   rw [← h_final_sail]
 
 /-- Generic projected-vreg preservation theorem for any successful program run
-whose instructions avoid protected Jolt registers.  The old classifier is
-stronger than needed for `systemProject`, but it gives a reusable bridge. -/
+whose instructions avoid the eight protected system virtual registers.
+For example, an expansion that writes only v40 and rd preserves all eight. -/
 theorem execProgram_preserves_projected_vregs_of_no_protected_writes
     {program : JoltISA.Program}
     {js js' : SailJoltState}
@@ -639,7 +693,9 @@ theorem execProgram_preserves_projected_vregs_of_no_protected_writes
     hprotected JoltISA.mepcVReg rfl,
     hprotected JoltISA.mcauseVReg rfl,
     hprotected JoltISA.mtvalVReg rfl,
-    hprotected JoltISA.mstatusVReg rfl⟩
+    hprotected JoltISA.mstatusVReg rfl,
+    hprotected JoltISA.reservationWReg rfl,
+    hprotected JoltISA.reservationDReg rfl⟩
 
 end Projection
 
