@@ -101,6 +101,51 @@ private theorem patchAdvice_nil (instrs : List JoltISA.Instr) :
       unfold patchAdvice
       split <;> simp_all only [List.headD_nil, List.tail_nil, List.cons.injEq, and_self]
 
+/-- A straight-line program that ends by retiring.
+For example, `pureWritebackRdZeroProgram` retires, while `.done RETIRE_FAIL` does not. -/
+private def Retires : JoltISA.Program → Prop
+  | .done result => result = RETIRE_SUCCESS
+  | .instr _ next => Retires next
+
+/-- A retiring program is the straight-line program of its own rows. -/
+private theorem foldr_instrs : ∀ p : JoltISA.Program, Retires p →
+    List.foldr JoltISA.Program.instr (.done RETIRE_SUCCESS) p.instrs = p
+  | .done _, h => by simp only [Retires] at h; subst h; rfl
+  | .instr _ next, h => by
+      simp only [JoltISA.Program.instrs, List.foldr]
+      rw [foldr_instrs next h]
+
+private theorem retires_csrReadInto (csr : JoltISA.SystemCSR) (rd : regidx)
+    (next : JoltISA.Program) : Retires (JoltISA.csrReadInto csr rd next) ↔ Retires next := by
+  unfold JoltISA.csrReadInto
+  split_ifs <;> simp only [Retires]
+
+private theorem retires_csrSwapWrite (csr : JoltISA.SystemCSR) (source : JoltISA.Src) :
+    Retires (JoltISA.csrSwapWrite csr source) := by
+  cases csr <;> simp only [JoltISA.csrSwapWrite, Retires]
+
+private theorem retires_pureWritebackRdZero : Retires JoltISA.pureWritebackRdZeroProgram := by
+  simp only [JoltISA.pureWritebackRdZeroProgram, Retires]
+
+private theorem retires_csrBitUpdate (clear : Bool) (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+    Retires (JoltISA.csrBitUpdateProgram clear csr rs1 rd) := by
+  unfold JoltISA.csrBitUpdateProgram
+  split_ifs <;> simp only [Retires, retires_csrReadInto, retires_pureWritebackRdZero]
+
+private theorem retires_csrrwi (csr : JoltISA.SystemCSR) (uimm : BitVec 5) (rd : regidx) :
+    Retires (JoltISA.csrrwiProgram csr uimm rd) := by
+  unfold JoltISA.csrrwiProgram
+  rw [retires_csrReadInto]
+  cases csr <;> simp only [Retires]
+  split_ifs <;> simp only [Retires]
+
+private theorem retires_csrImmediateBitUpdate (clear : Bool) (csr : JoltISA.SystemCSR)
+    (uimm : BitVec 5) (rd : regidx) :
+    Retires (JoltISA.csrImmediateBitUpdateProgram clear csr uimm rd) := by
+  unfold JoltISA.csrImmediateBitUpdateProgram
+  rw [retires_csrReadInto]
+  split_ifs <;> simp only [Retires, retires_pureWritebackRdZero]
+
 -- Every generated pure program already includes the destination-zero no-op.
 -- The remaining comparison is syntactic, so execution errors agree as well.
 private theorem expanded_exec (i : RiscvInstruction) (js : SailJoltState)
@@ -133,12 +178,18 @@ private theorem expanded_exec (i : RiscvInstruction) (js : SailJoltState)
       JoltISA.amoxordProgramAuto, JoltISA.amomindProgramAuto, JoltISA.amomaxdProgramAuto,
       JoltISA.amominudProgramAuto, JoltISA.amomaxudProgramAuto,
       JoltISA.ecallProgram, JoltISA.ebreakProgram, JoltISA.mretProgram,
-      JoltISA.csrrwProgram, JoltISA.csrrsProgram, JoltISA.pureWritebackRdZeroProgram]
+      JoltISA.csrrwProgram]
   all_goals
     (try split_ifs) <;>
       simp only [expandedInstrs, JoltISA.Program.instrs, patchAdvice_nil, patchAdvice,
         JoltISA.Program.seq, List.foldr, List.headD_cons]
-  all_goals exact exec_singleton _ _
+  all_goals first
+    | exact exec_singleton _ _
+    | (rw [foldr_instrs]
+       simp only [Retires, retires_csrReadInto, retires_csrSwapWrite,
+         JoltISA.csrrsProgram, JoltISA.csrrcProgram, JoltISA.csrrsiProgram,
+         JoltISA.csrrciProgram, retires_csrBitUpdate, retires_csrrwi,
+         retires_csrImmediateBitUpdate])
 
 /-- Running a source instruction's expanded rows with honest advice has the same
 result after CSR projection as its instruction theorem's `joltRun` program.
