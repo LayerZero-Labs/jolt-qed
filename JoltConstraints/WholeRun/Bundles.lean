@@ -63,14 +63,22 @@ def RamAccess : RiscvInstruction → SailJoltState → Prop
   | _, _ => True
 
 
+/-- A state fixed by the system projection supplies every linked-register
+assumption without source-register reads.
+For example, its Sail reservation address is the value of Jolt's v32. -/
 private def noSource (js : SailJoltState)
-    (hlink : System.systemProject js = js.sail) : NoSourceReadWithLinkedCSRs js where
-  mstatus_matches := ⟨hlink ▸ System.systemProject_mstatus_read js⟩
-  mtvec_matches := ⟨hlink ▸ System.systemProject_mtvec_read js⟩
-  mscratch_matches := ⟨hlink ▸ System.systemProject_mscratch_read js⟩
-  mepc_matches := ⟨hlink ▸ System.systemProject_mepc_read js⟩
-  mcause_matches := ⟨hlink ▸ System.systemProject_mcause_read js⟩
-  mtval_matches := ⟨hlink ▸ System.systemProject_mtval_read js⟩
+    (hlink : System.systemProject js = js.sail) : NoSourceReadWithLinkedCSRs js := by
+  refine
+    { mstatus_matches := ⟨?_⟩
+      mtvec_matches := ⟨?_⟩
+      mscratch_matches := ⟨?_⟩
+      mepc_matches := ⟨?_⟩
+      mcause_matches := ⟨?_⟩
+      mtval_matches := ⟨?_⟩
+      reservation_matches := ⟨?_, ?_, ?_⟩ }
+  all_goals
+    rw [← hlink]
+    simp [System.systemProject, Std.ExtDHashMap.get?_insert]
 
 private theorem source_read (js : SailJoltState) (hinv : Step.StepInvariant js.sail)
     (r : regidx) :
@@ -103,13 +111,14 @@ private theorem mprv_zero (js : SailJoltState)
     (hlink : System.systemProject js = js.sail)
     (hmstatus : js.vregs JoltISA.mstatusVReg &&& ~~~(0x88 : BitVec 64) = 0) :
     Assumptions.MstatusMprvZero js.sail := by
-  refine ⟨js.vregs JoltISA.mstatusVReg,
+  refine ⟨js.vregs JoltISA.mstatusVReg ||| 0x1800#64,
     (noSource js hlink).linkedCSRs.1.value_eq, ?_⟩
-  change (js.vregs JoltISA.mstatusVReg).extractLsb' 17 1 = 0
+  change (js.vregs JoltISA.mstatusVReg ||| 0x1800#64).extractLsb' 17 1 = 0
   have hb := congrArg (fun v : BitVec 64 => v.extractLsb' 17 1) hmstatus
   simp only [BitVec.extractLsb'_and, BitVec.reduceNot, BitVec.reduceExtractLsb'] at hb
   change (js.vregs JoltISA.mstatusVReg).extractLsb' 17 1 &&& BitVec.allOnes 1 = 0 at hb
-  simpa only [BitVec.and_allOnes] using hb
+  simpa only [BitVec.and_allOnes, BitVec.extractLsb'_or, BitVec.reduceExtractLsb',
+    BitVec.or_zero] using hb
 
 private theorem range_subset_nat (addr base size : BitVec 64) (n : Nat)
     (hbase : base.toNat ≤ addr.toNat) (hn : n < 2 ^ 64)
@@ -845,6 +854,7 @@ private theorem retire_conditions (i : RiscvInstruction) (hi : i.Lifted)
   case SC_D => exact False.elim hi
   case CSRRW rd csr rs1 => exact False.elim ((hcsr rd csr rs1).1 rfl)
   case CSRRS rd csr rs1 => exact False.elim ((hcsr rd csr rs1).2 rfl)
+  case CSRRC | CSRRWI | CSRRSI | CSRRCI => exact False.elim hi
   all_goals
     refine ⟨True.intro, ?_⟩
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.execLUI] at hrun
@@ -1084,6 +1094,7 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
   case SC_D => exact False.elim hi
   case CSRRW rd csr rs1 => exact False.elim ((hcsr rd csr rs1).1 rfl)
   case CSRRS rd csr rs1 => exact False.elim ((hcsr rd csr rs1).2 rfl)
+  case CSRRC | CSRRWI | CSRRSI | CSRRCI => exact False.elim hi
   all_goals first
     | exact ⟨unarySource js hinv hlink _, True.intro⟩
     | exact ⟨binarySource js hinv hlink _ _, by first | exact True.intro | rfl⟩

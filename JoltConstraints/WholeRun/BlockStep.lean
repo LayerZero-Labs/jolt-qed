@@ -14,11 +14,18 @@ noncomputable section
 
 namespace WholeRun
 
+/-- Overlay the fixed system-register values `cs`, retirement count `m`,
+increment flag `inc`, and platform regions onto a Jolt state.
+For example, zero reservation virtual registers give an invalid reservation,
+and a zero mstatus virtual register gives Sail mstatus `0x1800`. -/
 private def overlayRows (cs : BitVec 7 → BitVec 64) (m : BitVec 64) (inc : Bool)
     (js : SailJoltState) : SailJoltState :=
-  withReg (withReg (withReg (withReg (withReg (withReg (withReg (withReg (withReg js
+  withReg (withReg (withReg (withReg (withReg (withReg (withReg (withReg (withReg
+    (withReg (withReg (withReg js
     .mtvec (cs trapHandlerVReg)) .mscratch (cs mscratchVReg)) .mepc (cs mepcVReg))
-    .mcause (cs mcauseVReg)) .mtval (cs mtvalVReg)) .mstatus (cs mstatusVReg))
+    .mcause (cs mcauseVReg)) .mtval (cs mtvalVReg)) .mstatus (cs mstatusVReg ||| 0x1800#64))
+    .reservation_valid (cs reservationWReg != 0#64)) .reservation_addr (cs reservationWReg))
+    .reservation_width (System.reservationWidth (cs reservationWReg) (cs reservationDReg)))
     .minstret m) .minstret_increment inc) .pma_regions platformPma
 
 private theorem execProgram_overlayRows (p : Program) (cs : BitVec 7 → BitVec 64)
@@ -29,6 +36,9 @@ private theorem execProgram_overlayRows (p : Program) (cs : BitVec 7 → BitVec 
     execProgram_withReg p .pma_regions (by trivial),
     execProgram_withReg p .minstret_increment (by trivial),
     execProgram_withReg p .minstret (by trivial),
+    execProgram_withReg p .reservation_width (by trivial),
+    execProgram_withReg p .reservation_addr (by trivial),
+    execProgram_withReg p .reservation_valid (by trivial),
     execProgram_withReg p .mstatus (by trivial),
     execProgram_withReg p .mtval (by trivial),
     execProgram_withReg p .mcause (by trivial),
@@ -42,12 +52,14 @@ local macro "overlay_keys" " => " finish:tactic : tactic =>
     (intro r
      by_cases hkey : Register.PC = r ∨ Register.nextPC = r ∨ Register.mtvec = r ∨
        Register.mscratch = r ∨ Register.mepc = r ∨ Register.mcause = r ∨
-       Register.mtval = r ∨ Register.mstatus = r ∨ Register.minstret = r ∨
+       Register.mtval = r ∨ Register.mstatus = r ∨ Register.reservation_valid = r ∨
+       Register.reservation_addr = r ∨ Register.reservation_width = r ∨ Register.minstret = r ∨
        Register.minstret_increment = r ∨ Register.pma_regions = r
-     · rcases hkey with he | he | he | he | he | he | he | he | he | he | he
+     · rcases hkey with he | he | he | he | he | he | he | he | he | he | he | he | he | he
        all_goals (subst r; $finish)
      · simp only [not_or] at hkey
-       obtain ⟨hPC, hnPC, htv, hscr, hepc, hcause, htval, hstatus, hm, hinc, hpma⟩ := hkey
+       obtain ⟨hPC, hnPC, htv, hscr, hepc, hcause, htval, hstatus,
+         hvalid, haddr, hwidth, hm, hinc, hpma⟩ := hkey
        $finish))
 
 private theorem ghost_projects {jt : SailJoltState} {s : SailState} (h : Related jt s) :
