@@ -131,8 +131,8 @@ noncomputable def joltRun : RiscvInstruction → JoltMonad ExecutionResult
   | .MRET => JoltISA.execProgram JoltISA.mretProgram
 
 /-- `Matches i ast`: `ast` is the Sail instruction that `i` stands for. FENCE
-matches every Sail FENCE (Jolt runs all of them as a no-op), and atomics keep
-their `aq`/`rl` bits. -/
+matches every Sail FENCE and FENCE_TSO (Jolt runs all of them as a no-op),
+and atomics keep their `aq`/`rl` bits. -/
 def Matches : RiscvInstruction → instruction → Prop
   | .LUI rd imm, ast => ast = .UTYPE (imm, rd, uop.LUI)
   | .AUIPC rd imm, ast => ast = .UTYPE (imm, rd, uop.AUIPC)
@@ -169,7 +169,7 @@ def Matches : RiscvInstruction → instruction → Prop
   | .OR rd rs1 rs2, ast => ast = .RTYPE (rs2, rs1, rd, rop.OR)
   | .AND rd rs1 rs2, ast => ast = .RTYPE (rs2, rs1, rd, rop.AND)
   | .ANDN rd rs1 rs2, ast => ast = .ZBB_RTYPE (rs2, rs1, rd, brop_zbb.ANDN)
-  | .FENCE, ast => ∃ fm pred succ rs1 rd, ast = .FENCE (fm, pred, succ, rs1, rd)
+  | .FENCE, ast => (∃ fm pred succ rs1 rd, ast = .FENCE (fm, pred, succ, rs1, rd)) ∨ ast = .FENCE_TSO ()
   | .ECALL, ast => ast = .ECALL ()
   | .EBREAK, ast => ast = .EBREAK ()
   | .LWU rd rs1 imm, ast => ast = .LOAD (imm, rs1, rd, true, 4)
@@ -435,10 +435,11 @@ theorem joltRun_eq_execute :
       rw [Projection.systemProject_eq_sail_of_compatible js hl]
       exact Natives.andnInstr_eq_sail rs2 rs1 rd js h
   | .FENCE, _, ast, hm, js, h, _ => by
-      obtain ⟨fm, pred, succ, rs1, rd, rfl⟩ := hm
-      have hl : LinkedCSRs js := by unfold equivAssumptions at h; exact h.linkedCSRs
-      rw [Projection.systemProject_eq_sail_of_compatible js hl]
-      exact (Natives.fenceInstr_eq_sail js h) fm pred succ rs1 rd
+      rcases hm with ⟨fm, pred, succ, rs1, rd, rfl⟩ | rfl
+      · have hl : LinkedCSRs js := by unfold equivAssumptions at h; exact h.linkedCSRs
+        rw [Projection.systemProject_eq_sail_of_compatible js hl]
+        exact (Natives.fenceInstr_eq_sail js h) fm pred succ rs1 rd
+      · rfl
   | .ECALL, hi, _, _, _, _, _ => hi.elim
   | .EBREAK, hi, _, _, _, _, _ => hi.elim
   | .LWU rd rs1 imm, _, ast, hm, js, h, _ => by
