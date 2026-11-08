@@ -132,6 +132,8 @@ structure Related (jt : SailJoltState) (s : SailState) : Prop where
   /-- Sail's state satisfies the facts that make `try_step` a plain
   fetch-decode-execute step. -/
   inv : Step.StepInvariant s
+  /-- Sail's HTIF device is off: no `tohost` address is configured. -/
+  htif : s.regs.get? Register.htif_tohost_base = some none
   /-- RAM: Sail's byte is Jolt's, a missing byte reading as zero on both sides. -/
   ram : ∀ a, JoltISA.RAM_START_ADDRESS ≤ a → Mmu.ram_byte s.mem a = Mmu.ram_byte jt.sail.mem a
   /-- Sail's memory holds every byte from `memLow` to `memHigh`. -/
