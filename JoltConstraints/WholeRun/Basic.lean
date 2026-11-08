@@ -35,7 +35,7 @@ them from there), and Sail's instruction-retirement bookkeeping. -/
 def Untouched : Register → Prop
   | .mtvec | .mscratch | .mepc | .mcause | .mtval | .mstatus
   | .reservation_valid | .reservation_addr | .reservation_width
-  | .minstret | .minstret_increment => True
+  | .minstret | .minstret_increment | .pma_regions => True
   | _ => False
 
 /-- The final state of a result, mapped. -/
