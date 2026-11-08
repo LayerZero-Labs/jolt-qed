@@ -3,11 +3,10 @@ Step f: the objects of the whole-run theorem.
 
 An honest Jolt trace runs one source instruction after another. Sail's emulator
 loop runs `try_step` once per instruction. This file fixes how the two are
-compared: the Sail loop (`sailRun`), the relation between a Jolt state between
-two source instructions and a Sail state (`Related`), and the decomposition of
-a trace into one block per source instruction (`Block`, `Block.Runs`).
-The pieces are proved in the other files of this directory and assembled in
-`Run.lean`; `docs/riscv-alignment.md` section 9 says which assumptions remain.
+compared: the Sail loop (`sailRun`) and the decomposition of a trace into one
+block per source instruction (`Block`, `Block.Runs`). The relation between a
+Jolt state and a Sail state is in `Relation.lean`; `Run.lean` chains blocks into
+a run; `docs/riscv-alignment.md` section 9 says which assumptions remain.
 -/
 import JoltConstraints.honest_trace
 import JoltBytecode.Step.Instructions
@@ -47,17 +46,6 @@ def mapState {ε σ τ α : Type} (f : σ → τ) : EStateM.Result ε σ α → 
 /-- A Jolt state with one embedded Sail register replaced. -/
 def withReg (js : SailJoltState) (r : Register) (v : RegisterType r) : SailJoltState :=
   { js with sail := Step.setReg js.sail r v }
-
-/-- The Sail state that a Jolt state between two source instructions stands
-for: its CSR projection, with `PC` at the next instruction (Jolt's `nextPC`)
-and some values of `minstret` and `minstret_increment`, which Jolt does not
-keep. For example, the initial Jolt state stands for the Sail state with the
-same registers and memory, `mstatus = 0x1800` and `PC` at the entry. -/
-def Related (jt : SailJoltState) (s : SailState) : Prop :=
-  ∃ (pc : BitVec 64) (m : BitVec 64) (inc : Bool),
-    jt.sail.regs.get? Register.nextPC = some pc ∧
-    s = Step.setReg (Step.setReg (Step.setReg (System.systemProject jt) Register.PC pc)
-      Register.minstret m) Register.minstret_increment inc
 
 /-- Patch advice values into the VirtualAdvice instructions of a list, in
 order; a VirtualAdvice with no value left keeps its placeholder. This is what
