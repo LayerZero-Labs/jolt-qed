@@ -1,5 +1,6 @@
-/* (extra) CSRRC on mscratch. Jolt decodes only CSRRW and CSRRS among the Zicsr
- * instructions; CSRRC, CSRRWI, CSRRSI and CSRRCI fail to decode. */
+/* (extra) CSRRC on mscratch. Jolt main (9407f93fb) decodes only CSRRW and
+ * CSRRS among the Zicsr instructions; CSRRC, CSRRWI, CSRRSI and CSRRCI fail
+ * to decode there. The random generator covers all six forms. */
 #include "../common.h"
 GUEST_START
   li t0, 0xff

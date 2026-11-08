@@ -65,6 +65,30 @@ differences are notes (see above).
   `toolchain.sh` finds them; set `CLANG` or `LLD` to override.
 - To generate the architectural tests only: Docker, see [Corpora](#corpora).
 
+## Quick start
+
+From a jolt-qed checkout, one command builds both simulators and runs every
+guest set:
+
+```sh
+JOLT_DIR=~/src/jolt scripts/difftest/all.sh WORK_DIR
+```
+
+It runs `build.sh`, the reproducers, riscv-tests, 1000 random guests of each
+mix and the ACT4 tests, in that order. Then it prints one line per set with
+its verdict counts, and writes the same lines to `WORK_DIR/summary.txt`.
+Each set's output goes to `WORK_DIR/NAME.log`. The exit status is 2 if a set
+could not run, 1 if a guest differs, and 0 otherwise. Besides the variables
+of `build.sh` and `run.sh`, it reads:
+
+| Variable | Meaning |
+| --- | --- |
+| `SEEDS` | Random guests per mix (default 1000). |
+| `LENGTH` | Items per random guest (default 200). |
+| `ACT4_ELF_DIR` | A directory of ready ACT4 ELFs. Without it they are generated with Docker, and with neither the ACT4 set does not run. |
+
+The rest of this file describes the steps one at a time.
+
 ## Building
 
 ```sh
@@ -142,7 +166,7 @@ named by the letter of the question it settles:
 | `e_lr_misaligned.S`, `e2_sc_misaligned.S` | misaligned LR.W and SC.W |
 | `f_mstatus_fs.S` | setting `mstatus.FS` |
 | `g_ebreak.S` | EBREAK |
-| `x_csr_forms.S` | CSRRC, which Jolt does not decode |
+| `x_csr_forms.S` | CSRRC, which Jolt main does not decode |
 
 ## Corpora
 
@@ -152,18 +176,31 @@ takes, and writes its results to its own directory under `WORK_DIR`.
 | Script | Guests | Results |
 | --- | --- | --- |
 | `corpus-riscv-tests.sh WORK_DIR [SUITE ...]` | riscv-tests, at a pinned commit; by default `rv64ui`, `rv64um`, `rv64ua`, `rv64uc` and `rv64mi` | `riscv-tests-results/` |
-| `corpus-random.sh WORK_DIR [FIRST_SEED [COUNT [LENGTH]]]` | random RV64IMAC guests from `gen-random.py`, 100 seeds of 200 instructions by default | `random-results/` |
+| `corpus-random.sh WORK_DIR [FIRST_SEED [COUNT [LENGTH]]]` | random RV64IMAC guests from `gen-random.py`, 100 seeds of 200 items by default, mix from `MIX` | `random-results/`, or `random-MIX-results/` |
 | `corpus-arch-test.sh WORK_DIR [ELF_DIR]` | the RV64IMAC architectural tests (ACT4) that Jolt's CI runs | `arch-test-results/` |
 
 riscv-tests are built against `guest/riscv-tests-env/riscv_test.h`, a copy of
 riscv-tests' `env/p` cut down to M-mode. It touches only `mtvec`, `mstatus` and
 `mcause`, so a test that fails tests the instruction, not the environment.
 
-`gen-random.py SEED [LENGTH]` writes one guest. It sets the registers to random
-values and runs random arithmetic, loads and stores, AMOs, LR/SC, the six CSR
-instructions on `mscratch`, compressed instructions and forward branches and
-jumps. Memory accesses are aligned and
-stay inside a 256-byte buffer. The same seed always gives the same guest.
+`gen-random.py SEED [LENGTH [MIX]]` writes one guest. It sets the registers
+to random values and then runs LENGTH random items. Memory accesses are
+aligned and stay inside a 256-byte buffer, and control flow only goes
+forwards. The same arguments always give the same guest. There are two mixes:
+
+- `base` (the default): single instructions: arithmetic, loads and stores,
+  AMOs, single LR and SC instructions, the six CSR instructions on
+  `mscratch`, compressed instructions, and forward branches and jumps.
+  Nothing traps.
+- `system`: weighted towards machine-mode system state: the six CSR
+  instructions on `mstatus`, `mscratch`, `mepc`, `mcause` and `mtval` with
+  random operands, reads of `mtvec` and writes to its MODE field, ECALL into
+  a handler that returns with MRET, MRET on its own, and LR … SC sequences
+  that mostly reuse the LR's address and width, sometimes with an ECALL or a
+  store in between. The rest are `base` instructions.
+
+`corpus-random.sh` takes the mix from `MIX`. A mix other than `base` writes
+to `random-MIX-results/`.
 
 `corpus-arch-test.sh` runs the ACT4 self-checking ELFs built with the DUT
 configuration in Jolt's `tests/arch-tests/jolt/`. Without `ELF_DIR` it

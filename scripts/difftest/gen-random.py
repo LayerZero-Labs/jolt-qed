@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
 """Generate a random RV64IMAC guest for the difftest harness.
 
-    gen-random.py SEED [LENGTH] > guest.S
+    gen-random.py SEED [LENGTH [MIX]] > guest.S
 
 The guest sets every integer register except x0, s0 and s1 to a random value,
-then runs LENGTH random instructions and exits through `tohost`. The
-instructions are drawn from RV64I, M, A, C and Zicsr: arithmetic and logic,
-loads and stores, AMOs and LR/SC, forward branches and jumps, and all six CSR
-instructions on mscratch, which both simulators treat as a plain read/write
-register. Memory accesses are
+then runs LENGTH random items and exits through `tohost`. Memory accesses are
 aligned and stay inside a 256-byte random buffer that s0 points to (s1 points
-64 bytes into it); s0 and s1 are never written. There are no other CSR
-accesses, traps, misaligned accesses or backward jumps, so every guest runs
-straight through. The same SEED always gives the same guest.
+64 bytes into it); s0 and s1 are never written. Control flow only goes
+forwards, so every guest runs straight through. The same SEED, LENGTH and MIX
+always give the same guest.
+
+MIX chooses what the items are:
+
+base    (default) one instruction each, drawn from RV64I, M, A, C and Zicsr:
+        arithmetic and logic, loads and stores, AMOs and single LR or SC
+        instructions, forward branches and jumps, and all six CSR
+        instructions on mscratch, which both simulators treat as a plain
+        read/write register. Nothing traps.
+system  weighted towards the machine-mode system state: all six CSR
+        instructions on mstatus, mscratch, mepc, mcause and mtval with random
+        operands, reads of mtvec and writes of its MODE field, ECALL into a
+        handler that returns past it with MRET, MRET on its own (to the next
+        instruction, through mepc), and LR ... SC sequences that mostly
+        reuse the LR's address and width. The rest are base instructions.
+        x31 is clobbered by the handler and by the MRET sequences.
 """
 
 import random
@@ -34,6 +45,8 @@ STORES = [("sb", 1), ("sh", 2), ("sw", 4), ("sd", 8)]
 AMOS = ["amoswap", "amoadd", "amoxor", "amoand", "amoor",
         "amomin", "amomax", "amominu", "amomaxu"]
 CSR_OPS = ["csrrw", "csrrs", "csrrc"]
+SYS_CSRS = ["mstatus", "mscratch", "mepc", "mcause", "mtval"]
+MIXES = ("base", "system")
 BRANCHES = ["beq", "bne", "blt", "bge", "bltu", "bgeu"]
 C_ALU = ["c.sub", "c.xor", "c.or", "c.and", "c.subw", "c.addw"]
 BUF = 256
@@ -129,7 +142,62 @@ class Gen:
             return f"{rng.choice(['c.sw', 'c.sd'])} {x(crs2)}, 0(s0)"
         return "c.nop"
 
-    def body(self, length):
+    def csr(self):
+        """A random CSR instruction on one of the CSRs both simulators model.
+
+        mtvec only has its MODE field written, so ECALL keeps reaching the
+        handler; its BASE is the handler address throughout."""
+        rng = self.rng
+        rd, rs1 = rng.choice(REGS), rng.randrange(32)
+        op = rng.choice(CSR_OPS)
+        if rng.random() < 0.1:
+            if rng.random() < 0.5:
+                return f"{rng.choice(['csrrs', 'csrrc'])} {x(rd)}, mtvec, x0"
+            return f"{rng.choice(['csrrsi', 'csrrci'])} {x(rd)}, mtvec, {rng.randrange(4)}"
+        csr = rng.choice(SYS_CSRS)
+        if rng.random() < 0.5:
+            return f"{op} {x(rd)}, {csr}, {x(rs1)}"
+        return f"{op}i {x(rd)}, {csr}, {rng.randrange(32)}"
+
+    def lrsc(self):
+        """LR, up to three other instructions, then SC: usually at the LR's
+        address and width, sometimes at the other base or width."""
+        rng = self.rng
+        width, base = rng.choice(["w", "d"]), rng.choice(["s0", "s1"])
+        out = [f"lr.{width} {x(rng.choice(REGS))}, ({base})"]
+        for _ in range(rng.randint(0, 3)):
+            k = rng.random()
+            if k < 0.15:
+                out.append("ecall")
+            elif k < 0.3:
+                op, size = rng.choice(STORES)
+                out.append(f"{op} {x(rng.randrange(32))}, {rng.randrange(BUF // size) * size}(s0)")
+            else:
+                out.append(self.straight())
+        if rng.random() < 0.2:
+            width = "d" if width == "w" else "w"
+        if rng.random() < 0.2:
+            base = "s1" if base == "s0" else "s0"
+        out.append(f"sc.{width} {x(rng.choice(REGS))}, {x(rng.randrange(32))}, ({base})")
+        return out
+
+    def system(self):
+        """One item of the system mix, as a list of lines."""
+        rng = self.rng
+        k = rng.random()
+        if k < 0.30:
+            return [self.csr()]
+        if k < 0.38:
+            return ["ecall"]
+        if k < 0.42:
+            # MRET to the next instruction: x31 = target, mepc = x31.
+            lab = self.label()
+            return [f"la x31, {lab}", "csrw mepc, x31", "mret", f"{lab}:"]
+        if k < 0.57:
+            return self.lrsc()
+        return [self.straight()]
+
+    def body(self, length, mix="base"):
         rng = self.rng
         out, pending = [], []          # pending: [label, instructions left]
         for _ in range(length):
@@ -153,6 +221,8 @@ class Gen:
                     r = rng.choice([r for r in REGS if r != 0])
                     out.append(f"la {x(r)}, {lab}")
                     out.append(f"jalr {x(rng.choice(REGS))}, 0({x(r)})")
+            elif mix == "system":
+                out += self.system()
             else:
                 out.append(self.straight())
         out += [f"{p[0]}:" for p in pending]
@@ -160,23 +230,31 @@ class Gen:
 
 
 def main():
+    if not 2 <= len(sys.argv) <= 4 or (len(sys.argv) == 4 and sys.argv[3] not in MIXES):
+        sys.exit(f"usage: gen-random.py SEED [LENGTH [{'|'.join(MIXES)}]]")
     seed = int(sys.argv[1])
     length = int(sys.argv[2]) if len(sys.argv) > 2 else 200
+    mix = sys.argv[3] if len(sys.argv) > 3 else "base"
     g = Gen(seed)
     rng = g.rng
-    lines = [f"/* Random guest: gen-random.py {seed} {length} */",
+    lines = [f"/* Random guest: gen-random.py {seed} {length} {mix} */",
              '#include "common.h"',
              "GUEST_START",
              "  la s0, rbuf",
              "  addi s1, s0, 64"]
+    if mix == "system":
+        lines += ["  la t0, .Lreturn_handler", "  csrw mtvec, t0"]
     lines += [f"  li {x(r)}, 0x{rng.getrandbits(64):x}" for r in REGS if r != 0]
-    lines += ["  " + i if not i.endswith(":") else i for i in g.body(length)]
-    lines += ["  GUEST_EXIT(0)", "GUEST_END",
-              "  .data", "  .align 6", "rbuf:"]
+    lines += ["  " + i if not i.endswith(":") else i for i in g.body(length, mix)]
+    lines += ["  GUEST_EXIT(0)"]
+    if mix == "system":
+        # ECALL handler: return past the 4-byte ECALL.
+        lines += ["  .align 2", ".Lreturn_handler:", "  csrr x31, mepc",
+                  "  addi x31, x31, 4", "  csrw mepc, x31", "  mret"]
+    lines += ["GUEST_END", "  .data", "  .align 6", "rbuf:"]
     data = [rng.getrandbits(64) for _ in range(BUF // 8)]
     lines += [f"  .dword 0x{v:016x}" for v in data]
     print("\n".join(lines))
-
 
 if __name__ == "__main__":
     main()
