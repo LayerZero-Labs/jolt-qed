@@ -25,10 +25,11 @@ from reset on and have kept differing, Sail privilege-mode changes and traps,
 and Jolt RAM writes at instructions where Sail stores nothing.
 
 LR/SC reservations are a spec-legal policy choice. Jolt reserves the exact
-address and fails an SC wider than its LR; Sail's C++ emulator reserves an
-8-byte granule and does not check width. When the first difference of a run
-is an SC that succeeds in Sail and fails in Jolt for one of these reasons, the
-run is labelled POLICY and compared no further.
+address and fails an SC wider than its LR. Sail's emulator may be more
+permissive (unpatched sail-riscv reserves an 8-byte granule and does not check
+the width). When the first difference of a run is an SC that succeeds in Sail
+and fails in Jolt for one of these two reasons, the run is labelled POLICY and
+compared no further.
 
 Usage:
   difftest.py --sail SIM --config JSON --jolt JOLT_TRACE ELF [--json OUT]
@@ -265,7 +266,7 @@ def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
             # Jolt's reservation needs the same address and an SC no wider
             # than the LR. The spec also lets an implementation accept an SC
             # elsewhere in the reserved granule, or wider than the LR, as
-            # Sail's C++ emulator does (8-byte granule, no width check).
+            # unpatched sail-riscv does (8-byte granule, no width check).
             # With rd = x0 the outcome shows only as Sail's store.
             sail_only = (xs[rd] == 0 and xj[rd] == 1) if rd else (changed_s and not changed_j)
             if (before == 0 and len(diffs) > 0 and resv and sail_only

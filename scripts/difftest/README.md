@@ -39,16 +39,17 @@ Each guest gets one of three verdicts:
 - `POLICY`: the first difference is an SC that succeeds in Sail and fails in
   Jolt because of the reservation policy, and the comparison stops there.
   Jolt reserves the exact address of the LR and fails an SC wider than the
-  LR. Sail's C++ emulator reserves the 8-byte granule and does not check the
-  width. The specification allows both.
+  LR. Unpatched sail-riscv reserves the 8-byte granule and does not check the
+  width. The specification allows both. With a model patched to Jolt's
+  policy, no guest gets this verdict.
 - `DIFFER`: any other difference.
 
 ## What this does not test
 
 The C++ emulator implements the model's external functions (memory, PMAs,
-reservations, the platform) in C++. The Lean model `LeanRV64D` implements them
-in `handwritten_support/RiscvExtras.lean` or leaves them as axioms. A difference
-in those functions, such as the LR/SC reservation granule, is a difference
+the platform, and in unpatched sail-riscv the LR/SC reservation) in C++. The
+Lean model `LeanRV64D` implements them in `handwritten_support/RiscvExtras.lean`
+or leaves them as axioms. A difference in those functions is a difference
 between Jolt and the C++ emulator. It need not be a difference between Jolt and
 the Lean model. Both simulators start from their own reset state; reset
 differences are notes (see above).
@@ -159,8 +160,9 @@ riscv-tests' `env/p` cut down to M-mode. It touches only `mtvec`, `mstatus` and
 `mcause`, so a test that fails tests the instruction, not the environment.
 
 `gen-random.py SEED [LENGTH]` writes one guest. It sets the registers to random
-values and runs random arithmetic, loads and stores, AMOs, LR/SC, compressed
-instructions and forward branches and jumps. Memory accesses are aligned and
+values and runs random arithmetic, loads and stores, AMOs, LR/SC, the six CSR
+instructions on `mscratch`, compressed instructions and forward branches and
+jumps. Memory accesses are aligned and
 stay inside a 256-byte buffer. The same seed always gives the same guest.
 
 `corpus-arch-test.sh` runs the ACT4 self-checking ELFs built with the DUT
@@ -173,7 +175,11 @@ machine with the same two targets and pass their directory as `ELF_DIR`. The
 `sail_riscv_sim` that ACT4 uses only computes the signatures baked into the
 ELFs; the comparison uses the emulator that `build.sh` built.
 
-With the current configuration, every `mstatus` read differs in the
-read-only `UXL` and `SXL` fields: Sail reads them as 2, and Jolt's `mstatus`
-starts at zero. The configuration enables S- and U-mode, so these fields
-exist in Sail.
+An ACT4 test that fails its own check halts by writing `(gp << 1) | 1` to
+`tohost`. Jolt stops on any such write. When that value sets the HTIF device
+byte (bits 63 to 56), Sail ignores the write and spins until `LIMIT`, so a
+test that fails on both sides shows as a length difference at that store.
+
+With a configuration that enables S- or U-mode, every `mstatus` read differs
+in the read-only `UXL` and `SXL` fields: Sail reads them as 2, and Jolt has no
+such fields. An M-only configuration reads them as 0.

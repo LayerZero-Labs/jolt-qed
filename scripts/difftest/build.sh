@@ -113,6 +113,21 @@ if [[ ! -x "$sim" || "$(cat "$riscv/.difftest-key" 2>/dev/null)" != "$model_key"
   fetch_commit "$riscv" "$(field model.repository)" "$(field model.commit)"
   check_sha "$riscv/model/riscv.sail_project" "$(field model.project_file_sha256)"
   for patch in "${model_patches[@]}"; do git -C "$riscv" apply "$patch"; done
+  # Upstream validates its bundled default configurations after linking the
+  # emulator. A model patch that adds required configuration keys, as the Jolt
+  # hart patch does, makes those defaults invalid; the configuration actually
+  # used is validated below instead.
+  python3 - "$riscv/c_emulator/CMakeLists.txt" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path).read()
+text, n = re.subn(r"\n# After the emulator is built, use it to validate the generated config files\.\n"
+                  r"foreach \(config_filename IN LISTS generated_config_filenames\).*?endforeach\(\)\n",
+                  "\n", text, flags=re.S)
+if n != 1:
+    sys.exit(f"{path}: default-configuration validation block not found")
+open(path, "w").write(text)
+PY
   cmake -S "$riscv" -B "$riscv/build" -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DSAIL_BIN="$SAIL_BIN" > "$work/cmake.log" 2>&1 ||
     { tail -30 "$work/cmake.log" >&2; fail "cmake configure failed"; }
