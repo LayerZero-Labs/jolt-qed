@@ -22,8 +22,10 @@ Jolt keeps RAM in `js.sail.mem` and the I/O window in `js.jolt_device`; Sail
 keeps both in one byte map. Sail's byte at a RAM address is Jolt's
 (`Mmu.ram_byte`, zero where Jolt has written nothing), and at an I/O address it
 is what Jolt's device reads there (`JoltDevice.load?`, zero where the device
-has no byte). Sail's memory holds a byte at every address from the lowest I/O
-address to the end of Jolt's heap; Jolt's tracer rejects every access outside
+has no byte). Above `RAM_START_ADDRESS` the two agree byte for byte, reading a
+missing byte as zero. Sail's memory holds a byte at every address from the
+lowest I/O address to eight bytes past the end of Jolt's heap (so that every
+doubleword Jolt can read is present); Jolt's tracer rejects every access outside
 that range.
 
 The panic and termination words are where the two platforms differ
@@ -93,9 +95,11 @@ regions. -/
 def memLow (device : JoltDevice) : Nat :=
   device.memory_layout.get_lowest_address.toNat
 
-/-- One past the highest address Jolt's tracer accepts: the end of the heap. -/
+/-- One past the highest byte Sail's memory must hold: eight bytes past the end
+of the heap, so that the doubleword of every RAM address Jolt accepts is
+present. -/
 def memHigh (device : JoltDevice) : Nat :=
-  device.memory_layout.heap_end.toNat
+  device.memory_layout.heap_end.toNat + 8
 
 /-- The panic and termination words, where Jolt's device is not memory. -/
 def IsFlagWord (device : JoltDevice) (a : Nat) : Bool :=
@@ -125,11 +129,18 @@ structure Related (jt : SailJoltState) (s : SailState) : Prop where
   /-- Registers: Sail's registers are Jolt's, through the overlay. -/
   regs : ∃ (pc m : BitVec 64) (inc : Bool),
     jt.sail.regs.get? Register.nextPC = some pc ∧ s.regs = (sailRegs jt pc m inc).regs
-  /-- Memory outside the flag words: Sail's byte is Jolt's. -/
-  mem : ∀ a, memLow jt.jolt_device ≤ a → a < memHigh jt.jolt_device →
-    ¬ IsFlagWord jt.jolt_device a → s.mem.get? a = some (sailByte jt a)
-  /-- The flag words are present in Sail's memory. -/
-  flags_present : ∀ a, IsFlagWord jt.jolt_device a → ∃ b, s.mem.get? a = some b
+  /-- Sail's state satisfies the facts that make `try_step` a plain
+  fetch-decode-execute step. -/
+  inv : Step.StepInvariant s
+  /-- RAM: Sail's byte is Jolt's, a missing byte reading as zero on both sides. -/
+  ram : ∀ a, JoltISA.RAM_START_ADDRESS ≤ a → Mmu.ram_byte s.mem a = Mmu.ram_byte jt.sail.mem a
+  /-- Sail's memory holds every byte from `memLow` to `memHigh`. -/
+  present : ∀ a, memLow jt.jolt_device ≤ a → a < memHigh jt.jolt_device →
+    ∃ b, s.mem.get? a = some b
+  /-- The I/O window outside the flag words: Sail's byte is what Jolt's device
+  reads there. -/
+  io : ∀ a, memLow jt.jolt_device ≤ a → a < JoltISA.RAM_START_ADDRESS →
+    IsFlagWord jt.jolt_device a = false → s.mem.get? a = some ((jt.jolt_device.load? a).getD 0)
   /-- Jolt's panic flag is set exactly when Sail's panic word is nonzero. -/
   panic : jt.jolt_device.panic = true ↔ sailPanicWord jt.jolt_device s ≠ 0
   /-- Jolt's output buffer stays inside the output region. -/
