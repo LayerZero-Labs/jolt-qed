@@ -202,6 +202,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -230,7 +231,7 @@ def require_Sv32 (ext_name : String) : Bool :=
   else true
 
 def require_Sv39 (ext_name : String) : Bool :=
-  if ((not (true : Bool)) : Bool)
+  if ((not (false : Bool)) : Bool)
   then
     (let _ : Unit :=
       (print_endline
@@ -285,14 +286,14 @@ def check_mmu_config (_ : Unit) : SailM Bool := do
       valid)
     else valid
   let valid ← (( do
-    if ((true : Bool) : Bool)
+    if ((false : Bool) : Bool)
     then (do (pure valid) <&&> (do (require_virtual_memory "Ssccptr")))
     else (pure valid) ) : SailM Bool )
   let valid : Bool :=
-    if ((true : Bool) : Bool)
+    if ((false : Bool) : Bool)
     then (valid && (require_Sv39 "Svnapot"))
     else valid
-  if ((true : Bool) : Bool)
+  if ((false : Bool) : Bool)
   then (do (pure valid) <&&> (do (require_virtual_memory "Svvptc")))
   else (pure valid)
 
@@ -504,7 +505,7 @@ def check_vext_config (_ : Unit) : Bool :=
     valid)
   else valid
 
-/-- Type quantifiers: k_ex256192_ : Bool, k_ex256191_ : Bool, k_ex256190_ : Bool, k_ex256189_ : Bool -/
+/-- Type quantifiers: k_ex256245_ : Bool, k_ex256244_ : Bool, k_ex256243_ : Bool, k_ex256242_ : Bool -/
 def check_pma_regions (pmas : (List PMA_Region)) (prev_base : (BitVec 64)) (prev_size : (BitVec 64)) (check_ziccamoa : Bool) (check_ziccamoc : Bool) (check_ziccrse : Bool) (check_ssccptr : Bool) : Bool := ExceptM.run do
   match pmas with
   | [] => (pure true)
@@ -576,7 +577,7 @@ def check_pma_regions (pmas : (List PMA_Region)) (prev_base : (BitVec 64)) (prev
                               false : Bool)
                           else (pure ())))))
           else (pure ())
-          (pure (check_pma_regions rest pma.base pma.size check_ziccamoc check_ziccamoa
+          (pure (check_pma_regions rest pma.base pma.size check_ziccamoa check_ziccamoc
               check_ziccrse check_ssccptr))))
 
 def dtb_within_configured_pma_memory (addr : (BitVec 64)) (size : (BitVec 64)) : SailM Bool := do
@@ -590,9 +591,9 @@ def check_mem_layout (_ : Unit) : SailM Bool := do
   else
     (do
       let ziccamoa_is_supported : Bool := true
-      let ziccamoc_is_supported : Bool := true
+      let ziccamoc_is_supported : Bool := false
       let ziccrse_is_supported : Bool := true
-      let ssccptr_is_supported : Bool := true
+      let ssccptr_is_supported : Bool := false
       (pure (check_pma_regions (← readReg pma_regions) (zeros (n := 64)) (zeros (n := 64))
           ziccamoa_is_supported ziccamoc_is_supported ziccrse_is_supported ssccptr_is_supported)))
 
@@ -614,7 +615,7 @@ def check_pmp (_ : Unit) : Bool :=
     valid)
   else valid
 
-/-- Type quantifiers: k_ex256193_ : Bool -/
+/-- Type quantifiers: k_ex256246_ : Bool -/
 def check_required_sstvala_option (name : String) (value : Bool) : Bool :=
   if ((not value) : Bool)
   then
@@ -772,7 +773,7 @@ def check_misc_extension_dependencies (_ : Unit) : Bool :=
           "The Ssqosid extension is enabled but Zicsr is disabled: supporting Ssqosid requires Zicsr.")
       valid)
     else valid
-  if (((true : Bool) && (((Sail.BitVec.extractLsb sys_writable_hpm_counters 31 3) &&& (Sail.BitVec.extractLsb
+  if (((false : Bool) && (((Sail.BitVec.extractLsb sys_writable_hpm_counters 31 3) &&& (Sail.BitVec.extractLsb
              sys_scounteren_writable_bits 31 3)) != (Sail.BitVec.extractLsb
            sys_writable_hpm_counters 31 3))) : Bool)
   then

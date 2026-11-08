@@ -223,20 +223,6 @@ structure CurPrivilegeMachine (s : SailState) : Prop where
   value : s.regs.get? Register.cur_privilege =
     some (Privilege.Machine : RegisterType Register.cur_privilege)
 
-/-- The generated `misa` CSR is present and has the U extension bit set.
-
-Rust source:
-`jolt/tracer/src/emulator/cpu.rs:471` at `5def437f`.
-Generated Sail source: `LeanRV64D/Types.lean:381-382`.
-
-Rust initializes `misa` to `0x800000008014312f`; generated Sail's
-`_get_Misa_U` reads bit 20, which is set in that value.
--/
-structure MisaUserEnabled (s : SailState) : Prop where
-  exists_value : ∃ misa : BitVec 64,
-    s.regs.get? Register.misa = some (misa : RegisterType Register.misa) ∧
-    _get_Misa_U misa = 1#1
-
 /-- The Sail `mstatus` register is readable and has MPRV=0.
 
 Rust source: `tracer/src/emulator/mmu.rs:870-898`.
@@ -249,14 +235,6 @@ structure MstatusMprvZero (s : SailState) : Prop where
   value : ∃ mval : RegisterType Register.mstatus,
     s.regs.get? Register.mstatus = some mval ∧
     _get_Mstatus_MPRV mval = 0#1
-
-/-- The generated Sail Zicfilp landing-pad extension is disabled.
-
-Jolt does not model the generated Sail `elp` register or Zicfilp landing-pad
-state.
--/
-structure ZicfilpDisabled (s : SailState) : Prop where
-  value : currentlyEnabled extension.Ext_Zicfilp s = .ok false s
 
 -- vreg == sail.csr begins  here 
 
@@ -351,10 +329,8 @@ end Assumptions
 export Assumptions (
   CurPrivilegeMachine
   MstatusMprvZero
-  ZicfilpDisabled
   XRegReadable
   SailRegReadable
-  MisaUserEnabled
   MtvecWriteDirectMode
   MstatusMppMachine
   DwordPresent

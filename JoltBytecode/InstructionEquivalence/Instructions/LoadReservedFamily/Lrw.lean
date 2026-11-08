@@ -9,29 +9,16 @@ The Rust-faithful Jolt expansion for `LR.W` is concrete:
 2. clear `reservation_d`;
 3. run the ordinary Jolt `LW` expansion.
 
-The generated Lean Sail semantics is not just an ordinary word load. `LR.W` runs
-`execute_LOADRES`, which performs the memory read and then calls
-`load_reservation (bits_of_physaddr paddr) 4`.
+The generated Lean Sail semantics runs `execute_LOADRES`, which performs the
+memory read and then calls `load_reservation (bits_of_physaddr paddr) 4`.
+The Sail model holds the reservation in the registers `reservation_valid`,
+`reservation_addr` and `reservation_width` (`model/sys/sys_reservation.sail`
+after `sail-import/patches/sail-riscv-jolt-hart.patch`), so `load_reservation`
+is an ordinary register update rather than an axiom.
 
-That hook is an opaque axiom:
-
-```
-axiom load_reservation : Arch.pa -> Nat -> SailM Unit
-```
-
-The Sail state has no visible reservation field in `SequentialState`, and the
-`regs` map is keyed only by the generated architectural `Register` enum. There
-is no `Register` key for LR/SC reservation state. The related query hooks
-`match_reservation` and `valid_reservation` are pure `Bool` functions, so they
-cannot inspect the Sail state either.
-
-As a result, this equivalence is not currently provable as a closed theorem.
-Assuming `load_reservation p 4 s = .ok () s` would collapse Sail `LR.W` to an
-ordinary `LW`, but that would be an external trust assumption and would not prove
-the reservation behavior that Jolt models with virtual registers.
-
-There is no theorem target in this file until Sail exposes a trustworthy
-reservation-state contract.
+The theorem relating those registers to Jolt's `reservation_w` and
+`reservation_d` virtual registers is not stated yet; the policy it will use is
+described in `docs/riscv-alignment.md`, section 3.
 -/
 
 namespace LoadReservedFamily

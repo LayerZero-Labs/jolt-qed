@@ -5,6 +5,7 @@ Authors: Ari
 -/
 
 import JoltBytecode.Assumptions
+import JoltBytecode.HartConfig
 import JoltBytecode.JoltISA.MemoryAccess
 import JoltBytecode.JoltISA.SystemCSR
 
@@ -73,9 +74,7 @@ def all_assumptions (js : SailJoltState) (operands : AssumptionOperands) : Prop 
     Assumptions.JoltRamLoadOk addr js ∧
     Assumptions.JoltRamStoreOk addr js) ∧
   Assumptions.CurPrivilegeMachine js.sail ∧
-  Assumptions.MisaUserEnabled js.sail ∧
   Assumptions.MstatusMprvZero js.sail ∧
-  Assumptions.ZicfilpDisabled js.sail ∧
   Assumptions.MstatusVRegMatchesSail js ∧
   Assumptions.MtvecVRegMatchesSail js ∧
   Assumptions.MscratchVRegMatchesSail js ∧
@@ -95,7 +94,7 @@ theorem all_assumptions.curPrivilege {js : SailJoltState} {ops : AssumptionOpera
 
 theorem all_assumptions.mstatusMprv {js : SailJoltState} {ops : AssumptionOperands}
     (h : all_assumptions js ops) : Assumptions.MstatusMprvZero js.sail :=
-  h.2.2.2.2.2.2.2.1
+  h.2.2.2.2.2.2.1
 
 -- ============================================================================
 -- Source-register bundles
@@ -211,15 +210,13 @@ def JalInstrEqSailAssumptions.linkedCSRs
 
 /-- Public assumptions for native JALR equivalence.
 
-Generated Sail runs `update_elp_state rs1` before the ordinary JALR body; Jolt
-does not model Zicfilp/ELP state, so this bundle records that the generated
-Zicfilp hook is disabled in the Jolt profile.
+Generated Sail runs `update_elp_state rs1` before the ordinary JALR body; the
+hart has no Zicfilp, so the hook does nothing (`HartConfig.currentlyEnabled_Zicfilp_run`).
 Rust reads the old cpu.pc and writes the target without an alignment check.
 The existing readability and alignment predicates ensure Sail can match this.
 -/
 structure JalrInstrEqSailAssumptions (imm : BitVec 12) (rs1 : regidx) (js : SailJoltState)
     extends UnarySourceReadWithLinkedCSRs rs1 js where
-  zicfilp_disabled : Assumptions.ZicfilpDisabled js.sail
   nextPC_readable : Assumptions.SailRegReadable Register.nextPC js.sail
   -- Rust clears bit 0 but does not check Sail's remaining alignment requirement.
   target_aligned : Assumptions.MepcReadAligned
@@ -397,7 +394,6 @@ structure MretProgramEqSailAssumptions (js : SailJoltState) : Type where
   cur_privilege_machine : Assumptions.CurPrivilegeMachine js.sail
   pc_readable : Assumptions.SailRegReadable Register.PC js.sail
   misa_readable : Assumptions.SailRegReadable Register.misa js.sail
-  misa_user_enabled : Assumptions.MisaUserEnabled js.sail
   mstatus_mpp_machine : Assumptions.MstatusMppMachine js
   mepc_read_aligned :
     Assumptions.MepcReadAligned (js.vregs JoltISA.mepcVReg) js.sail

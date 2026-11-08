@@ -16,6 +16,7 @@ import LeanRV64D.SysExceptions
 import LeanRV64D.TypesKext
 import LeanRV64D.ZihintntlTypes
 import LeanRV64D.ZicfilpRegs
+import LeanRV64D.SysReservation
 import LeanRV64D.SysControl
 import LeanRV64D.Mem
 import LeanRV64D.VmemTlb
@@ -227,6 +228,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -22271,9 +22273,9 @@ def execute_WFI (_ : Unit) : SailM ExecutionResult := do
   | .Supervisor => (pure (Enter_Wait WAIT_WFI))
   | .User => (pure (Illegal_Instruction ()))
   | .VirtualUser =>
-    (internal_error "extensions/I/base_insts.sail" 626 "Hypervisor extension not supported")
+    (internal_error "extensions/I/base_insts.sail" 628 "Hypervisor extension not supported")
   | .VirtualSupervisor =>
-    (internal_error "extensions/I/base_insts.sail" 627 "Hypervisor extension not supported")
+    (internal_error "extensions/I/base_insts.sail" 629 "Hypervisor extension not supported")
 
 def execute_UTYPE (imm : (BitVec 20)) (rd : regidx) (op : uop) : SailM ExecutionResult := do
   let off : xlenbits := (sign_extend (m := 64) (imm +++ 0x000#12))
@@ -22288,7 +22290,7 @@ def execute_UNZIP (rs1 : regidx) (rd : regidx) : SailM ExecutionResult := do
   sail_assert (xlen == 32) "extensions/K/zbkb_insts.sail:97.19-97.20"
   throw Error.Exit
 
-/-- Type quantifiers: width : Nat, k_ex256166_ : Bool, k_ex256165_ : Bool, List.elem width
+/-- Type quantifiers: width : Nat, k_ex256219_ : Bool, k_ex256218_ : Bool, List.elem width
   [1, 2, 4, 8] -/
 def execute_STORECON (aq : Bool) (rl : Bool) (rs2 : regidx) (rs1 : regidx) (width : Nat) (rd : regidx) : SailM ExecutionResult := do
   sail_assert (width ≤b xlen_bytes) "extensions/A/zalrsc_insts.sail:68.28-68.29"
@@ -22363,7 +22365,7 @@ def execute_SSPOPCHK (rs1 : regidx) : SailM ExecutionResult := do
                   (pure RETIRE_SUCCESS)))
           | .Err e => (pure e)))
 
-/-- Type quantifiers: width : Nat, k_ex256170_ : Bool, k_ex256169_ : Bool, List.elem width
+/-- Type quantifiers: width : Nat, k_ex256223_ : Bool, k_ex256222_ : Bool, List.elem width
   [1, 2, 4, 8] -/
 def execute_SSAMOSWAP (aq : Bool) (rl : Bool) (rs2 : regidx) (rs1 : regidx) (width : Nat) (rd : regidx) : SailM ExecutionResult := SailME.run do
   match (← readReg cur_privilege) with
@@ -22438,9 +22440,9 @@ def execute_SRET (_ : Unit) : SailM ExecutionResult := do
         (pure ((_get_Mstatus_TSR (← readReg mstatus)) == 1#1)))
     | .Machine => (pure (not (← (currentlyEnabled Ext_S))))
     | .VirtualUser =>
-      (internal_error "extensions/I/base_insts.sail" 585 "Hypervisor extension not supported")
+      (internal_error "extensions/I/base_insts.sail" 586 "Hypervisor extension not supported")
     | .VirtualSupervisor =>
-      (internal_error "extensions/I/base_insts.sail" 586 "Hypervisor extension not supported") ) :
+      (internal_error "extensions/I/base_insts.sail" 587 "Hypervisor extension not supported") ) :
     SailM Bool )
   if (sret_illegal : Bool)
   then (pure (Illegal_Instruction ()))
@@ -22450,6 +22452,9 @@ def execute_SRET (_ : Unit) : SailM ExecutionResult := do
       then (pure (Ext_XRET_Priv_Failure ()))
       else
         (do
+          if (plat_reservation_invalidate_on_xret : Bool)
+          then (cancel_reservation ())
+          else (pure ())
           (set_next_pc
             (← (exception_handler (← readReg cur_privilege) (CTL_SRET ()) (← readReg PC))))
           (pure RETIRE_SUCCESS)))
@@ -22526,7 +22531,7 @@ def execute_SFENCE_VMA (rs1 : regidx) (rs2 : regidx) : SailM ExecutionResult := 
       (pure RETIRE_SUCCESS))
   | .VirtualUser => (pure (Virtual_Instruction ()))
   | .VirtualSupervisor =>
-    (internal_error "extensions/I/base_insts.sail" 653 "Hypervisor extension not supported")
+    (internal_error "extensions/I/base_insts.sail" 655 "Hypervisor extension not supported")
 
 def execute_SINVAL_VMA (rs1 : regidx) (rs2 : regidx) : SailM ExecutionResult := do
   (execute_SFENCE_VMA rs1 rs2)
@@ -22717,7 +22722,7 @@ def execute_REV8 (rs1 : regidx) (rd : regidx) : SailM ExecutionResult := do
   (wX_bits rd (rev8 (← (rX_bits rs1))))
   (pure RETIRE_SUCCESS)
 
-/-- Type quantifiers: k_ex256172_ : Bool -/
+/-- Type quantifiers: k_ex256225_ : Bool -/
 def execute_REMW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (is_unsigned : Bool) : SailM ExecutionResult := do
   let rs1_bits ← do (pure (Sail.BitVec.extractLsb (← (rX_bits rs1)) 31 0))
   let rs2_bits ← do (pure (Sail.BitVec.extractLsb (← (rX_bits rs2)) 31 0))
@@ -22736,7 +22741,7 @@ def execute_REMW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (is_unsigned : Bool
   (wX_bits rd (sign_extend (m := 64) (to_bits_truncate (l := 32) remainder)))
   (pure RETIRE_SUCCESS)
 
-/-- Type quantifiers: k_ex256173_ : Bool -/
+/-- Type quantifiers: k_ex256226_ : Bool -/
 def execute_REM (rs2 : regidx) (rs1 : regidx) (rd : regidx) (is_unsigned : Bool) : SailM ExecutionResult := do
   let rs1_bits ← do (rX_bits rs1)
   let rs2_bits ← do (rX_bits rs2)
@@ -22805,6 +22810,9 @@ def execute_MRET (_ : Unit) : SailM ExecutionResult := do
       then (pure (Ext_XRET_Priv_Failure ()))
       else
         (do
+          if (plat_reservation_invalidate_on_xret : Bool)
+          then (cancel_reservation ())
+          else (pure ())
           (set_next_pc
             (← (exception_handler (← readReg cur_privilege) (CTL_MRET ()) (← readReg PC))))
           (pure RETIRE_SUCCESS)))
@@ -22827,7 +22835,7 @@ def execute_LPAD (lpl : (BitVec 20)) : SailM ExecutionResult := do
           (pure RETIRE_SUCCESS)))
   else (pure RETIRE_SUCCESS)
 
-/-- Type quantifiers: width : Nat, k_ex256175_ : Bool, k_ex256174_ : Bool, List.elem width
+/-- Type quantifiers: width : Nat, k_ex256228_ : Bool, k_ex256227_ : Bool, List.elem width
   [1, 2, 4, 8] -/
 def execute_LOADRES (aq : Bool) (rl : Bool) (rs1 : regidx) (width : Nat) (rd : regidx) : SailM ExecutionResult := do
   sail_assert (width ≤b xlen_bytes) "extensions/A/zalrsc_insts.sail:43.28-43.29"
@@ -22838,7 +22846,7 @@ def execute_LOADRES (aq : Bool) (rl : Bool) (rs1 : regidx) (width : Nat) (rd : r
       (pure RETIRE_SUCCESS))
   | .Err e => (pure e)
 
-/-- Type quantifiers: width : Nat, k_ex256177_ : Bool, List.elem width [1, 2, 4, 8] -/
+/-- Type quantifiers: width : Nat, k_ex256230_ : Bool, List.elem width [1, 2, 4, 8] -/
 def execute_LOAD (imm : (BitVec 12)) (rs1 : regidx) (rd : regidx) (is_unsigned : Bool) (width : Nat) : SailM ExecutionResult := do
   let offset : xlenbits := (sign_extend (m := 64) imm)
   sail_assert (width ≤b xlen_bytes) "extensions/I/base_insts.sail:289.28-289.29"
@@ -22934,7 +22942,7 @@ def execute_EBREAK (_ : Unit) : SailM ExecutionResult := do
   (pure (Trap
       ((← readReg cur_privilege), (CTL_TRAP (make_sync_exception trap (← readReg PC))), (← readReg PC))))
 
-/-- Type quantifiers: k_ex256179_ : Bool -/
+/-- Type quantifiers: k_ex256232_ : Bool -/
 def execute_DIVW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (is_unsigned : Bool) : SailM ExecutionResult := do
   let rs1_bits ← do (pure (Sail.BitVec.extractLsb (← (rX_bits rs1)) 31 0))
   let rs2_bits ← do (pure (Sail.BitVec.extractLsb (← (rX_bits rs2)) 31 0))
@@ -22957,7 +22965,7 @@ def execute_DIVW (rs2 : regidx) (rs1 : regidx) (rd : regidx) (is_unsigned : Bool
   (wX_bits rd (sign_extend (m := 64) (to_bits_truncate (l := 32) quotient)))
   (pure RETIRE_SUCCESS)
 
-/-- Type quantifiers: k_ex256180_ : Bool -/
+/-- Type quantifiers: k_ex256233_ : Bool -/
 def execute_DIV (rs2 : regidx) (rs1 : regidx) (rd : regidx) (is_unsigned : Bool) : SailM ExecutionResult := do
   let rs1_bits ← do (rX_bits rs1)
   let rs2_bits ← do (rX_bits rs2)
@@ -23275,7 +23283,7 @@ def execute_BITYPE (imm : (BitVec 13)) (cimm : (BitVec 5)) (rs1 : regidx) (op : 
   then (jump_to ((← readReg PC) + (sign_extend (m := 64) imm)))
   else (pure RETIRE_SUCCESS)
 
-/-- Type quantifiers: width : Nat, k_ex256182_ : Bool, k_ex256181_ : Bool, List.elem width
+/-- Type quantifiers: width : Nat, k_ex256235_ : Bool, k_ex256234_ : Bool, List.elem width
   [1, 2, 4, 8, 16] -/
 def execute_AMO (op : amoop) (aq : Bool) (rl : Bool) (rs2 : regidx) (rs1 : regidx) (width : Nat) (rd : regidx) : SailM ExecutionResult := SailME.run do
   let width := width

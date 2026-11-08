@@ -145,7 +145,9 @@ theorem mretProgram_eq_sail_projected
       (!instBEqPrivilege.beq Privilege.Machine Privilege.Machine) = false := by
     decide
   simp only [bne, BEq.beq, hMachineNeFalse, ext_check_xret_priv,
-    sail_not_true, sail_not_false, Bool.false_eq_true, ↓reduceIte]
+    sail_not_true, Bool.false_eq_true, ↓reduceIte]
+  -- The configuration keeps the reservation across MRET.
+  simp only [plat_reservation_invalidate_on_xret, Bool.false_eq_true, ↓reduceIte]
   -- Read current privilege again inside the MRET trap-return postlude.
   simp only [EStateM.bind, readReg_eq_of_get? Register.cur_privilege
     (systemProject js) Privilege.Machine hCurPrivilegeProject]

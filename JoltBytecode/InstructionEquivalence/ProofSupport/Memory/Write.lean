@@ -17,6 +17,14 @@ set_option autoImplicit true
 
 noncomputable section
 
+/-- `pure false <&&> x` short-circuits. Sail's store path tests
+`res & not(match_reservation(...))`; `match_reservation` reads the reservation
+registers, so the conjunction is monadic, and an ordinary store (`res = false`)
+never evaluates it. -/
+theorem pure_false_andM {m : Type → Type} [Monad m] [LawfulMonad m] (x : m Bool) :
+    ((pure false : m Bool) <&&> x) = pure false := by
+  simp [andM, toBool]
+
 -- Inputs: dw (64-bit dword), k (byte index)
 -- Assumptions: none
 -- Extracts the k-th byte from a 64-bit dword in little-endian order.
@@ -174,7 +182,7 @@ theorem vmem_write_addr_dword_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_dword_store s addr data) := by
   unfold vmem_write_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false]
+  simp only [ha.misalign, Bool.false_eq_true, if_false, pure_false_andM]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
@@ -764,7 +772,7 @@ theorem vmem_write_addr_byte_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_byte_store s addr data) := by
   unfold vmem_write_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false]
+  simp only [ha.misalign, Bool.false_eq_true, if_false, pure_false_andM]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
@@ -807,7 +815,7 @@ theorem vmem_write_addr_halfword_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_halfword_store s addr data) := by
   unfold vmem_write_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false]
+  simp only [ha.misalign, Bool.false_eq_true, if_false, pure_false_andM]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
@@ -857,7 +865,7 @@ theorem vmem_write_addr_word_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_word_store s addr data) := by
   unfold vmem_write_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false]
+  simp only [ha.misalign, Bool.false_eq_true, if_false, pure_false_andM]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,

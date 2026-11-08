@@ -196,6 +196,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -215,7 +216,7 @@ def vector_support_of_num (arg_ : Nat) : vector_support :=
   | 3 => Float_double
   | _ => Full
 
-def vector_support_level : vector_support := Full
+def vector_support_level : vector_support := Disabled
 
 def vlen_exp := 8
 

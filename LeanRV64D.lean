@@ -198,6 +198,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -212,14 +213,18 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg fp_rounding_global fp_rounding_default
   writeReg misa (_update_Misa_MXL (Mk_Misa (zeros (n := 64))) (architecture_bits_forwards RV64))
   writeReg mstatus (let mxl := (architecture_bits_forwards RV64)
-  (_update_Mstatus_UXL
-    (_update_Mstatus_SXL (Mk_Mstatus (zeros (n := 64)))
-      (if (((xlen != 32) && (hartSupports Ext_S)) : Bool)
+  (_update_Mstatus_MPP
+    (_update_Mstatus_UXL
+      (_update_Mstatus_SXL (Mk_Mstatus (zeros (n := 64)))
+        (if (((xlen != 32) && (hartSupports Ext_S)) : Bool)
+        then mxl
+        else (zeros (n := 2))))
+      (if (((xlen != 32) && (hartSupports Ext_U)) : Bool)
       then mxl
       else (zeros (n := 2))))
-    (if (((xlen != 32) && (hartSupports Ext_U)) : Bool)
-    then mxl
-    else (zeros (n := 2)))))
+    (if ((hartSupports Ext_U) : Bool)
+    then (privLevel_to_bits User)
+    else (privLevel_to_bits Machine))))
   writeReg hstateen0 (Mk_Hstateen0 (zeros (n := 64)))
   writeReg hstateen1 (Mk_Hstateen1 (zeros (n := 64)))
   writeReg hstateen2 (Mk_Hstateen2 (zeros (n := 64)))
@@ -240,6 +245,9 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg marchid (← (to_bits_checked (l := 64) (0 : Int)))
   writeReg mhartid (← (to_bits_checked (l := 64) (0 : Int)))
   writeReg mconfigptr (zeros (n := 64))
+  writeReg reservation_valid false
+  writeReg reservation_addr (zeros (n := 64))
+  writeReg reservation_width 0
   writeReg pc_reset_address (zeros (n := 64))
   writeReg htif_tohost_base none
   writeReg htif_tohost (zeros (n := 64))
@@ -247,52 +255,37 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg htif_exit_code (zeros (n := 64))
   writeReg htif_cmd_write (zeros (n := 1))
   writeReg htif_payload_writes (zeros (n := 4))
-  writeReg pma_regions [{ base := 0b0000000000000000000000000000000000000000000000000001000000000000#64
-                          size := 0b0000000000000000000000000000000000000000000000000001000000000000#64
-                          attributes := { cacheable := true
-                                          coherent := false
+  writeReg pma_regions [{ base := 0b0000000000000000000000000000000001000000000000000000000000000000#64
+                          size := 0b0000000000000000000000000000000001000000000000000000000000000000#64
+                          attributes := { cacheable := false
+                                          coherent := true
                                           executable := false
                                           readable := true
-                                          writable := false
+                                          writable := true
                                           read_idempotent := true
                                           write_idempotent := true
-                                          misaligned_fault := NoFault
+                                          misaligned_fault := AlignmentFault
                                           atomic_support := AMONone
                                           reservability := RsrvNone
                                           supports_cbo_zero := false
                                           supports_pte_read := false
                                           supports_pte_write := false }
-                          include_in_device_tree := false }, { base := 0b0000000000000000000000000000000000000010000000000000000000000000#64
-                                                               size := 0b0000000000000000000000000000000000000010000000000000000000000000#64
-                                                               attributes := { cacheable := false
+                          include_in_device_tree := false }, { base := 0b0000000000000000000000000000000010000000000000000000000000000000#64
+                                                               size := 0b1111111111111111111111111111111110000000000000000000000000000000#64
+                                                               attributes := { cacheable := true
                                                                                coherent := true
-                                                                               executable := false
+                                                                               executable := true
                                                                                readable := true
                                                                                writable := true
-                                                                               read_idempotent := false
-                                                                               write_idempotent := false
-                                                                               misaligned_fault := AlignmentFault
-                                                                               atomic_support := AMONone
-                                                                               reservability := RsrvNone
+                                                                               read_idempotent := true
+                                                                               write_idempotent := true
+                                                                               misaligned_fault := NoFault
+                                                                               atomic_support := AMOArithmetic
+                                                                               reservability := RsrvEventual
                                                                                supports_cbo_zero := false
                                                                                supports_pte_read := false
                                                                                supports_pte_write := false }
-                                                               include_in_device_tree := false }, { base := 0b0000000000000000000000000000000010000000000000000000000000000000#64
-                                                                                                    size := 0b0000000000000000000000000000000010000000000000000000000000000000#64
-                                                                                                    attributes := { cacheable := true
-                                                                                                                    coherent := true
-                                                                                                                    executable := true
-                                                                                                                    readable := true
-                                                                                                                    writable := true
-                                                                                                                    read_idempotent := true
-                                                                                                                    write_idempotent := true
-                                                                                                                    misaligned_fault := NoFault
-                                                                                                                    atomic_support := AMOCASQ
-                                                                                                                    reservability := RsrvEventual
-                                                                                                                    supports_cbo_zero := true
-                                                                                                                    supports_pte_read := true
-                                                                                                                    supports_pte_write := true }
-                                                                                                    include_in_device_tree := true }]
+                                                               include_in_device_tree := true }]
   writeReg tlb (vectorInit none)
   writeReg ssp (zeros (n := 64))
   writeReg hart_state (HART_ACTIVE ())

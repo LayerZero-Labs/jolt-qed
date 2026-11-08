@@ -192,6 +192,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -199,8 +200,8 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_ex254582_ : Nat, List.elem k_ex254582_ [16, 32, 64, 128] -/
-def float_is_zero (op : (BitVec k_ex254582_)) : Bool :=
+/-- Type quantifiers: k_ex254630_ : Nat, List.elem k_ex254630_ [16, 32, 64, 128] -/
+def float_is_zero (op : (BitVec k_ex254630_)) : Bool :=
   let { exp := exp, mantissa := mantissa, sign := _ } := (float_decompose op)
   ((is_all_zeros exp) && (is_all_zeros mantissa))
 

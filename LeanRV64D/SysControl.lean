@@ -15,6 +15,7 @@ import LeanRV64D.PmpControl
 import LeanRV64D.StateenRegs
 import LeanRV64D.ZicfilpRegs
 import LeanRV64D.StateenAccessChecks
+import LeanRV64D.SysReservation
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -208,6 +209,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -1293,8 +1295,7 @@ def reset_misa (_ : Unit) : SailM Unit := do
   else (pure ())
   writeReg misa (Sail.BitVec.updateSubrange (← readReg misa) 5 5
     (bool_to_bit (hartSupports Ext_F)))
-  writeReg misa (Sail.BitVec.updateSubrange (← readReg misa) 3 3
-    (bool_to_bit (hartSupports Ext_D)))
+  writeReg misa (Sail.BitVec.updateSubrange (← readReg misa) 3 3 0#1)
   (csr_name_write_callback "misa" (← readReg misa))
 
 def set_pc_reset_address (addr : (BitVec 64)) : SailM Unit := do

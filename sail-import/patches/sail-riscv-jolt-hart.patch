@@ -1,0 +1,239 @@
+diff --git a/handwritten_support/RiscvExtras.lean b/handwritten_support/RiscvExtras.lean
+index 27dbbd0..cdc1170 100644
+--- a/handwritten_support/RiscvExtras.lean
++++ b/handwritten_support/RiscvExtras.lean
+@@ -28,17 +28,17 @@ section Effectful
+ 
+ variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Register] [Hashable Register]
+ 
+-axiom plat_term_write {α} : α → SailM Unit
+-axiom plat_term_read : Unit → SailM String
++-- The HTIF console: this platform has no console, so writes are discarded
++-- and reads return the empty string.
++def plat_term_write {α} (_ : α) : SailM Unit := pure ()
++def plat_term_read (_ : Unit) : SailM String := pure ""
+ 
+--- Reservations
+-axiom load_reservation : Arch.pa → Nat → SailM Unit
+-axiom match_reservation : Arch.pa → Bool
+-axiom cancel_reservation : Unit → SailM Unit
+-axiom valid_reservation : Unit → Bool
++-- Reservations are model registers (model/sys/sys_reservation.sail).
+ 
+ axiom get_16_random_bits : Unit → SailM (BitVec 16)
+-axiom sys_enable_experimental_extensions : Unit → Bool
++
++-- This platform enables no experimental extensions.
++def sys_enable_experimental_extensions (_ : Unit) : Bool := false
+ 
+ end Effectful
+ 
+diff --git a/model/core/platform_config.sail b/model/core/platform_config.sail
+index cd94473..eb8379b 100644
+--- a/model/core/platform_config.sail
++++ b/model/core/platform_config.sail
+@@ -26,6 +26,18 @@ let plat_cache_block_size_exp : range(0, 12) = config platform.cache_block_size_
+ // their LR operands (4 bytes for LR.W, 8 bytes for LR.D).
+ let plat_reservation_set_size_exp : range(2, 12) = config platform.reservation_set_size_exp
+ 
++// Reservation policy options (see model/sys/sys_reservation.sail).  These
++// follow the options of upstream sail-riscv (platform.reservation.*), plus
++// require_width_within, which upstream does not have.
++//
++// Whether an SC must use exactly the address of the preceding LR, rather than
++// any address in the same reservation set.
++let plat_reservation_require_exact_addr_match : bool = config platform.reservation.require_exact_reservation_addr
++// Whether an SC must be no wider than the preceding LR.
++let plat_reservation_require_width_within : bool = config platform.reservation.require_width_within
++// Whether xRET clears any outstanding LR reservation.
++let plat_reservation_invalidate_on_xret : bool = config platform.reservation.invalidate_on_xret
++
+ // whether the MMU should update dirty bits in PTEs
+ let plat_enable_dirty_update : bool = config memory.translation.dirty_update
+ 
+@@ -65,6 +77,15 @@ let reserved_exceptions_write_xtval : bool = config base.xtval_nonzero.reserved_
+ 
+ // Define the policy for handling reserved behaviors.
+ 
++// Legal values for mstatus.FS (backported from upstream sail-riscv 81184531).
++enum ExtContextPolicy = {
++  ExtContext_Off,        // The extension is always off.
++  ExtContext_TwoState,   // Legal values are Off and Dirty.
++  ExtContext_FourState,  // Legal values are Off, Initial, Clean and Dirty.
++}
++
++let plat_mstatus_legal_fs : ExtContextPolicy = config base.mstatus.fs_legal_states
++
+ enum AmocasOddRegisterReservedBehavior = {
+   AMOCAS_Fatal,
+   AMOCAS_Illegal,
+diff --git a/model/core/sys_regs.sail b/model/core/sys_regs.sail
+index b3be230..dcb4b6c 100644
+--- a/model/core/sys_regs.sail
++++ b/model/core/sys_regs.sail
+@@ -202,6 +202,23 @@ bitfield Mstatus : bits(64) = {
+   SIE  : 1,
+ }
+ 
++// Backported from upstream sail-riscv 81184531.
++function legalize_extStatus(policy : ExtContextPolicy, status : ext_status) -> ext_status = {
++  match policy {
++    ExtContext_Off       => extStatus_to_bits(Off),
++
++    // This emulates the following implementation choice from the spec:
++    //
++    // "On other implementations, dirtiness might not be tracked at
++    // all, in which case the valid FS states are Off and Dirty, and
++    // an attempt to set FS to Initial or Clean causes it to be set to
++    // Dirty."
++    ExtContext_TwoState  => if extStatus_of_bits(status) == Off then status else extStatus_to_bits(Dirty),
++
++    ExtContext_FourState => status,
++  }
++}
++
+ private function legalize_mstatus(o : Mstatus, v : bits(64)) -> Mstatus = {
+   // Populate all defined fields using the bits of v, stripping anything
+   // that does not have a matching bitfield entry. The SD bits are handled
+@@ -229,11 +246,9 @@ private function legalize_mstatus(o : Mstatus, v : bits(64)) -> Mstatus = {
+     MPRV = if currentlyEnabled(Ext_U) then v[MPRV] else 0b0,
+     // We don't have any extension context yet.
+     XS = extStatus_to_bits(Off),
+-    // FS is WARL, and making FS writable can support the M-mode emulation of an FPU
+-    // to support code running in S/U-modes.  Spike does this, and for now, we match it,
+-    // but only if Zfinx isn't enabled.
+-    // FIXME: This should be made a platform parameter.
+-    FS = if hartSupports(Ext_Zfinx) then extStatus_to_bits(Off) else v[FS],
++    // FS is WARL.  Making FS writable can support the M-mode emulation of an FPU
++    // to support code running in S/U-modes; the platform chooses its legal values.
++    FS = if hartSupports(Ext_Zfinx) then extStatus_to_bits(Off) else legalize_extStatus(plat_mstatus_legal_fs, v[FS]),
+     MPP = if have_nominal_privLevel(v[MPP]) then v[MPP] else privLevel_to_bits(lowest_supported_privLevel()),
+     SPP = if currentlyEnabled(Ext_S) then v[SPP] else 0b0,
+     // TODO: make this configurable
+@@ -263,6 +278,9 @@ register mstatus : Mstatus = {
+     // if the corresponding mode is not supported.
+     SXL = if xlen != 32 & hartSupports(Ext_S) then mxl else zeros(),
+     UXL = if xlen != 32 & hartSupports(Ext_U) then mxl else zeros(),
++    // MPP is WARL and must hold a supported privilege mode.  Without U-mode
++    // the only legal value is M (priv spec, mstatus_xpp_warl).
++    MPP = if hartSupports(Ext_U) then privLevel_to_bits(User) else privLevel_to_bits(Machine),
+   ]
+ }
+ 
+diff --git a/model/extensions/I/base_insts.sail b/model/extensions/I/base_insts.sail
+index 0a6080f..78e6754 100644
+--- a/model/extensions/I/base_insts.sail
++++ b/model/extensions/I/base_insts.sail
+@@ -564,6 +564,7 @@ function clause execute MRET() = {
+   else if not(ext_check_xret_priv(Machine))
+   then Ext_XRET_Priv_Failure()
+   else {
++    if plat_reservation_invalidate_on_xret then cancel_reservation();
+     set_next_pc(exception_handler(cur_privilege, CTL_MRET(), PC));
+     RETIRE_SUCCESS
+   }
+@@ -590,6 +591,7 @@ function clause execute SRET() = {
+   else if not(ext_check_xret_priv (Supervisor))
+   then Ext_XRET_Priv_Failure()
+   else {
++    if plat_reservation_invalidate_on_xret then cancel_reservation();
+     set_next_pc(exception_handler(cur_privilege, CTL_SRET(), PC));
+     RETIRE_SUCCESS
+   }
+diff --git a/model/postlude/validate_config.sail b/model/postlude/validate_config.sail
+index f2b6c91..6bbec3e 100644
+--- a/model/postlude/validate_config.sail
++++ b/model/postlude/validate_config.sail
+@@ -246,7 +246,7 @@ private function check_pma_regions(pmas : list(PMA_Region), prev_base : bits(64)
+           return false;
+         };
+       };
+-      check_pma_regions(rest, pma.base, pma.size, check_ziccamoc, check_ziccamoa, check_ziccrse, check_ssccptr)
++      check_pma_regions(rest, pma.base, pma.size, check_ziccamoa, check_ziccamoc, check_ziccrse, check_ssccptr)
+     },
+   }
+ 
+diff --git a/model/sys/sys_reservation.sail b/model/sys/sys_reservation.sail
+index cba2540..10409c1 100644
+--- a/model/sys/sys_reservation.sail
++++ b/model/sys/sys_reservation.sail
+@@ -8,16 +8,55 @@
+ 
+ // Reservation handling for LR/SC.
+ //
+-// The reservation state is maintained external to the model since the
+-// reservation behavior is platform-specific anyway and maintaining
+-// this state outside the model simplifies the concurrency analysis.
++// The reservation is held in model registers, so that backends without an
++// external platform (such as the Lean backend) have a concrete reservation
++// policy instead of uninterpreted functions.  The policy is chosen by the
++// platform options in platform_config.sail:
+ //
+-// These are externs are defined here in the system module since
+-// we currently perform reservation cancellation on privilege level
+-// transition.  Ideally, the platform should get more visibility into
+-// where cancellation can be performed.
++// - An LR records one reservation: the physical address it read and its
++//   width in bytes.
++// - The reservation set is the naturally aligned 2^plat_reservation_set_size_exp
++//   bytes containing that address, unless plat_reservation_require_exact_addr_match
++//   is set, in which case an SC must use exactly the LR's address.
++// - If plat_reservation_require_width_within is set, an SC must also be no
++//   wider than the LR, so that the bytes it writes lie inside the bytes the LR
++//   read.
++// - Every SC that does not raise an exception cancels the reservation (see
++//   the STORECON execute clause), as does reset.  xRET cancels it only if
++//   plat_reservation_invalidate_on_xret is set.
++//
++// All of these are choices the Zalrsc specification permits for a single hart.
++
++register reservation_valid : bool = false
++register reservation_addr : physaddrbits = zeros()
++register reservation_width : int = 0
++
++val load_reservation : forall 'n, 0 < 'n < max_mem_access . (/* addr */ physaddrbits, /* width */ int('n)) -> unit
++function load_reservation(addr, width) = {
++  reservation_valid = true;
++  reservation_addr = addr;
++  reservation_width = width
++}
++
++val reservation_set_mask : unit -> physaddrbits
++function reservation_set_mask() =
++  ~(zero_extend(ones(plat_reservation_set_size_exp)))
++
++val match_reservation : forall 'n, 0 < 'n < max_mem_access . (/* addr */ physaddrbits, /* width */ int('n)) -> bool
++function match_reservation(addr, width) = {
++  let addr_match : bool =
++    if plat_reservation_require_exact_addr_match
++    then addr == reservation_addr
++    else (addr & reservation_set_mask()) == (reservation_addr & reservation_set_mask());
++  let width_match : bool =
++    not(plat_reservation_require_width_within) | width <= reservation_width;
++  reservation_valid & addr_match & width_match
++}
++
++val cancel_reservation : unit -> unit
++function cancel_reservation() = {
++  reservation_valid = false
++}
+ 
+-val load_reservation = impure {interpreter: "Platform.load_reservation", cpp: "load_reservation", c: "load_reservation", lem: "load_reservation"} : forall 'n, 0 < 'n < max_mem_access . (/* addr */ physaddrbits, /* width */ int('n)) -> unit
+-val match_reservation = pure {interpreter: "Platform.match_reservation", cpp: "match_reservation", c: "match_reservation", lem: "match_reservation"} : physaddrbits -> bool
+-val cancel_reservation = impure {interpreter: "Platform.cancel_reservation", cpp: "cancel_reservation", c: "cancel_reservation", lem: "cancel_reservation"} : unit -> unit
+-val valid_reservation = pure {interpreter: "Platform.valid_reservation", cpp: "valid_reservation", c: "valid_reservation", lem: "valid_reservation"} : unit -> bool
++val valid_reservation : unit -> bool
++function valid_reservation() = reservation_valid
+diff --git a/model/sys/vmem_utils.sail b/model/sys/vmem_utils.sail
+index a54d44f..7f9d5cc 100644
+--- a/model/sys/vmem_utils.sail
++++ b/model/sys/vmem_utils.sail
+@@ -213,7 +213,7 @@ function vmem_write_addr(vaddr, width, data, access, aq, rl, res) = {
+       Ok(paddr, _) => {
+         // If res is true, the load should be aligned, and this loop should only execute once.
+         assert(res == is_store_conditional(access));
+-        if res & not(match_reservation(bits_of(paddr))) then {
++        if res & not(match_reservation(bits_of(paddr), width)) then {
+           // Check PMA and PMP access controls before reporting the
+           // cancelled reservation.
+           // "Attempting to execute a store, store-conditional, or AMO

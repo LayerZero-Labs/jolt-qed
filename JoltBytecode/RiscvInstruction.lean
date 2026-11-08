@@ -807,10 +807,8 @@ theorem equivalenceStatement_holds :
       sorry
   | .EBREAK, _js, _h => by
       sorry
-   --- Cannot be proven :-( due to opaque axioms for 
-   -- load_reservation
-   -- cancel_resevation 
-   -- match_reservation 
+   -- The reservation is now Sail model state (sys_reservation.sail); these
+   -- cases wait for the LR/SC theorems against Jolt's reservation registers.
   | .LR_W _rd _rs1 _aq _rl, _js, _h => by
       sorry
   | .SC_W _rd _rs1 _rs2 _aq _rl, _js, _h => by

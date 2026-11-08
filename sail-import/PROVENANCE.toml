@@ -14,8 +14,29 @@ project_file_sha256 = "818fc3305955e3664b7a642d1899004ebb7960f54021db79538a68173
 # Handwritten support adapted to the namespaced Lean backend and Lean 4.35, as
 # upstream did in riscv/sail-riscv#1776, #1876 (open the model namespace) and
 # #1667 (`toCtorIdx` -> `ctorIdx`). Apply before generating.
-patches = ["sail-import/patches/sail-riscv-lean-handwritten.patch"]
-patch_sha256 = ["095a3d4b82574d45735622339bcf6674e0d58c8975c04634c983876ec8d3b767"]
+# Then the Jolt hart patch (docs/riscv-alignment.md):
+#  - LR/SC reservations as model registers (model/sys/sys_reservation.sail)
+#    instead of uninterpreted platform functions, with the options
+#    platform.reservation.{require_exact_reservation_addr, invalidate_on_xret}
+#    of upstream sail-riscv and a new require_width_within (an SC must be no
+#    wider than its LR); MRET and SRET cancel the reservation when
+#    invalidate_on_xret is set;
+#  - the mstatus.FS legal-values policy base.mstatus.fs_legal_states, backported
+#    from upstream sail-riscv 81184531;
+#  - mstatus.MPP resets to M on a hart without U-mode (it reset to 0, an
+#    unsupported mode);
+#  - the configuration check of memory regions passes its Ziccamoa and Ziccamoc
+#    flags in the right order (upstream has since rewritten it);
+#  - RiscvExtras.lean: no HTIF console, no experimental extensions; the
+#    reservation axioms are gone.
+patches = [
+  "sail-import/patches/sail-riscv-lean-handwritten.patch",
+  "sail-import/patches/sail-riscv-jolt-hart.patch",
+]
+patch_sha256 = [
+  "095a3d4b82574d45735622339bcf6674e0d58c8975c04634c983876ec8d3b767",
+  "8aa306cdeff92cb64206d5cb4cc367ff80be87c03bf3d196629f610cbae273e9",
+]
 
 [compiler]
 repository = "https://github.com/rems-project/sail"
@@ -35,16 +56,12 @@ commit = "1e5b216bf881ef08da160db63b44ecda430802d6"
 # Upstream config/config.json.in instantiated for RV64D, VLEN 256, ELEN 64.
 upstream = "sail-import/rv64d_v256_e64.json"
 upstream_sha256 = "a390a2f46fc02cf666bc9d0b8b0d7223444c1b5b473de406a8784548b191f753"
-# Used for generation. Differs from upstream in exactly three values, each read
-# once by the model:
-#   memory.misaligned.supported = false  -> plat_enable_misaligned_access
-#   extensions.Zicfilp.supported = false -> hartSupports Ext_Zicfilp
-#   extensions.Zicfiss.supported = false -> hartSupports Ext_Zicfiss
-# These replace the three hand edits previously made to the generated files.
-# With the previous compiler (eff56f4) and --all-modules this config reproduces
-# the previous checked-in LeanRV64D exactly, except for the hand-edit comments.
+# Used for generation: Jolt's hart, RV64IMAC with Zca and Zicsr, M-mode only,
+# no PMP, no virtual memory, no floating point, CLINT + I/O + RAM regions, and
+# exact-address, width-contained LR/SC. Its header comment and
+# docs/riscv-alignment.md give the reasons.
 used = "sail-import/rv64d_jolt.json"
-used_sha256 = "2bd0c9f7d2b5bf25103a512ae37d48713d45d2b27282f599eda8fd48385ac12f"
+used_sha256 = "55898b80ad178d49a2809574805bb1b0b1252335ad799a0f484a8caca11ac08e"
 
 [modules]
 # Lean 4.35 compiles inductive types eagerly and rejects one with more than 244
@@ -75,4 +92,4 @@ selected = [
 [output]
 # sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
 # followed by LeanRV64D.lean.
-tree_sha256 = "b6c35217ba23cf7a949405da1228c9af934cccc5b3991b75876251e89376991c"
+tree_sha256 = "d4cabe3cfafcaa89be6dc35adb2f78283599ca629614d10da6fc72d679ec73d6"

@@ -194,6 +194,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -264,7 +265,7 @@ def lookup_TLB (sv_width : Nat) (asid : (BitVec (if ( 64 = 32  : Bool) then 9 el
     then (pure (some (index, entry)))
     else (pure none))
 
-/-- Type quantifiers: k_ex256051_ : Bool, level : Nat, sv_width : Nat, (is_sv_mode sv_width), 0 ≤
+/-- Type quantifiers: k_ex256104_ : Bool, level : Nat, sv_width : Nat, (is_sv_mode sv_width), 0 ≤
   level ∧
   level ≤
   (if ( sv_width = 32  : Bool) then 1 else (if ( sv_width = 39  : Bool) then 2 else (if ( sv_width =

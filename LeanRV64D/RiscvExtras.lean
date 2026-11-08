@@ -28,17 +28,17 @@ section Effectful
 
 variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Register] [Hashable Register]
 
-axiom plat_term_write {α} : α → SailM Unit
-axiom plat_term_read : Unit → SailM String
+-- The HTIF console: this platform has no console, so writes are discarded
+-- and reads return the empty string.
+def plat_term_write {α} (_ : α) : SailM Unit := pure ()
+def plat_term_read (_ : Unit) : SailM String := pure ""
 
--- Reservations
-axiom load_reservation : Arch.pa → Nat → SailM Unit
-axiom match_reservation : Arch.pa → Bool
-axiom cancel_reservation : Unit → SailM Unit
-axiom valid_reservation : Unit → Bool
+-- Reservations are model registers (model/sys/sys_reservation.sail).
 
 axiom get_16_random_bits : Unit → SailM (BitVec 16)
-axiom sys_enable_experimental_extensions : Unit → Bool
+
+-- This platform enables no experimental extensions.
+def sys_enable_experimental_extensions (_ : Unit) : Bool := false
 
 end Effectful
 

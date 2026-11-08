@@ -196,6 +196,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -234,8 +235,8 @@ def num_of_float_class (arg_ : float_class) : Int :=
   | .float_class_snan => 8
   | .float_class_qnan => 9
 
-/-- Type quantifiers: k_ex254668_ : Nat, List.elem k_ex254668_ [16, 32, 64, 128] -/
-def float_classify (f : (BitVec k_ex254668_)) : SailM float_class := do
+/-- Type quantifiers: k_ex254716_ : Nat, List.elem k_ex254716_ [16, 32, 64, 128] -/
+def float_classify (f : (BitVec k_ex254716_)) : SailM float_class := do
   if ((float_is_snan f) : Bool)
   then (pure float_class_snan)
   else

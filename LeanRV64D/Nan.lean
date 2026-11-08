@@ -192,6 +192,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -199,18 +200,18 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_ex254570_ : Nat, List.elem k_ex254570_ [16, 32, 64, 128] -/
-def float_is_nan (op : (BitVec k_ex254570_)) : Bool :=
+/-- Type quantifiers: k_ex254618_ : Nat, List.elem k_ex254618_ [16, 32, 64, 128] -/
+def float_is_nan (op : (BitVec k_ex254618_)) : Bool :=
   let { exp := exp, mantissa := mantissa, sign := _ } := (float_decompose op)
   ((is_all_ones exp) && (! (is_all_zeros mantissa)))
 
-/-- Type quantifiers: k_ex254572_ : Nat, List.elem k_ex254572_ [16, 32, 64, 128] -/
-def float_is_snan (op : (BitVec k_ex254572_)) : Bool :=
+/-- Type quantifiers: k_ex254620_ : Nat, List.elem k_ex254620_ [16, 32, 64, 128] -/
+def float_is_snan (op : (BitVec k_ex254620_)) : Bool :=
   let { mantissa := mantissa, sign := _, exp := _ } := (float_decompose op)
   ((float_is_nan op) && (is_highest_zero mantissa))
 
-/-- Type quantifiers: k_ex254574_ : Nat, List.elem k_ex254574_ [16, 32, 64, 128] -/
-def float_is_qnan (op : (BitVec k_ex254574_)) : Bool :=
+/-- Type quantifiers: k_ex254622_ : Nat, List.elem k_ex254622_ [16, 32, 64, 128] -/
+def float_is_qnan (op : (BitVec k_ex254622_)) : Bool :=
   let { mantissa := mantissa, sign := _, exp := _ } := (float_decompose op)
   ((float_is_nan op) && (is_highest_one mantissa))
 

@@ -196,6 +196,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -613,9 +614,9 @@ def _set_Misa_Z (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Uni
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Misa_Z r v)
 
-def sys_enable_writable_misa : Bool := true
+def sys_enable_writable_misa : Bool := false
 
-def sys_writable_hpm_counters : (BitVec 32) := 0b11111111111111111111111111111111#32
+def sys_writable_hpm_counters : (BitVec 32) := 0b00000000000000000000000000000000#32
 
 def ext_veto_disable_C (_ : Unit) : Bool :=
   false
@@ -744,9 +745,6 @@ def _set_Mstatus_MPIE (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : Sai
 
 def _get_Mstatus_MPP (v : (BitVec 64)) : (BitVec 2) :=
   (Sail.BitVec.extractLsb v 12 11)
-
-def _update_Mstatus_MPP (v : (BitVec 64)) (x : (BitVec 2)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v 12 11 x)
 
 def _set_Mstatus_MPP (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 2)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
@@ -1003,6 +1001,15 @@ def _set_Sstatus_XS (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 2)) : SailM
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Sstatus_XS r v)
 
+def legalize_extStatus (policy : ExtContextPolicy) (status : (BitVec 2)) : (BitVec 2) :=
+  match policy with
+  | .ExtContext_Off => (extStatus_to_bits Off)
+  | .ExtContext_TwoState =>
+    (if (((extStatus_of_bits status) == Off) : Bool)
+    then status
+    else (extStatus_to_bits Dirty))
+  | .ExtContext_FourState => status
+
 def legalize_mstatus (o : (BitVec 64)) (v : (BitVec 64)) : SailM (BitVec 64) := do
   let v := (Mk_Mstatus v)
   let o ← do
@@ -1055,7 +1062,7 @@ def legalize_mstatus (o : (BitVec 64)) (v : (BitVec 64)) : SailM (BitVec 64) := 
                             else (pure 0#1))) (extStatus_to_bits Off))
                       (if ((hartSupports Ext_Zfinx) : Bool)
                       then (extStatus_to_bits Off)
-                      else (_get_Mstatus_FS v)))
+                      else (legalize_extStatus plat_mstatus_legal_fs (_get_Mstatus_FS v))))
                     (← do
                       if ((← (have_nominal_privLevel (_get_Mstatus_MPP v))) : Bool)
                       then (pure (_get_Mstatus_MPP v))
@@ -1088,9 +1095,9 @@ def architecture (priv : Privilege) : SailM Architecture := do
       | .Supervisor => (pure (_get_Mstatus_SXL (← readReg mstatus)))
       | .User => (pure (_get_Mstatus_UXL (← readReg mstatus)))
       | .VirtualUser =>
-        (internal_error "core/sys_regs.sail" 292 "Hypervisor extension not supported")
+        (internal_error "core/sys_regs.sail" 310 "Hypervisor extension not supported")
       | .VirtualSupervisor =>
-        (internal_error "core/sys_regs.sail" 293 "Hypervisor extension not supported")))
+        (internal_error "core/sys_regs.sail" 311 "Hypervisor extension not supported")))
 
 def in32BitMode (_ : Unit) : SailM Bool := do
   (pure ((← (architecture (← readReg cur_privilege))) == RV32))
@@ -1184,9 +1191,9 @@ def is_fiom_active (_ : Unit) : SailM Bool := do
   | .Supervisor => (pure ((_get_MEnvcfg_FIOM (← readReg menvcfg)) == 1#1))
   | .User =>
     (pure (((_get_MEnvcfg_FIOM (← readReg menvcfg)) ||| (_get_SEnvcfg_FIOM (← readReg senvcfg))) == 1#1))
-  | .VirtualUser => (internal_error "core/sys_regs.sail" 469 "Hypervisor extension not supported")
+  | .VirtualUser => (internal_error "core/sys_regs.sail" 487 "Hypervisor extension not supported")
   | .VirtualSupervisor =>
-    (internal_error "core/sys_regs.sail" 470 "Hypervisor extension not supported")
+    (internal_error "core/sys_regs.sail" 488 "Hypervisor extension not supported")
 
 def undefined_Mtvec (_ : Unit) : SailM (BitVec 64) := do
   (undefined_bitvector 64)
@@ -1371,7 +1378,7 @@ def _set_Counteren_TM (r_ref : (RegisterRef (BitVec 32))) (v : (BitVec 1)) : Sai
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Counteren_TM r v)
 
-def sys_scounteren_writable_bits : (BitVec 32) := 0b11111111111111111111111111111111#32
+def sys_scounteren_writable_bits : (BitVec 32) := 0b00000000000000000000000000000000#32
 
 def legalize_scounteren (_c : (BitVec 32)) (v : (BitVec 64)) : (BitVec 32) :=
   (Mk_Counteren

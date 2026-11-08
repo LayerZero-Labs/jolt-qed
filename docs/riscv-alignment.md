@@ -24,7 +24,7 @@ Jolt's decoder (`tracer/src/instruction/mod.rs`, `Instruction::decode`) accepts 
 - M (all of RV64M);
 - A (Zalrsc and Zaamo, word and doubleword; no Zabha, no Zacas);
 - Zca: `uncompress_instruction` expands C.FLD and C.FSD into F-extension words that the decoder then rejects, and treats the Zcb encodings as reserved, so neither Zcd nor Zcb is accepted;
-- from Zicsr, only CSRRW and CSRRS, and only on `mstatus`, `mtvec`, `mscratch`, `mepc`, `mcause` and `mtval` (`tracer/src/utils/virtual_registers.rs`, `is_supported_csr`);
+- from Zicsr, only CSRRW and CSRRS, and only on `mstatus`, `mtvec`, `mscratch`, `mepc`, `mcause` and `mtval` (`tracer/src/utils/virtual_registers.rs`, `is_supported_csr`); the Jolt changes for this alignment (a16z/jolt branch `align/system-semantics`, `87cc513a6`) add CSRRC, CSRRWI, CSRRSI and CSRRCI on the same six CSRs, so with them Jolt accepts all of Zicsr on those CSRs; funct3 4 stays reserved;
 - Jolt's own instructions on the custom-2 major opcode `0x5B` (advice loads, `VirtualRev8W`, `VirtualAssertEQ`, `VirtualHostIO`; section 7);
 - the inline opcodes `0x0B` (custom-0) and `0x2B` (custom-1), which are out of scope for now.
 
@@ -32,6 +32,9 @@ Every other encoding makes Jolt's tracer panic, so no run that contains one has 
 
 The Sail model is therefore configured as RV64IMAC with Zicsr and only these extensions.
 S, U, F, D, V, H, B and every Zb*, Zk*, Zv*, Zf*, Zicbo*, Zicond, Zicntr, Zihpm, Zifencei, Zimop, Zcb, Zcd, Zcmop, Zawrs, Zabha, Zacas, Sstc, Sscofpmf, Smcntrpmf, Smstateen, Ssqosid and Svinval are off; `misa` is read-only.
+PMP has no entries (`memory.pmp.count = 0`), so the PMP check never faults: Jolt's MMU implements no memory protection (`tracer/src/emulator/mmu.rs`).
+Ziccamoa and Ziccrse stay on: they only state that main memory supports every A-extension AMO and eventual LR/SC success, which the RAM region below provides.
+`memory.dtb_address` is 0; it is read only by the C++ emulator's boot code, which the theorems do not use.
 Address translation is Svbare only, which is what an M-mode-only hart has: `satp` does not exist without S-mode, and Jolt's MMU never leaves `AddressingMode::None` (`tracer/src/emulator/mmu.rs`).
 The specification allows an M-only hart: `priv/machine.adoc` `norm:mstatus_xpp_warl` says MPP "can hold only privilege mode _x_ and any implemented privilege mode lower than _x_", so with no lower mode MPP always reads 3.
 
@@ -55,7 +58,7 @@ The Sail configuration has two regions, and nothing else is readable, writable o
 
 | Region | Range | R | W | X | Atomics | Reservability |
 | --- | --- | --- | --- | --- | --- | --- |
-| RAM | `[0x8000_0000, top)`, `top` as high as the configuration format allows | yes | yes | yes | AMOArithmetic | RsrvEventual |
+| RAM | `[0x8000_0000, 2^64)` | yes | yes | yes | AMOArithmetic | RsrvEventual |
 | I/O | `[IO_BASE, 0x8000_0000)` | yes | yes | no | AMONone | RsrvNone |
 
 `IO_BASE` is a fixed platform constant, `0x4000_0000`; the whole-run theorem assumes `IO_BASE ≤ io_start`, which every layout with an I/O window of at most 1 GiB satisfies.
@@ -104,7 +107,9 @@ Jolt's tracer implements the same rule as `Cpu::reservation_covers` (`tracer/src
 
 Upstream sail-riscv matches on the address alone (exactly or within a granule) and has no width condition.
 The width condition is needed here because the reservation set is exactly the bytes of the LR: an LR.W followed by an SC.D at the same address must fail.
-The patch offers it as an option next to upstream's `require_exact_reservation_addr`, `invalidate_on_xret` and `invalidate_on_same_hart_store`, so it can be proposed upstream.
+The model patch (`sail-import/patches/sail-riscv-jolt-hart.patch`) implements the policy with three registers, `reservation_valid`, `reservation_addr` and `reservation_width`, and three options under `platform.reservation`: upstream's `require_exact_reservation_addr` and `invalidate_on_xret`, and a new `require_width_within`, which can be proposed upstream.
+The configuration sets them to `true`, `false` and `true`.
+Upstream's `invalidate_on_same_hart_store` is implemented outside the model (in the C++ emulator), so it is not part of the patch; leaving it out is rule 5.
 
 Two differences remain between Jolt and this policy, and neither changes the architectural state:
 
@@ -164,13 +169,17 @@ The Jolt-changes stream implements these sequences in Jolt; step b checks them a
   Every trap a Jolt run can take is synchronous, and synchronous exceptions go to the base in both modes (`norm:mtvec_mode_vectored_op`), which is what Jolt's `JALR v40, v34, 0` reaches: the JALR clears bit 0, and bit 1 is 0 in both legal modes.
 - `mepc`: a write of `v` stores `v & ~1`, because with Zca IALIGN is 16 (`norm:mepc_align`).
 - `mcause`, `mtval`, `mscratch`: stored as written.
+  For `mcause` this is a choice: the Exception Code field is WLRL, so an implementation may store any value written, and the model at `266473f8` does (`model/core/sys_regs.sail`, `write_CSR(0x342, …)`).
+  Newer upstream models legalize it (`legalize_cause` keeps the old value on an unsupported code); the pinned model does not, and Jolt stores every write raw, so the two agree.
 
 The other five relations are equality, `mtvec = v34`, `mscratch = v35`, `mepc = v36`, `mcause = v37` and `mtval = v38`, with the invariants `v34[1] = 0` and `v36[0] = 0`.
 The reset values must match as well: Sail must reset `mstatus` to `0x1800`.
-The current configuration resets MPP to U and UXL = SXL = 2, because U- and S-mode are on (difftest findings a2 and UXL/SXL); turning both off in step b gives MPP = M (`norm:mstatus_xpp_warl`) and UXL = SXL = 0.
+The previous configuration reset MPP to U and UXL = SXL = 2, because U- and S-mode were on (difftest findings a2 and UXL/SXL).
+With both off, UXL = SXL = 0 (the `mstatus` initialiser sets them only when S or U is supported), but the model's `mstatus` initialiser still set MPP to 0, a mode the hart does not have; this is a bug in the model at `266473f8` and in upstream `81184531` alike.
+The model patch initialises MPP to M when U-mode is absent (`norm:mstatus_xpp_warl`), so Sail's `mstatus` resets to `0x1800`.
 
 The Sail model at `266473f8` keeps FS writable unless Zfinx is on, which contradicts `norm:mstatus_fs_acc2`, and then computes SD from it.
-Upstream fixed this in `81184531` by legalizing FS through the platform's supported values; step b backports that fix, and the `mstatus` mask above holds only with it.
+Upstream fixed this in `81184531` by legalizing FS through the platform's supported values (`base.mstatus.fs_legal_states`); the model patch backports that fix, the configuration sets `ExtContext_Off`, and the `mstatus` mask above holds only with it.
 
 ## 7. Jolt's custom instructions
 
@@ -185,5 +194,43 @@ The inline opcodes `0x0B` and `0x2B` are out of scope for now and are excluded t
 
 ## 8. Remaining assumptions and where they go
 
-Step b produces a table of every assumption the instruction theorems use, classified as a configuration fact (removed), a lemma (proved), or still assumed.
+The instruction theorems take their hypotheses from `JoltBytecode/Assumptions.lean`, collected in `JoltBytecode/Bundles.lean`.
+After the regeneration of step b each of them is one of:
+
+- **configuration fact**: true in every Sail state of the regenerated model, proved in `JoltBytecode/HartConfig.lean`, and removed from the theorems;
+- **invariant**: true in every state the whole-run theorem reaches from its initial state, proved once in step c and then discharged;
+- **relation**: part of the Jolt–Sail state relation of section 5;
+- **Jolt fact**: a property of Jolt's state that holds on every honest trace because Jolt's tracer panics otherwise; it stays a hypothesis of the step theorems and becomes a property of the trace in step f;
+- **removed in step d**: a hypothesis that compensated for Jolt's old CSR sequences, which the jolt-changes sequences make unnecessary.
+
+| Assumption | Status | Reason |
+| --- | --- | --- |
+| `ZicfilpDisabled` | configuration fact | Zicfilp is off: `HartConfig.currentlyEnabled_Zicfilp_run` |
+| `MisaUserEnabled` | removed | It asked for `misa.U = 1`, which the M-only hart does not have; MRET now reads `currentlyEnabled Ext_U = false` (`HartConfig.currentlyEnabled_U_run`) whatever `misa` holds |
+| PMP half of `LoadPmpOk`, `StorePmpOk`, `AtomicPmpOk` and their windows | configuration fact | No PMP entries: `HartConfig.pmpCheck_run` |
+| PMA half of the same | invariant | `pma_regions` equals the configured list (only reset writes it) and the address is in RAM |
+| `NotReadableMmio`, `NotWritableMmio` and their windows | invariant | The CLINT lies below RAM, and `htif_tohost_base` is `none` (only the C++ ELF loader sets it) |
+| `CurPrivilegeMachine` | invariant | No mode below M exists, so every trap and MRET lands in M |
+| `MstatusMprvZero` | invariant | MPRV resets to 0 and is read-only zero without U-mode |
+| `SailRegReadable`, `XRegReadable`, the source-read bundles | invariant | Every register is present in the initial state and no step removes one |
+| `DwordPresent` | invariant | The initial state's memory map covers RAM and the I/O window |
+| `MstatusVRegMatchesSail` and the five other `…VRegMatchesSail` | relation | Section 6 |
+| `JoltRamLoadOk`, `JoltRamStoreOk` | Jolt fact | Jolt's MMU panics at or above `heap_end` and on stores into the stack canary |
+| `MstatusWriteLegalized`, `MtvecWriteDirectMode`, `MepcWriteLegalized` | removed in step d | The jolt-changes sequences legalize the written value the way Sail does |
+| `MstatusMppMachine` | removed in step d | `v39` no longer holds MPP; every read adds `MPP = 3` |
+| `MepcReadAligned` | invariant (step d) | `v36[0] = 0`, kept by the `mepc` write mask |
+
+The model's own axioms (`LeanRV64D/RiscvExtras.lean`) after the regeneration:
+
+| Axiom | Status |
+| --- | --- |
+| `load_reservation`, `match_reservation`, `cancel_reservation`, `valid_reservation` | removed: model registers (section 3) |
+| `sys_enable_experimental_extensions` | removed: a definition, `false` |
+| `plat_term_write`, `plat_term_read` | removed: definitions; the platform has no console |
+| `get_16_random_bits` | still assumed: the entropy source behind the Zkr `seed` CSR. Zkr is off, and Jolt rejects the CSR, so no Jolt step reaches it; it declares a function, not a proposition, so it cannot make the theory inconsistent |
+| floating-point operations (`riscv_f16Add` and the rest) | not reached: F and D are off and their instruction modules are not generated |
+
+`#print axioms` on `JoltInstance.soundness` and on every instruction theorem that is fully proved gives only `propext`, `Classical.choice` and `Quot.sound`.
+The dispatcher `RiscvInstruction.equivalenceStatement_holds` also lists `get_16_random_bits` (through the generic CSR read) and `sorryAx` (the cases that steps c and d close).
+
 Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (the read-back of the panic and termination words in section 2, and anything the difference testing confirms).

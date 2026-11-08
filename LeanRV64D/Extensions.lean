@@ -196,6 +196,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -702,67 +703,67 @@ def hartSupports (merge_var : extension) : Bool :=
   match merge_var with
   | .Ext_M => true
   | .Ext_A => true
-  | .Ext_F => true
-  | .Ext_D => (true && (hartSupports Ext_F))
-  | .Ext_B => true
+  | .Ext_F => false
+  | .Ext_D => (false && (hartSupports Ext_F))
+  | .Ext_B => false
   | .Ext_V => ((8 ≥b 7) && (vector_support_ge vector_support_level Full))
-  | .Ext_S => true
-  | .Ext_U => true
+  | .Ext_S => false
+  | .Ext_U => false
   | .Ext_H => false
-  | .Ext_Zibi => ((sys_enable_experimental_extensions ()) && (true : Bool))
-  | .Ext_Zic64b => true
-  | .Ext_Zicbom => true
-  | .Ext_Zicbop => true
-  | .Ext_Zicboz => true
+  | .Ext_Zibi => ((sys_enable_experimental_extensions ()) && (false : Bool))
+  | .Ext_Zic64b => false
+  | .Ext_Zicbom => false
+  | .Ext_Zicbop => false
+  | .Ext_Zicboz => false
   | .Ext_Zicfilp => false
   | .Ext_Zicfiss => false
-  | .Ext_Zicntr => true
-  | .Ext_Zicond => true
+  | .Ext_Zicntr => false
+  | .Ext_Zicond => false
   | .Ext_Zicsr => true
-  | .Ext_Zifencei => true
-  | .Ext_Zihintntl => true
-  | .Ext_Zihintpause => true
-  | .Ext_Zihpm => true
-  | .Ext_Zimop => true
+  | .Ext_Zifencei => false
+  | .Ext_Zihintntl => false
+  | .Ext_Zihintpause => false
+  | .Ext_Zihpm => false
+  | .Ext_Zimop => false
   | .Ext_Zmmul => false
   | .Ext_Zaamo => false
-  | .Ext_Zabha => true
-  | .Ext_Zacas => true
+  | .Ext_Zabha => false
+  | .Ext_Zacas => false
   | .Ext_Zalrsc => false
-  | .Ext_Zawrs => true
+  | .Ext_Zawrs => false
   | .Ext_Za64rs => ((plat_reservation_set_size_exp ≤b 6) && ((false : Bool) || (true : Bool)))
   | .Ext_Za128rs => ((plat_reservation_set_size_exp ≤b 7) && ((false : Bool) || (true : Bool)))
-  | .Ext_Zfa => true
-  | .Ext_Zfbfmin => true
-  | .Ext_Zfh => true
-  | .Ext_Zfhmin => true
+  | .Ext_Zfa => false
+  | .Ext_Zfbfmin => false
+  | .Ext_Zfh => false
+  | .Ext_Zfhmin => false
   | .Ext_Zfinx => false
   | .Ext_Zdinx => false
   | .Ext_Zca => true
-  | .Ext_Zcb => true
-  | .Ext_Zcd => true
+  | .Ext_Zcb => false
+  | .Ext_Zcd => false
   | .Ext_Zcf => ((false : Bool) && (xlen == 32))
-  | .Ext_Zcmop => true
+  | .Ext_Zcmop => false
   | .Ext_C =>
     ((hartSupports Ext_Zca) && (((hartSupports Ext_Zcf) || ((not (hartSupports Ext_F)) || (xlen != 32))) && ((hartSupports
             Ext_Zcd) || (not (hartSupports Ext_D)))))
   | .Ext_Zba => false
   | .Ext_Zbb => false
-  | .Ext_Zbc => true
-  | .Ext_Zbkb => true
-  | .Ext_Zbkc => true
-  | .Ext_Zbkx => true
+  | .Ext_Zbc => false
+  | .Ext_Zbkb => false
+  | .Ext_Zbkc => false
+  | .Ext_Zbkx => false
   | .Ext_Zbs => false
   | .Ext_Ziccamoa => true
-  | .Ext_Ziccamoc => true
+  | .Ext_Ziccamoc => false
   | .Ext_Ziccrse => true
-  | .Ext_Zknd => true
-  | .Ext_Zkne => true
-  | .Ext_Zknh => true
-  | .Ext_Zkr => true
-  | .Ext_Zksed => true
-  | .Ext_Zksh => true
-  | .Ext_Zkt => true
+  | .Ext_Zknd => false
+  | .Ext_Zkne => false
+  | .Ext_Zknh => false
+  | .Ext_Zkr => false
+  | .Ext_Zksed => false
+  | .Ext_Zksh => false
+  | .Ext_Zkt => false
   | .Ext_Zhinx => false
   | .Ext_Zhinxmin => false
   | .Ext_Zvl32b => (8 ≥b 5)
@@ -776,21 +777,21 @@ def hartSupports (merge_var : extension) : Bool :=
   | .Ext_Zve64d => ((6 ≥b 6) && (vector_support_ge vector_support_level Float_double))
   | .Ext_Zve64f => ((6 ≥b 6) && (vector_support_ge vector_support_level Float_single))
   | .Ext_Zve64x => ((6 ≥b 6) && (vector_support_ge vector_support_level Integer))
-  | .Ext_Zvabd => ((sys_enable_experimental_extensions ()) && (true : Bool))
-  | .Ext_Zvfbfmin => true
-  | .Ext_Zvfbfwma => true
-  | .Ext_Zvfh => true
-  | .Ext_Zvfhmin => true
-  | .Ext_Zvbb => true
-  | .Ext_Zvbc => true
+  | .Ext_Zvabd => ((sys_enable_experimental_extensions ()) && (false : Bool))
+  | .Ext_Zvfbfmin => false
+  | .Ext_Zvfbfwma => false
+  | .Ext_Zvfh => false
+  | .Ext_Zvfhmin => false
+  | .Ext_Zvbb => false
+  | .Ext_Zvbc => false
   | .Ext_Zvkb => false
-  | .Ext_Zvkg => true
-  | .Ext_Zvkned => true
-  | .Ext_Zvknha => true
-  | .Ext_Zvknhb => true
-  | .Ext_Zvksed => true
-  | .Ext_Zvksh => true
-  | .Ext_Zvkt => true
+  | .Ext_Zvkg => false
+  | .Ext_Zvkned => false
+  | .Ext_Zvknha => false
+  | .Ext_Zvknhb => false
+  | .Ext_Zvksed => false
+  | .Ext_Zvksh => false
+  | .Ext_Zvkt => false
   | .Ext_Zvkn =>
     ((hartSupports Ext_Zvkned) && ((hartSupports Ext_Zvknhb) && ((hartSupports Ext_Zvkb) && (hartSupports
             Ext_Zvkt))))
@@ -801,27 +802,27 @@ def hartSupports (merge_var : extension) : Bool :=
             Ext_Zvkt))))
   | .Ext_Zvksc => ((hartSupports Ext_Zvks) && (hartSupports Ext_Zvbc))
   | .Ext_Zvksg => ((hartSupports Ext_Zvks) && (hartSupports Ext_Zvkg))
-  | .Ext_Ssccptr => true
-  | .Ext_Sscofpmf => true
-  | .Ext_Sscounterenw => true
-  | .Ext_Ssstateen => true
-  | .Ext_Sstc => true
-  | .Ext_Sstvala => true
+  | .Ext_Ssccptr => false
+  | .Ext_Sscofpmf => false
+  | .Ext_Sscounterenw => false
+  | .Ext_Ssstateen => false
+  | .Ext_Sstc => false
+  | .Ext_Sstvala => false
   | .Ext_Sstvecd => (hartSupports Ext_S)
   | .Ext_Ssu64xl => ((hartSupports Ext_S) && (xlen == 64))
   | .Ext_Svbare => true
   | .Ext_Sv32 => ((false : Bool) && (xlen == 32))
-  | .Ext_Sv39 => ((true : Bool) && (xlen == 64))
-  | .Ext_Sv48 => ((true : Bool) && (xlen == 64))
-  | .Ext_Sv57 => ((true : Bool) && (xlen == 64))
-  | .Ext_Svinval => true
-  | .Ext_Svnapot => ((true : Bool) && (xlen == 64))
+  | .Ext_Sv39 => ((false : Bool) && (xlen == 64))
+  | .Ext_Sv48 => ((false : Bool) && (xlen == 64))
+  | .Ext_Sv57 => ((false : Bool) && (xlen == 64))
+  | .Ext_Svinval => false
+  | .Ext_Svnapot => ((false : Bool) && (xlen == 64))
   | .Ext_Svpbmt => false
-  | .Ext_Svrsw60t59b => true
-  | .Ext_Svvptc => true
-  | .Ext_Smcntrpmf => true
-  | .Ext_Smstateen => true
-  | .Ext_Ssqosid => true
+  | .Ext_Svrsw60t59b => false
+  | .Ext_Svvptc => false
+  | .Ext_Smcntrpmf => false
+  | .Ext_Smstateen => false
+  | .Ext_Ssqosid => false
 termination_by (let ext := merge_var
 (hartSupports_measure ext)).toNat
 
