@@ -86,7 +86,7 @@ theorem halfword_load_pmp_ok
     h.load_pmp.subaccess
       (offset :=
         (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat)
-      (accessWidth := 2)
+      (accessWidth := 2) (by decide)
       (halfword_offset_fits h.rs1_val imm hAlign)
 
 /-- The enclosing Jolt non-MMIO window contains Sail's halfword-sized
@@ -102,7 +102,7 @@ theorem halfword_not_readable_mmio
     h.not_readable_mmio.subaccess
       (offset :=
         (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat)
-      (accessWidth := 2)
+      (accessWidth := 2) (by decide)
       (halfword_offset_fits h.rs1_val imm hAlign)
 
 /-- An aligned effective halfword address has room for both bytes. -/

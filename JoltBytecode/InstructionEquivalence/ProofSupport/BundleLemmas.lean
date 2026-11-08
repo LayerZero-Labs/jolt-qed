@@ -47,10 +47,10 @@ def LoadProgramEqSailAssumptions.dwordWindowFacts
     bytes := by
       simpa using h.dword_present.memBytesPresentAt
     load_pmp := by
-      simpa using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+      simpa using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega)
     read_mmio := by
       simpa using h.not_readable_mmio.subaccess
-        (offset := 0) (accessWidth := 8) (by omega) }
+        (offset := 0) (accessWidth := 8) (by decide) (by omega) }
 
 /-- Derived facts for the enclosing dword window used by store-family proofs.
 
@@ -87,18 +87,18 @@ def StoreProgramEqSailAssumptions.dwordWindowFacts
     bytes := by
       simpa using h.dword_present.memBytesPresentAt
     load_pmp := by
-      simpa using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+      simpa using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega)
     read_mmio := by
       simpa using h.not_readable_mmio.subaccess
-        (offset := 0) (accessWidth := 8) (by omega)
+        (offset := 0) (accessWidth := 8) (by decide) (by omega)
     store_pmp := by
-      simpa using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+      simpa using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega)
     write_mmio := by
       simpa using h.not_writable_mmio.subaccess
-        (offset := 0) (accessWidth := 8) (by omega) }
+        (offset := 0) (accessWidth := 8) (by decide) (by omega) }
 
 /-- Derived write-side facts for a native store access inside the enclosing
-dword window. The caller supplies only the arithmetic fact that the access fits
+dword window. The caller supplies positivity and the arithmetic fact that the access fits
 inside that window. -/
 structure StoreAccessFacts
     (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState)
@@ -113,6 +113,7 @@ def StoreProgramEqSailAssumptions.storeAccessFacts
     {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
     (h : StoreProgramEqSailAssumptions imm rs2 rs1 js)
     (width : Nat)
+    (hpositive : 0 < width)
     (hfits :
       (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat +
         width ≤ 8) :
@@ -163,12 +164,12 @@ def StoreProgramEqSailAssumptions.storeAccessFacts
   · have hsub :
         Assumptions.StorePmpOk (base + BitVec.ofNat 64 offset) width js.sail := by
       simpa [base] using h.store_pmp.subaccess
-        (offset := offset) (accessWidth := width) hfits'
+        (offset := offset) (accessWidth := width) hpositive hfits'
     simpa [haddr] using hsub
   · have hsub :
         Assumptions.NotWritableMmio (base + BitVec.ofNat 64 offset) width js.sail := by
       simpa [base] using h.not_writable_mmio.subaccess
-        (offset := offset) (accessWidth := width) hfits'
+        (offset := offset) (accessWidth := width) hpositive hfits'
     simpa [haddr] using hsub
 
 theorem readReg_eq_of_get? (r : Register) (s : SailState) (rval : RegisterType r)

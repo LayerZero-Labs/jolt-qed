@@ -364,7 +364,7 @@ theorem shProgram_eq_sail (imm : BitVec 12) (rs2 rs1 : regidx)
       have hcases := write_halfword_offset_cases ea (by simpa [ea] using halign)
       rcases hcases with h0 | h2 | h4 | h6 <;> omega
     have hstore_access :=
-      StoreProgramEqSailAssumptions.storeAccessFacts h 2
+      StoreProgramEqSailAssumptions.storeAccessFacts h 2 (by decide)
         (by simpa [ea, offset] using hstore_fits)
     have hwrite_halfword :
         vmem_write rs1 (sign_extend (m := 64) imm) 2

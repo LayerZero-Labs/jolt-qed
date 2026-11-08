@@ -39,9 +39,10 @@ namespace Assumptions.LoadPmpOkWindow
 theorem subaccess
     {base : BitVec 64} {baseWidth offset accessWidth : Nat} {s : SailState}
     (h : Assumptions.LoadPmpOkWindow base baseWidth s)
+    (hpositive : 0 < accessWidth)
     (hfits : offset + accessWidth ≤ baseWidth) :
     Assumptions.LoadPmpOk (base + BitVec.ofNat 64 offset) accessWidth s :=
-  h.ok offset accessWidth hfits
+  h.ok offset accessWidth hpositive hfits
 
 end Assumptions.LoadPmpOkWindow
 
@@ -50,9 +51,10 @@ namespace Assumptions.StorePmpOkWindow
 theorem subaccess
     {base : BitVec 64} {baseWidth offset accessWidth : Nat} {s : SailState}
     (h : Assumptions.StorePmpOkWindow base baseWidth s)
+    (hpositive : 0 < accessWidth)
     (hfits : offset + accessWidth ≤ baseWidth) :
     Assumptions.StorePmpOk (base + BitVec.ofNat 64 offset) accessWidth s :=
-  h.ok offset accessWidth hfits
+  h.ok offset accessWidth hpositive hfits
 
 end Assumptions.StorePmpOkWindow
 
@@ -62,9 +64,10 @@ theorem subaccess
     {op : amoop} {base : BitVec 64} {baseWidth offset accessWidth : Nat}
     {s : SailState}
     (h : Assumptions.AtomicPmpOkWindow op base baseWidth s)
+    (hpositive : 0 < accessWidth)
     (hfits : offset + accessWidth ≤ baseWidth) :
     Assumptions.AtomicPmpOk op (base + BitVec.ofNat 64 offset) accessWidth s :=
-  h.ok offset accessWidth hfits
+  h.ok offset accessWidth hpositive hfits
 
 end Assumptions.AtomicPmpOkWindow
 
@@ -73,9 +76,10 @@ namespace Assumptions.NotReadableMmioWindow
 theorem subaccess
     {base : BitVec 64} {baseWidth offset accessWidth : Nat} {s : SailState}
     (h : Assumptions.NotReadableMmioWindow base baseWidth s)
+    (hpositive : 0 < accessWidth)
     (hfits : offset + accessWidth ≤ baseWidth) :
     Assumptions.NotReadableMmio (base + BitVec.ofNat 64 offset) accessWidth s :=
-  h.ok offset accessWidth hfits
+  h.ok offset accessWidth hpositive hfits
 
 end Assumptions.NotReadableMmioWindow
 
@@ -84,9 +88,10 @@ namespace Assumptions.NotWritableMmioWindow
 theorem subaccess
     {base : BitVec 64} {baseWidth offset accessWidth : Nat} {s : SailState}
     (h : Assumptions.NotWritableMmioWindow base baseWidth s)
+    (hpositive : 0 < accessWidth)
     (hfits : offset + accessWidth ≤ baseWidth) :
     Assumptions.NotWritableMmio (base + BitVec.ofNat 64 offset) accessWidth s :=
-  h.ok offset accessWidth hfits
+  h.ok offset accessWidth hpositive hfits
 
 end Assumptions.NotWritableMmioWindow
 

@@ -74,15 +74,15 @@ private theorem amoanddProgram_core_eq_sail
   have hbytes : MemBytesPresentAt js.sail addr 8 := by
     simpa [addr] using Assumptions.DwordPresent.memBytesPresentAt h.dword_present
   have hload_pmp : Assumptions.LoadPmpOk addr 8 js.sail := by
-    simpa [addr] using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega)
   have hstore_pmp : Assumptions.StorePmpOk addr 8 js.sail := by
-    simpa [addr] using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega)
   have hatomic_pmp : Assumptions.AtomicPmpOk amoop.AMOAND addr 8 js.sail := by
-    simpa [addr] using h.atomic_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.atomic_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega)
   have hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail := by
-    simpa [addr] using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega)
   have hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail := by
-    simpa [addr] using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega)
   by_cases h_align : addr &&& (7 : BitVec 64) = 0
   · exact
       amo_dword_double_binop_program_eq_sail_aligned
