@@ -145,6 +145,8 @@ structure Related (jt : SailJoltState) (s : SailState) : Prop where
     IsFlagWord jt.jolt_device a = false → s.mem.get? a = some ((jt.jolt_device.load? a).getD 0)
   /-- Jolt's panic flag is set exactly when Sail's panic word is nonzero. -/
   panic : jt.jolt_device.panic = true ↔ sailPanicWord jt.jolt_device s ≠ 0
+  /-- Jolt's memory layout is one `MemoryLayout.new` builds; no row changes it. -/
+  layout : ∃ config, MemoryLayout.new config = some jt.jolt_device.memory_layout
   /-- Jolt's output buffer stays inside the output region. -/
   outputs_size : jt.jolt_device.outputs.size ≤
     jt.jolt_device.memory_layout.max_output_size.toNat
