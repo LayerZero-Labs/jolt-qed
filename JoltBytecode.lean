@@ -5,3 +5,4 @@
 import JoltBytecode.RiscvInstruction
 import JoltBytecode.Step.Instructions
 import JoltBytecode.Step.Invariant
+import JoltBytecode.Step.SailCsr
