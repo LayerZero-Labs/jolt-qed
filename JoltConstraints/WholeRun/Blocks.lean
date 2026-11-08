@@ -9,14 +9,6 @@ set_option autoImplicit false
 
 noncomputable section
 
-universe u
-
-/-- Consecutive elements satisfy `relation`; for example, `[a, b]` requires
-`relation a b`.
-This retains the `Chain'` spelling for Lean 4.35's `List.IsChain`. -/
-abbrev List.Chain' {α : Type u} (relation : α → α → Prop) (xs : List α) : Prop :=
-  xs.IsChain relation
-
 namespace WholeRun
 
 private theorem source_at (image : Rv64ProgramImage SourceInstruction)
@@ -464,7 +456,7 @@ private theorem blocks_suffix {joltInstance : JoltInstance SourceInstruction}
       bs ≠ [] ∧
       (∀ b ∈ bs, b.Runs joltInstance.program) ∧
       bs.head?.map (·.pre) = some pre ∧
-      List.Chain' (fun b c => b.post = c.pre) bs ∧
+      bs.IsChain (fun b c => b.post = c.pre) ∧
       bs.getLast?.map (·.post) = trace.rows.back?.map (·.postState) ∧
       ∀ b ∈ bs.getLast?, b.post.sail.regs.get? Register.nextPC = some b.row.address := by
   obtain ⟨segment⟩ := block_at trace base hbase pre starts continues prepared
@@ -549,7 +541,7 @@ theorem HonestTrace.blocks {joltInstance : JoltInstance SourceInstruction}
       bs ≠ [] ∧
       (∀ b ∈ bs, b.Runs joltInstance.program) ∧
       bs.head?.map (·.pre) = some trace.initialState ∧
-      List.Chain' (fun b c => b.post = c.pre) bs ∧
+      bs.IsChain (fun b c => b.post = c.pre) ∧
       bs.getLast?.map (·.post) = trace.rows.back?.map (·.postState) ∧
       ∀ b ∈ bs.getLast?, b.post.sail.regs.get? Register.nextPC = some b.row.address := by
   obtain ⟨entry, starts, prepared⟩ := trace.starts (trace.rows[0]'trace.nonempty)
