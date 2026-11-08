@@ -288,12 +288,12 @@ theorem ldInstr_eq_sail
       simpa [haddr] using hsub
     have hload_pmp : Assumptions.LoadPmpOk ea 8 js.sail := by
       have hsub : Assumptions.LoadPmpOk (base + BitVec.ofNat 64 offset) 8 js.sail :=
-        h.load_pmp.subaccess (offset := offset) (accessWidth := 8) hoff
+        h.load_pmp.subaccess (offset := offset) (accessWidth := 8) (by decide) hoff
       simpa [base, haddr] using hsub
     have hread_mmio : Assumptions.NotReadableMmio ea 8 js.sail := by
       have hsub :
           Assumptions.NotReadableMmio (base + BitVec.ofNat 64 offset) 8 js.sail :=
-        h.not_readable_mmio.subaccess (offset := offset) (accessWidth := 8) hoff
+        h.not_readable_mmio.subaccess (offset := offset) (accessWidth := 8) (by decide) hoff
       simpa [base, haddr] using hsub
     have hread :
         vmem_read_addr (Virtaddr ea) 0 8 (Load Data) false false false js.sail =

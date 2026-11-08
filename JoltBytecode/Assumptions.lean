@@ -103,11 +103,12 @@ abbrev LoadPmpOk (addr : BitVec 64) (width : Nat) (s : SailState) : Prop :=
   phys_access_check (Load Data) Privilege.Machine
     (physaddr.Physaddr addr) width false s = .ok none s
 
-/-- Machine-mode PMP accepts every explicit sub-load inside a memory window. -/
+/-- Machine-mode PMP accepts every positive-width sub-load inside a memory window.
+For example, an eight-byte window includes byte loads, but excludes zero-byte accesses. -/
 structure LoadPmpOkWindow
     (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       LoadPmpOk (base + BitVec.ofNat 64 offset) accessWidth s
 
 /-- Machine-mode PMP accepts a data store to `addr` for `width` bytes.
@@ -121,11 +122,12 @@ abbrev StorePmpOk (addr : BitVec 64) (width : Nat) (s : SailState) : Prop :=
   phys_access_check (Store Data) Privilege.Machine
     (physaddr.Physaddr addr) width false s = .ok none s
 
-/-- Machine-mode PMP accepts every explicit sub-store inside a memory window. -/
+/-- Machine-mode PMP accepts every positive-width sub-store inside a memory window.
+For example, an eight-byte window includes byte stores, but excludes zero-byte accesses. -/
 structure StorePmpOkWindow
     (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       StorePmpOk (base + BitVec.ofNat 64 offset) accessWidth s
 
 /-- Machine-mode PMP accepts an AMO at `addr` for `width` bytes.
@@ -140,11 +142,12 @@ abbrev AtomicPmpOk
   phys_access_check (Atomic (op, Data, Data)) Privilege.Machine
     (physaddr.Physaddr addr) width true s = .ok none s
 
-/-- Machine-mode PMP accepts every explicit sub-AMO inside a memory window. -/
+/-- Machine-mode PMP accepts every positive-width sub-AMO inside a memory window.
+For example, an eight-byte window includes word AMOs, but excludes zero-byte accesses. -/
 structure AtomicPmpOkWindow
     (op : amoop) (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       AtomicPmpOk op (base + BitVec.ofNat 64 offset) accessWidth s
 
 /-- The physical range is not readable MMIO.
@@ -161,11 +164,12 @@ structure NotReadableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Pro
   ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_readable (physaddr.Physaddr addr) width s = .ok false s
 
-/-- Every explicit sub-load inside a memory window avoids readable MMIO. -/
+/-- Every positive-width sub-load inside a memory window avoids readable MMIO.
+For example, an eight-byte window includes byte loads, but excludes zero-byte accesses. -/
 structure NotReadableMmioWindow
     (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       NotReadableMmio (base + BitVec.ofNat 64 offset) accessWidth s
 
 /-- The physical range is not writable MMIO.
@@ -181,11 +185,12 @@ structure NotWritableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Pro
   ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_writable (physaddr.Physaddr addr) width s = .ok false s
 
-/-- Every explicit sub-store inside a memory window avoids writable MMIO. -/
+/-- Every positive-width sub-store inside a memory window avoids writable MMIO.
+For example, an eight-byte window includes byte stores, but excludes zero-byte accesses. -/
 structure NotWritableMmioWindow
     (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       NotWritableMmio (base + BitVec.ofNat 64 offset) accessWidth s
 
 -- ============================================================================

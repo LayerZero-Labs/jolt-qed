@@ -53,7 +53,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
           (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat = 0 := by
         simpa [ea] using congrArg BitVec.toNat halign_ea
       simpa [hoff]
-    have hstore_access := StoreProgramEqSailAssumptions.storeAccessFacts h 8 hfits
+    have hstore_access := StoreProgramEqSailAssumptions.storeAccessFacts h 8 (by decide) hfits
     have haligned_access : AlignedAccess ea 8 :=
       { misalign := access_misaligned_8_aligned_false ea halign_ea
         split := split_misaligned_aligned_8 ea halign_ea }
