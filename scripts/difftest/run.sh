@@ -9,12 +9,19 @@
 # guest/repro/ are run. Run build.sh WORK_DIR first.
 #
 # Environment:
-#   CLANG  clang with the RISC-V target (default: Homebrew LLVM, then clang)
-#   LLD    ld.lld or rust-lld (default: ld.lld, then rustup's rust-lld)
-#   LIMIT  instruction limit per run (default 100000)
+#   CLANG, LLD  guest toolchain (see toolchain.sh)
+#   LIMIT       instruction limit per run (default 100000)
+#   JOLT_MSTATUS_OR  bits Jolt ORs into its mstatus register on a read
+#               (default 0; 0x1800 for Jolt versions that store only MIE and MPIE)
+#   IGNORE_BITS space-separated CSR=MASK pairs left out of the comparison,
+#               such as "mstatus=0xa00000000" for UXL/SXL on a configuration
+#               with S- and U-mode
+#   RESULTS     name of the results directory under WORK_DIR (default results)
 #
-# Raw traces and per-guest JSON results go to WORK_DIR/results/. The exit
-# status is 0 when every guest agrees and 1 otherwise.
+# Raw traces and per-guest JSON results go to WORK_DIR/$RESULTS/. A guest
+# whose first difference is a spec-legal reservation-policy SC is counted
+# apart (see difftest.py). The exit status is 1 when any guest differs
+# otherwise, 2 on a harness error, and 0 otherwise.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -23,44 +30,33 @@ shift
 work="$(cd "$work" && pwd)"
 [[ -f "$work/env.sh" ]] || { echo "difftest/run: run build.sh $work first" >&2; exit 2; }
 source "$work/env.sh"
-
-if [[ -z "${CLANG:-}" ]]; then
-  for c in /opt/homebrew/opt/llvm/bin/clang /usr/local/opt/llvm/bin/clang clang; do
-    if command -v "$c" >/dev/null && "$c" -print-targets 2>/dev/null | grep -q riscv64; then
-      CLANG="$c"; break
-    fi
-  done
-fi
-[[ -n "${CLANG:-}" ]] || { echo "difftest/run: no clang with the riscv64 target; set CLANG" >&2; exit 2; }
-if [[ -z "${LLD:-}" ]]; then
-  if command -v ld.lld >/dev/null; then
-    LLD="ld.lld"
-  else
-    LLD="$(find "$(rustc --print sysroot)" -name rust-lld -type f 2>/dev/null | head -1)"
-    [[ -n "$LLD" ]] && LLD="$LLD -flavor gnu"
-  fi
-fi
-[[ -n "${LLD:-}" ]] || { echo "difftest/run: no ld.lld or rust-lld; set LLD" >&2; exit 2; }
+source "$HERE/toolchain.sh"
 
 guests=("$@")
 [[ ${#guests[@]} -gt 0 ]] || guests=("$HERE"/guest/repro/*.S)
 
-out="$work/results"
+out="$work/${RESULTS:-results}"
 mkdir -p "$out/elf"
-status=0
+ignore=()
+for i in ${IGNORE_BITS:-}; do ignore+=(--ignore-bits "$i"); done
+agree=0 policy=0 differ=0
 for g in "${guests[@]}"; do
   name="$(basename "${g%.*}")"
   case "$g" in
-    *.S)
-      elf="$out/elf/$name.elf"
-      "$CLANG" --target=riscv64 -march=rv64imac_zicsr -mabi=lp64 -mno-relax \
-        -I "$HERE/guest" -c "$g" -o "$out/elf/$name.o"
-      $LLD -T "$HERE/guest/link.ld" "$out/elf/$name.o" -o "$elf"
-      ;;
+    *.S) elf="$out/elf/$name.elf"; assemble "$g" "$elf" ;;
     *) elf="$g" ;;
   esac
+  status=0
   python3 "$HERE/difftest.py" --sail "$SAIL_SIM" --config "$SAIL_CONFIG" \
     --jolt "$JOLT_TRACE" --limit "${LIMIT:-100000}" \
-    --keep "$out/traces" --json "$out/$name.json" "$elf" || status=1
+    --jolt-mstatus-or "${JOLT_MSTATUS_OR:-0}" ${ignore[@]+"${ignore[@]}"} \
+    --keep "$out/traces" --json "$out/$name.json" "$elf" || status=$?
+  case $status in
+    0) agree=$((agree + 1)) ;;
+    3) policy=$((policy + 1)) ;;
+    1) differ=$((differ + 1)) ;;
+    *) echo "difftest/run: harness error on $g" >&2; exit 2 ;;
+  esac
 done
-exit $status
+echo "difftest/run: $agree agree, $policy reservation policy, $differ differ (results in $out)"
+[[ $differ -eq 0 ]]

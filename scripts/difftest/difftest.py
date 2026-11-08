@@ -11,22 +11,31 @@ For each retired instruction the script compares
   * the instruction address and the address of the next instruction,
   * the integer registers x1..x31,
   * the six machine CSRs that Jolt keeps in virtual registers
-    (mstatus, mtvec, mscratch, mepc, mcause, mtval),
+    (mstatus, mtvec, mscratch, mepc, mcause, mtval); Jolt's mstatus is
+    compared as virtual register 39 OR --jolt-mstatus-or, the value a CSR read
+    returns,
   * the memory bytes whose value changed.
 A difference is reported at the instruction where it first appears or
 changes, so a register that stays different is reported once. The comparison
 stops at the first control-flow difference, since the two runs no longer
 execute the same instructions after it.
 
-It also reports, without counting them as differences: Sail privilege-mode
-changes and traps, and Jolt RAM writes at instructions where Sail stores
-nothing.
+It also reports, without counting them as differences: CSR bits that differ
+from reset on and have kept differing, Sail privilege-mode changes and traps,
+and Jolt RAM writes at instructions where Sail stores nothing.
+
+LR/SC reservations are a spec-legal policy choice. Jolt reserves the exact
+address and fails an SC wider than its LR; Sail's C++ emulator reserves an
+8-byte granule and does not check width. When the first difference of a run
+is an SC that succeeds in Sail and fails in Jolt for one of these reasons, the
+run is labelled POLICY and compared no further.
 
 Usage:
   difftest.py --sail SIM --config JSON --jolt JOLT_TRACE ELF [--json OUT]
               [--limit N] [--keep DIR]
 
-Exit status: 0 when the runs agree, 1 when they differ, 2 on a harness error.
+Exit status: 0 when the runs agree, 1 when they differ, 2 on a harness error,
+3 when they differ only from a reservation-policy SC on.
 """
 
 import argparse
@@ -37,6 +46,8 @@ import struct
 import subprocess
 import sys
 
+# LR/SC as Sail disassembles them, such as "sc.d.aq x23, x6, (x8)".
+LRSC_RE = re.compile(r"\b(lr|sc)\.([wd])(?:\.\w+)*\s+x(\d+),\s*(?:x\d+,\s*)?\(x(\d+)\)")
 CSRS = ("mstatus", "mtvec", "mscratch", "mepc", "mcause", "mtval")
 MASK64 = (1 << 64) - 1
 
@@ -75,7 +86,7 @@ class Step:
 STEP_RE = re.compile(r"^\[(\d+)\] \[(\w+)\]: 0x([0-9A-Fa-f]+) \(0x([0-9A-Fa-f]+)\) (.*?)\s*(\S+\+\d+)?$")
 XW_RE = re.compile(r"^x(\d+) <- 0x([0-9A-Fa-f]+)$")
 CSRW_RE = re.compile(r"^CSR (\w+) \(0x[0-9A-Fa-f]+\) <- 0x([0-9A-Fa-f]+)$")
-MEMW_RE = re.compile(r"^mem\[W,0x([0-9A-Fa-f]+)\] <- 0x([0-9A-Fa-f]+)$")
+MEMW_RE = re.compile(r"^mem\[R?W,0x([0-9A-Fa-f]+)\] <- 0x([0-9A-Fa-f]+)$")
 TRAP_RE = re.compile(r"^handling (\S+) at priv (\w+) with tval 0x([0-9A-Fa-f]+)$")
 
 
@@ -166,7 +177,8 @@ def jolt_bytes(writes):
     return out
 
 
-def compare(elf, sail, jolt):
+def compare(elf, sail, jolt, mstatus_or=0, ignore=None):
+    ignore = ignore or {}
     s_steps, s_end, s_reset = sail
     j_steps, j_end, _ = jolt
     mem_s = load_elf(elf)
@@ -184,14 +196,33 @@ def compare(elf, sail, jolt):
             if pair is not None:
                 diffs.append(text)
 
+    # CSR bits that differ at reset are a note, not a difference, for as long
+    # as they keep differing: a guest sees them only by reading the CSR (and
+    # the register it reads into is compared) or through control flow (also
+    # compared). Once such a bit agrees it is compared like any other.
+    view0 = dict(cj, mstatus=cj["mstatus"] | mstatus_or)
+    since_reset = {}
+    for c in CSRS:
+        since_reset[c] = (cs[c] ^ view0[c]) & ~ignore.get(c, 0)
+        if since_reset[c]:
+            notes.append(f"reset: {c} Sail 0x{cs[c]:x}, Jolt 0x{view0[c]:x} "
+                         f"(differ in 0x{since_reset[c]:x})")
+
     n = min(len(s_steps), len(j_steps))
     stopped = None
+    policy = None
+    resv = None     # (address, width) of the last LR, while no SC has followed
     for i in range(n):
         s, j = s_steps[i], j_steps[i]
         where = f"step {i} pc=0x{s.pc:x} [{s.insn}]"
+        before = len(diffs)
+        lrsc = LRSC_RE.search(s.insn)
+        if lrsc:
+            addr, width = xs[int(lrsc[4])], 4 if lrsc[2] == "w" else 8
         if s.pc != j.pc:
             stopped = f"{where}: Sail pc 0x{s.pc:x}, Jolt pc 0x{j.pc:x}"
             diffs.append("control flow: " + stopped)
+            n = i
             break
         if s.priv != "M":
             notes.append(f"{where}: Sail runs in privilege {s.priv}")
@@ -209,12 +240,15 @@ def compare(elf, sail, jolt):
                 cs[c] = v
         for c, v in j.csr.items():
             cj[c] = v
+        view = dict(cj, mstatus=cj["mstatus"] | mstatus_or)
         for c in CSRS:
             # Keyed on the differing bits, so a constant difference (such as
             # the read-only mstatus.UXL/SXL fields) is reported once.
-            xor = cs[c] ^ cj[c]
+            xor = (cs[c] ^ view[c]) & ~ignore.get(c, 0)
+            since_reset[c] &= xor
+            xor &= ~since_reset[c]
             report(("csr", c), xor or None,
-                   f"{where}: {c} Sail 0x{cs[c]:x}, Jolt 0x{cj[c]:x} (differ in 0x{xor:x})")
+                   f"{where}: {c} Sail 0x{cs[c]:x}, Jolt 0x{view[c]:x} (differ in 0x{xor:x})")
         changed_s = {a: b for a, b in sail_bytes(s.writes).items() if mem_s.get(a, 0) != b}
         changed_j = {a: b for a, b in jolt_bytes(j.writes).items() if mem_j.get(a, 0) != b}
         mem_s.update(changed_s)
@@ -224,11 +258,40 @@ def compare(elf, sail, jolt):
         if j.writes and not s.writes:
             ws = ", ".join(f"0x{a:x}: 0x{pre:x} -> 0x{post:x}" for a, pre, post in j.writes)
             notes.append(f"{where}: Jolt RAM write with no Sail store ({ws})")
+        if lrsc and lrsc[1] == "lr":
+            resv = (addr, width)
+        elif lrsc:
+            rd = int(lrsc[3])
+            # Jolt's reservation needs the same address and an SC no wider
+            # than the LR. The spec also lets an implementation accept an SC
+            # elsewhere in the reserved granule, or wider than the LR, as
+            # Sail's C++ emulator does (8-byte granule, no width check).
+            # With rd = x0 the outcome shows only as Sail's store.
+            sail_only = (xs[rd] == 0 and xj[rd] == 1) if rd else (changed_s and not changed_j)
+            if (before == 0 and len(diffs) > 0 and resv and sail_only
+                    and resv[0] // 8 == addr // 8
+                    and (resv[0] != addr or resv[1] < width)):
+                policy = (f"{where}: SC succeeds in Sail and fails in Jolt after an LR "
+                          f"of {resv[1]} bytes at 0x{resv[0]:x} (spec-legal reservation "
+                          "policy, compared no further)")
+                del diffs[before:]
+                stopped = policy
+                n = i + 1
+                break
+            resv = None
         if s.next is not None and s.next != j.next:
             stopped = f"{where}: next pc Sail 0x{s.next:x}, Jolt 0x{j.next:x}"
             diffs.append("control flow: " + stopped)
+            n = i + 1
             break
-    if stopped is None and len(s_steps) != len(j_steps):
+    same_exit = end_key(s_end) == end_key(j_end) and s_end["kind"] == "tohost"
+    if stopped is None and same_exit and len(s_steps) != len(j_steps):
+        # Both wrote the same exit code to tohost. Jolt stops at the first
+        # store to tohost; Sail can retire a few more instructions before its
+        # HTIF device acts (riscv-tests store the high half separately).
+        notes.append(f"Sail retired {len(s_steps)} instructions, Jolt {len(j_steps)}, "
+                     "before the same tohost exit")
+    elif stopped is None and len(s_steps) != len(j_steps):
         diffs.append(f"length: Sail retired {len(s_steps)} instructions, Jolt {len(j_steps)}")
         if len(s_steps) > n:
             s = s_steps[n]
@@ -237,7 +300,7 @@ def compare(elf, sail, jolt):
                          + (f", writes {', '.join(f'{k}=0x{v:x}' for k, v in s.csr.items())}" if s.csr else ""))
     if stopped is None and end_key(s_end) != end_key(j_end):
         diffs.append(f"end: Sail {s_end}, Jolt {j_end}")
-    return diffs, notes, s_end, j_end, n
+    return diffs, notes, s_end, j_end, n, policy
 
 
 def end_key(end):
@@ -258,6 +321,11 @@ def main():
     ap.add_argument("--jolt", required=True, help="jolt-trace binary")
     ap.add_argument("--limit", type=int, default=100000, help="instruction limit")
     ap.add_argument("--json", help="write the result as JSON to this file")
+    ap.add_argument("--ignore-bits", action="append", default=[], metavar="CSR=MASK",
+                    help="leave these bits of CSR out of the comparison (repeatable)")
+    ap.add_argument("--jolt-mstatus-or", type=lambda v: int(v, 0), default=0,
+                    help="bits Jolt ORs into virtual register 39 when it reads mstatus "
+                         "(0x1800 on Jolt versions that keep only MIE and MPIE there)")
     ap.add_argument("--keep", help="keep both raw traces in this directory")
     a = ap.parse_args()
     logs = (None, None)
@@ -271,19 +339,23 @@ def main():
     except (OSError, json.JSONDecodeError) as e:
         print(f"difftest: {e}", file=sys.stderr)
         return 2
-    diffs, notes, s_end, j_end, n = compare(a.elf, sail, jolt)
+    diffs, notes, s_end, j_end, n, policy = compare(a.elf, sail, jolt, a.jolt_mstatus_or,
+                                                {c: int(m, 0) for c, m in (i.split("=") for i in a.ignore_bits)})
     name = os.path.basename(a.elf)
-    print(f"== {name}: {'AGREE' if not diffs else 'DIFFER'} ({n} instructions compared)")
+    verdict = "DIFFER" if diffs else "POLICY" if policy else "AGREE"
+    print(f"== {name}: {verdict} ({n} instructions compared)")
     print(f"   end: Sail {s_end}; Jolt {j_end}")
+    if policy:
+        print(f"   policy  {policy}")
     for d in diffs:
         print(f"   diff  {d}")
     for t in notes:
         print(f"   note  {t}")
     if a.json:
-        json.dump({"elf": name, "agree": not diffs, "compared": n, "diffs": diffs,
+        json.dump({"elf": name, "verdict": verdict, "compared": n, "policy": policy, "diffs": diffs,
                    "notes": notes, "sail_end": s_end, "jolt_end": j_end},
                   open(a.json, "w"), indent=2)
-    return 0 if not diffs else 1
+    return 1 if diffs else 3 if policy else 0
 
 
 if __name__ == "__main__":

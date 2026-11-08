@@ -15,6 +15,10 @@
 #             a16z/jolt main on first use and never updated afterwards)
 #   SAIL_BIN  Sail compiler to use; it must report the pinned version. Without
 #             it the pinned compiler is fetched, patched and built with opam.
+#   PROVENANCE_ROOT  jolt-qed checkout whose sail-import/PROVENANCE.toml, and
+#             the patches and configuration it names, define the emulator
+#             (default: the checkout this script is in). Use it to test
+#             another branch's model patches and configuration.
 #
 # Each step is skipped when its inputs are unchanged: the emulator is rebuilt
 # whenever the model commit, the compiler commit or any recorded patch changes,
@@ -24,7 +28,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$HERE/../.." && pwd)"
+ROOT="$(cd "${PROVENANCE_ROOT:-$HERE/../..}" && pwd)"
 PROVENANCE="$ROOT/sail-import/PROVENANCE.toml"
 work="${1:?usage: build.sh WORK_DIR}"
 mkdir -p "$work"
