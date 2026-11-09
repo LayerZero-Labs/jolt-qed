@@ -2,8 +2,6 @@ import LeanRV64D.Common
 import LeanRV64D.Nan
 import LeanRV64D.ArithInternal
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 

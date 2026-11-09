@@ -10,8 +10,6 @@ import LeanRV64D.SysRegs
 import LeanRV64D.InterruptRegs
 import LeanRV64D.Smcntrpmf
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 

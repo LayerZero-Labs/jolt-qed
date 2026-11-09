@@ -6,8 +6,6 @@ import LeanRV64D.Types
 import LeanRV64D.Callbacks
 import LeanRV64D.RegType
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 

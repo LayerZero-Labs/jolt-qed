@@ -7,8 +7,6 @@ import LeanRV64D.SysRegs
 import LeanRV64D.AddrChecks
 import LeanRV64D.Vmem
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 

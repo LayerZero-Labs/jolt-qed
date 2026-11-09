@@ -11,8 +11,6 @@ import LeanRV64D.Mem
 import LeanRV64D.Vmem
 import LeanRV64D.InstsBegin
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 

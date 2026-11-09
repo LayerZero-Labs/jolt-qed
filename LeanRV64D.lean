@@ -6,8 +6,6 @@ import LeanRV64D.Extensions
 import LeanRV64D.Types
 import LeanRV64D.Main
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -265,7 +263,7 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
                                           read_idempotent := true
                                           write_idempotent := true
                                           misaligned_fault := AlignmentFault
-                                          atomic_support := AMONone
+                                          atomic_support := AMOArithmetic
                                           reservability := RsrvNone
                                           supports_cbo_zero := false
                                           supports_pte_read := false

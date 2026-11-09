@@ -326,6 +326,23 @@ The model's own axioms (`LeanRV64D/RiscvExtras.lean`) after the regeneration:
 | `get_16_random_bits` | removed: an opaque function (unspecified entropy). It is the entropy source behind the Zkr `seed` CSR. Zkr is off, and Jolt rejects the CSR, so no Jolt step reaches it; as an opaque constant it adds no axiom and proofs cannot assume anything about its result |
 | floating-point operations (`riscv_f16Add` and the rest) | not reached: F and D are off and their instruction modules are not generated |
 
+The generated model is checked at Lean's default limits (200000 heartbeats, `maxRecDepth` 512), with no file-wide `set_option`; `scripts/regen-sail-model.sh` removes the two header lines Sail writes and splits each 256-entry S-box table into two 128-entry halves.
+Only the declarations below carry a limit, as `set_option … in` directly before the declaration; each limit is the smallest passing value rounded up to the next 50 (next 50000 for heartbeats).
+The first five are in the closure of `JoltInstance.sail_soundness`, which therefore depends on those options for the model, though not on any file-wide one.
+
+| Declaration | Limit | Reason | In the closure |
+| --- | --- | --- | --- |
+| `is_CSR_accessible` (`SysControl`) | `maxRecDepth` 900 | generated if-chain over every CSR address | yes |
+| `read_CSR`, `write_CSR` (`ZicsrInsts`) | `maxRecDepth` 900 | the same chain, for reads and writes | yes |
+| `encdec_backwards` (`InstsEnd`) | `maxRecDepth` 1450, `maxHeartbeats` 250000 | decoder mapping over every instruction | yes |
+| `encdec_compressed_backwards` (`InstsEnd`) | `maxRecDepth` 550 | the same mapping for compressed instructions | yes |
+| `encdec_backwards_matches` (`InstsEnd`) | `maxRecDepth` 1400, `maxHeartbeats` 250000 | the same mapping, returning a `Bool` | no |
+| `encdec_compressed_backwards_matches` (`InstsEnd`) | `maxRecDepth` 550 | the same mapping, returning a `Bool` | no |
+| `print_rvfi_exec` (`RvfiDii`) | `maxHeartbeats` 1000000000 | debug printer for the RVFI trace format | no |
+
+The follow-up is for Sail's Lean backend to split long if-chains and mappings into helper definitions, so that these options, and the S-box rewrite, can be dropped from the regeneration.
+The proofs unfold the CSR chains and the decoder mapping, so the chains are not split by hand.
+
 `#print axioms` on `JoltInstance.soundness` and on every instruction theorem that is fully proved gives only `propext`, `Classical.choice` and `Quot.sound`.
 The headline theorems, including `Decode.joltDecode_compressed_agrees` and the block theorems of section 9, use only these three standard axioms, although the generic CSR read in their closure mentions `get_16_random_bits`.
 None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/Completeness/`, some of them waiting on a16z/jolt#1949.

@@ -18,8 +18,6 @@ import LeanRV64D.SysControl
 import LeanRV64D.InstsBegin
 import LeanRV64D.ZkrControl
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -321,6 +319,7 @@ def read_mhpmevent (index : Nat) : SailM (BitVec 64) := do
 def read_mhpmeventh (index : Nat) : SailM (BitVec 32) := do
   (pure (Sail.BitVec.extractLsb (GetElem?.getElem! (← readReg mhpmevent) index) 63 32))
 
+set_option maxRecDepth 900 in
 def read_CSR (b__0 : (BitVec 12)) : SailM (BitVec 64) := do
   if ((b__0 == (0x301#12 : (BitVec 12))) : Bool)
   then readReg misa
@@ -1251,6 +1250,7 @@ def write_mhpmeventh (index : Nat) (value : (BitVec 32)) : SailM Unit := do
                 0))))))
   else (pure ())
 
+set_option maxRecDepth 900 in
 def write_CSR (b__0 : (BitVec 12)) (value : (BitVec 64)) : SailM (Result (BitVec 64) Unit) := do
   if ((b__0 == (0x301#12 : (BitVec 12))) : Bool)
   then
