@@ -69,6 +69,10 @@ Each region is a superset of what Jolt allows, which is the direction the whole-
 Jolt's tracer additionally panics on stores into the stack canary, on accesses at or above `heap_end`, on stores to the read-only parts of the I/O window, and on fetches outside the program's bytecode.
 Those runs have no Jolt trace, so the theorem never has to say what Sail does on them.
 Reservability and atomics are restricted the way Jolt restricts them: Jolt's LR and SC expansions assert `rs1 ≥ 0x8000_0000` before touching the reservation (`crates/jolt-program/src/expand/memory/lrw.rs`, `lrd.rs`, `shared.rs` `expand_sc_success`).
+Jolt's AMO expansions make no such assertion: they load and store the doubleword through the ordinary MMU, which accepts the output region.
+So an AMO on an output address retires in Jolt, while Sail's I/O region has no atomics and raises an access fault.
+This is a documented deviation: the whole-run theorem takes `AmoInRam` (every AMO's address is in RAM) as a named premise per block.
+It is discharged once Jolt's AMO expansions assert `rs1 ≥ RAM_START_ADDRESS` the way LR and SC do.
 
 The I/O window is not plain memory in Jolt: a store to the panic word sets a flag whatever the value, and the termination word ignores stores and always reads 0 (`JoltBytecode/JoltISA/JoltDevice.lean`, `load?` and `store?`).
 The specification leaves the behaviour of I/O regions to the platform, so this is not a deviation from RISC-V; it is a difference between Jolt's platform and the Sail model's flat memory.
@@ -322,3 +326,7 @@ Step f classifies whatever is left in the whole-run theorem as an invariant, a p
 `WholeRun.SystemInv` is a run invariant: raw mstatus contains only MIE/MPIE, mtvec has mode 0 or 1, mepc is even, and the reservation registers form a legal pair.
 It holds initially and is preserved by every source block, including CSR writes, MRET, LR/SC and ECALL, assuming the separately supplied run invariant that the source PC is even.
 `WholeRun.block_simulates` combines these facts with the platform RAM assumptions and fetch/decode results to simulate every RISC-V block before EBREAK by one Sail `try_step`.
+
+Platform premise `JoltInstance.HeapNoWrap`: the memory layout ends at least eight bytes below `2^64` (`heap_end ≤ 2^64 - 8`).
+`MemoryLayout.new` checks its additions but rounds only the stack and heap sizes to eight bytes, so a `program_end` near `2^64` gives `heap_end = 2^64 - 1`; real ELFs end far below that.
+The layout never changes during a run, so the premise on the instance holds at every block.
