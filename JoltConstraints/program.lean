@@ -8,16 +8,29 @@ import JoltBytecode.JoltISA.JoltDevice
 import JoltBytecode.RiscvInstruction
 import JoltConstraints.expansions
 import Mathlib.Tactic.DeriveFintype
+import Mathlib.Data.Fintype.EquivFin
 import Mathlib.Data.Nat.Log
 
 open LeanRV64D
 
 set_option autoImplicit false
 
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
-set_option maxRecDepth 4096 in
-deriving instance Fintype for Register
+-- `Register` is a Sail enumeration of 181 constructors.
+-- Mathlib's `deriving instance Fintype` needs a raised recursion depth and a relaxed
+-- transparency setting at this size, so the instance goes through the constructor index instead.
+-- The bound `181` only has to be an upper bound on the number of constructors.
+-- (`Register.ofNat_ctorIdx` is generated with the enumeration.)
+theorem LeanRV64D.Register.ctorIdx_lt (r : Register) : r.ctorIdx < 181 := by
+  cases r <;> decide
+
+theorem LeanRV64D.Register.ctorIdx_injective : Function.Injective Register.ctorIdx := fun a b h =>
+  (Register.ofNat_ctorIdx a).symm.trans ((congrArg Register.ofNat h).trans (Register.ofNat_ctorIdx b))
+
+noncomputable instance : Fintype Register :=
+  haveI : Finite Register :=
+    Finite.of_injective (β := Fin 181) (fun r => ⟨r.ctorIdx, r.ctorIdx_lt⟩)
+      (fun _ _ h => Register.ctorIdx_injective (congrArg Fin.val h))
+  Fintype.ofFinite Register
 
 def ramPmaRegion (ramSize : Nat) : PMA_Region :=
   { base := BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS
