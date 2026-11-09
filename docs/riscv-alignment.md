@@ -182,13 +182,21 @@ The files are under `JoltBytecode/Step/`.
   For a compressed parcel, `ast` is the base instruction the parcel abbreviates, not the compressed AST Sail decodes: Sail's `C_ADDI` executes as `pure (ExecuteAs (ITYPE …))`, and `try_step` then runs the `ITYPE`.
   `joltStep_compressed` takes the decoded compressed AST `cast` and the base AST `base` together with the fact that they agree under `executeFull` (step e proves it for every parcel Jolt accepts).
   Decision: an earlier version required `Matches i cast` for the compressed AST itself, which no Jolt instruction satisfies, so that theorem was vacuous.
-- `Instructions.lean` restates every wired instruction theorem in that form: `joltRun_eq_execute` relates `joltRun i` to `execute ast` for each `ast` with `Matches i ast`.
-  It covers 83 instructions: all except ECALL, EBREAK, LR, SC (no theorem yet) and MRET (its theorem ends in `sorry`); step d adds them with the jolt-changes sequences.
-  It calls the instruction theorems directly, not through the dispatcher, so `#print axioms` on it and on the step corollaries lists only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (through the generic CSR read).
+- `Instructions.lean` states `joltRun_eq_execute`: `joltRun i` agrees with `execute ast` for each retiring instruction and matching Sail AST (`Matches i ast`).
+  It covers arithmetic, branches, loads, stores, AMOs, FENCE, all six CSR forms, MRET, LR.W, SC.W, LR.D and SC.D.
+  Their system-program specifications and Sail bridges are in `InstructionEquivalence/Instructions/System/`.
+  LR/SC bundles include natural alignment, populated RAM windows, Jolt's RAM checks and Sail's exact reserved-access PMP/PMA permissions; SC also requires the reservation-pair invariant from section 3.
+  These facts ensure a failed SC's write-back preserves memory.
+  EBREAK remains outside `Lifted`: section 4 stops the whole-run theorem before its first occurrence.
+  `Step/Ecall.lean` proves `RiscvInstruction.joltStep_eq_try_step_ecall` for a 32-bit ECALL fetch using `Step.joltEcallStep`: the prelude, `ecallProgram` and the non-retiring trap finish.
+  Its additional hypotheses `hm` and `ht` require the persistent raw mstatus mask and legal mtvec mode; for example, mtvec `0x101` enters the handler at `0x100` without retiring ECALL.
+  Decision (step d): the execute-level dispatcher was retired because `joltRun_eq_execute` and the ECALL step theorem replace it.
+  `joltRun_eq_execute` calls the proved program theorems directly, and the step corollaries compose it with the fetch/decode lift.
+  Their `#print axioms` lists only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (through the generic CSR read).
   FENCE matches every Sail FENCE, since Jolt runs all of them as one no-op row.
-  Atomics match with their own `aq` and `rl` bits: `AmoFlags.lean` proves that Sail's AMO semantics does not depend on them, because they reach the memory interface only as the request's `access_kind`, which the sequential memory model ignores.
+  Atomics match with their own `aq` and `rl` bits: `AmoFlags.lean` supplies the generic memory-flag erasure used by AMOs and LR/SC, because the sequential memory model ignores the request's `access_kind`.
   The division and remainder expansions need their advice operand to be the honest value (`AdviceHonest`); the soundness half of those theorems shows a retiring run with `rd ≠ 0` has no other choice.
-  `joltStep_eq_try_step_base` and `joltStep_eq_try_step_compressed` combine this with the step theorem.
+  `joltStep_eq_try_step_base` and `joltStep_eq_try_step_compressed` combine `joltRun_eq_execute` with the step theorem.
 - `Frame.lean` proves that Jolt rows write only `x1`-`x31` and `nextPC` among Sail's registers, and remove none, on success and on error.
 - `Invariant.lean` proves that a retiring Jolt step preserves `StepInvariant`: the prelude writes `minstret_increment` and `nextPC`, the rows stay in their frame, and the finish writes `PC` and `minstret`.
   `RiscvInstruction.joltStep_stepInvariant` states it per instruction.
@@ -196,7 +204,8 @@ The files are under `JoltBytecode/Step/`.
 Counters are unobservable: no Jolt row reads `minstret`, `minstret_increment` or `mcycle`, and the bookkeeping that writes them is Sail's own code run on the embedded state, so the two sides cannot disagree on them.
 
 The step theorems keep three hypotheses that step f discharges from the run: the instruction's assumption bundle at the state after the prelude (its parts are classified in section 8), Sail's fetch and decode results at that state (step e relates them to Jolt's decoder), and that `execute ast` retires.
-A step that traps is the subject of step d: ECALL, misaligned accesses and failed CSR accesses enter Sail's trap handler, which writes `mepc`, `mcause`, `mtval` and `mstatus`.
+The separate ECALL theorem follows trap entry through the writes to `mepc`, `mcause`, `mtval` and `mstatus` and commits the handler PC without retirement.
+The retiring theorems retain their retirement hypothesis; natural alignment excludes the LR/SC faults that are outside Jolt's step handoff.
 
 ## 6. CSR legalization
 
