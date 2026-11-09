@@ -4,8 +4,6 @@ import LeanRV64D.Sign
 import LeanRV64D.Zero
 import LeanRV64D.Normal
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 

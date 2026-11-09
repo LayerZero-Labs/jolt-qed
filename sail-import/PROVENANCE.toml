@@ -69,7 +69,9 @@ used_sha256 = "a60717fcf321459be8736a5e5f481dac2eed9ce864ff2d0e4253f1ad0a0b3992"
 # constructors carrying data; the full instruction union has 353. The vector and
 # F/D instruction modules (and the modules that require them) are left out,
 # leaving 159 constructors. No hand-written proof refers to a dropped
-# constructor, and the proofs do not use the Sail decoder.
+# constructor. The Sail decoder modules stay in the selection because
+# `Decode.joltDecode_agrees` and `Decode.joltDecode_compressed_agrees` use
+# `ext_decode` and `ext_decode_compressed`.
 excluded_roots = ["V_instructions", "FD_instructions"]
 dropped_leaves = [
   "FD_instructions", "V_instructions", "Zfbfmin", "Zvabd_insts", "Zvbb", "Zvbc",
@@ -93,4 +95,4 @@ selected = [
 [output]
 # sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
 # followed by LeanRV64D.lean.
-tree_sha256 = "58d054904ba0ee2d9545d5229248664820304b94290ccc47f0903ba7f0ee8e54"
+tree_sha256 = "74041ff8565d6f9a3fe3ecaf2abdd7fa212c9f78c9d4d1c4a9f77db159f9d4d2"

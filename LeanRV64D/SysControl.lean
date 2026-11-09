@@ -17,8 +17,6 @@ import LeanRV64D.ZicfilpRegs
 import LeanRV64D.StateenAccessChecks
 import LeanRV64D.SysReservation
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -265,6 +263,7 @@ def sstc_CSRs_accessible (priv : Privilege) : SailM Bool := do
       (pure ((_get_Counteren_TM (← readReg mcounteren)) == 1#1)) <&&> (do
         (pure ((_get_MEnvcfg_STCE (← readReg menvcfg)) == 1#1)))))
 
+set_option maxRecDepth 900 in
 def is_CSR_accessible (b__0 : (BitVec 12)) (g__2 : Privilege) (g__3 : CSRAccessType) : SailM Bool := do
   if ((b__0 == (0x301#12 : (BitVec 12))) : Bool)
   then (pure true)
