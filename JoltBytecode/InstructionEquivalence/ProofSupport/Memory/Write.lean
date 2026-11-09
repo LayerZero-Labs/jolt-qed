@@ -3,11 +3,13 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Alignment
 import Mathlib.Tactic.IntervalCases
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.SD
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option linter.unusedSimpArgs false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open Std.Do
 open virtaddr MemoryAccessType mem_payload
 
@@ -70,10 +72,10 @@ theorem write_ram_dword_eq_state_after_dword_store
       data default_meta s =
     .ok true (state_after_dword_store s addr data) := by
   dsimp [LeanRV64D.Functions.write_ram,
-    Sail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.writeBytes,
-    PreSail.writeByte,
+    LeanRV64D.ConcurrencyInterfaceV1.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeBytes,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeByte,
     state_after_dword_store,
     dword_byte,
     default_meta,
@@ -149,6 +151,12 @@ theorem mem_write_ea_plain_dword_ok
       .ok (Ok ()) s
   rfl
 
+/-- A plain store is not a store-conditional. Rewriting with this, rather than
+unfolding `is_store_conditional`, keeps the `Decidable` instance of the
+surrounding `if` in step with its condition. -/
+private theorem is_store_conditional_store {k : Type} (a : k) :
+    is_store_conditional (MemoryAccessType.Store a) = false := rfl
+
 /-- Collapse Sail's virtual dword store pipeline once translation, effective
 address write, and physical value write have been reduced. -/
 theorem vmem_write_addr_dword_store_bridge
@@ -167,12 +175,12 @@ theorem vmem_write_addr_dword_store_bridge
       .ok (Ok true) (state_after_dword_store s addr data) := by
   unfold vmem_write_addr
   simp only [ha.misalign, Bool.false_eq_true, if_false]
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
-    SailME.throw, PreSail.PreSailME.throw, MonadExceptOf.throw,
+    SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw, MonadExceptOf.throw,
     misaligned_order, sys_misaligned_order_decreasing,
-    bits_of_virtaddr, Sail.assert, PreSail.assert,
+    bits_of_virtaddr, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
     untilFuelM, untilFuelM.go, zeros, BitVec.zero, BitVec.addInt,
     ha.split]
   norm_num
@@ -214,10 +222,10 @@ theorem vmem_write_addr_dword_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk,
     bind, EStateM.bind, EStateM.map,
-    Functor.map, htranslate, hea_int, hwrite_int,
+    Functor.map, htranslate, hea, hwrite, hea_int, hwrite_int,
     ExceptT.bind, ExceptT.bindCont, ExceptT.map,
     Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
-    is_store_conditional, BEq.beq, Bool.false_and, Bool.false_eq_true,
+    is_store_conditional_store, ↓reduceIte, BEq.beq, Bool.false_and, Bool.false_eq_true,
     if_true, pure, EStateM.pure, ExceptT.pure]
 
 /-- Under exact aligned flat-memory evidence, Sail's virtual dword
@@ -475,10 +483,10 @@ theorem write_ram_byte_eq_state_after_byte_store
       (physaddr.Physaddr addr) 1 data default_meta s =
     .ok true (state_after_byte_store s addr data) := by
   dsimp [LeanRV64D.Functions.write_ram,
-    Sail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.writeBytes,
-    PreSail.writeByte,
+    LeanRV64D.ConcurrencyInterfaceV1.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeBytes,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeByte,
     state_after_byte_store,
     byte_byte,
     default_meta,
@@ -493,10 +501,10 @@ theorem write_ram_halfword_eq_state_after_halfword_store
       (physaddr.Physaddr addr) 2 data default_meta s =
     .ok true (state_after_halfword_store s addr data) := by
   dsimp [LeanRV64D.Functions.write_ram,
-    Sail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.writeBytes,
-    PreSail.writeByte,
+    LeanRV64D.ConcurrencyInterfaceV1.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeBytes,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeByte,
     state_after_halfword_store,
     halfword_byte,
     default_meta,
@@ -511,10 +519,10 @@ theorem write_ram_word_eq_state_after_word_store
       (physaddr.Physaddr addr) 4 data default_meta s =
     .ok true (state_after_word_store s addr data) := by
   dsimp [LeanRV64D.Functions.write_ram,
-    Sail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.ConcurrencyInterfaceV1.sail_mem_write,
-    PreSail.writeBytes,
-    PreSail.writeByte,
+    LeanRV64D.ConcurrencyInterfaceV1.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_write,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeBytes,
+    Sail.ConcurrencyInterfaceV1.PreSail.writeByte,
     state_after_word_store,
     word_byte,
     default_meta,
@@ -757,12 +765,12 @@ theorem vmem_write_addr_byte_store_bridge
       .ok (Ok true) (state_after_byte_store s addr data) := by
   unfold vmem_write_addr
   simp only [ha.misalign, Bool.false_eq_true, if_false]
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
-    SailME.throw, PreSail.PreSailME.throw, MonadExceptOf.throw,
+    SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw, MonadExceptOf.throw,
     misaligned_order, sys_misaligned_order_decreasing,
-    bits_of_virtaddr, Sail.assert, PreSail.assert,
+    bits_of_virtaddr, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
     untilFuelM, ha.split]
   norm_num
   unfold untilFuelM.go
@@ -772,7 +780,7 @@ theorem vmem_write_addr_byte_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
   have hwrite_int :
       mem_write_value (physaddr.Physaddr addr) (Int.toNat 1) data
         (Store Data) false false false s =
@@ -800,12 +808,12 @@ theorem vmem_write_addr_halfword_store_bridge
       .ok (Ok true) (state_after_halfword_store s addr data) := by
   unfold vmem_write_addr
   simp only [ha.misalign, Bool.false_eq_true, if_false]
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
-    SailME.throw, PreSail.PreSailME.throw, MonadExceptOf.throw,
+    SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw, MonadExceptOf.throw,
     misaligned_order, sys_misaligned_order_decreasing,
-    bits_of_virtaddr, Sail.assert, PreSail.assert,
+    bits_of_virtaddr, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
     untilFuelM, ha.split]
   norm_num
   unfold untilFuelM.go
@@ -815,7 +823,7 @@ theorem vmem_write_addr_halfword_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
   have hea_int :
       mem_write_ea (physaddr.Physaddr addr) (Int.toNat 2)
         false false false s =
@@ -831,7 +839,7 @@ theorem vmem_write_addr_halfword_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_halfword_store s addr data)
     exact hwrite
-  simp only [EStateM.bind, EStateM.map, hea_int, hwrite_int]
+  simp only [EStateM.bind, EStateM.map, hea, hwrite, hea_int, hwrite_int]
   rfl
 
 theorem vmem_write_addr_word_store_bridge
@@ -850,12 +858,12 @@ theorem vmem_write_addr_word_store_bridge
       .ok (Ok true) (state_after_word_store s addr data) := by
   unfold vmem_write_addr
   simp only [ha.misalign, Bool.false_eq_true, if_false]
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
-    SailME.throw, PreSail.PreSailME.throw, MonadExceptOf.throw,
+    SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw, MonadExceptOf.throw,
     misaligned_order, sys_misaligned_order_decreasing,
-    bits_of_virtaddr, Sail.assert, PreSail.assert,
+    bits_of_virtaddr, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
     untilFuelM, ha.split]
   norm_num
   unfold untilFuelM.go
@@ -865,7 +873,7 @@ theorem vmem_write_addr_word_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
   have hea_int :
       mem_write_ea (physaddr.Physaddr addr) (Int.toNat 4)
         false false false s =
@@ -881,7 +889,7 @@ theorem vmem_write_addr_word_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_word_store s addr data)
     exact hwrite
-  simp only [EStateM.bind, EStateM.map, hea_int, hwrite_int]
+  simp only [EStateM.bind, EStateM.map, hea, hwrite, hea_int, hwrite_int]
   rfl
 
 theorem vmem_write_addr_byte_store_reduces
@@ -943,7 +951,7 @@ theorem vmem_write_byte_store_reduces (imm : BitVec 12) (rs1 : regidx)
       (state_after_byte_store s (load_effective_address v imm) data) := by
   unfold load_effective_address
   unfold vmem_write
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
     ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift,
@@ -966,7 +974,7 @@ theorem vmem_write_halfword_store_reduces (imm : BitVec 12) (rs1 : regidx)
       (state_after_halfword_store s (load_effective_address v imm) data) := by
   unfold load_effective_address at halign hpmp hmmio ⊢
   unfold vmem_write
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
     ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift,
@@ -989,7 +997,7 @@ theorem vmem_write_word_store_reduces (imm : BitVec 12) (rs1 : regidx)
       (state_after_word_store s (load_effective_address v imm) data) := by
   unfold load_effective_address at halign hpmp hmmio ⊢
   unfold vmem_write
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
     ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift,

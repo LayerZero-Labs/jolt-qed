@@ -4,7 +4,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true
@@ -112,7 +114,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
           js.sail := by
       unfold vmem_write_addr
       simp only [hmis, if_true]
-      unfold SailME.run PreSail.PreSailME.run
+      unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
       simp only [ExceptT.mk, ExceptT.run, bind, EStateM.bind, pure,
         EStateM.pure, ExceptT.pure]
     simp only [halign, if_false]
@@ -138,9 +140,9 @@ theorem sdSail_reduces_to_vmem_write_addr
     | .error e s' => .error e s' := by
   unfold execute_STORE
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind,
     pure, EStateM.pure, EStateM.run, if_true]
   rw [h.rs2_read]
   simp only
@@ -153,7 +155,7 @@ theorem sdSail_reduces_to_vmem_write_addr
     simp [Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb']
   rw [hdata]
   unfold vmem_write
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
     ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift,

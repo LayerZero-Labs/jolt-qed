@@ -1,13 +1,15 @@
 import JoltConstraints.lookup_table
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 /-! Byte-reversal identities shared by soundness and completeness. -/
 
 set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 private theorem append32_eq_add (hi lo : BitVec 32) :
     hi +++ lo = lo.setWidth 64 + (hi.setWidth 64 <<< 32) := by

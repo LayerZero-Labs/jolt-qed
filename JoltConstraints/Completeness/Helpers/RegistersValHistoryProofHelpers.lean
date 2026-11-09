@@ -1,6 +1,8 @@
 import JoltConstraints.Completeness.Helpers.RegistersValProofHelpers
 import Batteries.Data.Fin.Fold
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 open scoped BigOperators

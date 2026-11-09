@@ -4,6 +4,8 @@ import JoltConstraints.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.Soundness.Layer5.TapeSemantics
 import JoltConstraints.Soundness.Layer4.Outputs
 
+open LeanRV64D
+
 /-! Shared steps for instructions that write a lookup result to a register.
 Instruction families prove their operand selection, metadata, table meaning and
 read/write equation. These local facts are discharged by each caller; none is
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -43,10 +45,10 @@ theorem lookupWrite_value_of_raf_zero (lhs rhs value : BitVec 64) (table : Looku
       witness.LookupOutput t = (value.toNat : F)) :
     witness.RdWriteValue t = (value.toNat : F) := by
   have raf : witness.InstructionRafFlag t = 0 := by
-    simpa only [bytecodeRafFlag, rowIs, rafFlag] using
+    simpa only [bytecodeRafFlag, rowIs, rafFlag] using!
       instructionRafFlag_of_selected_bytecode charAbove2pow127 context equations t slot selected
   have writes : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, writeFlag] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, writeFlag] using!
       opFlag_of_selected_bytecode charAbove2pow127 context equations
         .WriteLookupOutputToRD t slot selected
   have selectedTable : (bytecodeRow context.bytecode slot.val).bind

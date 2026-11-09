@@ -1,12 +1,14 @@
 import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.nextpc_frame
 
+open LeanRV64D
+
 -- HostIO changes no Sail state: its byte reads go through Jolt's MMU, which
 -- changes nothing, and it otherwise only appends to the advice tape.
 
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltHostFrame
 
@@ -77,9 +79,7 @@ theorem execHostIO_frame : Preserves (JoltISA.execHostIO) := by
   dsimp only
   split
   · exact pure_rule _
-  · refine bind_rule (pure_rule _) (fun _ => ?_)
-    refine bind_rule (read_rule _) (fun callId => ?_)
-    repeat' first
+  · repeat' first
       | exact readHostBytes_frame _ _ _ _ _
       | exact read_rule _
       | exact pure_rule _

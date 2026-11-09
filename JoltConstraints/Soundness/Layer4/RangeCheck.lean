@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Identity
 import JoltConstraints.Soundness.Layer4.RangeCheckEntry
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints.Soundness

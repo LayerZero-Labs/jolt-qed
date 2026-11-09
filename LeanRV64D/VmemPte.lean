@@ -12,11 +12,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -230,14 +233,14 @@ def _set_PTE_Ext_RSW_60t59b (r_ref : (RegisterRef (BitVec 10))) (v : (BitVec 2))
 
 def default_sv32_ext_pte : pte_ext_bits := (zeros (n := 10))
 
-/-- Type quantifiers: k_pte_size : Nat, k_pte_size ≥ 0, k_pte_size ∈ {32, 64} -/
+/-- Type quantifiers: k_pte_size : Nat, k_pte_size ≥ 0, List.elem k_pte_size [32, 64] -/
 def ext_bits_of_PTE (pte : (BitVec k_pte_size)) : (BitVec 10) :=
   (Mk_PTE_Ext
     (if (((Sail.BitVec.length pte) == 64) : Bool)
     then (Sail.BitVec.extractLsb pte 63 54)
     else default_sv32_ext_pte))
 
-/-- Type quantifiers: k_pte_size : Nat, k_pte_size ≥ 0, k_pte_size ∈ {32, 64} -/
+/-- Type quantifiers: k_pte_size : Nat, k_pte_size ≥ 0, List.elem k_pte_size [32, 64] -/
 def PPN_of_PTE (pte : (BitVec k_pte_size)) : (BitVec (if ( k_pte_size = 32  : Bool) then 22 else 44)) :=
   if (((Sail.BitVec.length pte) == 32) : Bool)
   then (Sail.BitVec.extractLsb pte 31 10)
@@ -254,33 +257,38 @@ def pte_is_non_leaf (pte_flags : (BitVec 8)) : Bool :=
           pte_flags) == 0#1)))
 
 def pte_is_invalid (pte_flags : (BitVec 8)) (pte_ext : (BitVec 10)) : SailM Bool := do
-  (pure (((_get_PTE_Flags_V pte_flags) == 0#1) || ((((_get_PTE_Flags_R pte_flags) == 0#1) && (((_get_PTE_Flags_W
-                pte_flags) == 1#1) && (((_get_PTE_Flags_X pte_flags) == 0#1) && ((_get_MEnvcfg_SSE
-                  (← readReg menvcfg)) == 0#1)))) || ((((_get_PTE_Flags_R pte_flags) == 0#1) && (((_get_PTE_Flags_W
-                  pte_flags) == 1#1) && ((_get_PTE_Flags_X pte_flags) == 1#1))) || (((pte_is_non_leaf
-                pte_flags) && (((_get_PTE_Flags_A pte_flags) == 1#1) || (((_get_PTE_Flags_D
-                      pte_flags) == 1#1) || (((_get_PTE_Flags_U pte_flags) == 1#1) || (pte_ext != (zeros
-                        (n := 10))))))) || ((((_get_PTE_Ext_N pte_ext) != 0#1) && (not
-                  (← (currentlyEnabled Ext_Svnapot)))) || ((((_get_PTE_Ext_PBMT pte_ext) != (zeros
-                      (n := 2))) && (not (← (currentlyEnabled Ext_Svpbmt)))) || ((((_get_PTE_Ext_RSW_60t59b
-                        pte_ext) != (zeros (n := 2))) && (not
-                      (← (currentlyEnabled Ext_Svrsw60t59b)))) || ((_get_PTE_Ext_reserved pte_ext) != (zeros
-                      (n := 5)))))))))))
+  (pure ((_get_PTE_Flags_V pte_flags) == 0#1)) <||> (do
+    (pure ((_get_PTE_Flags_R pte_flags) == 0#1)) <&&> (do
+      (pure ((_get_PTE_Flags_W pte_flags) == 1#1)) <&&> (do
+        (pure ((_get_PTE_Flags_X pte_flags) == 0#1)) <&&> (do
+          (pure ((_get_MEnvcfg_SSE (← readReg menvcfg)) == 0#1))))) <||> (do
+      (pure (((_get_PTE_Flags_R pte_flags) == 0#1) && (((_get_PTE_Flags_W pte_flags) == 1#1) && ((_get_PTE_Flags_X
+                pte_flags) == 1#1)))) <||> (do
+        (pure ((pte_is_non_leaf pte_flags) && (((_get_PTE_Flags_A pte_flags) == 1#1) || (((_get_PTE_Flags_D
+                    pte_flags) == 1#1) || (((_get_PTE_Flags_U pte_flags) == 1#1) || (pte_ext != (zeros
+                      (n := 10)))))))) <||> (do
+          (pure ((_get_PTE_Ext_N pte_ext) != 0#1)) <&&> (do
+            (pure (not (← (currentlyEnabled Ext_Svnapot))))) <||> (do
+            (pure ((_get_PTE_Ext_PBMT pte_ext) != (zeros (n := 2)))) <&&> (do
+              (pure (not (← (currentlyEnabled Ext_Svpbmt))))) <||> (do
+              (pure ((←((pure ((_get_PTE_Ext_RSW_60t59b pte_ext) != (zeros (n := 2)))) <&&> (do
+                    (pure (not (← (currentlyEnabled Ext_Svrsw60t59b))))))) || ((_get_PTE_Ext_reserved
+                      pte_ext) != (zeros (n := 5)))))))))))
 
-/-- Type quantifiers: k_ex827573_ : Bool, k_ex827572_ : Bool -/
+/-- Type quantifiers: k_ex256023_ : Bool, k_ex256022_ : Bool -/
 def check_PTE_permission (access : (MemoryAccessType mem_payload)) (priv : Privilege) (mxr : Bool) (do_sum : Bool) (pte_flags : (BitVec 8)) (_ext : (BitVec 10)) (_ext_ptw : Unit) : SailM PTE_Check := SailME.run do
   let pte_U := (bit_to_bool (_get_PTE_Flags_U pte_flags))
   let pte_R := (bit_to_bool (_get_PTE_Flags_R pte_flags))
   let pte_W := (bit_to_bool (_get_PTE_Flags_W pte_flags))
   let pte_X := (bit_to_bool (_get_PTE_Flags_X pte_flags))
-  assert (zopz0zJzJzK pte_W pte_R) "sys/vmem_pte.sail:139.24-139.25"
+  sail_assert (zopz0zJzJzK pte_W pte_R) "sys/vmem_pte.sail:139.24-139.25"
   let priv_ok ← (( do
     match priv with
-    | User => (pure pte_U)
-    | Supervisor => (pure ((not pte_U) || (do_sum && (is_load_store access))))
-    | Machine => (internal_error "sys/vmem_pte.sail" 147 "m-mode mem perm check")
-    | VirtualUser => (internal_error "sys/vmem_pte.sail" 148 "Hypervisor extension not supported")
-    | VirtualSupervisor =>
+    | .User => (pure pte_U)
+    | .Supervisor => (pure ((not pte_U) || (do_sum && (is_load_store access))))
+    | .Machine => (internal_error "sys/vmem_pte.sail" 147 "m-mode mem perm check")
+    | .VirtualUser => (internal_error "sys/vmem_pte.sail" 148 "Hypervisor extension not supported")
+    | .VirtualSupervisor =>
       (internal_error "sys/vmem_pte.sail" 149 "Hypervisor extension not supported") ) : SailME
     PTE_Check Bool )
   if ((not priv_ok) : Bool)
@@ -290,20 +298,20 @@ def check_PTE_permission (access : (MemoryAccessType mem_payload)) (priv : Privi
       if (((not pte_R) && (pte_W && (not pte_X))) : Bool)
       then
         (do
-          assert (bool_bit_backwards (_get_MEnvcfg_SSE (← readReg menvcfg))) "sys/vmem_pte.sail:158.33-158.34"
+          sail_assert (bool_bit_backwards (_get_MEnvcfg_SSE (← readReg menvcfg))) "sys/vmem_pte.sail:158.33-158.34"
           let shadow_stack_ok ← (( do
             match access with
             | .InstructionFetch () => (pure false)
-            | .Load PageTableEntry => (pure false)
-            | .Store PageTableEntry => (pure false)
-            | .Load Data => (pure true)
-            | .Load ShadowStack => (pure true)
-            | .LoadReserved Data => (pure true)
-            | .Store Data => (pure false)
-            | .StoreConditional Data => (pure false)
-            | .Atomic (_, Data, Data) => (pure false)
-            | .Store ShadowStack => (pure true)
-            | .Atomic (_, ShadowStack, ShadowStack) => (pure true)
+            | .Load .PageTableEntry => (pure false)
+            | .Store .PageTableEntry => (pure false)
+            | .Load .Data => (pure true)
+            | .Load .ShadowStack => (pure true)
+            | .LoadReserved .Data => (pure true)
+            | .Store .Data => (pure false)
+            | .StoreConditional .Data => (pure false)
+            | .Atomic (_, .Data, .Data) => (pure false)
+            | .Store .ShadowStack => (pure true)
+            | .Atomic (_, .ShadowStack, .ShadowStack) => (pure true)
             | .CacheAccess _ => (pure false)
             | .LoadReserved p =>
               (internal_error "sys/vmem_pte.sail" 185
@@ -345,15 +353,15 @@ def check_PTE_permission (access : (MemoryAccessType mem_payload)) (priv : Privi
         | .CacheAccess (.CB_zero ()) => pte_W
         | .CacheAccess (.CB_prefetch p) =>
           (match p with
-          | PREFETCH_R => pte_R
-          | PREFETCH_W => pte_W
-          | PREFETCH_I => pte_X)
+          | .PREFETCH_R => pte_R
+          | .PREFETCH_W => pte_W
+          | .PREFETCH_I => pte_X)
         | .CacheAccess (.CB_manage _) => (pte_R || pte_W)
       if ((not access_ok) : Bool)
       then (pure (PTE_Check_Failure ((), (PTE_No_Permission ()))))
       else (pure (PTE_Check_Success ())))
 
-/-- Type quantifiers: k_pte_size : Nat, k_pte_size ≥ 0, k_pte_size ∈ {32, 64} -/
+/-- Type quantifiers: k_pte_size : Nat, k_pte_size ≥ 0, List.elem k_pte_size [32, 64] -/
 def update_PTE_Bits (pte : (BitVec k_pte_size)) (access : (MemoryAccessType mem_payload)) : (Option (BitVec k_pte_size)) :=
   let pte_flags := (Mk_PTE_Flags (Sail.BitVec.extractLsb pte 7 0))
   let update_d : Bool :=

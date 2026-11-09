@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.RamStore
 import JoltConstraints.Soundness.Layer5.MemoryRows
 import JoltConstraints.Soundness.Layer3.Updates
 
+open LeanRV64D
+
 /-! Connect a selected store row to an actual ordinary-RAM write. The rows are
 SD and the floor stores VirtualStoreB/H/W, classified by `StoreRow`. Register
 agreement supplies both operands; the constraints force the accessed doubleword,
@@ -17,7 +19,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -55,7 +57,7 @@ theorem store_write_value {live : Fin 128 → Prop} {pre : SailJoltState}
   have sourceIs := agrees.rs2Value bound context equations selected rowIs source
     (storeRow.canonical context rowIs).2 facts.rs2Register sourceLive
   have store : witness.OpFlags .Store t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.store] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.store] using!
       opFlag_of_selected_bytecode bound context equations .Store t slot selected
   have relation := equations.rs2EqRamWriteIfStore t
   rw [store, one_mul, sourceIs] at relation

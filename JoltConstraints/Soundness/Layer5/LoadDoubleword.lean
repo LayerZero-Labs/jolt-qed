@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.RamAgreement
 import JoltConstraints.Soundness.Layer5.MemoryRows
 
+open LeanRV64D
+
 /-! A selected load row in ordinary RAM reads the interpreter's word at its
 accessed doubleword through the agreed table, writes it to its destination, and
 leaves the RAM table unchanged. The rows are LD and the floor loads
@@ -13,7 +15,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -82,7 +84,7 @@ theorem load_ram_step (regionFits : joltInstance.RamRegionFits)
   obtain ⟨chosen, one, _⟩ := ramRa_unique_of_address_ne_zero bound context equations t nonzero
   have read := OrdinaryRamAgreement.read bound context equations ram chosen one _ encoded inRam
   have loadOne : witness.OpFlags .Load t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load] using!
       opFlag_of_selected_bytecode bound context equations .Load t slot selected
   have written : witness.RdWriteValue t =
       ((Mmu.ram_doubleword pre.sail.mem

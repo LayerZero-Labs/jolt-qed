@@ -5,6 +5,8 @@ import JoltConstraints.honest_witness
 import JoltConstraints.Completeness.Helpers.AddressSum
 import JoltConstraints.Soundness.Layer4.Interleave
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints
@@ -133,7 +135,7 @@ theorem honestWitness_rightLookupEqRightInputOtherwise
         trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex].instruction = true
     · simp only [Fin.getElem_fin] at combined
       simpa [HonestTrace.honestWitness, TraceWitness.OpFlags,
-        TraceWitness.RightLookupOperand, JoltMetadata.circuitFlag, inBounds, combined] using
+        TraceWitness.RightLookupOperand, JoltMetadata.circuitFlag, inBounds, combined] using!
           (rightLookupOtherwiseForOpcode (F := F)
             trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex].instruction
             ((TraceWitness.lookupIndex trace t.val).toNat : F)

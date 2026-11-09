@@ -3,9 +3,11 @@ import JoltConstraints.Soundness.Layer7.LastJump
 import JoltConstraints.Soundness.Layer7.TerminationStore
 import JoltConstraints.Soundness.Layer3.History
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 namespace JoltInstance
 

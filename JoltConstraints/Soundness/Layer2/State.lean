@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer2.Registers
 import JoltConstraints.Soundness.Layer2.RegisterMap
 
+open LeanRV64D
+
 /-! The register table's initial values agree with the actual initial state.
 Preparing an instruction's PC leaves those register values unchanged. Neither
 fact needs an honest trace or an instruction-execution premise. -/

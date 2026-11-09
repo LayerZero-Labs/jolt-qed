@@ -2,6 +2,8 @@ import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 import Mathlib.Tactic
 
+open LeanRV64D
+
 /-! Untrusted-answer semantics for tape reads.
 Each answer is a full 64-bit word. Width checks and cursor increments remain,
 but tape contents and exhaustion do not constrain the answer.
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Execute one instruction with an independent tape answer. Non-tape
 instructions ignore the answer and use the existing interpreter. -/
@@ -32,6 +34,35 @@ noncomputable def execWithTapeAnswer (instruction : Instr) (answer : BitVec 64) 
       else
         .error (Error.Assertion "VirtualAdviceLoad: invalid width") state
   | instruction => execInstr instruction
+
+/-- `execWithTapeAnswer` by its defining match. Lean 4.35 generates the default
+equation lemmas for this overlapping match over `Instr` very slowly (minutes per
+use); this single lemma replaces them, and `simp` reduces the match on a
+concrete instruction directly. -/
+theorem execWithTapeAnswer_def (instruction : Instr) (answer : BitVec 64) :
+    execWithTapeAnswer instruction answer =
+      match instruction with
+      | .VirtualAdviceLoad destination byteCount => fun state =>
+          if byteCount.toNat = 1 ∨ byteCount.toNat = 2 ∨
+              byteCount.toNat = 4 ∨ byteCount.toNat = 8 then
+            (do
+              writeDst destination answer
+              pure RETIRE_SUCCESS)
+              { state with adviceTape :=
+                { state.adviceTape with readPosition := state.adviceTape.readPosition + byteCount.toNat } }
+          else
+            .error (Error.Assertion "VirtualAdviceLoad: invalid width") state
+      | instruction => execInstr instruction := rfl
+
+attribute [eqns execWithTapeAnswer_def] execWithTapeAnswer
+
+/-- Off tape reads the relaxed interpreter is the existing interpreter. Proved
+per constructor, which avoids the slow default equation lemmas. -/
+theorem execWithTapeAnswer_of_ne (instruction : Instr) (answer : BitVec 64)
+    (notAdvice : ∀ destination byteCount,
+      instruction ≠ .VirtualAdviceLoad destination byteCount) :
+    execWithTapeAnswer instruction answer = execInstr instruction := by
+  cases instruction <;> first | rfl | exact absurd rfl (notAdvice _ _)
 
 /-- Every relaxed instruction preserves a reflexive, transitive device
 relation whose byte-store obligations cover SD and all floor stores.

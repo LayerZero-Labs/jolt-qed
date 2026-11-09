@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer5.UnaryWord
 import JoltConstraints.Soundness.Layer4.Shift
 
+open LeanRV64D
+
 /-! Register-fed right shifts use a mask written by the immediately preceding
 VirtualShiftRightBitmask(W) row. The local step below consumes that derived mask
 shape; the producer bridge supplies it from the actual prior write.
@@ -15,7 +17,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The four register-fed right-shift row kinds. -/
 inductive RegisterShift where

@@ -1,5 +1,7 @@
 import JoltBytecode.JoltISA.Instruction
 
+open LeanRV64D
+
 /-! Shared program fragments for the addressed lane of a containing doubleword.
 These mirror `LaneWindow` in `crates/jolt-program/src/expand/memory/shared.rs`.
 Each fragment continues with its caller's `tail` after successful retirement.
@@ -7,7 +9,7 @@ Offsets are decoded 64-bit immediates; an encoded 12-bit offset is sign-extended
 before being passed to these fragments.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

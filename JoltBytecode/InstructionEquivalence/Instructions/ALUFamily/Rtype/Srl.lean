@@ -8,9 +8,11 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Virtua
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -58,8 +60,7 @@ theorem execute_RTYPE_SRL_factored
   simp only [execute_RTYPE]
   simp only [bind_pure_comp]
   simp only [map_eq_pure_bind]
-  simp only [bind_assoc]
-  simp only [pure_bind, srl_sail_operation]
+  simp only [bind_assoc, pure_bind, srl_sail_operation]
 
 /-- Program-level concrete theorem for `SRL`.
 

@@ -3,7 +3,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -22,7 +24,7 @@ def bltInstrEqSailStatement
     ((execute_BTYPE imm rs2 rs1 bop.BLT).run js.sail)
 
 abbrev branchJumpSailStep (imm : BitVec 13) : SailM ExecutionResult := do
-  let pc ← Sail.readReg Register.PC
+  let pc ← LeanRV64D.readReg Register.PC
   jump_to (pc + sign_extend (m := 64) imm)
 
 /-- The branch jump block does not touch the six Sail registers used by
@@ -52,21 +54,23 @@ theorem bltInstr_eq_sail
  simp only [EStateM.run, bind, EStateM.bind]
  simp only [h.rs1_read, h.rs2_read]
  simp only [pure, EStateM.pure]
- -- LHS 
- simp only [JoltISA.execInstr, encoded_branch_offset, JoltISA.branchDecisionPure,
-   bind, EStateM.bind, pure,
-   JoltISA.readSrc_xreg_run_of_read rs1 js h.rs1_val h.rs1_read,
-   JoltISA.readSrc_xreg_run_of_read rs2 js h.rs2_val h.rs2_read]
- cases h_taken : zopz0zI_s h.rs1_val h.rs2_val
- · -- not taken
-   simp only [Bool.false_eq_true, if_false]
-   exact Projection.systemProjectResult_pure_retire js h.linkedCSRs 
+ -- LHS. Split on the branch condition first and resolve both `if`s in the same
+ -- `simp` call that unfolds `branchDecisionPure`, so no stale `Decidable`
+ -- instance is left behind.
+ rcases Bool.eq_false_or_eq_true (zopz0zI_s h.rs1_val h.rs2_val) with h_taken | h_taken
+ all_goals
+   simp only [JoltISA.execInstr, encoded_branch_offset, JoltISA.branchDecisionPure,
+     bind, EStateM.bind, pure,
+     JoltISA.readSrc_xreg_run_of_read rs1 js h.rs1_val h.rs1_read,
+     JoltISA.readSrc_xreg_run_of_read rs2 js h.rs2_val h.rs2_read,
+     h_taken, Bool.false_eq_true, ↓reduceIte]
  · -- taken
-   simp only [if_true]
-   simpa only [Projection.liftSail_bind] using
+   simpa only [Projection.liftSail_bind] using!
      (Projection.systemProjectResult_liftSail_eq_of_preservesSystemProjectRegs
        h.linkedCSRs
        (branchJump_preservesSystemProjectRegs imm js))
+ · -- not taken
+   exact Projection.systemProjectResult_pure_retire js h.linkedCSRs
 
 end Natives
 

@@ -12,6 +12,8 @@ counterexamples are excluded by temporary restrictions
 import JoltConstraints.Soundness.TopLevel
 import JoltConstraints.Soundness.Layer7.TapeRebuild
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- Soundness: if some private inputs and witness satisfy every constraint, the instance

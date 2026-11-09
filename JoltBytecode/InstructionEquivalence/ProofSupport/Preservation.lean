@@ -1,5 +1,7 @@
 import JoltBytecode.JoltISA.Core
 
+open LeanRV64D
+
 /-
 Rules for proving that successful stateful computations preserve a relation
 between their initial and final states. The relation can express equality of
@@ -8,7 +10,7 @@ selected fields, preservation of an invariant, or inclusion of a memory domain.
 
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace StatePreservation
 

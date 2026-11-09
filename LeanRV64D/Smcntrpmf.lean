@@ -6,11 +6,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -327,9 +330,9 @@ def legalize_smcntrpmf (c : (BitVec 64)) (value : (BitVec 64)) : SailM (BitVec 6
 
 def counter_priv_filter_bit (reg : (BitVec 64)) (priv : Privilege) : (BitVec 1) :=
   match priv with
-  | Machine => (_get_CountSmcntrpmf_MINH reg)
-  | Supervisor => (_get_CountSmcntrpmf_SINH reg)
-  | VirtualSupervisor => (_get_CountSmcntrpmf_VSINH reg)
-  | User => (_get_CountSmcntrpmf_UINH reg)
-  | VirtualUser => (_get_CountSmcntrpmf_VUINH reg)
+  | .Machine => (_get_CountSmcntrpmf_MINH reg)
+  | .Supervisor => (_get_CountSmcntrpmf_SINH reg)
+  | .VirtualSupervisor => (_get_CountSmcntrpmf_VSINH reg)
+  | .User => (_get_CountSmcntrpmf_UINH reg)
+  | .VirtualUser => (_get_CountSmcntrpmf_VUINH reg)
 

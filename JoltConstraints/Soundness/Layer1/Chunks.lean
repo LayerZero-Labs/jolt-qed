@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer0.Bounds
 import JoltConstraints.Soundness.Layer1.OneHot
 import JoltConstraints.Constraints.All
 
+open LeanRV64D
+
 /-! An entry is a chunk's digit value, in `Fin (2 ^ params.chunkBits)`. -/
 
 set_option autoImplicit false

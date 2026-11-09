@@ -1,0 +1,78 @@
+# Provenance of the trusted generated model LeanRV64D/.
+#
+# Regenerate with:
+#   scripts/regen-sail-model.sh SAIL_BIN SAIL_RISCV_DIR OUT_DIR <modules below>
+# then copy OUT_DIR/Lean_RV64D/LeanRV64D/ and LeanRV64D.lean over the tree.
+# scripts/check-sail-model.sh WORK_DIR rebuilds everything below from these pins
+# and checks that the checked-in tree is identical; CI runs it on every PR that
+# changes the model or these inputs.
+
+[model]
+repository = "https://github.com/abiswas3/sail-riscv"
+commit = "266473f8b2872ac25f5cfaf5a4293d6421a40b5d"
+project_file_sha256 = "818fc3305955e3664b7a642d1899004ebb7960f54021db79538a68173a67adfa"
+# Handwritten support adapted to the namespaced Lean backend and Lean 4.35, as
+# upstream did in riscv/sail-riscv#1776, #1876 (open the model namespace) and
+# #1667 (`toCtorIdx` -> `ctorIdx`). Apply before generating.
+patches = ["sail-import/patches/sail-riscv-lean-handwritten.patch"]
+patch_sha256 = ["095a3d4b82574d45735622339bcf6674e0d58c8975c04634c983876ec8d3b767"]
+
+[compiler]
+repository = "https://github.com/rems-project/sail"
+commit = "2ae2199f8890180a8f9653f6ea08e54cd9790220"
+version = "0.20.3"
+# Lean backend fix for type-level `if` and `/` precedence (rems-project/sail#1774).
+# Without it `flen` is generated as `if true then 8 else 4 * 8` = 8 instead of 64.
+patches = ["sail-import/patches/1774-type-arithmetic.patch"]
+patch_sha256 = ["a00368bdc758e9073b7ab08e0d70dc41b815f15d7fcfe9fdc9e501637d09b1a2"]
+
+[runtime]
+repository = "https://github.com/rems-project/lean-sail"
+tag = "v8"
+commit = "1e5b216bf881ef08da160db63b44ecda430802d6"
+
+[config]
+# Upstream config/config.json.in instantiated for RV64D, VLEN 256, ELEN 64.
+upstream = "sail-import/rv64d_v256_e64.json"
+upstream_sha256 = "a390a2f46fc02cf666bc9d0b8b0d7223444c1b5b473de406a8784548b191f753"
+# Used for generation. Differs from upstream in exactly three values, each read
+# once by the model:
+#   memory.misaligned.supported = false  -> plat_enable_misaligned_access
+#   extensions.Zicfilp.supported = false -> hartSupports Ext_Zicfilp
+#   extensions.Zicfiss.supported = false -> hartSupports Ext_Zicfiss
+# These replace the three hand edits previously made to the generated files.
+# With the previous compiler (eff56f4) and --all-modules this config reproduces
+# the previous checked-in LeanRV64D exactly, except for the hand-edit comments.
+used = "sail-import/rv64d_jolt.json"
+used_sha256 = "2bd0c9f7d2b5bf25103a512ae37d48713d45d2b27282f599eda8fd48385ac12f"
+
+[modules]
+# Lean 4.35 compiles inductive types eagerly and rejects one with more than 244
+# constructors carrying data; the full instruction union has 353. The vector and
+# F/D instruction modules (and the modules that require them) are left out,
+# leaving 159 constructors. No hand-written proof refers to a dropped
+# constructor, and the proofs do not use the Sail decoder.
+excluded_roots = ["V_instructions", "FD_instructions"]
+dropped_leaves = [
+  "FD_instructions", "V_instructions", "Zfbfmin", "Zvabd_insts", "Zvbb", "Zvbc",
+  "Zvfbfmin", "Zvfbfwma", "Zvkg", "Zvkned", "Zvknhab", "Zvksed", "Zvksh",
+  "bfloat16_core",
+]
+selected = [
+  "A_types", "B_types", "CFI_types", "FD_core", "H", "I_insts", "I_types",
+  "K_core", "M_insts", "M_types", "Smcntrpmf", "Sscofpmf", "Ssqosid", "Sstc",
+  "Stateen_csrs", "Stateen_regs", "Svinval", "V_core", "V_types", "Zaamo",
+  "Zalrsc", "Zawrs_insts", "Zawrs_types", "Zba", "Zbb", "Zbc", "Zbkb", "Zbkx",
+  "Zbs", "Zca", "Zcb", "Zcmop", "Zibi_insts", "Zibi_types", "Zicbom_insts",
+  "Zicbom_types", "Zicbop_insts", "Zicbop_types", "Zicboz", "Zicfilp_insts",
+  "Zicfilp_regs", "Zicfiss_insts", "Zicfiss_regs", "Zicntr", "Zicond_insts",
+  "Zicond_types", "Zicsr_insts", "Zicsr_types", "Zifencei", "Zihintntl_insts",
+  "Zihintntl_types", "Zihintpause", "Zihpm", "Zimop", "Zkn", "Zkr", "Zks",
+  "Zvabd_types", "Zvk_core", "core", "exceptions", "main", "pmp", "postlude",
+  "prelude", "rmem", "sys", "unit_tests",
+]
+
+[output]
+# sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
+# followed by LeanRV64D.lean.
+tree_sha256 = "b6c35217ba23cf7a949405da1228c9af934cccc5b3991b75876251e89376991c"

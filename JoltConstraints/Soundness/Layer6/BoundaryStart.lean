@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer6.BytecodePC
 import JoltConstraints.Soundness.Layer7.TerminationStore
 import JoltConstraints.Soundness.Layer3.State
 
+open LeanRV64D
+
 /-! Staged initialization of the empty run and the next source expansion. -/
 
 set_option autoImplicit false
@@ -355,7 +357,7 @@ theorem boundaryState_empty {F : Type} [Field F] (joltField : JoltField F)
     refine ⟨first, advance_pc joltInstance.program.entry_address
       (source_is_compressed context.bytecode first) state, context.entry,
       ?_, slotIs, ?_⟩
-    · simpa only [run] using selected
+    · simpa only [run] using! selected
     · refine {
         honestRuntimeAdvice := by intro n; exact False.elim (by simpa [run] using n.isLt)
         noEarlierStop := by intro i current next currentIs _; simp [run] at currentIs
@@ -395,7 +397,7 @@ theorem expansion_start {F : Type} [Field F] {params : WitnessParams}
         simp only [lastDone, ne_eq, not_true_eq_false, ↓reduceIte] at ready
         obtain ⟨_, _, _, _, starts, _⟩ := ready
         exact starts
-    simpa only [first, bytecodeIs] using atStart
+    simpa only [first, bytecodeIs] using! atStart
   refine ⟨first, {
     represents := boundary.represents
     real := boundary.real
@@ -418,7 +420,7 @@ theorem expansion_start {F : Type} [Field F] {params : WitnessParams}
       intro _
       refine ⟨bound, real, next, pre, slot, rfl, selected, ?_, ?_⟩
       · simpa only [first] using slotIs
-      · simpa only [first] using step.ready
+      · simpa only [first] using! step.ready
     notStopped := by intro _; exact notStopped
   }⟩
 

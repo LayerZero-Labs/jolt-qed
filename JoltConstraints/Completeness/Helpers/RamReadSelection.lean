@@ -5,6 +5,8 @@ import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.Completeness.Helpers.FloorMemory
 import JoltConstraints.Completeness.Helpers.MemoryValueFacts
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 open JoltConstraints
@@ -45,7 +47,8 @@ private theorem captured_zero_retire (dst : JoltISA.Dst) (pre post : SailJoltSta
         JoltISA.sourceValue
       dsimp only
       rw [zeroRegister]
-    · exact lookup_write_retire (.xreg register) 0 pre post (by simpa using zeroRegister) runs
+      rfl
+    · exact lookup_write_retire (.xreg register) 0 pre post (by simpa using! zeroRegister) runs
 
 /-- An LD row at address zero captures zero, including when its destination is x0.
 For example, LD from base zero with immediate zero reads the special zero word.

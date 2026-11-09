@@ -1,12 +1,14 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Lemmas
 
+open LeanRV64D
+
 /-!
 # ORI instruction semantics
 
 Run lemmas for the Jolt ISA `ORI` instruction.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

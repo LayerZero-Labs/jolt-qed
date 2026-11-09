@@ -1,6 +1,8 @@
 import JoltConstraints.witness_helpers.ram_state
 import JoltConstraints.verifier_sizes
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

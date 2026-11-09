@@ -2,7 +2,6 @@ import LeanRV64D.Flow
 import LeanRV64D.Prelude
 import LeanRV64D.RvfiDii
 import LeanRV64D.Types
-import LeanRV64D.Regs
 import LeanRV64D.PcAccess
 import LeanRV64D.SysRegs
 import LeanRV64D.AddrChecks
@@ -14,11 +13,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -216,15 +218,14 @@ def rvfi_fetch (_ : Unit) : SailM FetchResult := SailME.run do
   match (ext_fetch_check_pc (← readReg PC) (← readReg PC)) with
   | .some e => SailME.throw ((F_Ext_Error e) : FetchResult)
   | none => (pure ())
-  if ((((BitVec.access (← readReg PC) 0) != 0#1) || (((BitVec.access (← readReg PC) 1) != 0#1) && (not
-           (← (currentlyEnabled Ext_Zca))))) : Bool)
+  if ((←((pure ((BitVec.access (← readReg PC) 0) != 0#1)) <||> (do
+       (pure ((BitVec.access (← readReg PC) 1) != 0#1)) <&&> (do
+         (pure (not (← (currentlyEnabled Ext_Zca)))))))) : Bool)
   then (pure (F_Error ((E_Fetch_Addr_Align ()), (← readReg PC))))
   else
     (do
       match (← (translateAddr (Virtaddr (← readReg PC)) (InstructionFetch ()))) with
-      | .Err (e, _) =>
-        SailME.throw (← do
-            (pure (F_Error (e, (← readReg PC)))))
+      | .Err (e, _) => SailME.throw (← do (pure (F_Error (e, (← readReg PC)))))
       | .Ok (_, _) => (pure ())
       let i ← do
         (pure (_get_RVFI_DII_Instruction_Packet_rvfi_insn (← readReg rvfi_instruction)))

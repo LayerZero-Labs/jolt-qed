@@ -2,6 +2,8 @@ import JoltConstraints.witness_helpers.right_instruction_input
 import JoltConstraints.witness_helpers.lookup_index
 import JoltConstraints.lookup_table
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

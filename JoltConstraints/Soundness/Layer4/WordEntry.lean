@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.RangeCheckEntry
 import JoltConstraints.Soundness.Layer4.ShiftEntry
 
+open LeanRV64D
+
 /-! Pure word, alignment and mask table identities shared with completeness. -/
 
 set_option autoImplicit false

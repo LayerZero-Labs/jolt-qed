@@ -5,10 +5,12 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.RemwSignedProgramBlocks
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option linter.unusedSimpArgs false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 

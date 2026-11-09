@@ -2,6 +2,8 @@ import JoltConstraints.Completeness.Helpers.RegistersValHistoryProofHelpers
 import JoltConstraints.Constraints.BytecodeReadSelectors
 import JoltConstraints.honest_witness
 
+open LeanRV64D
+
 /-!
 Source-register reads for the honest register witness.
 Each real row selects at most one first and one second source register.
@@ -138,9 +140,7 @@ theorem srcOfAddress_sourceRegisterAddress (src : JoltISA.Src)
             have hlt128 : bits.toNat < 128 := by omega
             simp [TraceWitness.sourceRegisterAddress,
               BitVec.toNat_setWidth, Nat.mod_eq_of_lt hlt128]
-            exact hlt128
           simp [register42_srcOfAddress, haddr, hlt]
-          exact hlt
   | vreg vr =>
       have hge := canonicalSource_vreg_ge32 vr hcanon
       simp [register42_srcOfAddress,

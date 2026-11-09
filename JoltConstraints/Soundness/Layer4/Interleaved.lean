@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer4.Table
 import JoltConstraints.Soundness.Layer4.Interleave
 import JoltConstraints.Soundness.Layer0.Words
 
+open LeanRV64D
+
 /-! Recover both 64-bit operands when the lookup RAF flag is zero. The field
 encodings determine each word separately, so the weaker `2^127` characteristic
 bound suffices even though the combined lookup address has 128 bits.

@@ -1,9 +1,11 @@
 import JoltBytecode.InstructionEquivalence.Instructions.AtomicFamily.Dword
 import JoltBytecode.JoltISA.ExpansionsAutomated
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -127,7 +129,7 @@ theorem amoadddProgram_eq_sail
       JoltISA.amoDoubleBinopNewVRegFor,
       JoltISA.amoVRegFor, JoltISA.amoDstFor,
       JoltISA.sideEffectingRdZeroDst, JoltISA.rdZeroRewriteVReg,
-      hrd, Bool.false_eq_true, if_false, if_true] using hcore
+      hrd, Bool.false_eq_true, if_false, if_true] using! hcore
 
 end AtomicFamily
 

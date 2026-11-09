@@ -1,6 +1,8 @@
 import JoltConstraints.witness_helpers.ram_ra_chunk
 import JoltConstraints.witness_params
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- Rust: [remapped_ram_address](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:260).

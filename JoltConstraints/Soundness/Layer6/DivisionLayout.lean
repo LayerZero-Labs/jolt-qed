@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer6.DivisionPrograms
 
+open LeanRV64D
+
 /-! Identify the generated rows of an advice-bearing division source. -/
 
 set_option autoImplicit false
@@ -7,7 +9,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Detect an internal VirtualAdvice row in an unstamped expansion.
 For example, a sequence containing REM's advice row returns true. -/

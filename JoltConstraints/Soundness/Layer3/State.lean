@@ -3,6 +3,8 @@ import JoltConstraints.constraint_context
 import JoltConstraints.honest_trace
 import JoltConstraints.layout_facts
 
+open LeanRV64D
+
 /-! The initial RAM table is the initializer's image, including both advice
 buffers and public input. Preparing PC preserves the entire memory map and
 device, hence any RAM encoding built from them. Relating device reads and writes

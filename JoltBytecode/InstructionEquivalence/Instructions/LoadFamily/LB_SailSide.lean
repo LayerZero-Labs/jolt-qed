@@ -4,10 +4,12 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Windows
 import JoltBytecode.InstructionEquivalence.ProofSupport.StateLemmas
 import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.DwordArithmetic
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open Std.Do
 open virtaddr MemoryAccessType mem_payload
 
@@ -182,9 +184,9 @@ theorem execute_LB_reduces
       (stateAfterWrite js.sail rd (writeValue imm rs1 js h)) := by
   unfold execute_LOAD
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind, pure,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
     EStateM.pure, EStateM.run, if_true]
   -- My one lemma that cuts through the memory reads
   -- TODO: (ari) Can I generalise this further?
@@ -227,9 +229,9 @@ theorem execute_LBU_reduces
       (stateAfterWrite js.sail rd (writeValueUnsigned imm rs1 js h)) := by
   unfold execute_LOAD
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind, pure,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
     EStateM.pure, EStateM.run, if_true]
   rw [vmem_read_byte_reduces
     (imm := imm)

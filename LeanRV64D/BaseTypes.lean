@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -211,8 +214,8 @@ def uop_of_num (arg_ : Nat) : uop :=
 
 def num_of_uop (arg_ : uop) : Int :=
   match arg_ with
-  | LUI => 0
-  | AUIPC => 1
+  | .LUI => 0
+  | .AUIPC => 1
 
 def undefined_bop (_ : Unit) : SailM bop := do
   (internal_pick [BEQ, BNE, BLT, BGE, BLTU, BGEU])
@@ -229,12 +232,12 @@ def bop_of_num (arg_ : Nat) : bop :=
 
 def num_of_bop (arg_ : bop) : Int :=
   match arg_ with
-  | BEQ => 0
-  | BNE => 1
-  | BLT => 2
-  | BGE => 3
-  | BLTU => 4
-  | BGEU => 5
+  | .BEQ => 0
+  | .BNE => 1
+  | .BLT => 2
+  | .BGE => 3
+  | .BLTU => 4
+  | .BGEU => 5
 
 def undefined_iop (_ : Unit) : SailM iop := do
   (internal_pick [ADDI, SLTI, SLTIU, XORI, ORI, ANDI])
@@ -251,12 +254,12 @@ def iop_of_num (arg_ : Nat) : iop :=
 
 def num_of_iop (arg_ : iop) : Int :=
   match arg_ with
-  | ADDI => 0
-  | SLTI => 1
-  | SLTIU => 2
-  | XORI => 3
-  | ORI => 4
-  | ANDI => 5
+  | .ADDI => 0
+  | .SLTI => 1
+  | .SLTIU => 2
+  | .XORI => 3
+  | .ORI => 4
+  | .ANDI => 5
 
 def undefined_sop (_ : Unit) : SailM sop := do
   (internal_pick [SLLI, SRLI, SRAI])
@@ -270,9 +273,9 @@ def sop_of_num (arg_ : Nat) : sop :=
 
 def num_of_sop (arg_ : sop) : Int :=
   match arg_ with
-  | SLLI => 0
-  | SRLI => 1
-  | SRAI => 2
+  | .SLLI => 0
+  | .SRLI => 1
+  | .SRAI => 2
 
 def undefined_rop (_ : Unit) : SailM rop := do
   (internal_pick [ADD, SUB, SLL, SLT, SLTU, XOR, SRL, SRA, OR, AND])
@@ -293,16 +296,16 @@ def rop_of_num (arg_ : Nat) : rop :=
 
 def num_of_rop (arg_ : rop) : Int :=
   match arg_ with
-  | ADD => 0
-  | SUB => 1
-  | SLL => 2
-  | SLT => 3
-  | SLTU => 4
-  | XOR => 5
-  | SRL => 6
-  | SRA => 7
-  | OR => 8
-  | AND => 9
+  | .ADD => 0
+  | .SUB => 1
+  | .SLL => 2
+  | .SLT => 3
+  | .SLTU => 4
+  | .XOR => 5
+  | .SRL => 6
+  | .SRA => 7
+  | .OR => 8
+  | .AND => 9
 
 def undefined_ropw (_ : Unit) : SailM ropw := do
   (internal_pick [ADDW, SUBW, SLLW, SRLW, SRAW])
@@ -318,11 +321,11 @@ def ropw_of_num (arg_ : Nat) : ropw :=
 
 def num_of_ropw (arg_ : ropw) : Int :=
   match arg_ with
-  | ADDW => 0
-  | SUBW => 1
-  | SLLW => 2
-  | SRLW => 3
-  | SRAW => 4
+  | .ADDW => 0
+  | .SUBW => 1
+  | .SLLW => 2
+  | .SRLW => 3
+  | .SRAW => 4
 
 def undefined_sopw (_ : Unit) : SailM sopw := do
   (internal_pick [SLLIW, SRLIW, SRAIW])
@@ -336,7 +339,7 @@ def sopw_of_num (arg_ : Nat) : sopw :=
 
 def num_of_sopw (arg_ : sopw) : Int :=
   match arg_ with
-  | SLLIW => 0
-  | SRLIW => 1
-  | SRAIW => 2
+  | .SLLIW => 0
+  | .SRLIW => 1
+  | .SRAIW => 2
 

@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer1.BytecodeReads
 import JoltConstraints.Soundness.Helpers.PrefixSum
 
+open LeanRV64D
+
 /-! Register-table histories and reads for an arbitrary satisfying witness.
 The prefix-sum constraint gives zero initialization and the single-cycle
 increment. Bytecode selection then identifies each source and destination,

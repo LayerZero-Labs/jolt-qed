@@ -10,9 +10,11 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.ValueLemmas
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -104,7 +106,7 @@ private theorem virtual_srliw_value_eq (v : BitVec 64) (shamt : BitVec 5) :
     srliw_jolt_val shamt v = srliw_sail_operation shamt v := by
   simp only [srliw_jolt_val, srliw_sail_operation]
   rw [srliwProgram_bitmask_eq]
-  simpa only [jolt_virtual_srli_value, shift_bits_left] using srliw_shift_eq v shamt
+  simpa only [jolt_virtual_srli_value, shift_bits_left] using! srliw_shift_eq v shamt
 
 /-- Main program-level equivalence for `SRLIW`. -/
 def srliwProgramEqSailStatement (shamt : BitVec 5) (rs1 rd : regidx) (js : SailJoltState)
@@ -168,7 +170,7 @@ theorem srliwProgram_eq_sail (shamt : BitVec 5) (rs1 rd : regidx) (js : SailJolt
   unfold liftSail
   simp only [bind, EStateM.bind]
   simp only [h_read_rs1, h_value, h_write]
-  simpa only [JoltISA.execProgram_done, pure, EStateM.pure, EStateM.run] using
+  simpa only [JoltISA.execProgram_done, pure, EStateM.pure, EStateM.run] using!
     Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'
       (srliw_sail_operation shamt v) h.linkedCSRs h_write
 

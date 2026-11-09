@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer5.AssertLessThanEqual
 import JoltConstraints.Soundness.Layer4.Assertions
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! The unsigned-multiplication guard uses the full 128-bit product lookup.
 At public pin 8bbb2357:
 See : jolt/tracer/src/instruction/virtual_assert_mulu_no_overflow.rs:16-26 -/
@@ -10,7 +12,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem mulWide_lt_128 (lhs rhs : BitVec 64) : mulWide lhs rhs < 2 ^ 128 := by
   have bound := Nat.mul_lt_mul'' lhs.isLt rhs.isLt
@@ -49,11 +51,11 @@ private theorem mulAssertion_passes {pre : SailJoltState}
     (by rw [instructionIs]; rfl) leftLive rightLive
   have active : witness.OpFlags .MultiplyOperands t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
-      JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using
+      JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using!
       opFlag_of_selected_bytecode bound context equations .MultiplyOperands t slot selected
   have assertion : witness.OpFlags .Assert t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs,
-      JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using
+      JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using!
       opFlag_of_selected_bytecode bound context equations .Assert t slot selected
   have raf := instructionRafFlag_one_of_arithmetic bound context equations t
     (Or.inr (Or.inr active))

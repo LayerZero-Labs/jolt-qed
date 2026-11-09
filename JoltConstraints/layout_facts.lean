@@ -8,6 +8,8 @@ https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/commo
 import JoltConstraints.program
 import JoltConstraints.Soundness.Layer5.PowerOfTwo
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- An Option step succeeds exactly when its first part does and the rest succeeds from

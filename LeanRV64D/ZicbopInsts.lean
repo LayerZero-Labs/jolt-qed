@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -207,14 +210,14 @@ def encdec_cbop_zicbop_backwards (arg_ : (BitVec 5)) : SailM cbop_zicbop := do
   | 0b00011 => (pure PREFETCH_W)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def encdec_cbop_zicbop_forwards_matches (arg_ : cbop_zicbop) : Bool :=
   match arg_ with
-  | PREFETCH_I => true
-  | PREFETCH_R => true
-  | PREFETCH_W => true
+  | .PREFETCH_I => true
+  | .PREFETCH_R => true
+  | .PREFETCH_W => true
 
 def encdec_cbop_zicbop_backwards_matches (arg_ : (BitVec 5)) : Bool :=
   match arg_ with
@@ -230,14 +233,14 @@ def prefetch_mnemonic_backwards (arg_ : String) : SailM cbop_zicbop := do
   | "prefetch.w" => (pure PREFETCH_W)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def prefetch_mnemonic_forwards_matches (arg_ : cbop_zicbop) : Bool :=
   match arg_ with
-  | PREFETCH_I => true
-  | PREFETCH_R => true
-  | PREFETCH_W => true
+  | .PREFETCH_I => true
+  | .PREFETCH_R => true
+  | .PREFETCH_W => true
 
 def prefetch_mnemonic_backwards_matches (arg_ : String) : Bool :=
   match arg_ with

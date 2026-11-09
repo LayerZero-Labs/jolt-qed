@@ -2,11 +2,13 @@ import JoltConstraints.Soundness.Layer5.Registers
 import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.expansion_temp_liveness
 
+open LeanRV64D
+
 /-! Operand observations shared by the plain-row instruction families. -/
 set_option autoImplicit false
 namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem readSources_eq_operands (instruction : Instr) :
     ExpansionTempLiveness.readSources instruction =

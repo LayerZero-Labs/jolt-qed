@@ -1,6 +1,8 @@
 import Sail
 import LeanRV64D.Defs
 
+namespace LeanRV64D
+
 abbrev real := Float
 
 -- val "neg_real" : real -> real

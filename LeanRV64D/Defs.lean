@@ -7,7 +7,10 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
+
+noncomputable section
+namespace LeanRV64D
 
 /-- Type quantifiers: k_a : Type -/
 inductive option (k_a : Type) where
@@ -33,9 +36,9 @@ inductive regidx where
   deriving Inhabited, BEq, Repr
   open regidx
 
-abbrev base_E_enabled : Bool := false
+abbrev base_E_enabled  : Bool := false
 
-abbrev regidx_bit_width : Int := (if ( base_E_enabled  : Bool) then 4 else 5)
+abbrev regidx_bit_width  : Int := (if ( base_E_enabled  : Bool) then 4 else 5)
 
 inductive vregidx where
   | Vregidx (_ : (BitVec 5))
@@ -53,7 +56,7 @@ abbrev fp_exception_flags := (BitVec 5)
 
 abbrev fp_rounding_modes := (BitVec 5)
 
-
+abbrev is_fp_bits (k_n : Int) : Bool := List.elem k_n [16, 32, 64, 128]
 
 -- Abbreviation fp_bits skipped
 
@@ -80,7 +83,7 @@ inductive VectorHalf where | High | Low
   deriving BEq, Inhabited, Repr
   open VectorHalf
 
-abbrev max_mem_access : Int := 4096
+abbrev max_mem_access  : Int := 4096
 
 abbrev mem_access_width := Nat
 
@@ -107,33 +110,33 @@ inductive biop where | BEQI | BNEI
   deriving BEq, Inhabited, Repr
   open biop
 
-abbrev xlen : Int := 64
+abbrev xlen  : Int := 64
 
-abbrev log2_xlen : Int := (if ( xlen = 32  : Bool) then 5 else 6)
+abbrev log2_xlen  : Int := (if ( xlen = 32  : Bool) then 5 else 6)
 
-abbrev xlen_bytes : Int := (if ( xlen = 32  : Bool) then 4 else 8)
+abbrev xlen_bytes  : Int := (if ( xlen = 32  : Bool) then 4 else 8)
 
-abbrev physaddrbits_len : Int := (if ( xlen = 32  : Bool) then 34 else 64)
+abbrev physaddrbits_len  : Int := (if ( xlen = 32  : Bool) then 34 else 64)
 
-abbrev asidlen : Int := (if ( xlen = 32  : Bool) then 9 else 16)
+abbrev asidlen  : Int := (if ( xlen = 32  : Bool) then 9 else 16)
 
 abbrev asidbits := (BitVec (if ( 64 = 32  : Bool) then 9 else 16))
 
-abbrev ext_d_supported : Bool := true
+abbrev ext_d_supported  : Bool := true
 
-abbrev flen_bytes : Int := (if ( ext_d_supported  : Bool) then 8 else 4)
+abbrev flen_bytes  : Int := (if ( ext_d_supported  : Bool) then 8 else 4)
 
-abbrev flen : Int := (if ( true  : Bool) then 8 else 4 * 8)
+abbrev flen  : Int := ((if ( true  : Bool) then 8 else 4) * 8)
 
-abbrev flenbits := (BitVec (if ( true  : Bool) then 8 else 4 * 8))
+abbrev flenbits := (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
 
-abbrev vlen_exp : Int := 8
+abbrev vlen_exp  : Int := 8
 
-abbrev elen_exp : Int := 6
+abbrev elen_exp  : Int := 6
 
-abbrev vlen : Int := (2 ^ 8)
+abbrev vlen  : Int := (2 ^ 8)
 
-abbrev elen : Int := (2 ^ 6)
+abbrev elen  : Int := (2 ^ 6)
 
 abbrev physaddrbits := (BitVec (if ( 64 = 32  : Bool) then 34 else 64))
 
@@ -218,7 +221,7 @@ abbrev word := (BitVec 32)
 
 abbrev instbits := (BitVec 32)
 
-abbrev pagesize_bits : Int := 12
+abbrev pagesize_bits  : Int := 12
 
 inductive cregidx where
   | Cregidx (_ : (BitVec 3))
@@ -344,187 +347,13 @@ inductive bop where | BEQ | BNE | BLT | BGE | BLTU | BGEU
   deriving BEq, Inhabited, Repr
   open bop
 
-inductive fregidx where
-  | Fregidx (_ : (BitVec 5))
-  deriving Inhabited, BEq, Repr
-  open fregidx
-
-inductive cfregidx where
-  | Cfregidx (_ : (BitVec 3))
-  deriving Inhabited, BEq, Repr
-  open cfregidx
-
 inductive csrop where | CSRRW | CSRRS | CSRRC
   deriving BEq, Inhabited, Repr
   open csrop
 
-inductive f_bin_f_op_D where | FSGNJ_D | FSGNJN_D | FSGNJX_D | FMIN_D | FMAX_D
-  deriving BEq, Inhabited, Repr
-  open f_bin_f_op_D
-
-inductive f_bin_f_op_H where | FSGNJ_H | FSGNJN_H | FSGNJX_H | FMIN_H | FMAX_H
-  deriving BEq, Inhabited, Repr
-  open f_bin_f_op_H
-
-inductive f_bin_rm_op_D where | FADD_D | FSUB_D | FMUL_D | FDIV_D
-  deriving BEq, Inhabited, Repr
-  open f_bin_rm_op_D
-
-inductive f_bin_rm_op_H where | FADD_H | FSUB_H | FMUL_H | FDIV_H
-  deriving BEq, Inhabited, Repr
-  open f_bin_rm_op_H
-
-inductive f_bin_rm_op_S where | FADD_S | FSUB_S | FMUL_S | FDIV_S
-  deriving BEq, Inhabited, Repr
-  open f_bin_rm_op_S
-
-inductive f_bin_op_f_S where | FSGNJ_S | FSGNJN_S | FSGNJX_S | FMIN_S | FMAX_S
-  deriving BEq, Inhabited, Repr
-  open f_bin_op_f_S
-
-inductive f_bin_op_x_S where | FEQ_S | FLT_S | FLE_S
-  deriving BEq, Inhabited, Repr
-  open f_bin_op_x_S
-
-inductive f_bin_x_op_D where | FEQ_D | FLT_D | FLE_D
-  deriving BEq, Inhabited, Repr
-  open f_bin_x_op_D
-
-inductive f_bin_x_op_H where | FEQ_H | FLT_H | FLE_H
-  deriving BEq, Inhabited, Repr
-  open f_bin_x_op_H
-
-inductive f_madd_op_D where | FMADD_D | FMSUB_D | FNMSUB_D | FNMADD_D
-  deriving BEq, Inhabited, Repr
-  open f_madd_op_D
-
-inductive f_madd_op_H where | FMADD_H | FMSUB_H | FNMSUB_H | FNMADD_H
-  deriving BEq, Inhabited, Repr
-  open f_madd_op_H
-
-inductive f_madd_op_S where | FMADD_S | FMSUB_S | FNMSUB_S | FNMADD_S
-  deriving BEq, Inhabited, Repr
-  open f_madd_op_S
-
-inductive f_un_f_op_D where | FMV_D_X
-  deriving BEq, Inhabited, Repr
-  open f_un_f_op_D
-
-inductive f_un_f_op_H where | FMV_H_X
-  deriving BEq, Inhabited, Repr
-  open f_un_f_op_H
-
-inductive f_un_rm_ff_op_D where | FSQRT_D | FCVT_S_D | FCVT_D_S
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_ff_op_D
-
-inductive f_un_rm_ff_op_H where | FSQRT_H | FCVT_H_S | FCVT_H_D | FCVT_S_H | FCVT_D_H
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_ff_op_H
-
-inductive f_un_rm_fx_op_D where | FCVT_W_D | FCVT_WU_D | FCVT_L_D | FCVT_LU_D
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_fx_op_D
-
-inductive f_un_rm_fx_op_H where | FCVT_W_H | FCVT_WU_H | FCVT_L_H | FCVT_LU_H
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_fx_op_H
-
-inductive f_un_rm_fx_op_S where | FCVT_W_S | FCVT_WU_S | FCVT_L_S | FCVT_LU_S
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_fx_op_S
-
-inductive f_un_rm_xf_op_D where | FCVT_D_W | FCVT_D_WU | FCVT_D_L | FCVT_D_LU
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_xf_op_D
-
-inductive f_un_rm_xf_op_H where | FCVT_H_W | FCVT_H_WU | FCVT_H_L | FCVT_H_LU
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_xf_op_H
-
-inductive f_un_rm_xf_op_S where | FCVT_S_W | FCVT_S_WU | FCVT_S_L | FCVT_S_LU
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_xf_op_S
-
-inductive f_un_op_f_S where | FMV_W_X
-  deriving BEq, Inhabited, Repr
-  open f_un_op_f_S
-
-inductive f_un_op_x_S where | FCLASS_S | FMV_X_W
-  deriving BEq, Inhabited, Repr
-  open f_un_op_x_S
-
-inductive f_un_x_op_D where | FCLASS_D | FMV_X_D
-  deriving BEq, Inhabited, Repr
-  open f_un_x_op_D
-
-inductive f_un_x_op_H where | FCLASS_H | FMV_X_H
-  deriving BEq, Inhabited, Repr
-  open f_un_x_op_H
-
-inductive rounding_mode where | RM_RNE | RM_RTZ | RM_RDN | RM_RUP | RM_RMM | RM_DYN
-  deriving BEq, Inhabited, Repr
-  open rounding_mode
-
-inductive fvfmafunct6 where | VF_VMADD | VF_VNMADD | VF_VMSUB | VF_VNMSUB | VF_VMACC | VF_VNMACC | VF_VMSAC | VF_VNMSAC
-  deriving BEq, Inhabited, Repr
-  open fvfmafunct6
-
-inductive fvfmfunct6 where | VFM_VMFEQ | VFM_VMFLE | VFM_VMFLT | VFM_VMFNE | VFM_VMFGT | VFM_VMFGE
-  deriving BEq, Inhabited, Repr
-  open fvfmfunct6
-
-inductive fvffunct6 where | VF_VADD | VF_VSUB | VF_VMIN | VF_VMAX | VF_VSGNJ | VF_VSGNJN | VF_VSGNJX | VF_VDIV | VF_VRDIV | VF_VMUL | VF_VRSUB | VF_VSLIDE1UP | VF_VSLIDE1DOWN
-  deriving BEq, Inhabited, Repr
-  open fvffunct6
-
-inductive fvvmafunct6 where | FVV_VMADD | FVV_VNMADD | FVV_VMSUB | FVV_VNMSUB | FVV_VMACC | FVV_VNMACC | FVV_VMSAC | FVV_VNMSAC
-  deriving BEq, Inhabited, Repr
-  open fvvmafunct6
-
-inductive fvvmfunct6 where | FVVM_VMFEQ | FVVM_VMFLE | FVVM_VMFLT | FVVM_VMFNE
-  deriving BEq, Inhabited, Repr
-  open fvvmfunct6
-
-inductive fvvfunct6 where | FVV_VADD | FVV_VSUB | FVV_VMIN | FVV_VMAX | FVV_VSGNJ | FVV_VSGNJN | FVV_VSGNJX | FVV_VDIV | FVV_VMUL
-  deriving BEq, Inhabited, Repr
-  open fvvfunct6
-
-inductive fwffunct6 where | FWF_VADD | FWF_VSUB
-  deriving BEq, Inhabited, Repr
-  open fwffunct6
-
-inductive fwvfmafunct6 where | FWVF_VMACC | FWVF_VNMACC | FWVF_VMSAC | FWVF_VNMSAC
-  deriving BEq, Inhabited, Repr
-  open fwvfmafunct6
-
-inductive fwvffunct6 where | FWVF_VADD | FWVF_VSUB | FWVF_VMUL
-  deriving BEq, Inhabited, Repr
-  open fwvffunct6
-
-inductive fwvfunct6 where | FWV_VADD | FWV_VSUB
-  deriving BEq, Inhabited, Repr
-  open fwvfunct6
-
-inductive fwvvmafunct6 where | FWVV_VMACC | FWVV_VNMACC | FWVV_VMSAC | FWVV_VNMSAC
-  deriving BEq, Inhabited, Repr
-  open fwvvmafunct6
-
-inductive fwvvfunct6 where | FWVV_VADD | FWVV_VSUB | FWVV_VMUL
-  deriving BEq, Inhabited, Repr
-  open fwvvfunct6
-
-inductive indexed_mop where | INDEXED_UNORDERED | INDEXED_ORDERED
-  deriving BEq, Inhabited, Repr
-  open indexed_mop
-
 inductive iop where | ADDI | SLTI | SLTIU | XORI | ORI | ANDI
   deriving BEq, Inhabited, Repr
   open iop
-
-inductive mmfunct6 where | MM_VMAND | MM_VMNAND | MM_VMANDN | MM_VMXOR | MM_VMOR | MM_VMNOR | MM_VMORN | MM_VMXNOR
-  deriving BEq, Inhabited, Repr
-  open mmfunct6
 
 structure mul_op where
   result_part : VectorHalf
@@ -532,65 +361,9 @@ structure mul_op where
   signed_rs2 : Signedness
   deriving BEq, Inhabited, Repr
 
-inductive mvvmafunct6 where | MVV_VMACC | MVV_VNMSAC | MVV_VMADD | MVV_VNMSUB
-  deriving BEq, Inhabited, Repr
-  open mvvmafunct6
-
-inductive mvvfunct6 where | MVV_VAADDU | MVV_VAADD | MVV_VASUBU | MVV_VASUB | MVV_VMUL | MVV_VMULH | MVV_VMULHU | MVV_VMULHSU | MVV_VDIVU | MVV_VDIV | MVV_VREMU | MVV_VREM
-  deriving BEq, Inhabited, Repr
-  open mvvfunct6
-
-inductive mvxmafunct6 where | MVX_VMACC | MVX_VNMSAC | MVX_VMADD | MVX_VNMSUB
-  deriving BEq, Inhabited, Repr
-  open mvxmafunct6
-
-inductive mvxfunct6 where | MVX_VAADDU | MVX_VAADD | MVX_VASUBU | MVX_VASUB | MVX_VSLIDE1UP | MVX_VSLIDE1DOWN | MVX_VMUL | MVX_VMULH | MVX_VMULHU | MVX_VMULHSU | MVX_VDIVU | MVX_VDIV | MVX_VREMU | MVX_VREM
-  deriving BEq, Inhabited, Repr
-  open mvxfunct6
-
-inductive nisfunct6 where | NIS_VNSRL | NIS_VNSRA
-  deriving BEq, Inhabited, Repr
-  open nisfunct6
-
-inductive nifunct6 where | NI_VNCLIPU | NI_VNCLIP
-  deriving BEq, Inhabited, Repr
-  open nifunct6
-
 inductive ntl_type where | NTL_P1 | NTL_PALL | NTL_S1 | NTL_ALL
   deriving BEq, Inhabited, Repr
   open ntl_type
-
-inductive nvsfunct6 where | NVS_VNSRL | NVS_VNSRA
-  deriving BEq, Inhabited, Repr
-  open nvsfunct6
-
-inductive nvfunct6 where | NV_VNCLIPU | NV_VNCLIP
-  deriving BEq, Inhabited, Repr
-  open nvfunct6
-
-inductive nxsfunct6 where | NXS_VNSRL | NXS_VNSRA
-  deriving BEq, Inhabited, Repr
-  open nxsfunct6
-
-inductive nxfunct6 where | NX_VNCLIPU | NX_VNCLIP
-  deriving BEq, Inhabited, Repr
-  open nxfunct6
-
-inductive rfvvfunct6 where | FVV_VFREDOSUM | FVV_VFREDUSUM | FVV_VFREDMAX | FVV_VFREDMIN
-  deriving BEq, Inhabited, Repr
-  open rfvvfunct6
-
-inductive rfwvvfunct6 where | FVV_VFWREDOSUM | FVV_VFWREDUSUM
-  deriving BEq, Inhabited, Repr
-  open rfwvvfunct6
-
-inductive rivvfunct6 where | IVV_VWREDSUMU | IVV_VWREDSUM
-  deriving BEq, Inhabited, Repr
-  open rivvfunct6
-
-inductive rmvvfunct6 where | MVV_VREDSUM | MVV_VREDAND | MVV_VREDOR | MVV_VREDXOR | MVV_VREDMINU | MVV_VREDMIN | MVV_VREDMAXU | MVV_VREDMAX
-  deriving BEq, Inhabited, Repr
-  open rmvvfunct6
 
 inductive rop where | ADD | SUB | SLL | SLT | SLTU | XOR | SRL | SRA | OR | AND
   deriving BEq, Inhabited, Repr
@@ -611,158 +384,6 @@ inductive sopw where | SLLIW | SRLIW | SRAIW
 inductive uop where | LUI | AUIPC
   deriving BEq, Inhabited, Repr
   open uop
-
-inductive zvabd_vabd_func6 where | VV_VABD | VV_VABDU
-  deriving BEq, Inhabited, Repr
-  open zvabd_vabd_func6
-
-inductive zvk_vaesdf_funct6 where | ZVK_VAESDF_VV | ZVK_VAESDF_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vaesdf_funct6
-
-inductive zvk_vaesdm_funct6 where | ZVK_VAESDM_VV | ZVK_VAESDM_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vaesdm_funct6
-
-inductive zvk_vaesef_funct6 where | ZVK_VAESEF_VV | ZVK_VAESEF_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vaesef_funct6
-
-inductive zvk_vaesem_funct6 where | ZVK_VAESEM_VV | ZVK_VAESEM_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vaesem_funct6
-
-inductive vextfunct6 where | VEXT2_ZVF2 | VEXT2_SVF2 | VEXT4_ZVF4 | VEXT4_SVF4 | VEXT8_ZVF8 | VEXT8_SVF8
-  deriving BEq, Inhabited, Repr
-  open vextfunct6
-
-inductive vfnunary0 where | FNV_CVT_XU_F | FNV_CVT_X_F | FNV_CVT_F_XU | FNV_CVT_F_X | FNV_CVT_F_F | FNV_CVT_ROD_F_F | FNV_CVT_RTZ_XU_F | FNV_CVT_RTZ_X_F
-  deriving BEq, Inhabited, Repr
-  open vfnunary0
-
-inductive vfunary0 where | FV_CVT_XU_F | FV_CVT_X_F | FV_CVT_F_XU | FV_CVT_F_X | FV_CVT_RTZ_XU_F | FV_CVT_RTZ_X_F
-  deriving BEq, Inhabited, Repr
-  open vfunary0
-
-inductive vfunary1 where | FVV_VSQRT | FVV_VRSQRT7 | FVV_VREC7 | FVV_VCLASS
-  deriving BEq, Inhabited, Repr
-  open vfunary1
-
-inductive vfwunary0 where | FWV_CVT_XU_F | FWV_CVT_X_F | FWV_CVT_F_XU | FWV_CVT_F_X | FWV_CVT_F_F | FWV_CVT_RTZ_XU_F | FWV_CVT_RTZ_X_F
-  deriving BEq, Inhabited, Repr
-  open vfwunary0
-
-inductive vicmpfunct6 where | VICMP_VMSEQ | VICMP_VMSNE | VICMP_VMSLEU | VICMP_VMSLE | VICMP_VMSGTU | VICMP_VMSGT
-  deriving BEq, Inhabited, Repr
-  open vicmpfunct6
-
-inductive vimcfunct6 where | VIMC_VMADC
-  deriving BEq, Inhabited, Repr
-  open vimcfunct6
-
-inductive vimsfunct6 where | VIMS_VADC
-  deriving BEq, Inhabited, Repr
-  open vimsfunct6
-
-inductive vimfunct6 where | VIM_VMADC
-  deriving BEq, Inhabited, Repr
-  open vimfunct6
-
-inductive visgfunct6 where | VI_VSLIDEUP | VI_VSLIDEDOWN | VI_VRGATHER
-  deriving BEq, Inhabited, Repr
-  open visgfunct6
-
-inductive vifunct6 where | VI_VADD | VI_VRSUB | VI_VAND | VI_VOR | VI_VXOR | VI_VSADDU | VI_VSADD | VI_VSLL | VI_VSRL | VI_VSRA | VI_VSSRL | VI_VSSRA
-  deriving BEq, Inhabited, Repr
-  open vifunct6
-
-inductive vlewidth where | VLE8 | VLE16 | VLE32 | VLE64
-  deriving BEq, Inhabited, Repr
-  open vlewidth
-
-inductive vmlsop where | VLM | VSM
-  deriving BEq, Inhabited, Repr
-  open vmlsop
-
-inductive zvk_vsha2_funct6 where | ZVK_VSHA2CH_VV | ZVK_VSHA2CL_VV
-  deriving BEq, Inhabited, Repr
-  open zvk_vsha2_funct6
-
-inductive zvk_vsm4r_funct6 where | ZVK_VSM4R_VV | ZVK_VSM4R_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vsm4r_funct6
-
-inductive vvcmpfunct6 where | VVCMP_VMSEQ | VVCMP_VMSNE | VVCMP_VMSLTU | VVCMP_VMSLT | VVCMP_VMSLEU | VVCMP_VMSLE
-  deriving BEq, Inhabited, Repr
-  open vvcmpfunct6
-
-inductive vvmcfunct6 where | VVMC_VMADC | VVMC_VMSBC
-  deriving BEq, Inhabited, Repr
-  open vvmcfunct6
-
-inductive vvmsfunct6 where | VVMS_VADC | VVMS_VSBC
-  deriving BEq, Inhabited, Repr
-  open vvmsfunct6
-
-inductive vvmfunct6 where | VVM_VMADC | VVM_VMSBC
-  deriving BEq, Inhabited, Repr
-  open vvmfunct6
-
-inductive vvfunct6 where | VV_VADD | VV_VSUB | VV_VMINU | VV_VMIN | VV_VMAXU | VV_VMAX | VV_VAND | VV_VOR | VV_VXOR | VV_VRGATHER | VV_VRGATHEREI16 | VV_VSADDU | VV_VSADD | VV_VSSUBU | VV_VSSUB | VV_VSLL | VV_VSMUL | VV_VSRL | VV_VSRA | VV_VSSRL | VV_VSSRA
-  deriving BEq, Inhabited, Repr
-  open vvfunct6
-
-inductive zvabd_vwabda_func6 where | VV_VWABDA | VV_VWABDAU
-  deriving BEq, Inhabited, Repr
-  open zvabd_vwabda_func6
-
-inductive vxcmpfunct6 where | VXCMP_VMSEQ | VXCMP_VMSNE | VXCMP_VMSLTU | VXCMP_VMSLT | VXCMP_VMSLEU | VXCMP_VMSLE | VXCMP_VMSGTU | VXCMP_VMSGT
-  deriving BEq, Inhabited, Repr
-  open vxcmpfunct6
-
-inductive vxmcfunct6 where | VXMC_VMADC | VXMC_VMSBC
-  deriving BEq, Inhabited, Repr
-  open vxmcfunct6
-
-inductive vxmsfunct6 where | VXMS_VADC | VXMS_VSBC
-  deriving BEq, Inhabited, Repr
-  open vxmsfunct6
-
-inductive vxmfunct6 where | VXM_VMADC | VXM_VMSBC
-  deriving BEq, Inhabited, Repr
-  open vxmfunct6
-
-inductive vxsgfunct6 where | VX_VSLIDEUP | VX_VSLIDEDOWN | VX_VRGATHER
-  deriving BEq, Inhabited, Repr
-  open vxsgfunct6
-
-inductive vxfunct6 where | VX_VADD | VX_VSUB | VX_VRSUB | VX_VMINU | VX_VMIN | VX_VMAXU | VX_VMAX | VX_VAND | VX_VOR | VX_VXOR | VX_VSADDU | VX_VSADD | VX_VSSUBU | VX_VSSUB | VX_VSLL | VX_VSMUL | VX_VSRL | VX_VSRA | VX_VSSRL | VX_VSSRA
-  deriving BEq, Inhabited, Repr
-  open vxfunct6
-
-inductive wmvvfunct6 where | WMVV_VWMACCU | WMVV_VWMACC | WMVV_VWMACCSU
-  deriving BEq, Inhabited, Repr
-  open wmvvfunct6
-
-inductive wmvxfunct6 where | WMVX_VWMACCU | WMVX_VWMACC | WMVX_VWMACCUS | WMVX_VWMACCSU
-  deriving BEq, Inhabited, Repr
-  open wmvxfunct6
-
-inductive wvfunct6 where | WV_VADD | WV_VSUB | WV_VADDU | WV_VSUBU
-  deriving BEq, Inhabited, Repr
-  open wvfunct6
-
-inductive wvvfunct6 where | WVV_VADD | WVV_VSUB | WVV_VADDU | WVV_VSUBU | WVV_VWMUL | WVV_VWMULU | WVV_VWMULSU
-  deriving BEq, Inhabited, Repr
-  open wvvfunct6
-
-inductive wvxfunct6 where | WVX_VADD | WVX_VSUB | WVX_VADDU | WVX_VSUBU | WVX_VWMUL | WVX_VWMULU | WVX_VWMULSU
-  deriving BEq, Inhabited, Repr
-  open wvxfunct6
-
-inductive wxfunct6 where | WX_VADD | WX_VSUB | WX_VADDU | WX_VSUBU
-  deriving BEq, Inhabited, Repr
-  open wxfunct6
 
 inductive extop_zbb where | SEXTB | SEXTH | ZEXTH
   deriving BEq, Inhabited, Repr
@@ -792,19 +413,7 @@ inductive zicondop where | CZERO_EQZ | CZERO_NEZ
   deriving BEq, Inhabited, Repr
   open zicondop
 
-inductive f_un_rm_ff_op_S where | FSQRT_S
-  deriving BEq, Inhabited, Repr
-  open f_un_rm_ff_op_S
-
 abbrev landing_pad_label := (BitVec 20)
-
-
-
-abbrev nfields := Int
-
-
-
-abbrev nfields_pow2 := Int
 
 abbrev shamt_zba := (BitVec 2)
 
@@ -920,156 +529,6 @@ inductive instruction where
   | C_ZEXT_W (_ : cregidx)
   | C_NOT (_ : cregidx)
   | C_MUL (_ : (cregidx × cregidx))
-  | LOAD_FP (_ : ((BitVec 12) × regidx × fregidx × word_width))
-  | STORE_FP (_ : ((BitVec 12) × fregidx × regidx × word_width))
-  | F_MADD_TYPE_S (_ : (fregidx × fregidx × fregidx × rounding_mode × fregidx × f_madd_op_S))
-  | F_BIN_RM_TYPE_S (_ : (fregidx × fregidx × rounding_mode × fregidx × f_bin_rm_op_S))
-  | F_UN_RM_FF_TYPE_S (_ : (fregidx × rounding_mode × fregidx × f_un_rm_ff_op_S))
-  | F_UN_RM_FX_TYPE_S (_ : (fregidx × rounding_mode × regidx × f_un_rm_fx_op_S))
-  | F_UN_RM_XF_TYPE_S (_ : (regidx × rounding_mode × fregidx × f_un_rm_xf_op_S))
-  | F_BIN_TYPE_F_S (_ : (fregidx × fregidx × fregidx × f_bin_op_f_S))
-  | F_BIN_TYPE_X_S (_ : (fregidx × fregidx × regidx × f_bin_op_x_S))
-  | F_UN_TYPE_F_S (_ : (regidx × fregidx × f_un_op_f_S))
-  | F_UN_TYPE_X_S (_ : (fregidx × regidx × f_un_op_x_S))
-  | C_FLWSP (_ : ((BitVec 6) × fregidx))
-  | C_FSWSP (_ : ((BitVec 6) × fregidx))
-  | C_FLW (_ : ((BitVec 5) × cregidx × cfregidx))
-  | C_FSW (_ : ((BitVec 5) × cregidx × cfregidx))
-  | F_MADD_TYPE_D (_ : (fregidx × fregidx × fregidx × rounding_mode × fregidx × f_madd_op_D))
-  | F_BIN_RM_TYPE_D (_ : (fregidx × fregidx × rounding_mode × fregidx × f_bin_rm_op_D))
-  | F_UN_RM_FF_TYPE_D (_ : (fregidx × rounding_mode × fregidx × f_un_rm_ff_op_D))
-  | F_UN_RM_XF_TYPE_D (_ : (regidx × rounding_mode × fregidx × f_un_rm_xf_op_D))
-  | F_UN_RM_FX_TYPE_D (_ : (fregidx × rounding_mode × regidx × f_un_rm_fx_op_D))
-  | F_BIN_F_TYPE_D (_ : (fregidx × fregidx × fregidx × f_bin_f_op_D))
-  | F_BIN_X_TYPE_D (_ : (fregidx × fregidx × regidx × f_bin_x_op_D))
-  | F_UN_X_TYPE_D (_ : (fregidx × regidx × f_un_x_op_D))
-  | F_UN_F_TYPE_D (_ : (regidx × fregidx × f_un_f_op_D))
-  | C_FLDSP (_ : ((BitVec 6) × fregidx))
-  | C_FSDSP (_ : ((BitVec 6) × fregidx))
-  | C_FLD (_ : ((BitVec 5) × cregidx × cfregidx))
-  | C_FSD (_ : ((BitVec 5) × cregidx × cfregidx))
-  | F_BIN_RM_TYPE_H (_ : (fregidx × fregidx × rounding_mode × fregidx × f_bin_rm_op_H))
-  | F_MADD_TYPE_H (_ : (fregidx × fregidx × fregidx × rounding_mode × fregidx × f_madd_op_H))
-  | F_BIN_F_TYPE_H (_ : (fregidx × fregidx × fregidx × f_bin_f_op_H))
-  | F_BIN_X_TYPE_H (_ : (fregidx × fregidx × regidx × f_bin_x_op_H))
-  | F_UN_RM_FF_TYPE_H (_ : (fregidx × rounding_mode × fregidx × f_un_rm_ff_op_H))
-  | F_UN_RM_FX_TYPE_H (_ : (fregidx × rounding_mode × regidx × f_un_rm_fx_op_H))
-  | F_UN_RM_XF_TYPE_H (_ : (regidx × rounding_mode × fregidx × f_un_rm_xf_op_H))
-  | F_UN_F_TYPE_H (_ : (regidx × fregidx × f_un_f_op_H))
-  | F_UN_X_TYPE_H (_ : (fregidx × regidx × f_un_x_op_H))
-  | FLI_H (_ : ((BitVec 5) × fregidx))
-  | FLI_S (_ : ((BitVec 5) × fregidx))
-  | FLI_D (_ : ((BitVec 5) × fregidx))
-  | FMINM_H (_ : (fregidx × fregidx × fregidx))
-  | FMAXM_H (_ : (fregidx × fregidx × fregidx))
-  | FMINM_S (_ : (fregidx × fregidx × fregidx))
-  | FMAXM_S (_ : (fregidx × fregidx × fregidx))
-  | FMINM_D (_ : (fregidx × fregidx × fregidx))
-  | FMAXM_D (_ : (fregidx × fregidx × fregidx))
-  | FROUND_H (_ : (fregidx × rounding_mode × fregidx))
-  | FROUNDNX_H (_ : (fregidx × rounding_mode × fregidx))
-  | FROUND_S (_ : (fregidx × rounding_mode × fregidx))
-  | FROUNDNX_S (_ : (fregidx × rounding_mode × fregidx))
-  | FROUND_D (_ : (fregidx × rounding_mode × fregidx))
-  | FROUNDNX_D (_ : (fregidx × rounding_mode × fregidx))
-  | FMVH_X_D (_ : (fregidx × regidx))
-  | FMVP_D_X (_ : (regidx × regidx × fregidx))
-  | FLEQ_H (_ : (fregidx × fregidx × regidx))
-  | FLTQ_H (_ : (fregidx × fregidx × regidx))
-  | FLEQ_S (_ : (fregidx × fregidx × regidx))
-  | FLTQ_S (_ : (fregidx × fregidx × regidx))
-  | FLEQ_D (_ : (fregidx × fregidx × regidx))
-  | FLTQ_D (_ : (fregidx × fregidx × regidx))
-  | FCVTMOD_W_D (_ : (fregidx × regidx))
-  | VSETVLI (_ : ((BitVec 1) × (BitVec 1) × (BitVec 3) × (BitVec 3) × regidx × regidx))
-  | VSETVL (_ : (regidx × regidx × regidx))
-  | VSETIVLI (_ : ((BitVec 1) × (BitVec 1) × (BitVec 3) × (BitVec 3) × (BitVec 5) × regidx))
-  | VVTYPE (_ : (vvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | NVSTYPE (_ : (nvsfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | NVTYPE (_ : (nvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | MASKTYPEV (_ : (vregidx × vregidx × vregidx))
-  | MOVETYPEV (_ : (vregidx × vregidx))
-  | VXTYPE (_ : (vxfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | NXSTYPE (_ : (nxsfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | NXTYPE (_ : (nxfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | VXSG (_ : (vxsgfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | MASKTYPEX (_ : (vregidx × regidx × vregidx))
-  | MOVETYPEX (_ : (regidx × vregidx))
-  | VITYPE (_ : (vifunct6 × (BitVec 1) × vregidx × (BitVec 5) × vregidx))
-  | NISTYPE (_ : (nisfunct6 × (BitVec 1) × vregidx × (BitVec 5) × vregidx))
-  | NITYPE (_ : (nifunct6 × (BitVec 1) × vregidx × (BitVec 5) × vregidx))
-  | VISG (_ : (visgfunct6 × (BitVec 1) × vregidx × (BitVec 5) × vregidx))
-  | MASKTYPEI (_ : (vregidx × (BitVec 5) × vregidx))
-  | MOVETYPEI (_ : (vregidx × (BitVec 5)))
-  | VMVRTYPE (_ : (vregidx × Int × vregidx))
-  | MVVTYPE (_ : (mvvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | MVVMATYPE (_ : (mvvmafunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | WVVTYPE (_ : (wvvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | WVTYPE (_ : (wvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | WMVVTYPE (_ : (wmvvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | VEXTTYPE (_ : (vextfunct6 × (BitVec 1) × vregidx × vregidx))
-  | VMVXS (_ : (vregidx × regidx))
-  | MVVCOMPRESS (_ : (vregidx × vregidx × vregidx))
-  | MVXTYPE (_ : (mvxfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | MVXMATYPE (_ : (mvxmafunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | WVXTYPE (_ : (wvxfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | WXTYPE (_ : (wxfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | WMVXTYPE (_ : (wmvxfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | VMVSX (_ : (regidx × vregidx))
-  | FVVTYPE (_ : (fvvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | FVVMATYPE (_ : (fvvmafunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | FWVVTYPE (_ : (fwvvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | FWVVMATYPE (_ : (fwvvmafunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | FWVTYPE (_ : (fwvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | VFUNARY0 (_ : ((BitVec 1) × vregidx × vfunary0 × vregidx))
-  | VFWUNARY0 (_ : ((BitVec 1) × vregidx × vfwunary0 × vregidx))
-  | VFNUNARY0 (_ : ((BitVec 1) × vregidx × vfnunary0 × vregidx))
-  | VFUNARY1 (_ : ((BitVec 1) × vregidx × vfunary1 × vregidx))
-  | VFMVFS (_ : (vregidx × fregidx))
-  | FVFTYPE (_ : (fvffunct6 × (BitVec 1) × vregidx × fregidx × vregidx))
-  | FVFMATYPE (_ : (fvfmafunct6 × (BitVec 1) × vregidx × fregidx × vregidx))
-  | FWVFTYPE (_ : (fwvffunct6 × (BitVec 1) × vregidx × fregidx × vregidx))
-  | FWVFMATYPE (_ : (fwvfmafunct6 × (BitVec 1) × fregidx × vregidx × vregidx))
-  | FWFTYPE (_ : (fwffunct6 × (BitVec 1) × vregidx × fregidx × vregidx))
-  | VFMERGE (_ : (vregidx × fregidx × vregidx))
-  | VFMV (_ : (fregidx × vregidx))
-  | VFMVSF (_ : (fregidx × vregidx))
-  | VLSEGTYPE (_ : (nfields × (BitVec 1) × regidx × vlewidth × vregidx))
-  | VLSEGFFTYPE (_ : (nfields × (BitVec 1) × regidx × vlewidth × vregidx))
-  | VSSEGTYPE (_ : (nfields × (BitVec 1) × regidx × vlewidth × vregidx))
-  | VLSSEGTYPE (_ : (nfields × (BitVec 1) × regidx × regidx × vlewidth × vregidx))
-  | VSSSEGTYPE (_ : (nfields × (BitVec 1) × regidx × regidx × vlewidth × vregidx))
-  | VLXSEGTYPE (_ : (nfields × (BitVec 1) × vregidx × regidx × vlewidth × vregidx × indexed_mop))
-  | VSXSEGTYPE (_ : (nfields × (BitVec 1) × vregidx × regidx × vlewidth × vregidx × indexed_mop))
-  | VLRETYPE (_ : (nfields_pow2 × regidx × vlewidth × vregidx))
-  | VSRETYPE (_ : (nfields_pow2 × regidx × vregidx))
-  | VMTYPE (_ : (regidx × vregidx × vmlsop))
-  | MMTYPE (_ : (mmfunct6 × vregidx × vregidx × vregidx))
-  | VCPOP_M (_ : ((BitVec 1) × vregidx × regidx))
-  | VFIRST_M (_ : ((BitVec 1) × vregidx × regidx))
-  | VMSBF_M (_ : ((BitVec 1) × vregidx × vregidx))
-  | VMSIF_M (_ : ((BitVec 1) × vregidx × vregidx))
-  | VMSOF_M (_ : ((BitVec 1) × vregidx × vregidx))
-  | VIOTA_M (_ : ((BitVec 1) × vregidx × vregidx))
-  | VID_V (_ : ((BitVec 1) × vregidx))
-  | VVMTYPE (_ : (vvmfunct6 × vregidx × vregidx × vregidx))
-  | VVMCTYPE (_ : (vvmcfunct6 × vregidx × vregidx × vregidx))
-  | VVMSTYPE (_ : (vvmsfunct6 × vregidx × vregidx × vregidx))
-  | VVCMPTYPE (_ : (vvcmpfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | VXMTYPE (_ : (vxmfunct6 × vregidx × regidx × vregidx))
-  | VXMCTYPE (_ : (vxmcfunct6 × vregidx × regidx × vregidx))
-  | VXMSTYPE (_ : (vxmsfunct6 × vregidx × regidx × vregidx))
-  | VXCMPTYPE (_ : (vxcmpfunct6 × (BitVec 1) × vregidx × regidx × vregidx))
-  | VIMTYPE (_ : (vimfunct6 × vregidx × (BitVec 5) × vregidx))
-  | VIMCTYPE (_ : (vimcfunct6 × vregidx × (BitVec 5) × vregidx))
-  | VIMSTYPE (_ : (vimsfunct6 × vregidx × (BitVec 5) × vregidx))
-  | VICMPTYPE (_ : (vicmpfunct6 × (BitVec 1) × vregidx × (BitVec 5) × vregidx))
-  | FVVMTYPE (_ : (fvvmfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | FVFMTYPE (_ : (fvfmfunct6 × (BitVec 1) × vregidx × fregidx × vregidx))
-  | RIVVTYPE (_ : (rivvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | RMVVTYPE (_ : (rmvvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | RFVVTYPE (_ : (rfvvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | RFWVVTYPE (_ : (rfwvvfunct6 × (BitVec 1) × vregidx × vregidx × vregidx))
   | SHA256SIG0 (_ : (regidx × regidx))
   | SHA256SIG1 (_ : (regidx × regidx))
   | SHA256SUM0 (_ : (regidx × regidx))
@@ -1106,44 +565,6 @@ inductive instruction where
   | BREV8 (_ : (regidx × regidx))
   | XPERM8 (_ : (regidx × regidx × regidx))
   | XPERM4 (_ : (regidx × regidx × regidx))
-  | VANDN_VV (_ : ((BitVec 1) × vregidx × vregidx × vregidx))
-  | VANDN_VX (_ : ((BitVec 1) × vregidx × regidx × vregidx))
-  | VBREV_V (_ : ((BitVec 1) × vregidx × vregidx))
-  | VBREV8_V (_ : ((BitVec 1) × vregidx × vregidx))
-  | VREV8_V (_ : ((BitVec 1) × vregidx × vregidx))
-  | VCLZ_V (_ : ((BitVec 1) × vregidx × vregidx))
-  | VCTZ_V (_ : ((BitVec 1) × vregidx × vregidx))
-  | VCPOP_V (_ : ((BitVec 1) × vregidx × vregidx))
-  | VROL_VV (_ : ((BitVec 1) × vregidx × vregidx × vregidx))
-  | VROL_VX (_ : ((BitVec 1) × vregidx × regidx × vregidx))
-  | VROR_VV (_ : ((BitVec 1) × vregidx × vregidx × vregidx))
-  | VROR_VX (_ : ((BitVec 1) × vregidx × regidx × vregidx))
-  | VROR_VI (_ : ((BitVec 1) × vregidx × (BitVec 6) × vregidx))
-  | VWSLL_VV (_ : ((BitVec 1) × vregidx × vregidx × vregidx))
-  | VWSLL_VX (_ : ((BitVec 1) × vregidx × regidx × vregidx))
-  | VWSLL_VI (_ : ((BitVec 1) × vregidx × (BitVec 5) × vregidx))
-  | VCLMUL_VV (_ : ((BitVec 1) × vregidx × vregidx × vregidx))
-  | VCLMUL_VX (_ : ((BitVec 1) × vregidx × regidx × vregidx))
-  | VCLMULH_VV (_ : ((BitVec 1) × vregidx × vregidx × vregidx))
-  | VCLMULH_VX (_ : ((BitVec 1) × vregidx × regidx × vregidx))
-  | VGHSH_VV (_ : (vregidx × vregidx × vregidx))
-  | VGMUL_VV (_ : (vregidx × vregidx))
-  | VAESDF (_ : (zvk_vaesdf_funct6 × vregidx × vregidx))
-  | VAESDM (_ : (zvk_vaesdm_funct6 × vregidx × vregidx))
-  | VAESEF (_ : (zvk_vaesef_funct6 × vregidx × vregidx))
-  | VAESEM (_ : (zvk_vaesem_funct6 × vregidx × vregidx))
-  | VAESKF1_VI (_ : (vregidx × (BitVec 5) × vregidx))
-  | VAESKF2_VI (_ : (vregidx × (BitVec 5) × vregidx))
-  | VAESZ_VS (_ : (vregidx × vregidx))
-  | VSM4K_VI (_ : (vregidx × (BitVec 5) × vregidx))
-  | ZVKSM4RTYPE (_ : (zvk_vsm4r_funct6 × vregidx × vregidx))
-  | VSHA2MS_VV (_ : (vregidx × vregidx × vregidx))
-  | ZVKSHA2TYPE (_ : (zvk_vsha2_funct6 × vregidx × vregidx × vregidx))
-  | VSM3ME_VV (_ : (vregidx × vregidx × vregidx))
-  | VSM3C_VI (_ : (vregidx × (BitVec 5) × vregidx))
-  | VABS_V (_ : ((BitVec 1) × vregidx × vregidx))
-  | ZVABDTYPE (_ : (zvabd_vabd_func6 × (BitVec 1) × vregidx × vregidx × vregidx))
-  | ZVWABDATYPE (_ : (zvabd_vwabda_func6 × (BitVec 1) × vregidx × vregidx × vregidx))
   | CSRReg (_ : (csreg × regidx × regidx × csrop))
   | CSRImm (_ : (csreg × (BitVec 5) × regidx × csrop))
   | SINVAL_VMA (_ : (regidx × regidx))
@@ -1161,21 +582,11 @@ inductive instruction where
   | BITYPE (_ : ((BitVec 13) × (BitVec 5) × regidx × biop))
   | ZICBOZ (_ : regidx)
   | FENCEI (_ : ((BitVec 12) × regidx × regidx))
-  | FCVT_BF16_S (_ : (fregidx × rounding_mode × fregidx))
-  | FCVT_S_BF16 (_ : (fregidx × rounding_mode × fregidx))
-  | VFNCVTBF16_F_F_W (_ : ((BitVec 1) × vregidx × vregidx))
-  | VFWCVTBF16_F_F_V (_ : ((BitVec 1) × vregidx × vregidx))
-  | VFWMACCBF16_VV (_ : ((BitVec 1) × vregidx × vregidx × vregidx))
-  | VFWMACCBF16_VF (_ : ((BitVec 1) × vregidx × fregidx × vregidx))
   | ZIMOP_MOP_R (_ : ((BitVec 5) × regidx × regidx))
   | ZIMOP_MOP_RR (_ : ((BitVec 3) × regidx × regidx × regidx))
   | ZCMOP (_ : (BitVec 3))
   deriving Inhabited, Repr
   open instruction
-
-abbrev Vtype := (BitVec 64)
-
-abbrev sew_bitsize := Int
 
 inductive InterruptType where | I_Reserved_0 | I_S_Software | I_VS_Software | I_M_Software | I_Reserved_4 | I_S_Timer | I_VS_Timer | I_M_Timer | I_Reserved_8 | I_S_External | I_VS_External | I_M_External | I_SG_External | I_COF
   deriving BEq, Inhabited, Repr
@@ -1237,7 +648,7 @@ inductive CSRAccessType where | CSRRead | CSRWrite | CSRReadWrite
   deriving BEq, Inhabited, Repr
   open CSRAccessType
 
-
+abbrev is_mem_width (k_w : Int) : Bool := List.elem k_w [1, 2, 4, 8]
 
 inductive SWCheckCodes where | LANDING_PAD_FAULT
   deriving BEq, Inhabited, Repr
@@ -1267,7 +678,7 @@ inductive SATPMode where | Bare | Sv32 | Sv39 | Sv48 | Sv57
 
 abbrev csrRW := (BitVec 2)
 
-
+abbrev is_sv_mode (k_v : Int) : Bool := List.elem k_v [32, 39, 48, 57]
 
 abbrev level_range (k_v : Nat) := Nat
 
@@ -1356,35 +767,433 @@ inductive pmpAddrMatch where | PMP_NoMatch | PMP_PartialMatch | PMP_Match
 
 abbrev fregtype := flenbits
 
+inductive f_madd_op_H where | FMADD_H | FMSUB_H | FNMSUB_H | FNMADD_H
+  deriving BEq, Inhabited, Repr
+  open f_madd_op_H
+
+inductive f_bin_rm_op_H where | FADD_H | FSUB_H | FMUL_H | FDIV_H
+  deriving BEq, Inhabited, Repr
+  open f_bin_rm_op_H
+
+inductive f_un_rm_ff_op_H where | FSQRT_H | FCVT_H_S | FCVT_H_D | FCVT_S_H | FCVT_D_H
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_ff_op_H
+
+inductive f_un_rm_fx_op_H where | FCVT_W_H | FCVT_WU_H | FCVT_L_H | FCVT_LU_H
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_fx_op_H
+
+inductive f_un_rm_xf_op_H where | FCVT_H_W | FCVT_H_WU | FCVT_H_L | FCVT_H_LU
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_xf_op_H
+
+inductive f_un_x_op_H where | FCLASS_H | FMV_X_H
+  deriving BEq, Inhabited, Repr
+  open f_un_x_op_H
+
+inductive f_un_f_op_H where | FMV_H_X
+  deriving BEq, Inhabited, Repr
+  open f_un_f_op_H
+
+inductive f_bin_f_op_H where | FSGNJ_H | FSGNJN_H | FSGNJX_H | FMIN_H | FMAX_H
+  deriving BEq, Inhabited, Repr
+  open f_bin_f_op_H
+
+inductive f_bin_x_op_H where | FEQ_H | FLT_H | FLE_H
+  deriving BEq, Inhabited, Repr
+  open f_bin_x_op_H
+
+inductive rounding_mode where | RM_RNE | RM_RTZ | RM_RDN | RM_RUP | RM_RMM | RM_DYN
+  deriving BEq, Inhabited, Repr
+  open rounding_mode
+
+inductive f_madd_op_S where | FMADD_S | FMSUB_S | FNMSUB_S | FNMADD_S
+  deriving BEq, Inhabited, Repr
+  open f_madd_op_S
+
+inductive f_bin_rm_op_S where | FADD_S | FSUB_S | FMUL_S | FDIV_S
+  deriving BEq, Inhabited, Repr
+  open f_bin_rm_op_S
+
+inductive f_un_rm_ff_op_S where | FSQRT_S
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_ff_op_S
+
+inductive f_un_rm_fx_op_S where | FCVT_W_S | FCVT_WU_S | FCVT_L_S | FCVT_LU_S
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_fx_op_S
+
+inductive f_un_rm_xf_op_S where | FCVT_S_W | FCVT_S_WU | FCVT_S_L | FCVT_S_LU
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_xf_op_S
+
+inductive f_un_op_f_S where | FMV_W_X
+  deriving BEq, Inhabited, Repr
+  open f_un_op_f_S
+
+inductive f_un_op_x_S where | FCLASS_S | FMV_X_W
+  deriving BEq, Inhabited, Repr
+  open f_un_op_x_S
+
+inductive f_bin_op_f_S where | FSGNJ_S | FSGNJN_S | FSGNJX_S | FMIN_S | FMAX_S
+  deriving BEq, Inhabited, Repr
+  open f_bin_op_f_S
+
+inductive f_bin_op_x_S where | FEQ_S | FLT_S | FLE_S
+  deriving BEq, Inhabited, Repr
+  open f_bin_op_x_S
+
+inductive f_madd_op_D where | FMADD_D | FMSUB_D | FNMSUB_D | FNMADD_D
+  deriving BEq, Inhabited, Repr
+  open f_madd_op_D
+
+inductive f_bin_rm_op_D where | FADD_D | FSUB_D | FMUL_D | FDIV_D
+  deriving BEq, Inhabited, Repr
+  open f_bin_rm_op_D
+
+inductive f_un_rm_ff_op_D where | FSQRT_D | FCVT_S_D | FCVT_D_S
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_ff_op_D
+
+inductive f_un_rm_fx_op_D where | FCVT_W_D | FCVT_WU_D | FCVT_L_D | FCVT_LU_D
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_fx_op_D
+
+inductive f_un_rm_xf_op_D where | FCVT_D_W | FCVT_D_WU | FCVT_D_L | FCVT_D_LU
+  deriving BEq, Inhabited, Repr
+  open f_un_rm_xf_op_D
+
+inductive f_bin_f_op_D where | FSGNJ_D | FSGNJN_D | FSGNJX_D | FMIN_D | FMAX_D
+  deriving BEq, Inhabited, Repr
+  open f_bin_f_op_D
+
+inductive f_bin_x_op_D where | FEQ_D | FLT_D | FLE_D
+  deriving BEq, Inhabited, Repr
+  open f_bin_x_op_D
+
+inductive f_un_x_op_D where | FCLASS_D | FMV_X_D
+  deriving BEq, Inhabited, Repr
+  open f_un_x_op_D
+
+inductive f_un_f_op_D where | FMV_D_X
+  deriving BEq, Inhabited, Repr
+  open f_un_f_op_D
+
+inductive fregidx where
+  | Fregidx (_ : (BitVec 5))
+  deriving Inhabited, BEq, Repr
+  open fregidx
+
 inductive fregno where
   | Fregno (_ : Nat)
   deriving Inhabited, BEq, Repr
   open fregno
 
+inductive cfregidx where
+  | Cfregidx (_ : (BitVec 3))
+  deriving Inhabited, BEq, Repr
+  open cfregidx
+
 abbrev Fcsr := (BitVec 32)
 
+abbrev nfields_range (k_q : Int) : Bool := k_q > 0 ∧ k_q ≤ 8
+
+abbrev nfields_range_pow2 (k_q : Int) : Bool := List.elem k_q [1, 2, 4, 8]
+
+abbrev nfields := Int
+
+abbrev nfields_pow2 := Int
+
 abbrev vlenbits := (BitVec (2 ^ 8))
+
+inductive vvfunct6 where | VV_VADD | VV_VSUB | VV_VMINU | VV_VMIN | VV_VMAXU | VV_VMAX | VV_VAND | VV_VOR | VV_VXOR | VV_VRGATHER | VV_VRGATHEREI16 | VV_VSADDU | VV_VSADD | VV_VSSUBU | VV_VSSUB | VV_VSLL | VV_VSMUL | VV_VSRL | VV_VSRA | VV_VSSRL | VV_VSSRA
+  deriving BEq, Inhabited, Repr
+  open vvfunct6
+
+inductive vvcmpfunct6 where | VVCMP_VMSEQ | VVCMP_VMSNE | VVCMP_VMSLTU | VVCMP_VMSLT | VVCMP_VMSLEU | VVCMP_VMSLE
+  deriving BEq, Inhabited, Repr
+  open vvcmpfunct6
+
+inductive vvmfunct6 where | VVM_VMADC | VVM_VMSBC
+  deriving BEq, Inhabited, Repr
+  open vvmfunct6
+
+inductive vvmcfunct6 where | VVMC_VMADC | VVMC_VMSBC
+  deriving BEq, Inhabited, Repr
+  open vvmcfunct6
+
+inductive vvmsfunct6 where | VVMS_VADC | VVMS_VSBC
+  deriving BEq, Inhabited, Repr
+  open vvmsfunct6
+
+inductive vxmfunct6 where | VXM_VMADC | VXM_VMSBC
+  deriving BEq, Inhabited, Repr
+  open vxmfunct6
+
+inductive vxmcfunct6 where | VXMC_VMADC | VXMC_VMSBC
+  deriving BEq, Inhabited, Repr
+  open vxmcfunct6
+
+inductive vxmsfunct6 where | VXMS_VADC | VXMS_VSBC
+  deriving BEq, Inhabited, Repr
+  open vxmsfunct6
+
+inductive vimfunct6 where | VIM_VMADC
+  deriving BEq, Inhabited, Repr
+  open vimfunct6
+
+inductive vimcfunct6 where | VIMC_VMADC
+  deriving BEq, Inhabited, Repr
+  open vimcfunct6
+
+inductive vimsfunct6 where | VIMS_VADC
+  deriving BEq, Inhabited, Repr
+  open vimsfunct6
+
+inductive vxcmpfunct6 where | VXCMP_VMSEQ | VXCMP_VMSNE | VXCMP_VMSLTU | VXCMP_VMSLT | VXCMP_VMSLEU | VXCMP_VMSLE | VXCMP_VMSGTU | VXCMP_VMSGT
+  deriving BEq, Inhabited, Repr
+  open vxcmpfunct6
+
+inductive vicmpfunct6 where | VICMP_VMSEQ | VICMP_VMSNE | VICMP_VMSLEU | VICMP_VMSLE | VICMP_VMSGTU | VICMP_VMSGT
+  deriving BEq, Inhabited, Repr
+  open vicmpfunct6
+
+inductive nvfunct6 where | NV_VNCLIPU | NV_VNCLIP
+  deriving BEq, Inhabited, Repr
+  open nvfunct6
+
+inductive nvsfunct6 where | NVS_VNSRL | NVS_VNSRA
+  deriving BEq, Inhabited, Repr
+  open nvsfunct6
+
+inductive nxfunct6 where | NX_VNCLIPU | NX_VNCLIP
+  deriving BEq, Inhabited, Repr
+  open nxfunct6
+
+inductive nxsfunct6 where | NXS_VNSRL | NXS_VNSRA
+  deriving BEq, Inhabited, Repr
+  open nxsfunct6
+
+inductive mmfunct6 where | MM_VMAND | MM_VMNAND | MM_VMANDN | MM_VMXOR | MM_VMOR | MM_VMNOR | MM_VMORN | MM_VMXNOR
+  deriving BEq, Inhabited, Repr
+  open mmfunct6
+
+inductive nifunct6 where | NI_VNCLIPU | NI_VNCLIP
+  deriving BEq, Inhabited, Repr
+  open nifunct6
+
+inductive nisfunct6 where | NIS_VNSRL | NIS_VNSRA
+  deriving BEq, Inhabited, Repr
+  open nisfunct6
+
+inductive wvvfunct6 where | WVV_VADD | WVV_VSUB | WVV_VADDU | WVV_VSUBU | WVV_VWMUL | WVV_VWMULU | WVV_VWMULSU
+  deriving BEq, Inhabited, Repr
+  open wvvfunct6
+
+inductive wvfunct6 where | WV_VADD | WV_VSUB | WV_VADDU | WV_VSUBU
+  deriving BEq, Inhabited, Repr
+  open wvfunct6
+
+inductive wvxfunct6 where | WVX_VADD | WVX_VSUB | WVX_VADDU | WVX_VSUBU | WVX_VWMUL | WVX_VWMULU | WVX_VWMULSU
+  deriving BEq, Inhabited, Repr
+  open wvxfunct6
+
+inductive wxfunct6 where | WX_VADD | WX_VSUB | WX_VADDU | WX_VSUBU
+  deriving BEq, Inhabited, Repr
+  open wxfunct6
+
+inductive vextfunct6 where | VEXT2_ZVF2 | VEXT2_SVF2 | VEXT4_ZVF4 | VEXT4_SVF4 | VEXT8_ZVF8 | VEXT8_SVF8
+  deriving BEq, Inhabited, Repr
+  open vextfunct6
+
+inductive vxfunct6 where | VX_VADD | VX_VSUB | VX_VRSUB | VX_VMINU | VX_VMIN | VX_VMAXU | VX_VMAX | VX_VAND | VX_VOR | VX_VXOR | VX_VSADDU | VX_VSADD | VX_VSSUBU | VX_VSSUB | VX_VSLL | VX_VSMUL | VX_VSRL | VX_VSRA | VX_VSSRL | VX_VSSRA
+  deriving BEq, Inhabited, Repr
+  open vxfunct6
+
+inductive vifunct6 where | VI_VADD | VI_VRSUB | VI_VAND | VI_VOR | VI_VXOR | VI_VSADDU | VI_VSADD | VI_VSLL | VI_VSRL | VI_VSRA | VI_VSSRL | VI_VSSRA
+  deriving BEq, Inhabited, Repr
+  open vifunct6
+
+inductive vxsgfunct6 where | VX_VSLIDEUP | VX_VSLIDEDOWN | VX_VRGATHER
+  deriving BEq, Inhabited, Repr
+  open vxsgfunct6
+
+inductive visgfunct6 where | VI_VSLIDEUP | VI_VSLIDEDOWN | VI_VRGATHER
+  deriving BEq, Inhabited, Repr
+  open visgfunct6
+
+inductive mvvfunct6 where | MVV_VAADDU | MVV_VAADD | MVV_VASUBU | MVV_VASUB | MVV_VMUL | MVV_VMULH | MVV_VMULHU | MVV_VMULHSU | MVV_VDIVU | MVV_VDIV | MVV_VREMU | MVV_VREM
+  deriving BEq, Inhabited, Repr
+  open mvvfunct6
+
+inductive mvvmafunct6 where | MVV_VMACC | MVV_VNMSAC | MVV_VMADD | MVV_VNMSUB
+  deriving BEq, Inhabited, Repr
+  open mvvmafunct6
+
+inductive rmvvfunct6 where | MVV_VREDSUM | MVV_VREDAND | MVV_VREDOR | MVV_VREDXOR | MVV_VREDMINU | MVV_VREDMIN | MVV_VREDMAXU | MVV_VREDMAX
+  deriving BEq, Inhabited, Repr
+  open rmvvfunct6
+
+inductive rivvfunct6 where | IVV_VWREDSUMU | IVV_VWREDSUM
+  deriving BEq, Inhabited, Repr
+  open rivvfunct6
+
+inductive rfvvfunct6 where | FVV_VFREDOSUM | FVV_VFREDUSUM | FVV_VFREDMAX | FVV_VFREDMIN
+  deriving BEq, Inhabited, Repr
+  open rfvvfunct6
+
+inductive rfwvvfunct6 where | FVV_VFWREDOSUM | FVV_VFWREDUSUM
+  deriving BEq, Inhabited, Repr
+  open rfwvvfunct6
+
+inductive wmvvfunct6 where | WMVV_VWMACCU | WMVV_VWMACC | WMVV_VWMACCSU
+  deriving BEq, Inhabited, Repr
+  open wmvvfunct6
+
+inductive mvxfunct6 where | MVX_VAADDU | MVX_VAADD | MVX_VASUBU | MVX_VASUB | MVX_VSLIDE1UP | MVX_VSLIDE1DOWN | MVX_VMUL | MVX_VMULH | MVX_VMULHU | MVX_VMULHSU | MVX_VDIVU | MVX_VDIV | MVX_VREMU | MVX_VREM
+  deriving BEq, Inhabited, Repr
+  open mvxfunct6
+
+inductive mvxmafunct6 where | MVX_VMACC | MVX_VNMSAC | MVX_VMADD | MVX_VNMSUB
+  deriving BEq, Inhabited, Repr
+  open mvxmafunct6
+
+inductive wmvxfunct6 where | WMVX_VWMACCU | WMVX_VWMACC | WMVX_VWMACCUS | WMVX_VWMACCSU
+  deriving BEq, Inhabited, Repr
+  open wmvxfunct6
 
 inductive maskfunct3 where | VV_VMERGE | VI_VMERGE | VX_VMERGE
   deriving BEq, Inhabited, Repr
   open maskfunct3
+
+inductive vlewidth where | VLE8 | VLE16 | VLE32 | VLE64
+  deriving BEq, Inhabited, Repr
+  open vlewidth
+
+inductive fvvfunct6 where | FVV_VADD | FVV_VSUB | FVV_VMIN | FVV_VMAX | FVV_VSGNJ | FVV_VSGNJN | FVV_VSGNJX | FVV_VDIV | FVV_VMUL
+  deriving BEq, Inhabited, Repr
+  open fvvfunct6
+
+inductive fvvmafunct6 where | FVV_VMADD | FVV_VNMADD | FVV_VMSUB | FVV_VNMSUB | FVV_VMACC | FVV_VNMACC | FVV_VMSAC | FVV_VNMSAC
+  deriving BEq, Inhabited, Repr
+  open fvvmafunct6
+
+inductive fwvvfunct6 where | FWVV_VADD | FWVV_VSUB | FWVV_VMUL
+  deriving BEq, Inhabited, Repr
+  open fwvvfunct6
+
+inductive fwvvmafunct6 where | FWVV_VMACC | FWVV_VNMACC | FWVV_VMSAC | FWVV_VNMSAC
+  deriving BEq, Inhabited, Repr
+  open fwvvmafunct6
+
+inductive fwvfunct6 where | FWV_VADD | FWV_VSUB
+  deriving BEq, Inhabited, Repr
+  open fwvfunct6
+
+inductive fvvmfunct6 where | FVVM_VMFEQ | FVVM_VMFLE | FVVM_VMFLT | FVVM_VMFNE
+  deriving BEq, Inhabited, Repr
+  open fvvmfunct6
+
+inductive vfunary0 where | FV_CVT_XU_F | FV_CVT_X_F | FV_CVT_F_XU | FV_CVT_F_X | FV_CVT_RTZ_XU_F | FV_CVT_RTZ_X_F
+  deriving BEq, Inhabited, Repr
+  open vfunary0
+
+inductive vfwunary0 where | FWV_CVT_XU_F | FWV_CVT_X_F | FWV_CVT_F_XU | FWV_CVT_F_X | FWV_CVT_F_F | FWV_CVT_RTZ_XU_F | FWV_CVT_RTZ_X_F
+  deriving BEq, Inhabited, Repr
+  open vfwunary0
+
+inductive vfnunary0 where | FNV_CVT_XU_F | FNV_CVT_X_F | FNV_CVT_F_XU | FNV_CVT_F_X | FNV_CVT_F_F | FNV_CVT_ROD_F_F | FNV_CVT_RTZ_XU_F | FNV_CVT_RTZ_X_F
+  deriving BEq, Inhabited, Repr
+  open vfnunary0
+
+inductive vfunary1 where | FVV_VSQRT | FVV_VRSQRT7 | FVV_VREC7 | FVV_VCLASS
+  deriving BEq, Inhabited, Repr
+  open vfunary1
+
+inductive fvffunct6 where | VF_VADD | VF_VSUB | VF_VMIN | VF_VMAX | VF_VSGNJ | VF_VSGNJN | VF_VSGNJX | VF_VDIV | VF_VRDIV | VF_VMUL | VF_VRSUB | VF_VSLIDE1UP | VF_VSLIDE1DOWN
+  deriving BEq, Inhabited, Repr
+  open fvffunct6
+
+inductive fvfmafunct6 where | VF_VMADD | VF_VNMADD | VF_VMSUB | VF_VNMSUB | VF_VMACC | VF_VNMACC | VF_VMSAC | VF_VNMSAC
+  deriving BEq, Inhabited, Repr
+  open fvfmafunct6
+
+inductive fwvffunct6 where | FWVF_VADD | FWVF_VSUB | FWVF_VMUL
+  deriving BEq, Inhabited, Repr
+  open fwvffunct6
+
+inductive fwvfmafunct6 where | FWVF_VMACC | FWVF_VNMACC | FWVF_VMSAC | FWVF_VNMSAC
+  deriving BEq, Inhabited, Repr
+  open fwvfmafunct6
+
+inductive fwffunct6 where | FWF_VADD | FWF_VSUB
+  deriving BEq, Inhabited, Repr
+  open fwffunct6
+
+inductive fvfmfunct6 where | VFM_VMFEQ | VFM_VMFLE | VFM_VMFLT | VFM_VMFNE | VFM_VMFGT | VFM_VMFGE
+  deriving BEq, Inhabited, Repr
+  open fvfmfunct6
+
+inductive vmlsop where | VLM | VSM
+  deriving BEq, Inhabited, Repr
+  open vmlsop
+
+inductive indexed_mop where | INDEXED_UNORDERED | INDEXED_ORDERED
+  deriving BEq, Inhabited, Repr
+  open indexed_mop
 
 inductive vregno where
   | Vregno (_ : Nat)
   deriving Inhabited, BEq, Repr
   open vregno
 
+abbrev Vtype := (BitVec 64)
+
 abbrev SEW_pow := Nat
 
 abbrev LMUL_pow := Int
 
+abbrev sew_bitsize := Int
 
+abbrev is_sew_bitsize (k_n : Int) : Bool := List.elem k_n [8, 16, 32, 64]
 
 inductive agtype where | UNDISTURBED | AGNOSTIC
   deriving BEq, Inhabited, Repr
   open agtype
 
 abbrev Vcsr := (BitVec 3)
+
+inductive zvk_vsha2_funct6 where | ZVK_VSHA2CH_VV | ZVK_VSHA2CL_VV
+  deriving BEq, Inhabited, Repr
+  open zvk_vsha2_funct6
+
+inductive zvk_vsm4r_funct6 where | ZVK_VSM4R_VV | ZVK_VSM4R_VS
+  deriving BEq, Inhabited, Repr
+  open zvk_vsm4r_funct6
+
+inductive zvk_vaesdf_funct6 where | ZVK_VAESDF_VV | ZVK_VAESDF_VS
+  deriving BEq, Inhabited, Repr
+  open zvk_vaesdf_funct6
+
+inductive zvk_vaesdm_funct6 where | ZVK_VAESDM_VV | ZVK_VAESDM_VS
+  deriving BEq, Inhabited, Repr
+  open zvk_vaesdm_funct6
+
+inductive zvk_vaesef_funct6 where | ZVK_VAESEF_VV | ZVK_VAESEF_VS
+  deriving BEq, Inhabited, Repr
+  open zvk_vaesef_funct6
+
+inductive zvk_vaesem_funct6 where | ZVK_VAESEM_VV | ZVK_VAESEM_VS
+  deriving BEq, Inhabited, Repr
+  open zvk_vaesem_funct6
+
+inductive zvabd_vabd_func6 where | VV_VABD | VV_VABDU
+  deriving BEq, Inhabited, Repr
+  open zvabd_vabd_func6
+
+inductive zvabd_vwabda_func6 where | VV_VWABDA | VV_VWABDAU
+  deriving BEq, Inhabited, Repr
+  open zvabd_vwabda_func6
 
 abbrev CountSmcntrpmf := (BitVec 64)
 
@@ -1428,9 +1237,9 @@ inductive PTE_Check where
   deriving Inhabited, BEq, Repr
   open PTE_Check
 
-abbrev tlb_vpn_bits : Int := (57 - 12)
+abbrev tlb_vpn_bits  : Int := (57 - 12)
 
-abbrev tlb_ppn_bits : Int := 44
+abbrev tlb_ppn_bits  : Int := 44
 
 structure TLB_Entry where
   asid : asidbits
@@ -1442,13 +1251,13 @@ structure TLB_Entry where
   pteAddr : physaddr
   deriving BEq, Inhabited, Repr
 
-abbrev num_tlb_entries_exp : Int := 6
+abbrev num_tlb_entries_exp  : Int := 6
 
-abbrev num_tlb_entries : Int := (2 ^ 6)
+abbrev num_tlb_entries  : Int := (2 ^ 6)
 
 abbrev tlb_index_range := Nat
 
-/-- Type quantifiers: k_v : Int, is_sv_mode(k_v) -/
+/-- Type quantifiers: k_v : Int, (is_sv_mode k_v) -/
 structure PTW_Output (k_v : Nat) where
   ppn : (ppn_bits k_v)
   pte : (pte_bits k_v)
@@ -1476,7 +1285,9 @@ inductive ExecutionResult where
   deriving Inhabited, Repr
   open ExecutionResult
 
-
+abbrev valid_misaligned_order (k_n : Int) (k_first : Int) (k_last : Int) (k_step : Int) : Bool :=
+  k_first = 0 ∧ k_last = (k_n - 1) ∧ k_step = 1 ∨
+  k_first = (k_n - 1) ∧ k_last = 0 ∧ k_step = ((- 1))
 
 inductive seed_opst where | BIST | ES16 | WAIT | DEAD
   deriving BEq, Inhabited, Repr
@@ -1545,6 +1356,9 @@ inductive Register : Type where
   | minstretcfg
   | mcyclecfg
   | vcsr
+  | vtype
+  | vl
+  | vstart
   | vr31
   | vr30
   | vr29
@@ -1673,9 +1487,6 @@ inductive Register : Type where
   | x1
   | nextPC
   | PC
-  | vstart
-  | vl
-  | vtype
   | menvcfg
   | mseccfg
   | senvcfg
@@ -1727,6 +1538,9 @@ abbrev RegisterType : Register → Type
   | .minstretcfg => (BitVec 64)
   | .mcyclecfg => (BitVec 64)
   | .vcsr => (BitVec 3)
+  | .vtype => (BitVec 64)
+  | .vl => (BitVec 64)
+  | .vstart => (BitVec 64)
   | .vr31 => (BitVec (2 ^ 8))
   | .vr30 => (BitVec (2 ^ 8))
   | .vr29 => (BitVec (2 ^ 8))
@@ -1760,38 +1574,38 @@ abbrev RegisterType : Register → Type
   | .vr1 => (BitVec (2 ^ 8))
   | .vr0 => (BitVec (2 ^ 8))
   | .fcsr => (BitVec 32)
-  | .f31 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f30 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f29 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f28 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f27 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f26 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f25 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f24 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f23 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f22 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f21 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f20 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f19 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f18 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f17 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f16 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f15 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f14 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f13 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f12 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f11 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f10 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f9 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f8 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f7 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f6 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f5 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f4 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f3 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f2 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f1 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
-  | .f0 => (BitVec (if ( true  : Bool) then 8 else 4 * 8))
+  | .f31 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f30 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f29 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f28 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f27 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f26 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f25 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f24 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f23 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f22 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f21 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f20 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f19 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f18 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f17 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f16 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f15 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f14 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f13 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f12 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f11 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f10 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f9 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f8 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f7 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f6 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f5 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f4 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f3 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f2 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f1 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f0 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
   | .pmpaddr_n => (Vector (BitVec 64) 64)
   | .pmpcfg_n => (Vector (BitVec 8) 64)
   | .mideleg => (BitVec 64)
@@ -1855,9 +1669,6 @@ abbrev RegisterType : Register → Type
   | .x1 => (BitVec 64)
   | .nextPC => (BitVec 64)
   | .PC => (BitVec 64)
-  | .vstart => (BitVec 64)
-  | .vl => (BitVec 64)
-  | .vtype => (BitVec 64)
   | .menvcfg => (BitVec 64)
   | .mseccfg => (BitVec 64)
   | .senvcfg => (BitVec 64)
@@ -1884,6 +1695,34 @@ abbrev RegisterType : Register → Type
   | .rvfi_inst_data => (BitVec 192)
   | .rvfi_instruction => (BitVec 64)
   | .fp_rounding_global => (BitVec 5)
+
+/-- Type quantifiers: k_n : Nat, k_n ≥ 0, m : Nat, m ≥ 0, m ≥ k_n -/
+def zero_extend {m : _} (v : (BitVec k_n)) : (BitVec m) :=
+  (Sail.BitVec.zeroExtend v m)
+
+def physaddrbits_zero_extend (xs : (BitVec (if ( 64 = 32  : Bool) then 34 else 64))) : (BitVec 64) :=
+  (zero_extend (m := 64) xs)
+
+instance : Arch where
+  va_size := 64
+  pa := (BitVec (if ( 64 = 32  : Bool) then 34 else 64))
+  abort := Unit
+  translation := Unit
+  trans_start := Unit
+  trans_end := Unit
+  fault := Unit
+  tlb_op := Unit
+  cache_op := Unit
+  barrier := barrier_kind
+  arch_ak := RISCV_strong_access
+  sys_reg_id := Unit
+
+
+
+abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
+abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
+
+
 
 instance : Inhabited (RegisterRef RegisterType HartState) where
   default := .Reg hart_state
@@ -1925,27 +1764,3 @@ instance : Inhabited (RegisterRef RegisterType (Vector (BitVec 8) 64)) where
   default := .Reg pmpcfg_n
 instance : Inhabited (RegisterRef RegisterType (Vector (Option TLB_Entry) (2 ^ 6))) where
   default := .Reg tlb
-abbrev SailM := PreSailM RegisterType trivialChoiceSource exception
-abbrev SailME := PreSailME RegisterType trivialChoiceSource exception
-
-/-- Type quantifiers: k_n : Nat, k_n ≥ 0, m : Nat, m ≥ 0, m ≥ k_n -/
-def zero_extend {m : _} (v : (BitVec k_n)) : (BitVec m) :=
-  (Sail.BitVec.zeroExtend v m)
-
-def physaddrbits_zero_extend (xs : (BitVec (if ( 64 = 32  : Bool) then 34 else 64))) : (BitVec 64) :=
-  (zero_extend (m := 64) xs)
-
-instance : Arch where
-  va_size := 64
-  pa := (BitVec (if ( 64 = 32  : Bool) then 34 else 64))
-  abort := Unit
-  translation := Unit
-  trans_start := Unit
-  trans_end := Unit
-  fault := Unit
-  tlb_op := Unit
-  cache_op := Unit
-  barrier := barrier_kind
-  arch_ak := RISCV_strong_access
-  sys_reg_id := Unit
-

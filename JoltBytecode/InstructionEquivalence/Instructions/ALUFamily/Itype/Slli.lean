@@ -6,9 +6,11 @@ import JoltBytecode.JoltISA.ExpansionsAutomated
 import JoltBytecode.InstructionEquivalence.ProofSupport.ExpansionBlocks.ALU
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -55,8 +57,7 @@ theorem execute_SHIFTIOP_SLLI_factored (shamt : BitVec 6) (rs1 rd : regidx) :
   simp only [execute_SHIFTIOP]
   simp only [bind_pure_comp]
   simp only [map_eq_pure_bind]
-  simp only [bind_assoc]
-  simp only [pure_bind, slli_sail_operation]
+  simp only [bind_assoc, pure_bind, slli_sail_operation]
 
 /-- Program-level concrete theorem for `SLLI`.
 

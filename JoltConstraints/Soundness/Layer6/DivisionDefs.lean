@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer6.PlainRow
 import JoltBytecode.InstructionEquivalence.ProofSupport.ProgramComposition
 
+open LeanRV64D
+
 /-! Staged reconstruction of a whole division expansion with honest advice. -/
 
 set_option autoImplicit false
@@ -8,7 +10,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The eight source operations implemented by division expansions.
 For example, `rem` selects the nine-row signed remainder program even when
@@ -147,7 +149,7 @@ theorem single_advice_index (rows : List Instr)
         have absent := List.filter_eq_nil_iff.mp empty _ member
         exact False.elim (absent present)
     · have remaining : (rest.filter fun row => row.adviceValue?.isSome).length = 1 := by
-        simpa only [List.filter_cons, advice, ↓reduceIte] using single
+        simpa only [List.filter_cons, advice, ↓reduceIte] using! single
       obtain ⟨index, bound, present, unique⟩ := ih remaining
       refine ⟨index + 1, by simp; omega, present, ?_⟩
       intro other inRows hasAdvice
@@ -188,11 +190,10 @@ theorem runtime_advice_isSome (instruction : Instr) (advice : instruction.Runtim
 is its ordinary execution. For example, REM's MUL has the same result for tape
 answers zero and five. -/
 theorem arithmetic_exec_eq (instruction : Instr) (arithmetic : DivisionArithmeticRow instruction)
-    (answer : BitVec 64) : execWithTapeAnswer instruction answer = execInstr instruction := by
-  unfold execWithTapeAnswer
-  split
-  · exact False.elim arithmetic
-  · rfl
+    (answer : BitVec 64) : execWithTapeAnswer instruction answer = execInstr instruction :=
+  execWithTapeAnswer_of_ne instruction answer fun _ _ isAdvice => by
+    subst isAdvice
+    exact False.elim arithmetic
 
 /-- A row inside an expansion is the instruction at the same list offset.
 For example, offset two of REM's bytecode expansion is its third program row. -/
@@ -328,7 +329,7 @@ private theorem arithmetic_advice_suffix_run {F : Type} [Field F] (joltField : J
         (Program.seq (((expansionInstructions context.bytecode first).drop (done + 1)).map (patchAdviceWord q))))).run
           step.preState = .ok RETIRE_SUCCESS (TraceWitness.finalTraceState candidate.toTrace)
       rw [execProgram_instr_run_retire _ _ _ _ headRun]
-      simpa only [tailPreIs] using tailRun
+      simpa only [tailPreIs] using! tailRun
 
 /-- Execute one arithmetic advice sequence using the witness's advice word.
 The conclusion retains the old run, the complete expansion invariant, and an

@@ -1,5 +1,7 @@
 import JoltConstraints.prover_config
 
+open LeanRV64D
+
 /-! Jolt's language, shared by the soundness and completeness statements and
 the inclusion into the relaxed tape-answer language. -/
 

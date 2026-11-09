@@ -2,6 +2,8 @@ import Mathlib.Tactic.Ring
 import JoltConstraints.lookup_table
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 /-!
 # PEXT table identities for arbitrary operand words
 
@@ -90,12 +92,12 @@ theorem jolt_pext_nat_of_low_ones : ∀ (fuel x n : Nat), n < 2 ^ fuel → n &&&
       simp [jolt_pext_nat_zero]
 
 
-/-- One pass of the table's general `pext` loop on the state (bits, k, out). -/
-private def pextStep (x : BitVec 64) (r : MProd (BitVec 64) (MProd Nat (BitVec 64))) :
-    MProd (BitVec 64) (MProd Nat (BitVec 64)) :=
-  if r.fst = 0 then r
-  else ⟨r.fst &&& r.fst - 1, r.snd.fst + 1,
-    r.snd.snd ||| ((x >>> r.fst.ctz.toNat) &&& 1) <<< r.snd.fst⟩
+/-- One pass of the table's general `pext` loop on the state (bits, out, k),
+in the order of Lean's `do`-loop tuple. -/
+private def pextStep (x : BitVec 64) (r : BitVec 64 × BitVec 64 × Nat) :
+    BitVec 64 × BitVec 64 × Nat :=
+  if r.1 = 0 then r
+  else (r.1 &&& r.1 - 1, r.2.1 ||| ((x >>> r.1.ctz.toNat) &&& 1) <<< r.2.2, r.2.2 + 1)
 
 private theorem forIn_eq_foldl_of {S : Type} (g : S → S) (f : Nat → S → Id (ForInStep S))
     (hf : ∀ a r, f a r = pure (.yield (g r))) (l : List Nat) (s : S) :
@@ -106,14 +108,14 @@ private theorem forIn_eq_foldl_of {S : Type} (g : S → S) (f : Nat → S → Id
 
 private theorem pext_general (x y : BitVec 64) (hy : y ≠ 0)
     (hc : ¬ (y >>> y.ctz.toNat) &&& ((y >>> y.ctz.toNat) + 1) = 0) :
-    pext x y = ((List.range 64).foldl (fun r _ => pextStep x r) ⟨y, 0, 0⟩).snd.snd := by
+    pext x y = ((List.range 64).foldl (fun r _ => pextStep x r) ⟨y, 0, 0⟩).2.1 := by
   unfold pext
   simp only [Id.run, hy, if_false, hc, pure_bind]
   rw [forIn_eq_foldl_of (pextStep x)]
   · simp only [pure_bind]
     generalize List.foldl _ _ _ = r
     rfl
-  · rintro _ ⟨b, k, o⟩
+  · rintro _ ⟨b, o, k⟩
     by_cases h0 : b = 0
     · subst h0; simp [pextStep]
     · simp only [pextStep]; rw [if_neg h0, if_pos h0]
@@ -150,10 +152,10 @@ private theorem eq_two_pow_mul_odd (m p : Nat) (hlow : m % 2 ^ p = 0) (hbit : m.
 
 /-- Loop invariant after `n` passes from `⟨y, 0, 0⟩`. -/
 private def PextInv (x y : BitVec 64) (n : Nat)
-    (r : MProd (BitVec 64) (MProd Nat (BitVec 64))) : Prop :=
+    (r : BitVec 64 × BitVec 64 × Nat) : Prop :=
   jolt_pext_nat 64 x.toNat y.toNat =
-      r.snd.snd.toNat + 2 ^ r.snd.fst * jolt_pext_nat 64 x.toNat r.fst.toNat ∧
-    r.snd.snd.toNat < 2 ^ r.snd.fst ∧ r.snd.fst ≤ n ∧ 2 ^ n ∣ r.fst.toNat
+      r.2.1.toNat + 2 ^ r.2.2 * jolt_pext_nat 64 x.toNat r.1.toNat ∧
+    r.2.1.toNat < 2 ^ r.2.2 ∧ r.2.2 ≤ n ∧ 2 ^ n ∣ r.1.toNat
 
 private theorem toNat_sub_one_of_ne_zero {b : BitVec 64} (hb : b ≠ 0) :
     (b - 1).toNat = b.toNat - 1 := by
@@ -161,9 +163,9 @@ private theorem toNat_sub_one_of_ne_zero {b : BitVec 64} (hb : b ≠ 0) :
   rw [BitVec.toNat_sub]; simp; omega
 
 private theorem pextInv_step (x y : BitVec 64) (n : Nat)
-    (r : MProd (BitVec 64) (MProd Nat (BitVec 64)))
+    (r : BitVec 64 × BitVec 64 × Nat)
     (h : PextInv x y n r) : PextInv x y (n + 1) (pextStep x r) := by
-  obtain ⟨b, k, o⟩ := r
+  obtain ⟨b, o, k⟩ := r
   obtain ⟨hJ, ho, hk, hd⟩ := h
   simp only at hJ ho hk hd
   by_cases hb : b = 0
@@ -215,7 +217,7 @@ private theorem pextInv_step (x y : BitVec 64) (n : Nat)
       exact Dvd.dvd.mul_right (Nat.pow_dvd_pow 2 (by omega)) q
 
 private theorem pextInv_foldl (x y : BitVec 64) :
-    ∀ (l : List Nat) (n : Nat) (r : MProd (BitVec 64) (MProd Nat (BitVec 64))),
+    ∀ (l : List Nat) (n : Nat) (r : BitVec 64 × BitVec 64 × Nat),
     PextInv x y n r → PextInv x y (n + l.length) (l.foldl (fun r _ => pextStep x r) r)
   | [], n, r, h => by simpa using h
   | _ :: l, n, r, h => by
@@ -229,7 +231,7 @@ private theorem pext_eq_of_general (x y : BitVec 64) (hy : y ≠ 0)
   rw [pext_general x y hy hc]
   have h := pextInv_foldl x y (List.range 64) 0 ⟨y, 0, 0⟩ ⟨by simp, by simp, le_refl _, by simp⟩
   generalize (List.range 64).foldl _ _ = r at h ⊢
-  obtain ⟨b, k, o⟩ := r
+  obtain ⟨b, o, k⟩ := r
   obtain ⟨hJ, -, -, hd⟩ := h
   simp only [List.length_range, zero_add] at hd hJ
   have hb0 : b.toNat = 0 := Nat.eq_zero_of_dvd_of_lt hd b.isLt

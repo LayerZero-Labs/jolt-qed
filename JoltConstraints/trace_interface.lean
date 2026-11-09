@@ -11,6 +11,8 @@ import JoltConstraints.nextpc_frame
 import JoltConstraints.expansion_facts
 import JoltConstraints.Soundness.Layer7.AdjacentRows
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- The length of row i's source instruction: 2 bytes if compressed, else 4.

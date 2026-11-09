@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer3.Address
 import JoltConstraints.Soundness.Layer1.BytecodeReads
 import JoltConstraints.Soundness.Layer4.Table
 
+open LeanRV64D
+
 /-! Recover load/store addresses as integers before converting them to machine
 words. Constraint (01) gives the field value of the integer sum of a base word
 and a signed immediate, minus the lookup offset; the lemmas here recover that

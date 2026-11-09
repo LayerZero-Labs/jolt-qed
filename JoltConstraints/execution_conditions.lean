@@ -1,5 +1,7 @@
 import JoltConstraints.honest_trace
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 /-- Rust's source-level stopping rule: the completed source instruction jumps

@@ -1,4 +1,4 @@
-import LeanRV64D.Flow
+import LeanRV64D.LeanRV64D
 import LeanRV64D.Prelude
 import LeanRV64D.Errors
 import LeanRV64D.Xlen
@@ -11,11 +11,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -220,17 +223,17 @@ def PmpAddrMatchType_of_num (arg_ : Nat) : PmpAddrMatchType :=
 
 def num_of_PmpAddrMatchType (arg_ : PmpAddrMatchType) : Int :=
   match arg_ with
-  | OFF => 0
-  | TOR => 1
-  | NA4 => 2
-  | NAPOT => 3
+  | .OFF => 0
+  | .TOR => 1
+  | .NA4 => 2
+  | .NAPOT => 3
 
 def pmpAddrMatchType_encdec_forwards (arg_ : PmpAddrMatchType) : (BitVec 2) :=
   match arg_ with
-  | OFF => 0b00#2
-  | TOR => 0b01#2
-  | NA4 => 0b10#2
-  | NAPOT => 0b11#2
+  | .OFF => 0b00#2
+  | .TOR => 0b01#2
+  | .NA4 => 0b10#2
+  | .NAPOT => 0b11#2
 
 def pmpAddrMatchType_encdec_backwards (arg_ : (BitVec 2)) : PmpAddrMatchType :=
   match arg_ with
@@ -241,10 +244,10 @@ def pmpAddrMatchType_encdec_backwards (arg_ : (BitVec 2)) : PmpAddrMatchType :=
 
 def pmpAddrMatchType_encdec_forwards_matches (arg_ : PmpAddrMatchType) : Bool :=
   match arg_ with
-  | OFF => true
-  | TOR => true
-  | NA4 => true
-  | NAPOT => true
+  | .OFF => true
+  | .TOR => true
+  | .NA4 => true
+  | .NAPOT => true
 
 def pmpAddrMatchType_encdec_backwards_matches (arg_ : (BitVec 2)) : Bool :=
   match arg_ with
@@ -262,7 +265,7 @@ def Mk_Pmpcfg_ent (v : (BitVec 8)) : (BitVec 8) :=
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 15 -/
 def pmpReadCfgReg (n : Nat) : SailM (BitVec 64) := do
-  assert ((Int.tmod n 2) == 0) "Unexpected pmp config reg read"
+  sail_assert ((Int.tmod n 2) == 0) "Unexpected pmp config reg read"
   (pure ((GetElem?.getElem! (← readReg pmpcfg_n) ((n *i 4) +i 7)) +++ ((GetElem?.getElem!
           (← readReg pmpcfg_n) ((n *i 4) +i 6)) +++ ((GetElem?.getElem! (← readReg pmpcfg_n)
             ((n *i 4) +i 5)) +++ ((GetElem?.getElem! (← readReg pmpcfg_n) ((n *i 4) +i 4)) +++ ((GetElem?.getElem!
@@ -308,24 +311,24 @@ def pmpWriteCfg (cfg : (BitVec 8)) (v : (BitVec 8)) : SailM (BitVec 8) := do
         then
           (do
             match pmp_write_only_reserved_behavior with
-            | PMP_Fatal => (reserved_behavior "pmpcfg with R=0,W=1")
-            | PMP_ClearPermissions =>
+            | .PMP_Fatal => (reserved_behavior "pmpcfg with R=0,W=1")
+            | .PMP_ClearPermissions =>
               (pure (_update_Pmpcfg_ent_R (_update_Pmpcfg_ent_W (_update_Pmpcfg_ent_X cfg 0#1) 0#1)
                   0#1)))
         else (pure cfg)
       let mode_supported : Bool :=
         match (pmpAddrMatchType_encdec_backwards (_get_Pmpcfg_ent_A cfg)) with
-        | OFF => true
-        | TOR => true
-        | NA4 => ((true : Bool) && (sys_pmp_grain == 0))
-        | NAPOT => true
+        | .OFF => true
+        | .TOR => true
+        | .NA4 => ((true : Bool) && (sys_pmp_grain == 0))
+        | .NAPOT => true
       if (mode_supported : Bool)
       then (pure cfg)
       else (pure (_update_Pmpcfg_ent_A cfg (pmpAddrMatchType_encdec_forwards OFF))))
 
 /-- Type quantifiers: n : Nat, 0 ≤ n ∧ n ≤ 15 -/
 def pmpWriteCfgReg (n : Nat) (v : (BitVec 64)) : SailM Unit := do
-  assert ((Int.tmod n 2) == 0) "Unexpected pmp config reg write"
+  sail_assert ((Int.tmod n 2) == 0) "Unexpected pmp config reg write"
   let loop_i_lower := 0
   let loop_i_upper := 7
   let mut loop_vars := ()
@@ -341,7 +344,7 @@ def pmpWriteCfgReg (n : Nat) (v : (BitVec 64)) : SailM Unit := do
       else (pure ())
   (pure loop_vars)
 
-/-- Type quantifiers: k_ex820187_ : Bool, k_ex820186_ : Bool -/
+/-- Type quantifiers: k_ex255871_ : Bool, k_ex255870_ : Bool -/
 def pmpWriteAddr (locked : Bool) (tor_locked : Bool) (reg : (BitVec 64)) (v : (BitVec 64)) : (BitVec 64) :=
   if ((locked || tor_locked) : Bool)
   then reg

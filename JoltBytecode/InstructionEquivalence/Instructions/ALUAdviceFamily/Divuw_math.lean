@@ -6,10 +6,12 @@ import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Div_math
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divw_math
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.DivuwProgramBlocks
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option linter.unusedSimpArgs false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -110,7 +112,7 @@ private lemma eq_zero_of_zeroExtend32_eq_zero_uw (x : BitVec 32)
   change Sail.BitVec.extractLsb (zero_extend (m := 64) x) 31 0 =
     Sail.BitVec.extractLsb (0#64) 31 0 at hx
   rw [extractLsb_zeroExtend_32_64_uw] at hx
-  simpa using hx
+  simpa using! hx
 
 private theorem intCast_tdiv_eq_udiv32_uw (x y : BitVec 32) :
     ((Int.ofNat x.toNat).tdiv (Int.ofNat y.toNat) : BitVec 32) = x / y := by

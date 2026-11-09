@@ -1,7 +1,9 @@
 import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
-open Sail PreSail LeanRV64D.Functions
+
+open LeanRV64D
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 set_option autoImplicit false
 set_option linter.unusedSimpArgs false
 set_option maxHeartbeats 400000
@@ -26,13 +28,21 @@ theorem bind_rule {α β : Type} {m : SailM α} {f : α → SailM β}
     simp only [bind, EStateM.bind, hr] at h
     exact (hf x s' t v h).trans (hm s s' x hr)
 
-theorem read_rule (r : Register) : Preserves (Sail.readReg r) := by
+theorem read_rule (r : Register) : Preserves (LeanRV64D.readReg r) := by
   intro s t v h
   cases readReg_pure r s v t h
   rfl
 
+-- Sail's short-circuiting `<&&>` runs its second operand only after `true`.
+theorem andM_rule {m n : SailM Bool} (hm : Preserves m) (hn : Preserves n) :
+    Preserves (m <&&> n) :=
+  bind_rule hm fun b => by
+    cases b
+    · exact pure_rule false
+    · exact hn
+
 theorem write_rule (r : Register) (v : RegisterType r)
-    (hne : r ≠ Register.PC) : Preserves (Sail.writeReg r v) := by
+    (hne : r ≠ Register.PC) : Preserves (LeanRV64D.writeReg r v) := by
   intro s t x h
   cases h
   simp only [Std.ExtDHashMap.get?_insert, beq_iff_eq, hne, ↓reduceDIte]
@@ -40,35 +50,38 @@ theorem write_rule (r : Register) (v : RegisterType r)
 theorem jump_rule (target : BitVec 64) : Preserves (jump_to target) := by
   intro s t v h
   unfold jump_to ext_control_check_pc at h
-  simp only [SailME.run, PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
+  simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
-    bind, EStateM.bind, pure, EStateM.pure, Sail.assert, PreSail.assert] at h
+    bind, EStateM.bind, pure, EStateM.pure, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at h
   by_cases hbit : (BitVec.access target 0 == 0#1) = true
   · simp only [hbit, ↓reduceIte, pure, EStateM.pure, bind, EStateM.bind,
       ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift, ExceptT.lift,
       ExceptT.mk, EStateM.map, Functor.map] at h
     have hzca : Preserves (currentlyEnabled extension.Ext_Zca) := by
-      unfold currentlyEnabled
-      apply bind_rule
-      · unfold currentlyEnabled
-        exact bind_rule (read_rule Register.misa) (fun _ => pure_rule _)
-      · intro zca
-        exact pure_rule _
-    cases hz : currentlyEnabled extension.Ext_Zca s with
-    | error e s' => simp only [hz] at h; cases h
-    | ok zca s' =>
-      have hp := hzca s s' zca hz
-      by_cases halign : bit_to_bool (BitVec.access target 1) = true ∧
-          LeanRV64D.Functions.not zca = true
-      all_goals
-        simp only [hz, ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift,
-          ExceptT.lift, ExceptT.mk, EStateM.map, Functor.map,
-          Bool.and_eq_true, halign, ↓reduceIte,
-          set_next_pc, Sail.writeReg, bind, EStateM.bind, pure, EStateM.pure] at h
-        cases h
-        simpa only [Std.ExtDHashMap.get?_insert, beq_iff_eq,
-          reduceCtorEq, ↓reduceDIte] using hp
+      simp only [currentlyEnabled]
+      exact andM_rule (pure_rule _) (bind_rule (andM_rule (pure_rule _)
+        (bind_rule (read_rule Register.misa) fun _ => pure_rule _)) fun _ => pure_rule _)
+    -- `<&&>` short-circuits: `Ext_Zca` is read only when bit 1 is set.
+    cases bit1 : bit_to_bool (BitVec.access target 1)
+    · simp only [andM, toBool, bit1, ExceptT.bindCont, EStateM.map, Bool.false_eq_true,
+        ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
+        pure, EStateM.pure] at h
+      cases h
+      simp only [Std.ExtDHashMap.get?_insert, beq_iff_eq, reduceCtorEq, ↓reduceDIte]
+    · simp only [andM, toBool, bit1, bind, EStateM.bind, pure, EStateM.pure,
+        ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.mk, EStateM.map] at h
+      cases hz : currentlyEnabled extension.Ext_Zca s with
+      | error e s' => simp only [hz] at h; cases h
+      | ok zca s' =>
+        have hp := hzca s s' zca hz
+        cases zca <;>
+          simp only [hz, sail_not_true, sail_not_false, ExceptT.bindCont, EStateM.map,
+            Bool.false_eq_true, ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind,
+            EStateM.bind, pure, EStateM.pure] at h <;>
+          cases h <;>
+          simpa only [Std.ExtDHashMap.get?_insert, beq_iff_eq,
+            reduceCtorEq, ↓reduceDIte] using hp
   · simp only [hbit, ↓reduceIte, throw, throwThe] at h
     cases h
 

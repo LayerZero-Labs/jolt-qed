@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -206,13 +209,13 @@ def zbb_rtypew_mnemonic_backwards (arg_ : String) : SailM bropw_zbb := do
   | "rorw" => (pure RORW)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def zbb_rtypew_mnemonic_forwards_matches (arg_ : bropw_zbb) : Bool :=
   match arg_ with
-  | ROLW => true
-  | RORW => true
+  | .ROLW => true
+  | .RORW => true
 
 def zbb_rtypew_mnemonic_backwards_matches (arg_ : String) : Bool :=
   match arg_ with
@@ -233,20 +236,20 @@ def zbb_rtype_mnemonic_backwards (arg_ : String) : SailM brop_zbb := do
   | "ror" => (pure ROR)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def zbb_rtype_mnemonic_forwards_matches (arg_ : brop_zbb) : Bool :=
   match arg_ with
-  | ANDN => true
-  | ORN => true
-  | XNOR => true
-  | MAX => true
-  | MAXU => true
-  | MIN => true
-  | MINU => true
-  | ROL => true
-  | ROR => true
+  | .ANDN => true
+  | .ORN => true
+  | .XNOR => true
+  | .MAX => true
+  | .MAXU => true
+  | .MIN => true
+  | .MINU => true
+  | .ROL => true
+  | .ROR => true
 
 def zbb_rtype_mnemonic_backwards_matches (arg_ : String) : Bool :=
   match arg_ with
@@ -268,14 +271,14 @@ def zbb_extop_mnemonic_backwards (arg_ : String) : SailM extop_zbb := do
   | "zext.h" => (pure ZEXTH)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def zbb_extop_mnemonic_forwards_matches (arg_ : extop_zbb) : Bool :=
   match arg_ with
-  | SEXTB => true
-  | SEXTH => true
-  | ZEXTH => true
+  | .SEXTB => true
+  | .SEXTH => true
+  | .ZEXTH => true
 
 def zbb_extop_mnemonic_backwards_matches (arg_ : String) : Bool :=
   match arg_ with

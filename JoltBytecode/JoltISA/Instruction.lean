@@ -6,6 +6,8 @@ Authors: Ari
 
 import JoltBytecode.JoltISA.VirtualRegisters
 
+open LeanRV64D
+
 /-!
 # Jolt ISA syntax
 
@@ -14,7 +16,7 @@ instructions that Rust lowers through `inline_sequence` belong in the expansion
 layer, not as constructors here.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

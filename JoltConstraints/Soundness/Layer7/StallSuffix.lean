@@ -12,9 +12,11 @@ import JoltConstraints.Soundness.Layer4.Arithmetic
 import JoltConstraints.trace_interface
 import JoltConstraints.Completeness.Helpers.TracePCProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 namespace JoltInstance
 
@@ -485,9 +487,9 @@ theorem represented_last_control_read
         else TraceWitness.Rs1Value params run.toTrace before) := by
     cases second with
     | false =>
-        exact represented.rs1 before inRun (by simpa only [rowEq] using safeRead)
+        exact represented.rs1 before inRun (by simpa only [rowEq] using! safeRead)
     | true =>
-        exact represented.rs2 before inRun (by simpa only [rowEq] using safeRead)
+        exact represented.rs2 before inRun (by simpa only [rowEq] using! safeRead)
   exact read.symm.trans (representedRead.trans observed)
 
 /-- The next cycle selects padding or a row whose address is the current
@@ -574,7 +576,7 @@ theorem real_slot_index (bytecode : Array JoltInstructionRow)
           (show bytecode[n]? = some row by simpa [JoltConstraints.bytecodeRow] using present)).1
       refine ⟨⟨n, inRange⟩, rfl, ?_⟩
       simpa only [JoltConstraints.bytecodeRow, Array.getElem?_eq_getElem inRange,
-        Option.some.injEq] using present.symm
+        Option.some.injEq] using! present.symm
 
 /-- A real selected row of accepted expanded bytecode has an array index, and
 its slot can be read through the witness context. For example, bytecode row
@@ -713,10 +715,10 @@ theorem stall_jal_exec_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
     (nextPC : pre.sail.regs.get? Register.nextPC = some link)
     (runs : JoltISA.execInstr (.JAL dst imm) pre = .ok RETIRE_SUCCESS post) :
     post.sail.regs.get? Register.nextPC = some (address + imm) := by
-  have readNext : liftSail (Sail.readReg Register.nextPC) pre = .ok link pre := by
+  have readNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail link nextPC]
-  have readPC : liftSail (Sail.readReg Register.PC) pre = .ok address pre := by
+  have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok address pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.PC pre.sail address pc]
   simp only [JoltISA.execInstr, bind, EStateM.bind, readNext, readPC] at runs
@@ -724,7 +726,7 @@ theorem stall_jal_exec_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
   | error error state => simp only [written] at runs; cases runs
   | ok result middle =>
       cases result
-      simp only [written, liftSail, Sail.writeReg, pure, EStateM.pure] at runs
+      simp only [written, liftSail, LeanRV64D.writeReg, pure, EStateM.pure] at runs
       cases runs
       simp only [Std.ExtDHashMap.get?_insert, beq_iff_eq, ↓reduceDIte, cast_eq]
 
@@ -959,7 +961,11 @@ private theorem tape_row_preserves_pc
         (fun _ => JoltPCFrame.pure_rule RETIRE_SUCCESS) prepared after _ runs
       simpa [prepared] using frame
     · cases runs
-  · have hostFrame : instruction.HostIOPCFrame before after := by
+  · rename_i _ notAdvice
+    replace runs : JoltISA.execInstr instruction before = .ok (.Retire_Success ()) after := by
+      rw [← JoltConstraints.Soundness.execWithTapeAnswer_of_ne instruction answer notAdvice]
+      exact runs
+    have hostFrame : instruction.HostIOPCFrame before after := by
       unfold JoltISA.Instr.HostIOPCFrame
       split
       · have ranHost : JoltISA.execHostIO before = .ok (.Retire_Success ()) after := by
@@ -1249,7 +1255,7 @@ private theorem stall_executed_jal_immediate_zero
     have executed := run.executes lastIndex
     rw [noAdvice] at executed
     rw [instrEq] at executed
-    simpa only [lastRow, JoltConstraints.Soundness.execWithTapeAnswer] using executed
+    simpa only [lastRow, JoltConstraints.Soundness.execWithTapeAnswer] using! executed
   exact stall_jal_immediate_zero dst imm run.bytecode[last.rowIndex].address
     (run.bytecode[last.rowIndex].address +
       if source_is_compressed run.bytecode last.rowIndex then 2 else 4)
@@ -1360,7 +1366,7 @@ theorem stall_jal_step
     have indexEq : index.val = last.rowIndex.val :=
       expand_program_unique joltInstance.program run.bytecode run.expands accepted
         index.val last.rowIndex.val index.isLt last.rowIndex.isLt
-        (by simpa only [rowIs] using sameSource)
+        (by simpa only [rowIs] using! sameSource)
         (by simpa only [Fin.getElem_fin] using indexZero.trans lastCount.symm)
     have sameIndex : index = last.rowIndex := Fin.ext indexEq
     have currentJump : row.instruction = .JAL dst imm := by
@@ -1476,7 +1482,7 @@ theorem stall_branch_runs
   have executedLast : JoltConstraints.Soundness.execWithTapeAnswer
       run.bytecode[last.rowIndex].instruction (run.answers lastIndex)
       last.preState = .ok RETIRE_SUCCESS last.postState := by
-    simpa only [lastRow] using executed
+    simpa only [lastRow] using! executed
   rcases isBranch with h | h | h | h | h | h
   all_goals simpa only [h, JoltConstraints.Soundness.execWithTapeAnswer] using executedLast
 
@@ -1887,7 +1893,7 @@ theorem tape_jalr_target
       answer pre = .ok (.Retire_Success ()) post) :
     post.sail.regs.get? Register.nextPC =
       some (jolt_jalr_target64 (JoltISA.sourceValue base pre) imm) := by
-  have hreadNext : liftSail (Sail.readReg Register.nextPC) pre = .ok link pre := by
+  have hreadNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail link hnext]
   simp only [JoltConstraints.Soundness.execWithTapeAnswer, JoltISA.execInstr,
@@ -1902,7 +1908,7 @@ theorem tape_jalr_target
     let afterPC : SailJoltState :=
       { pre with sail := { pre.sail with
         regs := pre.sail.regs.insert Register.nextPC target } }
-    have hpcWrite : liftSail (Sail.writeReg Register.nextPC target) pre =
+    have hpcWrite : liftSail (LeanRV64D.writeReg Register.nextPC target) pre =
         .ok () afterPC := by rfl
     simp only [hread] at runs
     rw [hpcWrite] at runs
@@ -2291,12 +2297,12 @@ theorem selected_jump_link_write_value
     charAbove2pow127 context equations
   have jumpFlag : witness.OpFlags .Jump cycle = 1 := by
     simpa only [JoltConstraints.bytecodeCircuitFlag, present,
-      JoltMetadata.circuitFlag, jump] using
+      JoltMetadata.circuitFlag, jump] using!
       flags .Jump cycle slot selected
   have compressedFlag : witness.OpFlags .IsCompressed cycle =
       if row.is_compressed then 1 else 0 := by
     simpa only [JoltConstraints.bytecodeCircuitFlag, present,
-      JoltMetadata.circuitFlag] using flags .IsCompressed cycle slot selected
+      JoltMetadata.circuitFlag] using! flags .IsCompressed cycle slot selected
   have address : witness.UnexpandedPC cycle = (row.address.toNat : F) := by
     simpa only [JoltConstraints.bytecodeAddress, present] using
       JoltConstraints.Soundness.unexpandedPC_of_selected_bytecode
@@ -2726,7 +2732,7 @@ theorem stall_system_jalr_step
   have currentJump : row.instruction = .JALR (.vreg rd) (.vreg rs1) imm := by
     have same := expand_program_unique joltInstance.program run.bytecode run.expands accepted
       index.val last.rowIndex.val index.isLt last.rowIndex.isLt
-      (by simpa only [rowIs] using sameSource)
+      (by simpa only [rowIs] using! sameSource)
       (by simpa only [Fin.getElem_fin, not_not] using
         (not_not.mp continues).trans stable.1.symm)
     simpa only [rowIs, (Fin.ext same : index = last.rowIndex)] using jump
@@ -2804,7 +2810,7 @@ theorem stable_stall_control_flow
     JoltMetadata.instructionFlag run.bytecode[last.rowIndex].instruction .Branch = true := by
   classical
   have lastAt : run.rows[run.rows.size - 1]? = some last := by
-    simpa only [Array.back?_eq_getElem?] using atEnd
+    simpa only [Array.back?_eq_getElem?] using! atEnd
   obtain ⟨lastIn, lastEq⟩ := Array.getElem?_eq_some_iff.mp lastAt
   let index : Fin run.rows.size := ⟨run.rows.size - 1, lastIn⟩
   have rowEq : run.rows[index] = last := lastEq
@@ -3147,10 +3153,10 @@ theorem stall_suffix_initial_jalr
           have activeGuard : TraceWitness.destinationRegisterAddress (.xreg rd) =
               TraceWitness.sourceRegisterAddress (.xreg rd) ∧
               (TraceWitness.sourceRegisterAddress (.xreg rd)).val ≠ 0 := ⟨rfl, nonzeroAddress⟩
-          simpa only [JoltConstraints.Soundness.destinationSource, if_pos activeGuard] using
-            selected_written_jalr_base_succ joltField joltInstance noWrap privateInputs
-              witness context equations run last atEnd stable rd imm jump nonzero
-              before next slot selected rowAtContext
+          rw [JoltConstraints.Soundness.destinationSource, if_pos activeGuard]
+          exact selected_written_jalr_base_succ joltField joltInstance noWrap privateInputs
+            witness context equations run last atEnd stable rd imm jump nonzero
+            before next slot selected rowAtContext
       | vreg rd =>
           have baseEq : base = .vreg rd := sameSource.symm
           subst base

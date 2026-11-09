@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -206,13 +209,13 @@ def encdec_biop_backwards (arg_ : (BitVec 3)) : SailM biop := do
   | 0b011 => (pure BNEI)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def encdec_biop_forwards_matches (arg_ : biop) : Bool :=
   match arg_ with
-  | BEQI => true
-  | BNEI => true
+  | .BEQI => true
+  | .BNEI => true
 
 def encdec_biop_backwards_matches (arg_ : (BitVec 3)) : Bool :=
   match arg_ with
@@ -226,13 +229,13 @@ def bitype_mnemonic_backwards (arg_ : String) : SailM biop := do
   | "bnei" => (pure BNEI)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def bitype_mnemonic_forwards_matches (arg_ : biop) : Bool :=
   match arg_ with
-  | BEQI => true
-  | BNEI => true
+  | .BEQI => true
+  | .BNEI => true
 
 def bitype_mnemonic_backwards_matches (arg_ : String) : Bool :=
   match arg_ with

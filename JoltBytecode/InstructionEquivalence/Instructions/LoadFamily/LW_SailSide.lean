@@ -5,10 +5,12 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Windows
 import JoltBytecode.InstructionEquivalence.ProofSupport.StateLemmas
 import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.DwordArithmetic
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open Std.Do
 open virtaddr MemoryAccessType mem_payload
 
@@ -226,9 +228,9 @@ theorem execute_LW_reduces
       (stateAfterWrite js.sail rd (writeValue imm rs1 js h hAlign)) := by
   unfold execute_LOAD
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind, pure,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
     EStateM.pure, EStateM.run, if_true]
   rw [vmem_read_word_reduces
     (imm := imm)
@@ -274,9 +276,9 @@ theorem execute_LWU_reduces
         (writeValueUnsigned imm rs1 js h hAlign)) := by
   unfold execute_LOAD
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind, pure,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
     EStateM.pure, EStateM.run, if_true]
   rw [vmem_read_word_reduces
     (imm := imm)
@@ -322,12 +324,12 @@ theorem execute_LW_misaligned
   let ea := load_effective_address h.rs1_val imm
   unfold execute_LOAD
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind, pure,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
     EStateM.pure, EStateM.run, if_true]
   unfold vmem_read
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have hmis :
       access_causes_misaligned_exception (Virtaddr ea) 4 false = true := by
     simpa only [ea] using access_misaligned_4_unaligned_true ea hMisaligned
@@ -351,12 +353,12 @@ theorem execute_LWU_misaligned
   let ea := load_effective_address h.rs1_val imm
   unfold execute_LOAD
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind, pure,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
     EStateM.pure, EStateM.run, if_true]
   unfold vmem_read
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have hmis :
       access_causes_misaligned_exception (Virtaddr ea) 4 false = true := by
     simpa only [ea] using access_misaligned_4_unaligned_true ea hMisaligned

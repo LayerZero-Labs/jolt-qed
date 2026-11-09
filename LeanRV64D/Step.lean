@@ -1,11 +1,9 @@
 import LeanRV64D.Prelude
 import LeanRV64D.MemAddrtype
 import LeanRV64D.Common0
-import LeanRV64D.RvfiDii
 import LeanRV64D.PlatformConfig
 import LeanRV64D.Types
 import LeanRV64D.Callbacks
-import LeanRV64D.Regs
 import LeanRV64D.PcAccess
 import LeanRV64D.SysRegs
 import LeanRV64D.ExtRegs
@@ -27,11 +25,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -217,7 +218,7 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_ex930387_ : Bool, _step_no : Int -/
+/-- Type quantifiers: k_ex256185_ : Bool, _step_no : Int -/
 def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32)) (exit_wait : Bool) : SailM Step := do
   if ((← (shouldWakeForInterrupt ())) : Bool)
   then
@@ -234,7 +235,7 @@ def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32))
   else
     (do
       match (wr, (valid_reservation ()), exit_wait) with
-      | (WAIT_WRS_STO, false, _) =>
+      | (.WAIT_WRS_STO, false, _) =>
         (do
           if ((get_config_print_instr ()) : Bool)
           then
@@ -245,7 +246,7 @@ def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32))
           else (pure ())
           writeReg hart_state (HART_ACTIVE ())
           (pure (Step_Execute ((Retire_Success ()), instbits))))
-      | (WAIT_WRS_NTO, false, _) =>
+      | (.WAIT_WRS_NTO, false, _) =>
         (do
           if ((get_config_print_instr ()) : Bool)
           then
@@ -256,7 +257,7 @@ def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32))
           else (pure ())
           writeReg hart_state (HART_ACTIVE ())
           (pure (Step_Execute ((Retire_Success ()), instbits))))
-      | (WAIT_WFI, _, true) =>
+      | (.WAIT_WFI, _, true) =>
         (do
           if ((get_config_print_instr ()) : Bool)
           then
@@ -266,10 +267,11 @@ def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32))
                     (HAppend.hAppend " state at PC " (BitVec.toFormatted (← readReg PC)))))))
           else (pure ())
           writeReg hart_state (HART_ACTIVE ())
-          if ((((← readReg cur_privilege) == Machine) || ((_get_Mstatus_TW (← readReg mstatus)) == 0#1)) : Bool)
+          if ((←((pure ((← readReg cur_privilege) == Machine)) <||> (do
+               (pure ((_get_Mstatus_TW (← readReg mstatus)) == 0#1))))) : Bool)
           then (pure (Step_Execute ((Retire_Success ()), instbits)))
           else (pure (Step_Execute ((Illegal_Instruction ()), instbits))))
-      | (WAIT_WRS_STO, _, true) =>
+      | (.WAIT_WRS_STO, _, true) =>
         (do
           if ((get_config_print_instr ()) : Bool)
           then
@@ -280,7 +282,7 @@ def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32))
           else (pure ())
           writeReg hart_state (HART_ACTIVE ())
           (pure (Step_Execute ((Retire_Success ()), instbits))))
-      | (WAIT_WRS_NTO, _, true) =>
+      | (.WAIT_WRS_NTO, _, true) =>
         (do
           if ((get_config_print_instr ()) : Bool)
           then
@@ -290,7 +292,8 @@ def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32))
                     (HAppend.hAppend " state at PC " (BitVec.toFormatted (← readReg PC)))))))
           else (pure ())
           writeReg hart_state (HART_ACTIVE ())
-          if ((((← readReg cur_privilege) == Machine) || ((_get_Mstatus_TW (← readReg mstatus)) == 0#1)) : Bool)
+          if ((←((pure ((← readReg cur_privilege) == Machine)) <||> (do
+               (pure ((_get_Mstatus_TW (← readReg mstatus)) == 0#1))))) : Bool)
           then (pure (Step_Execute ((Retire_Success ()), instbits)))
           else (pure (Step_Execute ((Illegal_Instruction ()), instbits))))
       | (_, _, false) =>
@@ -389,11 +392,11 @@ def run_hart_active (step_no : Nat) : SailM Step := SailME.run do
 
 def wait_is_nop (wr : WaitReason) : Bool :=
   match wr with
-  | WAIT_WFI => false
-  | WAIT_WRS_STO => false
-  | WAIT_WRS_NTO => false
+  | .WAIT_WFI => false
+  | .WAIT_WRS_STO => false
+  | .WAIT_WRS_NTO => false
 
-/-- Type quantifiers: k_ex930437_ : Bool, step_no : Nat, 0 ≤ step_no -/
+/-- Type quantifiers: k_ex256188_ : Bool, step_no : Nat, 0 ≤ step_no -/
 def try_step (step_no : Nat) (exit_wait : Bool) : SailM Bool := do
   let _ : Unit := (ext_pre_step_hook ())
   writeReg minstret_increment (← (should_inc_minstret (← readReg cur_privilege)))
@@ -412,10 +415,10 @@ def try_step (step_no : Nat) (exit_wait : Bool) : SailM Bool := do
   | .Step_Ext_Fetch_Failure e => (pure (ext_handle_fetch_check_error e))
   | .Step_Fetch_Failure (vaddr, e) => (handle_exception (bits_of_virtaddr vaddr) e)
   | .Step_Waiting _ =>
-    assert (hart_is_waiting (← readReg hart_state)) "cannot be Waiting in a non-Wait state"
+    sail_assert (hart_is_waiting (← readReg hart_state)) "cannot be Waiting in a non-Wait state"
   | .Step_Execute (.Retire_Success (), _) =>
-    assert (hart_is_active (← readReg hart_state)) "postlude/step.sail:211.74-211.75"
-  | .Step_Execute (.ExecuteAs _, _) => assert false "postlude/step.sail:213.49-213.50"
+    sail_assert (hart_is_active (← readReg hart_state)) "postlude/step.sail:211.74-211.75"
+  | .Step_Execute (.ExecuteAs _, _) => sail_assert false "postlude/step.sail:213.49-213.50"
   | .Step_Execute (.Trap (priv, ctl, pc), _) => (set_next_pc (← (exception_handler priv ctl pc)))
   | .Step_Execute (.Memory_Exception (vaddr, e), _) => (handle_exception (bits_of_virtaddr vaddr) e)
   | .Step_Execute (.Illegal_Instruction (), instbits) =>
@@ -425,7 +428,7 @@ def try_step (step_no : Nat) (exit_wait : Bool) : SailM Bool := do
   | .Step_Execute (.Enter_Wait wr, instbits) =>
     (do
       if ((wait_is_nop wr) : Bool)
-      then assert (hart_is_active (← readReg hart_state)) "postlude/step.sail:223.41-223.42"
+      then sail_assert (hart_is_active (← readReg hart_state)) "postlude/step.sail:223.41-223.42"
       else
         (do
           if ((get_config_print_instr ()) : Bool)
@@ -453,7 +456,8 @@ def try_step (step_no : Nat) (exit_wait : Bool) : SailM Bool := do
           then true
           else false)
         | _ => false
-      if ((retired && (← readReg minstret_increment)) : Bool)
+      if ((←((pure retired) <&&> (do
+           readReg minstret_increment))) : Bool)
       then writeReg minstret (BitVec.addInt (← readReg minstret) 1)
       else (pure ())
       if ((get_config_rvfi ()) : Bool)

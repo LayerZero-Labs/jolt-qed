@@ -12,6 +12,8 @@ import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Soundness.Layer5.TerminationRestriction
 import JoltConstraints.Soundness.Layer5.PanicRestriction
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- The fields the base theorem covers. Jolt's Rust code has a `JoltField` trait for

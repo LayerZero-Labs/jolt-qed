@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer4.Table
 
+open LeanRV64D
+
 /-! How the constraints consume lookup outputs: register writes, assertions and
 branches. Instruction-specific callers derive the active flags from bytecode. -/
 

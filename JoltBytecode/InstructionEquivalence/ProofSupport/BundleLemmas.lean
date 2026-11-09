@@ -2,6 +2,8 @@ import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Alignment
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Windows
 
+open LeanRV64D
+
 /-!
 # Derived facts from top-level assumptions
 
@@ -12,7 +14,7 @@ This file proves consequences of the primitive assumptions in
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true
@@ -171,8 +173,8 @@ def StoreProgramEqSailAssumptions.storeAccessFacts
 
 theorem readReg_eq_of_get? (r : Register) (s : SailState) (rval : RegisterType r)
     (h : s.regs.get? r = some rval) :
-    (Sail.readReg r : SailM (RegisterType r)) s = .ok rval s := by
-  unfold Sail.readReg PreSail.readReg
+    (LeanRV64D.readReg r : SailM (RegisterType r)) s = .ok rval s := by
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg
   simp only [bind, EStateM.bind, pure, EStateM.pure,
              MonadStateOf.get, EStateM.get, getThe, get, h]
 
@@ -188,7 +190,7 @@ theorem translateAddr_load_data_of_machine_mprv_zero
   have h_ms_read := readReg_eq_of_get? Register.mstatus s mval hmstatus
   have h_priv := readReg_eq_of_get? Register.cur_privilege s Privilege.Machine
     hpriv.value
-  unfold translateAddr SailME.run PreSail.PreSailME.run
+  unfold translateAddr SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp (config := { decide := true }) [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift,
@@ -210,7 +212,7 @@ theorem translateAddr_store_data_of_machine_mprv_zero
   have h_ms_read := readReg_eq_of_get? Register.mstatus s mval hmstatus
   have h_priv := readReg_eq_of_get? Register.cur_privilege s Privilege.Machine
     hpriv.value
-  unfold translateAddr SailME.run PreSail.PreSailME.run
+  unfold translateAddr SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp (config := { decide := true }) [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift,
@@ -232,7 +234,7 @@ theorem translateAddr_atomic_data_of_machine_mprv_zero
   have h_ms_read := readReg_eq_of_get? Register.mstatus s mval hmstatus
   have h_priv := readReg_eq_of_get? Register.cur_privilege s Privilege.Machine
     hpriv.value
-  unfold translateAddr SailME.run PreSail.PreSailME.run
+  unfold translateAddr SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp (config := { decide := true }) [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift,

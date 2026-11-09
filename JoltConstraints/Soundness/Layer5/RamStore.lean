@@ -1,5 +1,7 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 
+open LeanRV64D
+
 /-! The byte-map effect of Jolt's ordinary-RAM doubleword store, expressed as
 an update to one aligned word. Reuse the existing byte hit/frame proofs.
 At public pin 8bbb2357:
@@ -9,7 +11,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Reading byte `offset < 8` after a doubleword store returns that byte of
 the stored word, counting from its least significant byte.

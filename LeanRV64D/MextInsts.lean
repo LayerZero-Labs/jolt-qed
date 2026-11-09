@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -220,15 +223,15 @@ def encdec_mul_op_backwards (arg_ : (BitVec 3)) : SailM mul_op := do
             signed_rs2 := Unsigned })
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def encdec_mul_op_forwards_matches (arg_ : mul_op) : Bool :=
   match arg_ with
-  | { result_part := Low, signed_rs1 := Signed, signed_rs2 := Signed } => true
-  | { result_part := High, signed_rs1 := Signed, signed_rs2 := Signed } => true
-  | { result_part := High, signed_rs1 := Signed, signed_rs2 := Unsigned } => true
-  | { result_part := High, signed_rs1 := Unsigned, signed_rs2 := Unsigned } => true
+  | { result_part := .Low, signed_rs1 := .Signed, signed_rs2 := .Signed } => true
+  | { result_part := .High, signed_rs1 := .Signed, signed_rs2 := .Signed } => true
+  | { result_part := .High, signed_rs1 := .Signed, signed_rs2 := .Unsigned } => true
+  | { result_part := .High, signed_rs1 := .Unsigned, signed_rs2 := .Unsigned } => true
   | _ => false
 
 def encdec_mul_op_backwards_matches (arg_ : (BitVec 3)) : Bool :=
@@ -259,15 +262,15 @@ def mul_mnemonic_backwards (arg_ : String) : SailM mul_op := do
             signed_rs2 := Unsigned })
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def mul_mnemonic_forwards_matches (arg_ : mul_op) : Bool :=
   match arg_ with
-  | { result_part := Low, signed_rs1 := Signed, signed_rs2 := Signed } => true
-  | { result_part := High, signed_rs1 := Signed, signed_rs2 := Signed } => true
-  | { result_part := High, signed_rs1 := Signed, signed_rs2 := Unsigned } => true
-  | { result_part := High, signed_rs1 := Unsigned, signed_rs2 := Unsigned } => true
+  | { result_part := .Low, signed_rs1 := .Signed, signed_rs2 := .Signed } => true
+  | { result_part := .High, signed_rs1 := .Signed, signed_rs2 := .Signed } => true
+  | { result_part := .High, signed_rs1 := .Signed, signed_rs2 := .Unsigned } => true
+  | { result_part := .High, signed_rs1 := .Unsigned, signed_rs2 := .Unsigned } => true
   | _ => false
 
 def mul_mnemonic_backwards_matches (arg_ : String) : Bool :=

@@ -1,6 +1,8 @@
 import JoltConstraints.trace_facts
 import JoltConstraints.verifier_sizes
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 /- Checked base/Dory sizing at public pin 5def437f, on a 64-bit host.

@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer6.ExecutionPrefix
 import JoltConstraints.Soundness.Layer5.Registers
 
+open LeanRV64D
+
 /-! Shared boundary and in-expansion state for execution-prefix reconstruction. -/
 
 set_option autoImplicit false

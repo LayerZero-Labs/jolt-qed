@@ -3,6 +3,8 @@ import JoltConstraints.Constraints.BytecodeReadData
 import JoltConstraints.witness_helpers.register_address
 import JoltConstraints.witness_helpers.destination_capture
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

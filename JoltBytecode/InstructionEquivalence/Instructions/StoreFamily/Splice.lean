@@ -2,6 +2,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 /-!
 # Pure splice facts for store-family expansions
 
@@ -22,7 +24,7 @@ set_option linter.unusedSimpArgs false
 set_option linter.unnecessarySeqFocus false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -892,7 +894,7 @@ theorem dword_store_splice_eq_byte_store_populated
           toNat_base_add_small base k hk hsetup.no_ovf
         have hpresent :
             MemBytePresentAt s (base + BitVec.ofNat 64 k).toNat := by
-          simpa [haddr] using Option.ne_none_iff_exists'.mp (hpop k hk)
+          simpa [haddr] using! Option.ne_none_iff_exists'.mp (hpop k hk)
         have hload' : loaded_byte_at s (base + BitVec.ofNat 64 k) hpresent =
             dword_byte dword_orig k := by
           simpa using (hload k hk).symm
@@ -952,7 +954,7 @@ theorem dword_store_splice_eq_halfword_store_populated
           toNat_base_add_small base k hk hsetup.no_ovf
         have hpresent :
             MemBytePresentAt s (base + BitVec.ofNat 64 k).toNat := by
-          simpa [haddr] using Option.ne_none_iff_exists'.mp (hpop k hk)
+          simpa [haddr] using! Option.ne_none_iff_exists'.mp (hpop k hk)
         have hload' : loaded_byte_at s (base + BitVec.ofNat 64 k) hpresent =
             dword_byte dword_orig k := by
           simpa using (hload k hk).symm
@@ -1011,7 +1013,7 @@ theorem dword_store_splice_eq_word_store_populated
           toNat_base_add_small base k hk hsetup.no_ovf
         have hpresent :
             MemBytePresentAt s (base + BitVec.ofNat 64 k).toNat := by
-          simpa [haddr] using Option.ne_none_iff_exists'.mp (hpop k hk)
+          simpa [haddr] using! Option.ne_none_iff_exists'.mp (hpop k hk)
         have hload' : loaded_byte_at s (base + BitVec.ofNat 64 k) hpresent =
             dword_byte dword_orig k := by
           simpa using (hload k hk).symm

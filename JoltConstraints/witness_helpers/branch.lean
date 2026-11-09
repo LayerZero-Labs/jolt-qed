@@ -3,6 +3,8 @@ import JoltConstraints.witness
 import JoltConstraints.trace
 import JoltBytecode.JoltISA.semantic_helpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- Rust paths are relative to /Users/ari.biswas/Work-with-A16z/jolt.

@@ -9,8 +9,10 @@ import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.Expansions.ALU
 import JoltBytecode.JoltISA.VirtualRegisters
 
+open LeanRV64D
 
-open Sail PreSail LeanRV64D.Functions
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

@@ -60,3 +60,5 @@ import JoltConstraints.Completeness.Rs2ValueEqRegistersRead
 import JoltConstraints.Completeness.ShouldBranchEqLookupOutputMulBranch
 import JoltConstraints.Completeness.ShouldJumpEqJumpMulNotNextIsNoop
 import JoltConstraints.Completeness.UnexpandedPCEqBytecodeRead
+
+open LeanRV64D

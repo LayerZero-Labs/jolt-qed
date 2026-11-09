@@ -6,7 +6,6 @@ import LeanRV64D.PlatformConfig
 import LeanRV64D.Extensions
 import LeanRV64D.Types
 import LeanRV64D.Callbacks
-import LeanRV64D.Regs
 import LeanRV64D.PcAccess
 import LeanRV64D.SysRegs
 import LeanRV64D.InterruptRegs
@@ -14,7 +13,6 @@ import LeanRV64D.SysExceptions
 import LeanRV64D.PmpRegs
 import LeanRV64D.PmpControl
 import LeanRV64D.StateenRegs
-import LeanRV64D.VextRegs
 import LeanRV64D.ZicfilpRegs
 import LeanRV64D.StateenAccessChecks
 
@@ -24,11 +22,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -227,15 +228,15 @@ def csrPriv (csr : (BitVec 12)) : (BitVec 2) :=
 
 def privLevel_to_CSR_privbits (p : Privilege) : SailM (BitVec 2) := do
   match p with
-  | User => (pure 0b00#2)
-  | VirtualUser => (pure 0b00#2)
-  | Supervisor =>
+  | .User => (pure 0b00#2)
+  | .VirtualUser => (pure 0b00#2)
+  | .Supervisor =>
     (do
       if ((← (currentlyEnabled Ext_H)) : Bool)
       then (pure 0b10#2)
       else (pure 0b01#2))
-  | VirtualSupervisor => (pure 0b01#2)
-  | Machine => (pure 0b11#2)
+  | .VirtualSupervisor => (pure 0b01#2)
+  | .Machine => (pure 0b11#2)
 
 def check_CSR_priv (csr : (BitVec 12)) (p : Privilege) : SailM Bool := do
   (pure (zopz0zKzJ_u (← (privLevel_to_CSR_privbits p)) (csrPriv csr)))
@@ -245,260 +246,761 @@ def check_CSR_access (csr : (BitVec 12)) (access_type : CSRAccessType) : Bool :=
 
 def is_ssp_accessible (priv : Privilege) : SailM Bool := do
   match priv with
-  | Machine => (pure true)
-  | Supervisor => (pure (bool_bit_backwards (_get_MEnvcfg_SSE (← readReg menvcfg))))
-  | VirtualSupervisor =>
+  | .Machine => (pure true)
+  | .Supervisor => (pure (bool_bit_backwards (_get_MEnvcfg_SSE (← readReg menvcfg))))
+  | .VirtualSupervisor =>
     (internal_error "extensions/cfi/zicfiss_regs.sail" 40 "Hypervisor extension not supported")
-  | VirtualUser =>
+  | .VirtualUser =>
     (internal_error "extensions/cfi/zicfiss_regs.sail" 43 "Hypervisor extension not supported")
-  | User =>
-    (pure (((← (currentlyEnabled Ext_S)) && (bool_bit_backwards
-            (_get_SEnvcfg_SSE (← (read_senvcfg ()))))) || (bool_bit_backwards
-          (_get_MEnvcfg_SSE (← readReg menvcfg)))))
+  | .User =>
+    (currentlyEnabled Ext_S) <&&> (do
+      (pure (bool_bit_backwards (_get_SEnvcfg_SSE (← (read_senvcfg ())))))) <||> (do
+      (pure (bool_bit_backwards (_get_MEnvcfg_SSE (← readReg menvcfg)))))
 
 def sstc_CSRs_accessible (priv : Privilege) : SailM Bool := do
-  (pure ((priv == Machine) || ((priv == Supervisor) && (((_get_Counteren_TM (← readReg mcounteren)) == 1#1) && ((_get_MEnvcfg_STCE
-              (← readReg menvcfg)) == 1#1)))))
+  (pure (priv == Machine)) <||> (do
+    (pure (priv == Supervisor)) <&&> (do
+      (pure ((_get_Counteren_TM (← readReg mcounteren)) == 1#1)) <&&> (do
+        (pure ((_get_MEnvcfg_STCE (← readReg menvcfg)) == 1#1)))))
 
-def is_CSR_accessible (arg0 : (BitVec 12)) (arg1 : Privilege) (arg2 : CSRAccessType) : SailM Bool := do
-  let merge_var := (arg0, arg1, arg2)
-  match merge_var with
-  | (0x301, g__2, g__3) => (pure true)
-  | (0x300, g__4, g__5) => (pure true)
-  | (0x310, g__6, g__7) => (pure (xlen == 32))
-  | (0x747, g__8, g__9) => (pure ((← (currentlyEnabled Ext_Zkr)) || (hartSupports Ext_Zicfilp)))
-  | (0x757, g__10, g__11) =>
-    (pure (((← (currentlyEnabled Ext_Zkr)) || (hartSupports Ext_Zicfilp)) && (xlen == 32)))
-  | (0x30A, g__12, g__13) => (currentlyEnabled Ext_U)
-  | (0x31A, g__14, g__15) => (pure ((← (currentlyEnabled Ext_U)) && (xlen == 32)))
-  | (0x10A, g__16, g__17) => (currentlyEnabled Ext_S)
-  | (0x342, g__18, g__19) => (pure true)
-  | (0x343, g__20, g__21) => (pure true)
-  | (0x340, g__22, g__23) => (pure true)
-  | (0x106, g__24, g__25) => (currentlyEnabled Ext_S)
-  | (0x306, g__26, g__27) => (currentlyEnabled Ext_U)
-  | (0x320, g__28, g__29) => (pure true)
-  | (0xF11, g__30, g__31) => (pure true)
-  | (0xF12, g__32, g__33) => (pure true)
-  | (0xF13, g__34, g__35) => (pure true)
-  | (0xF14, g__36, g__37) => (pure true)
-  | (0xF15, g__38, g__39) => (pure true)
-  | (0x100, g__40, g__41) => (currentlyEnabled Ext_S)
-  | (0x140, g__42, g__43) => (currentlyEnabled Ext_S)
-  | (0x142, g__44, g__45) => (currentlyEnabled Ext_S)
-  | (0x143, g__46, g__47) => (currentlyEnabled Ext_S)
-  | (0x7A0, g__48, g__49) => (pure true)
-  | (0x304, g__50, g__51) => (pure true)
-  | (0x344, g__52, g__53) => (pure true)
-  | (0x302, g__54, g__55) => (currentlyEnabled Ext_S)
-  | (0x312, g__56, g__57) => (pure ((← (currentlyEnabled Ext_S)) && (xlen == 32)))
-  | (0x303, g__58, g__59) => (currentlyEnabled Ext_S)
-  | (0x144, g__60, g__61) => (currentlyEnabled Ext_S)
-  | (0x104, g__62, g__63) => (currentlyEnabled Ext_S)
-  | (0x105, g__64, g__65) => (currentlyEnabled Ext_S)
-  | (0x141, g__66, g__67) => (currentlyEnabled Ext_S)
-  | (0x305, g__68, g__69) => (pure true)
-  | (0x341, g__70, g__71) => (pure true)
-  | (v__3840, g__72, g__73) =>
+def is_CSR_accessible (b__0 : (BitVec 12)) (g__2 : Privilege) (g__3 : CSRAccessType) : SailM Bool := do
+  if ((b__0 == (0x301#12 : (BitVec 12))) : Bool)
+  then (pure true)
+  else
     (do
-      if (((Sail.BitVec.extractLsb v__3840 11 4) == (0x3A#8 : (BitVec 8))) : Bool)
-      then
-        (let idx : (BitVec 4) := (Sail.BitVec.extractLsb v__3840 3 0)
-        (pure ((sys_pmp_count >b (4 *i (BitVec.toNatInt idx))) && (((BitVec.access idx 0) == 0#1) || (xlen == 32)))))
+      if ((b__0 == (0x300#12 : (BitVec 12))) : Bool)
+      then (pure true)
       else
         (do
-          if (((Sail.BitVec.extractLsb v__3840 11 4) == (0x3B#8 : (BitVec 8))) : Bool)
-          then
-            (let idx : (BitVec 4) := (Sail.BitVec.extractLsb v__3840 3 0)
-            (pure (sys_pmp_count >b (BitVec.toNatInt (0b00#2 +++ idx)))))
+          if ((b__0 == (0x310#12 : (BitVec 12))) : Bool)
+          then (pure (xlen == 32))
           else
             (do
-              if (((Sail.BitVec.extractLsb v__3840 11 4) == (0x3C#8 : (BitVec 8))) : Bool)
-              then
-                (let idx : (BitVec 4) := (Sail.BitVec.extractLsb v__3840 3 0)
-                (pure (sys_pmp_count >b (BitVec.toNatInt (0b01#2 +++ idx)))))
+              if ((b__0 == (0x747#12 : (BitVec 12))) : Bool)
+              then (pure ((← (currentlyEnabled Ext_Zkr)) || (hartSupports Ext_Zicfilp)))
               else
                 (do
-                  if (((Sail.BitVec.extractLsb v__3840 11 4) == (0x3D#8 : (BitVec 8))) : Bool)
+                  if ((b__0 == (0x757#12 : (BitVec 12))) : Bool)
                   then
-                    (let idx : (BitVec 4) := (Sail.BitVec.extractLsb v__3840 3 0)
-                    (pure (sys_pmp_count >b (BitVec.toNatInt (0b10#2 +++ idx)))))
+                    (pure (((← (currentlyEnabled Ext_Zkr)) || (hartSupports Ext_Zicfilp)) && (xlen == 32)))
                   else
                     (do
-                      if (((Sail.BitVec.extractLsb v__3840 11 4) == (0x3E#8 : (BitVec 8))) : Bool)
-                      then
-                        (let idx : (BitVec 4) := (Sail.BitVec.extractLsb v__3840 3 0)
-                        (pure (sys_pmp_count >b (BitVec.toNatInt (0b11#2 +++ idx)))))
+                      if ((b__0 == (0x30A#12 : (BitVec 12))) : Bool)
+                      then (currentlyEnabled Ext_U)
                       else
                         (do
-                          match (v__3840, g__72, g__73) with
-                          | (0x001, g__74, g__75) =>
-                            (pure ((← (currentlyEnabled Ext_F)) || (← (currentlyEnabled
-                                    Ext_Zfinx))))
-                          | (0x002, g__76, g__77) =>
-                            (pure ((← (currentlyEnabled Ext_F)) || (← (currentlyEnabled
-                                    Ext_Zfinx))))
-                          | (0x003, g__78, g__79) =>
-                            (pure ((← (currentlyEnabled Ext_F)) || (← (currentlyEnabled
-                                    Ext_Zfinx))))
-                          | (0x008, g__80, g__81) => (currentlyEnabled Ext_Zve32x)
-                          | (0x009, g__82, g__83) => (currentlyEnabled Ext_Zve32x)
-                          | (0x00A, g__84, g__85) => (currentlyEnabled Ext_Zve32x)
-                          | (0x00F, g__86, g__87) => (currentlyEnabled Ext_Zve32x)
-                          | (0xC20, g__88, g__89) => (currentlyEnabled Ext_Zve32x)
-                          | (0xC21, g__90, g__91) => (currentlyEnabled Ext_Zve32x)
-                          | (0xC22, g__92, g__93) => (currentlyEnabled Ext_Zve32x)
-                          | (0x321, g__94, g__95) => (currentlyEnabled Ext_Smcntrpmf)
-                          | (0x721, g__96, g__97) =>
-                            (pure ((← (currentlyEnabled Ext_Smcntrpmf)) && (xlen == 32)))
-                          | (0x322, g__98, g__99) => (currentlyEnabled Ext_Smcntrpmf)
-                          | (0x722, g__100, g__101) =>
-                            (pure ((← (currentlyEnabled Ext_Smcntrpmf)) && (xlen == 32)))
-                          | (0x30C, g__102, g__103) => (pure (is_mstateen_accessible ()))
-                          | (0x30D, g__104, g__105) => (pure (is_mstateen_accessible ()))
-                          | (0x30E, g__106, g__107) => (pure (is_mstateen_accessible ()))
-                          | (0x30F, g__108, g__109) => (pure (is_mstateen_accessible ()))
-                          | (0x31C, g__110, g__111) =>
-                            (pure ((is_mstateen_accessible ()) && (xlen == 32)))
-                          | (0x31D, g__112, g__113) =>
-                            (pure ((is_mstateen_accessible ()) && (xlen == 32)))
-                          | (0x31E, g__114, g__115) =>
-                            (pure ((is_mstateen_accessible ()) && (xlen == 32)))
-                          | (0x31F, g__116, g__117) =>
-                            (pure ((is_mstateen_accessible ()) && (xlen == 32)))
-                          | (0x60C, g__118, g__119) => (is_hstateen_accessible ())
-                          | (0x60D, g__120, g__121) => (is_hstateen_accessible ())
-                          | (0x60E, g__122, g__123) => (is_hstateen_accessible ())
-                          | (0x60F, g__124, g__125) => (is_hstateen_accessible ())
-                          | (0x61C, g__126, g__127) =>
-                            (pure ((xlen == 32) && (← (is_hstateen_accessible ()))))
-                          | (0x61D, g__128, g__129) =>
-                            (pure ((xlen == 32) && (← (is_hstateen_accessible ()))))
-                          | (0x61E, g__130, g__131) =>
-                            (pure ((xlen == 32) && (← (is_hstateen_accessible ()))))
-                          | (0x61F, g__132, g__133) =>
-                            (pure ((xlen == 32) && (← (is_hstateen_accessible ()))))
-                          | (0x10C, g__134, g__135) => (is_sstateen_accessible ())
-                          | (0x10D, g__136, g__137) => (is_sstateen_accessible ())
-                          | (0x10E, g__138, g__139) => (is_sstateen_accessible ())
-                          | (0x10F, g__140, g__141) => (is_sstateen_accessible ())
-                          | (0x180, g__72, g__142) =>
-                            (pure ((← (currentlyEnabled Ext_S)) && (not
-                                  ((g__72 == Supervisor) && ((_get_Mstatus_TVM (← readReg mstatus)) == 1#1)))))
-                          | (0x015, g__72, g__73) =>
-                            (pure ((← (currentlyEnabled Ext_Zkr)) && ((bne g__73 CSRRead) && (← do
-                                    match g__72 with
-                                    | Machine => (pure true)
-                                    | Supervisor =>
-                                      (pure ((_get_Seccfg_SSEED (← readReg mseccfg)) == 1#1))
-                                    | User =>
-                                      (pure ((_get_Seccfg_USEED (← readReg mseccfg)) == 1#1))
-                                    | VirtualSupervisor =>
-                                      (internal_error "extensions/K/zkr_control.sail" 52
-                                        "Hypervisor extension not supported")
-                                    | VirtualUser =>
-                                      (internal_error "extensions/K/zkr_control.sail" 53
-                                        "Hypervisor extension not supported")))))
-                          | (v__3840, g__143, g__144) =>
+                          if ((b__0 == (0x31A#12 : (BitVec 12))) : Bool)
+                          then (pure ((← (currentlyEnabled Ext_U)) && (xlen == 32)))
+                          else
                             (do
-                              if ((((Sail.BitVec.extractLsb v__3840 11 5) == (0b0011001#7 : (BitVec 7))) && (let index : (BitVec 5) :=
-                                     (Sail.BitVec.extractLsb v__3840 4 0)
-                                   ((BitVec.toNatInt index) ≥b 3) : Bool)) : Bool)
-                              then (currentlyEnabled Ext_Zihpm)
+                              if ((b__0 == (0x10A#12 : (BitVec 12))) : Bool)
+                              then (currentlyEnabled Ext_S)
                               else
                                 (do
-                                  if ((((Sail.BitVec.extractLsb v__3840 11 5) == (0b1011000#7 : (BitVec 7))) && (let index : (BitVec 5) :=
-                                         (Sail.BitVec.extractLsb v__3840 4 0)
-                                       ((BitVec.toNatInt index) ≥b 3) : Bool)) : Bool)
-                                  then (currentlyEnabled Ext_Zihpm)
+                                  if ((b__0 == (0x342#12 : (BitVec 12))) : Bool)
+                                  then (pure true)
                                   else
                                     (do
-                                      if ((((Sail.BitVec.extractLsb v__3840 11 5) == (0b1011100#7 : (BitVec 7))) && (let index : (BitVec 5) :=
-                                             (Sail.BitVec.extractLsb v__3840 4 0)
-                                           ((BitVec.toNatInt index) ≥b 3) : Bool)) : Bool)
-                                      then
-                                        (pure ((← (currentlyEnabled Ext_Zihpm)) && (xlen == 32)))
+                                      if ((b__0 == (0x343#12 : (BitVec 12))) : Bool)
+                                      then (pure true)
                                       else
                                         (do
-                                          if ((((Sail.BitVec.extractLsb v__3840 11 5) == (0b1100000#7 : (BitVec 7))) && (let index : (BitVec 5) :=
-                                                 (Sail.BitVec.extractLsb v__3840 4 0)
-                                               ((BitVec.toNatInt index) ≥b 3) : Bool)) : Bool)
-                                          then
-                                            (do
-                                              let index : (BitVec 5) :=
-                                                (Sail.BitVec.extractLsb v__3840 4 0)
-                                              (pure ((← (currentlyEnabled Ext_Zihpm)) && ((← (currentlyEnabled
-                                                        Ext_U)) && (← (counter_enabled
-                                                        (BitVec.toNatInt index) g__143))))))
+                                          if ((b__0 == (0x340#12 : (BitVec 12))) : Bool)
+                                          then (pure true)
                                           else
                                             (do
-                                              if ((((Sail.BitVec.extractLsb v__3840 11 5) == (0b1100100#7 : (BitVec 7))) && (let index : (BitVec 5) :=
-                                                     (Sail.BitVec.extractLsb v__3840 4 0)
-                                                   ((BitVec.toNatInt index) ≥b 3) : Bool)) : Bool)
-                                              then
-                                                (do
-                                                  let index : (BitVec 5) :=
-                                                    (Sail.BitVec.extractLsb v__3840 4 0)
-                                                  (pure ((← (currentlyEnabled Ext_Zihpm)) && ((← (currentlyEnabled
-                                                            Ext_U)) && ((xlen == 32) && (← (counter_enabled
-                                                              (BitVec.toNatInt index) g__143)))))))
+                                              if ((b__0 == (0x106#12 : (BitVec 12))) : Bool)
+                                              then (currentlyEnabled Ext_S)
                                               else
                                                 (do
-                                                  if ((((Sail.BitVec.extractLsb v__3840 11 5) == (0b0111001#7 : (BitVec 7))) && (let index : (BitVec 5) :=
-                                                         (Sail.BitVec.extractLsb v__3840 4 0)
-                                                       ((BitVec.toNatInt index) ≥b 3) : Bool)) : Bool)
-                                                  then
-                                                    (pure ((← (currentlyEnabled Ext_Sscofpmf)) && (xlen == 32)))
+                                                  if ((b__0 == (0x306#12 : (BitVec 12))) : Bool)
+                                                  then (currentlyEnabled Ext_U)
                                                   else
                                                     (do
-                                                      match (v__3840, g__143, g__144) with
-                                                      | (0xDA0, g__145, g__146) =>
-                                                        (pure ((← (currentlyEnabled Ext_Sscofpmf)) && (← (currentlyEnabled
-                                                                Ext_S))))
-                                                      | (0x14D, g__143, g__147) =>
-                                                        (pure ((← (currentlyEnabled Ext_S)) && ((← (currentlyEnabled
-                                                                  Ext_Sstc)) && (← (sstc_CSRs_accessible
-                                                                  g__143)))))
-                                                      | (0x15D, g__143, g__148) =>
-                                                        (pure ((← (currentlyEnabled Ext_S)) && ((← (currentlyEnabled
-                                                                  Ext_Sstc)) && ((xlen == 32) && (← (sstc_CSRs_accessible
-                                                                    g__143))))))
-                                                      | (0x011, g__149, g__150) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicfiss)) && (← (is_ssp_accessible
-                                                                (← readReg cur_privilege)))))
-                                                      | (0xC00, g__143, g__151) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicntr)) && (← (counter_enabled
-                                                                0 g__143))))
-                                                      | (0xC01, g__143, g__152) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicntr)) && (← (counter_enabled
-                                                                1 g__143))))
-                                                      | (0xC02, g__143, g__153) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicntr)) && (← (counter_enabled
-                                                                2 g__143))))
-                                                      | (0xC80, g__143, g__154) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicntr)) && ((xlen == 32) && (← (counter_enabled
-                                                                  0 g__143)))))
-                                                      | (0xC81, g__143, g__155) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicntr)) && ((xlen == 32) && (← (counter_enabled
-                                                                  1 g__143)))))
-                                                      | (0xC82, g__143, g__156) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicntr)) && ((xlen == 32) && (← (counter_enabled
-                                                                  2 g__143)))))
-                                                      | (0xB00, g__157, g__158) =>
-                                                        (currentlyEnabled Ext_Zicntr)
-                                                      | (0xB02, g__159, g__160) =>
-                                                        (currentlyEnabled Ext_Zicntr)
-                                                      | (0xB80, g__161, g__162) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicntr)) && (xlen == 32)))
-                                                      | (0xB82, g__163, g__164) =>
-                                                        (pure ((← (currentlyEnabled Ext_Zicntr)) && (xlen == 32)))
-                                                      | (0x181, g__165, g__166) =>
-                                                        (currentlyEnabled Ext_Ssqosid)
-                                                      | _ => (pure false))))))))))))))
+                                                      if ((b__0 == (0x320#12 : (BitVec 12))) : Bool)
+                                                      then (pure true)
+                                                      else
+                                                        (do
+                                                          if ((b__0 == (0xF11#12 : (BitVec 12))) : Bool)
+                                                          then (pure true)
+                                                          else
+                                                            (do
+                                                              if ((b__0 == (0xF12#12 : (BitVec 12))) : Bool)
+                                                              then (pure true)
+                                                              else
+                                                                (do
+                                                                  if ((b__0 == (0xF13#12 : (BitVec 12))) : Bool)
+                                                                  then (pure true)
+                                                                  else
+                                                                    (do
+                                                                      if ((b__0 == (0xF14#12 : (BitVec 12))) : Bool)
+                                                                      then (pure true)
+                                                                      else
+                                                                        (do
+                                                                          if ((b__0 == (0xF15#12 : (BitVec 12))) : Bool)
+                                                                          then (pure true)
+                                                                          else
+                                                                            (do
+                                                                              if ((b__0 == (0x100#12 : (BitVec 12))) : Bool)
+                                                                              then
+                                                                                (currentlyEnabled
+                                                                                  Ext_S)
+                                                                              else
+                                                                                (do
+                                                                                  if ((b__0 == (0x140#12 : (BitVec 12))) : Bool)
+                                                                                  then
+                                                                                    (currentlyEnabled
+                                                                                      Ext_S)
+                                                                                  else
+                                                                                    (do
+                                                                                      if ((b__0 == (0x142#12 : (BitVec 12))) : Bool)
+                                                                                      then
+                                                                                        (currentlyEnabled
+                                                                                          Ext_S)
+                                                                                      else
+                                                                                        (do
+                                                                                          if ((b__0 == (0x143#12 : (BitVec 12))) : Bool)
+                                                                                          then
+                                                                                            (currentlyEnabled
+                                                                                              Ext_S)
+                                                                                          else
+                                                                                            (do
+                                                                                              if ((b__0 == (0x7A0#12 : (BitVec 12))) : Bool)
+                                                                                              then
+                                                                                                (pure true)
+                                                                                              else
+                                                                                                (do
+                                                                                                  if ((b__0 == (0x304#12 : (BitVec 12))) : Bool)
+                                                                                                  then
+                                                                                                    (pure true)
+                                                                                                  else
+                                                                                                    (do
+                                                                                                      if ((b__0 == (0x344#12 : (BitVec 12))) : Bool)
+                                                                                                      then
+                                                                                                        (pure true)
+                                                                                                      else
+                                                                                                        (do
+                                                                                                          if ((b__0 == (0x302#12 : (BitVec 12))) : Bool)
+                                                                                                          then
+                                                                                                            (currentlyEnabled
+                                                                                                              Ext_S)
+                                                                                                          else
+                                                                                                            (do
+                                                                                                              if ((b__0 == (0x312#12 : (BitVec 12))) : Bool)
+                                                                                                              then
+                                                                                                                (pure ((← (currentlyEnabled
+                                                                                                                        Ext_S)) && (xlen == 32)))
+                                                                                                              else
+                                                                                                                (do
+                                                                                                                  if ((b__0 == (0x303#12 : (BitVec 12))) : Bool)
+                                                                                                                  then
+                                                                                                                    (currentlyEnabled
+                                                                                                                      Ext_S)
+                                                                                                                  else
+                                                                                                                    (do
+                                                                                                                      if ((b__0 == (0x144#12 : (BitVec 12))) : Bool)
+                                                                                                                      then
+                                                                                                                        (currentlyEnabled
+                                                                                                                          Ext_S)
+                                                                                                                      else
+                                                                                                                        (do
+                                                                                                                          if ((b__0 == (0x104#12 : (BitVec 12))) : Bool)
+                                                                                                                          then
+                                                                                                                            (currentlyEnabled
+                                                                                                                              Ext_S)
+                                                                                                                          else
+                                                                                                                            (do
+                                                                                                                              if ((b__0 == (0x105#12 : (BitVec 12))) : Bool)
+                                                                                                                              then
+                                                                                                                                (currentlyEnabled
+                                                                                                                                  Ext_S)
+                                                                                                                              else
+                                                                                                                                (do
+                                                                                                                                  if ((b__0 == (0x141#12 : (BitVec 12))) : Bool)
+                                                                                                                                  then
+                                                                                                                                    (currentlyEnabled
+                                                                                                                                      Ext_S)
+                                                                                                                                  else
+                                                                                                                                    (do
+                                                                                                                                      if ((b__0 == (0x305#12 : (BitVec 12))) : Bool)
+                                                                                                                                      then
+                                                                                                                                        (pure true)
+                                                                                                                                      else
+                                                                                                                                        (do
+                                                                                                                                          if ((b__0 == (0x341#12 : (BitVec 12))) : Bool)
+                                                                                                                                          then
+                                                                                                                                            (pure true)
+                                                                                                                                          else
+                                                                                                                                            (do
+                                                                                                                                              if (((Sail.BitVec.extractLsb
+                                                                                                                                                     b__0
+                                                                                                                                                     11
+                                                                                                                                                     4) == (0x3A#8 : (BitVec 8))) : Bool)
+                                                                                                                                              then
+                                                                                                                                                (let idx : (BitVec 4) :=
+                                                                                                                                                  (Sail.BitVec.extractLsb
+                                                                                                                                                    b__0
+                                                                                                                                                    3
+                                                                                                                                                    0)
+                                                                                                                                                (pure ((sys_pmp_count >b (4 *i (BitVec.toNatInt
+                                                                                                                                                          idx))) && (((BitVec.access
+                                                                                                                                                          idx
+                                                                                                                                                          0) == 0#1) || (xlen == 32)))))
+                                                                                                                                              else
+                                                                                                                                                (do
+                                                                                                                                                  if (((Sail.BitVec.extractLsb
+                                                                                                                                                         b__0
+                                                                                                                                                         11
+                                                                                                                                                         4) == (0x3B#8 : (BitVec 8))) : Bool)
+                                                                                                                                                  then
+                                                                                                                                                    (let idx : (BitVec 4) :=
+                                                                                                                                                      (Sail.BitVec.extractLsb
+                                                                                                                                                        b__0
+                                                                                                                                                        3
+                                                                                                                                                        0)
+                                                                                                                                                    (pure (sys_pmp_count >b (BitVec.toNatInt
+                                                                                                                                                          (0b00#2 +++ idx)))))
+                                                                                                                                                  else
+                                                                                                                                                    (do
+                                                                                                                                                      if (((Sail.BitVec.extractLsb
+                                                                                                                                                             b__0
+                                                                                                                                                             11
+                                                                                                                                                             4) == (0x3C#8 : (BitVec 8))) : Bool)
+                                                                                                                                                      then
+                                                                                                                                                        (let idx : (BitVec 4) :=
+                                                                                                                                                          (Sail.BitVec.extractLsb
+                                                                                                                                                            b__0
+                                                                                                                                                            3
+                                                                                                                                                            0)
+                                                                                                                                                        (pure (sys_pmp_count >b (BitVec.toNatInt
+                                                                                                                                                              (0b01#2 +++ idx)))))
+                                                                                                                                                      else
+                                                                                                                                                        (do
+                                                                                                                                                          if (((Sail.BitVec.extractLsb
+                                                                                                                                                                 b__0
+                                                                                                                                                                 11
+                                                                                                                                                                 4) == (0x3D#8 : (BitVec 8))) : Bool)
+                                                                                                                                                          then
+                                                                                                                                                            (let idx : (BitVec 4) :=
+                                                                                                                                                              (Sail.BitVec.extractLsb
+                                                                                                                                                                b__0
+                                                                                                                                                                3
+                                                                                                                                                                0)
+                                                                                                                                                            (pure (sys_pmp_count >b (BitVec.toNatInt
+                                                                                                                                                                  (0b10#2 +++ idx)))))
+                                                                                                                                                          else
+                                                                                                                                                            (do
+                                                                                                                                                              if (((Sail.BitVec.extractLsb
+                                                                                                                                                                     b__0
+                                                                                                                                                                     11
+                                                                                                                                                                     4) == (0x3E#8 : (BitVec 8))) : Bool)
+                                                                                                                                                              then
+                                                                                                                                                                (let idx : (BitVec 4) :=
+                                                                                                                                                                  (Sail.BitVec.extractLsb
+                                                                                                                                                                    b__0
+                                                                                                                                                                    3
+                                                                                                                                                                    0)
+                                                                                                                                                                (pure (sys_pmp_count >b (BitVec.toNatInt
+                                                                                                                                                                      (0b11#2 +++ idx)))))
+                                                                                                                                                              else
+                                                                                                                                                                (do
+                                                                                                                                                                  if ((b__0 == (0x001#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                  then
+                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                      Ext_F) <||> (do
+                                                                                                                                                                      (currentlyEnabled
+                                                                                                                                                                        Ext_Zfinx))
+                                                                                                                                                                  else
+                                                                                                                                                                    (do
+                                                                                                                                                                      if ((b__0 == (0x002#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                      then
+                                                                                                                                                                        (currentlyEnabled
+                                                                                                                                                                          Ext_F) <||> (do
+                                                                                                                                                                          (currentlyEnabled
+                                                                                                                                                                            Ext_Zfinx))
+                                                                                                                                                                      else
+                                                                                                                                                                        (do
+                                                                                                                                                                          if ((b__0 == (0x003#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                          then
+                                                                                                                                                                            (currentlyEnabled
+                                                                                                                                                                              Ext_F) <||> (do
+                                                                                                                                                                              (currentlyEnabled
+                                                                                                                                                                                Ext_Zfinx))
+                                                                                                                                                                          else
+                                                                                                                                                                            (do
+                                                                                                                                                                              if ((b__0 == (0x008#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                              then
+                                                                                                                                                                                (currentlyEnabled
+                                                                                                                                                                                  Ext_Zve32x)
+                                                                                                                                                                              else
+                                                                                                                                                                                (do
+                                                                                                                                                                                  if ((b__0 == (0x009#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                  then
+                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                      Ext_Zve32x)
+                                                                                                                                                                                  else
+                                                                                                                                                                                    (do
+                                                                                                                                                                                      if ((b__0 == (0x00A#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                      then
+                                                                                                                                                                                        (currentlyEnabled
+                                                                                                                                                                                          Ext_Zve32x)
+                                                                                                                                                                                      else
+                                                                                                                                                                                        (do
+                                                                                                                                                                                          if ((b__0 == (0x00F#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                          then
+                                                                                                                                                                                            (currentlyEnabled
+                                                                                                                                                                                              Ext_Zve32x)
+                                                                                                                                                                                          else
+                                                                                                                                                                                            (do
+                                                                                                                                                                                              if ((b__0 == (0xC20#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                              then
+                                                                                                                                                                                                (currentlyEnabled
+                                                                                                                                                                                                  Ext_Zve32x)
+                                                                                                                                                                                              else
+                                                                                                                                                                                                (do
+                                                                                                                                                                                                  if ((b__0 == (0xC21#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                  then
+                                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                                      Ext_Zve32x)
+                                                                                                                                                                                                  else
+                                                                                                                                                                                                    (do
+                                                                                                                                                                                                      if ((b__0 == (0xC22#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                      then
+                                                                                                                                                                                                        (currentlyEnabled
+                                                                                                                                                                                                          Ext_Zve32x)
+                                                                                                                                                                                                      else
+                                                                                                                                                                                                        (do
+                                                                                                                                                                                                          if ((b__0 == (0x321#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                          then
+                                                                                                                                                                                                            (currentlyEnabled
+                                                                                                                                                                                                              Ext_Smcntrpmf)
+                                                                                                                                                                                                          else
+                                                                                                                                                                                                            (do
+                                                                                                                                                                                                              if ((b__0 == (0x721#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                              then
+                                                                                                                                                                                                                (pure ((← (currentlyEnabled
+                                                                                                                                                                                                                        Ext_Smcntrpmf)) && (xlen == 32)))
+                                                                                                                                                                                                              else
+                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                  if ((b__0 == (0x322#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                                                      Ext_Smcntrpmf)
+                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                      if ((b__0 == (0x722#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                        (pure ((← (currentlyEnabled
+                                                                                                                                                                                                                                Ext_Smcntrpmf)) && (xlen == 32)))
+                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                          if ((b__0 == (0x30C#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                            (pure (is_mstateen_accessible
+                                                                                                                                                                                                                                ()))
+                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                              if ((b__0 == (0x30D#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                (pure (is_mstateen_accessible
+                                                                                                                                                                                                                                    ()))
+                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                  if ((b__0 == (0x30E#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                    (pure (is_mstateen_accessible
+                                                                                                                                                                                                                                        ()))
+                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                      if ((b__0 == (0x30F#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                        (pure (is_mstateen_accessible
+                                                                                                                                                                                                                                            ()))
+                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                          if ((b__0 == (0x31C#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                            (pure ((is_mstateen_accessible
+                                                                                                                                                                                                                                                  ()) && (xlen == 32)))
+                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                              if ((b__0 == (0x31D#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                (pure ((is_mstateen_accessible
+                                                                                                                                                                                                                                                      ()) && (xlen == 32)))
+                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                  if ((b__0 == (0x31E#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                    (pure ((is_mstateen_accessible
+                                                                                                                                                                                                                                                          ()) && (xlen == 32)))
+                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                      if ((b__0 == (0x31F#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                        (pure ((is_mstateen_accessible
+                                                                                                                                                                                                                                                              ()) && (xlen == 32)))
+                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                          if ((b__0 == (0x60C#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                            (is_hstateen_accessible
+                                                                                                                                                                                                                                                              ())
+                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                              if ((b__0 == (0x60D#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                (is_hstateen_accessible
+                                                                                                                                                                                                                                                                  ())
+                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                  if ((b__0 == (0x60E#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                    (is_hstateen_accessible
+                                                                                                                                                                                                                                                                      ())
+                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                      if ((b__0 == (0x60F#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                                        (is_hstateen_accessible
+                                                                                                                                                                                                                                                                          ())
+                                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                                          if ((b__0 == (0x61C#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                                            (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                              (is_hstateen_accessible
+                                                                                                                                                                                                                                                                                ()))
+                                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                                              if ((b__0 == (0x61D#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                                (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                                  (is_hstateen_accessible
+                                                                                                                                                                                                                                                                                    ()))
+                                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                  if ((b__0 == (0x61E#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                                    (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                                      (is_hstateen_accessible
+                                                                                                                                                                                                                                                                                        ()))
+                                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                                      if ((b__0 == (0x61F#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                                                        (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                                          (is_hstateen_accessible
+                                                                                                                                                                                                                                                                                            ()))
+                                                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                                                          if ((b__0 == (0x10C#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                                                            (is_sstateen_accessible
+                                                                                                                                                                                                                                                                                              ())
+                                                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                                                              if ((b__0 == (0x10D#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                                                (is_sstateen_accessible
+                                                                                                                                                                                                                                                                                                  ())
+                                                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                                  if ((b__0 == (0x10E#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                                                    (is_sstateen_accessible
+                                                                                                                                                                                                                                                                                                      ())
+                                                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                                                      if ((b__0 == (0x10F#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                                                                        (is_sstateen_accessible
+                                                                                                                                                                                                                                                                                                          ())
+                                                                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                                                                          if ((b__0 == (0x180#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                                                                            (currentlyEnabled
+                                                                                                                                                                                                                                                                                                              Ext_S) <&&> (do
+                                                                                                                                                                                                                                                                                                              (pure (not
+                                                                                                                                                                                                                                                                                                                  (←((pure (g__2 == Supervisor)) <&&> (do
+                                                                                                                                                                                                                                                                                                                    (pure ((_get_Mstatus_TVM
+                                                                                                                                                                                                                                                                                                                          (← readReg mstatus)) == 1#1))))))))
+                                                                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                                                                              if ((b__0 == (0x015#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                                                                (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                  Ext_Zkr) <&&> (do
+                                                                                                                                                                                                                                                                                                                  (pure (bne
+                                                                                                                                                                                                                                                                                                                      g__3
+                                                                                                                                                                                                                                                                                                                      CSRRead)) <&&> (do
+                                                                                                                                                                                                                                                                                                                    match g__2 with
+                                                                                                                                                                                                                                                                                                                    | .Machine =>
+                                                                                                                                                                                                                                                                                                                      (pure true)
+                                                                                                                                                                                                                                                                                                                    | .Supervisor =>
+                                                                                                                                                                                                                                                                                                                      (pure ((_get_Seccfg_SSEED
+                                                                                                                                                                                                                                                                                                                            (← readReg mseccfg)) == 1#1))
+                                                                                                                                                                                                                                                                                                                    | .User =>
+                                                                                                                                                                                                                                                                                                                      (pure ((_get_Seccfg_USEED
+                                                                                                                                                                                                                                                                                                                            (← readReg mseccfg)) == 1#1))
+                                                                                                                                                                                                                                                                                                                    | .VirtualSupervisor =>
+                                                                                                                                                                                                                                                                                                                      (internal_error
+                                                                                                                                                                                                                                                                                                                        "extensions/K/zkr_control.sail"
+                                                                                                                                                                                                                                                                                                                        52
+                                                                                                                                                                                                                                                                                                                        "Hypervisor extension not supported")
+                                                                                                                                                                                                                                                                                                                    | .VirtualUser =>
+                                                                                                                                                                                                                                                                                                                      (internal_error
+                                                                                                                                                                                                                                                                                                                        "extensions/K/zkr_control.sail"
+                                                                                                                                                                                                                                                                                                                        53
+                                                                                                                                                                                                                                                                                                                        "Hypervisor extension not supported")))
+                                                                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                                                  if ((((Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                           b__0
+                                                                                                                                                                                                                                                                                                                           11
+                                                                                                                                                                                                                                                                                                                           5) == (0b0011001#7 : (BitVec 7))) && (let index : (BitVec 5) :=
+                                                                                                                                                                                                                                                                                                                         (Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                           b__0
+                                                                                                                                                                                                                                                                                                                           4
+                                                                                                                                                                                                                                                                                                                           0)
+                                                                                                                                                                                                                                                                                                                       ((BitVec.toNatInt
+                                                                                                                                                                                                                                                                                                                           index) ≥b 3) : Bool)) : Bool)
+                                                                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                      Ext_Zihpm)
+                                                                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                                                                      if ((((Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                               b__0
+                                                                                                                                                                                                                                                                                                                               11
+                                                                                                                                                                                                                                                                                                                               5) == (0b1011000#7 : (BitVec 7))) && (let index : (BitVec 5) :=
+                                                                                                                                                                                                                                                                                                                             (Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                               b__0
+                                                                                                                                                                                                                                                                                                                               4
+                                                                                                                                                                                                                                                                                                                               0)
+                                                                                                                                                                                                                                                                                                                           ((BitVec.toNatInt
+                                                                                                                                                                                                                                                                                                                               index) ≥b 3) : Bool)) : Bool)
+                                                                                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                                                                                        (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                          Ext_Zihpm)
+                                                                                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                                                                                          if ((((Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                   b__0
+                                                                                                                                                                                                                                                                                                                                   11
+                                                                                                                                                                                                                                                                                                                                   5) == (0b1011100#7 : (BitVec 7))) && (let index : (BitVec 5) :=
+                                                                                                                                                                                                                                                                                                                                 (Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                   b__0
+                                                                                                                                                                                                                                                                                                                                   4
+                                                                                                                                                                                                                                                                                                                                   0)
+                                                                                                                                                                                                                                                                                                                               ((BitVec.toNatInt
+                                                                                                                                                                                                                                                                                                                                   index) ≥b 3) : Bool)) : Bool)
+                                                                                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                                                                                            (pure ((← (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                    Ext_Zihpm)) && (xlen == 32)))
+                                                                                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                                                                                              if ((((Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                       b__0
+                                                                                                                                                                                                                                                                                                                                       11
+                                                                                                                                                                                                                                                                                                                                       5) == (0b1100000#7 : (BitVec 7))) && (let index : (BitVec 5) :=
+                                                                                                                                                                                                                                                                                                                                     (Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                       b__0
+                                                                                                                                                                                                                                                                                                                                       4
+                                                                                                                                                                                                                                                                                                                                       0)
+                                                                                                                                                                                                                                                                                                                                   ((BitVec.toNatInt
+                                                                                                                                                                                                                                                                                                                                       index) ≥b 3) : Bool)) : Bool)
+                                                                                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                                                                  let index : (BitVec 5) :=
+                                                                                                                                                                                                                                                                                                                                    (Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                      b__0
+                                                                                                                                                                                                                                                                                                                                      4
+                                                                                                                                                                                                                                                                                                                                      0)
+                                                                                                                                                                                                                                                                                                                                  (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                    Ext_Zihpm) <&&> (do
+                                                                                                                                                                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                      Ext_U) <&&> (do
+                                                                                                                                                                                                                                                                                                                                      (counter_enabled
+                                                                                                                                                                                                                                                                                                                                        (BitVec.toNatInt
+                                                                                                                                                                                                                                                                                                                                          index)
+                                                                                                                                                                                                                                                                                                                                        g__2))))
+                                                                                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                                                                  if ((((Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                           b__0
+                                                                                                                                                                                                                                                                                                                                           11
+                                                                                                                                                                                                                                                                                                                                           5) == (0b1100100#7 : (BitVec 7))) && (let index : (BitVec 5) :=
+                                                                                                                                                                                                                                                                                                                                         (Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                           b__0
+                                                                                                                                                                                                                                                                                                                                           4
+                                                                                                                                                                                                                                                                                                                                           0)
+                                                                                                                                                                                                                                                                                                                                       ((BitVec.toNatInt
+                                                                                                                                                                                                                                                                                                                                           index) ≥b 3) : Bool)) : Bool)
+                                                                                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                                                                                      let index : (BitVec 5) :=
+                                                                                                                                                                                                                                                                                                                                        (Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                          b__0
+                                                                                                                                                                                                                                                                                                                                          4
+                                                                                                                                                                                                                                                                                                                                          0)
+                                                                                                                                                                                                                                                                                                                                      (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                        Ext_Zihpm) <&&> (do
+                                                                                                                                                                                                                                                                                                                                        (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                          Ext_U) <&&> (do
+                                                                                                                                                                                                                                                                                                                                          (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                                                                                            (counter_enabled
+                                                                                                                                                                                                                                                                                                                                              (BitVec.toNatInt
+                                                                                                                                                                                                                                                                                                                                                index)
+                                                                                                                                                                                                                                                                                                                                              g__2)))))
+                                                                                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                                                                                      if ((((Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                               b__0
+                                                                                                                                                                                                                                                                                                                                               11
+                                                                                                                                                                                                                                                                                                                                               5) == (0b0111001#7 : (BitVec 7))) && (let index : (BitVec 5) :=
+                                                                                                                                                                                                                                                                                                                                             (Sail.BitVec.extractLsb
+                                                                                                                                                                                                                                                                                                                                               b__0
+                                                                                                                                                                                                                                                                                                                                               4
+                                                                                                                                                                                                                                                                                                                                               0)
+                                                                                                                                                                                                                                                                                                                                           ((BitVec.toNatInt
+                                                                                                                                                                                                                                                                                                                                               index) ≥b 3) : Bool)) : Bool)
+                                                                                                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                                                                                                        (pure ((← (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                Ext_Sscofpmf)) && (xlen == 32)))
+                                                                                                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                                                                                                          if ((b__0 == (0xDA0#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                                                                                                            (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                              Ext_Sscofpmf) <&&> (do
+                                                                                                                                                                                                                                                                                                                                              (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                Ext_S))
+                                                                                                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                                                                                                              if ((b__0 == (0x14D#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                                                                                                (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                  Ext_S) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                  (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                    Ext_Sstc) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                    (sstc_CSRs_accessible
+                                                                                                                                                                                                                                                                                                                                                      g__2)))
+                                                                                                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                                                                                  if ((b__0 == (0x15D#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                      Ext_S) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                      (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                        Ext_Sstc) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                        (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                          (sstc_CSRs_accessible
+                                                                                                                                                                                                                                                                                                                                                            g__2))))
+                                                                                                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                                                                                                      if ((b__0 == (0x011#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                                                                                                                        (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                          Ext_Zicfiss) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                          (is_ssp_accessible
+                                                                                                                                                                                                                                                                                                                                                            (← readReg cur_privilege)))
+                                                                                                                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                                                                                                                          if ((b__0 == (0xC00#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                                                                                                                            (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                              Ext_Zicntr) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                              (counter_enabled
+                                                                                                                                                                                                                                                                                                                                                                0
+                                                                                                                                                                                                                                                                                                                                                                g__2))
+                                                                                                                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                                                                                                                              if ((b__0 == (0xC01#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                                                                                                                (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                  Ext_Zicntr) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                                  (counter_enabled
+                                                                                                                                                                                                                                                                                                                                                                    1
+                                                                                                                                                                                                                                                                                                                                                                    g__2))
+                                                                                                                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                                                                                                  if ((b__0 == (0xC02#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                      Ext_Zicntr) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                                      (counter_enabled
+                                                                                                                                                                                                                                                                                                                                                                        2
+                                                                                                                                                                                                                                                                                                                                                                        g__2))
+                                                                                                                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                                                                                                                      if ((b__0 == (0xC80#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                                                                                                                                        (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                          Ext_Zicntr) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                                          (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                                            (counter_enabled
+                                                                                                                                                                                                                                                                                                                                                                              0
+                                                                                                                                                                                                                                                                                                                                                                              g__2)))
+                                                                                                                                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                                                                                                                                          if ((b__0 == (0xC81#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                                                                                                                                            (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                              Ext_Zicntr) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                                              (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                                                (counter_enabled
+                                                                                                                                                                                                                                                                                                                                                                                  1
+                                                                                                                                                                                                                                                                                                                                                                                  g__2)))
+                                                                                                                                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                                                                                                                                              if ((b__0 == (0xC82#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                                                                                                                                (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                                  Ext_Zicntr) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                                                  (pure (xlen == 32)) <&&> (do
+                                                                                                                                                                                                                                                                                                                                                                                    (counter_enabled
+                                                                                                                                                                                                                                                                                                                                                                                      2
+                                                                                                                                                                                                                                                                                                                                                                                      g__2)))
+                                                                                                                                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                                                                                                                  if ((b__0 == (0xB00#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                                      Ext_Zicntr)
+                                                                                                                                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                                                                                                                                    (do
+                                                                                                                                                                                                                                                                                                                                                                                      if ((b__0 == (0xB02#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                                      then
+                                                                                                                                                                                                                                                                                                                                                                                        (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                                          Ext_Zicntr)
+                                                                                                                                                                                                                                                                                                                                                                                      else
+                                                                                                                                                                                                                                                                                                                                                                                        (do
+                                                                                                                                                                                                                                                                                                                                                                                          if ((b__0 == (0xB80#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                                          then
+                                                                                                                                                                                                                                                                                                                                                                                            (pure ((← (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                                                    Ext_Zicntr)) && (xlen == 32)))
+                                                                                                                                                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                                                                                                                                            (do
+                                                                                                                                                                                                                                                                                                                                                                                              if ((b__0 == (0xB82#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                                              then
+                                                                                                                                                                                                                                                                                                                                                                                                (pure ((← (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                                                        Ext_Zicntr)) && (xlen == 32)))
+                                                                                                                                                                                                                                                                                                                                                                                              else
+                                                                                                                                                                                                                                                                                                                                                                                                (do
+                                                                                                                                                                                                                                                                                                                                                                                                  if ((b__0 == (0x181#12 : (BitVec 12))) : Bool)
+                                                                                                                                                                                                                                                                                                                                                                                                  then
+                                                                                                                                                                                                                                                                                                                                                                                                    (currentlyEnabled
+                                                                                                                                                                                                                                                                                                                                                                                                      Ext_Ssqosid)
+                                                                                                                                                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                                                                                                                                                    (pure false)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
 
 def check_CSR (csr : (BitVec 12)) (p : Privilege) (access_type : CSRAccessType) : SailM Bool := do
-  (pure ((← (check_CSR_priv csr p)) && ((check_CSR_access csr access_type) && ((← (is_CSR_accessible
-              csr p access_type)) && (← (stateen_allows_CSR_access csr p access_type))))))
+  (check_CSR_priv csr p) <&&> (do
+    (pure (check_CSR_access csr access_type)) <&&> (do
+      (is_CSR_accessible csr p access_type) <&&> (do
+        (stateen_allows_CSR_access csr p access_type))))
 
 def exception_delegatee (e : ExceptionType) (p : Privilege) : SailM Privilege := do
   let idx := (BitVec.toNatInt (exceptionType_bits_forwards e))
@@ -536,14 +1038,17 @@ def findPendingInterrupt (ip : (BitVec 64)) : (Option InterruptType) :=
               else none))))))
 
 def getPendingSet (priv : Privilege) : SailM (Option ((BitVec 64) × Privilege)) := do
-  assert ((← (currentlyEnabled Ext_S)) || ((← readReg mideleg) == (zeros (n := 64)))) "sys/sys_control.sail:91.58-91.59"
+  sail_assert (←((currentlyEnabled Ext_S) <||> (do
+    (pure ((← readReg mideleg) == (zeros (n := 64))))))) "sys/sys_control.sail:91.58-91.59"
   let pending_m ← do
     (pure ((← readReg mip) &&& ((← readReg mie) &&& (Complement.complement (← readReg mideleg)))))
   let pending_s ← do (pure ((← readReg mip) &&& ((← readReg mie) &&& (← readReg mideleg))))
   let mIE ← do
-    (pure (((priv == Machine) && ((_get_Mstatus_MIE (← readReg mstatus)) == 1#1)) || ((priv == Supervisor) || (priv == User))))
+    (pure ((←((pure (priv == Machine)) <&&> (do
+          (pure ((_get_Mstatus_MIE (← readReg mstatus)) == 1#1))))) || ((priv == Supervisor) || (priv == User))))
   let sIE ← do
-    (pure (((priv == Supervisor) && ((_get_Mstatus_SIE (← readReg mstatus)) == 1#1)) || (priv == User)))
+    (pure ((←((pure (priv == Supervisor)) <&&> (do
+          (pure ((_get_Mstatus_SIE (← readReg mstatus)) == 1#1))))) || (priv == User)))
   if ((mIE && (pending_m != (zeros (n := 64)))) : Bool)
   then (pure (some (pending_m, Machine)))
   else
@@ -570,19 +1075,19 @@ def tval (excinfo : (Option (BitVec 64))) : (BitVec 64) :=
 def track_trap (p : Privilege) : SailM Unit := do
   (long_csr_write_callback "mstatus" "mstatush" (← readReg mstatus))
   match p with
-  | Machine =>
+  | .Machine =>
     (do
       (csr_name_write_callback "mcause" (← readReg mcause))
       (csr_name_write_callback "mtval" (← readReg mtval))
       (csr_name_write_callback "mepc" (← readReg mepc)))
-  | Supervisor =>
+  | .Supervisor =>
     (do
       (csr_name_write_callback "scause" (← readReg scause))
       (csr_name_write_callback "stval" (← readReg stval))
       (csr_name_write_callback "sepc" (← readReg sepc)))
-  | User => (internal_error "sys/sys_control.sail" 169 "Invalid privilege level")
-  | VirtualUser => (internal_error "sys/sys_control.sail" 170 "Hypervisor extension not supported")
-  | VirtualSupervisor =>
+  | .User => (internal_error "sys/sys_control.sail" 169 "Invalid privilege level")
+  | .VirtualUser => (internal_error "sys/sys_control.sail" 170 "Hypervisor extension not supported")
+  | .VirtualSupervisor =>
     (internal_error "sys/sys_control.sail" 171 "Hypervisor extension not supported")
 
 def trap_handler (del_priv : Privilege) (c : TrapCause) (pc : (BitVec 64)) (info : (Option (BitVec 64))) (ext : (Option Unit)) : SailM (BitVec 64) := do
@@ -602,7 +1107,7 @@ def trap_handler (del_priv : Privilege) (c : TrapCause) (pc : (BitVec 64)) (info
   then (zicfilp_preserve_elp_on_trap del_priv)
   else (pure ())
   match del_priv with
-  | Machine =>
+  | .Machine =>
     (do
       writeReg mcause (Sail.BitVec.updateSubrange (← readReg mcause) (64 -i 1) (64 -i 1)
         (bool_to_bit is_interrupt))
@@ -619,9 +1124,9 @@ def trap_handler (del_priv : Privilege) (c : TrapCause) (pc : (BitVec 64)) (info
       let _ : Unit := (handle_trap_extension del_priv pc ext)
       (track_trap del_priv)
       (prepare_trap_vector del_priv (← readReg mcause)))
-  | Supervisor =>
+  | .Supervisor =>
     (do
-      assert (← (currentlyEnabled Ext_S)) "no supervisor mode present for delegation"
+      sail_assert (← (currentlyEnabled Ext_S)) "no supervisor mode present for delegation"
       writeReg scause (Sail.BitVec.updateSubrange (← readReg scause) (64 -i 1) (64 -i 1)
         (bool_to_bit is_interrupt))
       writeReg scause (Sail.BitVec.updateSubrange (← readReg scause) (64 -i 2) 0
@@ -632,13 +1137,13 @@ def trap_handler (del_priv : Privilege) (c : TrapCause) (pc : (BitVec 64)) (info
       writeReg mstatus (Sail.BitVec.updateSubrange (← readReg mstatus) 8 8
         (← do
           match (← readReg cur_privilege) with
-          | User => (pure 0#1)
-          | Supervisor => (pure 1#1)
-          | Machine =>
+          | .User => (pure 0#1)
+          | .Supervisor => (pure 1#1)
+          | .Machine =>
             (internal_error "sys/sys_control.sail" 220 "invalid privilege for s-mode trap")
-          | VirtualUser =>
+          | .VirtualUser =>
             (internal_error "sys/sys_control.sail" 221 "Hypervisor extension not supported")
-          | VirtualSupervisor =>
+          | .VirtualSupervisor =>
             (internal_error "sys/sys_control.sail" 222 "Hypervisor extension not supported")))
       writeReg stval (tval info)
       writeReg sepc pc
@@ -646,9 +1151,9 @@ def trap_handler (del_priv : Privilege) (c : TrapCause) (pc : (BitVec 64)) (info
       let _ : Unit := (handle_trap_extension del_priv pc ext)
       (track_trap del_priv)
       (prepare_trap_vector del_priv (← readReg scause)))
-  | User => (internal_error "sys/sys_control.sail" 235 "Invalid privilege level")
-  | VirtualUser => (internal_error "sys/sys_control.sail" 236 "Hypervisor extension not supported")
-  | VirtualSupervisor =>
+  | .User => (internal_error "sys/sys_control.sail" 235 "Invalid privilege level")
+  | .VirtualUser => (internal_error "sys/sys_control.sail" 236 "Hypervisor extension not supported")
+  | .VirtualSupervisor =>
     (internal_error "sys/sys_control.sail" 237 "Hypervisor extension not supported")
 
 def exception_handler (cur_priv : Privilege) (ctl : ctl_result) (pc : (BitVec 64)) : SailM (BitVec 64) := do
@@ -726,8 +1231,8 @@ def xtval_exception_value (e : ExceptionType) (excinfo : (BitVec 64)) : (Option 
   if ((match e with
      | .E_Illegal_Instr () => illegal_instruction_writes_xtval
      | .E_Virtual_Instr () => virtual_instruction_writes_xtval
-     | .E_Breakpoint Brk_Software => software_breakpoint_writes_xtval
-     | .E_Breakpoint Brk_Hardware => hardware_breakpoint_writes_xtval
+     | .E_Breakpoint .Brk_Software => software_breakpoint_writes_xtval
+     | .E_Breakpoint .Brk_Hardware => hardware_breakpoint_writes_xtval
      | .E_Load_Addr_Align () => misaligned_load_writes_xtval
      | .E_Load_Access_Fault () => load_access_fault_writes_xtval
      | .E_Load_Page_Fault () => load_page_fault_writes_xtval

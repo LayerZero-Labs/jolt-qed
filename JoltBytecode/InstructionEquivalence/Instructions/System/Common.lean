@@ -5,6 +5,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.ADDI
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.VirtualMULI
 
+open LeanRV64D
+
 set_option linter.unusedSimpArgs false
 set_option linter.unusedTactic false
 set_option linter.unreachableTactic false
@@ -23,13 +25,18 @@ The Sail side is still computed by Sail helpers such as `exception_handler`,
 `set_next_pc`, `tvec_addr`, `_get_Mstatus_*`, and `_update_Mstatus_*`.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
 noncomputable section
 
 namespace System
+
+/-- The extension CSR check accepts every access. Stated for the same reason as
+`sail_not_true` in ProofSupport/Lemmas.lean. -/
+theorem ext_check_CSR_true (csrno : BitVec 12) (p : Privilege) (access : CSRAccessType) :
+    ext_check_CSR csrno p access = true := rfl
 
 /-- Jolt's concrete MRET return target: `JALR` reads virtual `mepc` and clears
 bit 0. -/
@@ -144,17 +151,17 @@ read of the current state. -/
 theorem sail_readReg_run
     (s : SailState) (reg : Register) (value : RegisterType reg)
     (h : s.regs.get? reg = some value) :
-    (Sail.readReg reg : SailM (RegisterType reg)) s = .ok value s := by
-  unfold Sail.readReg PreSail.readReg
+    (LeanRV64D.readReg reg : SailM (RegisterType reg)) s = .ok value s := by
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg
   simp only [h, bind, EStateM.bind, pure, EStateM.pure,
     get, getThe, MonadStateOf.get, EStateM.get]
 
 /-- A generated Sail register write only inserts the new register value. -/
 theorem sail_writeReg_run
     (s : SailState) (reg : Register) (value : RegisterType reg) :
-    (Sail.writeReg reg value : SailM Unit) s =
+    (LeanRV64D.writeReg reg value : SailM Unit) s =
       .ok () { s with regs := s.regs.insert reg value } := by
-  unfold Sail.writeReg PreSail.writeReg
+  unfold LeanRV64D.writeReg Sail.ConcurrencyInterfaceV1.PreSail.writeReg
   simp only [modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet]
 
 /-- Reading a non-overlaid register through `systemProject` reads the original
@@ -202,7 +209,7 @@ theorem systemProject_rX_bits
     rfl
   all_goals
     simp only [hidx] at h_read ⊢
-    unfold Sail.readReg PreSail.readReg at h_read ⊢
+    unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg at h_read ⊢
     simp only [bind, EStateM.bind, get, getThe, MonadStateOf.get,
       EStateM.get, pure] at h_read ⊢
     rw [systemProject_get_unmodified]
@@ -524,7 +531,7 @@ theorem set_next_pc_systemProject_run
     (set_next_pc target).run (systemProject js) =
       .ok () (systemProject { js with sail := setNextPCState js.sail target }) := by
   unfold set_next_pc sail_branch_announce redirect_callback
-  unfold Sail.writeReg PreSail.writeReg
+  unfold LeanRV64D.writeReg Sail.ConcurrencyInterfaceV1.PreSail.writeReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet]
   rw [← systemProject_setNextPCState]
@@ -562,9 +569,10 @@ theorem currentlyEnabled_Ext_C_run
       some (misa : RegisterType Register.misa)) :
     (currentlyEnabled extension.Ext_C) s =
       .ok (hartSupports extension.Ext_C && ((_get_Misa_C misa) == 1#1)) s := by
-  unfold currentlyEnabled Sail.readReg PreSail.readReg
-  simp only [hmisa, bind, EStateM.bind, pure, EStateM.pure,
-    MonadStateOf.get, EStateM.get, getThe, get]
+  unfold currentlyEnabled LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg
+  cases hartSupports extension.Ext_C <;>
+    simp only [andM, toBool, hmisa, bind, EStateM.bind, pure, EStateM.pure,
+      MonadStateOf.get, EStateM.get, getThe, get, Bool.true_and, Bool.false_and]
 
 /-- Literal callback map lookup for the generated `mstatus` CSR name. -/
 theorem csr_name_map_backwards_mstatus_run (s : SailState) :
@@ -623,7 +631,7 @@ theorem long_csr_write_callback_mstatus_run
     (s : SailState) (value : BitVec 64) :
     long_csr_write_callback "mstatus" "mstatush" value s = .ok () s := by
   unfold long_csr_write_callback
-  rw [csr_name_write_callback_mstatus_run]
+  exact csr_name_write_callback_mstatus_run s _
 
 end System
 

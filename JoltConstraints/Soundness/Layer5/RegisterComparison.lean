@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Comparison
 
+open LeanRV64D
+
 /-! Shared step for signed and unsigned register comparisons. Both tables
 return the exact 0/1 word written by the instruction interpreter.
 At public pin 8bbb2357:
@@ -11,7 +13,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Signed and unsigned two-register comparison rows. -/
 inductive RegisterComparison where

@@ -18,11 +18,13 @@ import JoltConstraints.Soundness.Layer5.Movsign
 import JoltConstraints.Soundness.Layer5.RegisterShift
 import JoltConstraints.expansion_temp_liveness
 
+open LeanRV64D
+
 /-! The register-writing families with a local selected-row execution rule. -/
 set_option autoImplicit false
 namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- A register-writing row described by its existing Layer 5 family and operands.
 For example, AND is a bitwise row and VirtualSRLI is an immediate-shift row. -/

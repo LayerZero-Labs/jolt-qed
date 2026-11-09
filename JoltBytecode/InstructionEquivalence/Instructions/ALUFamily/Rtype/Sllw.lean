@@ -8,9 +8,11 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Virtua
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import Mathlib.Data.Nat.Bitwise
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -138,7 +140,7 @@ theorem sllwProgram_eq_sail
         .ok RETIRE_SUCCESS js_tmp := by
     unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst liftSail
     simp only [h_read_rs2, bind, EStateM.bind]
-    simpa only [js_tmp, pow2] using
+    simpa only [js_tmp, pow2] using!
       JoltISA.writeVReg_retire_run_of_writable tmp pow2 js htmp
   have h_second :
       JoltISA.execInstr (.MULW (.xreg rd) (.xreg rs1) (.vreg tmp)) js_tmp =

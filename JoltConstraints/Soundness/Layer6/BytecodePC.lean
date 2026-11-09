@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer1.BytecodeReads
 import JoltConstraints.trace_interface
 
+open LeanRV64D
+
 /-! Recover selected bytecode slots across the initial and interior cycles.
 The field PC is converted back to a slot index using the verifier's domain
 bound; no execution-state or theorem premise is added. -/

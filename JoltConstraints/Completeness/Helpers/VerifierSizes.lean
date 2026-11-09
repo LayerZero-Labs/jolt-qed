@@ -2,6 +2,8 @@ import JoltConstraints.verifier_sizes
 import JoltConstraints.witness_domain
 import JoltConstraints.Completeness.Helpers.RamReadSelection
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints
@@ -398,7 +400,7 @@ theorem HonestTrace.witness_params_ram_bounds
     imageNonempty minimum minimumComputed
   unfold JoltInstance.ram_size_in_bounds JoltInstance.verifier_ram_bounds
   simp only [layoutBuilt, minimumComputed, maximumComputed, Option.bind_eq_bind,
-    Option.bind_some, decide_eq_true_eq]
+    Option.bind_some, Option.pure_def, decide_eq_true_eq]
   exact ⟨atLeastMinimum, atMostMaximum⟩
 
 /-- The honest prover's one-hot chunks fit the verifier's Dory setup

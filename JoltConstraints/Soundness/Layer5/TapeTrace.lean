@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.TapeSemantics
 import JoltConstraints.language
 
+open LeanRV64D
+
 /-! A separate execution language for independent tape answers.
 The fixed-tape inclusion below preserves the entire Trace, including all states,
 so it preserves registers, RAM, outputs, runtime advice and stopping behavior.
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 /-- A run with one independent private answer per executed row. Answers on
 non-tape rows are ignored; the remaining fields retain the existing run rules. -/

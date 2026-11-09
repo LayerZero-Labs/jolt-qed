@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -211,6 +214,18 @@ def encdec_nfields_forwards (arg_ : (BitVec 3)) : Int :=
   | 0b110 => 7
   | _ => 8
 
+/-- Type quantifiers: arg_ : Nat, arg_ > 0 ∧ arg_ ≤ 8 -/
+def encdec_nfields_backwards (arg_ : Nat) : (BitVec 3) :=
+  match arg_ with
+  | 1 => 0b000#3
+  | 2 => 0b001#3
+  | 3 => 0b010#3
+  | 4 => 0b011#3
+  | 5 => 0b100#3
+  | 6 => 0b101#3
+  | 7 => 0b110#3
+  | _ => 0b111#3
+
 def encdec_nfields_forwards_matches (arg_ : (BitVec 3)) : Bool :=
   match arg_ with
   | 0b000 => true
@@ -236,6 +251,18 @@ def encdec_nfields_backwards_matches (arg_ : Nat) : Bool :=
   | 8 => true
   | _ => false
 
+/-- Type quantifiers: arg_ : Nat, arg_ > 0 ∧ arg_ ≤ 8 -/
+def nfields_string_forwards (arg_ : Nat) : String :=
+  match arg_ with
+  | 1 => ""
+  | 2 => "seg2"
+  | 3 => "seg3"
+  | 4 => "seg4"
+  | 5 => "seg5"
+  | 6 => "seg6"
+  | 7 => "seg7"
+  | _ => "seg8"
+
 def nfields_string_backwards (arg_ : String) : SailM Int := do
   match arg_ with
   | "" => (pure 1)
@@ -248,7 +275,7 @@ def nfields_string_backwards (arg_ : String) : SailM Int := do
   | "seg8" => (pure 8)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 /-- Type quantifiers: arg_ : Nat, arg_ > 0 ∧ arg_ ≤ 8 -/
@@ -284,8 +311,16 @@ def encdec_nfields_pow2_forwards (arg_ : (BitVec 3)) : SailM Int := do
   | 0b111 => (pure 8)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
+
+/-- Type quantifiers: arg_ : Nat, List.elem arg_ [1, 2, 4, 8] -/
+def encdec_nfields_pow2_backwards (arg_ : Nat) : (BitVec 3) :=
+  match arg_ with
+  | 1 => 0b000#3
+  | 2 => 0b001#3
+  | 4 => 0b011#3
+  | _ => 0b111#3
 
 def encdec_nfields_pow2_forwards_matches (arg_ : (BitVec 3)) : Bool :=
   match arg_ with
@@ -295,7 +330,7 @@ def encdec_nfields_pow2_forwards_matches (arg_ : (BitVec 3)) : Bool :=
   | 0b111 => true
   | _ => false
 
-/-- Type quantifiers: arg_ : Nat, arg_ ∈ {1, 2, 4, 8} -/
+/-- Type quantifiers: arg_ : Nat, List.elem arg_ [1, 2, 4, 8] -/
 def encdec_nfields_pow2_backwards_matches (arg_ : Nat) : Bool :=
   match arg_ with
   | 1 => true
@@ -303,6 +338,14 @@ def encdec_nfields_pow2_backwards_matches (arg_ : Nat) : Bool :=
   | 4 => true
   | 8 => true
   | _ => false
+
+/-- Type quantifiers: arg_ : Nat, List.elem arg_ [1, 2, 4, 8] -/
+def nfields_pow2_string_forwards (arg_ : Nat) : String :=
+  match arg_ with
+  | 1 => "1"
+  | 2 => "2"
+  | 4 => "4"
+  | _ => "8"
 
 def nfields_pow2_string_backwards (arg_ : String) : SailM Int := do
   match arg_ with
@@ -312,10 +355,10 @@ def nfields_pow2_string_backwards (arg_ : String) : SailM Int := do
   | "8" => (pure 8)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-/-- Type quantifiers: arg_ : Nat, arg_ ∈ {1, 2, 4, 8} -/
+/-- Type quantifiers: arg_ : Nat, List.elem arg_ [1, 2, 4, 8] -/
 def nfields_pow2_string_forwards_matches (arg_ : Nat) : Bool :=
   match arg_ with
   | 1 => true

@@ -1,5 +1,7 @@
 import JoltBytecode.JoltISA.RegisterAccess
 
+open LeanRV64D
+
 /-!
 # Register-access proof support
 
@@ -19,7 +21,7 @@ here.
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -122,8 +124,8 @@ macro_rules
 -- ============================================================================
 
 theorem readReg_pure (reg : Register) (s : SailState) (v : RegisterType reg) (s' : SailState)
-    (h : (Sail.readReg reg : SailM (RegisterType reg)) s = .ok v s') : s' = s := by
-  unfold Sail.readReg PreSail.readReg at h
+    (h : (LeanRV64D.readReg reg : SailM (RegisterType reg)) s = .ok v s') : s' = s := by
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg at h
   simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get, pure] at h
   generalize hget : s.regs.get? reg = lookup at h
   cases lookup with
@@ -150,7 +152,7 @@ theorem rX_bits_pure (r : regidx) (s : SailState) (v : BitVec 64) (s' : SailStat
   · simp only [h'] at h; cases h; rfl
   all_goals (
     simp only [h'] at h
-    generalize hread : Sail.readReg _ s = result at h
+    generalize hread : LeanRV64D.readReg _ s = result at h
     cases result with
     | error e s'' => exact absurd h (by simp)
     | ok a s'' =>
@@ -175,7 +177,7 @@ theorem wX_shape (r : regidx) (v : BitVec 64) (s : SailState) :
   unfold wX_bits wX regval_into_reg
   simp only [Sail.BitVec.toNatInt, Int.ofNat_eq_natCast, Int.toNat_natCast, bind, pure]
   reg_cases r <;>
-    simp_all [Sail.writeReg, PreSail.writeReg, xreg_write_callback,
+    simp_all [LeanRV64D.writeReg, Sail.ConcurrencyInterfaceV1.PreSail.writeReg, xreg_write_callback,
               reg_name_forwards, to_bits] <;>
     exact ⟨_, rfl⟩
 
@@ -197,7 +199,7 @@ theorem wX_shape_modify (r : regidx) (v : BitVec 64) (s : SailState) :
   unfold wX_bits wX regval_into_reg
   simp only [Sail.BitVec.toNatInt, Int.ofNat_eq_natCast, Int.toNat_natCast, bind, pure]
   reg_cases r <;>
-    simp_all [Sail.writeReg, PreSail.writeReg, xreg_write_callback,
+    simp_all [LeanRV64D.writeReg, Sail.ConcurrencyInterfaceV1.PreSail.writeReg, xreg_write_callback,
               reg_name_forwards, to_bits, modify, modifyGet] <;>
     first
     | exact ⟨_, rfl, rfl⟩
@@ -240,7 +242,7 @@ theorem wX_regs_spec (r : regidx) (v : BitVec 64) (s : SailState) :
   unfold wX_bits wX regval_into_reg wX_update_regs
   simp only [Sail.BitVec.toNatInt, Int.ofNat_eq_natCast, Int.toNat_natCast, bind, pure]
   reg_cases r <;>
-    simp_all [Sail.writeReg, PreSail.writeReg, xreg_write_callback,
+    simp_all [LeanRV64D.writeReg, Sail.ConcurrencyInterfaceV1.PreSail.writeReg, xreg_write_callback,
               reg_name_forwards, to_bits, modify, modifyGet] <;>
     exact ⟨_, rfl, rfl⟩
 
@@ -283,10 +285,10 @@ theorem wX_wX_collapse (r : regidx) (v1 v2 : BitVec 64) (s s1 s2 : SailState)
 
 -- readReg after insert on the same key returns the inserted value.
 theorem readReg_insert_self (reg : Register) (v : RegisterType reg) (s : SailState) :
-    (PreSail.readReg reg : SailM (RegisterType reg))
+    (Sail.ConcurrencyInterfaceV1.PreSail.readReg reg : SailM (RegisterType reg))
       { s with regs := s.regs.insert reg v } =
     .ok v { s with regs := s.regs.insert reg v } := by
-  unfold PreSail.readReg
+  unfold Sail.ConcurrencyInterfaceV1.PreSail.readReg
   simp only [bind, get, getThe, EStateM.bind, EStateM.get, MonadStateOf.get,
              Std.ExtDHashMap.get?_insert_self, pure, EStateM.pure]
 
@@ -396,9 +398,9 @@ macro_rules
             | contradiction
             | simp [Std.ExtDHashMap.get?_insert]
         rw [show rX_bits (regidx.Regidx $srcIdx) =
-            (fun s => (Sail.readReg $srcReg >>=
+            (fun s => (LeanRV64D.readReg $srcReg >>=
               fun v => pure (regval_from_reg v)) s) from rfl] at hread ⊢
-        unfold Sail.readReg PreSail.readReg at hread ⊢
+        unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg at hread ⊢
         simp only [bind, EStateM.bind, pure, EStateM.pure, get, EStateM.get,
           MonadStateOf.get, getThe] at hread ⊢
         cases hget : s.regs.get? $srcReg with

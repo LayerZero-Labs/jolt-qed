@@ -2,6 +2,8 @@ import JoltConstraints.constraint_context
 import Mathlib.Algebra.CharP.Defs
 import Mathlib.Data.Fintype.Card
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

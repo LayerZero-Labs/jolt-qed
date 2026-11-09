@@ -1,4 +1,6 @@
 import LeanRV64D.Prelude
+import LeanRV64D.Vlen
+import LeanRV64D.VextRegs
 import LeanRV64D.TypesKext
 
 set_option maxHeartbeats 1_000_000_000
@@ -7,11 +9,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -197,6 +202,26 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
+/-- Type quantifiers: emul_pow : Int -/
+def zvk_valid_reg_overlap (rs : vregidx) (rd : vregidx) (emul_pow : Int) : Bool :=
+  let reg_group_size :=
+    if ((emul_pow >b 0) : Bool)
+    then (2 ^i emul_pow)
+    else 1
+  let rs_int := (BitVec.toNatInt (vregidx_bits rs))
+  let rd_int := (BitVec.toNatInt (vregidx_bits rd))
+  (((rs_int +i reg_group_size) ≤b rd_int) || ((rd_int +i reg_group_size) ≤b rs_int))
+
+/-- Type quantifiers: EGS : Nat, EGW : Nat, 0 ≤ EGW, EGS > 0 -/
+def zvk_check_encdec (EGW : Nat) (EGS : Nat) : SailM Bool := do
+  let LMUL_pow ← do (get_lmul_pow ())
+  let LMUL_times_VLEN :=
+    if ((LMUL_pow <b 0) : Bool)
+    then (Int.tdiv vlen (2 ^i (Int.natAbs LMUL_pow)))
+    else ((2 ^i LMUL_pow) *i vlen)
+  (pure ((Int.tmod (BitVec.toNatInt (← readReg vl)) EGS) == 0)) <&&> (do
+    (pure (((Int.tmod (BitVec.toNatInt (← readReg vstart)) EGS) == 0) && (LMUL_times_VLEN ≥b EGW))))
+
 def undefined_zvk_vsha2_funct6 (_ : Unit) : SailM zvk_vsha2_funct6 := do
   (internal_pick [ZVK_VSHA2CH_VV, ZVK_VSHA2CL_VV])
 
@@ -208,28 +233,34 @@ def zvk_vsha2_funct6_of_num (arg_ : Nat) : zvk_vsha2_funct6 :=
 
 def num_of_zvk_vsha2_funct6 (arg_ : zvk_vsha2_funct6) : Int :=
   match arg_ with
-  | ZVK_VSHA2CH_VV => 0
-  | ZVK_VSHA2CL_VV => 1
+  | .ZVK_VSHA2CH_VV => 0
+  | .ZVK_VSHA2CL_VV => 1
 
-/-- Type quantifiers: SEW : Nat, SEW ≥ 0, SEW ∈ {32, 64} -/
+def zvknhab_check_encdec (vs2 : vregidx) (vs1 : vregidx) (vd : vregidx) : SailM Bool := do
+  let SEW ← do (get_sew ())
+  let LMUL_pow ← do (get_lmul_pow ())
+  (pure ((← (zvk_check_encdec SEW 4)) && ((zvk_valid_reg_overlap vs1 vd LMUL_pow) && (zvk_valid_reg_overlap
+          vs2 vd LMUL_pow))))
+
+/-- Type quantifiers: SEW : Nat, SEW ≥ 0, List.elem SEW [32, 64] -/
 def zvk_sig0 (x : (BitVec k_n)) (SEW : Nat) : (BitVec SEW) :=
   match SEW with
   | 32 => ((rotater x 7) ^^^ ((rotater x 18) ^^^ (x >>> 3)))
   | _ => ((rotater x 1) ^^^ ((rotater x 8) ^^^ (x >>> 7)))
 
-/-- Type quantifiers: SEW : Nat, SEW ≥ 0, SEW ∈ {32, 64} -/
+/-- Type quantifiers: SEW : Nat, SEW ≥ 0, List.elem SEW [32, 64] -/
 def zvk_sig1 (x : (BitVec k_n)) (SEW : Nat) : (BitVec SEW) :=
   match SEW with
   | 32 => ((rotater x 17) ^^^ ((rotater x 19) ^^^ (x >>> 10)))
   | _ => ((rotater x 19) ^^^ ((rotater x 61) ^^^ (x >>> 6)))
 
-/-- Type quantifiers: SEW : Nat, SEW ≥ 0, SEW ∈ {32, 64} -/
+/-- Type quantifiers: SEW : Nat, SEW ≥ 0, List.elem SEW [32, 64] -/
 def zvk_sum0 (x : (BitVec k_n)) (SEW : Nat) : (BitVec SEW) :=
   match SEW with
   | 32 => ((rotater x 2) ^^^ ((rotater x 13) ^^^ (rotater x 22)))
   | _ => ((rotater x 28) ^^^ ((rotater x 34) ^^^ (rotater x 39)))
 
-/-- Type quantifiers: SEW : Nat, SEW ≥ 0, SEW ∈ {32, 64} -/
+/-- Type quantifiers: SEW : Nat, SEW ≥ 0, List.elem SEW [32, 64] -/
 def zvk_sum1 (x : (BitVec k_n)) (SEW : Nat) : (BitVec SEW) :=
   match SEW with
   | 32 => ((rotater x 6) ^^^ ((rotater x 11) ^^^ (rotater x 25)))
@@ -254,8 +285,8 @@ def zvk_vsm4r_funct6_of_num (arg_ : Nat) : zvk_vsm4r_funct6 :=
 
 def num_of_zvk_vsm4r_funct6 (arg_ : zvk_vsm4r_funct6) : Int :=
   match arg_ with
-  | ZVK_VSM4R_VV => 0
-  | ZVK_VSM4R_VS => 1
+  | .ZVK_VSM4R_VV => 0
+  | .ZVK_VSM4R_VS => 1
 
 def zvk_round_key (X : (BitVec 32)) (S : (BitVec 32)) : (BitVec 32) :=
   (X ^^^ (S ^^^ ((rotatel S 13) ^^^ (rotatel S 23))))
@@ -345,8 +376,8 @@ def zvk_vaesdf_funct6_of_num (arg_ : Nat) : zvk_vaesdf_funct6 :=
 
 def num_of_zvk_vaesdf_funct6 (arg_ : zvk_vaesdf_funct6) : Int :=
   match arg_ with
-  | ZVK_VAESDF_VV => 0
-  | ZVK_VAESDF_VS => 1
+  | .ZVK_VAESDF_VV => 0
+  | .ZVK_VAESDF_VS => 1
 
 def undefined_zvk_vaesdm_funct6 (_ : Unit) : SailM zvk_vaesdm_funct6 := do
   (internal_pick [ZVK_VAESDM_VV, ZVK_VAESDM_VS])
@@ -359,8 +390,8 @@ def zvk_vaesdm_funct6_of_num (arg_ : Nat) : zvk_vaesdm_funct6 :=
 
 def num_of_zvk_vaesdm_funct6 (arg_ : zvk_vaesdm_funct6) : Int :=
   match arg_ with
-  | ZVK_VAESDM_VV => 0
-  | ZVK_VAESDM_VS => 1
+  | .ZVK_VAESDM_VV => 0
+  | .ZVK_VAESDM_VS => 1
 
 def undefined_zvk_vaesef_funct6 (_ : Unit) : SailM zvk_vaesef_funct6 := do
   (internal_pick [ZVK_VAESEF_VV, ZVK_VAESEF_VS])
@@ -373,8 +404,8 @@ def zvk_vaesef_funct6_of_num (arg_ : Nat) : zvk_vaesef_funct6 :=
 
 def num_of_zvk_vaesef_funct6 (arg_ : zvk_vaesef_funct6) : Int :=
   match arg_ with
-  | ZVK_VAESEF_VV => 0
-  | ZVK_VAESEF_VS => 1
+  | .ZVK_VAESEF_VV => 0
+  | .ZVK_VAESEF_VS => 1
 
 def undefined_zvk_vaesem_funct6 (_ : Unit) : SailM zvk_vaesem_funct6 := do
   (internal_pick [ZVK_VAESEM_VV, ZVK_VAESEM_VS])
@@ -387,6 +418,6 @@ def zvk_vaesem_funct6_of_num (arg_ : Nat) : zvk_vaesem_funct6 :=
 
 def num_of_zvk_vaesem_funct6 (arg_ : zvk_vaesem_funct6) : Int :=
   match arg_ with
-  | ZVK_VAESEM_VV => 0
-  | ZVK_VAESEM_VS => 1
+  | .ZVK_VAESEM_VV => 0
+  | .ZVK_VAESEM_VS => 1
 

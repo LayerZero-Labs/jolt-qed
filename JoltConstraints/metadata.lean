@@ -1,6 +1,8 @@
 import JoltConstraints.witness
 import JoltConstraints.trace
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltMetadata

@@ -3,7 +3,6 @@ import LeanRV64D.Errors
 import LeanRV64D.PlatformConfig
 import LeanRV64D.Extensions
 import LeanRV64D.Types
-import LeanRV64D.Regs
 
 set_option maxHeartbeats 1_000_000_000
 set_option maxRecDepth 1_000_000
@@ -11,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -393,6 +395,9 @@ def _set_Misa_M (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Uni
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Misa_M r v)
 
+def _get_Misa_MXL (v : (BitVec 64)) : (BitVec (64 - 1 - (64 - 2) + 1)) :=
+  (Sail.BitVec.extractLsb v (64 -i 1) (64 -i 2))
+
 def _set_Misa_MXL (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec (64 - 1 - (64 - 2) + 1))) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Misa_MXL r v)
@@ -617,8 +622,9 @@ def ext_veto_disable_C (_ : Unit) : Bool :=
 
 def legalize_misa (m : (BitVec 64)) (v : (BitVec 64)) : SailM (BitVec 64) := do
   let v := (Mk_Misa v)
-  if (((not sys_enable_writable_misa) || (((_get_Misa_C v) == 0#1) && (((BitVec.access
-               (← readReg nextPC) 1) == 1#1) || (ext_veto_disable_C ())))) : Bool)
+  if ((←((pure (not sys_enable_writable_misa)) <||> (do
+       (pure ((_get_Misa_C v) == 0#1)) <&&> (do
+         (pure (((BitVec.access (← readReg nextPC) 1) == 1#1) || (ext_veto_disable_C ()))))))) : Bool)
   then (pure m)
   else
     (pure (_update_Misa_V
@@ -906,6 +912,9 @@ def _set_Sstatus_SUM (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : Sail
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Sstatus_SUM r v)
 
+def _get_Mstatus_SXL (v : (BitVec 64)) : (BitVec 2) :=
+  (Sail.BitVec.extractLsb v 35 34)
+
 def _set_Mstatus_SXL (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 2)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Mstatus_SXL r v)
@@ -939,6 +948,9 @@ def _update_Mstatus_TW (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
 def _set_Mstatus_TW (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Mstatus_TW r v)
+
+def _get_Mstatus_UXL (v : (BitVec 64)) : (BitVec 2) :=
+  (Sail.BitVec.extractLsb v 33 32)
 
 def _update_Sstatus_UXL (v : (BitVec 64)) (x : (BitVec 2)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 33 32 x)
@@ -1068,6 +1080,21 @@ def legalize_mstatus (o : (BitVec 64)) (v : (BitVec 64)) : SailM (BitVec 64) := 
             (_get_Mstatus_VS o)) == Dirty)))
   (pure (_update_Mstatus_SD o (bool_to_bit dirty)))
 
+def architecture (priv : Privilege) : SailM Architecture := do
+  (architecture_bits_backwards
+    (← do
+      match priv with
+      | .Machine => (pure (_get_Misa_MXL (← readReg misa)))
+      | .Supervisor => (pure (_get_Mstatus_SXL (← readReg mstatus)))
+      | .User => (pure (_get_Mstatus_UXL (← readReg mstatus)))
+      | .VirtualUser =>
+        (internal_error "core/sys_regs.sail" 292 "Hypervisor extension not supported")
+      | .VirtualSupervisor =>
+        (internal_error "core/sys_regs.sail" 293 "Hypervisor extension not supported")))
+
+def in32BitMode (_ : Unit) : SailM Bool := do
+  (pure ((← (architecture (← readReg cur_privilege))) == RV32))
+
 def undefined_Seccfg (_ : Unit) : SailM (BitVec 64) := do
   (undefined_bitvector 64)
 
@@ -1153,12 +1180,12 @@ def undefined_SEnvcfg (_ : Unit) : SailM (BitVec 64) := do
 
 def is_fiom_active (_ : Unit) : SailM Bool := do
   match (← readReg cur_privilege) with
-  | Machine => (pure false)
-  | Supervisor => (pure ((_get_MEnvcfg_FIOM (← readReg menvcfg)) == 1#1))
-  | User =>
+  | .Machine => (pure false)
+  | .Supervisor => (pure ((_get_MEnvcfg_FIOM (← readReg menvcfg)) == 1#1))
+  | .User =>
     (pure (((_get_MEnvcfg_FIOM (← readReg menvcfg)) ||| (_get_SEnvcfg_FIOM (← readReg senvcfg))) == 1#1))
-  | VirtualUser => (internal_error "core/sys_regs.sail" 469 "Hypervisor extension not supported")
-  | VirtualSupervisor =>
+  | .VirtualUser => (internal_error "core/sys_regs.sail" 469 "Hypervisor extension not supported")
+  | .VirtualSupervisor =>
     (internal_error "core/sys_regs.sail" 470 "Hypervisor extension not supported")
 
 def undefined_Mtvec (_ : Unit) : SailM (BitVec 64) := do
@@ -1210,17 +1237,17 @@ def _set_Satp64_Mode (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 4)) : Sail
 def legalize_tvec (o : (BitVec 64)) (v : (BitVec 64)) : SailM (BitVec 64) := do
   let v := (Mk_Mtvec v)
   match (trapVectorMode_of_bits (_get_Mtvec_Mode v)) with
-  | TV_Direct => (pure v)
-  | TV_Vector => (pure v)
+  | .TV_Direct => (pure v)
+  | .TV_Vector => (pure v)
   | _ =>
     (do
       match xtvec_mode_reserved_behavior with
-      | Xtvec_Fatal =>
+      | .Xtvec_Fatal =>
         (reserved_behavior
           (HAppend.hAppend "Tried to write a reserved value ("
             (HAppend.hAppend (Int.repr (BitVec.toNatInt (_get_Mtvec_Mode v)))
               ") to the MODE field of xtvec.")))
-      | Xtvec_Ignore => (pure (_update_Mtvec_Mode v (_get_Mtvec_Mode o))))
+      | .Xtvec_Ignore => (pure (_update_Mtvec_Mode v (_get_Mtvec_Mode o))))
 
 def undefined_Mcause (_ : Unit) : SailM (BitVec 64) := do
   (undefined_bitvector 64)
@@ -1251,12 +1278,12 @@ def _set_Mcause_IsInterrupt (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec (64
 def tvec_addr (m : (BitVec 64)) (c : (BitVec 64)) : (Option (BitVec 64)) :=
   let base : xlenbits := ((_get_Mtvec_Base m) +++ 0b00#2)
   match (trapVectorMode_of_bits (_get_Mtvec_Mode m)) with
-  | TV_Direct => (some base)
-  | TV_Vector =>
+  | .TV_Direct => (some base)
+  | .TV_Vector =>
     (if (((_get_Mcause_IsInterrupt c) == 1#1) : Bool)
     then (some (base + ((zero_extend (m := 64) (_get_Mcause_Cause c)) <<< 2)))
     else (some base))
-  | TV_Reserved => none
+  | .TV_Reserved => none
 
 def legalize_xepc (v : (BitVec 64)) : (BitVec 64) :=
   if ((hartSupports Ext_Zca) : Bool)
@@ -1466,22 +1493,22 @@ def legalize_satp (arch : Architecture) (prev_value : (BitVec 64)) (written_valu
   | .some Sv_mode =>
     (do
       match Sv_mode with
-      | Bare =>
+      | .Bare =>
         (do
           if ((← (currentlyEnabled Ext_Svbare)) : Bool)
           then (pure s)
           else (pure prev_value))
-      | Sv39 =>
+      | .Sv39 =>
         (do
           if ((← (currentlyEnabled Ext_Sv39)) : Bool)
           then (pure s)
           else (pure prev_value))
-      | Sv48 =>
+      | .Sv48 =>
         (do
           if ((← (currentlyEnabled Ext_Sv48)) : Bool)
           then (pure s)
           else (pure prev_value))
-      | Sv57 =>
+      | .Sv57 =>
         (do
           if ((← (currentlyEnabled Ext_Sv57)) : Bool)
           then (pure s)
@@ -1500,30 +1527,31 @@ def FeatureEnabledResult_of_num (arg_ : Nat) : FeatureEnabledResult :=
 
 def num_of_FeatureEnabledResult (arg_ : FeatureEnabledResult) : Int :=
   match arg_ with
-  | FEATURE_ENABLED => 0
-  | FEATURE_ILLEGAL => 1
-  | FEATURE_VIRTUAL => 2
+  | .FEATURE_ENABLED => 0
+  | .FEATURE_ILLEGAL => 1
+  | .FEATURE_VIRTUAL => 2
 
 def feature_enabled_for_priv (p : Privilege) (machine_enable_bit : (BitVec 1)) (supervisor_enable_bit : (BitVec 1)) (hypervisor_enable_bit : (BitVec 1)) : SailM FeatureEnabledResult := do
   match p with
-  | Machine => (pure FEATURE_ENABLED)
-  | Supervisor =>
+  | .Machine => (pure FEATURE_ENABLED)
+  | .Supervisor =>
     (if ((machine_enable_bit == 1#1) : Bool)
     then (pure FEATURE_ENABLED)
     else (pure FEATURE_ILLEGAL))
-  | User =>
+  | .User =>
     (do
-      if (((machine_enable_bit == 1#1) && ((not (← (currentlyEnabled Ext_S))) || (supervisor_enable_bit == 1#1))) : Bool)
+      if ((←((pure (machine_enable_bit == 1#1)) <&&> (do
+           (pure ((not (← (currentlyEnabled Ext_S))) || (supervisor_enable_bit == 1#1)))))) : Bool)
       then (pure FEATURE_ENABLED)
       else (pure FEATURE_ILLEGAL))
-  | VirtualSupervisor =>
+  | .VirtualSupervisor =>
     (if ((machine_enable_bit == 0#1) : Bool)
     then (pure FEATURE_ILLEGAL)
     else
       (if ((hypervisor_enable_bit == 0#1) : Bool)
       then (pure FEATURE_VIRTUAL)
       else (pure FEATURE_ENABLED)))
-  | VirtualUser =>
+  | .VirtualUser =>
     (if ((machine_enable_bit == 0#1) : Bool)
     then (pure FEATURE_ILLEGAL)
     else

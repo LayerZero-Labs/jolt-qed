@@ -7,9 +7,11 @@ import JoltConstraints.register_encoding
 import JoltConstraints.metadata
 import JoltConstraints.expansion_temp_liveness
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace ExpansionFacts
 

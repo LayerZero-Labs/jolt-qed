@@ -3,7 +3,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.Instructions.Natives.Blt
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -41,12 +43,11 @@ theorem bneInstr_eq_sail
     JoltISA.readSrc_xreg_run_of_read rs2 js h.rs2_val h.rs2_read]
   by_cases h_eq : h.rs1_val = h.rs2_val
   · -- not taken
-    simp only [bne_iff_ne,
-      if_neg (fun hne : h.rs1_val ≠ h.rs2_val => hne h_eq)]
+    simp only [h_eq, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
     exact Projection.systemProjectResult_pure_retire js h.linkedCSRs
   · -- taken
-    simp only [bne_iff_ne, if_pos h_eq]
-    simpa only [Projection.liftSail_bind] using
+    simp only [bne_iff_ne, ne_eq, h_eq, not_false_eq_true, ↓reduceIte]
+    simpa only [Projection.liftSail_bind] using!
       (Projection.systemProjectResult_liftSail_eq_of_preservesSystemProjectRegs
         h.linkedCSRs
         (branchJump_preservesSystemProjectRegs imm js))

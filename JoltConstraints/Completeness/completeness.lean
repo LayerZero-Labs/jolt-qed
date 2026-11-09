@@ -9,6 +9,8 @@ import JoltConstraints.Completeness.All
 import JoltConstraints.Completeness.Assumptions
 import JoltConstraints.language
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- Jolt's preprocessing accepts the honest trace's bytecode: its rows pass the PC map

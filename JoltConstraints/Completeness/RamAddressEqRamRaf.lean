@@ -2,6 +2,8 @@ import JoltConstraints.Completeness.Helpers.RamReadSelection
 import JoltConstraints.Constraints.RamAddressEqRamRaf
 import JoltConstraints.Completeness.Helpers.RamReadSelection
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

@@ -1,10 +1,12 @@
 import JoltConstraints.Soundness.Layer6.MemoryRowExecution
 
+open LeanRV64D
+
 /-! The load and store row extensions, sharing their regional memory contract. -/
 set_option autoImplicit false
 namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 section
 variable {F : Type} [Field F] (joltField : JoltField F)

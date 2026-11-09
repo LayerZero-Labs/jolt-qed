@@ -6,9 +6,11 @@ import JoltConstraints.Soundness.Layer5.MemoryRows
 import JoltConstraints.Soundness.Layer3.Address
 import JoltConstraints.Completeness.Helpers.IOSetupFrame
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 namespace JoltConstraints.Soundness
 
@@ -854,7 +856,8 @@ private theorem truncate_honest_runtime_advice
   have hm' : m.val < run.rows.size := by omega
   have hrow : (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[m] =
       run.rows[m.val]'hm' := by
-    change (run.rows.extract 0 i.val)[m.val]'m.isLt = run.rows[m.val]'hm'
+    have hlt : m.val < (run.rows.extract 0 i.val).size := m.isLt
+    change (run.rows.extract 0 i.val)[m.val]'hlt = run.rows[m.val]'hm'
     simp only [Array.getElem_extract, Nat.zero_add]
   have hadvice := advice ⟨m.val, hm'⟩
   have hextract := honestTracerAdviceAtStepN_extract joltInstance.program
@@ -986,7 +989,7 @@ private theorem store_precedes_last_jump
   have hgetAt : run.rows[run.rows.size - 1]? = some run.rows[i] := by
     simpa only [hi] using hget
   have hlastAt : run.rows[run.rows.size - 1]? = some last := by
-    simpa only [Array.back?_eq_getElem?] using hlast
+    simpa only [Array.back?_eq_getElem?] using! hlast
   have hrow : run.rows[i] = last := Option.some.inj (hgetAt.symm.trans hlastAt)
   have hInstr := congrArg
     (fun row : TraceRow run.bytecode => run.bytecode[row.rowIndex].instruction) hrow
@@ -1028,7 +1031,7 @@ theorem soundness_termination_last_stall
     have hget : run.rows[lastIndex.val]? = some run.rows[lastIndex] :=
       Array.getElem?_eq_getElem lastIndex.isLt
     have hback : run.rows[lastIndex.val]? = some last := by
-      simpa only [Array.back?_eq_getElem?] using hlast
+      simpa only [Array.back?_eq_getElem?] using! hlast
     exact Option.some.inj (hget.symm.trans hback)
   subst last
   have lastFacts := lastJump run.rows[lastIndex] hlast

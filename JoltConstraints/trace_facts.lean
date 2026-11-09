@@ -7,6 +7,8 @@ import JoltConstraints.honest_trace
 import JoltConstraints.execution_facts
 import JoltConstraints.layout_facts
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- The trace starts at the slot Rust's get_first_pc picks for the entry address: one

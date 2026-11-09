@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer1.Instruction
 
+open LeanRV64D
+
 /-! The lookup equations read a full 128-bit address using the product of
 the `InstructionRa` lookup selectors. Reconstruct that address from their unique
 choices, then collapse the lookup-output and operand sums. These are field

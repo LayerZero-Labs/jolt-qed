@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Table
 import JoltConstraints.Soundness.Layer4.RangeCheckEntry
 
+open LeanRV64D
+
 /-! RangeCheck supplies a word even when advice has no input-determined address.
 This proves word range only; correctness of internal runtime advice belongs to
 Layer 5. Tape answers follow the separate execution specification in the plan. -/

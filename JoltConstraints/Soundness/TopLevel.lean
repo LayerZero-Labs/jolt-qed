@@ -21,11 +21,13 @@ import JoltConstraints.witness_helpers.rs1_value
 import JoltConstraints.witness_helpers.rs2_value
 import JoltConstraints.witness_helpers.ram_address
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltInstance
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- A. Reconstruct a relaxed-answer trace whose every executed row and every
 nontermination final RAM word agrees with the witness. -/

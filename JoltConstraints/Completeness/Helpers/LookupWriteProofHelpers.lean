@@ -1,9 +1,11 @@
 import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 set_option maxHeartbeats 1000000
 set_option linter.unusedSimpArgs false
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 /-- A destination write followed by retirement captures the value written. -/
 theorem lookup_write_retire (dst : JoltISA.Dst)
@@ -68,7 +70,7 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
       ⟨row.runtimeAdvice, row.executes⟩
     have hreadpc : liftSail (get_arch_pc ()) row.preState =
         .ok bc.address row.preState := by
-      change liftSail (Sail.readReg Register.PC) row.preState = _
+      change liftSail (LeanRV64D.readReg Register.PC) row.preState = _
       unfold liftSail
       rw [readReg_eq_of_get? Register.PC row.preState.sail bc.address hpc]
     cases hi : bc.instruction with

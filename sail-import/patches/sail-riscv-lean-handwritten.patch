@@ -1,0 +1,20 @@
+diff --git a/handwritten_support/RiscvExtras.lean b/handwritten_support/RiscvExtras.lean
+index 22a0463..27dbbd0 100644
+--- a/handwritten_support/RiscvExtras.lean
++++ b/handwritten_support/RiscvExtras.lean
+@@ -11,6 +11,7 @@ import THE_MODULE_NAME.Defs
+ 
+ open Sail
+ open ConcurrencyInterfaceV1
++open THE_MODULE_NAME
+ 
+ def print_bits (_ : String) (_ : BitVec n) : Unit := ()
+ def print_string (_ : String) (_ : String) : Unit := ()
+@@ -112,6 +113,6 @@ axiom riscv_f64roundToInt : BitVec 3 → BitVec 64 → Bool → (BitVec 5 × Bit
+ 
+ -- Termination of currentlyEnabled
+ instance : SizeOf extension where
+-  sizeOf := extension.toCtorIdx
++  sizeOf := extension.ctorIdx
+ 
+ macro_rules | `(tactic| decreasing_trivial) => `(tactic| decide)

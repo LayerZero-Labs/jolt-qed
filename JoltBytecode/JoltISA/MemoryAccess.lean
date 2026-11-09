@@ -7,6 +7,8 @@ Authors: Ari
 
 import LeanRV64D.Prelude
 
+open LeanRV64D
+
 /-!
 # Jolt ISA memory address vocabulary
 
@@ -14,7 +16,7 @@ These are small helper abbreviations or definitions that make memory
 addressing more readable.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

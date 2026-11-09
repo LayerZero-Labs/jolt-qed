@@ -9,11 +9,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -215,12 +218,12 @@ def write_kind_of_num (arg_ : Nat) : write_kind :=
 
 def num_of_write_kind (arg_ : write_kind) : Int :=
   match arg_ with
-  | Write_plain => 0
-  | Write_RISCV_release => 1
-  | Write_RISCV_strong_release => 2
-  | Write_RISCV_conditional => 3
-  | Write_RISCV_conditional_release => 4
-  | Write_RISCV_conditional_strong_release => 5
+  | .Write_plain => 0
+  | .Write_RISCV_release => 1
+  | .Write_RISCV_strong_release => 2
+  | .Write_RISCV_conditional => 3
+  | .Write_RISCV_conditional_release => 4
+  | .Write_RISCV_conditional_strong_release => 5
 
 def undefined_read_kind (_ : Unit) : SailM read_kind := do
   (internal_pick
@@ -239,13 +242,13 @@ def read_kind_of_num (arg_ : Nat) : read_kind :=
 
 def num_of_read_kind (arg_ : read_kind) : Int :=
   match arg_ with
-  | Read_plain => 0
-  | Read_ifetch => 1
-  | Read_RISCV_acquire => 2
-  | Read_RISCV_strong_acquire => 3
-  | Read_RISCV_reserved => 4
-  | Read_RISCV_reserved_acquire => 5
-  | Read_RISCV_reserved_strong_acquire => 6
+  | .Read_plain => 0
+  | .Read_ifetch => 1
+  | .Read_RISCV_acquire => 2
+  | .Read_RISCV_strong_acquire => 3
+  | .Read_RISCV_reserved => 4
+  | .Read_RISCV_reserved_acquire => 5
+  | .Read_RISCV_reserved_strong_acquire => 6
 
 def undefined_barrier_kind (_ : Unit) : SailM barrier_kind := do
   (internal_pick
@@ -268,17 +271,17 @@ def barrier_kind_of_num (arg_ : Nat) : barrier_kind :=
 
 def num_of_barrier_kind (arg_ : barrier_kind) : Int :=
   match arg_ with
-  | Barrier_RISCV_rw_rw => 0
-  | Barrier_RISCV_r_rw => 1
-  | Barrier_RISCV_r_r => 2
-  | Barrier_RISCV_rw_w => 3
-  | Barrier_RISCV_w_w => 4
-  | Barrier_RISCV_w_rw => 5
-  | Barrier_RISCV_rw_r => 6
-  | Barrier_RISCV_r_w => 7
-  | Barrier_RISCV_w_r => 8
-  | Barrier_RISCV_tso => 9
-  | Barrier_RISCV_i => 10
+  | .Barrier_RISCV_rw_rw => 0
+  | .Barrier_RISCV_r_rw => 1
+  | .Barrier_RISCV_r_r => 2
+  | .Barrier_RISCV_rw_w => 3
+  | .Barrier_RISCV_w_w => 4
+  | .Barrier_RISCV_w_rw => 5
+  | .Barrier_RISCV_rw_r => 6
+  | .Barrier_RISCV_r_w => 7
+  | .Barrier_RISCV_w_r => 8
+  | .Barrier_RISCV_tso => 9
+  | .Barrier_RISCV_i => 10
 
 def undefined_RISCV_strong_access (_ : Unit) : SailM RISCV_strong_access := do
   (pure { variety := ← (undefined_Access_variety ()) })
@@ -288,24 +291,24 @@ def write_ram (wk : write_kind) (app_1 : physaddr) (width : Nat) (data : (BitVec
   let .Physaddr addr := app_1
   let request ← (( do
     (pure { access_kind := ← match wk with
-              | Write_plain =>
+              | .Write_plain =>
                 (pure (AK_explicit
                     { variety := AV_plain
                       strength := AS_normal }))
-              | Write_RISCV_release =>
+              | .Write_RISCV_release =>
                 (internal_error "core/phys_mem_interface.sail" 90 "Write_RISCV_release is unused")
-              | Write_RISCV_strong_release =>
+              | .Write_RISCV_strong_release =>
                 (internal_error "core/phys_mem_interface.sail" 91
                   "Write_RISCV_strong_release is unused")
-              | Write_RISCV_conditional =>
+              | .Write_RISCV_conditional =>
                 (pure (AK_explicit
                     { variety := AV_exclusive
                       strength := AS_normal }))
-              | Write_RISCV_conditional_release =>
+              | .Write_RISCV_conditional_release =>
                 (pure (AK_explicit
                     { variety := AV_exclusive
                       strength := AS_rel_or_acq }))
-              | Write_RISCV_conditional_strong_release =>
+              | .Write_RISCV_conditional_strong_release =>
                 (pure (AK_arch { variety := AV_exclusive }))
             va := none
             pa := addr
@@ -325,7 +328,7 @@ def write_ram_ea (_wk : write_kind) (app_1 : physaddr) (_width : Nat) : Unit :=
   let .Physaddr _addr := app_1
   ()
 
-/-- Type quantifiers: k_ex808301_ : Bool, width : Nat, width ≥ 0, 0 < width ∧
+/-- Type quantifiers: k_ex255004_ : Bool, width : Nat, width ≥ 0, 0 < width ∧
   width ≤ max_mem_access -/
 def read_ram (rk : read_kind) (app_1 : physaddr) (width : Nat) (read_meta : Bool) : SailM ((BitVec (8 * width)) × Unit) := do
   let .Physaddr addr := app_1
@@ -335,25 +338,25 @@ def read_ram (rk : read_kind) (app_1 : physaddr) (width : Nat) (read_meta : Bool
     else default_meta
   let request ← (( do
     (pure { access_kind := ← match rk with
-              | Read_plain =>
+              | .Read_plain =>
                 (pure (AK_explicit
                     { variety := AV_plain
                       strength := AS_normal }))
-              | Read_ifetch => (pure (AK_ifetch ()))
-              | Read_RISCV_acquire =>
+              | .Read_ifetch => (pure (AK_ifetch ()))
+              | .Read_RISCV_acquire =>
                 (internal_error "core/phys_mem_interface.sail" 131 "Read_RISCV_acquire is unused")
-              | Read_RISCV_strong_acquire =>
+              | .Read_RISCV_strong_acquire =>
                 (internal_error "core/phys_mem_interface.sail" 132
                   "Read_RISCV_strong_acquire is unused")
-              | Read_RISCV_reserved =>
+              | .Read_RISCV_reserved =>
                 (pure (AK_explicit
                     { variety := AV_exclusive
                       strength := AS_normal }))
-              | Read_RISCV_reserved_acquire =>
+              | .Read_RISCV_reserved_acquire =>
                 (pure (AK_explicit
                     { variety := AV_exclusive
                       strength := AS_rel_or_acq }))
-              | Read_RISCV_reserved_strong_acquire => (pure (AK_arch { variety := AV_exclusive }))
+              | .Read_RISCV_reserved_strong_acquire => (pure (AK_arch { variety := AV_exclusive }))
             va := none
             pa := addr
             translation := ()

@@ -9,6 +9,8 @@ import JoltConstraints.trace_interface
 import JoltConstraints.witness_domain
 import JoltConstraints.execution_conditions
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- Every column comes from an honest trace. The result remains a term of the

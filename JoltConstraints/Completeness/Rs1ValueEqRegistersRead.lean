@@ -6,6 +6,8 @@ import JoltConstraints.witness
 import JoltConstraints.honest_witness
 import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

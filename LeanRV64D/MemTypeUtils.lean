@@ -8,11 +8,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -201,16 +204,16 @@ open AmocasOddRegisterReservedBehavior
 def accessFaultFromAccessType (access : (MemoryAccessType mem_payload)) : SailM ExceptionType := do
   match access with
   | .InstructionFetch () => (pure (E_Fetch_Access_Fault ()))
-  | .Load Data => (pure (E_Load_Access_Fault ()))
-  | .Load PageTableEntry => (pure (E_Load_Access_Fault ()))
-  | .LoadReserved Data => (pure (E_Load_Access_Fault ()))
-  | .Store Data => (pure (E_SAMO_Access_Fault ()))
-  | .Store PageTableEntry => (pure (E_SAMO_Access_Fault ()))
-  | .StoreConditional Data => (pure (E_SAMO_Access_Fault ()))
-  | .Atomic (_, Data, Data) => (pure (E_SAMO_Access_Fault ()))
-  | .Load ShadowStack => (pure (E_SAMO_Access_Fault ()))
-  | .Store ShadowStack => (pure (E_SAMO_Access_Fault ()))
-  | .Atomic (_, ShadowStack, ShadowStack) => (pure (E_SAMO_Access_Fault ()))
+  | .Load .Data => (pure (E_Load_Access_Fault ()))
+  | .Load .PageTableEntry => (pure (E_Load_Access_Fault ()))
+  | .LoadReserved .Data => (pure (E_Load_Access_Fault ()))
+  | .Store .Data => (pure (E_SAMO_Access_Fault ()))
+  | .Store .PageTableEntry => (pure (E_SAMO_Access_Fault ()))
+  | .StoreConditional .Data => (pure (E_SAMO_Access_Fault ()))
+  | .Atomic (_, .Data, .Data) => (pure (E_SAMO_Access_Fault ()))
+  | .Load .ShadowStack => (pure (E_SAMO_Access_Fault ()))
+  | .Store .ShadowStack => (pure (E_SAMO_Access_Fault ()))
+  | .Atomic (_, .ShadowStack, .ShadowStack) => (pure (E_SAMO_Access_Fault ()))
   | .LoadReserved p =>
     (internal_error "core/mem_type_utils.sail" 28
       (HAppend.hAppend "Invalid payload ("
@@ -228,23 +231,23 @@ def accessFaultFromAccessType (access : (MemoryAccessType mem_payload)) : SailM 
   | .CacheAccess (.CB_zero ()) => (pure (E_SAMO_Access_Fault ()))
   | .CacheAccess (.CB_prefetch p) =>
     (match p with
-    | PREFETCH_R => (pure (E_Load_Access_Fault ()))
-    | PREFETCH_W => (pure (E_SAMO_Access_Fault ()))
-    | PREFETCH_I => (pure (E_Fetch_Access_Fault ())))
+    | .PREFETCH_R => (pure (E_Load_Access_Fault ()))
+    | .PREFETCH_W => (pure (E_SAMO_Access_Fault ()))
+    | .PREFETCH_I => (pure (E_Fetch_Access_Fault ())))
 
 def alignmentFaultFromAccessType (access : (MemoryAccessType mem_payload)) : SailM ExceptionType := do
   match access with
   | .InstructionFetch () => (pure (E_Fetch_Addr_Align ()))
-  | .Load Data => (pure (E_Load_Addr_Align ()))
-  | .Load PageTableEntry => (pure (E_Load_Addr_Align ()))
-  | .LoadReserved Data => (pure (E_Load_Addr_Align ()))
-  | .Store Data => (pure (E_SAMO_Addr_Align ()))
-  | .Store PageTableEntry => (pure (E_SAMO_Addr_Align ()))
-  | .StoreConditional Data => (pure (E_SAMO_Addr_Align ()))
-  | .Atomic (_, Data, Data) => (pure (E_SAMO_Addr_Align ()))
-  | .Load ShadowStack => (pure (E_SAMO_Addr_Align ()))
-  | .Store ShadowStack => (pure (E_SAMO_Addr_Align ()))
-  | .Atomic (_, ShadowStack, ShadowStack) => (pure (E_SAMO_Addr_Align ()))
+  | .Load .Data => (pure (E_Load_Addr_Align ()))
+  | .Load .PageTableEntry => (pure (E_Load_Addr_Align ()))
+  | .LoadReserved .Data => (pure (E_Load_Addr_Align ()))
+  | .Store .Data => (pure (E_SAMO_Addr_Align ()))
+  | .Store .PageTableEntry => (pure (E_SAMO_Addr_Align ()))
+  | .StoreConditional .Data => (pure (E_SAMO_Addr_Align ()))
+  | .Atomic (_, .Data, .Data) => (pure (E_SAMO_Addr_Align ()))
+  | .Load .ShadowStack => (pure (E_SAMO_Addr_Align ()))
+  | .Store .ShadowStack => (pure (E_SAMO_Addr_Align ()))
+  | .Atomic (_, .ShadowStack, .ShadowStack) => (pure (E_SAMO_Addr_Align ()))
   | .LoadReserved p =>
     (internal_error "core/mem_type_utils.sail" 66
       (HAppend.hAppend "Invalid payload ("
@@ -262,7 +265,7 @@ def alignmentFaultFromAccessType (access : (MemoryAccessType mem_payload)) : Sai
   | .CacheAccess (.CB_zero ()) => (pure (E_SAMO_Addr_Align ()))
   | .CacheAccess (.CB_prefetch p) =>
     (match p with
-    | PREFETCH_R => (pure (E_Load_Addr_Align ()))
-    | PREFETCH_W => (pure (E_SAMO_Addr_Align ()))
-    | PREFETCH_I => (pure (E_Fetch_Addr_Align ())))
+    | .PREFETCH_R => (pure (E_Load_Addr_Align ()))
+    | .PREFETCH_W => (pure (E_SAMO_Addr_Align ()))
+    | .PREFETCH_I => (pure (E_Fetch_Addr_Align ())))
 

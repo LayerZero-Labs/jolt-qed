@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -200,23 +203,7 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-def vsm4r_mnemonic_backwards (arg_ : String) : SailM zvk_vsm4r_funct6 := do
-  match arg_ with
-  | "vsm4r.vv" => (pure ZVK_VSM4R_VV)
-  | "vsm4r.vs" => (pure ZVK_VSM4R_VS)
-  | _ =>
-    (do
-      assert false "Pattern match failure at unknown location"
-      throw Error.Exit)
-
-def vsm4r_mnemonic_forwards_matches (arg_ : zvk_vsm4r_funct6) : Bool :=
-  match arg_ with
-  | ZVK_VSM4R_VV => true
-  | ZVK_VSM4R_VS => true
-
-def vsm4r_mnemonic_backwards_matches (arg_ : String) : Bool :=
-  match arg_ with
-  | "vsm4r.vv" => true
-  | "vsm4r.vs" => true
-  | _ => false
+/-- Type quantifiers: x : Int -/
+def __id (x : Int) : Int :=
+  x
 

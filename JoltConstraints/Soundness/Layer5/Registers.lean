@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer2.State
 import JoltConstraints.Soundness.Layer2.ZeroRegister
 
+open LeanRV64D
+
 /-! Register agreement for the execution-prefix induction. Alongside the table
 values, retain register presence: `sourceValue` alone defaults missing registers
 to zero and would not justify a successful execution read. Initialization and
@@ -12,7 +14,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
 

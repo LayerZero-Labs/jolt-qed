@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -211,6 +214,6 @@ def zicondop_of_num (arg_ : Nat) : zicondop :=
 
 def num_of_zicondop (arg_ : zicondop) : Int :=
   match arg_ with
-  | CZERO_EQZ => 0
-  | CZERO_NEZ => 1
+  | .CZERO_EQZ => 0
+  | .CZERO_NEZ => 1
 

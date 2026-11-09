@@ -3,7 +3,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 set_option linter.unusedSimpArgs false
@@ -63,16 +65,16 @@ private theorem executeAUIPC_preservesSystemProjectRegs
   unfold execute_UTYPE
   simp only
   exact Projection.bind_preservesSystemProjectRegs
-    (Projection.bind_preservesSystemProjectRegs
-      (getArchPC_preservesSystemProjectRegs s)
-      (fun pc s0 _hpc =>
-        Projection.pure_preservesSystemProjectRegs s0
-          (pc + sign_extend (m := 64) (imm +++ (0x000#12 : BitVec 12)))))
-    (fun value s1 _hvalue =>
+    (getArchPC_preservesSystemProjectRegs s)
+    (fun pc s0 _hpc =>
       Projection.bind_preservesSystemProjectRegs
-        (wX_bits_preservesSystemProjectRegs rd value s1)
-        (fun _ s2 _hwrite =>
-          Projection.pure_preservesSystemProjectRegs s2 RETIRE_SUCCESS))
+        (Projection.pure_preservesSystemProjectRegs s0
+          (pc + sign_extend (m := 64) (imm +++ (0x000#12 : BitVec 12))))
+        (fun value s1 _hvalue =>
+          Projection.bind_preservesSystemProjectRegs
+            (wX_bits_preservesSystemProjectRegs rd value s1)
+            (fun _ s2 _hwrite =>
+              Projection.pure_preservesSystemProjectRegs s2 RETIRE_SUCCESS)))
 
 /-- Native `AUIPC` agrees with Sail `execute_UTYPE ... AUIPC`. -/
 theorem auipcInstr_eq_sail
@@ -98,7 +100,7 @@ theorem auipcInstr_eq_sail
     unfold JoltISA.execInstr execute_UTYPE JoltISA.writeDst liftSail get_arch_pc
     simp only [JoltISA.addWide_low]
     simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run]
-    cases hpc : Sail.readReg Register.PC js.sail with
+    cases hpc : LeanRV64D.readReg Register.PC js.sail with
     | error e s1 =>
         simp only [hpc, EStateM.run]
     | ok pc s1 =>

@@ -1,5 +1,7 @@
 import JoltBytecode.JoltISA.Instruction
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltRegisterEncoding

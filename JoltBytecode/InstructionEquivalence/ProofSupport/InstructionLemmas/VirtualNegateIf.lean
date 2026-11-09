@@ -1,6 +1,8 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Lemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.StateLemmas
 
+open LeanRV64D
+
 /-!
 # VirtualNegateIf instruction semantics
 
@@ -8,7 +10,7 @@ Run lemmas for the source combinations used by the signed division and
 remainder expansions.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

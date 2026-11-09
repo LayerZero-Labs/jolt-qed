@@ -2,6 +2,8 @@ import JoltConstraints.Soundness.Layer2.Registers
 import JoltConstraints.Soundness.Layer2.RegisterMap
 import JoltConstraints.Soundness.Layer2.ZeroLookup
 
+open LeanRV64D
+
 /-! The x0 register-table entry remains zero in every satisfying witness.
 Expansion permits only the canonical no-op to target x0. Its constraints force
 a zero write when the old x0 value is zero; other rows cannot change that entry.

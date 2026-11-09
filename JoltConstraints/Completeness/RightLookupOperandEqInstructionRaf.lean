@@ -2,6 +2,8 @@ import JoltConstraints.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.Constraints.RightLookupOperandEqInstructionRaf
 import JoltConstraints.Soundness.Layer4.Interleave
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer4.PextEntry
 
+open LeanRV64D
+
 /-! Extraction lookup outputs on arbitrary source words and masks. -/
 
 set_option autoImplicit false

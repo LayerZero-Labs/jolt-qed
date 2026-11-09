@@ -3,6 +3,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltConstraints.Completeness.Helpers.HostIOFrame
 import JoltConstraints.Completeness.Helpers.FloorMemory
 
+open LeanRV64D
+
 /-!
 Instruction-level register frames for the honest register-history witness.
 Successful final rows preserve every register other than their destination.
@@ -11,7 +13,7 @@ The proofs use the trace's existing execution and memory assumptions.
 
 set_option autoImplicit false
 set_option linter.unusedSimpArgs false
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 theorem register42_prepareSource_preserves_sourceValue
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -151,8 +153,8 @@ theorem register42_nextPC_preserves_sourceValue
 theorem register42_lift_readReg_pure
     (reg : Register) (s t : SailJoltState)
     (value : RegisterType reg)
-    (hread : liftSail (Sail.readReg reg) s = .ok value t) : t = s := by
-  cases hr : Sail.readReg reg s.sail with
+    (hread : liftSail (LeanRV64D.readReg reg) s = .ok value t) : t = s := by
+  cases hr : LeanRV64D.readReg reg s.sail with
   | error e s' => simp only [liftSail, hr] at hread; cases hread
   | ok v s' =>
       have hs := readReg_pure reg s.sail v s' hr
@@ -164,9 +166,9 @@ theorem register42_lift_readReg_pure
 theorem register42_nextPC_write_preserves_sourceValue
     (src : JoltISA.Src) (value : BitVec 64)
     (s t : SailJoltState)
-    (hwrite : liftSail (Sail.writeReg Register.nextPC value) s = .ok () t) :
+    (hwrite : liftSail (LeanRV64D.writeReg Register.nextPC value) s = .ok () t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
-  simp only [liftSail, Sail.writeReg, PreSail.writeReg,
+  simp only [liftSail, LeanRV64D.writeReg, Sail.ConcurrencyInterfaceV1.PreSail.writeReg,
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet] at hwrite
   cases hwrite
   exact register42_nextPC_preserves_sourceValue src value s
@@ -174,9 +176,9 @@ theorem register42_nextPC_write_preserves_sourceValue
 theorem register42_lift_readReg_bind {α : Type}
     (reg : Register) (f : RegisterType reg → JoltMonad α)
     (s t : SailJoltState) (result : α)
-    (hexec : (liftSail (Sail.readReg reg) >>= f) s = .ok result t) :
+    (hexec : (liftSail (LeanRV64D.readReg reg) >>= f) s = .ok result t) :
     ∃ value, f value s = .ok result t := by
-  cases hr : liftSail (Sail.readReg reg) s with
+  cases hr : liftSail (LeanRV64D.readReg reg) s with
   | error e s' => simp only [bind, EStateM.bind, hr] at hexec; cases hexec
   | ok v s' =>
       have hs := register42_lift_readReg_pure reg s s' v hr
@@ -191,7 +193,7 @@ theorem register42_write_then_nextPC_preserves_other
     (hready : ∀ rd, Assumptions.XRegReadable rd s.sail)
     (hexec : (do
       JoltISA.writeDst dst written
-      liftSail (Sail.writeReg Register.nextPC pc)
+      liftSail (LeanRV64D.writeReg Register.nextPC pc)
       pure RETIRE_SUCCESS) s = .ok (.Retire_Success ()) t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
   cases hw : JoltISA.writeDst dst written s with
@@ -199,7 +201,7 @@ theorem register42_write_then_nextPC_preserves_other
   | ok u mid =>
       cases u
       simp only [bind, EStateM.bind, hw] at hexec
-      cases hp : liftSail (Sail.writeReg Register.nextPC pc) mid with
+      cases hp : liftSail (LeanRV64D.writeReg Register.nextPC pc) mid with
       | error e s' => simp only [hp] at hexec; cases hexec
       | ok u post =>
           cases u
@@ -296,11 +298,11 @@ theorem register42_nextPC_then_writeDst_preserves_other
     (hne : src ≠ register42_dstAsSrc dst)
     (hready : ∀ rs, Assumptions.XRegReadable rs s.sail)
     (hexec : (do
-      liftSail (Sail.writeReg Register.nextPC target)
+      liftSail (LeanRV64D.writeReg Register.nextPC target)
       JoltISA.writeDst dst written
       pure RETIRE_SUCCESS) s = .ok (.Retire_Success ()) t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
-  have hpc : liftSail (Sail.writeReg Register.nextPC target) s =
+  have hpc : liftSail (LeanRV64D.writeReg Register.nextPC target) s =
       .ok () { s with sail := { s.sail with
         regs := s.sail.regs.insert Register.nextPC target } } := rfl
   simp only [bind, EStateM.bind, hpc] at hexec
@@ -349,10 +351,18 @@ theorem bind_rule {α β : Type} {m : SailM α} {f : α → SailM β}
     simp only [bind, EStateM.bind, hr] at h
     exact (hf x s' t v h).trans (hm s s' x hr)
 
-theorem read_rule (r : Register) : Preserves (Sail.readReg r) := by
+theorem read_rule (r : Register) : Preserves (LeanRV64D.readReg r) := by
   intro s t v h
   cases readReg_pure r s v t h
   rfl
+
+theorem andM_rule {first second : SailM Bool}
+    (keepsFirst : Preserves first) (keepsSecond : Preserves second) :
+    Preserves (first <&&> second) :=
+  bind_rule keepsFirst fun value => by
+    cases value
+    · exact pure_rule false
+    · exact keepsSecond
 
 end SailReadOnly
 
@@ -381,7 +391,7 @@ theorem readSrc_rule (src : JoltISA.Src) : Preserves (JoltISA.readSrc src) := by
   exact (lookup_readSrc_value src s t value h).1
 
 theorem liftReadReg_rule (reg : Register) :
-    Preserves (liftSail (Sail.readReg reg)) := by
+    Preserves (liftSail (LeanRV64D.readReg reg)) := by
   intro s t value h
   exact register42_lift_readReg_pure reg s t value h
 
@@ -403,13 +413,11 @@ macro "register42_readOnly_auto" : tactic => `(tactic|
 
 theorem register42_currentlyEnabled_readOnly :
     SailReadOnly.Preserves (currentlyEnabled extension.Ext_Zca) := by
-  unfold currentlyEnabled
-  apply SailReadOnly.bind_rule
-  · unfold currentlyEnabled
-    exact SailReadOnly.bind_rule (SailReadOnly.read_rule Register.misa)
-      (fun _ => SailReadOnly.pure_rule _)
-  · intro zca
-    exact SailReadOnly.pure_rule _
+  simp only [currentlyEnabled]
+  open SailReadOnly in
+  exact andM_rule (pure_rule _)
+    (bind_rule (andM_rule (pure_rule _)
+      (bind_rule (read_rule Register.misa) fun _ => pure_rule _)) fun _ => pure_rule _)
 
 theorem register42_jump_to_shape
     (target : BitVec 64) (s t : SailState)
@@ -417,32 +425,34 @@ theorem register42_jump_to_shape
     (hjump : jump_to target s = .ok result t) :
     t = s ∨ t = System.setNextPCState s target := by
   unfold jump_to ext_control_check_pc at hjump
-  simp only [SailME.run, PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
+  simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
     bind, EStateM.bind, pure, EStateM.pure,
-    Sail.assert, PreSail.assert] at hjump
+    LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at hjump
   by_cases hbit : (BitVec.access target 0 == 0#1) = true
-  · simp only [hbit, ↓reduceIte, pure, EStateM.pure, bind, EStateM.bind,
-      ExceptT.bindCont, liftM, monadLift, MonadLift.monadLift, ExceptT.lift,
-      ExceptT.mk, EStateM.map, Functor.map] at hjump
-    cases hz : currentlyEnabled extension.Ext_Zca s with
-    | error e s' => simp only [hz] at hjump; cases hjump
-    | ok zca s' =>
+  · simp only [hbit, ↓reduceIte, pure, EStateM.pure, EStateM.bind,
+      ExceptT.bindCont, EStateM.map] at hjump
+    -- `<&&>` short-circuits: `Ext_Zca` is read only when bit 1 is set.
+    cases bit1 : bit_to_bool (BitVec.access target 1)
+    · simp only [andM, toBool, bit1, ExceptT.bindCont, EStateM.map, Bool.false_eq_true,
+        ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
+        pure, EStateM.pure] at hjump
+      cases hjump
+      first | exact Or.inl rfl | exact Or.inr rfl
+    · simp only [andM, toBool, bit1, bind, EStateM.bind, pure, EStateM.pure,
+        ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.mk, EStateM.map] at hjump
+      cases hz : currentlyEnabled extension.Ext_Zca s with
+      | error e s' => simp only [hz] at hjump; cases hjump
+      | ok zca s' =>
         have hs' := register42_currentlyEnabled_readOnly s s' zca hz
         subst s'
-        by_cases halign : bit_to_bool (BitVec.access target 1) = true ∧
-            LeanRV64D.Functions.not zca = true
-        all_goals
-          simp only [hz, ExceptT.bindCont, liftM, monadLift,
-            MonadLift.monadLift, ExceptT.lift, ExceptT.mk,
-            EStateM.map, Functor.map, Bool.and_eq_true, halign,
-            ↓reduceIte, set_next_pc, Sail.writeReg, bind, EStateM.bind,
-            pure, EStateM.pure] at hjump
+        cases zca <;>
+          simp only [hz, sail_not_true, sail_not_false, ExceptT.bindCont, EStateM.map,
+            Bool.false_eq_true, ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind,
+            EStateM.bind, pure, EStateM.pure] at hjump <;>
           cases hjump
-          first
-          | exact Or.inl rfl
-          | exact Or.inr rfl
+        all_goals first | exact Or.inl rfl | exact Or.inr rfl
   · simp only [hbit, ↓reduceIte, throw, throwThe] at hjump
     cases hjump
 
@@ -472,7 +482,7 @@ theorem register42_branch_preserves_sourceValue
       let x ← JoltISA.readSrc lhs
       let y ← JoltISA.readSrc rhs
       if decision x y then
-        let pc ← liftSail (Sail.readReg Register.PC)
+        let pc ← liftSail (LeanRV64D.readReg Register.PC)
         liftSail (jump_to (pc + offset))
       else pure RETIRE_SUCCESS) s = .ok (.Retire_Success ()) t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
@@ -629,9 +639,7 @@ theorem execHostIO_frame : Preserves JoltISA.execHostIO := by
   dsimp only
   split
   · exact pure_rule _
-  · refine bind_rule (pure_rule _) (fun _ => ?_)
-    refine bind_rule (read_rule _) (fun callId => ?_)
-    repeat' first
+  · repeat' first
       | exact readHostBytes_frame _ _ _ _ _
       | exact read_rule _
       | exact pure_rule _
@@ -705,7 +713,7 @@ theorem register42_instruction_preserves_other
     | xreg rd => simp only [JoltISA.sourceValue, hsail]
     | vreg vr => exact congrFun hvregs vr
   case AUIPC dst imm =>
-    have h : (liftSail (Sail.readReg Register.PC) >>= fun pc => do
+    have h : (liftSail (LeanRV64D.readReg Register.PC) >>= fun pc => do
       JoltISA.writeDst dst (BitVec.ofNat 64 (JoltISA.addWide pc imm))
       pure RETIRE_SUCCESS) s = .ok (.Retire_Success ()) t := by
       simpa only [JoltISA.execInstr, get_arch_pc] using hexec
@@ -784,10 +792,8 @@ theorem register42_srcOfDestinationAddress (dst : JoltISA.Dst)
             have hlt128 : bits.toNat < 128 := by omega
             simp [TraceWitness.destinationRegisterAddress,
               BitVec.toNat_setWidth, Nat.mod_eq_of_lt hlt128]
-            exact hlt128
           simp [register42_srcOfAddress, haddr, hlt,
             register42_dstAsSrc]
-          exact hlt
   | vreg vr =>
       have hge := register42_canonical_vreg_ge32 vr hcanon
       simp [register42_srcOfAddress,
@@ -833,7 +839,8 @@ theorem register42_RdWa_real
   simp only [dif_pos hb]
   cases instr :
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
-    simp [JoltISA.Instr.destination?, TraceWitness.capturedDestination]
+    simp [JoltISA.Instr.destination?, TraceWitness.capturedDestination] <;>
+    rfl
 
 theorem register42_destination_withRuntimeAdvice
     (instr : JoltISA.Instr) (advice : instr.RuntimeAdvice) :

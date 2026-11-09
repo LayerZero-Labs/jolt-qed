@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer5.NarrowAdvice
 import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltConstraints.expansions
 
+open LeanRV64D
+
 /-! Full execution of the generated narrow-advice expansions. The source-level
 x0 case writes temporary register 40; the ordinary case writes the requested
 architectural register. No initial register-presence assumption is needed:
@@ -12,7 +14,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The source operand for the register used by a side-effecting destination rewrite. -/
 def adviceReadSource (rd : regidx) : Src :=

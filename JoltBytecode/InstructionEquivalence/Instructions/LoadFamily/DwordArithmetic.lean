@@ -3,10 +3,12 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Windows
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.VirtualPext
 import Mathlib.Tactic.IntervalCases
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -362,7 +364,7 @@ theorem window_mask_b_pext (d base : BitVec 64) (imm : BitVec 12) :
   have hpext := JoltISA.pext_value_contiguous d (8 * offset) 8 hfit
   simpa only [jolt_virtual_window_mask_b_value, load_effective_address, offset,
     byte_of_dword, Nat.shiftLeft_eq,
-    show (0xFF : Nat) = 2 ^ 8 - 1 by norm_num] using hpext
+    show (0xFF : Nat) = 2 ^ 8 - 1 by norm_num] using! hpext
 
 /-- Signed byte extraction is the same selected byte sign-extended to XLEN. -/
 theorem window_mask_b_pext_signed (d base : BitVec 64) (imm : BitVec 12) :
@@ -377,7 +379,7 @@ theorem window_mask_b_pext_signed (d base : BitVec 64) (imm : BitVec 12) :
   have hpext := JoltISA.pext_signed_value_contiguous d (8 * offset) 8 (by omega) hfit
   simpa only [jolt_virtual_window_mask_b_value, load_effective_address, offset,
     byte_of_dword, Nat.shiftLeft_eq,
-    show (0xFF : Nat) = 2 ^ 8 - 1 by norm_num] using hpext
+    show (0xFF : Nat) = 2 ^ 8 - 1 by norm_num] using! hpext
 
 private theorem halfword_window_offset_eq (addr : BitVec 64)
     (halign : addr &&& (1 : BitVec 64) = 0) :
@@ -566,7 +568,7 @@ private lemma addr_low_bit_eq_of_and7_toNat (addr : BitVec 64) {k i : Nat}
   have h7 : (7 : BitVec 64).getLsbD i = true := by
     interval_cases i <;> decide
   rw [h7, Bool.and_true] at h
-  simpa [BitVec.getLsbD_eq_getElem] using h
+  simpa [BitVec.getLsbD_eq_getElem] using! h
 
 private lemma sll_byte_shift_amount (addr : BitVec 64) (k : Nat)
     (hk : (addr &&& 7).toNat = k) (hk_lt : k < 8) :

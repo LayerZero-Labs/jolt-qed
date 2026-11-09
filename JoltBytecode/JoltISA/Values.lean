@@ -8,6 +8,8 @@ import JoltBytecode.JoltISA.semantic_helpers
 import Mathlib.Tactic
 import Mathlib.Data.BitVec
 
+open LeanRV64D
+
 /-!
 # Helper Functions
 
@@ -22,7 +24,7 @@ Proof-side characterisations of these helpers live in
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

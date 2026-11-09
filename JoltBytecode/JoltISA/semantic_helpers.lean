@@ -1,9 +1,11 @@
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.RegisterAccess
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open LeanRV64D.Functions
+open LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

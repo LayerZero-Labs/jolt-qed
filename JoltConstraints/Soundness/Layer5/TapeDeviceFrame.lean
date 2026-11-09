@@ -2,11 +2,13 @@ import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Completeness.Helpers.IOSetupFrame
 import JoltConstraints.layout_facts
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- An execution prefix carries a reflexive, transitive relation on devices
 from its initial device to its final device when every successful byte store

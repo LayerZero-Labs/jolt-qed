@@ -11,6 +11,8 @@ checks are producer checks, not additional verifier constraints or theorem premi
 -/
 import JoltConstraints.program
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- In the bytecode, a VirtualAdvice instruction's value is a placeholder. The tracer

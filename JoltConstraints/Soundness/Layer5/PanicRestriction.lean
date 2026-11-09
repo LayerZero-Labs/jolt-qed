@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
 
+open LeanRV64D
+
 /-! Temporary restrictions for the two known panic issues, written up in
 `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md` and
 `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`.
@@ -28,7 +30,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- An eight-byte access at `address` touches the panic region
 `[panic, termination)` of `device`. -/

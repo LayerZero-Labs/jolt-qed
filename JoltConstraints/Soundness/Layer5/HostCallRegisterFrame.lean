@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.HostCallRestriction
 import JoltConstraints.Soundness.Layer5.Registers
 
+open LeanRV64D
+
 /-! A successful operandless HostIO row preserves Sail state and virtual
 registers. Its absent destination leaves the witness register table unchanged,
 so the local step preserves live-register agreement. -/
@@ -9,7 +11,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Keeping Sail state and virtual registers keeps every source value.
 For example, changing only an output buffer keeps x1 and temporary 40.

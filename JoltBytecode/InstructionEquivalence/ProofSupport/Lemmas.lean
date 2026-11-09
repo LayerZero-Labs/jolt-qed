@@ -1,6 +1,8 @@
 import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 
+open LeanRV64D
+
 /-!
 # Basic Jolt ISA semantic lemmas
 
@@ -9,12 +11,20 @@ facts about the generic interpreter rather than unfolding it ad hoc.
 -/
 
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true
 
 noncomputable section
+
+/-- Sail's `not` on literals. Rewriting with these, rather than unfolding `not`,
+keeps the `Decidable` instance of an enclosing `if` in step with its condition
+(Lean 4.35 rejects the mismatched term that unfolding leaves behind). -/
+theorem sail_not_true : LeanRV64D.Functions.not true = false := rfl
+
+/-- See `sail_not_true`. -/
+theorem sail_not_false : LeanRV64D.Functions.not false = true := rfl
 
 namespace JoltISA
 
@@ -60,7 +70,7 @@ theorem execProgram_instr_run_retire_inv (instr : Instr) (rest : Program)
       cases result <;> simp only [pure, EStateM.pure] at h
       case Retire_Success u =>
         cases u
-        exact ⟨js₁, by simpa [EStateM.run] using hinstr, h⟩
+        exact ⟨js₁, by simpa [EStateM.run, RETIRE_SUCCESS] using hinstr, h⟩
       all_goals cases h
   | error e js₁ =>
       simp only [hinstr] at h

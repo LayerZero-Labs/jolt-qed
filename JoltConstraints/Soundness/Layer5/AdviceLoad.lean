@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer5.Advice
 
+open LeanRV64D
+
 /-! Selected tape loads use the witness's range-check word and advance only
 the advice cursor before writing a canonical destination.
 See jolt/tracer/src/instruction/virtual_advice_load.rs
@@ -9,7 +11,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- An expanded bytecode tape load has byte count 1, 2, 4 or 8.
 This lifts the shared advice checker through materialization and program

@@ -1,5 +1,7 @@
 import JoltBytecode.JoltISA.Core
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltISA

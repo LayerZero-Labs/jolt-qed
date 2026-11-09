@@ -3,6 +3,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Alignment
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.LD
 import Mathlib.Tactic
 
+open LeanRV64D
+
 /-!
 # Memory read pipeline reductions
 
@@ -14,7 +16,7 @@ set_option linter.unusedVariables false
 set_option linter.unusedSimpArgs false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open Std.Do
 open virtaddr MemoryAccessType mem_payload
 
@@ -29,7 +31,7 @@ noncomputable section
 theorem readBytes_8_eq_loaded_dword (addr : BitVec 64) (s : SailState)
     (hbytes : MemBytesPresentAt s addr 8)
     (h_no_ovf : addr.toNat + 7 < 2 ^ 64) :
-    (PreSail.readBytes 8 addr.toNat : SailM _) s =
+    (Sail.ConcurrencyInterfaceV1.PreSail.readBytes 8 addr.toNat : SailM _) s =
     .ok (loaded_dword_at s addr hbytes h_no_ovf, none) s := by
   obtain ⟨b0, hb0'⟩ := hbytes 0 (by omega)
   obtain ⟨b1, hb1⟩ := hbytes 1 (by omega)
@@ -40,7 +42,7 @@ theorem readBytes_8_eq_loaded_dword (addr : BitVec 64) (s : SailState)
   obtain ⟨b6, hb6⟩ := hbytes 6 (by omega)
   obtain ⟨b7, hb7⟩ := hbytes 7 (by omega)
   have hb0 : s.mem.get? addr.toNat = some b0 := by simpa using hb0'
-  simp only [PreSail.readBytes, PreSail.readByte,
+  simp only [Sail.ConcurrencyInterfaceV1.PreSail.readBytes, Sail.ConcurrencyInterfaceV1.PreSail.readByte,
              bind, EStateM.bind, pure, EStateM.pure,
              MonadStateOf.get, EStateM.get, getThe, get,
              hb0, hb1, hb2, hb3, hb4, hb5, hb6, hb7]
@@ -58,11 +60,11 @@ theorem readBytes_8_eq_loaded_dword (addr : BitVec 64) (s : SailState)
 
 theorem readBytes_1_eq_loaded_byte (addr : BitVec 64) (s : SailState)
     (hbytes : MemBytesPresentAt s addr 1) :
-    (PreSail.readBytes 1 addr.toNat : SailM _) s =
+    (Sail.ConcurrencyInterfaceV1.PreSail.readBytes 1 addr.toNat : SailM _) s =
     .ok (loaded_byte_at s addr (by simpa using hbytes 0 (by omega)), none) s := by
   obtain ⟨b0, hb0'⟩ := hbytes 0 (by omega)
   have hb0 : s.mem.get? addr.toNat = some b0 := by simpa using hb0'
-  simp only [PreSail.readBytes, PreSail.readByte,
+  simp only [Sail.ConcurrencyInterfaceV1.PreSail.readBytes, Sail.ConcurrencyInterfaceV1.PreSail.readByte,
              bind, EStateM.bind, pure, EStateM.pure,
              MonadStateOf.get, EStateM.get, getThe, get,
              hb0]
@@ -72,12 +74,12 @@ theorem readBytes_1_eq_loaded_byte (addr : BitVec 64) (s : SailState)
 theorem readBytes_2_eq_loaded_halfword (addr : BitVec 64) (s : SailState)
     (hbytes : MemBytesPresentAt s addr 2)
     (h_no_ovf : addr.toNat + 1 < 2 ^ 64) :
-    (PreSail.readBytes 2 addr.toNat : SailM _) s =
+    (Sail.ConcurrencyInterfaceV1.PreSail.readBytes 2 addr.toNat : SailM _) s =
     .ok (loaded_halfword_at s addr hbytes h_no_ovf, none) s := by
   obtain ⟨b0, hb0'⟩ := hbytes 0 (by omega)
   obtain ⟨b1, hb1⟩ := hbytes 1 (by omega)
   have hb0 : s.mem.get? addr.toNat = some b0 := by simpa using hb0'
-  simp only [PreSail.readBytes, PreSail.readByte,
+  simp only [Sail.ConcurrencyInterfaceV1.PreSail.readBytes, Sail.ConcurrencyInterfaceV1.PreSail.readByte,
              bind, EStateM.bind, pure, EStateM.pure,
              MonadStateOf.get, EStateM.get, getThe, get,
              hb0, hb1]
@@ -90,14 +92,14 @@ theorem readBytes_2_eq_loaded_halfword (addr : BitVec 64) (s : SailState)
 theorem readBytes_4_eq_loaded_word (addr : BitVec 64) (s : SailState)
     (hbytes : MemBytesPresentAt s addr 4)
     (h_no_ovf : addr.toNat + 3 < 2 ^ 64) :
-    (PreSail.readBytes 4 addr.toNat : SailM _) s =
+    (Sail.ConcurrencyInterfaceV1.PreSail.readBytes 4 addr.toNat : SailM _) s =
     .ok (loaded_word_at s addr hbytes h_no_ovf, none) s := by
   obtain ⟨b0, hb0'⟩ := hbytes 0 (by omega)
   obtain ⟨b1, hb1⟩ := hbytes 1 (by omega)
   obtain ⟨b2, hb2⟩ := hbytes 2 (by omega)
   obtain ⟨b3, hb3⟩ := hbytes 3 (by omega)
   have hb0 : s.mem.get? addr.toNat = some b0 := by simpa using hb0'
-  simp only [PreSail.readBytes, PreSail.readByte,
+  simp only [Sail.ConcurrencyInterfaceV1.PreSail.readBytes, Sail.ConcurrencyInterfaceV1.PreSail.readByte,
              bind, EStateM.bind, pure, EStateM.pure,
              MonadStateOf.get, EStateM.get, getThe, get,
              hb0, hb1, hb2, hb3]
@@ -114,8 +116,8 @@ theorem read_ram_1_eq_loaded_byte (addr : BitVec 64) (s : SailState)
     LeanRV64D.Functions.read_ram read_kind.Read_plain (physaddr.Physaddr addr) 1 false s =
     .ok (loaded_byte_at s addr (by simpa using hbytes 0 (by omega)), default_meta) s := by
   dsimp [LeanRV64D.Functions.read_ram,
-         Sail.ConcurrencyInterfaceV1.sail_mem_read,
-         PreSail.ConcurrencyInterfaceV1.sail_mem_read,
+         LeanRV64D.ConcurrencyInterfaceV1.sail_mem_read,
+         Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_read,
          default_meta]
   simp only [bind, EStateM.bind, pure, EStateM.pure]
   rw [readBytes_1_eq_loaded_byte addr s hbytes]
@@ -127,8 +129,8 @@ theorem read_ram_2_eq_loaded_halfword (addr : BitVec 64) (s : SailState)
     LeanRV64D.Functions.read_ram read_kind.Read_plain (physaddr.Physaddr addr) 2 false s =
     .ok (loaded_halfword_at s addr hbytes h_no_ovf, default_meta) s := by
   dsimp [LeanRV64D.Functions.read_ram,
-         Sail.ConcurrencyInterfaceV1.sail_mem_read,
-         PreSail.ConcurrencyInterfaceV1.sail_mem_read,
+         LeanRV64D.ConcurrencyInterfaceV1.sail_mem_read,
+         Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_read,
          default_meta]
   simp only [bind, EStateM.bind, pure, EStateM.pure]
   rw [readBytes_2_eq_loaded_halfword addr s hbytes h_no_ovf]
@@ -140,8 +142,8 @@ theorem read_ram_4_eq_loaded_word (addr : BitVec 64) (s : SailState)
     LeanRV64D.Functions.read_ram read_kind.Read_plain (physaddr.Physaddr addr) 4 false s =
     .ok (loaded_word_at s addr hbytes h_no_ovf, default_meta) s := by
   dsimp [LeanRV64D.Functions.read_ram,
-         Sail.ConcurrencyInterfaceV1.sail_mem_read,
-         PreSail.ConcurrencyInterfaceV1.sail_mem_read,
+         LeanRV64D.ConcurrencyInterfaceV1.sail_mem_read,
+         Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_read,
          default_meta]
   simp only [bind, EStateM.bind, pure, EStateM.pure]
   rw [readBytes_4_eq_loaded_word addr s hbytes h_no_ovf]
@@ -265,24 +267,20 @@ theorem vmem_read_addr_byte_bridge (addr : BitVec 64) (offset : BitVec 64) (s : 
     .ok (Ok value) s := by
   unfold vmem_read_addr
   simp only [ha.misalign, Bool.false_eq_true, if_false]
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate :=
     translateAddr_load_data_of_machine_mprv_zero addr s hpriv hmprv
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift, ExceptT.map, ExceptT.instMonadLift,
-        MonadLift.monadLift, SailME.throw, PreSail.PreSailME.throw, MonadExceptOf.throw,
+        MonadLift.monadLift, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw, MonadExceptOf.throw,
         Except.ok, Except.error,
         misaligned_order, sys_misaligned_order_decreasing,
-        bits_of_virtaddr, Sail.assert, PreSail.assert,
+        bits_of_virtaddr, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
         untilFuelM, untilFuelM.go, zeros, BitVec.zero, BitVec.addInt,
         Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
         liftM, monadLift, Functor.map,
         ha.split, htranslate, h_mem]
-  change 0#8 ||| value.shiftLeft 0 = value
-  rw [BitVec.shiftLeft_eq]
-  rw [BitVec.shiftLeft_zero]
-  rw [BitVec.zero_or]
 
 theorem vmem_read_byte_reduces (imm : BitVec 12) (rs1 : regidx)
     (s : SailState)
@@ -297,7 +295,7 @@ theorem vmem_read_byte_reduces (imm : BitVec 12) (rs1 : regidx)
     vmem_read rs1 (sign_extend (m := 64) imm) 1 (Load Data) false false false s =
     .ok (Ok value) s := by
   unfold vmem_read
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift,
@@ -317,24 +315,20 @@ theorem vmem_read_addr_halfword_bridge (addr : BitVec 64) (offset : BitVec 64) (
     .ok (Ok value) s := by
   unfold vmem_read_addr
   simp only [ha.misalign, Bool.false_eq_true, if_false]
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate :=
     translateAddr_load_data_of_machine_mprv_zero addr s hpriv hmprv
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift, ExceptT.map, ExceptT.instMonadLift,
-        MonadLift.monadLift, SailME.throw, PreSail.PreSailME.throw, MonadExceptOf.throw,
+        MonadLift.monadLift, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw, MonadExceptOf.throw,
         Except.ok, Except.error,
         misaligned_order, sys_misaligned_order_decreasing,
-        bits_of_virtaddr, Sail.assert, PreSail.assert,
+        bits_of_virtaddr, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
         untilFuelM, untilFuelM.go, zeros, BitVec.zero, BitVec.addInt,
         Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
         liftM, monadLift, Functor.map,
         ha.split, htranslate, h_mem]
-  change 0#16 ||| value.shiftLeft 0 = value
-  rw [BitVec.shiftLeft_eq]
-  rw [BitVec.shiftLeft_zero]
-  rw [BitVec.zero_or]
 
 theorem vmem_read_addr_word_bridge (addr : BitVec 64) (offset : BitVec 64) (s : SailState)
     (hpriv : Assumptions.CurPrivilegeMachine s)
@@ -348,24 +342,20 @@ theorem vmem_read_addr_word_bridge (addr : BitVec 64) (offset : BitVec 64) (s : 
     .ok (Ok value) s := by
   unfold vmem_read_addr
   simp only [ha.misalign, Bool.false_eq_true, if_false]
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate :=
     translateAddr_load_data_of_machine_mprv_zero addr s hpriv hmprv
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift, ExceptT.map, ExceptT.instMonadLift,
-        MonadLift.monadLift, SailME.throw, PreSail.PreSailME.throw, MonadExceptOf.throw,
+        MonadLift.monadLift, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw, MonadExceptOf.throw,
         Except.ok, Except.error,
         misaligned_order, sys_misaligned_order_decreasing,
-        bits_of_virtaddr, Sail.assert, PreSail.assert,
+        bits_of_virtaddr, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
         untilFuelM, untilFuelM.go, zeros, BitVec.zero, BitVec.addInt,
         Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
         liftM, monadLift, Functor.map,
         ha.split, htranslate, h_mem]
-  change 0#32 ||| value.shiftLeft 0 = value
-  rw [BitVec.shiftLeft_eq]
-  rw [BitVec.shiftLeft_zero]
-  rw [BitVec.zero_or]
 
 theorem read_ram_eq_loaded_dword (addr : BitVec 64) (s : SailState)
     (hbytes : MemBytesPresentAt s addr 8)
@@ -373,8 +363,8 @@ theorem read_ram_eq_loaded_dword (addr : BitVec 64) (s : SailState)
     LeanRV64D.Functions.read_ram read_kind.Read_plain (physaddr.Physaddr addr) 8 false s =
     .ok (loaded_dword_at s addr hbytes h_no_ovf, default_meta) s := by
   dsimp [LeanRV64D.Functions.read_ram,
-         Sail.ConcurrencyInterfaceV1.sail_mem_read,
-         PreSail.ConcurrencyInterfaceV1.sail_mem_read,
+         LeanRV64D.ConcurrencyInterfaceV1.sail_mem_read,
+         Sail.ConcurrencyInterfaceV1.PreSail.sail_mem_read,
          default_meta]
   simp only [bind, EStateM.bind, pure, EStateM.pure]
   rw [readBytes_8_eq_loaded_dword addr s hbytes h_no_ovf]
@@ -428,13 +418,13 @@ theorem vmem_read_addr_pipeline_bridge (addr : BitVec 64) (s : SailState)
     .ok (Ok value) s := by
   unfold vmem_read_addr
   simp only [ha.misalign, Bool.false_eq_true, if_false]
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate :=
     translateAddr_load_data_of_machine_mprv_zero addr s hpriv hmprv
   simp [ExceptT.mk, ExceptT.run,
-        SailME.throw, PreSail.PreSailME.throw, MonadExceptOf.throw,
+        SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw, MonadExceptOf.throw,
         misaligned_order, sys_misaligned_order_decreasing,
-        bits_of_virtaddr, Sail.assert, PreSail.assert,
+        bits_of_virtaddr, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
         untilFuelM, untilFuelM.go, zeros, BitVec.zero, BitVec.addInt,
         ha.split]
   simp only [liftM, monadLift, MonadLift.monadLift,
@@ -551,7 +541,7 @@ theorem vmem_read_word_reduces (imm : BitVec 12) (rs1 : regidx)
     vmem_read rs1 (sign_extend (m := 64) imm) 4 (Load Data) false false false s =
     .ok (Ok value) s := by
   unfold vmem_read
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift,
@@ -572,7 +562,7 @@ theorem vmem_read_halfword_reduces (imm : BitVec 12) (rs1 : regidx)
     vmem_read rs1 (sign_extend (m := 64) imm) 2 (Load Data) false false false s =
     .ok (Ok value) s := by
   unfold vmem_read
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
         ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
         ExceptT.pure, ExceptT.lift,

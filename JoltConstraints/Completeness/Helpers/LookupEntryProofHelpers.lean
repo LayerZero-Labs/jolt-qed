@@ -11,6 +11,8 @@ import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupPextProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupShiftProofHelpers
 
+open LeanRV64D
+
 /-!
 # Per-table obligations for constraint (39)
 
@@ -32,7 +34,7 @@ set_option autoImplicit false
 namespace JoltConstraints
 
 open TraceWitness
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 /-- The expanded instruction executed by a trace row. -/
 abbrev rowInstruction {bytecode : Array JoltInstructionRow} (row : HonestTraceRow bytecode) : JoltISA.Instr :=
@@ -234,7 +236,7 @@ theorem windowMaskB_entry (n : Nat) :
   have ho : (BitVec.ofNat 128 n &&& 7).toNat = (BitVec.ofNat 64 n &&& 7).toNat :=
     toNat_eq_of_setWidth _ _ (by
       rw [ofNat64_eq_setWidth]
-      simpa only [BitVec.ushiftRight_zero] using
+      simpa only [BitVec.ushiftRight_zero] using!
         BitVec.ushiftRight_and_setWidth (w := 128) (v := 64) _ 7 0 3
           (by decide) (by decide) (by decide))
   simp only [windowMaskBTableEntry, BitVec.ofFin_toFin, hm, shiftLeft_ofNat_eq, ho]
@@ -246,7 +248,7 @@ theorem windowMaskH_entry (n : Nat) :
   have ho : (BitVec.ofNat 128 n &&& 6).toNat = (BitVec.ofNat 64 n &&& 6).toNat :=
     toNat_eq_of_setWidth _ _ (by
       rw [ofNat64_eq_setWidth]
-      simpa only [BitVec.ushiftRight_zero] using
+      simpa only [BitVec.ushiftRight_zero] using!
         BitVec.ushiftRight_and_setWidth (w := 128) (v := 64) _ 6 0 3
           (by decide) (by decide) (by decide))
   simp only [windowMaskHTableEntry, BitVec.ofFin_toFin, hm, shiftLeft_ofNat_eq, ho]

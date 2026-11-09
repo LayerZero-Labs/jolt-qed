@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.RamAgreement
 import JoltConstraints.Soundness.Layer5.StoreDoubleword
 
+open LeanRV64D
+
 /-! An ordinary-RAM store row updates the selected table word and interpreter
 memory word together, preserving their agreement through the next or final
 column. The rows are SD and VirtualStoreB/H/W, classified by `StoreRow`. -/
@@ -9,7 +11,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

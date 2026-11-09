@@ -1,5 +1,7 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Lemmas
 
+open LeanRV64D
+
 /-!
 # `VirtualPext` instruction and value lemmas
 
@@ -9,7 +11,7 @@ proofs use only the resulting contiguous-window theorem; they never mention
 the recursion fuel.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

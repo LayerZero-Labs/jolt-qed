@@ -42,3 +42,5 @@ import JoltConstraints.witness_helpers.should_jump
 
 import JoltConstraints.witness_helpers.registers_val
 import JoltConstraints.witness_helpers.ram_val_final
+
+open LeanRV64D

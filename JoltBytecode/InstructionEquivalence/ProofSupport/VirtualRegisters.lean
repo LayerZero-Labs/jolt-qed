@@ -1,5 +1,7 @@
 import JoltBytecode.JoltISA.VirtualRegisters
 
+open LeanRV64D
+
 /-!
 # Proof-side facts about the Jolt virtual-register layout
 

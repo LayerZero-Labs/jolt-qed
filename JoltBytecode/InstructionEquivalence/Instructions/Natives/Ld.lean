@@ -6,7 +6,9 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true
@@ -73,9 +75,9 @@ private theorem vmem_read_dword_reduces (imm : BitVec 12) (rs1 : regidx)
         (sign_extend (m := 64) imm) 8 (Load Data) false false false s =
       .ok (Ok (loaded_dword_at s (load_effective_address val imm)
         hbytes haligned.no_ovf)) s := by
-    simpa [load_effective_address, Memory.effectiveAddr12] using haddr
+    simpa [load_effective_address, Memory.effectiveAddr12] using! haddr
   unfold vmem_read
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
     ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
     ExceptT.pure, ExceptT.lift,
@@ -100,9 +102,9 @@ private theorem execute_LD_reduces (imm : BitVec 12) (rs1 rd : regidx)
           hbytes haligned.no_ovf)) := by
   unfold execute_LOAD
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind,
     pure, EStateM.pure, EStateM.run, if_true]
   rw [vmem_read_dword_reduces imm rs1 js.sail hpriv hmprv val hrx
     haligned hbytes hload_pmp hread_mmio]
@@ -122,12 +124,12 @@ private theorem execute_LD_misaligned (imm : BitVec 12) (rs1 rd : regidx)
   let ea := load_effective_address val imm
   unfold execute_LOAD
   simp only [bind, pure]
-  unfold Sail.assert LeanRV64D.Functions.xlen_bytes
+  unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
-  simp (config := { decide := true }) only [PreSail.assert, EStateM.bind,
+  simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind,
     pure, EStateM.pure, EStateM.run, if_true]
   unfold vmem_read
-  unfold SailME.run PreSail.PreSailME.run
+  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have hmis :
       access_causes_misaligned_exception (Virtaddr ea) 8 false = true := by
     simpa [ea] using access_misaligned_8_unaligned_true ea h_align

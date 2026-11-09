@@ -8,11 +8,13 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.ANDN
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Add
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 
+open LeanRV64D
+
 /-! Execution of the shared word lane used by atomic expansions.
 The row order follows `LaneWindow` in
 `crates/jolt-program/src/expand/memory/shared.rs`. -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr
 
 namespace AtomicFamily
@@ -108,7 +110,7 @@ theorem amo_word_lane_pre_run
     have hrow : (JoltISA.execInstr
         (.VirtualPextSigned (.vreg old) (.vreg dword) (.vreg lane))).run masked =
         .ok RETIRE_SUCCESS (stateAfterVRegWrite masked old (amoWordLaneOld addr value)) := by
-      simpa only [masked, loaded, stateAfterVRegWrite, if_pos rfl, if_neg hdl] using hextract
+      simpa only [masked, loaded, stateAfterVRegWrite, if_pos rfl, if_neg hdl] using! hextract
     change (JoltISA.execProgram (.instr
       (.VirtualPextSigned (.vreg old) (.vreg dword) (.vreg lane))
       (.done RETIRE_SUCCESS))).run masked = _
@@ -244,7 +246,7 @@ theorem amo_word_copy_row_eq_sign_extend
   have hext' : jolt_virtual_sign_extend_word_value (js.vregs old) = js.vregs old := by
     simpa only [jolt_virtual_sign_extend_word_value, sign_extend, Sail.BitVec.signExtend,
       Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb',
-      Nat.reduceSub, Nat.reduceAdd, Nat.shiftRight_zero] using hext
+      Nat.reduceSub, Nat.reduceAdd, Nat.shiftRight_zero] using! hext
   rw [JoltISA.addWide_low]
   have hzero : sign_extend (m := 64) (0 : BitVec 12) = (0 : BitVec 64) := rfl
   rw [hzero, add_zero, hext']

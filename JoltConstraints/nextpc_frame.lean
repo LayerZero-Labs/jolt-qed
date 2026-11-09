@@ -5,6 +5,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 
+open LeanRV64D
+
 /-!
 Instruction-level nextPC frames. Ordinary instructions, untaken branches, and
 word memory operations preserve nextPC. HostIO's frame is proved in
@@ -13,15 +15,15 @@ word memory operations preserve nextPC. HostIO's frame is proved in
 
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 -- Operand reads, moved here from LookupWriteProofHelpers.lean so the frame lemmas
 -- below can sit under trace_interface.lean.
 private theorem readReg_get (reg : Register) (s : SailState)
     (v : RegisterType reg) (s' : SailState)
-    (h : (Sail.readReg reg : SailM (RegisterType reg)) s = .ok v s') :
+    (h : (LeanRV64D.readReg reg : SailM (RegisterType reg)) s = .ok v s') :
     s.regs.get? reg = some v := by
-  unfold Sail.readReg PreSail.readReg at h
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg at h
   simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get,
     pure] at h
   cases hg : s.regs.get? reg with
@@ -61,7 +63,7 @@ theorem lookup_readSrc_value (src : JoltISA.Src) (state state' : SailJoltState)
                 cases h
                 rfl
               | simp only [bind, EStateM.bind, pure, EStateM.pure] at h
-                generalize hread : Sail.readReg _ state.sail = result at h
+                generalize hread : LeanRV64D.readReg _ state.sail = result at h
                 cases result with
                 | error e s => cases h
                 | ok v s =>
@@ -101,13 +103,13 @@ theorem bind_rule {α β : Type} {m : SailM α} {f : α → SailM β}
     simp only [bind, EStateM.bind, hr] at h
     exact (hf x s' t v h).trans (hm s s' x hr)
 
-theorem read_rule (r : Register) : Preserves (Sail.readReg r) := by
+theorem read_rule (r : Register) : Preserves (LeanRV64D.readReg r) := by
   intro s t v h
   cases readReg_pure r s v t h
   rfl
 
 theorem write_rule (r : Register) (v : RegisterType r)
-    (hne : r ≠ Register.nextPC) : Preserves (Sail.writeReg r v) := by
+    (hne : r ≠ Register.nextPC) : Preserves (LeanRV64D.writeReg r v) := by
   intro s t x h
   cases h
   simp only [Std.ExtDHashMap.get?_insert, beq_iff_eq, hne, ↓reduceDIte]
@@ -265,9 +267,7 @@ theorem execHostIOWith_frame
   dsimp only
   split
   · exact pure_rule _
-  · refine bind_rule (pure_rule _) (fun _ => ?_)
-    refine bind_rule (read_rule _) (fun callId => ?_)
-    repeat' first
+  · repeat' first
       | exact readHostBytes_frame loadByte hload _ _ _ _ _
       | exact read_rule _
       | exact pure_rule _

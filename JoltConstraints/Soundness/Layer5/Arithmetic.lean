@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! One register-step proof for ADD, SUB and MUL. They share source recovery,
 RangeCheck lookup consumption and register updates. Only the arithmetic flag,
 the existing Layer 4 rule and the interpreter's operation vary.
@@ -16,7 +18,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The three full-word arithmetic operations with two register operands. -/
 inductive RegisterArithmetic where
@@ -81,7 +83,7 @@ private theorem arithmetic_write_value {pre : SailJoltState}
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, RegisterArithmetic.instruction,
-        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using
+        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using!
         opFlag_of_selected_bytecode bound context equations .WriteLookupOutputToRD t slot selected
   have table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some .RangeCheck := by
@@ -92,7 +94,7 @@ private theorem arithmetic_write_value {pre : SailJoltState}
     have flag := opFlag_of_selected_bytecode bound context equations operation.flag t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, RegisterArithmetic.instruction,
-        RegisterArithmetic.flag, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        RegisterArithmetic.flag, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   cases operation with
   | add =>

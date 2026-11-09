@@ -6,11 +6,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -202,12 +205,11 @@ def plat_reservation_set_size_exp : Nat := 3
 
 def plat_enable_dirty_update : Bool := false
 
--- WARNING: CHANGE IN TRANSPILED CODE
 def plat_enable_misaligned_access : Bool := false
 
-def plat_clint_base : physaddrbits := unwrapValue ((to_bits_checked (l := 64) (33554432 : Int)))
+def plat_clint_base : physaddrbits := unwrapValue (do (to_bits_checked (l := 64) (33554432 : Int)))
 
-def plat_clint_size : physaddrbits := unwrapValue ((to_bits_checked (l := 64) (786432 : Int)))
+def plat_clint_size : physaddrbits := unwrapValue (do (to_bits_checked (l := 64) (786432 : Int)))
 
 def plat_insns_per_tick : nat1 := 2
 
@@ -260,8 +262,8 @@ def AmocasOddRegisterReservedBehavior_of_num (arg_ : Nat) : AmocasOddRegisterRes
 
 def num_of_AmocasOddRegisterReservedBehavior (arg_ : AmocasOddRegisterReservedBehavior) : Int :=
   match arg_ with
-  | AMOCAS_Fatal => 0
-  | AMOCAS_Illegal => 1
+  | .AMOCAS_Fatal => 0
+  | .AMOCAS_Illegal => 1
 
 def undefined_FcsrRmReservedBehavior (_ : Unit) : SailM FcsrRmReservedBehavior := do
   (internal_pick [Fcsr_RM_Fatal, Fcsr_RM_Illegal])
@@ -274,8 +276,8 @@ def FcsrRmReservedBehavior_of_num (arg_ : Nat) : FcsrRmReservedBehavior :=
 
 def num_of_FcsrRmReservedBehavior (arg_ : FcsrRmReservedBehavior) : Int :=
   match arg_ with
-  | Fcsr_RM_Fatal => 0
-  | Fcsr_RM_Illegal => 1
+  | .Fcsr_RM_Fatal => 0
+  | .Fcsr_RM_Illegal => 1
 
 def undefined_PmpWriteOnlyReservedBehavior (_ : Unit) : SailM PmpWriteOnlyReservedBehavior := do
   (internal_pick [PMP_Fatal, PMP_ClearPermissions])
@@ -288,8 +290,8 @@ def PmpWriteOnlyReservedBehavior_of_num (arg_ : Nat) : PmpWriteOnlyReservedBehav
 
 def num_of_PmpWriteOnlyReservedBehavior (arg_ : PmpWriteOnlyReservedBehavior) : Int :=
   match arg_ with
-  | PMP_Fatal => 0
-  | PMP_ClearPermissions => 1
+  | .PMP_Fatal => 0
+  | .PMP_ClearPermissions => 1
 
 def undefined_XenvcfgCbieReservedBehavior (_ : Unit) : SailM XenvcfgCbieReservedBehavior := do
   (internal_pick [Xenvcfg_Fatal, Xenvcfg_ClearPermissions])
@@ -302,8 +304,8 @@ def XenvcfgCbieReservedBehavior_of_num (arg_ : Nat) : XenvcfgCbieReservedBehavio
 
 def num_of_XenvcfgCbieReservedBehavior (arg_ : XenvcfgCbieReservedBehavior) : Int :=
   match arg_ with
-  | Xenvcfg_Fatal => 0
-  | Xenvcfg_ClearPermissions => 1
+  | .Xenvcfg_Fatal => 0
+  | .Xenvcfg_ClearPermissions => 1
 
 def undefined_XtvecModeReservedBehavior (_ : Unit) : SailM XtvecModeReservedBehavior := do
   (internal_pick [Xtvec_Fatal, Xtvec_Ignore])
@@ -316,8 +318,8 @@ def XtvecModeReservedBehavior_of_num (arg_ : Nat) : XtvecModeReservedBehavior :=
 
 def num_of_XtvecModeReservedBehavior (arg_ : XtvecModeReservedBehavior) : Int :=
   match arg_ with
-  | Xtvec_Fatal => 0
-  | Xtvec_Ignore => 1
+  | .Xtvec_Fatal => 0
+  | .Xtvec_Ignore => 1
 
 def undefined_RV32ZdinxOddRegisterReservedBehavior (_ : Unit) : SailM RV32ZdinxOddRegisterReservedBehavior := do
   (internal_pick [Zdinx_Fatal, Zdinx_Illegal])
@@ -330,8 +332,8 @@ def RV32ZdinxOddRegisterReservedBehavior_of_num (arg_ : Nat) : RV32ZdinxOddRegis
 
 def num_of_RV32ZdinxOddRegisterReservedBehavior (arg_ : RV32ZdinxOddRegisterReservedBehavior) : Int :=
   match arg_ with
-  | Zdinx_Fatal => 0
-  | Zdinx_Illegal => 1
+  | .Zdinx_Fatal => 0
+  | .Zdinx_Illegal => 1
 
 def amocas_odd_register_reserved_behavior : AmocasOddRegisterReservedBehavior := AMOCAS_Illegal
 
@@ -344,3 +346,4 @@ def xenvcfg_cbie_reserved_behavior : XenvcfgCbieReservedBehavior := Xenvcfg_Clea
 def xtvec_mode_reserved_behavior : XtvecModeReservedBehavior := Xtvec_Ignore
 
 def rv32zdinx_odd_register_reserved_behavior : RV32ZdinxOddRegisterReservedBehavior := Zdinx_Illegal
+

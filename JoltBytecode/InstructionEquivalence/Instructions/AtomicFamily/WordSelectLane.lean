@@ -1,6 +1,8 @@
 import JoltBytecode.InstructionEquivalence.Instructions.AtomicFamily.WordProgram
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 namespace AtomicFamily
@@ -194,7 +196,7 @@ theorem amo_word_select_eq_sail
     have hlow : (Sail.BitVec.extractLsb (sign_extend (m := 64) old) 31 0 : BitVec 32) = old :=
       sign_extend_64_setWidth_32 old
     rw [amo_word_extract_select_result, hlow] at hfinal
-    simpa only [selected, hselect] using hfinal
+    simpa only [selected, hselect] using! hfinal
   · intro halign
     exact amo_word_pre64_with_scratch_misaligned_run rs1 _ _ _ _ js h.rs1_val h.rs1_read halign
 

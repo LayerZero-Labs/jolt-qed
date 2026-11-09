@@ -1,11 +1,13 @@
 import JoltConstraints.Soundness.Layer6.PlainRow
 import JoltConstraints.Soundness.Layer5.Jalr
 
+open LeanRV64D
+
 /-! Append terminal non-memory rows and direct or indirect jumps using live register agreement. -/
 set_option autoImplicit false
 namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Append a row with its selected observations, unchanged memory and device,
 and next-column live-register agreement to the represented expansion prefix.

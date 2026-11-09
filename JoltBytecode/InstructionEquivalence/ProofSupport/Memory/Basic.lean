@@ -1,6 +1,8 @@
 import JoltBytecode.Assumptions
 import Mathlib.Tactic
 
+open LeanRV64D
+
 /-!
 # Exact flat-memory model
 
@@ -13,7 +15,7 @@ set_option linter.unusedVariables false
 set_option linter.unusedSimpArgs false
 set_option mvcgen.warning false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open Std.Do
 open virtaddr MemoryAccessType mem_payload
 
@@ -178,8 +180,8 @@ theorem loaded_word_at_eq_of_addr_eq {s : SailState} {a b : BitVec 64}
 
 theorem readReg_eq (r : Register) (s : SailState) (v : RegisterType r)
     (h : s.regs.get? r = some v) :
-    (Sail.readReg r : SailM (RegisterType r)) s = .ok v s := by
-  unfold Sail.readReg PreSail.readReg
+    (LeanRV64D.readReg r : SailM (RegisterType r)) s = .ok v s := by
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg
   simp only [bind, EStateM.bind, pure, EStateM.pure,
              MonadStateOf.get, EStateM.get, getThe, get, h]
 

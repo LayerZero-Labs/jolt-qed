@@ -1,12 +1,14 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Lemmas
 
+open LeanRV64D
+
 /-!
 # ANDI instruction semantics
 
 Run lemmas for the Jolt ISA `ANDI` instruction.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 

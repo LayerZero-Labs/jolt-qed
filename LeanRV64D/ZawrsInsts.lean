@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -206,13 +209,13 @@ def encdec_wrsop_backwards (arg_ : (BitVec 12)) : SailM wrsop := do
   | 0b000000001101 => (pure WRS_NTO)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def encdec_wrsop_forwards_matches (arg_ : wrsop) : Bool :=
   match arg_ with
-  | WRS_STO => true
-  | WRS_NTO => true
+  | .WRS_STO => true
+  | .WRS_NTO => true
 
 def encdec_wrsop_backwards_matches (arg_ : (BitVec 12)) : Bool :=
   match arg_ with

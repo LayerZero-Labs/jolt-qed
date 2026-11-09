@@ -6,9 +6,11 @@ hand-written ones in `JoltBytecode/JoltISA/Expansions/`.
 -/
 import JoltBytecode.RiscvInstruction
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 -- Jolt's own source instructions: custom opcode 0x5B, decoded alongside RISC-V.
 -- Inline (opcodes 0x0B and 0x2B) is out of scope.

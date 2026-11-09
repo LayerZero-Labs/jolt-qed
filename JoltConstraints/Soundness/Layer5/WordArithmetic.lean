@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.WordArithmetic
 
+open LeanRV64D
+
 /-! Shared register step for ADDW, SUBW, MULW and MULHU. The arithmetic
 flags produce a wide lookup operand; the existing word-table rules truncate
 or select the high word exactly as the interpreter does.
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 inductive WordArithmetic where
   | addw | subw | mulw | mulhu
@@ -82,7 +84,7 @@ private theorem wordArithmetic_write_value {pre : SailJoltState}
   have writeFlag : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, WordArithmetic.instruction,
-        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using
+        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using!
         opFlag_of_selected_bytecode bound context equations .WriteLookupOutputToRD t slot selected
   have table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some operation.table := by
@@ -93,7 +95,7 @@ private theorem wordArithmetic_write_value {pre : SailJoltState}
     have flag := opFlag_of_selected_bytecode bound context equations operation.flag t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, WordArithmetic.instruction,
-        WordArithmetic.flag, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        WordArithmetic.flag, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   cases operation with
   | addw =>

@@ -1,9 +1,11 @@
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Primitives
 import Mathlib
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -110,7 +112,7 @@ theorem sail_div_value_of_normal (dividend divisor : BitVec 64)
     · right
       intro hb
       apply h_no_overflow
-      exact ⟨by simpa using ha, by simpa using hb⟩
+      exact ⟨by simpa using! ha, by simpa using hb⟩
     · exact Or.inl ha
   have hsdivInt :
       (BitVec.sdiv dividend divisor).toInt =
@@ -128,7 +130,7 @@ theorem sail_div_value_of_normal (dividend divisor : BitVec 64)
     show decide _ = false
     apply decide_eq_false
     push_neg
-    simpa using hquotient_lt
+    simpa using! hquotient_lt
   rw [hge_false]
   simp only [Bool.false_eq_true, ↓reduceIte]
   rw [trunc64_eq_intCast, ← hsdivInt]
@@ -144,7 +146,7 @@ theorem sail_div_value_eq_sdiv_of_ne (dividend divisor : BitVec 64)
   · obtain ⟨rfl, rfl⟩ := h_overflow
     rw [sail_div_value_of_overflow]
     · simpa only [show ((1 : BitVec 64) <<< 63) = BitVec.intMin 64 by decide]
-        using BitVec.intMin_sdiv_neg_one (w := 64)
+        using! BitVec.intMin_sdiv_neg_one (w := 64)
     · exact ⟨rfl, rfl⟩
   · exact sail_div_value_of_normal dividend divisor h_ne h_overflow
 

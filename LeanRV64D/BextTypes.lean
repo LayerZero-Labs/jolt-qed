@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -218,15 +221,15 @@ def brop_zbb_of_num (arg_ : Nat) : brop_zbb :=
 
 def num_of_brop_zbb (arg_ : brop_zbb) : Int :=
   match arg_ with
-  | ANDN => 0
-  | ORN => 1
-  | XNOR => 2
-  | MAX => 3
-  | MAXU => 4
-  | MIN => 5
-  | MINU => 6
-  | ROL => 7
-  | ROR => 8
+  | .ANDN => 0
+  | .ORN => 1
+  | .XNOR => 2
+  | .MAX => 3
+  | .MAXU => 4
+  | .MIN => 5
+  | .MINU => 6
+  | .ROL => 7
+  | .ROR => 8
 
 def undefined_brop_zbkb (_ : Unit) : SailM brop_zbkb := do
   (internal_pick [PACK, PACKH])
@@ -239,8 +242,8 @@ def brop_zbkb_of_num (arg_ : Nat) : brop_zbkb :=
 
 def num_of_brop_zbkb (arg_ : brop_zbkb) : Int :=
   match arg_ with
-  | PACK => 0
-  | PACKH => 1
+  | .PACK => 0
+  | .PACKH => 1
 
 def undefined_brop_zbs (_ : Unit) : SailM brop_zbs := do
   (internal_pick [BCLR, BEXT, BINV, BSET])
@@ -255,10 +258,10 @@ def brop_zbs_of_num (arg_ : Nat) : brop_zbs :=
 
 def num_of_brop_zbs (arg_ : brop_zbs) : Int :=
   match arg_ with
-  | BCLR => 0
-  | BEXT => 1
-  | BINV => 2
-  | BSET => 3
+  | .BCLR => 0
+  | .BEXT => 1
+  | .BINV => 2
+  | .BSET => 3
 
 def undefined_bropw_zbb (_ : Unit) : SailM bropw_zbb := do
   (internal_pick [ROLW, RORW])
@@ -271,8 +274,8 @@ def bropw_zbb_of_num (arg_ : Nat) : bropw_zbb :=
 
 def num_of_bropw_zbb (arg_ : bropw_zbb) : Int :=
   match arg_ with
-  | ROLW => 0
-  | RORW => 1
+  | .ROLW => 0
+  | .RORW => 1
 
 def undefined_biop_zbs (_ : Unit) : SailM biop_zbs := do
   (internal_pick [BCLRI, BEXTI, BINVI, BSETI])
@@ -287,10 +290,10 @@ def biop_zbs_of_num (arg_ : Nat) : biop_zbs :=
 
 def num_of_biop_zbs (arg_ : biop_zbs) : Int :=
   match arg_ with
-  | BCLRI => 0
-  | BEXTI => 1
-  | BINVI => 2
-  | BSETI => 3
+  | .BCLRI => 0
+  | .BEXTI => 1
+  | .BINVI => 2
+  | .BSETI => 3
 
 def undefined_extop_zbb (_ : Unit) : SailM extop_zbb := do
   (internal_pick [SEXTB, SEXTH, ZEXTH])
@@ -304,7 +307,7 @@ def extop_zbb_of_num (arg_ : Nat) : extop_zbb :=
 
 def num_of_extop_zbb (arg_ : extop_zbb) : Int :=
   match arg_ with
-  | SEXTB => 0
-  | SEXTH => 1
-  | ZEXTH => 2
+  | .SEXTB => 0
+  | .SEXTH => 1
+  | .ZEXTH => 2
 

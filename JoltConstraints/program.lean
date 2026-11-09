@@ -10,8 +10,12 @@ import JoltConstraints.expansions
 import Mathlib.Tactic.DeriveFintype
 import Mathlib.Data.Nat.Log
 
+open LeanRV64D
+
 set_option autoImplicit false
 
+-- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
+set_option backward.isDefEq.respectTransparency false in
 set_option maxRecDepth 4096 in
 deriving instance Fintype for Register
 
@@ -247,6 +251,8 @@ def expand_program (image : Rv64ProgramImage SourceInstruction) :
 
 -- One slot of Rust's preprocessed bytecode.
 -- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:279-293 (noop_instruction)
+-- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
+set_option backward.isDefEq.respectTransparency false in
 inductive BytecodeSlot where
   | noop
   | row (row : JoltInstructionRow)
@@ -421,6 +427,10 @@ def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) : Opti
   pure bytecode
 
 -- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
+-- Lean 4.35's `do` elaborator copies the continuation into both branches of each
+-- `if _ then none` below (eight copies in all). The legacy elaborator keeps the
+-- term exactly as stated and as elaborated before the toolchain update.
+set_option backward.do.legacy true in
 noncomputable def JoltInstance.initial_state {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) :
     Option SailJoltState := do

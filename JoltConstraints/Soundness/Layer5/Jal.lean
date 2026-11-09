@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! A selected JAL row writes the return address and updates Sail's `nextPC`.
 The jump constraint supplies the return address, including compressed rows;
 the execution-prefix induction must connect the selected row's address to
@@ -14,7 +16,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem jal_write_value
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
@@ -34,10 +36,10 @@ private theorem jal_write_value
   have flags := opFlag_of_selected_bytecode bound context equations
   have jumpFlag : witness.OpFlags .Jump t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag,
-      instruction, JoltMetadata.opcodeFlag] using flags .Jump t slot selected
+      instruction, JoltMetadata.opcodeFlag] using! flags .Jump t slot selected
   have compressedFlag : witness.OpFlags .IsCompressed t =
       if row.is_compressed then 1 else 0 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag] using!
       flags .IsCompressed t slot selected
   have address : witness.UnexpandedPC t = (row.address.toNat : F) := by
     simpa only [bytecodeAddress, rowIs] using
@@ -55,7 +57,7 @@ private theorem jal_write_value
     simp only [notCompressed, Bool.false_eq_true, ↓reduceIte] at relation ⊢
     have sum : (row.address + BitVec.ofNat 64 4).toNat = row.address.toNat + 4 := by
       simp only [BitVec.toNat_add, BitVec.toNat_ofNat]
-      rw [Nat.mod_eq_of_lt (by simpa only [notCompressed, ↓reduceIte] using noWrap)]
+      rw [Nat.mod_eq_of_lt (by simpa only [notCompressed, ↓reduceIte] using! noWrap)]
     rw [sum, Nat.cast_add]
     linear_combination relation
 
@@ -63,7 +65,7 @@ end JoltConstraints.Soundness
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 private theorem sourceValue_setNextPC (source : Src) (target : BitVec 64)
     (state : SailJoltState) :
@@ -130,11 +132,11 @@ theorem jal_step
     (bytecodeRow_rowOk context rowIs).canonical (by rw [instruction]; rfl)
   have written := writeDst_afterWriteDst dst canonical
     (row.address + BitVec.ofNat 64 (if row.is_compressed then 2 else 4)) pre
-  have readNext : liftSail (Sail.readReg Register.nextPC) pre =
+  have readNext : liftSail (LeanRV64D.readReg Register.nextPC) pre =
       .ok (row.address + BitVec.ofNat 64 (if row.is_compressed then 2 else 4)) pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail _ nextPC]
-  have readPC : liftSail (Sail.readReg Register.PC) pre = .ok row.address pre := by
+  have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok row.address pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.PC pre.sail _ pc]
   refine ⟨encoded, ?_, ?_⟩

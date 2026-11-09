@@ -1,6 +1,8 @@
 import JoltConstraints.witness_helpers.address_chunk
 import JoltConstraints.witness_helpers.pc
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

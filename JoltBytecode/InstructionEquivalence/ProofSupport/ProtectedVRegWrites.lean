@@ -1,6 +1,8 @@
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.InstructionEquivalence.ProofSupport.VirtualRegisters
 
+open LeanRV64D
+
 /-!
 # Protected virtual-register write footprints
 

@@ -3,6 +3,8 @@ import JoltConstraints.Constraints.RamValEqInitialPlusPrefixRamInc
 import JoltConstraints.Constraints.RamReadData
 import JoltConstraints.Completeness.Helpers.RamAccesses
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints

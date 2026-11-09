@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer6.RowStepKinds
 import JoltConstraints.Soundness.Layer7.TerminationStore
 
+open LeanRV64D
+
 /-! Staged execution of one row in a source expansion without internal advice. -/
 
 set_option autoImplicit false
@@ -8,7 +10,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Appending a row without runtime advice preserves honest advice at every
 position: old advice depends only on its prefix and the new value is none.

@@ -10,9 +10,11 @@ import Mathlib.Tactic.IntervalCases
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 
+open LeanRV64D
+
 set_option autoImplicit false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace SailAndVRegsUnchanged
 
@@ -114,9 +116,7 @@ theorem execHostIO_keeps_state (state after : SailJoltState) (result : Execution
     dsimp only
     split
     · exact SailAndVRegsUnchanged.pure_rule _
-    · refine SailAndVRegsUnchanged.bind_rule (SailAndVRegsUnchanged.pure_rule _) (fun _ => ?_)
-      refine SailAndVRegsUnchanged.bind_rule (SailAndVRegsUnchanged.read_rule _) (fun callId => ?_)
-      preservation_auto [SailAndVRegsUnchanged.readHostBytes_rule _ _ _ _ _,
+    · preservation_auto [SailAndVRegsUnchanged.readHostBytes_rule _ _ _ _ _,
         SailAndVRegsUnchanged.read_rule _, SailAndVRegsUnchanged.pure_rule _,
         SailAndVRegsUnchanged.throw_rule _,
         SailAndVRegsUnchanged.modify_rule _ (fun _ => ⟨rfl, rfl⟩)]
@@ -219,53 +219,65 @@ theorem bind_rule {Value Next : Type} {first : SailM Value} {next : Value → Sa
     simp only [bind, EStateM.bind, firstRun] at runs
     exact (keepsNext value middle after result runs).trans (keepsFirst sail middle value firstRun)
 
-theorem read_rule (register : Register) : Preserves (Sail.readReg register) := by
+theorem read_rule (register : Register) : Preserves (LeanRV64D.readReg register) := by
   intro sail after value runs
   exact readReg_pure register sail value after runs
+
+-- Sail's short-circuiting `<&&>` runs its second operand only after `true`.
+theorem andM_rule {first second : SailM Bool}
+    (keepsFirst : Preserves first) (keepsSecond : Preserves second) :
+    Preserves (first <&&> second) :=
+  bind_rule keepsFirst fun value => by
+    cases value
+    · exact pure_rule false
+    · exact keepsSecond
 
 end SailStateUnchanged
 
 -- Checking whether compressed instructions are enabled only reads `misa`.
 theorem zca_enabled_unchanged :
     SailStateUnchanged.Preserves (currentlyEnabled extension.Ext_Zca) := by
-  unfold currentlyEnabled
-  apply SailStateUnchanged.bind_rule
-  · unfold currentlyEnabled
-    exact SailStateUnchanged.bind_rule (SailStateUnchanged.read_rule Register.misa)
-      (fun _ => SailStateUnchanged.pure_rule _)
-  · intro enabled
-    exact SailStateUnchanged.pure_rule _
+  simp only [currentlyEnabled]
+  open SailStateUnchanged in
+  exact andM_rule (pure_rule _)
+    (bind_rule (andM_rule (pure_rule _)
+      (bind_rule (read_rule Register.misa) fun _ => pure_rule _)) fun _ => pure_rule _)
 
 -- A jump either changes nothing or writes the target into nextPC.
 theorem jump_to_shape (target : BitVec 64) (sail after : SailState)
     (result : ExecutionResult) (runs : jump_to target sail = .ok result after) :
     after = sail ∨ after = { sail with regs := sail.regs.insert Register.nextPC target } := by
   unfold jump_to ext_control_check_pc at runs
-  simp only [SailME.run, PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
+  simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
     bind, EStateM.bind, pure, EStateM.pure,
-    Sail.assert, PreSail.assert] at runs
+    LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at runs
   by_cases evenTarget : (BitVec.access target 0 == 0#1) = true
   · simp only [evenTarget, ↓reduceIte, pure, EStateM.pure, EStateM.bind,
       ExceptT.bindCont, EStateM.map] at runs
-    cases zcaRun : currentlyEnabled extension.Ext_Zca sail with
-    | error failure middle =>
-      simp only [zcaRun] at runs
+    -- `<&&>` short-circuits: `Ext_Zca` is read only when bit 1 is set.
+    cases bit1 : bit_to_bool (BitVec.access target 1)
+    · simp only [andM, toBool, bit1, ExceptT.bindCont, EStateM.map, Bool.false_eq_true,
+        ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
+        pure, EStateM.pure] at runs
       cases runs
-    | ok zca middle =>
-      have same := zca_enabled_unchanged sail middle zca zcaRun
-      subst same
-      by_cases misaligned : bit_to_bool (BitVec.access target 1) = true ∧
-          LeanRV64D.Functions.not zca = true
-      all_goals
-        simp only [zcaRun, ExceptT.bindCont, EStateM.map, Bool.and_eq_true, misaligned,
-          ↓reduceIte, set_next_pc, Sail.writeReg, bind, EStateM.bind,
-          pure, EStateM.pure] at runs
+      first | exact Or.inl rfl | exact Or.inr rfl
+    · simp only [andM, toBool, bit1, bind, EStateM.bind, pure, EStateM.pure,
+        ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.mk, EStateM.map] at runs
+      cases zcaRun : currentlyEnabled extension.Ext_Zca sail with
+      | error failure middle =>
+        simp only [zcaRun] at runs
         cases runs
-        first
-        | exact Or.inl rfl
-        | exact Or.inr rfl
+      | ok zca middle =>
+        have same := zca_enabled_unchanged sail middle zca zcaRun
+        subst same
+        cases zca <;>
+          simp only [zcaRun, sail_not_true, sail_not_false, ExceptT.bindCont, EStateM.map,
+            Bool.false_eq_true, ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind,
+            EStateM.bind, pure, EStateM.pure] at runs <;>
+          cases runs
+        all_goals first | exact Or.inl rfl | exact Or.inr rfl
   · simp only [evenTarget, throw, throwThe] at runs
     cases runs
 
@@ -274,29 +286,36 @@ theorem jump_to_retires (target : BitVec 64) (sail after : SailState)
     (runs : jump_to target sail = .ok (.Retire_Success ()) after) :
     after = { sail with regs := sail.regs.insert Register.nextPC target } := by
   unfold jump_to ext_control_check_pc at runs
-  simp only [SailME.run, PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
+  simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
     bind, EStateM.bind, pure, EStateM.pure,
-    Sail.assert, PreSail.assert] at runs
+    LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at runs
   by_cases evenTarget : (BitVec.access target 0 == 0#1) = true
   · simp only [evenTarget, ↓reduceIte, pure, EStateM.pure, EStateM.bind,
       ExceptT.bindCont, EStateM.map] at runs
-    cases zcaRun : currentlyEnabled extension.Ext_Zca sail with
-    | error failure middle =>
-      simp only [zcaRun] at runs
+    -- `<&&>` short-circuits: `Ext_Zca` is read only when bit 1 is set.
+    cases bit1 : bit_to_bool (BitVec.access target 1)
+    · simp only [andM, toBool, bit1, ExceptT.bindCont, EStateM.map, Bool.false_eq_true,
+        ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
+        pure, EStateM.pure] at runs
       cases runs
-    | ok zca middle =>
-      have same := zca_enabled_unchanged sail middle zca zcaRun
-      subst same
-      by_cases misaligned : bit_to_bool (BitVec.access target 1) = true ∧
-          LeanRV64D.Functions.not zca = true
-      all_goals
-        simp only [zcaRun, ExceptT.bindCont, EStateM.map, Bool.and_eq_true, misaligned,
-          ↓reduceIte, set_next_pc, Sail.writeReg, bind, EStateM.bind,
-          pure, EStateM.pure] at runs
-        cases runs
       rfl
+    · simp only [andM, toBool, bit1, bind, EStateM.bind, pure, EStateM.pure,
+        ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.mk, EStateM.map] at runs
+      cases zcaRun : currentlyEnabled extension.Ext_Zca sail with
+      | error failure middle =>
+        simp only [zcaRun] at runs
+        cases runs
+      | ok zca middle =>
+        have same := zca_enabled_unchanged sail middle zca zcaRun
+        subst same
+        cases zca <;>
+          simp only [zcaRun, sail_not_true, sail_not_false, ExceptT.bindCont, EStateM.map,
+            Bool.false_eq_true, ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind,
+            EStateM.bind, pure, EStateM.pure] at runs <;>
+          cases runs
+        all_goals rfl
   · simp only [evenTarget, throw, throwThe] at runs
     cases runs
 
@@ -358,13 +377,13 @@ theorem lift_rule {Value : Type} {step : SailM Value} (keeps : SailPreserves ste
     cases runs
     exact kept
 
-theorem readReg_rule (register : Register) : Preserves (liftSail (Sail.readReg register)) :=
+theorem readReg_rule (register : Register) : Preserves (liftSail (LeanRV64D.readReg register)) :=
   lift_rule (fun sail after value runs present => by
     rw [readReg_pure register sail value after runs]
     exact present)
 
 theorem writeReg_rule (register : Register) (value : RegisterType register) :
-    Preserves (liftSail (Sail.writeReg register value)) :=
+    Preserves (liftSail (LeanRV64D.writeReg register value)) :=
   lift_rule (fun sail after result runs present => by
     cases runs
     exact insert_keeps_present _ _ _ present)
@@ -478,7 +497,7 @@ theorem readable_of_present (sail : SailState) (present : AllRegistersPresent sa
   have small : index.toNat < 32 := index.isLt
   generalize index.toNat = number at small ⊢
   interval_cases number
-  all_goals dsimp only
+  all_goals try simp only
   · -- x0 is read as zero without looking it up
     exact ⟨_, rfl⟩
   all_goals
@@ -548,9 +567,9 @@ theorem HonestTrace.registers_present {joltInstance : JoltInstance SourceInstruc
 -- A successful Sail register read returns the value stored for that register.
 theorem readReg_value (register : Register) (sail after : SailState)
     (value : RegisterType register)
-    (runs : (Sail.readReg register : SailM (RegisterType register)) sail = .ok value after) :
+    (runs : (LeanRV64D.readReg register : SailM (RegisterType register)) sail = .ok value after) :
     sail.regs.get? register = some value := by
-  unfold Sail.readReg PreSail.readReg at runs
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg at runs
   simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get, pure] at runs
   generalize lookup : sail.regs.get? register = stored at runs
   cases stored with
@@ -593,7 +612,7 @@ theorem readSrc_value (source : JoltISA.Src) (state after : SailJoltState) (valu
       generalize registerNumber : index.toNat = number at small readResult
       simp only [registerNumber]
       interval_cases number
-      all_goals dsimp only at readResult ⊢
+      all_goals try simp only at readResult ⊢
       · cases readResult
         rfl
       all_goals
@@ -691,7 +710,7 @@ theorem init_state_sourceValue (entryAddress : BitVec 64) (ram : Array (BitVec 8
     simp only [registerNumber]
     interval_cases number
     -- x0 reads as 0 directly; every other register holds its initial value, 0
-    all_goals dsimp only
+    all_goals try simp only
     all_goals
       rw [init_state_register]
       rfl

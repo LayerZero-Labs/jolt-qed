@@ -7,6 +7,8 @@ import JoltConstraints.Completeness.Helpers.FloorMemory
 import JoltConstraints.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.expansion_temp_liveness
 
+open LeanRV64D
+
 /-! Native and floor-addressed memory rows, classified once by their width.
 A memory row is a load (LD, VirtualLoadB/H/W) or a store (SD, VirtualStoreB/H/W).
 Its effective address is `ea = base + imm`.
@@ -25,7 +27,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The width class of a memory row.
 `double` is a native LD or SD, which accesses the eight bytes at its effective
@@ -587,7 +589,7 @@ private theorem AccessRow.lookup_offset (baseValue : BitVec 64)
   simp only [Prod.mk.injEq] at inputFlags
   obtain ⟨rs1Flag, pcFlag, rs2Flag, immFlag, rdFlag⟩ := inputFlags
   have add : witness.OpFlags .AddOperands t = 1 := by
-    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, addFlag] using
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, addFlag] using!
       opFlag_of_selected_bytecode bound context equations .AddOperands t slot selected
   have raf := instructionRafFlag_one_of_arithmetic bound context equations t (Or.inl add)
   have immediateIs : witness.Imm t = (imm.toInt : F) := by
@@ -610,9 +612,9 @@ private theorem AccessRow.lookup_offset (baseValue : BitVec 64)
   · simp only [lookupTableEntry, addressOffsetTableEntry] at output
     cases width
     · exact False.elim (native rfl)
-    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 7 (by norm_num)] using output
-    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 6 (by norm_num)] using output
-    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 4 (by norm_num)] using output
+    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 7 (by norm_num)] using! output
+    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 6 (by norm_num)] using! output
+    · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 4 (by norm_num)] using! output
   · intro sum sumSmall sumIs
     have same : chosen.val = sum := natCast_injective_below_char
       (lt_trans chosen.isLt charAbove2pow128) (lt_trans sumSmall (two_pow_64_lt_char bound))

@@ -1,6 +1,8 @@
 import JoltConstraints.Constraints.All
 import JoltConstraints.layout_facts
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- For one fixed instance, varying any prover input cannot change the trusted

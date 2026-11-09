@@ -3,6 +3,8 @@ import JoltConstraints.Soundness.Layer5.LookupWrite
 import JoltConstraints.Soundness.Layer4.Word
 import JoltConstraints.Soundness.Layer4.Arithmetic
 
+open LeanRV64D
+
 /-! Shared step for unary word operations whose AddOperands flag uses the
 source value as the lookup index, without interleaving. The row immediate is ignored by both
 the circuit's operand selection and the interpreter.
@@ -19,7 +21,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Unary word operations whose lookup index is the source value. -/
 inductive UnaryWord where
@@ -108,13 +110,13 @@ private theorem unaryWord_write_value {pre : SailJoltState}
       .WriteLookupOutputToRD t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, UnaryWord.instruction,
-        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   have active : witness.OpFlags .AddOperands t = 1 := by
     have flag := opFlag_of_selected_bytecode bound context equations
       .AddOperands t slot selected
     cases operation <;>
       simpa only [bytecodeCircuitFlag, rowIs, instructionIs, UnaryWord.instruction,
-        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using flag
+        JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag] using! flag
   have table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some operation.table := by
     cases operation <;>
@@ -133,13 +135,13 @@ private theorem unaryWord_write_value {pre : SailJoltState}
       t slot selected _ raf encoded table
     simpa only [UnaryWord.value, jolt_virtual_sign_extend_word_value,
       JoltISA.addWide, BitVec.toNat_zero, Nat.add_zero, BitVec.setWidth_ofNat_of_le
-        (by decide : 32 ≤ 128)] using output
+        (by decide : 32 ≤ 128)] using! output
   | zeroExtend =>
     have output := lookupOutput_lowerHalfWord_of_identity charAbove2pow128 context equations
       t slot selected _ raf encoded table
     simpa only [UnaryWord.value, jolt_virtual_zero_extend_word_value,
       JoltISA.addWide, BitVec.toNat_zero, Nat.add_zero, BitVec.setWidth_ofNat_of_le
-        (by decide : 32 ≤ 128)] using output
+        (by decide : 32 ≤ 128)] using! output
   | pow2 =>
     have output := lookupOutput_pow2_of_identity charAbove2pow128 context equations
       t slot selected _ raf encoded table
@@ -180,7 +182,7 @@ private theorem unaryWord_write_value {pre : SailJoltState}
     rw [indexEq] at output
     rw [rev8w_eq_kernel] at output
     simpa only [UnaryWord.value, jolt_virtual_rev8w_value, rev8_32_kernel]
-      using output
+      using! output
 
 /-- Seven unary word and mask rows write their
 constrained result and preserve register agreement at the next cycle.

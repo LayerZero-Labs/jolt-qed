@@ -7,6 +7,8 @@ import JoltConstraints.honest_witness
 import JoltConstraints.execution_conditions
 import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints
@@ -50,7 +52,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
               (sourceLength trace.bytecode row.rowIndex) := by
           exact jump_jal_link dst imm _ row.preState row.postState hwritable hnext hexec
         have hend : bc.continues = false := by
-          simpa [hinstNat] using (trace.rowValid row.rowIndex).jumpAtSourceEnd
+          simpa [hinstNat] using! (trace.rowValid row.rowIndex).jumpAtSourceEnd
         have hlen := jump_sourceLength_at_end trace
           row.rowIndex hend
         have hnoWrap : bc.address.toNat + (if bc.is_compressed then 2 else 4) < 2 ^ 64 := by
@@ -82,7 +84,8 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           simp [TraceWitness.UnexpandedPC, hb, bc, row]
         have hcomp : TraceWitness.OpFlags (F := F) params trace .IsCompressed t =
             (if bc.is_compressed then (1 : F) else 0) := by
-          simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row]
+          -- the two sides can differ only in their `Decidable` instances
+          simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row] <;> rfl
         have hflag : TraceWitness.OpFlags (F := F) params trace .Jump t = 1 := by
           unfold TraceWitness.OpFlags
           simp only [dif_pos hb]
@@ -109,7 +112,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
               (sourceLength trace.bytecode row.rowIndex) := by
           exact jump_jalr_link dst base imm _ row.preState row.postState hwritable hnext hexec
         have hend : bc.continues = false := by
-          simpa [hinstNat] using (trace.rowValid row.rowIndex).jumpAtSourceEnd
+          simpa [hinstNat] using! (trace.rowValid row.rowIndex).jumpAtSourceEnd
         have hlen := jump_sourceLength_at_end trace
           row.rowIndex hend
         have hnoWrap : bc.address.toNat + (if bc.is_compressed then 2 else 4) < 2 ^ 64 := by
@@ -141,7 +144,8 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           simp [TraceWitness.UnexpandedPC, hb, bc, row]
         have hcomp : TraceWitness.OpFlags (F := F) params trace .IsCompressed t =
             (if bc.is_compressed then (1 : F) else 0) := by
-          simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row]
+          -- the two sides can differ only in their `Decidable` instances
+          simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row] <;> rfl
         have hflag : TraceWitness.OpFlags (F := F) params trace .Jump t = 1 := by
           unfold TraceWitness.OpFlags
           simp only [dif_pos hb]

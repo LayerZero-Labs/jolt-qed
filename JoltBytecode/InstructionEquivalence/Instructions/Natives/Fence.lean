@@ -4,7 +4,9 @@ import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.JoltISA.Semantics
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -40,7 +42,7 @@ theorem fenceInstr_eq_sail
     rfl
   rw [h_jolt]
   simp only [System.systemProjectResult, h_project_initial]
-  unfold execute_FENCE is_fiom_active Sail.readReg PreSail.readReg
+  unfold execute_FENCE is_fiom_active LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg
   simp only [h.cur_privilege.value, bind, EStateM.bind, pure, EStateM.pure,
     EStateM.run, get, getThe, MonadStateOf.get, EStateM.get]
   simp only [effective_fence_set, Bool.false_eq_true, ↓reduceIte]
@@ -51,8 +53,8 @@ theorem fenceInstr_eq_sail
     cases q with
     | ofFin qfin =>
       fin_cases pfin <;> fin_cases qfin <;>
-        simp only [Sail.ConcurrencyInterfaceV1.sail_barrier,
-          PreSail.ConcurrencyInterfaceV1.sail_barrier, pure] <;>
+        simp only [LeanRV64D.ConcurrencyInterfaceV1.sail_barrier,
+          Sail.ConcurrencyInterfaceV1.PreSail.sail_barrier, pure] <;>
         rfl
 
 end Natives

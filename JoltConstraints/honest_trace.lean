@@ -7,6 +7,8 @@ import JoltConstraints.trace
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divw_math
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divuw_math
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 -- An individual transition with its execution certificate. Whole honest traces

@@ -6,11 +6,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -196,13 +199,13 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_ex807388_ : Nat, k_ex807388_ ∈ {16, 32, 64, 128} -/
-def float_is_normal (op : (BitVec k_ex807388_)) : Bool :=
+/-- Type quantifiers: k_ex254584_ : Nat, List.elem k_ex254584_ [16, 32, 64, 128] -/
+def float_is_normal (op : (BitVec k_ex254584_)) : Bool :=
   let { exp := exp, sign := _, mantissa := _ } := (float_decompose op)
   ((! (is_all_ones exp)) && (! (is_all_zeros exp)))
 
-/-- Type quantifiers: k_ex807406_ : Nat, k_ex807406_ ∈ {16, 32, 64, 128} -/
-def float_is_subnormal (op : (BitVec k_ex807406_)) : Bool :=
+/-- Type quantifiers: k_ex254586_ : Nat, List.elem k_ex254586_ [16, 32, 64, 128] -/
+def float_is_subnormal (op : (BitVec k_ex254586_)) : Bool :=
   let { exp := exp, mantissa := mantissa, sign := _ } := (float_decompose op)
   ((is_all_zeros exp) && (! (is_all_zeros mantissa)))
 

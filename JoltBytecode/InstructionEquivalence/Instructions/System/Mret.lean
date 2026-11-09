@@ -1,7 +1,9 @@
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.Instructions.System.Common
 
-open Sail PreSail LeanRV64D.Functions
+open LeanRV64D
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 set_option autoImplicit true
 
@@ -48,7 +50,7 @@ private theorem mretProgram_jolt_run
   simp only [EStateM.run, JoltISA.execProgram, JoltISA.mretProgram,
     JoltISA.execInstr, bind, EStateM.bind]
   -- Read sail register next_pc successfully (use assumptions that it's readable)
-  have hGetNextPC : liftSail (Sail.readReg Register.nextPC) js = .ok nextPC js := by
+  have hGetNextPC : liftSail (LeanRV64D.readReg Register.nextPC) js = .ok nextPC js := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC js.sail nextPC hNextPCReadable]
   simp only [hGetNextPC]
@@ -59,7 +61,7 @@ private theorem mretProgram_jolt_run
   simp only [hReadMepc, jolt_jalr_target64, JoltISA.addWide_low]
   -- Rust's JALR writes its target directly to cpu.pc, represented by nextPC.
   have hWriteNextPC :
-      liftSail (Sail.writeReg Register.nextPC
+      liftSail (LeanRV64D.writeReg Register.nextPC
         (BitVec.update
           (js.vregs JoltISA.mepcVReg + sign_extend (m := 64) (0 : BitVec 12))
           0 0#1)) js =
@@ -143,9 +145,8 @@ theorem mretProgram_eq_sail_projected
       (!instBEqPrivilege.beq Privilege.Machine Privilege.Machine) = false := by
     decide
   simp only [bne, BEq.beq, hMachineNeFalse, ext_check_xret_priv,
-    LeanRV64D.Functions.not, Bool.false_eq_true, if_false]
+    sail_not_true, sail_not_false, Bool.false_eq_true, ↓reduceIte]
   -- Read current privilege again inside the MRET trap-return postlude.
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
   simp only [EStateM.bind, readReg_eq_of_get? Register.cur_privilege
     (systemProject js) Privilege.Machine hCurPrivilegeProject]
   -- Read PC successfully before entering the MRET exception handler.

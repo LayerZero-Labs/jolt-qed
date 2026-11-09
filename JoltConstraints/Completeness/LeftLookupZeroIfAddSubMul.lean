@@ -3,6 +3,8 @@ import Mathlib.Algebra.Field.Defs
 import JoltConstraints.witness
 import JoltConstraints.honest_witness
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace JoltConstraints
@@ -28,7 +30,7 @@ theorem honestWitness_leftLookupZeroIfAddSubMul
   intro t
   by_cases inBounds : t.val < trace.rows.size
   · simpa [HonestTrace.honestWitness, TraceWitness.OpFlags,
-      TraceWitness.LeftLookupOperand, JoltMetadata.circuitFlag, inBounds] using
+      TraceWitness.LeftLookupOperand, JoltMetadata.circuitFlag, inBounds] using!
         (arithmeticLeftLookupIsZero (F := F)
           (trace.bytecode[(trace.rows[t.val]'inBounds).rowIndex]).instruction
           (TraceWitness.LeftInstructionInput params trace t))

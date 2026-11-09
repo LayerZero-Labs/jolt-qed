@@ -2,6 +2,8 @@ import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.VirtualRegisters
 import JoltBytecode.JoltISA.Expansions.ALU
 
+open LeanRV64D
+
 /-!
 # Auto-generated Jolt-ISA expansion programs
 
@@ -11,7 +13,7 @@ regenerate instead. Each `...ProgramAuto` mirrors the final Jolt rows
 emitted by Rust for its source instruction parameters.
 -/
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
 

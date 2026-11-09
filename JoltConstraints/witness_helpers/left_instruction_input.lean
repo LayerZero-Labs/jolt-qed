@@ -2,6 +2,8 @@ import JoltConstraints.metadata
 import JoltConstraints.witness_helpers.rs1_value
 import JoltConstraints.witness_helpers.unexpanded_pc
 
+open LeanRV64D
+
 set_option autoImplicit false
 
 namespace TraceWitness

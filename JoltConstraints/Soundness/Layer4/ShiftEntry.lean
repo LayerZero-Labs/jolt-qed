@@ -2,6 +2,8 @@ import Mathlib.Tactic.Ring
 import JoltConstraints.lookup_table
 import JoltBytecode.JoltISA.Values
 
+open LeanRV64D
+
 /-!
 # The shift tables on right-shift bitmasks
 
@@ -202,18 +204,18 @@ theorem sra_value (x : BitVec 64) (s : Nat) (sLt : s < 64) :
       · simp [BitVec.getLsbD_of_ge x (s + i) (by omega)]
 
 /-- One pass of the VIRTUAL_SRA loop: step i reads bit 63 - i. -/
-def sraStep (x y : BitVec 64) (r : MProd (BitVec 64) (BitVec 64)) (i : Nat) :
-    MProd (BitVec 64) (BitVec 64) :=
+def sraStep (x y : BitVec 64) (r : BitVec 64 × BitVec 64) (i : Nat) :
+    BitVec 64 × BitVec 64 :=
   ⟨srlStep x y r.fst (63 - i), signStep 63 y r.snd i⟩
 
 /-- The first SRA accumulator follows the logical-shift recurrence. -/
-theorem sraStep_fst (x y : BitVec 64) : ∀ (l : List Nat) (r : MProd (BitVec 64) (BitVec 64)),
+theorem sraStep_fst (x y : BitVec 64) : ∀ (l : List Nat) (r : BitVec 64 × BitVec 64),
     (l.foldl (sraStep x y) r).fst = l.foldl (fun entry i => srlStep x y entry (63 - i)) r.fst
   | [], _ => rfl
   | i :: l, r => sraStep_fst x y l (sraStep x y r i)
 
 /-- The second SRA accumulator follows the sign-extension recurrence. -/
-theorem sraStep_snd (x y : BitVec 64) : ∀ (l : List Nat) (r : MProd (BitVec 64) (BitVec 64)),
+theorem sraStep_snd (x y : BitVec 64) : ∀ (l : List Nat) (r : BitVec 64 × BitVec 64),
     (l.foldl (sraStep x y) r).snd = l.foldl (signStep 63 y) r.snd
   | [], _ => rfl
   | i :: l, r => sraStep_snd x y l (sraStep x y r i)
@@ -294,18 +296,18 @@ theorem upper_word_mask :
   decide
 
 /-- One pass of the VIRTUAL_SRAW loop: step i reads bit 31 - i. -/
-def srawStep (x y : BitVec 64) (r : MProd (BitVec 64) (BitVec 64)) (i : Nat) :
-    MProd (BitVec 64) (BitVec 64) :=
+def srawStep (x y : BitVec 64) (r : BitVec 64 × BitVec 64) (i : Nat) :
+    BitVec 64 × BitVec 64 :=
   ⟨srlStep x y r.fst (31 - i), signStep 31 y r.snd i⟩
 
 /-- The first SRAW accumulator extracts bits of the low word. -/
-theorem srawStep_fst (x y : BitVec 64) : ∀ (l : List Nat) (r : MProd (BitVec 64) (BitVec 64)),
+theorem srawStep_fst (x y : BitVec 64) : ∀ (l : List Nat) (r : BitVec 64 × BitVec 64),
     (l.foldl (srawStep x y) r).fst = l.foldl (fun entry i => srlStep x y entry (31 - i)) r.fst
   | [], _ => rfl
   | i :: l, r => srawStep_fst x y l (srawStep x y r i)
 
 /-- The second SRAW accumulator builds the sign-extension mask. -/
-theorem srawStep_snd (x y : BitVec 64) : ∀ (l : List Nat) (r : MProd (BitVec 64) (BitVec 64)),
+theorem srawStep_snd (x y : BitVec 64) : ∀ (l : List Nat) (r : BitVec 64 × BitVec 64),
     (l.foldl (srawStep x y) r).snd = l.foldl (signStep 31 y) r.snd
   | [], _ => rfl
   | i :: l, r => srawStep_snd x y l (srawStep x y r i)
@@ -355,18 +357,18 @@ theorem srlw_value (x : BitVec 64) (s : Nat) (sLt : s < 32) :
       Nat.shiftRight_eq_div_pow]
 
 /-- One pass of the VIRTUAL_SRLW loop at bit i; the second slot keeps the last mask bit. -/
-def srlwStep (x y : BitVec 64) (r : MProd (BitVec 64) (BitVec 64)) (i : Nat) :
-    MProd (BitVec 64) (BitVec 64) :=
+def srlwStep (x y : BitVec 64) (r : BitVec 64 × BitVec 64) (i : Nat) :
+    BitVec 64 × BitVec 64 :=
   ⟨srlStep x y r.fst i, (y >>> i) &&& 1⟩
 
 /-- The first SRLW accumulator follows the logical-shift recurrence. -/
-theorem srlwStep_fst (x y : BitVec 64) : ∀ (l : List Nat) (r : MProd (BitVec 64) (BitVec 64)),
+theorem srlwStep_fst (x y : BitVec 64) : ∀ (l : List Nat) (r : BitVec 64 × BitVec 64),
     (l.foldl (srlwStep x y) r).fst = l.foldl (srlStep x y) r.fst
   | [], _ => rfl
   | i :: l, r => srlwStep_fst x y l (srlwStep x y r i)
 
 /-- After processing bit zero, the second SRLW accumulator is mask bit zero. -/
-theorem srlwStep_snd (x y : BitVec 64) (l : List Nat) (r : MProd (BitVec 64) (BitVec 64)) :
+theorem srlwStep_snd (x y : BitVec 64) (l : List Nat) (r : BitVec 64 × BitVec 64) :
     ((l ++ [0]).foldl (srlwStep x y) r).snd = (y >>> 0) &&& 1 := by
   rw [List.foldl_append]
   rfl

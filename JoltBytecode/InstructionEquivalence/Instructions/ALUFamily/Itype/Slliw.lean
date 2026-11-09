@@ -7,9 +7,11 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.Virtua
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.VirtualSignExtendWord
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 
+open LeanRV64D
+
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 noncomputable section
 
@@ -111,7 +113,7 @@ theorem slliwProgram_eq_sail (shamt : BitVec 5) (rs1 rd : regidx) (js : SailJolt
   unfold liftSail
   simp only [bind, EStateM.bind]
   simp only [h_read_rs1, h_value, h_write]
-  simpa only [JoltISA.execProgram_done, pure, EStateM.pure, EStateM.run] using
+  simpa only [JoltISA.execProgram_done, pure, EStateM.pure, EStateM.run] using!
     Projection.systemProjectResult_pure_retire_after_xreg_write rd js s'
       (slliw_sail_operation shamt v) h.linkedCSRs h_write
 

@@ -16,6 +16,8 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Splice
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 
+open LeanRV64D
+
 /-!
 # Program blocks for store-family Jolt-ISA proofs
 
@@ -39,7 +41,7 @@ Rust program top-to-bottom while keeping each proof phase small enough to read.
 
 set_option linter.unusedVariables false
 
-open Sail PreSail LeanRV64D.Functions
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 open virtaddr MemoryAccessType mem_payload
 
 set_option autoImplicit true
@@ -565,7 +567,7 @@ theorem setupBlock (rest : JoltISA.Program)
       (JoltISA.execInstr (JoltISA.Encoded.ANDI (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp0) (-8 : BitVec 12))).run js0 =
         .ok RETIRE_SUCCESS js1 := by
     simpa [js0, js1, ea, base, compute_aligned_dword_base_address,
-      load_effective_address, h8] using
+      load_effective_address, h8] using!
       (JoltISA.andi_run_vreg_vreg JoltISA.inlineTmp1 JoltISA.inlineTmp0
         (-8 : BitVec 12) js0 (by unfold WritableVReg; decide))
   have h_base_aligned : AlignedDwordAccess base := by

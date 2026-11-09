@@ -1,6 +1,6 @@
 import Sail
 import LeanRV64D.Defs
-import LeanRV64D.Specialization
+import LeanRV64D.SpecializationV1
 import LeanRV64D.FakeReal
 import LeanRV64D.RiscvExtras
 
@@ -10,11 +10,14 @@ set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
 open Sail
-open ConcurrencyInterfaceV1
+open Sail.ConcurrencyInterfaceV1
 
 noncomputable section
+namespace LeanRV64D
 
-namespace LeanRV64D.Functions
+open ConcurrencyInterfaceV1
+
+namespace Functions
 
 open zvk_vsm4r_funct6
 open zvk_vsha2_funct6
@@ -212,15 +215,15 @@ def Software_Check_Code_of_num (arg_ : Nat) : Software_Check_Code :=
 
 def num_of_Software_Check_Code (arg_ : Software_Check_Code) : Int :=
   match arg_ with
-  | SWC_NO_INFO => 0
-  | SWC_LANDING_PAD_FAULT => 1
-  | SWC_SHADOW_STACK_FAULT => 2
+  | .SWC_NO_INFO => 0
+  | .SWC_LANDING_PAD_FAULT => 1
+  | .SWC_SHADOW_STACK_FAULT => 2
 
 def software_check_cause_forwards (arg_ : Software_Check_Code) : (BitVec 2) :=
   match arg_ with
-  | SWC_NO_INFO => 0b00#2
-  | SWC_LANDING_PAD_FAULT => 0b10#2
-  | SWC_SHADOW_STACK_FAULT => 0b11#2
+  | .SWC_NO_INFO => 0b00#2
+  | .SWC_LANDING_PAD_FAULT => 0b10#2
+  | .SWC_SHADOW_STACK_FAULT => 0b11#2
 
 def software_check_cause_backwards (arg_ : (BitVec 2)) : SailM Software_Check_Code := do
   match arg_ with
@@ -229,14 +232,14 @@ def software_check_cause_backwards (arg_ : (BitVec 2)) : SailM Software_Check_Co
   | 0b11 => (pure SWC_SHADOW_STACK_FAULT)
   | _ =>
     (do
-      assert false "Pattern match failure at unknown location"
+      sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
 def software_check_cause_forwards_matches (arg_ : Software_Check_Code) : Bool :=
   match arg_ with
-  | SWC_NO_INFO => true
-  | SWC_LANDING_PAD_FAULT => true
-  | SWC_SHADOW_STACK_FAULT => true
+  | .SWC_NO_INFO => true
+  | .SWC_LANDING_PAD_FAULT => true
+  | .SWC_SHADOW_STACK_FAULT => true
 
 def software_check_cause_backwards_matches (arg_ : (BitVec 2)) : Bool :=
   match arg_ with

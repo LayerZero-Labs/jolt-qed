@@ -1,6 +1,8 @@
 import JoltConstraints.Soundness.Layer6.DivisionAppend
 import JoltConstraints.Soundness.Layer6.DivisionLayout
 
+open LeanRV64D
+
 /-! Complete the division block from witness and honest generated runs. -/
 
 set_option autoImplicit false
@@ -8,7 +10,7 @@ set_option autoImplicit false
 namespace JoltInstance
 
 open JoltConstraints.Soundness
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- Split the certified honest program run into rows and append them to the
 original prefix, transferring the candidate's represented observations and

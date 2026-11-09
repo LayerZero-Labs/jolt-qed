@@ -1,5 +1,7 @@
 import JoltConstraints.Soundness.Layer5.MemoryAccessRestriction
 
+open LeanRV64D
+
 /-! Temporary program restriction for the termination word (B6, stopping early;
 related to a16z/jolt#1950 and #1951 item 2).
 
@@ -24,7 +26,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- An eight-byte access at `address` touches the termination region
 `[termination, io_end)` of `device`. -/
@@ -81,7 +83,7 @@ def JoltInstance.TerminationThenStall (joltInstance : JoltInstance SourceInstruc
 
 namespace JoltConstraints.Soundness
 
-open Sail PreSail LeanRV64D.Functions JoltISA
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- After a completed termination store, an attempted direct jump is the
 self-jump required for the tracer to stop. -/
@@ -118,10 +120,10 @@ theorem jal_zero_exec_stalls (dst : JoltISA.Dst) (pre post : SailJoltState)
     (nextPC : pre.sail.regs.get? Register.nextPC = some link)
     (runs : JoltISA.execInstr (.JAL dst 0) pre = .ok RETIRE_SUCCESS post) :
     post.sail.regs.get? Register.nextPC = some address := by
-  have readNext : liftSail (Sail.readReg Register.nextPC) pre = .ok link pre := by
+  have readNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.nextPC pre.sail link nextPC]
-  have readPC : liftSail (Sail.readReg Register.PC) pre = .ok address pre := by
+  have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok address pre := by
     unfold liftSail
     rw [readReg_eq_of_get? Register.PC pre.sail address pc]
   simp only [JoltISA.execInstr, bind, EStateM.bind, readNext, readPC] at runs
@@ -129,7 +131,7 @@ theorem jal_zero_exec_stalls (dst : JoltISA.Dst) (pre post : SailJoltState)
   | error err state => simp only [write] at runs; cases runs
   | ok result middle =>
       cases result
-      have setPC : liftSail (Sail.writeReg Register.nextPC (address + 0)) middle =
+      have setPC : liftSail (LeanRV64D.writeReg Register.nextPC (address + 0)) middle =
           .ok () { middle with sail := { middle.sail with
             regs := middle.sail.regs.insert Register.nextPC (address + 0) } } := by rfl
       simp only [write, setPC, pure, EStateM.pure] at runs
