@@ -140,7 +140,8 @@ Do not weaken a main statement to close one of these gaps.
 
 These are source debt, not permission to add such tactics or raise limits during repair.
 - `decide +kernel` at `JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean:52` and `:59`; `AGENTS.md` bans it.
-- Raised heartbeat limits: `set_option maxHeartbeats 1000000` at `JoltConstraints/Completeness/Helpers/LookupWriteProofHelpers.lean:4`, and `400000` at `JoltConstraints/Completeness/Helpers/TracePCProofHelpers.lean:7`.
+- `decide +kernel` is outside the closure of `JoltInstance.sail_soundness`: `DeviceMemoryObstruction` formalizes the termination-device obstruction (#1950/#1951), and only the root module imports it.
+- No raised limits remain in `JoltBytecode/` or `JoltConstraints/` (2026-11-09); the generated model's remaining declaration-local limits are listed in `docs/riscv-alignment.md` section 8.
 - No executable `bv_decide` use remains in `JoltBytecode/` or `JoltConstraints/`; the only textual match is a comment in `Soundness/Layer4/Interleave.lean:17`.
 
 ### Constraints migration (2026-11-03)
