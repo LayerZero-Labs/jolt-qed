@@ -195,7 +195,7 @@ The files are under `JoltBytecode/Step/`.
   Decision (step d): the execute-level dispatcher was retired because `joltRun_eq_execute` and the ECALL step theorem replace it.
   `joltRun_eq_execute` calls the proved program theorems directly, and the step corollaries compose it with the fetch/decode lift.
   Their `#print axioms` lists only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (through the generic CSR read).
-  FENCE matches every Sail FENCE, since Jolt runs all of them as one no-op row.
+  FENCE matches every Sail FENCE and FENCE_TSO, since Jolt runs all of them as one no-op row.
   Atomics match with their own `aq` and `rl` bits: `AmoFlags.lean` supplies the generic memory-flag erasure used by AMOs and LR/SC, because the sequential memory model ignores the request's `access_kind`.
   The division and remainder expansions need their advice operand to be the honest value (`AdviceHonest`); the soundness half of those theorems shows a retiring run with `rd ≠ 0` has no other choice.
   `joltStep_eq_try_step_base` and `joltStep_eq_try_step_compressed` combine `joltRun_eq_execute` with the step theorem.
@@ -208,6 +208,28 @@ Counters are unobservable: no Jolt row reads `minstret`, `minstret_increment` or
 The step theorems keep three hypotheses that step f discharges from the run: the instruction's assumption bundle at the state after the prelude (its parts are classified in section 8), Sail's fetch and decode results at that state (step e relates them to Jolt's decoder), and that `execute ast` retires.
 The separate ECALL theorem follows trap entry through the writes to `mepc`, `mcause`, `mtval` and `mstatus` and commits the handler PC without retirement.
 The retiring theorems retain their retirement hypothesis; natural alignment excludes the LR/SC faults that are outside Jolt's step handoff.
+
+### What step e proves
+
+The files are under `JoltBytecode/Decode/`.
+`Jolt.lean` transcribes Jolt's decoder (`joltDecode` for a 32-bit word with its advice, `joltUncompress` for a 16-bit parcel), and the two agreement theorems relate it to Sail's decoders on every state that satisfies `StepInvariant` and has `misa` at its reset value:
+
+- `Agreement.lean`, `Decode.joltDecode_agrees`: if Jolt decodes a 32-bit word `w` to `i`, then `ext_decode w` returns an AST `ast` with `Matches i ast`.
+  Jolt accepts no 32-bit word that Sail rejects.
+- `Compressed.lean`, `Decode.joltDecode_compressed_agrees`: if Jolt decodes the expansion of a 16-bit parcel `h` to `i`, and `h` is not the reserved parcel below, then `ext_decode_compressed h` returns a compressed AST `cast`, and there is a base AST `base` with `Matches i base` such that `executeFull cast` and `executeFull base` agree on every `StepInvariant` state.
+  This is the hypothesis `joltStep_compressed` takes.
+
+Decision: FENCE.TSO (`0x8330000f`) is decoded by Sail as `FENCE_TSO` and by Jolt as an ordinary FENCE.
+`Matches .FENCE` accepts both Sail ASTs, because Jolt runs every fence as one no-op row and Sail's sequential memory model gives both the same effect, so the theorem needs no special case.
+
+Deviation: the parcel `0x6001` is C.LUI with `rd = x0` and a zero immediate, which the specification reserves (`unpriv/zca.adoc` `norm:c-lui_rsv`: "The code points with imm=0 are reserved").
+Sail decodes it as `C_ILLEGAL` and raises an illegal-instruction exception; Jolt expands it to `ADDI x0, x0, 0` and runs it as a no-op.
+`ReservedAccepted` (`Decode/Jolt.lean`) names the parcels Jolt accepts that the specification reserves, and `Decode.reservedAccepted_iff` shows `0x6001` is the only one.
+The whole-run theorem takes "no block fetches `0x6001`" as a named premise.
+A compiler never emits this parcel, so the premise holds for compiled guests; Jolt could reject it instead, which would remove the premise.
+
+The proofs use no `bv_decide` and no `decide +kernel`.
+The first versions of both files proved bit-vector side conditions with `bv_decide`, which in Lean 4.35 adds one auxiliary axiom per call; they now go through `omega` and `simp` on `BitVec.toNat`, and the two theorems' axioms are only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (the last only in the compressed theorem, through `executeFull`, which includes Sail's generic CSR read).
 
 ## 6. CSR legalization
 
