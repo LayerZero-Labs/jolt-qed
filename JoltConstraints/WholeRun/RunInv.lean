@@ -22,8 +22,7 @@ not derive) or a **documented deviation** (a place where Jolt and Sail differ;
 | even PC | platform premise `RowsAligned`, then invariant | `Block.Runs.pc_even` |
 | heap end below `2^64 - 8` | platform premise `HeapNoWrap`, then invariant | `RunInv.heap_no_wrap` |
 | LR/SC address in RAM | invariant | `access_classified` |
-| AMO address in RAM or the I/O window | invariant | `access_classified_full` |
-| AMO address in RAM, without the I/O window | documented deviation `AmoInRam` | `access_classified` |
+| AMO address in RAM or the I/O window | invariant | `access_classified` |
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
@@ -100,22 +99,6 @@ private theorem amoWordBase_ram (v : BitVec 64) (h : RAM_START_ADDRESS ≤ v.toN
   · exact h'
   · exact absurd h (Nat.not_le.mpr h')
 
-/-- **Documented deviation** (`docs/riscv-alignment.md` §2): Jolt's AMO expansions
-do not assert the address is in RAM, unlike LR/SC, so an AMO on the output region
-retires in Jolt. Sail's I/O region now allows the arithmetic atomics, so
-`access_classified_full` classifies such an AMO as an `IoAmoAccess` instead and needs
-no premise; this one remains for `access_classified`.
-For every AMO*_W and AMO*_D it says the access is a `RamAccess`; every other
-instruction satisfies it. For example, `AMOADD.D` with `rs1 = 0x80000008`
-satisfies it and with `rs1 = output_start` does not; `LR.W` satisfies it always. -/
-def AmoInRam (i : RiscvInstruction) (js : SailJoltState) : Prop :=
-  match i with
-  | .AMOSWAP_W .. | .AMOADD_W .. | .AMOXOR_W .. | .AMOAND_W .. | .AMOOR_W ..
-  | .AMOMIN_W .. | .AMOMAX_W .. | .AMOMINU_W .. | .AMOMAXU_W ..
-  | .AMOSWAP_D .. | .AMOADD_D .. | .AMOXOR_D .. | .AMOAND_D .. | .AMOOR_D ..
-  | .AMOMIN_D .. | .AMOMAX_D .. | .AMOMINU_D .. | .AMOMAXU_D .. => RamAccess i js
-  | _ => True
-
 /-- A successful `VirtualAssertLTE` leaves the state unchanged and says its first
 operand is at most its second. For example, asserting `2^31 ≤ x5` retires only when
 `x5 ≥ 2^31`. -/
@@ -187,60 +170,19 @@ private theorem lrsc_ram {program : Rv64ProgramImage SourceInstruction} {b : Blo
     split at hrun
     all_goals exact assert_prefix (by decide) hrun
 
-/-- **Access classification.** A block that runs and is a RISC-V instruction
-accesses either RAM or the I/O window, so `block_simulates` or `block_simulates_io`
-applies to it.
-Loads and stores are classified by their effective address: below
-`RAM_START_ADDRESS` it is an `IoAccess`, and from there on the doubleword base is in
-RAM because `RAM_START_ADDRESS` is a multiple of eight. LR and SC are in RAM
-because their expansions assert `rs1 ≥ RAM_START_ADDRESS`. AMOs are in RAM by the
-documented deviation `AmoInRam`. Every other instruction has no access.
-For example, `LW` from `0x40000010` is an `IoAccess`, `LR.D` is a `RamAccess` because
-it retired, and `ADD` is a `RamAccess` trivially. -/
-theorem access_classified (program : Rv64ProgramImage SourceInstruction) (b : Block)
-    (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
-    (hamo : AmoInRam i b.start) : RamAccess i b.start ∨ i.IoAccess b.start := by
-  have hlr : ∀ (rd rs1 rs2 : regidx) (p : Program),
-      b.row.instruction.expand = some (ExpandedSource.ofProgram p) →
-      b.row.instruction.honestTracerAdvice b.start = [] →
-      (p = lrwProgramAuto rd rs1 rs2 ∨ p = lrdProgramAuto rd rs1 rs2 ∨
-        p = scwProgramAuto rd rs1 rs2 ∨ p = scdProgramAuto rd rs1 rs2) →
-      RAM_START_ADDRESS ≤ (sourceValue (.xreg rs1) b.start).toNat := fun rd rs1 rs2 p he hadv hp =>
-    lrsc_ram hruns rd rs1 rs2 p he hp hadv
-  cases i
-  case LR_W rd rs1 aq rl =>
-    exact Or.inl (amoWordBase_ram _ (hlr rd rs1 (regidx.Regidx 0) _ (by rw [hrow]; rfl)
-      (by rw [hrow]; rfl) (Or.inl rfl)))
-  case LR_D rd rs1 aq rl =>
-    exact Or.inl (hlr rd rs1 (regidx.Regidx 0) _ (by rw [hrow]; rfl) (by rw [hrow]; rfl)
-      (Or.inr (Or.inl rfl)))
-  case SC_W rd rs1 rs2 aq rl =>
-    exact Or.inl (amoWordBase_ram _ (hlr rd rs1 rs2 _ (by rw [hrow]; rfl)
-      (by rw [hrow]; rfl) (Or.inr (Or.inr (Or.inl rfl)))))
-  case SC_D rd rs1 rs2 aq rl =>
-    exact Or.inl (hlr rd rs1 rs2 _ (by rw [hrow]; rfl) (by rw [hrow]; rfl)
-      (Or.inr (Or.inr (Or.inr rfl))))
-  all_goals
-    first
-    | exact Or.inl trivial
-    | exact Or.inl hamo
-    | (rename_i rs1 imm
-       rcases aligned_or_below (load_effective_address (sourceValue (.xreg rs1) b.start) imm)
-         with h | h
-       · exact Or.inl h
-       · refine Or.inr ⟨_, _, _, rfl, ?_⟩
-         exact h)
-
 /-- **Access classification, with atomics on the I/O window.** A block that runs and is a
 RISC-V instruction accesses RAM, accesses the I/O window with a load or store, or is an
 atomic on the I/O window, so `block_simulates`, `block_simulates_io` or
 `block_simulates_io_amo` applies to it.
-It is `access_classified` without the deviation premise `AmoInRam`: an AMO's accessed
-doubleword is either at or above `RAM_START_ADDRESS`, a `RamAccess`, or below it, an
-`IoAmoAccess`. Loads, stores, LR and SC are classified as before.
+Loads and stores are classified by their effective address: below `RAM_START_ADDRESS` it is an
+`IoAccess`, and from there on the doubleword base is in RAM because `RAM_START_ADDRESS` is a
+multiple of eight. LR and SC are in RAM because their expansions assert
+`rs1 ≥ RAM_START_ADDRESS`. An AMO's accessed doubleword is either at or above
+`RAM_START_ADDRESS`, a `RamAccess`, or below it, an `IoAmoAccess`. Every other instruction has
+no access.
 For example, `AMOADD.D` through `0x40000010` is an `IoAmoAccess`, and through
 `0x80000010` a `RamAccess`. -/
-theorem access_classified_full (program : Rv64ProgramImage SourceInstruction) (b : Block)
+theorem access_classified (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i) :
     RamAccess i b.start ∨ i.IoAccess b.start ∨ IoAmoAccess i b.start := by
   have hlr : ∀ (rd rs1 rs2 : regidx) (p : Program),
@@ -333,7 +275,7 @@ theorem access_classified_full (program : Rv64ProgramImage SourceInstruction) (b
 the legal system values (`SystemInv`, an invariant) and the heap bound
 (`heap_no_wrap`, an invariant given the platform premise `JoltInstance.HeapNoWrap`).
 The PC parity and the access class are properties of the block being run, derived
-from `RowsAligned` and `AmoInRam` (`Block.Runs.pc_even`, `access_classified`).
+from `RowsAligned` (`Block.Runs.pc_even`) and from the instruction (`access_classified`).
 `program` is the image the run executes, which later invariants about its code
 depend on.
 For example, a state with all virtual registers zero and the layout of a small

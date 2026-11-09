@@ -73,8 +73,7 @@ Reservability and atomics are restricted the way Jolt restricts them: Jolt's LR 
 Jolt's platform allows AMOs anywhere its MMU accepts a load and a store, including the output region: its AMO expansions load and store the doubleword through the ordinary MMU.
 The specification leaves a region's atomics to the platform, so the I/O region's atomics are our modelling choice, not a property of Jolt, and AMONone would be wrong for Jolt's platform.
 The I/O region therefore has AMOArithmetic (`Relation.lean` and `sail-import/rv64d_jolt.json`), keeping RsrvNone, which stays exact because LR and SC assert RAM.
-Every AMO block is then in RAM or in the I/O window, and the whole-run theorem needs no `AmoInRam` premise: `access_classified_full` (`WholeRun/RunInv.lean`) classifies a block as a RAM access, an I/O load or store, or an I/O AMO (`IoAmoAccess`: a word or doubleword AMO whose containing doubleword lies below `0x8000_0000`), `block_simulates_io_amo` (`WholeRun/IoAmo.lean`) simulates the last kind, and `block_simulates_image_full` (`WholeRun/Decoded.lean`) combines the three.
-`AmoInRam` and `access_classified` stay until the cleanup that deletes them.
+Every AMO block is then in RAM or in the I/O window, and the whole-run theorem needs no premise placing AMOs in RAM: `access_classified` (`WholeRun/RunInv.lean`) classifies a block as a RAM access, an I/O load or store, or an I/O AMO (`IoAmoAccess`: a word or doubleword AMO whose containing doubleword lies below `0x8000_0000`), `block_simulates_io_amo` (`WholeRun/IoAmo.lean`) simulates the last kind, and `block_simulates_image` (`WholeRun/Decoded.lean`) combines the three.
 An I/O AMO takes one deviation premise, `AmoNoFlagWord`: no byte of the doubleword it reads and writes is a byte of the panic or termination word, because Jolt's device turns a store of the panic byte into the flag and ignores every other store to those words, while Sail stores the bytes (for example `AMOADD.D` at the panic address).
 Two premises that the loads and stores need are not needed here.
 First, no low-address premise: a retiring AMO stores to its doubleword, and Jolt's tracer accepts a store only at or above `output_start`, which is at least `memLow`, so the load half reads above `memLow` too.
@@ -375,7 +374,7 @@ The premises, by class:
 | `RowsAligned` | platform | every row address is even; Jolt's ELF loader does not check that the text section starts at an even address |
 | `HeapNoWrap` | platform | the layout ends at least eight bytes below `2^64` |
 | `ImageNoReservedParcel` | documented deviation | the parcel `0x6001` (section 5); goes away with a16z/jolt#2381 |
-| `BlockConforms.amo_in_ram` | documented deviation | AMOs on the I/O window (section 2) |
+| `BlockConforms.amo_no_flag_word` | documented deviation | an AMO on the I/O window touches no panic or termination byte (section 2) |
 | `BlockConforms.no_code_store` | documented deviation | stores into the code, above |
 | `BlockConforms.no_flag_word_load`, `no_low_load`, `panic_store_nonzero` | documented deviation | the I/O window (section 2) |
 | `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |

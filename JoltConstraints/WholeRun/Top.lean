@@ -67,10 +67,6 @@ structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Bloc
   /-- Scope: the row is a RISC-V instruction. Jolt's own instructions (`SourceInstruction.jolt`,
   `docs/riscv-alignment.md` section 7) have no block theorem yet. -/
   riscv : ∃ i, b.row.instruction = .riscv i
-  /-- Deviation: every AMO's address is in RAM (`AmoInRam`), until the I/O region gets atomics in
-  the model. This is the field that `BlockConforms.access_class` turns into the access
-  classification. -/
-  amo_in_ram : ∀ i, b.row.instruction = .riscv i → AmoInRam i b.start
   /-- Deviation: the block stores into no byte of the program's code (`NoCodeStore`). -/
   no_code_store : NoCodeStore program b
   /-- Deviation, for an I/O access: no load reads the panic or termination word
@@ -84,15 +80,10 @@ structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Bloc
   nonzero (`PanicStoreNonzero`). -/
   panic_store_nonzero : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start →
     i.PanicStoreNonzero b.start
-
-/-- **The access classification of a conforming block.** Its memory access is in RAM or in the I/O
-window, which is what `block_simulates_image` takes as `hclass`. This is the one place that
-produces the premise, so that replacing `AmoInRam` by the three-way classification changes only
-this lemma and the field `amo_in_ram`. -/
-theorem BlockConforms.access_class {program : Rv64ProgramImage SourceInstruction} {b : Block}
-    (h : BlockConforms program b) (hruns : b.Runs program) (i : RiscvInstruction)
-    (hrow : b.row.instruction = .riscv i) : RamAccess i b.start ∨ i.IoAccess b.start :=
-  access_classified program b hruns i hrow (h.amo_in_ram i hrow)
+  /-- Deviation, for an atomic on the I/O window: no byte of its doubleword is the panic or
+  termination word (`AmoNoFlagWord`). -/
+  amo_no_flag_word : ∀ i, b.row.instruction = .riscv i → IoAmoAccess i b.start →
+    i.AmoNoFlagWord b.start
 
 /-- **Documented deviation: no row of the image holds the reserved parcel `0x6001`.** This is
 `NotReservedParcel` stated once on the image instead of on each block. For example, an image
@@ -118,9 +109,9 @@ theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
   rintro s ⟨hrel, hinv, hcode⟩
   obtain ⟨v, s', hstep, hrel'⟩ := block_simulates_image program b hruns himage i hrow hi
     hinv.system (hruns.pc_even hrows) (fun _ hr => CodeIntact.of_related hr hcode)
-    hinv.heap_no_wrap (hreserved.block hruns) (hconf.access_class hruns i hrow)
+    hinv.heap_no_wrap (hreserved.block hruns)
     (hconf.no_flag_word_load i hrow) (hconf.no_low_load i hrow) (hconf.panic_store_nonzero i hrow)
-    s hrel
+    (hconf.amo_no_flag_word i hrow) s hrel
   exact ⟨v, s', hstep, hrel', RunInv.of_block hruns hrows hinv,
     JoltCodeIntact.of_block hruns hconf.no_code_store hcode⟩
 
@@ -316,11 +307,11 @@ Premises, by class:
 * documented deviation: `hreserved` (`ImageNoReservedParcel`). It covers the reserved parcel
   `0x6001`, which Jolt runs as a no-op and Sail rejects; it is discharged once a16z/jolt#2381 is in
   the pin. On the blocks of the prefix there are five more:
-  * `AmoInRam`: AMOs on the output region;
   * `NoCodeStore`: no store into the code;
   * `NoFlagWordLoad`: no read of the panic or termination word;
   * `NoLowLoad`: no load below the lowest address Jolt's prover accepts;
-  * `PanicStoreNonzero`: a store into the panic word leaves it nonzero.
+  * `PanicStoreNonzero`: a store into the panic word leaves it nonzero;
+  * `AmoNoFlagWord`: no atomic on the I/O window touches the panic or termination word.
 * scope: every block of the prefix runs a RISC-V row; Jolt's own instructions
   (`SourceInstruction.jolt`) have no block theorem yet.
 
