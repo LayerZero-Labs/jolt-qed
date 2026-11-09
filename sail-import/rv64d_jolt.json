@@ -7,7 +7,7 @@
 // the only readable, writable or executable ones:
 //   I/O    [0x4000_0000, 0x8000_0000)  Jolt's advice, input, output, panic and
 //                                      termination words: read/write, not
-//                                      executable, no AMOs, not reservable;
+//                                      executable, AMOArithmetic, not reservable;
 //   RAM    [0x8000_0000, 2^64)         read/write/execute, AMOArithmetic,
 //                                      RsrvEventual.
 // The CLINT (platform.clint) is outside both regions, so every access to it
@@ -97,7 +97,7 @@
           "read_idempotent": true,
           "write_idempotent": true,
           "misaligned_fault": "AlignmentFault",
-          "atomic_support": "AMONone",
+          "atomic_support": "AMOArithmetic",
           "reservability": "RsrvNone",
           "supports_cbo_zero": false,
           "supports_pte_read": false,
