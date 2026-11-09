@@ -21,8 +21,8 @@ flowchart LR
 ```
 
 As of 2026-11-02, `lake build JoltBytecode` passes with seven existing admitted cases.
-The recorded Jolt pin remains `5def437f`; the working model targets `c6703570`, and alignment is under audit.
-The constraints migration is pending, so the default `lake build` does not currently pass.
+The recorded Jolt pin is `c97e9300`, the merge of a16z/jolt#2250.
+The constraints migration is merged, and `lake build JoltConstraints` passes.
 See [current status](methods/soundness.md) and [proof obligations](JoltConstraints/model_review.md).
 
 A self contained manuscript describing the efforts of formally verifying bytecode expansion is available [here](./jolt-qed.pdf)

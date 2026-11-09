@@ -86,7 +86,7 @@ Each of these has made a staged statement false before.
 1. A trace row or state given on its own carries no execution certificate.
    A property of its post-state, such as `StableStall`, says nothing about its instruction unless the lemma also has the run (`last ∈ run.rows.back?`) or an explicit execution fact.
 2. Witness values are field sums that do not wrap; Sail stores 64-bit words that do.
-   Comparing them needs a bound, such as `NextPCNoWrap` (`assumptions.pcNoWrap`), as in `Soundness/Layer5/Jal.lean`.
+   Comparing them needs a bound, such as `NextPCNoWrap` (`joltInstance.program.next_pc_no_wrap`), as in `Soundness/Layer5/Jal.lean`.
 3. Some flags are set per row, not per source instruction.
    `stamp_sequence` sets `is_compressed` only on an expansion's last row; use `source_is_compressed` for any row.
 4. A fact about "every row at an address" needs unique addresses: `pc_map_ok` with `pc_map_ok_distinct_addresses`.
@@ -103,6 +103,6 @@ Each of these has made a staged statement false before.
 ## Sources
 
 - Jolt's Rust code: `/Users/ari.biswas/Work-with-A16z/jolt`.
-  The model is pinned to the commit recorded in `methods/soundness.md` (currently `5def437f`), which may not be the checked-out HEAD.
+  The model is pinned to the commit recorded in `methods/soundness.md` (currently `c97e9300`), which may not be the checked-out HEAD.
   Read pinned files with `git -C /Users/ari.biswas/Work-with-A16z/jolt show <pin>:<path>`.
 - The stopping rule follows a16z/jolt PR #2109 at merge commit `0249591a`.

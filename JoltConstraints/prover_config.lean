@@ -55,18 +55,15 @@ def checkedTouched (bounds : Option (Nat × Nat)) (layout : MemoryLayout) : Opti
     let offset ← MemoryLayout.checkedSub hi layout.get_lowest_address.toNat
     pure (offset / 8)
 
-/-- Jolt's prover's RAM size, with the fix that a16z/jolt#1951 item 4 proposes
-and that a16z/jolt#2250 makes in Jolt (open; the model follows it ahead of its merge):
+/-- Jolt's prover's RAM size, as a16z/jolt#2250 fixed it for a16z/jolt#1951 item 4:
 `touched` is the word index of the highest touched
 address, `imageEnd` is the image's first word index plus its word count plus one,
 and the RAM size is the power of two that rounds up `max (touched + 1) imageEnd`,
 so the table holds word `touched`.
 For example, `touched = 1024` with `imageEnd = 40` gives `pow2(1025) = 2048`, where
-the pinned prover rounds `max touched imageEnd` and gets 1024.
-The issue's proposed line for Jolt's prover is
-`let ram_K = (touched + 1).max(image_end).next_power_of_two()`; the checked rounding
-of jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at
-5def437f is kept. `touched + 1` cannot overflow, since `touched < 2^61`. -/
+Jolt's prover before #2250 rounded `max touched imageEnd` and got 1024.
+See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at
+c97e9300. `touched + 1` cannot overflow, since `touched < 2^61`. -/
 def checkedRamSize (dimensions : ExecutionDimensions) (layout : MemoryLayout)
     (minBytecodeAddress imageWords : Nat) : Option Nat := do
   let touched ← checkedTouched dimensions.ram_bounds layout

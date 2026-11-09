@@ -156,7 +156,6 @@ See jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at 5def437f. -/
 theorem append_jalr_row
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
-    (assumptions : inst.SoundnessAssumptions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
@@ -185,7 +184,7 @@ theorem append_jalr_row
   rw [source_compressed_of_last run.bytecode next last] at nextPC
   let advice := runtimeAdviceFor run.bytecode[next].instruction 0
   obtain ⟨_, executes, registerNext⟩ := jalr_step joltField context equations selected rowIs
-    instruction (terminal_link_no_wrap inst.program run.bytecode run.expands assumptions.pcNoWrap next last)
+    instruction (terminal_link_no_wrap inst.program run.bytecode run.expands inst.program.next_pc_no_wrap next last)
     registers baseLive nextPC 0 advice
   let post := afterWriteDst destination
     (run.bytecode[next].address + if run.bytecode[next].is_compressed then 2 else 4)

@@ -60,10 +60,12 @@ noncomputable def execHostIOWith
     let count := (← readSrc (.xreg (.Regidx 12))).setWidth 32
     let event := (← readSrc (.xreg (.Regidx 13))).setWidth 32
     if callId = hostCycleTrackCall then
-      if event = 1 then
+      -- Both marker events read the label (Rust's handle_jolt_cycle_marker);
+      -- any other event panics without reading.
+      if event = 1 || event = 2 then
         let _ ← readHostBytes loadByte config.overflowChecks true pointer count.toNat #[]
         pure ()
-      else if event != 2 then
+      else
         throw (Error.Assertion "VirtualHostIO: invalid cycle-marker event")
     else
       match ← readHostBytes loadByte config.overflowChecks true pointer count.toNat #[] with

@@ -114,7 +114,7 @@ of its RAM size `config.ram_K` is below 64: Jolt's prover checks that the rounde
 fits in 64 bits (`HonestTrace.prover_config_ram_K`).
 For example, `ram_K = 1024 = 2^10` gives `10 < 64`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
-at c6703570. -/
+at c97e9300. -/
 theorem HonestTrace.prover_config_log_ram_K_lt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)

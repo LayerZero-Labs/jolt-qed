@@ -16,7 +16,6 @@ See jolt/tracer/src/instruction/jal.rs (`JAL::exec`) at 5def437f. -/
 theorem append_jal_row
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
-    (assumptions : inst.SoundnessAssumptions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
@@ -40,7 +39,7 @@ theorem append_jal_row
   have compressed := source_compressed_of_last run.bytecode next last
   rw [compressed] at nextPC
   have noWrap := expand_program_next_pc_no_wrap inst.program run.bytecode run.expands
-    assumptions.pcNoWrap next
+    inst.program.next_pc_no_wrap next
   rw [compressed] at noWrap
   have nextPCLink : pre.sail.regs.get? Register.nextPC =
       some (run.bytecode[next].address +

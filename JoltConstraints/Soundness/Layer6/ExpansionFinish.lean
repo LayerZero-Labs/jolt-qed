@@ -259,12 +259,11 @@ private theorem expansion_ready {F : Type} [Field F] (joltField : JoltField F)
 
 /-- Close a completed source expansion with honest advice, restoring the boundary
 invariant including readiness for the next source when execution continues.
-The assumptions retain `pcNoWrap` for the field/word PC comparison.
+The image's `next_pc_no_wrap` supplies the field/word PC comparison.
 For example, a completed ADDI at address 0x1000 selects a successor at 0x1004
 when uncompressed and when the next witness cycle is real. -/
 theorem expansion_finish {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
@@ -286,7 +285,7 @@ theorem expansion_finish {F : Type} [Field F] (joltField : JoltField F)
     atBoundary := atBoundary
     registers := ?_
     terminationWord := state.terminationWord
-    ready := expansion_ready joltField joltInstance assumptions.pcNoWrap privateInputs
+    ready := expansion_ready joltField joltInstance joltInstance.program.next_pc_no_wrap privateInputs
       witness context equations run first state honestAdvice atBoundary
   }
   intro bound

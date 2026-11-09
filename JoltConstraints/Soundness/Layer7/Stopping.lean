@@ -18,7 +18,6 @@ See jolt/jolt-sdk/macros/src/lib.rs:880-887 at 5def437f and
 PR #2109 merge commit 0249591a, jolt/tracer/src/emulator/cpu.rs:553-576. -/
 theorem soundness_stopping {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
@@ -48,7 +47,7 @@ theorem soundness_stopping {F : Type} [Field F] (joltField : JoltField F)
       witness.RamValFinal address =
         ((TraceWitness.finalRamWord run.toTrace address.val).toNat : F)) := by
   obtain ⟨storeIndex, stored⟩ :=
-    soundness_termination_store_exists joltField joltInstance assumptions restrictions
+    soundness_termination_store_exists joltField joltInstance restrictions
       privateInputs witness context equations run bytecodeEq represented realRows cut
   have nonempty : 0 < run.rows.size := by
     have inBounds := storeIndex.isLt
@@ -75,7 +74,7 @@ theorem soundness_stopping {F : Type} [Field F] (joltField : JoltField F)
       ∀ t : Fin params.traceLength, run.rows.size ≤ t.val →
         ∀ address : Fin params.ramSize,
           witness.RamRa address t * witness.RamInc t = 0 :=
-    soundness_stall_suffix_zero_ram_effects joltField joltInstance assumptions.pcNoWrap privateInputs
+    soundness_stall_suffix_zero_ram_effects joltField joltInstance joltInstance.program.next_pc_no_wrap privateInputs
       witness context equations run bytecodeEq represented.toRepresentsRows nonempty stops
   have finalFromCut :
       ∀ address : Fin params.ramSize,
