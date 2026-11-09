@@ -45,10 +45,146 @@ elab "decode32_start" : tactic => do
     evalTactic (← `(tactic| rw [Decode.ntlPrefix_none]))
     evalTactic (← `(tactic| conv_lhs => whnf))
 
+/-- Compressed register fields add eight without a carry, as in C.LW's x8–x15 operands. -/
+private theorem decoder_creg_add (x : BitVec 32) :
+    (x &&& 7#32) + 8#32 = (x &&& 7#32) ||| 8#32 := by
+  apply BitVec.add_eq_or_of_and_eq_zero
+  simp [BitVec.and_assoc]
+
+/-- Jolt's sign mask on a parcel is its bit twelve gating the mask; for example, C.ADDI's
+immediate has bits 31:6 set exactly when the parcel's sign bit is set. -/
+private theorem decoder_sign_mask_bit (h : BitVec 16) (bit mask : BitVec 32) (hbit : bit.toNat = 4096) (i : Nat) :
+    (Decode.signBitMask (h.setWidth 32) bit mask).getLsbD i = (h.getLsbD 12 && mask.getLsbD i) := by
+  obtain rfl : bit = 0x1000#32 := BitVec.eq_of_toNat_eq hbit
+  have hc : (h.setWidth 32 &&& 0x1000#32 = 0x1000#32) ↔ h.getLsbD 12 = true := by
+    constructor
+    · intro he
+      have := congrArg (fun x : BitVec 32 => x.getLsbD 12) he
+      simpa [-BitVec.getLsbD_eq_getElem] using this
+    · intro hb
+      apply BitVec.eq_of_getLsbD_eq
+      intro j hj
+      simp only [BitVec.getLsbD_and, BitVec.getLsbD_setWidth, BitVec.getLsbD_ofNat]
+      by_cases hj12 : j = 12
+      · subst hj12; simp [-BitVec.getLsbD_eq_getElem, hb]
+      · have : ¬ Nat.testBit 0x1000 j := by
+          rw [show (0x1000 : Nat) = 2 ^ 12 by norm_num, Nat.testBit_two_pow]
+          simpa using Ne.symm hj12
+        simp [this]
+  unfold Decode.signBitMask
+  by_cases hb : h.getLsbD 12 = true
+  · simp [-BitVec.getLsbD_eq_getElem, hc.mpr hb, hb]
+  · simp [-BitVec.getLsbD_eq_getElem, hb, (not_congr hc).mpr hb]
+
+open Lean Meta Simp in
+/-- Read one bit of a concatenation, such as bit 3 of `a +++ b`. Simplification normalizes the
+widths in the types of a concatenation but not in its instance, so the plain lemma
+`BitVec.getLsbD_append` no longer matches; this simproc instantiates it by hand and leaves the
+type check to the kernel. -/
+simproc decoderAppendBit (BitVec.getLsbD _ _) := fun e => do
+  let_expr BitVec.getLsbD _ v i := e | return .continue
+  let_expr HAppend.hAppend _ _ _ _ x y := v | return .continue
+  let pr ← mkAppOptM ``BitVec.getLsbD_append #[none, none, some i, some x, some y]
+  let some (_, _, rhs) := (← inferType pr).eq? | return .continue
+  return .visit { expr := rhs, proof? := some pr }
+
+/-- A slice below a left shift is zero; for example, opcode bits ignore an immediate shifted by twenty. -/
+private theorem decoder_extract_shift_zero {n : Nat} (x : BitVec n) (start len shift : Nat)
+    (h : start + len ≤ shift) : (x <<< shift).extractLsb' start len = 0 := by
+  apply BitVec.eq_of_getLsbD_eq_iff.mpr
+  intro i hi
+  have hs : start + i < shift := by omega
+  simp [-BitVec.getLsbD_eq_getElem, BitVec.getLsbD_extractLsb',
+    BitVec.getLsbD_shiftLeft, hi, hs]
+
+/-- A slice above a left shift reads the original field; for example, bits 19:15 recover a register shifted by fifteen. -/
+private theorem decoder_extract_shift_cancel {n : Nat} (x : BitVec n) (start len shift : Nat)
+    (hs : shift ≤ start) (hn : start + len ≤ n) :
+    (x <<< shift).extractLsb' start len = x.extractLsb' (start - shift) len := by
+  apply BitVec.eq_of_getLsbD_eq_iff.mpr
+  intro i hi
+  have hb : start + i < n := by omega
+  have hk : ¬ start + i < shift := by omega
+  have he : start + i - shift = start - shift + i := by omega
+  simp [-BitVec.getLsbD_eq_getElem, BitVec.getLsbD_extractLsb',
+    BitVec.getLsbD_shiftLeft, hi, hb, hk, he]
+
+/-- Reduce decoder field arithmetic to natural-number quotients and remainders;
+for example, funct3 is the three-bit remainder after shifting by twelve. -/
+macro "decoder_omega" : tactic => `(tactic|
+  ((try simp only [Sail.BitVec.extractLsb, BitVec.toNat_eq, BitVec.toNat_ne, BitVec.extractLsb_toNat,
+    BitVec.extractLsb'_toNat, BitVec.toNat_ushiftRight, BitVec.toNat_setWidth,
+    BitVec.toNat_and, BitVec.ofNat_eq_ofNat, BitVec.natCast_eq_ofNat,
+    BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow, Nat.reducePow, Nat.reduceMod,
+    Nat.reduceSub, Nat.reduceAdd, Nat.reduceDiv,
+    Nat.and_two_pow_sub_one_eq_mod _ 1, Nat.and_two_pow_sub_one_eq_mod _ 2,
+    Nat.and_two_pow_sub_one_eq_mod _ 3, Nat.and_two_pow_sub_one_eq_mod _ 5] at *) <;> omega))
+
+/-- Reassociate the remaining field conjunctions, such as two orders of C.ADDI4SPN's zero bits. -/
+elab "decoder_conjunctions" : tactic => withMainContext do
+  if (← whnf (← getMainTarget)).isConstOf ``False then
+    throwError "guard reduced to False"
+  evalTactic (← `(tactic| solve | simp_all only [and_assoc, and_left_comm, and_comm]))
+
+/-- Check field identities bit by bit, then solve their Boolean consequences.
+For example, extracting two low funct3 bits agrees with extracting them from the word.
+Only bit positions are expanded; instruction words are never enumerated. -/
+macro "decoder_bits" : tactic => `(tactic|
+  ((try simp [-BitVec.shiftLeft_add_distrib, decoder_creg_add,
+    Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb'_or, BitVec.extractLsb'_and,
+    decoder_extract_shift_zero, decoder_extract_shift_cancel, *]) <;> first
+  | decoder_omega
+  | (intros
+     (try simp only [Sail.BitVec.extractLsb, BitVec.extractLsb,
+       ← BitVec.getLsbD_eq_getElem] at *) <;>
+     (try simp only [BitVec.eq_of_getLsbD_eq_iff, Nat.forall_lt_succ_right,
+       Nat.not_lt_zero, decoderAppendBit] at *) <;>
+     simp_all [-BitVec.getLsbD_eq_getElem, -BitVec.append_eq, -Nat.lt_add_one, -BitVec.shiftLeft_add_distrib, decoder_creg_add, BitVec.eq_of_getLsbD_eq_iff,
+       Nat.forall_lt_succ_right, Nat.le_one_iff_eq_zero_or_eq_one, BitVec.getLsbD_signExtend,
+       decoderAppendBit, BitVec.getLsbD_ofNat, BitVec.toNat_ofNat, decoder_sign_mask_bit,
+       ← BitVec.getLsbD_eq_extractLsb', Nat.testBit_eq_decide_div_mod_eq]
+     <;> first | assumption | decoder_conjunctions)))
+
+/-- Like `decoder_bits`, but expand every field to bit positions first; for example, the
+immediate of C.ADDI equals the sign-extended parcel bits. Used for compressed operand identities. -/
+macro "decoder_bits_expanded" : tactic => `(tactic|
+  ((try simp [-BitVec.shiftLeft_add_distrib, decoder_creg_add,
+    Sail.BitVec.extractLsb, BitVec.extractLsb, BitVec.extractLsb'_or, BitVec.extractLsb'_and,
+    decoder_extract_shift_zero, decoder_extract_shift_cancel, *]) <;> first
+  | decoder_omega
+  | (intros
+     (try simp only [Sail.BitVec.extractLsb, BitVec.extractLsb,
+       ← BitVec.getLsbD_eq_getElem] at *) <;>
+     (try simp only [BitVec.eq_of_getLsbD_eq_iff, Nat.forall_lt_succ_right,
+       Nat.not_lt_zero, decoderAppendBit] at *) <;>
+     (repeat' apply And.intro) <;>
+     (try simp only [decoderAppendBit, decoder_creg_add,
+       BitVec.ofNat_eq_ofNat, BitVec.natCast_eq_ofNat, BitVec.eq_of_getLsbD_eq_iff,
+       Nat.forall_lt_succ_right, Nat.not_lt_zero, BitVec.getLsbD_extractLsb',
+       BitVec.getLsbD_setWidth, BitVec.getLsbD_setWidth', BitVec.getLsbD_shiftLeft,
+       BitVec.getLsbD_ushiftRight, BitVec.getLsbD_shiftLeftZeroExtend,
+       BitVec.getLsbD_and, BitVec.getLsbD_or, BitVec.getLsbD_xor,
+       BitVec.getLsbD_not, BitVec.getLsbD_signExtend, BitVec.msb_eq_getLsbD_last,
+       BitVec.getLsbD_ofNat, BitVec.toNat_ofNat, decoder_sign_mask_bit,
+       Nat.testBit_eq_decide_div_mod_eq,
+       Nat.reduceAdd, Nat.reduceSub, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv,
+       Nat.reduceLT, Nat.reduceLeDiff, decide_true, decide_false,
+       Bool.true_and, Bool.false_and, Bool.and_true, Bool.and_false,
+       Bool.true_or, Bool.false_or, Bool.or_true, Bool.or_false, ↓reduceIte] at *) <;>
+     simp_all [-BitVec.getLsbD_eq_getElem, -BitVec.append_eq, -Nat.lt_add_one, -BitVec.shiftLeft_add_distrib, decoder_creg_add, BitVec.eq_of_getLsbD_eq_iff,
+       Nat.forall_lt_succ_right, Nat.le_one_iff_eq_zero_or_eq_one, BitVec.getLsbD_signExtend,
+       decoderAppendBit, BitVec.getLsbD_ofNat, BitVec.toNat_ofNat, decoder_sign_mask_bit,
+       ← BitVec.getLsbD_eq_extractLsb', Nat.testBit_eq_decide_div_mod_eq]
+     <;> first | assumption | decoder_conjunctions)))
+
 private theorem decoder_f3_lo (w : BitVec 32) (n : BitVec 3)
-    (h : w.extractLsb 14 12 = n) : w.extractLsb 13 12 = n.extractLsb 1 0 := by bv_decide
+    (h : w.extractLsb 14 12 = n) : w.extractLsb 13 12 = n.extractLsb 1 0 := by
+  simp only [BitVec.extractLsb] at *
+  decoder_omega
 private theorem decoder_f3_hi (w : BitVec 32) (n : BitVec 3)
-    (h : w.extractLsb 14 12 = n) : w.extractLsb 14 14 = n.extractLsb 2 2 := by bv_decide
+    (h : w.extractLsb 14 12 = n) : w.extractLsb 14 14 = n.extractLsb 2 2 := by
+  simp only [BitVec.extractLsb] at *
+  decoder_omega
 
 private def prepareDecoderFields : TacticM Unit := withMainContext do
   let mut g ← getMainGoal
@@ -76,6 +212,28 @@ private def prepareDecoderFields : TacticM Unit := withMainContext do
               g := g'
   setGoals [g]
 
+/-- Record the extraction form of the compressed selectors;
+for example, quadrant one gives `h.extractLsb 1 0 = 1`. -/
+private def addSelectorFacts : TacticM Unit := do
+  let mut g ← getMainGoal
+  for (name, hi, lo) in [(`hop, 1, 0), (`hf, 15, 13)] do
+    let fact? ← g.withContext do
+      let some parcel := (← getLCtx).findFromUserName? `h | return none
+      let some d := (← getLCtx).findFromUserName? name | return none
+      let some (_, _, value) := (← whnf d.type).eq? | return none
+      let field ← mkAppM ``Sail.BitVec.extractLsb #[parcel.toExpr, toExpr hi, toExpr lo]
+      let ty ← mkEq field (mkApp2 (mkConst ``BitVec.ofNat) (toExpr (hi - lo + 1)) value)
+      if (← getLCtx).decls.toArray.any (fun d => d.any (·.type == ty)) then return none
+      let m ← mkFreshExprMVar ty
+      setGoals [m.mvarId!]
+      evalTactic (← `(tactic| decoder_omega))
+      return some (ty, ← instantiateMVars m)
+    if let some (ty, pr) := fact? then
+      let gn ← g.assert (← mkFreshUserName `decoded_selector) ty pr
+      let (_, gn) ← gn.intro1P
+      g := gn
+  setGoals [g]
+
 /-- Record bit-vector forms of selector hypotheses, such as quadrant one. -/
 elab "compressed_prepare" : tactic => prepareDecoderFields
 
@@ -96,12 +254,12 @@ private def decoderRunProofs (s : Expr) : TacticM (Array Expr) := withMainContex
   return proofs
 
 private theorem decoder_width_matches (x : BitVec 2) : width_enc_backwards_matches x = true := by
-  unfold width_enc_backwards_matches
-  split <;> bv_decide
+  revert x
+  decide
 
 private theorem decoder_bool_matches (x : BitVec 1) : bool_bit_backwards_matches x = true := by
-  unfold bool_bit_backwards_matches
-  split <;> bv_decide
+  revert x
+  decide
 
 private theorem decoder_bool_value (x : BitVec 1) : bool_bit_backwards x = (x == 1) := by
   unfold bool_bit_backwards
@@ -125,11 +283,19 @@ private partial def reduceDecoder (x : Expr) (runs : Array Expr) : TacticM (Expr
     else throwError "stuck decoder: {e}"
   if fn.isConstOf ``Bool.rec then
     let isDecide := args[3]!.isAppOfArity ``decide 2
+    let rewriteGuard (value hp : Expr) : MetaM (Expr × Expr) := do
+      let p := Expr.lam `guard (mkConst ``Bool) (mkAppN fn (args.set! 3 (.bvar 0))) .default
+      return (mkAppN fn (args.set! 3 value), ← mkCongrArg p hp)
+    unless isDecide do
+      for pr in runs do
+        let some (_, l, r) := (← whnf (← inferType pr)).eq? | continue
+        if ← isDefEq (← inferType l) (mkConst ``Bool) then
+          if ← isDefEq args[3]! l then return ← rewriteGuard r pr
     let prop ← if isDecide then pure args[3]!.getAppArgs[0]!
       else mkEq args[3]! (mkConst ``Bool.true)
     let inst := if isDecide then args[3]!.getAppArgs[1]! else mkConst ``Bool.true
     let saved ← saveState
-    let prove (b : Bool) : TacticM Expr := do
+    let prove (b : Bool) (thorough : Bool) : TacticM Expr := do
       let m ← mkFreshExprMVar (if b then prop else mkNot prop)
       setGoals [m.mvarId!]
       let fieldNames := (← getLCtx).decls.toArray.filterMap fun od => do
@@ -149,21 +315,39 @@ private partial def reduceDecoder (x : Expr) (runs : Array Expr) : TacticM (Expr
       evalTactic (← `(tactic| try simp only [Decode.signBitMask] at *))
       evalTactic (← `(tactic| try simp only [Sail.BitVec.extractLsb, BitVec.extractLsb] at *))
       if (← getGoals).isEmpty then return (← instantiateMVars m)
-      evalTactic (← `(tactic| simp [Sail.BitVec.extractLsb, BitVec.extractLsb,
-        Decode.signBitMask, Functions.regidx_bit_width, decoder_reg_beq, bne, zreg, sp, ra, zero_extend, Sail.BitVec.zeroExtend, encdec_reg_backwards_matches, encdec_creg_backwards_matches, Functions.base_E_enabled,
+      unless thorough do
+        -- Guards about parcel fields are linear arithmetic once the field expressions are unfolded.
+        evalTactic (← `(tactic| simp [-BitVec.shiftLeft_add_distrib, Sail.BitVec.extractLsb, BitVec.extractLsb,
+          Decode.signBitMask, decoder_creg_add, Functions.regidx_bit_width, decoder_reg_beq, bne, zreg, sp, ra, zero_extend, Sail.BitVec.zeroExtend, encdec_reg_backwards_matches, encdec_creg_backwards_matches, Functions.base_E_enabled,
+          encdec_uop_backwards_matches, encdec_bop_backwards_matches, encdec_iop_backwards_matches,
+          encdec_amoop_backwards_matches, encdec_mul_op_backwards_matches, encdec_csrop_backwards_matches, width_enc_wide_backwards_matches,
+          encdec_biop_backwards_matches, lrsc_width_valid, decoder_width_matches, decoder_bool_matches, valid_load_encdec, Functions.xlen_bytes, Functions.xlen, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, Functions.not] <;> decoder_omega))
+        unless (← getGoals).isEmpty do throwError "guard needs the thorough proof"
+        return (← instantiateMVars m)
+      evalTactic (← `(tactic| simp [-BitVec.shiftLeft_add_distrib, Sail.BitVec.extractLsb, BitVec.extractLsb,
+        Decode.signBitMask, decoder_creg_add, Functions.regidx_bit_width, decoder_reg_beq, bne, zreg, sp, ra, zero_extend, Sail.BitVec.zeroExtend, encdec_reg_backwards_matches, encdec_creg_backwards_matches, Functions.base_E_enabled,
         encdec_uop_backwards_matches, encdec_bop_backwards_matches, encdec_iop_backwards_matches,
         encdec_amoop_backwards_matches, encdec_mul_op_backwards_matches, encdec_csrop_backwards_matches, width_enc_wide_backwards_matches,
-        encdec_biop_backwards_matches, lrsc_width_valid, decoder_width_matches, decoder_bool_matches, valid_load_encdec, Functions.xlen_bytes, Functions.xlen, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, Functions.not, *] <;> bv_decide))
+        encdec_biop_backwards_matches, lrsc_width_valid, decoder_width_matches, decoder_bool_matches, valid_load_encdec, Functions.xlen_bytes, Functions.xlen, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, Functions.not, *]))
+      for g in ← getGoals do
+        if (← whnf (← g.getType)).isConstOf ``False then
+          throwError "guard has the opposite value"
+      unless (← getGoals).isEmpty do evalTactic (← `(tactic| decoder_bits))
       unless (← getGoals).isEmpty do throwError "guard unresolved"
       instantiateMVars m
-    let (b, hp) ← try pure (false, ← prove false) catch _ => do
+    -- Failing a guard's proof is expensive, so try the cheap bit-arithmetic proof of each value
+    -- before the thorough one.
+    let (b, hp) ← try pure (false, ← prove false false) catch _ => do
       saved.restore
-      pure (true, ← prove true)
+      try pure (true, ← prove true false) catch _ => do
+        saved.restore
+        try pure (false, ← prove false true) catch _ => do
+          saved.restore
+          pure (true, ← prove true true)
     unless isDecide do
       let hp ← if b then pure hp else mkAppM ``Bool.eq_false_of_not_eq_true #[hp]
       let value := mkConst (if b then ``Bool.true else ``Bool.false)
-      let p := Expr.lam `guard (mkConst ``Bool) (mkAppN fn (args.set! 3 (.bvar 0))) .default
-      return (mkAppN fn (args.set! 3 value), ← mkCongrArg p hp)
+      return ← rewriteGuard value hp
     let .forallE _ _ resultTy _ ← inferType args[1]! | throwError "branch type expected"
     let u ← getLevel resultTy
     let mut eq := mkApp6 (mkConst (if b then ``dite_eq_left else ``dite_eq_right) [u])
@@ -229,10 +413,14 @@ elab "decode32_case" : tactic => do
     setGoals []
   setGoals remaining
   withMainContext <| evalTactic (← `(tactic| try simp only [Sail.BitVec.extractLsb, BitVec.extractLsb] at *))
-  withMainContext <| evalTactic (← `(tactic| simp [_root_.Step.Matches, RiscvInstruction.Matches, Decode.rd, Decode.rs1, Decode.rs2,
+  -- Supply FENCE's operands before normalization expands their equalities.
+  withMainContext <| evalTactic (← `(tactic| first
+  | exact Or.inl ⟨_, _, _, _, _, rfl⟩
+  | exact Or.inr rfl
+  | simp [_root_.Step.Matches, RiscvInstruction.Matches, Decode.rd, Decode.rs1, Decode.rs2,
     Decode.immI, Decode.immS, Decode.immB, Decode.immU, Decode.immJ,
     Sail.BitVec.extractLsb, BitVec.extractLsb, Functions.regidx_bit_width,
-    Sail.BitVec.access, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, *] <;> first | rfl | bv_decide))
+    Sail.BitVec.access, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, *] <;> first | rfl | decoder_bits))
 
 /-- Reduce a compressed decoder field case, such as quadrant zero's C.LW arm. -/
 elab "decode16_start" : tactic => do
@@ -256,6 +444,7 @@ elab "decode16_start" : tactic => do
 /-- Evaluate a compressed decoder after fixing its selector fields, without enumerating parcels. -/
 elab "decode16_case" : tactic => do
   prepareDecoderFields
+  addSelectorFacts
   let g ← getMainGoal
   let s ← withMainContext do
     let some (_, l, _) := (← whnf (← g.getType)).eq? | throwError "decoder equality expected"
@@ -333,9 +522,18 @@ elab "decode_word_fields" : tactic => withoutRecover do
             let ty ← mkEq field (mkApp2 (mkConst ``BitVec.ofNat) width (toExpr value))
             let m ← mkFreshExprMVar ty
             setGoals [m.mvarId!]
-            evalTactic (← `(tactic| try simp only [Decode.branchImmediates, Decode.jOffset, Decode.signBitMask,
-              Sail.BitVec.extractLsb, BitVec.extractLsb]))
-            unless (← getGoals).isEmpty do evalTactic (← `(tactic| bv_decide))
+            -- Keep sign masks folded first, so their bits are read by `decoder_sign_mask_bit`.
+            let folded ← saveState
+            try
+              evalTactic (← `(tactic| try simp only [Decode.branchImmediates, Decode.jOffset,
+                Sail.BitVec.extractLsb, BitVec.extractLsb]))
+              unless (← getGoals).isEmpty do evalTactic (← `(tactic| decoder_bits))
+            catch _ =>
+              folded.restore
+              setGoals [m.mvarId!]
+              evalTactic (← `(tactic| try simp only [Decode.branchImmediates, Decode.jOffset,
+                Decode.signBitMask, Sail.BitVec.extractLsb, BitVec.extractLsb]))
+              unless (← getGoals).isEmpty do evalTactic (← `(tactic| decoder_bits))
             let pr ← instantiateMVars m
             let gn ← g.assert (← mkFreshUserName `word_field) ty pr
             let (_, gn) ← gn.intro1P
@@ -415,22 +613,47 @@ elab "decoder_pair" : tactic => do
   gs[1]!.setKind .natural
   setGoals (gs.drop 2)
 
+/-- Drop every proposition from the local context except the parcel's clear bits (`zbit…`);
+for example, selector hypotheses are not needed for operand identities. -/
+private def clearHypotheses (g : MVarId) : MetaM MVarId := g.withContext do
+  let mut g := g
+  for d in (← getLCtx).decls.toList.reverse.filterMap id do
+    if !d.isImplementationDetail && (← isProp d.type) &&
+        !(d.userName.toString.startsWith "zbit") then g ← g.tryClear d.fvarId
+  return g
+
 /-- Prove operand identities after normalizing compressed fields, such as C.J offsets. -/
 private def proveCompressedBits (ty : Expr) : TacticM Expr := withoutRecover do
-  let m ← mkFreshExprMVar ty
-  setGoals [m.mvarId!]
-  let stateNames := #[`hinv', `s', `hinv, `s].map mkIdent
-  evalTactic (← `(tactic| try clear $[$stateNames:ident]*))
-  evalTactic (← `(tactic| try simp only [Decode.signBitMask] at *))
-  unless (← getGoals).isEmpty do evalTactic (← `(tactic| simp [encdec_creg_backwards, creg2reg_idx, zero_extend,
-    Sail.BitVec.zeroExtend, sign_extend, Sail.BitVec.signExtend,
-    Sail.BitVec.extractLsb, BitVec.extractLsb, Functions.regidx_bit_width, zreg, sp, ra,
-    zeros, Decode.signBitMask, Decode.jOffset, Decode.branchImmediates, *] <;> bv_decide))
-  instantiateMVars m
+  let attempt (minimal : Bool) : TacticM Expr := do
+    let m ← mkFreshExprMVar ty
+    setGoals [m.mvarId!]
+    let stateNames := #[`hinv', `s', `hinv, `s].map mkIdent
+    evalTactic (← `(tactic| try clear $[$stateNames:ident]*))
+    -- Most operand identities hold for every parcel, so selector hypotheses only slow them down.
+    if minimal then
+      setGoals [← clearHypotheses (← getMainGoal)]
+      evalTactic (← `(tactic| simp [-BitVec.shiftLeft_add_distrib, decoder_creg_add, encdec_creg_backwards, creg2reg_idx, zero_extend,
+        Sail.BitVec.zeroExtend, sign_extend, Sail.BitVec.signExtend,
+        Sail.BitVec.extractLsb, BitVec.extractLsb, Functions.regidx_bit_width, zreg, sp, ra,
+        zeros, Decode.jOffset, Decode.branchImmediates] <;> decoder_bits_expanded))
+    else
+      evalTactic (← `(tactic| simp [-BitVec.shiftLeft_add_distrib, decoder_creg_add, encdec_creg_backwards, creg2reg_idx, zero_extend,
+        Sail.BitVec.zeroExtend, sign_extend, Sail.BitVec.signExtend,
+        Sail.BitVec.extractLsb, BitVec.extractLsb, Functions.regidx_bit_width, zreg, sp, ra,
+        zeros, Decode.jOffset, Decode.branchImmediates, *] <;> decoder_bits_expanded))
+    unless (← getGoals).isEmpty do throwError "compressed bits unresolved"
+    instantiateMVars m
+  let saved ← saveState
+  -- Runtime failures (recursion depth) must become ordinary errors so callers can fall back.
+  tryCatchRuntimeEx (attempt true) fun _ => do
+    saved.restore
+    tryCatchRuntimeEx (attempt false) fun _ =>
+      throwError "compressed operand identity unresolved"
 
 /-- Compare compressed execution with its base expansion, including C.MV and hints. -/
 elab "compressed_execution" : tactic => withoutRecover do
   prepareDecoderFields
+  addSelectorFacts
   withMainContext do
     let g ← getMainGoal
     let some (_, lhs, rhs) := (← instantiateMVars (← g.getType)).eq? | throwError "execution equality expected"
