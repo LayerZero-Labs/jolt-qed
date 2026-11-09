@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" width="760" height="330">
+  <defs>
+    <marker id="ah-black" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1e1e1e"/>
+    </marker>
+    <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1971c2"/>
+    </marker>
+    <style>
+      text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1e1e1e; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .title { font-size: 18px; font-weight: 600; }
+      .sub { font-size: 14px; }
+      .small { font-size: 13px; }
+      .repo { font-size: 13px; fill: #868e96; }
+      .red { fill: #e03131; }
+      .blue { fill: #1971c2; }
+      .group { fill: none; stroke: #868e96; stroke-width: 1; stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <!-- Repository: rems-project/sail -->
+  <rect class="group" x="20" y="30" width="240" height="150" rx="12"/>
+  <text class="mono repo" x="34" y="52">rems-project/sail</text>
+  <rect x="35" y="65" width="210" height="95" rx="14" fill="none" stroke="#1e1e1e"/>
+  <text class="title" x="140" y="97" text-anchor="middle">Sail compiler</text>
+  <text class="sub" x="140" y="121" text-anchor="middle">OCaml source code</text>
+  <text class="mono small" x="140" y="144" text-anchor="middle">commit 2ae2199f</text>
+
+  <!-- Repository: jolt-qed -->
+  <rect class="group" x="20" y="200" width="240" height="110" rx="12"/>
+  <text class="mono repo" x="34" y="222">jolt-qed</text>
+  <rect x="28" y="232" width="224" height="65" rx="12" fill="none" stroke="#1971c2"/>
+  <text class="title blue" x="140" y="259" text-anchor="middle">patch</text>
+  <text class="mono small" x="140" y="283" text-anchor="middle">1774-type-arithmetic.patch</text>
+
+  <!-- patch -> source -->
+  <line x1="140" y1="232" x2="140" y2="162" stroke="#1971c2" stroke-width="1.5" marker-end="url(#ah-blue)"/>
+  <text class="mono small blue" x="150" y="194">git apply</text>
+
+  <!-- source -> binary -->
+  <line x1="245" y1="112" x2="518" y2="112" stroke="#1e1e1e" stroke-width="1.5" marker-end="url(#ah-black)"/>
+  <text class="mono small" x="382" y="66" text-anchor="middle">opam install --deps-only .</text>
+  <text class="mono small" x="382" y="84" text-anchor="middle">dune build --release</text>
+  <text class="mono small" x="382" y="102" text-anchor="middle">dune install</text>
+
+  <!-- binary -->
+  <rect x="520" y="65" width="220" height="95" rx="14" fill="none" stroke="#e03131"/>
+  <text class="mono title red" x="630" y="97" text-anchor="middle">sail</text>
+  <text class="sub red" x="630" y="121" text-anchor="middle">compiled binary</text>
+  <text class="mono small" x="630" y="144" text-anchor="middle">~/sail-2ae2199f/bin/sail</text>
+</svg>

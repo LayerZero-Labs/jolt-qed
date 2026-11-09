@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 730" width="1000" height="730">
+  <defs>
+    <marker id="ah-black" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1e1e1e"/>
+    </marker>
+    <marker id="ah-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f9e44"/>
+    </marker>
+    <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1971c2"/>
+    </marker>
+    <style>
+      text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1e1e1e; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .title { font-size: 18px; font-weight: 600; }
+      .sub { font-size: 14px; }
+      .small { font-size: 13px; }
+      .repo { font-size: 13px; fill: #868e96; }
+      .red { fill: #e03131; }
+      .green { fill: #2f9e44; }
+      .blue { fill: #1971c2; }
+      .gray { fill: #868e96; }
+      .group { fill: none; stroke: #868e96; stroke-width: 1; stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <!-- Repository: riscv/sail-riscv -->
+  <rect class="group" x="20" y="40" width="260" height="420" rx="12"/>
+  <text class="mono repo" x="34" y="62">riscv/sail-riscv</text>
+
+  <rect x="35" y="85" width="230" height="90" rx="14" fill="none" stroke="#1e1e1e"/>
+  <text class="title" x="150" y="123" text-anchor="middle">RISC-V spec</text>
+  <text class="mono sub" x="150" y="149" text-anchor="middle">.sail files</text>
+
+  <rect x="35" y="205" width="230" height="90" rx="14" fill="none" stroke="#1e1e1e"/>
+  <text class="title" x="150" y="243" text-anchor="middle">project file</text>
+  <text class="mono small" x="150" y="268" text-anchor="middle">model/riscv.sail_project</text>
+
+  <rect x="35" y="325" width="230" height="115" rx="14" fill="none" stroke="#2f9e44"/>
+  <text class="mono title green" x="150" y="362" text-anchor="middle">RiscvExtras.lean</text>
+  <text class="sub green" x="150" y="386" text-anchor="middle">hand-written Lean</text>
+  <text class="mono small" x="150" y="412" text-anchor="middle">axiom load_reservation …</text>
+
+  <!-- Repository: rems-project/sail -->
+  <rect class="group" x="420" y="150" width="220" height="250" rx="12"/>
+  <text class="mono repo" x="434" y="172">rems-project/sail</text>
+
+  <rect x="435" y="185" width="190" height="200" rx="14" fill="none" stroke="#e03131"/>
+  <text class="title red" x="530" y="275" text-anchor="middle">Sail compiler</text>
+  <text class="sub red" x="530" y="301" text-anchor="middle">OCaml</text>
+
+  <!-- Repository: jolt-qed -->
+  <rect class="group" x="690" y="40" width="290" height="495" rx="12"/>
+  <text class="mono repo" x="704" y="62">jolt-qed</text>
+
+  <rect x="705" y="80" width="260" height="95" rx="14" fill="none" stroke="#1971c2"/>
+  <text class="title blue" x="835" y="114" text-anchor="middle">module list</text>
+  <text class="mono small" x="835" y="139" text-anchor="middle">sail-import/PROVENANCE.toml</text>
+  <text class="small blue" x="835" y="161" text-anchor="middle">chosen in jolt-qed</text>
+
+  <rect x="705" y="200" width="260" height="315" rx="14" fill="none" stroke="#1e1e1e"/>
+  <text class="title" x="835" y="234" text-anchor="middle">RISC-V Lean spec</text>
+  <text class="mono sub" x="835" y="258" text-anchor="middle">LeanRV64D/</text>
+
+  <rect x="725" y="280" width="220" height="70" rx="8" fill="none" stroke="#1e1e1e"/>
+  <text class="sub" x="835" y="312" text-anchor="middle">generated Lean</text>
+  <text class="small gray" x="835" y="334" text-anchor="middle">translated from the .sail files</text>
+
+  <rect x="725" y="370" width="220" height="80" rx="8" fill="none" stroke="#2f9e44"/>
+  <text class="mono sub green" x="835" y="402" text-anchor="middle">RiscvExtras.lean</text>
+  <text class="small gray" x="835" y="426" text-anchor="middle">copied unchanged</text>
+
+  <!-- Repository: rems-project/lean-sail -->
+  <rect class="group" x="690" y="565" width="290" height="150" rx="12"/>
+  <text class="mono repo" x="704" y="587">rems-project/lean-sail</text>
+
+  <rect x="705" y="600" width="260" height="100" rx="14" fill="none" stroke="#2f9e44"/>
+  <text class="title green" x="835" y="635" text-anchor="middle">lean-sail</text>
+  <text class="sub green" x="835" y="659" text-anchor="middle">hand-written Lean library</text>
+  <text class="mono small" x="835" y="683" text-anchor="middle">readReg, writeReg, …</text>
+
+  <!-- .sail files -> compiler: translated -->
+  <polyline points="265,130 350,130 350,215 433,215" fill="none" stroke="#1e1e1e" stroke-width="1.5" marker-end="url(#ah-black)"/>
+  <text class="small" x="288" y="122">translated</text>
+
+  <!-- project file -> compiler: read -->
+  <line x1="265" y1="250" x2="433" y2="250" stroke="#1e1e1e" stroke-width="1.5" marker-end="url(#ah-black)"/>
+  <text class="small" x="288" y="242">read</text>
+
+  <!-- RiscvExtras.lean -> compiler: copied -->
+  <polyline points="265,382 350,382 350,330 433,330" fill="none" stroke="#2f9e44" stroke-width="1.5" marker-end="url(#ah-green)"/>
+  <text class="small green" x="288" y="402">copied as-is</text>
+
+  <!-- module list -> compiler -->
+  <polyline points="705,128 590,128 590,183" fill="none" stroke="#1971c2" stroke-width="1.5" marker-end="url(#ah-blue)"/>
+  <text class="small blue" x="638" y="120" text-anchor="middle">selects modules</text>
+
+  <!-- compiler -> LeanRV64D -->
+  <line x1="625" y1="260" x2="723" y2="315" stroke="#1e1e1e" stroke-width="1.5" marker-end="url(#ah-black)"/>
+  <line x1="625" y1="330" x2="723" y2="410" stroke="#2f9e44" stroke-width="1.5" marker-end="url(#ah-green)"/>
+
+  <!-- lean-sail -> LeanRV64D: imported when Lean builds -->
+  <line x1="905" y1="600" x2="905" y2="517" stroke="#2f9e44" stroke-width="1.5" stroke-dasharray="7 5" marker-end="url(#ah-green)"/>
+  <text class="mono small green" x="895" y="555" text-anchor="end">import Sail</text>
+
+  <!-- compiler ... lean-sail: names agreed by hand, no code link -->
+  <polyline points="530,385 530,650 705,650" fill="none" stroke="#868e96" stroke-width="1.5" stroke-dasharray="2 4"/>
+  <text class="small gray" x="617" y="671" text-anchor="middle">compiler prints names</text>
+  <text class="small gray" x="617" y="688" text-anchor="middle">that lean-sail defines</text>
+
+  <!-- Legend -->
+  <line x1="35" y1="526" x2="65" y2="526" stroke="#1e1e1e" stroke-width="1.5" marker-end="url(#ah-black)"/>
+  <text class="small" x="75" y="530">input or output of the compiler</text>
+  <line x1="35" y1="552" x2="65" y2="552" stroke="#2f9e44" stroke-width="1.5" stroke-dasharray="7 5" marker-end="url(#ah-green)"/>
+  <text class="small" x="75" y="556">imported when Lean builds the spec</text>
+  <line x1="35" y1="578" x2="65" y2="578" stroke="#868e96" stroke-width="1.5" stroke-dasharray="2 4"/>
+  <text class="small" x="75" y="582">no code link, names agreed by hand</text>
+  <rect x="35" y="596" width="30" height="16" rx="3" fill="none" stroke="#2f9e44"/>
+  <text class="small" x="75" y="609">hand-written Lean</text>
+  <rect x="35" y="622" width="30" height="16" rx="3" fill="none" stroke="#1971c2"/>
+  <text class="small" x="75" y="635">chosen in jolt-qed, not upstream</text>
+  <rect class="group" x="35" y="648" width="30" height="16" rx="3"/>
+  <text class="small" x="75" y="661">repository</text>
+</svg>

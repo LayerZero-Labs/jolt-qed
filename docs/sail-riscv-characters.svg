@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 480" width="300" height="480">
+  <defs>
+    <style>
+      text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1e1e1e; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .title { font-size: 18px; font-weight: 600; }
+      .sub { font-size: 14px; }
+      .small { font-size: 13px; }
+      .repo { font-size: 13px; fill: #868e96; }
+      .green { fill: #2f9e44; }
+      .group { fill: none; stroke: #868e96; stroke-width: 1; stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <!-- Repository: riscv/sail-riscv -->
+  <rect class="group" x="20" y="40" width="260" height="420" rx="12"/>
+  <text class="mono repo" x="34" y="62">riscv/sail-riscv</text>
+
+  <rect x="35" y="85" width="230" height="90" rx="14" fill="none" stroke="#1e1e1e"/>
+  <text class="title" x="150" y="123" text-anchor="middle">RISC-V spec</text>
+  <text class="mono sub" x="150" y="149" text-anchor="middle">.sail files</text>
+
+  <rect x="35" y="205" width="230" height="90" rx="14" fill="none" stroke="#1e1e1e"/>
+  <text class="title" x="150" y="243" text-anchor="middle">project file</text>
+  <text class="mono small" x="150" y="268" text-anchor="middle">model/riscv.sail_project</text>
+
+  <rect x="35" y="325" width="230" height="115" rx="14" fill="none" stroke="#2f9e44"/>
+  <text class="mono title green" x="150" y="362" text-anchor="middle">RiscvExtras.lean</text>
+  <text class="sub green" x="150" y="386" text-anchor="middle">hand-written Lean</text>
+  <text class="mono small" x="150" y="412" text-anchor="middle">axiom load_reservation …</text>
+</svg>
