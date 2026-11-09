@@ -331,9 +331,39 @@ It holds initially and is preserved by every source block, including CSR writes,
 `WholeRun.block_simulates` combines these facts with the platform RAM assumptions and fetch/decode results to simulate every RISC-V block before EBREAK by one Sail `try_step`.
 `WholeRun.block_simulates_decoded` removes the fetch and decode premises: Sail's `fetch` and decode at the block's PC come from the program image (`WholeRun/Decoded.lean`).
 `ImageDecoded` is a platform premise: each RISC-V row of the image is what Jolt's decoder (`joltDecode`, and `joltUncompress` for a compressed row) gives for the bytes `memory_init` loads at its address.
-`CodeIntact` says Sail's memory still holds those bytes at every row; it holds at `sailInit` (`codeIntact_sailInit`), and keeping it through the run is a run invariant (Jolt itself does not forbid a store into the code).
+`CodeIntact` says Sail's memory still holds those bytes at every row; it holds at `sailInit` (`codeIntact_sailInit`).
+Its Jolt-side version `JoltCodeIntact` (`WholeRun/CodeInv.lean`) is a run invariant under the documented deviation `NoCodeStore`: the block stores into no instruction byte, counting the whole doubleword Jolt's narrow stores rewrite.
+Jolt does not forbid a store into the code, and its tracer keeps fetching the committed bytecode afterwards, while Sail's model fetches coherently from memory; without Zifencei the specification permits either (`unpriv/zifencei.adoc`).
 `NotReservedParcel` is the documented deviation for the parcel `0x6001` (section 5, "What step e proves"), discharged once Jolt rejects that parcel (a16z/jolt#2381).
 
 Platform premise `JoltInstance.HeapNoWrap`: the memory layout ends at least eight bytes below `2^64` (`heap_end ≤ 2^64 - 8`).
 `MemoryLayout.new` checks its additions but rounds only the stack and heap sizes to eight bytes, so a `program_end` near `2^64` gives `heap_end = 2^64 - 1`; real ELFs end far below that.
 The layout never changes during a run, so the premise on the instance holds at every block.
+
+### What step f proves
+
+`JoltInstance.sail_soundness` (`WholeRun/Top.lean`) strengthens `JoltInstance.soundness`.
+Every instance the constraints accept has an honest trace that satisfies the three conjuncts of `InLanguage`, and Sail reproduces the run of that trace up to its halt.
+`HaltPrefix` names the blocks `pre` before the trace's first EBREAK, ending at the state `halt`.
+If every block of `pre` satisfies `BlockConforms`, then `sailRun n (sailInit trace.initialState)` succeeds at a Sail state `s` with three properties:
+- its trimmed output bytes are the instance's claimed outputs;
+- its panic word is nonzero exactly when the instance claims a panic;
+- either `PC` names an EBREAK row of the image (`SailHalted`), or the trace ended without an EBREAK at `halt`.
+
+The relation carried along the run is `RunRel = Related ∧ RunInv ∧ JoltCodeIntact`.
+The premises, by class:
+
+| Premise | Class | Where |
+| --- | --- | --- |
+| `ImageDecoded` | platform | the committed bytecode is what Jolt's decoder makes of the image |
+| `RowsAligned` | platform | every row address is even; Jolt's ELF loader does not check that the text section starts at an even address |
+| `HeapNoWrap` | platform | the layout ends at least eight bytes below `2^64` |
+| `ImageNoReservedParcel` | documented deviation | the parcel `0x6001` (section 5); goes away with a16z/jolt#2381 |
+| `BlockConforms.amo_in_ram` | documented deviation | AMOs on the I/O window (section 2) |
+| `BlockConforms.no_code_store` | documented deviation | stores into the code, above |
+| `BlockConforms.no_flag_word_load`, `no_low_load`, `panic_store_nonzero` | documented deviation | the I/O window (section 2) |
+| `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |
+
+The per-block premises are stated on the blocks of the trace's own halt prefix, so they are checked on the run that actually happens, not on every program the image could run.
+`NoLowLoad` is not yet derived from the prover's acceptance of the trace (`prover_config`), because the blocks are not linked to the trace's recorded `ram_address` values.
+`#print axioms JoltInstance.sail_soundness` gives `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits`; the last is the declared entropy function of section 8.
