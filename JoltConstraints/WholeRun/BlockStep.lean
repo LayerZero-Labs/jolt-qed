@@ -169,6 +169,16 @@ private theorem encoding_try_step (e : BlockEncoding) (s : SailState)
   | base w => exact Step.try_step_base 0 s hinv inc hinc pc hpc w ast hf hd
   | compressed c => exact Step.try_step_compressed 0 s hinv inc hinc pc hpc c ast hf hd
 
+/-- Executing a decoded instruction `cast` and executing the instruction `ast` it stands for
+agree on every invariant state, so the finishing steps agree.
+For example, a compressed C.MV and its ADD expansion retire the same way. -/
+theorem executeAndFinish_congr (cast ast : instruction) (bits : BitVec 32) (s : SailState)
+    (hs : Step.StepInvariant s)
+    (h : ∀ t, Step.StepInvariant t → Step.executeFull cast t = Step.executeFull ast t) :
+    Step.executeAndFinish cast bits s = Step.executeAndFinish ast bits s := by
+  unfold Step.executeAndFinish
+  simp only [bind, EStateM.bind, h s hs]
+
 private def finishState (s : SailState) (pc m : BitVec 64) (inc : Bool) : SailState :=
   if inc then Step.setReg (Step.setReg s .PC pc) .minstret (BitVec.addInt m 1)
   else Step.setReg s .PC pc
@@ -231,17 +241,21 @@ private theorem panicWord_eq {device : JoltDevice} {s t : SailState}
   rw [h _ (by omega), h _ (by omega), h _ (by omega), h _ (by omega),
     h _ (by omega), h _ (by omega), h _ (by omega), h _ (by omega)]
 
-/-- A retiring lifted source block is one Sail `try_step`, for either a base
-or compressed encoding.
+/-- A retiring lifted source block is one Sail `try_step`, where Sail decodes the fetched
+encoding to `cast` and `cast` executes like the matching instruction `ast`.
+This is `block_simulates_retire` for a decoder whose result is not itself `ast`, such as a
+compressed parcel decoded to a compressed AST that runs as its base expansion; with
+`cast = ast` the bridge is trivial. The decoded instructions come with the fetch, since
+they are facts about the state Sail runs from.
 The per-instruction hypotheses supply Sail's fetch and decode and the existing
 equivalence assumptions after the prelude, with honest advice.
 Retirement follows from `Block.Runs`, and the unchanged device preserves its
 layout and output buffer.
 For example, an ADD block uses the base encoding case and has no memory or
 advice obligations beyond its existing instruction-equivalence assumptions. -/
-theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b : Block)
+theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
-    (hi : i.Lifted) (ast : instruction) (hm : RiscvInstruction.Matches i ast)
+    (hi : i.Lifted)
     (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
     (hdevice : b.post.jolt_device = b.pre.jolt_device)
     (hinputs : ∀ (s : SailState), Related b.pre s →
@@ -252,8 +266,10 @@ theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b
         should_inc_minstret .Machine s = .ok inc s ∧
         fetch () (Step.setReg s .minstret_increment inc) =
           .ok encoding.fetched (Step.setReg s .minstret_increment inc) ∧
+        ∃ (ast cast : instruction), RiscvInstruction.Matches i ast ∧
+        (∀ t, Step.StepInvariant t → Step.executeFull cast t = Step.executeFull ast t) ∧
         encoding.decode (Step.setReg s .minstret_increment inc) =
-          .ok ast (Step.setReg s .minstret_increment inc) ∧
+          .ok cast (Step.setReg s .minstret_increment inc) ∧
         ∃ h : RiscvInstruction.equivAssumptions
           (honestInstr i (Step.preludeJolt { b.pre with sail := s } inc pc
             (if b.row.is_compressed then 2 else 4)))
@@ -267,7 +283,8 @@ theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b
     ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
   intro s hrel
   obtain ⟨pc, m, oldInc, hnext, hregs⟩ := hrel.regs
-  obtain ⟨inc, hinc, hfetch, hdecode, hequiv, hadv⟩ := hinputs s hrel pc m oldInc hnext hregs
+  obtain ⟨inc, hinc, hfetch, ast, cast, hm, hbridge, hdecode, hequiv, hadv⟩ :=
+    hinputs s hrel pc m oldInc hnext hregs
   have hp : pc = b.row.address := Option.some.inj (hnext.symm.trans hruns.continues)
   let Gs := Step.preludeJolt { b.pre with sail := s } inc pc
     (if b.row.is_compressed then 2 else 4)
@@ -310,11 +327,11 @@ theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b
   have hpc : s.regs.get? Register.PC = some pc := by
     simp [hregs, sailRegs, Step.setReg, Std.ExtDHashMap.get?_insert,
       System.systemProject]
-  have htry := encoding_try_step encoding s hrel.inv inc hinc pc hpc ast hfetch hdecode
+  have htry := encoding_try_step encoding s hrel.inv inc hinc pc hpc cast hfetch hdecode
   have hstep : try_step 0 false s = .ok false s' := by
     rw [htry]
     simp only [← hwidth]
-    rw [← hGp]
+    rw [← hGp, executeAndFinish_congr cast ast _ _ hinvPre hbridge]
     unfold Step.executeAndFinish Step.executeFull
     simp only [bind, EStateM.bind, hexec, RETIRE_SUCCESS, pure, EStateM.pure]
     exact hfinish
@@ -363,5 +380,44 @@ theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b
     obtain ⟨_, _, hterm, hend, hbound⟩ := new_io_geometry config _ hconfig
     rw [panicWord_eq (by omega) hbelow]
     exact hrel.panic
+
+/-- A retiring lifted source block is one Sail `try_step`, for either a base
+or compressed encoding.
+The per-instruction hypotheses supply Sail's fetch and decode and the existing
+equivalence assumptions after the prelude, with honest advice.
+Retirement follows from `Block.Runs`, and the unchanged device preserves its
+layout and output buffer.
+For example, an ADD block uses the base encoding case and has no memory or
+advice obligations beyond its existing instruction-equivalence assumptions. -/
+theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b : Block)
+    (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
+    (hi : i.Lifted) (ast : instruction) (hm : RiscvInstruction.Matches i ast)
+    (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
+    (hdevice : b.post.jolt_device = b.pre.jolt_device)
+    (hinputs : ∀ (s : SailState), Related b.pre s →
+      ∀ (pc m : BitVec 64) (oldInc : Bool),
+      b.pre.sail.regs.get? Register.nextPC = some pc →
+      s.regs = (sailRegs b.pre pc m oldInc).regs →
+      ∃ inc : Bool,
+        should_inc_minstret .Machine s = .ok inc s ∧
+        fetch () (Step.setReg s .minstret_increment inc) =
+          .ok encoding.fetched (Step.setReg s .minstret_increment inc) ∧
+        encoding.decode (Step.setReg s .minstret_increment inc) =
+          .ok ast (Step.setReg s .minstret_increment inc) ∧
+        ∃ h : RiscvInstruction.equivAssumptions
+          (honestInstr i (Step.preludeJolt { b.pre with sail := s } inc pc
+            (if b.row.is_compressed then 2 else 4)))
+          (Step.preludeJolt { b.pre with sail := s } inc pc
+            (if b.row.is_compressed then 2 else 4)),
+          RiscvInstruction.AdviceHonest
+            (honestInstr i (Step.preludeJolt { b.pre with sail := s } inc pc
+              (if b.row.is_compressed then 2 else 4)))
+            (Step.preludeJolt { b.pre with sail := s } inc pc
+              (if b.row.is_compressed then 2 else 4)) h) :
+    ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
+  refine block_simulates_retire_via program b hruns i hrow hi encoding hwidth hdevice ?_
+  intro s hrel pc m oldInc hn hr
+  obtain ⟨inc, hinc, hf, hd, h, hadv⟩ := hinputs s hrel pc m oldInc hn hr
+  exact ⟨inc, hinc, hf, ast, ast, hm, fun _ _ => rfl, hd, h, hadv⟩
 
 end WholeRun

@@ -320,3 +320,7 @@ Step f classifies whatever is left in the whole-run theorem as an invariant, a p
 `WholeRun.SystemInv` is a run invariant: raw mstatus contains only MIE/MPIE, mtvec has mode 0 or 1, mepc is even, and the reservation registers form a legal pair.
 It holds initially and is preserved by every source block, including CSR writes, MRET, LR/SC and ECALL, assuming the separately supplied run invariant that the source PC is even.
 `WholeRun.block_simulates` combines these facts with the platform RAM assumptions and fetch/decode results to simulate every RISC-V block before EBREAK by one Sail `try_step`.
+`WholeRun.block_simulates_decoded` removes the fetch and decode premises: Sail's `fetch` and decode at the block's PC come from the program image (`WholeRun/Decoded.lean`).
+`ImageDecoded` is a platform premise: each RISC-V row of the image is what Jolt's decoder (`joltDecode`, and `joltUncompress` for a compressed row) gives for the bytes `memory_init` loads at its address.
+`CodeIntact` says Sail's memory still holds those bytes at every row; it holds at `sailInit` (`codeIntact_sailInit`), and keeping it through the run is a run invariant (Jolt itself does not forbid a store into the code).
+`NotReservedParcel` is the documented deviation for the parcel `0x6001` (section 5, "What step e proves"), discharged once Jolt rejects that parcel (a16z/jolt#2381).

@@ -183,17 +183,20 @@ private theorem ramAccess_of_sources (i : RiscvInstruction) (s t : SailJoltState
     (hr : RamAccess i s) : RamAccess i t := by
   cases i <;> simpa only [RamAccess, h] using hr
 
-/-- Every RISC-V block before EBREAK is one Sail step, including trap entry.
+/-- Every RISC-V block before EBREAK is one Sail step, including trap entry, where Sail
+decodes a non-ECALL encoding to `cast` and `cast` executes like the matching instruction
+`ast`. This is `block_simulates` for a decoder whose result is not itself `ast`, such as a
+compressed parcel; with `cast = ast` the bridge is trivial. The decoded instructions are
+part of `hinputs`.
 `hsys`, `hpc`, `hlayout` (from `Related`) are run invariants; `hheap` and `hram`
 are platform premises, while offsets, instruction matching, width, fetch and
 decode come from decoding; for example, LR.W and ECALL use the same conclusion. -/
-theorem block_simulates (program : Rv64ProgramImage SourceInstruction) (b : Block)
+theorem block_simulates_via (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
     (hbreak : i ≠ .EBREAK) (hsys : SystemInv b.pre)
     (hpc : b.row.address.getLsbD 0 = false) (heven : i.EvenOffsets)
     (hheap : b.pre.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8)
     (hram : RamAccess i b.start)
-    (ast : instruction) (hm : RiscvInstruction.Matches i ast)
     (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
     (hinputs : ∀ (s : SailState), Related b.pre s →
       ∀ (pc m : BitVec 64) (oldInc : Bool),
@@ -209,8 +212,10 @@ theorem block_simulates (program : Rv64ProgramImage SourceInstruction) (b : Bloc
         else
           fetch () (Step.setReg s .minstret_increment inc) =
             .ok encoding.fetched (Step.setReg s .minstret_increment inc) ∧
+          ∃ (ast cast : instruction), RiscvInstruction.Matches i ast ∧
+          (∀ t, Step.StepInvariant t → Step.executeFull cast t = Step.executeFull ast t) ∧
           encoding.decode (Step.setReg s .minstret_increment inc) =
-            .ok ast (Step.setReg s .minstret_increment inc))) :
+            .ok cast (Step.setReg s .minstret_increment inc))) :
     ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
   by_cases hecall : i = .ECALL
   · subst i
@@ -221,6 +226,7 @@ theorem block_simulates (program : Rv64ProgramImage SourceInstruction) (b : Bloc
     obtain ⟨w, hf, hd⟩ := hd
     exact ⟨inc, w, hi, hf, hd⟩
   have hlift : i.Lifted := by
+    clear hinputs
     cases i <;> simp_all [RiscvInstruction.Lifted]
   obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
   have hraw := blockInstrs_run i b.row.address b.row.is_compressed b.start instrs
@@ -229,11 +235,11 @@ theorem block_simulates (program : Rv64ProgramImage SourceInstruction) (b : Bloc
       .ok RETIRE_SUCCESS b.post := hraw.symm.trans hrun
   have hdevice : b.post.jolt_device = b.pre.jolt_device :=
     joltRun_device_of_ram i hlift b.start b.post hram hhonest
-  apply block_simulates_retire program b hruns i hrow hlift ast hm encoding hwidth hdevice
+  apply block_simulates_retire_via program b hruns i hrow hlift encoding hwidth hdevice
   intro s hrel pc m oldInc hn hr
   obtain ⟨inc, hi, hdecode⟩ := hinputs s hrel pc m oldInc hn hr
   rw [if_neg hecall] at hdecode
-  obtain ⟨hf, hd⟩ := hdecode
+  obtain ⟨hf, ast, cast, hm, hbridge, hd⟩ := hdecode
   have hp : pc = b.row.address := Option.some.inj (hn.symm.trans hruns.continues)
   let Gs := Step.preludeJolt { b.pre with sail := s } inc pc
     (if b.row.is_compressed then 2 else 4)
@@ -272,6 +278,45 @@ theorem block_simulates (program : Rv64ProgramImage SourceInstruction) (b : Bloc
     (by simpa [Gs, Step.preludeJolt, Step.preludeState, Step.setReg,
       Std.ExtDHashMap.get?_insert] using hrel.htif)
     hrel.present hramG ⟨ghostPost, hrawG.symm.trans hghost⟩
-  exact ⟨inc, hi, hf, hd, hb, ha⟩
+  exact ⟨inc, hi, hf, ast, cast, hm, hbridge, hd, hb, ha⟩
+
+/-- Every RISC-V block before EBREAK is one Sail step, including trap entry.
+`hsys`, `hpc`, `hlayout` (from `Related`) are run invariants; `hheap` and `hram`
+are platform premises, while offsets, instruction matching, width, fetch and
+decode come from decoding; for example, LR.W and ECALL use the same conclusion. -/
+theorem block_simulates (program : Rv64ProgramImage SourceInstruction) (b : Block)
+    (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
+    (hbreak : i ≠ .EBREAK) (hsys : SystemInv b.pre)
+    (hpc : b.row.address.getLsbD 0 = false) (heven : i.EvenOffsets)
+    (hheap : b.pre.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8)
+    (hram : RamAccess i b.start)
+    (ast : instruction) (hm : RiscvInstruction.Matches i ast)
+    (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
+    (hinputs : ∀ (s : SailState), Related b.pre s →
+      ∀ (pc m : BitVec 64) (oldInc : Bool),
+      b.pre.sail.regs.get? Register.nextPC = some pc →
+      s.regs = (sailRegs b.pre pc m oldInc).regs →
+      ∃ inc : Bool, should_inc_minstret .Machine s = .ok inc s ∧
+        (if i = .ECALL then
+          ∃ w : BitVec 32,
+            fetch () (Step.setReg s .minstret_increment inc) =
+              .ok (.F_Base w) (Step.setReg s .minstret_increment inc) ∧
+            ext_decode w (Step.setReg s .minstret_increment inc) =
+              .ok (.ECALL ()) (Step.setReg s .minstret_increment inc)
+        else
+          fetch () (Step.setReg s .minstret_increment inc) =
+            .ok encoding.fetched (Step.setReg s .minstret_increment inc) ∧
+          encoding.decode (Step.setReg s .minstret_increment inc) =
+            .ok ast (Step.setReg s .minstret_increment inc))) :
+    ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
+  refine block_simulates_via program b hruns i hrow hbreak hsys hpc heven hheap hram encoding
+    hwidth ?_
+  intro s hrel pc m oldInc hn hr
+  obtain ⟨inc, hinc, hd⟩ := hinputs s hrel pc m oldInc hn hr
+  refine ⟨inc, hinc, ?_⟩
+  by_cases hecall : i = .ECALL
+  · simpa only [hecall, ite_true] using hd
+  · simp only [hecall, ite_false] at hd ⊢
+    exact ⟨hd.1, ast, ast, hm, fun _ _ => rfl, hd.2⟩
 
 end WholeRun
