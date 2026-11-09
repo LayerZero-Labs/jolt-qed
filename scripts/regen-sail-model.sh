@@ -129,12 +129,14 @@ for path in files:
 if stripped == 0:
     sys.exit("regen-sail-model: no generated file found")
 # No other limit option may remain anywhere in the tree, file-wide or local:
-# step c below adds the only ones.
-limit_option = re.compile(r"^\s*set_option\s+(maxHeartbeats|maxRecDepth|synthInstance\.maxHeartbeats|maxSize)\b")
+# step c below adds the only ones. The check matches the option names anywhere in
+# the text, so a comment or a line break between `set_option` and the name cannot
+# hide one; Sail's output mentions them nowhere else.
+limit_name = re.compile(r"maxHeartbeats|maxRecDepth|maxSize")
 for path in files:
     for n, line in enumerate(path.read_text().split("\n"), 1):
-        if limit_option.match(line):
-            sys.exit(f"regen-sail-model: {path}:{n} sets a limit Sail is not expected to emit: '{line}'")
+        if limit_name.search(line):
+            sys.exit(f"regen-sail-model: {path}:{n} mentions a limit option after the header strip: '{line}'")
 
 # ---- b. the three 256-entry S-box tables ----------------------------------
 kext = root / "LeanRV64D" / "TypesKext.lean"
@@ -176,12 +178,13 @@ for module, name, options in LIMITS:
         sys.exit(f"regen-sail-model: {name} is preceded by '{lines[i - 1]}', expected a blank line")
     lines[i:i] = [f"set_option {option} {value} in" for option, value in options]
     path.write_text("\n".join(lines))
-# The tree now carries exactly the limit options listed above, and no other.
-expected = sum(len(options) for _, _, options in LIMITS)
-found = [(path, line) for path in files for line in path.read_text().split("\n")
-         if limit_option.match(line)]
-if len(found) != expected or not all(line.endswith(" in") for _, line in found):
-    sys.exit(f"regen-sail-model: expected {expected} declaration-local limit options, found {len(found)}")
+# The tree now mentions the limit options exactly on the lines step c inserted.
+expected = sorted((f"{module}.lean", f"set_option {option} {value} in")
+                  for module, _, options in LIMITS for option, value in options)
+found = sorted((path.name, line) for path in files for line in path.read_text().split("\n")
+               if limit_name.search(line))
+if found != expected:
+    sys.exit(f"regen-sail-model: the limit options in the tree are {found}, expected {expected}")
 print("regen-sail-model: post-processed the generated model", file=sys.stderr)
 EOF
 
