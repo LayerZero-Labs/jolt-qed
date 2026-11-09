@@ -505,7 +505,10 @@ private theorem agree_FENCE (w : BitVec 32)
   by_cases htso : w = 0x8330000f
   · subst w
     decode32_case
-  · decode32_case
+  · have hnotso : (w == (0x8330000f#32)) = false :=
+      beq_eq_false_iff_ne.mpr htso
+    clear htso
+    decode32_case
 
 private theorem agree_LR_W (w : BitVec 32)
     (hop : (Sail.BitVec.extractLsb w 6 0).toNat = 47)
