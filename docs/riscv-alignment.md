@@ -226,7 +226,9 @@ Deviation: the parcel `0x6001` is C.LUI with `rd = x0` and a zero immediate, whi
 Sail decodes it as `C_ILLEGAL` and raises an illegal-instruction exception; Jolt expands it to `ADDI x0, x0, 0` and runs it as a no-op.
 `ReservedAccepted` (`Decode/Jolt.lean`) names the parcels Jolt accepts that the specification reserves, and `Decode.reservedAccepted_iff` shows `0x6001` is the only one.
 The whole-run theorem takes "no block fetches `0x6001`" as a named premise.
-A compiler never emits this parcel, so the premise holds for compiled guests; Jolt could reject it instead, which would remove the premise.
+A compiler never emits this parcel, so the premise holds for compiled guests.
+Pending Jolt change: a16z/jolt#2381 makes both of Jolt's decompressors return the invalid word for `0x6001`, so the image decoder rejects it as `MalformedImage` and the tracer panics.
+Once the Jolt pin includes that change, the premise is discharged: delete `NotReservedParcel`, `ReservedAccepted` and this paragraph.
 
 The proofs use no `bv_decide` and no `decide +kernel`.
 The first versions of both files proved bit-vector side conditions with `bv_decide`, which in Lean 4.35 adds one auxiliary axiom per call; they now go through `omega` and `simp` on `BitVec.toNat`, and the two theorems' axioms are only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (the last only in the compressed theorem, through `executeFull`, which includes Sail's generic CSR read).
