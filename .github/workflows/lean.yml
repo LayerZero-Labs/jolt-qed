@@ -30,7 +30,8 @@ jobs:
       # LeanRV64D is generated Sail output and is treated as trusted input.
       # A PR may change it only by regenerating it from the pinned inputs in
       # sail-import/PROVENANCE.toml. When a PR touches the root module, anything
-      # below LeanRV64D/, the pinned inputs or the scripts that use them, CI
+      # below LeanRV64D/, the pinned inputs, the scripts that use them, or the
+      # Lean copy of the memory regions (WholeRun/Relation.lean), CI
       # rebuilds the pinned Sail compiler, regenerates the model and requires
       # the checked-in tree to be byte-for-byte identical.
       # This checks PRs; the main rules must enforce it and disallow direct pushes.
@@ -42,7 +43,8 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/ \
-              sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh; then
+              sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh \
+              JoltConstraints/WholeRun/Relation.lean; then
             echo "regenerate=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -52,7 +54,8 @@ jobs:
           fi
           echo "Generated Sail sources or their pinned inputs changed:"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/ \
-            sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh | head -50
+            sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh \
+            JoltConstraints/WholeRun/Relation.lean | head -50
           echo "regenerate=true" >> "$GITHUB_OUTPUT"
       - name: Install the Sail compiler's build dependencies
         if: steps.sail.outputs.regenerate == 'true'

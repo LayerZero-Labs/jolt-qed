@@ -9,9 +9,13 @@ Later work (the Sail configuration, the model patches, the step-level and whole-
 - RISC-V ISA manual, riscv/riscv-isa-manual at `717aeca3` (2026-11-06).
   Citations give the file under `src/` and the normative anchor, for example `priv/machine.adoc` `norm:ld_rsv_rst`.
 - RISC-V Debug Specification 1.0, section 4.9.1 (`dcsr`), for EBREAK.
-- Jolt, a16z/jolt at `9407f93f` (2026-11-06).
+- Jolt, a16z/jolt at `9407f93f` (2026-11-06), for Jolt as it stands on `main`.
   jolt-qed's expansions were generated from `c6703570`.
   Every Jolt file cited below is identical at the two commits, except four added lines in `tracer/src/emulator/cpu.rs` that do not touch the code cited.
+- The Jolt changes for this alignment, a16z/jolt `669cf17ea` (branch `align/system-semantics`, on top of `9407f93f`).
+  Its `crates/jolt-program` and its RV64C uncompressor are identical to the head of a16z/jolt#2384 (`c0b1dd7c1`), which is stacked on a16z/jolt#2383.
+  The system expansions (`JoltBytecode/JoltISA/Expansions/System.lean`) and the decoder (`JoltBytecode/Decode/Jolt.lean`) transcribe this revision, not `9407f93f`: there, a CSR read of `mstatus` returns `v39 | 0x1800`, MRET restores `mstatus` before it jumps, and the decoder accepts CSRRC, CSRRWI, CSRRSI and CSRRCI.
+  The rejection of the reserved parcel `0x6001` (a16z/jolt#2381) is not in this revision; section 5 treats it as a premise.
 - The Sail model: abiswas3/sail-riscv at `266473f8`, as recorded in `sail-import/PROVENANCE.toml`, and upstream riscv/sail-riscv at `81184531` where this note backports a fix.
 
 ## 1. The hart: RV64IMAC, M-mode only, no interrupts
@@ -24,7 +28,7 @@ Jolt's decoder (`tracer/src/instruction/mod.rs`, `Instruction::decode`) accepts 
 - M (all of RV64M);
 - A (Zalrsc and Zaamo, word and doubleword; no Zabha, no Zacas);
 - Zca: `uncompress_instruction` expands C.FLD and C.FSD into F-extension words that the decoder then rejects, and treats the Zcb encodings as reserved, so neither Zcd nor Zcb is accepted;
-- from Zicsr, only CSRRW and CSRRS, and only on `mstatus`, `mtvec`, `mscratch`, `mepc`, `mcause` and `mtval` (`tracer/src/utils/virtual_registers.rs`, `is_supported_csr`); the Jolt changes for this alignment (a16z/jolt branch `align/system-semantics`, `87cc513a6`) add CSRRC, CSRRWI, CSRRSI and CSRRCI on the same six CSRs, so with them Jolt accepts all of Zicsr on those CSRs; funct3 4 stays reserved;
+- from Zicsr, only CSRRW and CSRRS, and only on `mstatus`, `mtvec`, `mscratch`, `mepc`, `mcause` and `mtval` (`tracer/src/utils/virtual_registers.rs`, `is_supported_csr`); the Jolt changes for this alignment (`669cf17ea`, a16z/jolt#2383 and #2384) add CSRRC, CSRRWI, CSRRSI and CSRRCI on the same six CSRs, so with them Jolt accepts all of Zicsr on those CSRs; funct3 4 stays reserved;
 - Jolt's own instructions on the custom-2 major opcode `0x5B` (advice loads, `VirtualRev8W`, `VirtualAssertEQ`, `VirtualHostIO`; section 7);
 - the inline opcodes `0x0B` (custom-0) and `0x2B` (custom-1), which are out of scope for now.
 
@@ -177,7 +181,9 @@ The relation between a Jolt state and a Sail state compares:
 - RAM bytes, and the I/O window through the device relation of section 2;
 - the six CSRs, read from Jolt's virtual registers `v34`-`v39` through the relations of section 6;
 - the reservation, read from `v32` and `v33` (section 3);
-- Jolt's platform state, the advice tape and the device, which only the custom instructions of section 7 and the I/O window touch.
+- Jolt's device, through the I/O window.
+
+The advice tape is platform state that only the custom instructions of section 7 touch; since those have no block theorem yet (section 9), the relation does not mention it.
 
 It also requires the invariants: privilege is Machine, `mie = 0`, `misa` is fixed, and the read-only `mstatus` fields have the values of section 6.
 Counters and Sail-internal registers are not compared.
@@ -282,7 +288,8 @@ Upstream fixed this in `81184531` by legalizing FS through the platform's suppor
 
 Jolt's guest programs may contain Jolt's own instructions on major opcode `0x5B`, which the specification's opcode map marks custom-2, reserved for custom extensions (`unpriv/rv-32-64g.adoc`, opcode map and the paragraph after it).
 They are not RISC-V instructions, so the Sail model does not decode them, and patching them into the model would make the trusted model depend on Jolt.
-The step-level and whole-run theorems instead use a platform step: on a `0x5B` encoding it runs a short Lean specification of Jolt's instruction, and on every other encoding it runs `try_step`.
+The plan is a platform step: on a `0x5B` encoding it runs a short Lean specification of Jolt's instruction, and on every other encoding it runs `try_step`.
+It is not built yet: the whole-run theorem runs `try_step` only, and `BlockConforms.riscv` restricts it to RISC-V rows (section 9), so the rest of this section describes the planned extension.
 Advice loads read from the advice tape, which the whole-run theorem quantifies over as a private input.
 `VirtualAssertEQ` has no successor state when its operands differ.
 `VirtualHostIO` changes no RISC-V state: it reads guest memory for the host call named in `a0`, and the advice-write call appends those bytes to the advice tape (`JoltBytecode/JoltISA/HostIO.lean`), so the tape is part of the platform state that the relation of section 5 carries.

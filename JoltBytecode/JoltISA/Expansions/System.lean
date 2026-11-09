@@ -13,7 +13,8 @@ open LeanRV64D
 /-!
 # System-instruction Jolt expansion programs
 
-These programs transcribe Jolt's expander at frozen commit `a86ec3716`:
+These programs transcribe Jolt's expander at `669cf17ea` (a16z/jolt branch
+`align/system-semantics`; the same `crates/jolt-program` as a16z/jolt#2384):
 `crates/jolt-program/src/expand/control_flow/{ecall,mret,csr,csrrw,csrrs,csrrc,csr_immediate}.rs`
 (`expand_ecall`, `expand_mret`, `emit_csr_read`, `emit_csr_swap`,
 `emit_csr_bit_update`, and the immediate expanders).
