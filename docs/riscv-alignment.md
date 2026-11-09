@@ -322,7 +322,9 @@ The model's own axioms (`LeanRV64D/RiscvExtras.lean`) after the regeneration:
 Theorems that reach the generic CSR read also list `get_16_random_bits`, among them `Decode.joltDecode_compressed_agrees` and the block theorems of section 9.
 None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/Completeness/`, some of them waiting on a16z/jolt#1949.
 
-Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (the read-back of the panic and termination words in section 2, and anything the difference testing confirms).
+Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (the read-back of the panic and termination words in section 2, and anything the difference testing confirms); the classified list is in section 9, "What step f proves".
+The per-block deviations of `JoltInstance.sail_soundness` are premises on the trace that `soundness` extracts, so they are checked on that trace; `HonestTrace.sail_reproduces` states the same for any honest trace given in advance.
+The deviation `NoLowLoad` (low-address loads, jolt-qed#37) stays a premise until the blocks are linked to the trace's recorded `ram_address` values, which the prover's address remapping checks.
 
 ## 9. Whole-run system invariant
 
@@ -342,13 +344,19 @@ The layout never changes during a run, so the premise on the instance holds at e
 
 ### What step f proves
 
-`JoltInstance.sail_soundness` (`WholeRun/Top.lean`) strengthens `JoltInstance.soundness`.
-Every instance the constraints accept has an honest trace that satisfies the three conjuncts of `InLanguage`, and Sail reproduces the run of that trace up to its halt.
-`HaltPrefix` names the blocks `pre` before the trace's first EBREAK, ending at the state `halt`.
-If every block of `pre` satisfies `BlockConforms`, then `sailRun n (sailInit trace.initialState)` succeeds at a Sail state `s` with three properties:
-- its trimmed output bytes are the instance's claimed outputs;
-- its panic word is nonzero exactly when the instance claims a panic;
+`HonestTrace.sail_reproduces` (`WholeRun/Top.lean`) is the run-level theorem.
+It applies to every honest trace and every `HaltPrefix` of it, where `HaltPrefix` names the blocks `pre` before the trace's first EBREAK, ending at the state `halt`.
+If every block of `pre` satisfies `BlockConforms`, then `sailRun n (sailInit trace.initialState)` succeeds at a Sail state `s` with four properties:
+- `s` is related to `halt` (`Related`): Sail's registers, PC, CSRs and memory are Jolt's;
+- its trimmed output bytes are those of the trace's final state;
+- its panic word is nonzero exactly when the final state's panic flag is set;
 - either `PC` names an EBREAK row of the image (`SailHalted`), or the trace ended without an EBREAK at `halt`.
+
+`JoltInstance.sail_soundness` composes it with `JoltInstance.soundness`.
+Every instance the constraints accept has an honest trace that satisfies the three conjuncts of `InLanguage`.
+For that trace the same conclusion holds, and the outputs and panic flag are the instance's claimed ones.
+The trace is the one `soundness` extracts from the witness, so conformance has to be checked on that trace.
+Alternatively, it can be argued from Jolt's determinism when the trace is unique for the given inputs.
 
 The relation carried along the run is `RunRel = Related ∧ RunInv ∧ JoltCodeIntact`.
 The premises, by class:
@@ -365,5 +373,7 @@ The premises, by class:
 | `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |
 
 The per-block premises are stated on the blocks of the trace's own halt prefix, so they are checked on the run that actually happens, not on every program the image could run.
-`NoLowLoad` is not yet derived from the prover's acceptance of the trace (`prover_config`), because the blocks are not linked to the trace's recorded `ram_address` values.
+`NoLowLoad` is the open question jolt-qed#37 lists as low-address loads: the prover's address remapping is expected to reject them.
+It stays a premise because the blocks are not linked to the trace's recorded `ram_address` values (`prover_config` checks those).
+Linking them is the follow-up that would remove it.
 `#print axioms JoltInstance.sail_soundness` gives `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits`; the last is the declared entropy function of section 8.
