@@ -2715,7 +2715,11 @@ private theorem io_core (i : RiscvInstruction) (ast : instruction)
     obtain ⟨_, _, _, h, _⟩ := hio
     simp [RiscvInstruction.memAccess] at h
 
-/-- A block whose source instruction is a load or store below `RAM_START_ADDRESS`, in the I/O
+/-- As `block_simulates_io`, where Sail decodes the encoding to `cast` and `cast` executes
+like the matching instruction `ast` (for a compressed parcel, its base expansion); with
+`cast = ast` the bridge is trivial. The decoded instructions are part of `hinputs`.
+
+A block whose source instruction is a load or store below `RAM_START_ADDRESS`, in the I/O
 window, is one Sail `try_step` that preserves the whole-run relation `Related`.
 
 The instruction is LB, LH, LW, LD, LBU, LHU, LWU, SB, SH, SW or SD. Alignment and the
@@ -2727,16 +2731,15 @@ bytes to the device's outputs, and the memory relation after the step includes
 Premises, by class:
 * invariant: `hsys`, the system invariant on the block's entry state.
 * platform: `hio`, the access lies below `RAM_START_ADDRESS`.
-* from decoding: `hrow`, `hm`, `hwidth` and `hinputs`, the decode-only facts that Sail
-  fetches and decodes the instruction word `encoding` to `ast`.
+* from decoding: `hrow`, `hwidth` and `hinputs`, the decode-only facts that Sail
+  fetches and decodes the instruction word `encoding` to `cast`, which runs like `ast`.
 * documented deviation (`docs/riscv-alignment.md`, section 2): `hflag` (`NoFlagWordLoad`),
   `hlow` (`NoLowLoad`) and `hpanic` (`PanicStoreNonzero`). -/
-theorem block_simulates_io (program : Rv64ProgramImage SourceInstruction) (b : Block)
+theorem block_simulates_io_via (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
     (hsys : SystemInv b.pre) (hio : i.IoAccess b.start)
     (hflag : i.NoFlagWordLoad b.start) (hlow : i.NoLowLoad b.start)
     (hpanic : i.PanicStoreNonzero b.start)
-    (ast : instruction) (hm : RiscvInstruction.Matches i ast)
     (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
     (hinputs : ∀ (s : SailState), Related b.pre s →
       ∀ (pc m : BitVec 64) (oldInc : Bool),
@@ -2746,18 +2749,22 @@ theorem block_simulates_io (program : Rv64ProgramImage SourceInstruction) (b : B
         should_inc_minstret .Machine s = .ok inc s ∧
         fetch () (Step.setReg s .minstret_increment inc) =
           .ok encoding.fetched (Step.setReg s .minstret_increment inc) ∧
+        ∃ (ast cast : instruction), RiscvInstruction.Matches i ast ∧
+        (∀ t, Step.StepInvariant t → Step.executeFull cast t = Step.executeFull ast t) ∧
         encoding.decode (Step.setReg s .minstret_increment inc) =
-          .ok ast (Step.setReg s .minstret_increment inc)) :
+          .ok cast (Step.setReg s .minstret_increment inc)) :
     ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
   intro s hrel
   obtain ⟨pc, m, oldInc, hnext, hregs⟩ := hrel.regs
-  obtain ⟨inc, hinc, hfetch, hdecode⟩ := hinputs s hrel pc m oldInc hnext hregs
+  obtain ⟨inc, hinc, hfetch, ast, cast, hm, hbridge, hdecode⟩ :=
+    hinputs s hrel pc m oldInc hnext hregs
   have hp : pc = b.row.address := Option.some.inj (hnext.symm.trans hruns.continues)
   let Gs := Step.preludeJolt { b.pre with sail := s } inc pc
     (if b.row.is_compressed then 2 else 4)
   have hshadow : Shadow ((blockHelper% overlayRows) b.pre.vregs m inc b.start) Gs :=
     (blockHelper% prelude_shadow) b s pc m oldInc inc hp hregs hrel.ram
   have hlift : i.Lifted := by
+    clear hinputs hdecode hfetch
     obtain ⟨store, width, ea, hacc, _⟩ := hio
     cases i <;> simp_all [RiscvInstruction.memAccess, RiscvInstruction.Lifted]
   obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
@@ -2826,12 +2833,12 @@ theorem block_simulates_io (program : Rv64ProgramImage SourceInstruction) (b : B
     cases inc <;> simp [s', hfs, Step.setReg, htregs]
   have hpcS : s.regs.get? Register.PC = some pc := by
     simp [hregs, sailRegs, Step.setReg, Std.ExtDHashMap.get?_insert, System.systemProject]
-  have htry := (blockHelper% encoding_try_step) encoding s hrel.inv inc hinc pc hpcS ast
+  have htry := (blockHelper% encoding_try_step) encoding s hrel.inv inc hinc pc hpcS cast
     hfetch hdecode
   have hstep : try_step 0 false s = .ok false s' := by
     rw [htry]
     simp only [← hwidth]
-    rw [← hGp]
+    rw [← hGp, executeAndFinish_congr cast ast _ _ hinvPre hbridge]
     unfold Step.executeAndFinish Step.executeFull
     simp only [bind, EStateM.bind, hexec', RETIRE_SUCCESS, pure, EStateM.pure]
     exact hfinish
@@ -2866,5 +2873,45 @@ theorem block_simulates_io (program : Rv64ProgramImage SourceInstruction) (b : B
       panic := hmemT.panic
       layout := hmemT.layout
       outputs_size := hmemT.outputs_size }
+
+/-- A block whose source instruction is a load or store below `RAM_START_ADDRESS`, in the I/O
+window, is one Sail `try_step` that preserves the whole-run relation `Related`.
+
+The instruction is LB, LH, LW, LD, LBU, LHU, LWU, SB, SH, SW or SD. Alignment and the
+address range are derived from the block's retiring run `hruns`, not assumed. For example, a
+`SW` of `0` to the first word of the output region is one `try_step` that appends four zero
+bytes to the device's outputs, and the memory relation after the step includes
+`outputs_size` and the panic flag.
+
+Premises, by class:
+* invariant: `hsys`, the system invariant on the block's entry state.
+* platform: `hio`, the access lies below `RAM_START_ADDRESS`.
+* from decoding: `hrow`, `hm`, `hwidth` and `hinputs`, the decode-only facts that Sail
+  fetches and decodes the instruction word `encoding` to `ast`.
+* documented deviation (`docs/riscv-alignment.md`, section 2): `hflag` (`NoFlagWordLoad`),
+  `hlow` (`NoLowLoad`) and `hpanic` (`PanicStoreNonzero`). -/
+theorem block_simulates_io (program : Rv64ProgramImage SourceInstruction) (b : Block)
+    (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
+    (hsys : SystemInv b.pre) (hio : i.IoAccess b.start)
+    (hflag : i.NoFlagWordLoad b.start) (hlow : i.NoLowLoad b.start)
+    (hpanic : i.PanicStoreNonzero b.start)
+    (ast : instruction) (hm : RiscvInstruction.Matches i ast)
+    (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
+    (hinputs : ∀ (s : SailState), Related b.pre s →
+      ∀ (pc m : BitVec 64) (oldInc : Bool),
+      b.pre.sail.regs.get? Register.nextPC = some pc →
+      s.regs = (sailRegs b.pre pc m oldInc).regs →
+      ∃ inc : Bool,
+        should_inc_minstret .Machine s = .ok inc s ∧
+        fetch () (Step.setReg s .minstret_increment inc) =
+          .ok encoding.fetched (Step.setReg s .minstret_increment inc) ∧
+        encoding.decode (Step.setReg s .minstret_increment inc) =
+          .ok ast (Step.setReg s .minstret_increment inc)) :
+    ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
+  refine block_simulates_io_via program b hruns i hrow hsys hio hflag hlow hpanic encoding hwidth
+    ?_
+  intro s hrel pc m oldInc hn hr
+  obtain ⟨inc, hinc, hf, hd⟩ := hinputs s hrel pc m oldInc hn hr
+  exact ⟨inc, hinc, hf, ast, ast, hm, fun _ _ => rfl, hd⟩
 
 end WholeRun

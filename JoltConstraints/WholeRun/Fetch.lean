@@ -102,13 +102,12 @@ private theorem not_mmio_ram (s : SailState) (addr : BitVec 64)
 private theorem mem_read_fetch_parcel (s : SailState)
     (hmachine : s.regs.get? Register.cur_privilege = some Privilege.Machine)
     (hmstatus : Assumptions.SailRegReadable Register.mstatus s)
-    (addr : BitVec 64) (ram : PMA_Region)
-    (hpma : s.regs.get? Register.pma_regions = some [ram])
-    (hbase : ram.base = 0x80000000)
+    (addr : BitVec 64) (regions : List PMA_Region) (ram : PMA_Region)
+    (hpma : s.regs.get? Register.pma_regions = some regions)
+    (hmatch : matching_pma regions (.Physaddr addr) 2 = some ram)
     (hexec : ram.attributes.executable = true)
     (hfault : ram.attributes.misaligned_fault = .NoFault)
     (hlo : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
-    (hhi : addr.toNat + 2 ≤ JoltISA.RAM_START_ADDRESS + ram.size.toNat)
     (hhtif : s.regs.get? Register.htif_tohost_base = some none)
     (hbytes : ∀ i < 2, ∃ b, s.mem.get? (addr.toNat + i) = some b) :
     mem_read (.InstructionFetch ()) (.Physaddr addr) 2 false false false s =
@@ -117,7 +116,7 @@ private theorem mem_read_fetch_parcel (s : SailState)
   have hpriv := readReg_eq_of_get? Register.cur_privilege s _ hmachine
   have hpma_read := readReg_eq_of_get? Register.pma_regions s _ hpma
   have hpma_check : pmaCheck (.Physaddr addr) 2 (.InstructionFetch ()) false s = .ok none s := by
-    simp [pmaCheck, hpma_read, matching_ram addr ram hbase hlo hhi, hexec, hfault,
+    simp [pmaCheck, hpma_read, hmatch, hexec, hfault,
       bind, EStateM.bind, pure, EStateM.pure]
   have hphys : phys_access_check (.InstructionFetch ()) .Machine (.Physaddr addr) 2 false s =
       .ok none s := by
@@ -129,6 +128,60 @@ private theorem mem_read_fetch_parcel (s : SailState)
     checked_mem_read, hphys, not_mmio_ram s addr hlo hhtif, read_kind_of_flags,
     read_ram_parcel s addr hbytes, MemoryOpResult_drop_meta,
     bind, EStateM.bind, pure, EStateM.pure]
+
+/-- Sail fetch reads a compressed parcel or base word from the executable RAM region of
+its PMA list and leaves all state unchanged, including memory and the PC.
+Only the bytes of the instruction itself are needed: the two bytes of the first parcel and,
+when its low bits are `11`, the two bytes of the second parcel (`hbase`).
+For example, at `0x80000000` a parcel with low bits `11` selects four bytes, while a parcel
+ending in `01` selects two, even where the next two bytes are absent.
+`hmatch` says that `ram` is the PMA region `matching_pma` finds for each parcel read; it holds
+for `[ram]` (`fetch_ram`) and for the platform list `[ioRegion, ramRegion]` of
+`Relation.lean`. HTIF is disabled at reset (`hhtif`), so RAM cannot be intercepted by that
+device. Sail reports `OutOfMemoryRange` for a missing byte, whereas `memByte` supplies Jolt's
+zero default. The path is `fetch` in `LeanRV64D/Fetch.lean`, with the default
+`ext_fetch_check_pc` hook in `LeanRV64D/AddrChecks.lean`. -/
+theorem fetch_regions (s : SailState) (hinv : Step.StepInvariant s)
+    (pc : BitVec 64) (hpc : s.regs.get? Register.PC = some pc)
+    (halign : pc.getLsbD 0 = false)
+    (regions : List PMA_Region) (ram : PMA_Region)
+    (hpma : s.regs.get? Register.pma_regions = some regions)
+    (hexec : ram.attributes.executable = true)
+    (hfault : ram.attributes.misaligned_fault = .NoFault)
+    (hlo : JoltISA.RAM_START_ADDRESS ≤ pc.toNat) (hhi : pc.toNat + 2 < 2 ^ 64)
+    (hmatch : matching_pma regions (.Physaddr pc) 2 = some ram)
+    (hhtif : s.regs.get? Register.htif_tohost_base = some none)
+    (hparcel : ∀ i < 2, ∃ b, s.mem.get? (pc.toNat + i) = some b)
+    (hbase : (memParcel s pc.toNat).extractLsb 1 0 = 0b11#2 →
+      matching_pma regions (.Physaddr (pc + 2#64)) 2 = some ram ∧
+      pc.toNat + 4 ≤ 2 ^ 64 ∧ ∀ i < 2, ∃ b, s.mem.get? (pc.toNat + 2 + i) = some b) :
+    fetch () s = .ok (fetchedAt s pc.toNat) s := by
+  have hpc_read := readReg_eq_of_get? Register.PC s _ hpc
+  have hhi_nat : (pc + 2#64).toNat = pc.toNat + 2 := by
+    apply BitVec.toNat_add_of_lt
+    change pc.toNat + 2 < 2 ^ 64
+    omega
+  have hlo_read := mem_read_fetch_parcel s hinv.machine (hinv.present _) pc regions ram hpma
+    hmatch hexec hfault hlo hhtif hparcel
+  have hhi_read : (memParcel s pc.toNat).extractLsb 1 0 = 0b11#2 →
+      mem_read (.InstructionFetch ()) (.Physaddr (pc + 2#64)) 2 false false false s =
+        .ok (.Ok (memParcel s (pc.toNat + 2))) s := by
+    intro hbits
+    obtain ⟨hm, h4, hb⟩ := hbase hbits
+    have := mem_read_fetch_parcel s hinv.machine (hinv.present _) (pc + 2#64) regions ram hpma
+      hm hexec hfault (by omega) hhtif (by
+        intro i hi
+        simpa only [hhi_nat, Nat.add_assoc] using hb i hi)
+    simpa only [hhi_nat] using this
+  unfold fetch SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
+  by_cases hbits : (memParcel s pc.toNat).extractLsb 1 0 = 0b11#2 <;>
+    cases hbit : pc.getLsbD 1 <;>
+    simp [hbits, hbit, get_config_rvfi, hpc_read, ext_fetch_check_pc, Step.currentlyEnabled_Zca_run s hinv,
+    BitVec.access, ← BitVec.getLsbD_eq_getElem, halign, translateAddr_fetch_of_machine _ s hinv.machine (hinv.present _),
+    hlo_read, hhi_read, BitVec.addInt, isRVC, fetchedAt,
+    Sail.BitVec.extractLsb, bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
+    ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
+    MonadLift.monadLift, liftM, monadLift, Functor.map, orM, andM, toBool, bne, BEq.beq, LeanRV64D.Functions.not]
 
 /-- Sail fetch reads a compressed parcel or base word in executable RAM and leaves
 all state unchanged, including memory and the PC.
@@ -154,25 +207,13 @@ theorem fetch_ram (s : SailState) (hinv : Step.StepInvariant s)
     (hhtif : s.regs.get? Register.htif_tohost_base = some none)
     (hbytes : ∀ i < 4, ∃ b, s.mem.get? (pc.toNat + i) = some b) :
     fetch () s = .ok (fetchedAt s pc.toNat) s := by
-  have hpc_read := readReg_eq_of_get? Register.PC s _ hpc
   have hhi_nat : (pc + 2#64).toNat = pc.toNat + 2 := by
     apply BitVec.toNat_add_of_lt
     change pc.toNat + 2 < 2 ^ 64
     omega
-  have hlo_read := mem_read_fetch_parcel s hinv.machine (hinv.present _) pc ram hpma hbase hexec hfault hram.1
-    (by omega) hhtif (fun i hi => hbytes i (by omega))
-  have hhi_read := mem_read_fetch_parcel s hinv.machine (hinv.present _) (pc + 2#64) ram hpma hbase hexec hfault
-    (by omega) (by omega) hhtif (by
-      intro i hi
-      simpa only [hhi_nat, Nat.add_assoc] using hbytes (2 + i) (by omega))
-  unfold fetch SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
-  by_cases hbits : (memParcel s pc.toNat).extractLsb 1 0 = 0b11#2 <;>
-    cases hbit : pc.getLsbD 1 <;>
-    simp [hbits, hbit, get_config_rvfi, hpc_read, ext_fetch_check_pc, Step.currentlyEnabled_Zca_run s hinv,
-    BitVec.access, ← BitVec.getLsbD_eq_getElem, halign, translateAddr_fetch_of_machine _ s hinv.machine (hinv.present _),
-    hlo_read, hhi_read, BitVec.addInt, hhi_nat, isRVC, fetchedAt,
-    Sail.BitVec.extractLsb, bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
-    ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
-    MonadLift.monadLift, liftM, monadLift, Functor.map, orM, andM, toBool, bne, BEq.beq, LeanRV64D.Functions.not]
+  refine fetch_regions s hinv pc hpc halign [ram] ram hpma hexec hfault hram.1 (by omega)
+    (matching_ram pc ram hbase hram.1 (by omega)) hhtif (fun i hi => hbytes i (by omega))
+    (fun _ => ⟨matching_ram _ ram hbase (by omega) (by omega), hram.2.2, fun i hi => ?_⟩)
+  · simpa only [Nat.add_assoc] using hbytes (2 + i) (by omega)
 
 end WholeRun
