@@ -1,3 +1,4 @@
+import JoltConstraints.WholeRun.SystemInv
 import JoltConstraints.WholeRun.Relation
 import JoltConstraints.WholeRun.Bridge
 import JoltConstraints.nextpc_frame
@@ -25,6 +26,8 @@ def EvenOffsets : RiscvInstruction → Prop
 end RiscvInstruction
 
 namespace WholeRun
+
+open MemoryAccessType mem_payload
 
 /-- The doubleword an instruction accesses belongs to Jolt's RAM, whose first
 address is `JoltISA.RAM_START_ADDRESS`.
@@ -291,7 +294,8 @@ private theorem load_frozen (addr : BitVec 64) :
 
 -- Only this small classification is needed for the rows before a RAM store.
 private def ScratchRow : JoltISA.Instr → Prop
-  | .ADDI dst _ _ | .ADD dst _ _ | .SUB dst _ _ | .MUL dst _ _
+  | .ADDI dst _ _ | .LUI dst _ | .SLTIU dst _ _
+  | .ADD dst _ _ | .SUB dst _ _ | .MUL dst _ _
   | .ANDN dst _ _ | .AND dst _ _ | .OR dst _ _ | .XOR dst _ _
   | .SLT dst _ _ | .SLTU dst _ _ | .VirtualSignExtendWord dst _ _
   | .VirtualWindowMaskB dst _ _ | .VirtualWindowMaskH dst _ _
@@ -300,11 +304,16 @@ private def ScratchRow : JoltISA.Instr → Prop
   | .VirtualShiftDataW dst _ _ _ | .LD _ dst _ _
   | .VirtualLoadB _ dst _ _ _ | .VirtualLoadH _ dst _ _ _
   | .VirtualLoadW _ dst _ _ _ => ∃ vr, dst = .vreg vr
+  | .VirtualAssertLTE .. => True
   | _ => False
 
 private theorem scratchRow_frozen (i : JoltISA.Instr) (hi : ScratchRow i) :
     StatePreservation.Preserves Frozen (JoltISA.execInstr i) := by
   cases i <;> simp only [ScratchRow] at hi
+  case VirtualAssertLTE =>
+    simp only [JoltISA.execInstr]
+    preservation_auto [readSrc_frozen _, StatePreservation.pure_rule frozen_refl _,
+      StatePreservation.throw_rule Frozen _] using (StatePreservation.bind_rule frozen_trans)
   all_goals rcases hi with ⟨vr, rfl⟩
   all_goals simp only [JoltISA.execInstr]
   all_goals preservation_auto [readSrc_frozen _, writeVReg_frozen _ _, load_frozen _,
@@ -586,6 +595,121 @@ private def jalrBundle (js : SailJoltState) (hinv : Step.StepInvariant js.sail)
     target_aligned := even_aligned js hinv _ (by rw [clear_bit_zero]; simp) }
 
 
+private def reservedLoadRow (double : Bool) (dst : JoltISA.Dst) (rs1 : regidx) : JoltISA.Instr :=
+  if double then .LD .amo dst (.xreg rs1) 0#64
+  else .VirtualLoadW .amo dst (.xreg rs1) 0#64 (.E_SAMO_Addr_Align ())
+
+private theorem reservedLoad_conditions (double : Bool) (dst : JoltISA.Dst) (rs1 : regidx)
+    (s t : SailJoltState)
+    (hram : JoltISA.RAM_START_ADDRESS ≤
+      (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)).toNat)
+    (hrun : JoltISA.execInstr (reservedLoadRow double dst rs1) s = .ok RETIRE_SUCCESS t) :
+    JoltISA.sourceValue (.xreg rs1) s &&& (if double then 7#64 else 3#64) = 0#64 ∧
+      Assumptions.JoltRamLoadOk
+        (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)) s := by
+  cases double with
+  | false =>
+    have hg := JoltConstraints.floor_load_access _ .amo dst (.xreg rs1) 0#64 3#64
+      (.E_SAMO_Addr_Align ()) (Or.inr (Or.inr ⟨rfl, rfl⟩)) () s t hrun
+    simp only [BitVec.add_zero] at hg
+    obtain ⟨value, u, hload, _⟩ := bind_success _ _ s t RETIRE_SUCCESS hg.2
+    exact ⟨hg.1, mmu_load_ram _ s u value hram hload⟩
+  | true =>
+    simp only [reservedLoadRow, ite_true, JoltISA.execInstr] at hrun
+    have hb := lookup_read_bind (.xreg rs1) _ s t RETIRE_SUCCESS hrun
+    simp only [BitVec.add_zero] at hb
+    split at hb
+    · rename_i ha
+      obtain ⟨value, u, hload, _⟩ := bind_success _ _ s t RETIRE_SUCCESS hb
+      exact ⟨ha, mmu_load_ram _ s u value hram hload⟩
+    · cases hb
+
+private inductive ReservationLoadPlan (double : Bool) (rs1 : regidx) : JoltISA.Program → Prop where
+  | load (dst : JoltISA.Dst) (rest : JoltISA.Program) :
+      ReservationLoadPlan double rs1 (.instr (reservedLoadRow double dst rs1) rest)
+  | scratch (i : JoltISA.Instr) (rest : JoltISA.Program) (hi : ScratchRow i)
+      (htail : ReservationLoadPlan double rs1 rest) :
+      ReservationLoadPlan double rs1 (.instr i rest)
+
+private theorem reservationLoadPlan_conditions (double : Bool) (rs1 : regidx)
+    (p : JoltISA.Program) (hp : ReservationLoadPlan double rs1 p)
+    (s t : SailJoltState)
+    (hram : JoltISA.RAM_START_ADDRESS ≤
+      (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)).toNat)
+    (hrun : JoltISA.execProgram p s = .ok RETIRE_SUCCESS t) :
+    JoltISA.sourceValue (.xreg rs1) s &&& (if double then 7#64 else 3#64) = 0#64 ∧
+      Assumptions.JoltRamLoadOk
+        (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)) s := by
+  induction hp generalizing s t with
+  | load dst rest =>
+    obtain ⟨u, hload, _⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
+    exact reservedLoad_conditions double dst rs1 s u hram hload
+  | scratch i rest hi htail ih =>
+    obtain ⟨u, hstep, hrest⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
+    obtain ⟨hregs, hdev⟩ := scratchRow_frozen i hi s u _ hstep
+    have heq := sourceValue_regs rs1 s u hregs
+    obtain ⟨ha, hl⟩ := ih u t (by simpa only [heq] using hram) hrest
+    exact ⟨by simpa only [heq] using ha,
+      ⟨by simpa only [heq, hdev] using hl.below_heap_end⟩⟩
+
+private theorem reservation_load_plan (store double : Bool) (rd rs1 rs2 : regidx) :
+    ReservationLoadPlan double rs1 (if store then SystemProofs.scRows double rd rs1 rs2
+      else SystemProofs.lrRows double rd rs1 rs2) := by
+  cases store <;> cases double
+  all_goals simp only [SystemProofs.scRows, SystemProofs.lrRows,
+    Bool.false_eq_true, ite_true, ite_false]
+  all_goals simp only [JoltISA.lrwProgramAuto, JoltISA.lrdProgramAuto,
+    JoltISA.scwProgramAuto, JoltISA.scdProgramAuto]
+  all_goals split
+  all_goals repeat' first
+    | exact ReservationLoadPlan.load _ _
+    | apply ReservationLoadPlan.scratch _ _ (by simp [ScratchRow])
+
+private theorem reservation_store_plan (double : Bool) (rd rs1 rs2 : regidx) :
+    StorePlan (if double then .dword else .word) rs1 0#64
+      (SystemProofs.scRows double rd rs1 rs2) := by
+  cases double
+  all_goals simp only [SystemProofs.scRows, Bool.false_eq_true, ite_true, ite_false,
+    JoltISA.scwProgramAuto, JoltISA.scdProgramAuto]
+  all_goals split
+  all_goals repeat' first
+    | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
+    | apply StorePlan.scratch _ _ (by simp [ScratchRow])
+
+private structure ReservationMemory (store double : Bool) (rs1 : regidx)
+    (js : SailJoltState) : Prop where
+  align : JoltISA.sourceValue (.xreg rs1) js &&& (if double then 7#64 else 3#64) = 0#64
+  load : Assumptions.JoltRamLoadOk
+    (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js
+  store_ok : if store then Assumptions.JoltRamStoreOk
+    (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js else True
+
+private theorem reservation_conditions (store double : Bool) (rd rs1 rs2 : regidx)
+    (s t : SailJoltState)
+    (hram : JoltISA.RAM_START_ADDRESS ≤
+      (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)).toNat)
+    (hrun : JoltISA.execProgram (if store then SystemProofs.scRows double rd rs1 rs2
+      else SystemProofs.lrRows double rd rs1 rs2) s = .ok RETIRE_SUCCESS t) :
+    ReservationMemory store double rs1 s ∧ t.jolt_device = s.jolt_device := by
+  obtain ⟨ha, hl⟩ := reservationLoadPlan_conditions double rs1 _
+    (reservation_load_plan store double rd rs1 rs2) s t hram hrun
+  cases store with
+  | false =>
+    refine ⟨⟨ha, hl, trivial⟩, noStoreProgram_device _ ?_ s t _ hrun⟩
+    cases double
+    all_goals simp only [SystemProofs.lrRows, Bool.false_eq_true, ite_true, ite_false,
+      JoltISA.lrwProgramAuto, JoltISA.lrdProgramAuto]
+    all_goals split <;> simp [NoStoreProgram, NoStoreRow]
+  | true =>
+    have hs := storePlan_ram (if double then .dword else .word) rs1 0#64 _
+      (reservation_store_plan double rd rs1 rs2) s t
+    have heq : accessAddress (if double then .dword else .word)
+        (JoltISA.sourceValue (.xreg rs1) s) 0#64 =
+        SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s) := by
+      cases double <;> simp [accessAddress, SystemProofs.reservationBase, amoWordBase]
+    obtain ⟨hstore, hdev⟩ := hs (by simpa only [heq] using hram) hrun
+    exact ⟨⟨ha, hl, by simpa only [heq, ite_true] using hstore⟩, hdev⟩
+
 private def MemoryConditions : RiscvInstruction → SailJoltState → Prop
   | .LB _ rs1 imm, js | .LH _ rs1 imm, js | .LW _ rs1 imm, js
   | .LBU _ rs1 imm, js | .LHU _ rs1 imm, js | .LWU _ rs1 imm, js
@@ -608,6 +732,10 @@ private def MemoryConditions : RiscvInstruction → SailJoltState → Prop
   | .AMOMAX_D _ rs1 _ _ _, js | .AMOMINU_D _ rs1 _ _ _, js
   | .AMOMAXU_D _ rs1 _ _ _, js =>
       Assumptions.JoltRamStoreOk (JoltISA.sourceValue (.xreg rs1) js) js
+  | .LR_W _ rs1 _ _, js => ReservationMemory false false rs1 js
+  | .LR_D _ rs1 _ _, js => ReservationMemory false true rs1 js
+  | .SC_W _ rs1 _ _ _, js => ReservationMemory true false rs1 js
+  | .SC_D _ rs1 _ _ _, js => ReservationMemory true true rs1 js
   | _, _ => True
 
 private theorem loadProgram_ram (kind : AccessKind) (dst : JoltISA.Dst) (rs : regidx)
@@ -626,16 +754,49 @@ private theorem loadProgram_ram (kind : AccessKind) (dst : JoltISA.Dst) (rs : re
   exact (noStoreProgram_device rest htail u t _ hrest).trans
     (noStoreRow_device _ hrow s u _ hload)
 
-/-- Instructions whose Jolt rows are the frozen system sequences: the six CSR
-forms, MRET, LR and SC. For example, `CSRRW` is one, while `ADD` and `SD` are not.
-Their blocks are simulated by the system-block theorems, not by this file. -/
-def SystemRow : RiscvInstruction → Prop
-  | .MRET | .LR_W .. | .SC_W .. | .LR_D .. | .SC_D .. | .CSRRW .. | .CSRRS ..
-  | .CSRRC .. | .CSRRWI .. | .CSRRSI .. | .CSRRCI .. => True
-  | _ => False
+private theorem csrRead_noStore (csr : JoltISA.SystemCSR) (rd : regidx)
+    (rest : JoltISA.Program) (h : NoStoreProgram rest) :
+    NoStoreProgram (JoltISA.csrReadInto csr rd rest) := by
+  unfold JoltISA.csrReadInto
+  split_ifs <;> simp [NoStoreProgram, NoStoreRow, h]
+
+private theorem csrSwap_noStore (csr : JoltISA.SystemCSR) (src : JoltISA.Src) :
+    NoStoreProgram (JoltISA.csrSwapWrite csr src) := by
+  cases csr <;> simp [JoltISA.csrSwapWrite, NoStoreProgram, NoStoreRow]
+
+private theorem csrrw_noStore (csr : JoltISA.SystemCSR) (rs rd : regidx) :
+    NoStoreProgram (JoltISA.csrrwProgram csr rs rd) := by
+  unfold JoltISA.csrrwProgram
+  split_ifs <;> simp only [NoStoreProgram, NoStoreRow, true_and]
+  all_goals apply csrRead_noStore
+  all_goals first | exact csrSwap_noStore _ _ | trivial
+
+private theorem csrBit_noStore (clear : Bool) (csr : JoltISA.SystemCSR) (rs rd : regidx) :
+    NoStoreProgram (JoltISA.csrBitUpdateProgram clear csr rs rd) := by
+  unfold JoltISA.csrBitUpdateProgram
+  split_ifs
+  all_goals simp only [NoStoreProgram, NoStoreRow, true_and]
+  all_goals first
+    | exact csrRead_noStore _ _ _ (by cases clear <;> trivial)
+    | simp [JoltISA.pureWritebackRdZeroProgram, NoStoreProgram, NoStoreRow]
+
+private theorem csrrwi_noStore (csr : JoltISA.SystemCSR) (imm : BitVec 5) (rd : regidx) :
+    NoStoreProgram (JoltISA.csrrwiProgram csr imm rd) := by
+  unfold JoltISA.csrrwiProgram
+  apply csrRead_noStore
+  cases csr <;> simp only
+  all_goals first
+    | trivial
+    | (split_ifs <;> trivial)
+
+private theorem csrImmediateBit_noStore (clear : Bool) (csr : JoltISA.SystemCSR)
+    (imm : BitVec 5) (rd : regidx) :
+    NoStoreProgram (JoltISA.csrImmediateBitUpdateProgram clear csr imm rd) := by
+  unfold JoltISA.csrImmediateBitUpdateProgram
+  apply csrRead_noStore
+  split_ifs <;> cases clear <;> trivial
 
 private theorem retire_conditions (i : RiscvInstruction) (hi : i.Lifted)
-    (hsys : ¬ SystemRow i)
     (s t : SailJoltState) (hram : RamAccess i s)
     (hrun : RiscvInstruction.joltRun (honestInstr i s) s = .ok RETIRE_SUCCESS t) :
     MemoryConditions i s ∧ t.jolt_device = s.jolt_device := by
@@ -855,8 +1016,19 @@ private theorem retire_conditions (i : RiscvInstruction) (hi : i.Lifted)
         (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
   case ECALL => exact False.elim hi
   case EBREAK => exact False.elim hi
-  case MRET | LR_W | SC_W | LR_D | SC_D | CSRRW | CSRRS | CSRRC | CSRRWI | CSRRSI | CSRRCI =>
-    exact False.elim (hsys trivial)
+  case LR_W rd rs1 aq rl => exact reservation_conditions false false rd rs1 zreg s t hram hrun
+  case LR_D rd rs1 aq rl => exact reservation_conditions false true rd rs1 zreg s t hram hrun
+  case SC_W rd rs1 rs2 aq rl => exact reservation_conditions true false rd rs1 rs2 s t hram hrun
+  case SC_D rd rs1 rs2 aq rl => exact reservation_conditions true true rd rs1 rs2 s t hram hrun
+  case MRET =>
+    exact ⟨trivial, noStoreProgram_device _ (by trivial) s t _ hrun⟩
+  case CSRRW => exact ⟨trivial, noStoreProgram_device _ (csrrw_noStore _ _ _) s t _ hrun⟩
+  case CSRRS => exact ⟨trivial, noStoreProgram_device _ (csrBit_noStore false _ _ _) s t _ hrun⟩
+  case CSRRC => exact ⟨trivial, noStoreProgram_device _ (csrBit_noStore true _ _ _) s t _ hrun⟩
+  case CSRRWI => exact ⟨trivial, noStoreProgram_device _ (csrrwi_noStore _ _ _) s t _ hrun⟩
+  case CSRRSI => exact ⟨trivial, noStoreProgram_device _ (csrImmediateBit_noStore false _ _ _) s t _ hrun⟩
+  case CSRRCI => exact ⟨trivial, noStoreProgram_device _ (csrImmediateBit_noStore true _ _ _) s t _ hrun⟩
+
   all_goals
     refine ⟨True.intro, ?_⟩
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.execLUI] at hrun
@@ -945,10 +1117,94 @@ private def amoDwordBundle (js : SailJoltState) (hinv : Step.StepInvariant js.sa
     jolt_ram_load := ⟨hr.below_heap_end⟩
     jolt_ram_store := hr }
 
+private theorem reservation_checks (s : SailState) (double : Bool) (addr : BitVec 64)
+    (hpma : s.regs.get? Register.pma_regions = some platformPma)
+    (hlo : JoltISA.RAM_START_ADDRESS ≤ (SystemProofs.reservationBase double addr).toNat)
+    (ha : addr &&& (if double then 7#64 else 3#64) = 0#64)
+    (hhi : (SystemProofs.reservationBase double addr).toNat + 8 ≤ 2 ^ 64) :
+    phys_access_check (LoadReserved Data) .Machine (.Physaddr addr)
+        (if double then 8 else 4) true s = .ok none s ∧
+    phys_access_check (StoreConditional Data) .Machine (.Physaddr addr)
+        (if double then 8 else 4) true s = .ok none s := by
+  obtain ⟨offset, hfits, heq⟩ := SystemProofs.reservation_subaccess double addr ha
+  have hn : 0 < (if double then 8 else 4 : Nat) := by cases double <;> decide
+  have hadd := toNat_add_small_of_no_ovf (SystemProofs.reservationBase double addr)
+    offset (by omega)
+  rw [heq] at hadd
+  have hread := readReg_eq_of_get? Register.pma_regions s _ hpma
+  have hmatch := matching_platform_ram addr (if double then 8 else 4)
+    (by omega) hn (by omega) (by omega)
+  simp [phys_access_check, HartConfig.pmpCheck_run, pmaCheck, hread, hmatch, ramRegion,
+    bne, show (Reservability.RsrvEventual == Reservability.RsrvNone) = false by decide,
+    LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
+    LeanRV64D.Functions.not, bind, EStateM.bind, pure, EStateM.pure]
+
+private def reservationWindow (js : SailJoltState) (double : Bool) (rs1 : regidx)
+    (hinv : Step.StepInvariant js.sail) (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hm : ReservationMemory false double rs1 js)
+    (hw : DwordAtomicWindowAssumptions .AMOADD
+      (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js.sail) :
+    SystemProofs.ReservationWindow double (JoltISA.sourceValue (.xreg rs1) js) js :=
+  { cur_privilege := ⟨hinv.machine⟩
+    mstatus_mprv := hmprv
+    align := hm.align
+    dword_present := hw.dword_present
+    not_readable_mmio := hw.not_readable_mmio
+    jolt_ram := hm.load }
+
+private def reservationReadBundle (js : SailJoltState) (double : Bool) (rs1 : regidx)
+    (hlink : System.systemProject js = js.sail) (hinv : Step.StepInvariant js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hm : ReservationMemory false double rs1 js)
+    (hw : DwordAtomicWindowAssumptions .AMOADD
+      (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js.sail)
+    (hpma : js.sail.regs.get? Register.pma_regions = some platformPma)
+    (hlo : JoltISA.RAM_START_ADDRESS ≤
+      (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)).toNat)
+    (hhi : (SystemProofs.reservationBase double
+      (JoltISA.sourceValue (.xreg rs1) js)).toNat + 8 ≤ 2 ^ 64) :
+    SystemProofs.ReservationReadEqAssumptions double rs1 js :=
+  { unarySource js hinv hlink rs1, reservationWindow js double rs1 hinv hmprv hm hw with
+    reserved_access := (reservation_checks js.sail double _ hpma hlo hm.align hhi).1 }
+
+private def reservationStoreBundle (js : SailJoltState) (double : Bool) (rs2 rs1 : regidx)
+    (hlink : System.systemProject js = js.sail) (hinv : Step.StepInvariant js.sail)
+    (hmprv : Assumptions.MstatusMprvZero js.sail)
+    (hm : ReservationMemory true double rs1 js)
+    (hw : DwordAtomicWindowAssumptions .AMOADD
+      (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js.sail)
+    (hpma : js.sail.regs.get? Register.pma_regions = some platformPma)
+    (hlo : JoltISA.RAM_START_ADDRESS ≤
+      (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)).toNat)
+    (hhi : (SystemProofs.reservationBase double
+      (JoltISA.sourceValue (.xreg rs1) js)).toNat + 8 ≤ 2 ^ 64)
+    (hsys : SystemInv js) :
+    SystemProofs.ReservationStoreEqAssumptions double rs2 rs1 js :=
+  { binarySource js hinv hlink rs2 rs1,
+    reservationWindow js double rs1 hinv hmprv ⟨hm.align, hm.load, trivial⟩ hw with
+    not_writable_mmio := hw.not_writable_mmio
+    jolt_ram_store := hm.store_ok
+    conditional_access := (reservation_checks js.sail double _ hpma hlo hm.align hhi).2
+    reservation_pair := hsys.reservation_pair }
+
+private def csrBundle (js : SailJoltState) (hsys : SystemInv js)
+    (hlink : System.systemProject js = js.sail) (hinv : Step.StepInvariant js.sail) :
+    RiscvInstruction.CsrEqAssumptions js :=
+  { invariant := hlink.symm ▸ hinv
+    mstatus_bits := hsys.mstatus_bits
+    mtvec_mode := hsys.mtvec_mode
+    mepc_align := hsys.mepc_align }
+
+private def csrRegBundle (js : SailJoltState) (rs1 : regidx) (hsys : SystemInv js)
+    (hlink : System.systemProject js = js.sail) (hinv : Step.StepInvariant js.sail) :
+    RiscvInstruction.CsrRegEqAssumptions rs1 js :=
+  { csrBundle js hsys hlink hinv, unarySource js hinv hlink rs1 with }
+
 /-- A retiring RAM instruction has the Sail equivalence bundle and honest advice.
 For example, an honest `LB` run supplies its heap bound, while memory presence
 supplies the eight bytes of the enclosing doubleword.
-The additional premises are: `hmstatus` (invariant: Jolt retains only MIE/MPIE),
+The additional premises are: `hsys` (invariant: legal persistent system values),
+`hmstatus` (invariant: Jolt retains only MIE/MPIE),
 `hlayout` (invariant: the device layout was constructed successfully),
 `heven` (from decoding: relative offsets are even),
 `hpc` (invariant: the current PC is even), and
@@ -956,8 +1212,7 @@ The additional premises are: `hmstatus` (invariant: Jolt retains only MIE/MPIE),
 The run supplies the heap and stack-canary checks made by Jolt's tracer in
 `tracer/src/emulator/mmu.rs` (`Mmu::assert_effective_address`) at `5def437f`. -/
 theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
-    (hsys : ¬ SystemRow i)
-    (js : SailJoltState)
+    (js : SailJoltState) (hsys : SystemInv js)
     (hlink : System.systemProject js = js.sail)
     (hinv : Step.StepInvariant js.sail)
     (hmstatus : js.vregs JoltISA.mstatusVReg &&& ~~~(0x88 : BitVec 64) = 0)
@@ -974,7 +1229,7 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
     ∃ h : RiscvInstruction.equivAssumptions (honestInstr i js) js,
       RiscvInstruction.AdviceHonest (honestInstr i js) js h := by
   obtain ⟨js', hrun⟩ := hok
-  have hc := (retire_conditions i hi hsys js js' hram hrun).1
+  have hc := (retire_conditions i hi js js' hram hrun).1
   have hmprv := mprv_zero js hlink hmstatus
   have window (base : BitVec 64)
       (hram : JoltISA.RAM_START_ADDRESS ≤ base.toNat)
@@ -1089,8 +1344,26 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
       (window _ hram hc.below_heap_end .AMOMAXU (by decide)) hc, True.intro⟩
   case ECALL => exact False.elim hi
   case EBREAK => exact False.elim hi
-  case MRET | LR_W | SC_W | LR_D | SC_D | CSRRW | CSRRS | CSRRC | CSRRWI | CSRRSI | CSRRCI =>
-    exact False.elim (hsys trivial)
+  case MRET =>
+    exact ⟨⟨hlink.symm ▸ hinv, hsys.mstatus_bits, hsys.mepc_align⟩, trivial⟩
+  case CSRRW | CSRRS | CSRRC => exact ⟨csrRegBundle js _ hsys hlink hinv, trivial⟩
+  case CSRRWI | CSRRSI | CSRRCI => exact ⟨csrBundle js hsys hlink hinv, trivial⟩
+  case LR_W rd rs1 aq rl =>
+    exact ⟨reservationReadBundle js false rs1 hlink hinv hmprv hc
+      (window _ hram hc.load.below_heap_end .AMOADD (by decide)) hpma hram (by
+        have := hc.load.below_heap_end; dsimp [SystemProofs.reservationBase] at *; omega), trivial⟩
+  case LR_D rd rs1 aq rl =>
+    exact ⟨reservationReadBundle js true rs1 hlink hinv hmprv hc
+      (window _ hram hc.load.below_heap_end .AMOADD (by decide)) hpma hram (by
+        have := hc.load.below_heap_end; dsimp [SystemProofs.reservationBase] at *; omega), trivial⟩
+  case SC_W rd rs1 rs2 aq rl =>
+    exact ⟨reservationStoreBundle js false rs2 rs1 hlink hinv hmprv hc
+      (window _ hram hc.load.below_heap_end .AMOADD (by decide)) hpma hram (by
+        have := hc.load.below_heap_end; dsimp [SystemProofs.reservationBase] at *; omega) hsys, trivial⟩
+  case SC_D rd rs1 rs2 aq rl =>
+    exact ⟨reservationStoreBundle js true rs2 rs1 hlink hinv hmprv hc
+      (window _ hram hc.load.below_heap_end .AMOADD (by decide)) hpma hram (by
+        have := hc.load.below_heap_end; dsimp [SystemProofs.reservationBase] at *; omega) hsys, trivial⟩
   all_goals first
     | exact ⟨unarySource js hinv hlink _, True.intro⟩
     | exact ⟨binarySource js hinv hlink _ _, by first | exact True.intro | rfl⟩
@@ -1101,10 +1374,9 @@ For example, `SD` into RAM updates Sail memory and leaves the device unchanged.
 Jolt's tracer uses the RAM branch of `Mmu::store_doubleword_raw` in
 `tracer/src/emulator/mmu.rs` at `5def437f`. -/
 theorem joltRun_device_of_ram (i : RiscvInstruction) (hi : i.Lifted)
-    (hsys : ¬ SystemRow i)
     (js js' : SailJoltState) (hram : RamAccess i js)
     (hrun : RiscvInstruction.joltRun (honestInstr i js) js = .ok RETIRE_SUCCESS js') :
     js'.jolt_device = js.jolt_device :=
-  (retire_conditions i hi hsys js js' hram hrun).2
+  (retire_conditions i hi js js' hram hrun).2
 
 end WholeRun

@@ -103,3 +103,5 @@ import JoltConstraints.WholeRun.Init
 import JoltConstraints.WholeRun.Ghost
 import JoltConstraints.WholeRun.BlockStep
 import JoltConstraints.WholeRun.Bundles
+import JoltConstraints.WholeRun.SystemInv
+import JoltConstraints.WholeRun.SystemBlocks

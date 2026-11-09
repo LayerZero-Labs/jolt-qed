@@ -290,3 +290,9 @@ The model's own axioms (`LeanRV64D/RiscvExtras.lean`) after the regeneration:
 The dispatcher `RiscvInstruction.equivalenceStatement_holds` also lists `get_16_random_bits` (through the generic CSR read) and `sorryAx` (the cases that steps c and d close).
 
 Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (the read-back of the panic and termination words in section 2, and anything the difference testing confirms).
+
+## 9. Whole-run system invariant
+
+`WholeRun.SystemInv` is a run invariant: raw mstatus contains only MIE/MPIE, mtvec has mode 0 or 1, mepc is even, and the reservation registers form a legal pair.
+It holds initially and is preserved by every source block, including CSR writes, MRET, LR/SC and ECALL, assuming the separately supplied run invariant that the source PC is even.
+`WholeRun.block_simulates` combines these facts with the platform RAM assumptions and fetch/decode results to simulate every RISC-V block before EBREAK by one Sail `try_step`.
