@@ -319,7 +319,8 @@ The model's own axioms (`LeanRV64D/RiscvExtras.lean`) after the regeneration:
 | floating-point operations (`riscv_f16Add` and the rest) | not reached: F and D are off and their instruction modules are not generated |
 
 `#print axioms` on `JoltInstance.soundness` and on every instruction theorem that is fully proved gives only `propext`, `Classical.choice` and `Quot.sound`.
-The dispatcher `RiscvInstruction.equivalenceStatement_holds` also lists `get_16_random_bits` (through the generic CSR read) and `sorryAx` (the cases that steps c and d close).
+Theorems that reach the generic CSR read also list `get_16_random_bits`, among them `Decode.joltDecode_compressed_agrees` and the block theorems of section 9.
+None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/Completeness/`, some of them waiting on a16z/jolt#1949.
 
 Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (the read-back of the panic and termination words in section 2, and anything the difference testing confirms).
 
