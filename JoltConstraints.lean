@@ -106,6 +106,7 @@ import JoltConstraints.WholeRun.Bundles
 import JoltConstraints.WholeRun.SystemInv
 import JoltConstraints.WholeRun.SystemBlocks
 import JoltConstraints.WholeRun.Io
+import JoltConstraints.WholeRun.IoAmo
 import JoltConstraints.WholeRun.RunInv
 import JoltConstraints.WholeRun.Decoded
 import JoltConstraints.WholeRun.Halt

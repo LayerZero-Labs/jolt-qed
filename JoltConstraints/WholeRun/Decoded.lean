@@ -1,4 +1,6 @@
 import JoltConstraints.WholeRun.Io
+import JoltConstraints.WholeRun.IoAmo
+import JoltConstraints.WholeRun.RunInv
 import JoltConstraints.WholeRun.Fetch
 import JoltConstraints.WholeRun.Init
 import JoltConstraints.memory_presence
@@ -708,5 +710,51 @@ theorem block_simulates_image (program : Rv64ProgramImage SourceInstruction) (b 
     ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' :=
   block_simulates_decoded program b hruns himage i hrow hbreak hsys hpc
     (fun _ hrel => hrel.misa) hcode hheap hnot hclass hflag hlow hpanic
+
+/-- **Every non-EBREAK RISC-V block of a decoded program simulates, atomics on the I/O window
+included.** This is `block_simulates_image` with the access classification derived instead
+of assumed: `access_classified_full` shows the block accesses RAM, accesses the I/O window
+with a load or store, or is an atomic on the I/O window, so the premise `hclass` and the
+deviation `AmoInRam` are gone, and an atomic on the I/O window takes the deviation premise
+`hamoflag` (`AmoNoFlagWord`) in their place.
+
+Premises, by class:
+* invariant: `hsys`, the system invariant on the block's entry state.
+* platform: `hpc` (`RowsAligned`), `hheap` (`HeapNoWrap`), `hcode` (the image is intact in
+  Sail's memory) and `himage` (the image decodes).
+* documented deviation (`docs/riscv-alignment.md`, section 2): `hnot` (`NotReservedParcel`);
+  for a load or store on the I/O window, `hflag` (`NoFlagWordLoad`), `hlow` (`NoLowLoad`) and
+  `hpanic` (`PanicStoreNonzero`); for an atomic on the I/O window, `hamoflag`
+  (`AmoNoFlagWord`).
+
+For example, a block whose row is `AMOADD.D` through a register holding `0x40000010`
+simulates, when no byte of the doubleword at `0x40000010` is a panic or termination byte. -/
+theorem block_simulates_image_full (program : Rv64ProgramImage SourceInstruction) (b : Block)
+    (hruns : b.Runs program) (himage : ImageDecoded program)
+    (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i) (hbreak : i ≠ .EBREAK)
+    (hsys : SystemInv b.pre) (hpc : b.row.address.getLsbD 0 = false)
+    (hcode : ∀ s, Related b.pre s → CodeIntact program s)
+    (hheap : b.pre.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8)
+    (hnot : NotReservedParcel program b)
+    (hflag : i.IoAccess b.start → i.NoFlagWordLoad b.start)
+    (hlow : i.IoAccess b.start → i.NoLowLoad b.start)
+    (hpanic : i.IoAccess b.start → i.PanicStoreNonzero b.start)
+    (hamoflag : IoAmoAccess i b.start → i.AmoNoFlagWord b.start) :
+    ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
+  rcases access_classified_full program b hruns i hrow with hram | hio | hamo
+  · exact block_simulates_image program b hruns himage i hrow hbreak hsys hpc hcode hheap hnot
+      (Or.inl hram) hflag hlow hpanic
+  · exact block_simulates_image program b hruns himage i hrow hbreak hsys hpc hcode hheap hnot
+      (Or.inr hio) hflag hlow hpanic
+  · obtain ⟨e, hd⟩ := himage b.row hruns.row_mem i hrow
+    have hwidth : b.row.is_compressed = e.isCompressed := by
+      cases e with
+      | base w => exact hd.1
+      | compressed h => exact hd.1
+    have hin := decoded_inputs program b hruns i e hd hnot hpc (fun s hrel => hrel.misa) hcode
+    refine block_simulates_io_amo_via program b hruns i hrow hsys hamo (hamoflag hamo) e hwidth ?_
+    intro s hrel pc m oldInc hn hr
+    obtain ⟨inc, hinc, hf, ast, cast, hm, hb, hdc, _⟩ := hin s hrel pc m oldInc hn hr
+    exact ⟨inc, hinc, hf, ast, cast, hm, hb, hdc⟩
 
 end WholeRun

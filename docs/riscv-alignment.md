@@ -59,20 +59,27 @@ The Sail configuration has two regions, and nothing else is readable, writable o
 | Region | Range | R | W | X | Atomics | Reservability |
 | --- | --- | --- | --- | --- | --- | --- |
 | RAM | `[0x8000_0000, 2^64)` | yes | yes | yes | AMOArithmetic | RsrvEventual |
-| I/O | `[IO_BASE, 0x8000_0000)` | yes | yes | no | AMONone | RsrvNone |
+| I/O | `[IO_BASE, 0x8000_0000)` | yes | yes | no | AMOArithmetic | RsrvNone |
 
 `IO_BASE` is a fixed platform constant, `0x4000_0000`; the whole-run theorem assumes `IO_BASE ≤ io_start`, which every layout with an I/O window of at most 1 GiB satisfies.
 The device-tree region at `0x1000` is removed, because Jolt has no device tree.
 The CLINT stays where the Sail model needs it (`0x0200_0000`), outside both regions; Jolt panics on any access to it (`mmu.rs`, `load_raw` and `store_raw`), so it is not reachable from a Jolt trace.
 
+The Lean side takes the regions from `JoltConstraints/WholeRun/Relation.lean` (`ioRegion`, `ramRegion`, `platformPma`), not from the json, and `scripts/check-sail-model.sh` keeps the two the same.
 Each region is a superset of what Jolt allows, which is the direction the whole-run theorem needs.
 Jolt's tracer additionally panics on stores into the stack canary, on accesses at or above `heap_end`, on stores to the read-only parts of the I/O window, and on fetches outside the program's bytecode.
 Those runs have no Jolt trace, so the theorem never has to say what Sail does on them.
 Reservability and atomics are restricted the way Jolt restricts them: Jolt's LR and SC expansions assert `rs1 ≥ 0x8000_0000` before touching the reservation (`crates/jolt-program/src/expand/memory/lrw.rs`, `lrd.rs`, `shared.rs` `expand_sc_success`).
 Jolt's platform allows AMOs anywhere its MMU accepts a load and a store, including the output region: its AMO expansions load and store the doubleword through the ordinary MMU.
-The specification leaves a region's atomics to the platform, so the I/O region's AMONone in the table above is our modelling choice, not a property of Jolt, and it is wrong for Jolt's platform.
-Decision: the I/O region gets AMOArithmetic (`sail-import/rv64d_jolt.json`), keeping RsrvNone, which stays exact because LR and SC assert RAM.
-Until the model is regenerated with that configuration, the whole-run theorem takes `AmoInRam` (every AMO's address is in RAM) as a named premise per block; the configuration change removes it.
+The specification leaves a region's atomics to the platform, so the I/O region's atomics are our modelling choice, not a property of Jolt, and AMONone would be wrong for Jolt's platform.
+The I/O region therefore has AMOArithmetic (`Relation.lean` and `sail-import/rv64d_jolt.json`), keeping RsrvNone, which stays exact because LR and SC assert RAM.
+Every AMO block is then in RAM or in the I/O window, and the whole-run theorem needs no `AmoInRam` premise: `access_classified_full` (`WholeRun/RunInv.lean`) classifies a block as a RAM access, an I/O load or store, or an I/O AMO (`IoAmoAccess`: a word or doubleword AMO whose containing doubleword lies below `0x8000_0000`), `block_simulates_io_amo` (`WholeRun/IoAmo.lean`) simulates the last kind, and `block_simulates_image_full` (`WholeRun/Decoded.lean`) combines the three.
+`AmoInRam` and `access_classified` stay until the cleanup that deletes them.
+An I/O AMO takes one deviation premise, `AmoNoFlagWord`: no byte of the doubleword it reads and writes is a byte of the panic or termination word, because Jolt's device turns a store of the panic byte into the flag and ignores every other store to those words, while Sail stores the bytes (for example `AMOADD.D` at the panic address).
+Two premises that the loads and stores need are not needed here.
+First, no low-address premise: a retiring AMO stores to its doubleword, and Jolt's tracer accepts a store only at or above `output_start`, which is at least `memLow`, so the load half reads above `memLow` too.
+Second, no panic-store premise: under `AmoNoFlagWord` the stored doubleword holds no flag byte, so `PanicStoreNonzero` holds trivially.
+Misalignment needs no premise either: Jolt's `LD` and `SD` rows assert `addr & 7 = 0` and its word lane rows (`VirtualLoadW`, `VirtualStoreW`) assert `ea & 3 = 0`, so a misaligned I/O AMO faults in Jolt as it does in Sail (Sail checks natural alignment before the PMA), and Jolt never retires where Sail faults.
 
 The I/O window is not plain memory in Jolt: a store to the panic word sets a flag whatever the value, and the termination word ignores stores and always reads 0 (`JoltBytecode/JoltISA/JoltDevice.lean`, `load?` and `store?`).
 The specification leaves the behaviour of I/O regions to the platform, so this is not a deviation from RISC-V; it is a difference between Jolt's platform and the Sail model's flat memory.
@@ -83,6 +90,7 @@ Jolt's prover maps RAM addresses through `MemoryLayout::remap_word_address`, whi
 If step f finds an honest trace that contains one, Jolt has to fault there instead, and that goes to the Jolt-changes stream.
 
 The theorem for blocks that access the I/O window (`WholeRun/Io.lean`, `block_simulates_io`) takes three deviation hypotheses, one for each difference above: `NoFlagWordLoad` (no load reads a byte of the panic or termination word), `PanicStoreNonzero` (a store that touches the panic doubleword leaves Sail's panic word nonzero, which excludes a store that zeroes the only nonzero byte of the word, because Jolt's flag is set by any such store) and `NoLowLoad` (no load reads below the lowest address Jolt's prover accepts, which is the open item above).
+The theorem for AMOs on the I/O window (`WholeRun/IoAmo.lean`, `block_simulates_io_amo`) takes only `AmoNoFlagWord` (no byte of the AMO's doubleword is a byte of the panic or termination word): a retiring AMO's store already puts its address at or above `memLow`, and its store cannot set the panic flag, so `NoLowLoad` and `PanicStoreNonzero` have no counterpart.
 
 ## 3. Reservation policy
 
