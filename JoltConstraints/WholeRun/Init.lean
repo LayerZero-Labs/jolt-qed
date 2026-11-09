@@ -112,26 +112,40 @@ theorem stepInvariant_systemProject (js : SailJoltState) (hinv : Step.StepInvari
     · obtain ⟨v, hv⟩ := (hinv.present r).exists_value
       exact ⟨v, by rw [Step.systemProject_get?_of_not_overlaid js ho]; exact hv⟩
 
+/-- Replacing `misa` by a value with the C bit set keeps the step invariant. -/
+theorem stepInvariant_setMisa {s : SailState} (hinv : Step.StepInvariant s)
+    (v : RegisterType Register.misa) (hv : _get_Misa_C v = 1#1) :
+    Step.StepInvariant (Step.setReg s Register.misa v) where
+  present := Step.setReg_present s _ v hinv.present
+  active := by rw [Step.setReg_get?_ne s v (by decide)]; exact hinv.active
+  machine := by rw [Step.setReg_get?_ne s v (by decide)]; exact hinv.machine
+  mie_zero := by rw [Step.setReg_get?_ne s v (by decide)]; exact hinv.mie_zero
+  mideleg_zero := by rw [Step.setReg_get?_ne s v (by decide)]; exact hinv.mideleg_zero
+  misa_c := ⟨v, Std.ExtDHashMap.get?_insert_self, hv⟩
+  elp_none := by rw [Step.setReg_get?_ne s v (by decide)]; exact hinv.elp_none
+
 /-- `sailRegs` keeps the step invariant of Jolt's Sail state. -/
 theorem stepInvariant_sailRegs (jt : SailJoltState) (hinv : Step.StepInvariant jt.sail)
     (pc m : BitVec 64) (inc : Bool) : Step.StepInvariant (sailRegs jt pc m inc) :=
-  ((((stepInvariant_systemProject jt hinv).setReg _ _ (by simp [Step.invariantReg])).setReg _ _
-    (by simp [Step.invariantReg])).setReg _ _ (by simp [Step.invariantReg])).setReg _ _
-    (by simp [Step.invariantReg])
+  stepInvariant_setMisa
+    (((((stepInvariant_systemProject jt hinv).setReg _ _ (by simp [Step.invariantReg])).setReg _ _
+      (by simp [Step.invariantReg])).setReg _ _ (by simp [Step.invariantReg])).setReg _ _
+      (by simp [Step.invariantReg]))
+    _ resetMisa_c
 
 /-- The step invariant reads registers only. -/
 theorem stepInvariant_withMem {s : SailState} (hinv : Step.StepInvariant s)
     (mem : Std.ExtHashMap Nat (BitVec 8)) : Step.StepInvariant { s with mem := mem } :=
   hinv.of_agree (fun _ _ => rfl) (fun r => ⟨(hinv.present r).exists_value⟩)
 
-/-- Outside `PC`, the retired-instruction counter, `pma_regions` and the overlaid
+/-- Outside `PC`, the retired-instruction counter, `pma_regions`, `misa` and the overlaid
 CSRs, `sailRegs` reads Jolt's Sail registers. -/
 theorem sailRegs_get?_other (jt : SailJoltState) (pc m : BitVec 64) (inc : Bool) {r : Register}
     (hpc : Register.PC ≠ r) (hm : Register.minstret ≠ r) (hinc : Register.minstret_increment ≠ r)
-    (hpma : Register.pma_regions ≠ r) (ho : ¬ Step.Overlaid r) :
+    (hpma : Register.pma_regions ≠ r) (hmisa : Register.misa ≠ r) (ho : ¬ Step.Overlaid r) :
     (sailRegs jt pc m inc).regs.get? r = jt.sail.regs.get? r := by
   unfold sailRegs
-  rw [Step.setReg_get?_ne _ _ hpma, Step.setReg_get?_ne _ _ hinc, Step.setReg_get?_ne _ _ hm,
+  rw [Step.setReg_get?_ne _ _ hmisa, Step.setReg_get?_ne _ _ hpma, Step.setReg_get?_ne _ _ hinc, Step.setReg_get?_ne _ _ hm,
     Step.setReg_get?_ne _ _ hpc, Step.systemProject_get?_of_not_overlaid jt ho]
 
 /-- **The run starts related.** Sail's initial state `sailInit jt` is related to
@@ -171,7 +185,7 @@ theorem related_sailInit {Source : Type} (joltInstance : JoltInstance Source)
     rfl
   · show (sailRegs jt _ 0 false).regs.get? _ = _
     rw [sailRegs_get?_other jt _ _ _ (by decide) (by decide) (by decide) (by decide)
-      (by simp [Step.Overlaid]), hreg]
+      (by decide) (by simp [Step.Overlaid]), hreg]
     rfl
   · have hflag : IsFlagWord jt.jolt_device a = false := by
       simp only [IsFlagWord, Bool.and_eq_false_iff, decide_eq_false_iff_not]
