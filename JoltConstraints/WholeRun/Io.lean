@@ -2773,7 +2773,7 @@ theorem block_simulates_io_via (program : Rv64ProgramImage SourceInstruction) (b
       ((blockHelper% advice_overlayRows) i b.pre.vregs m inc b.start)
     simp only [blockInstrs, hrow, he]
   have hpatched := (blockHelper% execProgram_overlayRows) (Program.seq instrs)
-    b.pre.vregs m inc b.start b.post RETIRE_SUCCESS hrun
+    b.pre.vregs m inc b.start b.post hrun
   have hsync := execProgram_shadow (Program.seq instrs) _ _ hshadow
   rw [hpatched] at hsync
   obtain ⟨ghostPost, hghost, hpost, _, _⟩ := hsync.ok_exists

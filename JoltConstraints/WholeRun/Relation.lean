@@ -1,4 +1,5 @@
 import JoltConstraints.WholeRun.Run
+import JoltBytecode.Decode.Configuration
 
 /-!
 # The Jolt–Sail relation of the whole run
@@ -15,6 +16,13 @@ writable, and RAM `[0x8000_0000, 2^64)`. The Sail configuration file is read by
 Sail's C++ emulator only; in the Lean model `pma_regions` is an ordinary
 register, so the whole-run theorem sets it to `platformPma` in its initial
 state, and no instruction writes it afterwards.
+
+Sail's `misa` is likewise Sail's own: the relation sets it to `Decode.resetMisa`,
+the value `reset_misa` gives (RV64 with I, M, A and C), whatever Jolt's embedded
+copy holds. Jolt accepts only six CSRs (`mstatus`, `mtvec`, `mscratch`, `mepc`,
+`mcause`, `mtval`), and `misa` is not one of them. Jolt's rows look at its C bit
+only to test a branch target's alignment, and a run that retires never fails that
+test (`execProgram_withMisa`).
 
 ## Memory
 
@@ -115,13 +123,16 @@ def sailByte (jt : SailJoltState) (a : Nat) : BitVec 8 :=
 def sailPanicWord (device : JoltDevice) (s : SailState) : BitVec 64 :=
   (read_doubleword? s.mem.get? device.memory_layout.panic.toNat).getD 0
 
+/-- Sail's reset `misa` enables compressed instructions. -/
+theorem resetMisa_c : _get_Misa_C Decode.resetMisa = 1#1 := by decide
+
 /-- Sail's registers for the Jolt state `jt`: the CSR and reservation overlay of
 `System.systemProject`, `PC` at Jolt's next PC, any instruction-retired counter,
-and the platform's memory regions. -/
+the platform's memory regions, and Sail's reset `misa`. -/
 def sailRegs (jt : SailJoltState) (pc m : BitVec 64) (inc : Bool) : SailState :=
-  Step.setReg (Step.setReg (Step.setReg (Step.setReg (System.systemProject jt)
+  Step.setReg (Step.setReg (Step.setReg (Step.setReg (Step.setReg (System.systemProject jt)
     Register.PC pc) Register.minstret m) Register.minstret_increment inc)
-    Register.pma_regions platformPma
+    Register.pma_regions platformPma) Register.misa Decode.resetMisa
 
 /-- **The relation of the whole run** between a Jolt state `jt` and a Sail
 state `s`. -/
@@ -150,6 +161,15 @@ structure Related (jt : SailJoltState) (s : SailState) : Prop where
   /-- Jolt's output buffer stays inside the output region. -/
   outputs_size : jt.jolt_device.outputs.size ≤
     jt.jolt_device.memory_layout.max_output_size.toNat
+
+/-- **Sail's `misa` is its reset value.** Whatever Jolt's embedded copy holds, a Sail
+state related to `jt` has `Decode.resetMisa` there, so fetch and decode see the
+configuration `reset_misa` gives. -/
+theorem Related.misa {jt : SailJoltState} {s : SailState} (h : Related jt s) :
+    s.regs.get? Register.misa = some Decode.resetMisa := by
+  obtain ⟨pc, m, inc, _, hregs⟩ := h.regs
+  rw [hregs]
+  exact Std.ExtDHashMap.get?_insert_self
 
 /-- The output bytes in Sail's memory: the output region up to the panic word,
 zero where a byte is missing. -/

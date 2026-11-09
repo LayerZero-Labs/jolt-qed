@@ -594,7 +594,7 @@ theorem decoded_inputs (program : Rv64ProgramImage SourceInstruction) (b : Block
   have hpc_s : s.regs.get? Register.PC = some pc := by
     simp [hr, sailRegs, Step.setReg, Std.ExtDHashMap.get?_insert, System.systemProject]
   have hpma_s : s.regs.get? Register.pma_regions = some platformPma := by
-    simp [hr, sailRegs, Step.setReg, System.systemProject]
+    simp [hr, sailRegs, Step.setReg, Std.ExtDHashMap.get?_insert, System.systemProject]
   refine ⟨inc, hinc, ?_⟩
   have := rowDecodes_fetch_decode program b.row hruns.row_mem i e hd hnot
     (Step.setReg s .minstret_increment inc)
@@ -686,5 +686,27 @@ theorem block_simulates_decoded (program : Rv64ProgramImage SourceInstruction) (
     intro s hrel pc m oldInc hn hr
     obtain ⟨inc, hinc, hf, ast, cast, hm, hb, hdc, _⟩ := hin s hrel pc m oldInc hn hr
     exact ⟨inc, hinc, hf, ast, cast, hm, hb, hdc⟩
+
+/-- **Every non-EBREAK RISC-V block of a decoded program simulates, with Sail's `misa` at its
+reset value by construction.** This is `block_simulates_decoded` with its `hmisa` premise
+discharged by `Related.misa`: the whole-run relation sets Sail's `misa` to `Decode.resetMisa`,
+so no premise on it remains.
+
+For example, a block whose row is the compressed C.ADDI parcel `0x0505` at an even address in
+RAM simulates under the premises of `block_simulates_decoded` other than `hmisa`. -/
+theorem block_simulates_image (program : Rv64ProgramImage SourceInstruction) (b : Block)
+    (hruns : b.Runs program) (himage : ImageDecoded program)
+    (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i) (hbreak : i ≠ .EBREAK)
+    (hsys : SystemInv b.pre) (hpc : b.row.address.getLsbD 0 = false)
+    (hcode : ∀ s, Related b.pre s → CodeIntact program s)
+    (hheap : b.pre.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8)
+    (hnot : NotReservedParcel program b)
+    (hclass : RamAccess i b.start ∨ i.IoAccess b.start)
+    (hflag : i.IoAccess b.start → i.NoFlagWordLoad b.start)
+    (hlow : i.IoAccess b.start → i.NoLowLoad b.start)
+    (hpanic : i.IoAccess b.start → i.PanicStoreNonzero b.start) :
+    ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' :=
+  block_simulates_decoded program b hruns himage i hrow hbreak hsys hpc
+    (fun _ hrel => hrel.misa) hcode hheap hnot hclass hflag hlow hpanic
 
 end WholeRun

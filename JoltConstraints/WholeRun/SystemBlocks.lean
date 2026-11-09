@@ -59,8 +59,9 @@ private theorem ecall_regs (pre : SailJoltState) (s : SailState) (pc m : BitVec 
       Register.mscratch = r ∨ Register.mepc = r ∨ Register.mcause = r ∨
       Register.mtval = r ∨ Register.mstatus = r ∨ Register.reservation_valid = r ∨
       Register.reservation_addr = r ∨ Register.reservation_width = r ∨
-      Register.minstret = r ∨ Register.minstret_increment = r ∨ Register.pma_regions = r
-  · rcases hk with h | h | h | h | h | h | h | h | h | h | h | h | h | h
+      Register.minstret = r ∨ Register.minstret_increment = r ∨ Register.pma_regions = r ∨
+      Register.misa = r
+  · rcases hk with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
     all_goals subst r
     all_goals simp [Std.ExtDHashMap.get?_insert, trapHandlerVReg, mscratchVReg,
       mepcVReg, mcauseVReg, mtvalVReg, mstatusVReg, reservationWReg, reservationDReg,
@@ -68,7 +69,7 @@ private theorem ecall_regs (pre : SailJoltState) (s : SailState) (pc m : BitVec 
       numReservedVirtualRegisters, Step.setReg, System.systemProject, sailRegs]
   · simp only [not_or] at hk
     obtain ⟨hPC, hnPC, htv, hscr, hepc, hcause, htval, hstatus,
-      hvalid, haddr, hwidth, hm, hinc, hpma⟩ := hk
+      hvalid, haddr, hwidth, hm, hinc, hpma, hmisa⟩ := hk
     simp [*, Std.ExtDHashMap.get?_insert, Step.setReg, System.systemProject, sailRegs]
 
 /-- An ECALL block enters the Machine-mode trap handler in one Sail step.
@@ -250,7 +251,7 @@ theorem block_simulates_via (program : Rv64ProgramImage SourceInstruction) (b : 
       ((blockHelper% advice_overlayRows) i b.pre.vregs m inc b.start)
     simp only [blockInstrs, hrow, he]
   have hpatched := (blockHelper% execProgram_overlayRows) (Program.seq instrs)
-    b.pre.vregs m inc b.start b.post RETIRE_SUCCESS hrun
+    b.pre.vregs m inc b.start b.post hrun
   have hsync := execProgram_shadow (Program.seq instrs) _ _ hshadow
   rw [hpatched] at hsync
   obtain ⟨ghostPost, hghost, _⟩ := hsync.ok_exists
