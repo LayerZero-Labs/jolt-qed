@@ -2,7 +2,7 @@ diff --git a/handwritten_support/RiscvExtras.lean b/handwritten_support/RiscvExt
 index 27dbbd0..cdc1170 100644
 --- a/handwritten_support/RiscvExtras.lean
 +++ b/handwritten_support/RiscvExtras.lean
-@@ -28,17 +28,17 @@ section Effectful
+@@ -28,17 +28,19 @@ section Effectful
  
  variable {Register : Type} {RegisterType : Register → Type} [DecidableEq Register] [Hashable Register]
  
@@ -20,7 +20,10 @@ index 27dbbd0..cdc1170 100644
 -axiom valid_reservation : Unit → Bool
 +-- Reservations are model registers (model/sys/sys_reservation.sail).
  
- axiom get_16_random_bits : Unit → SailM (BitVec 16)
+-axiom get_16_random_bits : Unit → SailM (BitVec 16)
++-- An entropy source the platform does not specify: an opaque function, so
++-- proofs cannot assume anything about its result.
++opaque get_16_random_bits : Unit → SailM (BitVec 16)
 -axiom sys_enable_experimental_extensions : Unit → Bool
 +
 +-- This platform enables no experimental extensions.

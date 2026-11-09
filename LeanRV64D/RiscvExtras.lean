@@ -35,7 +35,9 @@ def plat_term_read (_ : Unit) : SailM String := pure ""
 
 -- Reservations are model registers (model/sys/sys_reservation.sail).
 
-axiom get_16_random_bits : Unit → SailM (BitVec 16)
+-- An entropy source the platform does not specify: an opaque function, so
+-- proofs cannot assume anything about its result.
+opaque get_16_random_bits : Unit → SailM (BitVec 16)
 
 -- This platform enables no experimental extensions.
 def sys_enable_experimental_extensions (_ : Unit) : Bool := false
