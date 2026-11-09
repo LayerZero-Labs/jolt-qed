@@ -36,7 +36,7 @@ patches = [
 ]
 patch_sha256 = [
   "095a3d4b82574d45735622339bcf6674e0d58c8975c04634c983876ec8d3b767",
-  "ce32c09799caa7b39fb5b628ca5355cd83ccb2a825bb6b35a98e2664bcb45cf9",
+  "705ddf4527ee5c500bb42aecef9ee58069be4b43cebd25c1a9b77b3cef7da485",
 ]
 
 [compiler]
@@ -93,4 +93,4 @@ selected = [
 [output]
 # sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
 # followed by LeanRV64D.lean.
-tree_sha256 = "27471fe06810a2da84a8c68b584461df404f9d32250725d6c2a8385ca0e25ac9"
+tree_sha256 = "58d054904ba0ee2d9545d5229248664820304b94290ccc47f0903ba7f0ee8e54"

@@ -200,7 +200,7 @@ The files are under `JoltBytecode/Step/`.
   Its additional hypotheses `hm` and `ht` require the persistent raw mstatus mask and legal mtvec mode; for example, mtvec `0x101` enters the handler at `0x100` without retiring ECALL.
   Decision (step d): the execute-level dispatcher was retired because `joltRun_eq_execute` and the ECALL step theorem replace it.
   `joltRun_eq_execute` calls the proved program theorems directly, and the step corollaries compose it with the fetch/decode lift.
-  Their `#print axioms` lists only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (through the generic CSR read).
+  Their `#print axioms` lists only `propext`, `Classical.choice` and `Quot.sound`.
   FENCE matches every Sail FENCE and FENCE_TSO, since Jolt runs all of them as one no-op row.
   Atomics match with their own `aq` and `rl` bits: `AmoFlags.lean` supplies the generic memory-flag erasure used by AMOs and LR/SC, because the sequential memory model ignores the request's `access_kind`.
   The division and remainder expansions need their advice operand to be the honest value (`AdviceHonest`); the soundness half of those theorems shows a retiring run with `rd ≠ 0` has no other choice.
@@ -237,7 +237,7 @@ Pending Jolt change: a16z/jolt#2381 makes both of Jolt's decompressors return th
 Once the Jolt pin includes that change, the premise is discharged: delete `NotReservedParcel`, `ReservedAccepted` and this paragraph.
 
 The proofs use no `bv_decide` and no `decide +kernel`.
-The first versions of both files proved bit-vector side conditions with `bv_decide`, which in Lean 4.35 adds one auxiliary axiom per call; they now go through `omega` and `simp` on `BitVec.toNat`, and the two theorems' axioms are only `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits` (the last only in the compressed theorem, through `executeFull`, which includes Sail's generic CSR read).
+The first versions of both files proved bit-vector side conditions with `bv_decide`, which in Lean 4.35 adds one auxiliary axiom per call; they now go through `omega` and `simp` on `BitVec.toNat`, and the two theorems' axioms are only `propext`, `Classical.choice` and `Quot.sound`.
 
 ## 6. CSR legalization
 
@@ -315,11 +315,11 @@ The model's own axioms (`LeanRV64D/RiscvExtras.lean`) after the regeneration:
 | `load_reservation`, `match_reservation`, `cancel_reservation`, `valid_reservation` | removed: model registers (section 3) |
 | `sys_enable_experimental_extensions` | removed: a definition, `false` |
 | `plat_term_write`, `plat_term_read` | removed: definitions; the platform has no console |
-| `get_16_random_bits` | still assumed: the entropy source behind the Zkr `seed` CSR. Zkr is off, and Jolt rejects the CSR, so no Jolt step reaches it; it declares a function, not a proposition, so it cannot make the theory inconsistent |
+| `get_16_random_bits` | removed: an opaque function (unspecified entropy). It is the entropy source behind the Zkr `seed` CSR. Zkr is off, and Jolt rejects the CSR, so no Jolt step reaches it; as an opaque constant it adds no axiom and proofs cannot assume anything about its result |
 | floating-point operations (`riscv_f16Add` and the rest) | not reached: F and D are off and their instruction modules are not generated |
 
 `#print axioms` on `JoltInstance.soundness` and on every instruction theorem that is fully proved gives only `propext`, `Classical.choice` and `Quot.sound`.
-Theorems that reach the generic CSR read also list `get_16_random_bits`, among them `Decode.joltDecode_compressed_agrees` and the block theorems of section 9.
+The headline theorems, including `Decode.joltDecode_compressed_agrees` and the block theorems of section 9, use only these three standard axioms, although the generic CSR read in their closure mentions `get_16_random_bits`.
 None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/Completeness/`, some of them waiting on a16z/jolt#1949.
 
 Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (the read-back of the panic and termination words in section 2, and anything the difference testing confirms).
@@ -366,4 +366,4 @@ The premises, by class:
 
 The per-block premises are stated on the blocks of the trace's own halt prefix, so they are checked on the run that actually happens, not on every program the image could run.
 `NoLowLoad` is not yet derived from the prover's acceptance of the trace (`prover_config`), because the blocks are not linked to the trace's recorded `ram_address` values.
-`#print axioms JoltInstance.sail_soundness` gives `propext`, `Classical.choice`, `Quot.sound` and `get_16_random_bits`; the last is the declared entropy function of section 8.
+`#print axioms JoltInstance.sail_soundness` gives `propext`, `Classical.choice` and `Quot.sound`.
