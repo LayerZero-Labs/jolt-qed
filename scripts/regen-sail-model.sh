@@ -101,7 +101,9 @@ SAIL_DIR="$sail_dir" "$sail_bin" \
 #    Proofs unfold the CSR chains and the mapping, so they are not split here. The
 #    follow-up is for the Sail Lean backend to split long chains into helper
 #    definitions, after which these options and the S-box rewrite can go.
-#    The script fails unless each listed declaration is found exactly once.
+#    The script fails unless each listed declaration is found exactly once, if
+#    any other limit option is left after step a, or if the tree does not end up
+#    with exactly the listed options.
 python3 - "$out_dir/Lean_RV64D" <<'EOF'
 import pathlib, re, sys
 
@@ -126,6 +128,13 @@ for path in files:
     stripped += 1
 if stripped == 0:
     sys.exit("regen-sail-model: no generated file found")
+# No other limit option may remain anywhere in the tree, file-wide or local:
+# step c below adds the only ones.
+limit_option = re.compile(r"^\s*set_option\s+(maxHeartbeats|maxRecDepth|synthInstance\.maxHeartbeats|maxSize)\b")
+for path in files:
+    for n, line in enumerate(path.read_text().split("\n"), 1):
+        if limit_option.match(line):
+            sys.exit(f"regen-sail-model: {path}:{n} sets a limit Sail is not expected to emit: '{line}'")
 
 # ---- b. the three 256-entry S-box tables ----------------------------------
 kext = root / "LeanRV64D" / "TypesKext.lean"
@@ -167,6 +176,12 @@ for module, name, options in LIMITS:
         sys.exit(f"regen-sail-model: {name} is preceded by '{lines[i - 1]}', expected a blank line")
     lines[i:i] = [f"set_option {option} {value} in" for option, value in options]
     path.write_text("\n".join(lines))
+# The tree now carries exactly the limit options listed above, and no other.
+expected = sum(len(options) for _, _, options in LIMITS)
+found = [(path, line) for path in files for line in path.read_text().split("\n")
+         if limit_option.match(line)]
+if len(found) != expected or not all(line.endswith(" in") for _, line in found):
+    sys.exit(f"regen-sail-model: expected {expected} declaration-local limit options, found {len(found)}")
 print("regen-sail-model: post-processed the generated model", file=sys.stderr)
 EOF
 
