@@ -172,6 +172,8 @@ The relation between a Jolt state and a Sail state compares:
 
 It also requires the invariants: privilege is Machine, `mie = 0`, `misa` is fixed, and the read-only `mstatus` fields have the values of section 6.
 Counters and Sail-internal registers are not compared.
+Decision (step f): Sail's `misa` is its reset value `0x8000000000001105` (A, C, I, M), set by the relation like `pma_regions`, not copied from the `misa` that Jolt's embedded Sail state carries (`0x800000008014312f`).
+Jolt accepts only the six CSRs of section 6, so no guest observes `misa`; Jolt's rows read only its C bit (in `jump_to`), which both values set (`NonInterference.lean`, `execProgram_withMisa`).
 A generic lifting lemma turns each existing `execute_X` theorem into a `try_step` theorem, by discharging fetch and decode for the instruction's encoding and the PC update once.
 
 ### What step c proves
