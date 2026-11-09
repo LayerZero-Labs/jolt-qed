@@ -12,10 +12,11 @@ Later work (the Sail configuration, the model patches, the step-level and whole-
 - Jolt, a16z/jolt at `9407f93f` (2026-11-06), for Jolt as it stands on `main`.
   jolt-qed's expansions were generated from `c6703570`.
   Every Jolt file cited below is identical at the two commits, except four added lines in `tracer/src/emulator/cpu.rs` that do not touch the code cited.
-- The Jolt changes for this alignment, a16z/jolt `669cf17ea` (branch `align/system-semantics`, on top of `9407f93f`).
-  Its `crates/jolt-program` and its RV64C uncompressor are identical to the head of a16z/jolt#2384 (`c0b1dd7c1`), which is stacked on a16z/jolt#2383.
+- The Jolt changes for this alignment, a16z/jolt `669cf17ea`, an earlier commit of the local reference branch `align/system-semantics` (on top of `9407f93f`).
+  Its inline expansions under `crates/jolt-program/src/expand` are byte-identical to those at the head of a16z/jolt#2384 (`c0b1dd7c1`, stacked on a16z/jolt#2383); so are `crates/jolt-program/src/image/decode.rs` and `crates/jolt-riscv/src/uncompress.rs`.
+  The two commits differ in the tracer, the specification text and the test skip list, and `669cf17ea` contains neither a16z/jolt#2381 (the reserved C.LUI parcel) nor a16z/jolt#2382; section 5 treats the parcel `0x6001` as a premise.
+  The pin moves to a16z/jolt `main` once a16z/jolt#2383 and #2384 merge, and once #2381 merges for `ImageNoReservedParcel`.
   The system expansions (`JoltBytecode/JoltISA/Expansions/System.lean`) and the decoder (`JoltBytecode/Decode/Jolt.lean`) transcribe this revision, not `9407f93f`: there, a CSR read of `mstatus` returns `v39 | 0x1800`, MRET restores `mstatus` before it jumps, and the decoder accepts CSRRC, CSRRWI, CSRRSI and CSRRCI.
-  The rejection of the reserved parcel `0x6001` (a16z/jolt#2381) is not in this revision; section 5 treats it as a premise.
 - The Sail model: abiswas3/sail-riscv at `266473f8`, as recorded in `sail-import/PROVENANCE.toml`, and upstream riscv/sail-riscv at `81184531` where this note backports a fix.
 
 ## 1. The hart: RV64IMAC, M-mode only, no interrupts
