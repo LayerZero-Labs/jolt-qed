@@ -2,8 +2,10 @@ import JoltBytecode.RiscvInstruction
 
 /-!
 Jolt's image decoder and RV64 compressed-instruction normalization at
-`669cf17ea` (a16z/jolt branch `align/system-semantics`, the same files as
-a16z/jolt#2384), before a16z/jolt#2381 rejects the parcel `0x6001`.
+`669cf17ea`, an earlier commit of the a16z/jolt reference branch
+`align/system-semantics`. Both transcribed files are byte-identical to those at the
+head of a16z/jolt#2384 (`c0b1dd7c1`). The revision predates a16z/jolt#2381, which
+rejects the parcel `0x6001`.
 The opcode and operand helpers transcribe `crates/jolt-program/src/image/decode.rs`;
 the parcel normalization transcribes `crates/jolt-riscv/src/uncompress.rs`.
 -/
