@@ -1,0 +1,13 @@
+[package]
+name = "jolt-trace"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tracer = { path = "@JOLT_DIR@/tracer" }
+common = { path = "@JOLT_DIR@/common", default-features = false, features = ["std"] }
+jolt-riscv = { path = "@JOLT_DIR@/crates/jolt-riscv" }
+serde_json = "1"
+
+[workspace]
