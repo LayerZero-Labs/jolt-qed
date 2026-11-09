@@ -109,3 +109,4 @@ import JoltConstraints.WholeRun.Io
 import JoltConstraints.WholeRun.RunInv
 import JoltConstraints.WholeRun.Decoded
 import JoltConstraints.WholeRun.Halt
+import JoltConstraints.WholeRun.CodeInv
