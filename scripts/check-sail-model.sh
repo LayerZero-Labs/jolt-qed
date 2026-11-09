@@ -93,6 +93,80 @@ check_sha "$ROOT/$(field config.upstream)" "$(field config.upstream_sha256)"
 config="$ROOT/$(field config.used)"
 check_sha "$config" "$(field config.used_sha256)"
 
+# 2b. The memory regions of the configuration are the ones the Lean side uses.
+# The Lean side takes its regions from `platformPma` in
+# JoltConstraints/WholeRun/Relation.lean, not from the configuration, so the two
+# must agree on every field. The configuration's header comments are stripped
+# before parsing.
+if ! python3 - "$config" "$ROOT/JoltConstraints/WholeRun/Relation.lean" <<'EOF'
+import json, re, sys
+
+config_path, lean_path = sys.argv[1], sys.argv[2]
+ATTRIBUTES = [
+    "cacheable", "coherent", "executable", "readable", "writable",
+    "read_idempotent", "write_idempotent", "misaligned_fault", "atomic_support",
+    "reservability", "supports_cbo_zero", "supports_pte_read", "supports_pte_write",
+]
+
+def problem(message):
+    print(f"check-sail-model: memory regions: {message}", file=sys.stderr)
+    sys.exit(1)
+
+text = open(config_path).read()
+stripped = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("//"))
+json_regions = json.loads(stripped)["memory"]["regions"]
+
+def from_json(region):
+    attrs = region["attributes"]
+    if sorted(attrs) != sorted(ATTRIBUTES):
+        problem(f"configuration attributes are {sorted(attrs)}, expected {sorted(ATTRIBUTES)}")
+    fields = {"base": int(region["base"]["value"], 16), "size": int(region["size"]["value"], 16)}
+    for key in ATTRIBUTES:
+        value = attrs[key]
+        fields[key] = ("true" if value else "false") if isinstance(value, bool) else "." + value
+    fields["include_in_device_tree"] = "true" if region["include_in_device_tree"] else "false"
+    return fields
+
+lean = open(lean_path).read()
+
+def lean_region(name):
+    match = re.search(r"def " + re.escape(name) + r" : PMA_Region :=(.*?)(?=\n/--|\ndef |\Z)", lean, re.S)
+    if match is None:
+        problem(f"Relation.lean has no definition of {name}")
+    body = match.group(1)
+    fields = {}
+    for key in ["base", "size"]:
+        m = re.search(r"\b" + key + r" := (0x[0-9A-Fa-f]+)#64", body)
+        if m is None:
+            problem(f"{name} has no {key}")
+        fields[key] = int(m.group(1), 16)
+    for key in ATTRIBUTES + ["include_in_device_tree"]:
+        found = re.findall(r"\b" + key + r" := (\.?\w+)", body)
+        if len(found) != 1:
+            problem(f"{name} sets {key} {len(found)} times, expected once")
+        fields[key] = found[0]
+    return fields
+
+m = re.search(r"def platformPma : List PMA_Region := \[([^\]]*)\]", lean)
+if m is None:
+    problem("Relation.lean has no platformPma list")
+names = [n.strip() for n in m.group(1).split(",") if n.strip()]
+if len(names) != len(json_regions):
+    problem(f"configuration has {len(json_regions)} regions, platformPma has {len(names)} ({', '.join(names)})")
+for index, (name, region) in enumerate(zip(names, json_regions)):
+    want, got = from_json(region), lean_region(name)
+    for key in ["base", "size"] + ATTRIBUTES + ["include_in_device_tree"]:
+        if want[key] != got[key]:
+            shown = lambda v: hex(v) if isinstance(v, int) else v
+            problem(f"region {index} ({name}): {key} is {shown(want[key])} in the configuration "
+                    f"but {shown(got[key])} in Relation.lean")
+print(f"check-sail-model: memory regions of the configuration match platformPma ({', '.join(names)})")
+EOF
+then
+  echo FAIL
+  fail "the configuration's memory regions differ from Relation.lean"
+fi
+
 # 3. The Sail compiler.
 if [[ -z "${SAIL_BIN:-}" ]]; then
   sail_src="$work/sail"

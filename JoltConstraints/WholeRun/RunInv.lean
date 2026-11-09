@@ -1,5 +1,6 @@
 import JoltConstraints.WholeRun.SystemInv
 import JoltConstraints.WholeRun.Io
+import JoltConstraints.WholeRun.IoAmo
 import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 /-!
@@ -21,7 +22,8 @@ not derive) or a **documented deviation** (a place where Jolt and Sail differ;
 | even PC | platform premise `RowsAligned`, then invariant | `Block.Runs.pc_even` |
 | heap end below `2^64 - 8` | platform premise `HeapNoWrap`, then invariant | `RunInv.heap_no_wrap` |
 | LR/SC address in RAM | invariant | `access_classified` |
-| AMO address in RAM | documented deviation `AmoInRam` | `access_classified` |
+| AMO address in RAM or the I/O window | invariant | `access_classified_full` |
+| AMO address in RAM, without the I/O window | documented deviation `AmoInRam` | `access_classified` |
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
@@ -100,9 +102,9 @@ private theorem amoWordBase_ram (v : BitVec 64) (h : RAM_START_ADDRESS ≤ v.toN
 
 /-- **Documented deviation** (`docs/riscv-alignment.md` §2): Jolt's AMO expansions
 do not assert the address is in RAM, unlike LR/SC, so an AMO on the output region
-retires in Jolt, while Sail's I/O region has no atomics and faults. Removed once
-the model is regenerated with AMOArithmetic on the I/O region
-(`sail-import/rv64d_jolt.json`; `docs/riscv-alignment.md` §2).
+retires in Jolt. Sail's I/O region now allows the arithmetic atomics, so
+`access_classified_full` classifies such an AMO as an `IoAmoAccess` instead and needs
+no premise; this one remains for `access_classified`.
 For every AMO*_W and AMO*_D it says the access is a `RamAccess`; every other
 instruction satisfies it. For example, `AMOADD.D` with `rs1 = 0x80000008`
 satisfies it and with `rs1 = output_start` does not; `LR.W` satisfies it always. -/
@@ -227,6 +229,102 @@ theorem access_classified (program : Rv64ProgramImage SourceInstruction) (b : Bl
          with h | h
        · exact Or.inl h
        · refine Or.inr ⟨_, _, _, rfl, ?_⟩
+         exact h)
+
+/-- **Access classification, with atomics on the I/O window.** A block that runs and is a
+RISC-V instruction accesses RAM, accesses the I/O window with a load or store, or is an
+atomic on the I/O window, so `block_simulates`, `block_simulates_io` or
+`block_simulates_io_amo` applies to it.
+It is `access_classified` without the deviation premise `AmoInRam`: an AMO's accessed
+doubleword is either at or above `RAM_START_ADDRESS`, a `RamAccess`, or below it, an
+`IoAmoAccess`. Loads, stores, LR and SC are classified as before.
+For example, `AMOADD.D` through `0x40000010` is an `IoAmoAccess`, and through
+`0x80000010` a `RamAccess`. -/
+theorem access_classified_full (program : Rv64ProgramImage SourceInstruction) (b : Block)
+    (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i) :
+    RamAccess i b.start ∨ i.IoAccess b.start ∨ IoAmoAccess i b.start := by
+  have hlr : ∀ (rd rs1 rs2 : regidx) (p : Program),
+      b.row.instruction.expand = some (ExpandedSource.ofProgram p) →
+      b.row.instruction.honestTracerAdvice b.start = [] →
+      (p = lrwProgramAuto rd rs1 rs2 ∨ p = lrdProgramAuto rd rs1 rs2 ∨
+        p = scwProgramAuto rd rs1 rs2 ∨ p = scdProgramAuto rd rs1 rs2) →
+      RAM_START_ADDRESS ≤ (sourceValue (.xreg rs1) b.start).toNat := fun rd rs1 rs2 p he hadv hp =>
+    lrsc_ram hruns rd rs1 rs2 p he hp hadv
+  cases i
+  case LR_W rd rs1 aq rl =>
+    exact Or.inl (amoWordBase_ram _ (hlr rd rs1 (regidx.Regidx 0) _ (by rw [hrow]; rfl)
+      (by rw [hrow]; rfl) (Or.inl rfl)))
+  case LR_D rd rs1 aq rl =>
+    exact Or.inl (hlr rd rs1 (regidx.Regidx 0) _ (by rw [hrow]; rfl) (by rw [hrow]; rfl)
+      (Or.inr (Or.inl rfl)))
+  case SC_W rd rs1 rs2 aq rl =>
+    exact Or.inl (amoWordBase_ram _ (hlr rd rs1 rs2 _ (by rw [hrow]; rfl)
+      (by rw [hrow]; rfl) (Or.inr (Or.inr (Or.inl rfl)))))
+  case SC_D rd rs1 rs2 aq rl =>
+    exact Or.inl (hlr rd rs1 rs2 _ (by rw [hrow]; rfl) (by rw [hrow]; rfl)
+      (Or.inr (Or.inr (Or.inr rfl))))
+  case AMOSWAP_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOADD_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOXOR_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOAND_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOOR_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOMIN_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOMAX_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOMINU_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOMAXU_W rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (amoWordBase (sourceValue (.xreg rs1) b.start)).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOSWAP_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOADD_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOXOR_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOAND_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOOR_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOMIN_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOMAX_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOMINU_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  case AMOMAXU_D rd rs1 rs2 aq rl =>
+    exact (Nat.lt_or_ge (sourceValue (.xreg rs1) b.start).toNat RAM_START_ADDRESS).symm.imp id
+      (fun h => Or.inr ⟨_, rfl, h⟩)
+  all_goals
+    first
+    | exact Or.inl trivial
+    | (rename_i rs1 imm
+       rcases aligned_or_below (load_effective_address (sourceValue (.xreg rs1) b.start) imm)
+         with h | h
+       · exact Or.inl h
+       · refine Or.inr (Or.inl ⟨_, _, _, rfl, ?_⟩)
          exact h)
 
 /-! ### The bundle -/

@@ -62,7 +62,7 @@ upstream_sha256 = "a390a2f46fc02cf666bc9d0b8b0d7223444c1b5b473de406a8784548b191f
 # exact-address, width-contained LR/SC. Its header comment and
 # docs/riscv-alignment.md give the reasons.
 used = "sail-import/rv64d_jolt.json"
-used_sha256 = "55898b80ad178d49a2809574805bb1b0b1252335ad799a0f484a8caca11ac08e"
+used_sha256 = "a60717fcf321459be8736a5e5f481dac2eed9ce864ff2d0e4253f1ad0a0b3992"
 
 [modules]
 # Lean 4.35 compiles inductive types eagerly and rejects one with more than 244
