@@ -1,25 +1,38 @@
 import Mathlib.Data.Fin.Basic
 import Mathlib.Data.Nat.Log
-import Mathlib.Tactic.DeriveFintype
+import Mathlib.Data.Fintype.EquivFin
 
 set_option autoImplicit false
+
+-- An enumeration is finite once its constructor index is below a bound and has the
+-- generated left inverse `ofNat`. Mathlib's `deriving Fintype` for enums needs a relaxed
+-- transparency setting under Lean 4.35, so each enumeration below gives the instance
+-- through this lemma instead. The bound only has to be an upper bound on the constructors.
+theorem finite_of_ofNat_ctorIdx {α : Type} (index : α → Nat) (ofNat : Nat → α) (bound : Nat)
+    (index_lt : ∀ a, index a < bound) (ofNat_index : ∀ a, ofNat (index a) = a) : Finite α :=
+  Finite.of_injective (β := Fin bound) (fun a => ⟨index a, index_lt a⟩) fun a b h =>
+    (ofNat_index a).symm.trans ((congrArg ofNat (congrArg Fin.val h)).trans (ofNat_index b))
 
 -- Rust paths below refer to public pin 8bbb2357, inspected in the local checkout.
 
 -- Rust: crates/jolt-riscv/src/flags.rs::CircuitFlags.
 -- TODO: For each constructor write a simple english description
 -- of what it means.
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
 inductive CircuitFlags where
   | AddOperands | SubtractOperands | MultiplyOperands
   | Load | Store | Jump | WriteLookupOutputToRD
   | VirtualInstruction | Assert | DoNotUpdateUnexpandedPC | Advice
   | IsCompressed | IsFirstInSequence | IsLastInSequence
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
 
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
+theorem CircuitFlags.ctorIdx_lt (a : CircuitFlags) : a.ctorIdx < 14 := by
+  cases a <;> decide
+
+noncomputable instance : Fintype CircuitFlags :=
+  haveI : Finite CircuitFlags :=
+    finite_of_ofNat_ctorIdx CircuitFlags.ctorIdx CircuitFlags.ofNat 14 CircuitFlags.ctorIdx_lt CircuitFlags.ofNat_ctorIdx
+  Fintype.ofFinite CircuitFlags
+
 /-- Operand-routing and branch/no-op flags in Jolt's prover.
 For example, LD selects its captured destination with `RightOperandIsRdWriteValue`.
 Jolt's prover: `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`) at `c6703570`. -/
@@ -27,10 +40,16 @@ inductive InstructionFlags where
   | LeftOperandIsPC | RightOperandIsImm
   | LeftOperandIsRs1Value | RightOperandIsRs2Value | Branch | IsNoop
   | RightOperandIsRdWriteValue
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
 
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
+theorem InstructionFlags.ctorIdx_lt (a : InstructionFlags) : a.ctorIdx < 7 := by
+  cases a <;> decide
+
+noncomputable instance : Fintype InstructionFlags :=
+  haveI : Finite InstructionFlags :=
+    finite_of_ofNat_ctorIdx InstructionFlags.ctorIdx InstructionFlags.ofNat 7 InstructionFlags.ctorIdx_lt InstructionFlags.ofNat_ctorIdx
+  Fintype.ofFinite InstructionFlags
+
 /-- The 55 lookup tables, in the order used by Jolt's prover.
 For example, `AddressOffsetH` returns an effective address masked with 6.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs`
@@ -91,7 +110,15 @@ inductive LookupTableKind where
   | AddressOffsetB
   | AddressOffsetH
   | AddressOffsetW
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
+
+theorem LookupTableKind.ctorIdx_lt (a : LookupTableKind) : a.ctorIdx < 55 := by
+  cases a <;> decide
+
+noncomputable instance : Fintype LookupTableKind :=
+  haveI : Finite LookupTableKind :=
+    finite_of_ofNat_ctorIdx LookupTableKind.ctorIdx LookupTableKind.ofNat 55 LookupTableKind.ctorIdx_lt LookupTableKind.ofNat_ctorIdx
+  Fintype.ofFinite LookupTableKind
 
 -- These are the things God gives before we can begin Jolt. Some are free params, some are derived from the users program.
 -- Rust: crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs::JoltOneHotDimensions.
