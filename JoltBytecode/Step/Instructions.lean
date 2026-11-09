@@ -6,8 +6,7 @@ import JoltBytecode.Step.Invariant
 /-!
 # Instruction theorems against Sail's `execute`
 
-The instruction theorems (the ones `RiscvInstruction.equivalenceStatement_holds`
-dispatches to) prove each instruction's Jolt rows against the matching
+The per-instruction theorems prove each instruction's Jolt rows against the matching
 `execute_X` function on the embedded Sail state. This file restates all of them
 in one shape: the rows `joltRun i`, projected through
 the CSR overlay, agree with `execute ast` on the projected state, for the Sail
@@ -22,8 +21,9 @@ Two points need more than unfolding:
   `Step.execute_AMO_flags` shows the bits never change Sail's semantics.
 
 The proofs call the proved instruction theorems directly.
-The dispatcher has unwired ECALL, EBREAK, CSR, MRET, LR and SC cases; these
-cases are excluded by `Lifted`.
+`joltRun_eq_execute` is the single dispatcher for retiring instructions.
+ECALL needs a separate step theorem because Sail enters the trap handler.
+EBREAK ends the whole-run comparison before its rows execute.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
@@ -231,10 +231,11 @@ def Matches : RiscvInstruction → instruction → Prop
   | .MRET, ast => ast = .MRET ()
 
 /-- The instructions whose equivalence theorem this file lifts.
-ECALL, EBREAK, the CSR forms, MRET, LR and SC have no wired equivalence theorem.
-For example, ADD is lifted, while CSRRW is excluded. -/
+ECALL needs a non-retiring trap step, and the whole-run theorem stops before
+the first EBREAK, as described in section 4 of `docs/riscv-alignment.md`.
+For example, ADD, MRET and CSRRWI are lifted. -/
 def Lifted : RiscvInstruction → Prop
-  | .ECALL | .EBREAK | .CSRRW .. | .CSRRS .. | .CSRRC .. | .CSRRWI .. | .CSRRSI .. | .CSRRCI .. | .MRET | .LR_W .. | .SC_W .. | .LR_D .. | .SC_D .. => False
+  | .ECALL | .EBREAK => False
   | _ => True
 
 /-- The advice operands of the division and remainder expansions are the
@@ -562,8 +563,12 @@ theorem joltRun_eq_execute :
       have hl : LinkedCSRs js := by unfold equivAssumptions at h; exact h.linkedCSRs
       rw [Projection.systemProject_eq_sail_of_compatible js hl]
       exact (remuwProgram_eq_sail rs2 rs1 rd quotient js h).1 hadv
-  | .LR_W .., hi, _, _, _, _, _ => hi.elim
-  | .SC_W .., hi, _, _, _, _, _ => hi.elim
+  | .LR_W rd rs1 aq rl, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.lrRows_eq_execute false aq rl rd rs1 js h
+  | .SC_W rd rs1 rs2 aq rl, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.scRows_eq_execute false aq rl rd rs1 rs2 js h
   | .SB rs2 rs1 imm, _, ast, hm, js, h, _ => by
       subst hm
       have hl : LinkedCSRs js := by unfold equivAssumptions at h; exact h.linkedCSRs
@@ -629,8 +634,12 @@ theorem joltRun_eq_execute :
       have hl : LinkedCSRs js := by unfold equivAssumptions at h; exact h.linkedCSRs
       rw [Projection.systemProject_eq_sail_of_compatible js hl]
       exact (AtomicFamily.amomaxuwProgram_eq_sail rs2 rs1 rd js h).trans (congrFun (Step.execute_AMO_flags amoop.AMOMAXU aq rl rs2 rs1 4 rd).symm js.sail)
-  | .LR_D .., hi, _, _, _, _, _ => hi.elim
-  | .SC_D .., hi, _, _, _, _, _ => hi.elim
+  | .LR_D rd rs1 aq rl, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.lrRows_eq_execute true aq rl rd rs1 js h
+  | .SC_D rd rs1 rs2 aq rl, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.scRows_eq_execute true aq rl rd rs1 rs2 js h
   | .AMOSWAP_D rd rs1 rs2 aq rl, _, ast, hm, js, h, _ => by
       subst hm
       have hl : LinkedCSRs js := by unfold equivAssumptions at h; exact h.linkedCSRs
@@ -676,10 +685,33 @@ theorem joltRun_eq_execute :
       have hl : LinkedCSRs js := by unfold equivAssumptions at h; exact h.linkedCSRs
       rw [Projection.systemProject_eq_sail_of_compatible js hl]
       exact (AtomicFamily.amomaxudProgram_eq_sail rs2 rs1 rd js h).trans (congrFun (Step.execute_AMO_flags amoop.AMOMAXU aq rl rs2 rs1 8 rd).symm js.sail)
-  | .CSRRW .., hi, _, _, _, _, _ | .CSRRS .., hi, _, _, _, _, _
-  | .CSRRC .., hi, _, _, _, _, _ | .CSRRWI .., hi, _, _, _, _, _
-  | .CSRRSI .., hi, _, _, _, _, _ | .CSRRCI .., hi, _, _, _, _, _ => hi.elim
-  | .MRET, hi, _, _, _, _, _ => hi.elim
+  | .CSRRW rd csr rs1, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.csrrwProgram_eq_execute csr rs1 rd js h.rs1_val h.invariant
+        h.linkedCSRs h.rs1_read h.mstatus_bits h.mtvec_mode h.mepc_align
+  | .CSRRS rd csr rs1, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.csrBitUpdateProgram_eq_execute false csr rs1 rd js h.rs1_val
+        h.invariant h.linkedCSRs h.rs1_read h.mstatus_bits h.mtvec_mode h.mepc_align
+  | .CSRRC rd csr rs1, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.csrBitUpdateProgram_eq_execute true csr rs1 rd js h.rs1_val
+        h.invariant h.linkedCSRs h.rs1_read h.mstatus_bits h.mtvec_mode h.mepc_align
+  | .CSRRWI rd csr imm, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.csrrwiProgram_eq_execute csr imm rd js h.invariant
+        h.mstatus_bits h.mtvec_mode h.mepc_align
+  | .CSRRSI rd csr imm, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.csrImmediateBitUpdateProgram_eq_execute false csr imm rd js h.invariant
+        h.mstatus_bits h.mtvec_mode h.mepc_align
+  | .CSRRCI rd csr imm, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.csrImmediateBitUpdateProgram_eq_execute true csr imm rd js h.invariant
+        h.mstatus_bits h.mtvec_mode h.mepc_align
+  | .MRET, _, ast, hm, js, h, _ => by
+      subst hm
+      exact SystemProofs.mretProgram_eq_execute js h.invariant h.mstatus_bits h.mepc_align
 
 /-- **One Sail step per lifted instruction, 32-bit encodings.** If Sail fetches
 and decodes `ast` from the projected state, `i` stands for `ast`, the

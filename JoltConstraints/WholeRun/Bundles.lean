@@ -626,8 +626,16 @@ private theorem loadProgram_ram (kind : AccessKind) (dst : JoltISA.Dst) (rs : re
   exact (noStoreProgram_device rest htail u t _ hrest).trans
     (noStoreRow_device _ hrow s u _ hload)
 
+/-- Instructions whose Jolt rows are the frozen system sequences: the six CSR
+forms, MRET, LR and SC. For example, `CSRRW` is one, while `ADD` and `SD` are not.
+Their blocks are simulated by the system-block theorems, not by this file. -/
+def SystemRow : RiscvInstruction → Prop
+  | .MRET | .LR_W .. | .SC_W .. | .LR_D .. | .SC_D .. | .CSRRW .. | .CSRRS ..
+  | .CSRRC .. | .CSRRWI .. | .CSRRSI .. | .CSRRCI .. => True
+  | _ => False
+
 private theorem retire_conditions (i : RiscvInstruction) (hi : i.Lifted)
-    (hcsr : ∀ rd csr rs1, i ≠ .CSRRW rd csr rs1 ∧ i ≠ .CSRRS rd csr rs1)
+    (hsys : ¬ SystemRow i)
     (s t : SailJoltState) (hram : RamAccess i s)
     (hrun : RiscvInstruction.joltRun (honestInstr i s) s = .ok RETIRE_SUCCESS t) :
     MemoryConditions i s ∧ t.jolt_device = s.jolt_device := by
@@ -847,14 +855,8 @@ private theorem retire_conditions (i : RiscvInstruction) (hi : i.Lifted)
         (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
   case ECALL => exact False.elim hi
   case EBREAK => exact False.elim hi
-  case MRET => exact False.elim hi
-  case LR_W => exact False.elim hi
-  case SC_W => exact False.elim hi
-  case LR_D => exact False.elim hi
-  case SC_D => exact False.elim hi
-  case CSRRW rd csr rs1 => exact False.elim ((hcsr rd csr rs1).1 rfl)
-  case CSRRS rd csr rs1 => exact False.elim ((hcsr rd csr rs1).2 rfl)
-  case CSRRC | CSRRWI | CSRRSI | CSRRCI => exact False.elim hi
+  case MRET | LR_W | SC_W | LR_D | SC_D | CSRRW | CSRRS | CSRRC | CSRRWI | CSRRSI | CSRRCI =>
+    exact False.elim (hsys trivial)
   all_goals
     refine ⟨True.intro, ?_⟩
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.execLUI] at hrun
@@ -954,7 +956,7 @@ The additional premises are: `hmstatus` (invariant: Jolt retains only MIE/MPIE),
 The run supplies the heap and stack-canary checks made by Jolt's tracer in
 `tracer/src/emulator/mmu.rs` (`Mmu::assert_effective_address`) at `5def437f`. -/
 theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
-    (hcsr : ∀ rd csr rs1, i ≠ .CSRRW rd csr rs1 ∧ i ≠ .CSRRS rd csr rs1)
+    (hsys : ¬ SystemRow i)
     (js : SailJoltState)
     (hlink : System.systemProject js = js.sail)
     (hinv : Step.StepInvariant js.sail)
@@ -972,7 +974,7 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
     ∃ h : RiscvInstruction.equivAssumptions (honestInstr i js) js,
       RiscvInstruction.AdviceHonest (honestInstr i js) js h := by
   obtain ⟨js', hrun⟩ := hok
-  have hc := (retire_conditions i hi hcsr js js' hram hrun).1
+  have hc := (retire_conditions i hi hsys js js' hram hrun).1
   have hmprv := mprv_zero js hlink hmstatus
   have window (base : BitVec 64)
       (hram : JoltISA.RAM_START_ADDRESS ≤ base.toNat)
@@ -1087,14 +1089,8 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
       (window _ hram hc.below_heap_end .AMOMAXU (by decide)) hc, True.intro⟩
   case ECALL => exact False.elim hi
   case EBREAK => exact False.elim hi
-  case MRET => exact False.elim hi
-  case LR_W => exact False.elim hi
-  case SC_W => exact False.elim hi
-  case LR_D => exact False.elim hi
-  case SC_D => exact False.elim hi
-  case CSRRW rd csr rs1 => exact False.elim ((hcsr rd csr rs1).1 rfl)
-  case CSRRS rd csr rs1 => exact False.elim ((hcsr rd csr rs1).2 rfl)
-  case CSRRC | CSRRWI | CSRRSI | CSRRCI => exact False.elim hi
+  case MRET | LR_W | SC_W | LR_D | SC_D | CSRRW | CSRRS | CSRRC | CSRRWI | CSRRSI | CSRRCI =>
+    exact False.elim (hsys trivial)
   all_goals first
     | exact ⟨unarySource js hinv hlink _, True.intro⟩
     | exact ⟨binarySource js hinv hlink _ _, by first | exact True.intro | rfl⟩
@@ -1105,10 +1101,10 @@ For example, `SD` into RAM updates Sail memory and leaves the device unchanged.
 Jolt's tracer uses the RAM branch of `Mmu::store_doubleword_raw` in
 `tracer/src/emulator/mmu.rs` at `5def437f`. -/
 theorem joltRun_device_of_ram (i : RiscvInstruction) (hi : i.Lifted)
-    (hcsr : ∀ rd csr rs1, i ≠ .CSRRW rd csr rs1 ∧ i ≠ .CSRRS rd csr rs1)
+    (hsys : ¬ SystemRow i)
     (js js' : SailJoltState) (hram : RamAccess i js)
     (hrun : RiscvInstruction.joltRun (honestInstr i js) js = .ok RETIRE_SUCCESS js') :
     js'.jolt_device = js.jolt_device :=
-  (retire_conditions i hi hcsr js js' hram hrun).2
+  (retire_conditions i hi hsys js js' hram hrun).2
 
 end WholeRun
