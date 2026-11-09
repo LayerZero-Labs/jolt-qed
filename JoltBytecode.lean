@@ -14,3 +14,4 @@ import JoltBytecode.Decode.Prefixes
 import JoltBytecode.Decode.ProofSupport
 import JoltBytecode.Decode.Execute
 import JoltBytecode.Decode.Agreement
+import JoltBytecode.Decode.Compressed
