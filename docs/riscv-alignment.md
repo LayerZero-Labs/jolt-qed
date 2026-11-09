@@ -78,6 +78,8 @@ Open item, settled in step f: Jolt's tracer lets a load read any address at or b
 Jolt's prover maps RAM addresses through `MemoryLayout::remap_word_address`, which rejects addresses below `io_start`, so such a load is expected to be outside every honest trace.
 If step f finds an honest trace that contains one, Jolt has to fault there instead, and that goes to the Jolt-changes stream.
 
+The theorem for blocks that access the I/O window (`WholeRun/Io.lean`, `block_simulates_io`) takes three deviation hypotheses, one for each difference above: `NoFlagWordLoad` (no load reads a byte of the panic or termination word), `PanicStoreNonzero` (a store that touches the panic doubleword leaves Sail's panic word nonzero, which excludes a store that zeroes the only nonzero byte of the word, because Jolt's flag is set by any such store) and `NoLowLoad` (no load reads below the lowest address Jolt's prover accepts, which is the open item above).
+
 ## 3. Reservation policy
 
 The Sail model holds the reservation in registers of its own, replacing the external functions of `model/sys/sys_reservation.sail`.
