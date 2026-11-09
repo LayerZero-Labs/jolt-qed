@@ -55,7 +55,7 @@ than the highest touched word (`Trace.highest_ram_slot`) and the image's end, th
 plus `program_image_len_words` plus one; that end and `config.ram_K` fit in 64 bits.
 For example, an image at `0x80000000` with lowest address `0x7fff8000` starts at word 4096.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`checked_remap_address`) at c6703570. -/
+`checked_remap_address`) at c97e9300. -/
 theorem HonestTrace.prover_config_ram_K_of_nonempty
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -97,7 +97,7 @@ number at least the image's end (`HonestTrace.prover_config_ram_K`).
 For example, an image whose first word index plus word count is 40 has minimum
 `pow2(40) = 64`, and Jolt's prover rounds at least 41, so its `ram_K` is at least 64.
 See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_min_ram_k`) and
-jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at c6703570. -/
+jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at c97e9300. -/
 theorem HonestTrace.witness_params_ram_minimum_of_nonempty
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -325,7 +325,7 @@ For example, with lowest address `0x7fff8000` and `heap_end = 0x80010000`, the m
 to 4135 gets `ram_K = pow2(max(5001, 4137)) = 8192 ≤ 16384`.
 See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_max_ram_k`) and
 jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
-at c6703570, with the fix of a16z/jolt#1951 item 4. -/
+at c97e9300. -/
 theorem HonestTrace.witness_params_ram_maximum
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)

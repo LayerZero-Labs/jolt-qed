@@ -201,12 +201,20 @@ structure Rv64ProgramImage (Source : Type) where
   -- See : jolt/crates/jolt-program/src/image/elf.rs:45-66
   memory_init_in_program : ∀ entry ∈ memory_init,
     JoltISA.RAM_START_ADDRESS ≤ entry.1.toNat ∧ entry.1.toNat < program_end.toNat
+  -- decode_elf rejects a section whose end, its start plus its size, passes 2^64 - 1,
+  -- and decode_text_section rejects an instruction cut off at the end of its text
+  -- range. So every instruction's next PC, its address plus its length (2 if
+  -- compressed, else 4), is below 2^64. For example, an ELF with an instruction
+  -- at 2^64 - 4 is rejected with "section extent overflows address space".
+  -- Jolt added the check in a16z/jolt#2129.
+  -- See : jolt/crates/jolt-program/src/image/elf.rs:50-55 (decode_elf),
+  --       118-141 (decode_text_section)
+  next_pc_no_wrap : ∀ row ∈ instructions,
+    row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 
 -- No instruction's next PC, its address plus its length (2 if compressed, else 4),
--- passes 2^64.
--- Assumed: a16z confirmed on 2026-10-07 that the PC is not allowed to wrap; an ELF
--- with an instruction whose next PC, its address plus its length (2 or 4), passes
--- 2^64 is an illegal ELF. (model_review.md, Upstream issues)
+-- passes 2^64. Every image meets this: it is the field `next_pc_no_wrap`, which
+-- holds because Jolt's ELF decoder rejects any program that breaks it.
 def Rv64ProgramImage.NextPCNoWrap {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
   ∀ row ∈ image.instructions, row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 
@@ -227,8 +235,12 @@ def Rv64ProgramImage.program_size {Source : Type} (image : Rv64ProgramImage Sour
 -- A pure RISC-V image is a Jolt image with no custom instructions.
 def Rv64ProgramImage.toJolt (image : Rv64ProgramImage RiscvInstruction) :
     Rv64ProgramImage SourceInstruction :=
-  { image with instructions := image.instructions.map fun row =>
-      { row with instruction := .riscv row.instruction } }
+  { image with
+    instructions := image.instructions.map fun row =>
+      { row with instruction := .riscv row.instruction }
+    next_pc_no_wrap := fun row member => by
+      obtain ⟨source, inImage, rfl⟩ := Array.mem_map.mp member
+      exact image.next_pc_no_wrap source inImage }
 
 -- Every source row's final rows, in order; none if any source row fails.
 -- Rust's preprocessing then puts a NoOp at slot 0 and pads with NoOps (preprocess below).

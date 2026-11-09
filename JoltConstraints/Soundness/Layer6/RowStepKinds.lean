@@ -118,7 +118,7 @@ theorem jal_row_step {destination : Dst} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .JAL destination imm)
     (terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
-  exact append_jal_row joltField assumptions witness context equations run first done state
+  exact append_jal_row joltField witness context equations run first done state
     unfinished bound next pre indexIs entry registers pc nextPC instruction
 
 /-- A terminal JALR appends its indirect jump using a live base register;
@@ -129,7 +129,7 @@ theorem jalr_row_step {destination : Dst} {base : Src} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .JALR destination base imm)
     (terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
-  exact append_jalr_row joltField assumptions witness context equations run first done state
+  exact append_jalr_row joltField witness context equations run first done state
     unfinished bound next pre indexIs entry registers nextPC instruction
 
 end Steps

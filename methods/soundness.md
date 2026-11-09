@@ -1,8 +1,7 @@
 ---
 title: Plan for deterministic, non-succinct soundness
-updated: 2026-11-03
-rust_pin: 5def437f21a0006e13c063a03f0b5a7c9b93cd6f
-alignment_target: c6703570588e88033b8722bd4dec47c7f46f3b16
+updated: 2026-11-05
+rust_pin: c97e93004fbf804409f0374fe8457c8f1562ce71
 lean_head: e29949809bbf2c54c315c2ca55ae3b90c7fd37a6
 ---
 
@@ -26,7 +25,7 @@ The older sections describe the proof as it stood at Lean commit `7096dca`.
 The Step 4 starting commit is `e29949809bbf2c54c315c2ca55ae3b90c7fd37a6`, on `review/audit-completeness-soundness`.
 The Step 4 proof repairs are uncommitted and await review.
 
-- The Jolt pin remains `5def437f`; `c6703570` is the migration target, not a pin update.
+- On 2026-11-05 Ari moved the Jolt pin from `5def437f` to `c97e9300`, the merge of a16z/jolt#2250 (see [Current Jolt pin](#current-jolt-pin-2026-11-05)).
 - Steps 1–3 are committed: migrated definitions, completeness repairs, and the approved extension of `TracerAddressChecks` to the containing doubleword of floor loads and stores.
 - Step 4 repairs the six initial failing modules and their callers: destination-value input routing, ShiftData's signed immediate, retired alignment rows, plain-row classification, stall flags and tape replay addresses.
 - Ari approved on 2026-11-03 extending `PanicStoresOne`, `TerminationThenStall`, `StoresPanicAt` and `StoresTerminationAt` to `VirtualLoadB/H/W` and `VirtualStoreB/H/W` at their containing doubleword `ea &&& ~~~7`; no other restriction or assumption changed, and the statements of `JoltInstance.soundness` and `InLanguage` are unchanged.
@@ -183,11 +182,13 @@ Agents work in one checkout on disjoint files; each task's report goes in `repor
 Do not add theorem premises without Ari's approval; do not use `native_decide`, `decide +kernel` or a larger `maxHeartbeats`.
 The issue write-ups remain for the agreed batch; #2044 discussion waits for Michael's comments.
 
-## Current Jolt pin (2026-10-22)
+## Current Jolt pin (2026-11-05)
 
-The current Jolt source pin is [`5def437f21a0006e13c063a03f0b5a7c9b93cd6f`](https://github.com/a16z/jolt/commit/5def437f21a0006e13c063a03f0b5a7c9b93cd6f).
-The statement was checked against this commit in `reports/2026-10-29-soundness-statement-audit.md`.
-The working-tree migration target is `c6703570` (see [Current state](#current-state-2026-11-03)); the pin does not change until Ari decides.
+The current Jolt source pin is [`c97e93004fbf804409f0374fe8457c8f1562ce71`](https://github.com/a16z/jolt/commit/c97e93004fbf804409f0374fe8457c8f1562ce71), the merge of a16z/jolt#2250.
+The constraints were migrated to `c6703570`.
+Of the seven commits from `c6703570` to `c97e9300`, only #2250 changes modeled code (`crates/jolt-prover/src/config.rs` and `crates/jolt-program/src/preprocess/ram.rs`), and the model already followed it.
+The others change CI, dependencies, Dory and GT arithmetic, and an optimized prover kernel, none of which is modeled.
+The previous pin was `5def437f`; the statement was checked against it in `reports/2026-10-29-soundness-statement-audit.md`.
 
 ## Soundness statement
 
@@ -227,7 +228,7 @@ We aim to preserve the supplied untrusted advice in RAM and choose the tape answ
 The premises are bundled in
 [Soundness/Assumptions.lean](../JoltConstraints/Soundness/Assumptions.lean):
 `JoltField F` (`2^128 < ringChar F`); `JoltInstance.SoundnessAssumptions`
-(`NextPCNoWrap`, `RamRegionFits`); and the temporary
+(`RamRegionFits`); and the temporary
 `JoltInstance.TemporaryRestrictions` (`TracerAddressChecks`,
 `HostCallsSucceed`, `NoMaxLengthTrace`, `TerminationThenStall`, `PanicStoresOne`,
 `ClaimsNoPanic`).

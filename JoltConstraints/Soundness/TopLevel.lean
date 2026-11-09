@@ -47,7 +47,7 @@ theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField 
     soundness_execution_prefix_agreement joltField joltInstance assumptions restrictions
       privateInputs witness context equations
   obtain ⟨stops, nonempty, finalRam⟩ :=
-    soundness_stopping joltField joltInstance assumptions restrictions
+    soundness_stopping joltField joltInstance restrictions
       privateInputs witness context equations run bytecodeEq representedRows realRows
       noEarlierStop cut advice
   have accepted : joltInstance.bytecode.isSome := by

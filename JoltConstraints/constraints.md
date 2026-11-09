@@ -1,14 +1,14 @@
 # Jolt constraints
 
 Source: the base RV64 relations at [public Rust pin `8bbb2357`](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs). GitHub links are documentation pointers; reviews of current behavior must scan the local Jolt checkout.
-On 2026-10-29 all 62 equations, the per-instruction flag tables and the 55 lookup tables were rechecked against Jolt's base verifier at the current pin `5def437f` and match (`reports/2026-10-29-soundness-statement-audit.md`).
+On 2026-10-29 all 62 equations, the per-instruction flag tables and the 55 lookup tables were rechecked against Jolt's base verifier at the previous pin `5def437f` and match (`reports/2026-10-29-soundness-statement-audit.md`).
 
 Status at 2026-11-03: Step 1 definitions were reviewed and remain uncommitted.
 Step 2 repairs target `c6703570`; see [the completeness migration report](../reports/2026-11-03-constraints-migration-completeness.md).
 `lake build JoltConstraints.Completeness` and the assembled `Completeness.completeness` module both pass after the approved `WordEntry` repair.
 Step 5 restates `JoltInstance.completeness` for the honest witness at the sizes Jolt's prover picks; see [the Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
 At those sizes the verifier's RAM bounds are proved.
-The RAM sizes follow the fix that #1951 item 4 proposes, which [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) makes in Jolt; the model follows that PR ahead of its merge, and `HonestTrace.prover_config_holds_highest_slot` is proved.
+The RAM sizes follow the fix that #1951 item 4 proposes, which [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) made in Jolt at the pin `c97e9300`, and `HonestTrace.prover_config_holds_highest_slot` is proved.
 The full soundness migration remains Step 3.
 A `DONE` label records the individual theorem's proof status, not completion of the [migration outline](#migration-outline).
 
