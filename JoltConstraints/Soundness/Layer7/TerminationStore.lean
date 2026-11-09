@@ -584,7 +584,6 @@ For example, neither a padding suffix nor a stable-stall suffix can supply it. -
 private theorem termination_effect_in_run
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : ConstraintContext joltInstance privateInputs params)
@@ -625,7 +624,7 @@ private theorem termination_effect_in_run
         rw [rowEq]
         exact stable
       exact effect (JoltInstance.soundness_stall_suffix_zero_ram_effects joltField joltInstance
-        assumptions.pcNoWrap privateInputs witness context equations run bytecodeEq
+        joltInstance.program.next_pc_no_wrap privateInputs witness context equations run bytecodeEq
         represented.toRepresentsRows nonempty stops cycle after address)
 
 /-- A nonzero RAM effect in a represented cycle selects a store row: SD or a
@@ -806,7 +805,6 @@ the store is emitted in jolt/jolt-sdk/macros/src/lib.rs:880-887. -/
 theorem soundness_termination_store_exists
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
@@ -826,7 +824,7 @@ theorem soundness_termination_store_exists
   obtain ⟨address, cycle, atTermination, effect⟩ :=
     termination_effect_exists joltInstance restrictions privateInputs witness
       context equations
-  have inRun := termination_effect_in_run joltField joltInstance assumptions
+  have inRun := termination_effect_in_run joltField joltInstance
     privateInputs witness context equations run bytecodeEq represented cut
     address cycle effect
   exact ⟨⟨cycle.val, inRun⟩,
