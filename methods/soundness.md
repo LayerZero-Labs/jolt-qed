@@ -34,7 +34,8 @@ The Step 4 proof repairs are uncommitted and await review.
   The Layer 5 load and store steps, the Layer 6 row extension and the Layer 7 termination-store proofs now cover every memory row through this classification.
 - `lake build JoltConstraints` passes (8,837 jobs), and `#print axioms JoltInstance.soundness` lists `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`, as at `7096dca`.
   No soundness proof has a `sorry`.
-- The six completeness admissions and seven bytecode admissions remain unchanged; see [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
+- Step 4 left the six completeness admissions and seven bytecode admissions unchanged.
+  The bytecode admissions have since been removed; see [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
 - The [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md) lists every repair, statement change and validation result.
 
 Bytecode migration in the working tree:

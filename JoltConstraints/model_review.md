@@ -100,6 +100,7 @@ Since a16z/jolt#2129, Jolt's ELF decoder (`decode_elf` in `crates/jolt-program/s
 On 2026-10-23, `lake build JoltBytecode JoltConstraints` passed (8,832 jobs) and `#print axioms JoltInstance.soundness` listed only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
 On 2026-11-03, with the Step 4 changes on top of `e299498`, `lake build JoltConstraints` passed against the migrated model (8,837 jobs), and `#print axioms JoltInstance.soundness` lists the same four axioms and no `sorryAx`.
 No soundness proof has a `sorry`, and no blocker lemma was staged.
+Since the Sail model was regenerated with the Jolt hart patch, `sys_enable_experimental_extensions` is a definition, not an axiom, and `#print axioms JoltInstance.soundness` lists only `propext`, `Classical.choice` and `Quot.sound`.
 The proof's structure is in `methods/soundness.md`, "The argument in brief".
 See the [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md).
 
@@ -122,20 +123,13 @@ No `bv_decide` remains in `JoltBytecode` or `JoltConstraints`; all 21 uses were 
 
 ### Bytecode
 
-The seven source `sorry` occurrences are all present at Lean HEAD `7096dca` and in the working tree.
-`lake build JoltBytecode` passed on 2026-11-02 with exit 0 and 8459 jobs.
+`JoltBytecode/` has no `sorry`.
+At Lean HEAD `7096dca` it had seven: ECALL, EBREAK, LR.W, SC.W, LR.D and SC.D in the dispatcher `equivalenceStatement_holds`, and MRET's exception-handler postlude in `InstructionEquivalence/Instructions/System/Mret.lean`.
+The MRET theorem is now proved.
+`joltRun_eq_execute` (`JoltBytecode/Step/Instructions.lean`) replaces the dispatcher, and the step theorems in `JoltBytecode/Step/` cover ECALL's trap entry and LR/SC against `try_step`.
+EBREAK is not executed: the whole-run theorem stops in front of it (`docs/riscv-alignment.md` section 4).
 
-| Instruction | Source occurrence | Existing obligation |
-|---|---|---|
-| ECALL | `JoltBytecode/RiscvInstruction.lean:805` | Dispatcher equivalence case remains admitted. |
-| EBREAK | `JoltBytecode/RiscvInstruction.lean:807` | Dispatcher equivalence case remains admitted. |
-| LR.W | `JoltBytecode/RiscvInstruction.lean:813` | Load-reserved equivalence remains admitted. |
-| SC.W | `JoltBytecode/RiscvInstruction.lean:815` | Store-conditional equivalence remains admitted. |
-| LR.D | `JoltBytecode/RiscvInstruction.lean:817` | Load-reserved equivalence remains admitted. |
-| SC.D | `JoltBytecode/RiscvInstruction.lean:819` | Store-conditional equivalence remains admitted. |
-| MRET | `JoltBytecode/InstructionEquivalence/Instructions/System/Mret.lean:162` | The generated Sail exception-handler postlude remains unproved. |
-
-Do not weaken a main statement to close one of these gaps.
+Do not weaken a main statement to close a gap.
 
 ### Existing tactic debt
 

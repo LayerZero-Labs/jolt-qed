@@ -381,7 +381,7 @@ The layout never changes during a run, so the premise on the instance holds at e
 `HonestTrace.sail_reproduces` (`WholeRun/Top.lean`) is the run-level theorem.
 It applies to every honest trace and every `HaltPrefix` of it, where `HaltPrefix` names the blocks `pre` before the trace's first EBREAK, ending at the state `halt`.
 If every block of `pre` satisfies `BlockConforms`, then `sailRun n (sailInit trace.initialState)` succeeds at a Sail state `s` with four properties:
-- `s` is related to `halt` (`Related`): Sail's registers, PC, CSRs and memory are Jolt's;
+- `s` is related to `halt` (`Related`), through the register projection and memory conditions that [`whole-run-theorem.md`](whole-run-theorem.md) describes;
 - its trimmed output bytes are those of the trace's final state;
 - its panic word is nonzero exactly when the final state's panic flag is set;
 - either `PC` names an EBREAK row of the image (`SailHalted`), or the trace ended without an EBREAK at `halt`.
@@ -406,7 +406,10 @@ The premises, by class:
 | `BlockConforms.no_flag_word_load`, `no_low_load`, `panic_store_nonzero` | documented deviation | the I/O window (section 2) |
 | `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |
 
-The per-block premises are stated on the blocks of the trace's own halt prefix, so they are checked on the run that actually happens, not on every program the image could run.
+The per-block premises are stated on the blocks of the trace's halt prefix, not on the whole program image.
+In `sail_soundness` that trace is existentially quantified, and a reader who sees only the instance cannot inspect its blocks.
+To obtain the Sail run, the reader has to prove the premises for the returned halt prefix; proving them for every run the program can take, on every private input, is one sufficient way.
+[`whole-run-theorem.md`](whole-run-theorem.md) explains this and lists what the theorems do not say.
 `NoLowLoad` is the open question jolt-qed#37 lists as low-address loads: the prover's address remapping is expected to reject them.
 It stays a premise because the blocks are not linked to the trace's recorded `ram_address` values (`prover_config` checks those).
 Linking them is the follow-up that would remove it.

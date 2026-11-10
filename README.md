@@ -20,37 +20,43 @@ flowchart LR
 
 ```
 
-As of 2026-11-02, `lake build JoltBytecode` passes with seven existing admitted cases.
+## Main result
+
+[`JoltConstraints/WholeRun/Top.lean`](JoltConstraints/WholeRun/Top.lean) proves that the Sail RISC-V model reproduces every run of Jolt's tracer up to its first EBREAK, and in particular every run behind an instance that Jolt's constraints accept.
+The theorems hold under premises stated with them, and they check the constraints directly, not through Jolt's sumcheck-based verifier.
+[What the whole-run theorems prove](docs/whole-run-theorem.md) states both theorems, every premise, and what they do not say.
+Read it before citing the result.
+[`docs/riscv-alignment.md`](docs/riscv-alignment.md) explains each modelling decision behind them.
+
+## Status
+
 The recorded Jolt pin is `c97e9300`, the merge of a16z/jolt#2250.
-The constraints migration is merged, and `lake build JoltConstraints` passes.
-See [current status](methods/soundness.md) and [proof obligations](JoltConstraints/model_review.md).
+The system expansions and the decoder transcribe a later revision, a16z/jolt `669cf17ea` (see [`docs/riscv-alignment.md`](docs/riscv-alignment.md), Sources).
+`lake build JoltBytecode` and `lake build JoltConstraints` pass, and `JoltBytecode/` has no `sorry`.
+The remaining `sorry`s are in completeness proofs under `JoltConstraints/Completeness/`.
+None of them is used by the soundness or whole-run theorems, whose `#print axioms` lists only `propext`, `Classical.choice` and `Quot.sound`.
+See [the soundness plan](methods/soundness.md) and [proof obligations](JoltConstraints/model_review.md).
 
 A self contained manuscript describing the efforts of formally verifying bytecode expansion is available [here](./jolt-qed.pdf)
 
-If you wanted to dig around the bytecode expansion source code.
-[This file](JoltBytecode/RiscvInstruction.lean) serves as the main entry point for the bytecode expansion project.
-It contains 3 large match blocks. 
-Loosely, it says given a RISC-V instruction, here is 
-
-1. The list of assumptions we make to prove equivalence for this instruction.
-2. Here is the theorem statement we wish to prove.
-3. Here is the proof for the above theorem statement. 
-
-The current `RiscvInstruction` type has 91 constructors, covering native instructions and instructions that expand into sequences.
-Seven equivalence cases remain admitted: ECALL, EBREAK, LR.W, SC.W, LR.D, SC.D, and MRET.
-The first six have `sorry` in the dispatcher; MRET's `sorry` is in `JoltBytecode/InstructionEquivalence/Instructions/System/Mret.lean`.
-All seven were already present at Lean HEAD `7096dca`.
-The current source and proof-debt inventory determine the status of this working tree.
+To read the bytecode expansion proofs, start at [`JoltBytecode/Step/Instructions.lean`](JoltBytecode/Step/Instructions.lean).
+For every RISC-V instruction except ECALL and EBREAK, its theorem `joltRun_eq_execute` proves that Jolt's expansion, projected to Sail's state by `System.systemProject`, agrees with Sail's `execute` of the matching instruction.
+The theorem assumes the instruction's `equivAssumptions` and, for division and remainder, honest advice (`AdviceHonest`).
+The other files in `JoltBytecode/Step/` lift these theorems, and separate ones for ECALL, to `try_step`, the function the Sail emulator calls once per instruction.
+[`JoltBytecode/RiscvInstruction.lean`](JoltBytecode/RiscvInstruction.lean) defines the `RiscvInstruction` type and, in `equivAssumptions`, the assumptions each instruction's theorem makes.
 
 ## Trusted Reference Model and Provenance
 
 `LeanRV64D/` contains the trusted RISC-V reference model used by these proofs.
 It was generated from [`abiswas3`'s fork](https://github.com/abiswas3/sail-riscv)
 of the official [`riscv/sail-riscv`](https://github.com/riscv/sail-riscv)
-repository, using [`abiswas3`'s fork](https://github.com/abiswas3/sail) of the
-official [`rems-project/sail`](https://github.com/rems-project/sail) compiler.
+repository at `266473f8`, using the official
+[`rems-project/sail`](https://github.com/rems-project/sail) compiler at `2ae2199f` with one patch.
 The complete generation process is documented in
-[Sail RISC-V Into Lean](https://randomwalks.xyz/blog/sail-to-lean/). The upstream
+[Sail RISC-V Into Lean](https://randomwalks.xyz/blog/sail-to-lean/).
+[`sail-import/PROVENANCE.toml`](sail-import/PROVENANCE.toml) pins the model commit, the compiler and the patches in `sail-import/patches/` that configure the model as Jolt's hart.
+`scripts/regen-sail-model.sh` regenerates `LeanRV64D/` from those inputs, and `scripts/check-sail-model.sh`, which CI runs when the model or its inputs change, checks that the checked-in tree matches byte for byte.
+The upstream
 Sail compiler and Sail RISC-V model are distributed under the BSD 2-Clause
 License. The complete notice is included in
 [`LeanRV64D/LICENSE`](LeanRV64D/LICENSE).

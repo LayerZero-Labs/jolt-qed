@@ -8,22 +8,37 @@ import JoltConstraints.WholeRun.RunInv
 /-!
 # The top theorem: Sail reproduces every run Jolt's soundness theorem accepts
 
-`JoltInstance.soundness` says an instance accepted by the constraints is in Jolt's language: some
-private inputs give an honest trace with the claimed outputs. `JoltInstance.sail_soundness`
-strengthens it: for that same trace, Sail's emulator loop started from `sailInit` of the trace's
-initial state runs to the trace's halt and reports the same outputs and panic flag.
+`JoltInstance.soundness` says that an instance whose witness satisfies `AllConstraints` is in
+Jolt's language: some private inputs give an honest trace with the claimed outputs.
+`JoltInstance.sail_soundness` strengthens it. For that same trace, Sail's emulator loop, started
+from `sailInit` of the trace's initial state, runs to the trace's halt and reports the same
+outputs and panic flag. `HonestTrace.sail_reproduces` is the same statement for any honest trace.
+
+`docs/whole-run-theorem.md` states both theorems, every premise and what they do not say. In
+short:
+
+* `AllConstraints` checks every constraint equation directly on the whole witness. Jolt's verifier
+  runs sumchecks, reductions and a polynomial commitment scheme, which are not modelled here.
+* The theorems go one way: a Jolt run gives a Sail run. They say nothing about Sail runs without
+  a Jolt counterpart, or about programs whose runs Jolt's tracer aborts.
+* They stop in front of the first EBREAK.
+* `sail_soundness` keeps every premise of `JoltInstance.soundness`, including the six
+  `TemporaryRestrictions`. One of them, `claimsNoPanic`, limits it to instances that claim no
+  panic.
+* Outputs are compared after dropping trailing zero bytes, as in `JoltInstance.soundness`.
 
 The proof chains the per-block theorem `block_simulates_image` along the halt prefix of the trace
 (`HonestTrace.halt_prefix`). The relation it carries (`RunRel`) is `Related` together with the run
 invariants `RunInv` and `JoltCodeIntact`, which hold initially and are kept by every block that
-runs. What a block needs beyond the invariants is collected in `BlockConforms`; the top theorem
-asks for it of the blocks of the trace's own prefix, so the deviations are checked on the run
-that actually happens.
+runs. What a block needs beyond the invariants is collected in `BlockConforms`. The theorems ask
+for it only of the blocks of the trace's halt prefix. In `sail_soundness` that trace is
+existentially quantified. A reader who knows only the instance usually argues `BlockConforms` for
+every run the program can take, which is sufficient but not required.
 
 `docs/riscv-alignment.md` section 2 asks whether the prover's acceptance of the trace implies
 `NoLowLoad`. It does not follow directly: `ProverConfig` is derived from the trace's recorded
 `ram_address` values (`HonestTrace.prover_config_addresses_ok`), and `HonestTrace.blocks` does not
-tie the blocks to those rows, so `NoLowLoad` stays a field of `BlockConforms`.
+tie the blocks to those rows. `NoLowLoad` therefore stays a field of `BlockConforms`.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
@@ -233,7 +248,8 @@ theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
 halt prefix `pre` of it (the blocks before the first EBREAK, ending at `halt`), if every block of
 `pre` conforms (`BlockConforms`), then `sailRun` from `sailInit` of the trace's initial state takes `n`
 successful steps to a Sail state `s` that satisfies four things:
-* `s` is related to `halt` (`Related`): Sail's registers, PC, CSRs and memory are Jolt's;
+* `s` is related to `halt` (`Related`), through the register projection and memory conditions
+  that `docs/whole-run-theorem.md` describes;
 * the output bytes of `s`, trailing zeros dropped, are those of the trace's final state;
 * the panic word of `s` is nonzero exactly when the final state's panic flag is set;
 * `s` has halted (`SailHalted`), or `halt` is the trace's final state.
@@ -243,6 +259,10 @@ Premises, by class:
 * documented deviation: `hreserved` (`ImageNoReservedParcel`), and the deviation fields of
   `BlockConforms` on the blocks of `pre`;
 * scope: the `riscv` field of `BlockConforms`.
+
+The theorem goes one way: it says nothing about Sail runs without a Jolt counterpart, about
+instructions after the first EBREAK, or about traces Jolt's tracer aborts.
+`docs/whole-run-theorem.md` lists what it does not say.
 
 For example, a trace that runs `addi a0, a0, 1` and then `ebreak` has `pre` with one block, `halt`
 the state before the `ebreak`, and `s` with `a0` one larger than at the start and `PC` at the
@@ -292,18 +312,37 @@ trace's initial state, takes `n` successful steps to a Sail state `s` with these
 * its panic word is nonzero exactly when the instance claims a panic;
 * it has halted (`SailHalted`), or `halt` is the trace's final state.
 
-The trace is the one `JoltInstance.soundness` extracts from the witness.
-Conformance has to be checked on that trace, or argued from Jolt's determinism when the trace is
-unique for the given inputs.
+"Accepted" means that the witness satisfies `AllConstraints`, which checks every constraint
+equation directly. Jolt's verifier checks the same constraints through sumchecks, reductions and a
+polynomial commitment scheme, which are not modelled here.
+
+The private inputs and the trace are existentially quantified: `JoltInstance.soundness` proves
+that some trace exists without naming it. `BlockConforms` is a premise on the blocks of that
+trace, and a reader who sees only the instance cannot inspect those blocks. To obtain the Sail
+run, the reader has to prove that the returned halt prefix conforms. Showing that the program
+conforms on every run it can take, for every private input, is one sufficient way.
 For a trace given in advance, `HonestTrace.sail_reproduces` states the same for every honest trace
 and every halt prefix of it.
 
 Premises, by class:
-* soundness's own premises: `joltField`, `assumptions` (`SoundnessAssumptions`), `restrictions`
-  (`TemporaryRestrictions`), and a witness that satisfies `AllConstraints`.
+* soundness's own premises: `joltField` (characteristic above `2^128`), `assumptions`
+  (`SoundnessAssumptions`), `restrictions` (`TemporaryRestrictions`), and a witness that
+  satisfies `AllConstraints`. The six restrictions exclude programs that expose reported or
+  suspected Jolt bugs. The first four constrain the row the program attempts after every prefix
+  of a relaxed execution, for every private input; `noMaxLengthTrace` constrains completed
+  relaxed traces, and `claimsNoPanic` only the instance. Jolt's verifier checks none of them:
+  * `tracerAddressChecks`: every load and store passes Jolt's tracer address checks;
+  * `hostCallsSucceed`: every host call succeeds;
+  * `noMaxLengthTrace`: no trace fills the largest power-of-two length the verifier admits;
+  * `terminationThenStall`: after a store to the termination word, the next jump is the stall,
+    and the termination word is not loaded again;
+  * `panicStoresOne`: every store to the panic word stores 1, and the panic word is not loaded
+    after such a store;
+  * `claimsNoPanic`: the instance claims no panic. With this restriction, the panic clause of the
+    conclusion says that Sail's panic word is zero.
 * platform: `himage` (`ImageDecoded`: the committed bytecode is what Jolt's decoder makes of the
-  image), `hrows` (`RowsAligned`: every row's address is even), `hheap` (`HeapNoWrap`: the heap ends
-  eight bytes below `2^64`).
+  image), `hrows` (`RowsAligned`: every row's address is even), `hheap` (`HeapNoWrap`: the heap
+  ends at least eight bytes below `2^64`).
 * documented deviation: `hreserved` (`ImageNoReservedParcel`). It covers the reserved parcel
   `0x6001`, which Jolt runs as a no-op and Sail rejects; it is discharged once a16z/jolt#2381 is in
   the pin. On the blocks of the prefix there are five more:
@@ -314,6 +353,9 @@ Premises, by class:
   * `AmoNoFlagWord`: no atomic on the I/O window touches the panic or termination word.
 * scope: every block of the prefix runs a RISC-V row; Jolt's own instructions
   (`SourceInstruction.jolt`) have no block theorem yet.
+
+The theorem goes one way, stops in front of the first EBREAK, and compares outputs after dropping
+trailing zero bytes. `docs/whole-run-theorem.md` lists what it does not say.
 
 For example, take a guest that sums its input, stores the sum in the output region and ends with
 `ebreak`. Its `ebreak` row is at `halt`, so Sail's `PC` names that row. -/
