@@ -29,3 +29,12 @@ leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
 name = "LeanRV64D"
 leanOptions.weak.linter.style.nameCheck = false
 moreLeancArgs = ["-fbracket-depth=500"]
+
+# Test executables; not a default target.
+[[lean_lib]]
+name = "JoltTests"
+leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+[[lean_exe]]
+name = "secp256k1-kat"
+root = "JoltTests.Secp256k1Kat.Main"
