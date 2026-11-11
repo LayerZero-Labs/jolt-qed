@@ -380,6 +380,7 @@ private structure TracedBlock (trace : Trace) (program : Rv64ProgramImage Source
   within : stop ≤ trace.rows.size
   pre_eq : block.pre = pre
   runs : block.Runs program
+  first : block.FirstRowAt trace base
   post_eq : block.post = (trace.rows[stop - 1]'(by omega)).postState
   finishes : trace.bytecode[(trace.rows[stop - 1]'(by omega)).rowIndex].virtual_sequence_remaining.getD 0 = 0
   address : trace.bytecode[(trace.rows[stop - 1]'(by omega)).rowIndex].address = block.row.address
@@ -429,7 +430,10 @@ private theorem block_at {joltInstance : JoltInstance SourceInstruction}
         exact segment_exec trace base hbase source rows emits atSource inside ordered lastBound
   have lastInside : rows.length - 1 < rows.length := by omega
   have lastIndex : base + (rows.length - 1) = base + rows.length - 1 := by omega
-  refine ⟨⟨block, base + rows.length, by omega, inside, rfl, runs, rfl, ?_, ?_⟩⟩
+  refine ⟨⟨block, base + rows.length, by omega, inside, rfl, runs, ?_, rfl, ?_, ?_⟩⟩
+  · refine ⟨hbase, startEq, rows, emits, ?_⟩
+    simpa only [List.head?_eq_getElem?, List.getElem?_eq_getElem positive, Nat.add_zero]
+      using congrArg some (ordered 0 positive).symm
   · have count := expand_instruction_countdown source rows emits (rows.length - 1) lastInside
     have byteEq := ordered (rows.length - 1) lastInside
     simp only [lastIndex] at byteEq
@@ -458,7 +462,8 @@ private theorem blocks_suffix {joltInstance : JoltInstance SourceInstruction}
       bs.head?.map (·.pre) = some pre ∧
       bs.IsChain (fun b c => b.post = c.pre) ∧
       bs.getLast?.map (·.post) = trace.rows.back?.map (·.postState) ∧
-      ∀ b ∈ bs.getLast?, b.post.sail.regs.get? Register.nextPC = some b.row.address := by
+      (∀ b ∈ bs.getLast?, b.post.sail.regs.get? Register.nextPC = some b.row.address) ∧
+      ∀ b ∈ bs, ∃ k, b.FirstRowAt trace.toTrace k := by
   obtain ⟨segment⟩ := block_at trace base hbase pre starts continues prepared
   have lastBound : segment.stop - 1 < trace.rows.size := by
     have := segment.advances
@@ -469,7 +474,7 @@ private theorem blocks_suffix {joltInstance : JoltInstance SourceInstruction}
       simp only [Array.back?_eq_getElem?, ← finished, Array.getElem?_eq_getElem lastBound]
     have stalled := (trace.stops _ lastAt).2.1
     rw [segment.address, ← segment.post_eq] at stalled
-    refine ⟨[segment.block], by simp, ?_, ?_, by simp, ?_, ?_⟩
+    refine ⟨[segment.block], by simp, ?_, ?_, by simp, ?_, ?_, ?_⟩
     · intro b hb
       simpa only [List.mem_singleton.mp hb] using segment.runs
     · simp only [List.head?_cons, Option.map_some, segment.pre_eq]
@@ -478,6 +483,8 @@ private theorem blocks_suffix {joltInstance : JoltInstance SourceInstruction}
       have eq : b = segment.block := by simpa only [List.getLast?_singleton, Option.mem_def,
         Option.some.injEq] using hb.symm
       exact eq ▸ stalled
+    · intro b hb
+      exact ⟨base, List.mem_singleton.mp hb ▸ segment.first⟩
   · have nextBound : segment.stop < trace.rows.size := by
       have := segment.within
       omega
@@ -489,11 +496,11 @@ private theorem blocks_suffix {joltInstance : JoltInstance SourceInstruction}
       (by simpa only [nextIndex] using Array.getElem?_eq_getElem nextBound)
     simp only [segment.finishes, ne_self_iff_false, ite_false] at linked
     obtain ⟨address, nextPC, nextAddress, nextStarts, nextPrepared⟩ := linked
-    obtain ⟨bs, nonempty, runs, first, chain, last, stalls⟩ :=
+    obtain ⟨bs, nonempty, runs, first, chain, last, stalls, traced⟩ :=
       blocks_suffix trace segment.stop nextBound segment.block.post nextStarts
         (by simpa only [segment.post_eq, nextAddress] using nextPC)
         (by simpa only [segment.post_eq, nextAddress] using nextPrepared)
-    refine ⟨segment.block :: bs, by simp, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨segment.block :: bs, by simp, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · intro b hb
       rcases List.mem_cons.mp hb with rfl | hb
       · exact segment.runs
@@ -507,6 +514,10 @@ private theorem blocks_suffix {joltInstance : JoltInstance SourceInstruction}
       exact first.symm
     · simpa only [List.getLast?_cons_of_ne_nil nonempty] using last
     · simpa only [List.getLast?_cons_of_ne_nil nonempty] using stalls
+    · intro b hb
+      rcases List.mem_cons.mp hb with rfl | hb
+      · exact ⟨base, segment.first⟩
+      · exact traced b hb
 termination_by trace.rows.size - base
 decreasing_by
   have := segment.advances
@@ -543,7 +554,8 @@ theorem HonestTrace.blocks {joltInstance : JoltInstance SourceInstruction}
       bs.head?.map (·.pre) = some trace.initialState ∧
       bs.IsChain (fun b c => b.post = c.pre) ∧
       bs.getLast?.map (·.post) = trace.rows.back?.map (·.postState) ∧
-      ∀ b ∈ bs.getLast?, b.post.sail.regs.get? Register.nextPC = some b.row.address := by
+      (∀ b ∈ bs.getLast?, b.post.sail.regs.get? Register.nextPC = some b.row.address) ∧
+      ∀ b ∈ bs, ∃ k, b.FirstRowAt trace.toTrace k := by
   obtain ⟨entry, starts, prepared⟩ := trace.starts (trace.rows[0]'trace.nonempty)
     (Array.getElem?_eq_getElem trace.nonempty)
   apply blocks_suffix trace 0 trace.nonempty trace.initialState starts

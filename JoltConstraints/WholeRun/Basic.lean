@@ -83,6 +83,15 @@ instruction and `nextPC` past it (`advance_pc`). -/
 def Block.start (b : Block) : SailJoltState :=
   advance_pc b.row.address b.row.is_compressed b.pre
 
+/-- Jolt's tracer starts block `b` at row `k` of `trace`, with the first bytecode row
+of the expansion of `b.row` and the state `b.start`.
+For example, an LB block starts with its VirtualLoadB row. -/
+def Block.FirstRowAt (b : Block) (trace : Trace) (k : Nat) : Prop :=
+  ∃ hk : k < trace.rows.size,
+    b.start = (trace.rows[k]'hk).preState ∧
+    ∃ rows, expand_instruction b.row = some rows ∧
+      rows.head? = some trace.bytecode[(trace.rows[k]'hk).rowIndex]
+
 /-- What every block of an honest trace satisfies: the row is the image's row
 at the address `pre` continues at, and its rows, run in order with the honest
 advice, retire and leave `post`. -/

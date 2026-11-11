@@ -134,12 +134,13 @@ private theorem ebreak_tail {program : Rv64ProgramImage SourceInstruction} :
       exact hbp.1
 
 /-- The halt prefix of a block chain, by induction on the chain. -/
-private theorem halt_prefix_aux (program : Rv64ProgramImage SourceInstruction) :
+private theorem halt_prefix_aux (program : Rv64ProgramImage SourceInstruction)
+    (P : Block → Prop) :
     ∀ (bs : List Block) (p : SailJoltState),
-      bs.IsChain (fun x y => x.post = y.pre) → (∀ b ∈ bs, b.Runs program) →
+      bs.IsChain (fun x y => x.post = y.pre) → (∀ b ∈ bs, b.Runs program ∧ P b) →
       (∀ f ∈ bs.head?, f.pre = p) →
       ∃ (pre : List Block) (halt : SailJoltState),
-        (∀ b ∈ pre, b.Runs program ∧ b.row.instruction ≠ .riscv .EBREAK) ∧
+        (∀ b ∈ pre, b.Runs program ∧ b.row.instruction ≠ .riscv .EBREAK ∧ P b) ∧
         pre.IsChain (fun x y => x.post = y.pre) ∧
         (∀ f ∈ pre.head?, f.pre = p) ∧
         (∀ l ∈ pre.getLast?, l.post = halt) ∧
@@ -149,20 +150,20 @@ private theorem halt_prefix_aux (program : Rv64ProgramImage SourceInstruction) :
   | [], p, _, _, _ => ⟨[], p, by simp, by simp, by simp, by simp, fun _ => rfl, by simp⟩
   | b :: rest, p, hchain, hruns, hhead => by
       have hbp : b.pre = p := hhead b rfl
-      have hbr := hruns b (by simp)
+      obtain ⟨hbr, hP⟩ := hruns b (by simp)
       by_cases hb : b.row.instruction = .riscv .EBREAK
       · refine ⟨[], p, by simp, by simp, by simp, by simp, fun _ => rfl, ?_⟩
         intro l hl
         refine ⟨Or.inl ⟨b.row, ?_, hbr.at_row, hb⟩, ?_⟩
         · rw [← hbp]; exact hbr.continues
-        · rw [← hbp]; exact ebreak_tail rest b hchain hruns hb l hl
+        · rw [← hbp]; exact ebreak_tail rest b hchain (fun c hc => (hruns c hc).1) hb l hl
       · cases rest with
         | nil =>
           refine ⟨[b], b.post, ?_, by simp, ?_, ?_, by simp, ?_⟩
           · intro x hx
             simp only [List.mem_singleton] at hx
             subst hx
-            exact ⟨hbr, hb⟩
+            exact ⟨hbr, hb, hP⟩
           · simp [hbp]
           · simp
           · intro l hl
@@ -172,7 +173,7 @@ private theorem halt_prefix_aux (program : Rv64ProgramImage SourceInstruction) :
         | cons c rest' =>
           rw [List.isChain_cons_cons] at hchain
           obtain ⟨hlink, hchain'⟩ := hchain
-          obtain ⟨pre', halt, h1, h2, h3, h4, h5, h6⟩ := halt_prefix_aux program (c :: rest')
+          obtain ⟨pre', halt, h1, h2, h3, h4, h5, h6⟩ := halt_prefix_aux program P (c :: rest')
             b.post hchain' (fun d hd => hruns d (List.mem_cons_of_mem _ hd))
             (by
               intro f hf
@@ -182,7 +183,7 @@ private theorem halt_prefix_aux (program : Rv64ProgramImage SourceInstruction) :
           refine ⟨b :: pre', halt, ?_, ?_, ?_, ?_, by simp, ?_⟩
           · intro x hx
             rcases List.mem_cons.mp hx with rfl | hx
-            · exact ⟨hbr, hb⟩
+            · exact ⟨hbr, hb, hP⟩
             · exact h1 x hx
           · cases pre' with
             | nil => simp
@@ -216,8 +217,9 @@ theorem HonestTrace.halt_prefix {joltInstance : JoltInstance SourceInstruction}
       (∀ last ∈ pre.getLast?, last.post = halt) ∧
       (pre = [] → halt = trace.initialState) ∧
       (NextIsEbreak joltInstance.program halt ∨ halt = final) ∧
-      halt.jolt_device = final.jolt_device := by
-  obtain ⟨bs, hne, hruns, hhead, hchain, hlast, -⟩ := HonestTrace.blocks trace
+      halt.jolt_device = final.jolt_device ∧
+      (∀ b ∈ pre, ∃ k, b.FirstRowAt trace.toTrace k) := by
+  obtain ⟨bs, hne, hruns, hhead, hchain, hlast, -, htraced⟩ := HonestTrace.blocks trace
   obtain ⟨last, hl⟩ : ∃ l, bs.getLast? = some l := by
     cases h : bs.getLast? with
     | none => exact absurd (List.getLast?_eq_none_iff.mp h) hne
@@ -228,11 +230,13 @@ theorem HonestTrace.halt_prefix {joltInstance : JoltInstance SourceInstruction}
     rw [hf] at hhead
     simpa using hhead
   obtain ⟨pre, halt, h1, h2, h3, h4, h5, h6⟩ :=
-    halt_prefix_aux joltInstance.program bs trace.initialState hchain hruns hheads
+    halt_prefix_aux joltInstance.program (fun b => ∃ k, b.FirstRowAt trace.toTrace k)
+      bs trace.initialState hchain (fun b hb => ⟨hruns b hb, htraced b hb⟩) hheads
   have hfinal : trace.rows.back?.map (·.postState) = some last.post := by
     rw [← hlast, hl]; rfl
   obtain ⟨hn, hjd⟩ := h6 last hl
-  exact ⟨pre, halt, last.post, hfinal, h1, h2, h3, h4, h5, hn, hjd.symm⟩
+  exact ⟨pre, halt, last.post, hfinal, fun b hb => ⟨(h1 b hb).1, (h1 b hb).2.1⟩,
+    h2, h3, h4, h5, hn, hjd.symm, fun b hb => (h1 b hb).2.2⟩
 
 /-- `Trace.matches_outputs` reads the final state only through its `jolt_device`, so it can be
 read at the halt state. -/
@@ -262,7 +266,7 @@ theorem HonestTrace.sailRun_halt {joltInstance : JoltInstance SourceInstruction}
       WholeRun.sailRun n s₀ = .ok () s ∧ R halt s ∧
       (NextIsEbreak joltInstance.program halt ∨ halt = final) ∧
       halt.jolt_device = final.jolt_device := by
-  obtain ⟨pre, halt, final, hfinal, hpre, hchain, hhead, hlast, hnil, hn, hjd⟩ :=
+  obtain ⟨pre, halt, final, hfinal, hpre, hchain, hhead, hlast, hnil, hn, hjd, -⟩ :=
     HonestTrace.halt_prefix trace
   cases pre with
   | nil =>

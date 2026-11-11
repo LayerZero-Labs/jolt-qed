@@ -4,6 +4,7 @@ import JoltConstraints.WholeRun.CodeInv
 import JoltConstraints.WholeRun.Decoded
 import JoltConstraints.WholeRun.Init
 import JoltConstraints.WholeRun.RunInv
+import JoltConstraints.WholeRun.LoadAddress
 
 /-!
 # The top theorem: Sail reproduces every run Jolt's soundness theorem accepts
@@ -12,7 +13,8 @@ import JoltConstraints.WholeRun.RunInv
 Jolt's language: some private inputs give an honest trace with the claimed outputs.
 `JoltInstance.sail_soundness` strengthens it. For that same trace, Sail's emulator loop, started
 from `sailInit` of the trace's initial state, runs to the trace's halt and reports the same
-outputs and panic flag. `HonestTrace.sail_reproduces` is the same statement for any honest trace.
+outputs and panic flag. `HonestTrace.sail_reproduces` states this for any honest trace that
+Jolt's prover accepts.
 
 `docs/whole-run-theorem.md` states both theorems, every premise and what they do not say. In
 short:
@@ -35,10 +37,11 @@ for it only of the blocks of the trace's halt prefix. In `sail_soundness` that t
 existentially quantified. A reader who knows only the instance usually argues `BlockConforms` for
 every run the program can take, which is sufficient but not required.
 
-`docs/riscv-alignment.md` section 2 asks whether the prover's acceptance of the trace implies
-`NoLowLoad`. It does not follow directly: `ProverConfig` is derived from the trace's recorded
-`ram_address` values (`HonestTrace.prover_config_addresses_ok`), and `HonestTrace.blocks` does not
-tie the blocks to those rows. `NoLowLoad` therefore stays a field of `BlockConforms`.
+Jolt's prover checks the trace's recorded RAM addresses, and each halt-prefix block is tied to
+its first trace row by `HaltPrefix.traced`.
+The proof derives `NoLowLoad` from that check and the residual `NoZeroDoublewordLoad` premise.
+Jolt's prover treats recorded address 0 as no access, which leaves loads below address 8 as a
+premise of `BlockConforms`.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
@@ -88,9 +91,11 @@ structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Bloc
   (`NoFlagWordLoad`). -/
   no_flag_word_load : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start →
     i.NoFlagWordLoad b.start
-  /-- Deviation, for an I/O access: no load reads below the lowest address Jolt's prover accepts
-  (`NoLowLoad`). -/
-  no_low_load : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start → i.NoLowLoad b.start
+  /-- Deviation, for an I/O access: every load has effective address at least 8
+  (`NoZeroDoublewordLoad`). Jolt's prover treats recorded address 0 as no access.
+  For example, an LB at address 7 is excluded by this field. -/
+  no_zero_doubleword_load : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start →
+    i.NoZeroDoublewordLoad b.start
   /-- Deviation, for an I/O access: a store touching the panic doubleword leaves Sail's panic word
   nonzero (`PanicStoreNonzero`). -/
   panic_store_nonzero : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start →
@@ -101,19 +106,21 @@ structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Bloc
     i.AmoNoFlagWord b.start
 
 /-- **A conforming block simulates, and keeps the relation.** Every block that runs, is not
-EBREAK and conforms is matched by one Sail step that lands in the relation for the block's last
-state. -/
+EBREAK and conforms is matched by one Sail step when its I/O loads satisfy `NoLowLoad`.
+For example, the prover's address check supplies this bound for a traced LB block. -/
 theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
     (himage : ImageDecoded program) (hrows : program.RowsAligned)
     {b : Block} (hruns : b.Runs program)
-    (hconf : BlockConforms program b) (hbreak : b.row.instruction ≠ .riscv .EBREAK) :
+    (hconf : BlockConforms program b)
+    (hlow : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start → i.NoLowLoad b.start)
+    (hbreak : b.row.instruction ≠ .riscv .EBREAK) :
     BlockSimulates (RunRel program) b := by
   obtain ⟨i, hrow⟩ := hconf.riscv
   have hi : i ≠ .EBREAK := fun h => hbreak (by rw [hrow, h])
   rintro s ⟨hrel, hinv, hcode⟩
   obtain ⟨v, s', hstep, hrel'⟩ := block_simulates_image program b hruns himage i hrow hi
     hinv.system (hruns.pc_even hrows) (fun _ hr => CodeIntact.of_related hr hcode)
-    hinv.heap_no_wrap (hconf.no_flag_word_load i hrow) (hconf.no_low_load i hrow)
+    hinv.heap_no_wrap (hconf.no_flag_word_load i hrow) (hlow i hrow)
     (hconf.panic_store_nonzero i hrow) (hconf.amo_no_flag_word i hrow) s hrel
   exact ⟨v, s', hstep, hrel', RunInv.of_block hruns hrows hinv,
     JoltCodeIntact.of_block hruns hconf.no_code_store hcode⟩
@@ -160,6 +167,8 @@ structure HaltPrefix {joltInstance : JoltInstance SourceInstruction}
   /-- Each block of the prefix runs (`Block.Runs`) and does not run EBREAK. Since a block's last
   state is a function of its first, the chain from the initial state is the trace's own. -/
   runs : ∀ b ∈ pre, b.Runs joltInstance.program ∧ b.row.instruction ≠ .riscv .EBREAK
+  /-- Jolt's tracer records each block's first row, for example an LB's VirtualLoadB. -/
+  traced : ∀ b ∈ pre, ∃ k, b.FirstRowAt trace.toTrace k
   /-- Each block starts where the previous one ended. -/
   chain : pre.IsChain (fun b c => b.post = c.pre)
   /-- The first block starts at the trace's initial state. -/
@@ -173,34 +182,33 @@ structure HaltPrefix {joltInstance : JoltInstance SourceInstruction}
   /-- `halt` and the final state have the same device. -/
   device : halt.jolt_device = final.jolt_device
 
+/-- Jolt's honest trace has a halt prefix with each block's first trace row recorded.
+For example, a trace beginning with EBREAK has an empty prefix at its initial state. -/
 theorem HonestTrace.haltPrefix {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     ∃ pre halt final, HaltPrefix trace pre halt final := by
-  obtain ⟨pre, halt, final, h1, h2, h3, h4, h5, h6, h7, h8⟩ := HonestTrace.halt_prefix trace
-  exact ⟨pre, halt, final, ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩⟩
+  obtain ⟨pre, halt, final, h1, h2, h3, h4, h5, h6, h7, h8, ht⟩ := HonestTrace.halt_prefix trace
+  exact ⟨pre, halt, final, ⟨h1, h2, ht, h3, h4, h5, h6, h7, h8⟩⟩
 
-/-- The memory layout is the same at the start and the end of a chain of blocks that run. -/
+/-- Jolt's blocks preserve the initial layout throughout their chain.
+For example, an ADDI block has the same layout before and after it runs. -/
 private theorem chain_layout (program : Rv64ProgramImage SourceInstruction) :
-    ∀ (bs : List Block), bs.IsChain (fun b c => b.post = c.pre) →
-      (∀ b ∈ bs, b.Runs program) →
-      ∀ f ∈ bs.head?, ∀ l ∈ bs.getLast?,
-        l.post.jolt_device.memory_layout = f.pre.jolt_device.memory_layout
-  | [], _, _, f, hf, _, _ => by simp at hf
-  | [b], _, hruns, f, hf, l, hl => by
-      simp only [List.head?_cons, Option.mem_def, Option.some.injEq] at hf
-      simp only [List.getLast?_singleton, Option.mem_def, Option.some.injEq] at hl
-      subst hf; subst hl
-      exact (hruns _ (by simp)).layout_eq
-  | b :: c :: rest, hchain, hruns, f, hf, l, hl => by
-      simp only [List.head?_cons, Option.mem_def, Option.some.injEq] at hf
-      subst hf
-      rw [List.isChain_cons_cons] at hchain
-      obtain ⟨hlink, hchain'⟩ := hchain
-      have ih := chain_layout program (c :: rest) hchain'
-        (fun d hd => hruns d (List.mem_cons_of_mem _ hd)) c rfl l
-        (by simpa only [List.getLast?_cons_cons] using hl)
-      rw [ih, ← hlink]
-      exact (hruns _ (by simp)).layout_eq
+    ∀ (bs : List Block) (p : SailJoltState), bs.IsChain (fun b c => b.post = c.pre) →
+      (∀ b ∈ bs, b.Runs program) → (∀ f ∈ bs.head?, f.pre = p) →
+      ∀ b ∈ bs, b.pre.jolt_device.memory_layout = p.jolt_device.memory_layout ∧
+        b.post.jolt_device.memory_layout = p.jolt_device.memory_layout
+  | [], _, _, _, _, b, hb => by simp at hb
+  | f :: rest, p, hchain, hruns, hfirst, b, hb => by
+      have hf : f.pre = p := hfirst f rfl
+      have hpost := (hruns f (by simp)).layout_eq.trans (congrArg
+        (fun s : SailJoltState => s.jolt_device.memory_layout) hf)
+      rcases List.mem_cons.mp hb with rfl | hb
+      · exact ⟨congrArg (fun s : SailJoltState => s.jolt_device.memory_layout) hf, hpost⟩
+      · obtain ⟨hlink, htail⟩ := List.isChain_cons.mp hchain
+        have ih := chain_layout program rest f.post htail
+          (fun c hc => hruns c (List.mem_cons_of_mem _ hc))
+          (fun c hc => (hlink c hc).symm) b hb
+        exact ⟨ih.1.trans hpost, ih.2.trans hpost⟩
 
 /-- `sailOutputs` and `sailPanicWord` read the device only through its memory layout. -/
 theorem sailOutputs_congr {d d' : JoltDevice} (h : d.memory_layout = d'.memory_layout)
@@ -211,13 +219,15 @@ theorem sailPanicWord_congr {d d' : JoltDevice} (h : d.memory_layout = d'.memory
     (s : SailState) : sailPanicWord d s = sailPanicWord d' s := by
   simp only [sailPanicWord, h]
 
-/-- **Sail runs the halt prefix.** If every block of the prefix conforms, `sailRun` from `sailInit`
-of the initial state reaches a Sail state in the relation for `halt`. -/
+/-- **Sail runs the halt prefix.** Jolt's prover accepts the trace, and every prefix block
+conforms. Sail's `sailRun` from `sailInit` reaches a state in the relation for `halt`.
+For example, an ADDI followed by EBREAK gives one successful Sail step. -/
 theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {trace : HonestTrace joltInstance privateInputs}
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
+    (hcfg : (trace.prover_config joltInstance).isSome)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
     ∃ (n : Nat) (s : SailState), sailRun n (sailInit trace.initialState) = .ok () s ∧
       RunRel joltInstance.program halt s := by
@@ -228,14 +238,20 @@ theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
     obtain ⟨l, s, hl, hrun, hrel⟩ := sailRun_of_chain (RunRel joltInstance.program)
       (first :: rest) hp.chain
       (fun b hb => BlockConforms.simulates himage hrows (hp.runs b hb).1
-        (hconf b hb) (hp.runs b hb).2) first rfl (sailInit trace.initialState)
+        (hconf b hb) (fun i hi hio => by
+          obtain ⟨k, hk⟩ := hp.traced b hb
+          apply Block.FirstRowAt.noLowLoad trace hk hcfg hi
+          · exact (chain_layout joltInstance.program _ trace.initialState hp.chain
+              (fun c hc => (hp.runs c hc).1) hp.first b hb).1
+          · exact (hconf b hb).no_zero_doubleword_load i hi hio)
+        (hp.runs b hb).2) first rfl (sailInit trace.initialState)
       (by rw [hp.first first rfl]; exact h₀)
     exact ⟨_, s, hrun, hp.last l hl ▸ hrel⟩
 
 /-- **Sail reproduces every conforming run of an honest trace.** For every honest trace and every
 halt prefix `pre` of it (the blocks before the first EBREAK, ending at `halt`), if every block of
-`pre` conforms (`BlockConforms`), then `sailRun` from `sailInit` of the trace's initial state takes `n`
-successful steps to a Sail state `s` that satisfies four things:
+`pre` conforms (`BlockConforms`) and Jolt's prover accepts the trace, then `sailRun` from
+`sailInit` of the trace's initial state takes `n` successful steps to a Sail state `s` with:
 * `s` is related to `halt` (`Related`), through the register projection and memory conditions
   that `docs/whole-run-theorem.md` describes;
 * the output bytes of `s`, trailing zeros dropped, are those of the trace's final state;
@@ -243,8 +259,10 @@ successful steps to a Sail state `s` that satisfies four things:
 * `s` has halted (`SailHalted`), or `halt` is the trace's final state.
 
 Premises, by class:
+* prover acceptance: `hcfg` (`trace.prover_config.isSome`);
 * platform: `himage` (`ImageDecoded`), `hrows` (`RowsAligned`), `hheap` (`HeapNoWrap`);
-* documented deviation: the deviation fields of `BlockConforms` on the blocks of `pre`;
+* documented deviation: the deviation fields of `BlockConforms` on the blocks of `pre`,
+  including `NoZeroDoublewordLoad`; the prover check supplies the remaining `NoLowLoad` bound;
 * scope: the `riscv` field of `BlockConforms`.
 
 The theorem goes one way: it says nothing about Sail runs without a Jolt counterpart, about
@@ -258,6 +276,7 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
+    (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
     ∃ (n : Nat) (s : SailState),
@@ -267,15 +286,16 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
         trimTrailingZeros final.jolt_device.outputs ∧
       (sailPanicWord trace.initialState.jolt_device s ≠ 0 ↔ final.jolt_device.panic = true) ∧
       (SailHalted joltInstance.program s ∨ halt = final) := by
-  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun himage hrows hheap hconf
+  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun himage hrows hheap hcfg hconf
   have hlayout : halt.jolt_device.memory_layout = trace.initialState.jolt_device.memory_layout := by
     cases pre with
     | nil => rw [hp.empty rfl]
     | cons f rest =>
       obtain ⟨l, hl⟩ : ∃ l, (f :: rest).getLast? = some l :=
         ⟨_, List.getLast?_eq_some_getLast (by simp)⟩
-      rw [← hp.last l hl, chain_layout joltInstance.program _ hp.chain
-        (fun b hb => (hp.runs b hb).1) f rfl l hl, hp.first f rfl]
+      rw [← hp.last l hl]
+      exact (chain_layout joltInstance.program _ trace.initialState hp.chain
+        (fun b hb => (hp.runs b hb).1) hp.first l (List.mem_of_mem_getLast? hl)).2
   refine ⟨n, s, hrun, hrel.1, ?_, ?_, ?_⟩
   · rw [← sailOutputs_congr hlayout, hrel.1.outputs, hp.device]
   · rw [← sailPanicWord_congr hlayout, ← hp.device]
@@ -333,7 +353,8 @@ Premises, by class:
 * documented deviation: five, on the blocks of the prefix:
   * `NoCodeStore`: no store into the code;
   * `NoFlagWordLoad`: no read of the panic or termination word;
-  * `NoLowLoad`: no load below the lowest address Jolt's prover accepts;
+  * `NoZeroDoublewordLoad`: no load below address 8; Jolt's prover supplies the remaining
+    `NoLowLoad` bound through the accepted trace's address check;
   * `PanicStoreNonzero`: a store into the panic word leaves it nonzero;
   * `AmoNoFlagWord`: no atomic on the I/O window touches the panic or termination word.
 * scope: every block of the prefix runs a RISC-V row; Jolt's own instructions
@@ -373,7 +394,7 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
   obtain ⟨pre, halt, final, hp⟩ := trace.haltPrefix
   refine ⟨privateInputs, trace, hmo, hcfg, hspoil, pre, halt, final, hp, fun hconf => ?_⟩
   obtain ⟨n, s, hrun, hrel, houts, hpanic, hstop⟩ :=
-    trace.sail_reproduces himage hrows hheap hp hconf
+    trace.sail_reproduces himage hrows hheap hcfg hp hconf
   obtain ⟨hmo_out, hmo_panic⟩ :=
     (trace.matches_outputs_halt final final hp.back rfl).1 hmo
   refine ⟨n, s, hrun, hrel, houts.trans hmo_out, ?_, hstop⟩
