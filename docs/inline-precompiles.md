@@ -117,7 +117,7 @@ Reserving the `rd = x0` temporary shifts later helper allocations; the known cas
 
 | Family | Inline (final rows) | Advice | What the rows guarantee |
 |---|---|---|---|
-| SHA-256 | `SHA256` (1,900): one compression with a given state; `SHA256_INIT` (1,864): one compression from the standard IV | None | The new state is a function of the old state and the 64-byte block, for every input. The rows read 8 words of state and a big-endian block and write the state in place through `rs1` |
+| SHA-256 | `SHA256` (1,900): one compression with a given state; `SHA256_INIT` (1,864): one compression from the standard IV | None | `SHA256`: the new state is a function of the old state and the 64-byte block, for every input; the rows read 8 words of state through `rs1` and a big-endian block through `rs2`, and write the state in place. `SHA256_INIT`: the new state is a function of the block alone; the rows read no state and write 8 words through `rs1` (`sha2/src/sequence_builder.rs:64-73, 115-123`) |
 | Keccak-256 | `KECCAK256` (3,087): Keccak-f[1600] in place; `KECCAK256_ABSORB_PERMUTE` (3,121): XOR a 136-byte rate block into the state, then Keccak-f | None | The new 200-byte state is a function of the old state (and the block), for every input |
 | BLAKE2b | `BLAKE2` (1,067): one compression F | None | The new `h` is a function of `h`, the 128-byte block, the counter `t` and `is_final`; the mathematical meaning needs `is_final ∈ {0, 1}` |
 | secp256k1 field | `MULQ`, `SQUAREQ`, `DIVQ` (186, 167, 194); `MULR`, `SQUARER`, `DIVR` (232, 213, 240) | MUL and SQUARE: 4 words (`w`); DIV: 8 words (`c`, `w`) | See below |
@@ -131,8 +131,13 @@ For the field operations, `q` stands for the base-field prime `p` or the group o
   The rows do not give `c < q`.
   A second representative `c + q` passes when `a·b ≥ q` (which makes `w − 1 ≥ 0`), `c + q < 2^256`, and the final checks accept `w − 1`.
   For the base field `2^256 − p = 2^32 + 977`, and the second representative needs `c < 2^32 + 977`; for the scalar field `2^256 − n` is about `1.3·2^128`.
-- DIV: the prover also chooses `c`, and the rows enforce `c·b = w·q + a`.
-  If `b ≡ 0 (mod q)` and `a ≡ 0`, every `c` passes; Jolt's advice function panics there, and the SDK spoils the proof on a zero divisor (`secp256k1/src/sdk.rs:280-284`), outside the inline.
+- DIV: the prover also chooses `c`, and the rows enforce `c·b = w·q + a` over the integers, on the unreduced input limbs, with bound checks on `w`.
+  Hence `c·b ≡ a (mod q)` and `c < 2^256`, and again the rows do not give `c < q`.
+  The second representative works differently from MUL: replacing `c` by `c + q` replaces `w` by `w + b`.
+  It passes whenever `c + q < 2^256` and the final checks accept `w + b`, even when `a·b < q`: `a = b = 1`, `c = q + 1`, `w = 1` passes.
+  If `a = b = 0`, every `c` passes with `w = 0`.
+  (Zero residues alone are not enough: `a = q`, `b = 0` admits no `c`, because `0 = w·q + q` has no unsigned solution.)
+  Jolt's advice function panics on a zero divisor, and the SDK spoils the proof on one (`secp256k1/src/sdk.rs:280-284`), outside the inline.
   All DIV result stores come after all checks.
   An earlier version stored before checking, and under `rd = rs1` that made the check vacuous (v12 audit finding #115878, fixed in `db9679295`).
 - `GLVR_ADV`: the rows store six words and check none of them.
@@ -344,7 +349,7 @@ def honestTracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
 The text of `InLanguage` and `JoltInstance.soundness` does not change.
 Every other step keeps today's rule, and programs without inline advice rows are unaffected.
 
-The proof adds three facts.
+The proof adds the facts below.
 Their exact homes in Layers 5 to 7 are decided in I1b.
 
 ```lean
@@ -368,11 +373,22 @@ theorem collectInlineAdvice_honest (rows : Array (TraceRow bytecode)) (n : Fin r
         { privateInputs with inline_advice := collectInlineAdvice program rows } rows n
 ```
 
-After Layer 6 reconstructs the trace, the proof sets the field to the witness's inline advice words in trace order, and every inline advice step is then honest.
-Layer 7's `rebuiltInputs` replaces only `advice_tape` and copies the field unchanged.
-`sail_reproduces` and `JoltInstance.completeness` need the other direction: Jolt's prover fills the field with its `build_advice` words, and these pass every assert (section 5.4).
+The proof fixes the field before Layer 6 starts, not after.
+Layer 6 already needs honest advice while it extends a prefix: `BoundaryState.honestAdvice` (`Layer6/PrefixState.lean:39-41`) and the `NextStep.honestRuntimeAdvice` certificate (`Layer5/MemoryAccessRestriction.lean:35-37`) that memory-row execution consumes (`Layer6/MemoryRowExecution.lean:18, 55, 91`).
+The proof therefore collects the inline advice words from the witness's cycles, in cycle order, and runs Layers 5 to 7 with private inputs whose `inline_advice` is that array.
+Two further facts make each prefix honest under the fixed array:
 
-The step relation of an inline call is `InlineSpec k`, a relation between states, not a function.
+- `honestTracerAdviceAtStepN` at step `n` depends only on rows `0..n` and the field;
+- when Layer 6 extends a prefix by one row, the inline advice steps of the prefix keep their indices, and the new row's index is the number of inline advice steps before it, which equals its position in the witness's collection.
+
+Layer 7's `rebuiltInputs` replaces only `advice_tape`, copies the field unchanged and leaves the rows unchanged, which keeps every index.
+
+`JoltInstance.completeness` and `sail_reproduces` take an existing honest trace (`Completeness/completeness.lean:83-99`, `WholeRun/Top.lean:276-289`).
+Neither needs the trace's inline advice to equal Jolt's `build_advice` words, and neither is restricted to it: both must hold for every passing inline advice, including the non-canonical outputs this design admits.
+A separate result says that Jolt's advice generator gives a passing run: `rows_jolt_advice_complete` per call (section 5.4), lifted to a whole trace in I1b.
+It shows that Jolt's prover can produce a trace in the language; it does not restrict the language.
+
+The step relation of an inline call is `InlineSpec c`, a relation between states, not a function.
 For the hash inlines it is the graph of a function.
 For the field operations it is the integer relation of section 3 with a bounded quotient witness.
 For `GLVR_ADV` it allows any six words at the output buffer.
@@ -386,32 +402,47 @@ This design changes `JoltPrivateInputs` and `honestTracerAdviceAtStepN`, which d
 
 ### 5.4 Per-inline theorems
 
-Each inline `k` has a precondition `Pre k s` that collects the caller's obligations: alignment, buffers inside RAM, overlap rules, and value ranges (`is_final ∈ {0, 1}` for `BLAKE2`, inputs below the modulus for secp256k1, a nonzero divisor for DIV).
+Each call has a precondition `Pre c s`, where `c : InlineCall` is the key with its operands `rs1`, `rs2`, `rs3`. `Pre` collects the caller's obligations: alignment, buffers inside RAM, overlap rules, and value ranges (`is_final ∈ {0, 1}` for `BLAKE2`, inputs below the modulus for secp256k1, a nonzero divisor for DIV).
 Row execution covers only the rows; the block layer advances the source PC (`Semantics.lean:589-597`, `WholeRun/Basic.lean:81-84`).
 
-Statement shapes, generic in `k`:
+Statement shapes, generic in the call:
 
 ```lean
+-- One call: the key and its operands, after the `rd = x0` rewrite.
+structure InlineCall where
+  key : InlineKey
+  rs1 : Reg
+  rs2 : Reg
+  rs3 : Reg
+
+-- The caller's obligations; the operands say where the buffers are.
+def Pre (c : InlineCall) : SailJoltState → Prop
+
 -- What a call may do when its preconditions hold.
-def InlineSpec (k : InlineKey) (rs1 rs2 rs3 : Reg) : SailJoltState → SailJoltState → Prop
+def InlineSpec (c : InlineCall) : SailJoltState → SailJoltState → Prop
 
 -- Frame and footprint: every input, every advice choice.
-theorem rows_frame (k)
-    (run : RunsToEnd (rowsAuto k rs1 rs2 rs3) advice s s') :
-    Frame k rs1 rs2 rs3 s s'
+theorem rows_frame (c : InlineCall)
+    (run : RunsToEnd (rowsAuto c) advice s s') :
+    Frame c s s'
 
 -- Soundness: every advice choice that gets through all the asserts.
-theorem rows_sound (k) (pre : Pre k s)
-    (run : RunsToEnd (rowsAuto k rs1 rs2 rs3) advice s s') :
-    InlineSpec k rs1 rs2 rs3 s s'
+theorem rows_sound (c : InlineCall) (pre : Pre c s)
+    (run : RunsToEnd (rowsAuto c) advice s s') :
+    InlineSpec c s s'
 
--- Jolt's `build_advice` for key k, transcribed; the empty list for the hashes.
-def joltAdvice (k : InlineKey) (s : SailJoltState) : List (BitVec 64)
+-- Jolt's `build_advice` for the call, transcribed; it reads the operand
+-- registers and buffers, as `host.rs` does. The empty list for the hashes.
+def joltAdvice (c : InlineCall) (s : SailJoltState) : List (BitVec 64)
 
--- Completeness: Jolt's own advice passes.
-theorem rows_jolt_advice_complete (k) (pre : Pre k s) :
-    ∃ s', RunsToEnd (rowsAuto k rs1 rs2 rs3) (joltAdvice k s) s s' ∧
-      InlineSpec k rs1 rs2 rs3 s s'
+-- The output Jolt's advice produces: c < q for the field operations; for
+-- GLVR_ADV, the six stored words encode `glvDecompose k` as Jolt serializes it.
+def Canonical (c : InlineCall) : SailJoltState → SailJoltState → Prop
+
+-- Completeness: Jolt's own advice passes and gives the canonical output.
+theorem rows_jolt_advice_complete (c : InlineCall) (pre : Pre c s) :
+    ∃ s', RunsToEnd (rowsAuto c) (joltAdvice c s) s s' ∧
+      InlineSpec c s s' ∧ Canonical c s s'
 
 -- The GLV facts behind the GLVR_ADV case.
 theorem glvDecompose_small (k : ZMod n) :
@@ -420,24 +451,27 @@ theorem glvDecompose_recombines (k : ZMod n) :
     (glvDecompose k).signedK1 + (glvDecompose k).signedK2 * glvLambda = k
 ```
 
-- **Frame and footprint**, for every input: the rows leave `x1..x31`, `vr32..39`, the advice tape, the device configuration and the other state that composition reads unchanged.
+- **Frame and footprint**, for every input: the rows leave `x1..x31`, `vr32..39`, the advice tape and the device configuration unchanged.
   Memory changes only inside the output buffer, computed from the rewritten operand with wrapping addresses.
+  Without `Pre c` that buffer can overlap the I/O window, and a successful store there can set the panic flag or change the output array (`JoltDevice.lean:221-228`, `DeviceMemory.lean:149-163`); the frame allows exactly the device effects of stores in the footprint.
+  I0 fixes the full list of state fields in `Frame` from the fields the whole-run layer reads.
   The allocated pool registers are zero again, and untouched pool registers keep their values.
   The instruction temporaries `vr40..47` may change.
-  This lemma does not need `Pre k`, and the whole-run layer can use it for every call.
-- **Soundness** (`rows_sound`): for every advice sequence, if the rows run to the end from `s` with `Pre k s`, the end state satisfies `InlineSpec k`.
+  This lemma does not need `Pre c`, and the whole-run layer can use it for every call.
+- **Soundness** (`rows_sound`): for every advice sequence, if the rows run to the end from `s` with `Pre c s`, the end state satisfies `InlineSpec c`.
   For the field operations `InlineSpec` is operation-specific: `a·b = w·q + c` for MUL and SQUARE, and `c·b = w·q + a` for DIV, each with the bounded quotient witness `w` the rows check.
-- **Completeness with Jolt's advice** (`rows_jolt_advice_complete`): for every `s` with `Pre k s`, the rows run to the end with `joltAdvice k s`, every assert passes, and the end state satisfies `InlineSpec k` with the canonical output.
-  The transcriptions are `mulq_quotient_advice` (`w = ⌊a·b / m⌋`), `mulq_division_advice` (result and quotient interleaved; it panics when `b = 0`, which `Pre k` excludes), both in `jolt-inlines/sdk/src/host.rs`, and `glv::decompose_scalar`.
-  For `GLVR_ADV` the lemma proves that both sign words are 0 or 1, that `k1, k2 < 2^128` (Jolt's `to_sign_abs` truncates to 128 bits), and that `k ≡ ±k1 ± λ·k2 (mod n)`, the identity the SDK checks.
+- **Completeness with Jolt's advice** (`rows_jolt_advice_complete`): for every `s` with `Pre c s`, the rows run to the end with `joltAdvice c s`, every assert passes, and the end state satisfies `InlineSpec c` and `Canonical c`.
+  The transcriptions are `mulq_quotient_advice` (`w = ⌊a·b / m⌋`), `mulq_division_advice` (result and quotient interleaved; it panics when `b = 0`, which `Pre c` excludes), both in `jolt-inlines/sdk/src/host.rs`, and `glv::decompose_scalar`.
+  For `GLVR_ADV`, `Canonical` says that the six stored words are the sign and magnitude encoding of `glvDecompose k` that Jolt serializes (`sdk/src/host.rs:233-242`), and the lemma proves that both sign words are 0 or 1, that `k1, k2 < 2^128` (Jolt's `to_sign_abs` truncates to 128 bits), and that `k ≡ ±k1 ± λ·k2 (mod n)`, the identity the SDK checks.
   I0 tests each transcription against Rust; I2 proves the lemmas.
   `JoltInstance.completeness` (`Completeness/completeness.lean`) then extends to inline rows in I1a and I1b.
 - **Determinism** for the hash inlines follows from the functional specification.
-  For the field operations a corollary states which representatives can pass (`c`, and `c + q` only under the conditions of section 3) and that a `c < q` check makes the result unique.
-  For DIV the corollary assumes `b ≢ 0 (mod q)`.
+  For the field operations, two corollaries state which representatives can pass and that a `c < q` check makes the result unique.
+  For MUL and SQUARE the second representative `c + q` needs `a·b ≥ q` and the quotient `w − 1`; for DIV it needs the quotient `w + b` and no condition on `a·b` (section 3).
+  The DIV corollary assumes `b ≢ 0 (mod q)`.
 - **Conditional and unconditional parts.**
   The frame and footprint hold for every call.
-  The mathematical specification holds only under `Pre k`.
+  The mathematical specification holds only under `Pre c`.
   R4 and R5 state both parts, and the per-call precondition appears as an explicit premise or as an invariant the guest establishes.
 - **Pool registers.**
   If the write-before-read check of section 5.1 passes for the twelve, their lemmas hold from any pool state.
@@ -486,11 +520,11 @@ EthLib covers all four families, each with a `BitVec` model written in the stand
 
 | # | Result | Statement | Needs |
 |---|---|---|---|
-| R1 | Row-level soundness and completeness for guests that call the twelve | `JoltInstance.soundness` and `JoltInstance.completeness` with `SourceInstruction` including `.inline`; each inline runs `rowsAuto k`, and the private inputs include the inline advice words, which have no effect on a program without inline advice rows | I0, I1a, I1b |
-| R2 | Per-inline correctness | Frame and footprint for every input; `rows_sound` and `rows_jolt_advice_complete` under `Pre k`; determinism or the representative corollary, for the twelve | I2 per inline |
+| R1 | Row-level soundness and completeness for guests that call the twelve | `JoltInstance.soundness` and `JoltInstance.completeness` with `SourceInstruction` including `.inline`; each inline call runs `rowsAuto c`, and the private inputs include the inline advice words, which have no effect on a program without inline advice rows | I0, I1a, I1b |
+| R2 | Per-inline correctness | Frame and footprint for every input; `rows_sound` and `rows_jolt_advice_complete` under `Pre c`; determinism or the representative corollary, for the twelve | I2 per inline |
 | R3 | Bug regression | The pre-`db9679295` secp256k1 DIV rows admit a run under `rd = rs1` whose output is not `a / b mod q`; the current rows satisfy `rows_sound` | I2 for DIV |
-| R4 | Inline-level soundness under the modelled acceptance relation | R1 plus R2: if the witness satisfies `AllConstraints`, every inline call satisfies its frame and footprint, and every call whose state satisfies `Pre k` satisfies `InlineSpec k` | R1, R2 |
-| R5 | Whole run for guests that call the twelve | `sail_soundness` and `sail_reproduces` against `platformRun`: Sail's `try_step` plus, on supported inline encodings, a step that always satisfies the frame and satisfies `InlineSpec k` when `Pre k` holds; the per-call preconditions are a premise or an invariant the guest supplies | I3 |
+| R4 | Inline-level soundness under the modelled acceptance relation | R1 plus R2: if the witness satisfies `AllConstraints`, every inline call satisfies its frame and footprint, and every call whose state satisfies `Pre c` satisfies `InlineSpec c` | R1, R2 |
+| R5 | Whole run for guests that call the twelve | `sail_soundness` and `sail_reproduces` against `platformRun`: Sail's `try_step` plus, on supported inline encodings, a step that always satisfies the frame and satisfies `InlineSpec c` when `Pre c` holds; the per-call preconditions are a premise or an invariant the guest supplies | I3 |
 
 "Accepted" in R4 and R5 means the modelled relation `AllConstraints`, as for the existing theorems.
 Connecting it to Jolt's verifier needs the sumcheck and commitment layers, which are outside this plan.
@@ -529,11 +563,11 @@ Track T shares its driver with the inlines.
 
 | Phase | Work | Output | Size |
 |---|---|---|---|
-| I0 foundations | (a) Extend the T1 driver to inline rows for all 27: production entry point, allocation cases, allocator restoration, fixture-hash and operand-uniformity checks, the write-before-read check for the twelve, the round-trip comparison; generated `Inlines/Generated/*.lean`. (b) Known-answer differential before any proof: run each of the twelve in Jolt's tracer on known-answer and random inputs, with honest advice from `build_advice`, and compare with the chosen Lean specification evaluated by `#eval` (test module only). (c) Answer the open questions of section 10. (d) Lean transcriptions of Jolt's advice functions for the seven secp256k1 inlines, tested against Rust on random and edge-case inputs, including edge-case scalars for the GLV split. (e) The generic frame lemma for rows that write only pool registers, instruction temporaries and stores in a footprint, with the per-inline write set computed from the generated rows. (f) Check every SDK call site of the twelve against `Pre k` | Generated rows for 27 inlines; known-answer report; tested advice transcriptions; frame lemma | 1–2 weeks |
+| I0 foundations | (a) Extend the T1 driver to inline rows for all 27: production entry point, allocation cases, allocator restoration, fixture-hash and operand-uniformity checks, the write-before-read check for the twelve, the round-trip comparison; generated `Inlines/Generated/*.lean`. (b) Known-answer differential before any proof: run each of the twelve in Jolt's tracer on known-answer and random inputs, with honest advice from `build_advice`, and compare with the chosen Lean specification evaluated by `#eval` (test module only). (c) Answer the open questions of section 10. (d) Lean transcriptions of Jolt's advice functions for the seven secp256k1 inlines, tested against Rust on random and edge-case inputs, including edge-case scalars for the GLV split. (e) The generic frame lemma for rows that write only pool registers, instruction temporaries and stores in a footprint, with the per-inline write set computed from the generated rows. (f) Check every SDK call site of the twelve against `Pre c` | Generated rows for 27 inlines; known-answer report; tested advice transcriptions; frame lemma | 1–2 weeks |
 | I1a language, hash inlines | `SourceInstruction.inline` over a generated key set (the five hash keys first), expansion with the `rd = x0` rewrite and the registration check of section 5.2, class-dependent capacity and the generalised `program_facts.lean` proofs; revisit `Layer4/Reachable.lean`; re-establish `JoltInstance.soundness` under today's `InLanguage` and extend `JoltInstance.completeness` to the hash rows. Acceptance: preprocessing the 3,121-row `KECCAK256_ABSORB_PERMUTE` expansion succeeds in the model | R1 for the hash inlines | 1–2 weeks |
 | I1b language, advice inlines | After D2: the `inline_advice` field and the changed honest rule (section 5.3); the adapted Layer 5a, 6 and 7 contracts; the seven secp256k1 keys; re-establish `JoltInstance.soundness` and extend `JoltInstance.completeness` | R1 for secp256k1 | 1–2 weeks |
 | I2 per-inline proofs | In this order: `GLVR_ADV`, secp256k1 MUL and SQUARE (both fields), secp256k1 DIV (both fields) with R3, `BLAKE2`, `SHA256` and `SHA256_INIT`, `KECCAK256` and `KECCAK256_ABSORB_PERMUTE`. Shared libraries, parametric for later inlines: limb and carry lemmas; `p'` cross-term lemmas parametric in the modulus and limb count (secp256k1 needs 1–3 limbs, P-256 later 3–4); the advice-store lemma parametric in the word count; 32-bit "dirty upper half" invariants (SHA-256, BLAKE3 later); a 64-bit rotate-and-XOR library (BLAKE2b, Keccak). Each inline's completeness lemma with Jolt's advice, including the GLV bound | R2, R3, R4 | `GLVR_ADV` rows: hours; GLV bound: about a week; secp256k1 field operations: about two weeks with shared lemmas; each hash: 2–4 weeks |
-| I3 whole run | Platform step `platformStep`: Sail's `try_step` on RISC-V encodings; on supported inline encodings, a step that satisfies the frame and footprint and, under `Pre k`, `InlineSpec k`. Generalise `BlockSimulates`, `sailRun` and `sailRun_of_chain`; drop `BlockConforms.riscv` for supported encodings; extend the decoding premise with the combined pipeline; give inline stores a footprint in `CodeInv.storeBase` and the I/O-window fields (`NoCodeStore`, flag-word premises); state the per-call preconditions as a premise or an invariant | R5 | 2–3 weeks |
+| I3 whole run | Platform step `platformStep`: Sail's `try_step` on RISC-V encodings; on supported inline encodings, a step that satisfies the frame and footprint and, under `Pre c`, `InlineSpec c`. Generalise `BlockSimulates`, `sailRun` and `sailRun_of_chain`; drop `BlockConforms.riscv` for supported encodings; extend the decoding premise with the combined pipeline; give inline stores a footprint in `CodeInv.storeBase` and the I/O-window fields (`NoCodeStore`, flag-word premises); state the per-call preconditions as a premise or an invariant | R5 | 2–3 weeks |
 
 Order and parallelism:
 
@@ -607,7 +641,7 @@ jolt-qed housekeeping that goes with I0: fix `docs/whole-run-theorem.md:124`, wh
 | The widened honest run weakens the meaning of existing theorems | The `inline_advice` field reaches only `VirtualAdvice` rows inside `.inline` expansions and has no effect on programs without such rows; DIV and REM are unchanged until a deliberate cleanup |
 | Statement drift or vacuity | Comparator replay of frozen statements (T7); each `rows_sound` instantiated on a known-answer input |
 | The extractor (driver plus generator) is wrong | It runs Jolt's production entry point and checks Jolt's fixture hashes; the generated Lean is rendered back and compared with Rust's rows; a person reviews T1's first mismatch report |
-| A precondition is unsatisfiable, or real guests do not establish it | Known-answer instances; I0(f) checks every SDK call site against `Pre k` |
+| A precondition is unsatisfiable, or real guests do not establish it | Known-answer instances; I0(f) checks every SDK call site against `Pre c` |
 | Jolt's GLV split exceeds `2^128` for some scalar, and the completeness lemma is false | I0 tests edge-case scalars first; a failing scalar is a Jolt completeness bug to report, and the lemma then states the scalars for which the split fits |
 | The generic machinery fits only the twelve | The driver, uniformity and round-trip checks run on all 27 from the start; the field-operation and advice-store lemmas are parametric; NTT's allocation case is in the driver's checks |
 | Readers take the results to cover the SDK | Section 1.2's boundary statement goes next to every public statement of the results |
