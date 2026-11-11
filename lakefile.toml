@@ -29,3 +29,13 @@ leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
 name = "LeanRV64D"
 leanOptions.weak.linter.style.nameCheck = false
 moreLeancArgs = ["-fbracket-depth=500"]
+
+# Tests: not a default target. `lake build JoltTests.InlineKat.Vectors` and
+# `lake exe inline-kat CASES.json` (see scripts/inline-kat/build.sh).
+[[lean_lib]]
+name = "JoltTests"
+leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+[[lean_exe]]
+name = "inline-kat"
+root = "JoltTests.InlineKat.Main"
