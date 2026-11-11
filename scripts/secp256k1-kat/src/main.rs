@@ -63,9 +63,9 @@ fn big(s: &str) -> BigUint {
     BigUint::parse_bytes(s.as_bytes(), 16).expect("hex constant")
 }
 
+/// The four little-endian limbs of `n`, which must be below `2^256`.
 fn to_limbs(n: &BigUint) -> [u64; 4] {
-    let m = BigUint::from(1u8) << 256usize;
-    let n = n % &m;
+    assert!(n.bits() <= 256, "to_limbs: {n:#x} does not fit in 256 bits");
     let ds = n.to_u64_digits();
     let mut out = [0u64; 4];
     out[..ds.len()].copy_from_slice(&ds);
@@ -537,9 +537,27 @@ fn main() {
             let b = rng.below(&q);
             pairs.push((format!("random canonical {i}"), to_limbs(&a), to_limbs(&b)));
         }
-        // Random 256-bit inputs, mostly unreduced.
+        // Uniform random 256-bit limbs. These are almost always canonical: a
+        // uniform 256-bit value is at least q with probability (2^256 - q) / 2^256,
+        // about 3.7e-68 for p and 3.7e-39 for n.
         for i in 0..30 {
             pairs.push((format!("random 256-bit {i}"), rng.limbs(), rng.limbs()));
+        }
+        // Deliberately unreduced operands: values in [q, 2^256), alone and
+        // against a canonical operand.
+        let two256 = BigUint::from(1u8) << 256usize;
+        let gap = &two256 - &q;
+        for i in 0..10 {
+            let u = &q + rng.below(&gap);
+            let v = &q + rng.below(&gap);
+            let c = rng.below(&q);
+            if op.binary() {
+                pairs.push((format!("unreduced a {i}"), to_limbs(&u), to_limbs(&c)));
+                pairs.push((format!("unreduced b {i}"), to_limbs(&c), to_limbs(&u)));
+                pairs.push((format!("unreduced a and b {i}"), to_limbs(&u), to_limbs(&v)));
+            } else {
+                pairs.push((format!("unreduced a {i}"), to_limbs(&u), [0; 4]));
+            }
         }
         // Random input with a random divisor in {1, q-1} for DIV.
         if matches!(op, Op::DivQ | Op::DivR) {
@@ -666,10 +684,15 @@ fn main() {
     for (c, k) in [
         ("n", nn.clone()),
         ("n+1", &nn + &one),
-        ("n+lambda", &nn + &lam),
+        ("n+2", &nn + BigUint::from(2u8)),
         ("2^256-1", (&one << 256usize) - &one),
     ] {
         glv_inputs.push((format!("unreduced {c}"), to_limbs(&k)));
+    }
+    // Random limbs in [n, 2^256), which the advice reduces modulo n first.
+    let glv_gap = (&one << 256usize) - &nn;
+    for i in 0..10 {
+        glv_inputs.push((format!("unreduced random {i}"), to_limbs(&(&nn + rng.below(&glv_gap)))));
     }
     for i in 0..100 {
         glv_inputs.push((format!("random {i}"), to_limbs(&rng.below(&nn))));

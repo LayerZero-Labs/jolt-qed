@@ -4,7 +4,7 @@ import Lean.Data.Json
 /-!
 # secp256k1 advice known-answer test
 
-`lake exe secp256k1-kat OUT.json` reads the JSON that `scripts/secp256k1-kat` writes from Jolt's
+`lake exe secp256k1-kat [--jolt-commit SHA] OUT.json` reads the JSON that `scripts/secp256k1-kat` writes from Jolt's
 Rust code and checks:
 
 - (a) the Lean transcriptions in `JoltBytecode/Inlines/Secp256k1/Advice.lean` return exactly
@@ -13,7 +13,12 @@ Rust code and checks:
   `Spec.lean` (`MulRel` or `DivRel`) with a canonical result, and for `GLVR_ADV` stores the
   encoding of the Lean `decomposeScalar`, with sign words in `{0, 1}`, magnitudes below `2^128`
   and `k ≡ ±k1 ± λ·k2 (mod n)`; a run panics exactly when the Lean advice is `none` or violates
-  the relation.
+  the relation;
+- (c) for every GLV scalar with `0 ≤ k < n` (computed from `k`, and checked against the JSON's
+  `in_range` label), the untruncated split recombines to `k` and has `|k1|, |k2| < 2^128`;
+- (d) the corpus comes from the expected Jolt commit (`expectedJoltCommit`, or the value of
+  `--jolt-commit SHA`), every case label matches its operands, and the corpus meets the minimum
+  coverage of `requiredCases`, `requiredGlvEdges` and `requiredGlvPrefixes`.
 
 It prints one line per failing check and a summary, and exits with status 1 on any failure.
 -/
@@ -135,6 +140,29 @@ def isDiv : Secp256k1Inline → Bool
   | .divq | .divr => true
   | _ => false
 
+/-- Check that a case's label describes its operands. The driver labels operand families
+`random canonical …` (both operands below `q`), `unreduced a …`, `unreduced b …` and
+`unreduced a and b …` (those operands in `[q, 2^256)`), and for `GLVR_ADV` `random …` (a scalar
+below `n`) and `unreduced …` (limbs in `[n, 2^256)`). -/
+def checkLabel (tag : String) (op : Secp256k1Inline) (case : String) (a b : Limbs) : T Unit := do
+  let q := op.modulus
+  let av := limbsToNat a
+  let bv := limbsToNat b
+  if case.startsWith "unreduced a and b " then
+    check (q ≤ av ∧ q ≤ bv) fun _ => s!"{tag}: labelled unreduced, but an operand is below q"
+  else if case.startsWith "unreduced b " then
+    check (q ≤ bv) fun _ => s!"{tag}: labelled unreduced, but b is below q"
+  else if case.startsWith "unreduced " then
+    check (q ≤ av) fun _ => s!"{tag}: labelled unreduced, but a is below q"
+  else if case.startsWith "random canonical " then
+    check (av < q ∧ bv < q) fun _ => s!"{tag}: labelled canonical, but an operand is at least q"
+  else if isGlv op && case.startsWith "random " then
+    check (av < q) fun _ => s!"{tag}: labelled random scalar, but k is at least n"
+where
+  isGlv : Secp256k1Inline → Bool
+    | .glvrAdv => true
+    | _ => false
+
 /-! ## (a) advice transcriptions -/
 
 def checkAdviceCase (j : Json) : T Unit := do
@@ -145,6 +173,7 @@ def checkAdviceCase (j : Json) : T Unit := do
   let bj ← field j "b"
   let b ← if bj.isNull then pure (natToLimbs 0) else limbs bj
   let tag := s!"advice {name} [{case}]"
+  checkLabel tag op case a b
   -- Runtime words.
   let lean := joltAdvice op a b
   match ← outcome (← field j "words") with
@@ -199,10 +228,14 @@ structure GlvMax where
 def checkGlvCase (j : Json) : StateT GlvMax T Unit := do
   let case ← str (← field j "case")
   let k ← hexInt (← field j "k")
-  let inRange ← bool (← field j "in_range")
+  let labelled ← bool (← field j "in_range")
   let rk1 ← hexInt (← field j "raw_k1")
   let rk2 ← hexInt (← field j "raw_k2")
   let tag := s!"glv [{case}]"
+  -- The range condition comes from `k`; the JSON label must agree with it.
+  let inRange : Bool := decide (0 ≤ k) && decide (k < (n : Int))
+  check (labelled == inRange) fun _ =>
+    s!"{tag}: the JSON says in_range = {labelled}, but 0 ≤ k < n is {inRange}"
   let (k1, k2) := glvSplit k
   check (k1 == rk1 ∧ k2 == rk2) fun _ =>
     s!"{tag}: untruncated split: Rust ({rk1}, {rk2}), Lean ({k1}, {k2})"
@@ -226,9 +259,14 @@ def checkGlvCase (j : Json) : StateT GlvMax T Unit := do
     check (l == ws) fun _ =>
       s!"{tag}: decompose_scalar_to_u64s: Rust {wordsStr ws}, Lean {wordsStr l}"
   if inRange then
-    -- The untruncated split recombines and fits in 128 bits.
+    -- The untruncated split recombines and fits in 128 bits, so `to_sign_abs`
+    -- loses nothing.
     check ((k1 + (glvLambda : Int) * k2 - k) % (n : Int) == 0) fun _ =>
       s!"{tag}: k1 + λ·k2 ≢ k (mod n)"
+    check (k1.natAbs < 2 ^ 128) fun _ =>
+      s!"{tag}: the untruncated |k1| = {k1.natAbs} is not below 2^128"
+    check (k2.natAbs < 2 ^ 128) fun _ =>
+      s!"{tag}: the untruncated |k2| = {k2.natAbs} is not below 2^128"
     let bits : Nat → Nat := fun x => if x = 0 then 0 else Nat.log2 x + 1
     let b1 := bits k1.natAbs
     let b2 := bits k2.natAbs
@@ -266,6 +304,7 @@ def checkRun (j : Json) : T Unit := do
   let bj ← field j "b"
   let b ← if bj.isNull then pure (natToLimbs 0) else limbs bj
   let tag := s!"run {name} [{case}]"
+  checkLabel tag op case a b
   let q := op.modulus
   let predicted := (joltAdvice op a b).map (rowsAccept op a b) |>.getD false
   match ← outcome (← field j "outcome") with
@@ -317,6 +356,80 @@ def checkRun (j : Json) : T Unit := do
           s!"{tag}: k ≢ ±k1 ± λ·k2 (mod n)"
       | _ => check false fun _ => s!"{tag}: expected 6 stored words"
 
+/-! ## Pin and coverage -/
+
+/-- The Jolt commit the corpus must come from, unless `--jolt-commit` overrides it. -/
+def expectedJoltCommit : String := "a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5"
+
+def fieldInlineNames : List String :=
+  ["SECP256K1_MULQ", "SECP256K1_SQUAREQ", "SECP256K1_DIVQ",
+   "SECP256K1_MULR", "SECP256K1_SQUARER", "SECP256K1_DIVR"]
+
+/-- Minimum numbers of cases per inline and label prefix, required both among the advice cases
+and among the tracer runs. -/
+def requiredCases : List (String × String × Nat) :=
+  (fieldInlineNames.flatMap fun nm =>
+    [(nm, "edge ", 16), (nm, "random canonical ", 100), (nm, "unreduced ", 10)]) ++
+  [("SECP256K1_GLVR_ADV", "edge ", 1), ("SECP256K1_GLVR_ADV", "unreduced ", 4),
+   ("SECP256K1_GLVR_ADV", "random ", 100)]
+
+/-- GLV edge scalars that the corpus must contain under the name `edge NAME`, both among the GLV
+scalars and as `GLVR_ADV` inputs. -/
+def requiredGlvEdges : List (String × Nat) :=
+  [("0", 0), ("1", 1), ("2", 2), ("n-1", n - 1), ("n-2", n - 2), ("(n-1)/2", (n - 1) / 2),
+   ("(n+1)/2", (n + 1) / 2), ("lambda", glvLambda), ("n-lambda", n - glvLambda),
+   ("a1", glvA1), ("b1", glvB1), ("a2", glvA2), ("(a1+a2)/2", (glvA1 + glvA2) / 2),
+   ("(b1+a1)/2", (glvB1 + glvA1) / 2), ("2^128-1", 2 ^ 128 - 1), ("2^128", 2 ^ 128)]
+
+/-- GLV scalar label prefixes with their minimum counts: the rounding thresholds of both
+`round(k·a1/n)` and `round(k·b1/n)`, the multiples of `⌈n/coeff⌉`, and the random scalars. -/
+def requiredGlvPrefixes : List (String × Nat) :=
+  [("edge round(a1) ", 1), ("edge round(b1) ", 1), ("edge ceil(n/coeff)*", 1), ("random ", 10000)]
+
+def caseOf (j : Json) : String := (j.getObjValAs? String "case").toOption.getD ""
+
+def inlineOf (j : Json) : String := (j.getObjValAs? String "inline").toOption.getD ""
+
+def countCases (cases : Array Json) (inline pre : String) : Nat :=
+  cases.foldl (fun acc j =>
+    if inlineOf j == inline && (caseOf j).startsWith pre then acc + 1 else acc) 0
+
+/-- Whether a `GLVR_ADV` case named `case` has the scalar limbs `k`. -/
+def hasGlvrInput (cases : Array Json) (case : String) (k : Nat) : Bool :=
+  cases.any fun j =>
+    inlineOf j == "SECP256K1_GLVR_ADV" && caseOf j == case &&
+      match j.getObjVal? "a" with
+      | .ok a => match a.getArr? with
+        | .ok ws =>
+          let vs := ws.toList.filterMap fun w => (w.getStr?.toOption.bind parseHexNat)
+          vs.length == 4 && (vs.zip (List.range 4)).foldl
+            (fun acc (v, i) => acc + 2 ^ (64 * i) * v) 0 == k
+        | .error _ => false
+      | .error _ => false
+
+def checkCoverage (advice runs glv : Array Json) : T Unit := do
+  for (inline, pre, min) in requiredCases do
+    for (what, cases) in [("advice cases", advice), ("tracer runs", runs)] do
+      let c := countCases cases inline pre
+      check (min ≤ c) fun _ =>
+        s!"coverage: {c} {what} for {inline} labelled '{pre}…', need at least {min}"
+  let glvKs : Array (String × Option Int) :=
+    glv.map fun j => (caseOf j, (j.getObjValAs? String "k").toOption.bind parseHexInt)
+  for (name, k) in requiredGlvEdges do
+    let case := s!"edge {name}"
+    check (glvKs.any (· == (case, some (k : Int)))) fun _ =>
+      s!"coverage: no GLV scalar '{case}' with k = {k}"
+    for (what, cases) in [("advice cases", advice), ("tracer runs", runs)] do
+      check (hasGlvrInput cases case k) fun _ =>
+        s!"coverage: no GLVR_ADV {what} entry '{case}' with k = {k}"
+  for (pre, min) in requiredGlvPrefixes do
+    let c := (glvKs.filter fun (case, _) => case.startsWith pre).size
+    check (min ≤ c) fun _ => s!"coverage: {c} GLV scalars labelled '{pre}…', need at least {min}"
+  let neg := (glvKs.filter fun (_, k) => k.any (· < 0)).size
+  let big := (glvKs.filter fun (_, k) => k.any ((n : Int) ≤ ·)).size
+  check (0 < neg ∧ 0 < big) fun _ =>
+    s!"coverage: GLV scalars outside [0, n) need both signs: {neg} below 0, {big} at least n"
+
 /-! ## Driver -/
 
 def countBy (cases : Array Json) (key : String) : Nat :=
@@ -325,7 +438,7 @@ def countBy (cases : Array Json) (key : String) : Nat :=
     | .ok o => if (o.getObjVal? key).toOption.isSome then acc + 1 else acc
     | .error _ => acc) 0
 
-def run (path : String) : M UInt32 := do
+def run (path expected : String) : M UInt32 := do
   let text ← IO.FS.readFile path
   let doc ← match Json.parse text with
     | .ok d => pure d
@@ -336,6 +449,9 @@ def run (path : String) : M UInt32 := do
   let runs ← arr (← field doc "runs")
   let glv ← arr (← field doc "glv")
   let body : T GlvMax := do
+    check (commit == expected) fun _ =>
+      s!"the corpus comes from Jolt commit {commit}, expected {expected} \
+        (pass --jolt-commit to check another commit)"
     check ((← hexNat (← field moduli "p")) == p) fun _ => "Rust's p differs from Lean's p"
     check ((← hexNat (← field moduli "n")) == n) fun _ => "Rust's n differs from Lean's n"
     check ((← hexNat (← field moduli "lambda")) == glvLambda) fun _ =>
@@ -347,12 +463,15 @@ def run (path : String) : M UInt32 := do
     let c2 := (← get).checks
     for j in runs do checkRun j
     let c3 := (← get).checks
-    IO.println s!"Jolt commit {commit}"
+    checkCoverage advice runs glv
+    let c4 := (← get).checks
+    IO.println s!"Jolt commit {commit} (expected {expected})"
     IO.println s!"advice cases: {advice.size} ({c1 - c0} checks)"
     IO.println s!"GLV scalars: {glv.size} ({c2 - c1} checks); in range: {g.count}, \
       max |k1| {g.k1Bits} bits, max |k2| {g.k2Bits} bits, {g.over128} at or above 2^128"
     IO.println s!"tracer runs: {runs.size} ({countBy runs "ok"} passed, \
       {countBy runs "panic"} panicked; {c3 - c2} checks)"
+    IO.println s!"coverage: {c4 - c3} checks"
     pure g
   let (_, tally) ← body.run {}
   for f in tally.failures do IO.println s!"FAIL {f}"
@@ -362,9 +481,11 @@ def run (path : String) : M UInt32 := do
 end JoltTests.Secp256k1Kat
 
 def main (args : List String) : IO UInt32 := do
-  match args with
-  | [path] =>
-    match ← (JoltTests.Secp256k1Kat.run path).run with
+  let go (path expected : String) : IO UInt32 := do
+    match ← (JoltTests.Secp256k1Kat.run path expected).run with
     | .ok code => pure code
     | .error e => IO.eprintln s!"secp256k1-kat: {e}"; pure 2
-  | _ => IO.eprintln "usage: secp256k1-kat OUT.json"; pure 2
+  match args with
+  | [path] => go path JoltTests.Secp256k1Kat.expectedJoltCommit
+  | ["--jolt-commit", sha, path] | [path, "--jolt-commit", sha] => go path sha
+  | _ => IO.eprintln "usage: secp256k1-kat [--jolt-commit SHA] OUT.json"; pure 2
