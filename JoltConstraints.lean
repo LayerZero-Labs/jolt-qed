@@ -2,6 +2,7 @@ import JoltConstraints.Completeness.All
 import JoltConstraints.Completeness.completeness
 import JoltConstraints.advice_inputs
 import JoltConstraints.Soundness.soundness
+import JoltConstraints.Soundness.FieldModuli
 import JoltConstraints.Soundness.Layer0.Bounds
 import JoltConstraints.Soundness.Layer0.Words
 import JoltConstraints.Soundness.Layer1.OneHot
