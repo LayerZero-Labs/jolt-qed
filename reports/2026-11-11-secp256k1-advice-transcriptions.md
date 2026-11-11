@@ -2,7 +2,7 @@
 
 Date: 2026-11-11.
 Jolt: a16z/jolt `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`.
-jolt-qed: branch `inline/i0d-advice`, based on `bf22776` (`spec/inline-precompiles`).
+jolt-qed: commit `4b24363a6aaf7311061aee58bf05f603a9d7302c` on branch `inline/i0d-advice` (based on `bf22776`, `spec/inline-precompiles`); the driver and checker at that commit produced and checked the results below.
 This report covers phase I0(d) of `docs/inline-precompiles.md` and the secp256k1 part of I0(b).
 
 ## What was added
@@ -24,6 +24,9 @@ JOLT_DIR=~/claude-work/jolt-inline-pin-a6b6 scripts/secp256k1-kat/build.sh WORK
 WORK/secp256k1-kat/target/release/secp256k1-kat WORK/kat.json
 lake exe secp256k1-kat WORK/kat.json
 ```
+
+The checker requires the corpus to come from Jolt `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`.
+To check a corpus from another Jolt commit, pass `lake exe secp256k1-kat --jolt-commit SHA WORK/kat.json`.
 
 The first `lake exe secp256k1-kat` compiles the C code of the Mathlib modules that `ZMod` imports, which took about 10 minutes on a 10-core Mac; later runs take seconds.
 
@@ -104,7 +107,8 @@ Field inlines, each of the six:
 
 - every pair (or every single value, for SQUARE) from 16 edge values: 0, 1, 2, `q-1`, `q-2`, `q`, `q+1`, `(q+1)/2`, `2^256-q`, `2^256-1` (all limbs `0xFFFF…`), `2^255`, `2^128`, `2^64-1`, `[0xFFFF…, 0, 0, 0]`, `[0, 0, 0, 0xFFFF…]`, and all limbs `0x8000…`;
 - the spec section 5.3 case `a = 2`, `b = (q+1)/2`;
-- 100 random canonical pairs and 30 random 256-bit pairs (mostly unreduced);
+- 100 random canonical pairs and 30 pairs of uniform random 256-bit limbs, which are almost always canonical (a uniform 256-bit value is at least `q` with probability about `3.7·10^-68` for `p` and `3.7·10^-39` for `n`);
+- deliberately unreduced operands, drawn uniformly from `[q, 2^256)`: for MUL and DIV, 10 pairs each with `a` unreduced, with `b` unreduced and with both unreduced (the other operand random canonical); for SQUARE, 10 unreduced values;
 - for DIV, 10 random dividends each with divisor 1 and with divisor `q-1` (both also among the edge pairs).
 
 GLV:
@@ -112,44 +116,62 @@ GLV:
 - 113 edge scalars: 0, 1, 2, `n-1`, `n-2`, `(n±1)/2`, `λ`, `n-λ`, `λ² mod n`, `λ±1`, `2^128-1`, `2^128`, `2^128+1`, `2^127`, `2^255`, `a1`, `b1`, `a2` and their neighbours and negatives modulo `n`, `(a1+a2)/2`, `(b1+a1)/2`, the products of `λ` with the basis entries, the rounding thresholds of `β1 = round(k·a1/n)` and `β2 = round(k·b1/n)` (the smallest `k` past `j·n + n/2` and `k ± 1, ± 2`, for `j` in `0, 1, 2, 1000`, `⌊coeff/2⌋` and `coeff - 2`), and multiples of `⌈n/coeff⌉`;
 - 10,000 random scalars below `n`;
 - 8 scalars outside `[0, n)` given to `decompose_scalar` directly (`-1`, `-λ`, `-(n-1)`, `-(2^200+12345)`, `n`, `2n+5`, `2^256-1`, `2^300+7`), which the production path never passes but which pin down the truncating division and the 128-bit truncation of `to_sign_abs`;
-- `GLVR_ADV` advice and tracer runs on the 113 edge scalars, 4 unreduced limb inputs (`n`, `n+1`, `n+λ`, `2^256-1`) and 100 random scalars.
+- `GLVR_ADV` advice and tracer runs on the 113 edge scalars, 4 fixed unreduced limb inputs (`n`, `n+1`, `n+2`, `2^256-1`), 10 random unreduced limb inputs in `[n, 2^256)` and 100 random scalars.
 
 ## Results
 
-`lake exe secp256k1-kat` on the driver's output (Jolt `a6b6dc717`) runs 57,068 checks with 0 failures.
+`lake exe secp256k1-kat` on the driver's output (Jolt `a6b6dc717`) runs 90,132 checks with 0 failures.
 
-- Advice transcriptions: 2,097 advice cases, 4,194 checks.
+Besides the checks below, the checker verifies the Jolt commit, checks every case label against its operands (for example that an `unreduced a` case has `a ≥ q`), and runs 95 coverage checks.
+The coverage checks require, among both the advice cases and the tracer runs, at least 16 edge, 100 random canonical and 10 unreduced cases for each field inline, and edge, unreduced and 100 random `GLVR_ADV` inputs.
+They also require 16 named GLV edge scalars with their values (for example `(n-1)/2` and `(b1+a1)/2`) among both the GLV scalars and the `GLVR_ADV` inputs, rounding thresholds of both `β1` and `β2`, multiples of `⌈n/coeff⌉`, 10,000 random scalars, and scalars outside `[0, n)` both below 0 and at least `n`.
+
+- Advice transcriptions: 2,247 advice cases, 5,348 checks (including the label checks).
   For every case, `joltAdvice` returns exactly the words of `build_runtime_advice`, and `mulqQuotientAdvice`, `mulqDivisionAdvice` or `decomposeScalar` (on `k mod n`) returns exactly the typed `build_advice` result.
-  Lean returns `none` exactly where Rust panics: 32 zero divisors per DIV inline (`b` in `{0, q}`, against the 16 dividends), and 3 MUL and 1 SQUARE cases per field whose quotient needs a fifth limb (`a, b` in `{q+1, 2^256-1}` with at least one `2^256-1`, and `a = 2^256-1` for SQUARE).
-- GLV on scalars: 10,121 scalars, 40,476 checks.
+  Lean returns `none` exactly where Rust panics: 32 zero divisors per DIV inline (`b` in `{0, q}`, against the 16 dividends), and the MUL and SQUARE cases whose quotient needs a fifth limb: per field, 3 MUL and 1 SQUARE edge cases (`a, b` in `{q+1, 2^256-1}` with at least one `2^256-1`, and `a = 2^256-1` for SQUARE), and among the unreduced cases 4 MULQ, 5 MULR, 6 SQUAREQ and 7 SQUARER cases, all with both operands unreduced.
+- GLV on scalars: 10,121 scalars, 70,823 checks.
   `glvSplit` equals the untruncated split of the driver's replica of `glv.rs` (which the driver checks against `glv::decompose_scalar` on every scalar), and `decomposeScalar` and `decomposeScalarToU64s` equal `decompose_scalar` and `decompose_scalar_to_u64s`, including the 8 scalars outside `[0, n)`, where truncating division and the 128-bit truncation matter.
   For example, `decompose_scalar(-(n-1))` has an untruncated `|k1|` of 129 bits, and both Rust and Lean keep its low 128 bits.
-- GLV bounds: over the 10,113 scalars in `[0, n)` (113 edge, 10,000 random), the largest `|k1|` is `0xa2a8918ca85bafe22016d0b917e4dd76` (128 bits, at `k = (n-1)/2`) and the largest `|k2|` is `0x89b6f7af5220ac3bcf568008c3e9d1ea` (128 bits).
+- GLV bounds: the checker computes from `k` whether a scalar is in `[0, n)`, checks the JSON's `in_range` label against it, and for each of the 10,113 scalars in `[0, n)` (113 edge, 10,000 random) fails unless the untruncated split has `|k1| < 2^128` and `|k2| < 2^128`.
+  The largest `|k1|` is `0xa2a8918ca85bafe22016d0b917e4dd76` (128 bits, at `k = (n-1)/2`) and the largest `|k2|` is `0x89b6f7af5220ac3bcf568008c3e9d1ea` (128 bits, at the random scalar `0x8607de81387b1b6afff5f2dbb04262ed41e4ca7dd704e7bd63730a0a0fe0f23e`).
   No split reaches `2^128`, and every untruncated split satisfies `k1 + λ·k2 ≡ k (mod n)`.
   I found no Jolt completeness bug.
 - Edge scalars: `0 ↦ (0, 0)`, `1 ↦ (1, 0)`, `n-1 ↦ (-1, 0)`, `λ ↦ (0, 1)`, `n-λ ↦ (0, -1)`, `λ² mod n ↦ (-1, -1)`, `2^128 ↦ (-0x14ca…cfd8, -0x3086…eb15)`, `a2 ↦ (0, -a1)`; all rounding-threshold scalars split within the bounds.
-- Tracer runs: 2,097 runs, 12,395 checks; 1,941 runs passed and 156 panicked, and Lean predicts each outcome from `joltAdvice` and `MulRel`/`DivRel`.
+- Tracer runs: 2,247 runs, 13,862 checks; 2,029 runs passed and 218 panicked, and Lean predicts each outcome from `joltAdvice` and `MulRel`/`DivRel`.
 
 | Inline | Rows | Passing runs | Panicking runs |
 |---|---|---|---|
-| `SECP256K1_MULQ` | 186 | 384 | 3 (advice panic, quotient too large) |
-| `SECP256K1_SQUAREQ` | 167 | 145 | 1 (advice panic) |
-| `SECP256K1_DIVQ` | 194 | 333 | 32 (zero divisor) + 42 (dividend `≥ p`: honest advice fails `VirtualAssertEQ`) |
-| `SECP256K1_MULR` | 232 | 384 | 3 (advice panic) |
-| `SECP256K1_SQUARER` | 213 | 145 | 1 (advice panic) |
-| `SECP256K1_DIVR` | 240 | 333 | 32 (zero divisor) + 42 (dividend `≥ n`) |
-| `SECP256K1_GLVR_ADV` | 13 | 217 | 0 |
+| `SECP256K1_MULQ` | 186 | 410 | 3 edge + 4 unreduced (advice panic, quotient too large) |
+| `SECP256K1_SQUAREQ` | 167 | 149 | 1 edge + 6 unreduced (advice panic) |
+| `SECP256K1_DIVQ` | 194 | 343 | 32 (zero divisor) + 42 edge + 20 unreduced (dividend `≥ p`: honest advice fails `VirtualAssertEQ`) |
+| `SECP256K1_MULR` | 232 | 409 | 3 edge + 5 unreduced (advice panic) |
+| `SECP256K1_SQUARER` | 213 | 148 | 1 edge + 7 unreduced (advice panic) |
+| `SECP256K1_DIVR` | 240 | 343 | 32 (zero divisor) + 42 edge + 20 unreduced (dividend `≥ n`) |
+| `SECP256K1_GLVR_ADV` | 13 | 227 | 0 |
+
+Among the unreduced cases, every MUL run with one unreduced operand passes, and every DIV run with only the divisor unreduced passes.
+Every DIV run with an unreduced dividend panics.
 
 The runs of each field inline include 100 random canonical inputs, and those of `GLVR_ADV` include 100 random scalars.
 On every passing run, the words the `VirtualAdvice` rows received equal `joltAdvice`, the inputs at `rs1` and `rs2` are unchanged, and:
 
 - MUL and SQUARE: `MulRel q a b w c` and `c < q` hold for the advice `w` and the stored `c`;
 - DIV: the stored `c` equals the advice result, and `DivRel q a b w c` and `c < q` hold;
-- `GLVR_ADV`: the six stored words equal `glvrAdvice k`, both sign words are 0 or 1, both magnitudes are below `2^128`, and `k ≡ ±k1 ± λ·k2 (mod n)`; this includes the unreduced inputs `n`, `n+1`, `n+λ` and `2^256-1`, which confirms that `Fr::new` reduces `k` modulo `n`.
+- `GLVR_ADV`: the six stored words equal `glvrAdvice k`, both sign words are 0 or 1, both magnitudes are below `2^128`, and `k ≡ ±k1 ± λ·k2 (mod n)`; this includes the unreduced inputs `n`, `n+1`, `n+2`, `2^256-1` and the 10 random ones in `[n, 2^256)`, which confirms that `Fr::new` reduces `k` modulo `n`.
 
 The spec section 5.3 case `a = 2`, `b = (q+1)/2` gives `w = 1` and `c = 1` for `MULQ` and `MULR`.
 
 I checked that the checker fails on corrupted data: changing one advice word, one stored DIV word, one stored GLV sign word and one `decompose_scalar_to_u64s` word gave 6 failures and exit status 1.
+Each of the following mutations also makes it exit with status 1:
+
+- the full corpus labelled with Jolt commit `wrong-pin` (1 failure);
+- a corpus labelled `wrong-pin` with empty arrays (96 failures), and the same corpus checked with `--jolt-commit wrong-pin` (95 coverage failures);
+- the corpus without the `DIVR` tracer runs (3 failures) or without the `round(b1)` threshold scalars (1 failure);
+- the scalar `-(n-1)` labelled in range (1 failure);
+- an `unreduced a` case whose `a` is replaced by 1 (4 failures).
+
+No scalar in `[0, n)` violates the GLV bound, so a corpus cannot exercise that check.
+I tested it by lowering the `|k1|` bound in the checker to `2^127`: the check then failed on 931 scalars with exit status 1, and I restored the bound before committing.
 
 ## Anything contradicting `docs/inline-precompiles.md`
 
