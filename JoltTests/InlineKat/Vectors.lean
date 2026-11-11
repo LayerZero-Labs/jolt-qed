@@ -1,4 +1,4 @@
-import JoltTests.InlineKat.Layout
+import JoltTests.InlineKat.Manifest
 
 /-!
 # Known answers for the hash specifications
@@ -65,23 +65,8 @@ def bytesAre (bytes : List UInt8) (hex : String) : Bool := bytes == (ofHex hex).
 #guard bytesAre (Keccak.keccak256 "abc".toUTF8).toList
   "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45"
 
-/-- Keccak-f[1600] of the zero state, from the Keccak team's `KeccakKAT-3`
-(EthLib `tests/cryptography/keccak/permutation/permutation_zero`). -/
-def keccakFZero : String :=
-  "e7dde140798f25f18a47c033f9ccd584eea95aa61e2698d54d49806f304715bd57d05362054e288bd46f8e7f2da4" ++
-  "97ffc44746a4a0e5fe90762e19d60cda5b8c9c05191bf7a630ad64fc8fd0b75a933035d617233fa95aeb0321710d" ++
-  "26e6a6a95f55cfdb167ca58126c84703cd31b8439f56a5111a2ff20161aed9215a63e505f270c98cf2febe641166" ++
-  "c47b95703661cb0ed04f555a7cb8c832cf1c8ae83e8c14263aae22790c94e409c5a224f94118c26504e72635f516" ++
-  "3ba1307fe944f67549a2ec5c7bfff1ea"
-
-/-- Keccak-f[1600] applied twice to the zero state (`permutation_zero_twice`). -/
-def keccakFZeroTwice : String :=
-  "3ccb6ef94d955c2d6db55770d02c336a6c6bd770128d3d0994d06955b2d9208a56f1e7e5994f9c4f38fb65daa2b9" ++
-  "57f90daf7512ae3d7785f710d8c347f2f4fa59879af7e69e1b1f25b498ee0fccfee4a168ceb9b661ce684f978fba" ++
-  "c466eadef5b1af6e833dc433d9db1927045406e065128309f0a9f87c434717bfa64954fd404b99d833addd9774e7" ++
-  "0b5dfcd5ea483cb0b755eec8b8e3e9429e646e22a0917bddbae729310e90e8cca3fac59e2a20b63d1c4e4602345b" ++
-  "59104ca4624e9f605cbf8f6ad26cd020"
-
+-- `keccakFZero` and `keccakFZeroTwice` (in `JoltTests.InlineKat.Manifest`) are the Keccak-f[1600]
+-- answers of the Keccak team's `KeccakKAT-3` for the zero state and for its image.
 #guard bytesAre (keccakBytes (Keccak.keccakF Keccak.State.zero)).toList keccakFZero
 #guard bytesAre (keccakBytes (Keccak.keccakF (keccakState (ofHex keccakFZero)))).toList
   keccakFZeroTwice

@@ -5,8 +5,18 @@ import Mathlib.Logic.Function.Defs
 
 This file is the specification of Jolt's `BLAKE2` inline.
 The inline computes the compression function F of RFC 7693 with 12 rounds:
-`Spec.compress 12 h m t f`, with the model's 128-bit counter `t`, or equivalently the
-executable `compress 12 h m t0 t1 f` (`compress_toBitVec` proves the two equal).
+`Spec.compress 12 h m t f`, or equivalently the executable `compress 12 h m t0 t1 f`
+(`compress_toBitVec` proves the two equal).
+
+The copied definitions take any 128-bit counter and a Boolean flag, but Jolt's inline supplies
+less:
+
+- The counter is one `u64` at `rs2 + 128`, widened to 128 bits: `t < 2^64`, so `t0` is that
+  word and `t1 = 0`. The sequence builder never XORs anything into word 13 of the work vector.
+- The final-block flag is one `u64` at `rs2 + 136`, and the specification covers the values 0
+  (`f = false`) and 1 (`f = true`). For any other value the builder XORs `0 - flag` into word 14,
+  which matches neither, so the inline's precondition requires the flag to be 0 or 1.
+  `JoltTests/InlineKat` records such cases as informational.
 
 ## Provenance
 

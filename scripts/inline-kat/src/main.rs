@@ -186,6 +186,11 @@ const SHA_ABC: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f
 const SHA_EMPTY: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const SHA_448: &str = "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1";
 const SHA_448_MSG: &[u8] = b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
+/// The intermediate hash value H(1) after the first block of SHA_448_MSG
+/// (NIST CSRC example "SHA256.pdf", two-block message).
+const SHA_448_H1: [u32; 8] = [
+    0x85e655d6, 0x417a1795, 0x3363376a, 0x624cde5c, 0x76e09589, 0xcac5f811, 0xcc4b32c1, 0xf20e533a,
+];
 
 /// Jolt's compression vectors (jolt-inlines/sha2/src/test_constants.rs):
 /// block words, and the state after compressing them into the IV.
@@ -238,7 +243,8 @@ fn sha256_cases(inline: Inline, run: &mut dyn FnMut(&Case) -> Vec<u8>) -> Vec<Ca
     }
     let blocks = sha256_pad(SHA_448_MSG);
     assert_eq!(blocks.len(), 2);
-    let first = Case::new("FIPS 180-4: 448-bit message, block 1", "kat", state(&SHA256_IV), blocks[0].clone());
+    let first = Case::new("FIPS 180-4: 448-bit message, block 1", "kat", state(&SHA256_IV), blocks[0].clone())
+        .expect(le32(&SHA_448_H1), "FIPS 180-4 / NIST CSRC example, intermediate H(1)");
     let mid = run(&first);
     cases.push(first);
     // The second block always goes through SHA256, from the tracer's state.

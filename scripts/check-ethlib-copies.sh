@@ -23,9 +23,10 @@
 # it must contain that commit. Without ETHLIB_DIR the script fetches the
 # commit into a temporary directory.
 #
-# A CI job runs it as
+# The workflow .github/workflows/ethlib-copies.yml runs it as
 #   scripts/check-ethlib-copies.sh
-# which needs only git, python3 and network access to github.com.
+# on pushes to main and on pull requests that touch JoltBytecode/Inlines or this
+# script. It needs only git, python3 and network access to github.com.
 #
 # To move to a newer EthLib commit: copy the changed declarations, update the
 # commit in each copy's header and in ETHLIB_COMMIT below, and rerun.
