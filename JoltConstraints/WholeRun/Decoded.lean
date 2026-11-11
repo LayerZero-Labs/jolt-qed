@@ -16,7 +16,6 @@ give the instruction Jolt decoded. This file derives both from the program image
   of the bytes `memory_init` loads at its address.
 * `CodeIntact`: Sail's memory still holds those bytes at every row. It holds at `sailInit`
   (`codeIntact_sailInit`); keeping it through the run is a run invariant.
-* `NotReservedParcel`: the documented deviation for the parcel `0x6001`.
 * `block_simulates_decoded`: every non-EBREAK RISC-V block, in RAM or in the I/O window, is one
   Sail `try_step` that keeps `Related`, with no premise on Sail's fetch or decode.
 -/
@@ -328,14 +327,6 @@ def CodeIntact (program : Rv64ProgramImage SourceInstruction) (s : SailState) : 
     ∀ b, imageByte? program (row.address.toNat + k) = some b →
       s.mem.get? (row.address.toNat + k) = some b
 
-/-- **Documented deviation: the block's parcel is not `0x6001`.** Jolt accepts the reserved
-compressed parcel `0x6001` (C.LUI x0, 0) and runs it as a no-op, while Sail rejects it as
-illegal, so a block at such a parcel is not simulated. See `docs/riscv-alignment.md`,
-section 5 ("What step e proves"). This premise is discharged once the Jolt pin includes
-a16z/jolt#2381, which makes Jolt reject `0x6001`. -/
-def NotReservedParcel (program : Rv64ProgramImage SourceInstruction) (b : Block) : Prop :=
-  imageParcel? program b.row.address.toNat ≠ some 0x6001#16
-
 /-- **The code starts intact.** At `sailInit` of Jolt's initial state, Sail's memory holds
 every byte the image loads, so `CodeIntact` holds for the start of a run. -/
 theorem codeIntact_sailInit (joltInstance : JoltInstance SourceInstruction)
@@ -467,7 +458,6 @@ AST and the bridge is the decoder's expansion agreement. -/
 theorem rowDecodes_fetch_decode (program : Rv64ProgramImage SourceInstruction)
     (row : SourceInstructionRow SourceInstruction) (hrowmem : row ∈ program.instructions)
     (i : RiscvInstruction) (e : BlockEncoding) (hd : RowDecodes program row i e)
-    (hnot : imageParcel? program row.address.toNat ≠ some 0x6001#16)
     (t : SailState) (hinv : Step.StepInvariant t)
     (hmisa : t.regs.get? Register.misa = some Decode.resetMisa)
     (hpc : t.regs.get? Register.PC = some row.address) (heven : row.address.getLsbD 0 = false)
@@ -549,15 +539,11 @@ theorem rowDecodes_fetch_decode (program : Rv64ProgramImage SourceInstruction)
         intro hbits
         rw [hp0] at hbits
         exact absurd hbits hlow)
-    have hres : ¬ Decode.ReservedAccepted (b1 ++ b0) := by
-      rw [Decode.reservedAccepted_iff]
-      intro heq
-      exact hnot (hp.trans (congrArg some heq))
     refine ⟨?_, ?_⟩
     · rw [hfetch]
       simp only [fetchedAt, hp0, hlow, ↓reduceIte, BlockEncoding.fetched]
     · obtain ⟨cast, base, hcast, hm, hbridge⟩ :=
-        Decode.joltDecode_compressed_agrees _ hlow hres adv i hdec t hinv hmisa
+        Decode.joltDecode_compressed_agrees _ hlow adv i hdec t hinv hmisa
       exact ⟨base, cast, hm, hbridge, hcast, fun w hw => by cases hw⟩
 
 
@@ -574,7 +560,7 @@ of the block's row give the encoding `e` and an AST `cast` that executes like an
 the block's instruction. This is the `hinputs` of `block_simulates_via` for non-ECALL rows. -/
 theorem decoded_inputs (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (e : BlockEncoding)
-    (hd : RowDecodes program b.row i e) (hnot : NotReservedParcel program b)
+    (hd : RowDecodes program b.row i e)
     (hpc : b.row.address.getLsbD 0 = false)
     (hmisa : ∀ s, Related b.pre s → s.regs.get? Register.misa = some Decode.resetMisa)
     (hcode : ∀ s, Related b.pre s → CodeIntact program s) :
@@ -598,7 +584,7 @@ theorem decoded_inputs (program : Rv64ProgramImage SourceInstruction) (b : Block
   have hpma_s : s.regs.get? Register.pma_regions = some platformPma := by
     simp [hr, sailRegs, Step.setReg, Std.ExtDHashMap.get?_insert, System.systemProject]
   refine ⟨inc, hinc, ?_⟩
-  have := rowDecodes_fetch_decode program b.row hruns.row_mem i e hd hnot
+  have := rowDecodes_fetch_decode program b.row hruns.row_mem i e hd
     (Step.setReg s .minstret_increment inc)
     (hrel.inv.setReg _ _ (by simp [Step.invariantReg]))
     (by rw [Step.setReg_get?_ne _ _ (by decide)]; exact hmisa s hrel)
@@ -641,8 +627,7 @@ Premises, by class:
   memory access is in RAM or in the I/O window.
 * from decoding: none; `encoding`, width, offsets, instruction matching, fetch and decode are
   derived.
-* documented deviation (`docs/riscv-alignment.md`, section 5, "What step e proves"): `hnot`
-  (`NotReservedParcel`), the parcel is not `0x6001`; and, for an I/O block, `hflag`
+* documented deviation (`docs/riscv-alignment.md`, section 2), for an I/O block: `hflag`
   (`NoFlagWordLoad`), `hlow` (`NoLowLoad`) and `hpanic` (`PanicStoreNonzero`).
 
 For example, a block whose row is the compressed C.ADDI parcel `0x0505` at an even address in
@@ -654,7 +639,6 @@ theorem block_simulates_decoded (program : Rv64ProgramImage SourceInstruction) (
     (hmisa : ∀ s, Related b.pre s → s.regs.get? Register.misa = some Decode.resetMisa)
     (hcode : ∀ s, Related b.pre s → CodeIntact program s)
     (hheap : b.pre.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8)
-    (hnot : NotReservedParcel program b)
     (hclass : RamAccess i b.start ∨ i.IoAccess b.start)
     (hflag : i.IoAccess b.start → i.NoFlagWordLoad b.start)
     (hlow : i.IoAccess b.start → i.NoLowLoad b.start)
@@ -665,7 +649,7 @@ theorem block_simulates_decoded (program : Rv64ProgramImage SourceInstruction) (
     cases e with
     | base w => exact hd.1
     | compressed h => exact hd.1
-  have hin := decoded_inputs program b hruns i e hd hnot hpc hmisa hcode
+  have hin := decoded_inputs program b hruns i e hd hpc hmisa hcode
   rcases hclass with hram | hio
   · refine block_simulates_via program b hruns i hrow hbreak hsys hpc
       (rowDecodes_evenOffsets hd) hheap hram e hwidth ?_
@@ -700,8 +684,8 @@ Premises, by class:
 * invariant: `hsys`, the system invariant on the block's entry state.
 * platform: `hpc` (`RowsAligned`), `hheap` (`HeapNoWrap`), `hcode` (the image is intact in
   Sail's memory) and `himage` (the image decodes).
-* documented deviation (`docs/riscv-alignment.md`, section 2): `hnot` (`NotReservedParcel`);
-  for a load or store on the I/O window, `hflag` (`NoFlagWordLoad`), `hlow` (`NoLowLoad`) and
+* documented deviation (`docs/riscv-alignment.md`, section 2): for a load or store on the
+  I/O window, `hflag` (`NoFlagWordLoad`), `hlow` (`NoLowLoad`) and
   `hpanic` (`PanicStoreNonzero`); for an atomic on the I/O window, `hamoflag`
   (`AmoNoFlagWord`).
 
@@ -713,7 +697,6 @@ theorem block_simulates_image (program : Rv64ProgramImage SourceInstruction) (b 
     (hsys : SystemInv b.pre) (hpc : b.row.address.getLsbD 0 = false)
     (hcode : ∀ s, Related b.pre s → CodeIntact program s)
     (hheap : b.pre.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8)
-    (hnot : NotReservedParcel program b)
     (hflag : i.IoAccess b.start → i.NoFlagWordLoad b.start)
     (hlow : i.IoAccess b.start → i.NoLowLoad b.start)
     (hpanic : i.IoAccess b.start → i.PanicStoreNonzero b.start)
@@ -721,15 +704,15 @@ theorem block_simulates_image (program : Rv64ProgramImage SourceInstruction) (b 
     ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
   rcases access_classified program b hruns i hrow with hram | hio | hamo
   · exact block_simulates_decoded program b hruns himage i hrow hbreak hsys hpc
-      (fun _ hrel => hrel.misa) hcode hheap hnot (Or.inl hram) hflag hlow hpanic
+      (fun _ hrel => hrel.misa) hcode hheap (Or.inl hram) hflag hlow hpanic
   · exact block_simulates_decoded program b hruns himage i hrow hbreak hsys hpc
-      (fun _ hrel => hrel.misa) hcode hheap hnot (Or.inr hio) hflag hlow hpanic
+      (fun _ hrel => hrel.misa) hcode hheap (Or.inr hio) hflag hlow hpanic
   · obtain ⟨e, hd⟩ := himage b.row hruns.row_mem i hrow
     have hwidth : b.row.is_compressed = e.isCompressed := by
       cases e with
       | base w => exact hd.1
       | compressed h => exact hd.1
-    have hin := decoded_inputs program b hruns i e hd hnot hpc (fun s hrel => hrel.misa) hcode
+    have hin := decoded_inputs program b hruns i e hd hpc (fun s hrel => hrel.misa) hcode
     refine block_simulates_io_amo_via program b hruns i hrow hsys hamo (hamoflag hamo) e hwidth ?_
     intro s hrel pc m oldInc hn hr
     obtain ⟨inc, hinc, hf, ast, cast, hm, hb, hdc, _⟩ := hin s hrel pc m oldInc hn hr

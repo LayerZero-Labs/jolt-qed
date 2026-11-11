@@ -12,10 +12,10 @@ Later work (the Sail configuration, the model patches, the step-level and whole-
 - Jolt, a16z/jolt at `9407f93f` (2026-11-06), for Jolt as it stands on `main`.
   jolt-qed's expansions were generated from `c6703570`.
   Every Jolt file cited below is identical at the two commits, except four added lines in `tracer/src/emulator/cpu.rs` that do not touch the code cited.
-- The Jolt changes for this alignment, a16z/jolt `669cf17ea`, an earlier commit of the local reference branch `align/system-semantics` (on top of `9407f93f`).
-  Its inline expansions under `crates/jolt-program/src/expand` are byte-identical to those at the head of a16z/jolt#2384 (`c0b1dd7c1`, stacked on a16z/jolt#2383); so are `crates/jolt-program/src/image/decode.rs` and `crates/jolt-riscv/src/uncompress.rs`.
-  The two commits differ in the tracer, the specification text and the test skip list, and `669cf17ea` contains neither a16z/jolt#2381 (the reserved C.LUI parcel) nor a16z/jolt#2382; section 5 treats the parcel `0x6001` as a premise.
-  The pin moves to a16z/jolt `main` once a16z/jolt#2383 and #2384 merge, and once #2381 merges for `ImageNoReservedParcel`.
+- The Jolt changes for this alignment, a16z/jolt `c336a6da7`, the head of a16z/jolt#2384 (stacked on a16z/jolt#2383, with `main` merged in after a16z/jolt#2381).
+  The inline expansions under `crates/jolt-program/src/expand`, `crates/jolt-program/src/image/decode.rs` and `crates/jolt-riscv/src/uncompress.rs` are transcribed from this commit.
+  It contains a16z/jolt#2381, which rejects the reserved C.LUI parcel (section 5).
+  The pin moves to a16z/jolt `main` once a16z/jolt#2383 and #2384 merge.
   The system expansions (`JoltBytecode/JoltISA/Expansions/System.lean`) and the decoder (`JoltBytecode/Decode/Jolt.lean`) transcribe this revision, not `9407f93f`: there, a CSR read of `mstatus` returns `v39 | 0x1800`, MRET restores `mstatus` before it jumps, and the decoder accepts CSRRC, CSRRWI, CSRRSI and CSRRCI.
 - The Sail model: abiswas3/sail-riscv at `266473f8`, as recorded in `sail-import/PROVENANCE.toml`, and upstream riscv/sail-riscv at `81184531` where this note backports a fix.
 
@@ -29,7 +29,7 @@ Jolt's decoder (`tracer/src/instruction/mod.rs`, `Instruction::decode`) accepts 
 - M (all of RV64M);
 - A (Zalrsc and Zaamo, word and doubleword; no Zabha, no Zacas);
 - Zca: `uncompress_instruction` expands C.FLD and C.FSD into F-extension words that the decoder then rejects, and treats the Zcb encodings as reserved, so neither Zcd nor Zcb is accepted;
-- from Zicsr, only CSRRW and CSRRS, and only on `mstatus`, `mtvec`, `mscratch`, `mepc`, `mcause` and `mtval` (`tracer/src/utils/virtual_registers.rs`, `is_supported_csr`); the Jolt changes for this alignment (`669cf17ea`, a16z/jolt#2383 and #2384) add CSRRC, CSRRWI, CSRRSI and CSRRCI on the same six CSRs, so with them Jolt accepts all of Zicsr on those CSRs; funct3 4 stays reserved;
+- from Zicsr, only CSRRW and CSRRS, and only on `mstatus`, `mtvec`, `mscratch`, `mepc`, `mcause` and `mtval` (`tracer/src/utils/virtual_registers.rs`, `is_supported_csr`); the Jolt changes for this alignment (`c336a6da7`, a16z/jolt#2383 and #2384) add CSRRC, CSRRWI, CSRRSI and CSRRCI on the same six CSRs, so with them Jolt accepts all of Zicsr on those CSRs; funct3 4 stays reserved;
 - Jolt's own instructions on the custom-2 major opcode `0x5B` (advice loads, `VirtualRev8W`, `VirtualAssertEQ`, `VirtualHostIO`; section 7);
 - the inline opcodes `0x0B` (custom-0) and `0x2B` (custom-1), which are out of scope for now.
 
@@ -238,19 +238,17 @@ The files are under `JoltBytecode/Decode/`.
 
 - `Agreement.lean`, `Decode.joltDecode_agrees`: if Jolt decodes a 32-bit word `w` to `i`, then `ext_decode w` returns an AST `ast` with `Matches i ast`.
   Jolt accepts no 32-bit word that Sail rejects.
-- `Compressed.lean`, `Decode.joltDecode_compressed_agrees`: if Jolt decodes the expansion of a 16-bit parcel `h` to `i`, and `h` is not the reserved parcel below, then `ext_decode_compressed h` returns a compressed AST `cast`, and there is a base AST `base` with `Matches i base` such that `executeFull cast` and `executeFull base` agree on every `StepInvariant` state.
+- `Compressed.lean`, `Decode.joltDecode_compressed_agrees`: if Jolt decodes the expansion of a 16-bit parcel `h` to `i`, then `ext_decode_compressed h` returns a compressed AST `cast`, and there is a base AST `base` with `Matches i base` such that `executeFull cast` and `executeFull base` agree on every `StepInvariant` state.
   This is the hypothesis `joltStep_compressed` takes.
 
 Decision: FENCE.TSO (`0x8330000f`) is decoded by Sail as `FENCE_TSO` and by Jolt as an ordinary FENCE.
 `Matches .FENCE` accepts both Sail ASTs, because Jolt runs every fence as one no-op row and Sail's sequential memory model gives both the same effect, so the theorem needs no special case.
 
-Deviation: the parcel `0x6001` is C.LUI with `rd = x0` and a zero immediate, which the specification reserves (`unpriv/zca.adoc` `norm:c-lui_rsv`: "The code points with imm=0 are reserved").
-Sail decodes it as `C_ILLEGAL` and raises an illegal-instruction exception; Jolt expands it to `ADDI x0, x0, 0` and runs it as a no-op.
-`ReservedAccepted` (`Decode/Jolt.lean`) names the parcels Jolt accepts that the specification reserves, and `Decode.reservedAccepted_iff` shows `0x6001` is the only one.
-The whole-run theorem takes "no block fetches `0x6001`" as a named premise.
-A compiler never emits this parcel, so the premise holds for compiled guests.
-Pending Jolt change: a16z/jolt#2381 makes both of Jolt's decompressors return the invalid word for `0x6001`, so the image decoder rejects it as `MalformedImage` and the tracer panics.
-Once the Jolt pin includes that change, the premise is discharged: delete `NotReservedParcel`, `ReservedAccepted` and this paragraph.
+Resolved deviation: the parcel `0x6001` is C.LUI with `rd = x0` and a zero immediate, which the specification reserves (`unpriv/zca.adoc` `norm:c-lui_rsv`: "The code points with imm=0 are reserved").
+Sail decodes it as `C_ILLEGAL` and raises an illegal-instruction exception.
+Jolt used to expand it to `ADDI x0, x0, 0` and run it as a no-op.
+Since a16z/jolt#2381, both of Jolt's decompressors return the invalid word for it, so the image decoder rejects it as `MalformedImage` and the tracer panics.
+The transcribed `joltUncompress` includes that change, so Jolt accepts no reserved parcel and `joltDecode_compressed_agrees` takes no premise about one.
 
 The proofs use no `bv_decide` and no `decide +kernel`.
 The first versions of both files proved bit-vector side conditions with `bv_decide`, which in Lean 4.35 adds one auxiliary axiom per call; they now go through `omega` and `simp` on `BitVec.toNat`, and the two theorems' axioms are only `propext`, `Classical.choice` and `Quot.sound`.
@@ -370,7 +368,6 @@ It holds initially and is preserved by every source block, including CSR writes,
 `CodeIntact` says Sail's memory still holds those bytes at every row; it holds at `sailInit` (`codeIntact_sailInit`).
 Its Jolt-side version `JoltCodeIntact` (`WholeRun/CodeInv.lean`) is a run invariant under the documented deviation `NoCodeStore`: the block stores into no instruction byte, counting the whole doubleword Jolt's narrow stores rewrite.
 Jolt does not forbid a store into the code, and its tracer keeps fetching the committed bytecode afterwards, while Sail's model fetches coherently from memory; without Zifencei the specification permits either (`unpriv/zifencei.adoc`).
-`NotReservedParcel` is the documented deviation for the parcel `0x6001` (section 5, "What step e proves"), discharged once Jolt rejects that parcel (a16z/jolt#2381).
 
 Platform premise `JoltInstance.HeapNoWrap`: the memory layout ends at least eight bytes below `2^64` (`heap_end ≤ 2^64 - 8`).
 `MemoryLayout.new` checks its additions but rounds only the stack and heap sizes to eight bytes, so a `program_end` near `2^64` gives `heap_end = 2^64 - 1`; real ELFs end far below that.
@@ -400,7 +397,6 @@ The premises, by class:
 | `ImageDecoded` | platform | the committed bytecode is what Jolt's decoder makes of the image |
 | `RowsAligned` | platform | every row address is even; Jolt's ELF loader does not check that the text section starts at an even address |
 | `HeapNoWrap` | platform | the layout ends at least eight bytes below `2^64` |
-| `ImageNoReservedParcel` | documented deviation | the parcel `0x6001` (section 5); goes away with a16z/jolt#2381 |
 | `BlockConforms.amo_no_flag_word` | documented deviation | an AMO on the I/O window touches no panic or termination byte (section 2) |
 | `BlockConforms.no_code_store` | documented deviation | stores into the code, above |
 | `BlockConforms.no_flag_word_load`, `no_low_load`, `panic_store_nonzero` | documented deviation | the I/O window (section 2) |

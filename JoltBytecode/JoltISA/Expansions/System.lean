@@ -13,9 +13,8 @@ open LeanRV64D
 /-!
 # System-instruction Jolt expansion programs
 
-These programs transcribe Jolt's expander at `669cf17ea`, an earlier commit of the
-a16z/jolt reference branch `align/system-semantics` whose `crates/jolt-program` is
-byte-identical to the head of a16z/jolt#2384 (`c0b1dd7c1`):
+These programs transcribe Jolt's expander at `c336a6da7`, the head of a16z/jolt#2384,
+which is stacked on a16z/jolt#2383:
 `crates/jolt-program/src/expand/control_flow/{ecall,mret,csr,csrrw,csrrs,csrrc,csr_immediate}.rs`
 (`expand_ecall`, `expand_mret`, `emit_csr_read`, `emit_csr_swap`,
 `emit_csr_bit_update`, and the immediate expanders).

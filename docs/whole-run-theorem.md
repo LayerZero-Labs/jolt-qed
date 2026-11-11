@@ -13,7 +13,7 @@ The claim holds under the premises listed below, and the most important limits a
 theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
-    (hheap : joltInstance.HeapNoWrap) (hreserved : ImageNoReservedParcel joltInstance.program)
+    (hheap : joltInstance.HeapNoWrap)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
     ∃ (n : Nat) (s : SailState),
@@ -32,7 +32,7 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
     (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
-    (hheap : joltInstance.HeapNoWrap) (hreserved : ImageNoReservedParcel joltInstance.program) :
+    (hheap : joltInstance.HeapNoWrap) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
       (trace.prover_config joltInstance).isSome ∧
@@ -102,12 +102,10 @@ Each premise is in one of four classes:
 
 ### Documented deviations
 
-`ImageNoReservedParcel` is a premise on the whole program.
-The other five are fields of `BlockConforms`, which must hold for every block of the halt prefix.
+All five are fields of `BlockConforms`, which must hold for every block of the halt prefix.
 
 | Premise | Meaning | What would remove it |
 | --- | --- | --- |
-| `ImageNoReservedParcel` | No row holds the parcel `0x6001`, which Jolt ran as a no-op and Sail rejects as illegal. | a16z/jolt#2381, which is merged; the premise goes once the Jolt pin includes it. |
 | `no_code_store` | No store writes into an instruction row of the program. The check covers the whole aligned doubleword of each store, because Jolt's narrow stores rewrite their doubleword. Jolt keeps fetching the committed bytecode after such a store, while Sail fetches from memory; without Zifencei the specification allows both. | A constraint in Jolt that every store's doubleword lies outside the code, with the same check in the tracer. |
 | `no_flag_word_load` | No load reads a byte of the panic or termination word. | Treating both words as plain memory in Jolt's tracer and verifier, with "panic" meaning "the panic word is nonzero". |
 | `panic_store_nonzero` | A store into the panic doubleword leaves Sail's panic word nonzero. Jolt sets its panic flag on any such store, even of zero. | The same change as for `no_flag_word_load`. |
@@ -161,7 +159,7 @@ Every deviation premise that Jolt's constraints come to enforce leaves `BlockCon
 - **They are one-directional.** Every honest Jolt run up to its first EBREAK is reproduced by Sail. The converse is not claimed: a Sail run need not correspond to a Jolt run, and the theorems say nothing about programs whose runs Jolt's tracer aborts.
 - **They stop at the first EBREAK.** Jolt treats EBREAK as the end of the program, and the RISC-V reading of that is entering debug mode. The Sail model does not implement the debug extension, and the theorems stop in front of the first EBREAK or C.EBREAK without executing it ([`riscv-alignment.md`](riscv-alignment.md) section 4). They say nothing about later instructions.
 - **They do not cover Jolt's own instructions**, the inline opcodes `0x0B` and `0x2B`, or the advice tape (see the scope premise above).
-- **They describe a particular Jolt revision.** The system expansions and the decoder transcribe a16z/jolt `669cf17ea`, whose relevant files match the head of a16z/jolt#2384. That change is not on Jolt `main` until a16z/jolt#2383 and #2384 merge ([`riscv-alignment.md`](riscv-alignment.md), Sources).
+- **They describe a particular Jolt revision.** The system expansions and the decoder transcribe a16z/jolt `c336a6da7`, the head of a16z/jolt#2384. That change is not on Jolt `main` until a16z/jolt#2383 and #2384 merge ([`riscv-alignment.md`](riscv-alignment.md), Sources).
 - **They compare outputs only up to trailing zero bytes**, as `JoltInstance.soundness` does.
 - **They describe one hart configuration.** The Sail model is configured as an RV64IMAC hart with only M-mode and no interrupts, with Jolt's memory map ([`riscv-alignment.md`](riscv-alignment.md) sections 1 and 2). They say nothing about other configurations.
 

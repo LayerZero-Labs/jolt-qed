@@ -2,10 +2,9 @@ import JoltBytecode.RiscvInstruction
 
 /-!
 Jolt's image decoder and RV64 compressed-instruction normalization at
-`669cf17ea`, an earlier commit of the a16z/jolt reference branch
-`align/system-semantics`. Both transcribed files are byte-identical to those at the
-head of a16z/jolt#2384 (`c0b1dd7c1`). The revision predates a16z/jolt#2381, which
-rejects the parcel `0x6001`.
+`c336a6da7`, the head of a16z/jolt#2384, which is stacked on a16z/jolt#2383 and
+contains a16z/jolt#2381. Since a16z/jolt#2381, the parcel `0x6001` normalizes to the
+invalid word, as every other reserved parcel does.
 The opcode and operand helpers transcribe `crates/jolt-program/src/image/decode.rs`;
 the parcel normalization transcribes `crates/jolt-riscv/src/uncompress.rs`.
 -/
@@ -204,7 +203,8 @@ def branchImmediates (h : BitVec 32) : BitVec 32 × BitVec 32 :=
   (((o >>> 6) &&& 0x40) ||| ((o >>> 5) &&& 0x3f),
     ((o >>> 11) &&& 1) ||| (o &&& 0x1e))
 
-/-- Jolt's `uncompress_rv64_instruction`, including invalid parcels; e.g. 0x6001 becomes 0x13. -/
+/-- Jolt's `uncompress_rv64_instruction`, including invalid parcels; e.g. 0x6001 becomes
+0xffffffff. -/
 def joltUncompress (parcel : BitVec 16) : BitVec 32 :=
   let h := parcel.setWidth 32
   let r := (h >>> 7) &&& 0x1f
@@ -239,10 +239,9 @@ def joltUncompress (parcel : BitVec 16) : BitVec 32 :=
       let imm := signBitMask h 0x1000 0xfffffc00 ||| ((h >>> 3) &&& 0x200) |||
         ((h >>> 2) &&& 0x10) ||| ((h <<< 1) &&& 0x40) ||| ((h <<< 4) &&& 0x180) ||| ((h <<< 3) &&& 0x20)
       if imm ≠ 0 then (imm <<< 20) ||| (r <<< 15) ||| (r <<< 7) ||| 0x13 else 0xffffffff
-    else if r ≠ 0 then
+    else
       let imm := signBitMask h 0x1000 0xfffc0000 ||| ((h <<< 5) &&& 0x20000) ||| ((h <<< 10) &&& 0x1f000)
-      if imm ≠ 0 then imm ||| (r <<< 7) ||| 0x37 else 0xffffffff
-    else 0x13
+      if imm ≠ 0 then (if r = 0 then 0x13 else imm ||| (r <<< 7) ||| 0x37) else 0xffffffff
   | 1, 4 => match ((h >>> 10) &&& 3).toNat with
     | 0 => (sh <<< 20) ||| (rp <<< 15) ||| (5 <<< 12) ||| (rp <<< 7) ||| 0x13
     | 1 => (0x20 <<< 25) ||| (sh <<< 20) ||| (rp <<< 15) ||| (5 <<< 12) ||| (rp <<< 7) ||| 0x13
@@ -289,14 +288,5 @@ def joltUncompress (parcel : BitVec 16) : BitVec 32 :=
       ((if f = 6 then 2 else 3) <<< 12) ||| ((o &&& 0x1f) <<< 7) |||
       (if f = 5 then 0x27 else 0x23)
   | _, _ => 0xffffffff
-
-/-- Compressed parcels the RISC-V specification marks reserved but Jolt accepts.
-Sail rejects them as C_ILLEGAL; see the deviation list in docs/riscv-alignment.md.
-For example, 0x6001 is a reserved C.LUI, although Jolt expands it to ADDI x0,x0,0. -/
-def ReservedAccepted (h : BitVec 16) : Prop :=
-  -- C.LUI nzimm=0 is RESERVED. Only rd=x0 is accepted by Jolt (canonical ADDI no-op);
-  -- Sail returns C_ILLEGAL. rd=x2 (C.ADDI16SP) and other rd return 0xffffffff in Jolt.
-  h.extractLsb 1 0 = 1 ∧ h.extractLsb 15 13 = 3 ∧ h.extractLsb 11 7 = 0 ∧
-    h.extractLsb 12 12 = 0 ∧ h.extractLsb 6 2 = 0
 
 end Decode

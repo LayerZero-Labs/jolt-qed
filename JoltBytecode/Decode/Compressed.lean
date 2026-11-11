@@ -1,7 +1,8 @@
 import JoltBytecode.Decode.Agreement
 
 /-!
-Agreement of Jolt’s compressed expander at `b65455e6d` with Sail’s RV64IMAC decoder.
+Agreement of Jolt’s compressed expander (`joltUncompress`, transcribed at a16z/jolt `c336a6da7`)
+with Sail’s RV64IMAC decoder.
 Cases follow `crates/jolt-riscv/src/uncompress.rs` (`uncompress_rv64_instruction`).
 -/
 
@@ -1173,10 +1174,14 @@ private theorem compare_lui_hint (h : BitVec 16)
     (hf : ((h.setWidth 32 >>> 13) &&& 7).toNat = 3)
     (hr : ((h.setWidth 32 >>> 7) &&& 31) = 0)
     (hi : h.extractLsb 12 12 ++ h.extractLsb 6 2 ≠ 0)
+    (hu : (signBitMask (h.setWidth 32) 0x1000 0xfffc0000 |||
+      ((h.setWidth 32 <<< 5) &&& 0x20000) ||| ((h.setWidth 32 <<< 10) &&& 0x1f000)) ≠ 0)
     (s : SailState) (hinv : _root_.Step.StepInvariant s) :
     ∃ cast base, ext_decode_compressed h s = .ok cast s ∧
       ext_decode (joltUncompress h) s = .ok base s ∧
       ∀ s', _root_.Step.StepInvariant s' → _root_.Step.executeFull cast s' = _root_.Step.executeFull base s' := by
+  -- `simp only` leaves Jolt's `r = 2` test at `0 = 2` unless this fact is in the context.
+  have hr2 : ((0 : BitVec 32) = 2) = False := by decide
   compare_compressed_split
 
 private theorem compare_mv_hint (h : BitVec 16)
@@ -1304,24 +1309,11 @@ macro "finish_compressed_case" : tactic => `(tactic|
       (hinv := $(Lean.mkIdent `hinv))) <;> assumption
   | solve | apply (compare_li_hint $(Lean.mkIdent `h) (s := $(Lean.mkIdent `s))
       (hinv := $(Lean.mkIdent `hinv))) <;> assumption
-  | solve | apply (compare_lui_hint $(Lean.mkIdent `h) (s := $(Lean.mkIdent `s))
-      (hinv := $(Lean.mkIdent `hinv))) <;> assumption
   | solve | apply (compare_mv_hint $(Lean.mkIdent `h) (s := $(Lean.mkIdent `s))
       (hinv := $(Lean.mkIdent `hinv))) <;> assumption
   | solve | apply (compare_add_hint $(Lean.mkIdent `h) (s := $(Lean.mkIdent `s))
       (hinv := $(Lean.mkIdent `hinv))) <;> assumption
 )
-
-/-- The reserved parcels accepted by Jolt form a singleton: 0x6001 is C.LUI x0,0. -/
-theorem reservedAccepted_iff (h : BitVec 16) : ReservedAccepted h ↔ h = 0x6001#16 := by
-  unfold ReservedAccepted
-  constructor
-  · intro ⟨_, _, _, _, _⟩
-    simp only [BitVec.toNat_eq, BitVec.extractLsb_toNat] at *
-    simp at *
-    omega
-  · rintro rfl
-    decide
 
 private theorem rejected_opcode (w : BitVec 32) (advice : BitVec 64)
     (hop : (w.extractLsb 6 0).toNat = 7 ∨ (w.extractLsb 6 0).toNat = 39 ∨
@@ -1371,22 +1363,18 @@ private theorem compare_control (h : BitVec 16)
     | simp only [joltUncompress, hop, hf, ha, hb, hr, ne_eq,
         ↓reduceIte, not_false_eq_true, not_true_eq_false] at hn
 
-/-- A quadrant-one parcel with funct3 three and register field zero is not reserved only if
-its immediate bits are nonzero; for example, 0x6005 is C.LUI x0 with nonzero immediate. -/
+/-- A nonzero C.LUI immediate has a nonzero source bit; for example, 0x6005 is C.LUI x0
+with immediate bit 0 set. -/
 private theorem compressed_upper_nonzero (h : BitVec 16)
-    (hq : (h.setWidth 32 &&& 3) = 1#32) (hf : ((h.setWidth 32 >>> 13) &&& 7) = 3#32)
-    (hres : ¬ ReservedAccepted h) (hr0 : ((h.setWidth 32 >>> 7) &&& 31) = 0) :
-    h.extractLsb 12 12 ++ h.extractLsb 6 2 ≠ 0 := by
-  intro hz
-  obtain ⟨a, b⟩ := append_eq_zero_aux _ _ hz
-  apply hres
-  unfold ReservedAccepted
-  decoder_omega
+    (hi : (signBitMask (h.setWidth 32) 0x1000 0xfffc0000 |||
+      ((h.setWidth 32 <<< 5) &&& 0x20000) ||| ((h.setWidth 32 <<< 10) &&& 0x1f000)) ≠ 0) :
+    h.extractLsb 12 12 ++ h.extractLsb 6 2 ≠ 0 :=
+  fun hz => hi (compressed_immediates_zero h hz).2.2.1
 
 private theorem compare_upper (h : BitVec 16)
     (hop : (h.setWidth 32 &&& 3).toNat = 1)
     (hf : ((h.setWidth 32 >>> 13) &&& 7).toNat = 3)
-    (hres : ¬ ReservedAccepted h) (hn : joltUncompress h ≠ 0xffffffff)
+    (hn : joltUncompress h ≠ 0xffffffff)
     (s : SailState) (hinv : _root_.Step.StepInvariant s) :
     ∃ cast base, ext_decode_compressed h s = .ok cast s ∧
       ext_decode (joltUncompress h) s = .ok base s ∧
@@ -1394,17 +1382,14 @@ private theorem compare_upper (h : BitVec 16)
   by_cases hr2 : ((h.setWidth 32 >>> 7) &&& 31) = 2
   · by_cases hz : (signBitMask (h.setWidth 32) 0x1000 0xfffffc00 ||| ((h.setWidth 32 >>> 3) &&& 0x200) ||| ((h.setWidth 32 >>> 2) &&& 0x10) ||| ((h.setWidth 32 <<< 1) &&& 0x40) ||| ((h.setWidth 32 <<< 4) &&& 0x180) ||| ((h.setWidth 32 <<< 3) &&& 0x20)) = 0
     · simp only [joltUncompress, hop, hf, hr2, hz, ne_eq,
-        ↓reduceIte, not_false_eq_true, not_true_eq_false] at hn
+        ↓reduceIte, not_true_eq_false] at hn
     · finish_compressed_case
-  · by_cases hr0 : ((h.setWidth 32 >>> 7) &&& 31) = 0
-    · have hz : h.extractLsb 12 12 ++ h.extractLsb 6 2 ≠ 0 := by
-        have hq : (h.setWidth 32 &&& 3) = 1#32 := BitVec.eq_of_toNat_eq hop
-        have hf' : ((h.setWidth 32 >>> 13) &&& 7) = 3#32 := BitVec.eq_of_toNat_eq hf
-        exact compressed_upper_nonzero h hq hf' hres hr0
-      finish_compressed_case
-    · by_cases hz : (signBitMask (h.setWidth 32) 0x1000 0xfffc0000 ||| ((h.setWidth 32 <<< 5) &&& 0x20000) ||| ((h.setWidth 32 <<< 10) &&& 0x1f000)) = 0
-      · simp only [joltUncompress, hop, hf, hr2, hr0, hz, ne_eq,
-          ↓reduceIte, not_false_eq_true, not_true_eq_false] at hn
+  · by_cases hz : (signBitMask (h.setWidth 32) 0x1000 0xfffc0000 |||
+      ((h.setWidth 32 <<< 5) &&& 0x20000) ||| ((h.setWidth 32 <<< 10) &&& 0x1f000)) = 0
+    · simp only [joltUncompress, hop, hf, hr2, hz, ne_eq,
+        ↓reduceIte, not_true_eq_false] at hn
+    · by_cases hr0 : ((h.setWidth 32 >>> 7) &&& 31) = 0
+      · exact compare_lui_hint h hop hf hr0 (compressed_upper_nonzero h hz) hz s hinv
       · finish_compressed_case
 
 private theorem accepted_opcode (w : BitVec 32) (advice : BitVec 64)
@@ -1452,7 +1437,7 @@ private theorem compare_quadrant0 (h : BitVec 16)
 
 private theorem compare_quadrant1 (h : BitVec 16)
     (hop : (h.setWidth 32 &&& 3).toNat = 1)
-    (hres : ¬ ReservedAccepted h) (hn : joltUncompress h ≠ 0xffffffff)
+    (hn : joltUncompress h ≠ 0xffffffff)
     (s : SailState) (hinv : _root_.Step.StepInvariant s) :
     ∃ cast base, ext_decode_compressed h s = .ok cast s ∧
       ext_decode (joltUncompress h) s = .ok base s ∧
@@ -1473,7 +1458,7 @@ private theorem compare_quadrant1 (h : BitVec 16)
   · by_cases hr : ((h.setWidth 32 >>> 7) &&& 31) = 0
     · finish_compressed_case
     · finish_compressed_case
-  · exact compare_upper h hop hf hres hn s hinv
+  · exact compare_upper h hop hf hn s hinv
   · exact compare_alu h hop hf hn s hinv
   · finish_compressed_case
   · finish_compressed_case
@@ -1513,7 +1498,7 @@ private theorem compare_quadrant2 (h : BitVec 16)
   · finish_compressed_case
 
 private theorem compare_accepted (h : BitVec 16)
-    (hc : h.extractLsb 1 0 ≠ 0b11#2) (hres : ¬ ReservedAccepted h)
+    (hc : h.extractLsb 1 0 ≠ 0b11#2)
     (advice : BitVec 64) (i : RiscvInstruction)
     (hi : joltDecode (joltUncompress h) advice = some i)
     (s : SailState) (hinv : _root_.Step.StepInvariant s) :
@@ -1529,24 +1514,23 @@ private theorem compare_accepted (h : BitVec 16)
     Nat.lt_succ_of_le Nat.and_le_right
   interval_cases hq : (h.setWidth 32 &&& 3).toNat
   · exact compare_quadrant0 h hq advice i hi hn s hinv
-  · exact compare_quadrant1 h hq hres hn s hinv
+  · exact compare_quadrant1 h hq hn s hinv
   · exact compare_quadrant2 h hq advice i hi hn s hinv
   · exfalso
     apply hn
     simp only [joltUncompress, hq]
 
-/-- Every compressed parcel accepted by Jolt at `b65455e6d`, except reserved 0x6001,
-has a Sail compressed AST executing like a matching base AST under the step invariant and reset misa;
-for example, C.MV agrees with Jolt's ADD expansion. -/
+/-- Every compressed parcel accepted by Jolt has a Sail compressed AST executing like a
+matching base AST under the step invariant and reset misa; for example, C.MV agrees with
+Jolt's ADD expansion. -/
 theorem joltDecode_compressed_agrees (h : BitVec 16) (hc : h.extractLsb 1 0 ≠ 0b11#2)
-    (hres : ¬ ReservedAccepted h)
     (advice : BitVec 64) (i : RiscvInstruction)
     (hi : joltDecode (joltUncompress h) advice = some i)
     (s : SailState) (hinv : _root_.Step.StepInvariant s)
     (hreset : s.regs.get? Register.misa = some resetMisa) :
     ∃ cast base, ext_decode_compressed h s = .ok cast s ∧ _root_.Step.Matches i base ∧
       ∀ s', _root_.Step.StepInvariant s' → _root_.Step.executeFull cast s' = _root_.Step.executeFull base s' := by
-  obtain ⟨cast, base, hcdec, hbdec, he⟩ := compare_accepted h hc hres advice i hi s hinv
+  obtain ⟨cast, base, hcdec, hbdec, he⟩ := compare_accepted h hc advice i hi s hinv
   obtain ⟨ast, hast, hm⟩ := joltDecode_agrees (joltUncompress h) advice i hi s hinv hreset
   have hab : base = ast := by simpa only [hbdec, EStateM.Result.ok.injEq, and_true] using hast
   subst ast
