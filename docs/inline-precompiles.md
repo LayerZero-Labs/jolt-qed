@@ -229,8 +229,10 @@ Jolt @ pin ──► driver (Rust, scripts/expansion-parity)
   A secp256k1 inline encoded with `rd = x0` takes its output pointer from whatever an earlier sequence left in the temporary.
   The current soundness proof lets that temporary differ between the witness and the honest run after REM by zero (`Layer6/ExecutionPrefix.lean:15-44`).
   A witness can leave a valid RAM pointer in `vr40` where the honest run has zero, and a following `rd = x0` inline then stores to different places in the two runs.
+  In Jolt this is a soundness gap for any guest that contains such an encoding: REM by zero leaves a prover-chosen quotient in `vr40`, and the inline then stores its result where the prover chose.
   The SDK never emits such an encoding, and the exclusion follows the precedent of `SC.W` and `SC.D`, excluded with Ari's approval on 2026-10-10.
-  Request J6 asks Jolt to reject these encodings too (decision D7).
+  a16z/jolt#2414 makes Jolt reject the same encodings at expansion, for every registered inline whose rows read `rd` before writing it (19 of the 27), and records the rejection in Jolt's parity fixture (decision D7).
+  Once it merges, the registration check and Jolt's expander reject the same set, and T2's comparison of the combined pipelines checks that they agree.
 
 ### 5.3 Inline advice is a private input, like the advice tape
 
@@ -603,7 +605,8 @@ Order and parallelism:
 - **D6. Field-inline stays out.**
   Revisit after T3 and #41 land.
 - **D7. `rd = x0` encodings of inlines that read `rs3`** are excluded by the registration check (section 5.2).
-  jolt-qed also asks Jolt to reject them at expansion (J6), after I0, by rejecting rather than initialising the temporary, because an inline that writes its output to address 0 is meaningless either way.
+  Jolt rejects them at expansion too (J6, a16z/jolt#2414).
+  Rejection was chosen over initialising the temporary to zero: an inline that writes its output to address 0 is meaningless either way, and rejection costs no row on the hash inlines, which the SDK calls with `rd = x0`.
 
 ## 9. Requests to Jolt
 
@@ -616,7 +619,7 @@ Each is a small PR or issue.
   The secp256k1 DIV aliasing test passes only honest quotients.
 - J4. Fix stale docs: the book's inline opcode table (`book/src/how/optimizations/inlines.md:64-75`), the BLAKE3 KEYED64 "PARENT flag" comment, and the BIGINT builder comment that claims reliance on zeroed pool registers (the builder assigns both accumulators before use).
 - J5. Later: a stable JSON export of rows, recipes, flags and R1CS; `jolt-lean-gen` support for `Inline` if Jolt wants it there.
-- J6. Reject `rd = x0` for inlines that use `rs3` as a pointer (D7).
+- J6. Reject `rd = x0` for inlines that read `rs3` before writing it (D7). Opened as a16z/jolt#2414.
 
 jolt-qed housekeeping that goes with I0: fix `docs/whole-run-theorem.md:124`, which says that `0x5B` holds the hash and big-integer instructions; correct the description of difftest in the README and in `docs/whole-run-theorem.md:175`, which presents it as evidence for the Lean models' faithfulness although Lean takes no part in it; add a glossary entry for the three meanings of "inline"; update issue #37 with this plan.
 
