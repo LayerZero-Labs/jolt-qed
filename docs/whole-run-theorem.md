@@ -14,6 +14,7 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
+    (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
     ∃ (n : Nat) (s : SailState),
@@ -54,7 +55,8 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
 `sail_reproduces` is about a trace you already have.
 An `HonestTrace` is a run of Jolt's tracer, as modelled in Lean, on the program and some private inputs.
 A `HaltPrefix` of it is the list of blocks before its first EBREAK, where a block is one source instruction with the Jolt states before and after its rows.
-If every block of that prefix conforms (`BlockConforms`), Sail's emulator loop `sailRun`, started from `sailInit` of the trace's initial state, takes `n` successful steps to a state `s`.
+If Jolt's prover accepts the trace (`hcfg`) and every block of that prefix conforms (`BlockConforms`), Sail's emulator loop `sailRun`, started from `sailInit` of the trace's initial state, takes `n` successful steps to a state `s`.
+`sail_soundness` needs no `hcfg` premise, because `JoltInstance.soundness` returns an accepted trace.
 
 `sail_soundness` is about an instance the constraints accept.
 Jolt's soundness theorem, `JoltInstance.soundness`, turns a witness that satisfies `AllConstraints` into an honest trace with the instance's claimed outputs and panic flag.
@@ -92,6 +94,9 @@ Each premise is in one of four classes:
 - a **scope** premise excludes a part of Jolt that the proof does not cover yet;
 - a **soundness** premise belongs to `JoltInstance.soundness` and appears only in `sail_soundness`.
 
+`sail_reproduces` also takes `hcfg`, which says that Jolt's prover accepts the trace.
+Jolt checks this itself, and `sail_soundness` obtains it from `JoltInstance.soundness`.
+
 ### Platform premises
 
 | Premise | Meaning | What would remove it |
@@ -110,7 +115,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 | `no_flag_word_load` | No load reads a byte of the panic or termination word. | Treating both words as plain memory in Jolt's tracer and verifier, with "panic" meaning "the panic word is nonzero". |
 | `panic_store_nonzero` | A store into the panic doubleword leaves Sail's panic word nonzero. Jolt sets its panic flag on any such store, even of zero. | The same change as for `no_flag_word_load`. |
 | `amo_no_flag_word` | An atomic memory operation on the I/O window touches no byte of the panic or termination word, across its whole doubleword. | The same change as for `no_flag_word_load`. |
-| `no_low_load` | No load reads below the lowest address Jolt's prover accepts. Jolt's tracer returns zero there, while Sail raises an access fault. | Jolt's prover already rejects such addresses. A Lean proof that ties each block to the RAM address the witness records would remove the premise (jolt-qed#37). |
+| `no_zero_doubleword_load` | Every load's effective address is at least 8. Jolt's tracer records a byte, halfword or word load at the address of its doubleword, which is 0 below address 8, and returns zero, while Sail raises an access fault. Jolt's prover reads recorded address 0 as no access and does not reject the load. An LD records its own effective address, and an LD at address 0 escapes the check too. The premise excludes every LD below 8, to state one bound for every width. The prover rejects every other load below the lowest address of the memory layout, and the proof derives that bound (`Block.FirstRowAt.noLowLoad`). | A fault in Jolt's tracer for loads below the lowest address of the memory layout, as Sail has (jolt-qed#37). |
 
 ### Scope premise
 

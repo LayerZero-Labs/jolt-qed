@@ -37,11 +37,11 @@ for it only of the blocks of the trace's halt prefix. In `sail_soundness` that t
 existentially quantified. A reader who knows only the instance usually argues `BlockConforms` for
 every run the program can take, which is sufficient but not required.
 
-Jolt's prover checks the trace's recorded RAM addresses, and each halt-prefix block is tied to
-its first trace row by `HaltPrefix.traced`.
-The proof derives `NoLowLoad` from that check and the residual `NoZeroDoublewordLoad` premise.
-Jolt's prover treats recorded address 0 as no access, which leaves loads below address 8 as a
-premise of `BlockConforms`.
+`HaltPrefix.traced` ties each block of the halt prefix to its first trace row, and Jolt's prover
+checks the RAM address recorded there. `HaltPrefix.sailRun` derives `NoLowLoad` from that check
+(`Block.FirstRowAt.noLowLoad`). The prover reads recorded address 0 as no access and therefore
+admits a load from the doubleword at address 0. `BlockConforms` keeps that case as the premise
+`NoZeroDoublewordLoad`: every load's effective address is at least 8.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
@@ -91,9 +91,9 @@ structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Bloc
   (`NoFlagWordLoad`). -/
   no_flag_word_load : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start →
     i.NoFlagWordLoad b.start
-  /-- Deviation, for an I/O access: every load has effective address at least 8
-  (`NoZeroDoublewordLoad`). Jolt's prover treats recorded address 0 as no access.
-  For example, an LB at address 7 is excluded by this field. -/
+  /-- Deviation, for an I/O access: no load reads below address 8 (`NoZeroDoublewordLoad`).
+  The prover's address check excludes the other loads below `memLow`, but it reads recorded
+  address 0 as no access. For example, this field excludes an LB at address 7. -/
   no_zero_doubleword_load : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start →
     i.NoZeroDoublewordLoad b.start
   /-- Deviation, for an I/O access: a store touching the panic doubleword leaves Sail's panic word
@@ -106,8 +106,9 @@ structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Bloc
     i.AmoNoFlagWord b.start
 
 /-- **A conforming block simulates, and keeps the relation.** Every block that runs, is not
-EBREAK and conforms is matched by one Sail step when its I/O loads satisfy `NoLowLoad`.
-For example, the prover's address check supplies this bound for a traced LB block. -/
+EBREAK, conforms and loads at or above `memLow` (`NoLowLoad`) is matched by one Sail step that
+lands in the relation for the block's last state. `HaltPrefix.sailRun` obtains `NoLowLoad` from
+the prover's address check. -/
 theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
     (himage : ImageDecoded program) (hrows : program.RowsAligned)
     {b : Block} (hruns : b.Runs program)
@@ -167,7 +168,8 @@ structure HaltPrefix {joltInstance : JoltInstance SourceInstruction}
   /-- Each block of the prefix runs (`Block.Runs`) and does not run EBREAK. Since a block's last
   state is a function of its first, the chain from the initial state is the trace's own. -/
   runs : ∀ b ∈ pre, b.Runs joltInstance.program ∧ b.row.instruction ≠ .riscv .EBREAK
-  /-- Jolt's tracer records each block's first row, for example an LB's VirtualLoadB. -/
+  /-- Each block starts at a row of the trace (`Block.FirstRowAt`); for example, an LB block
+  starts at its VirtualLoadB row. -/
   traced : ∀ b ∈ pre, ∃ k, b.FirstRowAt trace.toTrace k
   /-- Each block starts where the previous one ended. -/
   chain : pre.IsChain (fun b c => b.post = c.pre)
@@ -182,15 +184,15 @@ structure HaltPrefix {joltInstance : JoltInstance SourceInstruction}
   /-- `halt` and the final state have the same device. -/
   device : halt.jolt_device = final.jolt_device
 
-/-- Jolt's honest trace has a halt prefix with each block's first trace row recorded.
-For example, a trace beginning with EBREAK has an empty prefix at its initial state. -/
+/-- Every honest trace has a halt prefix. For example, a trace that starts with EBREAK has the
+empty prefix, which halts at the initial state. -/
 theorem HonestTrace.haltPrefix {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     ∃ pre halt final, HaltPrefix trace pre halt final := by
   obtain ⟨pre, halt, final, h1, h2, h3, h4, h5, h6, h7, h8, ht⟩ := HonestTrace.halt_prefix trace
   exact ⟨pre, halt, final, ⟨h1, h2, ht, h3, h4, h5, h6, h7, h8⟩⟩
 
-/-- Jolt's blocks preserve the initial layout throughout their chain.
+/-- Every block of a chain that runs from `p` starts and ends with `p`'s memory layout.
 For example, an ADDI block has the same layout before and after it runs. -/
 private theorem chain_layout (program : Rv64ProgramImage SourceInstruction) :
     ∀ (bs : List Block) (p : SailJoltState), bs.IsChain (fun b c => b.post = c.pre) →
@@ -219,9 +221,9 @@ theorem sailPanicWord_congr {d d' : JoltDevice} (h : d.memory_layout = d'.memory
     (s : SailState) : sailPanicWord d s = sailPanicWord d' s := by
   simp only [sailPanicWord, h]
 
-/-- **Sail runs the halt prefix.** Jolt's prover accepts the trace, and every prefix block
-conforms. Sail's `sailRun` from `sailInit` reaches a state in the relation for `halt`.
-For example, an ADDI followed by EBREAK gives one successful Sail step. -/
+/-- **Sail runs the halt prefix.** If Jolt's prover accepts the trace and every block of the
+prefix conforms, `sailRun` from `sailInit` of the initial state reaches a Sail state in the
+relation for `halt`. For example, an ADDI followed by EBREAK gives one successful Sail step. -/
 theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {trace : HonestTrace joltInstance privateInputs}
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
@@ -261,8 +263,7 @@ halt prefix `pre` of it (the blocks before the first EBREAK, ending at `halt`), 
 Premises, by class:
 * prover acceptance: `hcfg` (`trace.prover_config.isSome`);
 * platform: `himage` (`ImageDecoded`), `hrows` (`RowsAligned`), `hheap` (`HeapNoWrap`);
-* documented deviation: the deviation fields of `BlockConforms` on the blocks of `pre`,
-  including `NoZeroDoublewordLoad`; the prover check supplies the remaining `NoLowLoad` bound;
+* documented deviation: the deviation fields of `BlockConforms` on the blocks of `pre`;
 * scope: the `riscv` field of `BlockConforms`.
 
 The theorem goes one way: it says nothing about Sail runs without a Jolt counterpart, about
@@ -353,8 +354,8 @@ Premises, by class:
 * documented deviation: five, on the blocks of the prefix:
   * `NoCodeStore`: no store into the code;
   * `NoFlagWordLoad`: no read of the panic or termination word;
-  * `NoZeroDoublewordLoad`: no load below address 8; Jolt's prover supplies the remaining
-    `NoLowLoad` bound through the accepted trace's address check;
+  * `NoZeroDoublewordLoad`: no load below address 8 (the prover's address check excludes the
+    other loads below the lowest address it accepts);
   * `PanicStoreNonzero`: a store into the panic word leaves it nonzero;
   * `AmoNoFlagWord`: no atomic on the I/O window touches the panic or termination word.
 * scope: every block of the prefix runs a RISC-V row; Jolt's own instructions

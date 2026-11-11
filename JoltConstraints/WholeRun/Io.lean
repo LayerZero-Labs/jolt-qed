@@ -75,19 +75,25 @@ def NoFlagWordLoad (i : RiscvInstruction) (js : SailJoltState) : Prop :=
     ∀ k < width, WholeRun.IsFlagWord js.jolt_device (ea.toNat + k) = false
 
 /-- Documented deviation (`docs/riscv-alignment.md`, section 2): a load does not read below
-`memLow`, the lowest nonzero recorded RAM address Jolt's prover accepts.
+`memLow`, the lowest nonzero RAM address Jolt's prover accepts in a trace.
 Jolt's tracer accepts a read at any address up to `RAM_START_ADDRESS - 8` and returns
 zero there, while Sail faults on an address with no memory.
+The whole-run theorems derive this condition from the prover's address check and
+`NoZeroDoublewordLoad` (`Block.FirstRowAt.noLowLoad`).
 For example, a `LB` from address `0x40000000` violates it whenever `memLow` is higher. -/
 def NoLowLoad (i : RiscvInstruction) (js : SailJoltState) : Prop :=
   ∀ width ea, i.memAccess js = some (false, width, ea) →
     WholeRun.memLow js.jolt_device ≤ ea.toNat
 
-/-- Jolt's source instruction loads only at effective addresses at least 8.
-Jolt's prover treats recorded RAM address 0 as no access, and its address check therefore
-allows loads from the doubleword at address 0.
-Jolt's tracer returns zero there, whereas Sail raises an access fault.
-For example, an LB at address 7 violates this condition, while an LB at address 8 satisfies it. -/
+/-- Documented deviation (`docs/riscv-alignment.md`, section 2): a load's effective address is
+at least 8.
+Jolt's tracer records a byte, halfword or word load at the address of its doubleword, which is
+0 for an effective address below 8. Jolt's prover reads recorded address 0 as no access, and its
+address check therefore does not exclude such a load. Jolt's tracer returns zero there, whereas
+Sail raises an access fault. An LD records its own effective address: an LD at address 0
+also escapes the check, and the check rejects an LD at addresses 1 to 7 when they are below the
+lowest address. The condition excludes all of them, to state one bound for every width.
+For example, an LB at address 7 violates this condition, and an LB at address 8 satisfies it. -/
 def NoZeroDoublewordLoad (i : RiscvInstruction) (js : SailJoltState) : Prop :=
   ∀ width ea, i.memAccess js = some (false, width, ea) → 8 ≤ ea.toNat
 
