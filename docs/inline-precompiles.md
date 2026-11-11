@@ -381,11 +381,11 @@ Two further facts make each prefix honest under the fixed array:
 - `honestTracerAdviceAtStepN` at step `n` depends only on rows `0..n` and the field;
 - when Layer 6 extends a prefix by one row, the inline advice steps of the prefix keep their indices, and the new row's index is the number of inline advice steps before it, which equals its position in the witness's collection.
 
-Layer 7's `rebuiltInputs` replaces only `advice_tape`, copies the field unchanged and leaves the rows unchanged, which keeps every index.
+Layer 7's `rebuiltInputs` replaces only `advice_tape` and copies the field unchanged. Its replay changes the rows' pre- and post-states (`Layer7/TapeRebuild.lean:947-955`) but keeps their order, bytecode indices and recorded runtime advice, which keeps every index.
 
 `JoltInstance.completeness` and `sail_reproduces` take an existing honest trace (`Completeness/completeness.lean:83-99`, `WholeRun/Top.lean:276-289`).
 Neither needs the trace's inline advice to equal Jolt's `build_advice` words, and neither is restricted to it: both must hold for every passing inline advice, including the non-canonical outputs this design admits.
-A separate result says that Jolt's advice generator gives a passing run: `rows_jolt_advice_complete` per call (section 5.4), lifted to a whole trace in I1b.
+A separate result says that Jolt's advice generator gives a passing run: `rows_jolt_advice_complete` per call (section 5.4), lifted to a whole trace once I2 has proved the per-call lemmas (I1b states the lift with `sorry` until then).
 It shows that Jolt's prover can produce a trace in the language; it does not restrict the language.
 
 The step relation of an inline call is `InlineSpec c`, a relation between states, not a function.
