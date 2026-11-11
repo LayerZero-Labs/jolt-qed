@@ -1,0 +1,35 @@
+[package]
+name = "expansion-parity"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# build.sh substitutes the a16z/jolt checkout path and appends Jolt's
+# [patch] tables, so dependencies resolve exactly as in Jolt's workspace.
+[dependencies]
+tracer = { path = "@JOLT_DIR@/tracer", features = ["std"] }
+common = { path = "@JOLT_DIR@/common", default-features = false, features = ["std"] }
+jolt-riscv = { path = "@JOLT_DIR@/crates/jolt-riscv", features = ["serialization"] }
+jolt-program = { path = "@JOLT_DIR@/crates/jolt-program", features = ["serialization"] }
+jolt-lookup-tables = { path = "@JOLT_DIR@/crates/jolt-lookup-tables" }
+jolt-witness = { path = "@JOLT_DIR@/crates/jolt-witness" }
+jolt-inlines-bigint = { path = "@JOLT_DIR@/jolt-inlines/bigint", features = ["host"] }
+jolt-inlines-blake2 = { path = "@JOLT_DIR@/jolt-inlines/blake2", features = ["host"] }
+jolt-inlines-blake3 = { path = "@JOLT_DIR@/jolt-inlines/blake3", features = ["host"] }
+jolt-inlines-grumpkin = { path = "@JOLT_DIR@/jolt-inlines/grumpkin", features = ["host"] }
+jolt-inlines-keccak256 = { path = "@JOLT_DIR@/jolt-inlines/keccak256", features = ["host"] }
+jolt-inlines-ntt = { path = "@JOLT_DIR@/jolt-inlines/ntt", features = ["host"] }
+jolt-inlines-p256 = { path = "@JOLT_DIR@/jolt-inlines/p256", features = ["host"] }
+jolt-inlines-secp256k1 = { path = "@JOLT_DIR@/jolt-inlines/secp256k1", features = ["host"] }
+jolt-inlines-sha2 = { path = "@JOLT_DIR@/jolt-inlines/sha2", features = ["host"] }
+inventory = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["std"] }
+sha2 = "0.11"
+hex = "0.4"
+rayon = "1"
+
+[profile.release]
+debug = false
+
+[workspace]
