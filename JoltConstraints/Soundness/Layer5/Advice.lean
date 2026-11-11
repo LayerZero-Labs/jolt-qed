@@ -59,7 +59,7 @@ and jolt/crates/jolt-lookup-tables/src/tables/range_check.rs
 theorem advice_step {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -78,14 +78,14 @@ theorem advice_step {F : Type} [Field F] {params : WitnessParams}
         RegisterAgreementOn
           (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
           witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
-  obtain ⟨value, encoded⟩ := rangeCheck_write_value (two_pow_127_lt_char charAbove2pow128)
+  obtain ⟨value, encoded⟩ := rangeCheck_write_value (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations selected rowIs (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
   obtain ⟨advice, patched⟩ : ∃ advice : row.instruction.RuntimeAdvice,
       row.instruction.withRuntimeAdvice advice = .VirtualAdvice destination value imm := by
     rw [instructionIs]
     exact ⟨value, rfl⟩
   refine ⟨value, advice, patched, ?_⟩
-  exact registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  exact registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by rw [instructionIs]; rfl) value encoded answer advice
     (by rw [patched]; rfl)
 

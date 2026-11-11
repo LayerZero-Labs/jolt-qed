@@ -17,7 +17,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -33,13 +33,13 @@ private theorem movsign_canonical :
   simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,
     Bool.and_eq_true] using (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem movsign_write_value {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t = ((jolt_movsign_value (sourceValue source pre)).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   obtain ⟨left, right⟩ := agrees.immediateInputs bound context equations selected rowIs
     source imm (movsign_canonical context rowIs instructionIs).2
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
@@ -71,9 +71,9 @@ theorem movsign_step {pre : SailJoltState}
         witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have sourceRead := (agrees.read source (movsign_canonical context rowIs instructionIs).2 sourceLive).1
-  have encoded := movsign_write_value charAbove2pow128 context equations
+  have encoded := movsign_write_value charAbove2pow128Minus2pow64 context equations
     selected rowIs instructionIs agrees sourceLive
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by rw [instructionIs]; rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by rw [instructionIs]; rfl)]
