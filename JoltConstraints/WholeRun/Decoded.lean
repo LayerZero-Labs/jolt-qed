@@ -12,8 +12,9 @@ import JoltBytecode.Decode.Compressed
 A RISC-V block of the whole-run theorem needs Sail's `fetch` and decode at the block's PC to
 give the instruction Jolt decoded. This file derives both from the program image.
 
-* `ImageDecoded` (platform premise): each RISC-V row of the image is what Jolt's decoder makes
-  of the bytes `memory_init` loads at its address.
+* `ImageDecoded`: each RISC-V row of the image is what Jolt's decoder makes of the bytes
+  `memory_init` loads at its address. `Rv64ProgramImage.DecodedFrom.imageDecoded`
+  (`WholeRun/Elf.lean`) proves it for every program built from the ELF's sections.
 * `CodeIntact`: Sail's memory still holds those bytes at every row. It holds at `sailInit`
   (`codeIntact_sailInit`); keeping it through the run is a run invariant.
 * `block_simulates_decoded`: every non-EBREAK RISC-V block, in RAM or in the I/O window, is one
@@ -304,15 +305,22 @@ def RowDecodes (program : Rv64ProgramImage SourceInstruction)
       imageParcel? program row.address.toNat = some h ∧ h.extractLsb 1 0 ≠ 0b11#2 ∧
       ∃ advice, Decode.joltDecode (Decode.joltUncompress h) advice = some i
 
-/-- **Platform premise: the committed bytecode is what Jolt's decoder makes of the image.**
+/-- **The committed bytecode is what Jolt's decoder makes of the image.**
 Every RISC-V row of the program image is what Jolt's decoder (`joltDecode`, and
 `joltUncompress` for a compressed row) gives for the bytes the image loads at its address.
 Its `is_compressed` flag agrees with the low two bits of the first parcel, and the advice
 operand of the decoder, which the encoding does not carry, is whatever Jolt used.
 
 The bytes are those of `memory_init`, the initial memory (`initialRam`), where a later entry
-overrides an earlier one at the same address (`imageByte?`). This is a premise on the
-off-chain decoder that produced the bytecode, not something the proof system checks. -/
+overrides an earlier one at the same address (`imageByte?`). No constraint checks this: it
+describes how the bytecode was produced. The whole-run theorems take instead the premise
+`Rv64ProgramImage.DecodedFrom` (the program agrees with what Jolt's `decode_elf` builds from
+the ELF's sections), and `DecodedFrom.imageDecoded` (`WholeRun/Elf.lean`) derives this property
+from it.
+For example, take an image with the single row ADDI x1,x0,1 at `0x80000000`, not compressed,
+whose `memory_init` holds the bytes `0x93 0x00 0x10 0x00` at `0x80000000` to `0x80000003`.
+The image satisfies `ImageDecoded` with the encoding `.base 0x00100093`: the word's low two bits
+are `0b11`, and `joltDecode 0x00100093` gives ADDI x1,x0,1. -/
 def ImageDecoded (program : Rv64ProgramImage SourceInstruction) : Prop :=
   ∀ row ∈ program.instructions, ∀ i : RiscvInstruction, row.instruction = .riscv i →
     ∃ e : BlockEncoding, RowDecodes program row i e
@@ -622,9 +630,10 @@ Premises, by class:
   invariant on the block's entry state; `hpc`, the row's address is even; `hmisa`, Sail's `misa`
   is `Decode.resetMisa` on every state related to the entry state; `hcode`, the code is intact
   on every such state (`CodeIntact`, which holds at `sailInit` by `codeIntact_sailInit`).
-* platform: `himage`, the committed bytecode is what Jolt's decoder makes of the image
-  (`ImageDecoded`); `hheap`, the heap ends eight bytes below `2^64`; `hclass`, the block's
-  memory access is in RAM or in the I/O window.
+* decoding: `himage`, the committed bytecode is what Jolt's decoder makes of the image
+  (`ImageDecoded`, which `DecodedFrom.imageDecoded` proves for a program built from the ELF).
+* platform: `hheap`, the heap ends eight bytes below `2^64`; `hclass`, the block's memory access
+  is in RAM or in the I/O window.
 * from decoding: none; `encoding`, width, offsets, instruction matching, fetch and decode are
   derived.
 * documented deviation (`docs/riscv-alignment.md`, section 2), for an I/O block: `hflag`
@@ -682,8 +691,10 @@ store, or is an atomic on the I/O window; an atomic on the I/O window takes the 
 
 Premises, by class:
 * invariant: `hsys`, the system invariant on the block's entry state.
-* platform: `hpc` (`RowsAligned`), `hheap` (`HeapNoWrap`), `hcode` (the image is intact in
-  Sail's memory) and `himage` (the image decodes).
+* platform: `hpc` (`RowsAligned`), `hheap` (`HeapNoWrap`) and `hcode` (the image is intact in
+  Sail's memory).
+* decoding: `himage` (`ImageDecoded`, which `DecodedFrom.imageDecoded` proves for a program built
+  from the ELF).
 * documented deviation (`docs/riscv-alignment.md`, section 2): for a load or store on the
   I/O window, `hflag` (`NoFlagWordLoad`), `hlow` (`NoLowLoad`) and
   `hpanic` (`PanicStoreNonzero`); for an atomic on the I/O window, `hamoflag`
