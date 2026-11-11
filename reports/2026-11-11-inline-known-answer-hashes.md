@@ -2,6 +2,7 @@
 
 Date: 2026-11-11.
 Jolt commit checked: `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5` (`a6b6dc71`).
+jolt-qed commit of the checker that produced the results: `71b3b0cb405744de065e8e71c28d89419705269c` (`71b3b0c`).
 EthLib commit of the copied specifications: `5310b3ec007b05a2bfe33b01125392b07df5f636` (`5310b3e`).
 This report covers phase I0(b) of `docs/inline-precompiles.md` for the five hash inlines: `SHA256`, `SHA256_INIT`, `KECCAK256`, `KECCAK256_ABSORB_PERMUTE` and `BLAKE2`.
 
@@ -10,6 +11,7 @@ This report covers phase I0(b) of `docs/inline-precompiles.md` for the five hash
 Jolt's tracer agrees with the copied EthLib specifications on every judged case: 354 of 354 pass, with no mismatch.
 The 354 cases are 72 for `SHA256`, 70 for `SHA256_INIT`, 70 for `KECCAK256`, 68 for `KECCAK256_ABSORB_PERMUTE` and 74 for `BLAKE2`.
 Every case that has a published answer (FIPS 180-4, Keccak-256, `KeccakKAT-3`, RFC 7693 and EIP-152 vectors, and Jolt's own constants) matches it.
+The checker also confirmed that the corpus is complete: it comes from the pinned Jolt commit, covers all five inlines with at least the required number of judged cases, and contains all 24 known-answer cases of its manifest with the recorded inputs and answers.
 Two further `BLAKE2` cases, with final-block flags 2 and `2^64 - 1`, are informational: the specification does not cover them, and the tracer computes the compression with `0 - flag` XORed into word 14 of the work vector.
 `lake build JoltTests.InlineKat.Vectors` succeeds, so the specifications alone also give the published answers.
 The report found two places where `docs/inline-precompiles.md` is incomplete or inaccurate; the last section lists them.
@@ -23,13 +25,26 @@ So the driver runs the same expansion the prover's bytecode uses, not a reimplem
 The driver checks that each key is registered under its expected name with `tracer::list_registered_inlines` before it runs any case.
 It never computes a hash itself.
 
-`lake exe inline-kat CASES.json` reads the recorded cases and evaluates the copied specifications in `JoltBytecode/Inlines` on the bytes before.
-A judged case passes when four checks hold:
+`lake exe inline-kat [--jolt-commit SHA] CASES.json` reads the recorded cases and evaluates the copied specifications in `JoltBytecode/Inlines` on the bytes before.
+A judged case passes when five checks hold:
 
 - the bytes the tracer left at `rs1` equal the specification's result;
 - the bytes at `rs2` did not change;
 - the bytes at `rs1` start with the published answer, when the case has one;
-- the registers `x1` to `x31` did not change.
+- the registers `x1` to `x31` did not change;
+- the tracer ran as many rows as the inline's expansion has.
+
+The checker decides itself which cases are judged, and ignores the corpus's `judged` field except to fail a case whose field disagrees.
+Every case is judged except a `BLAKE2` case whose final-block flag is outside {0, 1}, which it reports as informational.
+
+The checker also fails the corpus as a whole when it is incomplete:
+
+- its `jolt_commit` is not `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`, or the commit given with `--jolt-commit` (for a run against another Jolt commit, such as one with a16z/jolt#2414);
+- its table of inlines is not exactly the five hash inlines;
+- an inline has fewer judged cases than the driver produces (72, 70, 70, 68 and 74), or two cases with one name;
+- a case of the manifest `JoltTests/InlineKat/Manifest.lean` is missing, has another input, lacks its published answer or records another one, or has a tracer result that does not start with that answer.
+
+The manifest lists the 24 cases with published answers below, with their inputs and answers written down in Lean from the sources, not taken from the corpus or computed by the specifications.
 
 `JoltTests/InlineKat/Layout.lean` documents and implements the conversion between memory and the specifications' arguments.
 `JoltTests/InlineKat/Vectors.lean` checks the specifications alone, without Jolt, on published vectors.
@@ -45,6 +60,8 @@ lake build JoltTests.InlineKat.Vectors
 lake exe inline-kat WORK_DIR/cases.json
 ```
 
+`lake exe inline-kat --jolt-commit SHA WORK_DIR/cases.json` accepts a corpus from another Jolt commit.
+
 `build.sh` copies Jolt's `Cargo.lock` and `rust-toolchain.toml` into `WORK_DIR/inline-kat` and builds there, so it never writes into the Jolt checkout.
 `run.sh` passes the checkout's commit to the driver, which records it in the JSON.
 The random cases come from a fixed splitmix64 seed per inline, so every run produces the same JSON.
@@ -56,7 +73,7 @@ Every inline gets 64 seeded random cases, plus these.
 
 - `SHA256` and `SHA256_INIT`:
   - FIPS 180-4 `SHA-256("abc")` and `SHA-256("")`, one padded block from the IV.
-  - Block 1 of the two-block FIPS 180-4 message `"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"`.
+  - Block 1 of the two-block FIPS 180-4 message `"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"`, checked against the intermediate value `H(1) = 85e655d6 ...` of the NIST CSRC example.
   - For `SHA256` only, block 2 of that message, once from the state `SHA256` left after block 1 and once from the state `SHA256_INIT` left, each checked against the final digest `248d6a61...`.
   - Jolt's three compression vectors from `jolt-inlines/sha2/src/test_constants.rs` (zero block, the NIST byte pattern, all-ones block, each from the IV).
   - `SHA256_INIT` gets a filler pattern at `rs1` instead of the IV, which shows that it does not read the state.
@@ -105,13 +122,30 @@ BLAKE2: 74 passed, 0 failed, 2 informational; rows per call [1067] (expansion le
   That is what the builder's `SUB` and `XOR` compute, and it is outside the specification, which takes a Boolean flag.
 - To check that a mismatch is caught, I flipped one bit of a recorded `KECCAK256` output: the program printed `FAIL ... word 2: tracer 0x400fec990f4afc14, spec 0x400fec990f4afd14` and exited with status 1.
 
+To check that the corpus checks catch an incomplete or altered corpus, I ran the checker of `71b3b0c` on altered copies of the JSON.
+Each altered copy exits with status 1, and the unaltered JSON exits with status 0:
+
+| Altered corpus | What the checker printed |
+| --- | --- |
+| `{}` | 32 failures: wrong format, commit missing, empty inline table, every known-answer case missing, every inline below its minimum |
+| all fields kept, no cases | 29 failures: every known-answer case missing, every inline below its minimum |
+| `jolt_commit` set to forty zeros | `the cases come from Jolt commit 0000..., not a6b6dc71...` |
+| only the `KECCAK256` cases | 24 failures: the 20 known-answer cases of the other inlines missing, four inlines below their minimum |
+| only the `KECCAK256` cases and table entry | 25 failures: as above, and the inline table is incomplete |
+| `SHA256` `random 5` marked not judged, one output bit flipped | `the corpus marks the case as not judged, but the specification covers it; rs1 differs from the specification at word 0` |
+| `SHA256` `"abc"` case removed | `the known-answer case ... is missing`, and `SHA256 has 71 judged cases, fewer than 72` |
+| answer field of EIP-152 vector 6 removed | `the published answer (EIP-152 vector 6) is missing` |
+| last byte of the `KECCAK256` `"abc"` input changed | `rs1 is not the known-answer input; rs1 differs from the specification at word 0` |
+
+With `--jolt-commit 0000...` the checker accepts the corpus with the zero commit.
+
 `lake exe inline-kat` takes about 25 seconds of CPU on the 356 cases, most of it in the SHA-256 message schedule, which the specification computes by unmemoized recursion.
-`lake build JoltTests.InlineKat.Vectors` takes about 30 seconds, including five Keccak-f evaluations of the bit model through tables.
+`lake build JoltTests.InlineKat.Vectors` takes 10 to 30 seconds, depending on the machine's load,, including five Keccak-f evaluations of the bit model through tables.
 `JoltBytecode/Inlines/Blake2b/Spec.lean` takes 157 to 190 seconds to build, most of it in EthLib's bijectivity proofs.
 
 ## What the copies leave out
 
-The copies keep every definition the five specifications need, unchanged; `scripts/check-ethlib-copies.sh` checks 143 declarations against EthLib `5310b3e`.
+The copies keep every definition the five specifications need, unchanged; `scripts/check-ethlib-copies.sh` checks 143 declarations against EthLib `5310b3e`, and the workflow `.github/workflows/ethlib-copies.yml` runs it on pull requests that touch `JoltBytecode/Inlines` or the script.
 They leave out these EthLib proofs, which use `decide` with the `+kernel` option, which jolt-qed's checking standard forbids:
 
 - SHA-256: `IV_from_primes` and `K_from_primes`.
