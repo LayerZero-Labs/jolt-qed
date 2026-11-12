@@ -25,9 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # The revision the expansion-parity job checks (a16z/jolt#2384). The check
-      # reports, without failing, every models path that is missing there.
-      JOLT_COMPARE_REV: 580084fcfad4788ebf48413a92dd640ca090c45f
+      # The earlier Track T pin. The pin is now the a16z/jolt#2384 head that
+      # the expansion-parity job checks; the check reports, without failing,
+      # every models path that is missing at this older revision.
+      JOLT_COMPARE_REV: a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -43,6 +44,8 @@ jobs:
           for rev in $(python3 scripts/check-provenance.py --list-revisions) "$JOLT_COMPARE_REV"; do
             git -C "$jolt" fetch -q --depth=1 --filter=blob:none origin "$rev"
           done
+      - name: Test the provenance and hygiene checkers
+        run: python3 -m unittest discover -s scripts/tests -v
       - name: Check the provenance manifest
         run: |
           python3 scripts/check-provenance.py \
@@ -62,17 +65,17 @@ jobs:
       - name: Scan for proof holes, trusted tactics, raised limits and axioms
         run: python3 scripts/check_hygiene.py
 
-  # UNTESTED: this job has never run. landrun needs Linux Landlock, so the
-  # external comparator never ran on the macOS machine where it was written.
-  # There, only the built-in `lake comparator` ran, without its sandbox
-  # (ci/comparator/README.md). Every step that can fail uses continue-on-error,
-  # and the last step turns a failure into a warning, so the job does not block
-  # a pull request. Remove both once the job passes.
+  # UNTESTED until it passes once on a runner: every step that can fail uses
+  # continue-on-error, and the last step turns a failure into a warning, so the
+  # job does not block a pull request. Remove both once the job passes.
   #
-  # The job rebuilds the gated theorems' imports, exports Challenge and
-  # Solution with lean4export, and checks with leanprover/comparator that both
-  # state the same theorems, that the kernel accepts the proofs and that they
-  # use only propext, Quot.sound and Classical.choice (ci/comparator/README.md).
+  # The job builds the jolt-qed modules that ci/comparator/Challenge.lean
+  # imports, then runs Lean's built-in `lake comparator` (Lean v4.35.0) inside
+  # its bwrap sandbox. The comparator builds and exports Challenge and Solution
+  # in the sandbox, and checks that both state the same theorems, that the
+  # kernel accepts the proofs and that they use only propext, Quot.sound and
+  # Classical.choice (ci/comparator/README.md). Nothing builds Solution
+  # outside the sandbox.
   comparator:
     name: comparator (untested)
     runs-on: ubuntu-latest
@@ -82,8 +85,7 @@ jobs:
         with:
           persist-credentials: false
       # Installs elan and fetches the Mathlib cache without building, because
-      # run_comparator.sh builds only the modules that Challenge and Solution
-      # import.
+      # run_comparator.sh builds only the modules that Challenge imports.
       - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
         id: lean
         continue-on-error: true
@@ -91,32 +93,29 @@ jobs:
           auto-config: false
           use-mathlib-cache: true
           use-github-cache: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        id: go
+      # bwrap needs unprivileged user namespaces, which Ubuntu 24.04 restricts
+      # through AppArmor by default.
+      - name: Install bubblewrap
+        id: bwrap
         continue-on-error: true
-        with:
-          go-version: stable
-          cache: false
-      - name: Build comparator, lean4export and landrun
-        id: setup
-        continue-on-error: true
-        run: scripts/setup_comparator_toolchain.sh
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --ro-bind / / true
       - name: Run the comparator gate
         id: gate
         continue-on-error: true
         env:
-          # No systemd user session on the runner. The comparator still runs its
-          # replay inside landrun.
-          COMPARATOR_NO_SANDBOX: "1"
+          COMPARATOR_ENGINE: lake
         run: scripts/run_comparator.sh
       - name: Report an unverified gate
         if: >-
-          steps.lean.outcome != 'success' || steps.go.outcome != 'success' ||
-          steps.setup.outcome != 'success' || steps.gate.outcome != 'success'
+          steps.lean.outcome != 'success' || steps.bwrap.outcome != 'success' ||
+          steps.gate.outcome != 'success'
         env:
           LEAN: ${{ steps.lean.outcome }}
-          GO: ${{ steps.go.outcome }}
-          SETUP: ${{ steps.setup.outcome }}
+          BWRAP: ${{ steps.bwrap.outcome }}
           GATE: ${{ steps.gate.outcome }}
         run: |
-          echo "::warning title=comparator gate::The untested comparator job did not pass (lean-action: $LEAN, setup-go: $GO, toolchain: $SETUP, gate: $GATE). See ci/comparator/README.md."
+          echo "::warning title=comparator gate::The untested comparator job did not pass (lean-action: $LEAN, bubblewrap: $BWRAP, gate: $GATE). See ci/comparator/README.md."

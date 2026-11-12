@@ -1,7 +1,7 @@
 # Comparator gate
 
-This directory runs [`leanprover/comparator`](https://github.com/leanprover/comparator) over jolt-qed's headline theorems.
-The comparator exports the `Challenge` and `Solution` modules with `lean4export` and replays them in a `landrun` sandbox.
+This directory runs Lean's built-in `lake comparator` (Lean v4.35.0) over jolt-qed's headline theorems.
+The comparator builds and exports the `Challenge` and `Solution` modules inside a `bwrap` sandbox and replays the exports.
 It then checks three things for every name in `theorem_names`.
 
 1. The `Solution` theorem proves the same statement as the `Challenge` theorem of the same name.
@@ -14,25 +14,30 @@ The gate is the third of three checks on the same theorems.
 |-------|-----------|--------|
 | `scripts/check_hygiene.py` | Text scan for `sorry`, trusted tactics, raised limits and axioms | `hygiene` in `provenance.yml` |
 | `JoltAudit/Axioms.lean` | `Lean.collectAxioms` against an allowlist, during `lake build JoltAudit` | `build` in `lean.yml` |
-| This gate | Export, sandboxed replay and statement comparison by a separate tool | `comparator` in `provenance.yml` |
+| This gate | Sandboxed build, export, replay and statement comparison | `comparator` in `provenance.yml` |
 
 The comparator does not trust Lean's own axiom bookkeeping, because it re-reads the exported declarations.
 
 ## Status
 
-The `comparator` CI job has not run yet, and nobody has run the external comparator, because `landrun` uses Linux Landlock and does not build on macOS.
-The job's steps use `continue-on-error: true`, and a failure shows as a warning that does not block a pull request.
+The `comparator` CI job has not passed yet.
+Its steps use `continue-on-error: true`, and a failure shows as a warning that does not block a pull request.
 Once the job passes on a runner, drop `continue-on-error` and the warning step.
 
-On macOS, `COMPARATOR_ENGINE=lake COMPARATOR_NO_SANDBOX=1 scripts/run_comparator.sh` accepts all six theorems.
-That run uses the built-in `lake comparator` without its `bwrap` sandbox.
+On macOS, `COMPARATOR_NO_SANDBOX=1 scripts/run_comparator.sh` accepts all six theorems.
+That run uses `lake comparator --inadvisably-no-sandbox`, because macOS has no `bwrap`.
 It checks the statements, the kernel and the axioms but not the isolation.
 With one proof in `Solution.lean` replaced by `sorry`, the same run rejects the solution with `Illegal axiom detected: 'sorryAx'`.
 
-The leanprover/comparator README now marks the project as deprecated.
-Lean v4.35.0, the toolchain of this repository, ships the same check as `lake comparator`, sandboxed with `bwrap` instead of `landrun`.
-`scripts/run_comparator.sh` runs the built-in command when `COMPARATOR_ENGINE=lake` is set.
-Moving the CI job to `lake comparator` would remove the three external builds in `scripts/setup_comparator_toolchain.sh`.
+## Trust
+
+`Solution.lean` is the untrusted input.
+`scripts/run_comparator.sh` never builds it, or `Challenge.lean`, outside the comparator's sandbox, and deletes any of their build output left in `.lake/`.
+It builds only the jolt-qed modules that `Challenge.lean` imports, which are trusted, and it fails unless `Solution.lean` has exactly the imports of `Challenge.lean`.
+To change the imports, change both files and `TRUSTED_IMPORTS` in the script.
+
+The deprecated external tool, [`leanprover/comparator`](https://github.com/leanprover/comparator) with `lean4export` and `landrun`, still runs with `COMPARATOR_ENGINE=external`.
+It also builds both modules inside its own sandbox.
 
 ## Layout
 
@@ -65,15 +70,10 @@ When two source namespaces reuse a name, put each statement in its own `section`
 
 ## Required tools
 
-`scripts/setup_comparator_toolchain.sh` builds three binaries at pinned revisions.
+`lake comparator` needs only the repository's toolchain and `bwrap` (bubblewrap) with unprivileged user namespaces.
+On Ubuntu 24.04, AppArmor restricts those namespaces; the CI job lifts the restriction with `sysctl kernel.apparmor_restrict_unprivileged_userns=0`.
 
-1. `comparator`, from leanprover/comparator, built with its own Lean toolchain.
-2. `lean4export`, from leanprover/lean4export, built against this repository's `lean-toolchain`.
-   The export must come from the same Lean version as the `.olean` files it reads.
-3. `landrun`, from Zouuup/landrun, built with Go from a pinned `main` commit.
-   openvm-fv found that the tagged releases fail to apply comparator's Landlock ruleset.
-
-The script prints `COMPARATOR_BIN`, `COMPARATOR_LEAN4EXPORT` and `COMPARATOR_LANDRUN`, and appends them to `$GITHUB_ENV` inside GitHub Actions.
+For the external engine, `scripts/setup_comparator_toolchain.sh` builds `comparator`, `lean4export` (against this repository's `lean-toolchain`) and `landrun` at pinned revisions, and prints `COMPARATOR_BIN`, `COMPARATOR_LEAN4EXPORT` and `COMPARATOR_LANDRUN`.
 
 ## Running
 
@@ -81,16 +81,18 @@ On Linux, from the repository root:
 
 ```bash
 lake exe cache get
-lake build
-scripts/setup_comparator_toolchain.sh
+scripts/run_comparator.sh
+```
+
+On macOS, without the sandbox, for a smoke test only:
+
+```bash
 COMPARATOR_NO_SANDBOX=1 scripts/run_comparator.sh
 ```
 
-`run_comparator.sh` wraps the comparator in `systemd-run --user` unless `COMPARATOR_NO_SANDBOX=1` is set.
-The comparator still sandboxes its own replay with `landrun` in that case.
-
-With the built-in command, no setup script is needed, but `bwrap` must be installed:
+With the external engine, on Linux:
 
 ```bash
-COMPARATOR_ENGINE=lake scripts/run_comparator.sh
+scripts/setup_comparator_toolchain.sh
+COMPARATOR_ENGINE=external COMPARATOR_NO_SANDBOX=1 scripts/run_comparator.sh
 ```

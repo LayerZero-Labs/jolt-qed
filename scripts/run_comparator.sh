@@ -6,21 +6,27 @@
 # that the kernel accepts it, and that it uses only the permitted axioms.
 #
 # Engines (COMPARATOR_ENGINE):
-#   external (default)  leanprover/comparator with lean4export and landrun.
+#   lake (default)      `lake comparator`, built into Lean v4.35.0. It needs
+#                       `bwrap` (bubblewrap). COMPARATOR_NO_SANDBOX=1 passes
+#                       --inadvisably-no-sandbox, which is for local smoke tests
+#                       only.
+#   external            leanprover/comparator with lean4export and landrun
+#                       (deprecated upstream in favour of `lake comparator`).
 #                       Tools come from PATH or from COMPARATOR_BIN,
 #                       COMPARATOR_LEAN4EXPORT and COMPARATOR_LANDRUN, which
 #                       scripts/setup_comparator_toolchain.sh prints.
 #                       The run is wrapped in `systemd-run --user` unless
 #                       COMPARATOR_NO_SANDBOX=1; comparator still sandboxes its
-#                       replay with landrun either way.
-#   lake                `lake comparator`, built into Lean v4.35.0. It needs
-#                       `bwrap` (bubblewrap). COMPARATOR_NO_SANDBOX=1 passes
-#                       --inadvisably-no-sandbox, which is for local smoke tests
-#                       only.
+#                       builds and replay with landrun either way.
 #
-# The script builds Challenge and Solution first. Build the root package (and
-# fetch the Mathlib cache) before running it, so that this build only compiles
-# the two gate modules.
+# The script never builds Challenge or Solution itself: Solution is the
+# untrusted input, and building it outside the comparator's sandbox would run
+# its elaborators unsandboxed before the check starts. Both engines build the
+# two modules inside their sandbox. The script first builds the jolt-qed
+# modules that Challenge imports (trusted code, the same build as lean.yml), so
+# that the sandboxed build compiles only the two gate modules. It deletes any
+# Challenge or Solution build output left in ci/comparator/.lake first, so the
+# comparator cannot reuse output built outside its sandbox.
 #
 # Usage: scripts/run_comparator.sh
 # Exit status: 0 accepted, 1 rejected or build failure, 2 missing tools.
@@ -29,7 +35,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GATE_DIR="$REPO_ROOT/ci/comparator"
 CONFIG="$GATE_DIR/config.json"
-ENGINE="${COMPARATOR_ENGINE:-external}"
+ENGINE="${COMPARATOR_ENGINE:-lake}"
 
 case "$ENGINE" in
   external | lake) ;;
@@ -60,8 +66,25 @@ if [ "$missing" -ne 0 ]; then
   exit 2
 fi
 
-echo ">> building Challenge and Solution in ci/comparator"
-( cd "$GATE_DIR" && lake build Challenge Solution )
+# The jolt-qed modules that Challenge.lean imports. Solution.lean must import
+# nothing else (ci/comparator/README.md).
+TRUSTED_IMPORTS=(JoltConstraints.WholeRun.Top JoltBytecode.Decode.Compressed JoltBytecode.Step.Instructions)
+if ! diff <(grep '^import ' "$GATE_DIR/Challenge.lean") <(grep '^import ' "$GATE_DIR/Solution.lean") >/dev/null; then
+  echo "ERROR: Solution.lean must have exactly the imports of Challenge.lean." >&2
+  exit 1
+fi
+for m in "${TRUSTED_IMPORTS[@]}"; do
+  grep -qx "import $m" "$GATE_DIR/Challenge.lean" || { echo "ERROR: Challenge.lean does not import $m; update TRUSTED_IMPORTS." >&2; exit 1; }
+done
+[ "$(grep -c '^import ' "$GATE_DIR/Challenge.lean")" -eq "${#TRUSTED_IMPORTS[@]}" ] || {
+  echo "ERROR: Challenge.lean imports modules missing from TRUSTED_IMPORTS." >&2; exit 1; }
+
+echo ">> building the trusted jolt-qed imports of the gate"
+( cd "$REPO_ROOT" && lake build "${TRUSTED_IMPORTS[@]}" )
+
+echo ">> removing Challenge and Solution build output built outside the sandbox"
+rm -rf "$GATE_DIR/.lake/build/lib/lean/Challenge".* "$GATE_DIR/.lake/build/lib/lean/Solution".* \
+  "$GATE_DIR/.lake/build/ir/Challenge".* "$GATE_DIR/.lake/build/ir/Solution".*
 
 echo ">> running the comparator ($ENGINE) on ci/comparator/config.json"
 if [ "$ENGINE" = lake ]; then
