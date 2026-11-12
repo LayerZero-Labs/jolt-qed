@@ -4,7 +4,8 @@ This report answers questions 1, 3 and 7 of section 10 of `docs/inline-precompil
 Questions 1 and 3 and the aliasing and value-range parts of I0(f) are settled by running Jolt's production code; the rest is settled by reading source.
 
 - jolt-qed: worktree `~/claude-work/jq-inline-research`, branch `inline/i0cf-research`, based on `309ba77`.
-- Jolt: `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`, checkout `~/claude-work/jolt-inline-pin-a6b6`. Every Jolt citation below is a path in that checkout at that commit.
+- Jolt: `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`, checkout `~/claude-work/jolt-inline-pin-a6b6`.
+  Every Jolt citation below is a path in that checkout at that commit.
 - Probe: `scripts/inline-open-questions/` (source identical to the binaries that produced the outputs below; see "How the runs were made").
 
 ## Summary
@@ -16,13 +17,13 @@ Questions 1 and 3 and the aliasing and value-range parts of I0(f) are settled by
 | Q3. Misaligned `LD`/`SD` inside an inline | Tracer: panic (`mmu.rs:321` load, `mmu.rs:429` store). Constraints: unsatisfiable (RAF admits only multiples of 8 since `629b7d959` added the alignment check on `lowest_address`). jolt-qed: `Memory_Exception`, and the rows stop there | Run (tracer), source (constraints, Lean) |
 | Q3. Range that wraps past 2^64 | Tracer: panic on the first access, which is already at or above `heap_end` (`memory.rs:36`). Constraints: unsatisfiable (`RamAddress` is the unwrapped `rs1 + imm`). jolt-qed: assertion error on the first access. For the twelve inlines a wrap needs a base above `2^64 − 200`, and the first access then already fails | Run, source |
 | Q3. Base above `heap_end` | Tracer: loads panic at `memory.rs:36` (before the "Illegal Memory Access" assert is reached), stores panic at `mmu.rs:166`. Constraints: unsatisfiable when the remapped index reaches `ram_k`. jolt-qed: assertion error | Run, source |
-| Q3. Base below the lowest address | Tracer: loads read 0, except in the five unsupported peripheral ranges (DTB, CLINT, PLIC, UART, disk), where they panic (`mmu.rs:446-450`); stores panic (`mmu.rs:148`). Constraints: a row access there is unsatisfiable, except an access at exactly address 0, which RAF reads as "no access". jolt-qed: the same split (`DeviceMemory.lean:81-84` rejects the peripheral ranges); `NoLowLoad` and `TracerAddressChecks` already exclude row loads below the lowest address at the whole-run level. Exception: `GLVR_ADV` reads `rs1` only in its advice, which records no RAM access, and a `GLVR_ADV` call with `rs1` below the lowest address is accepted by the tracer and the prover's address check | Run, source |
+| Q3. Base below the lowest address | Tracer: loads read 0, except in the five unsupported peripheral ranges (DTB, CLINT, PLIC, UART, disk), where they panic (`mmu.rs:446-450`); stores panic (`mmu.rs:148`). Constraints: a row access there is unsatisfiable, except an access at exactly address 0, which RAF reads as "no access". jolt-qed: the same split (`DeviceMemory.lean:81-84` rejects the peripheral ranges); `NoLowLoad` and `TracerAddressChecks` already exclude row loads below the lowest address at the whole-run level. Exception: `GLVR_ADV` reads `rs1` only in its advice, which records no RAM access, and a `GLVR_ADV` call whose four input words `rs1`, `rs1 + 8`, `rs1 + 16` and `rs1 + 24` all lie below the lowest address and outside the peripheral ranges is accepted by the tracer and the prover's address check (`rs1 = 0x1018` is not: its second word is at `0x1020` and panics at `mmu.rs:446`) | Run, source |
 | Q3. Address 0 | Not special for any buffer that emitted memory rows access: every such buffer has at least four words, and a base of 0 therefore also accesses address 8, which the prover and RAF reject (loads) or the tracer rejects (stores). The exception is `GLVR_ADV`'s `rs1`, which no row loads: with `rs1 = 0` the advice reads four zero words and no RAM access reaches the prover or RAF | Run, source |
 | Q3. What 629b7d959 and 4e55c9a5f changed for `LD`/`SD` | `629b7d959` kept `RamAddress = rs1 + imm` for `LD`/`SD`, added the verifier check that `lowest_address` is a multiple of 8 (which makes misaligned `LD`/`SD` unsatisfiable), and added the expansion check that inline load and store offsets lie in [−2048, 2047]. `4e55c9a5f` range-checks the value an `LD` loads; it changes no address | Source |
 | Q7. Whether `trace_file` affects proving | No. The `trace_file` argument of `register_inlines!` is read only by the generated `store_inlines`, and nothing calls `store_inlines` | Source (`git grep`) |
-| I0(f). SDK call sites | The SDK emits the twelve inlines from 11 `.insn` sites (4 hash, 7 secp256k1; plain `KECCAK256` has none). All 11 satisfy `Pre c` for callers that respect the documented invariants of the SDK's public functions: buffers are 8-aligned Rust objects in RAM, output buffers are fresh locals or `&mut self` fields, BLAKE2's flag comes from a `bool`, and secp256k1 inputs are canonical when built through the checked constructors. Five public functions let a caller break those invariants: `ECField::from_u64_arr_unchecked`, `ECField::div_assume_nonzero`, `AffinePoint::new_unchecked` and `AffinePoint::from_u64_arr_unchecked` (all safe Rust, with documented preconditions), and `unsafe fn keccak256_absorb_permute` | Source |
+| I0(f). SDK call sites | The SDK emits the twelve inlines from 11 `.insn` sites (4 hash, 7 secp256k1; plain `KECCAK256` has none). All 11 satisfy `Pre c` for callers that respect the documented invariants of the SDK's public functions: buffers are 8-aligned Rust objects in RAM, output buffers are fresh locals or `&mut self` fields, BLAKE2's flag comes from a `bool`, and secp256k1 inputs are canonical when built through the checked constructors. Five public functions let a caller break those invariants: `ECField::from_u64_arr_unchecked`, `ECField::div_assume_nonzero`, `AffinePoint::new_unchecked` and `AffinePoint::from_u64_arr_unchecked` (all safe Rust; the first has a documented canonicity invariant, and the requirement of the second, a nonzero divisor, is implied by its name and implementation but not documented), and `unsafe fn keccak256_absorb_permute` | Source |
 | I0(f). Overlap | No overlap condition is needed for any of the twelve: every load comes before every store, and the advice reads its operands before any row runs. Every aliasing shape tried gave the same output as disjoint buffers, and `GLVR_ADV` with `rs3 = rs1` returns the correct decomposition while overwriting `k` | Run |
-| I0(f). Value ranges | BLAKE2 accepts any `is_final` but means BLAKE2 only for 0 and 1. For secp256k1, "Jolt's advice generation succeeds" and "Jolt's advice passes the rows" differ. MUL and SQUARE: generation needs `⌊a·b/q⌋ < 2^256` (`a = b = 2^256 − 1` panics), and the advice then passes the rows (`a = p, b = 1`, `a = b = p`, `a = 2^256 − 1, b = p − 1` and the scalar-field analogues all pass, with canonical outputs). DIV: generation needs `b mod q ≠ 0` (`b = p` panics), and the advice passes the rows only when the dividend `a < q` (`a = q, b = 1` gives `c = w = 0`, and the row check `c·b = w·q + a` fails: the tracer panics at the first `VirtualAssertEQ`). A non-canonical divisor with `b mod q ≠ 0` passes (`b = p + 1`, `b = 2^256 − 1`). `GLVR_ADV` reduces `k` modulo `n` and needs no range | Run, source |
+| I0(f). Value ranges | BLAKE2 accepts any `is_final` but means BLAKE2 only for 0 and 1. For secp256k1, "Jolt's advice generation succeeds" and "Jolt's advice passes the rows" differ. MUL and SQUARE: generation needs `⌊a·b/q⌋ < 2^256` (`a = b = 2^256 − 1` panics), and the advice then passes the rows (`a = p, b = 1`, `a = b = p`, `a = 2^256 − 1, b = p` with the largest quotient `2^256 − 1`, and the scalar-field analogues all pass, with canonical outputs). DIV: generation needs `b mod q ≠ 0` (`b = p` panics), and the advice passes the rows only when the dividend `a < q` (`a = q, b = 1` gives `c = w = 0`, and the row check `c·b = w·q + a` fails: the tracer panics at the first `VirtualAssertEQ`). A non-canonical divisor with `b mod q ≠ 0` passes (`b = p + 1`, `b = 2^256 − 1`). `GLVR_ADV` reduces `k` modulo `n` and needs no range | Run, source |
 
 ## How the runs were made
 
@@ -49,8 +50,9 @@ JOLT_DIR=~/claude-work/jolt-inline-pin-a6b6 CARGO_TARGET_DIR=~/claude-work/.carg
 ```
 
 which writes `~/claude-work/i0cf-scratch/work/bin/inline-probe-{nofeat,depsha2,inlines}`, and ran each subcommand as `inline-probe-<variant> <q1|q3|alias|glv|edge>` from that directory.
-The outputs are kept in `~/claude-work/i0cf-scratch/out2/` and are quoted below.
-An earlier build of the same probe without the review cases (outputs in `~/claude-work/i0cf-scratch/out/`) gave byte-identical `q1`, `alias` and `glv` output and the same results for every `q3` and `edge` case the two share (the new `edge` lines are padded wider and add the `out < modulus` check).
+The outputs are kept in `~/claude-work/i0cf-scratch/out3/` and are quoted below.
+Two earlier builds of the probe with fewer cases (outputs in `~/claude-work/i0cf-scratch/out/` and `out2/`) gave byte-identical `q1`, `alias` and `glv` output and the same results for every `q3` and `edge` case they share with this one.
+The `edge` lines of the first build are padded narrower and lack the `out < modulus` check.
 
 All runs use `MemoryConfig::default()` with the program size of the probe image.
 The resulting layout is:
@@ -152,11 +154,12 @@ Each memory row goes through `Mmu::load_doubleword` (`tracer/src/emulator/mmu.rs
 Both call `assert_effective_address` (`mmu.rs:112-178`), but in a different order:
 
 - `trace_store` (`mmu.rs:484-496`) asserts the address first, and a bad store fails with the MMU's own message.
-- `trace_load` (`mmu.rs:472-478`) reads the doubleword for the trace before it asserts anything. A load at or above `heap_end`, or at a wrapped address, panics in `Memory::get_doubleword` (`tracer/src/emulator/memory.rs:36`, "Out of bounds memory access") and never reaches the "Illegal Memory Access" assert (around `mmu.rs:173-176`).
+- `trace_load` (`mmu.rs:472-478`) reads the doubleword for the trace before it asserts anything.
+  A load at or above `heap_end`, or at a wrapped address, panics in `Memory::get_doubleword` (`tracer/src/emulator/memory.rs:36`, "Out of bounds memory access") and never reaches the "Illegal Memory Access" assert (around `mmu.rs:173-176`).
 
 The advice of the secp256k1 inlines reads its operands through `InlineAdviceContext` for `Cpu` (`tracer/src/instruction/inline.rs:71-82`), which calls `mmu.load_doubleword(...).ok()`; the MMU asserts panic instead of returning `Err`, and a bad advice read panics the same way.
 
-`./inline-probe-inlines q3` (abridged to the cases that differ; the full output is in `~/claude-work/i0cf-scratch/out2/q3.txt`):
+`./inline-probe-inlines q3` (abridged to the cases that differ; the full output is in `~/claude-work/i0cf-scratch/out3/q3.txt`):
 
 ```
 SHA256: rs1 = state (read, then written), rs2 = block (read), rd = x0
@@ -220,13 +223,16 @@ GLVR_ADV: rs1 = k (read by the advice only), rs3 = out (written)
   rs1 = 0                                          rs1=0x0: ok (17 rows); remap: 0 access(es) at address 0 (no access), every other access remaps; out = [0, 0, 0, 0, 0, 0]
   rs1 below lowest address                         rs1=0x7fff7000: ok (17 rows); remap: 0 access(es) at address 0 (no access), every other access remaps; out = [0, 0, 0, 0, 0, 0]
   rs1 = 0x1020 (DTB range, below lowest)           rs1=0x1020: panic at tracer/src/emulator/mmu.rs:446: load_raw:dtb is unsupported.
+  rs1 = 0x1018 (second word at 0x1020, DTB)        rs1=0x1018: panic at tracer/src/emulator/mmu.rs:446: load_raw:dtb is unsupported.
   rs1 in gap above io_end                          rs1=0x7fffc110: panic at tracer/src/emulator/mmu.rs:126: I/O overflow: Attempted to read from 0x7FFFC110. Out of bounds.
   rs1 = input_start                                rs1=0x7fffa000: ok (17 rows); remap: 0 access(es) at address 0 (no access), every other access remaps; out = [0, 3331612b9b1c56ee, 71f8f429be031929, 0, 6224359466c40437, 536b0bf3285ceb1a]
   rs1 = heap_end                                   rs1=0x82002580: panic at tracer/src/emulator/memory.rs:36: Out of bounds memory access (4195504 >= 4195504)
   rs1 range wraps past 2^64 (rs1 = 2^64-16)        rs1=0xfffffffffffffff0: panic at tracer/src/emulator/memory.rs:36: Out of bounds memory access (2305843008945258494 >= 4195504)
 ```
 
-The advice reads `k` through the tracer's MMU and therefore fails exactly where a row load would, except that its reads record no RAM access: with `rs1 = 0` or below the lowest address the call succeeds and nothing reaches the prover's address check.
+The advice reads `k` through the tracer's MMU and therefore fails exactly where a row load would.
+Its reads record no RAM access, however: when all four words lie below the lowest address and outside the peripheral ranges, the call succeeds and nothing reaches the prover's address check.
+`rs1 = 0x1018` shows that the whole four-word range matters: its first word is outside the peripheral ranges, but its second word at `0x1020` is not.
 
 In short, the tracer:
 
@@ -245,7 +251,8 @@ Constraint 0 of the RV64 R1CS (`crates/jolt-claims/src/protocols/composed/r1cs/r
 (Load + Store) · (RamAddress − Rs1Value − Imm + LookupOutput) = 0
 ```
 
-`LD` and `SD` look up no table. Instruction read-RAF therefore forces `LookupOutput = 0`, and `RamAddress` is the unwrapped integer `rs1 + imm`.
+`LD` and `SD` look up no table.
+Instruction read-RAF therefore forces `LookupOutput = 0`, and `RamAddress` is the unwrapped integer `rs1 + imm`.
 RAM RAF evaluation admits only `RamAddress = Σ_k ra(k)·(8k + lowest_address)` with boolean `ra`, or 0 when every `ra(k)` is 0 (no access).
 The verifier rejects a layout whose `lowest_address` is at most 8 or not a multiple of 8 (`validate_ram_remap_base`, `crates/jolt-verifier/src/verifier.rs:952-973`).
 Jolt's own comment states the consequences, which match the runs:
@@ -254,7 +261,8 @@ Jolt's own comment states the consequences, which match the runs:
 - A sum `rs1 + imm` that carries past 2^64 has no satisfying `RamAddress`, because every admissible address is far below 2^64.
 - An access below `lowest_address` other than address 0 has no satisfying `RamAddress`; the honest prover fails earlier, in `remapped_ram_address` (`crates/jolt-witness/src/backend/trace/ram.rs:260-283`), with `InvalidWitnessData` ("failed to remap RAM access address ...").
 - An access whose index reaches `ram_k` is rejected by the same function.
-- Address 0 is "no access": an `LD` there reads 0 and an `SD` there changes nothing. `remap_word_address` returns `Ok(None)` for it (`common/src/jolt_device.rs:539-553`).
+- Address 0 is "no access": an `LD` there reads 0 and an `SD` there changes nothing.
+  `remap_word_address` returns `Ok(None)` for it (`common/src/jolt_device.rs:539-553`).
 
 What the two commits changed for `LD`/`SD`:
 
@@ -263,7 +271,8 @@ What the two commits changed for `LD`/`SD`:
   - added the check that `lowest_address` is a multiple of 8 to `validate_ram_remap_base` (before, only `lowest_address > 8` was checked); this is what makes a misaligned `LD`/`SD` unsatisfiable;
   - added the check in `materialize_inline` that rejects an inline load or store offset outside [−2048, 2047] with `ExpansionError::InlineMemoryOffsetOutOfRange` (`crates/jolt-program/src/expand/materialize.rs:24, 157-165`; `crates/jolt-program/src/expand/error.rs:14`);
   - removed the `VirtualAssertWordAlignment` and `VirtualAssertHalfwordAlignment` rows of the sub-word accesses, which `LD`/`SD` never used.
-- `4e55c9a5f` ("range-check direct RAM loads", #2190): an `LD` routes `RdWriteValue` into the right lookup operand, and read-RAF proves that the loaded value is a 64-bit word. It pins `LookupOutput = 0` for direct loads and changes no address.
+- `4e55c9a5f` ("range-check direct RAM loads", #2190): an `LD` routes `RdWriteValue` into the right lookup operand, and read-RAF proves that the loaded value is a 64-bit word.
+  It pins `LookupOutput = 0` for direct loads and changes no address.
 
 ### jolt-qed Lean semantics: source
 
@@ -274,7 +283,8 @@ What the two commits changed for `LD`/`SD`:
   Below `RAM_START`, loads go through `load_raw?`, which accepts the I/O regions and every address at most `RAM_START − 8` (reading 0) except the five peripheral ranges, which it rejects as the tracer does (`DeviceMemory.lean:81-84`); stores go through `store_raw?`, which accepts only the output, panic and termination words.
   Every failure is an `Error.Assertion`, the model of a tracer panic.
 - The model therefore agrees with the tracer case by case on success versus failure (by reading; the Lean side was not run).
-  The messages differ in one case: the model reports "Illegal Memory Access" for a load at or above `heap_end`, where the tracer panics earlier in `memory.rs:36`. Both are failures.
+  The messages differ in one case: the model reports "Illegal Memory Access" for a load at or above `heap_end`, where the tracer panics earlier in `memory.rs:36`.
+  Both are failures.
 - A wrapping range fails on its first access in the model as well, because that access is at or above `heap_end`.
 - Loads below the lowest address succeed in the model as in the tracer.
   The whole-run layer already excludes them: `NoLowLoad` (`JoltConstraints/WholeRun/Io.lean:84`) and `NoZeroDoublewordLoad` (`Io.lean:97`), derived from `JoltInstance.TracerAddressChecks` (`JoltConstraints/Soundness/Layer5/MemoryAccessRestriction.lean:89`), which quantifies over every `LD`/`SD` and floor row of the bytecode, expanded inline rows included.
@@ -289,15 +299,17 @@ For each operand buffer `[base, base + 8·len)` of the call (from the table abov
 2. Every address that a row loads is below `heap_end` in RAM (the stack canary is allowed) or in the input, advice, output, panic or termination regions.
    The tracer also accepts row loads below the lowest address outside the peripheral ranges, but the prover rejects them (all but address 0) and the whole-run layer excludes them through `TracerAddressChecks` and `NoLowLoad`; `Pre c` gains nothing by admitting them.
 3. Every address that a row stores to is below `heap_end` in RAM and outside the stack canary, or in the output, panic or termination words.
-4. No range wraps. Conditions 2 and 3 imply this, because every range starts at a nonnegative offset 0 and is at most 200 bytes long.
-5. For `GLVR_ADV`, whose rows never load `rs1`: `rs1` is a multiple of 8 and the four words at `rs1` pass the tracer's read check, because the advice reads them through `Mmu::load_doubleword`. No row and no RAF access constrains `rs1`.
+4. No range wraps.
+   Conditions 2 and 3 imply this, because every range starts at a nonnegative offset 0 and is at most 200 bytes long.
+5. For `GLVR_ADV`, whose rows never load `rs1`: `rs1` is a multiple of 8 and the four words at `rs1` pass the tracer's read check, because the advice reads them through `Mmu::load_doubleword`.
+   No row and no RAF access constrains `rs1`.
 
 Address 0 needs no special case for buffers that emitted memory rows access: a base of 0 makes the row at offset 8 fail (a load at 8 is rejected by the prover and is unsatisfiable; a store at 8 panics in the tracer).
 Condition 2 or 3 excludes such a base already.
 
 `GLVR_ADV`'s `rs1` is the exception.
 `GlvrAdvBuilder::advice` (`jolt-inlines/secp256k1/src/sequence_builder.rs:25-35`) reads `k` through `InlineAdviceContext::load_doubleword`, which for `Cpu` calls `Mmu::load_doubleword(...).ok()` and discards the access record (`tracer/src/instruction/inline.rs:76-81`), and the 13 rows only store through `rs3`.
-With `rs1 = 0`, or any aligned `rs1` below the lowest address outside the peripheral ranges, the advice reads four zero words, the rows store the decomposition of 0, and no RAM access at a low address reaches the prover's address check or RAF (runs in the Q3 tracer section: `rs1 = 0` and `rs1 = 0x7fff7000` give `out = [0, 0, 0, 0, 0, 0]` and every recorded access remaps).
+With `rs1 = 0`, or any aligned `rs1` whose four words `rs1` to `rs1 + 24` all lie below the lowest address and outside the peripheral ranges, the advice reads four zero words, the rows store the decomposition of 0, and no RAM access at a low address reaches the prover's address check or RAF (runs in the Q3 tracer section: `rs1 = 0` and `rs1 = 0x7fff7000` give `out = [0, 0, 0, 0, 0, 0]` and every recorded access remaps).
 Jolt therefore proves such a call; it is complete and harmless, because the stored words carry no guarantee in any case and the SDK checks them against the `k` it holds.
 In jolt-qed's model the rows of such a call run to the end for every advice, since no row reads `rs1`.
 What `joltAdvice c s` returns depends on how the transcription reads `k`: to match Jolt it must read through the model's MMU (`Mmu.load_doubleword`, which returns 0 below `RAM_START − 8` outside the peripheral ranges and fails in them, in the gap above `io_end` and at or above `heap_end`), not the raw memory map.
@@ -315,9 +327,12 @@ The hash `InlineSpec` therefore needs either a precondition that the written buf
 
 - `register_inlines!` (doc from `jolt-inlines/sdk/src/host.rs:572`, macro at 585) takes a `trace_file` argument and uses it only in the generated `store_inlines` function (`host.rs:591-601`).
 - `store_inlines` calls `store_trace` (`host.rs:292-308`), which calls `write_inline_trace` (`host.rs:307`; defined at `tracer/src/utils/inline_sequence_writer.rs:106`).
-- `git grep -n store_inlines` at the pin finds only the doc line 572 and the definition at 591. Nothing calls it.
-- The `trace_file` argument of `register_inlines!` appears only in the macro's invocations in the inline crates (for example `jolt-inlines/sha2/src/host.rs:4`, `jolt-inlines/secp256k1/src/host.rs:7`) and in the macro itself. Other variables and parameters named `trace_file` are unrelated: the `trace_file` parameter of `Program::trace_to_file` (`crates/jolt-host/src/program.rs:453`) and local variables in `examples/backtrace/src/main.rs` and `examples/fibonacci/src/main.rs`, which name execution-trace output files.
-- `specs/inline-expansion-grammar.md:406-409` ("Trace File Policy") says that the `.joltinline` files are developer fixtures and "not the source of truth for static expansion". `.gitignore:50` ignores `*.joltinline`.
+- `git grep -n store_inlines` at the pin finds only the doc line 572 and the definition at 591.
+  Nothing calls it.
+- The `trace_file` argument of `register_inlines!` appears only in the macro's invocations in the inline crates (for example `jolt-inlines/sha2/src/host.rs:4`, `jolt-inlines/secp256k1/src/host.rs:7`) and in the macro itself.
+  Other variables and parameters named `trace_file` are unrelated: the `trace_file` parameter of `Program::trace_to_file` (`crates/jolt-host/src/program.rs:453`) and local variables in `examples/backtrace/src/main.rs` and `examples/fibonacci/src/main.rs`, which name execution-trace output files.
+- `specs/inline-expansion-grammar.md:406-409` ("Trace File Policy") says that the `.joltinline` files are developer fixtures and "not the source of truth for static expansion".
+  `.gitignore:50` ignores `*.joltinline`.
 
 The `trace_file` argument of `register_inlines!` does not affect proving.
 
@@ -332,10 +347,14 @@ For each site I checked every function that passes operands to it, up to the SDK
 
 Facts common to all call sites:
 
-- Every buffer is a Rust array or struct field of `u64` or `u32` words inside an 8-aligned type, allocated on the stack or heap. It therefore lies in RAM below `heap_end` and outside the canary (the tracer panics on a stack overflow into the canary before the inline runs).
+- Every buffer is a Rust array or struct field of `u64` or `u32` words inside an 8-aligned type, allocated on the stack or heap.
+  It therefore lies in RAM below `heap_end` and outside the canary (the tracer panics on a stack overflow into the canary before the inline runs).
 - Every footprint is at most 200 bytes from an address inside a live Rust object, and no range wraps.
-- Register operands use `in(reg)`. Rust's RISC-V `reg` class never allocates `x0`, and the secp256k1 call sites therefore always pass a real `rd` (Rust's rule; not run). The hash call sites write `x0` literally in the `.insn` template.
-- Advice counts: the tracer asserts that each inline consumes exactly the advice it was given (`tracer/src/instruction/inline.rs:347` and `357`). `QuotientAdvice` serializes 4 words, `ModularDivisionAdvice` 8 and `GlvDecompositionAdvice` 6 (`jolt-inlines/sdk/src/host.rs:210-245`), matching the `VirtualAdvice` rows counted in the alias runs (4, 4, 8, 4, 4, 8, 6).
+- Register operands use `in(reg)`.
+  Rust's RISC-V `reg` class never allocates `x0`, and the secp256k1 call sites therefore always pass a real `rd` (Rust's rule; not run).
+  The hash call sites write `x0` literally in the `.insn` template.
+- Advice counts: the tracer asserts that each inline consumes exactly the advice it was given (`tracer/src/instruction/inline.rs:347` and `357`).
+  `QuotientAdvice` serializes 4 words, `ModularDivisionAdvice` 8 and `GlvDecompositionAdvice` 6 (`jolt-inlines/sdk/src/host.rs:210-245`), matching the `VirtualAdvice` rows counted in the alias runs (4, 4, 8, 4, 4, 8, 6).
 
 ### Call sites
 
@@ -363,7 +382,10 @@ Out of scope and not counted: the `0x5B` `REV8W` at `sha2/src/sdk.rs:373`, the `
 
 - `ECField::from_u64_arr_unchecked` (trait `jolt-inlines/sdk/src/ec.rs:27`, doc at 19-26) and `ECField::div_assume_nonzero` (`ec.rs:16`) are public, and `impl ECField for Secp256k1Fq` forwards them to the `pub(crate)` inherent functions (`secp256k1/src/sdk.rs:364-366` and `376-378`).
   `ec` is a public module behind the `elliptic-curve` feature (`jolt-inlines/sdk/src/lib.rs:22-23`).
-  Both are safe Rust with documented preconditions (canonical limbs; a nonzero divisor), and a caller that ignores them can build a non-canonical `Secp256k1Fq` and pass it to `MULQ`, `SQUAREQ` or `DIVQ`, or divide by zero without the spoil check.
+  Both are safe Rust.
+  `from_u64_arr_unchecked` documents its invariant (canonical limbs).
+  `div_assume_nonzero` has no doc comment: its requirement, a nonzero divisor, is implied by its name and by its implementation, which skips the zero check that `div` makes.
+  A caller that ignores these requirements can build a non-canonical `Secp256k1Fq` and pass it to `MULQ`, `SQUAREQ` or `DIVQ`, or divide by zero without the spoil check.
   The edge runs below show the effect: non-canonical inputs can make advice generation panic (`host.rs:73`), a non-canonical dividend makes Jolt's DIV advice fail the rows, and a zero divisor makes advice generation panic (`sequence_builder.rs:152`).
   Each of these is a completeness failure (the honest prover produces no proof), not a soundness one.
 - `AffinePoint::new_unchecked` (`ec.rs:78`) and `AffinePoint::from_u64_arr_unchecked` (`ec.rs:145`) are public and build points from unchecked coordinates.
@@ -397,7 +419,7 @@ GLVR_ADV: disjoint buffers ok, 17 rows, 6 VirtualAdvice rows
   rs3 = rs1 - 16     rs1=0x80000600 rs2=0x80000900 rs3=0x800005f0: outputs equal
 ```
 
-Every applicable shape gave "outputs equal" for all twelve inlines (full output in `~/claude-work/i0cf-scratch/out2/alias.txt`): `SHA256_INIT` and `BLAKE2` behave as `SHA256`; `DIVQ`, `MULR` and `DIVR` as `MULQ`; `SQUAREQ` and `SQUARER` for the three `rs3` shapes.
+Every applicable shape gave "outputs equal" for all twelve inlines (full output in `~/claude-work/i0cf-scratch/out3/alias.txt`): `SHA256_INIT` and `BLAKE2` behave as `SHA256`; `DIVQ`, `MULR` and `DIVR` as `MULQ`; `SQUAREQ` and `SQUARER` for the three `rs3` shapes.
 `KECCAK256` has only one buffer and no shape to alias.
 Row counts with the setup rows: `SHA256_INIT` 1,868, `KECCAK256` 3,090, `BLAKE2` 1,071, `SQUAREQ` 171, `DIVQ` 199, `MULR` 237, `SQUARER` 217, `DIVR` 245.
 
@@ -414,7 +436,7 @@ k = [a95514aaa, a00aaafdf80202bf, 8b13399cd1d1497a, 141dc47f2feffab4]
   after rs3 = rs1 run, memory at rs1 = [0, 91c5c8f7ed64537a, 39cb5fda3596685f, 0] (k was [a95514aaa, a00aaafdf80202bf, 8b13399cd1d1497a, 141dc47f2feffab4])
 ```
 
-Two more random scalars give the same picture (`~/claude-work/i0cf-scratch/out2/glv.txt`).
+Two more random scalars give the same picture (`~/claude-work/i0cf-scratch/out3/glv.txt`).
 
 ### Value-range runs
 
@@ -424,7 +446,8 @@ Two more random scalars give the same picture (`~/claude-work/i0cf-scratch/out2/
 MULQ a = b = 2^256 - 1 (non-canonical)                  : panic at jolt-inlines/sdk/src/host.rs:73: Result does not fit in 4 limbs
 MULQ a = p, b = 1 (a = p, non-canonical)                : ok (191 rows), out = [0, 0, 0, 0], out < modulus
 MULQ a = 2^256 - 1, b = 1                               : ok (191 rows), out = [1000003d0, 0, 0, 0], out < modulus
-MULQ a = 2^256 - 1, b = p - 1 (largest w below 2^256)   : ok (191 rows), out = [fffffffdfffff85f, ffffffffffffffff, ffffffffffffffff, ffffffffffffffff], out < modulus
+MULQ a = 2^256 - 1, b = p - 1 (w = 2^256 - 3)           : ok (191 rows), out = [fffffffdfffff85f, ffffffffffffffff, ffffffffffffffff, ffffffffffffffff], out < modulus
+MULQ a = 2^256 - 1, b = p (w = 2^256 - 1, largest)      : ok (191 rows), out = [0, 0, 0, 0], out < modulus
 MULQ a = b = p                                          : ok (191 rows), out = [0, 0, 0, 0], out < modulus
 SQUAREQ a = 2^256 - 1                                   : panic at jolt-inlines/sdk/src/host.rs:73: Result does not fit in 4 limbs
 SQUAREQ a = p                                           : ok (171 rows), out = [0, 0, 0, 0], out < modulus
@@ -451,17 +474,26 @@ BLAKE2 is_final = 0xffffffffffffffff: ok (1071 rows), h[0] = 0xecdecdd4ac2785ed
 
 Two questions are separate here: whether Jolt's advice generation succeeds, and whether the advice it generates passes the rows.
 
-- MUL and SQUARE. `mulq_quotient_advice` (`jolt-inlines/sdk/src/host.rs:98-117`) computes `w = ⌊a·b/q⌋` and `c = a·b − w·q`, and `nbiguint_to_field_limbs` asserts that each fits in four limbs (`host.rs:73`). Generation therefore succeeds exactly when `a·b < 2^256·q`.
-  The rows check `a·b + w·(2^256 − q) = 2^256·w + c` limb by limb, with a final carry check (`secp256k1/src/sequence_builder.rs:43-54`, 340-382). The generated `w` and `c` satisfy `a·b = w·q + c` exactly, and the identity follows. The runs confirm it: every MUL and SQUARE case whose advice generation succeeds passes the rows, including `a = 2^256 − 1, b = p − 1`, whose quotient is the largest below 2^256, and every output is canonical.
-- DIV. `mulq_division_advice` (`host.rs:130-148`) computes `c = a·b⁻¹ mod q` with `field_inv_mul`, which panics on a divisor that is zero modulo the field (`secp256k1/src/sequence_builder.rs:146` scalar field, `152` base field), and `w = ⌊b·c/q⌋` (`host.rs:137-139`).
+- MUL and SQUARE: `mulq_quotient_advice` (`jolt-inlines/sdk/src/host.rs:98-114`) computes and returns only the quotient `w = ⌊a·b/q⌋`, and `nbiguint_to_field_limbs` asserts that it fits in four limbs (`host.rs:73`).
+  Generation therefore succeeds exactly when `a·b < 2^256·q`.
+  The rows compute the result themselves: they accumulate `a·b + w·(2^256 − q)` limb by limb, store its low four limbs through `rs3` as the result `c`, assert that its high four limbs equal `w`, and end with a carry check (`secp256k1/src/sequence_builder.rs:43-54`, 340-382).
+  With the generated `w`, `a·b = w·q + r` for `r = a·b mod q`, and the accumulated value is `2^256·w + r`.
+  Its high limbs are `w` and its low limbs are `r`, which is below `q`, and every assert passes.
+  The runs confirm it: every MUL and SQUARE case whose advice generation succeeds passes the rows, and every output is below the modulus.
+  The largest quotient that fits is `w = 2^256 − 1`, which `a = 2^256 − 1, b = p` reaches (out 0).
+  The near-boundary case `a = 2^256 − 1, b = p − 1` gives `w = 2^256 − 3`, and both pass.
+- DIV: `mulq_division_advice` (`host.rs:130-148`) computes `c = a·b⁻¹ mod q` with `field_inv_mul`, which panics on a divisor that is zero modulo the field (`secp256k1/src/sequence_builder.rs:146` scalar field, `152` base field), and `w = ⌊b·c/q⌋` (`host.rs:137-139`).
   Generation therefore succeeds exactly when `b mod q ≠ 0`; `b = p` is nonzero as an integer and still panics.
   The rows check `c·b + w·(2^256 − q) = 2^256·w + a`, comparing against the dividend loaded from `rs1` (first comparison at `sequence_builder.rs:216-218`).
-  Since `b·c = w·q + (a mod q)`, the generated advice passes exactly when `a mod q = a`, that is `a < q`. For `a = q, b = 1` it gives `c = w = 0`, and the first comparison fails: the tracer panics at `virtual_assert_eq.rs:20` for `a = p` and `a = p + 1` (DIVQ) and `a = n` (DIVR).
+  Since `b·c = w·q + (a mod q)`, the generated advice passes exactly when `a mod q = a`, that is `a < q`.
+  For `a = q, b = 1` it gives `c = w = 0`, and the first comparison fails: the tracer panics at `virtual_assert_eq.rs:20` for `a = p` and `a = p + 1` (DIVQ) and `a = n` (DIVR).
   A non-canonical divisor with `b mod q ≠ 0` passes: `c < q` and `b < 2^256` keep `w` below 2^256 (runs: `b = p + 1` and `b = 2^256 − 1` for DIVQ, `b = n + 1` for DIVR).
-- `GlvrAdvBuilder::advice` (`secp256k1/src/sequence_builder.rs:25-35`) reads `k` through `load_field_element_limbs` (`host.rs:57-69`) and reduces it with `Fr::new`. Every 256-bit `k` therefore works, and the output is the decomposition of `k mod n`.
-- BLAKE2's rows compute `v14 = IV6 ^ (0 − is_final)` (`jolt-inlines/blake2/src/sequence_builder.rs:74-79`, `109-119`). The rows are total on every flag value, and only 0 and 1 give BLAKE2.
+- `GlvrAdvBuilder::advice` (`secp256k1/src/sequence_builder.rs:25-35`) reads `k` through `load_field_element_limbs` (`host.rs:57-69`) and reduces it with `Fr::new`.
+  Every 256-bit `k` therefore works, and the output is the decomposition of `k mod n`.
+- BLAKE2's rows compute `v14 = IV6 ^ (0 − is_final)` (`jolt-inlines/blake2/src/sequence_builder.rs:74-79`, `109-119`).
+  The rows are total on every flag value, and only 0 and 1 give BLAKE2.
 
-## Contradictions with the spec
+## Refinements and corrections to the spec
 
 All line numbers are in `docs/inline-precompiles.md` at `309ba77`.
 No finding shows a spec statement to be false.
@@ -470,20 +502,34 @@ The findings are refinements (a statement is true but stronger or less complete 
 ### Refinements
 
 1. Line 407: "`Pre` collects the caller's obligations: alignment, buffers inside RAM, overlap rules, and value ranges (`is_final ∈ {0, 1}` for `BLAKE2`, inputs below the modulus for secp256k1, a nonzero divisor for DIV)."
-   - "overlap rules": none of the twelve needs one. Every load precedes every store, the advice reads its inputs before any row, and every aliasing shape gave the same output as disjoint buffers.
-   - "buffers inside RAM": Jolt's tracer and the prover's address check also accept buffers that rows read in the input, advice, output, panic or termination regions, and buffers that rows write in the output, panic or termination words. Whether the whole proof then verifies is open for the panic and termination words (final-memory consistency; Q3 section). Keeping "inside RAM" is sufficient for the SDK. `GLVR_ADV`'s `rs1` is read only by the advice and can be any address the tracer can read, including 0.
-   - "inputs below the modulus for secp256k1": soundness (`a·b = w·q + c`, `c·b = w·q + a`) holds for every input whose advice gets through the asserts. Completeness with Jolt's advice needs, for MUL and SQUARE, only `⌊a·b/q⌋ < 2^256` (run), and for DIV a canonical dividend `a < q` and any divisor with `b mod q ≠ 0`. Canonical inputs are therefore needed for the dividend and sufficient elsewhere.
+   - "overlap rules": none of the twelve needs one.
+     Every load precedes every store, the advice reads its inputs before any row, and every aliasing shape gave the same output as disjoint buffers.
+   - "buffers inside RAM": Jolt's tracer and the prover's address check also accept buffers that rows read in the input, advice, output, panic or termination regions, and buffers that rows write in the output, panic or termination words.
+     Whether the whole proof then verifies is open for the panic and termination words (final-memory consistency; Q3 section).
+     Keeping "inside RAM" is sufficient for the SDK.
+     `GLVR_ADV`'s `rs1` is read only by the advice and can be any aligned address whose four words the tracer can read, including 0.
+   - "inputs below the modulus for secp256k1": soundness (`a·b = w·q + c`, `c·b = w·q + a`) holds for every input whose advice gets through the asserts.
+     Completeness with Jolt's advice needs, for MUL and SQUARE, only `⌊a·b/q⌋ < 2^256` (run), and for DIV a canonical dividend `a < q` and any divisor with `b mod q ≠ 0`.
+     Canonical inputs are therefore needed for the dividend and sufficient elsewhere.
    - "a nonzero divisor for DIV": with canonical inputs this is right; if `Pre` drops canonicity of the divisor it must say "nonzero modulo q".
-2. Line 466: "`mulq_division_advice` (...; it panics when `b = 0`, which `Pre c` excludes)". True but incomplete: it panics whenever `b ≡ 0 (mod q)`, which includes `b = q` (run). The completeness lemma also needs `a < q`, which line 466 does not mention and line 407's "inputs below the modulus" covers.
+2. Line 466: "`mulq_division_advice` (...; it panics when `b = 0`, which `Pre c` excludes)".
+   True but incomplete: it panics whenever `b ≡ 0 (mod q)`, which includes `b = q` (run).
+   The completeness lemma also needs `a < q`, which line 466 does not mention and line 407's "inputs below the modulus" covers.
 
 ### Citation corrections
 
-3. Line 140: "the SDK spoils the proof on one (`secp256k1/src/sdk.rs:280-284`)". The citation is `Secp256k1Fq::div` (280-285, spoil at 282) and is right for `div`. The ECDSA path calls `div_assume_nonzero` directly (`sdk.rs:899-900`, guarded by the `s ≠ 0` check at 893-895), and `ECField::div_assume_nonzero` is public with no check. Section 12.3 (line 704) already gives the per-call-site argument; line 140 reads as if the spoil covers every division.
-4. Line 144: "The guest checks the sign words and `k1 + λ·k2 = k` afterwards (`secp256k1/src/sdk.rs:751`)". Line 751 starts the right function, `decompose_scalar_impl`; the sign checks are at 765-766 and the recombination check at 781-784.
+3. Line 140: "the SDK spoils the proof on one (`secp256k1/src/sdk.rs:280-284`)".
+   The citation is `Secp256k1Fq::div` (280-285, spoil at 282) and is right for `div`.
+   The ECDSA path calls `div_assume_nonzero` directly (`sdk.rs:899-900`, guarded by the `s ≠ 0` check at 893-895), and `ECField::div_assume_nonzero` is public with no check.
+   Section 12.3 (line 704) already gives the per-call-site argument; line 140 reads as if the spoil covers every division.
+4. Line 144: "The guest checks the sign words and `k1 + λ·k2 = k` afterwards (`secp256k1/src/sdk.rs:751`)".
+   Line 751 starts the right function, `decompose_scalar_impl`; the sign checks are at 765-766 and the recombination check at 781-784.
 
 ### Answer to an open question
 
-5. Line 630 asks whether a misaligned or out-of-range `LD`/`SD` is "unsatisfiable, a trap, or something else". The answer differs by place: the tracer panics (no trace); the constraints are unsatisfiable; jolt-qed's model returns `Memory_Exception` for misalignment (a trap result) and an assertion error for an out-of-range address. Both Lean outcomes mean the rows do not run to the end, and they agree with Jolt on success versus failure.
+5. Line 630 asks whether a misaligned or out-of-range `LD`/`SD` is "unsatisfiable, a trap, or something else".
+   The answer differs by place: the tracer panics (no trace); the constraints are unsatisfiable; jolt-qed's model returns `Memory_Exception` for misalignment (a trap result) and an assertion error for an out-of-range address.
+   Both Lean outcomes mean the rows do not run to the end, and they agree with Jolt on success versus failure.
 
 ### Checked and holding
 
@@ -493,9 +539,12 @@ Line 120 (SHA-256 buffers), 122 (`is_final ∈ {0, 1}` needed for meaning), 147 
 
 ### I1a (hash inlines)
 
-- Registration: the Lean registration check models the set of keys linked into the preprocessing binary. An unregistered key makes Jolt's preprocessing panic, and the Lean check that rejects it matches Jolt (no proof exists for such a guest).
-- (a) The frame lemma needs no `Pre`, as section 5.4 already says. The hash soundness theorems need less than section 5.4 lists:
-  - If the rows run to the end, every access was aligned and in range in the model. Alignment and range therefore need not appear in `Pre` for soundness.
+- Registration: the Lean registration check models the set of keys linked into the preprocessing binary.
+  An unregistered key makes Jolt's preprocessing panic, and the Lean check that rejects it matches Jolt (no proof exists for such a guest).
+- (a) The frame lemma needs no `Pre`, as section 5.4 already says.
+  The hash soundness theorems need less than section 5.4 lists:
+  - If the rows run to the end, every access was aligned and in range in the model.
+    Alignment and range therefore need not appear in `Pre` for soundness.
   - No overlap rule is needed: state `InlineSpec` with the words the rows load at the start, which equal the memory contents before the call because every load precedes every store.
   - The written buffer must avoid the panic and termination words, or `InlineSpec` must be stated through the device read function, because the model does not read back stored words there.
   - `BLAKE2` needs `is_final ∈ {0, 1}` only to call the result BLAKE2's F.
@@ -507,7 +556,8 @@ Line 120 (SHA-256 buffers), 122 (`is_final ∈ {0, 1}` needed for meaning), 147 
 - (b) `MulRel` and `DivRel` (soundness) need no canonical inputs and no nonzero divisor: they hold for every advice that passes the asserts.
   Completeness with Jolt's advice (`rows_jolt_advice_complete`) must keep two facts apart: advice generation succeeding, and the generated advice passing the rows.
   For MUL and SQUARE, generation needs `⌊a·b/q⌋ < 2^256`, and generated advice then passes (run); canonical inputs give the bound.
-  For DIV, generation needs `b mod q ≠ 0`, and the generated advice passes the rows only if `a < q`. `Pre` for DIV must therefore keep the canonical dividend; with a canonical divisor, `b mod q ≠ 0` is `b ≠ 0`.
+  For DIV, generation needs `b mod q ≠ 0`, and the generated advice passes the rows only if `a < q`.
+  `Pre` for DIV must therefore keep the canonical dividend; with a canonical divisor, `b mod q ≠ 0` is `b ≠ 0`.
   `Canonical` for `GLVR_ADV` takes `k mod n` as its input: the transcription of `GlvrAdvBuilder::advice` must reduce the 256-bit `k` first, and `Pre` needs no range on `k`.
   The transcription must also read `k` through the model's MMU, or `Pre` must put `k`'s buffer in RAM (Q3 section, `GLVR_ADV`'s `rs1`).
   The transcribed advice word counts are 4 (MUL, SQUARE), 8 (DIV, interleaved) and 6 (GLV), and the tracer rejects any other count.
@@ -515,12 +565,17 @@ Line 120 (SHA-256 buffers), 122 (`is_final ∈ {0, 1}` needed for meaning), 147 
 
 ### Expansion-parity tests
 
-- (c) Every one of the twelve has nonnegative offsets that are multiples of 8, its base in an operand register, and all loads before all stores. Neither property is checked by the driver today; adding both checks to `scripts/expansion-parity` would turn the "no overlap rule" and "address 0 is not special for buffers that rows access" conclusions into checked facts for future Jolt revisions. The check should also list operands that only the advice reads (today `GLVR_ADV`'s `rs1`), since no row or RAF access constrains them.
+- (c) Every one of the twelve has nonnegative offsets that are multiples of 8, its base in an operand register, and all loads before all stores.
+  Neither property is checked by the driver today; adding both checks to `scripts/expansion-parity` would turn the "no overlap rule" and "address 0 is not special for buffers that rows access" conclusions into checked facts for future Jolt revisions.
+  The check should also list operands that only the advice reads (today `GLVR_ADV`'s `rs1`), since no row or RAF access constrains them.
   Jolt's own `InlineMemoryOffsetOutOfRange` check already bounds offsets to [−2048, 2047] at expansion.
   (Two inlines outside the twelve break the load-before-store order or the operand-base rule: `NTT64_I32_POINTWISE_DOT6` interleaves loads and stores, and both NTT inlines load through bases held in virtual registers.)
 
 ## Follow-ups outside this task
 
-- `JoltBytecode/JoltISA/DeviceMemory.lean` cites `mmu.rs` line numbers from an older Jolt (for example 120-184, 329-337, 437-443, 619-635, 729-748). At the pin they are 112-178 (`assert_effective_address`), 319-327 (`load_doubleword`), 427-433 (`store_doubleword`), 565-584 (`load_doubleword_raw`) and 675-694 (`store_doubleword_raw`).
-- The SDK's `keccak256_absorb_permute` safety contract asks for no overlap (`keccak256/src/sdk.rs:167-170`), which the inline does not need. This is a note for Jolt, not a defect.
-- The latest expansion-parity output (`~/claude-work/expansion-parity-work/out/summary.json`) reports `all_pass: false`. This report uses only its `inline_templates.json`.
+- `JoltBytecode/JoltISA/DeviceMemory.lean` cites `mmu.rs` line numbers from an older Jolt (for example 120-184, 329-337, 437-443, 619-635, 729-748).
+  At the pin they are 112-178 (`assert_effective_address`), 319-327 (`load_doubleword`), 427-433 (`store_doubleword`), 565-584 (`load_doubleword_raw`) and 675-694 (`store_doubleword_raw`).
+- The SDK's `keccak256_absorb_permute` safety contract asks for no overlap (`keccak256/src/sdk.rs:167-170`), which the inline does not need.
+  This is a note for Jolt, not a defect.
+- The latest expansion-parity output (`~/claude-work/expansion-parity-work/out/summary.json`) reports `all_pass: false`.
+  This report uses only its `inline_templates.json`.
