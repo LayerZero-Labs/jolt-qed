@@ -47,14 +47,17 @@ namespace JoltISA.Inlines
 
 /-- How a store row addresses its doubleword.
 `SD` stores at `ea = base + imm`; the floor stores `VirtualStoreB/H/W` store at the
-doubleword containing `ea`, that is `ea &&& ~~~7`. -/
+doubleword containing `ea`, that is `ea &&& ~~~7`.
+Example: `SD (.xreg x10) v 8` has kind `.dword`, and `VirtualStoreB (.xreg x10) v 3 f`
+has kind `.floor`. -/
 inductive StoreKind where
   | dword
   | floor
   deriving DecidableEq, Repr
 
 /-- The syntactic shape of one store row: its base operand, its immediate and its
-addressing kind. The stored value does not affect the footprint. -/
+addressing kind. The stored value does not affect the footprint.
+Example: the row `SD (.xreg x10) (.vreg vr50) 16` has slot `⟨.xreg x10, 16, .dword⟩`. -/
 structure StoreSlot where
   base : Src
   imm : BitVec 64
@@ -63,14 +66,17 @@ structure StoreSlot where
 
 /-- The doubleword address a store slot writes, with the base read in `s`.
 It matches `execInstr`: `SD` passes `base + imm` to `Mmu.store_doubleword`, the floor
-stores pass `(base + imm) &&& ~~~7`. -/
+stores pass `(base + imm) &&& ~~~7`.
+Example: if `x10` holds `0x80000000` in `s`, the slot `⟨.xreg x10, 8, .dword⟩` has address
+`0x80000008`, and the slot `⟨.xreg x10, 3, .floor⟩` has address `0x80000000`. -/
 def StoreSlot.address (slot : StoreSlot) (s : SailJoltState) : BitVec 64 :=
   let ea := sourceValue slot.base s + slot.imm
   match slot.kind with
   | .dword => ea
   | .floor => ea &&& ~~~(7 : BitVec 64)
 
-/-- Whether a source operand is an architectural register. -/
+/-- Whether a source operand is an architectural register.
+Example: `(.xreg x10).isXReg = true` and `(.vreg vr40).isXReg = false`. -/
 def _root_.JoltISA.Src.isXReg : Src → Bool
   | .xreg _ => true
   | .vreg _ => false
@@ -78,7 +84,10 @@ def _root_.JoltISA.Src.isXReg : Src → Bool
 /-- What a program's rows may write.
 For the in-scope inlines `vregs` lists the pool registers (`vr48..127`) and instruction
 temporaries (`vr40..47`) the rows write, `xregs` is empty, and `stores` lists the store
-rows. -/
+rows.
+Example: a program whose rows are `ADDI (.vreg vr48) (.xreg x0) 0` and
+`SD (.xreg x10) (.vreg vr48) 0` has the write set
+`⟨[vr48], [], [⟨.xreg x10, 0, .dword⟩]⟩`. -/
 structure WriteSet where
   vregs : List VReg
   xregs : List regidx
@@ -89,13 +98,17 @@ namespace WriteSet
 variable (ws : WriteSet)
 
 /-- A destination is allowed when it is a listed virtual register, a listed
-architectural register, or `x0` (a write to `x0` changes nothing). -/
+architectural register, or `x0` (a write to `x0` changes nothing).
+Example: for `ws = ⟨[vr48], [], []⟩`, the destinations `.vreg vr48` and `.xreg x0` are
+allowed, and `.vreg vr49` and `.xreg x10` are not. -/
 def allowsDst : Dst → Bool
   | .vreg v => ws.vregs.contains v
   | .xreg r => isX0 r || ws.xregs.any (fun w => sameXReg w r)
 
 /-- A source operand that no allowed row writes: an unlisted virtual register or an
-unlisted architectural register. -/
+unlisted architectural register.
+Example: for `ws = ⟨[vr48], [], []⟩`, the sources `.xreg x10` and `.vreg vr32` are kept,
+and `.vreg vr48` is not. -/
 def keepsSrc : Src → Bool
   | .vreg v => !ws.vregs.contains v
   | .xreg r => !ws.xregs.any (fun w => sameXReg w r)
@@ -103,21 +116,29 @@ def keepsSrc : Src → Bool
 /-- Every store slot's base is an architectural register that no allowed row writes.
 Requiring `.xreg` rules out bases such as `vr40`, the instruction temporary that Jolt's
 `rd = x0` rewrite of secp256k1 inlines stores through: its value at entry is not an
-operand of the source instruction. Jolt rejects those encodings (a16z/jolt#2414). -/
+operand of the source instruction.
+Decision D7 of `docs/inline-precompiles.md` excludes those encodings.
+At the generated-row pin `a6b6dc717` Jolt still accepts them; the open pull request
+a16z/jolt#2414 adds the rejection upstream.
+Example: `⟨[vr48], [], [⟨.xreg x10, 0, .dword⟩]⟩` passes, and
+`⟨[vr40], [], [⟨.vreg vr40, 0, .dword⟩]⟩` fails. -/
 def basesKept : Bool :=
   ws.stores.all (fun slot => slot.base.isXReg && ws.keepsSrc slot.base)
 
 /-- The byte addresses the store rows may write, with bases read in `s`:
 `address .. address + 7` for each slot.
 The byte addresses are natural numbers, as in `Mmu.write_ram_doubleword` and
-`Mmu.store_raw?`. -/
+`Mmu.store_raw?`.
+Example: with the single slot `⟨.xreg x10, 8, .dword⟩` and `x10 = 0x80000000` in `s`, the
+footprint is the addresses `0x80000008 .. 0x8000000f`. -/
 def Footprint (s : SailJoltState) (a : Nat) : Prop :=
   ∃ slot ∈ ws.stores, (slot.address s).toNat ≤ a ∧ a < (slot.address s).toNat + 8
 
 end WriteSet
 
 /-- The Sail register an architectural index names, or `none` for `x0`.
-It matches the register `wX` writes and `rX` reads. -/
+It matches the register `wX` writes and `rX` reads.
+Example: `xRegister? x10 = some Register.x10` and `xRegister? x0 = none`. -/
 def xRegister? : regidx → Option Register
   | .Regidx rs =>
     match rs.toNat with
@@ -135,11 +156,17 @@ def xRegister? : regidx → Option Register
     | _ => none
 
 /-- The Sail registers the write set allows rows to change: the registers of the listed
-architectural indices. -/
+architectural indices.
+Example: for `ws.xregs = [x5]` only `Register.x5` qualifies; for `ws.xregs = []` no
+register does, so `PC`, `nextPC` and every CSR must keep their values. -/
 def WriteSet.WritesSailReg (ws : WriteSet) (r : Register) : Prop :=
   ∃ i ∈ ws.xregs, xRegister? i = some r
 
-/-- One successful device byte store at a footprint address below RAM. -/
+/-- One successful device byte store at a footprint address below RAM.
+`d'` is the device after `JoltDevice.store? d a v` writes byte `v` at address `a`.
+Example: a store row whose footprint contains the output region's first address `a`
+changes the device to `d'` with `JoltDevice.store? d a v = some d'`, which appends `v` to
+the output buffer. -/
 def DeviceStoreAt (footprint : Nat → Prop) (d d' : JoltDevice) : Prop :=
   ∃ a v, footprint a ∧ a < RAM_START_ADDRESS ∧ JoltDevice.store? d a v = some d'
 
@@ -157,7 +184,9 @@ write the Sail PC or `nextPC`, `VirtualAdviceLoad` moves the advice-tape cursor,
 `VirtualHostIO` can change the tape, the device and the host settings.
 Every other row changes at most its destination and, for a store row, memory or the
 device at its own address. The match lists every constructor so that a new constructor
-needs an explicit decision. -/
+needs an explicit decision.
+Example: `ADDI (.vreg vr48) (.xreg x0) 0` is a frame row, and `BEQ (.xreg x5) (.xreg x6) 8`
+is not. -/
 def Instr.isFrameRow : Instr → Bool
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _ | .BGEU _ _ _
   | .JAL _ _ | .JALR _ _ _ | .VirtualAdviceLoad _ _ | .VirtualHostIO => false
@@ -190,25 +219,32 @@ def Instr.isFrameRow : Instr → Bool
   | .VirtualAssertValidUnsignedRemainder _ _ _
   | .VirtualAssertMulUNoOverflow _ _ _ | .VirtualAssertLTE _ _ _ => true
 
-/-- The store slot of a store row, and `none` for every other row. -/
+/-- The store slot of a store row, and `none` for every other row.
+Example: `(SD (.xreg x10) (.vreg vr50) 16).storeSlot? = some ⟨.xreg x10, 16, .dword⟩`, and
+`(ADDI (.vreg vr48) (.xreg x0) 0).storeSlot? = none`. -/
 def Instr.storeSlot? : Instr → Option StoreSlot
   | .SD base _ imm => some ⟨base, imm, .dword⟩
   | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _
   | .VirtualStoreW base _ imm _ => some ⟨base, imm, .floor⟩
   | _ => none
 
-/-- The per-row check: the row is a frame row and its destination, if any, is allowed. -/
+/-- The per-row check: the row is a frame row and its destination, if any, is allowed.
+Example: for `ws = ⟨[vr48], [], []⟩`, the row `ADDI (.vreg vr48) (.xreg x0) 0` passes, and
+`ADDI (.vreg vr49) (.xreg x0) 0` fails. -/
 def Instr.writesWithin (ws : WriteSet) (i : Instr) : Bool :=
   i.isFrameRow &&
     match i.destination? with
     | some d => ws.allowsDst d
     | none => true
 
-/-- The rows of a program, up to its terminal result. -/
+/-- The rows of a program, up to its terminal result.
+Example: `(Program.seq [i, j]).rows = [i, j]`. -/
 def Program.rows : Program → List Instr
   | .done _ => []
   | .instr i rest => i :: rest.rows
 
+/-- `Program.seq` and `Program.rows` are inverse on rows.
+Example: `(Program.seq [i, j]).rows = [i, j]`. -/
 @[simp] theorem Program.rows_seq (l : List Instr) : (Program.seq l).rows = l := by
   induction l with
   | nil => rfl
@@ -216,11 +252,15 @@ def Program.rows : Program → List Instr
     show x :: (Program.seq l).rows = x :: l
     rw [ih]
 
-/-- The store slots of a program's store rows, in row order. -/
+/-- The store slots of a program's store rows, in row order.
+Example: the program with rows `ADDI (.vreg vr48) (.xreg x0) 0` and
+`SD (.xreg x10) (.vreg vr48) 0` has store slots `[⟨.xreg x10, 0, .dword⟩]`. -/
 def Program.storeSlots (p : Program) : List StoreSlot :=
   p.rows.filterMap Instr.storeSlot?
 
-/-- The Boolean row check of a whole program. -/
+/-- The Boolean row check of a whole program: every row passes `Instr.writesWithin`.
+Example: for `ws = ⟨[vr48], [], []⟩`, the program with the single row
+`ADDI (.vreg vr48) (.xreg x0) 0` passes. -/
 def Program.rowsWithin (ws : WriteSet) (p : Program) : Bool :=
   p.rows.all (Instr.writesWithin ws)
 
@@ -234,18 +274,24 @@ never compare two architectural registers when `ws.xregs = []`.
 `decide` does not apply to such goals, since they contain free variables.
 On a program of a few thousand rows a single `rfl` exceeds the default recursion depth,
 so `FrameInstances` checks each generated chunk separately and assembles the chunks with
-`Program.rowsWithin_seq_append` and `Program.storeSlots_seq_append`. -/
+`Program.rowsWithin_seq_append` and `Program.storeSlots_seq_append`.
+Example: `FrameInstances.sha256_writesWithin` proves this for the SHA-256 compression
+rows and `sha256WriteSet`. -/
 def Program.WritesWithin (p : Program) (ws : WriteSet) : Prop :=
   p.rowsWithin ws = true ∧ p.storeSlots ⊆ ws.stores ∧ ws.basesKept = true
 
 /-- Chunked form of the row check, for generated programs built with `Program.seq`
-from concatenated chunks. -/
+from concatenated chunks.
+Example: `(Program.seq (c₁ ++ c₂)).rowsWithin ws` reduces to the checks of the chunks
+`c₁` and `c₂`, each of which `rfl` decides. -/
 theorem Program.rowsWithin_seq_append (ws : WriteSet) (l₁ l₂ : List Instr) :
     (Program.seq (l₁ ++ l₂)).rowsWithin ws =
       ((Program.seq l₁).rowsWithin ws && (Program.seq l₂).rowsWithin ws) := by
   simp [Program.rowsWithin, List.all_append]
 
-/-- Chunked form of `Program.storeSlots`. -/
+/-- Chunked form of `Program.storeSlots`: the slots of `l₁ ++ l₂` are those of `l₁`
+followed by those of `l₂`.
+Example: if chunk `c₁` has no store row, the slots of `c₁ ++ c₂` are the slots of `c₂`. -/
 theorem Program.storeSlots_seq_append (l₁ l₂ : List Instr) :
     (Program.seq (l₁ ++ l₂)).storeSlots =
       (Program.seq l₁).storeSlots ++ (Program.seq l₂).storeSlots := by
@@ -253,16 +299,21 @@ theorem Program.storeSlots_seq_append (l₁ l₂ : List Instr) :
 
 /-! ### Soundness of the Boolean check -/
 
-/-- The meaning of an allowed destination. -/
+/-- The meaning of an allowed destination, as a proposition.
+Example: for `ws = ⟨[vr48], [], []⟩`, `ws.AllowsDst (.vreg vr48)` is `vr48 ∈ [vr48]`. -/
 def Inlines.WriteSet.AllowsDst (ws : WriteSet) : Dst → Prop
   | .vreg v => v ∈ ws.vregs
   | .xreg r => isX0 r = true ∨ ∃ w ∈ ws.xregs, sameXReg w r = true
 
+/-- Soundness and completeness of the Boolean destination check `WriteSet.allowsDst`.
+Example: `ws.allowsDst (.vreg vr48) = true` exactly when `vr48 ∈ ws.vregs`. -/
 theorem Inlines.WriteSet.allowsDst_iff (ws : WriteSet) (d : Dst) :
     ws.allowsDst d = true ↔ ws.AllowsDst d := by
   cases d <;> simp [WriteSet.allowsDst, WriteSet.AllowsDst]
 
-/-- Soundness and completeness of the per-row check. -/
+/-- Soundness and completeness of the per-row check.
+Example: `(ADDI (.vreg vr48) (.xreg x0) 0).writesWithin ws = true` exactly when the row is
+a frame row (it is) and `vr48 ∈ ws.vregs`. -/
 theorem Instr.writesWithin_iff (ws : WriteSet) (i : Instr) :
     i.writesWithin ws = true ↔
       i.isFrameRow = true ∧ ∀ d, i.destination? = some d → ws.AllowsDst d := by
@@ -271,12 +322,17 @@ theorem Instr.writesWithin_iff (ws : WriteSet) (i : Instr) :
   | none => simp
   | some d => simp [WriteSet.allowsDst_iff]
 
-/-- Soundness and completeness of the program check. -/
+/-- Soundness and completeness of the program check.
+Example: a program passes `rowsWithin ws` exactly when each of its rows passes
+`Instr.writesWithin_iff`. -/
 theorem Program.rowsWithin_iff (ws : WriteSet) (p : Program) :
     p.rowsWithin ws = true ↔
       ∀ i ∈ p.rows, i.isFrameRow = true ∧ ∀ d, i.destination? = some d → ws.AllowsDst d := by
   simp only [Program.rowsWithin, List.all_eq_true, Instr.writesWithin_iff]
 
+/-- The row check is decidable, since it is a Boolean equation.
+Example: `decide ((Program.seq [ADDI (.vreg vr48) (.xreg x0) 0]).rowsWithin ws = true)`
+evaluates the check for a closed program. -/
 instance (p : Program) (ws : WriteSet) : Decidable (p.rowsWithin ws = true) :=
   inferInstance
 
@@ -301,7 +357,11 @@ namespace JoltISA.Inlines
   addresses below RAM. Corollaries: the I/O setup (`JoltIOSetupFrame.Same`) is unchanged
   and the panic flag only goes from `false` to `true`.
 * `adviceTape`, `hostIO`: unchanged. `VirtualAdvice` writes its literal value and does not
-  touch the tape; only the excluded `VirtualAdviceLoad` and `VirtualHostIO` touch it. -/
+  touch the tape; only the excluded `VirtualAdviceLoad` and `VirtualHostIO` touch it.
+
+Example: for `ws = ⟨[vr48], [], [⟨.xreg x10, 0, .dword⟩]⟩` and a run of the rows
+`ADDI (.vreg vr48) (.xreg x0) 0; SD (.xreg x10) (.vreg vr48) 0`, `Frame ws s s'` says that
+only `vr48` and the eight bytes at the address `x10` holds in `s` may change. -/
 structure Frame (ws : WriteSet) (s s' : SailJoltState) : Prop where
   sailRegs : ∀ r : Register, ¬ ws.WritesSailReg r → s'.sail.regs.get? r = s.sail.regs.get? r
   choiceState : s'.sail.choiceState = s.sail.choiceState
@@ -319,6 +379,8 @@ namespace Frame
 
 variable {ws : WriteSet}
 
+/-- The empty run satisfies every frame.
+Example: `Frame.refl ws s` is the frame of the program `.done RETIRE_SUCCESS`. -/
 theorem refl (ws : WriteSet) (s : SailJoltState) : Frame ws s s where
   sailRegs _ _ := rfl
   choiceState := rfl
@@ -335,6 +397,8 @@ theorem refl (ws : WriteSet) (s : SailJoltState) : Frame ws s s where
 /-- An architectural register no allowed row writes keeps its value.
 This is the `rX_bits` form of `sailRegs`: `sourceValue (.xreg r)` is exactly the value a
 successful `readSrc (.xreg r)` (that is `rX_bits r`) returns.
+Example: for `ws.xregs = []`, the base `x10` of every store row reads the same value at
+the end of the run as at the start.
 Proof plan: case on the 32 values of `r`; for `r ≠ x0`, `keepsSrc` rules out every
 listed index `i` with `xRegister? i = xRegister? r`, so `sailRegs` applies. -/
 theorem sourceValue_xreg_eq {s s' : SailJoltState} (f : Frame ws s s') {r : regidx}
@@ -342,6 +406,8 @@ theorem sourceValue_xreg_eq {s s' : SailJoltState} (f : Frame ws s s') {r : regi
     sourceValue (.xreg r) s' = sourceValue (.xreg r) s := by
   sorry
 
+/-- A kept source operand, virtual or architectural, reads the same value in both states.
+Example: for `ws = ⟨[vr48], [], []⟩`, the source `.vreg vr32` keeps its value. -/
 theorem sourceValue_eq_of_keepsSrc {s s' : SailJoltState} (f : Frame ws s s') {src : Src}
     (h : ws.keepsSrc src = true) : sourceValue src s' = sourceValue src s := by
   cases src with
@@ -353,7 +419,9 @@ theorem sourceValue_eq_of_keepsSrc {s s' : SailJoltState} (f : Frame ws s s') {s
   | xreg r => exact f.sourceValue_xreg_eq h
 
 /-- With kept bases, the footprint read in the end state equals the footprint read in
-the start state. -/
+the start state.
+Example: if no row writes `x10`, the slot `⟨.xreg x10, 0, .dword⟩` covers the same eight
+bytes whether `x10` is read before or after the run. -/
 theorem footprint_eq {s s' : SailJoltState} (f : Frame ws s s') (hk : ws.basesKept = true) :
     ws.Footprint s' = ws.Footprint s := by
   have haddr : ∀ slot ∈ ws.stores, slot.address s' = slot.address s := by
@@ -371,7 +439,8 @@ theorem footprint_eq {s s' : SailJoltState} (f : Frame ws s s') (hk : ws.basesKe
   · rintro ⟨slot, hs, h⟩
     exact ⟨slot, hs, by rwa [haddr slot hs]⟩
 
-/-- Frames compose when no allowed row writes a store base. -/
+/-- Frames compose when no allowed row writes a store base.
+Example: `frame_of_run` composes the frames of single rows with `trans`. -/
 theorem trans {s m s' : SailJoltState} (f₁ : Frame ws s m) (f₂ : Frame ws m s')
     (hk : ws.basesKept = true) : Frame ws s s' := by
   have hfp := f₁.footprint_eq hk
@@ -390,7 +459,9 @@ theorem trans {s m s' : SailJoltState} (f₁ : Frame ws s m) (f₂ : Frame ws m 
     adviceTape := f₂.adviceTape.trans f₁.adviceTape
     hostIO := f₂.hostIO.trans f₁.hostIO }
 
-/-- With no listed architectural register, the whole Sail register file is unchanged. -/
+/-- With no listed architectural register, the whole Sail register file is unchanged.
+Example: every in-scope inline has `xregs = []`, so its runs keep `PC`, `x1..x31` and the
+CSRs. -/
 theorem sailRegs_eq_of_xregs_nil {s s' : SailJoltState} (f : Frame ws s s')
     (h : ws.xregs = []) : s'.sail.regs = s.sail.regs := by
   apply Std.ExtDHashMap.ext_get?
@@ -399,7 +470,9 @@ theorem sailRegs_eq_of_xregs_nil {s s' : SailJoltState} (f : Frame ws s s')
   rintro ⟨i, hi, _⟩
   simp [h] at hi
 
-/-- The I/O setup of the device (layout, inputs, advice) is unchanged. -/
+/-- The I/O setup of the device (layout, inputs, advice) is unchanged.
+Example: a store row that writes an output byte appends to `outputs` and keeps
+`memory_layout` and `inputs`. -/
 theorem device_same {s s' : SailJoltState} (f : Frame ws s s') :
     JoltIOSetupFrame.Same s.jolt_device s'.jolt_device := by
   have hd := f.device
@@ -410,12 +483,16 @@ theorem device_same {s s' : SailJoltState} (f : Frame ws s s') :
     obtain ⟨a, v, _, _, hs⟩ := hstep
     exact ih.trans (JoltIOSetupFrame.storeDeviceByte_same _ _ a v hs)
 
+/-- One successful device byte store never clears the panic flag.
+Example: a store to the panic address sets `panic := true`, and any other store keeps the
+flag. -/
 theorem store?_panic_mono {d d' : JoltDevice} {a : Nat} {v : BitVec 8}
     (h : JoltDevice.store? d a v = some d') : d.panic = true → d'.panic = true := by
   unfold JoltDevice.store? at h
   split_ifs at h <;> cases h <;> simp
 
-/-- The panic flag never goes from `true` back to `false`. -/
+/-- The panic flag never goes from `true` back to `false`.
+Example: a run that starts in a panicked device ends in a panicked device. -/
 theorem panic_mono {s s' : SailJoltState} (f : Frame ws s s') :
     s.jolt_device.panic = true → s'.jolt_device.panic = true := by
   have hd := f.device
@@ -428,7 +505,9 @@ theorem panic_mono {s s' : SailJoltState} (f : Frame ws s s') :
 
 /-- The output buffer stays inside the output region (`Related.outputs_size`), given that
 it did at the start and that the layout has the output span `MemoryLayout.new` gives it
-(`new_io_geometry` in `JoltConstraints/layout_facts.lean`). -/
+(`new_io_geometry` in `JoltConstraints/layout_facts.lean`).
+Example: if the start device has 3 output bytes and `max_output_size = 4096`, the end
+device has at most 4096 output bytes. -/
 theorem outputs_size {s s' : SailJoltState} (f : Frame ws s s')
     (outputSpan : s.jolt_device.memory_layout.panic.toNat =
       s.jolt_device.memory_layout.output_start.toNat +
@@ -458,7 +537,9 @@ which cannot prove `Frame.sailRegs`. For a frame row, the Sail registers change 
 except memory are unchanged.
 Proof plan: case on the row; `readSrc` and `Mmu.load_doubleword` preserve the state,
 `writeDst (.vreg _)` touches only `vregs`, `writeDst (.xreg rd)` is `wX_regs_spec`, and
-`Mmu.store_doubleword` changes only `sail.mem` and `jolt_device`. -/
+`Mmu.store_doubleword` changes only `sail.mem` and `jolt_device`.
+Example: `ADDI (.xreg x5) (.xreg x0) 1` changes the Sail registers by
+`wX_update_regs x5 1`, and `SD (.xreg x10) (.vreg vr48) 0` leaves them unchanged. -/
 theorem execInstr_sail_effect {i : Instr} (hi : i.isFrameRow = true)
     {s s' : SailJoltState} {r : ExecutionResult}
     (h : (execInstr i).run s = .ok r s') :
@@ -474,7 +555,9 @@ Proof plan: `execInstr_sail_effect` gives the Sail clauses; `writeDst` gives `vr
 for a store row, `Mmu.store_doubleword` at `slot.address s` writes RAM bytes
 `address + k` (`Mmu.write_ram_doubleword`) or folds `Mmu.store_raw?` over them
 (`InstructionFrame.storeFold_rule_of_step` with the relation "device changes by
-`DeviceStoreAt`"), so every changed byte is in the footprint. -/
+`DeviceStoreAt`"), so every changed byte is in the footprint.
+Example: `SD (.xreg x10) (.vreg vr48) 0` with its slot in `ws.stores` satisfies the frame,
+writing only the eight bytes at the address `x10` holds. -/
 theorem execInstr_frame {ws : WriteSet} {i : Instr} (hi : i.writesWithin ws = true)
     (hslot : ∀ slot, i.storeSlot? = some slot → slot ∈ ws.stores)
     {s s' : SailJoltState} (h : (execInstr i).run s = .ok RETIRE_SUCCESS s') :
@@ -485,7 +568,8 @@ theorem execInstr_frame {ws : WriteSet} {i : Instr} (hi : i.writesWithin ws = tr
 
 /-- **Generic inline frame lemma.** Every successful run of a program that passes the
 static check satisfies the frame relation. There is no precondition on the start state,
-on the inputs or on the advice. -/
+on the inputs or on the advice.
+Example: `FrameInstances.sha256_frame` applies it to the SHA-256 compression rows. -/
 theorem frame_of_run {p : Program} {ws : WriteSet} (hp : p.WritesWithin ws)
     {s s' : SailJoltState} (h : p.Run s s') : Frame ws s s' := by
   obtain ⟨hrows, hslots, hk⟩ := hp
@@ -525,28 +609,38 @@ open Inlines
 /-! ## Pool reset (per program) -/
 
 /-- The pool-reset clause of the spec, stated per program: after every successful run,
-the listed pool registers hold zero. It is separate from `Frame`, which is generic. -/
+the listed pool registers hold zero. It is separate from `Frame`, which is generic.
+Example: the program with the single row `ADDI (.vreg vr48) (.xreg x0) 0` resets the pool
+`[vr48]`. -/
 def Program.ResetsPool (p : Program) (pool : List VReg) : Prop :=
   ∀ ⦃s s' : SailJoltState⦄, p.Run s s' → ∀ v ∈ pool, s'.vregs v = 0
 
-/-- The row `ADDI (.vreg v) (.xreg x0) 0`, the reset Jolt emits for a pool register. -/
+/-- The row `ADDI (.vreg v) (.xreg x0) 0`, the reset Jolt emits for a pool register.
+Example: `(ADDI (.vreg vr48) (.xreg x0) 0).isZeroReset vr48 = true`, and the same row with
+immediate `1` gives `false`. -/
 def Instr.isZeroReset (v : VReg) : Instr → Bool
   | .ADDI (.vreg d) (.xreg r) imm => d == v && isX0 r && imm == 0
   | _ => false
 
-/-- The row writes virtual register `v`. -/
+/-- The row writes virtual register `v`.
+Example: `(ADDI (.vreg vr48) (.xreg x5) 1).writesVReg vr48 = true`, and
+`SD (.xreg x10) (.vreg vr48) 0` writes no register. -/
 def Instr.writesVReg (v : VReg) (i : Instr) : Bool :=
   match i.destination? with
   | some (.vreg d) => d == v
   | _ => false
 
-/-- The last row of `rows` that writes `v` exists and is a zero reset of `v`. -/
+/-- The last row of `rows` that writes `v` exists and is a zero reset of `v`.
+Example: for the rows `ADDI (.vreg vr48) (.xreg x5) 1; ADDI (.vreg vr48) (.xreg x0) 0` it
+is `true`, and in the reverse order it is `false`. -/
 def Instr.lastWriteResets (v : VReg) (rows : List Instr) : Bool :=
   match rows.reverse.find? (Instr.writesVReg v) with
   | some i => i.isZeroReset v
   | none => false
 
-/-- Appending rows in front keeps the last write of `v`, once `l₂` has one. -/
+/-- Appending rows in front keeps the last write of `v`, once `l₂` has one.
+Example: if `l₂ = [ADDI (.vreg vr48) (.xreg x0) 0]`, then `lastWriteResets vr48 (l₁ ++ l₂)`
+holds for every `l₁`. -/
 theorem Instr.lastWriteResets_append (v : VReg) (l₁ : List Instr) {l₂ : List Instr}
     (h : Instr.lastWriteResets v l₂ = true) : Instr.lastWriteResets v (l₁ ++ l₂) = true := by
   unfold Instr.lastWriteResets at h ⊢
@@ -555,19 +649,25 @@ theorem Instr.lastWriteResets_append (v : VReg) (l₁ : List Instr) {l₂ : List
   | none => simp [h₂] at h
   | some i => simpa [h₂] using h
 
-/-- Chunked form of the pool-reset check: it suffices to check a final segment. -/
+/-- Chunked form of the pool-reset check: it suffices to check a final segment.
+Example: the generated instances check only the last chunk, which holds the pool
+resets. -/
 theorem Instr.lastWriteResets_all_append (l₁ : List Instr) {l₂ : List Instr}
     {pool : List VReg} (h : pool.all (fun v => Instr.lastWriteResets v l₂) = true) :
     pool.all (fun v => Instr.lastWriteResets v (l₁ ++ l₂)) = true := by
   simp only [List.all_eq_true] at h ⊢
   exact fun v hv => Instr.lastWriteResets_append v l₁ (h v hv)
 
-/-- Static check for `Program.ResetsPool`. -/
+/-- Static check for `Program.ResetsPool`: for every pool register, the last row that
+writes it is a zero reset.
+Example: the program with the single row `ADDI (.vreg vr48) (.xreg x0) 0` passes the check
+for the pool `[vr48]`. -/
 def Program.resetsPoolCheck (p : Program) (pool : List VReg) : Bool :=
   pool.all (fun v => Instr.lastWriteResets v p.rows)
 
 /-- Chunked form of the pool-reset check: rows in front of a segment that passes
-the check do not matter. -/
+the check do not matter.
+Example: `sha256_resetsPoolCheck` applies it with the last chunk of the SHA-256 rows. -/
 theorem Program.resetsPoolCheck_seq_append (l₁ : List Instr) {l₂ : List Instr}
     {pool : List VReg} (h : (Program.seq l₂).resetsPoolCheck pool = true) :
     (Program.seq (l₁ ++ l₂)).resetsPoolCheck pool = true := by
@@ -575,7 +675,8 @@ theorem Program.resetsPoolCheck_seq_append (l₁ : List Instr) {l₂ : List Inst
   exact Instr.lastWriteResets_all_append l₁ h
 
 /-- Variant of `Program.resetsPoolCheck_seq_append` for a final segment of two chunks, in the
-left-nested form that `l₁ ++ l₂ ++ l₃` elaborates to. -/
+left-nested form that `l₁ ++ l₂ ++ l₃` elaborates to.
+Example: a program whose pool resets span its last two chunks `l₂` and `l₃`. -/
 theorem Program.resetsPoolCheck_seq_append_append (l₁ : List Instr) {l₂ l₃ : List Instr}
     {pool : List VReg} (h : (Program.seq (l₂ ++ l₃)).resetsPoolCheck pool = true) :
     (Program.seq (l₁ ++ l₂ ++ l₃)).resetsPoolCheck pool = true := by
@@ -586,7 +687,10 @@ theorem Program.resetsPoolCheck_seq_append_append (l₁ : List Instr) {l₂ l₃
 Proof plan: split the rows at the last write of `v`; that row sets `v` to
 `sourceValue (.xreg x0) + 0 = 0`, and `frame_of_run` on the remaining rows with the
 write set minus `v` keeps it. Needs every row to be a frame row; the generated inlines
-satisfy this through `WritesWithin`. -/
+satisfy this through `WritesWithin`.
+Example: applied to `FrameInstances.sha256_writesWithin` and
+`FrameInstances.sha256_resetsPoolCheck`, it says that every successful SHA-256 run leaves
+`vr48..vr83` at zero. -/
 theorem Program.resetsPool_of_check {p : Program} {pool : List VReg} {ws : WriteSet}
     (hp : p.WritesWithin ws) (h : p.resetsPoolCheck pool = true) : p.ResetsPool pool := by
   sorry

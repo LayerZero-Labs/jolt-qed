@@ -22,7 +22,9 @@ rows, the static frame check `Program.WritesWithin` and the pool-reset check, an
 frame corollary. It covers the `rd ≠ x0` case of all twelve inlines and the `rd = x0` case
 of the five hash inlines. The `rd = x0` case of the seven secp256k1 inlines is omitted:
 those rows store through `vr40` before any row writes it, so they fail the store-base
-check, and Jolt rejects the encodings (a16z/jolt#2414).
+check. Decision D7 of `docs/inline-precompiles.md` excludes those encodings. At the
+generated-row Jolt pin `a6b6dc717` Jolt still accepts them; the open pull request
+a16z/jolt#2414 adds the rejection upstream.
 
 The write sets are exact: `vregs` lists the pool registers the rows write (always a
 contiguous range from `vr48`), `xregs` is empty, and `stores` lists the store rows.
@@ -48,24 +50,30 @@ namespace JoltISA.Inlines.FrameInstances
 
 open JoltISA.Inlines.Generated
 
-/-- The pool registers `vr48 .. vr(48 + n - 1)`. -/
+/-- The pool registers `vr48 .. vr(48 + n - 1)`.
+Example: `poolVRegs 2 = [vr48, vr49]`. -/
 def poolVRegs (n : Nat) : List VReg := (List.range n).map fun k => BitVec.ofNat 7 (48 + k)
 
 /-! ### `Sha256`, rd ≠ x0 -/
 
-/-- Store slots of `Sha256` (rd ≠ x0). -/
+/-- Store slots of `Sha256` (rd ≠ x0), in row order.
+Example: the first slot of `sha256Stores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def sha256Stores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩]
 
 /-- Write set of `Sha256` (rd ≠ x0): pool registers `vr48..vr83`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `sha256WriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr84` and every architectural register other than `x0`. -/
 def sha256WriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 36
   xregs := []
   stores := sha256Stores rs1
 
-/-- Chunk 0 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 0 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk0
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk0 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -73,7 +81,9 @@ theorem sha256_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 1 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk1
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk1 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -81,7 +91,9 @@ theorem sha256_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 2 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk2
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk2 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -89,7 +101,9 @@ theorem sha256_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 3 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk3
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk3 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -97,7 +111,9 @@ theorem sha256_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 4 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk4
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk4 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -105,7 +121,9 @@ theorem sha256_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 5 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk5
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk5 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -113,7 +131,9 @@ theorem sha256_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 6 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk6
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk6 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -121,7 +141,9 @@ theorem sha256_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 7 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk7
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk7 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -129,7 +151,9 @@ theorem sha256_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 8 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk8
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk8 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -137,7 +161,9 @@ theorem sha256_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 9 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk9
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk9 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -145,7 +171,9 @@ theorem sha256_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 10 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk10
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk10 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -153,7 +181,9 @@ theorem sha256_chunk10
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 11 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 11 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk11
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk11 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -161,7 +191,9 @@ theorem sha256_chunk11
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 12 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 12 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk12
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk12 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -169,7 +201,9 @@ theorem sha256_chunk12
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 13 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 13 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk13
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk13 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -177,7 +211,9 @@ theorem sha256_chunk13
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 14 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 14 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk14
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk14 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -185,7 +221,9 @@ theorem sha256_chunk14
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 15 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 15 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk15
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk15 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -193,7 +231,9 @@ theorem sha256_chunk15
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 16 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 16 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk16
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk16 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -201,7 +241,9 @@ theorem sha256_chunk16
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 17 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 17 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256_chunk17
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk17 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -209,7 +251,9 @@ theorem sha256_chunk17
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 18 of `Sha256` (rd ≠ x0). -/
+/-- Chunk 18 of `Sha256` (rd ≠ x0): every row passes the row check for
+`sha256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 4 store rows. -/
 theorem sha256_chunk18
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk18 rs1 rs2 rs3)).rowsWithin (sha256WriteSet rs1) = true ∧
@@ -217,6 +261,9 @@ theorem sha256_chunk18
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Sha256` rows (rd ≠ x0) are exactly `sha256Stores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem sha256_storeSlots
     (rs1 rs2 rs3 : regidx) :
     (sha256RowsAuto rs1 rs2 rs3).storeSlots =
@@ -244,6 +291,8 @@ theorem sha256_storeSlots
       (sha256_chunk18 rs1 rs2 rs3).2]
   rfl
 
+/-- The `Sha256` rows (rd ≠ x0) pass the static frame check for `sha256WriteSet`.
+Example: `sha256_frame` applies `frame_of_run` to this check. -/
 theorem sha256_writesWithin
     (rs1 rs2 rs3 : regidx) :
     (sha256RowsAuto rs1 rs2 rs3).WritesWithin
@@ -274,17 +323,25 @@ theorem sha256_writesWithin
    by rw [sha256_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Sha256` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem sha256_tailResets
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256RowsAutoChunk18 rs1 rs2 rs3)).resetsPoolCheck (poolVRegs 36) = true := rfl
 
+/-- The `Sha256` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr83`.
+Example: with `sha256_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem sha256_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) :
     (sha256RowsAuto rs1 rs2 rs3).resetsPoolCheck (poolVRegs 36) = true := by
   unfold sha256RowsAuto sha256RowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (sha256_tailResets rs1 rs2 rs3)
 
+/-- The frame of a successful run of the `Sha256` rows (rd ≠ x0): only `vr48..vr83`
+and the bytes of the 4 store slots in `sha256Stores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem sha256_frame
     (rs1 rs2 rs3 : regidx) {s s' : SailJoltState}
     (h : (sha256RowsAuto rs1 rs2 rs3).Run s s') :
@@ -293,19 +350,24 @@ theorem sha256_frame
 
 /-! ### `Sha256`, rd = x0 -/
 
-/-- Store slots of `Sha256` (rd = x0). -/
+/-- Store slots of `Sha256` (rd = x0), in row order.
+Example: the first slot of `sha256RdZeroStores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def sha256RdZeroStores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩]
 
 /-- Write set of `Sha256` (rd = x0): pool registers `vr48..vr83`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `sha256RdZeroWriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr84` and every architectural register other than `x0`. -/
 def sha256RdZeroWriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 36
   xregs := []
   stores := sha256RdZeroStores rs1
 
-/-- Chunk 0 of `Sha256` (rd = x0). -/
+/-- Chunk 0 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk0
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk0 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -313,7 +375,9 @@ theorem sha256RdZero_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Sha256` (rd = x0). -/
+/-- Chunk 1 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk1
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk1 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -321,7 +385,9 @@ theorem sha256RdZero_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Sha256` (rd = x0). -/
+/-- Chunk 2 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk2
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk2 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -329,7 +395,9 @@ theorem sha256RdZero_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Sha256` (rd = x0). -/
+/-- Chunk 3 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk3
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk3 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -337,7 +405,9 @@ theorem sha256RdZero_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Sha256` (rd = x0). -/
+/-- Chunk 4 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk4
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk4 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -345,7 +415,9 @@ theorem sha256RdZero_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Sha256` (rd = x0). -/
+/-- Chunk 5 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk5
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk5 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -353,7 +425,9 @@ theorem sha256RdZero_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Sha256` (rd = x0). -/
+/-- Chunk 6 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk6
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk6 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -361,7 +435,9 @@ theorem sha256RdZero_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Sha256` (rd = x0). -/
+/-- Chunk 7 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk7
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk7 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -369,7 +445,9 @@ theorem sha256RdZero_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Sha256` (rd = x0). -/
+/-- Chunk 8 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk8
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk8 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -377,7 +455,9 @@ theorem sha256RdZero_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Sha256` (rd = x0). -/
+/-- Chunk 9 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk9
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk9 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -385,7 +465,9 @@ theorem sha256RdZero_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Sha256` (rd = x0). -/
+/-- Chunk 10 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk10
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk10 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -393,7 +475,9 @@ theorem sha256RdZero_chunk10
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 11 of `Sha256` (rd = x0). -/
+/-- Chunk 11 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk11
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk11 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -401,7 +485,9 @@ theorem sha256RdZero_chunk11
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 12 of `Sha256` (rd = x0). -/
+/-- Chunk 12 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk12
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk12 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -409,7 +495,9 @@ theorem sha256RdZero_chunk12
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 13 of `Sha256` (rd = x0). -/
+/-- Chunk 13 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk13
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk13 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -417,7 +505,9 @@ theorem sha256RdZero_chunk13
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 14 of `Sha256` (rd = x0). -/
+/-- Chunk 14 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk14
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk14 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -425,7 +515,9 @@ theorem sha256RdZero_chunk14
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 15 of `Sha256` (rd = x0). -/
+/-- Chunk 15 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk15
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk15 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -433,7 +525,9 @@ theorem sha256RdZero_chunk15
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 16 of `Sha256` (rd = x0). -/
+/-- Chunk 16 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk16
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk16 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -441,7 +535,9 @@ theorem sha256RdZero_chunk16
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 17 of `Sha256` (rd = x0). -/
+/-- Chunk 17 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256RdZero_chunk17
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk17 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -449,7 +545,9 @@ theorem sha256RdZero_chunk17
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 18 of `Sha256` (rd = x0). -/
+/-- Chunk 18 of `Sha256` (rd = x0): every row passes the row check for
+`sha256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 4 store rows. -/
 theorem sha256RdZero_chunk18
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk18 rs1 rs2)).rowsWithin (sha256RdZeroWriteSet rs1) = true ∧
@@ -457,6 +555,9 @@ theorem sha256RdZero_chunk18
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Sha256` rows (rd = x0) are exactly `sha256RdZeroStores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem sha256RdZero_storeSlots
     (rs1 rs2 : regidx) :
     (sha256RowsAutoRdZero rs1 rs2).storeSlots =
@@ -484,6 +585,8 @@ theorem sha256RdZero_storeSlots
       (sha256RdZero_chunk18 rs1 rs2).2]
   rfl
 
+/-- The `Sha256` rows (rd = x0) pass the static frame check for `sha256RdZeroWriteSet`.
+Example: `sha256RdZero_frame` applies `frame_of_run` to this check. -/
 theorem sha256RdZero_writesWithin
     (rs1 rs2 : regidx) :
     (sha256RowsAutoRdZero rs1 rs2).WritesWithin
@@ -514,17 +617,25 @@ theorem sha256RdZero_writesWithin
    by rw [sha256RdZero_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Sha256` (rd = x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem sha256RdZero_tailResets
     (rs1 rs2 : regidx) :
     (Program.seq (sha256RowsAutoRdZeroChunk18 rs1 rs2)).resetsPoolCheck (poolVRegs 36) = true := rfl
 
+/-- The `Sha256` rows (rd = x0) pass the pool-reset check for `vr48..vr83`.
+Example: with `sha256RdZero_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem sha256RdZero_resetsPoolCheck
     (rs1 rs2 : regidx) :
     (sha256RowsAutoRdZero rs1 rs2).resetsPoolCheck (poolVRegs 36) = true := by
   unfold sha256RowsAutoRdZero sha256RowsAutoRdZeroList
   exact Program.resetsPoolCheck_seq_append _ (sha256RdZero_tailResets rs1 rs2)
 
+/-- The frame of a successful run of the `Sha256` rows (rd = x0): only `vr48..vr83`
+and the bytes of the 4 store slots in `sha256RdZeroStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem sha256RdZero_frame
     (rs1 rs2 : regidx) {s s' : SailJoltState}
     (h : (sha256RowsAutoRdZero rs1 rs2).Run s s') :
@@ -533,19 +644,24 @@ theorem sha256RdZero_frame
 
 /-! ### `Sha256Init`, rd ≠ x0 -/
 
-/-- Store slots of `Sha256Init` (rd ≠ x0). -/
+/-- Store slots of `Sha256Init` (rd ≠ x0), in row order.
+Example: the first slot of `sha256InitStores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def sha256InitStores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩]
 
 /-- Write set of `Sha256Init` (rd ≠ x0): pool registers `vr48..vr75`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `sha256InitWriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr76` and every architectural register other than `x0`. -/
 def sha256InitWriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 28
   xregs := []
   stores := sha256InitStores rs1
 
-/-- Chunk 0 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 0 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk0
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk0 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -553,7 +669,9 @@ theorem sha256Init_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 1 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk1
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk1 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -561,7 +679,9 @@ theorem sha256Init_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 2 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk2
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk2 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -569,7 +689,9 @@ theorem sha256Init_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 3 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk3
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk3 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -577,7 +699,9 @@ theorem sha256Init_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 4 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk4
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk4 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -585,7 +709,9 @@ theorem sha256Init_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 5 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk5
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk5 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -593,7 +719,9 @@ theorem sha256Init_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 6 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk6
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk6 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -601,7 +729,9 @@ theorem sha256Init_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 7 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk7
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk7 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -609,7 +739,9 @@ theorem sha256Init_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 8 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk8
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk8 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -617,7 +749,9 @@ theorem sha256Init_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 9 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk9
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk9 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -625,7 +759,9 @@ theorem sha256Init_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 10 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk10
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk10 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -633,7 +769,9 @@ theorem sha256Init_chunk10
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 11 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 11 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk11
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk11 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -641,7 +779,9 @@ theorem sha256Init_chunk11
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 12 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 12 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk12
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk12 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -649,7 +789,9 @@ theorem sha256Init_chunk12
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 13 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 13 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk13
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk13 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -657,7 +799,9 @@ theorem sha256Init_chunk13
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 14 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 14 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk14
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk14 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -665,7 +809,9 @@ theorem sha256Init_chunk14
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 15 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 15 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk15
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk15 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -673,7 +819,9 @@ theorem sha256Init_chunk15
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 16 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 16 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk16
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk16 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -681,7 +829,9 @@ theorem sha256Init_chunk16
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 17 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 17 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256Init_chunk17
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk17 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -689,7 +839,9 @@ theorem sha256Init_chunk17
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 18 of `Sha256Init` (rd ≠ x0). -/
+/-- Chunk 18 of `Sha256Init` (rd ≠ x0): every row passes the row check for
+`sha256InitWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 4 store rows. -/
 theorem sha256Init_chunk18
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk18 rs1 rs2 rs3)).rowsWithin (sha256InitWriteSet rs1) = true ∧
@@ -697,6 +849,9 @@ theorem sha256Init_chunk18
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Sha256Init` rows (rd ≠ x0) are exactly `sha256InitStores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem sha256Init_storeSlots
     (rs1 rs2 rs3 : regidx) :
     (sha256InitRowsAuto rs1 rs2 rs3).storeSlots =
@@ -724,6 +879,8 @@ theorem sha256Init_storeSlots
       (sha256Init_chunk18 rs1 rs2 rs3).2]
   rfl
 
+/-- The `Sha256Init` rows (rd ≠ x0) pass the static frame check for `sha256InitWriteSet`.
+Example: `sha256Init_frame` applies `frame_of_run` to this check. -/
 theorem sha256Init_writesWithin
     (rs1 rs2 rs3 : regidx) :
     (sha256InitRowsAuto rs1 rs2 rs3).WritesWithin
@@ -754,17 +911,25 @@ theorem sha256Init_writesWithin
    by rw [sha256Init_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Sha256Init` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem sha256Init_tailResets
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (sha256InitRowsAutoChunk18 rs1 rs2 rs3)).resetsPoolCheck (poolVRegs 28) = true := rfl
 
+/-- The `Sha256Init` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr75`.
+Example: with `sha256Init_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem sha256Init_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) :
     (sha256InitRowsAuto rs1 rs2 rs3).resetsPoolCheck (poolVRegs 28) = true := by
   unfold sha256InitRowsAuto sha256InitRowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (sha256Init_tailResets rs1 rs2 rs3)
 
+/-- The frame of a successful run of the `Sha256Init` rows (rd ≠ x0): only `vr48..vr75`
+and the bytes of the 4 store slots in `sha256InitStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem sha256Init_frame
     (rs1 rs2 rs3 : regidx) {s s' : SailJoltState}
     (h : (sha256InitRowsAuto rs1 rs2 rs3).Run s s') :
@@ -773,19 +938,24 @@ theorem sha256Init_frame
 
 /-! ### `Sha256Init`, rd = x0 -/
 
-/-- Store slots of `Sha256Init` (rd = x0). -/
+/-- Store slots of `Sha256Init` (rd = x0), in row order.
+Example: the first slot of `sha256InitRdZeroStores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def sha256InitRdZeroStores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩]
 
 /-- Write set of `Sha256Init` (rd = x0): pool registers `vr48..vr75`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `sha256InitRdZeroWriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr76` and every architectural register other than `x0`. -/
 def sha256InitRdZeroWriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 28
   xregs := []
   stores := sha256InitRdZeroStores rs1
 
-/-- Chunk 0 of `Sha256Init` (rd = x0). -/
+/-- Chunk 0 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk0
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk0 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -793,7 +963,9 @@ theorem sha256InitRdZero_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Sha256Init` (rd = x0). -/
+/-- Chunk 1 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk1
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk1 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -801,7 +973,9 @@ theorem sha256InitRdZero_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Sha256Init` (rd = x0). -/
+/-- Chunk 2 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk2
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk2 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -809,7 +983,9 @@ theorem sha256InitRdZero_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Sha256Init` (rd = x0). -/
+/-- Chunk 3 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk3
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk3 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -817,7 +993,9 @@ theorem sha256InitRdZero_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Sha256Init` (rd = x0). -/
+/-- Chunk 4 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk4
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk4 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -825,7 +1003,9 @@ theorem sha256InitRdZero_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Sha256Init` (rd = x0). -/
+/-- Chunk 5 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk5
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk5 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -833,7 +1013,9 @@ theorem sha256InitRdZero_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Sha256Init` (rd = x0). -/
+/-- Chunk 6 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk6
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk6 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -841,7 +1023,9 @@ theorem sha256InitRdZero_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Sha256Init` (rd = x0). -/
+/-- Chunk 7 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk7
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk7 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -849,7 +1033,9 @@ theorem sha256InitRdZero_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Sha256Init` (rd = x0). -/
+/-- Chunk 8 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk8
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk8 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -857,7 +1043,9 @@ theorem sha256InitRdZero_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Sha256Init` (rd = x0). -/
+/-- Chunk 9 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk9
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk9 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -865,7 +1053,9 @@ theorem sha256InitRdZero_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Sha256Init` (rd = x0). -/
+/-- Chunk 10 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk10
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk10 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -873,7 +1063,9 @@ theorem sha256InitRdZero_chunk10
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 11 of `Sha256Init` (rd = x0). -/
+/-- Chunk 11 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk11
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk11 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -881,7 +1073,9 @@ theorem sha256InitRdZero_chunk11
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 12 of `Sha256Init` (rd = x0). -/
+/-- Chunk 12 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk12
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk12 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -889,7 +1083,9 @@ theorem sha256InitRdZero_chunk12
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 13 of `Sha256Init` (rd = x0). -/
+/-- Chunk 13 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk13
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk13 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -897,7 +1093,9 @@ theorem sha256InitRdZero_chunk13
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 14 of `Sha256Init` (rd = x0). -/
+/-- Chunk 14 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk14
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk14 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -905,7 +1103,9 @@ theorem sha256InitRdZero_chunk14
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 15 of `Sha256Init` (rd = x0). -/
+/-- Chunk 15 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk15
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk15 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -913,7 +1113,9 @@ theorem sha256InitRdZero_chunk15
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 16 of `Sha256Init` (rd = x0). -/
+/-- Chunk 16 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk16
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk16 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -921,7 +1123,9 @@ theorem sha256InitRdZero_chunk16
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 17 of `Sha256Init` (rd = x0). -/
+/-- Chunk 17 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem sha256InitRdZero_chunk17
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk17 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -929,7 +1133,9 @@ theorem sha256InitRdZero_chunk17
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 18 of `Sha256Init` (rd = x0). -/
+/-- Chunk 18 of `Sha256Init` (rd = x0): every row passes the row check for
+`sha256InitRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 4 store rows. -/
 theorem sha256InitRdZero_chunk18
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk18 rs1 rs2)).rowsWithin (sha256InitRdZeroWriteSet rs1) = true ∧
@@ -937,6 +1143,9 @@ theorem sha256InitRdZero_chunk18
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Sha256Init` rows (rd = x0) are exactly `sha256InitRdZeroStores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem sha256InitRdZero_storeSlots
     (rs1 rs2 : regidx) :
     (sha256InitRowsAutoRdZero rs1 rs2).storeSlots =
@@ -964,6 +1173,8 @@ theorem sha256InitRdZero_storeSlots
       (sha256InitRdZero_chunk18 rs1 rs2).2]
   rfl
 
+/-- The `Sha256Init` rows (rd = x0) pass the static frame check for `sha256InitRdZeroWriteSet`.
+Example: `sha256InitRdZero_frame` applies `frame_of_run` to this check. -/
 theorem sha256InitRdZero_writesWithin
     (rs1 rs2 : regidx) :
     (sha256InitRowsAutoRdZero rs1 rs2).WritesWithin
@@ -994,17 +1205,25 @@ theorem sha256InitRdZero_writesWithin
    by rw [sha256InitRdZero_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Sha256Init` (rd = x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem sha256InitRdZero_tailResets
     (rs1 rs2 : regidx) :
     (Program.seq (sha256InitRowsAutoRdZeroChunk18 rs1 rs2)).resetsPoolCheck (poolVRegs 28) = true := rfl
 
+/-- The `Sha256Init` rows (rd = x0) pass the pool-reset check for `vr48..vr75`.
+Example: with `sha256InitRdZero_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem sha256InitRdZero_resetsPoolCheck
     (rs1 rs2 : regidx) :
     (sha256InitRowsAutoRdZero rs1 rs2).resetsPoolCheck (poolVRegs 28) = true := by
   unfold sha256InitRowsAutoRdZero sha256InitRowsAutoRdZeroList
   exact Program.resetsPoolCheck_seq_append _ (sha256InitRdZero_tailResets rs1 rs2)
 
+/-- The frame of a successful run of the `Sha256Init` rows (rd = x0): only `vr48..vr75`
+and the bytes of the 4 store slots in `sha256InitRdZeroStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem sha256InitRdZero_frame
     (rs1 rs2 : regidx) {s s' : SailJoltState}
     (h : (sha256InitRowsAutoRdZero rs1 rs2).Run s s') :
@@ -1013,7 +1232,8 @@ theorem sha256InitRdZero_frame
 
 /-! ### `Keccak256`, rd ≠ x0 -/
 
-/-- Store slots of `Keccak256` (rd ≠ x0). -/
+/-- Store slots of `Keccak256` (rd ≠ x0), in row order.
+Example: the first slot of `keccak256Stores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def keccak256Stores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩,
@@ -1026,13 +1246,17 @@ def keccak256Stores (rs1 : regidx) : List StoreSlot :=
     ⟨.xreg rs1, 192, .dword⟩]
 
 /-- Write set of `Keccak256` (rd ≠ x0): pool registers `vr48..vr84`, no
-architectural register, 25 store rows. -/
+architectural register, 25 store rows.
+Example: `keccak256WriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr85` and every architectural register other than `x0`. -/
 def keccak256WriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 37
   xregs := []
   stores := keccak256Stores rs1
 
-/-- Chunk 0 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 0 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk0
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk0 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1040,7 +1264,9 @@ theorem keccak256_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 1 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk1
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk1 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1048,7 +1274,9 @@ theorem keccak256_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 2 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk2
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk2 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1056,7 +1284,9 @@ theorem keccak256_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 3 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk3
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk3 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1064,7 +1294,9 @@ theorem keccak256_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 4 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk4
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk4 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1072,7 +1304,9 @@ theorem keccak256_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 5 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk5
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk5 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1080,7 +1314,9 @@ theorem keccak256_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 6 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk6
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk6 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1088,7 +1324,9 @@ theorem keccak256_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 7 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk7
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk7 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1096,7 +1334,9 @@ theorem keccak256_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 8 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk8
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk8 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1104,7 +1344,9 @@ theorem keccak256_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 9 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk9
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk9 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1112,7 +1354,9 @@ theorem keccak256_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 10 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk10
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk10 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1120,7 +1364,9 @@ theorem keccak256_chunk10
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 11 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 11 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk11
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk11 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1128,7 +1374,9 @@ theorem keccak256_chunk11
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 12 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 12 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk12
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk12 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1136,7 +1384,9 @@ theorem keccak256_chunk12
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 13 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 13 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk13
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk13 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1144,7 +1394,9 @@ theorem keccak256_chunk13
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 14 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 14 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk14
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk14 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1152,7 +1404,9 @@ theorem keccak256_chunk14
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 15 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 15 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk15
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk15 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1160,7 +1414,9 @@ theorem keccak256_chunk15
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 16 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 16 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk16
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk16 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1168,7 +1424,9 @@ theorem keccak256_chunk16
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 17 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 17 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk17
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk17 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1176,7 +1434,9 @@ theorem keccak256_chunk17
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 18 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 18 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk18
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk18 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1184,7 +1444,9 @@ theorem keccak256_chunk18
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 19 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 19 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk19
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk19 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1192,7 +1454,9 @@ theorem keccak256_chunk19
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 20 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 20 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk20
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk20 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1200,7 +1464,9 @@ theorem keccak256_chunk20
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 21 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 21 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk21
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk21 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1208,7 +1474,9 @@ theorem keccak256_chunk21
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 22 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 22 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk22
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk22 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1216,7 +1484,9 @@ theorem keccak256_chunk22
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 23 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 23 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk23
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk23 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1224,7 +1494,9 @@ theorem keccak256_chunk23
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 24 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 24 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk24
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk24 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1232,7 +1504,9 @@ theorem keccak256_chunk24
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 25 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 25 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk25
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk25 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1240,7 +1514,9 @@ theorem keccak256_chunk25
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 26 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 26 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk26
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk26 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1248,7 +1524,9 @@ theorem keccak256_chunk26
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 27 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 27 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk27
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk27 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1256,7 +1534,9 @@ theorem keccak256_chunk27
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 28 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 28 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk28
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk28 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1264,7 +1544,9 @@ theorem keccak256_chunk28
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 29 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 29 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256_chunk29
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk29 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1272,7 +1554,9 @@ theorem keccak256_chunk29
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 30 of `Keccak256` (rd ≠ x0). -/
+/-- Chunk 30 of `Keccak256` (rd ≠ x0): every row passes the row check for
+`keccak256WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 25 store rows. -/
 theorem keccak256_chunk30
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk30 rs1 rs2 rs3)).rowsWithin (keccak256WriteSet rs1) = true ∧
@@ -1280,6 +1564,9 @@ theorem keccak256_chunk30
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩, ⟨.xreg rs1, 48, .dword⟩, ⟨.xreg rs1, 56, .dword⟩, ⟨.xreg rs1, 64, .dword⟩, ⟨.xreg rs1, 72, .dword⟩, ⟨.xreg rs1, 80, .dword⟩, ⟨.xreg rs1, 88, .dword⟩, ⟨.xreg rs1, 96, .dword⟩, ⟨.xreg rs1, 104, .dword⟩, ⟨.xreg rs1, 112, .dword⟩, ⟨.xreg rs1, 120, .dword⟩, ⟨.xreg rs1, 128, .dword⟩, ⟨.xreg rs1, 136, .dword⟩, ⟨.xreg rs1, 144, .dword⟩, ⟨.xreg rs1, 152, .dword⟩, ⟨.xreg rs1, 160, .dword⟩, ⟨.xreg rs1, 168, .dword⟩, ⟨.xreg rs1, 176, .dword⟩, ⟨.xreg rs1, 184, .dword⟩, ⟨.xreg rs1, 192, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Keccak256` rows (rd ≠ x0) are exactly `keccak256Stores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem keccak256_storeSlots
     (rs1 rs2 rs3 : regidx) :
     (keccak256RowsAuto rs1 rs2 rs3).storeSlots =
@@ -1319,6 +1606,8 @@ theorem keccak256_storeSlots
       (keccak256_chunk30 rs1 rs2 rs3).2]
   rfl
 
+/-- The `Keccak256` rows (rd ≠ x0) pass the static frame check for `keccak256WriteSet`.
+Example: `keccak256_frame` applies `frame_of_run` to this check. -/
 theorem keccak256_writesWithin
     (rs1 rs2 rs3 : regidx) :
     (keccak256RowsAuto rs1 rs2 rs3).WritesWithin
@@ -1361,17 +1650,25 @@ theorem keccak256_writesWithin
    by rw [keccak256_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Keccak256` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem keccak256_tailResets
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256RowsAutoChunk30 rs1 rs2 rs3)).resetsPoolCheck (poolVRegs 37) = true := rfl
 
+/-- The `Keccak256` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr84`.
+Example: with `keccak256_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem keccak256_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) :
     (keccak256RowsAuto rs1 rs2 rs3).resetsPoolCheck (poolVRegs 37) = true := by
   unfold keccak256RowsAuto keccak256RowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (keccak256_tailResets rs1 rs2 rs3)
 
+/-- The frame of a successful run of the `Keccak256` rows (rd ≠ x0): only `vr48..vr84`
+and the bytes of the 25 store slots in `keccak256Stores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem keccak256_frame
     (rs1 rs2 rs3 : regidx) {s s' : SailJoltState}
     (h : (keccak256RowsAuto rs1 rs2 rs3).Run s s') :
@@ -1380,7 +1677,8 @@ theorem keccak256_frame
 
 /-! ### `Keccak256`, rd = x0 -/
 
-/-- Store slots of `Keccak256` (rd = x0). -/
+/-- Store slots of `Keccak256` (rd = x0), in row order.
+Example: the first slot of `keccak256RdZeroStores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def keccak256RdZeroStores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩,
@@ -1393,13 +1691,17 @@ def keccak256RdZeroStores (rs1 : regidx) : List StoreSlot :=
     ⟨.xreg rs1, 192, .dword⟩]
 
 /-- Write set of `Keccak256` (rd = x0): pool registers `vr48..vr84`, no
-architectural register, 25 store rows. -/
+architectural register, 25 store rows.
+Example: `keccak256RdZeroWriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr85` and every architectural register other than `x0`. -/
 def keccak256RdZeroWriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 37
   xregs := []
   stores := keccak256RdZeroStores rs1
 
-/-- Chunk 0 of `Keccak256` (rd = x0). -/
+/-- Chunk 0 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk0
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk0 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1407,7 +1709,9 @@ theorem keccak256RdZero_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Keccak256` (rd = x0). -/
+/-- Chunk 1 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk1
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk1 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1415,7 +1719,9 @@ theorem keccak256RdZero_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Keccak256` (rd = x0). -/
+/-- Chunk 2 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk2
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk2 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1423,7 +1729,9 @@ theorem keccak256RdZero_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Keccak256` (rd = x0). -/
+/-- Chunk 3 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk3
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk3 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1431,7 +1739,9 @@ theorem keccak256RdZero_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Keccak256` (rd = x0). -/
+/-- Chunk 4 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk4
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk4 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1439,7 +1749,9 @@ theorem keccak256RdZero_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Keccak256` (rd = x0). -/
+/-- Chunk 5 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk5
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk5 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1447,7 +1759,9 @@ theorem keccak256RdZero_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Keccak256` (rd = x0). -/
+/-- Chunk 6 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk6
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk6 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1455,7 +1769,9 @@ theorem keccak256RdZero_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Keccak256` (rd = x0). -/
+/-- Chunk 7 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk7
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk7 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1463,7 +1779,9 @@ theorem keccak256RdZero_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Keccak256` (rd = x0). -/
+/-- Chunk 8 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk8
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk8 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1471,7 +1789,9 @@ theorem keccak256RdZero_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Keccak256` (rd = x0). -/
+/-- Chunk 9 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk9
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk9 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1479,7 +1799,9 @@ theorem keccak256RdZero_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Keccak256` (rd = x0). -/
+/-- Chunk 10 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk10
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk10 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1487,7 +1809,9 @@ theorem keccak256RdZero_chunk10
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 11 of `Keccak256` (rd = x0). -/
+/-- Chunk 11 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk11
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk11 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1495,7 +1819,9 @@ theorem keccak256RdZero_chunk11
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 12 of `Keccak256` (rd = x0). -/
+/-- Chunk 12 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk12
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk12 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1503,7 +1829,9 @@ theorem keccak256RdZero_chunk12
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 13 of `Keccak256` (rd = x0). -/
+/-- Chunk 13 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk13
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk13 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1511,7 +1839,9 @@ theorem keccak256RdZero_chunk13
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 14 of `Keccak256` (rd = x0). -/
+/-- Chunk 14 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk14
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk14 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1519,7 +1849,9 @@ theorem keccak256RdZero_chunk14
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 15 of `Keccak256` (rd = x0). -/
+/-- Chunk 15 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk15
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk15 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1527,7 +1859,9 @@ theorem keccak256RdZero_chunk15
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 16 of `Keccak256` (rd = x0). -/
+/-- Chunk 16 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk16
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk16 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1535,7 +1869,9 @@ theorem keccak256RdZero_chunk16
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 17 of `Keccak256` (rd = x0). -/
+/-- Chunk 17 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk17
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk17 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1543,7 +1879,9 @@ theorem keccak256RdZero_chunk17
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 18 of `Keccak256` (rd = x0). -/
+/-- Chunk 18 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk18
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk18 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1551,7 +1889,9 @@ theorem keccak256RdZero_chunk18
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 19 of `Keccak256` (rd = x0). -/
+/-- Chunk 19 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk19
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk19 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1559,7 +1899,9 @@ theorem keccak256RdZero_chunk19
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 20 of `Keccak256` (rd = x0). -/
+/-- Chunk 20 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk20
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk20 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1567,7 +1909,9 @@ theorem keccak256RdZero_chunk20
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 21 of `Keccak256` (rd = x0). -/
+/-- Chunk 21 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk21
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk21 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1575,7 +1919,9 @@ theorem keccak256RdZero_chunk21
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 22 of `Keccak256` (rd = x0). -/
+/-- Chunk 22 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk22
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk22 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1583,7 +1929,9 @@ theorem keccak256RdZero_chunk22
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 23 of `Keccak256` (rd = x0). -/
+/-- Chunk 23 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk23
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk23 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1591,7 +1939,9 @@ theorem keccak256RdZero_chunk23
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 24 of `Keccak256` (rd = x0). -/
+/-- Chunk 24 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk24
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk24 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1599,7 +1949,9 @@ theorem keccak256RdZero_chunk24
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 25 of `Keccak256` (rd = x0). -/
+/-- Chunk 25 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk25
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk25 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1607,7 +1959,9 @@ theorem keccak256RdZero_chunk25
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 26 of `Keccak256` (rd = x0). -/
+/-- Chunk 26 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk26
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk26 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1615,7 +1969,9 @@ theorem keccak256RdZero_chunk26
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 27 of `Keccak256` (rd = x0). -/
+/-- Chunk 27 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk27
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk27 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1623,7 +1979,9 @@ theorem keccak256RdZero_chunk27
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 28 of `Keccak256` (rd = x0). -/
+/-- Chunk 28 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk28
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk28 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1631,7 +1989,9 @@ theorem keccak256RdZero_chunk28
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 29 of `Keccak256` (rd = x0). -/
+/-- Chunk 29 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256RdZero_chunk29
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk29 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1639,7 +1999,9 @@ theorem keccak256RdZero_chunk29
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 30 of `Keccak256` (rd = x0). -/
+/-- Chunk 30 of `Keccak256` (rd = x0): every row passes the row check for
+`keccak256RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 25 store rows. -/
 theorem keccak256RdZero_chunk30
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk30 rs1 rs2)).rowsWithin (keccak256RdZeroWriteSet rs1) = true ∧
@@ -1647,6 +2009,9 @@ theorem keccak256RdZero_chunk30
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩, ⟨.xreg rs1, 48, .dword⟩, ⟨.xreg rs1, 56, .dword⟩, ⟨.xreg rs1, 64, .dword⟩, ⟨.xreg rs1, 72, .dword⟩, ⟨.xreg rs1, 80, .dword⟩, ⟨.xreg rs1, 88, .dword⟩, ⟨.xreg rs1, 96, .dword⟩, ⟨.xreg rs1, 104, .dword⟩, ⟨.xreg rs1, 112, .dword⟩, ⟨.xreg rs1, 120, .dword⟩, ⟨.xreg rs1, 128, .dword⟩, ⟨.xreg rs1, 136, .dword⟩, ⟨.xreg rs1, 144, .dword⟩, ⟨.xreg rs1, 152, .dword⟩, ⟨.xreg rs1, 160, .dword⟩, ⟨.xreg rs1, 168, .dword⟩, ⟨.xreg rs1, 176, .dword⟩, ⟨.xreg rs1, 184, .dword⟩, ⟨.xreg rs1, 192, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Keccak256` rows (rd = x0) are exactly `keccak256RdZeroStores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem keccak256RdZero_storeSlots
     (rs1 rs2 : regidx) :
     (keccak256RowsAutoRdZero rs1 rs2).storeSlots =
@@ -1686,6 +2051,8 @@ theorem keccak256RdZero_storeSlots
       (keccak256RdZero_chunk30 rs1 rs2).2]
   rfl
 
+/-- The `Keccak256` rows (rd = x0) pass the static frame check for `keccak256RdZeroWriteSet`.
+Example: `keccak256RdZero_frame` applies `frame_of_run` to this check. -/
 theorem keccak256RdZero_writesWithin
     (rs1 rs2 : regidx) :
     (keccak256RowsAutoRdZero rs1 rs2).WritesWithin
@@ -1728,17 +2095,25 @@ theorem keccak256RdZero_writesWithin
    by rw [keccak256RdZero_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Keccak256` (rd = x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem keccak256RdZero_tailResets
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256RowsAutoRdZeroChunk30 rs1 rs2)).resetsPoolCheck (poolVRegs 37) = true := rfl
 
+/-- The `Keccak256` rows (rd = x0) pass the pool-reset check for `vr48..vr84`.
+Example: with `keccak256RdZero_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem keccak256RdZero_resetsPoolCheck
     (rs1 rs2 : regidx) :
     (keccak256RowsAutoRdZero rs1 rs2).resetsPoolCheck (poolVRegs 37) = true := by
   unfold keccak256RowsAutoRdZero keccak256RowsAutoRdZeroList
   exact Program.resetsPoolCheck_seq_append _ (keccak256RdZero_tailResets rs1 rs2)
 
+/-- The frame of a successful run of the `Keccak256` rows (rd = x0): only `vr48..vr84`
+and the bytes of the 25 store slots in `keccak256RdZeroStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem keccak256RdZero_frame
     (rs1 rs2 : regidx) {s s' : SailJoltState}
     (h : (keccak256RowsAutoRdZero rs1 rs2).Run s s') :
@@ -1747,7 +2122,8 @@ theorem keccak256RdZero_frame
 
 /-! ### `Keccak256AbsorbPermute`, rd ≠ x0 -/
 
-/-- Store slots of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Store slots of `Keccak256AbsorbPermute` (rd ≠ x0), in row order.
+Example: the first slot of `keccak256AbsorbPermuteStores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def keccak256AbsorbPermuteStores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩,
@@ -1760,13 +2136,17 @@ def keccak256AbsorbPermuteStores (rs1 : regidx) : List StoreSlot :=
     ⟨.xreg rs1, 192, .dword⟩]
 
 /-- Write set of `Keccak256AbsorbPermute` (rd ≠ x0): pool registers `vr48..vr84`, no
-architectural register, 25 store rows. -/
+architectural register, 25 store rows.
+Example: `keccak256AbsorbPermuteWriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr85` and every architectural register other than `x0`. -/
 def keccak256AbsorbPermuteWriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 37
   xregs := []
   stores := keccak256AbsorbPermuteStores rs1
 
-/-- Chunk 0 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 0 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk0
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk0 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1774,7 +2154,9 @@ theorem keccak256AbsorbPermute_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 1 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk1
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk1 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1782,7 +2164,9 @@ theorem keccak256AbsorbPermute_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 2 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk2
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk2 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1790,7 +2174,9 @@ theorem keccak256AbsorbPermute_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 3 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk3
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk3 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1798,7 +2184,9 @@ theorem keccak256AbsorbPermute_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 4 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk4
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk4 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1806,7 +2194,9 @@ theorem keccak256AbsorbPermute_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 5 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk5
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk5 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1814,7 +2204,9 @@ theorem keccak256AbsorbPermute_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 6 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk6
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk6 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1822,7 +2214,9 @@ theorem keccak256AbsorbPermute_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 7 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk7
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk7 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1830,7 +2224,9 @@ theorem keccak256AbsorbPermute_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 8 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk8
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk8 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1838,7 +2234,9 @@ theorem keccak256AbsorbPermute_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 9 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk9
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk9 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1846,7 +2244,9 @@ theorem keccak256AbsorbPermute_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 10 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk10
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk10 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1854,7 +2254,9 @@ theorem keccak256AbsorbPermute_chunk10
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 11 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 11 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk11
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk11 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1862,7 +2264,9 @@ theorem keccak256AbsorbPermute_chunk11
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 12 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 12 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk12
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk12 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1870,7 +2274,9 @@ theorem keccak256AbsorbPermute_chunk12
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 13 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 13 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk13
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk13 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1878,7 +2284,9 @@ theorem keccak256AbsorbPermute_chunk13
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 14 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 14 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk14
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk14 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1886,7 +2294,9 @@ theorem keccak256AbsorbPermute_chunk14
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 15 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 15 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk15
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk15 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1894,7 +2304,9 @@ theorem keccak256AbsorbPermute_chunk15
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 16 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 16 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk16
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk16 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1902,7 +2314,9 @@ theorem keccak256AbsorbPermute_chunk16
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 17 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 17 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk17
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk17 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1910,7 +2324,9 @@ theorem keccak256AbsorbPermute_chunk17
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 18 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 18 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk18
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk18 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1918,7 +2334,9 @@ theorem keccak256AbsorbPermute_chunk18
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 19 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 19 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk19
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk19 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1926,7 +2344,9 @@ theorem keccak256AbsorbPermute_chunk19
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 20 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 20 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk20
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk20 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1934,7 +2354,9 @@ theorem keccak256AbsorbPermute_chunk20
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 21 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 21 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk21
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk21 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1942,7 +2364,9 @@ theorem keccak256AbsorbPermute_chunk21
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 22 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 22 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk22
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk22 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1950,7 +2374,9 @@ theorem keccak256AbsorbPermute_chunk22
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 23 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 23 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk23
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk23 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1958,7 +2384,9 @@ theorem keccak256AbsorbPermute_chunk23
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 24 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 24 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk24
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk24 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1966,7 +2394,9 @@ theorem keccak256AbsorbPermute_chunk24
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 25 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 25 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk25
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk25 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1974,7 +2404,9 @@ theorem keccak256AbsorbPermute_chunk25
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 26 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 26 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk26
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk26 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1982,7 +2414,9 @@ theorem keccak256AbsorbPermute_chunk26
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 27 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 27 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk27
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk27 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1990,7 +2424,9 @@ theorem keccak256AbsorbPermute_chunk27
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 28 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 28 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk28
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk28 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -1998,7 +2434,9 @@ theorem keccak256AbsorbPermute_chunk28
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 29 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 29 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk29
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk29 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -2006,7 +2444,9 @@ theorem keccak256AbsorbPermute_chunk29
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 30 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 30 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 25 store rows. -/
 theorem keccak256AbsorbPermute_chunk30
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk30 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -2014,7 +2454,9 @@ theorem keccak256AbsorbPermute_chunk30
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩, ⟨.xreg rs1, 48, .dword⟩, ⟨.xreg rs1, 56, .dword⟩, ⟨.xreg rs1, 64, .dword⟩, ⟨.xreg rs1, 72, .dword⟩, ⟨.xreg rs1, 80, .dword⟩, ⟨.xreg rs1, 88, .dword⟩, ⟨.xreg rs1, 96, .dword⟩, ⟨.xreg rs1, 104, .dword⟩, ⟨.xreg rs1, 112, .dword⟩, ⟨.xreg rs1, 120, .dword⟩, ⟨.xreg rs1, 128, .dword⟩, ⟨.xreg rs1, 136, .dword⟩, ⟨.xreg rs1, 144, .dword⟩, ⟨.xreg rs1, 152, .dword⟩, ⟨.xreg rs1, 160, .dword⟩, ⟨.xreg rs1, 168, .dword⟩, ⟨.xreg rs1, 176, .dword⟩, ⟨.xreg rs1, 184, .dword⟩, ⟨.xreg rs1, 192, .dword⟩] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 31 of `Keccak256AbsorbPermute` (rd ≠ x0). -/
+/-- Chunk 31 of `Keccak256AbsorbPermute` (rd ≠ x0): every row passes the row check for
+`keccak256AbsorbPermuteWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermute_chunk31
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk31 rs1 rs2 rs3)).rowsWithin (keccak256AbsorbPermuteWriteSet rs1) = true ∧
@@ -2022,6 +2464,9 @@ theorem keccak256AbsorbPermute_chunk31
         [] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Keccak256AbsorbPermute` rows (rd ≠ x0) are exactly `keccak256AbsorbPermuteStores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem keccak256AbsorbPermute_storeSlots
     (rs1 rs2 rs3 : regidx) :
     (keccak256AbsorbPermuteRowsAuto rs1 rs2 rs3).storeSlots =
@@ -2062,6 +2507,8 @@ theorem keccak256AbsorbPermute_storeSlots
       (keccak256AbsorbPermute_chunk31 rs1 rs2 rs3).2]
   rfl
 
+/-- The `Keccak256AbsorbPermute` rows (rd ≠ x0) pass the static frame check for `keccak256AbsorbPermuteWriteSet`.
+Example: `keccak256AbsorbPermute_frame` applies `frame_of_run` to this check. -/
 theorem keccak256AbsorbPermute_writesWithin
     (rs1 rs2 rs3 : regidx) :
     (keccak256AbsorbPermuteRowsAuto rs1 rs2 rs3).WritesWithin
@@ -2105,18 +2552,26 @@ theorem keccak256AbsorbPermute_writesWithin
    by rw [keccak256AbsorbPermute_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Keccak256AbsorbPermute` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem keccak256AbsorbPermute_tailResets
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoChunk30 rs1 rs2 rs3 ++
       keccak256AbsorbPermuteRowsAutoChunk31 rs1 rs2 rs3)).resetsPoolCheck (poolVRegs 37) = true := rfl
 
+/-- The `Keccak256AbsorbPermute` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr84`.
+Example: with `keccak256AbsorbPermute_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem keccak256AbsorbPermute_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) :
     (keccak256AbsorbPermuteRowsAuto rs1 rs2 rs3).resetsPoolCheck (poolVRegs 37) = true := by
   unfold keccak256AbsorbPermuteRowsAuto keccak256AbsorbPermuteRowsAutoList
   exact Program.resetsPoolCheck_seq_append_append _ (keccak256AbsorbPermute_tailResets rs1 rs2 rs3)
 
+/-- The frame of a successful run of the `Keccak256AbsorbPermute` rows (rd ≠ x0): only `vr48..vr84`
+and the bytes of the 25 store slots in `keccak256AbsorbPermuteStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem keccak256AbsorbPermute_frame
     (rs1 rs2 rs3 : regidx) {s s' : SailJoltState}
     (h : (keccak256AbsorbPermuteRowsAuto rs1 rs2 rs3).Run s s') :
@@ -2125,7 +2580,8 @@ theorem keccak256AbsorbPermute_frame
 
 /-! ### `Keccak256AbsorbPermute`, rd = x0 -/
 
-/-- Store slots of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Store slots of `Keccak256AbsorbPermute` (rd = x0), in row order.
+Example: the first slot of `keccak256AbsorbPermuteRdZeroStores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def keccak256AbsorbPermuteRdZeroStores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩,
@@ -2138,13 +2594,17 @@ def keccak256AbsorbPermuteRdZeroStores (rs1 : regidx) : List StoreSlot :=
     ⟨.xreg rs1, 192, .dword⟩]
 
 /-- Write set of `Keccak256AbsorbPermute` (rd = x0): pool registers `vr48..vr84`, no
-architectural register, 25 store rows. -/
+architectural register, 25 store rows.
+Example: `keccak256AbsorbPermuteRdZeroWriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr85` and every architectural register other than `x0`. -/
 def keccak256AbsorbPermuteRdZeroWriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 37
   xregs := []
   stores := keccak256AbsorbPermuteRdZeroStores rs1
 
-/-- Chunk 0 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 0 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk0
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk0 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2152,7 +2612,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 1 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk1
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk1 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2160,7 +2622,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 2 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk2
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk2 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2168,7 +2632,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 3 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk3
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk3 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2176,7 +2642,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 4 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk4
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk4 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2184,7 +2652,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 5 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk5
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk5 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2192,7 +2662,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 6 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk6
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk6 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2200,7 +2672,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 7 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk7
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk7 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2208,7 +2682,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 8 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk8
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk8 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2216,7 +2692,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 9 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk9
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk9 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2224,7 +2702,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 10 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk10
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk10 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2232,7 +2712,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk10
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 11 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 11 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk11
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk11 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2240,7 +2722,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk11
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 12 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 12 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk12
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk12 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2248,7 +2732,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk12
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 13 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 13 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk13
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk13 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2256,7 +2742,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk13
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 14 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 14 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk14
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk14 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2264,7 +2752,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk14
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 15 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 15 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk15
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk15 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2272,7 +2762,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk15
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 16 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 16 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk16
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk16 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2280,7 +2772,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk16
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 17 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 17 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk17
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk17 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2288,7 +2782,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk17
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 18 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 18 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk18
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk18 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2296,7 +2792,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk18
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 19 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 19 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk19
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk19 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2304,7 +2802,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk19
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 20 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 20 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk20
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk20 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2312,7 +2812,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk20
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 21 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 21 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk21
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk21 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2320,7 +2822,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk21
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 22 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 22 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk22
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk22 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2328,7 +2832,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk22
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 23 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 23 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk23
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk23 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2336,7 +2842,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk23
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 24 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 24 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk24
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk24 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2344,7 +2852,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk24
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 25 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 25 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk25
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk25 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2352,7 +2862,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk25
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 26 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 26 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk26
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk26 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2360,7 +2872,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk26
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 27 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 27 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk27
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk27 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2368,7 +2882,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk27
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 28 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 28 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk28
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk28 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2376,7 +2892,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk28
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 29 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 29 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk29
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk29 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2384,7 +2902,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk29
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 30 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 30 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 25 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk30
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk30 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2392,7 +2912,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk30
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩, ⟨.xreg rs1, 48, .dword⟩, ⟨.xreg rs1, 56, .dword⟩, ⟨.xreg rs1, 64, .dword⟩, ⟨.xreg rs1, 72, .dword⟩, ⟨.xreg rs1, 80, .dword⟩, ⟨.xreg rs1, 88, .dword⟩, ⟨.xreg rs1, 96, .dword⟩, ⟨.xreg rs1, 104, .dword⟩, ⟨.xreg rs1, 112, .dword⟩, ⟨.xreg rs1, 120, .dword⟩, ⟨.xreg rs1, 128, .dword⟩, ⟨.xreg rs1, 136, .dword⟩, ⟨.xreg rs1, 144, .dword⟩, ⟨.xreg rs1, 152, .dword⟩, ⟨.xreg rs1, 160, .dword⟩, ⟨.xreg rs1, 168, .dword⟩, ⟨.xreg rs1, 176, .dword⟩, ⟨.xreg rs1, 184, .dword⟩, ⟨.xreg rs1, 192, .dword⟩] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 31 of `Keccak256AbsorbPermute` (rd = x0). -/
+/-- Chunk 31 of `Keccak256AbsorbPermute` (rd = x0): every row passes the row check for
+`keccak256AbsorbPermuteRdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem keccak256AbsorbPermuteRdZero_chunk31
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk31 rs1 rs2)).rowsWithin (keccak256AbsorbPermuteRdZeroWriteSet rs1) = true ∧
@@ -2400,6 +2922,9 @@ theorem keccak256AbsorbPermuteRdZero_chunk31
         [] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Keccak256AbsorbPermute` rows (rd = x0) are exactly `keccak256AbsorbPermuteRdZeroStores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem keccak256AbsorbPermuteRdZero_storeSlots
     (rs1 rs2 : regidx) :
     (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).storeSlots =
@@ -2440,6 +2965,8 @@ theorem keccak256AbsorbPermuteRdZero_storeSlots
       (keccak256AbsorbPermuteRdZero_chunk31 rs1 rs2).2]
   rfl
 
+/-- The `Keccak256AbsorbPermute` rows (rd = x0) pass the static frame check for `keccak256AbsorbPermuteRdZeroWriteSet`.
+Example: `keccak256AbsorbPermuteRdZero_frame` applies `frame_of_run` to this check. -/
 theorem keccak256AbsorbPermuteRdZero_writesWithin
     (rs1 rs2 : regidx) :
     (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).WritesWithin
@@ -2483,18 +3010,26 @@ theorem keccak256AbsorbPermuteRdZero_writesWithin
    by rw [keccak256AbsorbPermuteRdZero_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Keccak256AbsorbPermute` (rd = x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem keccak256AbsorbPermuteRdZero_tailResets
     (rs1 rs2 : regidx) :
     (Program.seq (keccak256AbsorbPermuteRowsAutoRdZeroChunk30 rs1 rs2 ++
       keccak256AbsorbPermuteRowsAutoRdZeroChunk31 rs1 rs2)).resetsPoolCheck (poolVRegs 37) = true := rfl
 
+/-- The `Keccak256AbsorbPermute` rows (rd = x0) pass the pool-reset check for `vr48..vr84`.
+Example: with `keccak256AbsorbPermuteRdZero_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem keccak256AbsorbPermuteRdZero_resetsPoolCheck
     (rs1 rs2 : regidx) :
     (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).resetsPoolCheck (poolVRegs 37) = true := by
   unfold keccak256AbsorbPermuteRowsAutoRdZero keccak256AbsorbPermuteRowsAutoRdZeroList
   exact Program.resetsPoolCheck_seq_append_append _ (keccak256AbsorbPermuteRdZero_tailResets rs1 rs2)
 
+/-- The frame of a successful run of the `Keccak256AbsorbPermute` rows (rd = x0): only `vr48..vr84`
+and the bytes of the 25 store slots in `keccak256AbsorbPermuteRdZeroStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem keccak256AbsorbPermuteRdZero_frame
     (rs1 rs2 : regidx) {s s' : SailJoltState}
     (h : (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).Run s s') :
@@ -2503,20 +3038,25 @@ theorem keccak256AbsorbPermuteRdZero_frame
 
 /-! ### `Blake2`, rd ≠ x0 -/
 
-/-- Store slots of `Blake2` (rd ≠ x0). -/
+/-- Store slots of `Blake2` (rd ≠ x0), in row order.
+Example: the first slot of `blake2Stores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def blake2Stores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩,
     ⟨.xreg rs1, 48, .dword⟩, ⟨.xreg rs1, 56, .dword⟩]
 
 /-- Write set of `Blake2` (rd ≠ x0): pool registers `vr48..vr87`, no
-architectural register, 8 store rows. -/
+architectural register, 8 store rows.
+Example: `blake2WriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr88` and every architectural register other than `x0`. -/
 def blake2WriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 40
   xregs := []
   stores := blake2Stores rs1
 
-/-- Chunk 0 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 0 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk0
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk0 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2524,7 +3064,9 @@ theorem blake2_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 1 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk1
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk1 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2532,7 +3074,9 @@ theorem blake2_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 2 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk2
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk2 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2540,7 +3084,9 @@ theorem blake2_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 3 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk3
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk3 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2548,7 +3094,9 @@ theorem blake2_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 4 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk4
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk4 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2556,7 +3104,9 @@ theorem blake2_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 5 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk5
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk5 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2564,7 +3114,9 @@ theorem blake2_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 6 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk6
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk6 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2572,7 +3124,9 @@ theorem blake2_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 7 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk7
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk7 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2580,7 +3134,9 @@ theorem blake2_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 8 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk8
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk8 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2588,7 +3144,9 @@ theorem blake2_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 9 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2_chunk9
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk9 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2596,7 +3154,9 @@ theorem blake2_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Blake2` (rd ≠ x0). -/
+/-- Chunk 10 of `Blake2` (rd ≠ x0): every row passes the row check for
+`blake2WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 8 store rows. -/
 theorem blake2_chunk10
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk10 rs1 rs2 rs3)).rowsWithin (blake2WriteSet rs1) = true ∧
@@ -2604,6 +3164,9 @@ theorem blake2_chunk10
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩, ⟨.xreg rs1, 48, .dword⟩, ⟨.xreg rs1, 56, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Blake2` rows (rd ≠ x0) are exactly `blake2Stores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem blake2_storeSlots
     (rs1 rs2 rs3 : regidx) :
     (blake2RowsAuto rs1 rs2 rs3).storeSlots =
@@ -2623,6 +3186,8 @@ theorem blake2_storeSlots
       (blake2_chunk10 rs1 rs2 rs3).2]
   rfl
 
+/-- The `Blake2` rows (rd ≠ x0) pass the static frame check for `blake2WriteSet`.
+Example: `blake2_frame` applies `frame_of_run` to this check. -/
 theorem blake2_writesWithin
     (rs1 rs2 rs3 : regidx) :
     (blake2RowsAuto rs1 rs2 rs3).WritesWithin
@@ -2645,17 +3210,25 @@ theorem blake2_writesWithin
    by rw [blake2_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Blake2` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem blake2_tailResets
     (rs1 rs2 rs3 : regidx) :
     (Program.seq (blake2RowsAutoChunk10 rs1 rs2 rs3)).resetsPoolCheck (poolVRegs 40) = true := rfl
 
+/-- The `Blake2` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr87`.
+Example: with `blake2_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem blake2_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) :
     (blake2RowsAuto rs1 rs2 rs3).resetsPoolCheck (poolVRegs 40) = true := by
   unfold blake2RowsAuto blake2RowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (blake2_tailResets rs1 rs2 rs3)
 
+/-- The frame of a successful run of the `Blake2` rows (rd ≠ x0): only `vr48..vr87`
+and the bytes of the 8 store slots in `blake2Stores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem blake2_frame
     (rs1 rs2 rs3 : regidx) {s s' : SailJoltState}
     (h : (blake2RowsAuto rs1 rs2 rs3).Run s s') :
@@ -2664,20 +3237,25 @@ theorem blake2_frame
 
 /-! ### `Blake2`, rd = x0 -/
 
-/-- Store slots of `Blake2` (rd = x0). -/
+/-- Store slots of `Blake2` (rd = x0), in row order.
+Example: the first slot of `blake2RdZeroStores x10` is `⟨.xreg x10, 0, .dword⟩`. -/
 def blake2RdZeroStores (rs1 : regidx) : List StoreSlot :=
   [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩,
     ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩,
     ⟨.xreg rs1, 48, .dword⟩, ⟨.xreg rs1, 56, .dword⟩]
 
 /-- Write set of `Blake2` (rd = x0): pool registers `vr48..vr87`, no
-architectural register, 8 store rows. -/
+architectural register, 8 store rows.
+Example: `blake2RdZeroWriteSet x10` allows the destination `.vreg vr48` and rejects
+`.vreg vr88` and every architectural register other than `x0`. -/
 def blake2RdZeroWriteSet (rs1 : regidx) : WriteSet where
   vregs := poolVRegs 40
   xregs := []
   stores := blake2RdZeroStores rs1
 
-/-- Chunk 0 of `Blake2` (rd = x0). -/
+/-- Chunk 0 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk0
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk0 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2685,7 +3263,9 @@ theorem blake2RdZero_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Blake2` (rd = x0). -/
+/-- Chunk 1 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk1
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk1 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2693,7 +3273,9 @@ theorem blake2RdZero_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Blake2` (rd = x0). -/
+/-- Chunk 2 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk2
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk2 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2701,7 +3283,9 @@ theorem blake2RdZero_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 3 of `Blake2` (rd = x0). -/
+/-- Chunk 3 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk3
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk3 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2709,7 +3293,9 @@ theorem blake2RdZero_chunk3
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 4 of `Blake2` (rd = x0). -/
+/-- Chunk 4 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk4
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk4 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2717,7 +3303,9 @@ theorem blake2RdZero_chunk4
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 5 of `Blake2` (rd = x0). -/
+/-- Chunk 5 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk5
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk5 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2725,7 +3313,9 @@ theorem blake2RdZero_chunk5
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 6 of `Blake2` (rd = x0). -/
+/-- Chunk 6 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk6
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk6 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2733,7 +3323,9 @@ theorem blake2RdZero_chunk6
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 7 of `Blake2` (rd = x0). -/
+/-- Chunk 7 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk7
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk7 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2741,7 +3333,9 @@ theorem blake2RdZero_chunk7
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 8 of `Blake2` (rd = x0). -/
+/-- Chunk 8 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk8
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk8 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2749,7 +3343,9 @@ theorem blake2RdZero_chunk8
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 9 of `Blake2` (rd = x0). -/
+/-- Chunk 9 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem blake2RdZero_chunk9
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk9 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2757,7 +3353,9 @@ theorem blake2RdZero_chunk9
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 10 of `Blake2` (rd = x0). -/
+/-- Chunk 10 of `Blake2` (rd = x0): every row passes the row check for
+`blake2RdZeroWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 8 store rows. -/
 theorem blake2RdZero_chunk10
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk10 rs1 rs2)).rowsWithin (blake2RdZeroWriteSet rs1) = true ∧
@@ -2765,6 +3363,9 @@ theorem blake2RdZero_chunk10
         [⟨.xreg rs1, 0, .dword⟩, ⟨.xreg rs1, 8, .dword⟩, ⟨.xreg rs1, 16, .dword⟩, ⟨.xreg rs1, 24, .dword⟩, ⟨.xreg rs1, 32, .dword⟩, ⟨.xreg rs1, 40, .dword⟩, ⟨.xreg rs1, 48, .dword⟩, ⟨.xreg rs1, 56, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Blake2` rows (rd = x0) are exactly `blake2RdZeroStores`.
+Example: with `x10` for the register parameters, the first store row has slot
+`⟨.xreg x10, 0, .dword⟩`. -/
 theorem blake2RdZero_storeSlots
     (rs1 rs2 : regidx) :
     (blake2RowsAutoRdZero rs1 rs2).storeSlots =
@@ -2784,6 +3385,8 @@ theorem blake2RdZero_storeSlots
       (blake2RdZero_chunk10 rs1 rs2).2]
   rfl
 
+/-- The `Blake2` rows (rd = x0) pass the static frame check for `blake2RdZeroWriteSet`.
+Example: `blake2RdZero_frame` applies `frame_of_run` to this check. -/
 theorem blake2RdZero_writesWithin
     (rs1 rs2 : regidx) :
     (blake2RowsAutoRdZero rs1 rs2).WritesWithin
@@ -2806,17 +3409,25 @@ theorem blake2RdZero_writesWithin
    by rw [blake2RdZero_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Blake2` (rd = x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem blake2RdZero_tailResets
     (rs1 rs2 : regidx) :
     (Program.seq (blake2RowsAutoRdZeroChunk10 rs1 rs2)).resetsPoolCheck (poolVRegs 40) = true := rfl
 
+/-- The `Blake2` rows (rd = x0) pass the pool-reset check for `vr48..vr87`.
+Example: with `blake2RdZero_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem blake2RdZero_resetsPoolCheck
     (rs1 rs2 : regidx) :
     (blake2RowsAutoRdZero rs1 rs2).resetsPoolCheck (poolVRegs 40) = true := by
   unfold blake2RowsAutoRdZero blake2RowsAutoRdZeroList
   exact Program.resetsPoolCheck_seq_append _ (blake2RdZero_tailResets rs1 rs2)
 
+/-- The frame of a successful run of the `Blake2` rows (rd = x0): only `vr48..vr87`
+and the bytes of the 8 store slots in `blake2RdZeroStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem blake2RdZero_frame
     (rs1 rs2 : regidx) {s s' : SailJoltState}
     (h : (blake2RowsAutoRdZero rs1 rs2).Run s s') :
@@ -2825,19 +3436,24 @@ theorem blake2RdZero_frame
 
 /-! ### `Secp256k1Mulq`, rd ≠ x0 -/
 
-/-- Store slots of `Secp256k1Mulq` (rd ≠ x0). -/
+/-- Store slots of `Secp256k1Mulq` (rd ≠ x0), in row order.
+Example: the first slot of `secp256k1MulqStores x12` is `⟨.xreg x12, 0, .dword⟩`. -/
 def secp256k1MulqStores (rs3 : regidx) : List StoreSlot :=
   [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩,
     ⟨.xreg rs3, 24, .dword⟩]
 
 /-- Write set of `Secp256k1Mulq` (rd ≠ x0): pool registers `vr48..vr63`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `secp256k1MulqWriteSet x12` allows the destination `.vreg vr48` and rejects
+`.vreg vr64` and every architectural register other than `x0`. -/
 def secp256k1MulqWriteSet (rs3 : regidx) : WriteSet where
   vregs := poolVRegs 16
   xregs := []
   stores := secp256k1MulqStores rs3
 
-/-- Chunk 0 of `Secp256k1Mulq` (rd ≠ x0). -/
+/-- Chunk 0 of `Secp256k1Mulq` (rd ≠ x0): every row passes the row check for
+`secp256k1MulqWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 3 store rows. -/
 theorem secp256k1Mulq_chunk0
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1MulqRowsAutoChunk0 rs1 rs2 rs3 advice)).rowsWithin (secp256k1MulqWriteSet rs3) = true ∧
@@ -2845,7 +3461,9 @@ theorem secp256k1Mulq_chunk0
         [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Secp256k1Mulq` (rd ≠ x0). -/
+/-- Chunk 1 of `Secp256k1Mulq` (rd ≠ x0): every row passes the row check for
+`secp256k1MulqWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 1 store row. -/
 theorem secp256k1Mulq_chunk1
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1MulqRowsAutoChunk1 rs1 rs2 rs3 advice)).rowsWithin (secp256k1MulqWriteSet rs3) = true ∧
@@ -2853,6 +3471,9 @@ theorem secp256k1Mulq_chunk1
         [⟨.xreg rs3, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Secp256k1Mulq` rows (rd ≠ x0) are exactly `secp256k1MulqStores`.
+Example: with `x12` for the register parameters, the first store row has slot
+`⟨.xreg x12, 0, .dword⟩`. -/
 theorem secp256k1Mulq_storeSlots
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1MulqRowsAuto rs1 rs2 rs3 advice).storeSlots =
@@ -2863,6 +3484,8 @@ theorem secp256k1Mulq_storeSlots
       (secp256k1Mulq_chunk1 rs1 rs2 rs3 advice).2]
   rfl
 
+/-- The `Secp256k1Mulq` rows (rd ≠ x0) pass the static frame check for `secp256k1MulqWriteSet`.
+Example: `secp256k1Mulq_frame` applies `frame_of_run` to this check. -/
 theorem secp256k1Mulq_writesWithin
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1MulqRowsAuto rs1 rs2 rs3 advice).WritesWithin
@@ -2876,17 +3499,25 @@ theorem secp256k1Mulq_writesWithin
    by rw [secp256k1Mulq_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Secp256k1Mulq` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem secp256k1Mulq_tailResets
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1MulqRowsAutoChunk1 rs1 rs2 rs3 advice)).resetsPoolCheck (poolVRegs 16) = true := rfl
 
+/-- The `Secp256k1Mulq` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr63`.
+Example: with `secp256k1Mulq_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem secp256k1Mulq_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1MulqRowsAuto rs1 rs2 rs3 advice).resetsPoolCheck (poolVRegs 16) = true := by
   unfold secp256k1MulqRowsAuto secp256k1MulqRowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (secp256k1Mulq_tailResets rs1 rs2 rs3 advice)
 
+/-- The frame of a successful run of the `Secp256k1Mulq` rows (rd ≠ x0): only `vr48..vr63`
+and the bytes of the 4 store slots in `secp256k1MulqStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem secp256k1Mulq_frame
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) {s s' : SailJoltState}
     (h : (secp256k1MulqRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -2895,19 +3526,24 @@ theorem secp256k1Mulq_frame
 
 /-! ### `Secp256k1Mulr`, rd ≠ x0 -/
 
-/-- Store slots of `Secp256k1Mulr` (rd ≠ x0). -/
+/-- Store slots of `Secp256k1Mulr` (rd ≠ x0), in row order.
+Example: the first slot of `secp256k1MulrStores x12` is `⟨.xreg x12, 0, .dword⟩`. -/
 def secp256k1MulrStores (rs3 : regidx) : List StoreSlot :=
   [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩,
     ⟨.xreg rs3, 24, .dword⟩]
 
 /-- Write set of `Secp256k1Mulr` (rd ≠ x0): pool registers `vr48..vr64`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `secp256k1MulrWriteSet x12` allows the destination `.vreg vr48` and rejects
+`.vreg vr65` and every architectural register other than `x0`. -/
 def secp256k1MulrWriteSet (rs3 : regidx) : WriteSet where
   vregs := poolVRegs 17
   xregs := []
   stores := secp256k1MulrStores rs3
 
-/-- Chunk 0 of `Secp256k1Mulr` (rd ≠ x0). -/
+/-- Chunk 0 of `Secp256k1Mulr` (rd ≠ x0): every row passes the row check for
+`secp256k1MulrWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 3 store rows. -/
 theorem secp256k1Mulr_chunk0
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1MulrRowsAutoChunk0 rs1 rs2 rs3 advice)).rowsWithin (secp256k1MulrWriteSet rs3) = true ∧
@@ -2915,7 +3551,9 @@ theorem secp256k1Mulr_chunk0
         [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Secp256k1Mulr` (rd ≠ x0). -/
+/-- Chunk 1 of `Secp256k1Mulr` (rd ≠ x0): every row passes the row check for
+`secp256k1MulrWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 1 store row. -/
 theorem secp256k1Mulr_chunk1
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1MulrRowsAutoChunk1 rs1 rs2 rs3 advice)).rowsWithin (secp256k1MulrWriteSet rs3) = true ∧
@@ -2923,7 +3561,9 @@ theorem secp256k1Mulr_chunk1
         [⟨.xreg rs3, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Secp256k1Mulr` (rd ≠ x0). -/
+/-- Chunk 2 of `Secp256k1Mulr` (rd ≠ x0): every row passes the row check for
+`secp256k1MulrWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem secp256k1Mulr_chunk2
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1MulrRowsAutoChunk2 rs1 rs2 rs3 advice)).rowsWithin (secp256k1MulrWriteSet rs3) = true ∧
@@ -2931,6 +3571,9 @@ theorem secp256k1Mulr_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Secp256k1Mulr` rows (rd ≠ x0) are exactly `secp256k1MulrStores`.
+Example: with `x12` for the register parameters, the first store row has slot
+`⟨.xreg x12, 0, .dword⟩`. -/
 theorem secp256k1Mulr_storeSlots
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1MulrRowsAuto rs1 rs2 rs3 advice).storeSlots =
@@ -2942,6 +3585,8 @@ theorem secp256k1Mulr_storeSlots
       (secp256k1Mulr_chunk2 rs1 rs2 rs3 advice).2]
   rfl
 
+/-- The `Secp256k1Mulr` rows (rd ≠ x0) pass the static frame check for `secp256k1MulrWriteSet`.
+Example: `secp256k1Mulr_frame` applies `frame_of_run` to this check. -/
 theorem secp256k1Mulr_writesWithin
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1MulrRowsAuto rs1 rs2 rs3 advice).WritesWithin
@@ -2956,17 +3601,25 @@ theorem secp256k1Mulr_writesWithin
    by rw [secp256k1Mulr_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Secp256k1Mulr` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem secp256k1Mulr_tailResets
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1MulrRowsAutoChunk2 rs1 rs2 rs3 advice)).resetsPoolCheck (poolVRegs 17) = true := rfl
 
+/-- The `Secp256k1Mulr` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr64`.
+Example: with `secp256k1Mulr_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem secp256k1Mulr_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1MulrRowsAuto rs1 rs2 rs3 advice).resetsPoolCheck (poolVRegs 17) = true := by
   unfold secp256k1MulrRowsAuto secp256k1MulrRowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (secp256k1Mulr_tailResets rs1 rs2 rs3 advice)
 
+/-- The frame of a successful run of the `Secp256k1Mulr` rows (rd ≠ x0): only `vr48..vr64`
+and the bytes of the 4 store slots in `secp256k1MulrStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem secp256k1Mulr_frame
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) {s s' : SailJoltState}
     (h : (secp256k1MulrRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -2975,19 +3628,24 @@ theorem secp256k1Mulr_frame
 
 /-! ### `Secp256k1Squareq`, rd ≠ x0 -/
 
-/-- Store slots of `Secp256k1Squareq` (rd ≠ x0). -/
+/-- Store slots of `Secp256k1Squareq` (rd ≠ x0), in row order.
+Example: the first slot of `secp256k1SquareqStores x12` is `⟨.xreg x12, 0, .dword⟩`. -/
 def secp256k1SquareqStores (rs3 : regidx) : List StoreSlot :=
   [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩,
     ⟨.xreg rs3, 24, .dword⟩]
 
 /-- Write set of `Secp256k1Squareq` (rd ≠ x0): pool registers `vr48..vr60`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `secp256k1SquareqWriteSet x12` allows the destination `.vreg vr48` and rejects
+`.vreg vr61` and every architectural register other than `x0`. -/
 def secp256k1SquareqWriteSet (rs3 : regidx) : WriteSet where
   vregs := poolVRegs 13
   xregs := []
   stores := secp256k1SquareqStores rs3
 
-/-- Chunk 0 of `Secp256k1Squareq` (rd ≠ x0). -/
+/-- Chunk 0 of `Secp256k1Squareq` (rd ≠ x0): every row passes the row check for
+`secp256k1SquareqWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 4 store rows. -/
 theorem secp256k1Squareq_chunk0
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1SquareqRowsAutoChunk0 rs1 rs2 rs3 advice)).rowsWithin (secp256k1SquareqWriteSet rs3) = true ∧
@@ -2995,7 +3653,9 @@ theorem secp256k1Squareq_chunk0
         [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩, ⟨.xreg rs3, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Secp256k1Squareq` (rd ≠ x0). -/
+/-- Chunk 1 of `Secp256k1Squareq` (rd ≠ x0): every row passes the row check for
+`secp256k1SquareqWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem secp256k1Squareq_chunk1
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1SquareqRowsAutoChunk1 rs1 rs2 rs3 advice)).rowsWithin (secp256k1SquareqWriteSet rs3) = true ∧
@@ -3003,6 +3663,9 @@ theorem secp256k1Squareq_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Secp256k1Squareq` rows (rd ≠ x0) are exactly `secp256k1SquareqStores`.
+Example: with `x12` for the register parameters, the first store row has slot
+`⟨.xreg x12, 0, .dword⟩`. -/
 theorem secp256k1Squareq_storeSlots
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1SquareqRowsAuto rs1 rs2 rs3 advice).storeSlots =
@@ -3013,6 +3676,8 @@ theorem secp256k1Squareq_storeSlots
       (secp256k1Squareq_chunk1 rs1 rs2 rs3 advice).2]
   rfl
 
+/-- The `Secp256k1Squareq` rows (rd ≠ x0) pass the static frame check for `secp256k1SquareqWriteSet`.
+Example: `secp256k1Squareq_frame` applies `frame_of_run` to this check. -/
 theorem secp256k1Squareq_writesWithin
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1SquareqRowsAuto rs1 rs2 rs3 advice).WritesWithin
@@ -3026,17 +3691,25 @@ theorem secp256k1Squareq_writesWithin
    by rw [secp256k1Squareq_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Secp256k1Squareq` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem secp256k1Squareq_tailResets
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1SquareqRowsAutoChunk1 rs1 rs2 rs3 advice)).resetsPoolCheck (poolVRegs 13) = true := rfl
 
+/-- The `Secp256k1Squareq` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr60`.
+Example: with `secp256k1Squareq_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem secp256k1Squareq_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1SquareqRowsAuto rs1 rs2 rs3 advice).resetsPoolCheck (poolVRegs 13) = true := by
   unfold secp256k1SquareqRowsAuto secp256k1SquareqRowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (secp256k1Squareq_tailResets rs1 rs2 rs3 advice)
 
+/-- The frame of a successful run of the `Secp256k1Squareq` rows (rd ≠ x0): only `vr48..vr60`
+and the bytes of the 4 store slots in `secp256k1SquareqStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem secp256k1Squareq_frame
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) {s s' : SailJoltState}
     (h : (secp256k1SquareqRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -3045,19 +3718,24 @@ theorem secp256k1Squareq_frame
 
 /-! ### `Secp256k1Squarer`, rd ≠ x0 -/
 
-/-- Store slots of `Secp256k1Squarer` (rd ≠ x0). -/
+/-- Store slots of `Secp256k1Squarer` (rd ≠ x0), in row order.
+Example: the first slot of `secp256k1SquarerStores x12` is `⟨.xreg x12, 0, .dword⟩`. -/
 def secp256k1SquarerStores (rs3 : regidx) : List StoreSlot :=
   [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩,
     ⟨.xreg rs3, 24, .dword⟩]
 
 /-- Write set of `Secp256k1Squarer` (rd ≠ x0): pool registers `vr48..vr61`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `secp256k1SquarerWriteSet x12` allows the destination `.vreg vr48` and rejects
+`.vreg vr62` and every architectural register other than `x0`. -/
 def secp256k1SquarerWriteSet (rs3 : regidx) : WriteSet where
   vregs := poolVRegs 14
   xregs := []
   stores := secp256k1SquarerStores rs3
 
-/-- Chunk 0 of `Secp256k1Squarer` (rd ≠ x0). -/
+/-- Chunk 0 of `Secp256k1Squarer` (rd ≠ x0): every row passes the row check for
+`secp256k1SquarerWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 3 store rows. -/
 theorem secp256k1Squarer_chunk0
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1SquarerRowsAutoChunk0 rs1 rs2 rs3 advice)).rowsWithin (secp256k1SquarerWriteSet rs3) = true ∧
@@ -3065,7 +3743,9 @@ theorem secp256k1Squarer_chunk0
         [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Secp256k1Squarer` (rd ≠ x0). -/
+/-- Chunk 1 of `Secp256k1Squarer` (rd ≠ x0): every row passes the row check for
+`secp256k1SquarerWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 1 store row. -/
 theorem secp256k1Squarer_chunk1
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1SquarerRowsAutoChunk1 rs1 rs2 rs3 advice)).rowsWithin (secp256k1SquarerWriteSet rs3) = true ∧
@@ -3073,7 +3753,9 @@ theorem secp256k1Squarer_chunk1
         [⟨.xreg rs3, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Secp256k1Squarer` (rd ≠ x0). -/
+/-- Chunk 2 of `Secp256k1Squarer` (rd ≠ x0): every row passes the row check for
+`secp256k1SquarerWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem secp256k1Squarer_chunk2
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1SquarerRowsAutoChunk2 rs1 rs2 rs3 advice)).rowsWithin (secp256k1SquarerWriteSet rs3) = true ∧
@@ -3081,6 +3763,9 @@ theorem secp256k1Squarer_chunk2
         [] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Secp256k1Squarer` rows (rd ≠ x0) are exactly `secp256k1SquarerStores`.
+Example: with `x12` for the register parameters, the first store row has slot
+`⟨.xreg x12, 0, .dword⟩`. -/
 theorem secp256k1Squarer_storeSlots
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1SquarerRowsAuto rs1 rs2 rs3 advice).storeSlots =
@@ -3092,6 +3777,8 @@ theorem secp256k1Squarer_storeSlots
       (secp256k1Squarer_chunk2 rs1 rs2 rs3 advice).2]
   rfl
 
+/-- The `Secp256k1Squarer` rows (rd ≠ x0) pass the static frame check for `secp256k1SquarerWriteSet`.
+Example: `secp256k1Squarer_frame` applies `frame_of_run` to this check. -/
 theorem secp256k1Squarer_writesWithin
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1SquarerRowsAuto rs1 rs2 rs3 advice).WritesWithin
@@ -3106,18 +3793,26 @@ theorem secp256k1Squarer_writesWithin
    by rw [secp256k1Squarer_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Secp256k1Squarer` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem secp256k1Squarer_tailResets
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1SquarerRowsAutoChunk1 rs1 rs2 rs3 advice ++
       secp256k1SquarerRowsAutoChunk2 rs1 rs2 rs3 advice)).resetsPoolCheck (poolVRegs 14) = true := rfl
 
+/-- The `Secp256k1Squarer` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr61`.
+Example: with `secp256k1Squarer_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem secp256k1Squarer_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1SquarerRowsAuto rs1 rs2 rs3 advice).resetsPoolCheck (poolVRegs 14) = true := by
   unfold secp256k1SquarerRowsAuto secp256k1SquarerRowsAutoList
   exact Program.resetsPoolCheck_seq_append_append _ (secp256k1Squarer_tailResets rs1 rs2 rs3 advice)
 
+/-- The frame of a successful run of the `Secp256k1Squarer` rows (rd ≠ x0): only `vr48..vr61`
+and the bytes of the 4 store slots in `secp256k1SquarerStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem secp256k1Squarer_frame
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) {s s' : SailJoltState}
     (h : (secp256k1SquarerRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -3126,19 +3821,24 @@ theorem secp256k1Squarer_frame
 
 /-! ### `Secp256k1Divq`, rd ≠ x0 -/
 
-/-- Store slots of `Secp256k1Divq` (rd ≠ x0). -/
+/-- Store slots of `Secp256k1Divq` (rd ≠ x0), in row order.
+Example: the first slot of `secp256k1DivqStores x12` is `⟨.xreg x12, 0, .dword⟩`. -/
 def secp256k1DivqStores (rs3 : regidx) : List StoreSlot :=
   [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩,
     ⟨.xreg rs3, 24, .dword⟩]
 
 /-- Write set of `Secp256k1Divq` (rd ≠ x0): pool registers `vr48..vr63`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `secp256k1DivqWriteSet x12` allows the destination `.vreg vr48` and rejects
+`.vreg vr64` and every architectural register other than `x0`. -/
 def secp256k1DivqWriteSet (rs3 : regidx) : WriteSet where
   vregs := poolVRegs 16
   xregs := []
   stores := secp256k1DivqStores rs3
 
-/-- Chunk 0 of `Secp256k1Divq` (rd ≠ x0). -/
+/-- Chunk 0 of `Secp256k1Divq` (rd ≠ x0): every row passes the row check for
+`secp256k1DivqWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem secp256k1Divq_chunk0
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1DivqRowsAutoChunk0 rs1 rs2 rs3 advice)).rowsWithin (secp256k1DivqWriteSet rs3) = true ∧
@@ -3146,7 +3846,9 @@ theorem secp256k1Divq_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Secp256k1Divq` (rd ≠ x0). -/
+/-- Chunk 1 of `Secp256k1Divq` (rd ≠ x0): every row passes the row check for
+`secp256k1DivqWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 4 store rows. -/
 theorem secp256k1Divq_chunk1
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1DivqRowsAutoChunk1 rs1 rs2 rs3 advice)).rowsWithin (secp256k1DivqWriteSet rs3) = true ∧
@@ -3154,6 +3856,9 @@ theorem secp256k1Divq_chunk1
         [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩, ⟨.xreg rs3, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Secp256k1Divq` rows (rd ≠ x0) are exactly `secp256k1DivqStores`.
+Example: with `x12` for the register parameters, the first store row has slot
+`⟨.xreg x12, 0, .dword⟩`. -/
 theorem secp256k1Divq_storeSlots
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1DivqRowsAuto rs1 rs2 rs3 advice).storeSlots =
@@ -3164,6 +3869,8 @@ theorem secp256k1Divq_storeSlots
       (secp256k1Divq_chunk1 rs1 rs2 rs3 advice).2]
   rfl
 
+/-- The `Secp256k1Divq` rows (rd ≠ x0) pass the static frame check for `secp256k1DivqWriteSet`.
+Example: `secp256k1Divq_frame` applies `frame_of_run` to this check. -/
 theorem secp256k1Divq_writesWithin
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1DivqRowsAuto rs1 rs2 rs3 advice).WritesWithin
@@ -3177,17 +3884,25 @@ theorem secp256k1Divq_writesWithin
    by rw [secp256k1Divq_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Secp256k1Divq` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem secp256k1Divq_tailResets
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1DivqRowsAutoChunk1 rs1 rs2 rs3 advice)).resetsPoolCheck (poolVRegs 16) = true := rfl
 
+/-- The `Secp256k1Divq` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr63`.
+Example: with `secp256k1Divq_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem secp256k1Divq_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1DivqRowsAuto rs1 rs2 rs3 advice).resetsPoolCheck (poolVRegs 16) = true := by
   unfold secp256k1DivqRowsAuto secp256k1DivqRowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (secp256k1Divq_tailResets rs1 rs2 rs3 advice)
 
+/-- The frame of a successful run of the `Secp256k1Divq` rows (rd ≠ x0): only `vr48..vr63`
+and the bytes of the 4 store slots in `secp256k1DivqStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem secp256k1Divq_frame
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) {s s' : SailJoltState}
     (h : (secp256k1DivqRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -3196,19 +3911,24 @@ theorem secp256k1Divq_frame
 
 /-! ### `Secp256k1Divr`, rd ≠ x0 -/
 
-/-- Store slots of `Secp256k1Divr` (rd ≠ x0). -/
+/-- Store slots of `Secp256k1Divr` (rd ≠ x0), in row order.
+Example: the first slot of `secp256k1DivrStores x12` is `⟨.xreg x12, 0, .dword⟩`. -/
 def secp256k1DivrStores (rs3 : regidx) : List StoreSlot :=
   [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩,
     ⟨.xreg rs3, 24, .dword⟩]
 
 /-- Write set of `Secp256k1Divr` (rd ≠ x0): pool registers `vr48..vr64`, no
-architectural register, 4 store rows. -/
+architectural register, 4 store rows.
+Example: `secp256k1DivrWriteSet x12` allows the destination `.vreg vr48` and rejects
+`.vreg vr65` and every architectural register other than `x0`. -/
 def secp256k1DivrWriteSet (rs3 : regidx) : WriteSet where
   vregs := poolVRegs 17
   xregs := []
   stores := secp256k1DivrStores rs3
 
-/-- Chunk 0 of `Secp256k1Divr` (rd ≠ x0). -/
+/-- Chunk 0 of `Secp256k1Divr` (rd ≠ x0): every row passes the row check for
+`secp256k1DivrWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem secp256k1Divr_chunk0
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1DivrRowsAutoChunk0 rs1 rs2 rs3 advice)).rowsWithin (secp256k1DivrWriteSet rs3) = true ∧
@@ -3216,7 +3936,9 @@ theorem secp256k1Divr_chunk0
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 1 of `Secp256k1Divr` (rd ≠ x0). -/
+/-- Chunk 1 of `Secp256k1Divr` (rd ≠ x0): every row passes the row check for
+`secp256k1DivrWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 0 store rows. -/
 theorem secp256k1Divr_chunk1
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1DivrRowsAutoChunk1 rs1 rs2 rs3 advice)).rowsWithin (secp256k1DivrWriteSet rs3) = true ∧
@@ -3224,7 +3946,9 @@ theorem secp256k1Divr_chunk1
         [] :=
   ⟨rfl, rfl⟩
 
-/-- Chunk 2 of `Secp256k1Divr` (rd ≠ x0). -/
+/-- Chunk 2 of `Secp256k1Divr` (rd ≠ x0): every row passes the row check for
+`secp256k1DivrWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 4 store rows. -/
 theorem secp256k1Divr_chunk2
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1DivrRowsAutoChunk2 rs1 rs2 rs3 advice)).rowsWithin (secp256k1DivrWriteSet rs3) = true ∧
@@ -3232,6 +3956,9 @@ theorem secp256k1Divr_chunk2
         [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩, ⟨.xreg rs3, 24, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Secp256k1Divr` rows (rd ≠ x0) are exactly `secp256k1DivrStores`.
+Example: with `x12` for the register parameters, the first store row has slot
+`⟨.xreg x12, 0, .dword⟩`. -/
 theorem secp256k1Divr_storeSlots
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1DivrRowsAuto rs1 rs2 rs3 advice).storeSlots =
@@ -3243,6 +3970,8 @@ theorem secp256k1Divr_storeSlots
       (secp256k1Divr_chunk2 rs1 rs2 rs3 advice).2]
   rfl
 
+/-- The `Secp256k1Divr` rows (rd ≠ x0) pass the static frame check for `secp256k1DivrWriteSet`.
+Example: `secp256k1Divr_frame` applies `frame_of_run` to this check. -/
 theorem secp256k1Divr_writesWithin
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1DivrRowsAuto rs1 rs2 rs3 advice).WritesWithin
@@ -3257,17 +3986,25 @@ theorem secp256k1Divr_writesWithin
    by rw [secp256k1Divr_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Secp256k1Divr` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem secp256k1Divr_tailResets
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1DivrRowsAutoChunk2 rs1 rs2 rs3 advice)).resetsPoolCheck (poolVRegs 17) = true := rfl
 
+/-- The `Secp256k1Divr` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr64`.
+Example: with `secp256k1Divr_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem secp256k1Divr_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1DivrRowsAuto rs1 rs2 rs3 advice).resetsPoolCheck (poolVRegs 17) = true := by
   unfold secp256k1DivrRowsAuto secp256k1DivrRowsAutoList
   exact Program.resetsPoolCheck_seq_append _ (secp256k1Divr_tailResets rs1 rs2 rs3 advice)
 
+/-- The frame of a successful run of the `Secp256k1Divr` rows (rd ≠ x0): only `vr48..vr64`
+and the bytes of the 4 store slots in `secp256k1DivrStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem secp256k1Divr_frame
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) {s s' : SailJoltState}
     (h : (secp256k1DivrRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -3276,19 +4013,24 @@ theorem secp256k1Divr_frame
 
 /-! ### `Secp256k1GlvrAdv`, rd ≠ x0 -/
 
-/-- Store slots of `Secp256k1GlvrAdv` (rd ≠ x0). -/
+/-- Store slots of `Secp256k1GlvrAdv` (rd ≠ x0), in row order.
+Example: the first slot of `secp256k1GlvrAdvStores x12` is `⟨.xreg x12, 0, .dword⟩`. -/
 def secp256k1GlvrAdvStores (rs3 : regidx) : List StoreSlot :=
   [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩,
     ⟨.xreg rs3, 24, .dword⟩, ⟨.xreg rs3, 32, .dword⟩, ⟨.xreg rs3, 40, .dword⟩]
 
 /-- Write set of `Secp256k1GlvrAdv` (rd ≠ x0): pool registers `vr48..vr48`, no
-architectural register, 6 store rows. -/
+architectural register, 6 store rows.
+Example: `secp256k1GlvrAdvWriteSet x12` allows the destination `.vreg vr48` and rejects
+`.vreg vr49` and every architectural register other than `x0`. -/
 def secp256k1GlvrAdvWriteSet (rs3 : regidx) : WriteSet where
   vregs := poolVRegs 1
   xregs := []
   stores := secp256k1GlvrAdvStores rs3
 
-/-- Chunk 0 of `Secp256k1GlvrAdv` (rd ≠ x0). -/
+/-- Chunk 0 of `Secp256k1GlvrAdv` (rd ≠ x0): every row passes the row check for
+`secp256k1GlvrAdvWriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has 6 store rows. -/
 theorem secp256k1GlvrAdv_chunk0
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1GlvrAdvRowsAutoChunk0 rs1 rs2 rs3 advice)).rowsWithin (secp256k1GlvrAdvWriteSet rs3) = true ∧
@@ -3296,6 +4038,9 @@ theorem secp256k1GlvrAdv_chunk0
         [⟨.xreg rs3, 0, .dword⟩, ⟨.xreg rs3, 8, .dword⟩, ⟨.xreg rs3, 16, .dword⟩, ⟨.xreg rs3, 24, .dword⟩, ⟨.xreg rs3, 32, .dword⟩, ⟨.xreg rs3, 40, .dword⟩] :=
   ⟨rfl, rfl⟩
 
+/-- The store slots of the `Secp256k1GlvrAdv` rows (rd ≠ x0) are exactly `secp256k1GlvrAdvStores`.
+Example: with `x12` for the register parameters, the first store row has slot
+`⟨.xreg x12, 0, .dword⟩`. -/
 theorem secp256k1GlvrAdv_storeSlots
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).storeSlots =
@@ -3304,6 +4049,8 @@ theorem secp256k1GlvrAdv_storeSlots
   rw [(secp256k1GlvrAdv_chunk0 rs1 rs2 rs3 advice).2]
   rfl
 
+/-- The `Secp256k1GlvrAdv` rows (rd ≠ x0) pass the static frame check for `secp256k1GlvrAdvWriteSet`.
+Example: `secp256k1GlvrAdv_frame` applies `frame_of_run` to this check. -/
 theorem secp256k1GlvrAdv_writesWithin
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).WritesWithin
@@ -3312,15 +4059,23 @@ theorem secp256k1GlvrAdv_writesWithin
    by rw [secp256k1GlvrAdv_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `Secp256k1GlvrAdv` (rd ≠ x0), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem secp256k1GlvrAdv_tailResets
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (Program.seq (secp256k1GlvrAdvRowsAutoChunk0 rs1 rs2 rs3 advice)).resetsPoolCheck (poolVRegs 1) = true := rfl
 
+/-- The `Secp256k1GlvrAdv` rows (rd ≠ x0) pass the pool-reset check for `vr48..vr48`.
+Example: with `secp256k1GlvrAdv_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem secp256k1GlvrAdv_resetsPoolCheck
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).resetsPoolCheck (poolVRegs 1) = true := secp256k1GlvrAdv_tailResets rs1 rs2 rs3 advice
 
+/-- The frame of a successful run of the `Secp256k1GlvrAdv` rows (rd ≠ x0): only `vr48..vr48`
+and the bytes of the 6 store slots in `secp256k1GlvrAdvStores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem secp256k1GlvrAdv_frame
     (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) {s s' : SailJoltState}
     (h : (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s') :

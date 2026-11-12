@@ -15,8 +15,9 @@ architectural register other than x0.
 
 It emits the `rd != x0` case of every inline and the `rd = x0` case of the five hash
 inlines. It omits the `rd = x0` case of the seven secp256k1 inlines: those store through
-vr40 before any row writes it, and Jolt rejects the encodings (a16z/jolt#2414, decision
-D7 of docs/inline-precompiles.md).
+vr40 before any row writes it. Decision D7 of docs/inline-precompiles.md excludes those
+encodings. At the generated-row Jolt pin a6b6dc717 Jolt still accepts them; the open pull
+request a16z/jolt#2414 adds the rejection upstream.
 
 Usage, from the repository root:
 
@@ -44,7 +45,9 @@ rows, the static frame check `Program.WritesWithin` and the pool-reset check, an
 frame corollary. It covers the `rd ≠ x0` case of all twelve inlines and the `rd = x0` case
 of the five hash inlines. The `rd = x0` case of the seven secp256k1 inlines is omitted:
 those rows store through `vr40` before any row writes it, so they fail the store-base
-check, and Jolt rejects the encodings (a16z/jolt#2414).
+check. Decision D7 of `docs/inline-precompiles.md` excludes those encodings. At the
+generated-row Jolt pin `a6b6dc717` Jolt still accepts them; the open pull request
+a16z/jolt#2414 adds the rejection upstream.
 
 The write sets are exact: `vregs` lists the pool registers the rows write (always a
 contiguous range from `vr48`), `xregs` is empty, and `stores` lists the store rows.
@@ -70,7 +73,8 @@ namespace JoltISA.Inlines.FrameInstances
 
 open JoltISA.Inlines.Generated
 
-/-- The pool registers `vr48 .. vr(48 + n - 1)`. -/
+/-- The pool registers `vr48 .. vr(48 + n - 1)`.
+Example: `poolVRegs 2 = [vr48, vr49]`. -/
 def poolVRegs (n : Nat) : List VReg := (List.range n).map fun k => BitVec.ofNat 7 (48 + k)
 ''')
 def lc(n): return n[0].lower()+n[1:]
@@ -111,8 +115,13 @@ for n in names:
         used=[r for r in ("rs1","rs2","rs3") if any(f".xreg {r}," in x for x in slots)]
         sparams = f"({' '.join(used)} : regidx) " if used else ""
         sargs = (" " + " ".join(used)) if used else ""
+        ex_slot = (slots[0].replace(".xreg rs1", ".xreg x10").replace(".xreg rs2", ".xreg x11")
+                   .replace(".xreg rs3", ".xreg x12"))
+        ex_args = " ".join({"rs1": "x10", "rs2": "x11", "rs3": "x12"}[r] for r in used)
         slot_lines = ",\n    ".join(", ".join(slots[i:i+3]) for i in range(0,len(slots),3))
-        chunk_text="".join(f'''/-- Chunk {i} of `{n}` ({variant}). -/
+        chunk_text="".join(f'''/-- Chunk {i} of `{n}` ({variant}): every row passes the row check for
+`{nm}WriteSet`, and the chunk's store slots are the listed ones.
+Example: this chunk has {len(cs)} store {"row" if len(cs)==1 else "rows"}. -/
 theorem {nm}_chunk{i}
     {params} :
     (Program.seq ({prog}Chunk{i} {args})).rowsWithin ({nm}WriteSet{sargs}) = true ∧
@@ -138,22 +147,30 @@ theorem {nm}_chunk{i}
                       if nch>tailn else f"{nm}_tailResets {args}")
         out.append(f'''/-! ### `{n}`, {variant} -/
 
-/-- Store slots of `{n}` ({variant}). -/
+/-- Store slots of `{n}` ({variant}), in row order.
+Example: the first slot of `{nm}Stores {ex_args}` is `{ex_slot}`. -/
 def {nm}Stores {sparams}: List StoreSlot :=
   [{slot_lines}]
 
 /-- Write set of `{n}` ({variant}): pool registers `vr48..vr{47+k}`, no
-architectural register, {len(slots)} store rows. -/
+architectural register, {len(slots)} store rows.
+Example: `{nm}WriteSet {ex_args}` allows the destination `.vreg vr48` and rejects
+`.vreg vr{48+k}` and every architectural register other than `x0`. -/
 def {nm}WriteSet {sparams}: WriteSet where
   vregs := poolVRegs {k}
   xregs := []
   stores := {nm}Stores{sargs}
 
-{chunk_text}theorem {nm}_storeSlots
+{chunk_text}/-- The store slots of the `{n}` rows ({variant}) are exactly `{nm}Stores`.
+Example: with `{ex_args}` for the register parameters, the first store row has slot
+`{ex_slot}`. -/
+theorem {nm}_storeSlots
     {params} :
     ({prog} {args}).storeSlots =
       {nm}Stores{sargs} := {ss_proof}
 
+/-- The `{n}` rows ({variant}) pass the static frame check for `{nm}WriteSet`.
+Example: `{nm}_frame` applies `frame_of_run` to this check. -/
 theorem {nm}_writesWithin
     {params} :
     ({prog} {args}).WritesWithin
@@ -162,15 +179,23 @@ theorem {nm}_writesWithin
    by rw [{nm}_storeSlots]; exact List.Subset.refl _, rfl⟩
 
 /-- The final chunks of `{n}` ({variant}), which contain the last write of every
-pool register. -/
+pool register, pass the pool-reset check.
+Example: in these chunks the last row that writes `vr48` is `ADDI (.vreg vr48) (.xreg x0) 0`. -/
 theorem {nm}_tailResets
     {params} :
     (Program.seq ({tail})).resetsPoolCheck (poolVRegs {k}) = true := rfl
 
+/-- The `{n}` rows ({variant}) pass the pool-reset check for `vr48..vr{47+k}`.
+Example: with `{nm}_writesWithin`, `Program.resetsPool_of_check` turns it into
+`Program.ResetsPool`, so every successful run leaves `vr48` at zero. -/
 theorem {nm}_resetsPoolCheck
     {params} :
     ({prog} {args}).resetsPoolCheck (poolVRegs {k}) = true := {rs_proof}
 
+/-- The frame of a successful run of the `{n}` rows ({variant}): only `vr48..vr{47+k}`
+and the bytes of the {len(slots)} store slots in `{nm}Stores` may change.
+Example: the run leaves `vr32..vr39`, every Sail register, the advice tape and memory
+outside the store slots unchanged. -/
 theorem {nm}_frame
     {params} {{s s' : SailJoltState}}
     (h : ({prog} {args}).Run s s') :
