@@ -77,16 +77,22 @@ open JoltSpec.Blake2b
 
 /-! ## Register facts -/
 
+/-- Work-vector word `i` lives in register `vr(48 + i)`.
+Example: `(wReg 3).toNat = 51`. -/
 theorem wReg_toNat (i : Fin 16) : (wReg i).toNat = 48 + i.val := by
   have := i.isLt
   show (48 + i.val) % 128 = 48 + i.val
   omega
 
+/-- Message word `j` lives in register `vr(64 + j)`.
+Example: `(mReg 0).toNat = 64`. -/
 theorem mReg_toNat (j : Fin 16) : (mReg j).toNat = 64 + j.val := by
   have := j.isLt
   show (64 + j.val) % 128 = 64 + j.val
   omega
 
+/-- State word `i` lives in register `vr(80 + i)`.
+Example: `(hReg 7).toNat = 87`. -/
 theorem hReg_toNat (i : Fin 8) : (hReg i).toNat = 80 + i.val := by
   have := i.isLt
   show (80 + i.val) % 128 = 80 + i.val
@@ -95,6 +101,8 @@ theorem hReg_toNat (i : Fin 8) : (hReg i).toNat = 80 + i.val := by
 /-- Work-vector registers are writable. Example: `32 ≤ (wReg 0).toNat`, as `wReg 0 = vr48`. -/
 @[simp] theorem wReg_ge (i : Fin 16) : 32 ≤ (wReg i).toNat := by rw [wReg_toNat]; omega
 
+/-- Distinct work-vector words live in distinct registers.
+Example: `wReg 0 ≠ wReg 4`, since `vr48 ≠ vr52`. -/
 theorem wReg_eq_iff (i j : Fin 16) : wReg i = wReg j ↔ i = j := by
   constructor
   · intro h
@@ -103,7 +111,7 @@ theorem wReg_eq_iff (i j : Fin 16) : wReg i = wReg j ↔ i = j := by
     exact Fin.ext (by omega)
   · rintro rfl; rfl
 
-theorem mReg_ne_wReg (j i : Fin 16) : mReg j ≠ wReg i := by
+private theorem mReg_ne_wReg (j i : Fin 16) : mReg j ≠ wReg i := by
   intro h
   have := congrArg BitVec.toNat h
   rw [mReg_toNat, wReg_toNat] at this
@@ -121,9 +129,13 @@ def wView (f : VReg → BitVec 64) : Vector (BitVec 64) 16 := Vector.ofFn fun i 
 Example: `(mView f)[0] = f vr64`. -/
 def mView (f : VReg → BitVec 64) : Vector (BitVec 64) 16 := Vector.ofFn fun j => f (mReg j)
 
+/-- Word `i` of the work-vector view `wView f` is register `wReg i` of `f`.
+Example: `(wView f)[12] = f vr60`. -/
 @[simp] theorem getElem_wView (f : VReg → BitVec 64) (i : Fin 16) : (wView f)[i] = f (wReg i) := by
   simp [wView]
 
+/-- Word `j` of the message view `mView f` is register `mReg j` of `f`.
+Example: `(mView f)[1] = f vr65`. -/
 @[simp] theorem getElem_mView (f : VReg → BitVec 64) (j : Fin 16) : (mView f)[j] = f (mReg j) := by
   simp [mView]
 
@@ -159,19 +171,21 @@ Example: `stepM 0 14 f` is `ADD vr48, vr48, vr78` on `f`. -/
 def stepM (i j : Fin 16) (f : VReg → BitVec 64) : VReg → BitVec 64 :=
   setV f (wReg i) (f (wReg i) + f (mReg j))
 
+/-- A step on work-vector words is a `set` on the work-vector view.
+Example: `wView (stepW (· + ·) 0 4 f) = (wView f).set 0 ((wView f)[0] + (wView f)[4])`. -/
 theorem wView_stepW (op : BitVec 64 → BitVec 64 → BitVec 64) (i j : Fin 16)
     (f : VReg → BitVec 64) :
     wView (stepW op i j f) = (wView f).set i (op (wView f)[i] (wView f)[j]) := by
   rw [stepW, wView_setV, getElem_wView, getElem_wView]
 
-theorem wView_stepM (i j : Fin 16) (f : VReg → BitVec 64) :
+private theorem wView_stepM (i j : Fin 16) (f : VReg → BitVec 64) :
     wView (stepM i j f) = (wView f).set i ((wView f)[i] + (mView f)[j]) := by
   rw [stepM, wView_setV, getElem_wView, getElem_mView]
 
-theorem mView_stepW (op : BitVec 64 → BitVec 64 → BitVec 64) (i j : Fin 16)
+private theorem mView_stepW (op : BitVec 64 → BitVec 64 → BitVec 64) (i j : Fin 16)
     (f : VReg → BitVec 64) : mView (stepW op i j f) = mView f := mView_setV _ _ _
 
-theorem mView_stepM (i j : Fin 16) (f : VReg → BitVec 64) : mView (stepM i j f) = mView f :=
+private theorem mView_stepM (i j : Fin 16) (f : VReg → BitVec 64) : mView (stepM i j f) = mView f :=
   mView_setV _ _ _
 
 /-- The register file after the ten rows of a call of G.

@@ -59,8 +59,8 @@ structure Mix where
   y : Fin 16
   deriving DecidableEq
 
-/-- The first seven rows of a call of G: `a := a + b + m[x]`, `d := (d ^ a) >>> 32`,
-`c := c + d`, `b := (b ^ c) >>> 24`, `a := a + b + m[y]`.
+/-- The first seven rows of a call of G: `a := a + b + m[x]`, `d := (d ^ a).rotateRight 32`,
+`c := c + d`, `b := (b ^ c).rotateRight 24`, `a := a + b + m[y]`.
 Example: for `⟨0, 4, 8, 12, 0, 1⟩` the first row is `ADD vr48, vr48, vr52`. -/
 def mixLo (M : Mix) : List Instr :=
   [.ADD (.vreg (wReg M.a)) (.vreg (wReg M.a)) (.vreg (wReg M.b)),
@@ -71,8 +71,8 @@ def mixLo (M : Mix) : List Instr :=
    .ADD (.vreg (wReg M.a)) (.vreg (wReg M.a)) (.vreg (wReg M.b)),
    .ADD (.vreg (wReg M.a)) (.vreg (wReg M.a)) (.vreg (mReg M.y))]
 
-/-- The last three rows of a call of G: `d := (d ^ a) >>> 16`, `c := c + d`,
-`b := (b ^ c) >>> 63`.
+/-- The last three rows of a call of G: `d := (d ^ a).rotateRight 16`, `c := c + d`,
+`b := (b ^ c).rotateRight 63`.
 Example: for `⟨0, 4, 8, 12, 0, 1⟩` the last row is `VirtualXORROT63 vr52, vr52, vr56`. -/
 def mixHi (M : Mix) : List Instr :=
   [.VirtualXORROT16 (.vreg (wReg M.d)) (.vreg (wReg M.d)) (.vreg (wReg M.a)),

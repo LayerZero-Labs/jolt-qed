@@ -92,11 +92,11 @@ def Blake2Spec (rs1 rs2 : regidx) (s s' : SailJoltState) : Prop :=
 
 /-! ## The register file at the end -/
 
-theorem hRegs_map (f : VReg → BitVec 64) : hRegs.map f = (hView f).toList := by
+private theorem hRegs_map (f : VReg → BitVec 64) : hRegs.map f = (hView f).toList := by
   simp only [hRegs, hView, List.map_ofFn, Vector.toList_ofFn]
   rfl
 
-theorem mView_loadF (s : SailJoltState) (A B : BitVec 64) :
+private theorem mView_loadF (s : SailJoltState) (A B : BitVec 64) :
     mView (loadF s A B) = (input s A B).m := by
   apply Vector.ext
   intro j hj
@@ -104,7 +104,7 @@ theorem mView_loadF (s : SailJoltState) (A B : BitVec 64) :
     getElem_mView, loadF_mReg]
   rfl
 
-theorem hView_loadF (s : SailJoltState) (A B : BitVec 64) :
+private theorem hView_loadF (s : SailJoltState) (A B : BitVec 64) :
     hView (loadF s A B) = (input s A B).h := by
   apply Vector.ext
   intro i hi

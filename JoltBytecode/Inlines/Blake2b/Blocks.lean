@@ -35,28 +35,28 @@ def InPool (r : VReg) : Prop := 48 ≤ r.toNat ∧ r.toNat < 88
 
 instance (r : VReg) : Decidable (InPool r) := inferInstanceAs (Decidable (_ ∧ _))
 
-theorem wReg_pool (i : Fin 16) : InPool (wReg i) := by
+private theorem wReg_pool (i : Fin 16) : InPool (wReg i) := by
   have := i.isLt; unfold InPool; rw [wReg_toNat]; omega
 
-theorem mReg_pool (j : Fin 16) : InPool (mReg j) := by
+private theorem mReg_pool (j : Fin 16) : InPool (mReg j) := by
   have := j.isLt; unfold InPool; rw [mReg_toNat]; omega
 
-theorem hReg_pool (i : Fin 8) : InPool (hReg i) := by
+private theorem hReg_pool (i : Fin 8) : InPool (hReg i) := by
   have := i.isLt; unfold InPool; rw [hReg_toNat]; omega
 
-@[simp] theorem hReg_ge (i : Fin 8) : 32 ≤ (hReg i).toNat := by rw [hReg_toNat]; omega
+@[simp] private theorem hReg_ge (i : Fin 8) : 32 ≤ (hReg i).toNat := by rw [hReg_toNat]; omega
 
-theorem ne_of_pool {r d : VReg} (hr : ¬ InPool r) (hd : InPool d) : r ≠ d := by
+private theorem ne_of_pool {r d : VReg} (hr : ¬ InPool r) (hd : InPool d) : r ≠ d := by
   rintro rfl; exact hr hd
 
-theorem hReg_ne_wReg (i : Fin 8) (j : Fin 16) : hReg i ≠ wReg j := by
+private theorem hReg_ne_wReg (i : Fin 8) (j : Fin 16) : hReg i ≠ wReg j := by
   intro h
   have := congrArg BitVec.toNat h
   rw [hReg_toNat, wReg_toNat] at this
   have := i.isLt; have := j.isLt
   omega
 
-theorem hReg_eq_iff (i j : Fin 8) : hReg i = hReg j ↔ i = j := by
+private theorem hReg_eq_iff (i j : Fin 8) : hReg i = hReg j ↔ i = j := by
   constructor
   · intro h
     have := congrArg BitVec.toNat h
@@ -64,21 +64,17 @@ theorem hReg_eq_iff (i j : Fin 8) : hReg i = hReg j ↔ i = j := by
     exact Fin.ext (by omega)
   · rintro rfl; rfl
 
-theorem setV_wReg_hReg (f : VReg → BitVec 64) (i : Fin 16) (v : BitVec 64) (j : Fin 8) :
+private theorem setV_wReg_hReg (f : VReg → BitVec 64) (i : Fin 16) (v : BitVec 64) (j : Fin 8) :
     setV f (wReg i) v (hReg j) = f (hReg j) := by
   simp only [setV, hReg_ne_wReg, ↓reduceIte]
 
-theorem setV_hReg_wReg (f : VReg → BitVec 64) (i : Fin 8) (v : BitVec 64) (j : Fin 16) :
+private theorem setV_hReg_wReg (f : VReg → BitVec 64) (i : Fin 8) (v : BitVec 64) (j : Fin 16) :
     setV f (hReg i) v (wReg j) = f (wReg j) := by
   simp only [setV, (hReg_ne_wReg i j).symm, ↓reduceIte]
 
-theorem setV_wReg_wReg (f : VReg → BitVec 64) (i j : Fin 16) (v : BitVec 64) :
+private theorem setV_wReg_wReg (f : VReg → BitVec 64) (i j : Fin 16) (v : BitVec 64) :
     setV f (wReg i) v (wReg j) = if j = i then v else f (wReg j) := by
   simp only [setV, wReg_eq_iff]
-
-theorem setV_hReg_hReg (f : VReg → BitVec 64) (i j : Fin 8) (v : BitVec 64) :
-    setV f (hReg i) v (hReg j) = if j = i then v else f (hReg j) := by
-  simp only [setV, hReg_eq_iff]
 
 /-! ## Loads -/
 
@@ -94,16 +90,22 @@ def mLds : List (VReg × BitVec 64) :=
   (List.range 16).map (fun j => (BitVec.ofNat 7 (64 + j), BitVec.ofNat 64 (8 * j))) ++
     [(BitVec.ofNat 7 60, 128), (BitVec.ofNat 7 62, 136)]
 
+/-- The 26 load rows are the 8 loads of `h` from `rs1`, then the 18 loads from `rs2`.
+Example: the first row is `LD vr80, 0(rs1)` and the ninth is `LD vr64, 0(rs2)`. -/
 theorem loadRows_eq (rs1 rs2 : regidx) :
     loadRows rs1 rs2 = ldRows rs1 hLds ++ ldRows rs2 mLds := rfl
 
+/-- Every load of `h` writes a register from `vr32` on.
+Example: the first writes `vr80`. -/
 theorem hLds_ge : ∀ p ∈ hLds, 32 ≤ p.1.toNat := by decide
 
+/-- Every load from the message buffer writes a register from `vr32` on.
+Example: the last writes `vr62`. -/
 theorem mLds_ge : ∀ p ∈ mLds, 32 ≤ p.1.toNat := by decide
 
-theorem hLds_pool : ∀ p ∈ hLds, InPool p.1 := by decide
+private theorem hLds_pool : ∀ p ∈ hLds, InPool p.1 := by decide
 
-theorem mLds_pool : ∀ p ∈ mLds, InPool p.1 := by decide
+private theorem mLds_pool : ∀ p ∈ mLds, InPool p.1 := by decide
 
 /-- The inputs of a call: the state `h`, the message `m`, the counter `t` and the final-block
 flag. -/
@@ -129,6 +131,8 @@ def Readable (s : SailJoltState) (A B : BitVec 64) : Prop :=
     (∀ j < 16, (loadDword? s (B + BitVec.ofNat 64 (8 * j))).isSome) ∧
     (loadDword? s (B + 128)).isSome ∧ (loadDword? s (B + 136)).isSome
 
+/-- `Readable` is the condition, list by list, that every load of the rows succeeds.
+Example: both sides fail when `A` is not 8-aligned. -/
 theorem readable_iff (s : SailJoltState) (A B : BitVec 64) :
     ((∀ p ∈ hLds, (loadDword? s (A + p.2)).isSome) ∧
       (∀ p ∈ mLds, (loadDword? s (B + p.2)).isSome)) ↔ Readable s A B := by
@@ -140,14 +144,14 @@ theorem readable_iff (s : SailJoltState) (A B : BitVec 64) :
 abbrev loadF (s : SailJoltState) (A B : BitVec 64) : VReg → BitVec 64 :=
   ldFile s B mLds (ldFile s A hLds s.vregs)
 
-theorem hLds_nodup : (hLds.map Prod.fst).Nodup := by decide
+private theorem hLds_nodup : (hLds.map Prod.fst).Nodup := by decide
 
-theorem mLds_nodup : (mLds.map Prod.fst).Nodup := by decide
+private theorem mLds_nodup : (mLds.map Prod.fst).Nodup := by decide
 
-theorem hLds_ge80 : ∀ p ∈ hLds, 80 ≤ p.1.toNat := by decide
+private theorem mLds_lt80 : ∀ p ∈ mLds, p.1.toNat < 80 := by decide
 
-theorem mLds_lt80 : ∀ p ∈ mLds, p.1.toNat < 80 := by decide
-
+/-- After the loads, state register `hReg i` holds word `i` of the loaded state.
+Example: `loadF s A B vr80` is the doubleword at `A`, or `0` when that load fails. -/
 theorem loadF_hReg (s : SailJoltState) (A B : BitVec 64) (i : Fin 8) :
     loadF s A B (hReg i) = (input s A B).h[i] := by
   have hne : ∀ p ∈ mLds, p.1 ≠ hReg i := by
@@ -160,22 +164,30 @@ theorem loadF_hReg (s : SailJoltState) (A B : BitVec 64) (i : Fin 8) :
       (List.mem_map.2 ⟨i.val, List.mem_range.2 i.isLt, rfl⟩)]
   simp [input]
 
+/-- After the loads, message register `mReg j` holds word `j` of the loaded block.
+Example: `loadF s A B vr65` is the doubleword at `B + 8`, or `0` when that load fails. -/
 theorem loadF_mReg (s : SailJoltState) (A B : BitVec 64) (j : Fin 16) :
     loadF s A B (mReg j) = (input s A B).m[j] := by
   rw [loadF, ldFile_apply_of_mem _ _ _ _ mLds_nodup (off := BitVec.ofNat 64 (8 * j.val))
       (List.mem_append_left _ (List.mem_map.2 ⟨j.val, List.mem_range.2 j.isLt, rfl⟩))]
   simp [input]
 
+/-- After the loads, `vr60` (work word 12) holds the counter.
+Example: it is the doubleword at `B + 128`, or `0` when that load fails. -/
 theorem loadF_t (s : SailJoltState) (A B : BitVec 64) :
     loadF s A B (wReg 12) = (input s A B).t := by
   rw [loadF, ldFile_apply_of_mem _ _ _ _ mLds_nodup (off := 128) (by decide)]
   rfl
 
+/-- After the loads, `vr62` (work word 14) holds the final-block flag.
+Example: it is the doubleword at `B + 136`, or `0` when that load fails. -/
 theorem loadF_flag (s : SailJoltState) (A B : BitVec 64) :
     loadF s A B (wReg 14) = (input s A B).flag := by
   rw [loadF, ldFile_apply_of_mem _ _ _ _ mLds_nodup (off := 136) (by decide)]
   rfl
 
+/-- The loads change no register outside the pool `vr48..87`.
+Example: `loadF s A B vr40 = s.vregs vr40`. -/
 theorem loadF_out (s : SailJoltState) (A B : BitVec 64) (r : VReg) (hr : ¬ InPool r) :
     loadF s A B r = s.vregs r := by
   rw [loadF, ldFile_apply_of_forall_ne _ _ _ _ _
@@ -188,16 +200,18 @@ theorem loadF_out (s : SailJoltState) (A B : BitVec 64) (r : VReg) (hr : ¬ InPo
 Example: `(hView f)[7] = f vr87`. -/
 def hView (f : VReg → BitVec 64) : Vector (BitVec 64) 8 := Vector.ofFn fun i => f (hReg i)
 
+/-- Word `i` of the state view `hView f` is register `hReg i` of `f`.
+Example: `(hView f)[2] = f vr82`. -/
 @[simp] theorem getElem_hView (f : VReg → BitVec 64) (i : Fin 8) : (hView f)[i] = f (hReg i) := by
   simp [hView]
 
-theorem hView_setV_wReg (f : VReg → BitVec 64) (i : Fin 16) (v : BitVec 64) :
+private theorem hView_setV_wReg (f : VReg → BitVec 64) (i : Fin 16) (v : BitVec 64) :
     hView (setV f (wReg i) v) = hView f := by
   apply Vector.ext
   intro k hk
   simp only [hView, Vector.getElem_ofFn, setV_wReg_hReg]
 
-theorem hView_setV_hReg (f : VReg → BitVec 64) (i : Fin 8) (v : BitVec 64) :
+private theorem hView_setV_hReg (f : VReg → BitVec 64) (i : Fin 8) (v : BitVec 64) :
     hView (setV f (hReg i) v) = (hView f).set i v := by
   apply Vector.ext
   intro k hk
@@ -208,7 +222,7 @@ theorem hView_setV_hReg (f : VReg → BitVec 64) (i : Fin 8) (v : BitVec 64) :
   · have h' : (⟨k, hk⟩ : Fin 8) ≠ i := fun he => h (by rw [← he])
     simp [h, h']
 
-theorem wView_setV_hReg (f : VReg → BitVec 64) (i : Fin 8) (v : BitVec 64) :
+private theorem wView_setV_hReg (f : VReg → BitVec 64) (i : Fin 8) (v : BitVec 64) :
     wView (setV f (hReg i) v) = wView f := by
   apply Vector.ext
   intro k hk
@@ -237,6 +251,8 @@ def initF (F : VReg → BitVec 64) : VReg → BitVec 64 :=
   let F := setV F (wReg 14) (0 - F (wReg 14))
   setV F (wReg 14) (jolt_xor_value (F (wReg 14)) 0x1f83d9abfb41bd6b)
 
+/-- The 17 init rows evaluate to `initF`.
+Example: from `F`, they set `vr56` to `0x6a09e667f3bcc908`. -/
 theorem regRun_initRows (F : VReg → BitVec 64) : regRun initRows F = some (initF F) := rfl
 
 /-- The work vector that the init rows set from `h`, the counter `t` and the flag.
@@ -247,6 +263,9 @@ def initVec (h : Vector (BitVec 64) 8) (t flag : BitVec 64) : Vector (BitVec 64)
     t ^^^ 0x510e527fade682d1, 0x9b05688c2b3e6c1f, (0 - flag) ^^^ 0x1f83d9abfb41bd6b,
     0x5be0cd19137e2179]
 
+/-- After the init rows, the work vector is `initVec` of the state registers, the counter and
+the flag.
+Example: word 8 is `IV[0] = 0x6a09e667f3bcc908`. -/
 theorem wView_initF (F : VReg → BitVec 64) :
     wView (initF F) =
       initVec (Vector.ofFn fun i => F (hReg i)) (F (wReg 12)) (F (wReg 14)) := by
@@ -255,39 +274,46 @@ theorem wView_initF (F : VReg → BitVec 64) :
   intro k hk
   interval_cases k <;> simp [initVec]
 
+/-- The init rows leave the message registers unchanged.
+Example: `vr64` keeps its value. -/
 theorem mView_initF (F : VReg → BitVec 64) : mView (initF F) = mView F := by
   simp only [initF, mView_setV]
 
-theorem initF_hReg (F : VReg → BitVec 64) (i : Fin 8) : initF F (hReg i) = F (hReg i) := by
-  simp only [initF, setV, hReg_ne_wReg, ↓reduceIte]
-
+/-- The init rows leave the state registers unchanged.
+Example: `vr80` keeps its value. -/
 theorem hView_initF (F : VReg → BitVec 64) : hView (initF F) = hView F := by
   simp only [initF, hView_setV_wReg]
 
+/-- The init rows change no register outside the pool `vr48..87`.
+Example: `initF F vr40 = F vr40`. -/
 theorem initF_out (F : VReg → BitVec 64) (r : VReg) (hr : ¬ InPool r) : initF F r = F r := by
   simp only [initF, setV, ne_of_pool hr (wReg_pool _), ↓reduceIte]
 
 /-! ## Rounds: registers outside the work vector -/
 
-theorem mixF_hReg (M : Mix) (f : VReg → BitVec 64) (i : Fin 8) : mixF M f (hReg i) = f (hReg i) := by
+private theorem mixF_hReg (M : Mix) (f : VReg → BitVec 64) (i : Fin 8) : mixF M f (hReg i) = f (hReg i) := by
   simp only [mixF, stepW, stepM, setV, hReg_ne_wReg, ↓reduceIte]
 
-theorem mixF_out (M : Mix) (f : VReg → BitVec 64) (r : VReg) (hr : ¬ InPool r) :
+private theorem mixF_out (M : Mix) (f : VReg → BitVec 64) (r : VReg) (hr : ¬ InPool r) :
     mixF M f r = f r := by
   simp only [mixF, stepW, stepM, setV, ne_of_pool hr (wReg_pool _), ↓reduceIte]
 
-theorem mixesF_hReg (Ms : List Mix) (f : VReg → BitVec 64) (i : Fin 8) :
+private theorem mixesF_hReg (Ms : List Mix) (f : VReg → BitVec 64) (i : Fin 8) :
     mixesF Ms f (hReg i) = f (hReg i) := by
   induction Ms generalizing f with
   | nil => rfl
   | cons M Ms ih => exact (ih (mixF M f)).trans (mixF_hReg M f i)
 
+/-- The calls of G change no register outside the pool `vr48..87`.
+Example: `mixesF Ms f vr40 = f vr40`. -/
 theorem mixesF_out (Ms : List Mix) (f : VReg → BitVec 64) (r : VReg) (hr : ¬ InPool r) :
     mixesF Ms f r = f r := by
   induction Ms generalizing f with
   | nil => rfl
   | cons M Ms ih => exact (ih (mixF M f)).trans (mixF_out M f r hr)
 
+/-- The calls of G leave the state registers unchanged.
+Example: `vr80` keeps its value through all 96 calls. -/
 theorem hView_mixesF (Ms : List Mix) (f : VReg → BitVec 64) :
     hView (mixesF Ms f) = hView f := by
   apply Vector.ext
@@ -310,7 +336,7 @@ def finalF (G : VReg → BitVec 64) : VReg → BitVec 64 :=
   xorH 3 3 <| stepW jolt_xor_value 3 11 <| xorH 2 2 <| stepW jolt_xor_value 2 10 <|
   xorH 1 1 <| stepW jolt_xor_value 1 9 <| xorH 0 0 <| stepW jolt_xor_value 0 8 G
 
-theorem finalRows_eq : finalRows =
+private theorem finalRows_eq : finalRows =
   [
    .XOR (.vreg (wReg 0)) (.vreg (wReg 0)) (.vreg (wReg 8)),
    .XOR (.vreg (hReg 0)) (.vreg (hReg 0)) (.vreg (wReg 0)),
@@ -329,31 +355,36 @@ theorem finalRows_eq : finalRows =
    .XOR (.vreg (wReg 7)) (.vreg (wReg 7)) (.vreg (wReg 15)),
    .XOR (.vreg (hReg 7)) (.vreg (hReg 7)) (.vreg (wReg 7))] := rfl
 
-theorem regRun_stepW_xor (i j : Fin 16) (l : List Instr) (f : VReg → BitVec 64) :
+private theorem regRun_stepW_xor (i j : Fin 16) (l : List Instr) (f : VReg → BitVec 64) :
     regRun (.XOR (.vreg (wReg i)) (.vreg (wReg i)) (.vreg (wReg j)) :: l) f =
       regRun l (stepW jolt_xor_value i j f) :=
   regRun_cons_of (i := .XOR (.vreg (wReg i)) (.vreg (wReg i)) (.vreg (wReg j))) rfl (wReg_ge i) l f
 
-theorem regRun_xorH (i : Fin 8) (j : Fin 16) (l : List Instr) (f : VReg → BitVec 64) :
+private theorem regRun_xorH (i : Fin 8) (j : Fin 16) (l : List Instr) (f : VReg → BitVec 64) :
     regRun (.XOR (.vreg (hReg i)) (.vreg (hReg i)) (.vreg (wReg j)) :: l) f =
       regRun l (xorH i j f) :=
   regRun_cons_of (i := .XOR (.vreg (hReg i)) (.vreg (hReg i)) (.vreg (wReg j))) rfl (hReg_ge i) l f
 
+/-- The 16 final rows evaluate to `finalF`.
+Example: their first row sets `vr48` to `vr48 ^ vr56`. -/
 theorem regRun_finalRows (G : VReg → BitVec 64) : regRun finalRows G = some (finalF G) := by
   rw [finalRows_eq]
   simp only [regRun_stepW_xor, regRun_xorH]
   rfl
 
-theorem hView_xorH (i : Fin 8) (j : Fin 16) (G : VReg → BitVec 64) :
+private theorem hView_xorH (i : Fin 8) (j : Fin 16) (G : VReg → BitVec 64) :
     hView (xorH i j G) = (hView G).set i ((hView G)[i] ^^^ (wView G)[j]) := by
   rw [xorH, hView_setV_hReg, getElem_hView, getElem_wView]
 
-theorem wView_xorH (i : Fin 8) (j : Fin 16) (G : VReg → BitVec 64) :
+private theorem wView_xorH (i : Fin 8) (j : Fin 16) (G : VReg → BitVec 64) :
     wView (xorH i j G) = wView G := wView_setV_hReg _ _ _
 
-theorem hView_stepW (op : BitVec 64 → BitVec 64 → BitVec 64) (i j : Fin 16)
+private theorem hView_stepW (op : BitVec 64 → BitVec 64 → BitVec 64) (i j : Fin 16)
     (G : VReg → BitVec 64) : hView (stepW op i j G) = hView G := hView_setV_wReg _ _ _
 
+/-- After the final rows, state word `i` is `h[i] ^ (v[i] ^ v[i + 8])`, for the state `h` and
+the work vector `v` before them.
+Example: word 0 is `h[0] ^ (v[0] ^ v[8])`. -/
 theorem hView_finalF (G : VReg → BitVec 64) :
     hView (finalF G) =
       Vector.ofFn fun i : Fin 8 => (hView G)[i] ^^^ ((wView G)[i.val] ^^^ (wView G)[i.val + 8]) := by
@@ -362,6 +393,8 @@ theorem hView_finalF (G : VReg → BitVec 64) :
   intro k hk
   interval_cases k <;> simp
 
+/-- The final rows change no register outside the pool `vr48..87`.
+Example: `finalF G vr40 = G vr40`. -/
 theorem finalF_out (G : VReg → BitVec 64) (r : VReg) (hr : ¬ InPool r) : finalF G r = G r := by
   simp only [finalF, xorH, stepW, setV, ne_of_pool hr (wReg_pool _), ne_of_pool hr (hReg_pool _),
     ↓reduceIte]
@@ -371,6 +404,8 @@ theorem finalF_out (G : VReg → BitVec 64) (r : VReg) (hr : ¬ InPool r) : fina
 /-- The state registers `vr80..87`, in order. -/
 def hRegs : List VReg := List.ofFn hReg
 
+/-- The 8 store rows are `sdRows` of the state registers at offset 0.
+Example: the second row is `SD rs1, vr81, 8`. -/
 theorem storeRows_eq (rs1 : regidx) : storeRows rs1 = sdRows rs1 0 hRegs := rfl
 
 /-- The register file `f` with the pool registers `vr48..87` reset to zero.
@@ -378,7 +413,7 @@ Example: `poolReset f vr60 = 0` and `poolReset f vr40 = f vr40`. -/
 def poolReset (f : VReg → BitVec 64) : VReg → BitVec 64 :=
   fun r => if InPool r then 0 else f r
 
-theorem regRun_resets (ks : List Nat) (hks : ∀ k ∈ ks, 48 + k < 128) (G : VReg → BitVec 64) :
+private theorem regRun_resets (ks : List Nat) (hks : ∀ k ∈ ks, 48 + k < 128) (G : VReg → BitVec 64) :
     regRun (ks.map fun k =>
         .ADDI (.vreg (BitVec.ofNat 7 (48 + k))) (.xreg (regidx.Regidx 0)) 0) G =
       some (fun r => if 48 ≤ r.toNat ∧ r.toNat - 48 ∈ ks then 0 else G r) := by
@@ -407,6 +442,8 @@ theorem regRun_resets (ks : List Nat) (hks : ∀ k ∈ ks, 48 + k < 128) (G : VR
           · exact h1 ⟨h4, h5⟩
         simp only [h1, h2, h3, ↓reduceIte]
 
+/-- The 40 reset rows evaluate to `poolReset`.
+Example: afterwards `vr48 = 0` and `vr40` is unchanged. -/
 theorem regRun_resetRows (G : VReg → BitVec 64) : regRun resetRows G = some (poolReset G) := by
   rw [resetRows, regRun_resets _ (fun k hk => by simp only [List.mem_range] at hk; omega)]
   congr 1
@@ -417,6 +454,8 @@ theorem regRun_resetRows (G : VReg → BitVec 64) : regRun resetRows G = some (p
   apply propext
   omega
 
+/-- Register files that agree outside the pool agree after `poolReset`.
+Example: `poolReset (setV f vr50 7) = poolReset f`. -/
 theorem poolReset_congr {f g : VReg → BitVec 64} (h : ∀ r, ¬ InPool r → f r = g r) :
     poolReset f = poolReset g := by
   funext r
@@ -433,7 +472,7 @@ def rowsOut (x : Input) : Vector (BitVec 64) 8 :=
   let v := Spec.rounds x.m (initVec x.h x.t x.flag) 12
   Vector.ofFn fun i => x.h[i] ^^^ (v[i.val] ^^^ v[i.val + 8])
 
-theorem append_eq_lit (h c : Vector (BitVec 64) 8) :
+private theorem append_eq_lit (h c : Vector (BitVec 64) 8) :
     (h ++ c : Vector (BitVec 64) 16) =
       #v[h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7],
         c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]] := by

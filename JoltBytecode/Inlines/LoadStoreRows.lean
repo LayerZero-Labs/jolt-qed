@@ -31,6 +31,8 @@ Example: `ldRows x10 [(vr80, 0), (vr81, 8)]` loads the doublewords at `x10` and 
 def ldRows (r : regidx) (ds : List (VReg × BitVec 64)) : List Instr :=
   ds.map fun p => .LD .normal (.vreg p.1) (.xreg r) p.2
 
+/-- `ldRows` of a nonempty list starts with the load of its head.
+Example: `ldRows x10 [(vr80, 0), (vr81, 8)]` is `LD vr80, 0(x10)` followed by `ldRows x10 [(vr81, 8)]`. -/
 theorem ldRows_cons (r : regidx) (p : VReg × BitVec 64) (ds : List (VReg × BitVec 64)) :
     ldRows r (p :: ds) = .LD .normal (.vreg p.1) (.xreg r) p.2 :: ldRows r ds := rfl
 
@@ -62,6 +64,9 @@ theorem ldFile_apply_of_forall_ne (s : SailJoltState) (base : BitVec 64)
     intro hr
     exact absurd hr.symm (h p List.mem_cons_self)
 
+/-- `ldFile` of a nonempty list loads the head first.
+Example: `ldFile s base [(vr80, 0), (vr81, 8)] f` is `ldFile s base [(vr81, 8)] (setV f vr80 w)`, where
+`w` is the doubleword at `base`, or `0` when that load fails. -/
 theorem ldFile_cons (s : SailJoltState) (base : BitVec 64) (p : VReg × BitVec 64)
     (ds : List (VReg × BitVec 64)) (f : VReg → BitVec 64) :
     ldFile s base (p :: ds) f = ldFile s base ds (setV f p.1 ((loadDword? s (base + p.2)).getD 0)) :=
