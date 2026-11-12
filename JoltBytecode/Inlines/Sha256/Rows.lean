@@ -134,20 +134,27 @@ def bigSigma0 (x : Val) (rd ss : VReg) : List Instr × Val :=
       .VirtualXORROTW22 (.vreg rd) (.vreg x) (.vreg rd)], .reg rd)
   | .imm v => ([], .imm ((JoltSpec.Sha256.Spec.large0 (w32 v)).setWidth 64))
 
+/-- `Ch(e, f, g) = (e & f) ^ (~e & g)` into `rd`, with scratch `ss`, computing `~e` as
+`e ^ 0xffffffff`: the rows of `ch` when `e` or `g` is a constant.
+Example: for `e = .reg vr51` and `g = .imm 0x9b05688c` the rows are `ANDI ss vr51 f`,
+`XORI rd vr51 0xffffffff`, `ANDI rd rd 0x9b05688c`, `XOR rd ss rd`. -/
+def chGen (e f g : Val) (rd ss : VReg) : List Instr × Val :=
+  let ef := and e f ss
+  let ne := xor e (.imm 0xffffffff) rd
+  let neg := and ne.2 g rd
+  let x := xor ef.2 neg.2 rd
+  (ef.1 ++ ne.1 ++ neg.1 ++ x.1, x.2)
+
 /-- `Ch(e, f, g) = (e & f) ^ (~e & g)` into `rd`, with scratch `ss`. When `e` and `g` are both
-registers, `~e & g` is one `ANDN`; otherwise `~e` is `e ^ 0xffffffff`.
+registers, `~e & g` is one `ANDN`; otherwise the rows are `chGen`.
 Example: on registers the rows are `AND ss e f`, `ANDN rd g e`, `XOR rd ss rd`. -/
 def ch (e f g : Val) (rd ss : VReg) : List Instr × Val :=
-  let ef := and e f ss
   match e, g with
   | .reg re, .reg rg =>
+    let ef := and e f ss
     let x := xor ef.2 (.reg rd) rd
     (ef.1 ++ [.ANDN (.vreg rd) (.vreg rg) (.vreg re)] ++ x.1, x.2)
-  | _, _ =>
-    let ne := xor e (.imm 0xffffffff) rd
-    let neg := and ne.2 g rd
-    let x := xor ef.2 neg.2 rd
-    (ef.1 ++ ne.1 ++ neg.1 ++ x.1, x.2)
+  | _, _ => chGen e f g rd ss
 
 /-- `Maj(a, b, c)` as `(b & c) ^ (a & (b ^ c))` into `rd`, with scratch `ss`.
 Example: on registers the rows are `AND ss b c`, `XOR rd b c`, `AND rd a rd`, `XOR rd ss rd`. -/

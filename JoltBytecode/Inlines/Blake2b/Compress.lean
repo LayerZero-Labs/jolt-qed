@@ -30,13 +30,14 @@ namespace JoltISA.Inlines
 
 /-! ## Rotation and register runs (any inline) -/
 
-/-- Sail's `rotater` on a 64-bit word is `BitVec.rotateRight`, for shifts below 64.
+/-- Sail's `rotater` is `BitVec.rotateRight`, for shifts below the width. BLAKE2 uses it on
+64-bit words and SHA-256 on 32-bit words.
 Example: `rotater 1#64 1 = 0x8000000000000000#64`. -/
-theorem rotater_eq_rotateRight (z : BitVec 64) (s : Nat) (hs : s < 64) :
+theorem rotater_eq_rotateRight {w : Nat} (z : BitVec w) (s : Nat) (hs : s < w) :
     rotater z s = z.rotateRight s := by
-  have h : rotater z s = (z >>> s) ||| (z <<< (64 - s)) := by
+  have h : rotater z s = (z >>> s) ||| (z <<< (w - s)) := by
     unfold rotater
-    have : (Sail.BitVec.length z -i (s : Int)) = ((64 - s : Nat) : Int) := by
+    have : (Sail.BitVec.length z -i (s : Int)) = ((w - s : Nat) : Int) := by
       simp only [Sail.BitVec.length]; omega
     rw [this]
     rfl
