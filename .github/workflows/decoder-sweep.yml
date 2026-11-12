@@ -1,0 +1,76 @@
+name: decoder-sweep
+
+# T2 check of Jolt's program-image decoder against Lean's joltDecode and
+# joltUncompress (scripts/expansion-parity/DECODER-SWEEP.md,
+# reports/2026-11-11-decoder-sweep.md).
+# It checks out Jolt at JOLT_REV, builds the driver, runs the sweep (with its
+# exhaustive Rust-side check), then the Lean comparator and its mutation check.
+#
+# The job fails on any mismatch at JOLT_REV, on a failed exhaustive check and on
+# a missed mutation. The comparison was clean at JOLT_REV when this job was
+# added (reports/2026-11-11-decoder-sweep.md); the job had been run locally only.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: decoder-sweep-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  decoder-sweep:
+    name: decoder-sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      # a16z/jolt#2384 at the commit the expansion-parity job uses; Lean's
+      # decoder follows #2384.
+      JOLT_REV: 580084fcfad4788ebf48413a92dd640ca090c45f
+      EXPANSION_PARITY_FEATURES: zicsr-remaining
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: a16z/jolt
+          ref: ${{ env.JOLT_REV }}
+          path: jolt-rev
+          persist-credentials: false
+      # Exit status 1 means the exhaustive check failed; the Lean steps still
+      # run on the sweep's output. Status 2 means the sweep could not run.
+      - name: Build the driver and run the sweep
+        id: driver
+        run: |
+          set +e
+          JOLT_DIR="$GITHUB_WORKSPACE/jolt-rev" \
+            scripts/expansion-parity/run-decoder-sweep.sh "$RUNNER_TEMP/decoder-sweep"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "decoder-sweep exit status: $status"
+          test "$status" -eq 0
+      - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
+        if: ${{ !cancelled() && steps.driver.outputs.status != '2' }}
+        with:
+          build: false
+          use-github-cache: false
+      - name: Build the comparator
+        id: comparator
+        if: ${{ !cancelled() && steps.driver.outputs.status != '2' }}
+        run: lake build JoltTests.DecoderSweep.Main
+      - name: Compare
+        if: ${{ !cancelled() && steps.comparator.outcome == 'success' }}
+        run: |
+          w="$RUNNER_TEMP/decoder-sweep"
+          DECODER_SWEEP_ARGS="compare $w/out $w/report" \
+            lake env lean JoltTests/DecoderSweep/Run.lean
+      - name: Mutation check
+        if: ${{ !cancelled() && steps.comparator.outcome == 'success' }}
+        run: |
+          w="$RUNNER_TEMP/decoder-sweep"
+          DECODER_SWEEP_ARGS="mutation $w/out" \
+            lake env lean JoltTests/DecoderSweep/Run.lean
