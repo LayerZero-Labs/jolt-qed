@@ -8,8 +8,8 @@ name: lookup-tables
 # then runs the Lean comparator and its mutation check. The check samples
 # indices; it does not prove agreement at every index.
 #
-# The job fails on any value mismatch or name gap at JOLT_REV and on a missed
-# mutation. The comparison was clean at JOLT_REV when this job was added
+# The job fails on any value mismatch, name gap or coverage error (vector counts
+# that differ from the emitter's summary) at JOLT_REV and on a missed mutation. The comparison was clean at JOLT_REV when this job was added
 # (reports/2026-11-11-lookup-table-vectors.md); the job had been run locally
 # only, not in CI.
 

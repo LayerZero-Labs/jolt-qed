@@ -47,7 +47,7 @@ LOOKUP_TABLES_ARGS="mutation WORK_DIR/out" \
   lake env lean JoltTests/LookupTables/Run.lean
 ```
 
-The CI job `.github/workflows/lookup-tables.yml` runs the same steps at `580084fcf` and fails on any mismatch, name gap or missed mutation.
+The CI job `.github/workflows/lookup-tables.yml` runs the same steps at `580084fcf` and fails on any mismatch, name gap, coverage error or missed mutation.
 When I added it, the job had been run locally only, not in CI.
 
 ## The twin and the theorem
@@ -94,8 +94,9 @@ Per table, every checked vector agrees:
 | VirtualSRL, VirtualSRA, VirtualROTR, VirtualROTRW, VirtualSRLW, VirtualSRAW | 2062 | 2000 | 4062 |
 | Pext, PextSigned | 2831 | 2000 | 4831 |
 
-The mutation check adds one to the value of the first vector of each table, in memory; the comparison reports all 55 corruptions.
-It also renames one vector's table to an unknown name, and the comparison flags it.
+The comparison also checks the vectors against the emitter's summary (total count, and per table the edge and random counts); at `580084fcf` it finds 0 coverage errors.
+The mutation check corrupts the vectors in memory and runs them through `compareVectors`, the function `compare` uses.
+It detects all four corruptions: one value changed in each of the 55 tables (55 mismatches in 55 tables), one vector's table renamed, the last vector dropped, and all but the first vector of each table dropped.
 I also changed one value in a copy of the vector file (RangeCheck at index 4, value 4 changed to 7): the comparator reported that one mismatch and `lean` exited with status 1.
 
 ## Mismatches and name gaps
@@ -113,7 +114,7 @@ Measured on a shared, loaded laptop (wall times).
 | `lake build JoltTests.LookupTables.Twin` | 8 to 10 s |
 | `lake build JoltTests.LookupTables.Main` | 4 to 7 s |
 | Comparator `compare`, end to end | 27 to 37 s (4 to 5 s reading, 14 to 16 s evaluating) |
-| Comparator `mutation`, end to end | 17 to 19 s |
+| Comparator `mutation`, end to end (four comparison runs) | 70 s |
 
 At 2,000 random indices per table the comparison runs in well under a minute.
 I kept that default.

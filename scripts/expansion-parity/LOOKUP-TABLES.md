@@ -77,5 +77,9 @@ An agreement between Jolt and the twin at an index is therefore an agreement bet
 
 ## Mutation check
 
-`mutation` adds one (modulo 2^64) to the value of the first vector of each table, in memory, and checks that the comparison reports each corruption.
-It also renames one vector's table to an unknown name and checks that the comparison flags the vector.
+`compare` also checks the vectors against the emitter's `lookup_summary.json`: the total count, and per table the number of edge and of random vectors, must match it, every table must have edge vectors, and every table must have at least the requested number of random vectors.
+A vector file that lost lines therefore fails, even if every remaining vector agrees.
+
+`mutation` corrupts the vectors in memory and runs them through `compareVectors`, the same function `compare` uses.
+It adds one (modulo 2^64) to the value of the first vector of every table, renames one vector's table to an unknown name, drops the last vector, and keeps only the first vector of each table.
+Each corruption must be reported and counted as a failure.

@@ -29,12 +29,14 @@ LOOKUP_TABLES_ARGS="mutation OUT_DIR" lake env lean JoltTests/LookupTables/Run.l
   (one JSON line per disagreeing vector or unknown table name) and
   `REPORT_DIR/lookup-summary.txt` (counts per table and the name gaps).
   It fails on a value mismatch, on a vector whose table has no Lean constructor,
-  on a Rust variant with no Lean constructor and on a Lean constructor with no
-  Rust variant.
-* `mutation` adds one to the value of the first vector of each table (modulo
-  2^64), in memory, and checks that the comparison reports each corruption.
-  It also renames one vector's table to an unknown name and checks that the
-  vector is flagged.
+  on a Rust variant with no Lean constructor, on a Lean constructor with no
+  Rust variant, and when the vectors do not match the summary's counts (in
+  total, and per table for edge and random vectors).
+* `mutation` corrupts the vectors in memory and runs the same comparison
+  (`compareVectors`) on them: it adds one to the value of the first vector of
+  every table (modulo 2^64), renames one vector's table, drops the last vector,
+  and keeps only the first vector of each table. Each corruption must be
+  reported and counted as a failure.
 -/
 
 open Lean
@@ -116,12 +118,28 @@ def readVectors (path : String) : IO (Array Vector) := do
     | .error e => throw <| IO.userError s!"{path}: {e}: {line}"
   return out
 
-/-- The Rust variant names in `lookup_summary.json`. -/
-def rustVariants (outDir : String) : IO (List String) := do
+/-- What the emitter says it wrote, from `lookup_summary.json`. -/
+structure Summary where
+  rustVariants : List String
+  /-- Per table: the number of edge vectors and of random vectors. -/
+  counts : Std.HashMap String (Nat × Nat)
+  total : Nat
+  randomPerTable : Nat
+
+def readSummary (outDir : String) : IO Summary := do
   let text ← IO.FS.readFile s!"{outDir}/lookup_summary.json"
   let j ← IO.ofExcept (Json.parse text)
-  let arr ← IO.ofExcept (j.getObjValAs? (Array String) "rust_variants")
-  return arr.toList
+  let rust ← IO.ofExcept (j.getObjValAs? (Array String) "rust_variants")
+  let total ← IO.ofExcept (j.getObjValAs? Nat "total_vectors")
+  let randomPerTable ← IO.ofExcept (j.getObjValAs? Nat "random_per_table")
+  let countsJson ← IO.ofExcept (j.getObjVal? "counts")
+  let mut counts : Std.HashMap String (Nat × Nat) := {}
+  for name in rust do
+    let c ← IO.ofExcept (countsJson.getObjVal? name)
+    let edge ← IO.ofExcept (c.getObjValAs? Nat "edge")
+    let random ← IO.ofExcept (c.getObjValAs? Nat "random")
+    counts := counts.insert name (edge, random)
+  return { rustVariants := rust.toList, counts, total, randomPerTable }
 
 /-- Per-table counts. -/
 structure Counts where
@@ -130,17 +148,37 @@ structure Counts where
   edge : Nat := 0
   random : Nat := 0
 
-def runCompare (outDir reportDir : String) : IO UInt32 := do
-  IO.FS.createDirAll reportDir
-  let start ← IO.monoMsNow
-  let vectors ← readVectors s!"{outDir}/lookup_vectors.jsonl"
-  let parsed ← IO.monoMsNow
+/-- The result of comparing a set of vectors. -/
+structure Result where
+  mismatches : Nat
+  unknown : Nat
+  /-- Tables with at least one value mismatch. -/
+  mismatchedTables : List String
+  /-- Disagreements between the vectors and the emitter's summary: a total or
+  per-table count that differs, a table with no edge vectors or fewer random
+  vectors than requested, or a vector of an unknown class. -/
+  coverageErrors : Array String
+  rustOnly : List String
+  leanOnly : List String
+  bad : Array Json
+  text : String
+
+def Result.failures (r : Result) : Nat :=
+  r.mismatches + r.unknown + r.coverageErrors.size + r.rustOnly.length + r.leanOnly.length
+
+/-- Compare every vector with the twin and the vector counts with the emitter's
+summary. `compare` and `mutation` both go through this function. -/
+def compareVectors (vectors : Array Vector) (sum : Summary) : Result := Id.run do
   let mut counts : Std.HashMap String Counts := {}
   let mut bad : Array Json := #[]
   let mut mismatches := 0
   let mut unknown := 0
+  let mut mismatchedTables : List String := []
+  let mut coverage : Array String := #[]
   for v in vectors do
     let o := check v
+    unless v.cls == "edge" || v.cls == "random" do
+      coverage := coverage.push s!"{v.table} index {v.index}: unknown class {v.cls}"
     let c := counts.getD v.table {}
     let c := { c with checked := c.checked + 1,
                       edge := c.edge + (if v.cls == "edge" then 1 else 0),
@@ -150,20 +188,31 @@ def runCompare (outDir reportDir : String) : IO UInt32 := do
     | .mismatch _ =>
       counts := counts.insert v.table c
       mismatches := mismatches + 1
+      unless mismatchedTables.contains v.table do
+        mismatchedTables := v.table :: mismatchedTables
       bad := bad.push (mismatchJson v o)
     | .unknownTable =>
       counts := counts.insert v.table c
       unknown := unknown + 1
       bad := bad.push (mismatchJson v o)
-  let evaluated ← IO.monoMsNow
-  let rust ← rustVariants outDir
+  let rust := sum.rustVariants
   let lean := leanKinds.map kindName
   let rustOnly := rust.filter (!lean.contains ·)
   let leanOnly := lean.filter (!rust.contains ·)
-  IO.FS.withFile s!"{reportDir}/lookup-mismatches.jsonl" .write fun h => do
-    for j in bad do h.putStrLn j.compress
+  if vectors.size != sum.total then
+    coverage := coverage.push s!"{vectors.size} vectors, but the summary reports {sum.total}"
+  for name in rust do
+    let c := counts.getD name {}
+    let (edge, random) := sum.counts.getD name (0, 0)
+    if c.edge != edge || c.random != random then
+      coverage := coverage.push
+        s!"{name}: {c.edge} edge + {c.random} random vectors, but the summary reports {edge} + {random}"
+    if c.edge == 0 then coverage := coverage.push s!"{name}: no edge vectors"
+    if c.random < sum.randomPerTable then
+      coverage := coverage.push
+        s!"{name}: {c.random} random vectors, fewer than the requested {sum.randomPerTable}"
   let mut s := s!"lookup-tables: {vectors.size} vectors, {mismatches} value mismatches, " ++
-    s!"{unknown} vectors with no Lean table\n"
+    s!"{unknown} vectors with no Lean table, {coverage.size} coverage errors\n"
   s := s ++ s!"Rust variants: {rust.length}; Lean constructors: {lean.length}\n"
   s := s ++ s!"Rust variants with no Lean constructor: {rustOnly}\n"
   s := s ++ s!"Lean constructors with no Rust variant: {leanOnly}\n"
@@ -171,41 +220,64 @@ def runCompare (outDir reportDir : String) : IO UInt32 := do
   for name in rust ++ leanOnly do
     let c := counts.getD name {}
     s := s ++ s!"  {name}: {c.checked} checked, {c.agree} agree ({c.edge} edge + {c.random} random)\n"
+  for e in coverage.toList.take 50 do
+    s := s ++ s!"  coverage error: {e}\n"
   for j in bad.toList.take 50 do
     s := s ++ s!"  mismatch: {j.compress}\n"
-  s := s ++ s!"time: {parsed - start} ms reading, {evaluated - parsed} ms evaluating\n"
+  return { mismatches, unknown, mismatchedTables, coverageErrors := coverage, rustOnly, leanOnly,
+           bad, text := s }
+
+def runCompare (outDir reportDir : String) : IO UInt32 := do
+  IO.FS.createDirAll reportDir
+  let start ← IO.monoMsNow
+  let vectors ← readVectors s!"{outDir}/lookup_vectors.jsonl"
+  let sum ← readSummary outDir
+  let parsed ← IO.monoMsNow
+  let r := compareVectors vectors sum
+  let failures := r.failures
+  let evaluated ← IO.monoMsNow
+  IO.FS.withFile s!"{reportDir}/lookup-mismatches.jsonl" .write fun h => do
+    for j in r.bad do h.putStrLn j.compress
+  let s := r.text ++ s!"time: {parsed - start} ms reading, {evaluated - parsed} ms evaluating\n"
   IO.FS.writeFile s!"{reportDir}/lookup-summary.txt" s
   IO.println s
-  let failures := mismatches + unknown + rustOnly.length + leanOnly.length
   IO.println s!"lookup-tables: {failures} failures; details in {reportDir}/lookup-mismatches.jsonl"
   return if failures == 0 then 0 else 1
 
-/-- Corrupt one vector per table in memory and check that each corruption is
-reported. -/
+/-- Corrupt the vectors in memory and check that `compareVectors`, the function
+`compare` uses, reports each corruption and counts it as a failure. -/
 def runMutation (outDir : String) : IO UInt32 := do
   let vectors ← readVectors s!"{outDir}/lookup_vectors.jsonl"
-  let mut seen : Std.HashMap String Vector := {}
-  for v in vectors do
-    unless seen.contains v.table do seen := seen.insert v.table v
-  let rust ← rustVariants outDir
-  let mut ok := true
-  let mut detected := 0
-  for name in rust do
-    match seen[name]? with
-    | none =>
-      IO.println s!"  {name}: no vector to corrupt"
-      ok := false
-    | some v =>
-      let v' := { v with value := (v.value + 1) % 2 ^ 64 }
-      if check v' matches .agree then
-        IO.println s!"  {name}: value corruption MISSED at index {v.index}"
-        ok := false
-      else detected := detected + 1
-  let renamed := (vectors[0]?).any fun v =>
-    check { v with table := v.table ++ "Renamed" } matches .unknownTable
-  IO.println s!"  value corrupted in {detected} of {rust.length} tables and detected"
-  IO.println s!"  table renamed: {if renamed then "detected" else "MISSED"}"
-  ok := ok && renamed
+  let sum ← readSummary outDir
+  let rust := sum.rustVariants
+  -- The position of the first vector of each table.
+  let mut first : Std.HashMap String Nat := {}
+  for i in [0:vectors.size] do
+    let v := vectors[i]!
+    unless first.contains v.table do first := first.insert v.table i
+  let missing := rust.filter (!first.contains ·)
+  -- One value corrupted in every table at once.
+  let corrupted := first.fold (init := vectors) fun acc _ i =>
+    acc.modify i fun v => { v with value := (v.value + 1) % 2 ^ 64 }
+  let rc := compareVectors corrupted sum
+  let valuesOk := missing.isEmpty && rc.mismatches == rust.length &&
+    rust.all rc.mismatchedTables.contains && rc.failures > 0
+  IO.println s!"  value corrupted in each of {rust.length} tables: {rc.mismatches} mismatches in {rc.mismatchedTables.length} tables, {if valuesOk then "detected" else "MISSED"}"
+  -- One vector's table renamed.
+  let renamed := vectors.modify 0 fun v => { v with table := v.table ++ "Renamed" }
+  let rr := compareVectors renamed sum
+  let renamedOk := rr.unknown == 1 && rr.failures > 0
+  IO.println s!"  table renamed: {if renamedOk then "detected" else "MISSED"}"
+  -- The last vector dropped.
+  let rd := compareVectors vectors.pop sum
+  let droppedOk := rd.coverageErrors.size > 0 && rd.failures > 0
+  IO.println s!"  last vector dropped: {if droppedOk then "detected" else "MISSED"}"
+  -- Only the first vector of each table kept.
+  let firsts := (first.toList.map (·.2)).toArray.qsort (· < ·) |>.map (vectors[·]!)
+  let rf := compareVectors firsts sum
+  let firstsOk := rf.coverageErrors.size > 0 && rf.failures > 0
+  IO.println s!"  only the first vector of each table kept: {if firstsOk then "detected" else "MISSED"}"
+  let ok := valuesOk && renamedOk && droppedOk && firstsOk
   IO.println (if ok then "mutation check: every corruption detected" else "mutation check: FAILED")
   return if ok then 0 else 1
 
