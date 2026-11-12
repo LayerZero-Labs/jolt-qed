@@ -44,16 +44,13 @@ def setV (f : VReg → BitVec 64) (d : VReg) (v : BitVec 64) : VReg → BitVec 6
 @[simp] theorem setV_same (f : VReg → BitVec 64) (d : VReg) (v : BitVec 64) :
     setV f d v d = v := by simp [setV]
 
-/-- Reading another register. Example: `setV f vr48 7 vr49 = f vr49`. -/
-theorem setV_ne (f : VReg → BitVec 64) {d r : VReg} (v : BitVec 64) (h : r ≠ d) :
-    setV f d v r = f r := by simp [setV, h]
-
 /-! ## Register rows -/
 
 /-- The register rows: rows that read only virtual registers (or `x0`) and write one virtual
 register. The result is the destination and the value as a function of the register file.
 `ADDI` counts only with source `x0`, which is how Jolt resets pool registers.
-Example: `(ADD (.vreg vr62) (.vreg vr62) (.vreg vr61)).regRow? = some (vr62, fun f => f vr62 + f vr61)`. -/
+Example: `(ADD (.vreg vr62) (.vreg vr62) (.vreg vr61)).regRow?` is
+`some (vr62, fun f => f vr62 + f vr61)`. -/
 def _root_.JoltISA.Instr.regRow? : Instr → Option (VReg × ((VReg → BitVec 64) → BitVec 64))
   | .ADD (.vreg d) (.vreg x) (.vreg y) => some (d, fun f => f x + f y)
   | .MUL (.vreg d) (.vreg x) (.vreg y) => some (d, fun f => f x * f y)
@@ -108,7 +105,8 @@ Example: `Program.seq [i, j] = .instr i (Program.seq [j])`. -/
     Program.seq (i :: l) = .instr i (Program.seq l) := rfl
 
 /-- A row that retires from `s` to `t` can be peeled off a run.
-Example: the step from `run_append_of_regRun` to the next row. -/
+Example: if `ADDI vr48, x0, 5` retires from `s` to `t`, a run of
+`[ADDI vr48, x0, 5; SD x12, vr48, 0]` from `s` is a run of `[SD x12, vr48, 0]` from `t`. -/
 theorem run_instr_iff {i : Instr} {s t : SailJoltState}
     (h : (execInstr i).run s = .ok RETIRE_SUCCESS t) (p : Program) (s' : SailJoltState) :
     Program.Run (.instr i p) s s' ↔ Program.Run p t s' := by
@@ -123,7 +121,9 @@ theorem run_instr_iff {i : Instr} {s t : SailJoltState}
     rw [execProgram_instr_run_retire i p s t h]
     exact hr
 
-/-- A row that throws ends every run. Example: a failing `VirtualAssertEQ`. -/
+/-- A row that throws ends every run.
+Example: `VirtualAssertEQ vr62, vr56` from a state with `vr62 = 1` and `vr56 = 2` throws, so
+no run of `[VirtualAssertEQ vr62, vr56; …]` starts there. -/
 theorem not_run_of_error {i : Instr} {s t : SailJoltState} {e : Error exception}
     (h : (execInstr i).run s = .error e t) (p : Program) (s' : SailJoltState) :
     ¬ Program.Run (.instr i p) s s' := by
@@ -131,17 +131,6 @@ theorem not_run_of_error {i : Instr} {s t : SailJoltState} {e : Error exception}
   obtain ⟨t', ht', _⟩ := execProgram_instr_run_retire_inv i p s s' hr
   rw [h] at ht'
   cases ht'
-
-/-- A row that returns a result other than `RETIRE_SUCCESS` ends every run.
-Example: a misaligned `LD`, which returns a memory exception. -/
-theorem not_run_of_result {i : Instr} {s t : SailJoltState} {r : ExecutionResult}
-    (h : (execInstr i).run s = .ok r t) (hr : r ≠ RETIRE_SUCCESS) (p : Program)
-    (s' : SailJoltState) : ¬ Program.Run (.instr i p) s s' := by
-  intro hrun
-  obtain ⟨t', ht', _⟩ := execProgram_instr_run_retire_inv i p s s' hrun
-  rw [h] at ht'
-  cases ht'
-  exact hr rfl
 
 /-- The pure evaluator for register rows: `none` as soon as a row is not a register row or
 writes a register below `vr32`.
@@ -153,23 +142,12 @@ def regRun : List Instr → (VReg → BitVec 64) → Option (VReg → BitVec 64)
     | some (d, g) => if 32 ≤ d.toNat then regRun l (setV f d (g f)) else none
     | none => none
 
-/-- The evaluator of a concatenation. Example: used to evaluate one helper at a time. -/
-theorem regRun_append (l₁ l₂ : List Instr) (f : VReg → BitVec 64) :
-    regRun (l₁ ++ l₂) f = (regRun l₁ f).bind (regRun l₂) := by
-  induction l₁ generalizing f with
-  | nil => rfl
-  | cons i l ih =>
-    simp only [List.cons_append, regRun]
-    split
-    · split
-      · exact ih _
-      · rfl
-    · rfl
-
 /-- **Register rows run as evaluated.** If the register rows `l` evaluate to `f` from the
 register file of `s`, a run of `l ++ rest` from `s` is a run of `rest` from `s` with register
 file `f`. Nothing else in the state changes.
-Example: the multiply-accumulate helpers of the secp256k1 field inlines. -/
+Example: `regRun [LUI vr60 5] s.vregs = some (setV s.vregs vr60 5)`, so a run of
+`[LUI vr60 5; SD x12, vr60, 0]` from `s` is a run of `[SD x12, vr60, 0]` from `s` with
+`vr60 = 5`. -/
 theorem run_append_of_regRun {l : List Instr} {s : SailJoltState} {f : VReg → BitVec 64}
     (h : regRun l s.vregs = some f) (rest : List Instr) (s' : SailJoltState) :
     (Program.seq (l ++ rest)).Run s s' ↔ (Program.seq rest).Run { s with vregs := f } s' := by
@@ -192,7 +170,8 @@ theorem run_append_of_regRun {l : List Instr} {s : SailJoltState} {f : VReg → 
 /-! ## Assertions -/
 
 /-- A run through `VirtualAssertEQ x y 0` is a run of the rest in which `x = y` held.
-Example: the column checks `assert_eq r, w[k]` of the secp256k1 field inlines. -/
+Example: from a state with `vr62 = vr56 = 1`, a run of `[VirtualAssertEQ vr62, vr56; rest]` is a
+run of `rest`; with `vr62 = 1`, `vr56 = 2` there is none. -/
 theorem run_assertEq_iff (x y : VReg) (rest : List Instr) (s s' : SailJoltState) :
     (Program.seq (.VirtualAssertEQ (.vreg x) (.vreg y) 0 :: rest)).Run s s' ↔
       s.vregs x = s.vregs y ∧ (Program.seq rest).Run s s' := by
@@ -210,7 +189,8 @@ theorem run_assertEq_iff (x y : VReg) (rest : List Instr) (s s' : SailJoltState)
 
 /-- A run through `VirtualAssertLTE x y 0` is a run of the rest in which `x ≤ y` held as
 unsigned 64-bit values.
-Example: the final overflow check `assert_lte aux, r[1]` of the secp256k1 field inlines. -/
+Example: from a state with `vr61 = 1` and `vr63 = 2`, a run of `[VirtualAssertLTE vr61, vr63; rest]`
+is a run of `rest`; with `vr61 = 3` there is none. -/
 theorem run_assertLTE_iff (x y : VReg) (rest : List Instr) (s s' : SailJoltState) :
     (Program.seq (.VirtualAssertLTE (.vreg x) (.vreg y) 0 :: rest)).Run s s' ↔
       (s.vregs x).toNat ≤ (s.vregs y).toNat ∧ (Program.seq rest).Run s s' := by

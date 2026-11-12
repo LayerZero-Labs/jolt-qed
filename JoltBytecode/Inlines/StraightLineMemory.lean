@@ -41,13 +41,13 @@ theorem XReads.eq_sourceValue {s : SailJoltState} {r : regidx} {v : BitVec 64}
   (readSrc_run (readSrc_xreg_run_of_read r s v h)).2
 
 /-- The operand read of a row through an architectural register.
-Example: the base read of an `LD` from `x10`. -/
+Example: if `XReads s x10 0x80010000`, then `readSrc (.xreg x10) s = .ok 0x80010000 s`. -/
 theorem XReads.run {s : SailJoltState} {r : regidx} {v : BitVec 64} (h : XReads s r v) :
     readSrc (.xreg r) s = .ok v s :=
   readSrc_xreg_run_of_read r s v h
 
 /-- A successful operand read through an architectural register is an `XReads`.
-Example: the base read of an `LD` that retired. -/
+Example: `readSrc (.xreg x10) s = .ok 0x80010000 t` gives `XReads s x10 0x80010000`. -/
 theorem XReads.of_readSrc {s t : SailJoltState} {r : regidx} {v : BitVec 64}
     (h : JoltISA.readSrc (.xreg r) s = .ok v t) : XReads s r v := by
   rw [(readSrc_run h).1] at h
@@ -75,7 +75,8 @@ private theorem readReg_ok_congr {reg : Register} {σ₁ σ₂ : SailState}
   | none => simp [throw, throwThe, MonadExceptOf.throw, EStateM.throw]
 
 /-- Reading an architectural register depends only on the Sail register map.
-Example: a read of `x10` that succeeds before a store to RAM succeeds after it. -/
+Example: if `XReads s x10 0x80010000` and `t` is `s` after an `SD` to RAM, then
+`XReads t x10 0x80010000`. -/
 theorem XReads.of_regs {s t : SailJoltState} {r : regidx} {v : BitVec 64}
     (hregs : s.sail.regs = t.sail.regs) (h : XReads s r v) : XReads t r v := by
   unfold XReads rX_bits rX at h ⊢
@@ -96,7 +97,9 @@ theorem XReads.of_regs {s t : SailJoltState} {r : regidx} {v : BitVec 64}
       rw [readReg_ok_congr hregs hσ]
     · cases h
 
-/-- Register-row updates keep architectural reads. Example: after `ADD vr62 vr62 vr61`. -/
+/-- Register-row updates keep architectural reads.
+Example: `XReads s x10 0x80010000` gives `XReads { s with vregs := setV s.vregs vr62 7 } x10
+0x80010000`. -/
 theorem XReads.vregs {s : SailJoltState} {r : regidx} {v : BitVec 64}
     (f : VReg → BitVec 64) (h : XReads s r v) : XReads { s with vregs := f } r v := h
 
@@ -118,14 +121,17 @@ theorem and_seven_eq_zero_iff (a : BitVec 64) : a &&& 7 = 0 ↔ a.toNat % 8 = 0 
 
 /-- The doubleword an `LD` reads at address `a` in state `s`, or `none` when Jolt's load
 fails (misaligned, outside the readable memory, or an unreadable device byte).
-Example: in RAM below the heap end it is `ram_doubleword s.sail.mem a.toNat`. -/
+Example: `loadDword? s 0x80010000 = some (ram_doubleword s.sail.mem 0x80010000)` when
+`0x80010000` lies below the heap end and outside the stack canary. -/
 def loadDword? (s : SailJoltState) (a : BitVec 64) : Option (BitVec 64) :=
   match Mmu.load_doubleword a s with
   | .ok (.Ok v) _ => some v
   | _ => none
 
 /-- A doubleword load that returns changes nothing and returns a value at an aligned
-address. Example: `Mmu.load_doubleword` never returns `.Err`. -/
+address.
+Example: if `Mmu.load_doubleword 0x80010000 s = .ok r t`, then `t = s` and `r = .Ok v` for
+some `v`. -/
 theorem load_doubleword_ok_inv {a : BitVec 64} {s t : SailJoltState}
     {r : Result (BitVec 64) ExecutionResult} (h : Mmu.load_doubleword a s = .ok r t) :
     t = s ∧ (∃ v, r = .Ok v) ∧ a.toNat % 8 = 0 := by
@@ -133,7 +139,9 @@ theorem load_doubleword_ok_inv {a : BitVec 64} {s t : SailJoltState}
   repeat' split at h
   all_goals first | (cases h; exact ⟨rfl, ⟨_, rfl⟩, by omega⟩) | cases h
 
-/-- The load behind a `loadDword?` value. Example: used to run an `LD` row. -/
+/-- The load behind a `loadDword?` value.
+Example: if `loadDword? s 0x80010000 = some 7`, then `Mmu.load_doubleword 0x80010000 s` returns
+`7` and leaves `s` unchanged. -/
 theorem load_doubleword_of_loadDword? {s : SailJoltState} {a v : BitVec 64}
     (h : loadDword? s a = some v) : Mmu.load_doubleword a s = .ok (.Ok v) s := by
   unfold loadDword? at h
@@ -166,7 +174,7 @@ theorem loadDword?_eq (s : SailJoltState) (a : BitVec 64) :
   · simp [h1]
 
 /-- What an `LD` reads depends only on the device and the RAM map, not on the registers.
-Example: a register row between two loads does not change what the second one reads. -/
+Example: `loadDword? { s with vregs := f } 0x80010000 = loadDword? s 0x80010000`. -/
 theorem loadDword?_congr {s t : SailJoltState} (hd : s.jolt_device = t.jolt_device)
     (hm : s.sail.mem = t.sail.mem) (a : BitVec 64) : loadDword? s a = loadDword? t a := by
   have hraw : Mmu.load_raw? s = Mmu.load_raw? t := by
@@ -175,7 +183,8 @@ theorem loadDword?_congr {s t : SailJoltState} (hd : s.jolt_device = t.jolt_devi
     simp only [hd, hm]
   rw [loadDword?_eq, loadDword?_eq, hd, hm, hraw]
 
-/-- Register updates do not change what an `LD` reads. Example: after `MUL vr61 vr48 vr52`. -/
+/-- Register updates do not change what an `LD` reads.
+Example: `loadDword? { s with vregs := setV s.vregs vr61 7 } a = loadDword? s a`. -/
 @[simp] theorem loadDword?_vregs (s : SailJoltState) (f : VReg → BitVec 64) (a : BitVec 64) :
     loadDword? { s with vregs := f } a = loadDword? s a :=
   loadDword?_congr (s := { s with vregs := f }) (t := s) rfl rfl a
@@ -192,7 +201,8 @@ theorem loadDword?_ram {s : SailJoltState} {a : BitVec 64} (halign : a.toNat % 8
 
 /-- An `LD` from a virtual destination at or above `vr32` through an architectural base that
 reads `base`: the run continues exactly when the load succeeds, with the destination set.
-Example: `LD vr48, 0(x10)` in the secp256k1 field inlines. -/
+Example: with `XReads s x10 0x80010000`, a run of `[LD vr48, 0(x10); rest]` from `s` is a run of
+`rest` with `vr48` set to `v`, where `loadDword? s 0x80010000 = some v`. -/
 theorem run_ld_iff {fc : LoadFaultClass} {d : VReg} (hd : 32 ≤ d.toNat) {r : regidx}
     {imm : BitVec 64} {s : SailJoltState} {base : BitVec 64} (hr : XReads s r base)
     (rest : List Instr) (s' : SailJoltState) :
@@ -228,7 +238,9 @@ theorem run_ld_iff {fc : LoadFaultClass} {d : VReg} (hd : 32 ≤ d.toNat) {r : r
         cases hl
     · simp [pure, EStateM.pure, RETIRE_SUCCESS] at ht
 
-/-- A run through an `LD` reads its base register. Example: the first row of an inline. -/
+/-- A run through an `LD` reads its base register.
+Example: a run of `[LD vr48, 0(x10); rest]` from `s` gives `XReads s x10 v`, where `v` is the
+value of `x10` in `s`. -/
 theorem XReads.of_run_ld {fc : LoadFaultClass} {d : Dst} {r : regidx} {imm : BitVec 64}
     {rest : List Instr} {s s' : SailJoltState}
     (h : (Program.seq (.LD fc d (.xreg r) imm :: rest)).Run s s') :
@@ -244,14 +256,16 @@ theorem XReads.of_run_ld {fc : LoadFaultClass} {d : Dst} {r : regidx} {imm : Bit
 /-! ## Stores -/
 
 /-- The state after an `SD` of `v` at address `a` in state `s`, or `none` when Jolt's store
-fails. Example: in RAM outside the stack canary and below the heap end it writes the RAM map. -/
+fails.
+Example: `storeDword? s 0x80020000 7` writes `7` to the RAM map at `0x80020000` when that
+address lies below the heap end and outside the stack canary. -/
 def storeDword? (s : SailJoltState) (a v : BitVec 64) : Option SailJoltState :=
   match Mmu.store_doubleword a v s with
   | .ok (.Ok _) t => some t
   | _ => none
 
 /-- A doubleword store that returns reports success at an aligned address.
-Example: `Mmu.store_doubleword` never returns `.Err`. -/
+Example: if `Mmu.store_doubleword 0x80020000 7 s = .ok r t`, then `r = .Ok b` for some `b`. -/
 theorem store_doubleword_ok_inv {a v : BitVec 64} {s t : SailJoltState}
     {r : Result Bool ExecutionResult} (h : Mmu.store_doubleword a v s = .ok r t) :
     (∃ b, r = .Ok b) ∧ a.toNat % 8 = 0 := by
@@ -259,7 +273,9 @@ theorem store_doubleword_ok_inv {a v : BitVec 64} {s t : SailJoltState}
   repeat' split at h
   all_goals first | (cases h; exact ⟨⟨_, rfl⟩, by omega⟩) | cases h
 
-/-- The store behind a `storeDword?` state. Example: used to run an `SD` row. -/
+/-- The store behind a `storeDword?` state.
+Example: if `storeDword? s 0x80020000 7 = some t`, then `Mmu.store_doubleword 0x80020000 7 s`
+succeeds and ends in `t`. -/
 theorem store_doubleword_of_storeDword? {s t : SailJoltState} {a v : BitVec 64}
     (h : storeDword? s a v = some t) : ∃ b, Mmu.store_doubleword a v s = .ok (.Ok b) t := by
   unfold storeDword? at h
@@ -270,21 +286,26 @@ theorem store_doubleword_of_storeDword? {s t : SailJoltState} {a v : BitVec 64}
   · cases h
 
 /-- A RAM doubleword store outside the stack canary and below the heap end writes the RAM
-map. Example: the output stores of the secp256k1 field inlines. -/
+map.
+Example: `storeDword? s 0x80020000 7` is `s` with `write_ram_doubleword s.sail.mem 0x80020000 7`
+as its RAM map. -/
 theorem storeDword?_ram {s : SailJoltState} {a : BitVec 64} (v : BitVec 64)
     (halign : a.toNat % 8 = 0) (hram : RAM_START_ADDRESS ≤ a.toNat)
     (hok : Mmu.effective_address_ok s.jolt_device a.toNat true = true) :
     storeDword? s a v =
-      some { s with sail := { s.sail with mem := Mmu.write_ram_doubleword s.sail.mem a.toNat v } } := by
+      some { s with
+        sail := { s.sail with mem := Mmu.write_ram_doubleword s.sail.mem a.toNat v } } := by
   unfold storeDword?
   rw [Mmu.store_doubleword_ram s a v ((and_seven_eq_zero_iff a).2 halign) hram hok]
 
 /-- A successful RAM store is the closed form, and its address was writable.
-Example: the soundness direction of the output stores. -/
+Example: `storeDword? s 0x80020000 7 = some t` gives that `0x80020000` is writable and `t` is `s`
+with `write_ram_doubleword s.sail.mem 0x80020000 7` as its RAM map. -/
 theorem storeDword?_ram_inv {s t : SailJoltState} {a v : BitVec 64}
     (hram : RAM_START_ADDRESS ≤ a.toNat) (h : storeDword? s a v = some t) :
     a.toNat % 8 = 0 ∧ Mmu.effective_address_ok s.jolt_device a.toNat true = true ∧
-      t = { s with sail := { s.sail with mem := Mmu.write_ram_doubleword s.sail.mem a.toNat v } } := by
+      t = { s with
+        sail := { s.sail with mem := Mmu.write_ram_doubleword s.sail.mem a.toNat v } } := by
   obtain ⟨b, hb⟩ := store_doubleword_of_storeDword? h
   have hal := (store_doubleword_ok_inv hb).2
   have hnot : ¬ a.toNat % 8 ≠ 0 := by omega
@@ -297,8 +318,9 @@ theorem storeDword?_ram_inv {s t : SailJoltState} {a v : BitVec 64}
     cases hb
 
 /-- An `SD` of a virtual register through an architectural base that reads `base`: the run
-continues exactly when the store succeeds. Example: `SD vr62, 0(x12)` in the secp256k1 field
-inlines. -/
+continues exactly when the store succeeds.
+Example: with `XReads s x12 0x80020000`, a run of `[SD x12, vr62, 0; rest]` from `s` is a run of
+`rest` from `t`, where `storeDword? s 0x80020000 (s.vregs vr62) = some t`. -/
 theorem run_sd_iff {x : VReg} {r : regidx} {imm : BitVec 64} {s : SailJoltState}
     {base : BitVec 64} (hr : XReads s r base) (rest : List Instr) (s' : SailJoltState) :
     (Program.seq (.SD (.xreg r) (.vreg x) imm :: rest)).Run s s' ↔
@@ -330,7 +352,9 @@ theorem run_sd_iff {x : VReg} {r : regidx} {imm : BitVec 64} {s : SailJoltState}
         cases hl
     · simp [pure, EStateM.pure, RETIRE_SUCCESS] at ht
 
-/-- A run through an `SD` reads its base register. Example: the output store of an inline. -/
+/-- A run through an `SD` reads its base register.
+Example: a run of `[SD x12, vr62, 0; rest]` from `s` gives `XReads s x12 v`, where `v` is the
+value of `x12` in `s`. -/
 theorem XReads.of_run_sd {r : regidx} {val : Src} {imm : BitVec 64}
     {rest : List Instr} {s s' : SailJoltState}
     (h : (Program.seq (.SD (.xreg r) val imm :: rest)).Run s s') :
@@ -346,7 +370,7 @@ theorem XReads.of_run_sd {r : regidx} {val : Src} {imm : BitVec 64}
 /-! ## Reading back RAM -/
 
 /-- A RAM doubleword reads back what was stored at the same address.
-Example: the output limbs of the secp256k1 field inlines. -/
+Example: `ram_doubleword (write_ram_doubleword m 0x80020000 7) 0x80020000 = 7`. -/
 theorem ram_doubleword_write_same (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat)
     (v : BitVec 64) : Mmu.ram_doubleword (Mmu.write_ram_doubleword m ea v) ea = v := by
   unfold Mmu.ram_doubleword Mmu.write_ram_doubleword Mmu.ram_byte

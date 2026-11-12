@@ -33,7 +33,8 @@ namespace JoltISA.Inlines
 /-- The doubleword at address `ea` is 8-aligned and `effective_address_ok` lets Jolt store to
 it. The predicate does not require `ea` to be in RAM (an aligned output-window address also
 satisfies it); the lemmas that use it take `RAM_START_ADDRESS ≤ ea` as a separate hypothesis.
-Example: an 8-aligned heap address below `heap_end`, outside the stack canary. -/
+Example: with the stack ending at `0x8000_1000` and the heap at `0x8010_0000`, the address
+`0x8002_0000` is writable and `0x8002_0004` is not (misaligned). -/
 def DwordWritable (dev : JoltDevice) (ea : Nat) : Prop :=
   ea % 8 = 0 ∧ Mmu.effective_address_ok dev ea true = true
 
@@ -64,15 +65,17 @@ def afterStores (s : SailJoltState) (d : VReg) (ea : Nat) : List (BitVec 64) →
 
 /-! ## The state after the stores -/
 
-/-- Writing the same register twice keeps the second value. Example: resetting `vr48` after the
-advice rows. -/
+/-- Writing the same register twice keeps the second value.
+Example: `setV (setV f vr48 7) vr48 0 = setV f vr48 0`. -/
 theorem setV_setV (f : VReg → BitVec 64) (d : VReg) (a b : BitVec 64) :
     setV (setV f d a) d b = setV f d b := by
   funext r
   by_cases h : r = d <;> simp [setV, h]
 
 /-- The stores change only the RAM map and register `d`; a later write to `d` hides the advice
-values. Example: `GLVR_ADV` ends with `vr48 := 0`. -/
+values.
+Example: after storing `[7]` through `vr48` and then setting `vr48 := 0`, the state is `s` with
+`vr48 = 0` and `7` in RAM. -/
 theorem afterStores_setV (s : SailJoltState) (d : VReg) (v : BitVec 64) (ea : Nat)
     (ws : List (BitVec 64)) :
     { afterStores s d ea ws with vregs := setV (afterStores s d ea ws).vregs d v } =
@@ -88,7 +91,7 @@ theorem afterStores_setV (s : SailJoltState) (d : VReg) (v : BitVec 64) (ea : Na
 /-! ## Running the rows -/
 
 /-- A run of an empty row list ends where it starts.
-Example: the rows after the last reset of an inline. -/
+Example: `(Program.seq []).Run s s'` holds exactly when `s' = s`. -/
 theorem run_nil_iff (s s' : SailJoltState) : (Program.seq []).Run s s' ↔ s' = s := by
   simp only [Program.seq, List.foldr, Program.Run, execProgram_done, EStateM.run, pure,
     EStateM.pure]
@@ -103,7 +106,8 @@ theorem run_nil_iff (s s' : SailJoltState) : (Program.seq []).Run s s' ↔ s' = 
 address wrapping. A run of `adviceStoreRows r d off ws ++ rest` from `s` is exactly a run of
 `rest` from `afterStores s d (C + off) ws`, and it exists only when every target doubleword is
 aligned and writable.
-Example: the six output words of `GLVR_ADV`. -/
+Example: with `x12` reading `0x8002_0000`, a run of `adviceStoreRows x12 vr48 0 [7, 9] ++ rest`
+is a run of `rest` from `s` with `7` at `0x8002_0000`, `9` at `0x8002_0008` and `vr48 = 9`. -/
 theorem run_adviceStoreRows_iff {r : regidx} {d : VReg} (hd : 32 ≤ d.toNat) {C : BitVec 64}
     (hC : RAM_START_ADDRESS ≤ C.toNat) (off : Nat) (ws : List (BitVec 64)) (s : SailJoltState)
     (hr : XReads s r C) (hw : C.toNat + off + 8 * ws.length ≤ 2 ^ 64) (rest : List Instr)
@@ -157,7 +161,7 @@ theorem run_adviceStoreRows_iff {r : regidx} {d : VReg} (hd : 32 ≤ d.toNat) {C
 /-! ## Reading the words back -/
 
 /-- A RAM address Jolt may store to, it may also load from.
-Example: a heap address below `heap_end` passes both checks. -/
+Example: if Jolt may store to `0x8002_0000`, it may also load from it. -/
 theorem effective_address_ok_read_of_write {dev : JoltDevice} {ea : Nat}
     (hram : RAM_START_ADDRESS ≤ ea) (h : Mmu.effective_address_ok dev ea true = true) :
     Mmu.effective_address_ok dev ea false = true := by
@@ -196,7 +200,8 @@ theorem ram_doubleword_writeDwords_get (m : Std.ExtHashMap Nat (BitVec 8)) (ea :
 
 /-- **Read-back.** If the RAM map of `t` holds the words `ws` stored from `C`, at addresses Jolt
 may store to, then loading doubleword `i` returns word `i`.
-Example: the output buffer of `GLVR_ADV` after the call. -/
+Example: if the RAM map of `t` is `writeDwords m 0x8002_0000 [7, 9]`, then
+`loadDword? t (0x8002_0000 + 8) = some 9`. -/
 theorem loadDword?_of_mem_writeDwords {t : SailJoltState} {m : Std.ExtHashMap Nat (BitVec 8)}
     {C : BitVec 64} {ws : List (BitVec 64)} (hm : t.sail.mem = writeDwords m C.toNat ws)
     (hC : RAM_START_ADDRESS ≤ C.toNat) (hw : C.toNat + 8 * ws.length ≤ 2 ^ 64)

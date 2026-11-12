@@ -49,7 +49,7 @@ Example: `0x8002_0000` when `x12 = 0x8002_0000` and `rs3 = x12`. -/
 abbrev glvrOut (rs3 : regidx) (s : SailJoltState) : BitVec 64 := sourceValue (.xreg rs3) s
 
 /-- Where the output buffer must lie for soundness: in RAM, with its 48 bytes below `2^64`.
-Example: a buffer at `0x8002_0000`. -/
+Example: a buffer at `0x8002_0000` meets it; one at `0x1000` (below RAM) does not. -/
 structure GlvrAdvBuffer (rs3 : regidx) (s : SailJoltState) : Prop where
   ram : RAM_START_ADDRESS ≤ (glvrOut rs3 s).toNat
   no_wrap : (glvrOut rs3 s).toNat + 48 ≤ 2 ^ 64
@@ -87,7 +87,8 @@ def glvrAdvFinal (rs3 : regidx) (advice : Nat → BitVec 64) (s : SailJoltState)
 
 /-- Given a readable `rs3` and a buffer in RAM, the rows run exactly when the six target
 doublewords are writable, and they end in `glvrAdvFinal`.
-Example: a buffer that overlaps the stack canary has no run. -/
+Example: with the stack ending at `0x8000_1000`, a buffer at `0x8000_0ff8` overlaps the stack
+canary, so its first doubleword is not writable and the rows have no run. -/
 theorem glvrAdv_run_iff {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : GlvrAdvBuffer rs3 s) (hr : XReads s rs3 (glvrOut rs3 s)) :
     (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s' ↔
@@ -127,7 +128,8 @@ theorem glvrAdv_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
 /-! ## Completeness with Jolt's advice -/
 
 /-- The four little-endian limbs at address `a`, or `none` when a load fails.
-Example: how Jolt's advice reads the scalar at `rs1`. -/
+Example: if RAM holds the words `1, 2, 3, 4` at `a`, `a + 8`, `a + 16` and `a + 24`, the result
+is `some #v[1, 2, 3, 4]`. -/
 def readLimbs? (s : SailJoltState) (a : BitVec 64) : Option Limbs := do
   let l0 ← loadDword? s a
   let l1 ← loadDword? s (a + 8)
