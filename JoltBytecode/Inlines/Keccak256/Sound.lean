@@ -111,6 +111,8 @@ def AbsorbPermuteSpec (rs1 rs2 : regidx) (s s' : SailJoltState) : Prop :=
 
 /-! ## The end state -/
 
+/-- Every Keccak state serializes to 25 doublewords.
+Example: `(wordsOf State.zero).length = 25`. -/
 theorem wordsOf_length (S : State) : (wordsOf S).length = 25 := rfl
 
 /-- A call leaves the device as it was. -/
@@ -187,6 +189,8 @@ theorem keccak256_run_iff {rs1 rs2 rs3 : regidx} {s s' : SailJoltState} {A : Bit
       (poolReset_congr fun r hr => ldFile_out s A s.vregs r hr)]
   exact Iff.rfl
 
+/-- The absorption reads memory only, so the registers of `s` do not matter.
+Example: `absorbF { s with vregs := 0 } B = absorbF s B`. -/
 @[simp] theorem absorbF_vregs (s : SailJoltState) (g : VReg → BitVec 64) (B : BitVec 64) :
     absorbF { s with vregs := g } B = absorbF s B := by
   unfold absorbF

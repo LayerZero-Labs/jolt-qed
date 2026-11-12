@@ -5,16 +5,7 @@ import JoltBytecode.Inlines.AdviceStores
 # The blocks of the Keccak rows other than the rounds
 
 * Loads: `stateOf_ldFile` says the loads put the 25 lanes at `A` (`stateAt`) into `vr48..72`.
-* Absorption (`KECCAK256_{ S with
-    a0 := S.a0 ^^^ .ofBitVec (w.getD 0 0), a1 := S.a1 ^^^ .ofBitVec (w.getD 1 0),
-    a2 := S.a2 ^^^ .ofBitVec (w.getD 2 0), a3 := S.a3 ^^^ .ofBitVec (w.getD 3 0),
-    a4 := S.a4 ^^^ .ofBitVec (w.getD 4 0), a5 := S.a5 ^^^ .ofBitVec (w.getD 5 0),
-    a6 := S.a6 ^^^ .ofBitVec (w.getD 6 0), a7 := S.a7 ^^^ .ofBitVec (w.getD 7 0),
-    a8 := S.a8 ^^^ .ofBitVec (w.getD 8 0), a9 := S.a9 ^^^ .ofBitVec (w.getD 9 0),
-    a10 := S.a10 ^^^ .ofBitVec (w.getD 10 0), a11 := S.a11 ^^^ .ofBitVec (w.getD 11 0),
-    a12 := S.a12 ^^^ .ofBitVec (w.getD 12 0), a13 := S.a13 ^^^ .ofBitVec (w.getD 13 0),
-    a14 := S.a14 ^^^ .ofBitVec (w.getD 14 0), a15 := S.a15 ^^^ .ofBitVec (w.getD 15 0),
-    a16 := S.a16 ^^^ .ofBitVec (w.getD 16 0) }_PERMUTE` only): `run_absorbRows_iff` runs the 34 rows, and
+* Absorption (`KECCAK256_ABSORB_PERMUTE` only): `run_absorbRows_iff` runs the 34 rows, and
   `stateOf_absorbF` says they XOR the 17 lanes of the block at `B` (`blockAt`) into lanes 0 to 16
   (`absorbLanes`). `absorbBlock_blockBytes` says that `absorbLanes` is EthLib's
   `Internal.absorbBlock 136` of the block's 136 bytes (`blockBytes`).
@@ -66,7 +57,8 @@ def wordsOf (S : State) : List (BitVec 64) :=
 /-- `ofLanes` reads `g` only below 25. -/
 theorem ofLanes_congr {g g' : Nat → BitVec 64} (h : ∀ i < 25, g i = g' i) :
     ofLanes g = ofLanes g' := by
-  simp only [ofLanes, h 0 (by omega), h 1 (by omega), h 2 (by omega), h 3 (by omega), h 4 (by omega),
+  simp only [ofLanes,
+    h 0 (by omega), h 1 (by omega), h 2 (by omega), h 3 (by omega), h 4 (by omega),
     h 5 (by omega), h 6 (by omega), h 7 (by omega), h 8 (by omega), h 9 (by omega),
     h 10 (by omega), h 11 (by omega), h 12 (by omega), h 13 (by omega), h 14 (by omega),
     h 15 (by omega), h 16 (by omega), h 17 (by omega), h 18 (by omega), h 19 (by omega),
@@ -91,6 +83,8 @@ theorem ne_of_pool {r d : VReg} (hr : ¬ InPool r) (hd : InPool d) : r ≠ d := 
   rintro rfl
   exact hr hd
 
+/-- Registers `vr48..84` are in the pool.
+Example: `InPool (vr 60)`. -/
 theorem vr_pool (n : Nat) (h1 : 48 ≤ n) (h2 : n < 85) : InPool (vr n) := by
   unfold InPool
   rw [BitVec.toNat_ofNat]
@@ -102,6 +96,8 @@ theorem stateOf_regsOf (g : VReg → BitVec 64) :
 
 /-! ## Loads -/
 
+/-- The 25 lane loads write virtual registers, not architectural ones.
+Example: the first load writes `vr48`, and `48 ≥ 32`. -/
 theorem laneLds_ge : ∀ p ∈ laneLds, 32 ≤ p.1.toNat := by decide
 
 /-- The 25 loads succeed exactly when the 25 lanes at `A` load. -/
@@ -137,6 +133,8 @@ def absorbStep (s : SailJoltState) (B : BitVec 64) (f : VReg → BitVec 64) (i :
     VReg → BitVec 64 :=
   Op.eval (setV f (vr scratch) (loadLane s B i)) (.xor (48 + i) (48 + i) scratch)
 
+/-- The absorption step reads memory only, so the registers of `s` do not matter.
+Example: `absorbStep { s with vregs := 0 } B = absorbStep s B`. -/
 @[simp] theorem absorbStep_vregs (s : SailJoltState) (g : VReg → BitVec 64) (B : BitVec 64) :
     absorbStep { s with vregs := g } B = absorbStep s B := by
   funext f i
@@ -238,6 +236,8 @@ theorem absorbF_out (s : SailJoltState) (B : BitVec 64) (f : VReg → BitVec 64)
 theorem laneRegs_map (f : VReg → BitVec 64) : laneRegs.map f = wordsOf (stateOf (regsOf f)) :=
   rfl
 
+/-- The stores write 25 registers, one per lane.
+Example: the first is `vr48` (lane 0), the last `vr72` (lane 24). -/
 theorem laneRegs_length : laneRegs.length = 25 := rfl
 
 /-! ## Resets -/
@@ -301,8 +301,8 @@ theorem poolReset_congr {f g : VReg → BitVec 64} (h : ∀ r, ¬ InPool r → f
 
 /-! ## The block as bytes -/
 
-/-- The 136 bytes of the block lanes, each lane least significant byte first, as EthLib reads
-a block.
+/-- The bytes of the lanes, eight per lane, each lane least significant byte first, as EthLib
+reads a block; 17 lanes give a 136-byte block.
 Example: the first byte of `blockBytes [0x0102]` is `0x02`. -/
 def blockBytes (w : List (BitVec 64)) : ByteArray :=
   ⟨(w.flatMap fun x => bytesOfLane (UInt64.ofBitVec x)).toArray⟩
@@ -346,6 +346,8 @@ theorem getElem?_flatMap_eight {α β : Type} (l : List α) (f : α → List β)
         show 8 * (i + 1) + k - 8 = 8 * i + k by omega, ih]
       simp
 
+/-- EthLib's `byteAt` of a byte list is its `j`-th element, or `0` past the end.
+Example: `byteAt ⟨#[7, 8]⟩ 1 = 8` and `byteAt ⟨#[7, 8]⟩ 5 = 0`. -/
 theorem byteAt_toArray (l : List UInt8) (j : Nat) : byteAt ⟨l.toArray⟩ j = l[j]?.getD 0 := by
   unfold byteAt
   split
@@ -383,7 +385,8 @@ theorem absorbBlock_blockBytes (S : State) (w : List (BitVec 64)) (hw : w.length
     simp only [blockLane, hj', ↓reduceIte, Nat.zero_add]
     rw [laneAt_blockBytes w j (by omega), List.getD_eq_getElem?_getD,
       List.getElem?_eq_getElem (by omega), Option.getD_some]
-  simp only [absorbBlock, absorbLanes, h 0 (by omega), h 1 (by omega), h 2 (by omega), h 3 (by omega), h 4 (by omega),
+  simp only [absorbBlock, absorbLanes,
+    h 0 (by omega), h 1 (by omega), h 2 (by omega), h 3 (by omega), h 4 (by omega),
     h 5 (by omega), h 6 (by omega), h 7 (by omega), h 8 (by omega), h 9 (by omega),
     h 10 (by omega), h 11 (by omega), h 12 (by omega), h 13 (by omega), h 14 (by omega),
     h 15 (by omega), h 16 (by omega)]

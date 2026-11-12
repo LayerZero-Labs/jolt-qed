@@ -113,6 +113,8 @@ def Op.ok : Op → Bool
   | .rotl d a k => poolNum d && poolNum a && decide (0 < k ∧ k < 64)
   | .xori d a _ => poolNum d && poolNum a
 
+/-- A checked op writes a pool register.
+Example: `(Op.xor 48 48 84).dst = 48`. -/
 theorem Op.dst_pool (o : Op) (ho : o.ok = true) : 48 ≤ o.dst ∧ o.dst < 85 := by
   cases o <;> simp_all [Op.ok, Op.dst]
 
@@ -306,14 +308,20 @@ def stateOf (R : Regs) : State :=
 /-- An op on the record. -/
 def Op.evalR (R : Regs) (o : Op) : Regs := R.set o.dst (o.val R.get)
 
+/-- Field `n` of the record of `f` is register `vr n`, for `n` in the pool.
+Example: `(regsOf f).get 60 = f (vr 60)`. -/
 theorem get_regsOf (f : VReg → BitVec 64) (n : Nat) (h1 : 48 ≤ n) (h2 : n < 85) :
     (regsOf f).get n = f (vr n) := by
   interval_cases n <;> rfl
 
+/-- Writing a pool register writes the matching record field.
+Example: `regsOf (setV f (vr 60) v) = (regsOf f).set 60 v`. -/
 theorem regsOf_setV (f : VReg → BitVec 64) (d : Nat) (v : BitVec 64) (h1 : 48 ≤ d)
     (h2 : d < 85) : regsOf (setV f (vr d) v) = (regsOf f).set d v := by
   interval_cases d <;> rfl
 
+/-- A checked op reads only pool registers.
+Example: `(Op.xor 48 49 50).val r` reads `r 49` and `r 50`. -/
 theorem Op.val_congr (o : Op) (ho : o.ok = true) (r r' : Nat → BitVec 64)
     (h : ∀ n, 48 ≤ n → n < 85 → r n = r' n) : o.val r = o.val r' := by
   cases o with
@@ -326,6 +334,8 @@ theorem Op.val_congr (o : Op) (ho : o.ok = true) (r r' : Nat → BitVec 64)
     simp only [Op.val]
     rw [h a (by omega) (by omega)]
 
+/-- Running a checked op on the register file is running it on the record.
+Example: for `Op.xor 48 49 50`, both write `a0` with `a1 ^^^ a2`. -/
 theorem regsOf_eval (o : Op) (ho : o.ok = true) (f : VReg → BitVec 64) :
     regsOf (Op.eval f o) = Op.evalR (regsOf f) o := by
   have hd := o.dst_pool ho

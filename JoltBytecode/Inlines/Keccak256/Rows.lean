@@ -13,8 +13,8 @@ restates that builder in Lean, so that the proofs can follow the rounds.
 | Block | `KECCAK256` rows | `ABSORB_PERMUTE` rows | What the rows do |
 |---|---|---|---|
 | `loadRows` | 0–24 | 0–24 | load the 25 lanes at `rs1` into `vr48..72` |
-| `absorbRows` | none | 25–58 | 17 pairs: load lane `i` of the block into `vr84`, XOR it into lane `i` |
-| `roundRows` (24 times) | 25–3024 | 59–3058 | 125 rows per round: theta 50, rho and pi 24, chi 50, iota 1 |
+| `absorbRows` | none | 25–58 | 17 pairs: load block lane `i` into `vr84`, XOR into lane `i` |
+| `roundRows` (24 times) | 25–3024 | 59–3058 | 125 a round: theta 50, rho-pi 24, chi 50, iota 1 |
 | `storeRows` | 3025–3049 | 3059–3083 | store `vr48..72` to the 25 lanes at `rs1` |
 | `resetRows` | 3050–3086 | 3084–3120 | reset `vr48..84` to zero |
 
