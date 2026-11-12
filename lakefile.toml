@@ -38,3 +38,7 @@ moreLeancArgs = ["-fbracket-depth=500"]
 [[lean_lib]]
 name = "JoltTests"
 leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+[[lean_exe]]
+name = "secp256k1-kat"
+root = "JoltTests.Secp256k1Kat.Main"
