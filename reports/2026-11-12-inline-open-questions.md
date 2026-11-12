@@ -16,13 +16,13 @@ Questions 1 and 3 and the aliasing and value-range parts of I0(f) are settled by
 | Q3. Misaligned `LD`/`SD` inside an inline | Tracer: panic (`mmu.rs:321` load, `mmu.rs:429` store). Constraints: unsatisfiable (RAF admits only multiples of 8 since `629b7d959` added the alignment check on `lowest_address`). jolt-qed: `Memory_Exception`, and the rows stop there | Run (tracer), source (constraints, Lean) |
 | Q3. Range that wraps past 2^64 | Tracer: panic on the first access, which is already at or above `heap_end` (`memory.rs:36`). Constraints: unsatisfiable (`RamAddress` is the unwrapped `rs1 + imm`). jolt-qed: assertion error on the first access. For the twelve inlines a wrap needs a base above `2^64 − 200`, and the first access then already fails | Run, source |
 | Q3. Base above `heap_end` | Tracer: loads panic at `memory.rs:36` (before the "Illegal Memory Access" assert is reached), stores panic at `mmu.rs:166`. Constraints: unsatisfiable when the remapped index reaches `ram_k`. jolt-qed: assertion error | Run, source |
-| Q3. Base below the lowest address | Tracer: loads succeed and read 0; stores panic (`mmu.rs:148`). Constraints: unsatisfiable, except an access at exactly address 0, which RAF reads as "no access". jolt-qed: loads succeed and read 0, stores fail; `NoLowLoad` and `TracerAddressChecks` already exclude the load case at the whole-run level | Run, source |
-| Q3. Address 0 | Not special for any of the twelve: every buffer has at least four words, and a base of 0 therefore also accesses address 8, which the prover and RAF reject (loads) or the tracer rejects (stores) | Run, source |
+| Q3. Base below the lowest address | Tracer: loads read 0, except in the five unsupported peripheral ranges (DTB, CLINT, PLIC, UART, disk), where they panic (`mmu.rs:446-450`); stores panic (`mmu.rs:148`). Constraints: a row access there is unsatisfiable, except an access at exactly address 0, which RAF reads as "no access". jolt-qed: the same split (`DeviceMemory.lean:81-84` rejects the peripheral ranges); `NoLowLoad` and `TracerAddressChecks` already exclude row loads below the lowest address at the whole-run level. Exception: `GLVR_ADV` reads `rs1` only in its advice, which records no RAM access, and a `GLVR_ADV` call with `rs1` below the lowest address is accepted by the tracer and the prover's address check | Run, source |
+| Q3. Address 0 | Not special for any buffer that emitted memory rows access: every such buffer has at least four words, and a base of 0 therefore also accesses address 8, which the prover and RAF reject (loads) or the tracer rejects (stores). The exception is `GLVR_ADV`'s `rs1`, which no row loads: with `rs1 = 0` the advice reads four zero words and no RAM access reaches the prover or RAF | Run, source |
 | Q3. What 629b7d959 and 4e55c9a5f changed for `LD`/`SD` | `629b7d959` kept `RamAddress = rs1 + imm` for `LD`/`SD`, added the verifier check that `lowest_address` is a multiple of 8 (which makes misaligned `LD`/`SD` unsatisfiable), and added the expansion check that inline load and store offsets lie in [−2048, 2047]. `4e55c9a5f` range-checks the value an `LD` loads; it changes no address | Source |
-| Q7. Whether `trace_file` affects proving | No. Only `store_inlines` reads it, and nothing calls `store_inlines` | Source (`git grep`) |
-| I0(f). SDK call sites | All 20 call sites (6 hash, 14 secp256k1) satisfy `Pre c` for every caller of the safe API: buffers are 8-aligned Rust objects in RAM, output buffers are fresh locals or `&mut self` fields, BLAKE2's flag comes from a `bool`, and secp256k1 inputs are canonical through checked constructors. Public bypasses exist: `ECField::from_u64_arr_unchecked`, `ECField::div_assume_nonzero`, `AffinePoint::new_unchecked`, `AffinePoint::from_u64_arr_unchecked` and `keccak256_absorb_permute` | Source |
+| Q7. Whether `trace_file` affects proving | No. The `trace_file` argument of `register_inlines!` is read only by the generated `store_inlines`, and nothing calls `store_inlines` | Source (`git grep`) |
+| I0(f). SDK call sites | The SDK emits the twelve inlines from 11 `.insn` sites (4 hash, 7 secp256k1; plain `KECCAK256` has none). All 11 satisfy `Pre c` for callers that respect the documented invariants of the SDK's public functions: buffers are 8-aligned Rust objects in RAM, output buffers are fresh locals or `&mut self` fields, BLAKE2's flag comes from a `bool`, and secp256k1 inputs are canonical when built through the checked constructors. Five public functions let a caller break those invariants: `ECField::from_u64_arr_unchecked`, `ECField::div_assume_nonzero`, `AffinePoint::new_unchecked` and `AffinePoint::from_u64_arr_unchecked` (all safe Rust, with documented preconditions), and `unsafe fn keccak256_absorb_permute` | Source |
 | I0(f). Overlap | No overlap condition is needed for any of the twelve: every load comes before every store, and the advice reads its operands before any row runs. Every aliasing shape tried gave the same output as disjoint buffers, and `GLVR_ADV` with `rs3 = rs1` returns the correct decomposition while overwriting `k` | Run |
-| I0(f). Value ranges | BLAKE2 accepts any `is_final` but means BLAKE2 only for 0 and 1. Jolt's secp256k1 advice needs the quotient `⌊a·b/q⌋` to fit in 256 bits (canonical inputs suffice; `a = p, b = 1` works, `a = b = 2^256 − 1` panics) and a divisor that is nonzero modulo `q` (`b = p` panics). `GLVR_ADV` reduces `k` modulo `n` and needs no range | Run |
+| I0(f). Value ranges | BLAKE2 accepts any `is_final` but means BLAKE2 only for 0 and 1. For secp256k1, "Jolt's advice generation succeeds" and "Jolt's advice passes the rows" differ. MUL and SQUARE: generation needs `⌊a·b/q⌋ < 2^256` (`a = b = 2^256 − 1` panics), and the advice then passes the rows (`a = p, b = 1` passes; RUN PENDING for the larger non-canonical cases). DIV: generation needs `b mod q ≠ 0` (`b = p` panics), and the advice passes the rows only when the dividend `a < q` (source: `a = q, b = 1` gives `c = w = 0`, and the check `c·b = w·q + a` fails; RUN PENDING). A non-canonical divisor is fine. `GLVR_ADV` reduces `k` modulo `n` and needs no range | Run, source |
 
 ## How the runs were made
 
@@ -30,7 +30,10 @@ The probe builds small RISC-V ELF images in memory (`src/elf.rs`): one `AUIPC` a
 Operands go in `x10` (`rs1`), `x11` (`rs2`) and `x12` (the `rd` field, which the secp256k1 inlines read as `rs3`); the hash inlines get `rd = x0`.
 Every row count below therefore includes the setup rows and the final jump.
 It then calls Jolt's production entry points directly: `jolt_program::image::decode_elf`, `jolt_program::build_jolt_program_with_inline_provider` (with `TracerInlineExpansionProvider`), `jolt_program::build_jolt_program`, `jolt_host::JoltProgramSource::decode` through a small `ElfSource` implementation, and `tracer::trace`.
-For every successful trace it also passes each recorded RAM address to `MemoryLayout::remap_word_address`, which is the check Jolt's prover applies when it builds the RAM witness (`crates/jolt-witness/src/backend/trace/ram.rs:260-283`).
+In the `q3` subcommand it also passes each RAM address that a successful trace records to `MemoryLayout::remap_word_address`, which is the first of the two address checks Jolt's prover applies when it builds the RAM witness (`crates/jolt-witness/src/backend/trace/ram.rs:260-283`).
+The probe omits the second check, that the remapped index is below `ram_k` (`ram.rs:274-282`); no `q3` case comes near `ram_k`, since every RAM address in them is below `heap_end`.
+Every assert row of the secp256k1 inlines is `VirtualAssertEQ` or `VirtualAssertLTE` with `imm = 0`, and the tracer panics when such a row fails (`tracer/src/instruction/virtual_assert_eq.rs:20`, `virtual_assert_lte.rs:19`); the hash inlines have no assert rows.
+A successful trace therefore means that the advice passed every assert row.
 Panics are caught with `catch_unwind`, and the probe prints the panic location and the first line of the message.
 
 The inline crates are optional dependencies behind two cargo features (`scripts/inline-open-questions/Cargo.toml.in`):
@@ -208,7 +211,8 @@ In short, the tracer:
 - panics on every misaligned access;
 - panics on every access at or above `heap_end`, which includes every wrapping range;
 - panics on stores below the lowest address, at 0, in the input region, in the gap above `io_end`, and in the stack canary;
-- accepts loads below the lowest address (they read 0), loads in the stack canary and in the input, output, panic and termination words;
+- accepts loads below the lowest address (they read 0), except in the unsupported peripheral ranges `0x1020..=0x1fff` (DTB), `0x02000000..=0x0200ffff` (CLINT), `0x0c000000..=0x0fffffff` (PLIC), `0x10000000..=0x100000ff` (UART) and `0x10001000..=0x10001fff` (disk), where `load_raw` panics (`mmu.rs:446-450`; probe cases at `0x1020` and `0x10000000`: RUN PENDING);
+- accepts loads in the stack canary and in the input, output, panic and termination words;
 - accepts stores to the output region and to the panic and termination words, and a store to the panic word sets the panic flag.
 
 ### Constraints: source
@@ -245,7 +249,7 @@ What the two commits changed for `LD`/`SD`:
   `execProgram` (`Semantics.lean:589-597`) stops at the first result that is not success: after a misaligned row the rows do not run to the end.
 - An aligned row calls `Mmu.load_doubleword` or `Mmu.store_doubleword` (`JoltBytecode/JoltISA/DeviceMemory.lean`, around 132-143 and 149-164).
   At or above `RAM_START` they check `effective_address_ok` (around 43-58), which mirrors `assert_effective_address`: loads need `ea < heap_end`; stores need `ea < heap_end` and `ea` outside the canary.
-  Below `RAM_START`, loads go through `load_raw?`, which accepts the I/O regions and every address at most `RAM_START − 8` (reading 0), and stores go through `store_raw?`, which accepts only the output, panic and termination words.
+  Below `RAM_START`, loads go through `load_raw?`, which accepts the I/O regions and every address at most `RAM_START − 8` (reading 0) except the five peripheral ranges, which it rejects as the tracer does (`DeviceMemory.lean:81-84`); stores go through `store_raw?`, which accepts only the output, panic and termination words.
   Every failure is an `Error.Assertion`, the model of a tracer panic.
 - The model therefore agrees with the tracer case by case on success versus failure (by reading; the Lean side was not run).
   The messages differ in one case: the model reports "Illegal Memory Access" for a load at or above `heap_end`, where the tracer panics earlier in `memory.rs:36`. Both are failures.
@@ -260,17 +264,29 @@ What the two commits changed for `LD`/`SD`:
 For each operand buffer `[base, base + 8·len)` of the call (from the table above):
 
 1. `base` is a multiple of 8.
-2. Every load address passes the tracer's read check: below `heap_end` in RAM (the stack canary is allowed), or in the input, advice, output, panic or termination regions.
-3. Every store address passes the tracer's write check: below `heap_end` in RAM and outside the stack canary, or in the output, panic or termination words.
+2. Every address that a row loads is below `heap_end` in RAM (the stack canary is allowed) or in the input, advice, output, panic or termination regions.
+   The tracer also accepts row loads below the lowest address outside the peripheral ranges, but the prover rejects them (all but address 0) and the whole-run layer excludes them through `TracerAddressChecks` and `NoLowLoad`; `Pre c` gains nothing by admitting them.
+3. Every address that a row stores to is below `heap_end` in RAM and outside the stack canary, or in the output, panic or termination words.
 4. No range wraps. Conditions 2 and 3 imply this, because every range starts at a nonnegative offset 0 and is at most 200 bytes long.
-5. For completeness of the whole proof, no load address is below the lowest address. Jolt's tracer accepts such loads, and the whole-run layer's `TracerAddressChecks` and `NoLowLoad` already demand this; `Pre c` need not repeat it.
+5. For `GLVR_ADV`, whose rows never load `rs1`: `rs1` is a multiple of 8 and the four words at `rs1` pass the tracer's read check, because the advice reads them through `Mmu::load_doubleword`. No row and no RAF access constrains `rs1`.
 
-Address 0 needs no special case for the twelve: a base of 0 makes the row at offset 8 fail (a load at 8 is rejected by the prover and is unsatisfiable; a store at 8 panics in the tracer).
+Address 0 needs no special case for buffers that emitted memory rows access: a base of 0 makes the row at offset 8 fail (a load at 8 is rejected by the prover and is unsatisfiable; a store at 8 panics in the tracer).
 Condition 2 or 3 excludes such a base already.
 
-Conditions 2 and 3 admit the I/O regions.
+`GLVR_ADV`'s `rs1` is the exception.
+`GlvrAdvBuilder::advice` (`jolt-inlines/secp256k1/src/sequence_builder.rs:25-35`) reads `k` through `InlineAdviceContext::load_doubleword`, which for `Cpu` calls `Mmu::load_doubleword(...).ok()` and discards the access record (`tracer/src/instruction/inline.rs:76-81`), and the 13 rows only store through `rs3`.
+With `rs1 = 0`, or any aligned `rs1` below the lowest address outside the peripheral ranges, the advice reads four zero words, the rows store the decomposition of 0, and no RAM access at a low address reaches the prover's address check or RAF (probe cases: RUN PENDING).
+Jolt therefore proves such a call; it is complete and harmless, because the stored words carry no guarantee in any case and the SDK checks them against the `k` it holds.
+In jolt-qed's model the rows of such a call run to the end for every advice, since no row reads `rs1`.
+What `joltAdvice c s` returns depends on how the transcription reads `k`: to match Jolt it must read through the model's MMU (`Mmu.load_doubleword`, which returns 0 below `RAM_START − 8` outside the peripheral ranges and fails in them, in the gap above `io_end` and at or above `heap_end`), not the raw memory map.
+The alternative is a `Pre` for `GLVR_ADV` that puts `k`'s buffer in RAM, which every SDK call satisfies.
+
+Conditions 2 and 3 admit the I/O regions, because the runs show that Jolt's tracer accepts these accesses and the prover's address check accepts their addresses.
+That is not yet a demonstration that Jolt proves such a call.
+jolt-witness builds the final RAM state with the panic word set from the device's panic flag and the termination word set to 1 when the guest did not panic (`crates/jolt-witness/src/backend/trace/ram.rs:180-193`), independently of the words an inline stored there.
+Whether the RAM consistency check then accepts a run whose inline stored other words into those two words is an open obligation that I did not test (the probe does not run the prover).
 If `Pre c` keeps the narrower "buffers inside RAM" of section 5.4, it remains sufficient but no longer covers a guest that hashes directly into the output region.
-A buffer that is written and covers the panic or termination word cannot satisfy a functional `InlineSpec` in the usual form: the model reads the panic word as the flag and the termination word as 0 whatever was stored (`JoltBytecode/JoltISA/JoltDevice.lean:203-206`), and the post-state therefore does not hold the computed words there.
+A buffer that is written and covers the panic or termination word also cannot satisfy a functional `InlineSpec` in the usual form: the model reads the panic word as the flag and the termination word as 0 whatever was stored (`JoltBytecode/JoltISA/JoltDevice.lean:203-206`), and the post-state therefore does not hold the computed words there.
 The hash `InlineSpec` therefore needs either a precondition that the written buffer avoids those two words, or a statement through the device's read function.
 
 ## Q7. `trace_file`
@@ -278,16 +294,19 @@ The hash `InlineSpec` therefore needs either a precondition that the written buf
 - `register_inlines!` (doc from `jolt-inlines/sdk/src/host.rs:572`, macro at 585) takes a `trace_file` argument and uses it only in the generated `store_inlines` function (`host.rs:591-601`).
 - `store_inlines` calls `store_trace` (`host.rs:292-308`), which calls `write_inline_trace` (`host.rs:307`; defined at `tracer/src/utils/inline_sequence_writer.rs:106`).
 - `git grep -n store_inlines` at the pin finds only the doc line 572 and the definition at 591. Nothing calls it.
-- `trace_file` appears only in the `register_inlines!` invocations of the inline crates (for example `jolt-inlines/sha2/src/host.rs:4`, `jolt-inlines/secp256k1/src/host.rs:7`) and in the macro. `crates/jolt-host/src/program.rs:453` has an unrelated `trace_to_file` parameter.
+- The `trace_file` argument of `register_inlines!` appears only in the macro's invocations in the inline crates (for example `jolt-inlines/sha2/src/host.rs:4`, `jolt-inlines/secp256k1/src/host.rs:7`) and in the macro itself. Other variables and parameters named `trace_file` are unrelated: the `trace_file` parameter of `Program::trace_to_file` (`crates/jolt-host/src/program.rs:453`) and local variables in `examples/backtrace/src/main.rs` and `examples/fibonacci/src/main.rs`, which name execution-trace output files.
 - `specs/inline-expansion-grammar.md:406-409` ("Trace File Policy") says that the `.joltinline` files are developer fixtures and "not the source of truth for static expansion". `.gitignore:50` ignores `*.joltinline`.
 
-`trace_file` does not affect proving.
+The `trace_file` argument of `register_inlines!` does not affect proving.
 
 ## I0(f). SDK call sites against `Pre c`
 
 ### What was checked
 
-For each call site: register aliasing (which registers carry which pointers), 8-byte alignment, the footprint in readable or writable memory, no wrap, advice word counts, BLAKE2's `is_final ∈ {0, 1}`, and for secp256k1 canonical inputs and a nonzero divisor.
+A call site here is an `.insn` instruction in SDK source that emits one of the twelve inlines.
+The SDK has 11 of them: 4 for the hash inlines (plain `KECCAK256` has none) and 7 for secp256k1.
+For each site I checked every function that passes operands to it, up to the SDK's public functions: register aliasing (which registers carry which pointers), 8-byte alignment, the footprint in readable or writable memory, no wrap, advice word counts, BLAKE2's `is_final ∈ {0, 1}`, and for secp256k1 canonical inputs and a nonzero divisor.
+"Satisfies `Pre`" below means: for every caller that respects the documented invariants of the SDK's public functions.
 
 Facts common to all call sites:
 
@@ -298,28 +317,19 @@ Facts common to all call sites:
 
 ### Call sites
 
-| # | Inline | Call site | Operands | Verdict |
-|---|---|---|---|---|
-| 1 | `SHA256` | `jolt-inlines/sha2/src/sdk.rs:186-189` (`finalize`) via `sha256_compression` (asm 264-275, `.insn` 267) | rs1 = `self.state` (`[u32; 8]` at offset 0 of the `#[repr(C, align(8))]` struct, line 3, 11), rs2 = `self.buffer` (line 23, offset 32) | Satisfies `Pre`. `update` (48-120) always copies input into `self.buffer` first |
-| 2 | `SHA256` | `sha2/src/sdk.rs:234` (`sha256_compress`, 226-240) | same | Satisfies `Pre` |
-| 3 | `SHA256_INIT` | `sha2/src/sdk.rs:228` via `sha256_compression_initial` (asm 322-333, `.insn` 325) | same | Satisfies `Pre`. Both functions are `pub(crate) unsafe`; their safety docs (258, 316) require 8-byte alignment |
-| 4 | `KECCAK256_ABSORB_PERMUTE` | `keccak256/src/sdk.rs:88` (`absorb_buffer`) | rs1 = `self.state` (`[u64; 25]`), rs2 = `self.buffer` | Satisfies `Pre` |
-| 5 | `KECCAK256_ABSORB_PERMUTE` | `keccak256/src/sdk.rs:128` (`absorb_full_blocks`) | rs2 = the caller's input slice, passed directly when it is 8-aligned | Satisfies `Pre`: the code checks 8-byte alignment of the input (124) before passing the pointer |
-| 6 | `KECCAK256_ABSORB_PERMUTE` | `keccak256/src/sdk.rs:141` | rs2 = an aligned local copy of an unaligned block | Satisfies `Pre` |
-| 7 | `KECCAK256_ABSORB_PERMUTE` | `keccak256/src/sdk.rs:159` (`absorb_final`) | rs2 = the padded final block | Satisfies `Pre` |
-| 8 | `BLAKE2` | `blake2/src/sdk.rs:48` (`CompressionBlock::compress`, 43-50); callers at 240, 251 (`false`) and 265 (`true`) | rs1 = `h` (`[u64; 8]`), rs2 = the `#[repr(C)]` block (22-30, size assert at 53) with `t` and `final_flag = u64::from(is_final)` (44) | Satisfies `Pre`; `is_final ∈ {0, 1}` because it comes from a `bool` |
-| 9 | `BLAKE2` | `blake2/src/sdk.rs:312` (`pub fn Blake2b::compress(h, m, t, last: bool)`, 305-313, flag `last as u64` at 309) | same layout | Satisfies `Pre`; public but safe |
-| 10 | `MULQ` | `secp256k1/src/sdk.rs:173` (`Secp256k1Fq::mul`, 168-187) | rd/rs3 = fresh local `e`, rs1 = `self.e`, rs2 = `other.e` | Satisfies `Pre` when `self` and `other` are canonical; spoils on non-canonical output (184) |
-| 11 | `SQUAREQ` | `secp256k1/src/sdk.rs:216` (`square`, 211-229) | rd = fresh local, rs1 = `self.e` | Same; spoil at 226 |
-| 12 | `DIVQ` | `secp256k1/src/sdk.rs:257` (private `div_assume_nonzero`, 252-271) | rd = fresh local, rs1 = `self.e`, rs2 = `other.e` | Satisfies `Pre` when the caller guarantees `other ≠ 0`; spoil at 268 |
-| 13 | `DIVQ` via `div` | `secp256k1/src/sdk.rs:280-285` | as 12 | `div` spoils when `other` is zero (282) and then calls 12 |
-| 14 | `DIVQ` via `ECField::div_assume_nonzero` | `secp256k1/src/sdk.rs:364-366` (in `impl ECField for Secp256k1Fq`, 321-379) | as 12 | Public bypass: no zero check (see below) |
-| 15 | `MULR` | `secp256k1/src/sdk.rs:489` (`Secp256k1Fr::mul`, 484-503) | as 10 | As 10; spoil at 500 |
-| 16 | `SQUARER` | `secp256k1/src/sdk.rs:532` (`square`, 527-545) | as 11 | As 11; spoil at 542 |
-| 17 | `DIVR` | `secp256k1/src/sdk.rs:573` (private `div_assume_nonzero`, 568-587) | as 12 | As 12; spoil at 584 |
-| 18 | `DIVR` via `div` | `secp256k1/src/sdk.rs:596-601` | as 17 | `div` spoils when `other` is zero (598) |
-| 19 | `DIVR` in `ecdsa_verify` | `secp256k1/src/sdk.rs:899-900` (`ecdsa_verify`, 866-920) | `z / s`, `r / s` | Satisfies `Pre`: `ecdsa_verify` checks canonicity of z, r, s and Q, Q on the curve and not at infinity, and r, s, z nonzero (872-898) before dividing |
-| 20 | `GLVR_ADV` | `secp256k1/src/sdk.rs:756` (`decompose_scalar_impl`, 751-789; called from `glv_decompose`, 640) | rd = fresh local `out: [u64; 6]`, rs1 = `k.e`, rs2 = `x0` | Satisfies `Pre`; sign checks at 765-766 and the recombination check at 781-784 |
+| # | Inline | `.insn` site | Callers that pass operands | Operands | Verdict |
+|---|---|---|---|---|---|
+| 1 | `SHA256` | `jolt-inlines/sha2/src/sdk.rs:267` in `pub(crate) unsafe fn sha256_compression` (264-275) | `finalize` (186-189), `sha256_compress` (234; in 226-240) | rs1 = `self.state` (`[u32; 8]` at offset 0 of the `#[repr(C, align(8))]` struct, lines 3, 11), rs2 = `self.buffer` (line 23, offset 32) | Satisfies `Pre`. `update` (48-120) always copies input into `self.buffer` first. The safety doc (258) requires 8-byte alignment |
+| 2 | `SHA256_INIT` | `sha2/src/sdk.rs:325` in `pub(crate) unsafe fn sha256_compression_initial` (322-333) | `sha256_compress` (228) | same | Satisfies `Pre`; safety doc at 316 |
+| 3 | `KECCAK256_ABSORB_PERMUTE` | `keccak256/src/sdk.rs:179` in `pub unsafe fn keccak256_absorb_permute` (171-186; safety contract 167-170) | `absorb_buffer` (88: rs2 = `self.buffer`), `absorb_full_blocks` (128: the caller's input, passed directly after the 8-byte alignment check at 124; 141: an aligned local copy otherwise), `absorb_final` (159: the padded final block) | rs1 = `self.state` (`[u64; 25]`) | Satisfies `Pre` for every SDK caller. The function itself is public (see Bypasses) |
+| 4 | `BLAKE2` | `blake2/src/sdk.rs:394` in `pub(crate) unsafe fn blake2b_compress` (387-402) | `CompressionBlock::compress` (48; in 43-50; flag `u64::from(is_final)` at 44; its callers at 240, 251 pass `false` and 265 passes `true`), `pub fn Blake2b::compress(h, m, t, last: bool)` (312; in 305-313; flag `last as u64` at 309) | rs1 = `h` (`[u64; 8]`), rs2 = the `#[repr(C)]` block (22-30, size assert at 53) holding the message, `t` and the flag | Satisfies `Pre`; `is_final ∈ {0, 1}` because it comes from a `bool` |
+| 5 | `MULQ` | `secp256k1/src/sdk.rs:173` in `Secp256k1Fq::mul` (168-187) | public | rd/rs3 = fresh local `e`, rs1 = `self.e`, rs2 = `other.e` | Satisfies `Pre` when `self` and `other` are canonical; spoils on a non-canonical output (184) |
+| 6 | `SQUAREQ` | `secp256k1/src/sdk.rs:216` in `Secp256k1Fq::square` (211-229) | public | rd = fresh local, rs1 = `self.e` | Same; spoil at 226 |
+| 7 | `DIVQ` | `secp256k1/src/sdk.rs:257` in private `Secp256k1Fq::div_assume_nonzero` (252-271) | `div` (280-285, spoils on a zero divisor at 282); `ECField::div_assume_nonzero` (364-366 in `impl ECField for Secp256k1Fq`, 321-379), which is public and has no zero check; through it, `ec.rs` `double`, `add`, `double_and_add` | rd = fresh local, rs1 = `self.e`, rs2 = `other.e` | Satisfies `Pre` when both operands are canonical and the divisor is nonzero: `div` checks the divisor, and the `ec.rs` callers guard it (below); spoil at 268 |
+| 8 | `MULR` | `secp256k1/src/sdk.rs:489` in `Secp256k1Fr::mul` (484-503) | public | as 5 | As 5; spoil at 500 |
+| 9 | `SQUARER` | `secp256k1/src/sdk.rs:532` in `Secp256k1Fr::square` (527-545) | public | as 6 | As 6; spoil at 542 |
+| 10 | `DIVR` | `secp256k1/src/sdk.rs:573` in private `Secp256k1Fr::div_assume_nonzero` (568-587) | `div` (596-601, spoils on a zero divisor at 598); `ecdsa_verify` (899-900: `z / s` and `r / s`) | as 7 | Satisfies `Pre`. `ecdsa_verify` (866-920) checks canonicity of z, r, s and Q, Q on the curve and not at infinity, and r, s, z nonzero (872-898) before dividing; spoil at 584 |
+| 11 | `GLVR_ADV` | `secp256k1/src/sdk.rs:756` in `decompose_scalar_impl` (751-789) | `glv_decompose` (640), which `ecdsa_verify` calls at 902 | rd = fresh local `out: [u64; 6]`, rs1 = `k.e`, rs2 = `x0` | Satisfies `Pre`; sign checks at 765-766 and the recombination check at 781-784 |
 
 The curve code in `jolt-inlines/sdk/src/ec.rs` reaches the field inlines through the `ECField` trait: `double` (165-179) divides only when `y ≠ 0`, `add` (182-200) divides only when the x-coordinates differ, and `double_and_add` (204-232) checks its divisor at 224.
 `examples/secp256k1-ecdsa-verify/guest/src/lib.rs` uses only the checked constructors.
@@ -331,8 +341,9 @@ Out of scope and not counted: the `0x5B` `REV8W` at `sha2/src/sdk.rs:373`, the `
 
 - `ECField::from_u64_arr_unchecked` (trait `jolt-inlines/sdk/src/ec.rs:27`, doc at 19-26) and `ECField::div_assume_nonzero` (`ec.rs:16`) are public, and `impl ECField for Secp256k1Fq` forwards them to the `pub(crate)` inherent functions (`secp256k1/src/sdk.rs:364-366` and `376-378`).
   `ec` is a public module behind the `elliptic-curve` feature (`jolt-inlines/sdk/src/lib.rs:22-23`).
-  A guest can therefore build a non-canonical `Secp256k1Fq` and pass it to `MULQ`, `SQUAREQ` or `DIVQ`, or divide by zero without the spoil check.
-  The edge runs below show the effect: non-canonical inputs can make the advice panic (`host.rs:73`), and a zero divisor makes it panic (`sequence_builder.rs:152`).
+  Both are safe Rust with documented preconditions (canonical limbs; a nonzero divisor), and a caller that ignores them can build a non-canonical `Secp256k1Fq` and pass it to `MULQ`, `SQUAREQ` or `DIVQ`, or divide by zero without the spoil check.
+  The edge runs below show the effect: non-canonical inputs can make advice generation panic (`host.rs:73`), a non-canonical dividend makes Jolt's DIV advice fail the rows, and a zero divisor makes advice generation panic (`sequence_builder.rs:152`).
+  Each of these is a completeness failure (the honest prover produces no proof), not a soundness one.
 - `AffinePoint::new_unchecked` (`ec.rs:78`) and `AffinePoint::from_u64_arr_unchecked` (`ec.rs:145`) are public and build points from unchecked coordinates.
 - `pub unsafe fn keccak256_absorb_permute` (`keccak256/src/sdk.rs:171`; safety contract at 167-170: aligned pointers, no overlap) is public.
   Its contract asks for no overlap, which the runs show the inline does not need.
@@ -402,26 +413,45 @@ BLAKE2 is_final = 0x2: ok (1071 rows), h[0] = 0xd6d54695f51a7d8b
 BLAKE2 is_final = 0xffffffffffffffff: ok (1071 rows), h[0] = 0xecdecdd4ac2785ed
 ```
 
-- `mulq_quotient_advice` (`jolt-inlines/sdk/src/host.rs:98-117`) computes `w = ⌊a·b/m⌋` and `nbiguint_to_field_limbs` asserts that it fits in four limbs (`host.rs:73`). Jolt's advice therefore needs `a·b < 2^256·q`, not canonical inputs.
-- `mulq_division_advice` (`host.rs:130-148`) calls `field_inv_mul`, which panics on a divisor that is zero modulo the field (`secp256k1/src/sequence_builder.rs:146` scalar field, `152` base field). `b = p` is nonzero as an integer and still panics.
+Two questions are separate here: whether Jolt's advice generation succeeds, and whether the advice it generates passes the rows.
+
+- MUL and SQUARE. `mulq_quotient_advice` (`jolt-inlines/sdk/src/host.rs:98-117`) computes `w = ⌊a·b/q⌋` and `c = a·b − w·q`, and `nbiguint_to_field_limbs` asserts that each fits in four limbs (`host.rs:73`). Generation therefore succeeds exactly when `a·b < 2^256·q`.
+  The rows check `a·b + w·(2^256 − q) = 2^256·w + c` limb by limb, with a final carry check (`secp256k1/src/sequence_builder.rs:43-54`, 340-382). The generated `w` and `c` satisfy `a·b = w·q + c` exactly, and the identity follows. `a = p, b = 1` passes the rows (out = 0). RUN PENDING: the larger non-canonical cases below.
+- DIV. `mulq_division_advice` (`host.rs:130-148`) computes `c = a·b⁻¹ mod q` with `field_inv_mul`, which panics on a divisor that is zero modulo the field (`secp256k1/src/sequence_builder.rs:146` scalar field, `152` base field), and `w = ⌊b·c/q⌋` (`host.rs:137-139`).
+  Generation therefore succeeds exactly when `b mod q ≠ 0`; `b = p` is nonzero as an integer and still panics.
+  The rows check `c·b + w·(2^256 − q) = 2^256·w + a`, comparing against the dividend loaded from `rs1` (first comparison at `sequence_builder.rs:216-218`).
+  Since `b·c = w·q + (a mod q)`, the generated advice passes exactly when `a mod q = a`, that is `a < q`. For `a = q, b = 1` it gives `c = w = 0`, and the first comparison fails (RUN PENDING).
+  A non-canonical divisor with `b mod q ≠ 0` passes: `c < q` and `b < 2^256` keep `w` below 2^256 (RUN PENDING: `b = p + 1`, `b = 2^256 − 1`).
 - `GlvrAdvBuilder::advice` (`secp256k1/src/sequence_builder.rs:25-35`) reads `k` through `load_field_element_limbs` (`host.rs:57-69`) and reduces it with `Fr::new`. Every 256-bit `k` therefore works, and the output is the decomposition of `k mod n`.
 - BLAKE2's rows compute `v14 = IV6 ^ (0 − is_final)` (`jolt-inlines/blake2/src/sequence_builder.rs:74-79`, `109-119`). The rows are total on every flag value, and only 0 and 1 give BLAKE2.
 
 ## Contradictions with the spec
 
 All line numbers are in `docs/inline-precompiles.md` at `309ba77`.
+No finding shows a spec statement to be false.
+The findings are refinements (a statement is true but stronger or less complete than Jolt's behaviour), citation corrections, and one answer to an open question.
+
+### Refinements
 
 1. Line 407: "`Pre` collects the caller's obligations: alignment, buffers inside RAM, overlap rules, and value ranges (`is_final ∈ {0, 1}` for `BLAKE2`, inputs below the modulus for secp256k1, a nonzero divisor for DIV)."
    - "overlap rules": none of the twelve needs one. Every load precedes every store, the advice reads its inputs before any row, and every aliasing shape gave the same output as disjoint buffers.
-   - "buffers inside RAM": Jolt proves calls whose buffers read from the input, advice, output, panic or termination regions or write to the output, panic or termination words. Keeping "inside RAM" is sufficient for the SDK, but it is a choice and not what Jolt requires. A written buffer that covers the panic or termination word needs separate treatment in `InlineSpec` (section Q3 above).
-   - "inputs below the modulus for secp256k1": the soundness relations (`a·b = w·q + c`, `c·b = w·q + a`) hold for every input that gets through the asserts. Jolt's advice needs only `⌊a·b/q⌋ < 2^256` for MUL and SQUARE. Canonical inputs are sufficient, not necessary.
-   - "a nonzero divisor for DIV": the divisor must be nonzero modulo `q`. `b = p` is nonzero and makes the advice panic. With canonical inputs the two conditions agree; if `Pre` drops canonicity it must say "nonzero modulo q".
-2. Line 466: "`mulq_division_advice` (result and quotient interleaved; it panics when `b = 0`, which `Pre c` excludes)". It panics whenever `b ≡ 0 (mod q)`, which includes `b = q` (run above).
-3. Line 140: "the SDK spoils the proof on one (`secp256k1/src/sdk.rs:280-284`)". The citation is `Secp256k1Fq::div` (280-285, spoil at 282). It is correct for `div`, but the ECDSA path calls `div_assume_nonzero` directly (`sdk.rs:899-900`, guarded by the `s ≠ 0` check at 893-895), and `ECField::div_assume_nonzero` is public with no check. Section 12.3 (line 704) already describes the per-call-site argument; line 140 reads as if the spoil covers every division.
-4. Line 144: "The guest checks the sign words and `k1 + λ·k2 = k` afterwards (`secp256k1/src/sdk.rs:751`)". Line 751 is the start of `decompose_scalar_impl`; the sign checks are at 765-766 and the recombination check at 781-784. This is imprecise, not wrong.
-5. Line 630: "unsatisfiable, a trap, or something else". The answer differs by place: the tracer panics (no trace); the constraints are unsatisfiable; jolt-qed's model returns `Memory_Exception` for misalignment (a trap result) and an assertion error for an out-of-range address. Both Lean outcomes mean the rows do not run to the end, and they agree with Jolt on success versus failure.
+   - "buffers inside RAM": Jolt's tracer and the prover's address check also accept buffers that rows read in the input, advice, output, panic or termination regions, and buffers that rows write in the output, panic or termination words. Whether the whole proof then verifies is open for the panic and termination words (final-memory consistency; Q3 section). Keeping "inside RAM" is sufficient for the SDK. `GLVR_ADV`'s `rs1` is read only by the advice and can be any address the tracer can read, including 0.
+   - "inputs below the modulus for secp256k1": soundness (`a·b = w·q + c`, `c·b = w·q + a`) holds for every input whose advice gets through the asserts. Completeness with Jolt's advice needs, for MUL and SQUARE, only `⌊a·b/q⌋ < 2^256` (RUN PENDING for the large cases), and for DIV a canonical dividend `a < q` and any divisor with `b mod q ≠ 0`. Canonical inputs are therefore needed for the dividend and sufficient elsewhere.
+   - "a nonzero divisor for DIV": with canonical inputs this is right; if `Pre` drops canonicity of the divisor it must say "nonzero modulo q".
+2. Line 466: "`mulq_division_advice` (...; it panics when `b = 0`, which `Pre c` excludes)". True but incomplete: it panics whenever `b ≡ 0 (mod q)`, which includes `b = q` (run). The completeness lemma also needs `a < q`, which line 466 does not mention and line 407's "inputs below the modulus" covers.
 
-The following spec statements were checked and hold: line 120 (SHA-256 buffers), 122 (`is_final ∈ {0, 1}` needed for meaning), 147 (the SDK always passes a real `rd`), 223-235 (registration check; "the registry lookup in the tracer and in preprocessing"), the step-1 citations of section 2.2 (`decode.rs:85`, `inline.rs:113-121`), 457-458 (a buffer over the I/O window can set the panic flag; confirmed by the `SHA256` `panic − 24` run), 467 (`host.rs:233-242`), the L-numbers of the table at 675-677, and the risk table at 703-705.
+### Citation corrections
+
+3. Line 140: "the SDK spoils the proof on one (`secp256k1/src/sdk.rs:280-284`)". The citation is `Secp256k1Fq::div` (280-285, spoil at 282) and is right for `div`. The ECDSA path calls `div_assume_nonzero` directly (`sdk.rs:899-900`, guarded by the `s ≠ 0` check at 893-895), and `ECField::div_assume_nonzero` is public with no check. Section 12.3 (line 704) already gives the per-call-site argument; line 140 reads as if the spoil covers every division.
+4. Line 144: "The guest checks the sign words and `k1 + λ·k2 = k` afterwards (`secp256k1/src/sdk.rs:751`)". Line 751 starts the right function, `decompose_scalar_impl`; the sign checks are at 765-766 and the recombination check at 781-784.
+
+### Answer to an open question
+
+5. Line 630 asks whether a misaligned or out-of-range `LD`/`SD` is "unsatisfiable, a trap, or something else". The answer differs by place: the tracer panics (no trace); the constraints are unsatisfiable; jolt-qed's model returns `Memory_Exception` for misalignment (a trap result) and an assertion error for an out-of-range address. Both Lean outcomes mean the rows do not run to the end, and they agree with Jolt on success versus failure.
+
+### Checked and holding
+
+Line 120 (SHA-256 buffers), 122 (`is_final ∈ {0, 1}` needed for meaning), 147 (the SDK always passes a real `rd`), 223-235 (registration check; "the registry lookup in the tracer and in preprocessing"), the step-1 citations of section 2.2 (`decode.rs:85`, `inline.rs:113-121`), 457-458 (a buffer over the I/O window can set the panic flag; confirmed by the `SHA256` `panic − 24` run), 467 (`host.rs:233-242`), the L-numbers of the table at 675-677, and the risk table at 703-705.
 
 ## What this changes for I1a and I2
 
@@ -439,14 +469,17 @@ The following spec statements were checked and hold: line 120 (SHA-256 buffers),
 ### I2 (secp256k1)
 
 - (b) `MulRel` and `DivRel` (soundness) need no canonical inputs and no nonzero divisor: they hold for every advice that passes the asserts.
-  Completeness with Jolt's advice (`rows_jolt_advice_complete`) needs `⌊a·b/q⌋ < 2^256` for MUL and SQUARE, and `b mod q ≠ 0` for DIV; canonical inputs give the first, and with canonical inputs the second is `b ≠ 0`.
+  Completeness with Jolt's advice (`rows_jolt_advice_complete`) must keep two facts apart: advice generation succeeding, and the generated advice passing the rows.
+  For MUL and SQUARE, generation needs `⌊a·b/q⌋ < 2^256`, and generated advice then passes (RUN PENDING for the large cases); canonical inputs give the bound.
+  For DIV, generation needs `b mod q ≠ 0`, and the generated advice passes the rows only if `a < q`. `Pre` for DIV must therefore keep the canonical dividend; with a canonical divisor, `b mod q ≠ 0` is `b ≠ 0`.
   `Canonical` for `GLVR_ADV` takes `k mod n` as its input: the transcription of `GlvrAdvBuilder::advice` must reduce the 256-bit `k` first, and `Pre` needs no range on `k`.
+  The transcription must also read `k` through the model's MMU, or `Pre` must put `k`'s buffer in RAM (Q3 section, `GLVR_ADV`'s `rs1`).
   The transcribed advice word counts are 4 (MUL, SQUARE), 8 (DIV, interleaved) and 6 (GLV), and the tracer rejects any other count.
 - No `Pre` for secp256k1 needs an overlap condition: the advice reads `a`, `b` and `k` before any row, the rows load before they store, and `rs3` may equal `rs1` or `rs2`.
 
 ### Expansion-parity tests
 
-- (c) Every one of the twelve has nonnegative offsets that are multiples of 8, its base in an operand register, and all loads before all stores. Neither property is checked by the driver today; adding both checks to `scripts/expansion-parity` would turn the "no overlap rule" and "address 0 is not special" conclusions into checked facts for future Jolt revisions.
+- (c) Every one of the twelve has nonnegative offsets that are multiples of 8, its base in an operand register, and all loads before all stores. Neither property is checked by the driver today; adding both checks to `scripts/expansion-parity` would turn the "no overlap rule" and "address 0 is not special for buffers that rows access" conclusions into checked facts for future Jolt revisions. The check should also list operands that only the advice reads (today `GLVR_ADV`'s `rs1`), since no row or RAF access constrains them.
   Jolt's own `InlineMemoryOffsetOutOfRange` check already bounds offsets to [−2048, 2047] at expansion.
   (Two inlines outside the twelve break the load-before-store order or the operand-base rule: `NTT64_I32_POINTWISE_DOT6` interleaves loads and stores, and both NTT inlines load through bases held in virtual registers.)
 

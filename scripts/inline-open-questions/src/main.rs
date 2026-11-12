@@ -89,6 +89,8 @@ fn trace(elf: &[u8]) -> Result<Run, String> {
 
 /// The prover's address check (`MemoryLayout::remap_word_address`, which
 /// jolt-witness applies to every RAM access) on the accesses of a run.
+/// It omits jolt-witness's second check, that the remapped index is below
+/// `ram_k` (`crates/jolt-witness/src/backend/trace/ram.rs:274-282`).
 fn remap_report(run: &Run, l: &MemoryLayout) -> String {
     let mut zero = 0;
     let mut bad = Vec::new();
@@ -259,6 +261,9 @@ fn q3() {
         ("rs1 = input_start", l.input_start, block),
         ("rs1 = output_start", l.output_start, block),
         ("rs1 = panic - 24 (state covers the panic word)", l.panic - 24, block),
+        ("rs1 = 0x1020 (DTB range, below lowest)", 0x1020, block),
+        ("rs2 = 0x1020 (DTB range, below lowest)", state, 0x1020),
+        ("rs2 = 0x10000000 (UART range, below lowest)", state, 0x1000_0000),
     ];
     for i in [SHA256, KECCAK_ABSORB, MULQ] {
         println!("\n{}: rs1 = {}, rs2 = {}{}", i.name,
@@ -301,6 +306,34 @@ fn q3() {
                 println!("  {name:<48} rs3={rs3:#x}: {detail}");
             }
         }
+    }
+
+    // GLVR_ADV: its rows never load rs1; only the advice reads k, through
+    // InlineAdviceContext, which records no RAM access.
+    println!("\nGLVR_ADV: rs1 = k (read by the advice only), rs3 = out (written)");
+    let mut rng = Rng(11);
+    let k = rng.field();
+    let mut buf = vec![0u8; BUF_SIZE];
+    put(&mut buf, state, &k);
+    let out = BUF + 0x800;
+    for (name, rs1) in [
+        ("valid", state),
+        ("rs1 misaligned by 4", state + 4),
+        ("rs1 = 0", 0),
+        ("rs1 below lowest address", below),
+        ("rs1 = 0x1020 (DTB range, below lowest)", 0x1020),
+        ("rs1 in gap above io_end", gap),
+        ("rs1 = input_start", l.input_start),
+        ("rs1 = heap_end", l.heap_end),
+        ("rs1 range wraps past 2^64 (rs1 = 2^64-16)", wrap),
+    ] {
+        let r = trace(&call(GLVR_ADV, rs1, None, Some(out), &buf));
+        let detail = match &r {
+            Ok(run) => format!("ok ({} rows); {}; out = {:x?}", run.rows, remap_report(run, &l),
+                words(run, out, 6)),
+            Err(e) => e.clone(),
+        };
+        println!("  {name:<48} rs1={rs1:#x}: {detail}");
     }
 }
 
@@ -463,14 +496,37 @@ fn edge() {
     let p = [0xFFFF_FFFE_FFFF_FC2F, u64::MAX, u64::MAX, u64::MAX];
     let one = [1, 0, 0, 0];
     let zero = [0u64; 4];
+    let p_minus_1 = [0xFFFF_FFFE_FFFF_FC2E, u64::MAX, u64::MAX, u64::MAX];
+    let p_plus_1 = [0xFFFF_FFFE_FFFF_FC30, u64::MAX, u64::MAX, u64::MAX];
+    let n = [0xBFD2_5E8C_D036_4141, 0xBAAE_DCE6_AF48_A03B, 0xFFFF_FFFF_FFFF_FFFE, u64::MAX];
+    let n_minus_1 = [0xBFD2_5E8C_D036_4140, 0xBAAE_DCE6_AF48_A03B, 0xFFFF_FFFF_FFFF_FFFE, u64::MAX];
+    let n_plus_1 = [0xBFD2_5E8C_D036_4142, 0xBAAE_DCE6_AF48_A03B, 0xFFFF_FFFF_FFFF_FFFE, u64::MAX];
+    // Every assert row of the secp256k1 inlines is VirtualAssertEQ or
+    // VirtualAssertLTE with imm = 0, and the tracer panics when one fails
+    // (tracer/src/instruction/virtual_assert_eq.rs:20, virtual_assert_lte.rs:19).
+    // "ok" below therefore means that Jolt's advice passed every assert row.
     let cases: Vec<(&str, Inline, [u64; 4], [u64; 4])> = vec![
         ("MULQ a = b = 2^256 - 1 (non-canonical)", MULQ, max, max),
         ("MULQ a = p, b = 1 (a = p, non-canonical)", MULQ, p, one),
+        ("MULQ a = 2^256 - 1, b = 1", MULQ, max, one),
+        ("MULQ a = 2^256 - 1, b = p - 1 (largest w below 2^256)", MULQ, max, p_minus_1),
+        ("MULQ a = b = p", MULQ, p, p),
         ("SQUAREQ a = 2^256 - 1", SQUAREQ, max, zero),
+        ("SQUAREQ a = p", SQUAREQ, p, zero),
+        ("SQUAREQ a = p + 1", SQUAREQ, p_plus_1, zero),
+        ("MULR a = n, b = 1", MULR, n, one),
+        ("MULR a = 2^256 - 1, b = n - 1", MULR, max, n_minus_1),
+        ("SQUARER a = n + 1", SQUARER, n_plus_1, zero),
         ("DIVQ a = 1, b = 0", DIVQ, one, zero),
         ("DIVQ a = 0, b = 0", DIVQ, zero, zero),
         ("DIVQ a = 1, b = p (b = 0 mod p, non-canonical)", DIVQ, one, p),
+        ("DIVQ a = p, b = 1 (dividend non-canonical)", DIVQ, p, one),
+        ("DIVQ a = p + 1, b = 1 (dividend non-canonical)", DIVQ, p_plus_1, one),
+        ("DIVQ a = 1, b = p + 1 (divisor non-canonical)", DIVQ, one, p_plus_1),
+        ("DIVQ a = p - 1, b = 2^256 - 1 (divisor non-canonical)", DIVQ, p_minus_1, max),
         ("DIVR a = 1, b = 0", DIVR, one, zero),
+        ("DIVR a = n, b = 1 (dividend non-canonical)", DIVR, n, one),
+        ("DIVR a = 1, b = n + 1 (divisor non-canonical)", DIVR, one, n_plus_1),
         ("GLVR_ADV k = 2^256 - 1 (k >= n)", GLVR_ADV, max, zero),
     ];
     for (label, i, x, y) in cases {
@@ -478,8 +534,22 @@ fn edge() {
         put(&mut buf, a, &x);
         put(&mut buf, b, &y);
         let r = run_at(i, a, b, c, &buf);
-        println!("{label:<52}: {}", match r {
-            Ok((out, rows, _)) => format!("ok ({rows} rows), out = {out:x?}"),
+        let modulus = match i.name {
+            "MULQ" | "SQUAREQ" | "DIVQ" => Some(p),
+            "MULR" | "SQUARER" | "DIVR" => Some(n),
+            _ => None,
+        };
+        println!("{label:<56}: {}", match r {
+            Ok((out, rows, _)) => {
+                let canon = match modulus {
+                    Some(m) if out.len() == 4 => {
+                        let o = [out[0], out[1], out[2], out[3]];
+                        if lt4(&o, &m) { ", out < modulus" } else { ", out >= modulus" }
+                    }
+                    _ => "",
+                };
+                format!("ok ({rows} rows), out = {out:x?}{canon}")
+            }
             Err(e) => e,
         });
     }
@@ -499,6 +569,16 @@ fn edge() {
             Err(e) => e,
         });
     }
+}
+
+/// `x < m` for little-endian four-limb integers.
+fn lt4(x: &[u64; 4], m: &[u64; 4]) -> bool {
+    for k in (0..4).rev() {
+        if x[k] != m[k] {
+            return x[k] < m[k];
+        }
+    }
+    false
 }
 
 fn main() {
