@@ -19,6 +19,11 @@ script checks that both name the same Jolt commit.
 generated chunk of its `rd != x0` case takes `rs3` as a used parameter (the driver
 renders an unused parameter as `_rs3`).
 
+Some inlines have `VirtualAdvice` rows, and their generated definitions take an
+`advice : Nat → BitVec 64` argument. Their bytecode rows use the placeholder
+`fun _ => 0`: the trace replaces each `VirtualAdvice` value with the row's runtime
+advice (`JoltISA.Instr.withRuntimeAdvice`), so the bytecode value is never read.
+
 Supporting another inline adds its driver name to SUPPORTED and regenerates.
 
 Usage, from the repository root:
@@ -45,7 +50,17 @@ SUPPORTED = [
     "KECCAK256_INLINE",
     "KECCAK256_ABSORB_PERMUTE_INLINE",
     "BLAKE2_INLINE",
+    "SECP256K1_MULQ",
+    "SECP256K1_MULR",
+    "SECP256K1_SQUAREQ",
+    "SECP256K1_SQUARER",
+    "SECP256K1_DIVQ",
+    "SECP256K1_DIVR",
+    "SECP256K1_GLVR_ADV",
 ]
+
+# The placeholder advice of the bytecode rows of an inline with `VirtualAdvice` rows.
+PLACEHOLDER = "(fun _ => 0)"
 
 
 def fail(message):
@@ -78,13 +93,18 @@ for name in SUPPORTED:
         fail(f"{name}: expected the cases normal and rd_zero")
     chunks = {}
     used_rs3 = False
+    advice_params = set()
     for case, suffix in (("normal", ""), ("rd_zero", "RdZero")):
         pattern = re.compile(
-            rf"^def {base}RowsAuto{suffix}Chunk(\d+) \(([^)]*) : regidx\) : List JoltISA\.Instr := \[$"
+            rf"^def {base}RowsAuto{suffix}Chunk(\d+) \(([^)]*) : regidx\)"
+            r"((?: \(_?advice : Nat → BitVec 64\))?) : List JoltISA\.Instr := \[$"
             r"(.*?)^\]$",
             re.M | re.S,
         )
-        found = [(int(n), params, body) for n, params, body in pattern.findall(source)]
+        found = []
+        for n, params, advice, body in pattern.findall(source):
+            advice_params.add(bool(advice))
+            found.append((int(n), params, body))
         if not found or [n for n, _, _ in found] != list(range(len(found))):
             fail(f"{name}: chunks of {base}RowsAuto{suffix} not found in order")
         lengths = []
@@ -97,6 +117,8 @@ for name in SUPPORTED:
         if sum(lengths) != expected:
             fail(f"{name} {case}: {sum(lengths)} rows in Lean, {expected} in the driver output")
         chunks[case] = lengths
+    if len(advice_params) != 1:
+        fail(f"{name}: some chunks take advice and some do not")
     keys.append(
         dict(
             name=name,
@@ -106,6 +128,7 @@ for name in SUPPORTED:
             funct3=inline["funct3"],
             funct7=inline["funct7"],
             reads_rd=used_rs3,
+            advice=advice_params.pop(),
             chunks=chunks,
         )
     )
@@ -120,6 +143,11 @@ if len(set(pairs)) != len(pairs):
 
 def lean_bool(b):
     return "true" if b else "false"
+
+
+def adv(k):
+    """The advice argument of the key's generated definitions, if they take one."""
+    return f" {PLACEHOLDER}" if k["advice"] else ""
 
 
 # ---------------------------------------------------------------- Keys.lean
@@ -186,7 +214,8 @@ for k in keys:
     out.append(f"  | .{k['base']} => {k['funct7']}")
 out.append("")
 out.append("/-- Whether the key's rows read the source `rd` (the `rs3` operand).\n"
-           "Example: no hash inline reads it, so `sha256.readsRd = false`. -/")
+           "Example: no hash inline reads it, so `sha256.readsRd = false`; the secp256k1\n"
+           "inlines store their output at the address in it, so `secp256k1Mulq.readsRd = true`. -/")
 out.append("def readsRd : InlineKey → Bool")
 for k in keys:
     out.append(f"  | .{k['base']} => {lean_bool(k['reads_rd'])}")
@@ -210,18 +239,19 @@ def ofEncoding (opcode : BitVec 7) (funct3 : BitVec 3) (funct7 : BitVec 7) :
   all.find? fun key => key.opcode == opcode && key.funct3 == funct3 && key.funct7 == funct7
 ''')
 out.append("/-- The rows of the `rd ≠ x0` case: the generated `<name>RowsAutoList`.\n"
-           "`rs3` is the source `rd`.\n"
+           "`rs3` is the source `rd`. A key with `VirtualAdvice` rows gets the placeholder\n"
+           "advice `fun _ => 0`; the trace replaces each value with the row's runtime advice.\n"
            "Example: the first row of `keccak256AbsorbPermute.rows x10 x11 x12` loads `vr48` from `x10`. -/")
 out.append("def rows : InlineKey → regidx → regidx → regidx → List JoltISA.Instr")
 for k in keys:
-    out.append(f"  | .{k['base']}, rs1, rs2, rs3 =>\n    Generated.{k['base']}RowsAutoList rs1 rs2 rs3")
+    out.append(f"  | .{k['base']}, rs1, rs2, rs3 =>\n    Generated.{k['base']}RowsAutoList rs1 rs2 rs3{adv(k)}")
 out.append("")
 out.append("/-- The rows of the `rd = x0` case, after Rust substitutes the instruction temporary\n"
            "`vr40` for `rd`: the generated `<name>RowsAutoRdZeroList`.\n"
            "Example: `sha256.rowsRdZero x10 x11` has 1900 rows. -/")
 out.append("def rowsRdZero : InlineKey → regidx → regidx → List JoltISA.Instr")
 for k in keys:
-    out.append(f"  | .{k['base']}, rs1, rs2 => Generated.{k['base']}RowsAutoRdZeroList rs1 rs2")
+    out.append(f"  | .{k['base']}, rs1, rs2 =>\n    Generated.{k['base']}RowsAutoRdZeroList rs1 rs2{adv(k)}")
 out.append('''
 /-- The rows Jolt's expander emits for the inline call `rd, rs1, rs2` with this key.
 With `rd = x0`, Rust allocates an instruction temporary and passes it as `rd`
@@ -251,7 +281,11 @@ the rows take free register parameters: no check compares two architectural
 registers. Each `_rows_ok` lemma chains its key's chunk facts with
 `checked_append`, `InlineKey.rows_ok` and `InlineKey.rowsRdZero_ok` collect them by
 key, and `ExpansionFacts.sequenceOk_of_inlineRowsOk` turns the row checks into the
-sequence checks.
+sequence checks. The `rd = x0` rows of the keys that read `rs3` (the secp256k1
+inlines) read the uninitialized temporary `vr40`. jolt-qed excludes those encodings
+(decision D7): `InlineEncoding.register` and `SourceInstruction.expand` reject them.
+Jolt at the pin still expands them; a16z/jolt#2414 proposes the same rejection. For
+those keys in that case the lemmas state only the length.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
@@ -271,6 +305,13 @@ theorem checked_append {{first second : List JoltISA.Instr}} {{m k : Nat}}
     (first ++ second).all inlineRowOk = true ∧ (first ++ second).length = m + k := by
   rw [List.all_append, List.length_append, firstOk.1, secondOk.1, firstOk.2, secondOk.2]
   exact ⟨rfl, rfl⟩
+
+/-- Lengths add when lists are appended. For example, chunks of 100 and 35 rows give
+135 rows. -/
+theorem length_append_eq {{first second : List JoltISA.Instr}} {{m k : Nat}}
+    (firstLength : first.length = m) (secondLength : second.length = k) :
+    (first ++ second).length = m + k := by
+  rw [List.length_append, firstLength, secondLength]
 ''']
 assemble = {}
 for k in keys:
@@ -279,26 +320,45 @@ for k in keys:
         ("rd_zero", "RdZero", "(rs1 rs2 : regidx)", "rs1 rs2"),
     ):
         names = []
+        call = f"{args}{adv(k)}"
+        # jolt-qed rejects `rd = x0` for a key that reads rs3 (D7), and those rows read the
+        # uninitialized vr40, so only their length is stated.
+        length_only = case == "rd_zero" and k["reads_rd"]
+        label = "rd ≠ x0" if case == "normal" else "rd = x0"
         for n, length in enumerate(k["chunks"][case]):
             lemma = f"{k['base']}{suffix}_chunk{n}"
             names.append(lemma)
-            label = "rd ≠ x0" if case == "normal" else "rd = x0"
+            if length_only:
+                out.append(f"/-- Chunk {n} of `{k['name']}` ({label}) has {length} rows. -/")
+                out.append(f"theorem {lemma} {params} :\n"
+                           f"    ({k['base']}RowsAuto{suffix}Chunk{n} {call}).length = {length} :=\n"
+                           f"  rfl\n")
+                continue
             out.append(f"/-- Chunk {n} of `{k['name']}` ({label}): every row passes `inlineRowOk`,\n"
                        f"and the chunk has {length} rows. -/")
             out.append(f"theorem {lemma} {params} :\n"
-                       f"    ({k['base']}RowsAuto{suffix}Chunk{n} {args}).all inlineRowOk = true ∧\n"
-                       f"      ({k['base']}RowsAuto{suffix}Chunk{n} {args}).length = {length} :=\n"
+                       f"    ({k['base']}RowsAuto{suffix}Chunk{n} {call}).all inlineRowOk = true ∧\n"
+                       f"      ({k['base']}RowsAuto{suffix}Chunk{n} {call}).length = {length} :=\n"
                        f"  ⟨rfl, rfl⟩\n")
         assemble[(k["base"], case)] = names
         total = sum(k["chunks"][case])
         lst = f"{k['base']}RowsAuto{suffix}List"
+        combine = "length_append_eq" if length_only else "checked_append"
         term = f"({names[0]} {args})"
         for name in names[1:]:
-            term = f"(checked_append {term}\n      ({name} {args}))"
+            term = f"({combine} {term}\n      ({name} {args}))"
+        if length_only:
+            out.append(f"/-- `{k['name']}` ({label}) has {total} rows. -/")
+            out.append(f"theorem {k['base']}{suffix}_rows_length {params} :\n"
+                       f"    ({lst} {call}).length = {total} := by\n"
+                       f"  unfold {lst}\n"
+                       f"  have chained := {term}\n"
+                       f"  exact chained\n")
+            continue
         out.append(f"/-- All {total} rows of `{k['name']}` ({label}) pass `inlineRowOk`. -/")
         out.append(f"theorem {k['base']}{suffix}_rows_ok {params} :\n"
-                   f"    ({lst} {args}).all inlineRowOk = true ∧\n"
-                   f"      ({lst} {args}).length = {total} := by\n"
+                   f"    ({lst} {call}).all inlineRowOk = true ∧\n"
+                   f"      ({lst} {call}).length = {total} := by\n"
                    f"  unfold {lst}\n"
                    f"  have chained := {term}\n"
                    f"  exact chained\n")
@@ -306,35 +366,58 @@ for k in keys:
 out.append("end JoltISA.Inlines.InlineRowsOk\n")
 out.append("namespace JoltISA.Inlines.InlineKey\n")
 out.append("open JoltISA.Inlines.Generated JoltISA.Inlines.InlineRowsOk ExpansionFacts\n")
-for case, suffix, fn, params, args in (
-    ("normal", "", "rows", "(rs1 rs2 rs3 : regidx)", "rs1 rs2 rs3"),
-    ("rd_zero", "RdZero", "rowsRdZero", "(rs1 rs2 : regidx)", "rs1 rs2"),
-):
-    label = "rd ≠ x0" if case == "normal" else "rd = x0"
-    out.append(f"/-- Every row of every supported key's `{label}` rows passes `inlineRowOk`, and\n"
-               f"there are `rowCount` of them.\n"
-               f"Example: the 3121 rows of `keccak256AbsorbPermute.{fn}` pass. -/")
-    out.append(f"theorem {fn}_ok (key : InlineKey) {params} :\n"
-               f"    (key.{fn} {args}).all inlineRowOk = true ∧\n      (key.{fn} {args}).length = key.rowCount := by")
-    out.append("  cases key")
-    for k in keys:
-        out.append(f"  · exact {k['base']}{suffix}_rows_ok {args}")
-    out.append("")
+out.append("/-- Every row of every supported key's `rd ≠ x0` rows passes `inlineRowOk`, and\n"
+           "there are `rowCount` of them.\n"
+           "Example: the 3121 rows of `keccak256AbsorbPermute.rows` pass. -/")
+out.append("theorem rows_ok (key : InlineKey) (rs1 rs2 rs3 : regidx) :\n"
+           "    (key.rows rs1 rs2 rs3).all inlineRowOk = true ∧\n"
+           "      (key.rows rs1 rs2 rs3).length = key.rowCount := by")
+out.append("  cases key")
+for k in keys:
+    out.append(f"  · exact {k['base']}_rows_ok rs1 rs2 rs3")
+out.append("")
+out.append("/-- The `rd = x0` rows of a key that does not read `rs3` pass `inlineRowOk`.\n"
+           "Example: the 3121 rows of `keccak256AbsorbPermute.rowsRdZero` pass. -/")
+out.append("theorem rowsRdZero_ok (key : InlineKey) (rs1 rs2 : regidx)\n"
+           "    (reads : key.readsRd = false) :\n"
+           "    (key.rowsRdZero rs1 rs2).all inlineRowOk = true := by")
+out.append("  cases key")
+for k in keys:
+    if k["reads_rd"]:
+        out.append("  · exact absurd reads (by decide)")
+    else:
+        out.append(f"  · exact ({k['base']}RdZero_rows_ok rs1 rs2).1")
+out.append("")
+out.append("/-- Every key's `rd = x0` rows have `rowCount` rows.\n"
+           "Example: `(secp256k1Mulq.rowsRdZero x10 x11).length = secp256k1Mulq.rowCount`. -/")
+out.append("theorem rowsRdZero_length (key : InlineKey) (rs1 rs2 : regidx) :\n"
+           "    (key.rowsRdZero rs1 rs2).length = key.rowCount := by")
+out.append("  cases key")
+for k in keys:
+    if k["reads_rd"]:
+        out.append(f"  · exact {k['base']}RdZero_rows_length rs1 rs2")
+    else:
+        out.append(f"  · exact ({k['base']}RdZero_rows_ok rs1 rs2).2")
+out.append("")
 
-out.append('''/-- Every row Jolt emits for a supported inline call passes `inlineRowOk`.
+out.append("""/-- Every row Jolt emits for a supported inline call that jolt-qed accepts passes
+`inlineRowOk`. jolt-qed rejects `rd = x0` for a key that reads `rs3` (decision D7).
 Example: every row of `keccak256AbsorbPermute.expandRows x10 x11 x0` passes. -/
-theorem expandRows_rowsOk (key : InlineKey) (rs1 rs2 rd : regidx) :
+theorem expandRows_rowsOk (key : InlineKey) (rs1 rs2 rd : regidx)
+    (registered : (JoltISA.isX0 rd && key.readsRd) = false) :
     (key.expandRows rs1 rs2 rd).all inlineRowOk = true := by
   unfold expandRows
   split
-  · exact (rowsRdZero_ok key rs1 rs2).1
+  · next zero => exact rowsRdZero_ok key rs1 rs2 (by simpa [zero] using registered)
   · exact (rows_ok key rs1 rs2 rd).1
 
-/-- The rows Jolt emits for any supported inline call pass the sequence checks.
+/-- The rows Jolt emits for a supported inline call that jolt-qed accepts pass the
+sequence checks.
 Example: `keccak256AbsorbPermute.expandRows x10 x11 x0` passes `sequenceOk`. -/
-theorem expandRows_sequenceOk (key : InlineKey) (rs1 rs2 rd : regidx) :
+theorem expandRows_sequenceOk (key : InlineKey) (rs1 rs2 rd : regidx)
+    (registered : (JoltISA.isX0 rd && key.readsRd) = false) :
     sequenceOk (key.expandRows rs1 rs2 rd) = true :=
-  sequenceOk_of_inlineRowsOk _ (expandRows_rowsOk key rs1 rs2 rd)
+  sequenceOk_of_inlineRowsOk _ (expandRows_rowsOk key rs1 rs2 rd registered)
 
 /-- Both allocation cases have `rowCount` rows.
 Example: `(keccak256AbsorbPermute.expandRows x10 x11 x0).length = 3121`. -/
@@ -342,11 +425,11 @@ theorem expandRows_length (key : InlineKey) (rs1 rs2 rd : regidx) :
     (key.expandRows rs1 rs2 rd).length = key.rowCount := by
   unfold expandRows
   split
-  · exact (rowsRdZero_ok key rs1 rs2).2
+  · exact rowsRdZero_length key rs1 rs2
   · exact (rows_ok key rs1 rs2 rd).2
 
 end JoltISA.Inlines.InlineKey
-''')
+""")
 checks_text = "\n".join(out)
 
 if check:

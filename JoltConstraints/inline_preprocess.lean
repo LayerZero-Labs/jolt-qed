@@ -73,7 +73,8 @@ theorem keccak256AbsorbPermute_preprocess (address : BitVec 64) (compressed : Bo
       exact List.exists_mem_of_length_pos (by rw [length]; decide)
     simp only [expand_instruction, SourceInstruction.expand, notEmpty,
       SourceInstruction.rowCapacity, MAX_INLINE_ROWS_PER_SOURCE, length,
-      JoltISA.Inlines.InlineKey.rowCount, Bool.false_or]
+      JoltISA.Inlines.InlineKey.rowCount, Bool.false_or, JoltISA.Inlines.InlineKey.readsRd,
+      Bool.and_false, Bool.false_eq_true, ↓reduceIte]
     rfl
   refine ⟨_, expanded, ?_, expand_instruction_preprocess _ _ expanded addressOk⟩
   simp only [stamp_sequence, List.length_map, List.length_zipIdx, length,

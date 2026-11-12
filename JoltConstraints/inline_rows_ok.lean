@@ -12,7 +12,11 @@ the rows take free register parameters: no check compares two architectural
 registers. Each `_rows_ok` lemma chains its key's chunk facts with
 `checked_append`, `InlineKey.rows_ok` and `InlineKey.rowsRdZero_ok` collect them by
 key, and `ExpansionFacts.sequenceOk_of_inlineRowsOk` turns the row checks into the
-sequence checks.
+sequence checks. The `rd = x0` rows of the keys that read `rs3` (the secp256k1
+inlines) read the uninitialized temporary `vr40`. jolt-qed excludes those encodings
+(decision D7): `InlineEncoding.register` and `SourceInstruction.expand` reject them.
+Jolt at the pin still expands them; a16z/jolt#2414 proposes the same rejection. For
+those keys in that case the lemmas state only the length.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
@@ -32,6 +36,13 @@ theorem checked_append {first second : List JoltISA.Instr} {m k : Nat}
     (first ++ second).all inlineRowOk = true ∧ (first ++ second).length = m + k := by
   rw [List.all_append, List.length_append, firstOk.1, secondOk.1, firstOk.2, secondOk.2]
   exact ⟨rfl, rfl⟩
+
+/-- Lengths add when lists are appended. For example, chunks of 100 and 35 rows give
+135 rows. -/
+theorem length_append_eq {first second : List JoltISA.Instr} {m k : Nat}
+    (firstLength : first.length = m) (secondLength : second.length = k) :
+    (first ++ second).length = m + k := by
+  rw [List.length_append, firstLength, secondLength]
 
 /-- Chunk 0 of `SHA256_INLINE` (rd ≠ x0): every row passes `inlineRowOk`,
 and the chunk has 100 rows. -/
@@ -1895,6 +1906,321 @@ theorem blake2RdZero_rows_ok (rs1 rs2 : regidx) :
       (blake2RdZero_chunk10 rs1 rs2))
   exact chained
 
+/-- Chunk 0 of `SECP256K1_MULQ` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Mulq_chunk0 (rs1 rs2 rs3 : regidx) :
+    (secp256k1MulqRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1MulqRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 1 of `SECP256K1_MULQ` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 86 rows. -/
+theorem secp256k1Mulq_chunk1 (rs1 rs2 rs3 : regidx) :
+    (secp256k1MulqRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1MulqRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).length = 86 :=
+  ⟨rfl, rfl⟩
+
+/-- All 186 rows of `SECP256K1_MULQ` (rd ≠ x0) pass `inlineRowOk`. -/
+theorem secp256k1Mulq_rows_ok (rs1 rs2 rs3 : regidx) :
+    (secp256k1MulqRowsAutoList rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1MulqRowsAutoList rs1 rs2 rs3 (fun _ => 0)).length = 186 := by
+  unfold secp256k1MulqRowsAutoList
+  have chained := (checked_append (secp256k1Mulq_chunk0 rs1 rs2 rs3)
+      (secp256k1Mulq_chunk1 rs1 rs2 rs3))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_MULQ` (rd = x0) has 100 rows. -/
+theorem secp256k1MulqRdZero_chunk0 (rs1 rs2 : regidx) :
+    (secp256k1MulqRowsAutoRdZeroChunk0 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 1 of `SECP256K1_MULQ` (rd = x0) has 86 rows. -/
+theorem secp256k1MulqRdZero_chunk1 (rs1 rs2 : regidx) :
+    (secp256k1MulqRowsAutoRdZeroChunk1 rs1 rs2 (fun _ => 0)).length = 86 :=
+  rfl
+
+/-- `SECP256K1_MULQ` (rd = x0) has 186 rows. -/
+theorem secp256k1MulqRdZero_rows_length (rs1 rs2 : regidx) :
+    (secp256k1MulqRowsAutoRdZeroList rs1 rs2 (fun _ => 0)).length = 186 := by
+  unfold secp256k1MulqRowsAutoRdZeroList
+  have chained := (length_append_eq (secp256k1MulqRdZero_chunk0 rs1 rs2)
+      (secp256k1MulqRdZero_chunk1 rs1 rs2))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_MULR` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Mulr_chunk0 (rs1 rs2 rs3 : regidx) :
+    (secp256k1MulrRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1MulrRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 1 of `SECP256K1_MULR` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Mulr_chunk1 (rs1 rs2 rs3 : regidx) :
+    (secp256k1MulrRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1MulrRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 2 of `SECP256K1_MULR` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 32 rows. -/
+theorem secp256k1Mulr_chunk2 (rs1 rs2 rs3 : regidx) :
+    (secp256k1MulrRowsAutoChunk2 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1MulrRowsAutoChunk2 rs1 rs2 rs3 (fun _ => 0)).length = 32 :=
+  ⟨rfl, rfl⟩
+
+/-- All 232 rows of `SECP256K1_MULR` (rd ≠ x0) pass `inlineRowOk`. -/
+theorem secp256k1Mulr_rows_ok (rs1 rs2 rs3 : regidx) :
+    (secp256k1MulrRowsAutoList rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1MulrRowsAutoList rs1 rs2 rs3 (fun _ => 0)).length = 232 := by
+  unfold secp256k1MulrRowsAutoList
+  have chained := (checked_append (checked_append (secp256k1Mulr_chunk0 rs1 rs2 rs3)
+      (secp256k1Mulr_chunk1 rs1 rs2 rs3))
+      (secp256k1Mulr_chunk2 rs1 rs2 rs3))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_MULR` (rd = x0) has 100 rows. -/
+theorem secp256k1MulrRdZero_chunk0 (rs1 rs2 : regidx) :
+    (secp256k1MulrRowsAutoRdZeroChunk0 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 1 of `SECP256K1_MULR` (rd = x0) has 100 rows. -/
+theorem secp256k1MulrRdZero_chunk1 (rs1 rs2 : regidx) :
+    (secp256k1MulrRowsAutoRdZeroChunk1 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 2 of `SECP256K1_MULR` (rd = x0) has 32 rows. -/
+theorem secp256k1MulrRdZero_chunk2 (rs1 rs2 : regidx) :
+    (secp256k1MulrRowsAutoRdZeroChunk2 rs1 rs2 (fun _ => 0)).length = 32 :=
+  rfl
+
+/-- `SECP256K1_MULR` (rd = x0) has 232 rows. -/
+theorem secp256k1MulrRdZero_rows_length (rs1 rs2 : regidx) :
+    (secp256k1MulrRowsAutoRdZeroList rs1 rs2 (fun _ => 0)).length = 232 := by
+  unfold secp256k1MulrRowsAutoRdZeroList
+  have chained := (length_append_eq (length_append_eq (secp256k1MulrRdZero_chunk0 rs1 rs2)
+      (secp256k1MulrRdZero_chunk1 rs1 rs2))
+      (secp256k1MulrRdZero_chunk2 rs1 rs2))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_SQUAREQ` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Squareq_chunk0 (rs1 rs2 rs3 : regidx) :
+    (secp256k1SquareqRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1SquareqRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 1 of `SECP256K1_SQUAREQ` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 67 rows. -/
+theorem secp256k1Squareq_chunk1 (rs1 rs2 rs3 : regidx) :
+    (secp256k1SquareqRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1SquareqRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).length = 67 :=
+  ⟨rfl, rfl⟩
+
+/-- All 167 rows of `SECP256K1_SQUAREQ` (rd ≠ x0) pass `inlineRowOk`. -/
+theorem secp256k1Squareq_rows_ok (rs1 rs2 rs3 : regidx) :
+    (secp256k1SquareqRowsAutoList rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1SquareqRowsAutoList rs1 rs2 rs3 (fun _ => 0)).length = 167 := by
+  unfold secp256k1SquareqRowsAutoList
+  have chained := (checked_append (secp256k1Squareq_chunk0 rs1 rs2 rs3)
+      (secp256k1Squareq_chunk1 rs1 rs2 rs3))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_SQUAREQ` (rd = x0) has 100 rows. -/
+theorem secp256k1SquareqRdZero_chunk0 (rs1 rs2 : regidx) :
+    (secp256k1SquareqRowsAutoRdZeroChunk0 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 1 of `SECP256K1_SQUAREQ` (rd = x0) has 67 rows. -/
+theorem secp256k1SquareqRdZero_chunk1 (rs1 rs2 : regidx) :
+    (secp256k1SquareqRowsAutoRdZeroChunk1 rs1 rs2 (fun _ => 0)).length = 67 :=
+  rfl
+
+/-- `SECP256K1_SQUAREQ` (rd = x0) has 167 rows. -/
+theorem secp256k1SquareqRdZero_rows_length (rs1 rs2 : regidx) :
+    (secp256k1SquareqRowsAutoRdZeroList rs1 rs2 (fun _ => 0)).length = 167 := by
+  unfold secp256k1SquareqRowsAutoRdZeroList
+  have chained := (length_append_eq (secp256k1SquareqRdZero_chunk0 rs1 rs2)
+      (secp256k1SquareqRdZero_chunk1 rs1 rs2))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_SQUARER` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Squarer_chunk0 (rs1 rs2 rs3 : regidx) :
+    (secp256k1SquarerRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1SquarerRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 1 of `SECP256K1_SQUARER` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Squarer_chunk1 (rs1 rs2 rs3 : regidx) :
+    (secp256k1SquarerRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1SquarerRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 2 of `SECP256K1_SQUARER` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 13 rows. -/
+theorem secp256k1Squarer_chunk2 (rs1 rs2 rs3 : regidx) :
+    (secp256k1SquarerRowsAutoChunk2 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1SquarerRowsAutoChunk2 rs1 rs2 rs3 (fun _ => 0)).length = 13 :=
+  ⟨rfl, rfl⟩
+
+/-- All 213 rows of `SECP256K1_SQUARER` (rd ≠ x0) pass `inlineRowOk`. -/
+theorem secp256k1Squarer_rows_ok (rs1 rs2 rs3 : regidx) :
+    (secp256k1SquarerRowsAutoList rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1SquarerRowsAutoList rs1 rs2 rs3 (fun _ => 0)).length = 213 := by
+  unfold secp256k1SquarerRowsAutoList
+  have chained := (checked_append (checked_append (secp256k1Squarer_chunk0 rs1 rs2 rs3)
+      (secp256k1Squarer_chunk1 rs1 rs2 rs3))
+      (secp256k1Squarer_chunk2 rs1 rs2 rs3))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_SQUARER` (rd = x0) has 100 rows. -/
+theorem secp256k1SquarerRdZero_chunk0 (rs1 rs2 : regidx) :
+    (secp256k1SquarerRowsAutoRdZeroChunk0 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 1 of `SECP256K1_SQUARER` (rd = x0) has 100 rows. -/
+theorem secp256k1SquarerRdZero_chunk1 (rs1 rs2 : regidx) :
+    (secp256k1SquarerRowsAutoRdZeroChunk1 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 2 of `SECP256K1_SQUARER` (rd = x0) has 13 rows. -/
+theorem secp256k1SquarerRdZero_chunk2 (rs1 rs2 : regidx) :
+    (secp256k1SquarerRowsAutoRdZeroChunk2 rs1 rs2 (fun _ => 0)).length = 13 :=
+  rfl
+
+/-- `SECP256K1_SQUARER` (rd = x0) has 213 rows. -/
+theorem secp256k1SquarerRdZero_rows_length (rs1 rs2 : regidx) :
+    (secp256k1SquarerRowsAutoRdZeroList rs1 rs2 (fun _ => 0)).length = 213 := by
+  unfold secp256k1SquarerRowsAutoRdZeroList
+  have chained := (length_append_eq (length_append_eq (secp256k1SquarerRdZero_chunk0 rs1 rs2)
+      (secp256k1SquarerRdZero_chunk1 rs1 rs2))
+      (secp256k1SquarerRdZero_chunk2 rs1 rs2))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_DIVQ` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Divq_chunk0 (rs1 rs2 rs3 : regidx) :
+    (secp256k1DivqRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1DivqRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 1 of `SECP256K1_DIVQ` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 94 rows. -/
+theorem secp256k1Divq_chunk1 (rs1 rs2 rs3 : regidx) :
+    (secp256k1DivqRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1DivqRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).length = 94 :=
+  ⟨rfl, rfl⟩
+
+/-- All 194 rows of `SECP256K1_DIVQ` (rd ≠ x0) pass `inlineRowOk`. -/
+theorem secp256k1Divq_rows_ok (rs1 rs2 rs3 : regidx) :
+    (secp256k1DivqRowsAutoList rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1DivqRowsAutoList rs1 rs2 rs3 (fun _ => 0)).length = 194 := by
+  unfold secp256k1DivqRowsAutoList
+  have chained := (checked_append (secp256k1Divq_chunk0 rs1 rs2 rs3)
+      (secp256k1Divq_chunk1 rs1 rs2 rs3))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_DIVQ` (rd = x0) has 100 rows. -/
+theorem secp256k1DivqRdZero_chunk0 (rs1 rs2 : regidx) :
+    (secp256k1DivqRowsAutoRdZeroChunk0 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 1 of `SECP256K1_DIVQ` (rd = x0) has 94 rows. -/
+theorem secp256k1DivqRdZero_chunk1 (rs1 rs2 : regidx) :
+    (secp256k1DivqRowsAutoRdZeroChunk1 rs1 rs2 (fun _ => 0)).length = 94 :=
+  rfl
+
+/-- `SECP256K1_DIVQ` (rd = x0) has 194 rows. -/
+theorem secp256k1DivqRdZero_rows_length (rs1 rs2 : regidx) :
+    (secp256k1DivqRowsAutoRdZeroList rs1 rs2 (fun _ => 0)).length = 194 := by
+  unfold secp256k1DivqRowsAutoRdZeroList
+  have chained := (length_append_eq (secp256k1DivqRdZero_chunk0 rs1 rs2)
+      (secp256k1DivqRdZero_chunk1 rs1 rs2))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_DIVR` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Divr_chunk0 (rs1 rs2 rs3 : regidx) :
+    (secp256k1DivrRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1DivrRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 1 of `SECP256K1_DIVR` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 100 rows. -/
+theorem secp256k1Divr_chunk1 (rs1 rs2 rs3 : regidx) :
+    (secp256k1DivrRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1DivrRowsAutoChunk1 rs1 rs2 rs3 (fun _ => 0)).length = 100 :=
+  ⟨rfl, rfl⟩
+
+/-- Chunk 2 of `SECP256K1_DIVR` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 40 rows. -/
+theorem secp256k1Divr_chunk2 (rs1 rs2 rs3 : regidx) :
+    (secp256k1DivrRowsAutoChunk2 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1DivrRowsAutoChunk2 rs1 rs2 rs3 (fun _ => 0)).length = 40 :=
+  ⟨rfl, rfl⟩
+
+/-- All 240 rows of `SECP256K1_DIVR` (rd ≠ x0) pass `inlineRowOk`. -/
+theorem secp256k1Divr_rows_ok (rs1 rs2 rs3 : regidx) :
+    (secp256k1DivrRowsAutoList rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1DivrRowsAutoList rs1 rs2 rs3 (fun _ => 0)).length = 240 := by
+  unfold secp256k1DivrRowsAutoList
+  have chained := (checked_append (checked_append (secp256k1Divr_chunk0 rs1 rs2 rs3)
+      (secp256k1Divr_chunk1 rs1 rs2 rs3))
+      (secp256k1Divr_chunk2 rs1 rs2 rs3))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_DIVR` (rd = x0) has 100 rows. -/
+theorem secp256k1DivrRdZero_chunk0 (rs1 rs2 : regidx) :
+    (secp256k1DivrRowsAutoRdZeroChunk0 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 1 of `SECP256K1_DIVR` (rd = x0) has 100 rows. -/
+theorem secp256k1DivrRdZero_chunk1 (rs1 rs2 : regidx) :
+    (secp256k1DivrRowsAutoRdZeroChunk1 rs1 rs2 (fun _ => 0)).length = 100 :=
+  rfl
+
+/-- Chunk 2 of `SECP256K1_DIVR` (rd = x0) has 40 rows. -/
+theorem secp256k1DivrRdZero_chunk2 (rs1 rs2 : regidx) :
+    (secp256k1DivrRowsAutoRdZeroChunk2 rs1 rs2 (fun _ => 0)).length = 40 :=
+  rfl
+
+/-- `SECP256K1_DIVR` (rd = x0) has 240 rows. -/
+theorem secp256k1DivrRdZero_rows_length (rs1 rs2 : regidx) :
+    (secp256k1DivrRowsAutoRdZeroList rs1 rs2 (fun _ => 0)).length = 240 := by
+  unfold secp256k1DivrRowsAutoRdZeroList
+  have chained := (length_append_eq (length_append_eq (secp256k1DivrRdZero_chunk0 rs1 rs2)
+      (secp256k1DivrRdZero_chunk1 rs1 rs2))
+      (secp256k1DivrRdZero_chunk2 rs1 rs2))
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_GLVR_ADV` (rd ≠ x0): every row passes `inlineRowOk`,
+and the chunk has 13 rows. -/
+theorem secp256k1GlvrAdv_chunk0 (rs1 rs2 rs3 : regidx) :
+    (secp256k1GlvrAdvRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1GlvrAdvRowsAutoChunk0 rs1 rs2 rs3 (fun _ => 0)).length = 13 :=
+  ⟨rfl, rfl⟩
+
+/-- All 13 rows of `SECP256K1_GLVR_ADV` (rd ≠ x0) pass `inlineRowOk`. -/
+theorem secp256k1GlvrAdv_rows_ok (rs1 rs2 rs3 : regidx) :
+    (secp256k1GlvrAdvRowsAutoList rs1 rs2 rs3 (fun _ => 0)).all inlineRowOk = true ∧
+      (secp256k1GlvrAdvRowsAutoList rs1 rs2 rs3 (fun _ => 0)).length = 13 := by
+  unfold secp256k1GlvrAdvRowsAutoList
+  have chained := (secp256k1GlvrAdv_chunk0 rs1 rs2 rs3)
+  exact chained
+
+/-- Chunk 0 of `SECP256K1_GLVR_ADV` (rd = x0) has 13 rows. -/
+theorem secp256k1GlvrAdvRdZero_chunk0 (rs1 rs2 : regidx) :
+    (secp256k1GlvrAdvRowsAutoRdZeroChunk0 rs1 rs2 (fun _ => 0)).length = 13 :=
+  rfl
+
+/-- `SECP256K1_GLVR_ADV` (rd = x0) has 13 rows. -/
+theorem secp256k1GlvrAdvRdZero_rows_length (rs1 rs2 : regidx) :
+    (secp256k1GlvrAdvRowsAutoRdZeroList rs1 rs2 (fun _ => 0)).length = 13 := by
+  unfold secp256k1GlvrAdvRowsAutoRdZeroList
+  have chained := (secp256k1GlvrAdvRdZero_chunk0 rs1 rs2)
+  exact chained
+
 end JoltISA.Inlines.InlineRowsOk
 
 namespace JoltISA.Inlines.InlineKey
@@ -1913,34 +2239,69 @@ theorem rows_ok (key : InlineKey) (rs1 rs2 rs3 : regidx) :
   · exact keccak256_rows_ok rs1 rs2 rs3
   · exact keccak256AbsorbPermute_rows_ok rs1 rs2 rs3
   · exact blake2_rows_ok rs1 rs2 rs3
+  · exact secp256k1Mulq_rows_ok rs1 rs2 rs3
+  · exact secp256k1Mulr_rows_ok rs1 rs2 rs3
+  · exact secp256k1Squareq_rows_ok rs1 rs2 rs3
+  · exact secp256k1Squarer_rows_ok rs1 rs2 rs3
+  · exact secp256k1Divq_rows_ok rs1 rs2 rs3
+  · exact secp256k1Divr_rows_ok rs1 rs2 rs3
+  · exact secp256k1GlvrAdv_rows_ok rs1 rs2 rs3
 
-/-- Every row of every supported key's `rd = x0` rows passes `inlineRowOk`, and
-there are `rowCount` of them.
+/-- The `rd = x0` rows of a key that does not read `rs3` pass `inlineRowOk`.
 Example: the 3121 rows of `keccak256AbsorbPermute.rowsRdZero` pass. -/
-theorem rowsRdZero_ok (key : InlineKey) (rs1 rs2 : regidx) :
-    (key.rowsRdZero rs1 rs2).all inlineRowOk = true ∧
-      (key.rowsRdZero rs1 rs2).length = key.rowCount := by
+theorem rowsRdZero_ok (key : InlineKey) (rs1 rs2 : regidx)
+    (reads : key.readsRd = false) :
+    (key.rowsRdZero rs1 rs2).all inlineRowOk = true := by
   cases key
-  · exact sha256RdZero_rows_ok rs1 rs2
-  · exact sha256InitRdZero_rows_ok rs1 rs2
-  · exact keccak256RdZero_rows_ok rs1 rs2
-  · exact keccak256AbsorbPermuteRdZero_rows_ok rs1 rs2
-  · exact blake2RdZero_rows_ok rs1 rs2
+  · exact (sha256RdZero_rows_ok rs1 rs2).1
+  · exact (sha256InitRdZero_rows_ok rs1 rs2).1
+  · exact (keccak256RdZero_rows_ok rs1 rs2).1
+  · exact (keccak256AbsorbPermuteRdZero_rows_ok rs1 rs2).1
+  · exact (blake2RdZero_rows_ok rs1 rs2).1
+  · exact absurd reads (by decide)
+  · exact absurd reads (by decide)
+  · exact absurd reads (by decide)
+  · exact absurd reads (by decide)
+  · exact absurd reads (by decide)
+  · exact absurd reads (by decide)
+  · exact absurd reads (by decide)
 
-/-- Every row Jolt emits for a supported inline call passes `inlineRowOk`.
+/-- Every key's `rd = x0` rows have `rowCount` rows.
+Example: `(secp256k1Mulq.rowsRdZero x10 x11).length = secp256k1Mulq.rowCount`. -/
+theorem rowsRdZero_length (key : InlineKey) (rs1 rs2 : regidx) :
+    (key.rowsRdZero rs1 rs2).length = key.rowCount := by
+  cases key
+  · exact (sha256RdZero_rows_ok rs1 rs2).2
+  · exact (sha256InitRdZero_rows_ok rs1 rs2).2
+  · exact (keccak256RdZero_rows_ok rs1 rs2).2
+  · exact (keccak256AbsorbPermuteRdZero_rows_ok rs1 rs2).2
+  · exact (blake2RdZero_rows_ok rs1 rs2).2
+  · exact secp256k1MulqRdZero_rows_length rs1 rs2
+  · exact secp256k1MulrRdZero_rows_length rs1 rs2
+  · exact secp256k1SquareqRdZero_rows_length rs1 rs2
+  · exact secp256k1SquarerRdZero_rows_length rs1 rs2
+  · exact secp256k1DivqRdZero_rows_length rs1 rs2
+  · exact secp256k1DivrRdZero_rows_length rs1 rs2
+  · exact secp256k1GlvrAdvRdZero_rows_length rs1 rs2
+
+/-- Every row Jolt emits for a supported inline call that jolt-qed accepts passes
+`inlineRowOk`. jolt-qed rejects `rd = x0` for a key that reads `rs3` (decision D7).
 Example: every row of `keccak256AbsorbPermute.expandRows x10 x11 x0` passes. -/
-theorem expandRows_rowsOk (key : InlineKey) (rs1 rs2 rd : regidx) :
+theorem expandRows_rowsOk (key : InlineKey) (rs1 rs2 rd : regidx)
+    (registered : (JoltISA.isX0 rd && key.readsRd) = false) :
     (key.expandRows rs1 rs2 rd).all inlineRowOk = true := by
   unfold expandRows
   split
-  · exact (rowsRdZero_ok key rs1 rs2).1
+  · next zero => exact rowsRdZero_ok key rs1 rs2 (by simpa [zero] using registered)
   · exact (rows_ok key rs1 rs2 rd).1
 
-/-- The rows Jolt emits for any supported inline call pass the sequence checks.
+/-- The rows Jolt emits for a supported inline call that jolt-qed accepts pass the
+sequence checks.
 Example: `keccak256AbsorbPermute.expandRows x10 x11 x0` passes `sequenceOk`. -/
-theorem expandRows_sequenceOk (key : InlineKey) (rs1 rs2 rd : regidx) :
+theorem expandRows_sequenceOk (key : InlineKey) (rs1 rs2 rd : regidx)
+    (registered : (JoltISA.isX0 rd && key.readsRd) = false) :
     sequenceOk (key.expandRows rs1 rs2 rd) = true :=
-  sequenceOk_of_inlineRowsOk _ (expandRows_rowsOk key rs1 rs2 rd)
+  sequenceOk_of_inlineRowsOk _ (expandRows_rowsOk key rs1 rs2 rd registered)
 
 /-- Both allocation cases have `rowCount` rows.
 Example: `(keccak256AbsorbPermute.expandRows x10 x11 x0).length = 3121`. -/
@@ -1948,7 +2309,7 @@ theorem expandRows_length (key : InlineKey) (rs1 rs2 rd : regidx) :
     (key.expandRows rs1 rs2 rd).length = key.rowCount := by
   unfold expandRows
   split
-  · exact (rowsRdZero_ok key rs1 rs2).2
+  · exact rowsRdZero_length key rs1 rs2
   · exact (rows_ok key rs1 rs2 rd).2
 
 end JoltISA.Inlines.InlineKey

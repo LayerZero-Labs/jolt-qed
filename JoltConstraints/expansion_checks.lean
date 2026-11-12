@@ -353,11 +353,12 @@ Example: `XOR vr48 vr48 vr84` passes; `ADD vr48 vr40 vr49` does not. -/
 def noTempRead (row : JoltISA.Instr) : Bool :=
   (List.range 8).all fun index => !ExpansionTempLiveness.reads (BitVec.ofNat 7 (40 + index)) row
 
-/-- The row is not a jump, an advice row, an advice load or an equality assertion with a
-nonzero immediate. Example: `SD x10 vr48 0` passes; `JALR vr40 vr41 0` and
-`VirtualAdvice vr52 v 0` do not. -/
+/-- The row is not a jump, an advice-tape load or an equality assertion with a nonzero
+immediate. `VirtualAdvice` rows pass: the curve inlines use them for the values their
+assertions check. Example: `SD x10 vr48 0` and `VirtualAdvice vr52 v 0` pass;
+`JALR vr40 vr41 0` and `VirtualAdviceLoad vr52 8` do not. -/
 def straightLineRow : JoltISA.Instr → Bool
-  | .JAL .. | .JALR .. | .VirtualAdvice .. | .VirtualAdviceLoad .. => false
+  | .JAL .. | .JALR .. | .VirtualAdviceLoad .. => false
   | .VirtualAssertEQ _ _ imm => imm == 0
   | _ => true
 
@@ -370,8 +371,7 @@ def reservedFree (row : JoltISA.Instr) : Bool :=
 
 /-- The per-row check for inline rows: a valid ordinary sequence row with a well-formed
 mask, no register shift, no read of an instruction temporary, no write to a reserved
-virtual register, and no jump, advice row, advice load or nonzero-immediate equality
-assertion.
+virtual register, and no jump, advice-tape load or nonzero-immediate equality assertion.
 Example: every row of the generated `KECCAK256_ABSORB_PERMUTE` rows passes. -/
 def inlineRowOk (row : JoltISA.Instr) : Bool :=
   sequenceRowOk row && ordinary row && fastImmShiftOk row && !isRegisterShift row &&

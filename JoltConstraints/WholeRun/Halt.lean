@@ -82,7 +82,7 @@ theorem Block.ebreak_post {program : Rv64ProgramImage SourceInstruction} {b : Bl
     (hruns : b.Runs program) (hb : b.row.instruction = .riscv .EBREAK) :
     b.post.jolt_device = b.pre.jolt_device ∧
       b.post.sail.regs.get? Register.nextPC = some b.row.address := by
-  obtain ⟨instrs, hinstrs, hexec⟩ := hruns.executes
+  obtain ⟨instrs, hinstrs, hexec⟩ := hruns.executes_riscv hb
   rw [ebreak_blockInstrs _ _ hb _ hinstrs] at hexec
   have hseq : JoltISA.Program.seq [JoltISA.Encoded.JAL (.vreg JoltISA.systemScratchVReg) 0] =
       .instr (JoltISA.Encoded.JAL (.vreg JoltISA.systemScratchVReg) 0) (.done RETIRE_SUCCESS) :=

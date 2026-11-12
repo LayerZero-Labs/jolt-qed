@@ -152,7 +152,8 @@ the generated expansions (`lrwProgramAuto`, `lrdProgramAuto`, `scwProgramAuto`,
 `expand_lrw`, `expand_lrd` and `expand_sc_success` do.
 For example, `SC.D` at `rs1 = 0x40000000` cannot retire. -/
 private theorem lrsc_ram {program : Rv64ProgramImage SourceInstruction} {b : Block}
-    (hruns : b.Runs program) (rd rs1 rs2 : regidx) (p : Program)
+    (hruns : b.Runs program) {i : RiscvInstruction} (hrow : b.row.instruction = .riscv i)
+    (rd rs1 rs2 : regidx) (p : Program)
     (hexpand : b.row.instruction.expand = some (ExpandedSource.ofProgram p))
     (hp : p = lrwProgramAuto rd rs1 rs2 ∨ p = lrdProgramAuto rd rs1 rs2 ∨
       p = scwProgramAuto rd rs1 rs2 ∨ p = scdProgramAuto rd rs1 rs2)
@@ -163,7 +164,8 @@ private theorem lrsc_ram {program : Rv64ProgramImage SourceInstruction} {b : Blo
     all_goals
       simp only [lrwProgramAuto, lrdProgramAuto, scwProgramAuto, scdProgramAuto]
       split <;> rfl
-  have hrun := block_program_run b.row b.start b.post p hexpand hadvice hseq hruns.executes
+  have hrun := block_program_run b.row b.start b.post p hexpand hadvice hseq
+    (hruns.executes_riscv hrow)
   rcases hp with rfl | rfl | rfl | rfl
   all_goals
     simp only [lrwProgramAuto, lrdProgramAuto, scwProgramAuto, scdProgramAuto] at hrun
@@ -191,7 +193,7 @@ theorem access_classified (program : Rv64ProgramImage SourceInstruction) (b : Bl
       (p = lrwProgramAuto rd rs1 rs2 ∨ p = lrdProgramAuto rd rs1 rs2 ∨
         p = scwProgramAuto rd rs1 rs2 ∨ p = scdProgramAuto rd rs1 rs2) →
       RAM_START_ADDRESS ≤ (sourceValue (.xreg rs1) b.start).toNat := fun rd rs1 rs2 p he hadv hp =>
-    lrsc_ram hruns rd rs1 rs2 p he hp hadv
+    lrsc_ram hruns hrow rd rs1 rs2 p he hp hadv
   cases i
   case LR_W rd rs1 aq rl =>
     exact Or.inl (amoWordBase_ram _ (hlr rd rs1 (regidx.Regidx 0) _ (by rw [hrow]; rfl)
@@ -299,7 +301,7 @@ it. For example, a store to the output region changes `outputs` and `panic` only
 theorem Block.Runs.layout_eq {program : Rv64ProgramImage SourceInstruction} {b : Block}
     (hruns : b.Runs program) :
     b.post.jolt_device.memory_layout = b.pre.jolt_device.memory_layout := by
-  obtain ⟨instrs, -, hrun⟩ := hruns.executes
+  obtain ⟨-, instrs, -, -, hrun⟩ := hruns.executes
   exact (JoltIOSetupFrame.execProgram_rule (Program.seq instrs) b.start b.post _ hrun).1
 
 /-- Every block that runs preserves the run invariants, given aligned rows.

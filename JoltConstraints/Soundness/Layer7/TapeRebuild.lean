@@ -1,6 +1,7 @@
 import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Soundness.Layer5.AdviceExpansion
 import JoltConstraints.Soundness.Layer5.RuntimeAdvice
+import JoltConstraints.Soundness.Layer5.InlineAdvice
 import JoltConstraints.advice_inputs
 import JoltConstraints.ProgramLayout
 import JoltConstraints.nextpc_frame
@@ -2020,7 +2021,7 @@ private theorem UntrustedAnswerRun.expansionStart_starts_source
       Option.map_some, Option.getD_some] at marked
     exact marked
 
-private theorem RebuildAgreement.honestAdviceAt_eq
+private theorem RebuildAgreement.builtinAdviceAt_eq
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
     {original : UntrustedAnswerRun joltInstance privateInputs}
@@ -2030,8 +2031,8 @@ private theorem RebuildAgreement.honestAdviceAt_eq
     (new : TraceRow replay.bytecode)
     (oldAt : original.rows[n]? = some old)
     (newAt : replay.rows[n]? = some new) :
-    honestTracerAdviceAtStepN joltInstance.program original.rows n =
-      honestTracerAdviceAtStepN joltInstance.program replay.rows n := by
+    builtinAdviceAtStepN joltInstance.program original.rows n =
+      builtinAdviceAtStepN joltInstance.program replay.rows n := by
   obtain ⟨sameIndex, _, _, _, _⟩ := agreement.rows n old new oldAt newAt
   have sameSlot := agreement.slot_eq old new sameIndex
   have sameCurrentAdvice :
@@ -2067,7 +2068,7 @@ private theorem RebuildAgreement.honestAdviceAt_eq
         replay.bytecode[newFirst.rowIndex.val].address := by
       simpa using sameAddress
     dsimp only [firstIndex] at oldFirstAt
-    simp [honestTracerAdviceAtStepN, oldAt, newAt, sameCurrentAdvice,
+    simp [builtinAdviceAtStepN, oldAt, newAt, sameCurrentAdvice,
       ← sameStart, oldFirstAt, newFirstAt, sameSourceAddress, ← sameCount,
       honestTracerAdvice_ignores_tape _ _ _ samePre]
   · have replayBound : ¬ firstIndex < replay.rows.size := by
@@ -2076,8 +2077,61 @@ private theorem RebuildAgreement.honestAdviceAt_eq
     have oldFirstAt : original.rows[firstIndex]? = none := by simp [firstBound]
     have newFirstAt : replay.rows[firstIndex]? = none := by simp [replayBound]
     dsimp only [firstIndex] at oldFirstAt
-    simp [honestTracerAdviceAtStepN, oldAt, newAt,
+    simp [builtinAdviceAtStepN, oldAt, newAt,
       ← sameStart, oldFirstAt, newFirstAt]
+
+/-- Replay keeps which steps are inline advice steps: it keeps every row's bytecode
+slot and every expansion start. For example, a SECP256K1_MULQ advice step stays one. -/
+private theorem RebuildAgreement.inlineFlagAt_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay) (k : Nat) :
+    stepNOfTraceIsInlineAdvice joltInstance.program original.rows k =
+      stepNOfTraceIsInlineAdvice joltInstance.program replay.rows k := by
+  let start := startOfExpansionContainingStepN original.rows k
+  have source : original.rows[start]?.bind (fun first =>
+        joltInstance.program.instructionAt original.bytecode[first.rowIndex].address) =
+      replay.rows[start]?.bind (fun first =>
+        joltInstance.program.instructionAt replay.bytecode[first.rowIndex].address) := by
+    simpa only [Option.bind_map] using! congrArg
+      (fun slot : Option JoltInstructionRow =>
+        slot.bind fun row => joltInstance.program.instructionAt row.address)
+      (agreement.observedSlotAt start)
+  unfold stepNOfTraceIsInlineAdvice
+  rw [agreement.adviceFlagAt_eq k, ← agreement.startOfExpansion_eq k]
+  change (_ && (match original.rows[start]?.bind (fun first =>
+        joltInstance.program.instructionAt original.bytecode[first.rowIndex].address) with
+      | some (.inline ..) => true | _ => false)) = _
+  rw [source]
+  rfl
+
+/-- Replay keeps honest advice: the built-in advice agrees, and an inline advice step
+reads the same word of the unchanged `inline_advice`. For example, a DIV's quotient and
+a SECP256K1_MULQ call's advice words are the same before and after replay. -/
+private theorem RebuildAgreement.honestAdviceAt_eq
+    {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs}
+    {original : UntrustedAnswerRun joltInstance privateInputs}
+    {replay : ValidRun joltInstance (rebuiltInputs privateInputs original)}
+    (agreement : RebuildAgreement original replay)
+    (n : Nat) (old : TraceRow original.bytecode)
+    (new : TraceRow replay.bytecode)
+    (oldAt : original.rows[n]? = some old)
+    (newAt : replay.rows[n]? = some new) :
+    honestTracerAdviceAtStepN joltInstance.program privateInputs original.rows n =
+      honestTracerAdviceAtStepN joltInstance.program (rebuiltInputs privateInputs original)
+        replay.rows n := by
+  have flags : stepNOfTraceIsInlineAdvice joltInstance.program original.rows =
+      stepNOfTraceIsInlineAdvice joltInstance.program replay.rows :=
+    funext agreement.inlineFlagAt_eq
+  have count : inlineAdviceStepsBeforeStepN joltInstance.program original.rows n =
+      inlineAdviceStepsBeforeStepN joltInstance.program replay.rows n := by
+    simp only [inlineAdviceStepsBeforeStepN, flags]
+  rw [honestTracerAdviceAtStepN_eq, honestTracerAdviceAtStepN_eq, agreement.inlineFlagAt_eq n,
+    agreement.builtinAdviceAt_eq n old new oldAt newAt, count]
+  rfl
 
 /-- Honest internal advice uses the state at the start of its source expansion;
 the rebuilt run has that state, apart from tape bytes. -/
@@ -2090,7 +2144,8 @@ theorem rebuild_honest_advice
     (agreement : RebuildAgreement original.toUntrustedAnswerRun replay) :
     ∀ n : Fin replay.rows.size,
       replay.rows[n].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program replay.rows n := by
+        honestTracerAdviceAtStepN joltInstance.program
+          (rebuiltInputs privateInputs original.toUntrustedAnswerRun) replay.rows n := by
   intro n
   have oldBound : n.val < original.rows.size := by
     rw [← agreement.length]

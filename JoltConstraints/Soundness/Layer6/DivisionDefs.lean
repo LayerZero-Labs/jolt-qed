@@ -353,8 +353,7 @@ theorem arithmetic_advice_sequence_run {F : Type} [Field F] (joltField : JoltFie
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (first : Fin context.bytecode.size)
     (state : ExpansionState witness context run first 0)
-    (honestAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program run.rows n)
+    (honestAdvice : BuiltinAdviceHonest joltInstance.program run.rows)
     (program : BitVec 64 → Program)
     (count : (expansionInstructions context.bytecode first).length =
       expansionRowCount context.bytecode first)

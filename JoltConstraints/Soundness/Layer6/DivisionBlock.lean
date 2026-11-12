@@ -50,20 +50,19 @@ theorem division_append_honest {F : Type} [Field F]
       RunExtends run run' ∧
       run'.rows.size = run.rows.size + expansionRowCount context.bytecode first ∧
       ExpansionState witness context run' first (expansionRowCount context.bytecode first) ∧
-      (∀ n : Fin run'.rows.size, run'.rows[n].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program run'.rows n) := by
+      BuiltinAdviceHonest joltInstance.program run'.rows := by
   obtain ⟨replay, replayed⟩ := division_replay_rows witness context run first state
     kind rd rs1 rs2 count shape pre honestPost entry honestRun
   have completed := division_replay_complete witness context run candidate replay first state
     kind rd rs1 rs2 count shape pre honestPost entry extendsRun size complete same replayed
-  have oldAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program run.rows n := by
+  have oldAdvice : BuiltinAdviceHonest joltInstance.program run.rows := by
     obtain ⟨_, _, ready⟩ := entry
     exact ready.honestRuntimeAdvice
   refine ⟨replay, replayed.extendsRun, replayed.size, completed, ?_⟩
-  intro n
+  intro n notInline
   by_cases before : n.val < run.rows.size
   · exact RunExtends.honestAdvice_before run replay replayed.extendsRun oldAdvice n before
+      notInline
   · exact division_replay_honest_new witness context run replay first state.starts
       kind rd rs1 rs2 placeholder source count shape pre honestPost replayed n (by omega)
 
@@ -84,19 +83,18 @@ theorem division_block {F : Type} [Field F] (joltField : JoltField F)
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (first : Fin context.bytecode.size)
     (state : ExpansionState witness context run first 0)
-    (honestAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program run.rows n)
-    (hasAdvice : ExpansionHasAdvice context.bytecode first) :
+    (honestAdvice : BuiltinAdviceHonest joltInstance.program run.rows)
+    (hasAdvice : ExpansionHasAdvice context.bytecode first)
+    (notInline : ¬ ExpansionIsInline joltInstance.program context.bytecode first) :
     ∃ run' : UntrustedAnswerRun joltInstance privateInputs,
       RunExtends run run' ∧
       run'.rows.size = run.rows.size + expansionRowCount context.bytecode first ∧
       ExpansionState witness context run' first (expansionRowCount context.bytecode first) ∧
-      (∀ n : Fin run'.rows.size, run'.rows[n].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program run'.rows n) := by
+      BuiltinAdviceHonest joltInstance.program run'.rows := by
   obtain ⟨slots, preprocessed, _⟩ := context.entryIsRust
   obtain ⟨kind, rd, rs1, rs2, placeholder, nonzero, source, count, shape⟩ :=
     division_expansion_layout joltInstance.program context.bytecode context.expands
-      ⟨slots, preprocessed⟩ first state.starts hasAdvice
+      ⟨slots, preprocessed⟩ first state.starts hasAdvice notInline
   obtain ⟨q, pre, candidate, entry, present, extendsRun, size, complete, runs⟩ :=
     arithmetic_advice_sequence_run joltField witness context equations run first state
       honestAdvice (kind.program rd rs1 rs2) count shape

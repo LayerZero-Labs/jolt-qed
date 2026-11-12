@@ -2781,7 +2781,7 @@ theorem block_simulates_io_via (program : Rv64ProgramImage SourceInstruction) (b
     clear hinputs hdecode hfetch
     obtain ⟨store, width, ea, hacc, _⟩ := hio
     cases i <;> simp_all [RiscvInstruction.memAccess, RiscvInstruction.Lifted]
-  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
+  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes_riscv hrow
   have hadvice : blockInstrs b.row Gs = blockInstrs b.row b.start := by
     have he := ((blockHelper% advice_shadow) i _ _ hshadow).trans
       ((blockHelper% advice_overlayRows) i b.pre.vregs m inc b.start)

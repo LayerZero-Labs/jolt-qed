@@ -132,6 +132,12 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .VirtualHostIO => some (.ofNative .VirtualHostIO)
   -- A registered inline: the generated rows, stamped as one sequence. With rd = x0
   -- Rust substitutes the instruction temporary vr40 for rd (`InlineKey.expandRows`).
+  -- An inline that reads rs3 (the secp256k1 keys) has no rd = x0 form here: its rd = x0
+  -- rows would read the unwritten vr40. jolt-qed rejects that encoding, in
+  -- `InlineEncoding.register` and here (decision D7 in docs/inline-precompiles.md).
+  -- Jolt at the pin still expands it; a16z/jolt#2414 proposes the same rejection.
   -- See : jolt/crates/jolt-program/src/expand/mod.rs (expand_source_instruction_with_provider)
   --       jolt/crates/jolt-program/src/expand/materialize.rs (materialize_inline) at a6b6dc717
-  | .inline key rs1 rs2 rs3 => some (.sequence (key.expandRows rs1 rs2 rs3))
+  | .inline key rs1 rs2 rs3 =>
+      if JoltISA.isX0 rs3 && key.readsRd then none
+      else some (.sequence (key.expandRows rs1 rs2 rs3))

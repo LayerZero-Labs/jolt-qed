@@ -211,57 +211,6 @@ private theorem division_source_advice_single (kind : DivisionKind)
       [kind.honestAdvice rd rs1 rs2 pre] := by
   cases kind <;> rfl
 
-private theorem division_block_later_not_start
-    (image : Rv64ProgramImage SourceInstruction)
-    (bytecode : Array JoltInstructionRow)
-    (expanded : expand_program image = some bytecode)
-    (first : Fin bytecode.size) (starts : bytecode[first].starts_source = true)
-    (offset : Nat) (positive : 0 < offset)
-    (inside : offset < expansionRowCount bytecode first)
-    (row : JoltInstructionRow) (atRow : bytecode[first.val + offset]? = some row) :
-    row.starts_source = false := by
-  have endBound := (expand_program_layout image bytecode expanded).endInBounds first
-  have prevBound : first.val + (offset - 1) < bytecode.size := by
-    unfold expansionRowCount at inside
-    omega
-  have currentBound : first.val + offset < bytecode.size := by
-    unfold expansionRowCount at inside
-    omega
-  let previous : Fin bytecode.size := ⟨first.val + (offset - 1), prevBound⟩
-  let current : Fin bytecode.size := ⟨first.val + offset, currentBound⟩
-  have remaining := expansion_row_remaining image bytecode expanded first starts
-    (offset - 1) (by omega) bytecode[previous]
-    (by simp only [previous, Array.getElem?_eq_getElem prevBound, Fin.getElem_fin])
-  have continues : bytecode[previous].continues = true := by
-    simpa only [JoltInstructionRow.continues, bne_iff_ne] using remaining
-  have layout := (expand_program_layout image bytecode expanded).next previous current
-    (by simp only [previous, current]; omega) continues
-  rw [Array.getElem?_eq_getElem currentBound] at atRow
-  have rowIs : row = bytecode[current] := by
-    exact (Option.some.inj atRow).symm
-  rw [rowIs]
-  unfold JoltInstructionRow.starts_source
-  simp only [layout.2.1, layout.2.2.1, Option.isNone_some, Bool.false_or]
-
-private theorem expansion_start_of_segment {bytecode : Array JoltInstructionRow}
-    (rows : Array (TraceRow bytecode)) (base offset : Nat)
-    (starts : stepNOfTraceIsStartOfNewExpansion rows base = true)
-    (later : ∀ k, 0 < k → k ≤ offset →
-      stepNOfTraceIsStartOfNewExpansion rows (base + k) = false) :
-    startOfExpansionContainingStepN rows (base + offset) = base := by
-  induction offset with
-  | zero =>
-      by_cases empty : base = 0
-      · subst base
-        rfl
-      · obtain ⟨previous, rfl⟩ := Nat.exists_eq_succ_of_ne_zero empty
-        simp [startOfExpansionContainingStepN, starts]
-  | succ offset ih =>
-      have noStart := later (offset + 1) (by omega) (by omega)
-      rw [Nat.add_succ, startOfExpansionContainingStepN]
-      rw [show base + offset + 1 = base + (offset + 1) by omega, noStart]
-      exact ih (fun k positive inside => later k positive (by omega))
-
 /-- A replay of `count` consecutive division rows after `run`.
 `ordered` identifies each bytecode row, `firstPre` records the prepared starting
 state, and `adviceAtOffset` records the one patched advice word.
@@ -596,7 +545,7 @@ private theorem division_replay_start_flag
         some replay.bytecode[row.rowIndex] := by
       rw [show first'.val + offset = row.rowIndex.val by simpa only [first'] using index.symm]
       simp
-    have notStart := division_block_later_not_start joltInstance.program replay.bytecode
+    have notStart := expansion_later_not_start joltInstance.program replay.bytecode
       replay.expands first' firstStarts offset positive inside' _ atBytecode
     change replay.rows[run.rows.size + offset]? = some row at rowAt
     change (replay.rows[run.rows.size + offset]?.map
@@ -1390,17 +1339,17 @@ theorem RunExtends.honestAdvice_before
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run replay : UntrustedAnswerRun joltInstance privateInputs)
     (extendsRun : RunExtends run replay)
-    (honest : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program run.rows n)
-    (n : Fin replay.rows.size) (before : n.val < run.rows.size) :
+    (honest : BuiltinAdviceHonest joltInstance.program run.rows)
+    (n : Fin replay.rows.size) (before : n.val < run.rows.size)
+    (notInline : stepNOfTraceIsInlineAdvice joltInstance.program replay.rows n = false) :
     replay.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program replay.rows n := by
+      builtinAdviceAtStepN joltInstance.program replay.rows n := by
   obtain ⟨bytecodeEq, rowsEq⟩ := extendsRun
   rcases run with ⟨⟨runBytecode, runRows, _⟩, _⟩
   rcases replay with ⟨⟨replayBytecode, replayRows, _⟩, _⟩
-  dsimp only at bytecodeEq rowsEq honest n before ⊢
+  dsimp only at bytecodeEq rowsEq honest n before notInline ⊢
   subst bytecodeEq
-  dsimp only at rowsEq honest before ⊢
+  dsimp only at rowsEq honest before notInline ⊢
   have sizes := congrArg Array.size rowsEq
   simp only [Array.size_extract, Nat.sub_zero] at sizes
   have within : runRows.size ≤ replayRows.size := by omega
@@ -1412,10 +1361,12 @@ theorem RunExtends.honestAdvice_before
       Array.getElem?_eq_getElem before] at h
     exact congrArg TraceRow.someTracerAdvice? (Option.some.inj h)
   rw [rowEq]
-  have adviceEq := honestTracerAdviceAtStepN_extract joltInstance.program
+  have adviceEq := builtinAdviceAtStepN_extract joltInstance.program
     replayRows runRows.size n.val within before
-  rw [rowsEq] at adviceEq
-  exact (honest ⟨n.val, before⟩).trans adviceEq
+  have inlineEq := stepNOfTraceIsInlineAdvice_extract joltInstance.program
+    replayRows runRows.size n.val within before
+  rw [rowsEq] at adviceEq inlineEq
+  exact (honest ⟨n.val, before⟩ (inlineEq.trans notInline)).trans adviceEq
 
 /-- Split an honest division program run and append each execution to the
 original prefix, preserving its exact rows and recording the patched advice.
@@ -1995,7 +1946,7 @@ theorem division_replay_honest_new
       pre honestPost (kind.honestAdvice rd rs1 rs2 pre))
     (n : Fin replay.rows.size) (new : run.rows.size ≤ n.val) :
     replay.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program replay.rows n := by
+      builtinAdviceAtStepN joltInstance.program replay.rows n := by
   let offset := n.val - run.rows.size
   have position : n.val = run.rows.size + offset := by simp only [offset]; omega
   have inside : offset < expansionRowCount context.bytecode first := by
@@ -2024,7 +1975,7 @@ theorem division_replay_honest_new
         simpa only [adviceOption, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
           using adviceAt
       rw [absent]
-      unfold honestTracerAdviceAtStepN
+      unfold builtinAdviceAtStepN
       rw [nRow]
       change replay.bytecode[row.rowIndex.val].instruction.adviceValue? = none at adviceOption
       simp [adviceOption]
@@ -2046,7 +1997,7 @@ theorem division_replay_honest_new
       have adviceBeforeN : adviceStepsBeforeStepN replay.rows n.val = 0 := by
         rw [position]
         exact adviceBefore
-      unfold honestTracerAdviceAtStepN
+      unfold builtinAdviceAtStepN
       rw [nRow]
       change replay.bytecode[row.rowIndex.val].instruction.adviceValue? = some value at adviceOption
       change joltInstance.program.instructionAt

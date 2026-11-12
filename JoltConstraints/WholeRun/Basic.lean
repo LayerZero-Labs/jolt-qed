@@ -93,12 +93,44 @@ def Block.FirstRowAt (b : Block) (trace : Trace) (k : Nat) : Prop :=
       rows.head? = some trace.bytecode[(trace.rows[k]'hk).rowIndex]
 
 /-- What every block of an honest trace satisfies: the row is the image's row
-at the address `pre` continues at, and its rows, run in order with the honest
-advice, retire and leave `post`. -/
+at the address `pre` continues at, and its rows, run in order with the advice
+the honest tracer gives them, retire and leave `post`.
+A registered inline's VirtualAdvice rows take words of the private input
+`JoltPrivateInputs.inline_advice`, which no state determines, so `executes`
+only says that some advice values run the inline's rows. Every other row takes
+the honest tracer's values in `b.start` (`blockInstrs`).
+For example, a DIV block runs its rows with its quotient as advice, and a
+SECP256K1_MULQ block runs its rows with the words the private input gives it. -/
 structure Block.Runs (program : Rv64ProgramImage SourceInstruction) (b : Block) : Prop where
   at_row : rowAt program b.row.address = some b.row
   continues : b.pre.sail.regs.get? Register.nextPC = some b.row.address
-  executes : ∃ instrs, blockInstrs b.row b.start = some instrs ∧
+  executes : ∃ values instrs,
+    ((∃ key rs1 rs2 rs3, b.row.instruction = .inline key rs1 rs2 rs3) ∨
+      values = b.row.instruction.honestTracerAdvice b.start) ∧
+    (expand_instruction b.row).map (fun rows => patchAdvice values (rows.map (·.instruction))) =
+      some instrs ∧
     JoltISA.execProgram (JoltISA.Program.seq instrs) b.start = .ok RETIRE_SUCCESS b.post
+
+/-- A block that is not a registered inline runs the rows `blockInstrs` gives,
+with the honest tracer's advice.
+For example, an ADD block runs its one ADD row. -/
+theorem Block.Runs.executes_plain {program : Rv64ProgramImage SourceInstruction} {b : Block}
+    (runs : b.Runs program)
+    (plain : ∀ key rs1 rs2 rs3, b.row.instruction ≠ .inline key rs1 rs2 rs3) :
+    ∃ instrs, blockInstrs b.row b.start = some instrs ∧
+      JoltISA.execProgram (JoltISA.Program.seq instrs) b.start = .ok RETIRE_SUCCESS b.post := by
+  obtain ⟨values, instrs, honest, patched, executed⟩ := runs.executes
+  rcases honest with ⟨key, rs1, rs2, rs3, inline⟩ | honest
+  · exact absurd inline (plain key rs1 rs2 rs3)
+  · subst values
+    exact ⟨instrs, patched, executed⟩
+
+/-- A RISC-V block runs the rows `blockInstrs` gives, with the honest tracer's
+advice. For example, a DIV block runs its rows with its quotient as advice. -/
+theorem Block.Runs.executes_riscv {program : Rv64ProgramImage SourceInstruction} {b : Block}
+    (runs : b.Runs program) {i : RiscvInstruction} (riscv : b.row.instruction = .riscv i) :
+    ∃ instrs, blockInstrs b.row b.start = some instrs ∧
+      JoltISA.execProgram (JoltISA.Program.seq instrs) b.start = .ok RETIRE_SUCCESS b.post :=
+  runs.executes_plain fun key rs1 rs2 rs3 inline => by rw [riscv] at inline; cases inline
 
 end WholeRun

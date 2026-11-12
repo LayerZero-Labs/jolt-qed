@@ -1,4 +1,4 @@
-import JoltConstraints.Soundness.Layer5.TapeTrace
+import JoltConstraints.Soundness.Layer5.InlineAdvice
 
 open LeanRV64D
 
@@ -26,15 +26,17 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 /-- The prefix uses honest internal runtime advice, has not continued past a
 stable stall, and is about to attempt `next` in `pre`. The row need not succeed.
+Honest advice constrains only built-in advice, such as a DIV's quotient
+(`BuiltinAdviceHonest`). An inline's advice rows may record any words: every such
+prefix is honest for the private inputs whose `inline_advice` holds those words
+(`honest_of_builtin`), and the restrictions below quantify over all private inputs.
 The boundary cases follow the entry and linkage rules of UntrustedAnswerRun.
 The stopping rule follows a16z/jolt PR #2109, merge commit 0249591a. -/
 structure UntrustedAnswerRun.NextStep
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (next : Fin run.bytecode.size) (pre : SailJoltState) : Prop where
-  honestRuntimeAdvice : ∀ n : Fin run.rows.size,
-    run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program run.rows n
+  honestRuntimeAdvice : BuiltinAdviceHonest joltInstance.program run.rows
   noEarlierStop : ∀ (i : Nat) (current following : TraceRow run.bytecode),
     run.rows[i]? = some current → run.rows[i + 1]? = some following →
     ¬ current.StableStall

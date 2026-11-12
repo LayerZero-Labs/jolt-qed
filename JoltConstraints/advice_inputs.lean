@@ -61,6 +61,16 @@ noncomputable def ConstraintContext.withAdviceTape
         rfl
       · exact ram }
 
+/-- The context binds the same RAM words after changing the inline advice words, because
+initialization does not read them. For example, a context for `inline_advice = #[]` is
+also one for `inline_advice = #[5]`. -/
+def ConstraintContext.withInlineAdvice
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    {params : WitnessParams} (context : ConstraintContext joltInstance privateInputs params)
+    (words : Array (BitVec 64)) :
+    ConstraintContext joltInstance { privateInputs with inline_advice := words } params :=
+  { context with initialized := context.initialized }
+
 -- The relation cannot distinguish two choices of execution tape. This is an
 -- invariance result; it does not establish that any satisfying witness admits
 -- an execution consistent with a single tape. That is a soundness obligation.

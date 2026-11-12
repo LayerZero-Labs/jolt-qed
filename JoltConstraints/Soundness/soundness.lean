@@ -2,8 +2,9 @@
 The base non-succinct soundness statement: a witness that satisfies every modeled
 constraint shows the instance is in Jolt's language, under the premises below.
 Source programs are limited to the instructions represented by `SourceInstruction`.
-That type includes five registered inlines at opcode 0x0B: SHA256, SHA256_INIT,
-KECCAK256, KECCAK256_ABSORB_PERMUTE and BLAKE2 (`JoltBytecode/Inlines/Keys.lean`).
+That type includes twelve registered inlines at opcode 0x0B: SHA256, SHA256_INIT,
+KECCAK256, KECCAK256_ABSORB_PERMUTE, BLAKE2 and the seven secp256k1 inlines MULQ,
+SQUAREQ, DIVQ, MULR, SQUARER, DIVR and GLVR_ADV (`JoltBytecode/Inlines/Keys.lean`).
 Every other 0x0B encoding, opcode 0x2B and the field-inline opcode 0x7B are outside
 that type. Guests using them are outside this theorem's scope.
 Akita's extra constraints are to be modeled separately; PCS security is out of scope.
@@ -36,15 +37,18 @@ theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (satisfied : JoltConstraints.AllConstraints joltInstance privateInputs witness) :
     joltInstance.InLanguage := by
   obtain ⟨context, equations⟩ := satisfied
-  obtain ⟨trace, bytecodeEq, represented⟩ :=
+  obtain ⟨words, trace, bytecodeEq, represented⟩ :=
     soundness_reconstruct_trace joltField joltInstance assumptions restrictions
       privateInputs witness context equations
+  -- The trace's private inputs differ from `privateInputs` only in `inline_advice`,
+  -- which the constraints do not read.
+  let inputs := { privateInputs with inline_advice := words }
   apply JoltConstraints.Soundness.untrustedAnswerLanguage_implies_inLanguage
-  refine ⟨privateInputs, trace, ?_, ?_, ?_⟩
-  · exact soundness_matches_outputs joltField joltInstance privateInputs witness
-      context equations trace represented
+  refine ⟨inputs, trace, ?_, ?_, ?_⟩
+  · exact soundness_matches_outputs joltField joltInstance inputs witness
+      (context.withInlineAdvice words) equations trace represented
   · exact soundness_prover_accepts joltField joltInstance restrictions.noMaxLengthTrace
-      privateInputs witness
-      context equations trace bytecodeEq represented
-  · exact soundness_spoil_asserts_pass joltField joltInstance privateInputs witness
-      context equations trace bytecodeEq represented
+      inputs witness
+      (context.withInlineAdvice words) equations trace bytecodeEq represented
+  · exact soundness_spoil_asserts_pass joltField joltInstance inputs witness
+      (context.withInlineAdvice words) equations trace bytecodeEq represented

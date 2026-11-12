@@ -20,22 +20,6 @@ theorem withRuntimeAdvice_eq_of_noAdvice (instruction : Instr)
     instruction.withRuntimeAdvice advice = instruction := by
   cases instruction <;> first | rfl | cases absent
 
-/-- A row without VirtualAdvice has no recorded or honest runtime-advice value,
-independently of how the trace prefix was constructed. -/
-theorem runtimeAdvice_agrees_of_noAdvice (program : Rv64ProgramImage SourceInstruction)
-    {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode))
-    (n : Fin rows.size)
-    (absent : bytecode[rows[n].rowIndex].instruction.adviceValue? = none) :
-    rows[n].someTracerAdvice? = honestTracerAdviceAtStepN program rows n := by
-  change (bytecode[rows[n].rowIndex].instruction.withRuntimeAdvice
-    rows[n].runtimeAdvice).adviceValue? = _
-  rw [withRuntimeAdvice_eq_of_noAdvice _ rows[n].runtimeAdvice absent, absent]
-  simp only [honestTracerAdviceAtStepN, Array.getElem?_eq_getElem n.isLt,
-    bind, Option.bind_some]
-  change none = bytecode[rows[n].rowIndex].instruction.adviceValue?.bind _
-  rw [absent]
-  rfl
-
 /-- Every row of the generated SC.W expansion has no runtime advice, for either
 destination branch and all source-register aliases. -/
 theorem scw_noAdvice (rd rs1 rs2 : regidx) (instruction : Instr)

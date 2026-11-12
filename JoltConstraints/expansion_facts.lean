@@ -878,7 +878,13 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .jolt (.VirtualAssertEQ rs1 rs2 imm), _, h => by cases h; exact virtualAssertEQ_native_ok ..
   | .jolt .VirtualHostIO, _, h => by cases h; exact virtualHostIO_native_ok
   | .inline key rs1 rs2 rs3, _, h => by
-    cases h; exact JoltISA.Inlines.InlineKey.expandRows_sequenceOk key rs1 rs2 rs3
+    simp only [SourceInstruction.expand] at h
+    split at h
+    · cases h
+    · next registered =>
+      cases h
+      exact JoltISA.Inlines.InlineKey.expandRows_sequenceOk key rs1 rs2 rs3
+        (by simpa using registered)
 
 /-- The first read of each instruction temporary in a source expansion follows
 a write within that same expansion. Reserved virtual registers are excluded. -/
