@@ -50,12 +50,14 @@ def storeBase : RiscvInstruction → SailJoltState → Option (BitVec 64)
 
 end RiscvInstruction
 
-/-- The first byte of the doubleword that Jolt's rows write when the source instruction stores;
-none for a custom instruction, none for an instruction that does not store.
+/-- The first byte of the doubleword that Jolt's rows write when a RISC-V source instruction
+stores; none for an instruction that does not store, and none for a custom instruction or a
+registered inline, which the whole-run theorem leaves out of scope (`BlockConforms.riscv`).
 For example, the custom instruction `AdviceLD` has none, and `SW` has its aligned doubleword. -/
 def SourceInstruction.storeBase : SourceInstruction → SailJoltState → Option (BitVec 64)
   | .riscv i, js => i.storeBase js
   | .jolt _, _ => none
+  | .inline .., _ => none
 
 namespace WholeRun
 
@@ -830,10 +832,12 @@ private theorem jolt_rows_noStore (j : JoltCustomInstruction) (e : ExpandedSourc
     | (simp only [expandedInstrs, ExpandedSource.ofNative, List.mem_singleton, forall_eq]
        exact rewriteNative_noStore _ (by trivial))
 
-/-- **Frame lemma for one block.** A block that runs changes no byte of Jolt's memory map outside
-the doubleword that its instruction stores into. -/
+/-- **Frame lemma for one block.** A block that runs, and is not a registered inline, changes no
+byte of Jolt's memory map outside the doubleword that its instruction stores into. Inline rows
+store to several doublewords, which `storeBase` does not describe. -/
 private theorem block_mem {program : Rv64ProgramImage SourceInstruction} {b : Block}
-    (hruns : b.Runs program) (a : Nat)
+    (hruns : b.Runs program)
+    (hinline : ∀ key rs1 rs2 rd, b.row.instruction ≠ .inline key rs1 rs2 rd) (a : Nat)
     (ha : ∀ base, b.row.instruction.storeBase b.start = some base → ¬ InDword base a) :
     b.post.sail.mem.get? a = b.pre.sail.mem.get? a := by
   obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
@@ -851,6 +855,7 @@ private theorem block_mem {program : Rv64ProgramImage SourceInstruction} {b : Bl
       rw [blockInstrs_eq he hblock]
       exact seq_noStore _ (patchAdvice_noStore _ (jolt_rows_noStore j e (hi ▸ he)) _)
     exact get_of_keep (mkeeps_execProgram _ hnos _ _ _ hrun) a
+  | inline key rs1 rs2 rd => exact absurd hi (hinline key rs1 rs2 rd)
 
 /-- The bytes of the program's instruction rows: each row covers two bytes if compressed and four
 otherwise.
@@ -902,15 +907,18 @@ theorem CodeIntact.of_related {program : Rv64ProgramImage SourceInstruction}
   simp only [JoltISA.Mmu.ram_byte, hb', hjt, Option.getD_some] at hram
   rw [hb', hram]
 
-/-- **A block that stores outside the code keeps the code.** -/
+/-- **A block that stores outside the code keeps the code.** The block must not be a registered
+inline, whose stores `NoCodeStore` does not describe. -/
 theorem JoltCodeIntact.of_block {program : Rv64ProgramImage SourceInstruction} {b : Block}
-    (hruns : b.Runs program) (hno : NoCodeStore program b)
+    (hruns : b.Runs program)
+    (hinline : ∀ key rs1 rs2 rd, b.row.instruction ≠ .inline key rs1 rs2 rd)
+    (hno : NoCodeStore program b)
     (h : JoltCodeIntact program b.pre) : JoltCodeIntact program b.post := by
   refine ⟨by rw [hruns.layout_eq]; exact h.1, ?_⟩
   intro row hrow k hk b' hb'
   have hmem : b.post.sail.mem.get? (row.address.toNat + k) =
       b.pre.sail.mem.get? (row.address.toNat + k) := by
-    refine block_mem hruns _ fun base hbase hin => ?_
+    refine block_mem hruns hinline _ fun base hbase hin => ?_
     exact hno base hbase ((row.address.toNat + k) - base.toNat) (by have := hin.2; omega)
       ⟨row, hrow, k, hk, by have := hin.1; omega⟩
   rw [hmem]

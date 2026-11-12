@@ -1,9 +1,10 @@
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer4.ShiftEntry
+import JoltConstraints.Soundness.Layer4.RotrEntry
 
 open LeanRV64D
 
-/-! Shift lookup outputs on right-shift masks. Mask shape is a local obligation
+/-! Shift and rotate lookup outputs on right-shift masks. Mask shape is a local obligation
 for the expansion proof; no executed trace is assumed here. -/
 
 set_option autoImplicit false
@@ -66,5 +67,29 @@ theorem lookupOutput_sraw
   rw [lookupOutput_of_interleaved charAbove2pow127 context equations
     t slot selected lhs rhs raf left right, table]
   exact ShiftTables.sraw_entry _ lhs rhs (uninterleave_interleave lhs rhs) shift shiftLt mask
+
+/-- VirtualROTR returns the right rotation specified by its right-shift mask. -/
+theorem lookupOutput_rotr
+    (table : (bytecodeRow context.bytecode slot.val).bind
+      (fun row => JoltMetadata.lookupTable row.instruction) = some .VirtualROTR)
+    (shift : Nat) (shiftLt : shift < 64)
+    (mask : ∀ i < 64, rhs.getLsbD i = decide (shift ≤ i)) :
+    witness.LookupOutput t = ((LeanRV64D.Functions.rotater lhs shift).toNat : F) := by
+  rw [lookupOutput_of_interleaved charAbove2pow127 context equations
+    t slot selected lhs rhs raf left right, table]
+  exact ShiftTables.rotr_entry _ lhs rhs (uninterleave_interleave lhs rhs) shift shiftLt mask
+
+/-- VirtualROTRW returns the low-word right rotation specified by its right-shift mask,
+zero-extended. -/
+theorem lookupOutput_rotrw
+    (table : (bytecodeRow context.bytecode slot.val).bind
+      (fun row => JoltMetadata.lookupTable row.instruction) = some .VirtualROTRW)
+    (shift : Nat) (shiftLt : shift < 32)
+    (mask : ∀ i < 32, rhs.getLsbD i = decide (shift ≤ i)) :
+    witness.LookupOutput t =
+      (((LeanRV64D.Functions.rotater (lhs.setWidth 32) shift).setWidth 64).toNat : F) := by
+  rw [lookupOutput_of_interleaved charAbove2pow127 context equations
+    t slot selected lhs rhs raf left right, table]
+  exact ShiftTables.rotrw_entry _ lhs rhs (uninterleave_interleave lhs rhs) shift shiftLt mask
 
 end JoltConstraints.Soundness

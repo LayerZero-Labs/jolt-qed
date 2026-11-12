@@ -72,7 +72,8 @@ private theorem ebreak_blockInstrs (row : SourceInstructionRow SourceInstruction
     instrs = [JoltISA.Encoded.JAL (.vreg JoltISA.systemScratchVReg) 0] := by
   simp [blockInstrs, expand_instruction, h, SourceInstruction.expand,
     ExpandedSource.ofProgram, JoltISA.ebreakProgram, JoltISA.Program.instrs,
-    MAX_FINAL_ROWS_PER_SOURCE, stamp_sequence, patchAdvice] at hb
+    SourceInstruction.rowCapacity, MAX_FINAL_ROWS_PER_SOURCE, stamp_sequence,
+    patchAdvice] at hb
   exact hb.symm
 
 /-- **A block running EBREAK stalls.** Its rows leave `jolt_device` unchanged and `nextPC` at

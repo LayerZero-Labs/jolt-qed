@@ -1,4 +1,5 @@
 import JoltConstraints.Soundness.Layer6.DivisionPrograms
+import JoltConstraints.inline_rows_ok
 
 open LeanRV64D
 
@@ -99,6 +100,22 @@ private theorem division_source_kind (kind : DivisionKind) (rd rs1 rs2 : regidx)
     SourceInstruction.expand, ExpandedSource.ofPureProgram, isX0,
     Instr.canonicalNoOp, Instr.adviceValue?] at advice
 
+/-- Rows that pass `inlineRowOk` contain no internal advice. For example, no row of a
+registered hash inline is a `VirtualAdvice` row. -/
+private theorem inline_rows_no_advice (rows : List Instr)
+    (ok : rows.all ExpansionFacts.inlineRowOk = true) :
+    rows.any (·.adviceValue?.isSome) = false := by
+  induction rows with
+  | nil => rfl
+  | cons row rest ih =>
+    simp only [List.all_cons, Bool.and_eq_true] at ok
+    have straight : ExpansionFacts.straightLineRow row = true := by
+      have parts := ok.1
+      simp only [ExpansionFacts.inlineRowOk, Bool.and_eq_true] at parts
+      exact parts.1.2
+    simp only [List.any_cons, ih ok.2, Bool.or_false]
+    cases row <;> first | rfl | simp [ExpansionFacts.straightLineRow] at straight
+
 /-- A source expansion containing internal advice is one of the division
 families with a nonzero architectural destination; for example, DIV x1,x2,x3
 uses advice, while the floor-memory rows in an SB expansion do not. -/
@@ -116,6 +133,12 @@ private theorem source_advice_kind (source : SourceInstruction)
   case riscv.REMU => exact division_source_kind .remu _ _ _ _ advice
   case riscv.REMW => exact division_source_kind .remw _ _ _ _ advice
   case riscv.REMUW => exact division_source_kind .remuw _ _ _ _ advice
+  -- Registered inline rows never request internal advice.
+  case inline.Regidx key rs1 rs2 rd =>
+    simp only [SourceInternalAdvice, SourceInstruction.expand, Option.any_some,
+      expandedInternalAdvice,
+      inline_rows_no_advice _ (Inlines.InlineKey.expandRows_rowsOk key rs1 rs2 (.Regidx rd)),
+      Bool.false_eq_true] at advice
   -- CSR reads, swaps and bit updates never request internal advice.
   case riscv.CSRRW | riscv.CSRRS | riscv.CSRRC | riscv.CSRRWI | riscv.CSRRSI | riscv.CSRRCI =>
     simp only [SourceInternalAdvice, SourceInstruction.expand, ExpandedSource.ofProgram,

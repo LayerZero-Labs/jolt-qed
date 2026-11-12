@@ -177,6 +177,26 @@ structure SourceInstructionRow (Source : Type) where
 -- See : jolt/crates/jolt-program/src/expand/materialize.rs:19
 def MAX_FINAL_ROWS_PER_SOURCE : Nat := 64
 
+/-- The most final rows one registered inline may expand to: `u16::MAX`.
+For example, the 3,121 rows of `KECCAK256_ABSORB_PERMUTE` fit.
+See jolt/crates/jolt-program/src/expand/materialize.rs:21 at a6b6dc717. -/
+def MAX_INLINE_ROWS_PER_SOURCE : Nat := 65535
+
+/-- The capacity Rust gives one source instruction's sequence: `u16::MAX` rows for a
+registered inline (`materialize_inline`) and 64 for every built-in sequence.
+For example, `(.inline .sha256 x10 x11 x0).rowCapacity = 65535`.
+See jolt/crates/jolt-program/src/expand/materialize.rs:118-156 at a6b6dc717. -/
+def SourceInstruction.rowCapacity : SourceInstruction → Nat
+  | .inline .. => MAX_INLINE_ROWS_PER_SOURCE
+  | _ => MAX_FINAL_ROWS_PER_SOURCE
+
+/-- Every capacity leaves the sequence counter in 16 bits.
+For example, an inline's last-but-one row counts 1 and its first counts at most 65534. -/
+theorem SourceInstruction.rowCapacity_le (source : SourceInstruction) :
+    source.rowCapacity ≤ 65535 := by
+  cases source <;> simp only [SourceInstruction.rowCapacity, MAX_INLINE_ROWS_PER_SOURCE,
+    MAX_FINAL_ROWS_PER_SOURCE] <;> omega
+
 -- The final rows for one source row; none where Rust returns an error.
 -- Rust also checks every final row against the profile (metadata.rs:39-45); for
 -- RV64IMAC_JOLT that check always passes, so it is left out.
@@ -194,7 +214,7 @@ def expand_instruction (row : SourceInstructionRow SourceInstruction) :
               is_first_in_sequence := false
               is_compressed := row.is_compressed }]
   | some (.sequence instructions) =>
-      if instructions.isEmpty || MAX_FINAL_ROWS_PER_SOURCE < instructions.length then none
+      if instructions.isEmpty || row.instruction.rowCapacity < instructions.length then none
       else some (stamp_sequence row.address row.is_compressed instructions)
 
 -- Source is RiscvInstruction for a pure RISC-V ELF, and SourceInstruction for

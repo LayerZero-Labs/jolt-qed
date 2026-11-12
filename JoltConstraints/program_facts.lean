@@ -67,7 +67,8 @@ theorem expand_instruction_countdown (source : SourceInstructionRow SourceInstru
     rfl
   · split at expanded
     · cases expanded
-    · -- a sequence: stamping gives row k the count n - k - 1, and n is at most 64
+    · -- a sequence: stamping gives row k the count n - k - 1, and n is at most the
+      -- source's capacity, which is below 2^16
       rename_i instructions _ sizeOk
       cases expanded
       simp only [Bool.or_eq_true, List.isEmpty_iff, decide_eq_true_eq, not_or, not_lt]
@@ -75,9 +76,29 @@ theorem expand_instruction_countdown (source : SourceInstructionRow SourceInstru
       simp only [stamp_sequence, List.getElem_map, List.getElem_zipIdx, List.length_map,
         List.length_zipIdx, Option.getD_some, BitVec.toNat_ofNat, Nat.zero_add]
       have small : instructions.length - k - 1 < 2 ^ 16 := by
-        have bound : MAX_FINAL_ROWS_PER_SOURCE = 64 := rfl
+        have bound := source.instruction.rowCapacity_le
         omega
       rw [Nat.mod_eq_of_lt small]
+      omega
+
+/-- An instruction expands to at most 65535 rows, so its countdown fits in 16 bits.
+For example, a native instruction gives one row and KECCAK256_ABSORB_PERMUTE gives 3121. -/
+theorem expand_instruction_length_le (source : SourceInstructionRow SourceInstruction)
+    (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows) :
+    rows.length ≤ 65535 := by
+  unfold expand_instruction at expanded
+  split at expanded
+  · cases expanded
+  · cases expanded
+    simp
+  · split at expanded
+    · cases expanded
+    · rename_i instructions _ sizeOk
+      cases expanded
+      simp only [Bool.or_eq_true, List.isEmpty_iff, decide_eq_true_eq, not_or, not_lt]
+        at sizeOk
+      simp only [stamp_sequence, List.length_map, List.length_zipIdx]
+      have bound := source.instruction.rowCapacity_le
       omega
 
 -- Only an instruction's first row is where it starts.

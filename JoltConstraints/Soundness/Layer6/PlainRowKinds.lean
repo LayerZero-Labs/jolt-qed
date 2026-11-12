@@ -230,6 +230,9 @@ def otherScalarKind? : Instr → Option OtherScalarKind
   | .VirtualSRAI destination source imm => some (.write (.shift .sra destination source imm))
   | .VirtualSRLIW destination source imm => some (.write (.shift .srlw destination source imm))
   | .VirtualSRAIW destination source imm => some (.write (.shift .sraw destination source imm))
+  | .VirtualROTRI destination source imm => some (.write (.shift .rotr destination source imm))
+  | .VirtualROTRIW destination source imm =>
+      some (.write (.shift .rotrw destination source imm))
   | .VirtualPow2I destination imm => some (.write (.power .pow2I destination imm))
   | .VirtualPow2IW destination imm => some (.write (.power .pow2IW destination imm))
   | .VirtualShiftRightBitmaskI destination imm => some (.write (.power .shiftMaskI destination imm))

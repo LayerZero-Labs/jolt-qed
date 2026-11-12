@@ -37,7 +37,7 @@ private theorem load_first_mask {bytecode : Array JoltInstructionRow}
       lhProgramAuto, lhuProgramAuto, lwProgramAuto, lwuProgramAuto] at emits
     (try split_ifs at emits) <;>
       simp [ExpandedSource.ofProgram, ExpandedSource.ofNative, JoltISA.Program.instrs,
-        MAX_FINAL_ROWS_PER_SOURCE, stamp_sequence] at emits <;>
+        SourceInstruction.rowCapacity, MAX_FINAL_ROWS_PER_SOURCE, stamp_sequence] at emits <;>
       subst rows <;>
       simp only [List.head?_cons, Option.some.injEq] at head <;>
       simp [TraceRow.ram_address, ← head, JoltISA.Instr.rewriteNative,

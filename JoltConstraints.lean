@@ -1,6 +1,7 @@
 import JoltConstraints.Completeness.All
 import JoltConstraints.Completeness.completeness
 import JoltConstraints.advice_inputs
+import JoltConstraints.inline_preprocess
 import JoltConstraints.Soundness.soundness
 import JoltConstraints.Soundness.Layer0.Bounds
 import JoltConstraints.Soundness.Layer0.Words
@@ -40,7 +41,6 @@ import JoltConstraints.Soundness.Layer4.Assertions
 import JoltConstraints.Soundness.Layer4.Inputs
 import JoltConstraints.Soundness.Layer4.Outputs
 import JoltConstraints.Soundness.Layer4.Advice
-import JoltConstraints.Soundness.Layer4.Reachable
 import JoltConstraints.Soundness.Layer5.TapeTrace
 import JoltConstraints.Soundness.Layer5.NarrowAdvice
 import JoltConstraints.Soundness.Layer5.MemoryAddress
