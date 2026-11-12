@@ -1,0 +1,48 @@
+name: provenance
+
+# Checks that need no Lean build: the provenance manifest (provenance.toml,
+# scripts/check-provenance.py) and the hygiene scan (scripts/check_hygiene.py).
+# reports/2026-11-11-provenance.md describes both.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provenance-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provenance:
+    name: provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # The revision the expansion-parity job checks (a16z/jolt#2384). The check
+      # reports, without failing, every models path that is missing there.
+      JOLT_COMPARE_REV: 580084fcfad4788ebf48413a92dd640ca090c45f
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The check reads only trees, so a shallow blobless fetch of each revision
+      # is enough. GitHub serves any commit reachable from a branch or pull
+      # request by its full hash.
+      - name: Fetch the pin and every checked Jolt revision
+        run: |
+          jolt="$RUNNER_TEMP/jolt"
+          git init -q "$jolt"
+          git -C "$jolt" remote add origin https://github.com/a16z/jolt.git
+          for rev in $(python3 scripts/check-provenance.py --list-revisions) "$JOLT_COMPARE_REV"; do
+            git -C "$jolt" fetch -q --depth=1 --filter=blob:none origin "$rev"
+          done
+      - name: Check the provenance manifest
+        run: |
+          python3 scripts/check-provenance.py \
+            --jolt-dir "$RUNNER_TEMP/jolt" --compare "$JOLT_COMPARE_REV"
