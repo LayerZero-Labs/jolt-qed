@@ -134,9 +134,9 @@ theorem byteInitialRam_masked (config : MemoryConfig) (io : JoltDevice)
 /-- Replacing empty untrusted advice by the bytes of the reconstructed words changes the
 tracer's initial RAM exactly in the untrusted-advice block, where it becomes the
 reconstructed words.
-For example, if the block holds 2 words and the committed words are the casts of `1` and
-`2`, the new state's initial RAM holds `1` and `2` at the block's two words and keeps
-every other word. -/
+For example, in a field of characteristic above `2 ^ 64`, if the block holds 2 words and
+the committed words are the casts of `1` and `2`, the new state's initial RAM holds `1`
+and `2` at the block's two words and keeps every other word. -/
 theorem initialRamWordFromState_untrustedAdvice (untrustedAdvice : Nat → F)
     (state state' : SailJoltState)
     (empty : state.jolt_device.untrusted_advice = #[])
