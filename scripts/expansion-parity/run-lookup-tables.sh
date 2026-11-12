@@ -2,7 +2,7 @@
 # Build the expansion-parity crate and emit lookup-table vectors (track T, T4).
 #
 # Usage:
-#   JOLT_DIR=~/claude-work/jolt-t2-580084 EXPANSION_PARITY_FEATURES=zicsr-remaining \
+#   JOLT_DIR=<a16z/jolt checkout at 580084fcf> EXPANSION_PARITY_FEATURES=zicsr-remaining \
 #     scripts/expansion-parity/run-lookup-tables.sh WORK_DIR [options...]
 #
 # EXPANSION_PARITY_FEATURES is passed to build.sh; a16z/jolt#2384 (580084fcf)

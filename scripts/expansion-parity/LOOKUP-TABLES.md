@@ -10,7 +10,7 @@ The results are in `reports/2026-11-11-lookup-table-vectors.md`.
 ## Running it
 
 ```
-JOLT_DIR=~/claude-work/jolt-t2-580084 EXPANSION_PARITY_FEATURES=zicsr-remaining \
+JOLT_DIR=<a16z/jolt checkout at 580084fcf> EXPANSION_PARITY_FEATURES=zicsr-remaining \
   scripts/expansion-parity/run-lookup-tables.sh WORK_DIR [--seed N] [--random-per-table N]
 lake build JoltTests.LookupTables.Main
 LOOKUP_TABLES_ARGS="compare WORK_DIR/out WORK_DIR/report" lake env lean JoltTests/LookupTables/Run.lean

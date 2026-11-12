@@ -38,12 +38,12 @@ The Lean comparator (`JoltTests/LookupTables/Main.lean`) maps each Rust variant 
 ## How to run it
 
 ```
-JOLT_DIR=~/claude-work/jolt-t2-580084 EXPANSION_PARITY_FEATURES=zicsr-remaining \
-  scripts/expansion-parity/run-lookup-tables.sh ~/claude-work/lookup-tables-580084
+JOLT_DIR=<a16z/jolt checkout at 580084fcf> EXPANSION_PARITY_FEATURES=zicsr-remaining \
+  scripts/expansion-parity/run-lookup-tables.sh WORK_DIR
 lake build JoltTests.LookupTables.Main
-LOOKUP_TABLES_ARGS="compare ~/claude-work/lookup-tables-580084/out ~/claude-work/lookup-tables-580084/report" \
+LOOKUP_TABLES_ARGS="compare WORK_DIR/out WORK_DIR/report" \
   lake env lean JoltTests/LookupTables/Run.lean
-LOOKUP_TABLES_ARGS="mutation ~/claude-work/lookup-tables-580084/out" \
+LOOKUP_TABLES_ARGS="mutation WORK_DIR/out" \
   lake env lean JoltTests/LookupTables/Run.lean
 ```
 
