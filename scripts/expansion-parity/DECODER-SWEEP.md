@@ -18,7 +18,8 @@ The results are in `reports/2026-11-11-decoder-sweep.md`.
 - In Rust alone, every one of the 2^30 words with low bits `0b11`.
   For each class this exhaustive check verifies two properties of Jolt's decoder.
   First, the decoded kind (or the rejection) depends on the operand bits only through which operand fields are zero.
-  Second, for the class's most common accepted kind, each output field (rd, rs1, rs2, imm) is an affine function over GF(2) of the operand bits.
+  Second, every accepted word in the class has the same kind, and each output field (rd, rs1, rs2, imm) is an affine function over GF(2) of the operand bits.
+  The check fails unless it covered every accepted word.
   Together with the patterns above, these properties mean that the sweep's words determine Jolt's result on every word of the class.
 
 The exhaustive check covers Jolt's side only.
@@ -30,10 +31,10 @@ The comparator does not prove this; the report states it as an argument.
 For each input the comparator compares Jolt's result with `joltDecode w 0`:
 
 - both reject;
-- both accept: T1's `SourceView.toLean` maps Jolt's record to `.riscv j`, and `joltDecode` returns `i` with `i = j` once the division advice and the atomic `aq`/`rl` bits (which Jolt's record does not carry) are cleared;
+- both accept: T1's `SourceView.toLean` maps Jolt's record to `.riscv j`, and `joltDecode` returns `i` with `i = j` once the fields Jolt's record does not carry are settled: the division advice of `i` is set to 0, and the atomic `aq`/`rl` bits of `j` are taken from the word's bits 26 and 25;
 - Jolt-only kind: Jolt accepts with a Jolt-specific kind (one `toLean` maps to `.jolt`, or one in T1's `noLeanSourceKinds`) and `joltDecode` returns `none`; `ImageDecoded` constrains only `.riscv` rows;
 - rejected by Jolt's expansion: Jolt's decoder accepts a Zicsr instruction (CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI, CSRRCI) at any CSR address, and Jolt's expansion then rejects it with `ExpansionError::UnsupportedCsr` unless the address is one of the six in `virtual_register_for_csr` (`crates/jolt-program/src/expand/allocator.rs`); `joltDecode` makes the same six-address check at decode and returns `none`.
-  The comparator counts a word here only if its CSR address is outside the six and the same record at address 0x300 maps to a Lean instruction;
+  Jolt reads the address as `imm & 0xfff`, so the comparator counts a word here only if its immediate is a sign-extended 12-bit value whose low 12 bits are the word's bits 31..20, that address is outside the six, and the same record at address 0x300 maps to a Lean instruction;
 - otherwise a mismatch, grouped by cause.
 
 ## Running it

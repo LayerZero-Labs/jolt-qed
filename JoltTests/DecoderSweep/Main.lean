@@ -33,8 +33,9 @@ For each input the comparator classifies the pair (Jolt result, Lean result):
 * both reject: Jolt returns an error and `joltDecode` returns `none`;
 * both accept: Jolt returns a source instruction, T1's `SourceView.toLean` maps it
   to `.riscv j`, and `joltDecode w 0` is `some i` with `i` equal to `j` once the
-  fields Jolt does not carry are cleared (the division advice is set to 0 and the
-  atomic `aq`/`rl` bits to false, as `toLean` does);
+  fields Jolt's record does not carry are settled: the division advice of `i` is
+  set to 0, and the atomic `aq`/`rl` bits of `j` are taken from the word's bits
+  26 and 25;
 * Jolt-only kind: Jolt accepts with a Jolt-specific kind (`toLean` maps it to a
   `.jolt` source instruction, such as the advice loads, or the kind is in T1's
   list `noLeanSourceKinds`, or it is `Inline`), and `joltDecode` returns `none`;
@@ -57,9 +58,10 @@ namespace DecoderSweep
 deriving instance BEq for JoltISA.SystemCSR
 deriving instance BEq for RiscvInstruction
 
-/-- Clear the fields Jolt's decoder does not produce: the division and
-remainder advice and the atomic ordering bits. -/
-def erase : RiscvInstruction → RiscvInstruction
+/-- Set the division and remainder advice to 0. `ImageDecoded` quantifies the
+advice existentially and the encoding does not carry it, so the comparison
+fixes it on the Lean side. -/
+def eraseAdvice : RiscvInstruction → RiscvInstruction
   | .DIV d a b _ => .DIV d a b 0
   | .DIVU d a b _ => .DIVU d a b 0
   | .REM d a b _ => .REM d a b 0
@@ -68,28 +70,36 @@ def erase : RiscvInstruction → RiscvInstruction
   | .DIVUW d a b _ => .DIVUW d a b 0
   | .REMW d a b _ => .REMW d a b 0
   | .REMUW d a b _ => .REMUW d a b 0
-  | .LR_W d a _ _ => .LR_W d a false false
-  | .LR_D d a _ _ => .LR_D d a false false
-  | .SC_W d a b _ _ => .SC_W d a b false false
-  | .SC_D d a b _ _ => .SC_D d a b false false
-  | .AMOSWAP_W d a b _ _ => .AMOSWAP_W d a b false false
-  | .AMOSWAP_D d a b _ _ => .AMOSWAP_D d a b false false
-  | .AMOADD_W d a b _ _ => .AMOADD_W d a b false false
-  | .AMOADD_D d a b _ _ => .AMOADD_D d a b false false
-  | .AMOAND_W d a b _ _ => .AMOAND_W d a b false false
-  | .AMOAND_D d a b _ _ => .AMOAND_D d a b false false
-  | .AMOOR_W d a b _ _ => .AMOOR_W d a b false false
-  | .AMOOR_D d a b _ _ => .AMOOR_D d a b false false
-  | .AMOXOR_W d a b _ _ => .AMOXOR_W d a b false false
-  | .AMOXOR_D d a b _ _ => .AMOXOR_D d a b false false
-  | .AMOMIN_W d a b _ _ => .AMOMIN_W d a b false false
-  | .AMOMIN_D d a b _ _ => .AMOMIN_D d a b false false
-  | .AMOMAX_W d a b _ _ => .AMOMAX_W d a b false false
-  | .AMOMAX_D d a b _ _ => .AMOMAX_D d a b false false
-  | .AMOMINU_W d a b _ _ => .AMOMINU_W d a b false false
-  | .AMOMINU_D d a b _ _ => .AMOMINU_D d a b false false
-  | .AMOMAXU_W d a b _ _ => .AMOMAXU_W d a b false false
-  | .AMOMAXU_D d a b _ _ => .AMOMAXU_D d a b false false
+  | i => i
+
+/-- Set the atomic ordering bits of an atomic instruction. Jolt's source record
+does not carry them, and `SourceView.toLean` sets both to false; the comparison
+takes the expected values from the word itself (`aq` is bit 26 and `rl` is
+bit 25 in the RISC-V A extension), so a decoder that drops or swaps them is
+reported. -/
+def withOrdering (aq rl : Bool) : RiscvInstruction → RiscvInstruction
+  | .LR_W d a _ _ => .LR_W d a aq rl
+  | .LR_D d a _ _ => .LR_D d a aq rl
+  | .SC_W d a b _ _ => .SC_W d a b aq rl
+  | .SC_D d a b _ _ => .SC_D d a b aq rl
+  | .AMOSWAP_W d a b _ _ => .AMOSWAP_W d a b aq rl
+  | .AMOSWAP_D d a b _ _ => .AMOSWAP_D d a b aq rl
+  | .AMOADD_W d a b _ _ => .AMOADD_W d a b aq rl
+  | .AMOADD_D d a b _ _ => .AMOADD_D d a b aq rl
+  | .AMOAND_W d a b _ _ => .AMOAND_W d a b aq rl
+  | .AMOAND_D d a b _ _ => .AMOAND_D d a b aq rl
+  | .AMOOR_W d a b _ _ => .AMOOR_W d a b aq rl
+  | .AMOOR_D d a b _ _ => .AMOOR_D d a b aq rl
+  | .AMOXOR_W d a b _ _ => .AMOXOR_W d a b aq rl
+  | .AMOXOR_D d a b _ _ => .AMOXOR_D d a b aq rl
+  | .AMOMIN_W d a b _ _ => .AMOMIN_W d a b aq rl
+  | .AMOMIN_D d a b _ _ => .AMOMIN_D d a b aq rl
+  | .AMOMAX_W d a b _ _ => .AMOMAX_W d a b aq rl
+  | .AMOMAX_D d a b _ _ => .AMOMAX_D d a b aq rl
+  | .AMOMINU_W d a b _ _ => .AMOMINU_W d a b aq rl
+  | .AMOMINU_D d a b _ _ => .AMOMINU_D d a b aq rl
+  | .AMOMAXU_W d a b _ _ => .AMOMAXU_W d a b aq rl
+  | .AMOMAXU_D d a b _ _ => .AMOMAXU_D d a b aq rl
   | i => i
 
 /-- The constructor name of a Lean instruction, for reports. -/
@@ -152,20 +162,26 @@ def joltOnlyDecodeKinds : List String := ["Inline"]
 def csrKinds : List String := ["CSRRW", "CSRRS", "CSRRC", "CSRRWI", "CSRRSI", "CSRRCI"]
 
 /-- Jolt's decoder accepts a Zicsr instruction with any CSR address
-(`decode_system` in `crates/jolt-program/src/image/decode.rs`), and Jolt's
-expansion rejects it with `ExpansionError::UnsupportedCsr` unless the address is
-one of the six that `virtual_register_for_csr` maps
-(`crates/jolt-program/src/expand/allocator.rs`). Lean's `joltDecode` makes the
-same six-address check at decode. This recognizes a record whose only obstacle
-in `toLean` is such an address: the same record at address 0x300 (mstatus)
-maps to a Lean RISC-V instruction. -/
-def rejectedAtExpansion (v : SourceView) : Bool :=
-  csrKinds.contains v.kind && (csr v.kind v.imm matches .error _) &&
+(`decode_system` in `crates/jolt-program/src/image/decode.rs`). Jolt's expansion
+reads the address as `imm & 0xfff` (`csr_address` in
+`crates/jolt-program/src/expand/operands.rs`) and rejects it with
+`ExpansionError::UnsupportedCsr` unless it is one of the six that
+`virtual_register_for_csr` maps (`crates/jolt-program/src/expand/allocator.rs`).
+Lean's `joltDecode` makes the same six-address check at decode.
+This recognizes a record for word `w` that Jolt's expansion rejects for that
+reason: its kind is a Zicsr kind, its immediate is a sign-extended 12-bit value
+whose low 12 bits are the word's bits 31..20, that address is not one of the six,
+and the same record at address 0x300 (mstatus) maps to a Lean RISC-V
+instruction, so the address is its only obstacle. -/
+def rejectedAtExpansion (w : BitVec 32) (v : SourceView) : Bool :=
+  let address := (v.imm % 4096).toNat
+  csrKinds.contains v.kind && (sext v.kind 12 v.imm matches .ok _) &&
+    address == (w.extractLsb 31 20).toNat &&
+    !(systemCSRs.any (·.address.toNat == address)) &&
     ({ v with imm := 0x300 }.toLean matches .ok (.riscv _))
 
-/-- Compare Jolt's result for a word with `joltDecode w 0`. -/
-def compareDecode (w : BitVec 32) (jolt : JoltResult) : Outcome :=
-  let lean := Decode.joltDecode w 0
+/-- Compare Jolt's result for word `w` with Lean's decode `lean` of it. -/
+def compareWith (w : BitVec 32) (lean : Option RiscvInstruction) (jolt : JoltResult) : Outcome :=
   match jolt, lean with
   | .err _, none => .bothReject
   | .err m, some i =>
@@ -177,17 +193,22 @@ def compareDecode (w : BitVec 32) (jolt : JoltResult) : Outcome :=
           if noLeanSourceKinds.contains k || joltOnlyDecodeKinds.contains k then .joltOnly k
           else .mismatch s!"Jolt accepts unknown kind {k}, Lean rejects" (jsonOf jolt)
       | _ =>
-        if rejectedAtExpansion v then .expansionRejects v.kind
+        if rejectedAtExpansion w v then .expansionRejects v.kind
         else .mismatch s!"Jolt accepts {v.kind}, Lean rejects" (jsonOf jolt)
   | .ok v, some i =>
       match v.toLean with
       | .ok (.riscv j) =>
-          if erase i == j then .bothAccept v.kind
+          let expected := withOrdering (w.getLsbD 26) (w.getLsbD 25) j
+          if eraseAdvice i == expected then .bothAccept v.kind
           else .mismatch s!"both accept {v.kind}, operands differ"
-            s!"{jsonOf jolt}; Lean {reprStr i}"
+            s!"{jsonOf jolt}; expected {reprStr expected}; Lean {reprStr i}"
       | .ok (.jolt _) => .mismatch s!"Jolt gives custom {v.kind}, Lean gives {ctorName i}" (reprStr i)
       | .error e => .mismatch s!"Jolt {v.kind} has no Lean source form ({e.describe}), Lean gives {ctorName i}"
           (reprStr i)
+
+/-- Compare Jolt's result for word `w` with `joltDecode w 0`. -/
+def compareDecode (w : BitVec 32) (jolt : JoltResult) : Outcome :=
+  compareWith w (Decode.joltDecode w 0) jolt
 
 structure Tally where
   inputs : Nat := 0
@@ -302,6 +323,7 @@ def runMutation (outDir : String) : IO UInt32 := do
   let mut firstReject : Option Nat := none
   let mut firstCsr : Option (Nat × SourceView) := none
   let mut firstLater : Option (Nat × SourceView) := none
+  let mut firstAmo : Option (Nat × SourceView) := none
   repeat
     let line := (← h.getLine).trimAsciiEnd.toString
     if line.isEmpty then break
@@ -311,13 +333,20 @@ def runMutation (outDir : String) : IO UInt32 := do
         let std := (v.toLean matches .ok (.riscv _)) && v.rd.isSome
         if firstAccept.isNone && std then firstAccept := some (w, v)
         if firstCsr.isNone && std && v.kind == "CSRRW" then firstCsr := some (w, v)
-        if firstLater.isNone && rejectedAtExpansion v then firstLater := some (w, v)
+        if firstLater.isNone && rejectedAtExpansion (BitVec.ofNat 32 w) v then
+          firstLater := some (w, v)
+        if firstAmo.isNone && std && v.kind.startsWith "AMO" then firstAmo := some (w, v)
     | .err _ => if firstReject.isNone then firstReject := some w
-    if firstAccept.isSome && firstReject.isSome && firstCsr.isSome && firstLater.isSome then break
+    if firstAccept.isSome && firstReject.isSome && firstCsr.isSome && firstLater.isSome &&
+        firstAmo.isSome then break
   let some (aw, av) := firstAccept | throw <| IO.userError "no accepted standard word"
   let some rw := firstReject | throw <| IO.userError "no rejected word"
   let some (cw, cv) := firstCsr | throw <| IO.userError "no accepted CSRRW word"
   let some (lw, lv) := firstLater | throw <| IO.userError "no word rejected at expansion"
+  let some (mw, mv) := firstAmo | throw <| IO.userError "no accepted AMO word"
+  let mword := BitVec.ofNat 32 mw
+  let some mlean := Decode.joltDecode mword 0 | throw <| IO.userError "Lean rejects the AMO word"
+  let lAddress := (lw / 2 ^ 20) % 4096
   let detected (o : Outcome) : Bool := o matches .mismatch _ _
   let cases : List (String × Bool) :=
     [ ("rd changed", detected (compareDecode (BitVec.ofNat 32 aw)
@@ -334,7 +363,15 @@ def runMutation (outDir : String) : IO UInt32 := do
       ("supported CSR address changed to an unsupported one", detected (compareDecode
         (BitVec.ofNat 32 cw) (.ok { cv with imm := 0x301 }))),
       ("unsupported CSR address changed to mstatus", detected (compareDecode
-        (BitVec.ofNat 32 lw) (.ok { lv with imm := 0x300 }))) ]
+        (BitVec.ofNat 32 lw) (.ok { lv with imm := 0x300 }))),
+      ("CSR immediate not a 12-bit value", detected (compareDecode
+        (BitVec.ofNat 32 lw) (.ok { lv with imm := lv.imm + 0x1000 }))),
+      ("CSR address differs from the word's", detected (compareDecode
+        (BitVec.ofNat 32 lw) (.ok { lv with imm := if lAddress == 0x301 then 0x302 else 0x301 }))),
+      ("Lean's aq bit flipped", detected (compareWith mword
+        (some (withOrdering (!mword.getLsbD 26) (mword.getLsbD 25) mlean)) (.ok mv))),
+      ("Lean's rl bit flipped", detected (compareWith mword
+        (some (withOrdering (mword.getLsbD 26) (!mword.getLsbD 25) mlean)) (.ok mv))) ]
   let parcels ← readLines s!"{outDir}/decoder_parcels.tsv"
   let (ph, pw, pr) ← IO.ofExcept (parseParcelLine (parcels[1]!))
   let cases := cases ++

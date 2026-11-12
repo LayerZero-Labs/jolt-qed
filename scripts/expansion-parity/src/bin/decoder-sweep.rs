@@ -437,7 +437,12 @@ fn run() -> Result<bool, String> {
     } else {
         let t = std::time::Instant::now();
         let ex = exhaustive();
-        pass &= ex.kind_violations.is_empty() && ex.affine_violations.is_empty();
+        // The coverage argument needs every accepted word in the affine check:
+        // a class with a second accepted kind, or a word whose basis
+        // differences are not all of the same kind, leaves accepted words
+        // unchecked, and then the sweep's words need not determine them.
+        let complete = ex.affine_checked == ex.accepted && ex.affine_skipped == 0;
+        pass &= ex.kind_violations.is_empty() && ex.affine_violations.is_empty() && complete;
         let per_opcode: BTreeMap<String, &BTreeMap<String, u64>> = ex
             .per_opcode
             .iter()
@@ -453,6 +458,7 @@ fn run() -> Result<bool, String> {
             "affine_violations": ex.affine_violations,
             "affine_words_checked": ex.affine_checked,
             "affine_words_skipped": ex.affine_skipped,
+            "every_accepted_word_checked": complete,
             "per_opcode": per_opcode,
         })
     };
@@ -477,11 +483,13 @@ fn run() -> Result<bool, String> {
     println!("decoder-sweep: {n_parcels} parcels, {n_words} words written to {}", args.out.display());
     if let Some(ex) = summary["exhaustive"].as_object() {
         println!(
-            "decoder-sweep: exhaustive {} words, {} accepted, kind check {}, affine check {} ({} checked, {} skipped), {:.1}s",
+            "decoder-sweep: exhaustive {} words, {} accepted, kind check {}, affine check {} ({} checked, {} skipped), coverage {}, {:.1}s",
             ex["words"], ex["accepted"],
             if ex["kind_depends_only_on_zero_fields"] == true { "pass" } else { "FAIL" },
             if ex["affine"] == true { "pass" } else { "FAIL" },
-            ex["affine_words_checked"], ex["affine_words_skipped"], ex["seconds"].as_f64().unwrap_or(0.0)
+            ex["affine_words_checked"], ex["affine_words_skipped"],
+            if ex["every_accepted_word_checked"] == true { "complete" } else { "INCOMPLETE" },
+            ex["seconds"].as_f64().unwrap_or(0.0)
         );
     }
     Ok(pass)
