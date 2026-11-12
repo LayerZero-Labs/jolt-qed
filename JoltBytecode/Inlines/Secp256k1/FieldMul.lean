@@ -636,6 +636,48 @@ theorem colSum_congr {op : FieldOp} {scalar : Bool} {L : MulRegs} {k : Nat}
   intro m hm
   exact Mac.val_congr m (fun r hr => h r (hops m hm r hr))
 
+/-- **Column 0.** From register file `F` with `r0 := a0·b0`, the rows of the term `lo(w0·p)`
+run, `r0 + 2^64·r1` becomes `lo(a0·b0) + lo(w0·p)`, and no operand or constant register
+changes. The same for every operation.
+Example: for `MULQ`, from `vr62 := vr48 * vr52`, column 0 adds `lo(vr56·vr60)` into `vr62`
+and its carry into `vr63`. -/
+theorem col0_spec {op : FieldOp} {scalar : Bool} {L : MulRegs} (hv : L.Valid op scalar)
+    (F : VReg → BitVec 64) :
+    ∃ g0, regRun (colRows (L.col 0) true [.low (L.w 0) L.p])
+        (setV F L.r0 (F (L.a 0) * F (L.b 0))) = some g0 ∧
+      (g0 L.r0).toNat + 2 ^ 64 * (g0 L.r1).toNat =
+        (F (L.a 0) * F (L.b 0)).toNat + (F (L.w 0) * F L.p).toNat ∧
+      ∀ r, L.OpFree r → g0 r = F r := by
+  have ow : L.OpFree (L.w 0) := by
+    apply hv.pre_free
+    cases op <;> cases scalar <;> simp [preRegs]
+  have opp : L.OpFree L.p := by
+    apply hv.pre_free
+    cases op <;> cases scalar <;> simp [preRegs]
+  have free : ∀ {r}, L.OpFree r → r ≠ L.r0 ∧ r ≠ L.r1 ∧ r ≠ L.aux ∧ r ≠ L.aux2 :=
+    fun h => h
+  obtain ⟨g0, hg0, e0, -, fr0⟩ := colRows_spec hv.col0 [.low (L.w 0) L.p] (by simp)
+    (by
+      intro m hm r hr
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
+      subst hm
+      simp only [Mac.ops, List.mem_cons, List.not_mem_nil, or_false] at hr
+      rcases hr with rfl | rfl
+      · exact ow
+      · exact opp)
+    (by simp) (setV F L.r0 (F (L.a 0) * F (L.b 0)))
+  refine ⟨g0, hg0, ?_, fun r hr => (fr0 r hr).trans (setV_ne _ _ (free hr).1)⟩
+  have hc1 : (L.col 0).c1 = L.r0 := rfl
+  have hc2 : (L.col 0).c2 = L.r1 := rfl
+  rw [hc1, hc2] at e0
+  have h : (g0 L.r0).toNat + 2 ^ 64 * (g0 L.r1).toNat =
+      (setV F L.r0 (F (L.a 0) * F (L.b 0)) L.r0).toNat +
+        (setV F L.r0 (F (L.a 0) * F (L.b 0)) (L.w 0) *
+          setV F L.r0 (F (L.a 0) * F (L.b 0)) L.p).toNat := by
+    simpa only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Mac.val,
+      Nat.add_zero] using e0
+  rwa [setV_same, setV_ne _ _ (free ow).1, setV_ne _ _ (free opp).1] at h
+
 /-- One column `k` of `1..6`, from a register file `G` that agrees with `F` on the operands:
 the column's register rows end in a file `G'` that still agrees with `F`, and
 `R + 2^64·C' = C + colSum k`, where `C`, `C'` are the carries in and out and `R` the column.
@@ -717,39 +759,13 @@ theorem run_tail_iff {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠ 
       interval_cases i <;> cases scalar <;> simp [preRegs]
     · rw [hv.square rfl]; exact oa i hi
     · exact absurd rfl hop
-  have opp : L.OpFree L.p := by
-    apply hv.pre_free
-    cases op <;> cases scalar <;> simp [preRegs]
   have c0 : 32 ≤ L.r0.toNat ∧ 32 ≤ L.r1.toNat ∧ 32 ≤ L.aux.toNat ∧ 32 ≤ L.aux2.toNat ∧
       L.r0 ≠ L.r1 ∧ L.aux ≠ L.r0 ∧ L.aux ≠ L.r1 ∧ L.aux2 ≠ L.r0 ∧ L.aux2 ≠ L.r1 ∧
       L.aux ≠ L.aux2 := hv.col0
   have free : ∀ {r}, L.OpFree r → r ≠ L.r0 ∧ r ≠ L.r1 ∧ r ≠ L.aux ∧ r ≠ L.aux2 :=
     fun h => h
   -- Column 0: `MUL r0, a0, b0`, then the term `lo(w0·p)`.
-  obtain ⟨g0, hg0, e0, -, fr0⟩ := colRows_spec hv.col0 [.low (L.w 0) L.p] (by simp)
-    (by
-      intro m hm r hr
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
-      subst hm
-      simp only [Mac.ops, List.mem_cons, List.not_mem_nil, or_false] at hr
-      rcases hr with rfl | rfl
-      · exact ow 0 (by decide)
-      · exact opp)
-    (by simp) (setV F L.r0 (F (L.a 0) * F (L.b 0)))
-  have A0 : ∀ r, L.OpFree r → g0 r = F r := fun r hr =>
-    (fr0 r hr).trans (setV_ne _ _ (free hr).1)
-  have e0' : (g0 L.r0).toNat + 2 ^ 64 * (g0 L.r1).toNat =
-      (F (L.a 0) * F (L.b 0)).toNat + (F (L.w 0) * F L.p).toNat := by
-    have hc1 : (L.col 0).c1 = L.r0 := rfl
-    have hc2 : (L.col 0).c2 = L.r1 := rfl
-    rw [hc1, hc2] at e0
-    have h : (g0 L.r0).toNat + 2 ^ 64 * (g0 L.r1).toNat =
-        (setV F L.r0 (F (L.a 0) * F (L.b 0)) L.r0).toNat +
-          (setV F L.r0 (F (L.a 0) * F (L.b 0)) (L.w 0) *
-            setV F L.r0 (F (L.a 0) * F (L.b 0)) L.p).toNat := by
-      simpa only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Mac.val,
-        Nat.add_zero] using e0
-    rwa [setV_same, setV_ne _ _ (free (ow 0 (by decide))).1, setV_ne _ _ (free opp).1] at h
+  obtain ⟨g0, hg0, e0', A0⟩ := col0_spec hv F
   -- Columns 1 to 6.
   obtain ⟨g1, hg1, e1, A1⟩ := col_step hv (k := 1) (by decide) A0
   obtain ⟨g2, hg2, e2, A2⟩ := col_step hv (k := 2) (by decide) A1
@@ -1032,6 +1048,33 @@ def FieldMulCanonical (q : Nat) (rs3 : regidx) (s s' : SailJoltState) : Prop :=
   ∃ c : Limbs, Canonical q (limbsToNat c) ∧
     ∀ i < 4, loadDword? s' (fieldOut rs3 s + BitVec.ofNat 64 (8 * i)) = c.toList[i]?
 
+/-- **The digits of the column sum.** If the column values `R0, …, R6` and the top column
+`C + H` sum to `lo + 2^256·W`, where `lo < 2^256` and `W` has limbs `w0, …, w3`, then
+`R0..R3` are the digits of `lo`, `R4, R5, R6` equal `w0, w1, w2`, and `C + H` equals `w3`
+without overflow. These are the conditions the tail rows check.
+Example: for `MULQ` with `a = 2`, `b = (p+1)/2`: `lo = 1` and `W = 1` give columns
+`1, 0, 0, 0, 1, 0, 0` and top column `0`. -/
+theorem column_digits {R0 R1 R2 R3 R4 R5 R6 C H w0 w1 w2 w3 : BitVec 64} {lo : Nat}
+    (heq : R0.toNat + 2 ^ 64 * R1.toNat + 2 ^ 128 * R2.toNat + 2 ^ 192 * R3.toNat +
+        2 ^ 256 * R4.toNat + 2 ^ 320 * R5.toNat + 2 ^ 384 * R6.toNat +
+        2 ^ 448 * (C.toNat + H.toNat) =
+      lo + 2 ^ 256 * (w0.toNat + 2 ^ 64 * w1.toNat + 2 ^ 128 * w2.toNat + 2 ^ 192 * w3.toNat))
+    (hlo : lo < 2 ^ 256) :
+    R0.toNat + 2 ^ 64 * R1.toNat + 2 ^ 128 * R2.toNat + 2 ^ 192 * R3.toNat = lo ∧
+      R4 = w0 ∧ R5 = w1 ∧ R6 = w2 ∧ C + H = w3 ∧ H.toNat ≤ (C + H).toNat := by
+  have := R0.isLt; have := R1.isLt; have := R2.isLt; have := R3.isLt
+  have := R4.isLt; have := R5.isLt; have := R6.isLt; have := C.isLt; have := H.isLt
+  have := w0.isLt; have := w1.isLt; have := w2.isLt; have := w3.isLt
+  have hsplit : R0.toNat + 2 ^ 64 * R1.toNat + 2 ^ 128 * R2.toNat + 2 ^ 192 * R3.toNat = lo ∧
+      R4.toNat + 2 ^ 64 * R5.toNat + 2 ^ 128 * R6.toNat + 2 ^ 192 * (C.toNat + H.toNat) =
+        w0.toNat + 2 ^ 64 * w1.toNat + 2 ^ 128 * w2.toNat + 2 ^ 192 * w3.toNat := by
+    omega
+  have d7 : C.toNat + H.toNat = w3.toNat := by omega
+  have hCH : (C + H).toNat = C.toNat + H.toNat := by
+    rw [BitVec.toNat_add]; omega
+  exact ⟨hsplit.1, BitVec.eq_of_toNat_eq (by omega), BitVec.eq_of_toNat_eq (by omega),
+    BitVec.eq_of_toNat_eq (by omega), BitVec.eq_of_toNat_eq (by rw [hCH, d7]), by omega⟩
+
 /-- **Completeness of the `MUL` and `SQUARE` rows with Jolt's advice.** For a call that meets
 its obligations, with operands `a` and `b` (for squaring, `b = a`) for which Jolt's quotient
 advice `w = ⌊a·b / q⌋` exists, the rows run with that advice; the end state meets the
@@ -1074,39 +1117,15 @@ theorem mulRows_jolt_advice_complete {op : FieldOp} {scalar : Bool} {L : MulRegs
       limbsToNat a * limbsToNat b % q + 2 ^ 256 * limbsToNat w := by
     rw [rows_identity_iff _ _ _ _ _ hq, hwv]
     exact (Nat.div_add_mod' _ _).symm
-  rw [hct, fa, fb, hW, hid] at heq
-  have hw0 := (F (L.w 0)).isLt
-  have hw1 := (F (L.w 1)).isLt
-  have hw2 := (F (L.w 2)).isLt
-  have hw3 := (F (L.w 3)).isLt
   have hwF : limbsToNat w = (F (L.w 0)).toNat + 2 ^ 64 * (F (L.w 1)).toNat +
       2 ^ 128 * (F (L.w 2)).toNat + 2 ^ 192 * (F (L.w 3)).toNat := by
     rw [← hW]; rfl
-  have r0 := R0.isLt
-  have r1 := R1.isLt
-  have r2 := R2.isLt
-  have r3 := R3.isLt
-  have r4 := R4.isLt
-  have r5 := R5.isLt
-  have r6 := R6.isLt
-  have hC := C.isLt
-  have hH := H.isLt
-  have hsplit : R0.toNat + 2 ^ 64 * R1.toNat + 2 ^ 128 * R2.toNat + 2 ^ 192 * R3.toNat =
-        limbsToNat a * limbsToNat b % q ∧
-      R4.toNat + 2 ^ 64 * R5.toNat + 2 ^ 128 * R6.toNat + 2 ^ 192 * (C.toNat + H.toNat) =
-        limbsToNat w := by
-    omega
-  have d4 : R4.toNat = (F (L.w 0)).toNat := by omega
-  have d5 : R5.toNat = (F (L.w 1)).toNat := by omega
-  have d6 : R6.toNat = (F (L.w 2)).toNat := by omega
-  have d7 : C.toNat + H.toNat = (F (L.w 3)).toNat := by omega
-  have hCH : (C + H).toNat = C.toNat + H.toNat := by
-    rw [BitVec.toNat_add]; omega
+  rw [hct, fa, fb, hW, hid, hwF] at heq
+  obtain ⟨hlo, d4, d5, d6, d7, hle⟩ := column_digits heq (hc0.trans_le hq)
   -- The run.
   set m1 := writeDwords s.sail.mem (fieldOut rs3 s).toNat [R0, R1, R2, R3]
   set s1 : SailJoltState := { s with vregs := V, sail := { s.sail with mem := m1 } }
-  have tail := (hiff s1).2 ⟨pre.writable, BitVec.eq_of_toNat_eq d4, BitVec.eq_of_toNat_eq d5,
-    BitVec.eq_of_toNat_eq d6, BitVec.eq_of_toNat_eq (by rw [hCH, d7]), by omega, rfl⟩
+  have tail := (hiff s1).2 ⟨pre.writable, d4, d5, d6, d7, hle, rfl⟩
   have run : (Program.seq (mulRows op scalar L rs1 rs2 rs3 (quotientAdvice w))).Run s s1 := by
     rw [mulRows_eq_append]
     cases op
