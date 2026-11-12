@@ -6,7 +6,8 @@ The inline checks of I0(a), the generated inline rows and the inline round trip 
 
 ## Revisions
 
-jolt-qed: branch `inline/t1-driver` on top of `bf22776`; the comparator is that of commit `031ba06`.
+jolt-qed: branch `inline/t1-driver` on top of `bf22776`.
+I ran every T1 and mutation result below with the comparator of commit `77b9f3a`.
 The branch has no generated inline rows, and the comparator does not import them.
 Toolchain: `leanprover/lean4:v4.35.0`.
 
@@ -56,19 +57,24 @@ It is non-blocking and has not run in CI yet.
 
 ## What the comparator checks
 
-`ExpansionParity.compareT1` (`JoltTests/ExpansionParity/Compare.lean:116`) handles each record whose source is not `Inline`.
+`ExpansionParity.compareT1` (`JoltTests/ExpansionParity/Compare.lean:129`) handles each record whose source is not `Inline`.
 It maps the Rust source to a Lean `SourceInstruction` with `SourceView.toLean` (`JoltTests/ExpansionParity/Source.lean:116`).
 The map uses Rust's kind names, takes the immediate in the form `decode.rs` produces, and fixes the operands Lean carries but Rust does not (the division quotient is 0 and the atomic `aq` and `rl` bits are false).
 It then runs `expand_instruction` (`JoltConstraints/program.lean:186`), which calls `SourceInstruction.expand` (`JoltConstraints/expansions.lean:17`) and `stamp_sequence` (`JoltConstraints/program.lean:161`).
 `RowView.ofLeanRow` (`JoltTests/ExpansionParity/Row.lean:283`) renders each Lean row: the kind and registers come from the `JoltISA.Instr` constructor, the immediate from `JoltMetadata.immediate`, the flags from `JoltMetadata.circuitFlag` and `JoltMetadata.instructionFlag`, the table from `JoltMetadata.lookupTable`, and the RAF flag from `JoltMetadata.instructionRafFlag` (`JoltConstraints/metadata.lean:17`, `:58`, `:225`, `:268`, `:334`).
 The comparison covers kind, address, rd, rs1, rs2, immediate, virtual sequence remaining, first-in-sequence, compressed, circuit flags, instruction flags, lookup table and RAF flag, and the row count.
 When Rust returns an error, the record matches only if Lean rejects as well; the summary says how Lean rejects.
+`readResult` (`Compare.lean:50`) requires each record's `result` to hold exactly one field, either a `rows` array of well-formed rows or an `error` string.
+Any other `result` (empty, both fields, a non-string error, a non-array `rows`) stops the run with an error.
+A malformed record therefore cannot count as a rejection.
 
 Some Rust source kinds have no Lean `SourceInstruction` constructor, and the comparator cannot expand them on the Lean side.
-For these records `compareRowMetadata` (`Compare.lean:105`) compares each Rust row's circuit flags, instruction flags, lookup table and RAF flag with `metadata.lean`.
+`noLeanSourceKinds` (`Source.lean:235`) lists these kinds explicitly: the 57 kinds of the pin given below.
+For records of these kinds `compareRowMetadata` (`Compare.lean:113`) compares each Rust row's circuit flags, instruction flags, lookup table and RAF flag with `metadata.lean`.
 Every metadata function depends only on the row's `JoltISA.Instr` constructor and its sequence stamp, not on its operands.
 `instrOfKind` (`Row.lean:253`) therefore picks a sample instance of the constructor with the row's kind name, and `RowView.leanMetadataOf` (`Row.lean:302`) stamps it with the Rust row's virtual sequence remaining, first-in-sequence and compressed fields.
 The summary reports these records as a separate class, "row metadata compared, no Lean source constructor", with their own counts.
+A record of any other kind that `SourceView.toLean` does not map is a disagreement with the cause "unknown Rust source kind", whether Rust returned rows or an error.
 
 Every record appears twice, once per driver allocator (`fresh` and `shared`); the counts below count both.
 
@@ -225,9 +231,12 @@ Jolt's golden fixture passes the bare shift amount as the immediate, while `deco
 ## Mutation check
 
 The `mutation` mode corrupts one field of one row of a Rust record and checks that the comparison reports the corruption at that row and field.
-On the first T1 record with ten or more rows (`MULHSU_imm_0_compressed_false`) it corrupts each of the 11 compared field kinds: kind, rs1, rd, immediate, virtual sequence remaining, first, compressed, circuit flags, instruction flags, lookup table and RAF flag.
+On the first T1 record with ten or more rows (`MULHSU_imm_0_compressed_false`) it corrupts each of the 13 compared row fields: kind, address, rd, rs1, rs2, immediate, virtual sequence remaining, first, compressed, circuit flags, instruction flags, lookup table and RAF flag.
 On the first agreeing record of the row-metadata class whose row has flags and a table (`aliased/VirtualAssertLTE/direct`) it corrupts the 4 metadata fields.
-At the pin both unmutated records give 0 mismatches, and the comparison reports all 15 corruptions.
+It then corrupts whole records and checks that each corrupted record is flagged, either as a disagreement or as a record the comparator refuses to read.
+On each of these two records it replaces the source kind with `UNKNOWN_KIND` and replaces `result` with `{}`, with an `error` that is a number, with an `error` that is null, with a `rows` that is a string, and with both `rows` and `error` (6 corruptions per record).
+On the first record both sides reject by kind (`aliased/Unimpl/direct`) it makes the same corruptions except the last, which needs rows (5 corruptions).
+At the pin the three unmutated records pass, and the comparator flags all 34 corruptions (17 field corruptions and 17 record corruptions).
 
 ## Fixes
 
