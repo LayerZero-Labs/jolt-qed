@@ -48,7 +48,9 @@ JOLT_DIR=~/claude-work/jolt-inline-pin-a6b6 CARGO_TARGET_DIR=~/claude-work/.carg
 
 and ran each subcommand as `./inline-probe-<variant> <q1|q3|alias|glv|edge>`.
 The outputs are kept in `~/claude-work/i0cf-scratch/out/` and are quoted below.
-`scripts/inline-open-questions/build.sh WORK_DIR` builds the same three binaries from the committed copy into `WORK_DIR/bin/`; the committed `src/` is byte-identical to the source of the binaries above.
+`scripts/inline-open-questions/build.sh WORK_DIR` builds the same three binaries from the committed copy into `WORK_DIR/bin/`.
+The committed `src/` is byte-identical to the source of the binaries above, and the `Cargo.toml` that `build.sh` generates is identical to the one they were built with (checked without compiling).
+I have not yet run the committed `build.sh` end to end, because the machine's single build slot was taken while I wrote this report.
 
 All runs use `MemoryConfig::default()` with the program size of the probe image.
 The resulting layout is:
