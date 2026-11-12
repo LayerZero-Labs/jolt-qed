@@ -227,6 +227,27 @@ def SourceView.toLean (s : SourceView) : MapM SourceInstruction := do
   | "VirtualHostIO" => jc .VirtualHostIO
   | _ => throw (.kind k)
 
+/-- The 57 Rust source kinds of the pin that Lean's `SourceInstruction` has no
+constructor for: `NoOp`, `Unimpl` and the `Virtual*` kinds Lean does not map.
+A record of one of these kinds is compared on row metadata only (`compareT1`);
+a record of any other kind that `SourceView.toLean` does not map is reported as
+an unknown kind. -/
+def noLeanSourceKinds : List String :=
+  ["NoOp", "Unimpl", "VirtualAdvice", "VirtualAdviceLoad", "VirtualAssertLTE",
+    "VirtualAssertMulUNoOverflow", "VirtualAssertValidDiv0",
+    "VirtualAssertValidUnsignedRemainder", "VirtualLoadB", "VirtualLoadH", "VirtualLoadW",
+    "VirtualMULI", "VirtualMULIW", "VirtualMovsign", "VirtualNegateIf", "VirtualPext",
+    "VirtualPextSigned", "VirtualPow2", "VirtualPow2I", "VirtualPow2IW", "VirtualPow2W",
+    "VirtualROTRI", "VirtualROTRIW", "VirtualSRA", "VirtualSRAI", "VirtualSRAIW",
+    "VirtualSRAW", "VirtualSRL", "VirtualSRLI", "VirtualSRLIW", "VirtualSRLW",
+    "VirtualShiftDataB", "VirtualShiftDataH", "VirtualShiftDataW", "VirtualShiftRightBitmask",
+    "VirtualShiftRightBitmaskI", "VirtualShiftRightBitmaskW", "VirtualSignExtendWord",
+    "VirtualStoreB", "VirtualStoreH", "VirtualStoreW", "VirtualWindowMaskB",
+    "VirtualWindowMaskH", "VirtualWindowMaskW", "VirtualXORROT16", "VirtualXORROT24",
+    "VirtualXORROT32", "VirtualXORROT63", "VirtualXORROTL1", "VirtualXORROTW12",
+    "VirtualXORROTW16", "VirtualXORROTW19", "VirtualXORROTW22", "VirtualXORROTW6",
+    "VirtualXORROTW7", "VirtualXORROTW8", "VirtualZeroExtendWord"]
+
 /-- Lean source kinds that Jolt's decoder produces only from a16z/jolt#2384
 (`decode.rs:195-208` at `c336a6da7`), not at the pin. The driver emits them
 only when built with the `zicsr-remaining` feature; `runT1` reports which of
