@@ -210,6 +210,49 @@ def operands : JoltISA.Instr → String × Option Nat × Option Nat × Option Na
       ("VirtualAssertMulUNoOverflow", none, some (regOfSrc a), some (regOfSrc b))
   | .VirtualAssertLTE a b _ => ("VirtualAssertLTE", none, some (regOfSrc a), some (regOfSrc b))
 
+/-! ## Row kinds without a source
+
+Every flag, table and RAF bit in `metadata.lean` depends only on a row's
+constructor and its sequence stamp (`virtual_sequence_remaining`,
+`is_first_in_sequence`, `is_compressed`), never on its operands. A Rust row can
+therefore be checked against `metadata.lean` from its kind name and stamp alone,
+even when no Lean source instruction produces it. -/
+
+/-- One instance of every `JoltISA.Instr` constructor, with placeholder operands. -/
+def kindSamples : List JoltISA.Instr :=
+  let d : JoltISA.Dst := .xreg (regidx.Regidx 0)
+  let s : JoltISA.Src := .xreg (regidx.Regidx 0)
+  let f : ExceptionType := ExceptionType.E_Load_Addr_Align ()
+  [ .ADDI d s 0, .ADDIW d s 0, .ANDI d s 0, .ORI d s 0, .XORI d s 0, .SLTI d s 0,
+    .SLTIU d s 0, .LUI d 0, .AUIPC d 0, .JAL d 0, .JALR d s 0,
+    .BEQ s s 0, .BNE s s 0, .BLT s s 0, .BGE s s 0, .BLTU s s 0, .BGEU s s 0, .FENCE,
+    .ADD d s s, .ADDW d s s, .SUB d s s, .SUBW d s s, .MUL d s s, .MULW d s s,
+    .MULHU d s s, .ANDN d s s, .VirtualMULI d s 0, .VirtualMULIW d s 0,
+    .VirtualPow2 d s 0, .VirtualPow2W d s 0, .VirtualPow2I d 0, .VirtualPow2IW d 0,
+    .VirtualShiftRightBitmask d s 0, .VirtualShiftRightBitmaskI d 0,
+    .VirtualShiftRightBitmaskW d s 0, .VirtualSRLI d s 0, .VirtualSRAI d s 0,
+    .VirtualSRLIW d s 0, .VirtualSRAIW d s 0, .VirtualSRL d s s, .VirtualSRA d s s,
+    .VirtualSRLW d s s, .VirtualSRAW d s s, .VirtualROTRI d s 0, .VirtualROTRIW d s 0,
+    .VirtualRev8W d s 0, .VirtualXORROT32 d s s, .VirtualXORROT24 d s s,
+    .VirtualXORROT16 d s s, .VirtualXORROT63 d s s, .VirtualXORROTL1 d s s,
+    .VirtualXORROTW16 d s s, .VirtualXORROTW12 d s s, .VirtualXORROTW8 d s s,
+    .VirtualXORROTW7 d s s, .VirtualXORROTW22 d s s, .VirtualXORROTW19 d s s,
+    .VirtualXORROTW6 d s s, .OR d s s, .XOR d s s, .AND d s s, .SLT d s s, .SLTU d s s,
+    .VirtualWindowMaskB d s 0, .VirtualWindowMaskH d s 0, .VirtualWindowMaskW d s 0,
+    .VirtualPext d s s, .VirtualPextSigned d s s, .VirtualShiftDataB d s s 0,
+    .VirtualShiftDataH d s s 0, .VirtualShiftDataW d s s 0, .VirtualSignExtendWord d s 0,
+    .VirtualZeroExtendWord d s 0, .VirtualMovsign d s 0,
+    .VirtualLoadB .normal d s 0 f, .VirtualLoadH .normal d s 0 f, .VirtualLoadW .normal d s 0 f,
+    .VirtualStoreB s s 0 f, .VirtualStoreH s s 0 f, .VirtualStoreW s s 0 f,
+    .LD .normal d s 0, .SD s s 0, .VirtualAdvice d 0 0, .VirtualAdviceLoad d 0,
+    .VirtualHostIO, .VirtualAssertEQ s s 0, .VirtualAssertValidDiv0 s s 0,
+    .VirtualNegateIf d s s, .VirtualAssertValidUnsignedRemainder s s 0,
+    .VirtualAssertMulUNoOverflow s s 0, .VirtualAssertLTE s s 0 ]
+
+/-- The `JoltISA.Instr` constructor whose kind name (`operands`) is `kind`. -/
+def instrOfKind (kind : String) : Option JoltISA.Instr :=
+  kindSamples.find? fun i => (operands i).1 == kind
+
 /-- Circuit flags in the order of Rust's `CIRCUIT_FLAGS`
 (`crates/jolt-riscv/src/flags.rs:73-87` at the pin). -/
 def circuitFlagNames : List (CircuitFlags × String) :=
@@ -251,6 +294,20 @@ def RowView.ofLeanRow (row : JoltInstructionRow) : RowView :=
       if JoltMetadata.instructionFlag row.instruction f then some n else none
     lookupTable := some ((JoltMetadata.lookupTable row.instruction).map lookupTableName)
     raf := some (JoltMetadata.instructionRafFlag row.instruction) }
+
+/-- `metadata.lean`'s flags, table and RAF bit for a Rust row, computed from the
+row's kind and stamp; every other field is the Rust row's own, so a comparison
+with the Rust row can disagree only on those four. `none` when Lean has no
+row constructor of that kind. -/
+def RowView.leanMetadataOf (rust : RowView) : Option RowView := do
+  let instruction ← instrOfKind rust.kind
+  let lean := RowView.ofLeanRow
+    { instruction, address := BitVec.ofNat 64 rust.address,
+      virtual_sequence_remaining := rust.vsr.map (BitVec.ofNat 16),
+      is_first_in_sequence := rust.first, is_compressed := rust.compressed }
+  pure { rust with
+    circuitFlags := lean.circuitFlags, instructionFlags := lean.instructionFlags,
+    lookupTable := lean.lookupTable, raf := lean.raf }
 
 /-- The rows of a straight-line program, written here rather than taken from
 `JoltISA.Program.instrs` so the test does not depend on the model's helper. -/

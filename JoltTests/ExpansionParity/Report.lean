@@ -1,4 +1,5 @@
 import Std.Data.HashMap
+import Std.Data.HashSet
 import JoltTests.ExpansionParity.Compare
 
 /-!
@@ -110,14 +111,23 @@ def mutations : List (String × Nat × String × (Json → Json)) :=
     ("lookup_table", 8, "lookup_table", fun _ => Json.str "Xor"),
     ("raf", 9, "raf", flipBool) ]
 
+/-- The mutations a row-metadata comparison must detect: the four metadata
+fields of row 0. -/
+def metadataMutations : List (String × Nat × String × (Json → Json)) :=
+  [ ("circuit_flags", 0, "circuit_flags", dropFirstFlag),
+    ("instruction_flags", 0, "instruction_flags", dropFirstFlag),
+    ("lookup_table", 0, "lookup_table", fun _ => Json.str "Xor"),
+    ("raf", 0, "raf", flipBool) ]
+
 /-- Applies every mutation to one record and checks that `cmp` reports each at
 the mutated row and field; the unmutated record must give no mismatch. -/
-def mutationCheck (label : String) (j : Json) (cmp : RecordInfo → List Mismatch) : IO Bool := do
+def mutationCheck (label : String) (j : Json) (cmp : RecordInfo → List Mismatch)
+    (muts : List (String × Nat × String × (Json → Json)) := mutations) : IO Bool := do
   let base ← IO.ofExcept (RecordInfo.ofJson j)
   let clean := cmp base
   IO.println s!"{label}: {base.case}: unmutated record gives {clean.length} mismatches"
   let mut ok := clean.isEmpty
-  for (name, row, key, f) in mutations do
+  for (name, row, key, f) in muts do
     let j' ← IO.ofExcept (setRowField j row key f)
     let r' ← IO.ofExcept (RecordInfo.ofJson j')
     let ms := cmp r'

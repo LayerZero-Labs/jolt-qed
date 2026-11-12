@@ -95,6 +95,15 @@ def shamt (kind : String) (w : Nat) (arith : Bool) (i : Int) : MapM (BitVec w) :
 def systemCSRs : List JoltISA.SystemCSR :=
   [.mstatus, .mtvec, .mscratch, .mepc, .mcause, .mtval]
 
+/-- The five-bit immediate of `CSRRWI`, `CSRRSI` and `CSRRCI`. Jolt's decoder
+carries it in the `rs1` operand (`expand/control_flow/csr_immediate.rs` at
+`c336a6da7`, `uimm = rs1(instruction)`). -/
+def uimm5 (kind : String) : Option Nat → MapM (BitVec 5)
+  | some n =>
+      if n < 32 then pure (BitVec.ofNat 5 n)
+      else throw (.operand kind s!"uimm (rs1 field) = {n} is not a 5-bit value")
+  | none => throw (.operand kind "uimm (rs1 field) is missing")
+
 def csr (kind : String) (i : Int) : MapM JoltISA.SystemCSR := do
   let address ← sext kind 12 i
   match systemCSRs.find? (·.address == address) with
@@ -205,6 +214,10 @@ def SourceView.toLean (s : SourceView) : MapM SourceInstruction := do
   | "AMOMAXUD" => rv (.AMOMAXU_D (← rd) (← rs1) (← rs2) false false)
   | "CSRRW" => rv (.CSRRW (← rd) (← csr k s.imm) (← rs1))
   | "CSRRS" => rv (.CSRRS (← rd) (← csr k s.imm) (← rs1))
+  | "CSRRC" => rv (.CSRRC (← rd) (← csr k s.imm) (← rs1))
+  | "CSRRWI" => rv (.CSRRWI (← rd) (← csr k s.imm) (← uimm5 k s.rs1))
+  | "CSRRSI" => rv (.CSRRSI (← rd) (← csr k s.imm) (← uimm5 k s.rs1))
+  | "CSRRCI" => rv (.CSRRCI (← rd) (← csr k s.imm) (← uimm5 k s.rs1))
   | "AdviceLB" => jc (.AdviceLB (← rd))
   | "AdviceLH" => jc (.AdviceLH (← rd))
   | "AdviceLW" => jc (.AdviceLW (← rd))
@@ -214,9 +227,10 @@ def SourceView.toLean (s : SourceView) : MapM SourceInstruction := do
   | "VirtualHostIO" => jc .VirtualHostIO
   | _ => throw (.kind k)
 
-/-- Lean source kinds with no Rust `SourceInstructionKind` produced by the
-decoder at the pin. The list is maintained by hand: these are the
-`RiscvInstruction` constructors that `SourceView.toLean` never builds. -/
-def leanOnlySourceKinds : List String := ["CSRRC", "CSRRWI", "CSRRSI", "CSRRCI"]
+/-- Lean source kinds that Jolt's decoder produces only from a16z/jolt#2384
+(`decode.rs:195-208` at `c336a6da7`), not at the pin. The driver emits them
+only when built with the `zicsr-remaining` feature; `runT1` reports which of
+them a `rows.jsonl` lacks. -/
+def zicsrRemainingKinds : List String := ["CSRRC", "CSRRWI", "CSRRSI", "CSRRCI"]
 
 end ExpansionParity

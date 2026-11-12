@@ -91,10 +91,27 @@ inductive T1Outcome where
   | bothReject (how : String)
   /-- Rows compared; the list holds every disagreement (empty when they agree). -/
   | compared (mismatches : List Mismatch)
+  /-- Lean has no source constructor for the Rust kind, so the expansion cannot
+  be compared. Each Rust row's flags, table and RAF bit are compared with
+  `metadata.lean` for the row's kind and stamp instead
+  (`RowView.leanMetadataOf`); the list holds every disagreement. -/
+  | metadataOnly (mismatches : List Mismatch)
 
 def leanRowsOf (src : SourceInstruction) (s : SourceView) : Option (List JoltInstructionRow) :=
   expand_instruction
     { address := BitVec.ofNat 64 s.address, instruction := src, is_compressed := s.compressed }
+
+/-- Compares each Rust row's flags, table and RAF bit with `metadata.lean`. -/
+def compareRowMetadata (r : RecordInfo) (rust : List RowView) : List Mismatch :=
+  (List.range rust.length).zip rust |>.flatMap fun (i, rr) =>
+    match rr.leanMetadataOf with
+    | none =>
+        [r.mismatch "t1_metadata" (some i) "kind" rr.kind "no JoltISA.Instr constructor"
+          s!"no Lean row constructor for row kind {rr.kind}"]
+    | some lr =>
+        (compareRows rr lr).map fun d =>
+          r.mismatch "t1_metadata" (some i) d.field d.rust d.lean
+            s!"{d.field} of {rr.kind} rows (Rust {d.rust}, Lean {d.lean})"
 
 def compareT1 (r : RecordInfo) : T1Outcome :=
   let s := r.source
@@ -102,6 +119,7 @@ def compareT1 (r : RecordInfo) : T1Outcome :=
   match s.toLean, r.rows with
   | .error why, none =>
       .bothReject s!"no Lean source instruction: {why.describe}"
+  | .error (.kind _), some rustRows => .metadataOnly (compareRowMetadata r rustRows)
   | .error why, some _ =>
       let cause := match why with
         | .kind k => s!"gap: no Lean SourceInstruction for Rust source kind {k}"

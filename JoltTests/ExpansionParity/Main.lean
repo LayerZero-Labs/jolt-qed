@@ -17,9 +17,13 @@ comparison with `#eval` (see `cli` below for why there is no executable).
 
 * `t1` compares every non-inline record with `expand_instruction` and
   `metadata.lean`, and writes `OUT_DIR/t1-mismatches.jsonl` and
-  `OUT_DIR/t1-summary.txt`.
+  `OUT_DIR/t1-summary.txt`. A record whose Rust source kind has no Lean
+  `SourceInstruction` constructor (NoOp, Unimpl and most Virtual* kinds) forms
+  the separate class "row metadata compared, no Lean source constructor": each
+  of its Rust rows is compared with `metadata.lean` for the row's kind and stamp.
 * `mutation` corrupts one field of one row of a T1 record, once per field
-  kind, and checks that the comparison reports each corruption.
+  kind, and one metadata field of a record in the row-metadata class, and
+  checks that the comparison reports each corruption.
 
 `Run.lean` fails (and `lean` exits with 1) when a mode finds a disagreement.
 -/
@@ -37,8 +41,17 @@ def runT1 (rowsPath outDir : String) : IO UInt32 := do
   let mut agreeGroup : Std.HashMap String Nat := {}
   let mut rejectHow : Std.HashMap String Nat := {}
   let mut inlineSkipped := 0
+  let mut sourceKinds : Std.HashSet String := {}
+  -- The class "row metadata compared, no Lean source constructor".
+  let mut metaAll : Array Mismatch := #[]
+  let mut metaSummary : Summary := {}
+  let mut metaGroup : Std.HashMap String Nat := {}
+  let mut metaAgree : Std.HashMap String Nat := {}
+  let mut metaKinds : Std.HashSet String := {}
+  let mut metaRows := 0
   for line in lines do
     let r ← parseRecord line
+    sourceKinds := sourceKinds.insert r.source.kind
     match compareT1 r with
     | .inline => inlineSkipped := inlineSkipped + 1
     | .bothReject how =>
@@ -51,24 +64,44 @@ def runT1 (rowsPath outDir : String) : IO UInt32 := do
         for m in ms do
           all := all.push m
           summary := summary.add m
-  writeMismatches (outDir ++ "/t1-mismatches.jsonl") all
-  let mismatched := (all.map (fun m => (m.case, m.allocator))).toList.eraseDups.length
+    | .metadataOnly ms =>
+        metaGroup := bump metaGroup r.group
+        metaKinds := metaKinds.insert r.source.kind
+        metaRows := metaRows + (r.rows.map List.length).getD 0
+        if ms.isEmpty then metaAgree := bump metaAgree r.group
+        for m in ms do
+          metaAll := metaAll.push m
+          metaSummary := metaSummary.add m
+  writeMismatches (outDir ++ "/t1-mismatches.jsonl") (all ++ metaAll)
+  let records (ms : Array Mismatch) := (ms.map (fun m => (m.case, m.allocator))).toList.eraseDups.length
+  let mismatched := records all
+  let total (m : Std.HashMap String Nat) := m.fold (fun acc _ n => acc + n) 0
+  let absentZicsr := zicsrRemainingKinds.filter (!sourceKinds.contains ·)
+  let metaKindList := (metaKinds.toArray.qsort (· < ·)).toList
   let text :=
     s!"T1 expansion parity: {rowsPath}\n" ++
     s!"records compared per group: {renderCounts perGroup}\n" ++
     s!"records that agree per group: {renderCounts agreeGroup}\n" ++
     s!"inline records left to the inline round trip: {inlineSkipped}\n" ++
     s!"records with a disagreement: {mismatched}; field mismatches: {all.size}\n" ++
-    s!"Lean source kinds with no Rust decoder kind: {leanOnlySourceKinds}\n\n" ++
+    s!"Lean source kinds with no record in this input: {absentZicsr}\n\n" ++
     "Rejected by both sides:\n" ++
     String.join ((rejectHow.toList.toArray.qsort (fun a b => a.1 < b.1)).toList.map
       fun (k, n) => s!"- {k} ({n} records)\n") ++
-    "\nDisagreements by cause:\n" ++ summary.render
+    "\nDisagreements by cause:\n" ++ summary.render ++
+    "\nRow metadata compared, no Lean source constructor:\n" ++
+    s!"records per group: {renderCounts metaGroup} (total {total metaGroup}, {metaRows} rows)\n" ++
+    s!"records that agree per group: {renderCounts metaAgree} (total {total metaAgree})\n" ++
+    s!"records with a disagreement: {records metaAll}; field mismatches: {metaAll.size}\n" ++
+    s!"source kinds ({metaKindList.length}): {metaKindList}\n" ++
+    "Disagreements by cause:\n" ++ metaSummary.render
   IO.FS.writeFile (outDir ++ "/t1-summary.txt") text
   IO.println text
-  return if all.isEmpty then 0 else 1
+  return if all.isEmpty && metaAll.isEmpty then 0 else 1
 
-/-- The mutation check on the first T1 record with at least ten rows. -/
+/-- The mutation check on the first T1 record with at least ten rows, and on the
+first record of the row-metadata class whose row 0 carries circuit and
+instruction flags and a table and agrees with `metadata.lean`. -/
 def runMutation (rowsPath : String) : IO UInt32 := do
   let mut t1Rec : Option Json := none
   for line in ← readLines rowsPath do
@@ -82,7 +115,26 @@ def runMutation (rowsPath : String) : IO UInt32 := do
     match compareT1 r with
     | .compared ms => ms
     | _ => []
+  let metaCmp (r : RecordInfo) : List Mismatch :=
+    match compareT1 r with
+    | .metadataOnly ms => ms
+    | _ => []
+  let mut metaRec : Option Json := none
+  for line in ← readLines rowsPath do
+    let j ← IO.ofExcept (Json.parse line)
+    let r ← IO.ofExcept (RecordInfo.ofJson j)
+    let flagged := match r.rows with
+      | some (row :: _) =>
+          !(row.circuitFlags.getD []).isEmpty && !(row.instructionFlags.getD []).isEmpty &&
+            (row.lookupTable.getD none).isSome
+      | _ => false
+    if let .metadataOnly [] := compareT1 r then
+      if flagged then
+        metaRec := some j
+        break
+  let some mj := metaRec | throw <| IO.userError "no agreeing row-metadata record"
   let ok ← mutationCheck "t1" tj t1cmp
+  let ok := (← mutationCheck "t1_metadata" mj metaCmp metadataMutations) && ok
   IO.println (if ok then "mutation check: every corruption detected" else "mutation check: FAILED")
   return if ok then 0 else 1
 
