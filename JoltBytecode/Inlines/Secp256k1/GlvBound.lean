@@ -44,7 +44,8 @@ theorem glvSplit_recombines (k : Int) :
       have hc0 : (n : Int) ∣ ((glvA1 + glvLambda * (n - glvB1) : Nat) : Int) := by
         exact_mod_cast hd
       simpa only [Int.natCast_add, Int.natCast_mul, Int.natCast_sub hb] using hc0
-    convert dvd_sub hc (dvd_mul_left (n : Int) (glvLambda : Int)) using 1 <;> ring
+    convert dvd_sub hc (dvd_mul_left (n : Int) (glvLambda : Int)) using 1
+    ring
   have hd2 : (n : Int) ∣ (glvA2 : Int) + (glvLambda : Int) * (glvA1 : Int) := by
     exact_mod_cast Nat.dvd_of_mod_eq_zero glv_lattice.2.1
   apply Int.emod_eq_zero_of_dvd
