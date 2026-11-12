@@ -46,6 +46,8 @@ Exit status: 0 pass, 1 a check failed, 2 usage or input error.
 from __future__ import annotations
 
 import argparse
+import itertools
+import json
 import re
 import subprocess
 import sys
@@ -58,18 +60,27 @@ MANIFEST_ROOTS = ("JoltBytecode", "JoltConstraints")
 SCAN_ROOTS = ("JoltBytecode", "JoltConstraints", "docs")
 SCAN_FILES = ("README.md", "provenance.toml")
 FULL_REV = re.compile(r"[0-9a-f]{40}")
+KNOWN_KINDS = ("local-path", "fork", "revision", "unchecked-model")
 
-# Local-path markers and the baseline text that names each one. The text is a
-# name rather than the marker, so that provenance.toml does not cite itself.
-LOCAL_MARKERS = {
-    "/Users/": "Users",
-    "/home/": "home",
-    "~/": "tilde",
-    "/private/tmp": "private-tmp",
-}
-LOCAL_RE = re.compile("|".join(re.escape(m) for m in LOCAL_MARKERS))
-FORK_RE = re.compile(r"github\.com/([A-Za-z0-9_.-]+)/jolt(?![A-Za-z0-9_-])")
+# Local paths and fork citations. The baseline records the whole citation (the
+# path or URL up to the next space or delimiter), so replacing one baselined
+# citation with another fails: the old entry goes stale and the new one is not
+# recorded.
+CITE_END = r"[^\s`'\"()<>\[\]{},;]*"
+LOCAL_RE = re.compile(r"(?:/Users/|/home/|~/|/private/tmp)" + CITE_END)
+FORK_RE = re.compile(r"github\.com/([A-Za-z0-9_.-]+)/jolt(?![A-Za-z0-9_-])" + CITE_END)
 HEX_RE = re.compile(r"(?<![0-9A-Za-z_])[0-9a-f]{7,40}(?![0-9A-Za-z_])")
+# A repository-qualified revision: a GitHub URL or owner/repo@rev.
+QUALIFIED_RE = re.compile(
+    r"(?:github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/(?:blob|tree|commit|commits|compare)/"
+    r"|(?<![\w./-])([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)@)"
+    r"([0-9a-fA-F]{7,40})(?![0-9A-Za-z_])"
+)
+# Words before a token that make an all-digit or all-letter hex token a
+# revision citation ("commit 7538215", "at revision deadbeef", "jolt@1234567").
+REV_CONTEXT_RE = re.compile(
+    r"(?:(?i:\b(?:commit|commits|revision|rev|pin|pinned|sha|hash|checked)\b)[\s:=`'\"(]*|@)$"
+)
 
 
 def fail_input(msg: str) -> "NoReturn":  # noqa: F821
@@ -78,6 +89,12 @@ def fail_input(msg: str) -> "NoReturn":  # noqa: F821
 
 
 def is_revision_token(tok: str) -> bool:
+    """A 7-40 hex token with a digit and a letter (not 0b binary) is a revision.
+
+    All-digit and all-letter tokens are ordinary numbers and words far more
+    often than revisions, so they count only in a citation context
+    (REV_CONTEXT_RE or a repository-qualified citation).
+    """
     return (re.search(r"[0-9]", tok) is not None
             and re.search(r"[a-f]", tok) is not None
             and re.fullmatch(r"0b[01]+", tok) is None)
@@ -85,6 +102,10 @@ def is_revision_token(tok: str) -> bool:
 
 def same_revision(token: str, rev: str) -> bool:
     return rev.startswith(token) or token.startswith(rev)
+
+
+def is_jolt_repo(owner: str, repo: str) -> bool:
+    return repo.lower() == "jolt"
 
 
 def manifest_lean_files() -> list[str]:
@@ -105,26 +126,110 @@ def scanned_files() -> list[str]:
     return sorted(set(out))
 
 
+def manifest_scan_text(text: str, manifest: dict) -> str:
+    """provenance.toml without the `text` lines of its [[known]] entries.
+
+    Those lines quote the baselined citations; scanning them would make the
+    baseline cite itself.
+    """
+    quoted = {"text = " + json.dumps(k.get("text", "")) for k in manifest.get("known", [])}
+    return "\n".join("" if line.strip() in quoted else line for line in text.split("\n"))
+
+
+def scan_text(rel: str, text: str, pin: str, checked: str | None,
+              others: list[dict]) -> Counter:
+    """Count violations per (file, kind, text) in one file's text."""
+    found: Counter = Counter()
+    for m in LOCAL_RE.finditer(text):
+        found[(rel, "local-path", m.group(0))] += 1
+    for m in FORK_RE.finditer(text):
+        if m.group(1).lower() != "a16z":
+            found[(rel, "fork", m.group(0))] += 1
+    if rel == "provenance.toml":
+        return found
+    jolt_ok = [pin] + ([checked] if checked else [])
+    qualified: set[int] = set()
+    for m in QUALIFIED_RE.finditer(text):
+        owner = m.group(1) or m.group(3)
+        repo = m.group(2) or m.group(4)
+        tok = m.group(5)
+        qualified.add(m.start(5))
+        if is_jolt_repo(owner, repo):
+            ok = any(same_revision(tok.lower(), r) for r in jolt_ok)
+        else:
+            ok = any(same_revision(tok.lower(), o["revision"])
+                     and o.get("repository", "").lower() == f"{owner}/{repo}".lower()
+                     for o in others)
+        if not ok:
+            found[(rel, "revision", tok)] += 1
+    allowed = jolt_ok + [o["revision"] for o in others]
+    for m in HEX_RE.finditer(text):
+        if m.start() in qualified:
+            continue
+        tok = m.group(0)
+        if not is_revision_token(tok) and not REV_CONTEXT_RE.search(text[max(0, m.start() - 24):m.start()]):
+            continue
+        if not any(same_revision(tok, r) for r in allowed):
+            found[(rel, "revision", tok)] += 1
+    return found
+
+
 def scan(manifest: dict, checked_of: dict[str, str]) -> Counter:
-    """Count violations per (file, kind, text)."""
+    """Count violations per (file, kind, text) over every scanned file."""
     pin = manifest["jolt"]["pin"]
-    others = [o["revision"] for o in manifest.get("other_revision", [])]
+    others = manifest.get("other_revision", [])
     found: Counter = Counter()
     for rel in scanned_files():
         text = (REPO / rel).read_text(encoding="utf-8", errors="replace")
-        for m in LOCAL_RE.finditer(text):
-            found[(rel, "local-path", LOCAL_MARKERS[m.group(0)])] += 1
-        for m in FORK_RE.finditer(text):
-            if m.group(1).lower() != "a16z":
-                found[(rel, "fork", m.group(1))] += 1
         if rel == "provenance.toml":
-            continue
-        allowed = [pin] + ([checked_of[rel]] if rel in checked_of else []) + others
-        for m in HEX_RE.finditer(text):
-            tok = m.group(0)
-            if is_revision_token(tok) and not any(same_revision(tok, r) for r in allowed):
-                found[(rel, "revision", tok)] += 1
+            text = manifest_scan_text(text, manifest)
+        found += scan_text(rel, text, pin, checked_of.get(rel), others)
     return found
+
+
+# Jolt paths a Lean file cites. A path segment may hold brace lists
+# (`virt/{load,store}_{b,h,w}.rs`), and a bare file name that follows a cited
+# `.rs` path closely (`div.rs, divu.rs, rem.rs`) is read in that path's
+# directory. A GitHub URL or local checkout prefix up to `/jolt/` is dropped.
+_SEG = r"(?:[\w.-]|\{[\w.,\s-]+\})+"
+_PATH_RE = re.compile(r"(?<![\w./{-])/?" + _SEG + r"(?:/" + _SEG + r")+")
+_BARE_RE = re.compile(r"(?<![\w./{-])([\w-]+\.rs)(?![\w/])")
+_URL_PREFIX = re.compile(r"(?:https?://)?github\.com/[\w.-]+/[\w.-]+/(?:blob|tree)/[\w.-]+/")
+BARE_WINDOW = 300
+
+
+def _expand(tok: str) -> list[str]:
+    parts = re.split(r"(\{[^}]*\})", tok)
+    opts = [[x.strip() for x in part[1:-1].split(",")] if part.startswith("{") else [part]
+            for part in parts]
+    return ["".join(c) for c in itertools.product(*opts)]
+
+
+def _normalize(path: str) -> str:
+    path = path.rstrip("/.")
+    i = path.find("jolt/")
+    if i != -1 and (i == 0 or path[i - 1] == "/"):
+        path = path[i + len("jolt/"):]
+    return path
+
+
+def cited_paths(text: str) -> set[str]:
+    """Candidate Jolt paths cited in a file; callers keep those that exist."""
+    text = _URL_PREFIX.sub(" ", text)
+    events = sorted([(m.start(), m.end(), True, m.group(0)) for m in _PATH_RE.finditer(text)]
+                    + [(m.start(), m.end(), False, m.group(1)) for m in _BARE_RE.finditer(text)])
+    out: set[str] = set()
+    last_dir, last_end = None, -BARE_WINDOW - 1
+    for start, end, is_path, tok in events:
+        if is_path:
+            for path in map(_normalize, _expand(tok)):
+                out.add(path)
+                if path.endswith(".rs") and "/" in path:
+                    last_dir, last_end = path.rsplit("/", 1)[0], end
+        elif last_dir is not None and start - last_end <= BARE_WINDOW:
+            out.add(f"{last_dir}/{tok}")
+            last_end = end
+    return out
 
 
 def git(jolt_dir: str, *args: str) -> subprocess.CompletedProcess:
@@ -147,6 +252,19 @@ def paths_at(jolt_dir: str, rev: str) -> set[str]:
             fail_input(f"git ls-tree {rev} failed in {jolt_dir}: {r.stderr.strip()}")
         _trees[rev] = set(p for p in r.stdout.split("\0") if p)
     return _trees[rev]
+
+
+_blobs: dict[str, set[str]] = {}
+
+
+def files_at(jolt_dir: str, rev: str) -> set[str]:
+    """Every file (blob) path at a revision, read from trees only."""
+    if rev not in _blobs:
+        r = git(jolt_dir, "ls-tree", "-r", "--full-tree", "--name-only", "-z", rev)
+        if r.returncode != 0:
+            fail_input(f"git ls-tree {rev} failed in {jolt_dir}: {r.stderr.strip()}")
+        _blobs[rev] = set(p for p in r.stdout.split("\0") if p)
+    return _blobs[rev]
 
 
 def main(argv: list[str]) -> int:
@@ -185,6 +303,7 @@ def main(argv: list[str]) -> int:
     # 2. One entry per Lean file.
     entries = manifest.get("file", [])
     by_file: dict[str, dict] = {}
+    lean_files = set(manifest_lean_files())
     for e in entries:
         lean = e.get("lean")
         if not isinstance(lean, str):
@@ -193,8 +312,14 @@ def main(argv: list[str]) -> int:
         if lean in by_file:
             failures.append(f"{lean}: more than one [[file]] entry")
         by_file[lean] = e
+        unknown = sorted(k for k in e if k not in ("lean", "models", "checked", "note"))
+        if unknown:
+            failures.append(f"{lean}: [[file]] entry has unexpected keys {unknown}")
         if not (REPO / lean).is_file():
             failures.append(f"{lean}: [[file]] entry names a file that does not exist")
+        elif lean not in lean_files:
+            failures.append(f"{lean}: [[file]] entries are for Lean files under "
+                            f"{' and '.join(r + '/' for r in MANIFEST_ROOTS)} only")
         models = e.get("models")
         if not isinstance(models, list) or not all(isinstance(m, str) for m in models):
             failures.append(f"{lean}: models must be a list of Jolt paths")
@@ -216,16 +341,24 @@ def main(argv: list[str]) -> int:
             print(rev)
         return 0
 
-    # 3. Local paths, fork citations, other revisions.
+    # 3. Local paths, fork citations, other revisions, and models paths that
+    # no checked revision vouches for.
     found = scan(manifest, checked_of)
+    for lean in unpinned:
+        for path in by_file[lean]["models"]:
+            found[(lean, "unchecked-model", path)] += 1
     if args.print_baseline:
         for (rel, kind, text), count in sorted(found.items()):
-            print(f'[[known]]\nfile = "{rel}"\nkind = "{kind}"\ntext = "{text}"\ncount = {count}\n')
+            print(f'[[known]]\nfile = {json.dumps(rel)}\nkind = {json.dumps(kind)}\n'
+                  f'text = {json.dumps(text)}\ncount = {count}\n')
         return 0
     known: Counter = Counter()
     for k in manifest.get("known", []):
+        if sorted(k) != ["count", "file", "kind", "text"]:
+            failures.append(f"[[known]] {k}: needs exactly file, kind, text and count")
+            continue
         key = (k["file"], k["kind"], k["text"])
-        if k["kind"] not in ("local-path", "fork", "revision"):
+        if k["kind"] not in KNOWN_KINDS:
             failures.append(f"[[known]] {key}: unknown kind")
         if key in known:
             failures.append(f"[[known]] {key}: duplicate entry")
@@ -264,6 +397,16 @@ def main(argv: list[str]) -> int:
                 for p in e["models"]:
                     if p not in at:
                         failures.append(f"{lean}: models path {p} does not exist at {checked}")
+                text = (REPO / lean).read_text(encoding="utf-8", errors="replace")
+                files = files_at(jd, checked)
+                for p in sorted(cited_paths(text) & files - set(e["models"])):
+                    failures.append(f"{lean}: cites {p}, a file at {checked}, but models omits it")
+            elif lean in unpinned and full_pin == pin:
+                at = paths_at(jd, pin)
+                for p in e["models"]:
+                    if p not in at:
+                        failures.append(f"{lean}: models path {p} has no checked revision "
+                                        f"and does not exist at the pin")
             for rev in ([pin] if full_pin == pin else []) + compare:
                 at = paths_at(jd, rev)
                 for p in e.get("models", []):

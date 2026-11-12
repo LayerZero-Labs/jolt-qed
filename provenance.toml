@@ -12,21 +12,27 @@
 # no checked revision; their note says so.
 #
 # [[other_revision]] lists commits of other repositories that the scanned docs
-# cite, so that the revision check does not count them as Jolt revisions.
+# cite, so that the revision check does not count them as Jolt revisions. A
+# repository-qualified citation (a GitHub URL or owner/repo@rev) must name the
+# pin or the file's checked revision for a Jolt repository, and an
+# [[other_revision]] of that same repository otherwise.
 # [[known]] is the baseline of existing violations: local paths, citations of
-# Jolt forks, and Jolt revisions other than the pin or a file's checked
-# revision. scripts/check-provenance.py fails on any new violation and on any
+# Jolt forks, Jolt revisions other than the pin or a file's checked revision,
+# and models paths with no checked revision. scripts/check-provenance.py fails on any new violation and on any
 # baseline count that no longer matches, so the baseline only shrinks.
-# A local-path entry names its marker (Users, home, tilde, private-tmp), and a
-# fork entry names the fork's owner.
+# Each entry quotes the whole offending citation (the local path, the fork URL
+# or the revision), so replacing one baselined citation with another fails.
+# An unchecked-model entry records a models path of an entry that names no
+# checked revision; the check requires it to exist at the pin, and a new
+# unchecked path fails until it is recorded here or gets a checked revision.
 #
 # Check: scripts/check-provenance.py [--jolt-dir <a16z/jolt clone>]
 # (reports/2026-11-11-provenance.md).
 
 [jolt]
 repository = "a16z/jolt"
-pin = "a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5"
-note = "Track T pin (docs/inline-precompiles.md section 7). README.md and methods/soundness.md still record c97e93004fbf804409f0374fe8457c8f1562ce71; the project pin is Ari's decision."
+pin = "580084fcfad4788ebf48413a92dd640ca090c45f"
+note = "The a16z/jolt#2384 head, the revision the expansion-parity, decoder-sweep and lookup-tables jobs check. Chosen over the earlier Track T pin a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5 on 2026-11-12 (reports/2026-11-11-provenance.md, Decisions). README.md and methods/soundness.md still name c97e93004fbf804409f0374fe8457c8f1562ce71, the merge of a16z/jolt#2250, which methods/soundness.md records as the project pin since 2026-11-05."
 
 [[other_revision]]
 revision = "e29949809bbf2c54c315c2ca55ae3b90c7fd37a6"
@@ -1248,6 +1254,7 @@ checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 lean = "JoltConstraints/Completeness/Helpers/RegistersReadProofHelpers.lean"
 models = [
   "crates/jolt-riscv/src/instructions/virt/load_h.rs",
+  "crates/jolt-riscv/src/instructions/virt/shift_data_h.rs",
   "crates/jolt-riscv/src/instructions/virt/store_h.rs",
 ]
 checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
@@ -1389,7 +1396,10 @@ models = []
 lean = "JoltConstraints/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean"
 models = [
   "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-witness/src/witnesses/lookups.rs",
+  "crates/jolt-witness/src/witnesses/operands.rs",
   "crates/jolt-witness/src/witnesses/ram.rs",
+  "crates/jolt-witness/src/witnesses/registers.rs",
   "tracer/src/instruction/floor_access.rs",
   "tracer/src/instruction/ld.rs",
   "tracer/src/instruction/sd.rs",
@@ -3004,18 +3014,27 @@ checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
 [[file]]
 lean = "JoltConstraints/honest_trace.lean"
 models = [
+  "crates/jolt-program/src/expand/memory/scd.rs",
   "crates/jolt-program/src/expand/memory/scw.rs",
   "crates/jolt-program/src/expand/metadata.rs",
   "crates/jolt-program/src/preprocess/public_io.rs",
   "crates/jolt-prover/src/config.rs",
   "crates/jolt-prover/src/preprocessing.rs",
   "crates/jolt-riscv/src/instructions/i/jal.rs",
+  "crates/jolt-riscv/src/instructions/i/jalr.rs",
   "crates/jolt-verifier/src/verifier.rs",
   "jolt-inlines/p256/src/sdk.rs",
   "jolt-platform/src/spoil.rs",
   "tracer/src/emulator/cpu.rs",
   "tracer/src/instruction/div.rs",
+  "tracer/src/instruction/divu.rs",
+  "tracer/src/instruction/divuw.rs",
+  "tracer/src/instruction/divw.rs",
   "tracer/src/instruction/mod.rs",
+  "tracer/src/instruction/rem.rs",
+  "tracer/src/instruction/remu.rs",
+  "tracer/src/instruction/remuw.rs",
+  "tracer/src/instruction/remw.rs",
   "tracer/src/instruction/scw.rs",
   "tracer/src/instruction/virtual_assert_eq.rs",
   "tracer/src/lib.rs",
@@ -3613,13 +3632,13 @@ checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 note = "Also cites c97e93004 (1)."
 
 # Baseline of existing violations; see the header. Generated with
-# scripts/check-provenance.py --print-baseline and checked by hand
-# (reports/2026-11-11-provenance.md lists them by kind).
+# scripts/check-provenance.py --print-baseline (reports/2026-11-11-provenance.md
+# lists them by kind).
 
 [[known]]
 file = "JoltBytecode/Assumptions.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/mmu.rs:523"
 count = 1
 
 [[known]]
@@ -3629,10 +3648,118 @@ text = "b65455e6d"
 count = 2
 
 [[known]]
+file = "JoltBytecode/Decode/Agreement.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/image/decode.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/WordLane.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/memory/shared.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/WordLane.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/floor_access.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/WordSelectLane.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/memory/shared.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/FloorLoad.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/memory/shared.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/FloorLoad.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/floor_access.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/ProgramBlocks.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/memory/shared.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Sb_main.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/memory/shared.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/ProofSupport/Basic.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/floor_access.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualShiftData.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_b.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualShiftData.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_h.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualShiftData.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_w.rs"
+count = 1
+
+[[known]]
 file = "JoltBytecode/JoltISA/AdviceTape.lean"
 kind = "local-path"
-text = "Users"
-count = 2
+text = "/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/cpu.rs:51"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/AdviceTape.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_advice_load.rs:18"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/AdviceTape.lean"
+kind = "unchecked-model"
+text = "tracer/src/emulator/cpu.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/AdviceTape.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_advice_load.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Core.lean"
+kind = "unchecked-model"
+text = "tracer/src/emulator/mmu.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Expansions/Atomics.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/memory/shared.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Expansions/LaneWindow.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/memory/shared.rs"
+count = 1
 
 [[known]]
 file = "JoltBytecode/JoltISA/Expansions/System.lean"
@@ -3641,16 +3768,70 @@ text = "a86ec3716"
 count = 6
 
 [[known]]
+file = "JoltBytecode/JoltISA/HostIO.lean"
+kind = "unchecked-model"
+text = "jolt-platform/src/advice.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/HostIO.lean"
+kind = "unchecked-model"
+text = "jolt-platform/src/cycle_tracking.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/HostIO.lean"
+kind = "unchecked-model"
+text = "jolt-platform/src/print.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/HostIO.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_host_io.rs"
+count = 1
+
+[[known]]
 file = "JoltBytecode/JoltISA/Instruction.lean"
 kind = "fork"
-text = "abiswas3"
-count = 5
+text = "github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/expand/inline.rs#L204-L245"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Instruction.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-riscv/src/trace_row.rs#L279-L283"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Instruction.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_b.rs#L9-L14"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Instruction.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_i.rs#L9-L14"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Instruction.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_virtual_right_shift_i.rs#L9-L14"
+count = 1
 
 [[known]]
 file = "JoltBytecode/JoltISA/Instruction.lean"
 kind = "local-path"
-text = "Users"
-count = 2
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/expand/mod.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Instruction.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format"
+count = 1
 
 [[known]]
 file = "JoltBytecode/JoltISA/Instruction.lean"
@@ -3659,28 +3840,274 @@ text = "5def437f"
 count = 2
 
 [[known]]
+file = "JoltBytecode/JoltISA/Semantics.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/floor_access.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Semantics.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/jal.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Semantics.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/jalr.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Semantics.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_b.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Semantics.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_h.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Semantics.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_w.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/SystemCSR.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/allocator.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/SystemCSR.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/mod.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/SystemCSR.lean"
+kind = "unchecked-model"
+text = "tracer/src/utils/virtual_registers.rs"
+count = 1
+
+[[known]]
 file = "JoltBytecode/JoltISA/Values.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/tracer/src/instruction/virtual_xor_rotl1.rs"
 count = 1
 
 [[known]]
 file = "JoltBytecode/JoltISA/Values.lean"
 kind = "local-path"
-text = "Users"
-count = 3
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs:29"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs:17"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_b.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_h.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_shift_data_w.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_srliw.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_xor_rotl1.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/VirtualRegisters.lean"
+kind = "unchecked-model"
+text = "common/src/constants.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/VirtualRegisters.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/expand/allocator.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/VirtualRegisters.lean"
+kind = "unchecked-model"
+text = "tracer/src/utils/virtual_registers.rs"
+count = 1
 
 [[known]]
 file = "JoltBytecode/JoltISA/semantic_helpers.lean"
 kind = "local-path"
-text = "Users"
-count = 3
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/add.rs:9"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/mul.rs:9"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/sub.rs:9"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/add.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/beq.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/bge.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/bgeu.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/blt.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/bltu.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/bne.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/mul.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/riscv/sub.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/beq.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/bge.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/bgeu.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/blt.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/bltu.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/bne.rs"
+count = 1
 
 [[known]]
 file = "JoltBytecode/RiscvInstruction.lean"
 kind = "local-path"
-text = "Users"
-count = 2
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-riscv/src/kind.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/RiscvInstruction.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-riscv/src/lib.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/RiscvInstruction.lean"
+kind = "unchecked-model"
+text = "crates/jolt-riscv/src/kind.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/RiscvInstruction.lean"
+kind = "unchecked-model"
+text = "crates/jolt-riscv/src/lib.rs"
+count = 1
 
 [[known]]
 file = "JoltConstraints/Completeness/BytecodeRaAtEntryEqOne.lean"
@@ -3695,28 +4122,82 @@ text = "c97e9300"
 count = 3
 
 [[known]]
+file = "JoltConstraints/Completeness/completeness.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/preprocess/bytecode.rs"
+count = 1
+
+[[known]]
 file = "JoltConstraints/Constraints/AssertLookupOne.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/AssertLookupOne.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/AssertLookupOne.lean"
+kind = "unchecked-model"
+text = "crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/AssertLookupOne.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_assert_eq.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/BytecodeRaChunkBooleanity.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs#L40-L58"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeRaChunkBooleanity.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/BytecodeRaChunkHammingWeight.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs#L82-L90"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeRaChunkHammingWeight.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/BytecodeReadData.lean"
 kind = "fork"
-text = "abiswas3"
-count = 4
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-riscv/src/instructions/mod.rs#L536-L547"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeReadData.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-riscv/src/instructions/mod.rs#L550-L560"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeReadData.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/bytecode.rs#L47-L51"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeReadData.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-witness/src/witnesses/one_hot.rs#L19-L58"
+count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/BytecodeReadSelectors.lean"
@@ -3727,49 +4208,97 @@ count = 2
 [[known]]
 file = "JoltConstraints/Constraints/InstructionRaChunkBooleanity.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs#L40-L58"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/InstructionRaChunkBooleanity.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/InstructionRaChunkHammingWeight.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs#L82-L90"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/InstructionRaChunkHammingWeight.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/InstructionRaEqChunkProduct.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs#L402-L417"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/InstructionRaEqChunkProduct.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/LeftInstructionInputEqSelection.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs#L108-L127"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LeftInstructionInputEqSelection.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/LeftLookupEqLeftInputOtherwise.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LeftLookupEqLeftInputOtherwise.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/LeftLookupOperandEqInstructionRaf.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L181-L201"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LeftLookupOperandEqInstructionRaf.lean"
+kind = "unchecked-model"
+text = "crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/LeftLookupZeroIfAddSubMul.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LeftLookupZeroIfAddSubMul.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/LookupOperandData.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L181-L201"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LookupOperandData.lean"
+kind = "unchecked-model"
+text = "crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs"
 count = 1
 
 [[known]]
@@ -3781,199 +4310,421 @@ count = 1
 [[known]]
 file = "JoltConstraints/Constraints/MustStartSequenceFromBeginning.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/MustStartSequenceFromBeginning.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/NextPCEqPCPlusOneIfInline.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/NextPCEqPCPlusOneIfInline.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/NextUnexpandedPCUpdateOtherwise.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/NextUnexpandedPCUpdateOtherwise.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamAddrEqZeroIfNotLoadStore.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamAddrEqZeroIfNotLoadStore.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamAddressEqRamRaf.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs#L133-L151"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamAddressEqRamRaf.lean"
+kind = "unchecked-model"
+text = "crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamHammingWeightBooleanity.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs#L89-L93"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamHammingWeightBooleanity.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamOutputEqPublicIo.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs#L115-L128"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamOutputEqPublicIo.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamRaChunkBooleanity.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs#L40-L58"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamRaChunkBooleanity.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamRaChunkHammingWeight.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs#L82-L90"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamRaChunkHammingWeight.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamRaEqChunkProduct.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/ram.rs#L163-L172"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamRaEqChunkProduct.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/geometry/ram.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamReadData.lean"
 kind = "fork"
-text = "abiswas3"
-count = 4
+text = "github.com/abiswas3/jolt/tree/main/common/src/jolt_device.rs#L491-L493"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadData.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/public_io.rs#L20-L25"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadData.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/public_io.rs#L27-L55"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadData.lean"
+kind = "fork"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-witness/src/backend/trace/ram.rs#L81-L130"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadData.lean"
+kind = "unchecked-model"
+text = "common/src/jolt_device.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadData.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/backend/trace/ram.rs"
+count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamReadEqRamWriteIfLoad.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadEqRamWriteIfLoad.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamReadEqRdWriteIfLoad.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadEqRdWriteIfLoad.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamReadValueEqRamRead.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs#L89-L106"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadValueEqRamRead.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamValEqInitialPlusPrefixRamInc.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135-L154"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamValEqInitialPlusPrefixRamInc.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamValFinalEqInitialPlusRamInc.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135-L154"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamValFinalEqInitialPlusRamInc.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RamWriteValueEqRamReadWrite.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs#L89-L106"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamWriteValueEqRamReadWrite.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RdWriteEqLookupIfWriteLookupToRd.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RdWriteEqLookupIfWriteLookupToRd.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RdWriteEqPCPlusConstIfJump.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RdWriteEqPCPlusConstIfJump.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RdWriteValueEqRegistersReadWrite.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs#L97-L121"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RdWriteValueEqRegistersReadWrite.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RegistersValEqPrefixRdInc.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs#L69-L79"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RegistersValEqPrefixRdInc.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RightLookupAdd.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupAdd.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RightLookupEqProductIfMul.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupEqProductIfMul.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RightLookupEqRightInputOtherwise.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupEqRightInputOtherwise.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RightLookupOperandEqInstructionRaf.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L181-L201"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupOperandEqInstructionRaf.lean"
+kind = "unchecked-model"
+text = "crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/RightLookupSub.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupSub.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/Rs1ValueEqRegistersRead.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs#L97-L121"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/Rs1ValueEqRegistersRead.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/Rs2EqRamWriteIfStore.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/Rs2EqRamWriteIfStore.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/Rs2ValueEqRegistersRead.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs#L97-L121"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/Rs2ValueEqRegistersRead.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/ShouldBranchEqLookupOutputMulBranch.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/ShouldBranchEqLookupOutputMulBranch.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
@@ -4085,6 +4836,30 @@ text = "0249591a"
 count = 1
 
 [[known]]
+file = "JoltConstraints/WholeRun/Bridge.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/mod.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/WholeRun/CodeInv.lean"
+kind = "unchecked-model"
+text = "tracer/src/emulator/mmu.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/WholeRun/IoAmo.lean"
+kind = "unchecked-model"
+text = "tracer/src/emulator/mmu.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/WholeRun/RunInv.lean"
+kind = "unchecked-model"
+text = "crates/jolt-program/src/image/elf.rs"
+count = 1
+
+[[known]]
 file = "JoltConstraints/constraints.md"
 kind = "revision"
 text = "5def437f"
@@ -4163,6 +4938,36 @@ text = "8bbb2357890928d8f83b00ca542879077c4d3d28"
 count = 1
 
 [[known]]
+file = "JoltConstraints/language.lean"
+kind = "unchecked-model"
+text = "book/src/usage/guests_hosts/guests.md"
+count = 1
+
+[[known]]
+file = "JoltConstraints/language.lean"
+kind = "unchecked-model"
+text = "crates/jolt-prover/src/config.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/language.lean"
+kind = "unchecked-model"
+text = "jolt-platform/src/spoil.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/language.lean"
+kind = "unchecked-model"
+text = "jolt-sdk/src/host_utils.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/language.lean"
+kind = "unchecked-model"
+text = "tracer/src/instruction/virtual_assert_eq.rs"
+count = 1
+
+[[known]]
 file = "JoltConstraints/layout_facts.lean"
 kind = "revision"
 text = "5def437f"
@@ -4171,13 +4976,13 @@ count = 1
 [[known]]
 file = "JoltConstraints/lookup_table.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-lookup-tables/src/tables/virtual_xor_rotl1.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/metadata.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/traits.rs:93"
 count = 1
 
 [[known]]
@@ -4189,7 +4994,7 @@ count = 1
 [[known]]
 file = "JoltConstraints/model_review.md"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/..."
 count = 1
 
 [[known]]
@@ -4255,7 +5060,7 @@ count = 3
 [[known]]
 file = "JoltConstraints/register_encoding.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/common/src/constants.rs"
 count = 1
 
 [[known]]
@@ -4279,7 +5084,7 @@ count = 1
 [[known]]
 file = "JoltConstraints/witness.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/cycle.rs:107"
 count = 1
 
 [[known]]
@@ -4291,74 +5096,188 @@ count = 1
 [[known]]
 file = "JoltConstraints/witness_domain.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:260"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/address_chunk.lean"
 kind = "local-path"
-text = "Users"
-count = 2
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/cycle.rs:73"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/address_chunk.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/one_hot.rs:19"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/address_chunk.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/backend/trace/cycle.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/address_chunk.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/one_hot.rs"
+count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/branch.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt."
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/branch.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/flags.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/bytecode_ra_chunk.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/one_hot.rs:121"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/bytecode_ra_chunk.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/one_hot.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/imm.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:146"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/imm.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/operands.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/instruction_flags.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt."
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_flags.lean"
+kind = "unchecked-model"
+text = "crates/jolt-riscv/src/instructions/i/noop.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_flags.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/backend/trace/cycle.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_flags.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/flags.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/instruction_ra.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/oracle.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_ra.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/backend/trace/oracle.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/instruction_ra_chunk.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/one_hot.rs:109"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_ra_chunk.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/one_hot.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/instruction_raf_flag.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt."
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_raf_flag.lean"
+kind = "unchecked-model"
+text = "crates/jolt-riscv/src/flags.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_raf_flag.lean"
+kind = "unchecked-model"
+text = "crates/jolt-riscv/src/instructions/i/noop.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_raf_flag.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/flags.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/left_instruction_input.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:77"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/left_instruction_input.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/operands.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/left_lookup_operand.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:45"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/left_lookup_operand.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/operands.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/lookup_index.lean"
 kind = "local-path"
-text = "Users"
-count = 4
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/addi.rs:18"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/lookup_index.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jal.rs:18"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/lookup_index.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/interleave.rs:17"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/lookup_index.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:45"
+count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/lookup_index.lean"
@@ -4369,31 +5288,61 @@ count = 1
 [[known]]
 file = "JoltConstraints/witness_helpers/lookup_output.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:23"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/lookup_table_flag.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/flags.rs:177"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/lookup_table_flag.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/flags.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/op_flags.lean"
 kind = "fork"
-text = "abiswas3"
+text = "github.com/abiswas3/jolt/tree/main/crates/jolt-riscv/src/instructions/mod.rs#L536-L543"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/op_flags.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt."
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/op_flags.lean"
+kind = "unchecked-model"
+text = "crates/jolt-riscv/src/instructions/mod.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/op_flags.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/backend/trace/cycle.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/op_flags.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/flags.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/product.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:131"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/product.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/operands.rs"
 count = 1
 
 [[known]]
@@ -4405,43 +5354,109 @@ count = 1
 [[known]]
 file = "JoltConstraints/witness_helpers/ram_hamming_weight.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/ram.rs:89"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_hamming_weight.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/ram.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/ram_ra.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:51"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_ra.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/backend/trace/ram.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/ram_ra_chunk.lean"
 kind = "local-path"
-text = "Users"
-count = 2
+text = "/Users/ari.biswas/Work-with-A16z/jolt/common/src/jolt_device.rs:496"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_ra_chunk.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/one_hot.rs:134"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_ra_chunk.lean"
+kind = "unchecked-model"
+text = "common/src/jolt_device.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_ra_chunk.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/one_hot.rs"
+count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/ram_state.lean"
 kind = "local-path"
-text = "Users"
-count = 4
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/preprocess/ram.rs:40"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_state.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:132"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_state.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:289"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_state.lean"
+kind = "local-path"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:81"
+count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/ram_val_final.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:70"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_val_final.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/backend/trace/ram.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/register_address.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/common/src/constants.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/register_address.lean"
+kind = "unchecked-model"
+text = "common/src/constants.rs"
 count = 1
 
 [[known]]
 file = "JoltConstraints/witness_helpers/unexpanded_pc.lean"
 kind = "local-path"
-text = "Users"
+text = "/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/pc.rs:36"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/unexpanded_pc.lean"
+kind = "unchecked-model"
+text = "crates/jolt-witness/src/witnesses/pc.rs"
 count = 1
 
 [[known]]
@@ -4478,6 +5493,12 @@ count = 1
 file = "docs/inline-precompiles.md"
 kind = "revision"
 text = "70e00da09"
+count = 2
+
+[[known]]
+file = "docs/inline-precompiles.md"
+kind = "revision"
+text = "a6b6dc717"
 count = 2
 
 [[known]]
