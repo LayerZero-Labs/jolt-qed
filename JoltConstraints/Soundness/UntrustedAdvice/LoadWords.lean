@@ -24,7 +24,10 @@ namespace JoltConstraints.Soundness.UntrustedAdvice
 
 open AdjacentRows
 
-/-- A load that does not range-check its own destination value. -/
+/-- A load that does not range-check its own destination value: a row with the Load flag
+whose destination value does not pass through a lookup operand of the same row
+(`ExpansionFacts.loadSelfChecked`). For example, `VirtualLoadB` is narrow, while `LD`
+checks its value through its right lookup operand and is not. -/
 def NarrowLoad (instruction : JoltISA.Instr) : Prop :=
   JoltMetadata.opcodeFlag instruction .Load = true ∧
     ExpansionFacts.loadSelfChecked instruction = false

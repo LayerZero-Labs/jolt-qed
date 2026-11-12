@@ -165,6 +165,40 @@ theorem load_mul_accessCorrection (gap : Fin params.ramSize → F)
     exact good address ⟨value, by rw [← initialIs, ← readIs, read]⟩
   · rfl
 
+/-- A word's RAM value history up to cycle `bound` carries over to the shifted witness:
+subtracting the word's correction at `bound` from a value with the original history
+gives the history from `byteRam` with the shifted increments.
+For example, `bound = t` gives the value at cycle `t`, and `bound = traceLength` the
+final value. -/
+theorem shifted_history (byteRam : Nat → BitVec 64) (gap : Fin params.ramSize → F)
+    (gapIs : ∀ address : Fin params.ramSize,
+      gap address = initialValue address.val - ramInitialValue byteRam address.val)
+    (address : Fin params.ramSize) (bound : Nat) {value : F}
+    (history : value = initialValue address.val +
+      ∑ cycle : Fin params.traceLength, if cycle.val < bound then
+        witness.RamRa address cycle * witness.RamInc cycle else 0) :
+    value - correction witness gap address bound =
+      ramInitialValue byteRam address.val +
+        ∑ cycle : Fin params.traceLength, if cycle.val < bound then
+          witness.RamRa address cycle *
+            (witness.RamInc cycle + accessCorrection witness gap cycle) else 0 := by
+  have split : (∑ cycle : Fin params.traceLength, if cycle.val < bound then
+        witness.RamRa address cycle *
+          (witness.RamInc cycle + accessCorrection witness gap cycle) else 0) =
+      (∑ cycle : Fin params.traceLength, if cycle.val < bound then
+        witness.RamRa address cycle * witness.RamInc cycle else 0) +
+      ∑ cycle : Fin params.traceLength, if cycle.val < bound then
+        witness.RamRa address cycle * correction witness gap address cycle.val else 0 := by
+    rw [← Finset.sum_add_distrib]
+    apply Finset.sum_congr rfl
+    intro cycle _
+    split_ifs
+    · rw [mul_add, ramRa_mul_accessCorrection charAbove2pow127 context equations gap address
+        cycle]
+    · rw [add_zero]
+  rw [split, prefix_correction context equations gap address bound, history, gapIs address]
+  ring
+
 /-- The shifted witness satisfies the equations with the 64-bit initial RAM `byteRam`.
 `byteRam` must agree with `initialValue` wherever `initialValue` is a 64-bit word, and
 the public I/O mask must vanish wherever they differ. -/
@@ -224,47 +258,18 @@ theorem shiftWitness_equations (byteRam : Nat → BitVec 64)
         · exact masked address
         · rw [mul_zero]
       linear_combination relation - maskedCorrection
-    ramValEqInitialPlusPrefixRamInc := fun address t => by
-      change witness.RamVal address t - correction witness gap address t.val =
-        ramInitialValue byteRam address.val +
-          ∑ cycle : Fin params.traceLength, if cycle.val < t.val then
-            witness.RamRa address cycle * (witness.RamInc cycle + accessCorrection witness gap cycle)
-          else 0
-      have split : (∑ cycle : Fin params.traceLength, if cycle.val < t.val then
-            witness.RamRa address cycle *
-              (witness.RamInc cycle + accessCorrection witness gap cycle) else 0) =
-          (∑ cycle : Fin params.traceLength, if cycle.val < t.val then
-            witness.RamRa address cycle * witness.RamInc cycle else 0) +
-          ∑ cycle : Fin params.traceLength, if cycle.val < t.val then
-            witness.RamRa address cycle * correction witness gap address cycle.val else 0 := by
-        rw [← Finset.sum_add_distrib]
-        apply Finset.sum_congr rfl
-        intro cycle _
-        split_ifs
-        · rw [mul_add, collapse address cycle]
-        · rw [add_zero]
-      rw [split, prefix_correction context equations gap address t.val,
-        equations.ramValEqInitialPlusPrefixRamInc address t]
-      simp only [gapIs]
-      ring
+    ramValEqInitialPlusPrefixRamInc := fun address t =>
+      shifted_history charAbove2pow127 context equations byteRam gap (fun _ => rfl) address
+        t.val (equations.ramValEqInitialPlusPrefixRamInc address t)
     ramValFinalEqInitialPlusRamInc := fun address => by
-      change witness.RamValFinal address - correction witness gap address params.traceLength =
-        ramInitialValue byteRam address.val +
-          ∑ cycle : Fin params.traceLength,
-            witness.RamRa address cycle * (witness.RamInc cycle + accessCorrection witness gap cycle)
-      have split : (∑ cycle : Fin params.traceLength,
-            witness.RamRa address cycle *
-              (witness.RamInc cycle + accessCorrection witness gap cycle)) =
-          (∑ cycle : Fin params.traceLength, witness.RamRa address cycle * witness.RamInc cycle) +
+      have history : witness.RamValFinal address = initialValue address.val +
           ∑ cycle : Fin params.traceLength, if cycle.val < params.traceLength then
-            witness.RamRa address cycle * correction witness gap address cycle.val else 0 := by
-        rw [← Finset.sum_add_distrib]
-        apply Finset.sum_congr rfl
-        intro cycle _
-        rw [ite_eq_left cycle.isLt, mul_add, collapse address cycle]
-      rw [split, prefix_correction context equations gap address
-        params.traceLength, equations.ramValFinalEqInitialPlusRamInc address]
-      simp only [gapIs]
-      ring }
+            witness.RamRa address cycle * witness.RamInc cycle else 0 := by
+        rw [equations.ramValFinalEqInitialPlusRamInc address]
+        simp only [Fin.is_lt, ite_true]
+      have shifted := shifted_history charAbove2pow127 context equations byteRam gap
+        (fun _ => rfl) address params.traceLength history
+      simp only [Fin.is_lt, ite_true] at shifted
+      exact shifted }
 
 end JoltConstraints.Soundness.UntrustedAdvice

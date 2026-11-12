@@ -45,9 +45,11 @@ theorem JoltInstance.initial_state_adviceTape_readPosition_zero {Source : Type}
       simpa using congrArg (fun state : SailJoltState =>
         state.adviceTape.readPosition) initialized.symm
 
--- Replacing the untrusted advice by bytes that pass the tracer's size check changes only
--- the untrusted advice in the starting device.
--- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
+/-- Replacing the untrusted advice by bytes that pass the tracer's size check changes only
+the untrusted advice in the starting device: the Sail state, the execution tape and every
+other device field stay the same. For example, with a configured maximum of 16 bytes,
+replacing 3 advice bytes by 16 zero bytes gives the same Sail state.
+See `jolt/tracer/src/lib.rs` (`create_emulator`). -/
 theorem JoltInstance.initial_state_with_untrusted_advice {Source : Type}
     (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
     (bytes : Array (BitVec 8))
@@ -119,8 +121,11 @@ noncomputable def adviceBlockWords {F : Type} [Field F] (layout : MemoryLayout)
   | none => 0
   | some first => ramInitialValue initialRam (first + index)
 
--- Outside the untrusted-advice block, the untrusted-advice overlay keeps the previous
--- word, for any advice that fits the block.
+/-- Outside the untrusted-advice block, the untrusted-advice overlay
+(`TraceWitness.overlayRamBytes` at `untrusted_advice_start`) keeps the previous word, for
+any advice that fits the block. The block is the `max_untrusted_advice_size / 8` words
+from the remapped `untrusted_advice_start` (`untrustedAdviceWordIndex?`). For example,
+with a 16-byte block at remapped word 100, the overlay keeps word 102. -/
 theorem overlay_untrusted_outside (layout : MemoryLayout)
     (aligned : layout.max_untrusted_advice_size.toNat % 8 = 0)
     (bytes : Array (BitVec 8)) (small : bytes.size ≤ layout.max_untrusted_advice_size.toNat)
@@ -139,8 +144,11 @@ theorem overlay_untrusted_outside (layout : MemoryLayout)
     split_ifs at outside with inBlock
     omega
 
--- Outside the untrusted-advice block, the initial RAM does not depend on the untrusted
--- advice.
+/-- Outside the untrusted-advice block, the initial RAM word
+(`TraceWitness.initialRamWordFromState`) does not depend on the untrusted advice: two
+states that differ only in their untrusted-advice bytes, both within the block, agree on
+every word outside it. For example, a program word below the block is the same for empty
+advice and for 16 bytes of advice. -/
 theorem initialRamWordFromState_outside_untrustedAdvice (state state' : SailJoltState)
     (bytes : Array (BitVec 8))
     (sail : state'.sail = state.sail)
@@ -159,20 +167,26 @@ theorem initialRamWordFromState_outside_untrustedAdvice (state state' : SailJolt
   rw [overlay_untrusted_outside _ aligned bytes small' outside,
     overlay_untrusted_outside _ aligned _ small outside]
 
--- The context's verifier I/O uses the layout of the starting device.
-theorem ConstraintContext.io_memory_layout {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} {params : WitnessParams}
-    (context : ConstraintContext joltInstance privateInputs params) (state : SailJoltState)
-    (initialized : joltInstance.initial_state privateInputs = some state) :
-    context.io.memory_layout = state.jolt_device.memory_layout := by
-  have layoutBuilt := (initial_state_device joltInstance privateInputs state initialized).1
+/-- The actual initializer and the constraint context use the same RAM layout,
+so their remapping bases and device regions agree. Here `initialState` is the state that
+`joltInstance.initial_state` builds from the private inputs of `context`. For example,
+both see the same `untrusted_advice_start`, so the untrusted-advice block of the run is
+the block the constraints use. -/
+theorem Soundness.initial_state_memory_layout
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    {params : WitnessParams} (context : ConstraintContext joltInstance privateInputs params)
+    {initialState : SailJoltState}
+    (built : joltInstance.initial_state privateInputs = some initialState) :
+    initialState.jolt_device.memory_layout = context.io.memory_layout := by
+  have initialLayout := (initial_state_device joltInstance privateInputs initialState built).1
   have publicIo := context.publicIo
   unfold JoltInstance.public_io at publicIo
   obtain ⟨layout, hasLayout, sameIo⟩ := Option.bind_eq_some_iff.mp publicIo
-  have layoutIs : layout = state.jolt_device.memory_layout :=
-    Option.some.inj (hasLayout.symm.trans layoutBuilt)
-  rw [← layoutIs]
-  exact (congrArg JoltDevice.memory_layout (Option.some.inj sameIo)).symm
+  have publicLayout : layout = context.io.memory_layout :=
+    congrArg JoltDevice.memory_layout (Option.some.inj sameIo)
+  have same : layout = initialState.jolt_device.memory_layout :=
+    Option.some.inj (hasLayout.symm.trans initialLayout)
+  exact same.symm.trans publicLayout
 
 /-- The byte relation gives the relation Jolt's verifier checks: commit to the words of
 the untrusted-advice block of the context's initial RAM.
@@ -189,7 +203,7 @@ theorem allConstraints_of_onBytes {F : Type} [Field F] {params : WitnessParams}
   obtain ⟨state, initialized, ramIs⟩ := context.initialized
   obtain ⟨layoutBuilt, -, untrustedIs, -, untrustedFits⟩ :=
     initial_state_device joltInstance privateInputs state initialized
-  have layoutEq := context.io_memory_layout state initialized
+  have layoutEq := (Soundness.initial_state_memory_layout context initialized).symm
   obtain ⟨-, -, configFits, aligned, -⟩ := new_advice_regions _ _ layoutBuilt
   -- drop the untrusted advice, then the execution tape
   obtain ⟨state', built', sail, -, device⟩ :=

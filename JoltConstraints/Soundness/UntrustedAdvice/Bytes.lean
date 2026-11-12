@@ -26,7 +26,9 @@ noncomputable def adviceWord {F : Type} [Field F] (untrustedAdvice : Nat → F) 
     BitVec 64 :=
   if h : ∃ value : BitVec 64, untrustedAdvice index = (value.toNat : F) then h.choose else 0
 
-/-- The first `size` little-endian bytes of the word sequence `words`. -/
+/-- The first `size` little-endian bytes of the word sequence `words`. Byte `k` is byte
+`k % 8` of word `k / 8`. For example, `wordBytes (fun _ => 0x0102) 3` is
+`#[0x02, 0x01, 0x00]`. -/
 def wordBytes (words : Nat → BitVec 64) (size : Nat) : Array (BitVec 8) :=
   Array.ofFn (n := size) fun k => (words (k.val / 8)).extractLsb' (8 * (k.val % 8)) 8
 
@@ -38,6 +40,8 @@ noncomputable def byteInitialRam {F : Type} [Field F] (layout : MemoryLayout)
   | some index => adviceWord untrustedAdvice index
   | none => fixedRam address
 
+/-- `wordBytes words size` has `size` bytes. For example, `wordBytes words 12` has 12
+bytes, a whole word and half of the next. -/
 theorem wordBytes_size (words : Nat → BitVec 64) (size : Nat) :
     (wordBytes words size).size = size := by
   simp [wordBytes]
@@ -198,7 +202,7 @@ theorem onBytes_of_allConstraints (joltField : JoltField F)
   obtain ⟨state, initialized, ramIs⟩ := context.initialized
   obtain ⟨layoutBuilt, -, untrustedIs, -, -⟩ :=
     initial_state_device joltInstance _ state initialized
-  have layoutEq := context.io_memory_layout state initialized
+  have layoutEq := (initial_state_memory_layout context initialized).symm
   obtain ⟨-, -, -, aligned, -, untrustedEnd, -, -, -, inputStart⟩ :=
     new_advice_regions _ _ layoutBuilt
   have fits : (wordBytes (adviceWord untrustedAdvice)

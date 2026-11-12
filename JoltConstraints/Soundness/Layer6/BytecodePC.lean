@@ -131,7 +131,7 @@ theorem next_of_remaining
     rw [virtual, nonlast] at relation
     linear_combination relation
   have zero : witness.NextPC t = 0 := by
-    simpa only [nextPCEqShift, dif_neg last] using equations.nextPCEqShift t
+    simpa only [nextPCEqShift, dite_eq_right last] using equations.nextPCEqShift t
   have oldPC := pc_of_selected_bytecode charAbove2pow127 context equations t slot selected
   have castZero : ((slot.val + 1 : Nat) : F) = ((0 : Nat) : F) := by
     rw [Nat.cast_add, Nat.cast_one, ← oldPC, ← increment, zero, Nat.cast_zero]

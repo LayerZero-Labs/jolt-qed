@@ -107,7 +107,7 @@ theorem JoltInstance.completeness {F : Type} [Field F]
   obtain ⟨state, initialized, ramIs⟩ := context.initialized
   have stateIs : state = trace.initialState :=
     Option.some.inj (initialized.symm.trans trace.initialized)
-  rw [context.io_memory_layout state initialized, ramIs, stateIs] at satisfied
+  rw [← JoltConstraints.Soundness.initial_state_memory_layout context initialized, ramIs, stateIs] at satisfied
   exact satisfied
 
 /-- Completeness, existential form: every instance in Jolt's language
