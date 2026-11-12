@@ -29,9 +29,11 @@ The lemma has no precondition on the start state.
 The pool-reset clause of the spec is a separate per-program predicate,
 `Program.ResetsPool`, with a static checker `Program.resetsPoolCheck`.
 
-Staged `sorry`s: `execInstr_sail_effect`, `execInstr_frame`, `Frame.sourceValue_xreg_eq`
-and `Program.resetsPool_of_check`.
-The design note `reports/2026-11-11-inline-frame-statement.md` explains the proof plan.
+Every lemma is proved; the module has no `sorry`.
+The per-row proofs run `execInstr` through `StatePreservation` with two relations:
+`RowEffect` (Sail registers, virtual registers, tape, host settings) and, for store rows,
+`MemStep` (memory and device at one doubleword).
+The design note `reports/2026-11-11-inline-frame-statement.md` explains the statement.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
@@ -340,6 +342,78 @@ end JoltISA
 
 namespace JoltISA.Inlines
 
+/-! ## Architectural register indices -/
+
+/-- The index of an architectural Sail register, `none` for every other register. -/
+private def xIndex : Register → Option Nat
+  | .x1 => some 1 | .x2 => some 2 | .x3 => some 3 | .x4 => some 4 | .x5 => some 5
+  | .x6 => some 6 | .x7 => some 7 | .x8 => some 8 | .x9 => some 9 | .x10 => some 10
+  | .x11 => some 11 | .x12 => some 12 | .x13 => some 13 | .x14 => some 14
+  | .x15 => some 15 | .x16 => some 16 | .x17 => some 17 | .x18 => some 18
+  | .x19 => some 19 | .x20 => some 20 | .x21 => some 21 | .x22 => some 22
+  | .x23 => some 23 | .x24 => some 24 | .x25 => some 25 | .x26 => some 26
+  | .x27 => some 27 | .x28 => some 28 | .x29 => some 29 | .x30 => some 30
+  | .x31 => some 31
+  | _ => none
+
+private theorem xIndex_of_xRegister? {b : BitVec 5} {R : Register}
+    (h : xRegister? (.Regidx b) = some R) : xIndex R = some b.toNat := by
+  have hb : b.toNat < 32 := b.isLt
+  unfold xRegister? at h
+  dsimp only at h
+  generalize b.toNat = n at h hb ⊢
+  interval_cases n <;> simp at h <;> subst h <;> rfl
+
+/-- Two indices that name the same Sail register are equal as indices.
+Example: if `xRegister? i = some Register.x10` and `xRegister? r = some Register.x10`, then
+`sameXReg i r = true`. -/
+theorem sameXReg_of_xRegister?_eq {i r : regidx} {R : Register}
+    (hi : xRegister? i = some R) (hr : xRegister? r = some R) : sameXReg i r = true := by
+  obtain ⟨a⟩ := i
+  obtain ⟨b⟩ := r
+  have ha := xIndex_of_xRegister? hi
+  have hb := xIndex_of_xRegister? hr
+  rw [ha] at hb
+  simp only [sameXReg, decide_eq_true_eq]
+  exact BitVec.eq_of_toNat_eq (Option.some.inj hb)
+
+/-- `sameXReg` is equality of indices.
+Example: `sameXReg x10 x10 = true`, so `x10 = x10`. -/
+theorem eq_of_sameXReg {w r : regidx} (h : sameXReg w r = true) : w = r := by
+  obtain ⟨a⟩ := w
+  obtain ⟨b⟩ := r
+  simp only [sameXReg, decide_eq_true_eq] at h
+  rw [h]
+
+/-- The index `x0` names no Sail register.
+Example: `xRegister? x0 = none`, since `wX` ignores writes to `x0`. -/
+theorem xRegister?_of_isX0 {r : regidx} (h : isX0 r = true) : xRegister? r = none := by
+  obtain ⟨b⟩ := r
+  simp only [isX0, decide_eq_true_eq] at h
+  simp [xRegister?, h]
+
+private theorem get?_insert_of_ne {m : Std.ExtDHashMap Register RegisterType}
+    {written read : Register} (v : RegisterType written) (h : written ≠ read) :
+    (m.insert written v).get? read = m.get? read := by
+  rw [Std.ExtDHashMap.get?_insert]
+  simp [beq_false_of_ne h]
+
+/-- An architectural register write leaves every Sail register other than its target
+unchanged.
+Example: `(wX_update_regs x5 v regs).get? Register.x6 = regs.get? Register.x6`, and
+`wX_update_regs x0 v regs` changes no register. -/
+theorem wX_update_regs_get?_of_ne (rd : regidx) (v : BitVec 64)
+    (regs : Std.ExtDHashMap Register RegisterType) {R : Register}
+    (h : xRegister? rd ≠ some R) : (wX_update_regs rd v regs).get? R = regs.get? R := by
+  obtain ⟨b⟩ := rd
+  have hb : b.toNat < 32 := b.isLt
+  unfold wX_update_regs
+  unfold xRegister? at h
+  dsimp only at h ⊢
+  generalize b.toNat = n at h hb ⊢
+  interval_cases n <;> (try simp only at h) <;>
+    first | rfl | (apply get?_insert_of_ne; rintro rfl; exact h rfl)
+
 /-! ## The frame relation -/
 
 /-- The state relation every successful run of a `WritesWithin` program satisfies.
@@ -399,12 +473,25 @@ This is the `rX_bits` form of `sailRegs`: `sourceValue (.xreg r)` is exactly the
 successful `readSrc (.xreg r)` (that is `rX_bits r`) returns.
 Example: for `ws.xregs = []`, the base `x10` of every store row reads the same value at
 the end of the run as at the start.
-Proof plan: case on the 32 values of `r`; for `r ≠ x0`, `keepsSrc` rules out every
-listed index `i` with `xRegister? i = xRegister? r`, so `sailRegs` applies. -/
+Proof: `keepsSrc` rules out every listed index `i` with `xRegister? i = xRegister? r`, so
+`sailRegs` applies to the register `r` names; then case on the 32 values of `r`. -/
 theorem sourceValue_xreg_eq {s s' : SailJoltState} (f : Frame ws s s') {r : regidx}
     (h : ws.keepsSrc (.xreg r) = true) :
     sourceValue (.xreg r) s' = sourceValue (.xreg r) s := by
-  sorry
+  have key : ∀ R, xRegister? r = some R → s'.sail.regs.get? R = s.sail.regs.get? R := by
+    intro R hR
+    apply f.sailRegs
+    rintro ⟨i, hi, hiR⟩
+    have hs := sameXReg_of_xRegister?_eq hiR hR
+    simp only [WriteSet.keepsSrc, Bool.not_eq_true', List.any_eq_false] at h
+    exact h i hi (by simp [hs])
+  obtain ⟨b⟩ := r
+  have hb : b.toNat < 32 := b.isLt
+  unfold xRegister? at key
+  unfold sourceValue
+  dsimp only at key ⊢
+  generalize b.toNat = n at key hb ⊢
+  interval_cases n <;> first | rfl | (simp only at key; simp only [key _ rfl])
 
 /-- A kept source operand, virtual or architectural, reads the same value in both states.
 Example: for `ws = ⟨[vr48], [], []⟩`, the source `.vreg vr32` keeps its value. -/
@@ -528,16 +615,438 @@ theorem outputs_size {s s' : SailJoltState} (f : Frame ws s s')
 
 end Frame
 
-/-! ## Per-row lemmas (staged) -/
+/-! ## Per-row lemmas -/
+
+/-! ### Reading operands -/
+
+private theorem readReg_get? (register : Register) (sail after : SailState)
+    (value : RegisterType register)
+    (runs : (LeanRV64D.readReg register : SailM (RegisterType register)) sail = .ok value after) :
+    sail.regs.get? register = some value := by
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg at runs
+  simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get, pure] at runs
+  generalize lookup : sail.regs.get? register = stored at runs
+  cases stored with
+  | some storedValue =>
+    cases runs
+    rfl
+  | none =>
+    simp only [throw, throwThe, MonadExceptOf.throw, EStateM.throw] at runs
+    cases runs
+
+/-- A successful operand read leaves the state unchanged and returns `sourceValue`.
+Example: if `x10` holds `0x80000000`, then `readSrc (.xreg x10)` returns `0x80000000`, and
+`readSrc (.xreg x0)` returns `0`.
+The proof follows `readSrc_value` in `JoltConstraints/execution_facts.lean`, which this
+library cannot import. -/
+theorem readSrc_run {src : Src} {s t : SailJoltState} {value : BitVec 64}
+    (runs : readSrc src s = .ok value t) : t = s ∧ value = sourceValue src s := by
+  cases src with
+  | vreg register =>
+    simp only [readSrc_vreg, readVReg_run] at runs
+    cases runs
+    exact ⟨rfl, rfl⟩
+  | xreg register =>
+    simp only [readSrc_xreg] at runs
+    unfold liftSail at runs
+    cases readResult : rX_bits register s.sail with
+    | error failure sail =>
+      rw [readResult] at runs
+      cases runs
+    | ok readValue sail =>
+      have same := rX_bits_pure register s.sail readValue sail readResult
+      subst same
+      rw [readResult] at runs
+      cases runs
+      refine ⟨rfl, ?_⟩
+      obtain ⟨index⟩ := register
+      unfold rX_bits rX regval_from_reg at readResult
+      simp only [Sail.BitVec.toNatInt, Int.ofNat_eq_natCast, Int.toNat_natCast,
+        bind, EStateM.bind, pure, EStateM.pure] at readResult
+      unfold sourceValue
+      have small : index.toNat < 32 := index.isLt
+      generalize registerNumber : index.toNat = number at small readResult
+      simp only [registerNumber]
+      interval_cases number
+      all_goals try simp only at readResult ⊢
+      · cases readResult
+        rfl
+      all_goals
+        split at readResult
+        · rename_i storedValue _ readStored
+          cases readResult
+          rw [readReg_get? _ _ _ _ readStored]
+          rfl
+        · cases readResult
+
+private theorem bind_ok {ε σ α β : Type} {x : EStateM ε σ α} {f : α → EStateM ε σ β}
+    {s t : σ} {r : β} (h : (x >>= f) s = .ok r t) :
+    ∃ a m, x s = .ok a m ∧ f a m = .ok r t := by
+  simp only [bind, EStateM.bind] at h
+  cases hx : x s with
+  | error e m => rw [hx] at h; cases h
+  | ok a m => rw [hx] at h; exact ⟨a, m, rfl, h⟩
+
+private theorem loadDoubleword_keeps (a : BitVec 64) (s t : SailJoltState)
+    (v : Result (BitVec 64) ExecutionResult) (h : Mmu.load_doubleword a s = .ok v t) : t = s := by
+  simp only [Mmu.load_doubleword] at h
+  repeat' split at h
+  all_goals first | (cases h; rfl) | cases h
+
+private theorem getArchPc_keeps (s t : SailJoltState) (v : BitVec 64)
+    (h : liftSail (get_arch_pc ()) s = .ok v t) : t = s := by
+  unfold liftSail at h
+  cases hr : get_arch_pc () s.sail with
+  | error e s1 => rw [hr] at h; cases h
+  | ok a s1 =>
+    rw [hr] at h
+    cases h
+    rw [readReg_pure _ _ _ _ hr]
+
+/-! ### Registers, tape and host settings: `RowEffect` -/
+
+/-- The effect of one row with destination `d` on everything except memory and the device:
+the Sail fields other than `regs` and `mem` are unchanged, the Sail registers are unchanged
+or updated by `wX_update_regs` at an architectural destination `d`, every virtual register
+other than a virtual destination `d` is unchanged, and the tape and host settings are
+unchanged.
+Example: `RowEffect (some (.vreg vr48)) s t` allows `t.vregs vr48 ≠ s.vregs vr48` and
+nothing else outside memory and the device. -/
+def RowEffect (d : Option Dst) (s t : SailJoltState) : Prop :=
+  t.sail.choiceState = s.sail.choiceState ∧
+  t.sail.cycleCount = s.sail.cycleCount ∧
+  t.sail.sailOutput = s.sail.sailOutput ∧
+  (t.sail.regs = s.sail.regs ∨
+    ∃ rd v, d = some (.xreg rd) ∧ t.sail.regs = wX_update_regs rd v s.sail.regs) ∧
+  (∀ vr, d ≠ some (.vreg vr) → t.vregs vr = s.vregs vr) ∧
+  t.adviceTape = s.adviceTape ∧ t.hostIO = s.hostIO
+
+/-- `RowEffect` is reflexive.
+Example: a row that throws before any write relates its state to itself. -/
+theorem RowEffect.refl (d : Option Dst) (s : SailJoltState) : RowEffect d s s :=
+  ⟨rfl, rfl, rfl, Or.inl rfl, fun _ _ => rfl, rfl, rfl⟩
+
+/-- `RowEffect` is transitive: two writes to the same architectural destination compose
+to the second write (`wX_update_regs_idem`).
+Example: two successive writes to `x5` compose to the second one. -/
+theorem RowEffect.trans {d : Option Dst} (s m t : SailJoltState) (h₁ : RowEffect d s m)
+    (h₂ : RowEffect d m t) : RowEffect d s t := by
+  obtain ⟨a₁, b₁, c₁, r₁, v₁, t₁, o₁⟩ := h₁
+  obtain ⟨a₂, b₂, c₂, r₂, v₂, t₂, o₂⟩ := h₂
+  refine ⟨a₂.trans a₁, b₂.trans b₁, c₂.trans c₁, ?_, fun vr h => (v₂ vr h).trans (v₁ vr h),
+    t₂.trans t₁, o₂.trans o₁⟩
+  rcases r₁ with r₁ | ⟨rd, v, hd, r₁⟩ <;> rcases r₂ with r₂ | ⟨rd', v', hd', r₂⟩
+  · exact Or.inl (r₂.trans r₁)
+  · exact Or.inr ⟨rd', v', hd', by rw [r₂, r₁]⟩
+  · exact Or.inr ⟨rd, v, hd, by rw [r₂, r₁]⟩
+  · rw [hd] at hd'
+    cases hd'
+    exact Or.inr ⟨rd, v', hd, by rw [r₂, r₁, wX_update_regs_idem]⟩
+
+open StatePreservation in
+private theorem keeps_rowEffect {α : Type} (d : Option Dst) {m : JoltMonad α}
+    (keeps : ∀ s t v, m s = .ok v t → t = s) : Preserves (RowEffect d) m := by
+  intro s t v h
+  rw [keeps s t v h]
+  exact RowEffect.refl d s
+
+open StatePreservation in
+private theorem readSrc_rowEffect (d : Option Dst) (src : Src) :
+    Preserves (RowEffect d) (readSrc src) :=
+  keeps_rowEffect d fun _ _ _ h => (readSrc_run h).1
+
+open StatePreservation in
+private theorem writeDst_rowEffect (dst : Dst) (v : BitVec 64) :
+    Preserves (RowEffect (some dst)) (writeDst dst v) := by
+  cases dst with
+  | vreg vr =>
+    intro s t u h
+    simp only [writeDst, writeVReg] at h
+    split at h
+    · cases h
+    · cases h
+      refine ⟨rfl, rfl, rfl, Or.inl rfl, fun r hr => ?_, rfl, rfl⟩
+      have hne : r ≠ vr := fun e => hr (by rw [e])
+      simp [hne]
+  | xreg rd =>
+    intro s t u h
+    simp only [writeDst] at h
+    unfold liftSail at h
+    cases hw : wX_bits rd v s.sail with
+    | error e s1 => rw [hw] at h; cases h
+    | ok u' s1 =>
+      rw [hw] at h
+      cases h
+      obtain ⟨s2, hs2, hregs⟩ := wX_regs_spec rd v s.sail
+      obtain ⟨-, rfl⟩ := eStateM_deterministic hw hs2
+      have hm := wX_eq_modify_regs rd v s.sail s1 hw
+      refine ⟨?_, ?_, ?_, Or.inr ⟨rd, v, rfl, hregs⟩, fun _ _ => rfl, rfl, rfl⟩ <;>
+        (dsimp only; rw [hm])
+
+/-! ### Memory and device at one doubleword: `MemStep` -/
+
+/-- A step that changes only Sail memory and the device, at the addresses `F`: memory changes
+only at `F`, never loses a byte, and is unchanged below RAM, and the device changes only by
+`DeviceStoreAt F` steps.
+Example: a successful `Mmu.store_doubleword addr v` is a `MemStep` for the eight addresses
+`addr .. addr + 7` (`storeDoubleword_memStep`). -/
+structure MemStep (F : Nat → Prop) (s t : SailJoltState) : Prop where
+  regs : t.sail.regs = s.sail.regs
+  choiceState : t.sail.choiceState = s.sail.choiceState
+  cycleCount : t.sail.cycleCount = s.sail.cycleCount
+  sailOutput : t.sail.sailOutput = s.sail.sailOutput
+  vregs : t.vregs = s.vregs
+  adviceTape : t.adviceTape = s.adviceTape
+  hostIO : t.hostIO = s.hostIO
+  mem : ∀ a, ¬ F a → t.sail.mem.get? a = s.sail.mem.get? a
+  present : ∀ a, (s.sail.mem.get? a).isSome → (t.sail.mem.get? a).isSome
+  belowRam : ∀ a, a < RAM_START_ADDRESS → t.sail.mem.get? a = s.sail.mem.get? a
+  device : Relation.ReflTransGen (DeviceStoreAt F) s.jolt_device t.jolt_device
+
+/-- `MemStep` is reflexive.
+Example: a store that fails leaves the state unchanged, which is a `MemStep`. -/
+theorem MemStep.refl (F : Nat → Prop) (s : SailJoltState) : MemStep F s s :=
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, fun _ _ => rfl, fun _ h => h, fun _ _ => rfl,
+    Relation.ReflTransGen.refl⟩
+
+/-- `MemStep` is transitive for a fixed address set.
+Example: the eight byte stores of a device doubleword store compose. -/
+theorem MemStep.trans {F : Nat → Prop} (s m t : SailJoltState) (h₁ : MemStep F s m)
+    (h₂ : MemStep F m t) : MemStep F s t :=
+  ⟨h₂.regs.trans h₁.regs, h₂.choiceState.trans h₁.choiceState,
+    h₂.cycleCount.trans h₁.cycleCount, h₂.sailOutput.trans h₁.sailOutput,
+    h₂.vregs.trans h₁.vregs, h₂.adviceTape.trans h₁.adviceTape, h₂.hostIO.trans h₁.hostIO,
+    fun a ha => (h₂.mem a ha).trans (h₁.mem a ha),
+    fun a ha => h₂.present a (h₁.present a ha),
+    fun a ha => (h₂.belowRam a ha).trans (h₁.belowRam a ha),
+    h₁.device.trans h₂.device⟩
+
+/-- A `MemStep` at `F` is a `MemStep` at every larger address set.
+Example: a store at one slot's doubleword is a `MemStep` at the footprint of the write set. -/
+theorem MemStep.mono {F G : Nat → Prop} (hFG : ∀ a, F a → G a) {s t : SailJoltState}
+    (h : MemStep F s t) : MemStep G s t :=
+  { h with
+    mem := fun a ha => h.mem a (fun hf => ha (hFG a hf))
+    device := Relation.ReflTransGen.mono (fun _ _ hs => by
+      obtain ⟨a, v, hf, hl, hs⟩ := hs
+      exact ⟨a, v, hFG a hf, hl, hs⟩) _ _ h.device }
+
+/-- A `MemStep` changes no register, so it is a `RowEffect` for every destination.
+Example: a store row's `Mmu.store_doubleword` call is a `RowEffect none` step. -/
+theorem MemStep.rowEffect {F : Nat → Prop} (d : Option Dst) {s t : SailJoltState}
+    (h : MemStep F s t) : RowEffect d s t :=
+  ⟨h.choiceState, h.cycleCount, h.sailOutput, Or.inl h.regs, fun vr _ => by rw [h.vregs],
+    h.adviceTape, h.hostIO⟩
+
+private theorem foldl_insert_get?_of_ne (L : List Nat) (f : Nat → BitVec 8) (ea a : Nat)
+    (mem : Std.ExtHashMap Nat (BitVec 8)) (h : ∀ k ∈ L, ea + k ≠ a) :
+    (L.foldl (fun mem k => mem.insert (ea + k) (f k)) mem).get? a = mem.get? a := by
+  induction L generalizing mem with
+  | nil => rfl
+  | cons k L ih =>
+    simp only [List.foldl_cons]
+    rw [ih _ (fun k' hk' => h k' (List.mem_cons_of_mem _ hk'))]
+    simp [Std.ExtHashMap.get?_eq_getElem?, Std.ExtHashMap.getElem?_insert, h k List.mem_cons_self]
+
+private theorem foldl_insert_isSome (L : List Nat) (f : Nat → BitVec 8) (ea a : Nat)
+    (mem : Std.ExtHashMap Nat (BitVec 8)) (h : (mem.get? a).isSome) :
+    (L.foldl (fun mem k => mem.insert (ea + k) (f k)) mem).get? a |>.isSome := by
+  induction L generalizing mem with
+  | nil => exact h
+  | cons k L ih =>
+    simp only [List.foldl_cons]
+    apply ih
+    simp only [Std.ExtHashMap.get?_eq_getElem?, Std.ExtHashMap.getElem?_insert] at h ⊢
+    split <;> simp [h]
+
+/-- A successful raw byte store at an address in `F` is a `MemStep` at `F`.
+Example: a byte store at RAM address `a` inserts into `sail.mem` at `a`, and a byte store at
+an output address below RAM is one `DeviceStoreAt` step. -/
+theorem storeRaw_memStep {F : Nat → Prop} {s t : SailJoltState} {a : Nat} {v : BitVec 8}
+    (hF : F a) (h : Mmu.store_raw? s a v = some t) : MemStep F s t := by
+  unfold Mmu.store_raw? at h
+  split at h
+  · split at h
+    · cases h
+      refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, fun b hb => ?_, fun b hb => ?_,
+        fun b hb => ?_, Relation.ReflTransGen.refl⟩
+      · have hne : a ≠ b := fun e => hb (e ▸ hF)
+        simp [Std.ExtHashMap.get?_eq_getElem?, Std.ExtHashMap.getElem?_insert, hne]
+      · simp only [Std.ExtHashMap.get?_eq_getElem?, Std.ExtHashMap.getElem?_insert] at hb ⊢
+        split <;> simp [hb]
+      · have hne : a ≠ b := by omega
+        simp [Std.ExtHashMap.get?_eq_getElem?, Std.ExtHashMap.getElem?_insert, hne]
+    · cases h
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · cases hd : s.jolt_device.store? a v with
+        | none => simp [hd] at h
+        | some d =>
+          simp only [hd, Option.map_some] at h
+          cases h
+          exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, fun _ _ => rfl, fun _ h => h,
+            fun _ _ => rfl, Relation.ReflTransGen.single ⟨a, v, hF, by omega, hd⟩⟩
+
+/-- A successful doubleword store at `addr` is a `MemStep` at `addr .. addr + 7`.
+Example: `Mmu.store_doubleword 0x80000008 v` changes at most the RAM bytes
+`0x80000008 .. 0x8000000f`. -/
+theorem storeDoubleword_memStep {addr value : BitVec 64} {s t : SailJoltState}
+    {r : Result Bool ExecutionResult} (h : Mmu.store_doubleword addr value s = .ok r t) :
+    MemStep (fun a => addr.toNat ≤ a ∧ a < addr.toNat + 8) s t := by
+  unfold Mmu.store_doubleword at h
+  dsimp only at h
+  split at h
+  · cases h
+  · split at h
+    · split at h
+      · cases h
+        refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, fun b hb => ?_, fun b hb => ?_,
+          fun b hb => ?_, Relation.ReflTransGen.refl⟩
+        · apply foldl_insert_get?_of_ne
+          intro k hk
+          simp only [List.mem_range] at hk
+          omega
+        · exact foldl_insert_isSome _ _ _ _ _ hb
+        · apply foldl_insert_get?_of_ne
+          intro k hk
+          omega
+      · cases h
+    · split at h
+      · rename_i heq
+        cases h
+        exact InstructionFrame.storeFold_rule_of_step (relation := MemStep _) addr.toNat value s
+          (List.range 8)
+          (fun k hk s₁ s₂ h₁ hs => h₁.trans _ _ _ (storeRaw_memStep
+            (by simp only [List.mem_range] at hk; omega) hs))
+          (some s) (fun s₁ hs₁ => by cases hs₁; exact MemStep.refl _ _) _ heq
+      · cases h
+
+open StatePreservation in
+private theorem storeDoubleword_rowEffect (d : Option Dst) (addr value : BitVec 64) :
+    Preserves (RowEffect d) (Mmu.store_doubleword addr value) :=
+  fun _ _ _ h => (storeDoubleword_memStep h).rowEffect d
+
+/-! ### Rows -/
+
+open StatePreservation in
+/-- Every frame row satisfies `RowEffect` for its own destination, whatever its result.
+Example: `ADDI (.vreg vr48) (.xreg x0) 0` changes only `vr48` outside memory and the
+device, and `SD (.xreg x10) (.vreg vr48) 0` changes nothing outside them. -/
+theorem execInstr_rowEffect {i : Instr} (hi : i.isFrameRow = true) :
+    Preserves (RowEffect i.destination?) (execInstr i) := by
+  cases i <;> simp only [Instr.isFrameRow, Bool.false_eq_true] at hi
+  all_goals simp only [execInstr, Instr.destination?]
+  all_goals preservation_auto [readSrc_rowEffect _ _, writeDst_rowEffect _ _,
+    pure_rule (RowEffect.refl _) _, throw_rule _ _,
+    keeps_rowEffect _ (loadDoubleword_keeps _), keeps_rowEffect _ getArchPc_keeps,
+    storeDoubleword_rowEffect _ _ _]
+    using (bind_rule RowEffect.trans)
+
+/-- Memory and the device are unchanged.
+Example: an `ADDI` row relates its start and end states by `MemDevEq`. -/
+def MemDevEq (s t : SailJoltState) : Prop :=
+  t.sail.mem = s.sail.mem ∧ t.jolt_device = s.jolt_device
+
+private theorem MemDevEq.refl (s : SailJoltState) : MemDevEq s s := ⟨rfl, rfl⟩
+
+private theorem MemDevEq.trans (s m t : SailJoltState) (h₁ : MemDevEq s m)
+    (h₂ : MemDevEq m t) : MemDevEq s t :=
+  ⟨h₂.1.trans h₁.1, h₂.2.trans h₁.2⟩
+
+open StatePreservation in
+private theorem keeps_memDevEq {α : Type} {m : JoltMonad α}
+    (keeps : ∀ s t v, m s = .ok v t → t = s) : Preserves MemDevEq m := by
+  intro s t v h
+  rw [keeps s t v h]
+  exact MemDevEq.refl s
+
+open StatePreservation in
+private theorem writeDst_memDevEq (dst : Dst) (v : BitVec 64) :
+    Preserves MemDevEq (writeDst dst v) := by
+  cases dst with
+  | vreg vr =>
+    intro s t u h
+    simp only [writeDst, writeVReg] at h
+    split at h
+    · cases h
+    · cases h
+      exact MemDevEq.refl s
+  | xreg rd =>
+    intro s t u h
+    simp only [writeDst] at h
+    unfold liftSail at h
+    cases hw : wX_bits rd v s.sail with
+    | error e s1 => rw [hw] at h; cases h
+    | ok u' s1 =>
+      rw [hw] at h
+      cases h
+      have hm := wX_eq_modify_regs rd v s.sail s1 hw
+      exact ⟨by dsimp only; rw [hm], rfl⟩
+
+open StatePreservation in
+/-- A frame row that is not a store row leaves memory and the device unchanged.
+Example: `LD` reads memory with `Mmu.load_doubleword` and changes neither. -/
+theorem execInstr_memDevEq {i : Instr} (hi : i.isFrameRow = true) (hs : i.storeSlot? = none) :
+    Preserves MemDevEq (execInstr i) := by
+  cases i <;>
+    simp only [Instr.isFrameRow, Instr.storeSlot?, Bool.false_eq_true, reduceCtorEq] at hi hs
+  all_goals simp only [execInstr]
+  all_goals preservation_auto [keeps_memDevEq (fun _ _ _ h => (readSrc_run h).1),
+    writeDst_memDevEq _ _, pure_rule MemDevEq.refl _, throw_rule _ _,
+    keeps_memDevEq (loadDoubleword_keeps _), keeps_memDevEq getArchPc_keeps]
+    using (bind_rule MemDevEq.trans)
+
+/-- A store row either leaves the state unchanged or stores one doubleword at its slot's
+address, with the base read in the start state.
+Example: `SD (.xreg x10) (.vreg vr48) 8` with `x10 = 0x80000000` either fails its
+alignment check or calls `Mmu.store_doubleword 0x80000008 v`. -/
+theorem storeRow_run {i : Instr} {slot : StoreSlot} (hslot : i.storeSlot? = some slot)
+    {s s' : SailJoltState} {r : ExecutionResult} (h : (execInstr i).run s = .ok r s') :
+    s' = s ∨ ∃ v res, Mmu.store_doubleword (slot.address s) v s = .ok res s' := by
+  cases i <;> simp only [Instr.storeSlot?, reduceCtorEq, Option.some.injEq] at hslot
+  all_goals subst hslot
+  all_goals simp only [execInstr, EStateM.run] at h
+  all_goals
+    obtain ⟨b, m, hb, h⟩ := bind_ok h
+    obtain ⟨rfl, rfl⟩ := readSrc_run hb
+  · -- VirtualStoreB
+    obtain ⟨v, m, hv, h⟩ := bind_ok h
+    obtain ⟨rfl, -⟩ := readSrc_run hv
+    obtain ⟨res, m, hst, h⟩ := bind_ok h
+    exact Or.inr ⟨v, res, by split at h <;> (cases h; exact hst)⟩
+  · -- VirtualStoreH
+    split at h
+    · obtain ⟨v, m, hv, h⟩ := bind_ok h
+      obtain ⟨rfl, -⟩ := readSrc_run hv
+      obtain ⟨res, m, hst, h⟩ := bind_ok h
+      exact Or.inr ⟨v, res, by split at h <;> (cases h; exact hst)⟩
+    · cases h
+      exact Or.inl rfl
+  · -- VirtualStoreW
+    split at h
+    · obtain ⟨v, m, hv, h⟩ := bind_ok h
+      obtain ⟨rfl, -⟩ := readSrc_run hv
+      obtain ⟨res, m, hst, h⟩ := bind_ok h
+      exact Or.inr ⟨v, res, by split at h <;> (cases h; exact hst)⟩
+    · cases h
+      exact Or.inl rfl
+  · -- SD
+    obtain ⟨v, m, hv, h⟩ := bind_ok h
+    obtain ⟨rfl, -⟩ := readSrc_run hv
+    split at h
+    · obtain ⟨res, m, hst, h⟩ := bind_ok h
+      exact Or.inr ⟨v, res, by split at h <;> (cases h; exact hst)⟩
+    · cases h
+      exact Or.inl rfl
 
 /-- The finer Sail fact the frame proof needs.
 `InstructionFrame.Rules.sail` lets an instruction replace the Sail state arbitrarily,
 which cannot prove `Frame.sailRegs`. For a frame row, the Sail registers change only by
 `wX_bits` on an architectural destination (`wX_update_regs`), and the other Sail fields
 except memory are unchanged.
-Proof plan: case on the row; `readSrc` and `Mmu.load_doubleword` preserve the state,
-`writeDst (.vreg _)` touches only `vregs`, `writeDst (.xreg rd)` is `wX_regs_spec`, and
-`Mmu.store_doubleword` changes only `sail.mem` and `jolt_device`.
+Proof: the first four components of `execInstr_rowEffect`.
 Example: `ADDI (.xreg x5) (.xreg x0) 1` changes the Sail registers by
 `wX_update_regs x5 1`, and `SD (.xreg x10) (.vreg vr48) 0` leaves them unchanged. -/
 theorem execInstr_sail_effect {i : Instr} (hi : i.isFrameRow = true)
@@ -548,21 +1057,64 @@ theorem execInstr_sail_effect {i : Instr} (hi : i.isFrameRow = true)
     s'.sail.sailOutput = s.sail.sailOutput ∧
     (s'.sail.regs = s.sail.regs ∨
       ∃ rd v, i.destination? = some (.xreg rd) ∧ s'.sail.regs = wX_update_regs rd v s.sail.regs) := by
-  sorry
+  obtain ⟨hc, hcy, ho, hr, -⟩ := execInstr_rowEffect hi s s' r h
+  exact ⟨hc, hcy, ho, hr⟩
 
 /-- The frame of one row.
-Proof plan: `execInstr_sail_effect` gives the Sail clauses; `writeDst` gives `vregs`;
-for a store row, `Mmu.store_doubleword` at `slot.address s` writes RAM bytes
-`address + k` (`Mmu.write_ram_doubleword`) or folds `Mmu.store_raw?` over them
-(`InstructionFrame.storeFold_rule_of_step` with the relation "device changes by
-`DeviceStoreAt`"), so every changed byte is in the footprint.
+Proof: `execInstr_rowEffect` gives the register, tape and host clauses.
+A non-store row leaves memory and the device unchanged (`execInstr_memDevEq`).
+A store row either changes nothing or calls `Mmu.store_doubleword` at `slot.address s`
+(`storeRow_run`), which is a `MemStep` at that doubleword (`storeDoubleword_memStep`), and
+the doubleword lies in the footprint.
 Example: `SD (.xreg x10) (.vreg vr48) 0` with its slot in `ws.stores` satisfies the frame,
 writing only the eight bytes at the address `x10` holds. -/
 theorem execInstr_frame {ws : WriteSet} {i : Instr} (hi : i.writesWithin ws = true)
     (hslot : ∀ slot, i.storeSlot? = some slot → slot ∈ ws.stores)
     {s s' : SailJoltState} (h : (execInstr i).run s = .ok RETIRE_SUCCESS s') :
     Frame ws s s' := by
-  sorry
+  have hw := (Instr.writesWithin_iff ws i).1 hi
+  obtain ⟨hc, hcy, ho, hregs, hv, ht, hh⟩ := execInstr_rowEffect hw.1 s s' _ h
+  have hmem : MemStep (ws.Footprint s) s s' ∨ MemDevEq s s' := by
+    cases hs : i.storeSlot? with
+    | none => exact Or.inr (execInstr_memDevEq hw.1 hs s s' _ h)
+    | some slot =>
+      rcases storeRow_run hs h with rfl | ⟨v, res, hst⟩
+      · exact Or.inr (MemDevEq.refl _)
+      · exact Or.inl ((storeDoubleword_memStep hst).mono
+          (fun a ha => ⟨slot, hslot slot hs, ha⟩))
+  refine
+    { sailRegs := fun R hR => ?_
+      choiceState := hc
+      cycleCount := hcy
+      sailOutput := ho
+      vregs := fun vr hvr => hv vr (fun hd => hvr (hw.2 _ hd))
+      mem := fun a ha => ?_
+      mem_present := fun a ha => ?_
+      mem_belowRam := fun a ha => ?_
+      device := ?_
+      adviceTape := ht
+      hostIO := hh }
+  · rcases hregs with e | ⟨rd, v, hd, e⟩
+    · rw [e]
+    · rw [e]
+      apply wX_update_regs_get?_of_ne
+      intro hrd
+      rcases hw.2 _ hd with h0 | ⟨w, hwm, hsame⟩
+      · rw [xRegister?_of_isX0 h0] at hrd
+        cases hrd
+      · exact hR ⟨w, hwm, by rw [eq_of_sameXReg hsame]; exact hrd⟩
+  · rcases hmem with m | m
+    · exact m.mem a ha
+    · rw [m.1]
+  · rcases hmem with m | m
+    · exact m.present a ha
+    · rw [m.1]; exact ha
+  · rcases hmem with m | m
+    · exact m.belowRam a ha
+    · rw [m.1]
+  · rcases hmem with m | m
+    · exact m.device
+    · rw [m.2]
 
 /-! ## The frame lemma -/
 
@@ -683,16 +1235,95 @@ theorem Program.resetsPoolCheck_seq_append_append (l₁ : List Instr) {l₂ l₃
   rw [List.append_assoc]
   exact Program.resetsPoolCheck_seq_append l₁ h
 
+/-- A run of frame rows none of which writes `v` keeps `v`.
+Example: the SHA-256 rows after the last reset of `vr48` keep `vr48` at zero. -/
+theorem Program.vreg_eq_of_run {v : VReg} : ∀ {p : Program} {s s' : SailJoltState},
+    (∀ j ∈ p.rows, j.isFrameRow = true ∧ j.writesVReg v = false) → p.Run s s' →
+    s'.vregs v = s.vregs v
+  | .done _, s, s', _, h => by
+    have hs : s' = s := by
+      simp only [Program.Run, execProgram_done, EStateM.run, pure, EStateM.pure] at h
+      cases h
+      rfl
+    rw [hs]
+  | .instr i rest, s, s', hrows, h => by
+    obtain ⟨m, hi, hrest⟩ := execProgram_instr_run_retire_inv i rest s s' h
+    have hrow := hrows i (by simp [Program.rows])
+    have e₁ : m.vregs v = s.vregs v := by
+      refine (execInstr_rowEffect hrow.1 s m _ hi).2.2.2.2.1 v (fun hd => ?_)
+      have := hrow.2
+      simp [Instr.writesVReg, hd] at this
+    rw [Program.vreg_eq_of_run (fun j hj => hrows j (by simp [Program.rows, hj])) hrest, e₁]
+
+/-- A successful zero reset of `v` leaves `v` at zero.
+Example: `ADDI (.vreg vr48) (.xreg x0) 0` sets `vr48` to `0 + 0 = 0`. -/
+theorem Instr.zeroReset_run {v : VReg} {i : Instr} (hz : i.isZeroReset v = true)
+    {s m : SailJoltState} {r : ExecutionResult} (h : (execInstr i).run s = .ok r m) :
+    m.vregs v = 0 := by
+  unfold Instr.isZeroReset at hz
+  split at hz
+  · rename_i d x imm
+    simp only [Bool.and_eq_true, beq_iff_eq] at hz
+    obtain ⟨⟨rfl, hx⟩, rfl⟩ := hz
+    simp only [execInstr, EStateM.run] at h
+    obtain ⟨a, m₁, ha, h⟩ := bind_ok h
+    obtain ⟨rfl, rfl⟩ := readSrc_run ha
+    obtain ⟨u, m₂, hw, h⟩ := bind_ok h
+    cases h
+    obtain ⟨b⟩ := x
+    simp only [isX0, decide_eq_true_eq] at hx
+    simp only [writeDst, writeVReg] at hw
+    split at hw
+    · cases hw
+    · cases hw
+      simp [sourceValue, hx, addWide]
+  · cases hz
+
+/-- A run of frame rows whose last write of `v` is a zero reset ends with `v` at zero.
+Example: the rows `ADDI (.vreg vr48) (.xreg x5) 1; ADDI (.vreg vr48) (.xreg x0) 0` end with
+`vr48 = 0`. -/
+theorem Program.vreg_zero_of_lastWriteResets {v : VReg} :
+    ∀ {p : Program} {s s' : SailJoltState},
+    (∀ j ∈ p.rows, j.isFrameRow = true) → Instr.lastWriteResets v p.rows = true →
+    p.Run s s' → s'.vregs v = 0
+  | .done _, _, _, _, hl, _ => by simp [Program.rows, Instr.lastWriteResets] at hl
+  | .instr i rest, s, s', hrows, hl, h => by
+    obtain ⟨m, hi, hrest⟩ := execProgram_instr_run_retire_inv i rest s s' h
+    have hrows' : ∀ j ∈ rest.rows, j.isFrameRow = true :=
+      fun j hj => hrows j (by simp [Program.rows, hj])
+    unfold Instr.lastWriteResets at hl
+    simp only [Program.rows, List.reverse_cons, List.find?_append] at hl
+    cases hf : rest.rows.reverse.find? (Instr.writesVReg v) with
+    | some j =>
+      apply Program.vreg_zero_of_lastWriteResets hrows' _ hrest
+      unfold Instr.lastWriteResets
+      rw [hf]
+      simpa [hf] using hl
+    | none =>
+      rw [hf] at hl
+      have hnone : ∀ j ∈ rest.rows, j.writesVReg v = false := by
+        intro j hj
+        have := List.find?_eq_none.1 hf j (List.mem_reverse.2 hj)
+        simpa using this
+      cases hwi : i.writesVReg v
+      · simp [hwi] at hl
+      · simp only [hwi, List.find?_cons_of_pos, Option.none_or] at hl
+        rw [Program.vreg_eq_of_run (fun j hj => ⟨hrows' j hj, hnone j hj⟩) hrest]
+        exact Instr.zeroReset_run (by simpa using hl) hi
+
 /-- Soundness of the pool-reset check.
-Proof plan: split the rows at the last write of `v`; that row sets `v` to
-`sourceValue (.xreg x0) + 0 = 0`, and `frame_of_run` on the remaining rows with the
-write set minus `v` keeps it. Needs every row to be a frame row; the generated inlines
-satisfy this through `WritesWithin`.
+Proof: for each pool register `v`, the last row that writes `v` is a zero reset
+(`Instr.zeroReset_run`), and the later rows are frame rows that do not write `v`
+(`Program.vreg_eq_of_run`). The check needs every row to be a frame row, which
+`WritesWithin` gives.
 Example: applied to `FrameInstances.sha256_writesWithin` and
 `FrameInstances.sha256_resetsPoolCheck`, it says that every successful SHA-256 run leaves
 `vr48..vr83` at zero. -/
 theorem Program.resetsPool_of_check {p : Program} {pool : List VReg} {ws : WriteSet}
     (hp : p.WritesWithin ws) (h : p.resetsPoolCheck pool = true) : p.ResetsPool pool := by
-  sorry
+  intro s s' hrun v hv
+  have hrows : ∀ j ∈ p.rows, j.isFrameRow = true :=
+    fun j hj => ((Program.rowsWithin_iff ws p).1 hp.1 j hj).1
+  exact Program.vreg_zero_of_lastWriteResets hrows ((List.all_eq_true.1 h) v hv) hrun
 
 end JoltISA

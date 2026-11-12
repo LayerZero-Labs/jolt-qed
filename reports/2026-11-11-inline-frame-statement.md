@@ -2,11 +2,11 @@
 
 This note explains the statement in `JoltBytecode/Inlines/Frame.lean` and the per-inline instances in `JoltBytecode/Inlines/FrameInstances.lean`.
 It covers spec section 5.4 ("Frame and footprint") and the I0(e) row of `docs/inline-precompiles.md`.
-The statement is ready for review; the per-row lemmas are staged with `sorry`.
+Every lemma in both files is proved, with no `sorry`.
 
 ## Pins
 
-- jolt-qed: the statement was checked at `c1f8c0f` on `inline/i0e-frame` (review range `41b09cc..c1f8c0f`).
+- jolt-qed: the statement was reviewed at `c1f8c0f` on `inline/i0e-frame` (review range `41b09cc..c1f8c0f`), and the proofs were added on top of `758fd39` without changing it.
 - Model Jolt pin: `c97e93004fbf804409f0374fe8457c8f1562ce71` (`JoltConstraints/model_review.md`), the commit the Lean model of Jolt's semantics follows.
 - Generated-row Jolt pin: `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`, the commit whose inline expansions `JoltBytecode/Inlines/Generated/` holds.
 
@@ -92,36 +92,43 @@ The reflexive-transitive closure of `DeviceStoreAt` records exactly those effect
 
 The pool-reset clause is per program: `Program.ResetsPool p pool` says that every successful run ends with every register in `pool` equal to zero.
 `Program.resetsPoolCheck p pool` checks statically that, for each `v` in `pool`, the last row of `p` that writes `v` is `ADDI (.vreg v) (.xreg x0) 0`.
-`Program.resetsPool_of_check` (staged) turns the check into the predicate, given `p.WritesWithin ws`.
+`Program.resetsPool_of_check` turns the check into the predicate, given `p.WritesWithin ws`.
 
-## Proof plan and reuse
+## Proofs
 
 `frame_of_run` is proved from the per-row lemma `execInstr_frame`, by induction on the program with `execProgram_instr_run_retire_inv` (`ProofSupport/Lemmas.lean:60`) and `Frame.trans`.
-`Frame.refl`, `Frame.trans`, `Frame.footprint_eq`, `Frame.sailRegs_eq_of_xregs_nil`, `Frame.device_same`, `Frame.panic_mono`, `Frame.outputs_size` and the Boolean soundness lemmas are proved.
+`Frame.refl`, `Frame.trans`, `Frame.footprint_eq`, `Frame.sailRegs_eq_of_xregs_nil`, `Frame.device_same`, `Frame.panic_mono` and the Boolean soundness lemmas are short.
 
 `Frame.outputs_size` gives `Related.outputs_size` in the end state from the same bound in the start state and the output span of the layout (`panic = output_start + max_output_size`).
 The proof is an induction on the `device` clause with `JoltIOSetupFrame.storeDeviceByte_outputs_fit` (`ProofSupport/DeviceFrame.lean:42`).
 The whole-run layer gets the span from `new_io_geometry` (`JoltConstraints/layout_facts.lean:339`) and `Related.layout`.
 
-Four lemmas are staged with `sorry`.
+The per-row proofs use `StatePreservation.Preserves` (`ProofSupport/Preservation.lean:17`) and the `preservation_auto` tactic, which proves `Preserves R (execInstr i)` for every row from leaf rules for `readSrc`, `writeDst`, `pure`, `throw`, `Mmu.load_doubleword`, `get_arch_pc` and `Mmu.store_doubleword`.
+`InstructionFrame.Rules` does not fit, because it lets a row replace the Sail state arbitrarily; the proofs instead use two finer relations.
 
-- `execInstr_sail_effect`: for a frame row, the Sail registers change only by `wX_update_regs rd v` on an `.xreg rd` destination, and `choiceState`, `cycleCount` and `sailOutput` are unchanged.
-  Proof: case on the row.
-  `readSrc` and `Mmu.load_doubleword` preserve the state, `writeDst (.vreg _)` touches only `vregs`, `writeDst (.xreg rd)` is `wX_regs_spec` (`ProofSupport/RegisterAccess.lean:240`), and `Mmu.store_doubleword` changes only `sail.mem` and `jolt_device`.
-- `execInstr_frame`: the frame of one row.
-  Proof: `execInstr_sail_effect` gives the Sail clauses, and `writeDst` gives `vregs`.
-  For a store row, `Mmu.store_doubleword` at `slot.address s` either writes RAM bytes `address + k` (`Mmu.write_ram_doubleword`) or folds `Mmu.store_raw?` over them.
-  `InstructionFrame.storeFold_rule_of_step` (`ProofSupport/InstructionFrame.lean:133`) handles the fold with the relation "the device changes by `DeviceStoreAt`".
-- `Frame.sourceValue_xreg_eq`: an architectural register that no row writes keeps its `sourceValue`, which is the value `rX_bits` returns.
-  Proof: a 32-case split on the register index.
-- `Program.resetsPool_of_check`.
+- `RowEffect d s t` says that the Sail fields other than `regs` and `mem` are unchanged, that the Sail registers are unchanged or updated by `wX_update_regs rd v` at an architectural destination `d = some (.xreg rd)`, that every virtual register other than a virtual destination `d` is unchanged, and that the tape and host settings are unchanged.
+  `execInstr_rowEffect` proves it for every frame row with `d = i.destination?`, whatever the row's result.
+  Its transitivity uses `wX_update_regs_idem`.
+- `MemStep F s t` says that only Sail memory and the device change, memory only at addresses in `F`, with present bytes kept and nothing below RAM changed, and the device only by `DeviceStoreAt F` steps.
+  `storeDoubleword_memStep` proves it for a successful `Mmu.store_doubleword addr v` with `F = [addr, addr + 8)`.
+  In the RAM branch the proof follows the eight inserts of `Mmu.write_ram_doubleword`; in the device branch it applies `InstructionFrame.storeFold_rule_of_step` (`ProofSupport/InstructionFrame.lean:133`) to the fold of `Mmu.store_raw?`.
 
-The existing preservation machinery is too coarse for most of `Frame`, so the proof can reuse only parts of it.
-`InstructionFrame.Rules` and `NonStoreRules` (`ProofSupport/InstructionFrame.lean:26-55`) require the relation to hold for an arbitrary replacement of the Sail state (`sail`), an arbitrary virtual-register write (`vreg`) and a store at an arbitrary address (`store`).
-`Frame` holds for none of these: it constrains which Sail registers, which virtual registers and which addresses change.
-These rules can still prove the clauses that do not mention registers or addresses: `hostIO`, and `JoltIOSetupFrame.Same` through `JoltIOSetupFrame.execProgram_rule` (`ProofSupport/DeviceFrame.lean:154`).
-`StatePreservation.Preserves` (`ProofSupport/Preservation.lean:17`) and its `bind_rule`, `modify_rule` and `liftSail_rule` fit the per-row proof once the relation is fixed to `Frame ws s0`, with `s0` the row's start state.
-`ProgramComposition` provides `Program.Run` and the append lemmas, so a program assembled with `Program.append` composes through `Frame.trans`.
+The four lemmas that the statement stage left open are proved as follows.
+
+- `execInstr_sail_effect` is the first four components of `execInstr_rowEffect`.
+- `execInstr_frame` takes the register, tape and host clauses from `execInstr_rowEffect`.
+  For a non-store row, `execInstr_memDevEq` shows that memory and the device are unchanged.
+  For a store row, `storeRow_run` shows that the row either leaves the state unchanged or calls `Mmu.store_doubleword` at `slot.address s`, because its operand reads leave the state unchanged (`readSrc_run`); `storeDoubleword_memStep` and the slot's membership in `ws.stores` then put every changed byte in the footprint.
+  An architectural destination is `x0`, which names no Sail register (`xRegister?_of_isX0`), or a listed index, which `WritesSailReg` excludes; `wX_update_regs_get?_of_ne` covers both.
+- `Frame.sourceValue_xreg_eq` applies `sailRegs` to the register that `r` names, after `sameXReg_of_xRegister?_eq` shows that no listed index names it, and then splits on the 32 values of `r`.
+- `Program.resetsPool_of_check` follows each pool register `v` to the last row that writes it.
+  That row is `ADDI (.vreg v) (.xreg x0) 0`, which sets `v` to `0 + 0` (`Instr.zeroReset_run`), and the later rows are frame rows that do not write `v`, so they keep it (`Program.vreg_eq_of_run`).
+
+`readSrc_run` repeats the proof of `readSrc_value` in `JoltConstraints/execution_facts.lean:584`, because `JoltBytecode` cannot import `JoltConstraints`.
+
+`#print axioms` reports `propext`, `Classical.choice` and `Quot.sound` for `frame_of_run`, `Program.resetsPool_of_check` and the `_frame` instances, and at most `propext` and `Quot.sound` for the `_writesWithin` and `_resetsPoolCheck` instances.
+No proof uses `native_decide`, `bv_decide`, `decide +kernel`, or a heartbeat or recursion-depth override.
+`lake build JoltBytecode.Inlines.Frame` takes 25 s and `lake build JoltBytecode.Inlines.FrameInstances` 77 s on the loaded machine.
 
 ## Deciding `WritesWithin`
 
@@ -147,7 +154,6 @@ Two further limits shaped the instance file.
 Checking all chunks of a 31-chunk Keccak program inside one declaration exceeds the 200,000-heartbeat budget, so each chunk gets its own lemma.
 `simp only [keccak256RowsAutoList]` and `rw [keccak256RowsAutoList]` also exceed the budget on the 31-chunk definition, while `unfold` is cheap, so the assembly proofs start with `unfold`.
 With this layout `lake build JoltBytecode.Inlines.FrameInstances` takes 51 s to 143 s, depending on machine load, for the 17 programs (twelve `rd ≠ x0` cases and five hash `rd = x0` cases), and no proof in the file needs an option override.
-The `_writesWithin` and `_resetsPoolCheck` lemmas depend only on `propext` and `Quot.sound`; the `_frame` corollaries inherit the staged `sorry` of `execInstr_frame` through `frame_of_run`.
 
 A later per-inline file can reuse this pattern directly; the generator could also emit the per-chunk lemmas next to the rows.
 
