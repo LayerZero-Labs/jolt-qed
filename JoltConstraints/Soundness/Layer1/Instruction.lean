@@ -41,7 +41,9 @@ variable {F : Type} [Field F]
 /-- Every entry of a lookup selector is zero or one. -/
 theorem instructionRa_zero_or_one
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (chunk : Fin params.virtualInstructionChunks)
     (address : Fin (2 ^ params.virtualChunkBits)) (t : Fin params.traceLength) :
     witness.InstructionRa chunk address t = 0 ∨ witness.InstructionRa chunk address t = 1 := by
@@ -53,7 +55,9 @@ theorem instructionRa_zero_or_one
 /-- A lookup selector selects at most one address. -/
 theorem instructionRa_at_most_one (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (chunk : Fin params.virtualInstructionChunks) (t : Fin params.traceLength)
     (a b : Fin (2 ^ params.virtualChunkBits))
     (selectedA : witness.InstructionRa chunk a t = 1)
@@ -76,7 +80,9 @@ theorem instructionRa_at_most_one (charAbove2pow127 : 2 ^ 127 < ringChar F)
 No characteristic bound on its entire address domain is required. -/
 theorem instructionRa_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (chunk : Fin params.virtualInstructionChunks) (t : Fin params.traceLength) :
     ∃! address, witness.InstructionRa chunk address t = 1 := by
   classical

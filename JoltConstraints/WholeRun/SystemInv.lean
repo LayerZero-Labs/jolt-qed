@@ -510,7 +510,7 @@ private theorem inline_rows_avoid (rows : List JoltISA.Instr)
     have free : ExpansionFacts.reservedFree row = true := by
       have parts := ok.1
       simp only [ExpansionFacts.inlineRowOk, Bool.and_eq_true] at parts
-      exact parts.2
+      exact parts.1.2
     intro same
     simp only [ExpansionFacts.reservedFree, same, Bool.or_eq_true, decide_eq_true_eq] at free
     omega

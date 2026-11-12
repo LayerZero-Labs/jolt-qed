@@ -29,9 +29,10 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
-    {params : WitnessParams} (givenInputs : JoltPrivateInputs)
+    (adviceBlockFits : joltInstance.UntrustedAdviceBlockFits)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness)
     (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
@@ -129,7 +130,11 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 - `JoltField F`: the field's characteristic is above `2^128`. BN254 satisfies this; Akita's prime does not.
 - `SoundnessAssumptions.ramRegionFits`: the whole maximum padded RAM region lies below `2^64`. The comment in `Assumptions.lean` records it as still to be confirmed with a16z.
-- `TemporaryRestrictions`: six restrictions that exclude programs exposing reported or suspected Jolt bugs. Jolt's verifier makes none of these checks.
+- `TemporaryRestrictions`: six restrictions that exclude programs exposing reported or suspected Jolt bugs.
+  Jolt's verifier makes none of these checks.
+- `UntrustedAdviceBlockFits`: a seventh temporary restriction, passed as the separate premise `adviceBlockFits` because soundness for advice given as bytes (`JoltInstance.soundness_onBytes`) does not need it.
+  It excludes a configured maximum untrusted-advice size that is not a multiple of 8, where Jolt's verifier lets the prover commit block bytes no tracer run can hold.
+  Jolt's verifier does not check it.
 
 | Restriction | What it excludes |
 | --- | --- |
@@ -142,7 +147,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 Four restrictions (`tracerAddressChecks`, `hostCallsSucceed`, `terminationThenStall` and `panicStoresOne`) constrain the next row the program attempts after every prefix of a relaxed execution, for every private input.
 A relaxed execution is one in which every advice read gets an arbitrary answer; the attempted row need not succeed.
-`noMaxLengthTrace` constrains every completed relaxed trace, and `claimsNoPanic` constrains only the instance.
+`noMaxLengthTrace` constrains every completed relaxed trace, and `claimsNoPanic` and `adviceBlockFits` constrain only the instance.
 The deviation premises in `BlockConforms` are stated differently, as the next section explains.
 
 ## Conformance is a premise on a trace the verifier does not see

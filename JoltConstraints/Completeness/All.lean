@@ -178,14 +178,14 @@ theorem HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstructio
 
 /-- Completeness at Jolt's sizes: when Jolt's prover accepts the honest trace with
 config `config` (`proverAccepts`), the honest witness at Jolt's witness sizes
-(`HonestTrace.witness_params`) satisfies every constraint, against Jolt's preprocessed
-bytecode `slots`, the verifier's entry slot `entry` and the public I/O `io` the verifier
-checks the proof against.
+(`HonestTrace.witness_params`) satisfies every constraint with the run's private inputs
+(`AllConstraintsOnBytes`), against Jolt's preprocessed bytecode `slots`, the verifier's
+entry slot `entry` and the public I/O `io` the verifier checks the proof against.
 It needs the existing premises below and inherits the gaps listed in `model_review.md`
 ("Proofs owed").
 For example, a 300-row run that touches RAM word 1000 is checked on a 512-cycle witness
 with a 1024-word RAM table. -/
-theorem HonestTrace.allConstraints_prover_sizes
+theorem HonestTrace.allConstraintsOnBytes_prover_sizes
     {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -207,7 +207,7 @@ theorem HonestTrace.allConstraints_prover_sizes
     (claimsRunOutputs : trace.matches_outputs joltInstance)
     -- the public I/O the verifier checks the proof against
     (io : JoltDevice) (publicIo : joltInstance.public_io = some io) :
-    AllConstraints joltInstance privateInputs
+    AllConstraintsOnBytes joltInstance privateInputs
       (trace.honestWitness (F := F) (trace.witness_params config proverAccepts)) := by
   refine ⟨{
     bytecode := trace.bytecode

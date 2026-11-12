@@ -90,17 +90,21 @@ Track every new `sorry` in `model_review.md` under "Proofs owed".
 
 Read this before the layers below; the rest of this document fills it in.
 
-- **The relation.** `AllConstraints joltInstance privateInputs witness` is a
-  predicate on the witness alone, a table of field elements indexed by cycle.
-  The instance and private inputs enter only as fixed data: the expanded
-  bytecode, the initial RAM, the public I/O and the entry slot
-  (`ConstraintContext`). No trace appears in it.
+- **The relation.** `AllConstraints joltInstance untrustedAdvice witness` is a predicate on the witness alone, a table of field elements indexed by cycle.
+  The instance and the committed untrusted-advice words enter only as fixed data: the expanded bytecode, the initial RAM, the public I/O and the entry slot (`ConstraintContext`).
+  No trace appears in it.
+  Jolt's verifier holds only a commitment to the untrusted advice, so each advice word is an arbitrary field element (`committedInitialValue`).
+- **From field words to bytes.** `onBytes_of_allConstraints` (`Soundness/UntrustedAdvice/Bytes.lean`) reduces the relation to the byte relation `AllConstraintsOnBytes joltInstance privateInputs witness`, where the untrusted advice is bytes, as the tracer receives it.
+  Every load reads a 64-bit word (`load_ramReadValue_word`), so an advice word that is not a 64-bit word is never loaded before it is overwritten.
+  The reduction replaces such a word by zero and shifts the witness's RAM value columns at the word's first access (`shiftWitness`).
+  It needs the separate temporary premise `UntrustedAdviceBlockFits` (not a field of `TemporaryRestrictions`).
+  The rest of this document proves `JoltInstance.soundness_onBytes` for the byte relation.
 - **The language.** `JoltInstance.InLanguage` says there exist private inputs
   and an `HonestTrace` on them whose final device has the claimed outputs and
   panic flag (`matches_outputs`), which Jolt's prover accepts, and whose spoil
   asserts all pass. Stopping at the PC stall is part of `HonestTrace` itself.
 - **The existential.** The private inputs are the given untrusted advice and a tape built from the values the witness records at its tape-read cycles.
-  The given tape cannot be used: no constraint reads it (`AllConstraints.advice_tape_irrelevant`).
+  The given tape cannot be used: no constraint reads it (`AllConstraintsOnBytes.advice_tape_irrelevant`).
   The relaxed trace ends at the first stable stall, or at padding or the last witness cycle if neither comes first.
   The rebuilt tape then gives an honest trace with the same source-level results.
 - **The connection, step 1.** For every retained cycle `t`, the witness's columns describe the relaxed trace's state before step `t`: the selected row, its live registers and its memory.
@@ -294,7 +298,7 @@ Once the private inputs are chosen, nothing else is free: Jolt's tracer computes
 
 ### Choosing the private inputs
 
-Keep the `untrusted_advice` from the `privateInputs` supplied to `AllConstraints`; the context already binds initial RAM to those inputs.
+Keep the `untrusted_advice` from the `privateInputs` supplied to `AllConstraintsOnBytes`; the context already binds initial RAM to those inputs.
 The witness gives one answer at each tape read, and no constraint ties the answers to a tape.
 The proof runs on these answers under the relaxed semantics (Layer 5a), then rebuilds one tape from them (Layer 7):
 - The tape is the answers' low bytes, laid end to end in read order: 1 byte for `AdviceLB`, 2 for `AdviceLH`, 4 for `AdviceLW`, 8 for `AdviceLD`. It holds exactly the bytes read, so no read runs out.

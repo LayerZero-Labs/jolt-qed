@@ -17,7 +17,9 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow127 : 2 ^ 127 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
-  (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+  {initialValue : Nat → F}
+  (equations : FieldConstraintEquations context.bytecode initialValue context.io
+    context.entry witness)
 
 include charAbove2pow127 context equations
 

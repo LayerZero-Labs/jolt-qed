@@ -59,7 +59,9 @@ variable {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPr
 padding slot reads zero; an explicit x0 reads the table entry at index zero. -/
 theorem rs1Value_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.Rs1Value t =
@@ -75,7 +77,9 @@ theorem rs1Value_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
 between an absent source and x0. -/
 theorem rs2Value_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.Rs2Value t =
@@ -91,7 +95,9 @@ theorem rs2Value_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
 With no destination, including padding, the write value is zero. -/
 theorem rdWriteValue_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.RdWriteValue t =
@@ -108,7 +114,9 @@ With no destination, every entry is unchanged. Selection is supplied by
 `bytecodeRa_unique`; no execution or initial-state hypothesis is used. -/
 theorem registersVal_succ_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (register : Fin 128) (t : Fin params.traceLength)
     (next : t.val + 1 < params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :

@@ -350,7 +350,8 @@ def honestTracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
 ```
 
 `HonestTrace.advice_from_honest_tracer` passes `privateInputs` to `honestTracerAdviceAtStepN`.
-The text of `InLanguage` and `JoltInstance.soundness` does not change.
+I1b does not change the text of `InLanguage` or `JoltInstance.soundness`.
+(T5, `t5/advice-field`, changes `JoltInstance.soundness` separately: it takes the committed untrusted-advice words in place of private inputs and adds the premise `adviceBlockFits`.)
 Every other step keeps today's rule, and programs without inline advice rows are unaffected.
 
 The proof adds the facts below, in `Soundness/Layer5/InlineAdvice.lean`.
@@ -368,6 +369,14 @@ def BuiltinAdviceHonest (program : Rv64ProgramImage SourceInstruction)
     (rows : Array (TraceRow bytecode)) : Prop :=
   ∀ n : Fin rows.size, stepNOfTraceIsInlineAdvice program rows n = false →
     rows[n].someTracerAdvice? = builtinAdviceAtStepN program rows n
+
+-- The byte relation does not read `inline_advice` (`advice_inputs.lean`).
+-- `AllConstraints` takes the committed untrusted-advice words `untrustedAdvice : Nat → F`
+-- instead of private inputs, so it cannot read `inline_advice` at all, and the soundness
+-- proof reaches the byte relation through `onBytes_of_allConstraints`.
+theorem AllConstraintsOnBytes.inline_advice_irrelevant (words : Array (BitVec 64)) :
+    AllConstraintsOnBytes joltInstance { privateInputs with inline_advice := words } witness ↔
+      AllConstraintsOnBytes joltInstance privateInputs witness
 
 -- With the collected words in the field, every step is honest.
 theorem honest_of_builtin (program : Rv64ProgramImage SourceInstruction)
