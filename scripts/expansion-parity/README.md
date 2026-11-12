@@ -162,22 +162,3 @@ The generator writes 100-row chunks by default.
 At a6b6dc717 the unchunked form (one nested `.instr … <|` term per definition) fails on `KECCAK256_ABSORB_PERMUTE_INLINE` (3,121 rows) with "maximum recursion depth has been reached" at row 250.
 With 100-row chunks the file elaborates under the default limits: `lake env lean` on it took 34 s of wall time and 15.5 s of CPU time on a machine with load average 30.
 The generated files never set `maxRecDepth`, `maxHeartbeats` or any other option.
-
-## Frame instances
-
-`gen_frame_instances.py` writes `JoltBytecode/Inlines/FrameInstances.lean` from the generated rows.
-For each of the twelve in-scope inlines, the file states the write set, the store slots, the static frame check `Program.WritesWithin`, the pool-reset check, the frame corollary of `frame_of_run` and the pool-reset corollary of `Program.resetsPool_of_check` (`JoltBytecode/Inlines/Frame.lean`).
-It covers the `rd ≠ x0` case of all twelve inlines and the `rd = x0` case of the five hash inlines.
-It omits the `rd = x0` case of the seven secp256k1 inlines, because those rows store through `vr40` before any row writes it.
-Decision D7 of `docs/inline-precompiles.md` excludes those encodings.
-At the generated-row Jolt pin `a6b6dc717` Jolt still accepts them; the open pull request a16z/jolt#2414 adds the rejection upstream.
-
-Regenerate the file after the driver rewrites `JoltBytecode/Inlines/Generated/`:
-
-```
-python3 scripts/expansion-parity/gen_frame_instances.py
-lake build JoltBytecode.Inlines.FrameInstances
-```
-
-`python3 scripts/expansion-parity/gen_frame_instances.py --check` exits with status 1 when the committed file differs from the generator output.
-The script needs only Python 3 and reads no Rust output.
