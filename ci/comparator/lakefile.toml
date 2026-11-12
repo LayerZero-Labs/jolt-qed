@@ -1,0 +1,20 @@
+# Isolated Lake package for the comparator gate (README.md in this directory).
+#
+# It is separate from jolt-qed's own package so that Challenge.lean, whose
+# frozen statements end in `sorry` on purpose, stays outside the roots of
+# scripts/check_hygiene.py, as in openvm-fv. It requires jolt-qed by path and
+# shares its dependency directory, so the Mathlib cache and the jolt-qed build
+# of the root are reused rather than fetched or built a second time.
+name = "ComparatorGate"
+defaultTargets = ["Challenge", "Solution"]
+packagesDir = "../../.lake/packages"
+
+[[require]]
+name = "JoltBytecode"
+path = "../.."
+
+[[lean_lib]]
+name = "Challenge"
+
+[[lean_lib]]
+name = "Solution"

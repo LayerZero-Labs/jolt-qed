@@ -1,8 +1,9 @@
 name: provenance
 
-# Checks that need no Lean build: the provenance manifest (provenance.toml,
-# scripts/check-provenance.py) and the hygiene scan (scripts/check_hygiene.py).
-# reports/2026-11-11-provenance.md describes both.
+# The provenance manifest (provenance.toml, scripts/check-provenance.py) and
+# the hygiene scan (scripts/check_hygiene.py) need no Lean build. The
+# comparator gate (ci/comparator/) builds the gated theorems and is not yet
+# tested. reports/2026-11-11-provenance.md describes all three.
 
 on:
   push:
@@ -60,3 +61,62 @@ jobs:
       # LeanRV64D/, against scripts/hygiene-baseline.toml. No build is needed.
       - name: Scan for proof holes, trusted tactics, raised limits and axioms
         run: python3 scripts/check_hygiene.py
+
+  # UNTESTED: this job has never run. landrun needs Linux Landlock, so the
+  # external comparator never ran on the macOS machine where it was written.
+  # There, only the built-in `lake comparator` ran, without its sandbox
+  # (ci/comparator/README.md). Every step that can fail uses continue-on-error,
+  # and the last step turns a failure into a warning, so the job does not block
+  # a pull request. Remove both once the job passes.
+  #
+  # The job rebuilds the gated theorems' imports, exports Challenge and
+  # Solution with lean4export, and checks with leanprover/comparator that both
+  # state the same theorems, that the kernel accepts the proofs and that they
+  # use only propext, Quot.sound and Classical.choice (ci/comparator/README.md).
+  comparator:
+    name: comparator (untested)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Installs elan and fetches the Mathlib cache without building, because
+      # run_comparator.sh builds only the modules that Challenge and Solution
+      # import.
+      - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
+        id: lean
+        continue-on-error: true
+        with:
+          auto-config: false
+          use-mathlib-cache: true
+          use-github-cache: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: go
+        continue-on-error: true
+        with:
+          go-version: stable
+          cache: false
+      - name: Build comparator, lean4export and landrun
+        id: setup
+        continue-on-error: true
+        run: scripts/setup_comparator_toolchain.sh
+      - name: Run the comparator gate
+        id: gate
+        continue-on-error: true
+        env:
+          # No systemd user session on the runner. The comparator still runs its
+          # replay inside landrun.
+          COMPARATOR_NO_SANDBOX: "1"
+        run: scripts/run_comparator.sh
+      - name: Report an unverified gate
+        if: >-
+          steps.lean.outcome != 'success' || steps.go.outcome != 'success' ||
+          steps.setup.outcome != 'success' || steps.gate.outcome != 'success'
+        env:
+          LEAN: ${{ steps.lean.outcome }}
+          GO: ${{ steps.go.outcome }}
+          SETUP: ${{ steps.setup.outcome }}
+          GATE: ${{ steps.gate.outcome }}
+        run: |
+          echo "::warning title=comparator gate::The untested comparator job did not pass (lean-action: $LEAN, setup-go: $GO, toolchain: $SETUP, gate: $GATE). See ci/comparator/README.md."
