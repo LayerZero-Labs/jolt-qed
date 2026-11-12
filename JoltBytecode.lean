@@ -19,3 +19,8 @@ import JoltBytecode.Step.Ecall
 import JoltBytecode.Inlines.Generated
 import JoltBytecode.Inlines.Keys
 import JoltBytecode.Inlines.FrameInstances
+import JoltBytecode.Inlines.Secp256k1.Advice
+import JoltBytecode.Inlines.Secp256k1.GlvBound
+import JoltBytecode.Inlines.Secp256k1.GlvrAdv
+import JoltBytecode.Inlines.Secp256k1.FieldMul
+import JoltBytecode.Inlines.Secp256k1.FieldDiv
