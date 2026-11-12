@@ -19,7 +19,7 @@ A write set `ws : WriteSet` has three fields.
 
 - `p.rowsWithin ws = true`: every row passes `Instr.writesWithin ws`. A row passes when `Instr.isFrameRow` accepts it and its `destination?` is allowed.
 - `p.storeSlots ⊆ ws.stores`: every store row is listed.
-- `ws.basesKept = true`: no allowed destination is a listed store base.
+- `ws.basesKept = true`: every listed store base is an architectural register (`.xreg`), and no allowed destination is a listed store base.
 
 `Instr.isFrameRow` matches every constructor explicitly, in the style of `Instr.WritesProtectedVReg`.
 It rejects branches, `JAL` and `JALR` (they write `PC` or `nextPC`), `VirtualAdviceLoad` (it moves the tape cursor) and `VirtualHostIO` (it can change the tape, the device and the host settings).
@@ -30,6 +30,16 @@ The third check makes the footprint a function of the start state.
 `ws.Footprint s a` holds when `a` lies in `[address, address + 8)` for some listed slot, where `address` is the slot's doubleword address with the base read in `s`.
 This is the same byte range as `InDword` in `JoltConstraints/WholeRun/CodeInv.lean:122`.
 
+The base check requires `.xreg`, as the brief asks ("an architectural register parameter").
+A virtual base would make the footprint depend on a register value that is not an operand of the source instruction.
+This happens in exactly one place: the `rd = x0` variants of the seven secp256k1 inlines store their result through `vr40`, the instruction temporary that Jolt's `rd = x0` rewrite allocates, and no row writes `vr40` first.
+Jolt rejects these encodings, because they read `rd` before writing it (a16z/jolt#2414, decision D7 in section 5.2 of the spec), so no frame lemma is owed for them.
+The check rejects them as a second guard, and `FrameInstances.lean` omits them.
+The `rd = x0` variants of the five hash inlines never read `rs3`, store through `rs1`, and keep their instances.
+
+The floor stores (`VirtualStoreB/H/W`) have footprint the doubleword containing `base + imm`; `SD` has `base + imm .. base + imm + 7`.
+No in-scope inline has a floor store, so the instances do not exercise the floor case.
+
 ## Fields of `Frame`
 
 The table lists each field and where the whole-run layer reads the component it protects.
@@ -37,13 +47,13 @@ Paths are relative to `JoltConstraints/WholeRun/`.
 
 | Field | What it says | Where the whole-run layer reads it |
 | --- | --- | --- |
-| `sailRegs` | Every Sail register outside the write set keeps its value. This covers `x1..x31`, `PC`, `nextPC`, `misa`, the platform registers and every CSR and reservation register that Sail holds. | `Relation.lean:141-142` (`Related.regs` compares all Sail registers through `sailRegs`, and reads `nextPC`); `Basic.lean:100` (`Block.Runs.continues` reads `nextPC`); `Bundles.lean:226-227` (`pma_regions`, `htif_tohost_base`); `Bundles.lean:578` (`PC` parity); `Halt.lean:33` (`nextPC` at EBREAK); `SystemInv.lean:648-649` (`PC`, `nextPC`). |
+| `sailRegs` | Every Sail register outside the write set keeps its value. This covers `x1..x31`, `PC`, `nextPC`, `misa`, the platform registers and every CSR and reservation register that Sail holds. It is stronger than "`x1..x31` outside the write set" because `Related.regs` compares the whole register file. | `Relation.lean:141-142` (`Related.regs` compares all Sail registers through `sailRegs`, and reads `nextPC`); `Basic.lean:100` (`Block.Runs.continues` reads `nextPC`); `Bundles.lean:226-227` (`pma_regions`, `htif_tohost_base`); `Bundles.lean:578` (`PC` parity); `Halt.lean:33` (`nextPC` at EBREAK); `SystemInv.lean:648-649` (`PC`, `nextPC`). |
 | `choiceState`, `cycleCount`, `sailOutput` | The remaining Sail fields are unchanged; `tags` has type `Unit`. | No whole-run file reads them today; `Ghost.lean:21` says a shadow may differ in them. The fields cost nothing to keep and make `Frame` a full description of the Sail state. |
 | `vregs` | Every virtual register outside `ws.vregs` keeps its value. | `SystemInv.lean:20-23` (`mstatusVReg`, `trapHandlerVReg`, `mepcVReg`, `vr32`, `vr33`); `Relation.lean:133` through `System.systemProject`, which reads the CSR and reservation overlay from `vr32..39`; `Ghost.lean:27`. |
 | `mem` | A Sail memory byte outside the footprint is unchanged. | `Relation.lean:149` (`ram`), `Relation.lean:155-156` (`io`); `CodeInv.lean:868-872` (`JoltCodeIntact`, code bytes in `sail.mem`); `CodeInv.lean:885-887` (`NoCodeStore`, the store footprint of a block). |
 | `mem_present` | A present byte stays present. | `Relation.lean:151-152` (`present`); `Ghost.lean:35` (`MemoryFrame.present`); `Bundles.lean:229-230`. |
 | `mem_belowRam` | Sail memory below `RAM_START_ADDRESS` is unchanged. | `Ghost.lean:36` (`MemoryFrame.below`); `Relation.lean:155-156`. |
-| `device` | The device changes only by successful `JoltDevice.store?` steps at footprint addresses below RAM. Corollaries `Frame.device_same` (layout, inputs, trusted and untrusted advice unchanged, as `JoltIOSetupFrame.Same`) and `Frame.panic_mono`. | `Relation.lean:158` (`panic`), `Relation.lean:160` (`layout`), `Relation.lean:162-163` (`outputs_size`), `Relation.lean:120` (`load?` of the I/O window); `RunInv.lean:285` (`heap_no_wrap` reads `heap_end`); `RunInv.lean:299-303` (`Block.Runs.layout_eq`); `Halt.lean:16` (outputs and panic flag). |
+| `device` | The device changes only by successful `JoltDevice.store?` steps at footprint addresses below RAM. Corollaries `Frame.device_same` (layout, inputs, trusted and untrusted advice unchanged, as `JoltIOSetupFrame.Same`) and `Frame.panic_mono`. | `Relation.lean:158` (`panic`), `Relation.lean:160` (`layout`), `Relation.lean:162-163` (`outputs_size`, through the corollary `Frame.outputs_size`), `Relation.lean:120` (`load?` of the I/O window); `RunInv.lean:285` (`heap_no_wrap` reads `heap_end`); `RunInv.lean:299-303` (`Block.Runs.layout_eq`); `Halt.lean:16` (outputs and panic flag). |
 | `adviceTape` | The advice tape (bytes and cursor) is unchanged. | `Ghost.lean:29`; `NonInterference.lean:365-372`; `CodeInv.lean:405-411` (the `VirtualAdviceLoad` case of the memory frame). |
 | `hostIO` | The host-I/O settings are unchanged. | `Ghost.lean:30`. |
 
@@ -65,7 +75,11 @@ The pool-reset clause is per program: `Program.ResetsPool p pool` says that ever
 ## Proof plan and reuse
 
 `frame_of_run` is proved from the per-row lemma `execInstr_frame`, by induction on the program with `execProgram_instr_run_retire_inv` (`ProofSupport/Lemmas.lean:60`) and `Frame.trans`.
-`Frame.refl`, `Frame.trans`, `Frame.footprint_eq`, `Frame.sailRegs_eq_of_xregs_nil`, `Frame.device_same`, `Frame.panic_mono` and the Boolean soundness lemmas are proved.
+`Frame.refl`, `Frame.trans`, `Frame.footprint_eq`, `Frame.sailRegs_eq_of_xregs_nil`, `Frame.device_same`, `Frame.panic_mono`, `Frame.outputs_size` and the Boolean soundness lemmas are proved.
+
+`Frame.outputs_size` gives `Related.outputs_size` in the end state from the same bound in the start state and the output span of the layout (`panic = output_start + max_output_size`).
+The proof is an induction on the `device` clause with `JoltIOSetupFrame.storeDeviceByte_outputs_fit` (`ProofSupport/DeviceFrame.lean:42`).
+The whole-run layer gets the span from `new_io_geometry` (`JoltConstraints/layout_facts.lean:339`) and `Related.layout`.
 
 Four lemmas are staged with `sorry`.
 
@@ -99,25 +113,21 @@ The checks therefore run per chunk, with no recursion-depth or heartbeat overrid
 `Program.rowsWithin_seq_append`, `Program.storeSlots_seq_append`, `Program.resetsPoolCheck_seq_append` and `Program.resetsPoolCheck_seq_append_append` split a `Program.seq` of concatenated chunks.
 `FrameInstances.lean` states one lemma per generated chunk (`_chunkN`, the row check and the store slots of that chunk, both by `rfl`) and assembles them with these lemmas.
 For the pool reset, only the final chunks that contain the last write of each pool register need checking: the last chunk, or the last two for `Keccak256AbsorbPermute` and `Secp256k1Squarer`.
+`scripts/expansion-parity/gen_frame_instances.py` writes the file from the generated rows; `--check` confirms that the committed file matches its output byte for byte.
 
 Two further limits shaped the instance file.
 Checking all chunks of a 31-chunk Keccak program inside one declaration exceeds the 200,000-heartbeat budget, so each chunk gets its own lemma.
 `simp only [keccak256RowsAutoList]` and `rw [keccak256RowsAutoList]` also exceed the budget on the 31-chunk definition, while `unfold` is cheap, so the assembly proofs start with `unfold`.
-With this layout `lake build JoltBytecode.Inlines.FrameInstances` takes 143 s for the 24 programs (twelve inlines, two allocation cases), and no proof in the file needs an option override.
+With this layout `lake build JoltBytecode.Inlines.FrameInstances` takes 51 s to 143 s, depending on machine load, for the 17 programs (twelve `rd ≠ x0` cases and five hash `rd = x0` cases), and no proof in the file needs an option override.
 The `_writesWithin` and `_resetsPoolCheck` lemmas depend only on `propext` and `Quot.sound`; the `_frame` corollaries inherit the staged `sorry` of `execInstr_frame` through `frame_of_run`.
 
 A later per-inline file can reuse this pattern directly; the generator could also emit the per-chunk lemmas next to the rows.
 
-## Open questions
+## Resolved questions
 
-1. The `rd = x0` variants of the seven secp256k1 inlines store their result through `vr40`, the instruction temporary that Jolt's `rd = x0` rewrite allocates, and no row writes `vr40` first.
-   Their footprint is therefore `s.vregs 40 + {0, 8, 16, 24}` (and `+ 32, + 40` for `GlvrAdv`): whatever `vr40` holds when the inline starts.
-   The spec already excludes these encodings (section 5.2 and decision D7, matching a16z/jolt#2414), so they never reach the frame lemma in an accepted program.
-   The statement still accepts them, because the base check accepts any register that no row writes, virtual or architectural, and `FrameInstances.lean` proves their instances.
-   The brief asked for "an architectural register parameter".
-   Requiring `.xreg` bases would make these seven instances fail the check, a second guard behind D7; should the check be tightened, and should their instances be dropped?
-2. The footprint of `SD` is `base + imm .. + 7`; the floor stores use the doubleword containing `base + imm`.
-   No in-scope inline has a floor store, so that case is untested.
-3. `Frame.sailRegs` quantifies over every Sail `Register`, which is stronger than the brief's "`x1..x31` outside the write set".
-   It is what `Related.regs` needs, since that clause compares the whole register file.
-4. `Frame` does not mention `Related.outputs_size`; it follows from the `device` clause and `JoltIOSetupFrame.storeDeviceByte_outputs_fit`, given the effective-address check that a successful store implies. A later lemma should state this.
+The coordinator settled the four questions of the first draft.
+
+1. Store bases must be architectural registers, and the seven secp256k1 `rd = x0` instances are dropped (a16z/jolt#2414, D7). The hash `rd = x0` instances stay.
+2. The floor-store clause stays; no instance exercises it.
+3. `Frame.sailRegs` stays over every Sail register, because `Related.regs` compares the whole register file.
+4. `Frame.outputs_size` states the `outputs_size` corollary, and it is proved.

@@ -15,7 +15,7 @@ rows may write, and the store rows of the program.
   `VirtualHostIO`;
 * every row's destination is in the write set;
 * every store row (`SD`, `VirtualStoreB/H/W`) is listed in the write set, and its base
-  operand is a register that no row writes.
+  operand is an architectural register that no row writes.
 
 The main theorem `frame_of_run` says that every successful run of such a program from any
 start state satisfies `Frame ws s s'`.
@@ -70,6 +70,11 @@ def StoreSlot.address (slot : StoreSlot) (s : SailJoltState) : BitVec 64 :=
   | .dword => ea
   | .floor => ea &&& ~~~(7 : BitVec 64)
 
+/-- Whether a source operand is an architectural register. -/
+def _root_.JoltISA.Src.isXReg : Src → Bool
+  | .xreg _ => true
+  | .vreg _ => false
+
 /-- What a program's rows may write.
 For the in-scope inlines `vregs` lists the pool registers (`vr48..127`) and instruction
 temporaries (`vr40..47`) the rows write, `xregs` is empty, and `stores` lists the store
@@ -95,9 +100,12 @@ def keepsSrc : Src → Bool
   | .vreg v => !ws.vregs.contains v
   | .xreg r => !ws.xregs.any (fun w => sameXReg w r)
 
-/-- Every store slot's base is a register that no allowed row writes. -/
+/-- Every store slot's base is an architectural register that no allowed row writes.
+Requiring `.xreg` rules out bases such as `vr40`, the instruction temporary that Jolt's
+`rd = x0` rewrite of secp256k1 inlines stores through: its value at entry is not an
+operand of the source instruction. Jolt rejects those encodings (a16z/jolt#2414). -/
 def basesKept : Bool :=
-  ws.stores.all (fun slot => ws.keepsSrc slot.base)
+  ws.stores.all (fun slot => slot.base.isXReg && ws.keepsSrc slot.base)
 
 /-- The byte addresses the store rows may write, with bases read in `s`:
 `address .. address + 7` for each slot.
@@ -217,7 +225,8 @@ def Program.rowsWithin (ws : WriteSet) (p : Program) : Bool :=
   p.rows.all (Instr.writesWithin ws)
 
 /-- The static condition of the frame lemma: every row passes `Instr.writesWithin`, every
-store row is listed in the write set, and no allowed row writes a listed store base.
+store row is listed in the write set, and every listed store base is an architectural
+register that no allowed row writes.
 For generated rows, `p.storeSlots` reduces by `rfl` to the explicit list in `ws.stores`,
 so the second conjunct is `List.Subset.refl _`; the first and third conjuncts reduce to
 `true` by `rfl` even when the rows take free register parameters, because the checks
@@ -349,7 +358,10 @@ theorem footprint_eq {s s' : SailJoltState} (f : Frame ws s s') (hk : ws.basesKe
     ws.Footprint s' = ws.Footprint s := by
   have haddr : ∀ slot ∈ ws.stores, slot.address s' = slot.address s := by
     intro slot hslot
-    have hkeep : ws.keepsSrc slot.base = true := (List.all_eq_true.1 hk) slot hslot
+    have hkeep : ws.keepsSrc slot.base = true := by
+      have h := (List.all_eq_true.1 hk) slot hslot
+      simp only [Bool.and_eq_true] at h
+      exact h.2
     simp only [StoreSlot.address, f.sourceValue_eq_of_keepsSrc hkeep]
   funext a
   apply propext
@@ -413,6 +425,27 @@ theorem panic_mono {s s' : SailJoltState} (f : Frame ws s s') :
   | tail _ hstep ih =>
     obtain ⟨a, v, _, _, hs⟩ := hstep
     exact fun h => store?_panic_mono hs (ih h)
+
+/-- The output buffer stays inside the output region (`Related.outputs_size`), given that
+it did at the start and that the layout has the output span `MemoryLayout.new` gives it
+(`new_io_geometry` in `JoltConstraints/layout_facts.lean`). -/
+theorem outputs_size {s s' : SailJoltState} (f : Frame ws s s')
+    (outputSpan : s.jolt_device.memory_layout.panic.toNat =
+      s.jolt_device.memory_layout.output_start.toNat +
+        s.jolt_device.memory_layout.max_output_size.toNat)
+    (h : s.jolt_device.outputs.size ≤ s.jolt_device.memory_layout.max_output_size.toNat) :
+    s'.jolt_device.outputs.size ≤ s'.jolt_device.memory_layout.max_output_size.toNat := by
+  suffices H : s'.jolt_device.memory_layout = s.jolt_device.memory_layout ∧
+      s'.jolt_device.outputs.size ≤ s.jolt_device.memory_layout.max_output_size.toNat by
+    rw [H.1]
+    exact H.2
+  have hd := f.device
+  generalize s'.jolt_device = d at hd ⊢
+  induction hd with
+  | refl => exact ⟨rfl, h⟩
+  | tail _ hstep ih =>
+    obtain ⟨a, v, _, _, hs⟩ := hstep
+    exact JoltIOSetupFrame.storeDeviceByte_outputs_fit _ outputSpan _ _ a v ih.1 ih.2 hs
 
 end Frame
 
