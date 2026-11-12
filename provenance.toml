@@ -1,0 +1,4511 @@
+# Provenance manifest: which Jolt code each Lean file models.
+#
+# [jolt] records the one Jolt revision the project is checked against.
+# Each [[file]] entry names a Lean file under JoltBytecode/ or JoltConstraints/,
+# the Jolt files it transcribes or relies on (models), the full Jolt revision it
+# was last checked against (checked), and a note where its citations disagree.
+# A file with no Jolt counterpart has models = [] and no checked revision.
+# models and checked were derived from each file's own citations: checked is
+# the published a16z/jolt revision the file names most (the later commit on a
+# tie), and models are the full Jolt paths it cites that exist at checked.
+# Entries that cite Jolt paths but name no revision keep their models and have
+# no checked revision; their note says so.
+#
+# [[other_revision]] lists commits of other repositories that the scanned docs
+# cite, so that the revision check does not count them as Jolt revisions.
+# [[known]] is the baseline of existing violations: local paths, citations of
+# Jolt forks, and Jolt revisions other than the pin or a file's checked
+# revision. scripts/check-provenance.py fails on any new violation and on any
+# baseline count that no longer matches, so the baseline only shrinks.
+# A local-path entry names its marker (Users, home, tilde, private-tmp), and a
+# fork entry names the fork's owner.
+#
+# Check: scripts/check-provenance.py [--jolt-dir <a16z/jolt clone>]
+# (reports/2026-11-11-provenance.md).
+
+[jolt]
+repository = "a16z/jolt"
+pin = "a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5"
+note = "Track T pin (docs/inline-precompiles.md section 7). README.md and methods/soundness.md still record c97e93004fbf804409f0374fe8457c8f1562ce71; the project pin is Ari's decision."
+
+[[other_revision]]
+revision = "e29949809bbf2c54c315c2ca55ae3b90c7fd37a6"
+repository = "LayerZero-Labs/jolt-qed"
+
+[[other_revision]]
+revision = "7096dcaeb62e4a49d259b511dce76c3bc77bae5f"
+repository = "LayerZero-Labs/jolt-qed"
+
+[[other_revision]]
+revision = "09aaeabf3227a874134ca0d33d56f3e8a09cafeb"
+repository = "LayerZero-Labs/jolt-qed"
+
+[[other_revision]]
+revision = "266473f8b2872ac25f5cfaf5a4293d6421a40b5d"
+repository = "abiswas3/sail-riscv"
+
+[[other_revision]]
+revision = "2ae2199f8890180a8f9653f6ea08e54cd9790220"
+repository = "rems-project/sail"
+
+[[other_revision]]
+revision = "717aeca3"
+repository = "riscv/riscv-isa-manual"
+
+[[other_revision]]
+revision = "5310b3e"
+repository = "ethereum/EthLib"
+
+[[file]]
+lean = "JoltBytecode/Assumptions.lean"
+models = [
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/emulator/memory.rs",
+  "tracer/src/emulator/mmu.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltBytecode/Bundles.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Decode/Agreement.lean"
+models = ["crates/jolt-program/src/image/decode.rs"]
+note = "Cites b65455e6d, which a16z/jolt does not publish. Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/Decode/Compressed.lean"
+models = ["crates/jolt-riscv/src/uncompress.rs"]
+checked = "c336a6da706d0a0d11c3489c7aef71ee80c2e370"
+
+[[file]]
+lean = "JoltBytecode/Decode/Configuration.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Decode/Execute.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Decode/Jolt.lean"
+models = [
+  "crates/jolt-program/src/expand/control_flow/csrrs.rs",
+  "crates/jolt-program/src/image/decode.rs",
+  "crates/jolt-riscv/src/uncompress.rs",
+]
+checked = "c336a6da706d0a0d11c3489c7aef71ee80c2e370"
+
+[[file]]
+lean = "JoltBytecode/Decode/Prefixes.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Decode/ProofSupport.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/HartConfig.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Div.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/DivProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Div_math.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Divu.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/DivuProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Divu_math.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Divuw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/DivuwProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Divuw_math.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Divw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/DivwProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/DivwSignedProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Divw_math.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Primitives.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Rem.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/RemProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Remu.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/RemuProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Remu_math.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Remuw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/RemuwProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Remuw_math.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Remw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/RemwSignedProgramBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/SignedW_math.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUAdviceFamily/Signed_math.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Itype/Slli.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Itype/Slliw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Itype/Srai.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Itype/Sraiw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Itype/Srli.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Itype/Srliw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Mult/Mulh.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Mult/Mulhsu.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Rtype/Sll.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Rtype/Sllw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Rtype/Sra.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Rtype/Sraw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Rtype/Srl.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/ALUFamily/Rtype/Srlw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoaddd.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoaddw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoandd.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoandw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amomaxd.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amomaxud.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amomaxuw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amomaxw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amomind.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amominud.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amominuw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amominw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoord.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoorw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoswapd.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoswapw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoxord.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Amoxorw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Dword.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/Word.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/WordLane.lean"
+models = [
+  "crates/jolt-program/src/expand/memory/shared.rs",
+  "tracer/src/instruction/floor_access.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/WordProgram.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/WordSelectLane.lean"
+models = ["crates/jolt-program/src/expand/memory/shared.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/WordSelectRust.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/DwordArithmetic.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/FloorLoad.lean"
+models = [
+  "crates/jolt-program/src/expand/memory/shared.rs",
+  "tracer/src/instruction/floor_access.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LBU_main.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LB_SailSide.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LB_main.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LHU_main.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LH_SailSide.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LH_main.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LWU_main.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LW_SailSide.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadFamily/LW_main.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadReservedFamily/Lrd.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/LoadReservedFamily/Lrw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Add.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Addi.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Addiw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Addw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/And.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Andi.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Andn.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Auipc.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Beq.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Bge.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Bgeu.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Blt.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Bltu.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Bne.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Fence.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Jal.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Jalr.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Ld.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Lui.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Mul.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Mulhu.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Mulw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Or.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Ori.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Sd.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Slt.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Slti.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Sltiu.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Sltu.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Sub.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Subw.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Xor.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/Natives/Xori.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/StoreConditionalFamily/Scd.lean"
+models = ["crates/jolt-program/src/expand/memory/scd.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/StoreConditionalFamily/Scw.lean"
+models = ["crates/jolt-program/src/expand/memory/scw.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/ProgramBlocks.lean"
+models = ["crates/jolt-program/src/expand/memory/shared.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Sb_main.lean"
+models = ["crates/jolt-program/src/expand/memory/shared.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Sh_main.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Splice.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/StoreFamily/Sw_main.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/Common.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/Csr.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/CsrReg.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/Reservation.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/ReservationMemory.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/ReservationRows.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/ReservationStore.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/Sc.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/ScDword.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/ScRows.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/ScWord.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/Instructions/System/Trap.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Basic.lean"
+models = ["tracer/src/instruction/floor_access.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/BitVecMasks.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/BundleLemmas.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/DeviceFrame.lean"
+models = [
+  "tracer/src/instruction/sd.rs",
+  "tracer/src/lib.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Also cites tracer/src/instruction/floor_access.rs, absent at checked."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/ExpansionBlocks/ALU.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/ExpansionBlocks/Mul.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/ExpansionLayouts.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionFrame.lean"
+models = [
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/sd.rs",
+  "tracer/src/instruction/virtual_advice_load.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Also cites tracer/src/instruction/floor_access.rs, absent at checked."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/ADDI.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/AND.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/ANDI.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/ANDN.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/Add.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/LD.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/LUI.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/MULHU.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/Mul.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/ORI.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/SD.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/SLTU.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/Sub.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualAdvice.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualAssertLTE.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualAssertMulUNoOverflow.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualAssertValidDiv0.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualAssertValidUnsignedRemainder.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualMULI.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualMovsign.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualNegateIf.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualPext.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualPow2.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualSRA.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualSRAI.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualSRL.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualSRLI.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualShiftData.lean"
+models = [
+  "tracer/src/instruction/virtual_shift_data_b.rs",
+  "tracer/src/instruction/virtual_shift_data_h.rs",
+  "tracer/src/instruction/virtual_shift_data_w.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualShiftRightBitmask.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualSignExtendWord.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualWindowMask.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/VirtualZeroExtendWord.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/XOR.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas/XORI.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/InstructionLemmas.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Lemmas.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Memory/Alignment.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Memory/Basic.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Memory/MmuJolt.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Memory/Read.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Memory/StoreExec.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Memory/Windows.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Memory/Write.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/MonadReduction.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/NativeDispatch.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Preservation.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/ProgramComposition.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/Projection.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/ProtectedVRegWrites.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/RegisterAccess.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/StateLemmas.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/ValueLemmas.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/InstructionEquivalence/ProofSupport/VirtualRegisters.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/AdviceTape.lean"
+models = [
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/virtual_advice_load.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Core.lean"
+models = ["tracer/src/emulator/mmu.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/DeviceMemory.lean"
+models = [
+  "tracer/src/emulator/memory.rs",
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/emulator/mod.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Expansions/ALU.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Expansions/AtomicRegisters.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Expansions/Atomics.lean"
+models = ["crates/jolt-program/src/expand/memory/shared.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Expansions/LaneWindow.lean"
+models = ["crates/jolt-program/src/expand/memory/shared.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Expansions/Load.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Expansions/Mul.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Expansions/Store.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Expansions/System.lean"
+models = [
+  "crates/jolt-program/src/expand/control_flow/csr.rs",
+  "crates/jolt-program/src/expand/control_flow/csr_immediate.rs",
+  "crates/jolt-program/src/expand/control_flow/csrrc.rs",
+  "crates/jolt-program/src/expand/control_flow/csrrs.rs",
+  "crates/jolt-program/src/expand/control_flow/csrrw.rs",
+  "crates/jolt-program/src/expand/control_flow/ecall.rs",
+  "crates/jolt-program/src/expand/control_flow/mret.rs",
+  "tracer/src/utils/virtual_registers.rs",
+]
+checked = "c336a6da706d0a0d11c3489c7aef71ee80c2e370"
+note = "Cites a86ec3716, which a16z/jolt does not publish."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/ExpansionsAutomated.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/HostIO.lean"
+models = [
+  "jolt-platform/src/advice.rs",
+  "jolt-platform/src/cycle_tracking.rs",
+  "jolt-platform/src/print.rs",
+  "tracer/src/instruction/virtual_host_io.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Instruction.lean"
+models = [
+  "crates/jolt-program/src/expand/inline.rs",
+  "crates/jolt-program/src/expand/mod.rs",
+  "crates/jolt-program/src/image/decode.rs",
+  "crates/jolt-riscv/src/instructions/virt/shift_data_b.rs",
+  "crates/jolt-riscv/src/trace_row.rs",
+  "tracer/src/instruction/format/format_b.rs",
+  "tracer/src/instruction/format/format_i.rs",
+  "tracer/src/instruction/format/format_virtual_right_shift_i.rs",
+  "tracer/src/instruction/virtual_host_io.rs",
+]
+checked = "e012da54c3bb26a6436b5ca74e86c19bb39695ad"
+note = "Also cites 5def437f2 (2). Also cites tracer/src/instruction/floor_access.rs, crates/jolt-riscv/src/instructions/virt/load_b.rs, crates/jolt-riscv/src/instructions/virt/store_b.rs, tracer/src/instruction/format/format_no_operands.rs, absent at checked."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/JoltDevice.lean"
+models = [
+  "common/src/constants.rs",
+  "common/src/jolt_device.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltBytecode/JoltISA/MemoryAccess.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/RegisterAccess.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Semantics.lean"
+models = [
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/jal.rs",
+  "tracer/src/instruction/jalr.rs",
+  "tracer/src/instruction/virtual_shift_data_b.rs",
+  "tracer/src/instruction/virtual_shift_data_h.rs",
+  "tracer/src/instruction/virtual_shift_data_w.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/SystemCSR.lean"
+models = [
+  "crates/jolt-program/src/expand/allocator.rs",
+  "tracer/src/instruction/mod.rs",
+  "tracer/src/utils/virtual_registers.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/SystemProjection.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/JoltISA/Values.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs",
+  "tracer/src/instruction/virtual_shift_data_b.rs",
+  "tracer/src/instruction/virtual_shift_data_h.rs",
+  "tracer/src/instruction/virtual_shift_data_w.rs",
+  "tracer/src/instruction/virtual_srliw.rs",
+  "tracer/src/instruction/virtual_xor_rotl1.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/VirtualRegisters.lean"
+models = [
+  "common/src/constants.rs",
+  "crates/jolt-program/src/expand/allocator.rs",
+  "tracer/src/utils/virtual_registers.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/JoltISA/semantic_helpers.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/add.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/beq.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/bge.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/bgeu.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/blt.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/bltu.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/bne.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/mul.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/sub.rs",
+  "tracer/src/instruction/beq.rs",
+  "tracer/src/instruction/bge.rs",
+  "tracer/src/instruction/bgeu.rs",
+  "tracer/src/instruction/blt.rs",
+  "tracer/src/instruction/bltu.rs",
+  "tracer/src/instruction/bne.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/RiscvInstruction.lean"
+models = [
+  "crates/jolt-riscv/src/kind.rs",
+  "crates/jolt-riscv/src/lib.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltBytecode/Step/AmoFlags.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Step/Ecall.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Step/Frame.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Step/Instructions.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Step/Invariant.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Step/Lift.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Step/SailCsr.lean"
+models = ["tracer/src/utils/virtual_registers.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltBytecode/Step/SailReservation.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Step/SailTrap.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Step/TryStep.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/All.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/AssertLookupOne.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Assumptions.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/BytecodeRaAtEntryEqOne.lean"
+models = []
+note = "Cites crates/jolt-trace/src/preprocess/bytecode.rs, which no a16z/jolt revision here has."
+
+[[file]]
+lean = "JoltConstraints/Completeness/BytecodeRaChunkBooleanity.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/BytecodeRaChunkHammingWeight.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/AddressOffsetEntry.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+  "crates/jolt-lookup-tables/src/tables/address_offset.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/AddressSum.lean"
+models = ["crates/jolt-witness/src/witnesses/operands.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/BytecodeReadSelection.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/FloorMemory.lean"
+models = ["tracer/src/instruction/floor_access.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/HostIOFrame.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/IOSetupFrame.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/InstructionReadSelection.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/JumpReturnProofHelpers.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/LookupEntryProofHelpers.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+  "crates/jolt-lookup-tables/src/tables/mod.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/LookupPextProofHelpers.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/LookupShiftProofHelpers.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/LookupWriteProofHelpers.lean"
+models = [
+  "crates/jolt-riscv/src/instructions/virt/load_b.rs",
+  "tracer/src/instruction/virtual_shift_data_b.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/MemoryValueFacts.lean"
+models = ["tracer/src/instruction/floor_access.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/RamAccesses.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/RamOutputProofHelpers.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/RamReadSelection.lean"
+models = [
+  "crates/jolt-witness/src/witnesses/increments.rs",
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/ld.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/RegistersReadProofHelpers.lean"
+models = [
+  "crates/jolt-riscv/src/instructions/virt/load_h.rs",
+  "crates/jolt-riscv/src/instructions/virt/store_h.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/RegistersValHistoryProofHelpers.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/RegistersValProofHelpers.lean"
+models = [
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/ld.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/TracePCProofHelpers.lean"
+models = [
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/floor_access.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Helpers/VerifierSizes.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-program/src/preprocess/ram.rs",
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-prover/src/dory/preprocessing.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Also cites c97e93004 (3)."
+
+[[file]]
+lean = "JoltConstraints/Completeness/ImmEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/InstructionFlagsEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/InstructionRaChunkBooleanity.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/InstructionRaChunkHammingWeight.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/InstructionRaEqChunkProduct.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/InstructionRafFlagEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/LeftInstructionInputEqSelection.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/LeftLookupEqLeftInputOtherwise.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/LeftLookupOperandEqInstructionRaf.lean"
+models = ["crates/jolt-lookup-tables/src/instructions/riscv/ld.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/LeftLookupZeroIfAddSubMul.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/LookupOutputEqInstructionReadRaf.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/LookupTableFlagEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/MustStartSequenceFromBeginning.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextIsFirstInSequenceEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextIsNoopEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextIsVirtualEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextPCEqPCPlusOneIfInline.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextPCEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextUnexpandedPCEqLookupIfShouldJump.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextUnexpandedPCEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/NextUnexpandedPCUpdateOtherwise.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/OpFlagsEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/PCEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/ProductEqLeftInputMulRightInput.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-witness/src/witnesses/ram.rs",
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/ld.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamAddrEqZeroIfNotLoadStore.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamAddressEqRamRaf.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamHammingWeightBooleanity.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamOutputEqPublicIo.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamRaChunkBooleanity.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamRaChunkHammingWeight.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamRaEqChunkProduct.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamReadEqRamWriteIfLoad.lean"
+models = ["tracer/src/instruction/floor_access.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamReadEqRdWriteIfLoad.lean"
+models = ["tracer/src/instruction/floor_access.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamReadValueEqRamRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamValEqInitialPlusPrefixRamInc.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamValFinalEqInitialPlusRamInc.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RamWriteValueEqRamReadWrite.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RdWaEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RdWriteEqLookupIfWriteLookupToRd.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RdWriteEqPCPlusConstIfJump.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RdWriteValueEqRegistersReadWrite.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RegistersValEqPrefixRdInc.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RightInstructionInputEqSelection.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/RightLookupAdd.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+  "crates/jolt-riscv/src/instructions/virt/load_b.rs",
+  "crates/jolt-riscv/src/instructions/virt/load_h.rs",
+  "crates/jolt-riscv/src/instructions/virt/load_w.rs",
+  "crates/jolt-riscv/src/instructions/virt/store_b.rs",
+  "crates/jolt-riscv/src/instructions/virt/store_h.rs",
+  "crates/jolt-riscv/src/instructions/virt/store_w.rs",
+  "crates/jolt-witness/src/witnesses/operands.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/RightLookupEqProductIfMul.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/RightLookupEqRightInputOtherwise.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs",
+  "crates/jolt-lookup-tables/src/traits.rs",
+  "crates/jolt-riscv/src/instructions/virt/shift_data_b.rs",
+  "crates/jolt-witness/src/witnesses/operands.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/RightLookupOperandEqInstructionRaf.lean"
+models = [
+  "crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs",
+  "crates/jolt-witness/src/witnesses/operands.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/RightLookupSub.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Rs1RaEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Rs1ValueEqRegistersRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Rs2EqRamWriteIfStore.lean"
+models = ["tracer/src/instruction/floor_access.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Completeness/Rs2RaEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/Rs2ValueEqRegistersRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/ShouldBranchEqLookupOutputMulBranch.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/ShouldJumpEqJumpMulNotNextIsNoop.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/UnexpandedPCEqBytecodeRead.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Completeness/completeness.lean"
+models = ["crates/jolt-program/src/preprocess/bytecode.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Completeness.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/All.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/AssertLookupOne.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs",
+  "tracer/src/instruction/virtual_assert_eq.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/BytecodeRaAtEntryEqOne.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/BytecodeRaChunkBooleanity.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/BytecodeRaChunkHammingWeight.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/BytecodeReadData.lean"
+models = [
+  "crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs",
+  "crates/jolt-riscv/src/instructions/mod.rs",
+  "crates/jolt-witness/src/witnesses/one_hot.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Cites crates/jolt-trace/src/preprocess/bytecode.rs, which no a16z/jolt revision here has."
+
+[[file]]
+lean = "JoltConstraints/Constraints/BytecodeReadSelectors.lean"
+models = [
+  "crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs",
+  "tracer/src/instruction/format/format_load.rs",
+  "tracer/src/instruction/format/format_s.rs",
+  "tracer/src/instruction/format/format_shift_data.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Also cites 5def437f2 (2)."
+
+[[file]]
+lean = "JoltConstraints/Constraints/ImmEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/InstructionFlagsEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/InstructionLookupRa.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/InstructionRaChunkBooleanity.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/InstructionRaChunkHammingWeight.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/InstructionRaEqChunkProduct.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/InstructionRafFlagEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/LeftInstructionInputEqSelection.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/LeftLookupEqLeftInputOtherwise.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/LeftLookupOperandEqInstructionRaf.lean"
+models = ["crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/LeftLookupZeroIfAddSubMul.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/LookupOperandData.lean"
+models = ["crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/LookupOutputEqInstructionReadRaf.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/LookupTableFlagEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/MemoryLayout.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "tracer/src/lib.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Citations tie between 754fc8821, 5def437f2; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/Constraints/MustStartSequenceFromBeginning.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextIsFirstInSequenceEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextIsNoopEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextIsVirtualEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextPCEqPCPlusOneIfInline.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextPCEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextUnexpandedPCEqShift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/NextUnexpandedPCUpdateOtherwise.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/OpFlagsEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/PCEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/ProductEqLeftInputMulRightInput.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamAddrEqZeroIfNotLoadStore.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamAddressEqRamRaf.lean"
+models = ["crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamHammingWeightBooleanity.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamOutputEqPublicIo.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamRaChunkBooleanity.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamRaChunkHammingWeight.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamRaEqChunkProduct.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/ram.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamReadData.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+]
+note = "Cites crates/jolt-trace/src/preprocess/public_io.rs, which no a16z/jolt revision here has. Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamReadEqRamWriteIfLoad.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamReadEqRdWriteIfLoad.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamReadValueEqRamRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamValEqInitialPlusPrefixRamInc.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamValFinalEqInitialPlusRamInc.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RamWriteValueEqRamReadWrite.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RdWaEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/RdWriteEqLookupIfWriteLookupToRd.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RdWriteEqPCPlusConstIfJump.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RdWriteValueEqRegistersReadWrite.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RegistersValEqPrefixRdInc.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RightInstructionInputEqSelection.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Constraints/RightLookupAdd.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RightLookupEqProductIfMul.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RightLookupEqRightInputOtherwise.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RightLookupOperandEqInstructionRaf.lean"
+models = ["crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/RightLookupSub.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/Rs1RaEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/Rs1ValueEqRegistersRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/Rs2EqRamWriteIfStore.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/Rs2RaEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/Rs2ValueEqRegistersRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/ShouldBranchEqLookupOutputMulBranch.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/Constraints/UnexpandedPCEqBytecodeRead.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/ProgramLayout.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Assumptions.lean"
+models = ["crates/jolt-prover/src/config.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Helpers/PrefixSum.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer0/Bounds.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer0/Field.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer0/Words.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/Addresses.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/Bytecode.lean"
+models = ["crates/jolt-poly/src/eq_plus_one.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/BytecodeReads.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/Chunks.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/Instruction.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/InstructionReads.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/OneHot.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/Products.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/Ram.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer1/RamReads.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer2/RegisterMap.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer2/Registers.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer2/State.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer2/ZeroLookup.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer2/ZeroRegister.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer3/Access.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer3/Address.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer3/History.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer3/Layout.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer3/State.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer3/Updates.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Advice.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Arithmetic.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Assertions.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Bitwise.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/BitwiseEntry.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/ByteSwap.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Comparison.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/ComparisonEntry.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Conditional.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/ConditionalEntry.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Identity.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Inputs.lean"
+models = ["crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Interleave.lean"
+models = []
+note = "Cites Jolt at 8bbb23578 without a file path."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Interleaved.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Outputs.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Pext.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/PextEntry.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/RangeCheck.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/RangeCheckEntry.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Reachable.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Rotate.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/RotateEntry.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Shift.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/ShiftEntry.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Table.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/Word.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/WordArithmetic.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer4/WordEntry.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/AddImmediate.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/AddressMasks.lean"
+models = ["tracer/src/instruction/virtual_window_mask_b.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Advice.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/virt/advice.rs",
+  "crates/jolt-lookup-tables/src/tables/range_check.rs",
+  "crates/jolt-riscv/src/instructions/virt/advice.rs",
+  "tracer/src/instruction/virtual_advice.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/AdviceExpansion.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/AdviceLoad.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/virt/advice_load.rs",
+  "crates/jolt-program/src/expand/memory/shared.rs",
+  "tracer/src/instruction/virtual_advice_load.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Arithmetic.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/add.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/mul.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/sub.rs",
+  "tracer/src/instruction/add.rs",
+  "tracer/src/instruction/mul.rs",
+  "tracer/src/instruction/sub.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/AssertLessThanEqual.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/virt/assert_lte.rs",
+  "crates/jolt-riscv/src/instructions/assert/assert_lte.rs",
+  "tracer/src/instruction/virtual_assert_lte.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/AssertionMulOverflow.lean"
+models = ["tracer/src/instruction/virtual_assert_mulu_no_overflow.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/AssertionsBinary.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs",
+  "tracer/src/instruction/virtual_assert_eq.rs",
+  "tracer/src/instruction/virtual_assert_valid_div0.rs",
+  "tracer/src/instruction/virtual_assert_valid_unsigned_remainder.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Citations tie between 8bbb23578, 5def437f2; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Auipc.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/auipc.rs",
+  "crates/jolt-riscv/src/instructions/i/auipc.rs",
+  "tracer/src/instruction/auipc.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/BitwiseBinary.lean"
+models = [
+  "tracer/src/instruction/and.rs",
+  "tracer/src/instruction/andn.rs",
+  "tracer/src/instruction/or.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Branch.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/beq.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/DeviceMemory.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/ld.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Also cites c67035705 (3). Also cites tracer/src/instruction/floor_access.rs, absent at checked."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean"
+models = ["common/src/jolt_device.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Fence.lean"
+models = ["tracer/src/instruction/fence.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/HostCallRegisterFrame.lean"
+models = [
+  "crates/jolt-witness/src/backend/trace/registers.rs",
+  "tracer/src/instruction/virtual_host_io.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/HostCallRestriction.lean"
+models = [
+  "crates/jolt-riscv/src/instructions/virt/host_io.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/virtual_host_io.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/ImmediateArithmetic.lean"
+models = [
+  "tracer/src/instruction/addiw.rs",
+  "tracer/src/instruction/virtual_muli.rs",
+  "tracer/src/instruction/virtual_muliw.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/ImmediateLogic.lean"
+models = [
+  "tracer/src/instruction/andi.rs",
+  "tracer/src/instruction/ori.rs",
+  "tracer/src/instruction/slti.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/ImmediatePowerMask.lean"
+models = [
+  "tracer/src/instruction/virtual_pow2i.rs",
+  "tracer/src/instruction/virtual_pow2i_w.rs",
+  "tracer/src/instruction/virtual_shift_right_bitmaski.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/ImmediateShift.lean"
+models = [
+  "tracer/src/instruction/virtual_srai.rs",
+  "tracer/src/instruction/virtual_sraiw.rs",
+  "tracer/src/instruction/virtual_srli.rs",
+  "tracer/src/instruction/virtual_srliw.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Jal.lean"
+models = [
+  "crates/jolt-riscv/src/instructions/i/jal.rs",
+  "tracer/src/instruction/jal.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Jalr.lean"
+models = ["tracer/src/instruction/jalr.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/LoadDoubleword.lean"
+models = [
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/ld.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/LoadUpperImmediate.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/lui.rs",
+  "crates/jolt-riscv/src/instructions/i/lui.rs",
+  "tracer/src/instruction/lui.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/LookupWrite.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/MemoryAccessRestriction.lean"
+models = [
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/floor_access.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Citations tie between 8bbb23578, 0249591a2, c67035705; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/MemoryAddress.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/MemoryRows.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-lookup-tables/src/tables/address_offset.rs",
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/ld.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/MisaFrame.lean"
+models = [
+  "crates/jolt-program/src/expand/control_flow/csrrw.rs",
+  "tracer/src/emulator/cpu.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Movsign.lean"
+models = ["tracer/src/instruction/virtual_movsign.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/NarrowAdvice.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/PanicRestriction.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-program/src/preprocess/public_io.rs",
+  "jolt-sdk/macros/src/lib.rs",
+  "jolt-sdk/src/runtime/exit.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/PowerOfTwo.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Program.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RamAgreement.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RamAlignment.lean"
+models = ["tracer/src/emulator/mmu.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RamInitialization.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RamStore.lean"
+models = ["tracer/src/emulator/mmu.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Also cites 8bbb23578 (1)."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RamStoreAgreement.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RegisterComparison.lean"
+models = [
+  "tracer/src/instruction/slt.rs",
+  "tracer/src/instruction/sltu.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RegisterInputs.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RegisterShift.lean"
+models = [
+  "tracer/src/instruction/virtual_sra.rs",
+  "tracer/src/instruction/virtual_sraw.rs",
+  "tracer/src/instruction/virtual_srl.rs",
+  "tracer/src/instruction/virtual_srlw.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RegisterWrite.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Registers.lean"
+models = ["crates/jolt-program/src/expand/allocator.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/RuntimeAdvice.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/SetLessThanImmediate.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/StoreDoubleword.lean"
+models = [
+  "crates/jolt-program/src/expand/allocator.rs",
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Citations tie between 5def437f2, c67035705; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/TapeDeviceFrame.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "tracer/src/emulator/cpu.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/TapeSemantics.lean"
+models = [
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/TapeTrace.lean"
+models = [
+  "crates/jolt-prover/src/preprocessing.rs",
+  "crates/jolt-verifier/src/verifier.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/mod.rs",
+  "tracer/src/lib.rs",
+]
+checked = "0249591a293aa40dc4ebba92818e1367c66ea633"
+note = "Also cites 5def437f2 (1)."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/TerminationRestriction.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-program/src/preprocess/public_io.rs",
+  "jolt-sdk/macros/src/lib.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/UnaryWord.lean"
+models = [
+  "tracer/src/instruction/virtual_pow2.rs",
+  "tracer/src/instruction/virtual_pow2_w.rs",
+  "tracer/src/instruction/virtual_rev8w.rs",
+  "tracer/src/instruction/virtual_shift_right_bitmask.rs",
+  "tracer/src/instruction/virtual_shift_right_bitmask_w.rs",
+  "tracer/src/instruction/virtual_sign_extend_word.rs",
+  "tracer/src/instruction/virtual_zero_extend_word.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/VirtualBinary.lean"
+models = [
+  "tracer/src/instruction/virtual_negate_if.rs",
+  "tracer/src/instruction/virtual_pext.rs",
+  "tracer/src/instruction/virtual_pext_signed.rs",
+  "tracer/src/instruction/virtual_shift_data_b.rs",
+  "tracer/src/instruction/virtual_shift_data_h.rs",
+  "tracer/src/instruction/virtual_shift_data_w.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Citations tie between 8bbb23578, c67035705; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/WordArithmetic.lean"
+models = [
+  "tracer/src/instruction/addw.rs",
+  "tracer/src/instruction/mulhu.rs",
+  "tracer/src/instruction/mulw.rs",
+  "tracer/src/instruction/subw.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/Xor.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/XorImmediate.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/xori.rs",
+  "tracer/src/instruction/xori.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer5/XorRotation.lean"
+models = [
+  "tracer/src/instruction/virtual_xor_rot.rs",
+  "tracer/src/instruction/virtual_xor_rotl1.rs",
+  "tracer/src/instruction/virtual_xor_rotw.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/BoundaryStart.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+  "tracer/src/lib.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/BytecodePC.lean"
+models = ["crates/jolt-riscv/src/instructions/mod.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/DivisionAppend.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/DivisionBlock.lean"
+models = ["crates/jolt-program/src/expand/division/rem.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/DivisionDefs.lean"
+models = ["tracer/src/instruction/rem.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/DivisionLayout.lean"
+models = ["crates/jolt-program/src/expand/mod.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/DivisionPrograms.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/ExecutionPrefix.lean"
+models = [
+  "crates/jolt-program/src/expand/allocator.rs",
+  "crates/jolt-program/src/expand/division/rem.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/ExpansionFinish.lean"
+models = ["crates/jolt-witness/src/witnesses/pc.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/MemoryRowAppend.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/MemoryRowExecution.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/PlainRow.lean"
+models = [
+  "crates/jolt-program/src/expand/metadata.rs",
+  "tracer/src/emulator/cpu.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/PlainRowKinds.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/PlainRowOperands.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/PrefixAgreement.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/PrefixState.lean"
+models = [
+  "crates/jolt-program/src/expand/division/rem.rs",
+  "crates/jolt-program/src/expand/metadata.rs",
+  "tracer/src/instruction/mod.rs",
+  "tracer/src/instruction/rem.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/RamCutAgreement.lean"
+models = ["crates/jolt-witness/src/backend/trace/ram.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/RowStep.lean"
+models = ["tracer/src/instruction/mod.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/RowStepJalr.lean"
+models = [
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/jal.rs",
+  "tracer/src/instruction/jalr.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/RowStepKinds.lean"
+models = [
+  "crates/jolt-program/src/expand/metadata.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/jal.rs",
+  "tracer/src/instruction/jalr.rs",
+  "tracer/src/instruction/virtual_host_io.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/RowStepMemory.lean"
+models = [
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/ld.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Citations tie between 5def437f2, c67035705; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/RowStepTerminal.lean"
+models = [
+  "tracer/src/instruction/jal.rs",
+  "tracer/src/instruction/virtual_host_io.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer6/TerminalNextPC.lean"
+models = [
+  "crates/jolt-witness/src/witnesses/flags.rs",
+  "crates/jolt-witness/src/witnesses/pc.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer7/AdjacentRows.lean"
+models = [
+  "crates/jolt-program/src/expand/materialize.rs",
+  "crates/jolt-program/src/expand/mod.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer7/LastJump.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-witness/src/witnesses/pc.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+note = "Also cites 5def437f2 (2)."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer7/ProverAccepts.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-program/src/execution/trace.rs",
+  "crates/jolt-program/src/preprocess/ram.rs",
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-verifier/src/config.rs",
+  "crates/jolt-witness/src/witnesses/pc.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer7/SpoilAsserts.lean"
+models = [
+  "crates/jolt-program/src/asm.rs",
+  "crates/jolt-program/src/expand/materialize.rs",
+  "crates/jolt-program/src/image/decode.rs",
+  "crates/jolt-riscv/src/instructions/assert/assert_eq.rs",
+  "tracer/src/instruction/virtual_assert_eq.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer7/StallSuffix.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/beq.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/jal.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs",
+  "crates/jolt-program/src/expand/control_flow/ebreak.rs",
+  "crates/jolt-program/src/expand/control_flow/ecall.rs",
+  "crates/jolt-program/src/expand/control_flow/mret.rs",
+  "crates/jolt-program/src/expand/metadata.rs",
+  "crates/jolt-program/src/expand/mod.rs",
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+  "crates/jolt-riscv/src/instructions/i/beq.rs",
+  "crates/jolt-riscv/src/row.rs",
+  "crates/jolt-witness/src/witnesses/pc.rs",
+  "crates/jolt-witness/src/witnesses/registers.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/jal.rs",
+  "tracer/src/instruction/jalr.rs",
+  "tracer/src/instruction/mod.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+note = "Also cites 0249591a2 (19), 5def437f2 (15). Cites crates/jolt-riscv/src/instructions/b/beq.rs, which no a16z/jolt revision here has."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer7/Stopping.lean"
+models = [
+  "jolt-sdk/macros/src/lib.rs",
+  "tracer/src/emulator/cpu.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Citations tie between 0249591a2, 5def437f2; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer7/TapeRebuild.lean"
+models = [
+  "crates/jolt-program/src/expand/memory/advice_lb.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/mod.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Also cites 8bbb23578 (1), 0249591a2 (1)."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer7/TerminationStore.lean"
+models = [
+  "crates/jolt-program/src/preprocess/public_io.rs",
+  "crates/jolt-riscv/src/row.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+  "jolt-sdk/macros/src/lib.rs",
+  "tracer/src/emulator/cpu.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Also cites 0249591a2 (2)."
+
+[[file]]
+lean = "JoltConstraints/Soundness/Layer8/OutputWords.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/Soundness/TopLevel.lean"
+models = [
+  "crates/jolt-prover/src/config.rs",
+  "tracer/src/instruction/virtual_assert_eq.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/soundness.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Basic.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/BlockStep.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Blocks.lean"
+models = ["tracer/src/emulator/cpu.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Citations tie between 0249591a2, 5def437f2; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Bridge.lean"
+models = ["tracer/src/instruction/mod.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Bundles.lean"
+models = ["tracer/src/emulator/mmu.rs"]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/WholeRun/CodeInv.lean"
+models = ["tracer/src/emulator/mmu.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Decoded.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Fetch.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Ghost.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Halt.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Init.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Io.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/IoAmo.lean"
+models = ["tracer/src/emulator/mmu.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/WholeRun/LoadAddress.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/NonInterference.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Relation.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Run.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/RunInv.lean"
+models = ["crates/jolt-program/src/image/elf.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/WholeRun/SystemBlocks.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/SystemInv.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Top.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/advice_inputs.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/constraint_context.lean"
+models = [
+  "crates/jolt-verifier/src/config.rs",
+  "crates/jolt-verifier/src/verifier.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/execution_conditions.lean"
+models = []
+note = "Cites Jolt at 0249591a2 without a file path."
+
+[[file]]
+lean = "JoltConstraints/execution_facts.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/virtual_assert_eq.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/expansion_facts.lean"
+models = [
+  "crates/jolt-program/src/expand/control_flow/ecall.rs",
+  "crates/jolt-program/src/expand/control_flow/mret.rs",
+  "crates/jolt-program/src/expand/materialize.rs",
+  "crates/jolt-program/src/expand/memory/shared.rs",
+  "crates/jolt-program/src/expand/metadata.rs",
+  "crates/jolt-program/src/expand/mod.rs",
+  "crates/jolt-riscv/src/lib.rs",
+  "tracer/src/instruction/virtual_advice_load.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+note = "Also cites 5def437f2 (3)."
+
+[[file]]
+lean = "JoltConstraints/expansion_helpers.lean"
+models = [
+  "crates/jolt-program/src/expand/materialize.rs",
+  "crates/jolt-program/src/expand/mod.rs",
+  "crates/jolt-program/src/image/decode.rs",
+  "crates/jolt-riscv/src/kind.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/expansion_temp_liveness.lean"
+models = [
+  "crates/jolt-program/src/expand/allocator.rs",
+  "tracer/src/instruction/virtual_load_b.rs",
+  "tracer/src/instruction/virtual_load_h.rs",
+  "tracer/src/instruction/virtual_load_w.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Citations tie between 8bbb23578, c67035705; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/expansions.lean"
+models = [
+  "crates/jolt-program/src/expand/grammar.rs",
+  "crates/jolt-program/src/expand/mod.rs",
+  "crates/jolt-program/src/image/decode.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/honest_trace.lean"
+models = [
+  "crates/jolt-program/src/expand/memory/scw.rs",
+  "crates/jolt-program/src/expand/metadata.rs",
+  "crates/jolt-program/src/preprocess/public_io.rs",
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-prover/src/preprocessing.rs",
+  "crates/jolt-riscv/src/instructions/i/jal.rs",
+  "crates/jolt-verifier/src/verifier.rs",
+  "jolt-inlines/p256/src/sdk.rs",
+  "jolt-platform/src/spoil.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/div.rs",
+  "tracer/src/instruction/mod.rs",
+  "tracer/src/instruction/scw.rs",
+  "tracer/src/instruction/virtual_assert_eq.rs",
+  "tracer/src/lib.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Citations tie between 0249591a2, 5def437f2; checked is the later one. Also cites 0dad0d9e6 (1), 8bbb23578 (2)."
+
+[[file]]
+lean = "JoltConstraints/honest_witness.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/honest_witness_helpers/ram_inc.lean"
+models = ["crates/jolt-witness/src/witnesses/increments.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/honest_witness_helpers/ram_read_value.lean"
+models = [
+  "crates/jolt-witness/src/witnesses/ram.rs",
+  "tracer/src/instruction/floor_access.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/honest_witness_helpers/ram_val.lean"
+models = ["crates/jolt-witness/src/backend/trace/ram.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/language.lean"
+models = [
+  "book/src/usage/guests_hosts/guests.md",
+  "crates/jolt-prover/src/config.rs",
+  "jolt-platform/src/spoil.rs",
+  "jolt-sdk/src/host_utils.rs",
+  "tracer/src/instruction/virtual_assert_eq.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/layout_facts.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-verifier/src/verifier.rs",
+  "tracer/src/lib.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+note = "Also cites 5def437f2 (1)."
+
+[[file]]
+lean = "JoltConstraints/lookup_table.lean"
+models = [
+  "crates/jolt-lookup-tables/src/interleave.rs",
+  "crates/jolt-lookup-tables/src/tables/address_offset.rs",
+  "crates/jolt-lookup-tables/src/tables/and.rs",
+  "crates/jolt-lookup-tables/src/tables/andn.rs",
+  "crates/jolt-lookup-tables/src/tables/equal.rs",
+  "crates/jolt-lookup-tables/src/tables/lower_half_word.rs",
+  "crates/jolt-lookup-tables/src/tables/mod.rs",
+  "crates/jolt-lookup-tables/src/tables/mulu_no_overflow.rs",
+  "crates/jolt-lookup-tables/src/tables/not_equal.rs",
+  "crates/jolt-lookup-tables/src/tables/or.rs",
+  "crates/jolt-lookup-tables/src/tables/pext.rs",
+  "crates/jolt-lookup-tables/src/tables/pext_signed.rs",
+  "crates/jolt-lookup-tables/src/tables/pow2.rs",
+  "crates/jolt-lookup-tables/src/tables/pow2_w.rs",
+  "crates/jolt-lookup-tables/src/tables/range_check.rs",
+  "crates/jolt-lookup-tables/src/tables/range_check_aligned.rs",
+  "crates/jolt-lookup-tables/src/tables/shift_data_b.rs",
+  "crates/jolt-lookup-tables/src/tables/shift_data_h.rs",
+  "crates/jolt-lookup-tables/src/tables/shift_data_w.rs",
+  "crates/jolt-lookup-tables/src/tables/shift_right_bitmask.rs",
+  "crates/jolt-lookup-tables/src/tables/shift_right_bitmask_w.rs",
+  "crates/jolt-lookup-tables/src/tables/sign_extend_word.rs",
+  "crates/jolt-lookup-tables/src/tables/sign_mask.rs",
+  "crates/jolt-lookup-tables/src/tables/signed_greater_than_equal.rs",
+  "crates/jolt-lookup-tables/src/tables/signed_less_than.rs",
+  "crates/jolt-lookup-tables/src/tables/suffixes/pext.rs",
+  "crates/jolt-lookup-tables/src/tables/suffixes/window_sign.rs",
+  "crates/jolt-lookup-tables/src/tables/unsigned_greater_than_equal.rs",
+  "crates/jolt-lookup-tables/src/tables/unsigned_less_than.rs",
+  "crates/jolt-lookup-tables/src/tables/unsigned_less_than_equal.rs",
+  "crates/jolt-lookup-tables/src/tables/upper_word.rs",
+  "crates/jolt-lookup-tables/src/tables/valid_div0.rs",
+  "crates/jolt-lookup-tables/src/tables/valid_unsigned_remainder.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_negate_if.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_rev8w.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_rotr.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_rotrw.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_sra.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_sraw.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_srl.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_srlw.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_xor_rot.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_xor_rotl1.rs",
+  "crates/jolt-lookup-tables/src/tables/virtual_xor_rotw.rs",
+  "crates/jolt-lookup-tables/src/tables/window_mask_b.rs",
+  "crates/jolt-lookup-tables/src/tables/window_mask_h.rs",
+  "crates/jolt-lookup-tables/src/tables/window_mask_w.rs",
+  "crates/jolt-lookup-tables/src/tables/xor.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/memory_presence.lean"
+models = [
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/metadata.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+  "crates/jolt-lookup-tables/src/traits.rs",
+  "crates/jolt-program/src/expand/memory/shared.rs",
+  "crates/jolt-riscv/src/instructions/i/ld.rs",
+  "crates/jolt-riscv/src/instructions/i/sd.rs",
+  "crates/jolt-riscv/src/lib.rs",
+  "crates/jolt-witness/src/witnesses/flags.rs",
+  "tracer/src/instruction/format/format_load.rs",
+  "tracer/src/instruction/format/format_s.rs",
+  "tracer/src/instruction/format/format_shift_data.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Also cites 8bbb23578 (1)."
+
+[[file]]
+lean = "JoltConstraints/nextpc_frame.lean"
+models = [
+  "tracer/src/emulator/mmu.rs",
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/ld.rs",
+  "tracer/src/instruction/sd.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/program.lean"
+models = [
+  "common/src/constants.rs",
+  "crates/jolt-host/src/program.rs",
+  "crates/jolt-program/src/expand/materialize.rs",
+  "crates/jolt-program/src/expand/metadata.rs",
+  "crates/jolt-program/src/expand/mod.rs",
+  "crates/jolt-program/src/image/decode.rs",
+  "crates/jolt-program/src/image/elf.rs",
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+  "crates/jolt-program/src/preprocess/program.rs",
+  "crates/jolt-program/src/preprocess/public_io.rs",
+  "crates/jolt-program/src/preprocess/ram.rs",
+  "crates/jolt-prover/src/preprocessing.rs",
+  "crates/jolt-riscv/src/lib.rs",
+  "crates/jolt-riscv/src/row.rs",
+  "crates/jolt-verifier/src/preprocessing.rs",
+  "crates/jolt-verifier/src/verifier.rs",
+  "jolt-sdk/src/host_utils.rs",
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/emulator/memory.rs",
+  "tracer/src/emulator/mod.rs",
+  "tracer/src/lib.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+note = "Also cites 0249591a2 (1), 5def437f2 (2)."
+
+[[file]]
+lean = "JoltConstraints/program_facts.lean"
+models = [
+  "crates/jolt-program/src/expand/materialize.rs",
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/prover_config.lean"
+models = [
+  "crates/jolt-program/src/execution/trace.rs",
+  "crates/jolt-prover/src/config.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Also cites c97e93004 (1)."
+
+[[file]]
+lean = "JoltConstraints/prover_config_facts.lean"
+models = [
+  "crates/jolt-program/src/execution/trace.rs",
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+]
+checked = "c97e93004fbf804409f0374fe8457c8f1562ce71"
+note = "Also cites 5def437f2 (1), c67035705 (3)."
+
+[[file]]
+lean = "JoltConstraints/register_encoding.lean"
+models = [
+  "common/src/constants.rs",
+  "tracer/src/instruction/format/format_load.rs",
+  "tracer/src/instruction/format/format_s.rs",
+  "tracer/src/instruction/format/format_shift_data.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/trace.lean"
+models = [
+  "crates/jolt-program/src/execution/trace.rs",
+  "crates/jolt-riscv/src/trace_row.rs",
+  "tracer/src/instruction/floor_access.rs",
+  "tracer/src/instruction/mod.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Citations tie between 8bbb23578, 5def437f2, c67035705; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/trace_facts.lean"
+models = [
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/trace_interface.lean"
+models = [
+  "tracer/src/emulator/cpu.rs",
+  "tracer/src/instruction/format/format_b.rs",
+  "tracer/src/lib.rs",
+]
+checked = "0249591a293aa40dc4ebba92818e1367c66ea633"
+
+[[file]]
+lean = "JoltConstraints/verifier_sizes.lean"
+models = [
+  "crates/jolt-claims/src/protocols/jolt/geometry/committed_openings.rs",
+  "crates/jolt-dory/src/scheme.rs",
+  "crates/jolt-program/src/preprocess/ram.rs",
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-prover/src/dory/preprocessing.rs",
+  "crates/jolt-verifier/src/stages/stage8/verify.rs",
+]
+checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+note = "Also cites c97e93004 (1)."
+
+[[file]]
+lean = "JoltConstraints/witness.lean"
+models = [
+  "common/src/constants.rs",
+  "crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs",
+  "crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs",
+  "crates/jolt-lookup-tables/src/tables/mod.rs",
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-riscv/src/flags.rs",
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/backend/trace/mod.rs",
+  "crates/jolt-witness/src/backend/trace/oracle.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+  "crates/jolt-witness/src/backend/trace/registers.rs",
+  "crates/jolt-witness/src/witnesses/flags.rs",
+  "crates/jolt-witness/src/witnesses/increments.rs",
+  "crates/jolt-witness/src/witnesses/lookups.rs",
+  "crates/jolt-witness/src/witnesses/one_hot.rs",
+  "crates/jolt-witness/src/witnesses/operands.rs",
+  "crates/jolt-witness/src/witnesses/pc.rs",
+  "crates/jolt-witness/src/witnesses/ram.rs",
+  "crates/jolt-witness/src/witnesses/registers.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Also cites 8bbb23578 (1)."
+
+[[file]]
+lean = "JoltConstraints/witness_domain.lean"
+models = [
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+]
+checked = "c97e93004fbf804409f0374fe8457c8f1562ce71"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/address_chunk.lean"
+models = [
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/witnesses/one_hot.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/branch.lean"
+models = ["crates/jolt-witness/src/witnesses/flags.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/bytecode_ra_chunk.lean"
+models = ["crates/jolt-witness/src/witnesses/one_hot.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/destination_capture.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/imm.lean"
+models = ["crates/jolt-witness/src/witnesses/operands.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/instruction_flags.lean"
+models = [
+  "crates/jolt-riscv/src/instructions/i/noop.rs",
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/witnesses/flags.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/instruction_ra.lean"
+models = ["crates/jolt-witness/src/backend/trace/oracle.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/instruction_ra_chunk.lean"
+models = ["crates/jolt-witness/src/witnesses/one_hot.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/instruction_raf_flag.lean"
+models = [
+  "crates/jolt-riscv/src/flags.rs",
+  "crates/jolt-riscv/src/instructions/i/noop.rs",
+  "crates/jolt-witness/src/witnesses/flags.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/left_instruction_input.lean"
+models = ["crates/jolt-witness/src/witnesses/operands.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/left_lookup_operand.lean"
+models = ["crates/jolt-witness/src/witnesses/operands.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/lookup_index.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/addi.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/jal.rs",
+  "crates/jolt-lookup-tables/src/interleave.rs",
+  "crates/jolt-lookup-tables/src/traits.rs",
+  "crates/jolt-program/src/image/decode.rs",
+  "crates/jolt-witness/src/witnesses/lookups.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Citations tie between 5def437f2, c67035705; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/lookup_output.lean"
+models = [
+  "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+  "crates/jolt-witness/src/witnesses/lookups.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/lookup_table_flag.lean"
+models = ["crates/jolt-witness/src/witnesses/flags.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/next_is_first_in_sequence.lean"
+models = [
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/witnesses/flags.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/next_is_noop.lean"
+models = [
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/witnesses/flags.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/next_is_virtual.lean"
+models = [
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/witnesses/flags.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/next_pc.lean"
+models = [
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/witnesses/pc.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/next_unexpanded_pc.lean"
+models = [
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/witnesses/pc.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/op_flags.lean"
+models = [
+  "crates/jolt-riscv/src/instructions/mod.rs",
+  "crates/jolt-witness/src/backend/trace/cycle.rs",
+  "crates/jolt-witness/src/witnesses/flags.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/pc.lean"
+models = [
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+  "crates/jolt-witness/src/witnesses/pc.rs",
+]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/product.lean"
+models = ["crates/jolt-witness/src/witnesses/operands.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/ram_address.lean"
+models = [
+  "crates/jolt-witness/src/witnesses/ram.rs",
+  "tracer/src/instruction/floor_access.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Citations tie between 8bbb23578, c67035705; checked is the later one."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/ram_hamming_weight.lean"
+models = ["crates/jolt-witness/src/witnesses/ram.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/ram_ra.lean"
+models = ["crates/jolt-witness/src/backend/trace/ram.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/ram_ra_chunk.lean"
+models = [
+  "common/src/jolt_device.rs",
+  "crates/jolt-witness/src/witnesses/one_hot.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/ram_state.lean"
+models = [
+  "crates/jolt-program/src/preprocess/ram.rs",
+  "crates/jolt-witness/src/backend/trace/ram.rs",
+]
+checked = "8e536f199735ac8187156aa589ed1387722a079a"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/ram_val_final.lean"
+models = ["crates/jolt-witness/src/backend/trace/ram.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/ram_write_value.lean"
+models = [
+  "crates/jolt-witness/src/witnesses/ram.rs",
+  "tracer/src/instruction/floor_access.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/rd_inc.lean"
+models = ["crates/jolt-witness/src/witnesses/increments.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/rd_value.lean"
+models = [
+  "tracer/src/instruction/virtual_load_b.rs",
+  "tracer/src/instruction/virtual_load_h.rs",
+  "tracer/src/instruction/virtual_load_w.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/rd_wa.lean"
+models = [
+  "tracer/src/instruction/virtual_load_b.rs",
+  "tracer/src/instruction/virtual_load_h.rs",
+  "tracer/src/instruction/virtual_load_w.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/rd_write_value.lean"
+models = ["crates/jolt-witness/src/witnesses/registers.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/register_address.lean"
+models = ["common/src/constants.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/registers_val.lean"
+models = ["crates/jolt-witness/src/backend/trace/registers.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/right_instruction_input.lean"
+models = ["crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs"]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/right_lookup_operand.lean"
+models = [
+  "crates/jolt-lookup-tables/src/traits.rs",
+  "crates/jolt-witness/src/witnesses/operands.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/rs1_ra.lean"
+models = [
+  "tracer/src/instruction/virtual_load_b.rs",
+  "tracer/src/instruction/virtual_load_h.rs",
+  "tracer/src/instruction/virtual_load_w.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/rs1_value.lean"
+models = [
+  "tracer/src/instruction/virtual_load_b.rs",
+  "tracer/src/instruction/virtual_load_h.rs",
+  "tracer/src/instruction/virtual_load_w.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/rs2_ra.lean"
+models = [
+  "tracer/src/instruction/virtual_load_b.rs",
+  "tracer/src/instruction/virtual_load_h.rs",
+  "tracer/src/instruction/virtual_load_w.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/rs2_value.lean"
+models = [
+  "tracer/src/instruction/virtual_load_b.rs",
+  "tracer/src/instruction/virtual_load_h.rs",
+  "tracer/src/instruction/virtual_load_w.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/should_jump.lean"
+models = ["crates/jolt-witness/src/witnesses/flags.rs"]
+checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+
+[[file]]
+lean = "JoltConstraints/witness_helpers/unexpanded_pc.lean"
+models = ["crates/jolt-witness/src/witnesses/pc.rs"]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/witness_helpers.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/witness_params.lean"
+models = [
+  "common/src/constants.rs",
+  "crates/jolt-program/src/preprocess/bytecode.rs",
+  "crates/jolt-prover/src/config.rs",
+  "crates/jolt-prover/src/dory/stages/stage0.rs",
+  "crates/jolt-riscv/src/trace_row.rs",
+  "tracer/src/instruction/floor_access.rs",
+]
+checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
+note = "Also cites c97e93004 (1)."
+
+# Baseline of existing violations; see the header. Generated with
+# scripts/check-provenance.py --print-baseline and checked by hand
+# (reports/2026-11-11-provenance.md lists them by kind).
+
+[[known]]
+file = "JoltBytecode/Assumptions.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltBytecode/Decode/Agreement.lean"
+kind = "revision"
+text = "b65455e6d"
+count = 2
+
+[[known]]
+file = "JoltBytecode/JoltISA/AdviceTape.lean"
+kind = "local-path"
+text = "Users"
+count = 2
+
+[[known]]
+file = "JoltBytecode/JoltISA/Expansions/System.lean"
+kind = "revision"
+text = "a86ec3716"
+count = 6
+
+[[known]]
+file = "JoltBytecode/JoltISA/Instruction.lean"
+kind = "fork"
+text = "abiswas3"
+count = 5
+
+[[known]]
+file = "JoltBytecode/JoltISA/Instruction.lean"
+kind = "local-path"
+text = "Users"
+count = 2
+
+[[known]]
+file = "JoltBytecode/JoltISA/Instruction.lean"
+kind = "revision"
+text = "5def437f"
+count = 2
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/Values.lean"
+kind = "local-path"
+text = "Users"
+count = 3
+
+[[known]]
+file = "JoltBytecode/JoltISA/semantic_helpers.lean"
+kind = "local-path"
+text = "Users"
+count = 3
+
+[[known]]
+file = "JoltBytecode/RiscvInstruction.lean"
+kind = "local-path"
+text = "Users"
+count = 2
+
+[[known]]
+file = "JoltConstraints/Completeness/BytecodeRaAtEntryEqOne.lean"
+kind = "revision"
+text = "3cb4e24361ae2006e9713ae65d58a3fa51fd0518"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Completeness/Helpers/VerifierSizes.lean"
+kind = "revision"
+text = "c97e9300"
+count = 3
+
+[[known]]
+file = "JoltConstraints/Constraints/AssertLookupOne.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeRaChunkBooleanity.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeRaChunkHammingWeight.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeReadData.lean"
+kind = "fork"
+text = "abiswas3"
+count = 4
+
+[[known]]
+file = "JoltConstraints/Constraints/BytecodeReadSelectors.lean"
+kind = "revision"
+text = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+count = 2
+
+[[known]]
+file = "JoltConstraints/Constraints/InstructionRaChunkBooleanity.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/InstructionRaChunkHammingWeight.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/InstructionRaEqChunkProduct.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LeftInstructionInputEqSelection.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LeftLookupEqLeftInputOtherwise.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LeftLookupOperandEqInstructionRaf.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LeftLookupZeroIfAddSubMul.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/LookupOperandData.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/MemoryLayout.lean"
+kind = "revision"
+text = "754fc88214936801a7d8a2260d9fc73478be4cbd"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/MustStartSequenceFromBeginning.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/NextPCEqPCPlusOneIfInline.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/NextUnexpandedPCUpdateOtherwise.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamAddrEqZeroIfNotLoadStore.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamAddressEqRamRaf.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamHammingWeightBooleanity.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamOutputEqPublicIo.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamRaChunkBooleanity.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamRaChunkHammingWeight.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamRaEqChunkProduct.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadData.lean"
+kind = "fork"
+text = "abiswas3"
+count = 4
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadEqRamWriteIfLoad.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadEqRdWriteIfLoad.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamReadValueEqRamRead.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamValEqInitialPlusPrefixRamInc.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamValFinalEqInitialPlusRamInc.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RamWriteValueEqRamReadWrite.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RdWriteEqLookupIfWriteLookupToRd.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RdWriteEqPCPlusConstIfJump.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RdWriteValueEqRegistersReadWrite.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RegistersValEqPrefixRdInc.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupAdd.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupEqProductIfMul.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupEqRightInputOtherwise.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupOperandEqInstructionRaf.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/RightLookupSub.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/Rs1ValueEqRegistersRead.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/Rs2EqRamWriteIfStore.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/Rs2ValueEqRegistersRead.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/ShouldBranchEqLookupOutputMulBranch.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer4/Interleave.lean"
+kind = "revision"
+text = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/AssertionsBinary.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/DeviceMemory.lean"
+kind = "revision"
+text = "c6703570"
+count = 3
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/MemoryAccessRestriction.lean"
+kind = "revision"
+text = "0249591a"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/MemoryAccessRestriction.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/RamStore.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/StoreDoubleword.lean"
+kind = "revision"
+text = "5def437f"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/TapeTrace.lean"
+kind = "revision"
+text = "5def437f"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/VirtualBinary.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer6/RowStepMemory.lean"
+kind = "revision"
+text = "5def437f"
+count = 2
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer7/LastJump.lean"
+kind = "revision"
+text = "5def437f"
+count = 2
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer7/StallSuffix.lean"
+kind = "revision"
+text = "0249591a"
+count = 19
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer7/StallSuffix.lean"
+kind = "revision"
+text = "5def437f"
+count = 15
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer7/Stopping.lean"
+kind = "revision"
+text = "0249591a"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer7/TapeRebuild.lean"
+kind = "revision"
+text = "0249591a"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer7/TapeRebuild.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer7/TerminationStore.lean"
+kind = "revision"
+text = "0249591a"
+count = 2
+
+[[known]]
+file = "JoltConstraints/WholeRun/Blocks.lean"
+kind = "revision"
+text = "0249591a"
+count = 1
+
+[[known]]
+file = "JoltConstraints/constraints.md"
+kind = "revision"
+text = "5def437f"
+count = 2
+
+[[known]]
+file = "JoltConstraints/constraints.md"
+kind = "revision"
+text = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+count = 2
+
+[[known]]
+file = "JoltConstraints/constraints.md"
+kind = "revision"
+text = "8bbb2357"
+count = 3
+
+[[known]]
+file = "JoltConstraints/constraints.md"
+kind = "revision"
+text = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+count = 26
+
+[[known]]
+file = "JoltConstraints/constraints.md"
+kind = "revision"
+text = "c6703570"
+count = 4
+
+[[known]]
+file = "JoltConstraints/constraints.md"
+kind = "revision"
+text = "c97e9300"
+count = 1
+
+[[known]]
+file = "JoltConstraints/execution_conditions.lean"
+kind = "revision"
+text = "0249591a"
+count = 1
+
+[[known]]
+file = "JoltConstraints/expansion_facts.lean"
+kind = "revision"
+text = "5def437f"
+count = 3
+
+[[known]]
+file = "JoltConstraints/expansion_temp_liveness.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/honest_trace.lean"
+kind = "revision"
+text = "0249591a"
+count = 3
+
+[[known]]
+file = "JoltConstraints/honest_trace.lean"
+kind = "revision"
+text = "0dad0d9e"
+count = 1
+
+[[known]]
+file = "JoltConstraints/honest_trace.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/honest_trace.lean"
+kind = "revision"
+text = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+count = 1
+
+[[known]]
+file = "JoltConstraints/layout_facts.lean"
+kind = "revision"
+text = "5def437f"
+count = 1
+
+[[known]]
+file = "JoltConstraints/lookup_table.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/metadata.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/metadata.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/model_review.md"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/model_review.md"
+kind = "revision"
+text = "00508a09"
+count = 1
+
+[[known]]
+file = "JoltConstraints/model_review.md"
+kind = "revision"
+text = "5def437f"
+count = 3
+
+[[known]]
+file = "JoltConstraints/model_review.md"
+kind = "revision"
+text = "c6703570"
+count = 2
+
+[[known]]
+file = "JoltConstraints/model_review.md"
+kind = "revision"
+text = "c97e9300"
+count = 1
+
+[[known]]
+file = "JoltConstraints/model_review.md"
+kind = "revision"
+text = "c97e93004fbf804409f0374fe8457c8f1562ce71"
+count = 2
+
+[[known]]
+file = "JoltConstraints/program.lean"
+kind = "revision"
+text = "0249591a"
+count = 1
+
+[[known]]
+file = "JoltConstraints/program.lean"
+kind = "revision"
+text = "5def437f"
+count = 2
+
+[[known]]
+file = "JoltConstraints/prover_config.lean"
+kind = "revision"
+text = "c97e9300"
+count = 1
+
+[[known]]
+file = "JoltConstraints/prover_config_facts.lean"
+kind = "revision"
+text = "5def437f"
+count = 1
+
+[[known]]
+file = "JoltConstraints/prover_config_facts.lean"
+kind = "revision"
+text = "c6703570"
+count = 3
+
+[[known]]
+file = "JoltConstraints/register_encoding.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/trace.lean"
+kind = "revision"
+text = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+count = 1
+
+[[known]]
+file = "JoltConstraints/trace.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/verifier_sizes.lean"
+kind = "revision"
+text = "c97e9300"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness.lean"
+kind = "revision"
+text = "8bbb2357"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_domain.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/address_chunk.lean"
+kind = "local-path"
+text = "Users"
+count = 2
+
+[[known]]
+file = "JoltConstraints/witness_helpers/branch.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/bytecode_ra_chunk.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/imm.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_flags.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_ra.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_ra_chunk.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/instruction_raf_flag.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/left_instruction_input.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/left_lookup_operand.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/lookup_index.lean"
+kind = "local-path"
+text = "Users"
+count = 4
+
+[[known]]
+file = "JoltConstraints/witness_helpers/lookup_index.lean"
+kind = "revision"
+text = "5def437f"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/lookup_output.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/lookup_table_flag.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/op_flags.lean"
+kind = "fork"
+text = "abiswas3"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/op_flags.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/product.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_address.lean"
+kind = "revision"
+text = "8bbb2357890928d8f83b00ca542879077c4d3d28"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_hamming_weight.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_ra.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_ra_chunk.lean"
+kind = "local-path"
+text = "Users"
+count = 2
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_state.lean"
+kind = "local-path"
+text = "Users"
+count = 4
+
+[[known]]
+file = "JoltConstraints/witness_helpers/ram_val_final.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/register_address.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_helpers/unexpanded_pc.lean"
+kind = "local-path"
+text = "Users"
+count = 1
+
+[[known]]
+file = "JoltConstraints/witness_params.lean"
+kind = "revision"
+text = "c97e9300"
+count = 1
+
+[[known]]
+file = "README.md"
+kind = "revision"
+text = "c336a6da7"
+count = 1
+
+[[known]]
+file = "README.md"
+kind = "revision"
+text = "c97e9300"
+count = 1
+
+[[known]]
+file = "docs/inline-precompiles.md"
+kind = "revision"
+text = "4e55c9a5f"
+count = 2
+
+[[known]]
+file = "docs/inline-precompiles.md"
+kind = "revision"
+text = "629b7d959"
+count = 1
+
+[[known]]
+file = "docs/inline-precompiles.md"
+kind = "revision"
+text = "70e00da09"
+count = 2
+
+[[known]]
+file = "docs/inline-precompiles.md"
+kind = "revision"
+text = "db9679295"
+count = 2
+
+[[known]]
+file = "docs/riscv-alignment.md"
+kind = "revision"
+text = "9407f93f"
+count = 2
+
+[[known]]
+file = "docs/riscv-alignment.md"
+kind = "revision"
+text = "c336a6da7"
+count = 2
+
+[[known]]
+file = "docs/riscv-alignment.md"
+kind = "revision"
+text = "c6703570"
+count = 1
+
+[[known]]
+file = "docs/whole-run-theorem.md"
+kind = "revision"
+text = "c336a6da7"
+count = 1
