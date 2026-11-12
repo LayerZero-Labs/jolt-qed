@@ -32,7 +32,9 @@ private theorem ramImageWord_getLsbD (byte : Nat → BitVec 8) (start : Nat)
   all_goals repeat' (rw [BitVec.getLsbD_append]; split_ifs <;> try omega)
   all_goals congr 1 <;> omega
 
-/-- Packing the eight little-endian bytes of a word gives the word back. -/
+/-- Packing the eight little-endian bytes of a word gives the word back. For example,
+if bytes `start` through `start + 7` are `0x02, 0x01, 0, 0, 0, 0, 0, 0`, the packed word
+is `0x0102`. -/
 theorem ramImageWord_of_bytes (word : BitVec 64) (byte : Nat → BitVec 8) (start : Nat)
     (bytes : ∀ offset < 8, byte (start + offset) = word.extractLsb' (8 * offset) 8) :
     ramImageWord byte start = word := by

@@ -114,7 +114,9 @@ theorem AllConstraintsOnBytes.advice_tape_irrelevant {F : Type} [Field F]
     exact ⟨context.withAdviceTape tape, equations⟩
 
 /-- The untrusted-advice words of a 64-bit initial RAM: word `index` of the
-untrusted-advice block, cast into the field. -/
+untrusted-advice block, cast into the field. For example, if `untrusted_advice_start`
+remaps to word 100, then `adviceBlockWords layout initialRam 1` is the field cast of
+`initialRam 101`. If `untrusted_advice_start` does not remap, every word is zero. -/
 noncomputable def adviceBlockWords {F : Type} [Field F] (layout : MemoryLayout)
     (initialRam : Nat → BitVec 64) (index : Nat) : F :=
   match TraceWitness.remapRamAddress layout layout.untrusted_advice_start with

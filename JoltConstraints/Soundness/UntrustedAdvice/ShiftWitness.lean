@@ -60,7 +60,9 @@ variable {witness : WitnessType F params}
 
 include charAbove2pow127 context equations
 
-/-- Every circuit flag is zero or one. -/
+/-- Every circuit flag is zero or one. For example, at a row that selects an `LD`
+bytecode entry, `witness.OpFlags .Load t = 1`, and at a row that selects an `ADD` entry
+it is `0`. -/
 theorem opFlag_zero_or_one (flag : CircuitFlags) (t : Fin params.traceLength) :
     witness.OpFlags flag t = 0 ∨ witness.OpFlags flag t = 1 := by
   obtain ⟨slot, selected, _⟩ := bytecodeRa_unique charAbove2pow127 context equations t

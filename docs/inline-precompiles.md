@@ -362,10 +362,13 @@ def collectInlineAdvice (program : Rv64ProgramImage SourceInstruction)
     if stepNOfTraceIsInlineAdvice program rows n then rows[n]?.bind (·.someTracerAdvice?)
     else none).toArray
 
--- The constraints do not read `inline_advice`.
-theorem allConstraints_inline_advice (words : Array (BitVec 64)) :
-    AllConstraints joltInstance { privateInputs with inline_advice := words } witness ↔
-      AllConstraints joltInstance privateInputs witness
+-- The byte relation does not read `inline_advice`. `AllConstraints` takes the committed
+-- untrusted-advice words `untrustedAdvice : Nat → F` instead of private inputs, so it
+-- cannot read `inline_advice`, and the soundness proof reaches the byte relation through
+-- `onBytes_of_allConstraints`.
+theorem allConstraintsOnBytes_inline_advice (words : Array (BitVec 64)) :
+    AllConstraintsOnBytes joltInstance { privateInputs with inline_advice := words } witness ↔
+      AllConstraintsOnBytes joltInstance privateInputs witness
 
 -- With the collected words in the field, every inline advice step is honest.
 theorem collectInlineAdvice_honest (rows : Array (TraceRow bytecode)) (n : Fin rows.size)

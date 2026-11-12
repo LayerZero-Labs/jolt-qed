@@ -33,7 +33,10 @@ def NarrowLoad (instruction : JoltISA.Instr) : Prop :=
     ExpansionFacts.loadSelfChecked instruction = false
 
 /-- A load, a mask row that leaves the load's destination unchanged, and a row that
-reads that destination as its left lookup operand. -/
+reads that destination as its left lookup operand. For example, the `LB` expansion
+starts with `VirtualLoadB` into `dw`, then `VirtualWindowMaskB` into a lane register
+other than `dw`, then `VirtualPextSigned` reading `dw` as `rs1`: these three rows form a
+load window for `dw`. -/
 def LoadWindow (window : Fin 3 → JoltISA.Instr) : Prop :=
   ∃ register, bytecodeRdRegister (window 0) = some register ∧
     bytecodeRdRegister (window 1) ≠ some register ∧

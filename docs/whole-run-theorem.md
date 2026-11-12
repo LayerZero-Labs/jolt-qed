@@ -29,6 +29,7 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
+    (adviceBlockFits : joltInstance.UntrustedAdviceBlockFits)
     {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness)

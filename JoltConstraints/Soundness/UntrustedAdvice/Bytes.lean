@@ -21,7 +21,10 @@ open TraceWitness
 
 open Classical in
 /-- The 64-bit word stored at untrusted-advice index `index`: the committed word if it is
-the cast of a 64-bit word, and zero otherwise. -/
+the cast of a 64-bit word, and zero otherwise. For example, if `untrustedAdvice 3` is the
+cast of `0x0102`, then `adviceWord untrustedAdvice 3 = 0x0102`; if `untrustedAdvice 3` is
+`2 ^ 64` in a field of characteristic above `2 ^ 64`, then
+`adviceWord untrustedAdvice 3 = 0`. -/
 noncomputable def adviceWord {F : Type} [Field F] (untrustedAdvice : Nat → F) (index : Nat) :
     BitVec 64 :=
   if h : ∃ value : BitVec 64, untrustedAdvice index = (value.toNat : F) then h.choose else 0
