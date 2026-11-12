@@ -4,7 +4,7 @@ Date: 2026-11-12.
 Jolt commit: a16z/jolt `a6b6dc717` (contains a16z/jolt#2190, `4e55c9a5f`).
 Lean commit: `86e3c7a` (the Lean implementation) on the pushed branch `t5/advice-field`, based on `inline/t1-driver` at `b648846`.
 The local worktree branch is `track/t5-advice-field`; `t5/advice-field` is the name to cite.
-Line numbers in the statement inventory refer to `5354ac5`, which changes only docstrings and Markdown after `86e3c7a`.
+Line numbers in the statement inventory refer to `6a44511`; the commits after `86e3c7a` change only docstrings and Markdown.
 Scope: every column of `WitnessType` (`JoltConstraints/witness.lean`) and every other input of the relation `AllConstraints` (`JoltConstraints/Constraints/All.lean`).
 For each one, this note compares the value Jolt's verifier has with the Lean type, and lists the mismatches.
 Only the untrusted-advice mismatch is fixed on this branch; the other fixes below are proposals.
@@ -105,7 +105,7 @@ Summary:
 * Removed: `materialized_pairs` and the private `pairs_append` and `pairs_flatten` (`Layer7/AdjacentRows.lean`), replaced by their window versions.
 * Unchanged: `InLanguage`, the execution semantics, `Pairs`, and the six fields of `TemporaryRestrictions`.
 
-Every changed or new declaration, with its line at `5354ac5` (paths relative to `JoltConstraints/`).
+Every changed or new declaration, with its line at `6a44511` (paths relative to `JoltConstraints/`).
 "New" means the declaration did not exist at `b648846`.
 
 `Completeness/All.lean`:
@@ -129,11 +129,11 @@ Every changed or new declaration, with its line at `5354ac5` (paths relative to 
 
 * `FieldConstraintEquations` (line 78): new.
 * `ConstraintEquations` (line 157): now an abbreviation for `FieldConstraintEquations` at `ramInitialValue initialRam`.
-* `_root_.JoltPrivateInputs.noUntrustedAdvice` (line 168): new.
-* `untrustedAdviceWordIndex?` (line 176): new.
-* `committedInitialValue` (line 191): new.
-* `AllConstraintsOnBytes` (line 206): the old `AllConstraints`, statement unchanged.
-* `AllConstraints` (line 223): takes `untrustedAdvice : Nat → F` instead of `privateInputs`.
+* `_root_.JoltPrivateInputs.noUntrustedAdvice` (line 170): new.
+* `untrustedAdviceWordIndex?` (line 181): new.
+* `committedInitialValue` (line 199): new.
+* `AllConstraintsOnBytes` (line 216): the old `AllConstraints`, statement unchanged.
+* `AllConstraints` (line 233): takes `untrustedAdvice : Nat → F` instead of `privateInputs`.
 
 `Constraints/RamValEqInitialPlusPrefixRamInc.lean`:
 
@@ -263,52 +263,52 @@ Every changed or new declaration, with its line at `5354ac5` (paths relative to 
 
 `Soundness/Layer7/AdjacentRows.lean`:
 
-* `window_bound` (line 17): new.
-* `Windows` (line 25): new.
-* `windows_append` (line 41): new.
-* `windows_flatten` (line 73): new.
-* `WithinSource` (line 88): new.
-* `materialized_windows` (line 98): new.
-* `expand_program_windows` (line 128): new.
-* `expand_program_pairs` (line 160): statement unchanged, now the width-two case of `expand_program_windows`.
+* `window_bound` (line 19): new.
+* `Windows` (line 27): new.
+* `windows_append` (line 43): new.
+* `windows_flatten` (line 75): new.
+* `WithinSource` (line 93): new.
+* `materialized_windows` (line 106): new.
+* `expand_program_windows` (line 139): new.
+* `expand_program_pairs` (line 171): statement unchanged, now the width-two case of `expand_program_windows`.
 
 `Soundness/UntrustedAdvice/Bytes.lean`:
 
 * `adviceWord` (line 28): new.
 * `wordBytes` (line 35): new.
-* `byteInitialRam` (line 40): new.
-* `wordBytes_size` (line 48): new.
-* `ramImageWord_wordBytes` (line 53): new.
-* `byteInitialRam_good` (line 67): new.
-* `publicIoMask_of_untrustedAdvice` (line 84): new.
-* `byteInitialRam_masked` (line 109): new.
-* `initialRamWordFromState_untrustedAdvice` (line 125): new.
-* `onBytes_of_allConstraints` (line 196): new.
+* `byteInitialRam` (line 44): new.
+* `wordBytes_size` (line 52): new.
+* `ramImageWord_wordBytes` (line 58): new.
+* `byteInitialRam_good` (line 75): new.
+* `publicIoMask_of_untrustedAdvice` (line 94): new.
+* `byteInitialRam_masked` (line 121): new.
+* `initialRamWordFromState_untrustedAdvice` (line 140): new.
+* `onBytes_of_allConstraints` (line 214): new.
 
 `Soundness/UntrustedAdvice/LoadWords.lean`:
 
 * `NarrowLoad` (line 31): new.
 * `LoadWindow` (line 40): new.
-* `loadWindowsOk_windows` (line 46): new.
-* `expand_program_loadWindows` (line 88): new.
-* `narrowLoad_window` (line 101): new.
-* `selfChecked_rdWriteValue_word` (line 156): new.
-* `narrowLoad_rdWriteValue_word` (line 180): new.
-* `load_rdWriteValue_word` (line 236): new.
-* `load_ramReadValue_word` (line 257): new.
+* `loadWindowsOk_windows` (line 49): new.
+* `expand_program_loadWindows` (line 93): new.
+* `narrowLoad_window` (line 108): new.
+* `selfChecked_rdWriteValue_word` (line 163): new.
+* `narrowLoad_rdWriteValue_word` (line 189): new.
+* `load_rdWriteValue_word` (line 247): new.
+* `load_ramReadValue_word` (line 270): new.
 
 `Soundness/UntrustedAdvice/ShiftWitness.lean`:
 
-* `Untouched` (line 27): new; unrelated to `WholeRun.Untouched`.
-* `correction` (line 34): new.
-* `accessCorrection` (line 39): new.
-* `shiftWitness` (line 44): new.
-* `opFlag_zero_or_one` (line 66): new.
-* `prefix_correction` (line 76): new.
-* `ramRa_mul_accessCorrection` (line 121): new.
-* `load_mul_accessCorrection` (line 140): new.
-* `shifted_history` (line 175): new.
-* `shiftWitness_equations` (line 207): new.
+* `Untouched` (line 29): new; unrelated to `WholeRun.Untouched`.
+* `correction` (line 39): new.
+* `accessCorrection` (line 46): new.
+* `shiftWitness` (line 54): new.
+* `opFlag_zero_or_one` (line 76): new.
+* `prefix_correction` (line 88): new.
+* `ramRa_mul_accessCorrection` (line 135): new.
+* `load_mul_accessCorrection` (line 156): new.
+* `shifted_history` (line 191): new.
+* `shiftWitness_equations` (line 225): new.
 
 `Soundness/soundness.lean`:
 
