@@ -4,7 +4,7 @@ Date: 2026-11-12.
 Jolt commit: a16z/jolt `a6b6dc717` (contains a16z/jolt#2190, `4e55c9a5f`).
 Lean commit: `86e3c7a` (the Lean implementation) on the pushed branch `t5/advice-field`, based on `inline/t1-driver` at `b648846`.
 The local worktree branch is `track/t5-advice-field`; `t5/advice-field` is the name to cite.
-Line numbers in the statement inventory refer to `6a44511`; the commits after `86e3c7a` change only docstrings and Markdown.
+Line numbers in the statement inventory refer to `6a44511` and are unchanged at the branch head; the commits after `86e3c7a` change only docstrings and Markdown.
 Scope: every column of `WitnessType` (`JoltConstraints/witness.lean`) and every other input of the relation `AllConstraints` (`JoltConstraints/Constraints/All.lean`).
 For each one, this note compares the value Jolt's verifier has with the Lean type, and lists the mismatches.
 Only the untrusted-advice mismatch is fixed on this branch; the other fixes below are proposals.
@@ -348,6 +348,7 @@ Every changed or new declaration, with its line at `6a44511` (paths relative to 
 * No new `bv_decide`, `native_decide`, `decide +kernel`, `sorry`, `maxHeartbeats` or `maxRecDepth`.
 * Build at `5354ac5`: `lake build JoltConstraints.advice_inputs JoltConstraints.Soundness.UntrustedAdvice.Bytes JoltConstraints.Soundness.UntrustedAdvice.LoadWords JoltConstraints.Soundness.UntrustedAdvice.ShiftWitness JoltConstraints.witness_helpers.ram_state JoltConstraints.Soundness.soundness JoltConstraints.Completeness.completeness JoltConstraints.WholeRun.Top` completed successfully (9774 jobs) with no errors.
   The same command without the four `UntrustedAdvice` and `ram_state` targets also succeeded at `86e3c7a`.
+  The Lean commits after `5354ac5` change only docstrings; `lake env lean` elaborated each changed file at `6a44511` without errors, and the PR's CI builds the whole project at the head.
   The remaining warnings in changed files are the existing `sorry` in completeness, deprecated names, and an unused-tactic lint in `ramImageWord_getLsbD`, all present at `b648846`.
 * `#print axioms` at `86e3c7a`, and again at `5354ac5`: `JoltInstance.soundness`, `JoltInstance.soundness_onBytes`, `JoltInstance.sail_soundness`, `allConstraints_of_onBytes` and `onBytes_of_allConstraints` use only `propext`, `Classical.choice` and `Quot.sound`; completeness keeps the `sorryAx` it had at `b648846`.
 * Proof times: `lean -Dprofiler=true -Dprofiler.threshold=10000` on `LoadWords`, `ShiftWitness`, `Bytes`, `advice_inputs`, `BytecodePC`, `AdjacentRows` and `expansion_facts` reports no declaration over ten seconds.
