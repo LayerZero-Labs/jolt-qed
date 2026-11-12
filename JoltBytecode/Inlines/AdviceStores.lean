@@ -85,13 +85,6 @@ theorem afterStores_setV (s : SailJoltState) (d : VReg) (v : BitVec 64) (ea : Na
     rw [ih]
     simp only [setV_setV]
 
-/-- The device configuration survives the stores. Example: what a later load may read. -/
-theorem afterStores_jolt_device (s : SailJoltState) (d : VReg) (ea : Nat)
-    (ws : List (BitVec 64)) : (afterStores s d ea ws).jolt_device = s.jolt_device := by
-  induction ws generalizing s ea with
-  | nil => rfl
-  | cons w ws ih => simp only [afterStores]; rw [ih]
-
 /-! ## Running the rows -/
 
 /-- A run of an empty row list ends where it starts.

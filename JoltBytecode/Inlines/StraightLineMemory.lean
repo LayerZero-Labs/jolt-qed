@@ -345,16 +345,6 @@ theorem XReads.of_run_sd {r : regidx} {val : Src} {imm : BitVec 64}
 
 /-! ## Reading back RAM -/
 
-private theorem foldl_insert_get?_not_mem (L : List Nat) (f : Nat → BitVec 8) (ea b : Nat)
-    (m : Std.ExtHashMap Nat (BitVec 8)) (hb : ∀ k ∈ L, ea + k ≠ b) :
-    (L.foldl (fun m k => m.insert (ea + k) (f k)) m).get? b = m.get? b := by
-  induction L generalizing m with
-  | nil => rfl
-  | cons j L ih =>
-    simp only [List.foldl_cons]
-    rw [ih _ (fun k hk => hb k (List.mem_cons_of_mem _ hk))]
-    simp [Std.ExtHashMap.get?_eq_getElem?, Std.ExtHashMap.getElem?_insert, hb j List.mem_cons_self]
-
 /-- A RAM doubleword reads back what was stored at the same address.
 Example: the output limbs of the secp256k1 field inlines. -/
 theorem ram_doubleword_write_same (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat)
@@ -379,7 +369,7 @@ theorem ram_doubleword_write_ne (m : Std.ExtHashMap Nat (BitVec 8)) (ea b : Nat)
       Mmu.ram_byte m c := by
     intro c hc1 hc2
     unfold Mmu.ram_byte Mmu.write_ram_doubleword
-    rw [foldl_insert_get?_not_mem]
+    rw [foldl_insert_get?_of_ne]
     intro k hk
     simp only [List.mem_range] at hk
     omega

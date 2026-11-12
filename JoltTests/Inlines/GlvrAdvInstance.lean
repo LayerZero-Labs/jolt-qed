@@ -93,23 +93,23 @@ def katState : SailJoltState where
   jolt_device := katDevice
   adviceTape := ⟨#[], 0⟩
 
-theorem regidx_ne {a b : BitVec 5} (h : a ≠ b) : regidx.Regidx a ≠ regidx.Regidx b :=
+private theorem regidx_ne {a b : BitVec 5} (h : a ≠ b) : regidx.Regidx a ≠ regidx.Regidx b :=
   fun e => h (by cases e; rfl)
 
-theorem kat_reads_x12 : XReads katState (regidx.Regidx 12) katOut :=
+private theorem kat_reads_x12 : XReads katState (regidx.Regidx 12) katOut :=
   rX_after_stateAfterWrite _ _ _ (regidx_ne (by decide))
 
-theorem kat_reads_x10 : XReads katState (regidx.Regidx 10) katIn :=
+private theorem kat_reads_x10 : XReads katState (regidx.Regidx 10) katIn :=
   rX_bits_stateAfterWrite_of_ne _ _ _ _ _ (regidx_ne (by decide))
     (rX_after_stateAfterWrite _ _ _ (regidx_ne (by decide)))
 
-theorem kat_out : glvrOut (regidx.Regidx 12) katState = katOut :=
+private theorem kat_out : glvrOut (regidx.Regidx 12) katState = katOut :=
   (XReads.eq_sourceValue kat_reads_x12).symm
 
-theorem kat_in : sourceValue (.xreg (regidx.Regidx 10)) katState = katIn :=
+private theorem kat_in : sourceValue (.xreg (regidx.Regidx 10)) katState = katIn :=
   (XReads.eq_sourceValue kat_reads_x10).symm
 
-theorem kat_writable (ea : Nat) (h1 : katIn.toNat ≤ ea) (h2 : ea + 8 ≤ katOut.toNat + 48)
+private theorem kat_writable (ea : Nat) (h1 : katIn.toNat ≤ ea) (h2 : ea + 8 ≤ katOut.toNat + 48)
     (h8 : ea % 8 = 0) : DwordWritable katDevice ea := by
   refine ⟨h8, ?_⟩
   simp only [katIn, katOut, BitVec.toNat_ofNat] at h1 h2

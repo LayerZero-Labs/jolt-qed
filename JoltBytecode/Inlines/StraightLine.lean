@@ -82,18 +82,13 @@ theorem execInstr_of_regRow {i : Instr} {d : VReg} {g : (VReg → BitVec 64) →
   unfold Instr.regRow? at h
   split at h
   all_goals
-    first
+    try first
     | (simp only [Option.some.injEq, Prod.mk.injEq] at h
        obtain ⟨rfl, rfl⟩ := h
        simp only [execInstr, EStateM.run, readSrc_vreg, readVReg_run, writeDst_vreg, bind,
          EStateM.bind, addWide_low, mulWide_low]
        exact writeVReg_retire_run_of_writable _ _ s hw)
-    | (simp only [Option.some.injEq, Prod.mk.injEq] at h
-       obtain ⟨rfl, rfl⟩ := h
-       simp only [execInstr, EStateM.run, writeDst_vreg]
-       exact writeVReg_retire_run_of_writable _ _ s hw)
     | cases h
-    | skip
   -- `ADDI` from `x0`
   rename_i r imm
   split at h
@@ -107,7 +102,8 @@ theorem execInstr_of_regRow {i : Instr} {d : VReg} {g : (VReg → BitVec 64) →
 
 /-! ## Running programs row by row -/
 
-/-- `Program.seq` of a cons is the row followed by the rest. Example: by definition. -/
+/-- `Program.seq` of a cons is the row followed by the rest.
+Example: `Program.seq [i, j] = .instr i (Program.seq [j])`. -/
 @[simp] theorem seq_cons (i : Instr) (l : List Instr) :
     Program.seq (i :: l) = .instr i (Program.seq l) := rfl
 
