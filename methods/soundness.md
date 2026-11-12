@@ -105,7 +105,7 @@ Read this before the layers below; the rest of this document fills it in.
   a 64-bit word is never loaded before it is overwritten.
   The reduction replaces such a word by zero and shifts the witness's RAM value columns at
   the word's first access (`shiftWitness`).
-  It needs the temporary restriction `untrustedAdviceBlockFits`.
+  It needs the separate temporary premise `UntrustedAdviceBlockFits` (not a field of `TemporaryRestrictions`).
   The rest of this document proves `JoltInstance.soundness_onBytes` for the byte relation.
 - **The language.** `JoltInstance.InLanguage` says there exist private inputs
   and an `HonestTrace` on them whose final device has the claimed outputs and

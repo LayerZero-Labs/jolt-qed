@@ -168,7 +168,7 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 ## Gaps in our model
 
 - **Untrusted-advice block size.** Jolt's tracer accepts at most the configured number of untrusted-advice bytes, while the verifier's block spans that size rounded up to a multiple of 8, so a prover can commit block bytes no tracer run holds.
-  The temporary restriction `untrustedAdviceBlockFits` excludes a configured size that is not a multiple of 8 (2026-11-12 witness-column report).
+  The temporary premise `UntrustedAdviceBlockFits` of `JoltInstance.soundness` excludes a configured size that is not a multiple of 8 (2026-11-12 witness-column report).
 - **Trusted advice.** The instance holds trusted advice as bytes; Jolt's verifier holds a commitment, so the model assumes the trusted party commits to packed bytes (2026-11-12 witness-column report).
 - **HostIO END marker.** Lean's `execHostIOWith` does not read the label for a cycle-marker END, while Jolt's tracer does and can abort on it (2026-10-29 report, finding 2).
 - **ELF sections and `tohost`.** Lean's initial RAM uses preprocessing's `memory_init` for the run; Jolt's tracer loads fewer section kinds, and sizes RAM differently when the ELF defines `tohost` (2026-10-29 report, findings 3 and 4).
