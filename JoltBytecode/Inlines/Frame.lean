@@ -998,6 +998,24 @@ theorem execInstr_memDevEq {i : Instr} (hi : i.isFrameRow = true) (hs : i.storeS
     keeps_memDevEq (loadDoubleword_keeps _), keeps_memDevEq getArchPc_keeps]
     using (bind_rule MemDevEq.trans)
 
+/-- The store step shared by every store row.
+A run of `readSrc value` followed by `Mmu.store_doubleword a` and any continuation `k`
+that ends in `.ok r s'` performs one doubleword store at `a` from the start state `s`
+whose result state is `s'`, because `readSrc` leaves the state unchanged and the
+continuation of a store row is `pure`.
+Example: the `VirtualStoreB` body `stored ← readSrc value; match ← Mmu.store_doubleword
+(ea &&& ~~~7) stored with ...` is this shape with `a = ea &&& ~~~7`. -/
+private theorem readThenStore_run {β : Type} {value : Src} {a : BitVec 64}
+    {k : Result Bool ExecutionResult → JoltMonad β}
+    (hk : ∀ x m r t, k x m = .ok r t → t = m)
+    {s s' : SailJoltState} {r : β}
+    (h : (readSrc value >>= fun v => Mmu.store_doubleword a v >>= k) s = .ok r s') :
+    ∃ v res, Mmu.store_doubleword a v s = .ok res s' := by
+  obtain ⟨v, m, hv, hrest⟩ := bind_ok h
+  obtain ⟨rfl, -⟩ := readSrc_run hv
+  obtain ⟨res, m, hst, hk'⟩ := bind_ok hrest
+  exact ⟨v, res, (hk _ _ _ _ hk') ▸ hst⟩
+
 /-- A store row either leaves the state unchanged or stores one doubleword at its slot's
 address, with the base read in the start state.
 Example: `SD (.xreg x10) (.vreg vr48) 8` with `x10 = 0x80000000` either fails its
@@ -1005,39 +1023,32 @@ alignment check or calls `Mmu.store_doubleword 0x80000008 v`. -/
 theorem storeRow_run {i : Instr} {slot : StoreSlot} (hslot : i.storeSlot? = some slot)
     {s s' : SailJoltState} {r : ExecutionResult} (h : (execInstr i).run s = .ok r s') :
     s' = s ∨ ∃ v res, Mmu.store_doubleword (slot.address s) v s = .ok res s' := by
+  have hk : ∀ (x : Result Bool ExecutionResult) m r t,
+      (match x with
+        | .Ok _ => pure RETIRE_SUCCESS
+        | .Err e => pure e : JoltMonad ExecutionResult) m = .ok r t → t = m := by
+    intro x m r t h
+    split at h <;> (cases h; rfl)
   cases i <;> simp only [Instr.storeSlot?, reduceCtorEq, Option.some.injEq] at hslot
   all_goals subst hslot
   all_goals simp only [execInstr, EStateM.run] at h
   all_goals
     obtain ⟨b, m, hb, h⟩ := bind_ok h
     obtain ⟨rfl, rfl⟩ := readSrc_run hb
-  · -- VirtualStoreB
-    obtain ⟨v, m, hv, h⟩ := bind_ok h
-    obtain ⟨rfl, -⟩ := readSrc_run hv
-    obtain ⟨res, m, hst, h⟩ := bind_ok h
-    exact Or.inr ⟨v, res, by split at h <;> (cases h; exact hst)⟩
-  · -- VirtualStoreH
+  case VirtualStoreB => exact Or.inr (readThenStore_run hk h)
+  case VirtualStoreH | VirtualStoreW =>
+    -- The value is read and stored only when the alignment check passes.
     split at h
-    · obtain ⟨v, m, hv, h⟩ := bind_ok h
-      obtain ⟨rfl, -⟩ := readSrc_run hv
-      obtain ⟨res, m, hst, h⟩ := bind_ok h
-      exact Or.inr ⟨v, res, by split at h <;> (cases h; exact hst)⟩
+    · exact Or.inr (readThenStore_run hk h)
     · cases h
       exact Or.inl rfl
-  · -- VirtualStoreW
-    split at h
-    · obtain ⟨v, m, hv, h⟩ := bind_ok h
-      obtain ⟨rfl, -⟩ := readSrc_run hv
-      obtain ⟨res, m, hst, h⟩ := bind_ok h
-      exact Or.inr ⟨v, res, by split at h <;> (cases h; exact hst)⟩
-    · cases h
-      exact Or.inl rfl
-  · -- SD
+  case SD =>
+    -- SD reads the value before its alignment check.
     obtain ⟨v, m, hv, h⟩ := bind_ok h
     obtain ⟨rfl, -⟩ := readSrc_run hv
     split at h
     · obtain ⟨res, m, hst, h⟩ := bind_ok h
-      exact Or.inr ⟨v, res, by split at h <;> (cases h; exact hst)⟩
+      exact Or.inr ⟨v, res, (hk _ _ _ _ h) ▸ hst⟩
     · cases h
       exact Or.inl rfl
 
@@ -1061,7 +1072,8 @@ theorem execInstr_sail_effect {i : Instr} (hi : i.isFrameRow = true)
   exact ⟨hc, hcy, ho, hr⟩
 
 /-- The frame of one row.
-Proof: `execInstr_rowEffect` gives the register, tape and host clauses.
+Proof: `execInstr_sail_effect` gives the Sail clauses, and `execInstr_rowEffect` gives
+the virtual-register, tape and host clauses.
 A non-store row leaves memory and the device unchanged (`execInstr_memDevEq`).
 A store row either changes nothing or calls `Mmu.store_doubleword` at `slot.address s`
 (`storeRow_run`), which is a `MemStep` at that doubleword (`storeDoubleword_memStep`), and
@@ -1073,7 +1085,8 @@ theorem execInstr_frame {ws : WriteSet} {i : Instr} (hi : i.writesWithin ws = tr
     {s s' : SailJoltState} (h : (execInstr i).run s = .ok RETIRE_SUCCESS s') :
     Frame ws s s' := by
   have hw := (Instr.writesWithin_iff ws i).1 hi
-  obtain ⟨hc, hcy, ho, hregs, hv, ht, hh⟩ := execInstr_rowEffect hw.1 s s' _ h
+  obtain ⟨hc, hcy, ho, hregs⟩ := execInstr_sail_effect hw.1 h
+  obtain ⟨-, -, -, -, hv, ht, hh⟩ := execInstr_rowEffect hw.1 s s' _ h
   have hmem : MemStep (ws.Footprint s) s s' ∨ MemDevEq s s' := by
     cases hs : i.storeSlot? with
     | none => exact Or.inr (execInstr_memDevEq hw.1 hs s s' _ h)
