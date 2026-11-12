@@ -211,9 +211,6 @@ theorem run_checks_div_iff {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scal
     intro i hi
     apply hv.pre_free
     interval_cases i <;> cases scalar <;> simp [preRegs]
-  have opp : L.OpFree L.p := by
-    apply hv.pre_free
-    cases scalar <;> simp [preRegs]
   have c0 : 32 ≤ L.r0.toNat ∧ 32 ≤ L.r1.toNat ∧ 32 ≤ L.aux.toNat ∧ 32 ≤ L.aux2.toNat ∧
       L.r0 ≠ L.r1 ∧ L.aux ≠ L.r0 ∧ L.aux ≠ L.r1 ∧ L.aux2 ≠ L.r0 ∧ L.aux2 ≠ L.r1 ∧
       L.aux ≠ L.aux2 := hv.col0
@@ -222,30 +219,7 @@ theorem run_checks_div_iff {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scal
   have r0a : L.r0 ≠ L.aux := Ne.symm c0.2.2.2.2.2.1
   have r1a : L.r1 ≠ L.aux := Ne.symm c0.2.2.2.2.2.2.1
   -- Column 0: `MUL r0, a0, b0`, then the term `lo(w0·p)`.
-  obtain ⟨g0, hg0, e0, -, fr0⟩ := colRows_spec hv.col0 [.low (L.w 0) L.p] (by simp)
-    (by
-      intro m hm r hr
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
-      subst hm
-      simp only [Mac.ops, List.mem_cons, List.not_mem_nil, or_false] at hr
-      rcases hr with rfl | rfl
-      · exact ow 0 (by decide)
-      · exact opp)
-    (by simp) (setV F L.r0 (F (L.a 0) * F (L.b 0)))
-  have A0 : ∀ r, L.OpFree r → g0 r = F r := fun r hr =>
-    (fr0 r hr).trans (setV_ne _ _ (free hr).1)
-  have e0' : (g0 L.r0).toNat + 2 ^ 64 * (g0 L.r1).toNat =
-      (F (L.a 0) * F (L.b 0)).toNat + (F (L.w 0) * F L.p).toNat := by
-    have hc1 : (L.col 0).c1 = L.r0 := rfl
-    have hc2 : (L.col 0).c2 = L.r1 := rfl
-    rw [hc1, hc2] at e0
-    have h : (g0 L.r0).toNat + 2 ^ 64 * (g0 L.r1).toNat =
-        (setV F L.r0 (F (L.a 0) * F (L.b 0)) L.r0).toNat +
-          (setV F L.r0 (F (L.a 0) * F (L.b 0)) (L.w 0) *
-            setV F L.r0 (F (L.a 0) * F (L.b 0)) L.p).toNat := by
-      simpa only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Mac.val,
-        Nat.add_zero] using e0
-    rwa [setV_same, setV_ne _ _ (free (ow 0 (by decide))).1, setV_ne _ _ (free opp).1] at h
+  obtain ⟨g0, hg0, e0', A0⟩ := col0_spec hv F
   -- The reloads write `aux`, which is no operand register.
   have keep : ∀ (g : VReg → BitVec 64) (v : BitVec 64), (∀ r, L.OpFree r → g r = F r) →
       ∀ r, L.OpFree r → setV g L.aux v r = F r := fun g v hg r hr =>
@@ -400,8 +374,8 @@ theorem run_store_div_iff {L : MulRegs} (hpool : ∀ r ∈ L.pool, 32 ≤ r.toNa
 divisor `b` (at `rs2`), both read from the state before the call, and some `w` and `c` with
 `c·b = w·q + a`, both below `2^256`. The call stores `c` at the output buffer, changes only
 virtual registers otherwise, and `c` reads back. The buffer may alias an operand.
-Example: for `DIVQ` with `a = 1` and `b = 2`, `c = (p+1)/2` and `w = 1` satisfy it, and so do
-`c = (p+1)/2 + p` and `w = 3`. -/
+Example: for `DIVQ` with `a = b = 1`, both `c = 1`, `w = 0` and `c = p + 1`, `w = 1` satisfy
+it; the rows do not check `c < p`. -/
 def FieldDivSpec (q : Nat) (rs1 rs2 rs3 : regidx) (s s' : SailJoltState) : Prop :=
   ∃ a b w c : Limbs,
     readLimbs? s (sourceValue (.xreg rs1) s) = some a ∧
@@ -416,7 +390,9 @@ def FieldDivSpec (q : Nat) (rs1 rs2 rs3 : regidx) (s s' : SailJoltState) : Prop 
 /-- **Soundness of the `DIV` rows.** Every run of the rows, for every advice, from a state
 whose output buffer lies in RAM, meets `FieldDivSpec` for the modulus of the layout. This holds
 when `rs3` equals `rs1`: the dividend in the specification is read before the call.
-Example: the instances `secp256k1Divq_rows_sound` and `secp256k1Divr_rows_sound`. -/
+Example: for `DIVQ` with `a = 1` at `x10 = 0x8001_0000` and `b = 2` at `x11 = 0x8001_0020`,
+every run, for any advice, stores `c = (p+1)/2`: it is the only `c < 2^256` with
+`2c = w·p + 1` for some `w < 2^256`. -/
 theorem divRows_sound {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
     {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64} {s s' : SailJoltState}
     (buf : FieldMulBuffer rs3 s)
@@ -531,8 +507,9 @@ obligations, with a dividend `a < q` and a divisor `b` coprime to `q`, Jolt's di
 exists, and the rows run with it (result and quotient words interleaved, as
 `divisionWords` orders them); the end state meets the specification, and the stored result is
 `a·b⁻¹ mod q`, which is below `q`.
-Example: the instances `secp256k1Divq_rows_jolt_advice_complete` and
-`secp256k1Divr_rows_jolt_advice_complete`. -/
+Example: for `DIVQ` with `a = 1` at `x10 = 0x8001_0000` and `b = 2` at `x11 = 0x8001_0020`,
+the advice words start `0xffffffff7ffffe18, 1` (the low limbs of `c = (p+1)/2` and `w = 1`),
+and the rows store `(p+1)/2`. -/
 theorem divRows_jolt_advice_complete {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
     {rs1 rs2 rs3 : regidx} {s : SailJoltState} (pre : FieldMulPre .div rs1 rs2 rs3 s)
     {a b : Limbs} (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a)
@@ -568,37 +545,13 @@ theorem divRows_jolt_advice_complete {scalar : Bool} {L : MulRegs} (hv : L.Valid
   have hid : limbsToNat c * limbsToNat b + limbsToNat w * pPrime q =
       limbsToNat a + 2 ^ 256 * limbsToNat w :=
     (rows_identity_iff _ _ _ _ _ hq).2 rel
-  rw [hct, hA, fb, hW, hid] at heq
-  have ha256 := limbsToNat_lt a
-  have hw0 := (F (L.w 0)).isLt
-  have hw1 := (F (L.w 1)).isLt
-  have hw2 := (F (L.w 2)).isLt
-  have hw3 := (F (L.w 3)).isLt
   have hwF : limbsToNat w = (F (L.w 0)).toNat + 2 ^ 64 * (F (L.w 1)).toNat +
       2 ^ 128 * (F (L.w 2)).toNat + 2 ^ 192 * (F (L.w 3)).toNat := by
     rw [← hW]; rfl
-  have r0 := R0.isLt
-  have r1 := R1.isLt
-  have r2 := R2.isLt
-  have r3 := R3.isLt
-  have r4 := R4.isLt
-  have r5 := R5.isLt
-  have r6 := R6.isLt
-  have hC := C.isLt
-  have hH := H.isLt
-  have hsplit : R0.toNat + 2 ^ 64 * R1.toNat + 2 ^ 128 * R2.toNat + 2 ^ 192 * R3.toNat =
-        limbsToNat a ∧
-      R4.toNat + 2 ^ 64 * R5.toNat + 2 ^ 128 * R6.toNat + 2 ^ 192 * (C.toNat + H.toNat) =
-        limbsToNat w := by
-    omega
-  have d4 : R4.toNat = (F (L.w 0)).toNat := by omega
-  have d5 : R5.toNat = (F (L.w 1)).toNat := by omega
-  have d6 : R6.toNat = (F (L.w 2)).toNat := by omega
-  have d7 : C.toNat + H.toNat = (F (L.w 3)).toNat := by omega
-  have hCH : (C + H).toNat = C.toNat + H.toNat := by
-    rw [BitVec.toNat_add]; omega
+  rw [hct, hA, fb, hW, hid, hwF] at heq
+  obtain ⟨hlo, d4, d5, d6, d7, hle⟩ := column_digits heq (limbsToNat_lt a)
   have hx : readLimbs? s (sourceValue (.xreg rs1) s) = some #v[R0, R1, R2, R3] := by
-    rw [ha, limbs_eq_of_limbsToNat_eq (x := a) (y := #v[R0, R1, R2, R3]) hsplit.1.symm]
+    rw [ha, limbs_eq_of_limbsToNat_eq (x := a) (y := #v[R0, R1, R2, R3]) hlo.symm]
   -- The run.
   have hpool : ∀ r ∈ L.pool, 32 ≤ r.toNat := by
     intro r hr
@@ -610,8 +563,7 @@ theorem divRows_jolt_advice_complete {scalar : Bool} {L : MulRegs} (hv : L.Valid
     [G (L.a 0), G (L.a 1), G (L.a 2), G (L.a 3)]
   set s1 : SailJoltState := { s with vregs := V, sail := { s.sail with mem := m1 } }
   have rest := (hst s1).2 ⟨pre.writable, rfl⟩
-  have checks := (hiff _ s1).2 ⟨hx, BitVec.eq_of_toNat_eq d4, BitVec.eq_of_toNat_eq d5,
-    BitVec.eq_of_toNat_eq d6, BitVec.eq_of_toNat_eq (by rw [hCH, d7]), by omega, rest⟩
+  have checks := (hiff _ s1).2 ⟨hx, d4, d5, d6, d7, hle, rest⟩
   have run : (Program.seq (mulRows .div scalar L rs1 rs2 rs3 advice)).Run s s1 := by
     rw [mulRows_eq_append, tailRows_div]
     exact (run_prologue_div_iff hv (pre.reads2 (by decide)) _ _ _).2 ⟨b, hb, checks⟩
@@ -648,7 +600,8 @@ theorem divqRegs_valid : mulqRegs.Valid .div false where
 
 /-- The `SECP256K1_DIVR` layout, which is the `MULR` layout, meets the conditions of the
 proofs for division.
-Example: its result, divisor, quotient and constant registers are distinct pool registers. -/
+Example: its result, divisor, quotient and constant registers `vr48..vr61` are distinct and
+differ from the column registers `vr62`, `vr63`, `vr64` and `vr127`. -/
 theorem divrRegs_valid : mulrRegs.Valid .div true where
   pre_nodup := by decide
   pre_ge := by decide

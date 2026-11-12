@@ -190,7 +190,7 @@ def oldRound (L : MulRegs) (rs2 rs3 : regidx) (advice : Nat → BitVec 64) (i : 
 `oldRound`, the constant rows, the checks, and the resets, with no stores after the checks.
 `MulqBuilder::inline_sequence` at `db9679295^` (`jolt-inlines/secp256k1/src/sequence_builder.rs`)
 emits these rows; the commit moved the four stores after the checks, which gives `mulRows .div`.
-Example: for `DIVQ` with `rs3 = x10`, the fourth row is `SD vr48, 0(x10)`, before the first
+Example: for `DIVQ` with `rs3 = x10`, the third row is `SD vr48, 0(x10)`, before the first
 reload `LD vr61, 0(x10)` of the dividend. -/
 def oldDivRows (scalar : Bool) (L : MulRegs) (rs1 rs2 rs3 : regidx)
     (advice : Nat → BitVec 64) : List Instr :=
