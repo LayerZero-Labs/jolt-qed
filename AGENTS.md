@@ -51,13 +51,19 @@ If you believe a staged statement is false, stop and report the exact missing fa
 - Never write a theorem or `sorry` you know to be false.
 - Never leave `sorry` inside a proof body; make each gap its own named, stated lemma.
 - Never replace a proved fact with `sorry`.
-- Do not use `native_decide` or `decide +kernel`, and never raise `maxHeartbeats`.
+- Do not use `native_decide`, and never raise `maxHeartbeats`.
+  `native_decide` trusts the compiler through the axiom `Lean.ofReduceBool`.
+- `decide +kernel` is allowed when it is efficient.
+  It adds no axiom: the kernel checks the computation, as for any other proof term.
+  Use it only where the kernel check is fast: a use that takes more than about ten seconds is not allowed.
+  List every new use with its check time in your report.
+  Prefer plain `decide`, `rfl` or `simp` when they work.
 - `bv_decide` is accepted for now, to make progress; it will be removed later.
   List every new use in your report, and add it to the `bv_decide` list in "Proofs owed" (`JoltConstraints/model_review.md`).
 - Delete every lemma no proof uses.
 - For now (Ari, 2026-10-22), correctness comes before speed: the first goal is to learn whether the soundness theorem is true.
   There is no time target for proofs; list any proof that takes more than about ten seconds in your report, so it can be sped up later.
-  This never allows raising `maxHeartbeats`, `native_decide` or `decide +kernel`.
+  This never allows raising `maxHeartbeats`, `native_decide`, or a slow `decide +kernel`.
 - Commit only when Ari asks, and add no Co-Authored-By lines.
 - Keep git worktrees under `/Users/ari.biswas/Lean/`, never in `/private/tmp`, which macOS clears.
 

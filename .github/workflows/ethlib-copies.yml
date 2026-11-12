@@ -1,0 +1,36 @@
+name: ethlib-copies
+
+# Check that the hash specifications in JoltBytecode/Inlines still match the
+# EthLib commit they were copied from. The script fetches that commit itself
+# (ethereum/EthLib 5310b3ec007b05a2bfe33b01125392b07df5f636) and needs only
+# git and python3, so this job does not build Lean.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "JoltBytecode/Inlines/**"
+      - "scripts/check-ethlib-copies.sh"
+      - ".github/workflows/ethlib-copies.yml"
+  pull_request:
+    paths:
+      - "JoltBytecode/Inlines/**"
+      - "scripts/check-ethlib-copies.sh"
+      - ".github/workflows/ethlib-copies.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compare the copies with EthLib
+        run: scripts/check-ethlib-copies.sh
