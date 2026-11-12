@@ -66,6 +66,12 @@ def header(src: str) -> list[str]:
         cmd.append(tokens[i])
         i += 1
         out.append(" ".join(cmd))
+    # The body starts with a command keyword or an attribute, never with text
+    # that begins like a header word. `import«Lean»` is one token here (the
+    # lexer hides the quoted name) but an import for Lean, so it fails.
+    if i < len(tokens) and re.match(r"(?:" + "|".join(HEADER_WORDS) + r")(?![\w'])|import",
+                                    tokens[i]):
+        raise ValueError(f"cannot read the header token {tokens[i]!r}")
     return out
 
 

@@ -15,6 +15,9 @@ hygiene = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(hygiene)
 
 
+AMBIGUOUS = hygiene.AMBIGUOUS
+
+
 def tokens(src: str) -> list[tuple[int, str]]:
     return [(line, token) for line, token, _ in hygiene.scan_text(src)]
 
@@ -32,42 +35,54 @@ class HygieneScanTest(unittest.TestCase):
         self.assertEqual(tokens('def p : String := s!"{f "x" (by sorry)}"\n'), [(1, "sorry")])
 
     # Round-2 review: a plain literal with a brace inside an interpolation.
+    # The inner literal's end depends on its reading, so it is reported too.
     def test_plain_brace_string_inside_interpolation(self) -> None:
         self.assertEqual(tokens('def p : String := s!"{String.length "{" + (by sorry : Nat)}"\n'),
-                         [(1, "sorry")])
+                         [(1, AMBIGUOUS), (1, "sorry")])
 
-    # Round-2 review: brace text in an ordinary string is not code.
-    def test_brace_text_in_plain_string_is_ignored(self) -> None:
-        self.assertEqual(tokens('def message : String := "{sorry}"\n'), [])
+    # Round 3: the scan no longer guesses which syntax interpolates. The `{...}`
+    # of every literal whose end both readings agree on is code, so a token
+    # there counts after any syntax, including a multiline throwErrorAt, a
+    # local macro or a macro declared with a quoted parser name.
+    def test_brace_code_counts_after_any_syntax(self) -> None:
+        src = ('def a (r : Syntax) : MetaM Unit := throwErrorAt r\n  "{(by sorry : Nat)}"\n'
+               'macro "myS! " s:«interpolatedStr»(term) : term => `(s! $s)\n'
+               'def b : String := myS! "{(by admit : Nat)}"\n'
+               'def c := do trace[Meta.debug] "{(by sorry : Nat)}"\n')
+        self.assertEqual(tokens(src), [(2, "sorry"), (4, "admit"), (5, "sorry")])
 
-    # A plain string after `]` or after a `!` macro that takes a term must not
-    # open code at its `{`: the `"` that closes it would then start a string
-    # that hides the rest of the line.
-    def test_plain_string_after_bracket_or_bang(self) -> None:
-        src = ('def a := Function.const Nat [1] "{" ++ toString (by sorry : Nat)\n'
-               'def b : Nat := panic! "{" ++ toString (by admit : Nat)\n'
-               'def c (xs : Array String) := xs[0]! ++ "{" ++ toString (by sorry : Nat)\n')
-        self.assertEqual(tokens(src), [(1, "sorry"), (2, "admit"), (3, "sorry")])
+    # Round 3: this is a false positive by design. A plain string whose
+    # braces hold a token reports it; writing the brace as `\\x7b` avoids it
+    # (Lean accepts `\\{` only in interpolated strings).
+    def test_brace_text_in_plain_string_counts(self) -> None:
+        self.assertEqual(tokens('def message : String := "{sorry}"\n'), [(1, "sorry")])
+        self.assertEqual(tokens('def message : String := "\\x7bsorry}"\n'), [])
 
-    def test_aesop_and_macro_trace_interpolate(self) -> None:
-        src = ('def a : MacroM Unit := do Macro.trace[debug] "{(by sorry : Nat)}"\n'
-               'def b := do aesop_trace[steps] "{(by sorry : Nat)}"\n'
-               'def c := do aesop_trace![steps] "{(by sorry : Nat)}"\n'
-               'def d : IO Unit := println! "{(by sorry : Nat)}"\n')
-        self.assertEqual(tokens(src), [(1, "sorry"), (2, "sorry"), (3, "sorry"), (4, "sorry")])
+    # Round 3: a literal whose end depends on the reading is reported, so
+    # neither reading can hide the code after it.
+    def test_ambiguous_literal_is_reported(self) -> None:
+        cases = [
+            'def f (r : Syntax) : MetaM Unit := throwErrorAt r (toMessageData "{")\n'
+            'theorem t : False := sorry\ndef s := "x"\n',
+            'def throwPRError (s : String) : String := s\n'
+            'def p : String := throwPRError "{" ++ toString (by sorry : Nat)\n',
+            'def a := Function.const Nat [1] "{" ++ toString (by sorry : Nat)\n',
+            'def b : Nat := panic! "{" ++ toString (by admit : Nat)\n',
+        ]
+        for src in cases:
+            got = tokens(src)
+            self.assertIn(AMBIGUOUS, [t for _, t in got], src)
+            self.assertTrue({"sorry", "admit"} & {t for _, t in got}, src)
 
-    def test_trace_and_argument_interpolators(self) -> None:
-        src = ('def a : CoreM Unit := do trace[Meta.debug] "{(by sorry : Nat)}"\n'
-               'def b (r : Syntax) : CoreM Unit := throwErrorAt r "x {(by admit : Nat)}"\n'
-               'def c : String := toString "{sorry}"\n')
-        self.assertEqual(tokens(src), [(1, "sorry"), (2, "admit")])
-
-    def test_new_interpolating_syntax_counts(self) -> None:
-        self.assertEqual(tokens('syntax "myErr " interpolatedStr(term) : term\n'), [(1, "interpolatedStr")])
+    def test_literal_after_s_bang_is_interpolated(self) -> None:
+        src = 'def p := s!"{f "x"}"\ntheorem t : False := sorry\n'
+        self.assertEqual(tokens(src), [(2, "sorry")])
+        src = 'def p := xs.s!"{f "x"}"\n'
+        self.assertEqual([t for _, t in tokens(src)], [AMBIGUOUS])
 
     def test_plain_string_with_brace_does_not_hide_later_code(self) -> None:
         src = 'def x := "{"\ntheorem t : False := sorry\ndef y := "z"\n'
-        self.assertEqual(tokens(src), [(2, "sorry")])
+        self.assertEqual(tokens(src), [(1, AMBIGUOUS), (2, "sorry")])
 
     def test_token_in_plain_string_text_is_ignored(self) -> None:
         self.assertEqual(tokens('def m := "uses sorry and native_decide"\n'), [])

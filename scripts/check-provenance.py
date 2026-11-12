@@ -24,8 +24,11 @@ Checks without a Jolt clone:
      `checked` revision. A revision is a token of 7 to 40 hex digits with at
      least one digit and one letter, or any such token after a citation word
      (REV_CONTEXT_RE) or in a repository-qualified citation (QUALIFIED_RE,
-     both ends of a compare URL included). A qualified citation of another
-     repository must match an [[other_revision]] of that repository.
+     both ends of a compare URL included); hex digits may be in either case.
+     A qualified citation of another repository must match an
+     [[other_revision]] of that repository. An unqualified token may match an
+     [[other_revision]] only when no "Jolt" precedes it on its line within
+     JOLT_CONTEXT_WINDOW characters.
      provenance.toml is not checked for revisions, because it is where they
      are recorded. Every `models` path of an entry with no `checked` revision
      counts as an unchecked-model violation.
@@ -38,7 +41,8 @@ With --jolt-dir DIR (a clone of a16z/jolt that has the pin and every
 `checked` revision; trees are enough, so a shallow blobless fetch of each
 revision printed by --list-revisions works, as CI does):
 
-  4. The pin and every `checked` revision are commits in DIR, and every
+  4. The pin and every `checked` revision are commits in DIR, no
+     [[other_revision]] is a commit in DIR, and every
      `models` path of an entry exists at its `checked` revision, or at the pin
      for an entry with no `checked` revision.
   5. Every Jolt file a Lean file cites (cited_paths) that exists at its
@@ -81,7 +85,12 @@ KNOWN_KINDS = ("local-path", "fork", "revision", "unchecked-model")
 CITE_END = r"[^\s`'\"()<>\[\]{},;]*"
 LOCAL_RE = re.compile(r"(?:/Users/|/home/|~/|/private/tmp)" + CITE_END)
 FORK_RE = re.compile(r"github\.com/([A-Za-z0-9_.-]+)/jolt(?![A-Za-z0-9_-])" + CITE_END)
-HEX_RE = re.compile(r"(?<![0-9A-Za-z_])[0-9a-f]{7,40}(?![0-9A-Za-z_])")
+# Hex digits in either case; tokens are compared and recorded in lowercase.
+HEX_RE = re.compile(r"(?<![0-9A-Za-z_])[0-9a-fA-F]{7,40}(?![0-9A-Za-z_])")
+# "Jolt" or "a16z/jolt" (not "jolt-qed") shortly before a token on the same
+# line makes it a Jolt citation, which no [[other_revision]] can exempt.
+JOLT_CONTEXT_RE = re.compile(r"(?i)(?<![\w-])jolt(?![\w-])")
+JOLT_CONTEXT_WINDOW = 60
 # A repository-qualified revision: a GitHub URL or owner/repo@rev.
 QUALIFIED_RE = re.compile(
     r"(?:github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/(?:blob|tree|commit|commits|compare)/"
@@ -191,16 +200,21 @@ def scan_text(rel: str, text: str, pin: str, checked: str | None,
                          and o.get("repository", "").lower() == f"{owner}/{repo}".lower()
                          for o in others)
             if not ok:
-                found[(rel, "revision", tok)] += 1
-    allowed = jolt_ok + [o["revision"] for o in others]
+                found[(rel, "revision", tok.lower())] += 1
+    foreign = [o["revision"] for o in others]
     for m in HEX_RE.finditer(text):
         if m.start() in qualified:
             continue
-        tok = m.group(0)
+        tok = m.group(0).lower()
         if not is_revision_token(tok) and not REV_CONTEXT_RE.search(text[max(0, m.start() - 24):m.start()]):
             continue
-        if not any(same_revision(tok, r) for r in allowed):
-            found[(rel, "revision", tok)] += 1
+        if any(same_revision(tok, r) for r in jolt_ok):
+            continue
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        before = text[max(line_start, m.start() - JOLT_CONTEXT_WINDOW):m.start()]
+        if not JOLT_CONTEXT_RE.search(before) and any(same_revision(tok, r) for r in foreign):
+            continue
+        found[(rel, "revision", tok)] += 1
     return found
 
 
@@ -219,20 +233,27 @@ def scan(manifest: dict, checked_of: dict[str, str], manifest_text: str) -> Coun
 
 
 # Jolt paths a Lean file cites. A path segment may hold brace lists
-# (`virt/{load,store}_{b,h,w}.rs`). A GitHub URL or local checkout prefix up to
-# `/jolt/` and a leading `./` are dropped. A path or bare file name that is not
-# itself a Jolt path is read relative to the directory of the Jolt path cited
-# just before it, or to one of that directory's ancestors (longest first): in
-# "`crates/jolt-riscv/src/instructions/i/ld.rs` and `instructions/virt/ld_b.rs`"
-# the second is `crates/jolt-riscv/src/instructions/virt/ld_b.rs`, and in
-# "tracer/src/instruction/div.rs, divu.rs" the second is in the same directory.
-# That reading reaches back at most BARE_WINDOW characters and never across a
-# blank line. Only paths that exist in the given tree count.
+# (`virt/{load,store}_{b,h,w}.rs`). A GitHub URL prefix and a leading `./` are
+# dropped. A path that is not a Jolt path as written is tried without each
+# prefix that ends in a `jolt/` component (a local checkout such as
+# `/Users/me/jolt/tracer/...`), so an internal component such as
+# `crates/jolt-claims/src/protocols/jolt/` is kept when the full path exists.
+# A path or bare file name that is still not a Jolt path is read relative to
+# the directory of the Jolt path cited just before it, or to one of that
+# directory's ancestors (longest first): in "`crates/jolt-riscv/src/
+# instructions/i/ld.rs` and `instructions/virt/ld_b.rs`" the second is
+# `crates/jolt-riscv/src/instructions/virt/ld_b.rs`, and in
+# "tracer/src/instruction/div.rs, divu.rs" the second is in the same
+# directory. That reading reaches back at most BARE_WINDOW characters and
+# never across a paragraph break (a line holding only spaces and comment
+# punctuation). Failing that, a path with a `/` that is the end of exactly one
+# Jolt file path (`relations/spartan/shift.rs`) is that file. Only paths that
+# exist in the given tree count.
 _SEG = r"(?:[\w.-]|\{[\w.,\s-]+\})+"
 _PATH_RE = re.compile(r"(?<![\w./{-])/?" + _SEG + r"(?:/" + _SEG + r")+")
 _BARE_RE = re.compile(r"(?<![\w./{-])([\w-]+\.rs)(?![\w/])")
 _URL_PREFIX = re.compile(r"(?:https?://)?github\.com/[\w.-]+/[\w.-]+/(?:blob|tree)/[\w.-]+/")
-_BLANK_LINE = re.compile(r"\n[ \t]*(?:--)?[ \t]*\n")
+_PARAGRAPH_BREAK = re.compile(r"\n[ \t]*[-*/#|>!=~+]*[ \t]*\n")
 BARE_WINDOW = 300
 
 
@@ -243,14 +264,15 @@ def _expand(tok: str) -> list[str]:
     return ["".join(c) for c in itertools.product(*opts)]
 
 
-def _normalize(path: str) -> str:
+def _candidates(path: str) -> list[str]:
+    """The path as written, then without each prefix ending in `jolt/`."""
     path = path.rstrip("/.")
-    i = path.find("jolt/")
-    if i != -1 and (i == 0 or path[i - 1] == "/"):
-        path = path[i + len("jolt/"):]
     while path.startswith("./"):
         path = path[2:]
-    return path
+    out = [path]
+    for m in re.finditer(r"(?:^|/)jolt/", path):
+        out.append(path[m.end():])
+    return out
 
 
 def _ancestors(directory: str) -> list[str]:
@@ -258,8 +280,24 @@ def _ancestors(directory: str) -> list[str]:
     return ["/".join(parts[:k]) for k in range(len(parts), 0, -1)]
 
 
+def _suffix_index(files: set[str]) -> dict[str, list[str]]:
+    """Map each proper path suffix with a `/` (`a/b.rs`) to the files ending in it."""
+    index: dict[str, list[str]] = {}
+    for f in files:
+        parts = f.split("/")
+        for k in range(1, len(parts) - 1):
+            index.setdefault("/".join(parts[k:]), []).append(f)
+    return index
+
+
+_suffixes: dict[int, dict[str, list[str]]] = {}
+
+
 def cited_paths(text: str, files: set[str], dirs: set[str]) -> set[str]:
     """The Jolt files (paths in `files`) that a file's text cites."""
+    if id(files) not in _suffixes:
+        _suffixes[id(files)] = _suffix_index(files)
+    suffixes = _suffixes[id(files)]
     text = _URL_PREFIX.sub(" ", text)
     events = sorted([(m.start(), m.end(), m.group(0)) for m in _PATH_RE.finditer(text)]
                     + [(m.start(), m.end(), m.group(1)) for m in _BARE_RE.finditer(text)])
@@ -267,25 +305,25 @@ def cited_paths(text: str, files: set[str], dirs: set[str]) -> set[str]:
     last_dir, last_end = None, 0
     for start, end, tok in events:
         if last_dir is not None and (start - last_end > BARE_WINDOW
-                                     or _BLANK_LINE.search(text, last_end, start)):
+                                     or _PARAGRAPH_BREAK.search(text, last_end, start)):
             last_dir = None
         new_dir = None
-        for path in map(_normalize, _expand(tok)):
-            if path in files:
-                out.add(path)
-                new_dir = path.rsplit("/", 1)[0] if "/" in path else ""
-            elif path in dirs:
-                new_dir = path
-            elif last_dir:
-                for base in _ancestors(last_dir):
-                    cand = f"{base}/{path}"
-                    if cand in files:
-                        out.add(cand)
-                        new_dir = cand.rsplit("/", 1)[0]
-                        break
-                    if cand in dirs:
-                        new_dir = cand
-                        break
+        for expanded in _expand(tok):
+            cands = _candidates(expanded)
+            hit = next((c for c in cands if c in files or c in dirs), None)
+            if hit is None and last_dir:
+                hit = next((f"{base}/{c}" for c in cands for base in _ancestors(last_dir)
+                            if f"{base}/{c}" in files or f"{base}/{c}" in dirs), None)
+            if hit is None:
+                hit = next((suffixes[c][0] for c in cands
+                            if "/" in c and len(suffixes.get(c, ())) == 1), None)
+            if hit is None:
+                continue
+            if hit in files:
+                out.add(hit)
+                new_dir = hit.rsplit("/", 1)[0] if "/" in hit else ""
+            else:
+                new_dir = hit
         if new_dir:
             last_dir, last_end = new_dir, end
     return out
@@ -515,8 +553,9 @@ def main(argv: list[str]) -> int:
             notes += [f"  {line}" for line in lines]
         for o in manifest.get("other_revision", []):
             if resolve(jd, o["revision"]):
-                notes.append(f"[[other_revision]] {o['revision']} ({o.get('repository')}) "
-                             f"also names a commit in the Jolt clone; check it is not a Jolt revision")
+                failures.append(f"[[other_revision]] {o['revision']} ({o.get('repository')}) "
+                                f"names a commit in the Jolt clone; a Jolt revision cannot be "
+                                f"recorded as another repository's")
         shallow = git(jd, "rev-parse", "--is-shallow-repository").stdout.strip() == "true"
         for (rel, kind, text) in sorted(found):
             if kind == "revision" and not shallow and resolve(jd, text) is None:

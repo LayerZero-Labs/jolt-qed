@@ -14,16 +14,18 @@ evaluator, raised limits and new axioms in four roots, each with its own policy:
 
 Tokens: sorry, admit, native_decide, decide +kernel (also kernel := true),
 bv_decide, set_option maxHeartbeats, maxRecDepth, synthInstance.* options,
-axiom declarations and new syntax that takes `interpolatedStr`.
+axiom declarations, and ambiguous string literals (below).
 
 Comments (nested /- -/ blocks, docstrings and -- lines) and the text of string,
 raw-string and char literals are blanked before matching, so a token that
 appears only in prose does not count. Quoted identifiers (`«...»`) are one
-opaque name. A string literal is read as interpolated, with its `{...}` parts
-kept as code, when the syntax just before it takes an interpolated string
-(`s!"..."`, `throwError "..."`, `trace[c] "..."`; see _INTERP_DIRECT); every
-other literal is plain text. New syntax declared with `interpolatedStr` counts
-as an occurrence. An `axiom` keyword counts wherever it appears in code.
+opaque name. A scan cannot tell for sure whether Lean reads a string literal
+as interpolated, so the `{...}` parts of every literal stay code when both
+readings agree on where the literal ends; a token there counts even in a
+plain string (write the brace as `\x7b` to avoid that). A literal whose end
+depends on the reading counts as an `ambiguous string`, unless it follows
+`s!`, `m!` or `f!` (see _Lexer). An `axiom` keyword counts wherever it
+appears in code.
 The regression tests are in scripts/tests/test_check_hygiene.py.
 Each root's root module (for example JoltBytecode.lean) is scanned with it.
 
@@ -60,9 +62,12 @@ TOKENS: dict[str, re.Pattern[str]] = {
     # `axiom` is a keyword, so any occurrence in code starts a declaration,
     # wherever it sits on the line (for example after `set_option ... in`).
     "axiom": re.compile(r"(?<![\w.'])axiom(?![\w'])"),
-    # New syntax that takes an interpolated string (see _INTERP_DIRECT).
-    "interpolatedStr": re.compile(r"(?<![\w.'])interpolatedStr(?![\w'])"),
 }
+
+# A string literal whose end depends on whether Lean reads it as interpolated
+# (see _Lexer). It counts like a token.
+AMBIGUOUS = "ambiguous string"
+TOKEN_NAMES = (*TOKENS, AMBIGUOUS)
 
 # root directory -> (root module, baseline section or None for zero tolerance)
 ROOTS: dict[str, tuple[str, str | None]] = {
@@ -77,46 +82,34 @@ CHAR_LIT = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^\\'\n])'")
 RAW_STR_START = re.compile(r'r(#*)"')
 
 
-# Syntax that reads the next string literal as an interpolated string
-# (`interpolatedStr(term)`), from Lean v4.35.0 core and the dependencies
-# (Mathlib, Batteries and the others declare none of their own):
-#   - s!, m!, f!, v!, println!, reportIssue!, reportDbgIssue!,
-#     reportEMatchIssue!, throwError, dbg_trace and Aesop's throwPRError
-#     directly before the literal;
-#   - trace[c], trace_goal[c], Macro.trace[c], and Aesop's aesop_trace[c] and
-#     aesop_trace![c] directly before it;
-#   - throwErrorAt, throwNamedError(At), logNamedError(At), logNamedWarning(At)
-#     earlier on the same line, which take one or two arguments first.
-# Every other literal is a plain string. Reading a literal the wrong way can
-# hide code in either direction (the `{...}` of an interpolated string blanked
-# as text, or a `"` inside a plain string's `{` read as the start of another
-# string), so the list is exact rather than generous. A scanned file that
-# declares new syntax with `interpolatedStr` counts as an occurrence of that
-# token, so a new interpolating macro in this project is noticed and added here.
-_INTERP_DIRECT = re.compile(
-    r"(?<![\w'.!])(?:(?:s|m|f|v|println|reportIssue|reportDbgIssue|reportEMatchIssue)!"
-    r"|throwError|dbg_trace|throwPRError"
-    r"|(?:trace|trace_goal|Macro\.trace|aesop_trace|aesop_trace!)\[[^\]\n]*\])\s*$"
-)
-_INTERP_ARGS = re.compile(
-    r"(?<![\w'.])(?:throwErrorAt|throwNamedError|throwNamedErrorAt|logNamedError|logNamedErrorAt"
-    r"|logNamedWarning|logNamedWarningAt)(?![\w'])[^\"\n]*$"
-)
+# `s!`, `m!` and `f!` are keywords (a token always wins over an identifier of
+# the same spelling), and each takes an interpolated string, so a literal right
+# after one is certainly interpolated.
+_CERTAIN_INTERP = re.compile(r"(?<![\w'.!?])[smf]!\s*$")
 
 
 class _Lexer:
     """Blank comments and literal text of one Lean source, keeping layout.
 
-    A string literal is interpolated when the syntax before it says so
-    (_INTERP_DIRECT, _INTERP_ARGS); then the code between an unescaped `{` and
-    its matching `}` is kept and lexed like any other code, nested string
-    literals included. Quoted identifiers (`«...»`, which may span lines) are
-    one opaque name.
+    Whether Lean reads a string literal as interpolated depends on the syntax
+    that takes it (`s!`, `throwError`, `trace[c]`, any macro with an
+    `interpolatedStr` argument, and so on), which a text scan cannot know for
+    sure. The lexer therefore does not guess. A literal with no unescaped `{`
+    reads the same either way. For a literal with one, it computes where the
+    literal ends under both readings. If they agree, the `{...}` parts hold no
+    string quote, and the lexer keeps them as code whichever reading Lean uses,
+    so a token there always counts. If they disagree and the literal follows
+    `s!`, `m!` or `f!` (_CERTAIN_INTERP), the lexer uses the interpolated
+    reading. Otherwise the literal is ambiguous: the lexer records its position
+    (scan_text reports it as an `ambiguous string`) and continues with the
+    plain reading. Quoted
+    identifiers (`«...»`, which may span lines) are one opaque name.
     """
 
     def __init__(self, src: str) -> None:
         self.src, self.n = src, len(src)
         self.out: list[str] = []
+        self.ambiguous: list[int] = []
 
     def blank(self, i: int, j: int) -> None:
         self.out.append("".join("\n" if c == "\n" else " " for c in self.src[i:j]))
@@ -127,11 +120,6 @@ class _Lexer:
     def run(self) -> str:
         self.code(0, in_braces=False)
         return "".join(self.out)
-
-    def interpolated_here(self) -> bool:
-        """Whether a string literal starting now is interpolated."""
-        before = "".join(self.out[-400:])[-300:]
-        return bool(_INTERP_DIRECT.search(before) or _INTERP_ARGS.search(before))
 
     def code(self, i: int, in_braces: bool) -> int:
         """Lex code from i; inside an interpolation, stop after its closing `}`."""
@@ -157,7 +145,7 @@ class _Lexer:
                     self.out.append("".join("\n" if ch == "\n" else "x" for ch in src[i:j + 1]))
                     i = j + 1
             elif c == '"':
-                i = self.string(i, self.interpolated_here())
+                i = self.string(i)
             elif c == "r" and (i == 0 or not IDENT_CHAR.match(src[i - 1])) and RAW_STR_START.match(src, i):
                 hashes = RAW_STR_START.match(src, i).group(1)
                 close = '"' + hashes
@@ -198,7 +186,37 @@ class _Lexer:
         self.blank(i, j)
         return j
 
-    def string(self, i: int, interpolate: bool) -> int:
+    def plain_end(self, i: int) -> tuple[int, bool]:
+        """Where a plain string literal at i ends, and whether it has a `{`."""
+        src, n = self.src, self.n
+        j, brace = i + 1, False
+        while j < n:
+            c = src[j]
+            if c == "\\":
+                j += 2
+            elif c == '"':
+                return j + 1, brace
+            else:
+                brace = brace or c == "{"
+                j += 1
+        return n, brace
+
+    def string(self, i: int) -> int:
+        end, brace = self.plain_end(i)
+        if brace:
+            sub = _Lexer(self.src)
+            sub_end = sub.interpolated(i)
+            certain = _CERTAIN_INTERP.search("".join(self.out[-40:])[-40:]) is not None
+            if sub_end == end or certain:
+                self.out += sub.out
+                self.ambiguous += sub.ambiguous
+                return sub_end
+            self.ambiguous.append(i)
+        self.blank(i, end)
+        return end
+
+    def interpolated(self, i: int) -> int:
+        """Lex an interpolated string literal at i; return where it ends."""
         src, n = self.src, self.n
         start, j = i, i + 1
         while j < n:
@@ -208,7 +226,7 @@ class _Lexer:
             elif c == '"':
                 j += 1
                 break
-            elif c == "{" and interpolate:
+            elif c == "{":
                 self.blank(start, j + 1)
                 j = self.code(j + 1, in_braces=True)
                 start = j
@@ -219,6 +237,13 @@ class _Lexer:
         return j
 
 
+def lex(src: str) -> tuple[str, list[int]]:
+    """The source with comments and literal text blanked, and the positions
+    of ambiguous string literals (see _Lexer)."""
+    lexer = _Lexer(src)
+    return lexer.run(), lexer.ambiguous
+
+
 def strip_comments_and_strings(src: str) -> str:
     """Blank Lean comments, string and char literal text; keep layout and code.
 
@@ -226,7 +251,7 @@ def strip_comments_and_strings(src: str) -> str:
     Quoted identifiers (`«...»`) become one opaque name, and the `{...}` parts
     of interpolated string literals stay code (see _Lexer).
     """
-    return _Lexer(src).run()
+    return lex(src)[0]
 
 
 def scan_file(path: Path) -> list[tuple[int, str, str]]:
@@ -236,7 +261,7 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
 
 def scan_text(text: str) -> list[tuple[int, str, str]]:
     """Return (line, token, source line) for every occurrence in a Lean source."""
-    code = strip_comments_and_strings(text)
+    code, ambiguous = lex(text)
     assert len(code) == len(text)
     raw_lines = text.splitlines()
     starts = [0]
@@ -250,6 +275,10 @@ def scan_text(text: str) -> list[tuple[int, str, str]]:
             lineno = _line_of(starts, pos)
             raw = raw_lines[lineno - 1].strip() if lineno - 1 < len(raw_lines) else ""
             hits.append((lineno, token, raw))
+    for pos in ambiguous:
+        lineno = _line_of(starts, pos)
+        raw = raw_lines[lineno - 1].strip() if lineno - 1 < len(raw_lines) else ""
+        hits.append((lineno, AMBIGUOUS, raw))
     hits.sort()
     return hits
 
@@ -282,7 +311,7 @@ def load_baseline(path: Path) -> dict[str, Counter]:
     for section in out:
         for entry in data.get(section, []):
             key = (entry["file"], entry["token"])
-            if entry["token"] not in TOKENS:
+            if entry["token"] not in TOKEN_NAMES:
                 raise SystemExit(f"error: unknown token {entry['token']!r} in baseline")
             if key in out[section]:
                 raise SystemExit(f"error: duplicate baseline entry {key}")

@@ -25,6 +25,9 @@
 #   get_16_random_bits is an opaque constant, not an axiom, and the scan does
 #   not count it. JoltAudit.Axioms checks that no headline theorem depends on
 #   an axiom other than propext, Classical.choice and Quot.sound.
+# - Nine plain string literals in DeviceTree.lean (the device-tree text, with
+#   unbalanced `{`) whose end would differ if Lean read them as interpolated.
+#   Lean reads them as plain strings, which is also how the scan continues.
 
 [[known]]
 file = "JoltConstraints/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean"
@@ -55,6 +58,11 @@ count = 1
 file = "JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean"
 token = "decide +kernel"
 count = 2
+
+[[generated]]
+file = "LeanRV64D/DeviceTree.lean"
+token = "ambiguous string"
+count = 9
 
 [[generated]]
 file = "LeanRV64D/InstsEnd.lean"

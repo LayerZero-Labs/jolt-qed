@@ -1,6 +1,6 @@
 # Provenance and trust checks: T7
 
-Date: 2026-11-11, updated 2026-11-12 after two Codex reviews (section "Review fixes") and with the decisions in section "Decisions".
+Date: 2026-11-11, updated 2026-11-12 after three Codex reviews (section "Review fixes") and with the decisions in section "Decisions".
 This report describes four checks that Track T phase T7 adds (`docs/inline-precompiles.md`, section 7).
 
 1. `provenance.toml` names the one Jolt revision the project is checked against and, for every Lean file under `JoltBytecode/` and `JoltConstraints/`, the Jolt files it models.
@@ -10,7 +10,7 @@ This report describes four checks that Track T phase T7 adds (`docs/inline-preco
 4. `ci/comparator/` re-checks six of those theorems with Lean's built-in `lake comparator`.
    Its CI job does not block until it has passed once.
 
-The first three pass locally, and `scripts/tests/` holds 60 regression tests for the Python checkers and the comparator's import guard.
+The first three pass locally, and `scripts/tests/` holds 66 regression tests for the Python checkers and the comparator's import guard.
 The built-in `lake comparator` accepts the six theorems on macOS without its sandbox; the sandboxed run is the CI job.
 
 ## Revisions
@@ -33,12 +33,16 @@ I derived `models` and `checked` from each file's own citations.
 `checked` is the published a16z/jolt revision the file names most often, with the later commit on a tie.
 `models` are the Jolt files the file cites that exist at `checked`.
 A citation counts with brace lists expanded (`virt/{load,store}_{b,h,w}.rs` is six files).
-A GitHub URL prefix, a local checkout prefix up to `/jolt/` and a leading `./` are dropped.
-A path or bare file name that is not itself a Jolt path is read relative to the directory of the Jolt file cited just before it, or to one of that directory's ancestors, longest first.
+A GitHub URL prefix and a leading `./` are dropped.
+A path that is not a Jolt path as written is tried without each prefix that ends in a `jolt/` component (a local checkout such as `/Users/…/jolt/tracer/…`), so an internal component such as `crates/jolt-claims/src/protocols/jolt/` stays when the full path exists.
+A path or bare file name that is still not a Jolt path is read relative to the directory of the Jolt file cited just before it, or to one of that directory's ancestors, longest first.
 So in `tracer/src/instruction/div.rs, divu.rs` the second file is `tracer/src/instruction/divu.rs`, and in `crates/jolt-riscv/src/instructions/i/ld.rs` and `instructions/virt/load_b.rs` the second is `crates/jolt-riscv/src/instructions/virt/load_b.rs`.
-That relative reading reaches back at most 300 characters and never across a blank line, and only a path that exists in the Jolt tree counts.
+That relative reading reaches back at most 300 characters and never across a paragraph break (a line with only spaces and comment punctuation such as `--` or `*`).
+Failing that, a path with a `/` that ends exactly one file of the tree is that file: `relations/spartan/shift.rs` is `crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs`.
+Only a path that exists in the Jolt tree counts.
+These rules cover the citation forms in the tree today; a citation in another form (a bare file name with no Jolt path before it, or a suffix that several files share) is not recognized, and the check cannot require it in `models`.
 A path the file cites that is missing at `checked` goes into the note instead.
-The two reviews found 42 cited files missing from `models`: 13 in the first (the div/rem family and `scd.rs`, `jalr.rs` in `honest_trace.lean`, three witness files in `RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean`, `shift_data_h.rs` in `RegistersReadProofHelpers.lean`) and 29 relative citations in the second (11 in `JoltConstraints/metadata.lean`, 6 in `witness_helpers/lookup_index.lean`, `format_shift_data.rs` in six other witness helpers, and others in `lookup_output.lean`, `right_instruction_input.lean`, `DivisionLayout.lean` and `JoltBytecode/JoltISA/HostIO.lean`).
+The reviews found 47 cited files missing from `models`: 13 in the first (the div/rem family and `scd.rs`, `jalr.rs` in `honest_trace.lean`, three witness files in `RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean`, `shift_data_h.rs` in `RegistersReadProofHelpers.lean`) and 29 relative citations in the second (11 in `JoltConstraints/metadata.lean`, 6 in `witness_helpers/lookup_index.lean`, `format_shift_data.rs` in six other witness helpers, and others in `lookup_output.lean`, `right_instruction_input.lean`, `DivisionLayout.lean` and `JoltBytecode/JoltISA/HostIO.lean`), and 5 in the third (two shorthand paths in `Soundness/Layer1/Bytecode.lean`, `csrrs.rs` in `expansion_facts.lean`, and `image/decode.rs` and `expand/operands.rs` in `metadata.lean`).
 They are now in `models`, and the check enforces the rule.
 
 | Entries | Count |
@@ -86,7 +90,9 @@ Without `--jolt-dir`, it checks the following.
   A revision is a token of 7 to 40 hex digits with at least one digit and one letter.
   An all-digit or all-letter token counts as a revision when a citation word precedes it (`commit`, `commits`, `revision`, `revisions`, `rev`, `pin`, `pinned`, `sha`, `hash`, `checked`, `at`, `jolt`, `head`, `tip`, `base`, `upstream`, `main`, or `@`) or when it is the revision of a repository-qualified citation.
   A repository-qualified citation (`github.com/<owner>/<repo>/blob|tree|commit|commits|compare/<rev>` or `<owner>/<repo>@<rev>`, and both endpoints of `compare/<rev>...<rev>` or `<rev>..<rev>`) must name the pin or the file's `checked` revision when the repository is a Jolt repository, and an `[[other_revision]]` of that same repository otherwise.
-  An unqualified token may match the pin, the file's own `checked` revision or any `[[other_revision]]`, by prefix.
+  Hex digits may be in either case; the baseline records tokens in lowercase.
+  An unqualified token may match the pin or the file's own `checked` revision by prefix.
+  It may match an `[[other_revision]]` only when no "Jolt" (or `a16z/jolt`, but not `jolt-qed`) precedes it on its line within 60 characters, so `Jolt commit 717aeca3` fails even though `717aeca3` is a riscv-isa-manual commit.
 - Every `models` path of an entry without a `checked` revision is recorded as an `unchecked-model` entry in `[[known]]`, so a new unchecked path fails.
 - The `[[known]]` tables end the file, in exactly the form `--print-baseline` prints, and each `count` is a positive integer.
   So a baseline entry cannot be spelled so that the scan reads it as a citation of itself.
@@ -95,7 +101,7 @@ Without `--jolt-dir`, it checks the following.
 
 With `--jolt-dir <a16z/jolt clone>`, it also checks the following.
 
-- The pin and every `checked` revision resolve.
+- The pin and every `checked` revision resolve, and no `[[other_revision]]` resolves (a Jolt commit cannot be recorded as another repository's).
 - Every `models` path exists at its `checked` revision.
 - Every Jolt file a Lean file cites (as section "The provenance manifest" defines) that exists at its `checked` revision is in its `models`.
 - Every `models` path of an entry without a `checked` revision exists at the pin, and every Jolt file such a Lean file cites that exists at the pin is in its `models`.
@@ -274,11 +280,16 @@ I checked that the check fails on each of these: a new Markdown file under `docs
 
 `scripts/check_hygiene.py` blanks comments, docstrings and the text of string, raw-string and character literals, then counts these tokens: `sorry`, `admit`, `native_decide`, `decide +kernel` (also `kernel := true`), `bv_decide`, `set_option maxHeartbeats`, `maxRecDepth`, `synthInstance.*` options and the `axiom` keyword anywhere in code.
 A quoted identifier (`«…»`) is one opaque name up to its `»`, across lines as Lean reads it, so `def «--»` and `def «/-` do not start a comment.
-The scan decides for each string literal whether Lean reads it as interpolated, from the syntax just before it.
-The list of syntaxes that take an `interpolatedStr` is exact, taken from Lean v4.35.0 core and the dependencies: `s!`, `m!`, `f!`, `v!`, `println!`, `reportIssue!`, `reportDbgIssue!`, `reportEMatchIssue!`, `throwError`, `dbg_trace`, `trace[…]`, `trace_goal[…]`, `Macro.trace[…]`, Aesop's `throwPRError`, `aesop_trace[…]` and `aesop_trace![…]`, and `throwErrorAt`, `throwNamedError(At)`, `logNamedError(At)` and `logNamedWarning(At)` after their first arguments.
-In an interpolated literal the `{…}` parts are code, nested string literals included; in a plain literal they are text.
-The list is exact rather than generous, because a wrong reading hides code either way: the `{…}` of an interpolated string read as text, or a `"` after the `{` of a plain string read as the start of another string.
-A scanned file that declares new syntax with `interpolatedStr` counts as an occurrence of that token, so a new interpolating macro in this project fails the scan until it is added to the list.
+Whether Lean reads a string literal as interpolated depends on the syntax that takes it (`s!`, `throwError`, `trace[c]`, a local macro, a macro declared with `«interpolatedStr»`), and a text scan cannot know that for sure.
+Two earlier designs guessed, and each review found a way to hide a `sorry` from the guess.
+The scan therefore does not guess.
+A literal without an unescaped `{` reads the same either way.
+For a literal with one, the scan works out where the literal ends under both readings.
+If the two agree, the `{…}` parts hold no string quote, and the scan keeps them as code whichever reading Lean uses, so a token there always counts.
+This reports a token in the braces of a plain string, such as `"{sorry}"`, by design; writing the brace as `\x7b` avoids it (Lean accepts `\{` only in interpolated strings).
+If the two readings disagree, the literal counts as an `ambiguous string` occurrence and the scan continues with the plain reading, unless the literal follows `s!`, `m!` or `f!`.
+Those three are keywords, which always win over an identifier of the same spelling, and each takes an interpolated string, so the scan uses the interpolated reading there.
+On the tree today, the only ambiguous literals are nine plain strings with unbalanced `{` in the generated `LeanRV64D/DeviceTree.lean`, which the `[[generated]]` baseline records.
 The scan is a guard against accidents and not the trust boundary: the axiom gate and the comparator decide whether a headline theorem uses `sorryAx` or another axiom.
 Each root has its own policy, and each root module (for example `JoltBytecode.lean`) is scanned with its root.
 
@@ -287,18 +298,19 @@ Each root has its own policy, and each root module (for example `JoltBytecode.le
 | `JoltBytecode/` | Zero tolerance | 0 |
 | `JoltConstraints/` | `[[known]]` baseline | 7 |
 | `JoltTests/` | Zero tolerance | 0 |
-| `LeanRV64D/` | `[[generated]]` baseline | 77 |
+| `LeanRV64D/` | `[[generated]]` baseline | 86 |
 
 The `[[known]]` baseline of `JoltConstraints/` has 5 `sorry` and 2 `decide +kernel`.
 
 - One `sorry` in each of these files under `JoltConstraints/Completeness/`: `RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean`, `RamValEqInitialPlusPrefixRamInc.lean`, `RamValFinalEqInitialPlusRamInc.lean`, `RightLookupAdd.lean` and `RightLookupEqRightInputOtherwise.lean`.
 - Two `decide +kernel` in `JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean` (lines 54 and 61).
 
-The `[[generated]]` baseline of `LeanRV64D/` has 67 `axiom` (the `riscv_f*` floating-point axioms in `RiscvExtras.lean`), 3 `set_option maxHeartbeats` and 7 `maxRecDepth`.
+The `[[generated]]` baseline of `LeanRV64D/` has 9 ambiguous strings (above), 67 `axiom` (the `riscv_f*` floating-point axioms in `RiscvExtras.lean`), 3 `set_option maxHeartbeats` and 7 `maxRecDepth`.
 
 | File | Token | Count |
 |------|-------|-------|
 | `LeanRV64D/RiscvExtras.lean` | `axiom` | 67 |
+| `LeanRV64D/DeviceTree.lean` | `ambiguous string` | 9 |
 | `LeanRV64D/InstsEnd.lean` | `maxHeartbeats` | 2 |
 | `LeanRV64D/InstsEnd.lean` | `maxRecDepth` | 4 |
 | `LeanRV64D/RvfiDii.lean` | `maxHeartbeats` | 1 |
@@ -355,9 +367,11 @@ The deprecated external engine (`COMPARATOR_ENGINE=external`, built by `scripts/
 The `comparator` job in `provenance.yml` installs `bubblewrap`, allows unprivileged user namespaces (Ubuntu 24.04 restricts them through AppArmor), and runs `scripts/run_comparator.sh`.
 Its steps use `continue-on-error: true`, and a last step reports a failure as a warning, until the job has passed once.
 
-`COMPARATOR_NO_SANDBOX=1 scripts/run_comparator.sh` on macOS accepts all six theorems: the statements match, Lean's kernel accepts the exported proofs, and they use only the three permitted axioms.
+`COMPARATOR_NO_SANDBOX=1 scripts/run_comparator.sh` on macOS, with the root-package layout of commit `88981d0`, accepts all six theorems: the statements match, Lean's kernel accepts the exported proofs, and they use only the three permitted axioms.
+The comparator built only `Challenge` (60 s) and `Solution` (16 s); the three trusted imports were already built.
 That run has no `bwrap` sandbox and does not test the isolation.
-With one proof in `Solution.lean` replaced by `sorry`, the same run rejects the solution with `Illegal axiom detected: 'sorryAx'`.
+With the proof of `joltRun_eq_execute` in `Solution.lean` replaced by `sorry`, the same run exits 1 with `Illegal axiom detected: 'sorryAx'`.
+Both logs are outside the repository, in the T7 session's log folder (`comparator-lake2.log` and `comparator-sorry.log`).
 
 ## How to run
 
@@ -444,6 +458,21 @@ A second Codex review of `1ff8284..2ea3d75` found ten more problems, eight of th
 | 10 | `"{sorry}"` in a plain string counted as `sorry` | Fixed by the per-literal reading of finding 1 | `test_brace_text_in_plain_string_is_ignored` |
 
 The review's two smaller points are fixed too: a relative file name no longer resolves across a blank line, and a leading `./` is dropped (`test_relative_names_do_not_cross_a_blank_line`, `test_dot_slash_prefix`).
+
+A third Codex review of `2ea3d75..88981d0` found eight more problems, mostly close variants of round-2 findings.
+For the hygiene scan and the import guard, the fixes stop guessing and fail on anything the scripts cannot read for certain.
+This reverses the round-2 fix for finding 10: a token in the braces of a plain string, as in `"{sorry}"`, counts again, by design (`test_brace_text_in_plain_string_counts`).
+
+| # | Finding | Fix | Test |
+|---|---------|-----|------|
+| 1 | A multiline `throwErrorAt`, a string inside its fallback term, and a user function named `throwPRError` hid `sorry` from the per-literal rule | The scan no longer classifies literals: brace code always counts, and a literal whose end depends on the reading is an `ambiguous string` | `test_brace_code_counts_after_any_syntax`, `test_ambiguous_literal_is_reported` |
+| 2 | A macro declared with `«interpolatedStr»` escaped the new-syntax guard | Same fix; the guard and its token are gone | `test_brace_code_counts_after_any_syntax` |
+| 3 | Path normalization dropped an internal `protocols/jolt/` component | A path is tried as written first, then without each prefix ending in `jolt/` | `test_internal_jolt_component_is_kept` |
+| 4 | Shorthand paths with no full path before them were not resolved | A path that ends exactly one file of the tree is that file; 5 paths added | `test_unique_suffix_resolves` |
+| 5 | `import«Lean»` after the header read as the start of the body | The body may not start with a header word or `import` | `test_adjacent_quoted_import_fails` |
+| 6 | `Jolt commit 717aeca3` passed because `717aeca3` is another repository's commit | No `[[other_revision]]` exemption after "Jolt" on the same line; an `[[other_revision]]` that is a Jolt commit fails | `test_foreign_revision_in_jolt_prose`, `test_other_revision_that_is_a_jolt_commit_fails` |
+| 7 | An uppercase revision escaped the scan | Hex in either case, recorded in lowercase | `test_uppercase_revision` |
+| 8 | A ` *` line did not end a paragraph for relative names | A line of only spaces and comment punctuation is a paragraph break | `test_relative_names_do_not_cross_a_decorated_break` |
 
 ## Follow-ups
 

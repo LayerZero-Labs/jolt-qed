@@ -87,6 +87,23 @@ class RevisionTest(unittest.TestCase):
         text = f"-- https://github.com/a16z/jolt/compare/{CHECKED[:9]}...{PIN[:9]}\n"
         self.assertEqual(violations(text), Counter())
 
+    # Round-3 finding 6: a foreign revision cited as a Jolt revision.
+    def test_foreign_revision_in_jolt_prose(self) -> None:
+        self.assertEqual(violations("-- Jolt commit 717aeca3\n"), Counter({("revision", "717aeca3"): 1}))
+        self.assertEqual(violations("-- see a16z/jolt at 717aeca3\n"),
+                         Counter({("revision", "717aeca3"): 1}))
+        self.assertEqual(violations("-- the ISA manual at 717aeca3\n"), Counter())
+        self.assertEqual(violations("-- jolt-qed's manual copy at 717aeca3\n"), Counter())
+
+    # Round-3 finding 7: an uppercase revision escaped the scan.
+    def test_uppercase_revision(self) -> None:
+        full = "7538215BFE497AE316FC09E72D6D12BB131BEAD0"
+        self.assertEqual(violations(f"-- Jolt at `{full}`\n"),
+                         Counter({("revision", full.lower()): 1}))
+        self.assertEqual(violations(f"-- https://github.com/a16z/jolt/blob/{PIN.upper()}/x.rs\n"),
+                         Counter())
+        self.assertEqual(violations(f"-- pinned at {PIN[:9].upper()}\n"), Counter())
+
     # Round-2 finding 4: "Jolt at `7538215`" escaped the citation words.
     def test_all_digit_revision_after_at_or_jolt(self) -> None:
         self.assertEqual(violations("-- Jolt at `7538215`\n"), Counter({("revision", "7538215"): 1}))
@@ -213,6 +230,11 @@ TREE = {
     "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
     "crates/jolt-lookup-tables/src/instructions/riscv/ld.rs",
     "crates/jolt-lookup-tables/src/instructions/riscv/sd.rs",
+    "crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs",
+    "crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs",
+    "crates/jolt-verifier/src/stages/stage3/spartan_shift.rs",
+    "crates/jolt-verifier/src/lib.rs",
+    "tracer/src/lib.rs",
 }
 DIRS = {"/".join(p.split("/")[:k]) for p in TREE for k in range(1, p.count("/") + 1)}
 
@@ -254,6 +276,26 @@ class CitedPathsTest(unittest.TestCase):
                                "crates/jolt-lookup-tables/src/instructions/riscv/sd.rs"})
         got = cited("Rust: tracer/src/instruction/virtual_host_io.rs; emulator/cpu.rs:1244-1333.")
         self.assertEqual(got, {"tracer/src/instruction/virtual_host_io.rs", "tracer/src/emulator/cpu.rs"})
+
+    # Round-3 finding 3: an internal `jolt/` component was stripped.
+    def test_internal_jolt_component_is_kept(self) -> None:
+        path = "crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"
+        self.assertEqual(cited(f"Rust: `{path}`"), {path})
+        self.assertEqual(cited(f"/Users/me/src/jolt/{path}"), {path})
+
+    # Round-3 finding 4: shorthand paths with no full path before them.
+    def test_unique_suffix_resolves(self) -> None:
+        got = cited("`relations/spartan/shift.rs` and `stages/stage3/spartan_shift.rs`")
+        self.assertEqual(got, {"crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs",
+                               "crates/jolt-verifier/src/stages/stage3/spartan_shift.rs"})
+        # `src/lib.rs` ends two files of the tree, so on its own it names neither.
+        self.assertEqual(cited("see `src/lib.rs`"), set())
+
+    # Round-3 finding 8: a decorated comment line is a paragraph break too.
+    def test_relative_names_do_not_cross_a_decorated_break(self) -> None:
+        for sep in (" *", "--", " * ", "/-", "-/", "##"):
+            got = cited(f"/- See tracer/src/instruction/div.rs.\n{sep}\n * The rem.rs of another.\n-/")
+            self.assertEqual(got, {"tracer/src/instruction/div.rs"}, sep)
 
     # Round-2 review nits: context crossed paragraphs, and `./` was kept.
     def test_relative_names_do_not_cross_a_blank_line(self) -> None:
@@ -309,6 +351,16 @@ class CloneCheckTest(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("HostIO.lean: cites tracer/src/emulator/cpu.rs, a file at the pin, "
                       "but models omits it", out)
+
+    # Round-3 finding 6: a Jolt commit recorded as another repository's.
+    def test_other_revision_that_is_a_jolt_commit_fails(self) -> None:
+        text = MANIFEST.read_text(encoding="utf-8").replace(PIN, self.rev)
+        i = text.index("\n[[other_revision]]\n") + 1
+        bad = (text[:i] + f'[[other_revision]]\nrevision = "{self.rev[:9]}"\n'
+               f'repository = "riscv/riscv-isa-manual"\n\n' + text[i:])
+        code, out = run_main(bad, "--jolt-dir", self.tmp.name)
+        self.assertEqual(code, 1, out)
+        self.assertIn("names a commit in the Jolt clone", out)
 
     def test_no_omission_with_the_full_models(self) -> None:
         text = MANIFEST.read_text(encoding="utf-8").replace(PIN, self.rev)

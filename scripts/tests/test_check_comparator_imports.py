@@ -52,6 +52,13 @@ class ImportHeaderTest(unittest.TestCase):
         self.assertNotEqual(imports.check(CHALLENGE, SOLUTION, MODULES[:2]), [])
         self.assertNotEqual(imports.check(CHALLENGE, SOLUTION, MODULES + ["Mathlib"]), [])
 
+    # Round-3 review: `import«Lean»` after the header read as the body.
+    def test_adjacent_quoted_import_fails(self) -> None:
+        for extra in ("import«Lean»\n", "import\n«Lean»\n", "import Lean.«Elab»\n"):
+            bad = SOLUTION.replace("import JoltBytecode.Step.Instructions\n",
+                                   "import JoltBytecode.Step.Instructions\n" + extra, 1)
+            self.assertNotEqual(imports.check(CHALLENGE, bad, MODULES), [], extra)
+
     def test_header_reading(self) -> None:
         self.assertEqual(imports.header("module\n-- c\npublic import A.B\nimport all C\ndef x := 1"),
                          ["module", "public import A.B", "import all C"])
