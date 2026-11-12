@@ -916,15 +916,7 @@ theorem tail_reads3 {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠ .
     (hv : L.Valid op scalar) {rs1 rs3 : regidx} {s s' : SailJoltState} {F : VReg → BitVec 64}
     (h : (Program.seq (tailRows op scalar L rs1 rs3)).Run { s with vregs := F } s') :
     XReads s rs3 (sourceValue (.xreg rs3) s) := by
-  obtain ⟨g0, hg0, -⟩ := colRows_spec hv.col0 [.low (L.w 0) L.p] (by simp)
-    (by
-      intro m hm r hr
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
-      subst hm
-      simp only [Mac.ops, List.mem_cons, List.not_mem_nil, or_false] at hr
-      rcases hr with rfl | rfl <;>
-        exact MulRegs.col_free (hv.pre_free _ (by cases op <;> cases scalar <;> simp [preRegs])) 0)
-    (by simp) (setV F L.r0 (F (L.a 0) * F (L.b 0)))
+  obtain ⟨g0, hg0, -⟩ := col0_spec hv F
   simp only [tailRows, col0Rows, List.cons_append, List.append_assoc,
     outRows_store hop L rs1 rs3 (show 0 < 4 by decide), sdRow] at h
   rw [run_regRow_vregs_iff (i := .MUL (.vreg L.r0) (.vreg (L.a 0)) (.vreg (L.b 0))) rfl
