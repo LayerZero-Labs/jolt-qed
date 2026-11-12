@@ -90,21 +90,13 @@ Track every new `sorry` in `model_review.md` under "Proofs owed".
 
 Read this before the layers below; the rest of this document fills it in.
 
-- **The relation.** `AllConstraints joltInstance untrustedAdvice witness` is a
-  predicate on the witness alone, a table of field elements indexed by cycle.
-  The instance and the committed untrusted-advice words enter only as fixed data: the
-  expanded bytecode, the initial RAM, the public I/O and the entry slot
-  (`ConstraintContext`). No trace appears in it.
-  Jolt's verifier holds only a commitment to the untrusted advice, so each advice word is
-  an arbitrary field element (`committedInitialValue`).
-- **From field words to bytes.** `onBytes_of_allConstraints`
-  (`Soundness/UntrustedAdvice/Bytes.lean`) reduces the relation to the byte relation
-  `AllConstraintsOnBytes joltInstance privateInputs witness`, where the untrusted advice is
-  bytes, as the tracer receives it.
-  Every load reads a 64-bit word (`load_ramReadValue_word`), so an advice word that is not
-  a 64-bit word is never loaded before it is overwritten.
-  The reduction replaces such a word by zero and shifts the witness's RAM value columns at
-  the word's first access (`shiftWitness`).
+- **The relation.** `AllConstraints joltInstance untrustedAdvice witness` is a predicate on the witness alone, a table of field elements indexed by cycle.
+  The instance and the committed untrusted-advice words enter only as fixed data: the expanded bytecode, the initial RAM, the public I/O and the entry slot (`ConstraintContext`).
+  No trace appears in it.
+  Jolt's verifier holds only a commitment to the untrusted advice, so each advice word is an arbitrary field element (`committedInitialValue`).
+- **From field words to bytes.** `onBytes_of_allConstraints` (`Soundness/UntrustedAdvice/Bytes.lean`) reduces the relation to the byte relation `AllConstraintsOnBytes joltInstance privateInputs witness`, where the untrusted advice is bytes, as the tracer receives it.
+  Every load reads a 64-bit word (`load_ramReadValue_word`), so an advice word that is not a 64-bit word is never loaded before it is overwritten.
+  The reduction replaces such a word by zero and shifts the witness's RAM value columns at the word's first access (`shiftWitness`).
   It needs the separate temporary premise `UntrustedAdviceBlockFits` (not a field of `TemporaryRestrictions`).
   The rest of this document proves `JoltInstance.soundness_onBytes` for the byte relation.
 - **The language.** `JoltInstance.InLanguage` says there exist private inputs
