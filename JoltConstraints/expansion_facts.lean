@@ -6,6 +6,7 @@ import JoltConstraints.expansions
 import JoltConstraints.register_encoding
 import JoltConstraints.metadata
 import JoltConstraints.expansion_temp_liveness
+import JoltConstraints.Constraints.BytecodeReadSelectors
 
 open LeanRV64D
 
@@ -193,64 +194,108 @@ def noSpoilAsserts (instructions : List JoltISA.Instr) : Bool :=
     | .VirtualAssertEQ _ _ imm => imm == 0
     | _ => true
 
+/-- A load row whose own lookup range-checks the doubleword it loads: the right
+lookup operand is the destination value and nothing else.
+For example, LD passes, so its loaded value is below 2^64.
+See jolt/crates/jolt-riscv/src/instructions/i/ld.rs at a6b6dc717 (a16z/jolt#2190). -/
+def loadSelfChecked (instruction : JoltISA.Instr) : Bool :=
+  JoltMetadata.instructionFlag instruction .RightOperandIsRdWriteValue &&
+    !JoltMetadata.instructionFlag instruction .RightOperandIsRs2Value &&
+    !JoltMetadata.instructionFlag instruction .RightOperandIsImm &&
+    !JoltMetadata.instructionRafFlag instruction
+
+/-- `instruction` reads `register` as its first source and passes it unchanged
+to its left lookup operand. For example, `VirtualPext rd v40 v41` passes v40,
+and `ANDN v40 v40 v41` passes v40. -/
+def leftOperandIsRegister (register : Fin 128) (instruction : JoltISA.Instr) : Bool :=
+  JoltConstraints.bytecodeRs1Register instruction == some register &&
+    JoltMetadata.instructionFlag instruction .LeftOperandIsRs1Value &&
+    !JoltMetadata.instructionFlag instruction .LeftOperandIsPC &&
+    !JoltMetadata.instructionRafFlag instruction
+
+/-- Every load's doubleword reaches a lookup operand, so the lookup range-checks
+it. Either the load checks itself (`loadSelfChecked`), or the next row does not
+write the load's destination and the row after it passes that destination to its
+left lookup operand. For example, LB loads into v40, writes its lane mask to v41
+and reads v40 in `VirtualPextSigned`. A load at the end of a list, or one whose
+destination is overwritten by the next row, fails this check.
+See jolt/crates/jolt-program/src/expand/memory/shared.rs at a6b6dc717. -/
+def loadWindowsOk : List JoltISA.Instr → Bool
+  | [] => true
+  | instruction :: rest =>
+      (!JoltMetadata.opcodeFlag instruction .Load || loadSelfChecked instruction ||
+        match JoltConstraints.bytecodeRdRegister instruction, rest with
+        | some register, mask :: consumer :: _ =>
+            JoltConstraints.bytecodeRdRegister mask != some register &&
+              leftOperandIsRegister register consumer
+        | _, _ => false) && loadWindowsOk rest
+
 /-- All syntactic checks for one source sequence: valid rows and shifts,
 initialized temporaries, jump/store separation, virtual JALRs with unchanged
-bases, adjacent narrow advice multiplies, and no nonzero-immediate equality
-assertion. For example, ECALL passes all checks while a sequence that stores
-before its final JAL does not. -/
+bases, adjacent narrow advice multiplies, no nonzero-immediate equality
+assertion, and a lookup that range-checks every load (`loadWindowsOk`).
+For example, ECALL passes all checks while a sequence that stores before its
+final JAL does not. -/
 def sequenceOk (instructions : List JoltISA.Instr) : Bool :=
-  rowsOk instructions && shiftsOk instructions &&
+  (rowsOk instructions && shiftsOk instructions &&
     ExpansionTempLiveness.tempsReadAfterWrite instructions &&
     jumpEndNoStore instructions && sequenceJalrsVirtual instructions &&
     virtualJalrBaseUnwritten instructions && advicePairsOk instructions &&
-    noSpoilAsserts instructions
+    noSpoilAsserts instructions) && loadWindowsOk instructions
 
 /-- Every row passes the sequence row checks; for example, ECALL contains no branch. -/
 theorem sequenceOk_rowsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : rowsOk instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.1.1
+  exact ok.1.1.1.1.1.1.1.1
 
 /-- Shifts use the required masks; for example, a register shift follows its mask producer. -/
 theorem sequenceOk_shiftsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : shiftsOk instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.1.2
+  exact ok.1.1.1.1.1.1.1.2
 
 /-- Temporary reads follow writes; for example, ECALL initializes its scratch register. -/
 theorem sequenceOk_tempsReadAfterWrite (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : ExpansionTempLiveness.tempsReadAfterWrite instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.2
+  exact ok.1.1.1.1.1.1.2
 
 /-- A sequence ending in a jump has no store; for example, ECALL ends in JALR. -/
 theorem sequenceOk_jumpEndNoStore (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : jumpEndNoStore instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.2
+  exact ok.1.1.1.1.1.2
 
 /-- Sequence JALRs have virtual operands; for example, MRET reads virtual mepc. -/
 theorem sequenceOk_sequenceJalrsVirtual (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : sequenceJalrsVirtual instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.2
+  exact ok.1.1.1.1.2
 
 /-- A virtual jump base is unwritten in its sequence; for example, ECALL preserves mtvec. -/
 theorem sequenceOk_virtualJalrBaseUnwritten (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : virtualJalrBaseUnwritten instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.1.2
+  exact ok.1.1.1.2
 
 /-- Narrow advice loads have the required multiply; for example, AdviceLB shifts by 56 bits. -/
 theorem sequenceOk_advicePairsOk (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : advicePairsOk instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
-  exact ok.1.2
+  exact ok.1.1.2
 
 /-- A checked sequence has no spoil assert; for example, no row can compare
 temporary 40 with a nonzero immediate. -/
 theorem sequenceOk_noSpoilAsserts (instructions : List JoltISA.Instr)
     (ok : sequenceOk instructions = true) : noSpoilAsserts instructions = true := by
+  simp only [sequenceOk, Bool.and_eq_true] at ok
+  exact ok.1.2
+
+/-- Every load is range-checked by its own lookup or by the row two later;
+for example, LB's VirtualLoadB is checked by its VirtualPextSigned. -/
+theorem sequenceOk_loadWindowsOk (instructions : List JoltISA.Instr)
+    (ok : sequenceOk instructions = true) : loadWindowsOk instructions = true := by
   simp only [sequenceOk, Bool.and_eq_true] at ok
   exact ok.2
 
@@ -329,7 +374,8 @@ macro "finish_rows_ok" : tactic => `(tactic| (
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
       wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
-      advicePairsOk, nativeJalrBaseOk, List.getLast?_cons, List.getLast?_nil,
+      advicePairsOk, nativeJalrBaseOk, loadWindowsOk, loadSelfChecked,
+      leftOperandIsRegister, List.getLast?_cons, List.getLast?_nil,
       List.all_cons, List.all_nil, ExpansionTempLiveness.writes, *]
     first
     | rfl
@@ -365,7 +411,8 @@ macro "pure_rows_ok " program:ident notX0:ident : tactic => `(tactic| (
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
       wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
-      advicePairsOk, nativeJalrBaseOk, List.getLast?_cons, List.getLast?_nil,
+      advicePairsOk, nativeJalrBaseOk, loadWindowsOk, loadSelfChecked,
+      leftOperandIsRegister, List.getLast?_cons, List.getLast?_nil,
       List.all_cons, List.all_nil, ExpansionTempLiveness.writes, *]
     rfl))
 
@@ -848,54 +895,62 @@ def BranchOffsetOk : JoltISA.Instr → Prop
 -- Natives: one row, after Rust's rd = x0 rewrite. A native row writes x0 only as
 -- the canonical no-op, its register operands are canonical, and it is not a shift
 -- that reads a bitmask.
-/-- Syntactic checks for a native row, including an architectural JALR base
-and absence of a narrow advice load. For example, native JALR x0, 0(x2)
-passes after the destination rewrite, while a lone one-byte advice load fails. -/
+/-- Syntactic checks for a native row, including an architectural JALR base,
+absence of a narrow advice load, and a load that range-checks its own value
+(`loadWindowsOk`). For example, native JALR x0, 0(x2) passes after the
+destination rewrite, while a lone one-byte advice load fails. -/
 def nativeRowOk (instruction : JoltISA.Instr) : Bool :=
-  x0Ok instruction && JoltRegisterEncoding.instructionIsCanonical instruction &&
+  (x0Ok instruction && JoltRegisterEncoding.instructionIsCanonical instruction &&
     immShiftOk instruction && !isRegisterShift instruction &&
     ExpansionTempLiveness.tempsReadAfterWrite [instruction] &&
-    nativeJalrBaseOk instruction && advicePairsOk [instruction]
+    nativeJalrBaseOk instruction && advicePairsOk [instruction]) &&
+    loadWindowsOk [instruction]
 
 /-- A native row writes x0 only as the canonical no-op; for example, JAL x0 is rewritten. -/
 theorem nativeRowOk_x0Ok (instruction : JoltISA.Instr)
     (ok : nativeRowOk instruction = true) : x0Ok instruction = true := by
   simp only [nativeRowOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.1
+  exact ok.1.1.1.1.1.1.1
 
 /-- Native operands use canonical register storage; for example, x2 is architectural. -/
 theorem nativeRowOk_canonical (instruction : JoltISA.Instr)
     (ok : nativeRowOk instruction = true) : JoltRegisterEncoding.instructionIsCanonical instruction = true := by
   simp only [nativeRowOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.1.2
+  exact ok.1.1.1.1.1.1.2
 
 /-- A native immediate shift has a valid mask; for example, a native ADDI has no shift to check. -/
 theorem nativeRowOk_immShiftOk (instruction : JoltISA.Instr)
     (ok : nativeRowOk instruction = true) : immShiftOk instruction = true := by
   simp only [nativeRowOk, Bool.and_eq_true] at ok
-  exact ok.1.1.1.1.2
+  exact ok.1.1.1.1.1.2
 
 /-- A native row is not a register-mask shift; for example, JALR needs no mask producer. -/
 theorem nativeRowOk_not_registerShift (instruction : JoltISA.Instr)
     (ok : nativeRowOk instruction = true) : isRegisterShift instruction = false := by
   simp only [nativeRowOk, Bool.and_eq_true] at ok
-  simpa only [Bool.not_eq_eq_eq_not, Bool.not_true] using ok.1.1.1.2
+  simpa only [Bool.not_eq_eq_eq_not, Bool.not_true] using ok.1.1.1.1.2
 
 /-- A native row does not read an uninitialized temporary; for example, JALR reads an architectural base. -/
 theorem nativeRowOk_tempsReadAfterWrite (instruction : JoltISA.Instr)
     (ok : nativeRowOk instruction = true) : ExpansionTempLiveness.tempsReadAfterWrite [instruction] = true := by
   simp only [nativeRowOk, Bool.and_eq_true] at ok
-  exact ok.1.1.2
+  exact ok.1.1.1.2
 
 /-- A native JALR reads an architectural base; for example, JALR x1, 0(x2) reads x2. -/
 theorem nativeRowOk_nativeJalrBaseOk (instruction : JoltISA.Instr)
     (ok : nativeRowOk instruction = true) : nativeJalrBaseOk instruction = true := by
   simp only [nativeRowOk, Bool.and_eq_true] at ok
-  exact ok.1.2
+  exact ok.1.1.2
 
 /-- A native row cannot be a narrow advice load; for example, AdviceLB needs a sequence. -/
 theorem nativeRowOk_advicePairsOk (instruction : JoltISA.Instr)
     (ok : nativeRowOk instruction = true) : advicePairsOk [instruction] = true := by
+  simp only [nativeRowOk, Bool.and_eq_true] at ok
+  exact ok.1.2
+
+/-- A native load checks itself; for example, native LD passes. -/
+theorem nativeRowOk_loadWindowsOk (instruction : JoltISA.Instr)
+    (ok : nativeRowOk instruction = true) : loadWindowsOk [instruction] = true := by
   simp only [nativeRowOk, Bool.and_eq_true] at ok
   exact ok.2
 
@@ -913,7 +968,8 @@ macro "native_ok" : tactic => `(tactic| (
   all_goals
     refine ⟨?_, ?_⟩
     · simp only [nativeRowOk, x0Ok, isCanonicalNoOp, JoltISA.Instr.destination?,
-        Bool.not_false, immShiftOk, isRegisterShift, nativeJalrBaseOk, advicePairsOk, *]
+        Bool.not_false, immShiftOk, isRegisterShift, nativeJalrBaseOk, advicePairsOk,
+        loadWindowsOk, loadSelfChecked, leftOperandIsRegister, *]
       rfl
     · first
         | trivial

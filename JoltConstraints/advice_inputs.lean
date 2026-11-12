@@ -45,6 +45,41 @@ theorem JoltInstance.initial_state_adviceTape_readPosition_zero {Source : Type}
       simpa using congrArg (fun state : SailJoltState =>
         state.adviceTape.readPosition) initialized.symm
 
+-- Replacing the untrusted advice by bytes that pass the tracer's size check changes only
+-- the untrusted advice in the starting device.
+-- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
+theorem JoltInstance.initial_state_with_untrusted_advice {Source : Type}
+    (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
+    (bytes : Array (BitVec 8))
+    (fits : bytes.size ≤ joltInstance.memory_config.max_untrusted_advice_size.toNat)
+    (state : SailJoltState)
+    (initialized : joltInstance.initial_state privateInputs = some state) :
+    ∃ state' : SailJoltState,
+      joltInstance.initial_state { privateInputs with untrusted_advice := bytes } =
+        some state' ∧
+      state'.sail = state.sail ∧ state'.adviceTape = state.adviceTape ∧
+      state'.jolt_device = { state.jolt_device with untrusted_advice := bytes } := by
+  unfold JoltInstance.initial_state at initialized ⊢
+  cases layout : joltInstance.memory_layout with
+  | none => simp [layout] at initialized
+  | some layout =>
+    simp only [layout] at initialized ⊢
+    by_cases trusted : joltInstance.memory_config.max_trusted_advice_size.toNat <
+      joltInstance.trusted_advice.size
+    · simp [trusted] at initialized
+    by_cases untrusted : joltInstance.memory_config.max_untrusted_advice_size.toNat <
+      privateInputs.untrusted_advice.size
+    · simp [untrusted] at initialized
+    by_cases inputs : joltInstance.memory_config.max_input_size.toNat <
+      joltInstance.inputs.size
+    · simp [inputs] at initialized
+    have notBytes := Nat.not_lt.mpr fits
+    simp only [trusted, untrusted, inputs, notBytes, ite_false] at initialized ⊢
+    simp only [Option.pure_def, Option.bind_eq_bind, Option.bind_some, Option.some.injEq]
+      at initialized ⊢
+    subst initialized
+    exact ⟨_, rfl, rfl, rfl, rfl⟩
+
 namespace JoltConstraints
 
 -- The context binds the same RAM words after changing the execution tape.
@@ -64,15 +99,149 @@ noncomputable def ConstraintContext.withAdviceTape
 -- The relation cannot distinguish two choices of execution tape. This is an
 -- invariance result; it does not establish that any satisfying witness admits
 -- an execution consistent with a single tape. That is a soundness obligation.
-theorem AllConstraints.advice_tape_irrelevant {F : Type} [Field F] {params : WitnessParams}
+theorem AllConstraintsOnBytes.advice_tape_irrelevant {F : Type} [Field F]
+    {params : WitnessParams}
     (joltInstance : JoltInstance SourceInstruction) (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params) (tape : Array (BitVec 8)) :
-    AllConstraints joltInstance { privateInputs with advice_tape := tape } witness ↔
-      AllConstraints joltInstance privateInputs witness := by
+    AllConstraintsOnBytes joltInstance { privateInputs with advice_tape := tape } witness ↔
+      AllConstraintsOnBytes joltInstance privateInputs witness := by
   constructor
   · rintro ⟨context, equations⟩
     refine ⟨context.withAdviceTape privateInputs.advice_tape, equations⟩
   · rintro ⟨context, equations⟩
     exact ⟨context.withAdviceTape tape, equations⟩
+
+/-- The untrusted-advice words of a 64-bit initial RAM: word `index` of the
+untrusted-advice block, cast into the field. -/
+noncomputable def adviceBlockWords {F : Type} [Field F] (layout : MemoryLayout)
+    (initialRam : Nat → BitVec 64) (index : Nat) : F :=
+  match TraceWitness.remapRamAddress layout layout.untrusted_advice_start with
+  | none => 0
+  | some first => ramInitialValue initialRam (first + index)
+
+-- Outside the untrusted-advice block, the untrusted-advice overlay keeps the previous
+-- word, for any advice that fits the block.
+theorem overlay_untrusted_outside (layout : MemoryLayout)
+    (aligned : layout.max_untrusted_advice_size.toNat % 8 = 0)
+    (bytes : Array (BitVec 8)) (small : bytes.size ≤ layout.max_untrusted_advice_size.toNat)
+    {address : Nat} (outside : untrustedAdviceWordIndex? layout address = none)
+    (previous : BitVec 64) :
+    TraceWitness.overlayRamBytes layout layout.untrusted_advice_start bytes address previous =
+      previous := by
+  unfold TraceWitness.overlayRamBytes
+  unfold untrustedAdviceWordIndex? at outside
+  cases firstIs : TraceWitness.remapRamAddress layout layout.untrusted_advice_start with
+  | none => rfl
+  | some first =>
+    rw [firstIs] at outside
+    dsimp only at outside ⊢
+    apply ite_eq_right
+    split_ifs at outside with inBlock
+    omega
+
+-- Outside the untrusted-advice block, the initial RAM does not depend on the untrusted
+-- advice.
+theorem initialRamWordFromState_outside_untrustedAdvice (state state' : SailJoltState)
+    (bytes : Array (BitVec 8))
+    (sail : state'.sail = state.sail)
+    (device : state'.jolt_device = { state.jolt_device with untrusted_advice := bytes })
+    (aligned : state.jolt_device.memory_layout.max_untrusted_advice_size.toNat % 8 = 0)
+    (small : state.jolt_device.untrusted_advice.size ≤
+      state.jolt_device.memory_layout.max_untrusted_advice_size.toNat)
+    (small' : bytes.size ≤ state.jolt_device.memory_layout.max_untrusted_advice_size.toNat)
+    {address : Nat}
+    (outside : untrustedAdviceWordIndex? state.jolt_device.memory_layout address = none) :
+    TraceWitness.initialRamWordFromState state' address =
+      TraceWitness.initialRamWordFromState state address := by
+  unfold TraceWitness.initialRamWordFromState
+  rw [sail, device]
+  dsimp only
+  rw [overlay_untrusted_outside _ aligned bytes small' outside,
+    overlay_untrusted_outside _ aligned _ small outside]
+
+-- The context's verifier I/O uses the layout of the starting device.
+theorem ConstraintContext.io_memory_layout {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} {params : WitnessParams}
+    (context : ConstraintContext joltInstance privateInputs params) (state : SailJoltState)
+    (initialized : joltInstance.initial_state privateInputs = some state) :
+    context.io.memory_layout = state.jolt_device.memory_layout := by
+  have layoutBuilt := (initial_state_device joltInstance privateInputs state initialized).1
+  have publicIo := context.publicIo
+  unfold JoltInstance.public_io at publicIo
+  obtain ⟨layout, hasLayout, sameIo⟩ := Option.bind_eq_some_iff.mp publicIo
+  have layoutIs : layout = state.jolt_device.memory_layout :=
+    Option.some.inj (hasLayout.symm.trans layoutBuilt)
+  rw [← layoutIs]
+  exact (congrArg JoltDevice.memory_layout (Option.some.inj sameIo)).symm
+
+/-- The byte relation gives the relation Jolt's verifier checks: commit to the words of
+the untrusted-advice block of the context's initial RAM.
+For example, an honest run's witness satisfies `AllConstraints` with the words of its
+initial RAM. -/
+theorem allConstraints_of_onBytes {F : Type} [Field F] {params : WitnessParams}
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    {witness : WitnessType F params}
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io
+      context.entry witness) :
+    AllConstraints joltInstance (adviceBlockWords context.io.memory_layout context.initialRam)
+      witness := by
+  obtain ⟨state, initialized, ramIs⟩ := context.initialized
+  obtain ⟨layoutBuilt, -, untrustedIs, -, untrustedFits⟩ :=
+    initial_state_device joltInstance privateInputs state initialized
+  have layoutEq := context.io_memory_layout state initialized
+  obtain ⟨-, -, configFits, aligned, -⟩ := new_advice_regions _ _ layoutBuilt
+  -- drop the untrusted advice, then the execution tape
+  obtain ⟨state', built', sail, -, device⟩ :=
+    joltInstance.initial_state_with_untrusted_advice privateInputs #[] (by simp) state
+      initialized
+  have built'' : joltInstance.initial_state JoltPrivateInputs.noUntrustedAdvice =
+      some { state' with adviceTape := { bytes := #[], readPosition := 0 } } := by
+    have dropTape := joltInstance.initial_state_with_advice_tape
+      { privateInputs with untrusted_advice := #[] } #[]
+    rw [built'] at dropTape
+    exact dropTape
+  refine ⟨{ context with
+    initialRam := TraceWitness.initialRamWordFromState
+      { state' with adviceTape := { bytes := #[], readPosition := 0 } }
+    initialized := ⟨_, built'', rfl⟩ }, ?_⟩
+  have same : committedInitialValue (F := F) context.io.memory_layout
+      (TraceWitness.initialRamWordFromState
+        { state' with adviceTape := { bytes := #[], readPosition := 0 } })
+      (adviceBlockWords context.io.memory_layout context.initialRam) =
+      ramInitialValue (F := F) context.initialRam := by
+    funext address
+    rw [layoutEq]
+    unfold committedInitialValue
+    cases indexIs : untrustedAdviceWordIndex? state.jolt_device.memory_layout address with
+    | none =>
+      dsimp only
+      unfold ramInitialValue
+      rw [ramIs, initialRamWordFromState_outside_untrustedAdvice state
+        { state' with adviceTape := { bytes := #[], readPosition := 0 } } #[] sail device
+        aligned (by rw [untrustedIs]; exact untrustedFits.trans configFits) (by simp)
+        indexIs]
+    | some index =>
+      dsimp only
+      unfold untrustedAdviceWordIndex? at indexIs
+      unfold adviceBlockWords
+      cases firstIs : TraceWitness.remapRamAddress state.jolt_device.memory_layout
+          state.jolt_device.memory_layout.untrusted_advice_start with
+      | none => simp only [firstIs, reduceCtorEq] at indexIs
+      | some first =>
+        rw [firstIs] at indexIs
+        dsimp only at indexIs ⊢
+        split_ifs at indexIs with inBlock
+        · simp only [Option.some.injEq] at indexIs
+          subst indexIs
+          rw [Nat.add_sub_cancel' inBlock.1]
+  change FieldConstraintEquations context.bytecode
+    (committedInitialValue (F := F) context.io.memory_layout
+      (TraceWitness.initialRamWordFromState
+        { state' with adviceTape := { bytes := #[], readPosition := 0 } })
+      (adviceBlockWords context.io.memory_layout context.initialRam))
+    context.io context.entry witness
+  rw [same]
+  exact equations
 
 end JoltConstraints

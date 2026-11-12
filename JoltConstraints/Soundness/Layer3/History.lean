@@ -15,17 +15,17 @@ namespace JoltConstraints.Soundness
 open scoped BigOperators
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
-  {initialRam : Nat → BitVec 64}
+  {initialValue : Nat → F}
 
 /-- Every RAM-table entry starts at the supplied initial image. -/
-theorem ramVal_zero (history : ramValEqInitialPlusPrefixRamInc initialRam witness)
+theorem ramVal_zero (history : ramValEqInitialPlusPrefixRamInc initialValue witness)
     (address : Fin params.ramSize) :
-    witness.RamVal address ⟨0, Nat.two_pow_pos _⟩ = ramInitialValue initialRam address.val := by
+    witness.RamVal address ⟨0, Nat.two_pow_pos _⟩ = initialValue address.val := by
   rw [history]
   simp
 
 /-- Between in-domain cycles, each word changes by its selector-weighted increment. -/
-theorem ramVal_succ (history : ramValEqInitialPlusPrefixRamInc initialRam witness)
+theorem ramVal_succ (history : ramValEqInitialPlusPrefixRamInc initialValue witness)
     (address : Fin params.ramSize) (t : Fin params.traceLength)
     (next : t.val + 1 < params.traceLength) :
     witness.RamVal address ⟨t.val + 1, next⟩ =
@@ -37,8 +37,8 @@ theorem ramVal_succ (history : ramValEqInitialPlusPrefixRamInc initialRam witnes
 /-- The last cycle updates into `RamValFinal`, even when there is no padding.
 This also covers a one-cycle domain. -/
 theorem ramValFinal_eq_last_update
-    (history : ramValEqInitialPlusPrefixRamInc initialRam witness)
-    (finalHistory : ramValFinalEqInitialPlusRamInc initialRam witness)
+    (history : ramValEqInitialPlusPrefixRamInc initialValue witness)
+    (finalHistory : ramValFinalEqInitialPlusRamInc initialValue witness)
     (address : Fin params.ramSize) (t : Fin params.traceLength)
     (last : t.val + 1 = params.traceLength) :
     witness.RamValFinal address =
@@ -54,8 +54,8 @@ theorem ramValFinal_eq_last_update
 /-- If every remaining increment for a word is zero, its current value equals
 the final column. Layer 6 must establish this suffix condition for padding. -/
 theorem ramVal_eq_final_of_suffix_zero
-    (history : ramValEqInitialPlusPrefixRamInc initialRam witness)
-    (finalHistory : ramValFinalEqInitialPlusRamInc initialRam witness)
+    (history : ramValEqInitialPlusPrefixRamInc initialValue witness)
+    (finalHistory : ramValFinalEqInitialPlusRamInc initialValue witness)
     (address : Fin params.ramSize) (t : Fin params.traceLength)
     (suffixZero : ∀ cycle : Fin params.traceLength, t.val ≤ cycle.val →
       witness.RamRa address cycle * witness.RamInc cycle = 0) :

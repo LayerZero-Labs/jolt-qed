@@ -15,7 +15,9 @@ no execution rows or honesty certificate.
 verifier holds a commitment to it, and we model its contents directly.
 `initialRam` includes this advice and the prover's untrusted advice, so it is
 not claimed to be public. Its encoding comes from `initial_state`; the execution
-tape does not affect this encoding. See `AllConstraints.advice_tape_irrelevant`. -/
+tape does not affect this encoding. See `AllConstraintsOnBytes.advice_tape_irrelevant`.
+In `AllConstraints` the private inputs carry no untrusted advice; the committed
+advice words enter through `committedInitialValue` instead. -/
 structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) (params : WitnessParams) where
   bytecode : Array JoltInstructionRow

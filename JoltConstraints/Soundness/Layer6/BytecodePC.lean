@@ -15,7 +15,9 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow127 : 2 ^ 127 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
-  (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+  {initialValue : Nat → F}
+  (equations : FieldConstraintEquations context.bytecode initialValue context.io
+    context.entry witness)
 
 include charAbove2pow127 context equations
 
@@ -64,6 +66,35 @@ theorem selected_next_of_nonlast_virtual
   refine ⟨nextSlot, nextSelected, ?_⟩
   exact (natCast_injective_below_char oldBound newBound same).symm
 
+/-- A selected row with a positive sequence countdown is a nonlast virtual row.
+For example, the first row of a three-row expansion has both flags. -/
+theorem nonlastVirtual_of_remaining
+    (t : Fin params.traceLength)
+    (slot : Fin (2 ^ params.logBytecodeK))
+    (selected : bytecodeRa witness slot t = 1)
+    {row : JoltInstructionRow}
+    (rowIs : bytecodeRow context.bytecode slot.val = some row)
+    (remaining : row.virtual_sequence_remaining.getD 0 ≠ 0) :
+    witness.OpFlags .VirtualInstruction t = 1 ∧
+      witness.OpFlags .IsLastInSequence t = 0 := by
+  constructor
+  · rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
+      .VirtualInstruction t slot selected]
+    simp only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag]
+    have some : row.virtual_sequence_remaining.isSome = true := by
+      cases h : row.virtual_sequence_remaining with
+      | none => simp only [h, Option.getD_none] at remaining; exact False.elim (remaining rfl)
+      | some n => rfl
+    simp only [some, ↓reduceIte]
+  · rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
+      .IsLastInSequence t slot selected]
+    simp only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag]
+    have notLast : row.virtual_sequence_remaining ≠ some 0 := by
+      intro h
+      rw [h] at remaining
+      exact remaining rfl
+    simp only [beq_iff_eq, notLast, ↓reduceIte]
+
 /-- The selected row's sequence stamp provides the nonlast virtual flags.
 This is the form the execution-prefix induction will use. -/
 theorem selected_next_of_remaining
@@ -76,26 +107,40 @@ theorem selected_next_of_remaining
     ∃ nextSlot : Fin (2 ^ params.logBytecodeK),
       bytecodeRa witness nextSlot ⟨t.val + 1, next⟩ = 1 ∧
       nextSlot.val = slot.val + 1 := by
-  have virtual : witness.OpFlags .VirtualInstruction t = 1 := by
-    rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
-      .VirtualInstruction t slot selected]
-    simp only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag]
-    have some : row.virtual_sequence_remaining.isSome = true := by
-      cases h : row.virtual_sequence_remaining with
-      | none => simp only [h, Option.getD_none] at remaining; exact False.elim (remaining rfl)
-      | some n => rfl
-    simp only [some, ↓reduceIte]
-  have nonlast : witness.OpFlags .IsLastInSequence t = 0 := by
-    rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
-      .IsLastInSequence t slot selected]
-    simp only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag]
-    have notLast : row.virtual_sequence_remaining ≠ some 0 := by
-      intro h
-      rw [h] at remaining
-      exact remaining rfl
-    simp only [beq_iff_eq, notLast, ↓reduceIte]
+  obtain ⟨virtual, nonlast⟩ := nonlastVirtual_of_remaining charAbove2pow127 context equations
+    t slot selected rowIs remaining
   exact selected_next_of_nonlast_virtual charAbove2pow127 context equations
     t next slot selected virtual nonlast
+
+/-- A selected row with a positive sequence countdown is not the last witness cycle.
+Constraint 18 advances its slot, while the last cycle's shifted PC is zero.
+For example, a narrow load's first row always has a successor row. -/
+theorem next_of_remaining
+    (t : Fin params.traceLength)
+    (slot : Fin (2 ^ params.logBytecodeK))
+    (selected : bytecodeRa witness slot t = 1)
+    {row : JoltInstructionRow}
+    (rowIs : bytecodeRow context.bytecode slot.val = some row)
+    (remaining : row.virtual_sequence_remaining.getD 0 ≠ 0) :
+    t.val + 1 < params.traceLength := by
+  obtain ⟨virtual, nonlast⟩ := nonlastVirtual_of_remaining charAbove2pow127 context equations
+    t slot selected rowIs remaining
+  by_contra last
+  have increment : witness.NextPC t = witness.PC t + 1 := by
+    have relation := equations.nextPCEqPCPlusOneIfInline t
+    rw [virtual, nonlast] at relation
+    linear_combination relation
+  have zero : witness.NextPC t = 0 := by
+    simpa only [nextPCEqShift, dif_neg last] using equations.nextPCEqShift t
+  have oldPC := pc_of_selected_bytecode charAbove2pow127 context equations t slot selected
+  have castZero : ((slot.val + 1 : Nat) : F) = ((0 : Nat) : F) := by
+    rw [Nat.cast_add, Nat.cast_one, ← oldPC, ← increment, zero, Nat.cast_zero]
+  have domain : 2 ^ params.logBytecodeK ≤ 2 ^ 64 :=
+    Nat.pow_le_pow_right (by decide : 0 < 2) params.logBytecodeK_lt_usizeBits.le
+  have oldBound : slot.val + 1 < ringChar F := by omega
+  have zeroBound : 0 < ringChar F := by omega
+  have := natCast_injective_below_char oldBound zeroBound castZero
+  omega
 
 /-- An interior next row requires the current real row to retain a positive
 sequence countdown.

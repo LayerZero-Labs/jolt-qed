@@ -8,6 +8,7 @@ false until Jolt bugs are fixed (a16z/jolt#1949, #1950 and #1951 items 1 and 4).
 import JoltConstraints.Completeness.All
 import JoltConstraints.Completeness.Assumptions
 import JoltConstraints.language
+import JoltConstraints.advice_inputs
 
 open LeanRV64D
 
@@ -73,7 +74,8 @@ trace `trace` of the instance on them that meets the three conditions of
 assert fails (`spoilAssertsPass`), and Jolt's prover accepts it with config `config`
 (`proverAccepts`).
 Then the honest witness at Jolt's witness sizes (`HonestTrace.witness_params`) satisfies
-`AllConstraints`.
+`AllConstraints` with the words of the untrusted-advice block of the run's initial RAM as
+the committed advice (`JoltConstraints.adviceBlockWords`).
 For example, a 300-row run that touches RAM word 1000 is accepted on a 512-cycle witness
 with a 1024-word RAM table.
 It inherits the gaps in `model_review.md` ("Proofs owed").
@@ -89,18 +91,28 @@ theorem JoltInstance.completeness {F : Type} [Field F]
     (spoilAssertsPass : trace.SpoilAssertsPass)
     (config : ProverConfig)
     (proverAccepts : trace.prover_config joltInstance = some config) :
-    JoltConstraints.AllConstraints joltInstance privateInputs
+    JoltConstraints.AllConstraints joltInstance
+      (JoltConstraints.adviceBlockWords trace.initialState.jolt_device.memory_layout
+        (TraceWitness.initialRamWord trace))
       (HonestTrace.honestWitness (F := F) (trace.witness_params config proverAccepts) trace) := by
   obtain ⟨slots, preprocessed⟩ := trace.exists_preprocessed
   obtain ⟨io, publicIo⟩ := trace.exists_public_io
-  exact trace.allConstraints_prover_sizes config proverAccepts slots preprocessed
+  obtain ⟨context, equations⟩ := trace.allConstraintsOnBytes_prover_sizes (F := F) config
+    proverAccepts
+    slots preprocessed
     ⟨TraceWitness.bytecodePc trace 0, trace.entry_lt_bytecode_domain config proverAccepts⟩
     (trace.first_pc_eq_entry slots preprocessed) spoilAssertsPass
     joltInstance.program.next_pc_no_wrap assumptions.imageNonempty claimsRunOutputs io publicIo
+  have satisfied := JoltConstraints.allConstraints_of_onBytes context equations
+  obtain ⟨state, initialized, ramIs⟩ := context.initialized
+  have stateIs : state = trace.initialState :=
+    Option.some.inj (initialized.symm.trans trace.initialized)
+  rw [context.io_memory_layout state initialized, ramIs, stateIs] at satisfied
+  exact satisfied
 
 /-- Completeness, existential form: every instance in Jolt's language
-(`JoltInstance.InLanguage`) that meets `JoltInstance.CompletenessAssumptions` has private
-inputs and a witness, at some sizes, that satisfy every constraint.
+(`JoltInstance.InLanguage`) that meets `JoltInstance.CompletenessAssumptions` has committed
+untrusted-advice words and a witness, at some sizes, that satisfy every constraint.
 It follows from `JoltInstance.completeness` by unpacking `InLanguage`: the witness is the
 honest one at Jolt's sizes.
 For example, an instance whose program writes its claimed output and ends in `j .` has
@@ -109,11 +121,11 @@ theorem JoltInstance.completeness_someWitness {F : Type} [Field F]
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.CompletenessAssumptions)
     (inLanguage : joltInstance.InLanguage) :
-    ∃ (privateInputs : JoltPrivateInputs) (params : WitnessParams)
+    ∃ (untrustedAdvice : Nat → F) (params : WitnessParams)
       (witness : WitnessType F params),
-      JoltConstraints.AllConstraints joltInstance privateInputs witness := by
+      JoltConstraints.AllConstraints joltInstance untrustedAdvice witness := by
   obtain ⟨privateInputs, trace, claimsRunOutputs, proverAccepts, spoilAssertsPass⟩ :=
     inLanguage
   obtain ⟨config, accepted⟩ := Option.isSome_iff_exists.mp proverAccepts
-  exact ⟨privateInputs, _, _, JoltInstance.completeness joltInstance assumptions privateInputs
+  exact ⟨_, _, _, JoltInstance.completeness joltInstance assumptions privateInputs
     trace claimsRunOutputs spoilAssertsPass config accepted⟩

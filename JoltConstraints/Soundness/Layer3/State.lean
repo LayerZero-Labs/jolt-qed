@@ -57,7 +57,7 @@ theorem ramVal_initial_state
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (context : ConstraintContext joltInstance privateInputs params)
-    (history : ramValEqInitialPlusPrefixRamInc context.initialRam witness)
+    (history : ramValEqInitialPlusPrefixRamInc (ramInitialValue context.initialRam) witness)
     {initialState : SailJoltState}
     (built : joltInstance.initial_state privateInputs = some initialState)
     (index : Fin params.ramSize) :
@@ -74,7 +74,7 @@ theorem ramVal_initial_advance_pc
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (context : ConstraintContext joltInstance privateInputs params)
-    (history : ramValEqInitialPlusPrefixRamInc context.initialRam witness)
+    (history : ramValEqInitialPlusPrefixRamInc (ramInitialValue context.initialRam) witness)
     {initialState : SailJoltState}
     (built : joltInstance.initial_state privateInputs = some initialState)
     (address : BitVec 64) (compressed : Bool) (index : Fin params.ramSize) :

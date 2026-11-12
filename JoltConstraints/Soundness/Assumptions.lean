@@ -53,6 +53,16 @@ def JoltInstance.NoMaxLengthTrace
     (trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs),
     trace.rows.size ≠ 2 ^ Nat.log2 joltInstance.max_padded_trace_length.toNat
 
+-- The untrusted-advice block Jolt's verifier checks holds no more bytes than the
+-- configured maximum the tracer enforces. Equivalently, that maximum is a multiple
+-- of 8: the layout rounds it up to a multiple of 8, and the block holds the rounded
+-- size.
+def JoltInstance.UntrustedAdviceBlockFits {Source : Type} (joltInstance : JoltInstance Source) :
+    Prop :=
+  ∀ layout : MemoryLayout, joltInstance.memory_layout = some layout →
+    layout.max_untrusted_advice_size.toNat ≤
+      joltInstance.memory_config.max_untrusted_advice_size.toNat
+
 -- Temporary program restrictions. Each excludes programs that expose reported
 -- or suspected Jolt bugs. None is a check Jolt's verifier makes. Remove each
 -- once Jolt and the model are fixed and the unrestricted proof is established.
@@ -90,3 +100,10 @@ structure JoltInstance.TemporaryRestrictions
   -- execution cut short at a jump (LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md).
   -- A Jolt bug: it must be fixed in Jolt and cannot remain a restriction.
   claimsNoPanic : joltInstance.ClaimsNoPanic
+  -- FIXME: the configured maximum untrusted-advice size is a multiple of 8.
+  -- Otherwise the layout rounds it up, Jolt's verifier lets the prover commit to
+  -- the whole rounded block, and the tracer accepts only the configured number of
+  -- bytes. For example, with a maximum of 12 the verifier's block has 2 words, and
+  -- the prover may set the top 4 bytes of the second word, which no tracer run can
+  -- hold. Remove when Jolt's tracer or `MemoryLayout::new` checks the rounded size.
+  untrustedAdviceBlockFits : joltInstance.UntrustedAdviceBlockFits
