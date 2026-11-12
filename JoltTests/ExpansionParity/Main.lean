@@ -23,14 +23,20 @@ comparison with `#eval` (see `cli` below for why there is no executable).
   `SourceInstruction` constructor (NoOp, Unimpl and most Virtual* kinds) forms
   the separate class "row metadata compared, no Lean source constructor": each
   of its Rust rows is compared with `metadata.lean` for the row's kind and stamp.
+  A record whose source kind is neither mapped to Lean nor listed in
+  `noLeanSourceKinds` is reported as an unknown kind, and a record whose
+  `result` is not exactly one of a rows array and an error string stops the run.
 * `inline` compares every `inline_fixture` record, flags included, and every
   inline template at the driver's two triples and `TRIPLES` (default 300)
   seeded random triples per case, with the generated Lean rows. It writes
   `OUT_DIR/inline-mismatches.jsonl` and `OUT_DIR/inline-summary.txt`.
 * `mutation` corrupts one field of one row of a T1 record and of an inline
-  fixture record, once per field kind, and one metadata field of a record in
-  the row-metadata class, and checks that the comparisons report each
-  corruption.
+  fixture record, once per compared field, and one metadata field of a record
+  in the row-metadata class, and checks that the comparisons report each
+  corruption. It also replaces the
+  source kind with an unknown one and the `result` object with malformed ones,
+  on a T1 record, a row-metadata record and a record both sides reject, and
+  checks that each of these records is flagged.
 
 `Run.lean` fails (and `lean` exits with 1) when a mode finds a disagreement.
 -/
@@ -109,7 +115,8 @@ def runT1 (rowsPath outDir : String) : IO UInt32 := do
 /-- The mutation check on the first T1 record with at least ten rows, on the
 first record of the row-metadata class whose row 0 carries circuit and
 instruction flags and a table and agrees with `metadata.lean`, and on the first
-inline fixture record. -/
+record that both sides reject because Lean has no constructor for its kind, and
+on the first inline fixture record. -/
 def runMutation (rowsPath : String) : IO UInt32 := do
   let mut t1Rec : Option Json := none
   for line in ← readLines rowsPath do
@@ -141,10 +148,21 @@ def runMutation (rowsPath : String) : IO UInt32 := do
         metaRec := some j
         break
   let some mj := metaRec | throw <| IO.userError "no agreeing row-metadata record"
-  let okT1 ← mutationCheck "t1" tj t1cmp
-  let okMeta ← mutationCheck "t1_metadata" mj metaCmp metadataMutations
-  let okInline ← mutationCheck "inline" (← firstInlineFixture rowsPath) compareInlineFixture
-  let ok := okT1 && okMeta && okInline
+  let mut rejRec : Option Json := none
+  for line in ← readLines rowsPath do
+    let j ← IO.ofExcept (Json.parse line)
+    let r ← IO.ofExcept (RecordInfo.ofJson j)
+    if let .bothReject _ := compareT1 r then
+      if noLeanSourceKinds.contains r.source.kind then
+        rejRec := some j
+        break
+  let some rj := rejRec | throw <| IO.userError "no record that both sides reject by kind"
+  let ok ← mutationCheck "t1" tj t1cmp
+  let ok := (← mutationCheck "t1_metadata" mj metaCmp metadataMutations) && ok
+  let ok := (← recordMutationCheck "t1 record" tj (recordMutations tj)) && ok
+  let ok := (← recordMutationCheck "t1_metadata record" mj (recordMutations mj)) && ok
+  let ok := (← recordMutationCheck "both-reject record" rj (recordMutations rj)) && ok
+  let ok := (← mutationCheck "inline" (← firstInlineFixture rowsPath) compareInlineFixture) && ok
   IO.println (if ok then "mutation check: every corruption detected" else "mutation check: FAILED")
   return if ok then 0 else 1
 
