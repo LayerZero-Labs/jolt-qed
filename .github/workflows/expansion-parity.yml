@@ -1,0 +1,103 @@
+name: expansion-parity
+
+# Non-blocking check of the T1 expansion parity and, once the generated inline
+# rows are checked in, of the inline round trip
+# (scripts/expansion-parity/README.md, reports/2026-11-11-expansion-parity.md,
+# reports/2026-11-11-inline-rows.md).
+# It checks out Jolt at the pin, builds the driver and regenerates rows.jsonl
+# and inline_templates.json. When JoltBytecode/Inlines/Generated is in the
+# repository it also regenerates the generated Lean, fails on a diff in it and
+# runs the inline round trip. The T1 comparator and the mutation check run in
+# both cases.
+# Untested in CI: the steps were run locally only.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: expansion-parity-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  expansion-parity:
+    name: expansion-parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    # Reports only: a failure here does not block a merge.
+    continue-on-error: true
+    env:
+      # a16z/jolt main at the pin of docs/inline-precompiles.md.
+      JOLT_REV: a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: a16z/jolt
+          ref: ${{ env.JOLT_REV }}
+          path: jolt-pin
+          persist-credentials: false
+      - name: Detect the generated inline rows
+        id: generated
+        run: |
+          if test -f JoltTests/ExpansionParity/RoundTrip.lean \
+              && test -n "$(git ls-files -- JoltBytecode/Inlines/Generated)"; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      # The driver exits with 1 when one of its own checks fails and with 2 when
+      # it cannot run. Status 1 fails this step, but the Lean steps below still
+      # run on the driver's output.
+      - name: Build the driver and regenerate its outputs
+        id: driver
+        env:
+          GENERATED: ${{ steps.generated.outputs.present }}
+        run: |
+          set +e
+          flags=()
+          if test "$GENERATED" != true; then flags=(--no-lean); fi
+          JOLT_DIR="$GITHUB_WORKSPACE/jolt-pin" \
+            scripts/expansion-parity/run.sh "$RUNNER_TEMP/expansion-parity" "${flags[@]}"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "driver exit status: $status"
+          test "$status" -eq 0
+      - name: Fail on a diff in the generated Lean
+        if: ${{ !cancelled() && steps.generated.outputs.present == 'true' && steps.driver.outputs.status != '2' }}
+        run: |
+          git status --porcelain -- JoltBytecode/Inlines/Generated
+          git diff --exit-code -- JoltBytecode/Inlines/Generated
+          test -z "$(git status --porcelain -- JoltBytecode/Inlines/Generated)"
+      - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
+        if: ${{ !cancelled() && steps.driver.outputs.status != '2' }}
+        with:
+          build: false
+          use-github-cache: false
+      - name: Build the comparator
+        id: comparator
+        if: ${{ !cancelled() && steps.driver.outputs.status != '2' }}
+        run: lake build JoltTests.ExpansionParity.Main
+      - name: T1 comparator
+        if: ${{ !cancelled() && steps.comparator.outcome == 'success' }}
+        run: |
+          out="$RUNNER_TEMP/expansion-parity/out"
+          EXPANSION_PARITY_ARGS="t1 $out/rows.jsonl $out/lean-t1" \
+            lake env lean JoltTests/ExpansionParity/Run.lean
+      - name: Inline round trip
+        if: ${{ !cancelled() && steps.comparator.outcome == 'success' && steps.generated.outputs.present == 'true' }}
+        run: |
+          out="$RUNNER_TEMP/expansion-parity/out"
+          EXPANSION_PARITY_ARGS="inline $out/rows.jsonl $out/inline_templates.json $out/lean-inline" \
+            lake env lean JoltTests/ExpansionParity/Run.lean
+      - name: Mutation check
+        if: ${{ !cancelled() && steps.comparator.outcome == 'success' }}
+        run: |
+          out="$RUNNER_TEMP/expansion-parity/out"
+          EXPANSION_PARITY_ARGS="mutation $out/rows.jsonl" \
+            lake env lean JoltTests/ExpansionParity/Run.lean
