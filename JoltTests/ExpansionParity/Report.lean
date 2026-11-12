@@ -97,10 +97,12 @@ def flipBool (j : Json) : Json :=
   | .ok b => Json.bool (!b)
   | .error _ => j
 
-/-- The mutations: one per field kind, each on one row. -/
+/-- The mutations: one per compared row field (13), each on one row. -/
 def mutations : List (String × Nat × String × (Json → Json)) :=
   [ ("kind", 0, "kind", fun _ => Json.str "ADD"),
+    ("address", 1, "address", bumpNat),
     ("rs1", 1, "rs1", bumpNat),
+    ("rs2", 2, "rs2", bumpNat),
     ("rd", 2, "rd", bumpNat),
     ("imm", 3, "imm", bumpIntString),
     ("vsr", 4, "vsr", bumpNat),
@@ -135,5 +137,56 @@ def mutationCheck (label : String) (j : Json) (cmp : RecordInfo → List Mismatc
     IO.println s!"  {name} on row {row}: {if caught then "detected" else "NOT DETECTED"} ({ms.length} mismatches)"
     ok := ok && caught
   return ok
+
+/-! ## Record-level corruptions
+
+A corrupted source kind or `result` object must not pass: the record must
+either fail to read (`RecordInfo.ofJson`) or give a mismatch. -/
+
+def setSourceKind (k : String) (j : Json) : Except String Json := do
+  let src ← j.getObjVal? "source"
+  pure (j.setObjVal! "source" (src.setObjVal! "kind" (Json.str k)))
+
+def setResult (res : Json) (j : Json) : Except String Json :=
+  pure (j.setObjVal! "result" res)
+
+/-- The record's `result` with an `error` string added next to its `rows`. -/
+def addError (j : Json) : Except String Json := do
+  let res ← j.getObjVal? "result"
+  pure (j.setObjVal! "result" (res.setObjVal! "error" (Json.str "x")))
+
+/-- How a record fares: `none` when it passes (agrees, or both sides reject),
+`some why` when it is flagged. -/
+def t1Verdict (j : Json) : Option String :=
+  match RecordInfo.ofJson j with
+  | .error e => some s!"read error: {e}"
+  | .ok r =>
+      match compareT1 r with
+      | .compared (m :: _) | .metadataOnly (m :: _) => some s!"mismatch: {m.cause}"
+      | _ => none
+
+/-- Applies each corruption to one record and checks that `t1Verdict` flags
+it; the unmutated record must pass. -/
+def recordMutationCheck (label : String) (j : Json)
+    (muts : List (String × (Json → Except String Json))) : IO Bool := do
+  let case := ((j.getObjVal? "case").bind Json.getStr?).toOption.getD "?"
+  let clean := t1Verdict j
+  IO.println s!"{label}: {case}: unmutated record {(clean.map (s!"is flagged: " ++ ·)).getD "passes"}"
+  let mut ok := clean.isNone
+  for (name, f) in muts do
+    let v := t1Verdict (← IO.ofExcept (f j))
+    IO.println s!"  {name}: {match v with | some why => s!"detected ({why})" | none => "NOT DETECTED"}"
+    ok := ok && v.isSome
+  return ok
+
+/-- Corruptions of the source kind and of the `result` object. -/
+def recordMutations (j : Json) : List (String × (Json → Except String Json)) :=
+  let rows := ((j.getObjVal? "result").bind (·.getObjVal? "rows")).toOption
+  [ ("source kind UNKNOWN_KIND", setSourceKind "UNKNOWN_KIND"),
+    ("result {}", setResult (Json.mkObj [])),
+    ("result with a non-string error", setResult (Json.mkObj [("error", Json.num (5 : Int))])),
+    ("result with a null error", setResult (Json.mkObj [("error", Json.null)])),
+    ("result with a non-array rows", setResult (Json.mkObj [("rows", Json.str "x")])) ] ++
+  (if rows.isSome then [("result with both rows and error", addError)] else [])
 
 end ExpansionParity
