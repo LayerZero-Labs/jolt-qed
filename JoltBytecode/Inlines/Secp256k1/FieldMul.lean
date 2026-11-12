@@ -599,7 +599,7 @@ theorem mulRows_eq_append (op : FieldOp) (scalar : Bool) (L : MulRegs) (rs1 rs2 
   simp only [mulRows, tailRows, MulRegs.pool, List.append_assoc]
 
 /-- For `MUL` and `SQUARE`, the output of columns 0 to 3 is a store to the output buffer.
-Example: column 2 ends with `SD rs3, r0, 16`. -/
+Example: for `MULQ` (`mulqRegs`) with `rs3 = x12`, column 2 ends with `SD x12, vr62, 16`. -/
 theorem outRows_store {op : FieldOp} (hop : op ≠ .div) (L : MulRegs) (rs1 rs3 : regidx)
     {k : Nat} (hk : k < 4) : outRows op L rs1 rs3 k = [sdRow rs3 (L.r k) (8 * k)] := by
   cases op
@@ -608,7 +608,7 @@ theorem outRows_store {op : FieldOp} (hop : op ≠ .div) (L : MulRegs) (rs1 rs3 
   · exact absurd rfl hop
 
 /-- The output of columns 4 to 6 is a check against a quotient limb.
-Example: column 4 ends with `VirtualAssertEQ r0, w0`. -/
+Example: for `mulqRegs`, column 4 ends with `VirtualAssertEQ vr62, vr56`. -/
 theorem outRows_assert (op : FieldOp) (L : MulRegs) (rs1 rs3 : regidx) {k : Nat}
     (hk : ¬ k < 4) :
     outRows op L rs1 rs3 k = [.VirtualAssertEQ (.vreg (L.r k)) (.vreg (L.w (k - 4))) 0] := by
