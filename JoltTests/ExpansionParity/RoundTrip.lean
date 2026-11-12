@@ -142,6 +142,74 @@ def randomTriples (seed : Nat) (n : Nat) : Array Triple := Id.run do
     out := out.push ⟨a, b, c⟩
   return out
 
+/-! ## Completeness of the driver output -/
+
+/-- The fixture scenarios the driver writes for every inline (the scenarios of
+`registered_inline_expand_parity_hashes.jsonl`). Each appears once per
+allocator: `NAME::SCENARIO` with `fresh` and `NAME::SCENARIO@shared` with
+`shared`. -/
+def fixtureScenarios : List String := ["normal", "compressed", "rd_zero", "aliased_operands"]
+
+/-- What `inline_templates.json` gives for one inline: whether its `normal` and
+`rd_zero` cases are present and not null. -/
+structure TemplateCases where
+  name : String
+  normal : Bool
+  rdZero : Bool
+
+def templateCases (tj : Json) : Except String (Array TemplateCases) := do
+  let inlines ← (← tj.getObjVal? "inlines").getArr?
+  inlines.mapM fun inl => do
+    let name ← (← inl.getObjVal? "name").getStr?
+    let cases ← (← inl.getObjVal? "cases").getObj?
+    let present (k : String) : Bool := match cases.get? k with
+      | none | some .null => false
+      | some _ => true
+    pure { name, normal := present "normal", rdZero := present "rd_zero" }
+
+def coverageMismatch (case field rust lean cause : String) : Mismatch :=
+  { check := "inline_coverage", case, group := "coverage", allocator := "-",
+    sourceKind := "Inline", row := none, field, rust, lean, cause }
+
+/-- Checks that the driver output covers every inline of `inlineEntries`.
+Each inline needs exactly one template entry, with a `normal` case that is not
+null, and exactly one fixture record per scenario and allocator. Its `rd_zero`
+fixture records must hold rows when its `rd_zero` template is not null and
+Jolt's error when it is null. A fixture record outside this set is reported
+too. An inline with no template entry at all is reported by `runInline`. -/
+def inlineCoverage (fixtures : Array RecordInfo) (templates : Array TemplateCases) :
+    List Mismatch := Id.run do
+  let mut out : Array Mismatch := #[]
+  let mut expected : Array (String × String) := #[]
+  for e in inlineEntries do
+    let ts := templates.filter (·.name == e.name)
+    if ts.size > 1 then
+      out := out.push <| coverageMismatch e.name "inline" s!"{ts.size} template entries"
+        "1 template entry" "repeated template entry"
+    let rdZero := ts.any (·.rdZero)
+    if ts.size == 1 && !ts.any (·.normal) then
+      out := out.push <| coverageMismatch e.name "normal" "missing or null" "generated rows"
+        "no normal template"
+    for sc in fixtureScenarios do
+      for (alloc, suffix) in [("fresh", ""), ("shared", "@shared")] do
+        let case := s!"{e.name}::{sc}{suffix}"
+        expected := expected.push (case, alloc)
+        let rs := fixtures.filter (fun r => r.case == case && r.allocator == alloc)
+        if rs.size != 1 then
+          out := out.push <| coverageMismatch case "fixture" s!"{rs.size} records" "1 record"
+            "fixture record missing or repeated"
+        for r in rs do
+          if sc == "rd_zero" && r.rows.isSome != rdZero then
+            out := out.push <| coverageMismatch case "rd_zero"
+              (if r.rows.isSome then "rows" else "error")
+              (if rdZero then "rows (template present)" else "error (template null)")
+              "rd_zero fixture record disagrees with the rd_zero template"
+  for r in fixtures do
+    if !expected.contains (r.case, r.allocator) then
+      out := out.push <| coverageMismatch r.case "fixture" r.allocator "not expected"
+        "unexpected fixture record"
+  return out.toList
+
 /-- A template-level disagreement that concerns a whole inline, not one row. -/
 def templateMismatch (name field rust lean cause : String) : Mismatch :=
   { check := "inline_template", case := name, group := "template", allocator := "-",
@@ -156,10 +224,12 @@ def runInline (rowsPath templatesPath outDir : String) (triples seed : Nat) : IO
   let mut fixtures := 0
   let mut fixtureRows := 0
   let mut fixtureAgree := 0
+  let mut fixtureRecords : Array RecordInfo := #[]
   for line in lines do
     let r ← parseRecord line
     if r.group != "inline_fixture" then continue
     fixtures := fixtures + 1
+    fixtureRecords := fixtureRecords.push r
     fixtureRows := fixtureRows + (r.rows.map List.length).getD 0
     let ms := compareInlineFixture r
     if ms.isEmpty then fixtureAgree := fixtureAgree + 1
@@ -177,6 +247,10 @@ def runInline (rowsPath templatesPath outDir : String) (triples seed : Nat) : IO
     | .ok t => pure t
     | .error e => throw <| IO.userError e
   let fixed := #[← tri "A", ← tri "B"]
+  let coverage := inlineCoverage fixtureRecords (← IO.ofExcept (templateCases tj))
+  for m in coverage do
+    all := all.push m
+    summary := summary.add m
   let inlines ← IO.ofExcept ((tj.getObjVal? "inlines") >>= (·.getArr?))
   let mut templateNames : Array String := #[]
   let mut instantiations := 0
@@ -227,11 +301,46 @@ def runInline (rowsPath templatesPath outDir : String) (triples seed : Nat) : IO
     s!"inlines in templates: {templateNames.size}; Lean entries: {inlineEntries.length}\n" ++
     s!"template instantiations: {instantiations} ({templateRows} rows); " ++
     s!"triples per case: 2 fixed + {triples} random, seed {seed}\n" ++
+    s!"coverage mismatches (missing or unexpected inputs): {coverage.length}\n" ++
     s!"field mismatches: {all.size}\n\n" ++
     "Disagreements by cause:\n" ++ summary.render
   IO.FS.writeFile (outDir ++ "/inline-summary.txt") text
   IO.println text
   return if all.isEmpty then 0 else 1
+
+/-- Deletes and repeats inputs of the round trip and checks that
+`inlineCoverage` reports each change; the unchanged inputs must give no
+coverage mismatch. -/
+def coverageMutationCheck (rowsPath templatesPath : String) : IO Bool := do
+  let mut fixtures : Array RecordInfo := #[]
+  for line in ← readLines rowsPath do
+    let r ← parseRecord line
+    if r.group == "inline_fixture" then fixtures := fixtures.push r
+  let tj ← IO.ofExcept (Json.parse (← IO.FS.readFile templatesPath))
+  let templates ← IO.ofExcept (templateCases tj)
+  let some first := templates[0]? | throw <| IO.userError "no inline template"
+  let n := first.name
+  let clean := inlineCoverage fixtures templates
+  IO.println s!"coverage: unchanged inputs give {clean.length} coverage mismatches"
+  let dropCase (c : String) := fixtures.filter (·.case != c)
+  let muts : List (String × Array RecordInfo × Array TemplateCases) :=
+    [ (s!"drop the normal template of {n}", fixtures,
+        templates.map fun t => if t.name == n then { t with normal := false } else t),
+      (s!"drop the fixture record {n}::normal", dropCase s!"{n}::normal", templates),
+      (s!"drop the fixture record {n}::normal@shared", dropCase s!"{n}::normal@shared", templates),
+      (s!"drop the fixture record {n}::rd_zero", dropCase s!"{n}::rd_zero", templates),
+      (s!"repeat the fixture record {n}::compressed",
+        fixtures ++ fixtures.filter (·.case == s!"{n}::compressed"), templates),
+      (s!"turn the rows of {n}::rd_zero into an error",
+        fixtures.map fun r =>
+          if r.case == s!"{n}::rd_zero" then { r with rows := none, error := some "x" } else r,
+        templates) ]
+  let mut ok := clean.isEmpty
+  for (name, fs, ts) in muts do
+    let ms := inlineCoverage fs ts
+    IO.println s!"  {name}: {if ms.isEmpty then "NOT DETECTED" else s!"detected ({ms.length} coverage mismatches)"}"
+    ok := ok && !ms.isEmpty
+  return ok
 
 /-- The first `inline_fixture` record with rows, for the mutation check. -/
 def firstInlineFixture (rowsPath : String) : IO Json := do
