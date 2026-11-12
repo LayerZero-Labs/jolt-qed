@@ -1,15 +1,14 @@
 name: expansion-parity
 
-# Non-blocking check of the T1 expansion parity and, once the generated inline
-# rows are checked in, of the inline round trip
+# Check of the T1 expansion parity and, once the generated inline rows are
+# checked in, of the inline round trip
 # (scripts/expansion-parity/README.md, reports/2026-11-11-expansion-parity.md,
 # reports/2026-11-11-inline-rows.md).
-# It checks out Jolt at the pin, builds the driver and regenerates rows.jsonl
+# It checks out Jolt at JOLT_REV, builds the driver and regenerates rows.jsonl
 # and inline_templates.json. When JoltBytecode/Inlines/Generated is in the
 # repository it also regenerates the generated Lean, fails on a diff in it and
 # runs the inline round trip. The T1 comparator and the mutation check run in
-# both cases.
-# Untested in CI: the steps were run locally only.
+# both cases. The job fails on any T1 disagreement at JOLT_REV.
 
 on:
   pull_request:
@@ -27,11 +26,12 @@ jobs:
     name: expansion-parity
     runs-on: ubuntu-latest
     timeout-minutes: 240
-    # Reports only: a failure here does not block a merge.
-    continue-on-error: true
     env:
-      # a16z/jolt main at the pin of docs/inline-precompiles.md.
-      JOLT_REV: a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5
+      # a16z/jolt#2384 (branch feat/zicsr-remaining-forms) at its restacked
+      # head. Lean's system expansions and decoder follow #2384, and the driver
+      # covers its CSR forms with the cargo feature zicsr-remaining.
+      JOLT_REV: 580084fcfad4788ebf48413a92dd640ca090c45f
+      EXPANSION_PARITY_FEATURES: zicsr-remaining
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,7 +40,7 @@ jobs:
         with:
           repository: a16z/jolt
           ref: ${{ env.JOLT_REV }}
-          path: jolt-pin
+          path: jolt-rev
           persist-credentials: false
       - name: Detect the generated inline rows
         id: generated
@@ -62,7 +62,7 @@ jobs:
           set +e
           flags=()
           if test "$GENERATED" != true; then flags=(--no-lean); fi
-          JOLT_DIR="$GITHUB_WORKSPACE/jolt-pin" \
+          JOLT_DIR="$GITHUB_WORKSPACE/jolt-rev" \
             scripts/expansion-parity/run.sh "$RUNNER_TEMP/expansion-parity" "${flags[@]}"
           status=$?
           echo "status=$status" >> "$GITHUB_OUTPUT"

@@ -18,9 +18,12 @@ comparison with `#eval` (see `cli` below for why there is no executable).
 * `t1` compares every non-inline record with `expand_instruction` and
   `metadata.lean`, and writes `OUT_DIR/t1-mismatches.jsonl` and
   `OUT_DIR/t1-summary.txt`. A record whose Rust source kind has no Lean
-  `SourceInstruction` constructor (NoOp, Unimpl and most Virtual* kinds) forms
+  `SourceInstruction` constructor (Unimpl and most Virtual* kinds) forms
   the separate class "row metadata compared, no Lean source constructor": each
   of its Rust rows is compared with `metadata.lean` for the row's kind and stamp.
+  A `NoOp` source whose only row is a `NoOp` row is padding, not a Lean source
+  instruction (`T1Outcome.padding`); in exchange the run checks that no other
+  record, inline ones included, has a `NoOp` row.
   A record whose source kind is neither mapped to Lean nor listed in
   `noLeanSourceKinds` is reported as an unknown kind, and a record whose
   `result` is not exactly one of a rows array and an error string stops the run.
@@ -55,11 +58,20 @@ def runT1 (rowsPath outDir : String) : IO UInt32 := do
   let mut metaAgree : Std.HashMap String Nat := {}
   let mut metaKinds : Std.HashSet String := {}
   let mut metaRows := 0
+  let mut padding : Std.HashMap String Nat := {}
+  let mut scannedRows := 0
   for line in lines do
     let r ← parseRecord line
     sourceKinds := sourceKinds.insert r.source.kind
+    -- Every record, inline ones included: no expansion may emit a NoOp row.
+    if r.source.kind != "NoOp" then
+      scannedRows := scannedRows + (r.rows.map List.length).getD 0
+    for m in noOpRows r "noop_rows" do
+      all := all.push m
+      summary := summary.add m
     match compareT1 r with
     | .inline => inlineSkipped := inlineSkipped + 1
+    | .padding => padding := bump padding r.group
     | .bothReject how =>
         perGroup := bump perGroup r.group
         agreeGroup := bump agreeGroup r.group
@@ -90,7 +102,9 @@ def runT1 (rowsPath outDir : String) : IO UInt32 := do
     s!"records that agree per group: {renderCounts agreeGroup}\n" ++
     s!"inline records left to the inline round trip: {inlineSkipped}\n" ++
     s!"records with a disagreement: {mismatched}; field mismatches: {all.size}\n" ++
-    s!"Lean source kinds with no record in this input: {absentZicsr}\n\n" ++
+    s!"Lean source kinds with no record in this input: {absentZicsr}\n" ++
+    s!"NoOp source records, not a Lean source instruction (padding): {renderCounts padding}\n" ++
+    s!"rows of non-NoOp sources checked for NoOp rows: {scannedRows}\n\n" ++
     "Rejected by both sides:\n" ++
     String.join ((rejectHow.toList.toArray.qsort (fun a b => a.1 < b.1)).toList.map
       fun (k, n) => s!"- {k} ({n} records)\n") ++
@@ -154,6 +168,12 @@ def runMutation (rowsPath : String) : IO UInt32 := do
   let ok := (← recordMutationCheck "t1 record" tj (recordMutations tj)) && ok
   let ok := (← recordMutationCheck "t1_metadata record" mj (recordMutations mj)) && ok
   let ok := (← recordMutationCheck "both-reject record" rj (recordMutations rj)) && ok
+  -- The NoOp-row check: a NoOp row in any other record must be reported.
+  let withNoOp ← IO.ofExcept (RecordInfo.ofJson (← IO.ofExcept
+    (setRowField tj 0 "kind" fun _ => Json.str "NoOp")))
+  let noOpCaught := !(noOpRows withNoOp "noop_rows").isEmpty
+  IO.println s!"noop_rows: {withNoOp.case} with row 0 of kind NoOp: {if noOpCaught then "detected" else "NOT DETECTED"}"
+  let ok := noOpCaught && ok
   IO.println (if ok then "mutation check: every corruption detected" else "mutation check: FAILED")
   return if ok then 0 else 1
 

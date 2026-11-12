@@ -104,6 +104,13 @@ inductive T1Outcome where
   `metadata.lean` for the row's kind and stamp instead
   (`RowView.leanMetadataOf`); the list holds every disagreement. -/
   | metadataOnly (mismatches : List Mismatch)
+  /-- A `NoOp` source whose only row is the `NoOp` row itself. Jolt's decoder
+  never produces `NoOp` (`decode_instruction` in
+  `crates/jolt-program/src/image/decode.rs` has no arm for it); `NoOp` rows are
+  the padding that bytecode preprocessing and the prover add. It is not a Lean
+  source instruction, and `noOpRows` checks that no expansion emits a `NoOp`
+  row. -/
+  | padding
 
 def leanRowsOf (src : SourceInstruction) (s : SourceView) : Option (List JoltInstructionRow) :=
   expand_instruction
@@ -126,9 +133,22 @@ def compareRowMetadata (r : RecordInfo) (rust : List RowView) : List Mismatch :=
 def unknownKind (r : RecordInfo) (k : String) : Mismatch :=
   r.mismatch "t1" none "source_kind" k "unknown" s!"unknown Rust source kind {k}"
 
+/-- A mismatch for each row of kind `NoOp` in a record whose source is not
+`NoOp`: every expansion, of decoded and inline sources alike, must be free of
+`NoOp` rows for the `padding` classification to hold. -/
+def noOpRows (r : RecordInfo) (check : String) : List Mismatch :=
+  if r.source.kind == "NoOp" then [] else
+  ((List.range ((r.rows.map List.length).getD 0)).zip (r.rows.getD [])).filterMap fun (i, row) =>
+    if row.kind == "NoOp" then
+      some (r.mismatch check (some i) "kind" "NoOp" "no NoOp row"
+        s!"an expansion of {r.source.kind} emits a NoOp row")
+    else none
+
 def compareT1 (r : RecordInfo) : T1Outcome :=
   let s := r.source
   if s.kind == "Inline" then .inline else
+  if s.kind == "NoOp" && (r.rows.map (·.all (·.kind == "NoOp"))).getD false
+    && (r.rows.map List.length).getD 0 == 1 then .padding else
   match s.toLean, r.rows with
   | .error (.kind k), _ =>
       if !noLeanSourceKinds.contains k then .compared [unknownKind r k] else
