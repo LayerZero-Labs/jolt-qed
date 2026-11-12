@@ -10,7 +10,8 @@ architectural base. Each lemma says what a successful run of `row :: rest` means
 
 * `loadDword?` is the doubleword an `LD` reads, and `storeDword?` the state after an `SD`.
 * For RAM addresses both have closed forms (`loadDword?_ram`, `storeDword?_ram`), with the
-  read-after-write facts (`loadDword?_storeDword?_same`, `loadDword?_storeDword?_ne`).
+  read-after-write facts on the RAM map (`ram_doubleword_write_same`,
+  `ram_doubleword_write_ne`).
 * `XReads` says that reading an architectural register succeeds; it depends only on the Sail
   register map, so it survives the rows of an inline (`XReads.of_regs`).
 
