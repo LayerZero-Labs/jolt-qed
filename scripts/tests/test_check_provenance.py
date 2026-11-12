@@ -293,7 +293,8 @@ class CitedPathsTest(unittest.TestCase):
 
     # Round-3 finding 8: a decorated comment line is a paragraph break too.
     def test_relative_names_do_not_cross_a_decorated_break(self) -> None:
-        for sep in (" *", "--", " * ", "/-", "-/", "##"):
+        # Round-4 review: spaces between the comment decoration and a divider.
+        for sep in (" *", "--", " * ", "/-", "-/", "##", " * ---", " * * *", "-- - -"):
             got = cited(f"/- See tracer/src/instruction/div.rs.\n{sep}\n * The rem.rs of another.\n-/")
             self.assertEqual(got, {"tracer/src/instruction/div.rs"}, sep)
 

@@ -1,6 +1,6 @@
 # Provenance and trust checks: T7
 
-Date: 2026-11-11, updated 2026-11-12 after three Codex reviews (section "Review fixes") and with the decisions in section "Decisions".
+Date: 2026-11-11, updated 2026-11-12 after four Codex reviews (section "Review fixes") and with the decisions in section "Decisions".
 This report describes four checks that Track T phase T7 adds (`docs/inline-precompiles.md`, section 7).
 
 1. `provenance.toml` names the one Jolt revision the project is checked against and, for every Lean file under `JoltBytecode/` and `JoltConstraints/`, the Jolt files it models.
@@ -10,7 +10,7 @@ This report describes four checks that Track T phase T7 adds (`docs/inline-preco
 4. `ci/comparator/` re-checks six of those theorems with Lean's built-in `lake comparator`.
    Its CI job does not block until it has passed once.
 
-The first three pass locally, and `scripts/tests/` holds 66 regression tests for the Python checkers and the comparator's import guard.
+The first three pass locally, and `scripts/tests/` holds 68 regression tests for the Python checkers and the comparator's import guard.
 The built-in `lake comparator` accepts the six theorems on macOS without its sandbox; the sandboxed run is the CI job.
 
 ## Revisions
@@ -37,7 +37,7 @@ A GitHub URL prefix and a leading `./` are dropped.
 A path that is not a Jolt path as written is tried without each prefix that ends in a `jolt/` component (a local checkout such as `/Users/…/jolt/tracer/…`), so an internal component such as `crates/jolt-claims/src/protocols/jolt/` stays when the full path exists.
 A path or bare file name that is still not a Jolt path is read relative to the directory of the Jolt file cited just before it, or to one of that directory's ancestors, longest first.
 So in `tracer/src/instruction/div.rs, divu.rs` the second file is `tracer/src/instruction/divu.rs`, and in `crates/jolt-riscv/src/instructions/i/ld.rs` and `instructions/virt/load_b.rs` the second is `crates/jolt-riscv/src/instructions/virt/load_b.rs`.
-That relative reading reaches back at most 300 characters and never across a paragraph break (a line with only spaces and comment punctuation such as `--` or `*`).
+That relative reading reaches back at most 300 characters and never across a paragraph break (a line with only spaces and comment punctuation, such as `--`, ` *` or ` * ---`).
 Failing that, a path with a `/` that ends exactly one file of the tree is that file: `relations/spartan/shift.rs` is `crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs`.
 Only a path that exists in the Jolt tree counts.
 These rules cover the citation forms in the tree today; a citation in another form (a bare file name with no Jolt path before it, or a suffix that several files share) is not recognized, and the check cannot require it in `models`.
@@ -287,8 +287,10 @@ A literal without an unescaped `{` reads the same either way.
 For a literal with one, the scan works out where the literal ends under both readings.
 If the two agree, the `{…}` parts hold no string quote, and the scan keeps them as code whichever reading Lean uses, so a token there always counts.
 This reports a token in the braces of a plain string, such as `"{sorry}"`, by design; writing the brace as `\x7b` avoids it (Lean accepts `\{` only in interpolated strings).
-If the two readings disagree, the literal counts as an `ambiguous string` occurrence and the scan continues with the plain reading, unless the literal follows `s!`, `m!` or `f!`.
+If the two readings disagree, the literal counts as an `ambiguous string` occurrence and the scan continues with the plain reading, unless the literal follows `s!`, `m!` or `f!`, past any whitespace or comment.
 Those three are keywords, which always win over an identifier of the same spelling, and each takes an interpolated string, so the scan uses the interpolated reading there.
+The keyword counts only where it starts a token: the character before it must be whitespace, an opening bracket or an operator character.
+So `xs!`, `a.s!` and the name literal `` `s! `` do not count, and the literal after them is ambiguous.
 On the tree today, the only ambiguous literals are nine plain strings with unbalanced `{` in the generated `LeanRV64D/DeviceTree.lean`, which the `[[generated]]` baseline records.
 The scan is a guard against accidents and not the trust boundary: the axiom gate and the comparator decide whether a headline theorem uses `sorryAx` or another axiom.
 Each root has its own policy, and each root module (for example `JoltBytecode.lean`) is scanned with its root.
@@ -319,7 +321,8 @@ The `[[generated]]` baseline of `LeanRV64D/` has 9 ambiguous strings (above), 67
 
 `python3 scripts/check_hygiene.py` passes on 778 files.
 A test file with a `sorry`, a `set_option maxHeartbeats` and an `axiom` makes it fail, and the same tokens inside a comment, a docstring or a string do not.
-`scripts/tests/test_check_hygiene.py` covers the reviews' bypasses (an interpolated `sorry`, a plain string inside an interpolation, `def «--» : Nat := by sorry`, a quoted identifier across lines, `set_option … in axiom`) and the cases that must keep passing, such as `"{sorry}"` in a plain string.
+`scripts/tests/test_check_hygiene.py` covers the reviews' bypasses (an interpolated `sorry`, a plain string inside an interpolation, `def «--» : Nat := by sorry`, a quoted identifier across lines, `set_option … in axiom`) and the cases that must keep passing, such as text in a plain string without braces.
+A token in the braces of a plain string, as in `"{sorry}"`, fails the scan by design; the passing spelling is `"\x7bsorry}"`.
 Like `scripts/check-provenance.py`, it fails when a baseline count no longer matches.
 
 ## The axiom gate
@@ -473,6 +476,15 @@ This reverses the round-2 fix for finding 10: a token in the braces of a plain s
 | 6 | `Jolt commit 717aeca3` passed because `717aeca3` is another repository's commit | No `[[other_revision]]` exemption after "Jolt" on the same line; an `[[other_revision]]` that is a Jolt commit fails | `test_foreign_revision_in_jolt_prose`, `test_other_revision_that_is_a_jolt_commit_fails` |
 | 7 | An uppercase revision escaped the scan | Hex in either case, recorded in lowercase | `test_uppercase_revision` |
 | 8 | A ` *` line did not end a paragraph for relative names | A line of only spaces and comment punctuation is a paragraph break | `test_relative_names_do_not_cross_a_decorated_break` |
+
+A fourth Codex review of `88981d0..f44ef32` found that the round-3 fixes hold and reported four close variants.
+
+| # | Finding | Fix | Test |
+|---|---------|-----|------|
+| 1 | A name literal `` `s! `` before a plain string `"{"` made the scan take the interpolated reading and hide the next theorem's `sorry` | The keyword counts only after whitespace, an opening bracket or an operator character | `test_name_literal_is_not_the_keyword` |
+| 2 | The test summary in this report still said `"{sorry}"` in a plain string passes | The summary says it fails and names `"\x7bsorry}"` | |
+| 3 | More than 40 characters of whitespace or a comment between `s!` and its literal made the literal ambiguous | The scan finds the token before the literal past any whitespace or comment | `test_keyword_across_whitespace_and_comments` |
+| 4 | A divider such as ` * ---` or ` * * *` did not end a paragraph for relative names | Spaces may appear anywhere in a punctuation-only line | `test_relative_names_do_not_cross_a_decorated_break` |
 
 ## Follow-ups
 

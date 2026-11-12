@@ -253,7 +253,7 @@ _SEG = r"(?:[\w.-]|\{[\w.,\s-]+\})+"
 _PATH_RE = re.compile(r"(?<![\w./{-])/?" + _SEG + r"(?:/" + _SEG + r")+")
 _BARE_RE = re.compile(r"(?<![\w./{-])([\w-]+\.rs)(?![\w/])")
 _URL_PREFIX = re.compile(r"(?:https?://)?github\.com/[\w.-]+/[\w.-]+/(?:blob|tree)/[\w.-]+/")
-_PARAGRAPH_BREAK = re.compile(r"\n[ \t]*[-*/#|>!=~+]*[ \t]*\n")
+_PARAGRAPH_BREAK = re.compile(r"\n[ \t*/#|>!=~+-]*\n")
 BARE_WINDOW = 300
 
 

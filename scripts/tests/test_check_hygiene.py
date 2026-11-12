@@ -80,6 +80,21 @@ class HygieneScanTest(unittest.TestCase):
         src = 'def p := xs.s!"{f "x"}"\n'
         self.assertEqual([t for _, t in tokens(src)], [AMBIGUOUS])
 
+    # Round-4 review: a name literal `` `s! `` is not the keyword, so the
+    # literal after it stays ambiguous and the later `sorry` counts.
+    def test_name_literal_is_not_the_keyword(self) -> None:
+        for kw in ("s!", "m!", "f!"):
+            src = (f'def p : String := (fun (_ : Lean.Name) (s : String) => s) `{kw} "{{"\n'
+                   'theorem t : False := sorry\ndef s := "x"\n')
+            self.assertEqual(tokens(src), [(1, AMBIGUOUS), (2, "sorry")], kw)
+
+    # Round-4 review: whitespace or a comment between the keyword and the
+    # literal does not change Lean's reading.
+    def test_keyword_across_whitespace_and_comments(self) -> None:
+        for gap in (" " * 41, " /-" + "x" * 50 + "-/ ", "\n  -- c\n  "):
+            src = f'def p := s!{gap}"{{String.length "x"}}"\ntheorem t : False := sorry\n'
+            self.assertEqual([t for _, t in tokens(src)], ["sorry"], repr(gap))
+
     def test_plain_string_with_brace_does_not_hide_later_code(self) -> None:
         src = 'def x := "{"\ntheorem t : False := sorry\ndef y := "z"\n'
         self.assertEqual(tokens(src), [(1, AMBIGUOUS), (2, "sorry")])

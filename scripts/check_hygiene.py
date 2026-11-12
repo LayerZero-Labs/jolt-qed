@@ -83,9 +83,13 @@ RAW_STR_START = re.compile(r'r(#*)"')
 
 
 # `s!`, `m!` and `f!` are keywords (a token always wins over an identifier of
-# the same spelling), and each takes an interpolated string, so a literal right
-# after one is certainly interpolated.
-_CERTAIN_INTERP = re.compile(r"(?<![\w'.!?])[smf]!\s*$")
+# the same spelling), and each takes an interpolated string, so a literal after
+# one, past any whitespace or comment, is certainly interpolated. The keyword
+# must start a token: the character before it must be one that ends a token
+# and cannot continue a name, so `xs!`, `a.s!`, a name literal `` `s! `` and
+# anything after `$`, `?`, `@` or `!` do not count. An unlisted character
+# leaves the literal ambiguous, which fails closed.
+_CERTAIN_INTERP = re.compile(r"(?:^|[\s(\[{,;:=<>|&+*/%^~-])[smf]!$")
 
 
 class _Lexer:
@@ -116,6 +120,17 @@ class _Lexer:
 
     def keep(self, i: int, j: int) -> None:
         self.out.append(self.src[i:j])
+
+    def code_before(self) -> str:
+        """The output so far, without trailing whitespace, cut to at least
+        its last three characters. Comments are already whitespace here, so
+        this skips any comment or layout between a keyword and a literal."""
+        tail = ""
+        for chunk in reversed(self.out):
+            tail = chunk + tail
+            if len(tail.rstrip()) >= 3:
+                break
+        return tail.rstrip()
 
     def run(self) -> str:
         self.code(0, in_braces=False)
@@ -206,7 +221,7 @@ class _Lexer:
         if brace:
             sub = _Lexer(self.src)
             sub_end = sub.interpolated(i)
-            certain = _CERTAIN_INTERP.search("".join(self.out[-40:])[-40:]) is not None
+            certain = _CERTAIN_INTERP.search(self.code_before()) is not None
             if sub_end == end or certain:
                 self.out += sub.out
                 self.ambiguous += sub.ambiguous
