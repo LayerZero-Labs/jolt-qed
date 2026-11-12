@@ -17,3 +17,4 @@ import JoltBytecode.Decode.Agreement
 import JoltBytecode.Decode.Compressed
 import JoltBytecode.Step.Ecall
 import JoltBytecode.Inlines.Generated
+import JoltBytecode.Inlines.FrameInstances
