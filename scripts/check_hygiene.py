@@ -83,12 +83,13 @@ RAW_STR_START = re.compile(r'r(#*)"')
 
 
 # `s!`, `m!` and `f!` are keywords (a token always wins over an identifier of
-# the same spelling), and each takes an interpolated string, so a literal after
-# one, past any whitespace or comment, is certainly interpolated. The keyword
-# must start a token: the character before it must be one that ends a token
-# and cannot continue a name, so `xs!`, `a.s!`, a name literal `` `s! `` and
-# anything after `$`, `?`, `@` or `!` do not count. An unlisted character
-# leaves the literal ambiguous, which fails closed.
+# the same spelling), and each takes one interpolated string, so the literal
+# right after one, past any whitespace or comment but no other literal, is
+# certainly interpolated. The lexer matches this against `_Lexer.recent`.
+# The keyword must start a token: the character before it must be one that
+# ends a token and cannot continue a name, so `xs!`, `a.s!`, a name literal
+# `` `s! `` and anything after `$`, `?`, `@` or `!` do not count. An unlisted
+# character leaves the literal ambiguous, which fails closed.
 _CERTAIN_INTERP = re.compile(r"(?:^|[\s(\[{,;:=<>|&+*/%^~-])[smf]!$")
 
 
@@ -114,23 +115,24 @@ class _Lexer:
         self.src, self.n = src, len(src)
         self.out: list[str] = []
         self.ambiguous: list[int] = []
+        # The last few characters of the code read so far, with each run of
+        # whitespace or comments as one space and each literal as `"`.
+        self.recent = ""
+
+    def note(self, text: str) -> None:
+        for ch in text:
+            if ch.isspace():
+                if self.recent.endswith(" "):
+                    continue
+                ch = " "
+            self.recent = (self.recent + ch)[-5:]
 
     def blank(self, i: int, j: int) -> None:
         self.out.append("".join("\n" if c == "\n" else " " for c in self.src[i:j]))
 
     def keep(self, i: int, j: int) -> None:
         self.out.append(self.src[i:j])
-
-    def code_before(self) -> str:
-        """The output so far, without trailing whitespace, cut to at least
-        its last three characters. Comments are already whitespace here, so
-        this skips any comment or layout between a keyword and a literal."""
-        tail = ""
-        for chunk in reversed(self.out):
-            tail = chunk + tail
-            if len(tail.rstrip()) >= 3:
-                break
-        return tail.rstrip()
+        self.note(self.src[i:j])
 
     def run(self) -> str:
         self.code(0, in_braces=False)
@@ -149,6 +151,7 @@ class _Lexer:
                 j = src.find("\n", i)
                 j = n if j == -1 else j
                 self.blank(i, j)
+                self.note(" ")
                 i = j
             elif c == "«":
                 j = src.find("»", i + 1)
@@ -158,6 +161,7 @@ class _Lexer:
                 else:
                     # A quoted identifier: one opaque name, never a comment or token.
                     self.out.append("".join("\n" if ch == "\n" else "x" for ch in src[i:j + 1]))
+                    self.note("x")
                     i = j + 1
             elif c == '"':
                 i = self.string(i)
@@ -167,10 +171,12 @@ class _Lexer:
                 j = src.find(close, i + 2 + len(hashes))
                 j = n if j == -1 else j + len(close)
                 self.blank(i, j)
+                self.note('"')
                 i = j
             elif c == "'" and (i == 0 or not IDENT_CHAR.match(src[i - 1])) and CHAR_LIT.match(src, i):
                 m = CHAR_LIT.match(src, i)
                 self.blank(i, m.end())
+                self.note('"')
                 i = m.end()
             elif in_braces and c == "{":
                 depth += 1
@@ -199,6 +205,7 @@ class _Lexer:
             else:
                 j += 1
         self.blank(i, j)
+        self.note(" ")
         return j
 
     def plain_end(self, i: int) -> tuple[int, bool]:
@@ -221,13 +228,15 @@ class _Lexer:
         if brace:
             sub = _Lexer(self.src)
             sub_end = sub.interpolated(i)
-            certain = _CERTAIN_INTERP.search(self.code_before()) is not None
+            certain = _CERTAIN_INTERP.search(self.recent.rstrip()) is not None
             if sub_end == end or certain:
                 self.out += sub.out
                 self.ambiguous += sub.ambiguous
+                self.note('"')
                 return sub_end
             self.ambiguous.append(i)
         self.blank(i, end)
+        self.note('"')
         return end
 
     def interpolated(self, i: int) -> int:
@@ -243,6 +252,7 @@ class _Lexer:
                 break
             elif c == "{":
                 self.blank(start, j + 1)
+                self.note("{")
                 j = self.code(j + 1, in_braces=True)
                 start = j
             else:

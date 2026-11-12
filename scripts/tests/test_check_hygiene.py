@@ -95,6 +95,18 @@ class HygieneScanTest(unittest.TestCase):
             src = f'def p := s!{gap}"{{String.length "x"}}"\ntheorem t : False := sorry\n'
             self.assertEqual([t for _, t in tokens(src)], ["sorry"], repr(gap))
 
+    # Round-5 review: the keyword takes one literal. A second literal after
+    # it, even past a long first literal, is not certainly interpolated.
+    def test_keyword_does_not_reach_past_its_literal(self) -> None:
+        for kw in ("s!", "m!", "f!"):
+            for first in ('"' + "x" * 50 + '"', '"' + "\\x78" * 20 + '"',
+                          '"a" \'c\' r"raw"', '"{1}"'):
+                src = (f'def p : String := second {kw}{first} "{{"\n'
+                       'theorem t : False := sorry\ndef q := "x"\n')
+                got = tokens(src)
+                self.assertIn((1, AMBIGUOUS), got, (kw, first))
+                self.assertIn((2, "sorry"), got, (kw, first))
+
     def test_plain_string_with_brace_does_not_hide_later_code(self) -> None:
         src = 'def x := "{"\ntheorem t : False := sorry\ndef y := "z"\n'
         self.assertEqual(tokens(src), [(1, AMBIGUOUS), (2, "sorry")])

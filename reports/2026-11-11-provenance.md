@@ -1,6 +1,6 @@
 # Provenance and trust checks: T7
 
-Date: 2026-11-11, updated 2026-11-12 after four Codex reviews (section "Review fixes") and with the decisions in section "Decisions".
+Date: 2026-11-11, updated 2026-11-12 after five Codex reviews (section "Review fixes") and with the decisions in section "Decisions".
 This report describes four checks that Track T phase T7 adds (`docs/inline-precompiles.md`, section 7).
 
 1. `provenance.toml` names the one Jolt revision the project is checked against and, for every Lean file under `JoltBytecode/` and `JoltConstraints/`, the Jolt files it models.
@@ -10,7 +10,7 @@ This report describes four checks that Track T phase T7 adds (`docs/inline-preco
 4. `ci/comparator/` re-checks six of those theorems with Lean's built-in `lake comparator`.
    Its CI job does not block until it has passed once.
 
-The first three pass locally, and `scripts/tests/` holds 68 regression tests for the Python checkers and the comparator's import guard.
+The first three pass locally, and `scripts/tests/` holds 69 regression tests for the Python checkers and the comparator's import guard.
 The built-in `lake comparator` accepts the six theorems on macOS without its sandbox; the sandboxed run is the CI job.
 
 ## Revisions
@@ -287,8 +287,8 @@ A literal without an unescaped `{` reads the same either way.
 For a literal with one, the scan works out where the literal ends under both readings.
 If the two agree, the `{…}` parts hold no string quote, and the scan keeps them as code whichever reading Lean uses, so a token there always counts.
 This reports a token in the braces of a plain string, such as `"{sorry}"`, by design; writing the brace as `\x7b` avoids it (Lean accepts `\{` only in interpolated strings).
-If the two readings disagree, the literal counts as an `ambiguous string` occurrence and the scan continues with the plain reading, unless the literal follows `s!`, `m!` or `f!`, past any whitespace or comment.
-Those three are keywords, which always win over an identifier of the same spelling, and each takes an interpolated string, so the scan uses the interpolated reading there.
+If the two readings disagree, the literal counts as an `ambiguous string` occurrence and the scan continues with the plain reading, unless the literal follows `s!`, `m!` or `f!`, past any whitespace or comment but no other literal.
+Those three are keywords, which always win over an identifier of the same spelling, and each takes one interpolated string, so the scan uses the interpolated reading there.
 The keyword counts only where it starts a token: the character before it must be whitespace, an opening bracket or an operator character.
 So `xs!`, `a.s!` and the name literal `` `s! `` do not count, and the literal after them is ambiguous.
 On the tree today, the only ambiguous literals are nine plain strings with unbalanced `{` in the generated `LeanRV64D/DeviceTree.lean`, which the `[[generated]]` baseline records.
@@ -485,6 +485,10 @@ A fourth Codex review of `88981d0..f44ef32` found that the round-3 fixes hold an
 | 2 | The test summary in this report still said `"{sorry}"` in a plain string passes | The summary says it fails and names `"\x7bsorry}"` | |
 | 3 | More than 40 characters of whitespace or a comment between `s!` and its literal made the literal ambiguous | The scan finds the token before the literal past any whitespace or comment | `test_keyword_across_whitespace_and_comments` |
 | 4 | A divider such as ` * ---` or ` * * *` did not end a paragraph for relative names | Spaces may appear anywhere in a punctuation-only line | `test_relative_names_do_not_cross_a_decorated_break` |
+
+A fifth Codex review of `f44ef32..4bc5ecc` found one regression in the round-4 fix: the scan looked back past whitespace in its output, where a consumed literal is also whitespace.
+So in `second s!"…" "{"`, with a first literal of 41 or more characters, the plain `"{"` took the interpolated reading and hid the next theorem's `sorry`.
+The lexer now records the last few source characters as it reads them, with whitespace and comments as one space and each literal as `"`, so the keyword applies only to the literal right after it (`test_keyword_does_not_reach_past_its_literal`).
 
 ## Follow-ups
 
