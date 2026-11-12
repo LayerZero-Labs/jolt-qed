@@ -7,7 +7,7 @@ Every lemma in both files is proved, with no `sorry`.
 ## Pins
 
 - jolt-qed: the builds, axiom checks and generator check in this note were run at `152a44f59b1aa06b86a886f55ddb618f9f8c2de6` on branch `inline/i0e-frame`.
-  Later commits on the branch change only this report and the generator's docstring, not the Lean files.
+  Later commits on the branch change only documentation; the Lean files are unchanged.
   The statement was reviewed before the proofs were added, and the proofs did not change it.
 - Model Jolt pin: `c97e93004fbf804409f0374fe8457c8f1562ce71` (`JoltConstraints/model_review.md`), the commit the Lean model of Jolt's semantics follows.
 - Generated-row Jolt pin: `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`, the commit whose inline expansions `JoltBytecode/Inlines/Generated/` holds.
