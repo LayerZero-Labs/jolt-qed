@@ -35,7 +35,9 @@ namespace JoltISA.Inlines.Secp256k1
 /-! ## The column identity -/
 
 /-- The sum of the terms of column `k` in register file `F`.
-Example: column 1 of `MULQ` sums `lo(w1·p)`, `hi(w0·p)`, `lo(a0·b1)`, `lo(a1·b0)`, `hi(a0·b0)`. -/
+Example: column 1 of `MULQ` sums `lo(vr57·vr60)`, `hi(vr56·vr60)`, `lo(vr48·vr53)`,
+`lo(vr49·vr52)` and `hi(vr48·vr52)`; with `vr48 = 2^63`, `vr52 = 2` and every other register
+`0`, the sum is `hi(2^63·2) = 1`. -/
 def colSum (op : FieldOp) (scalar : Bool) (L : MulRegs) (F : VReg → BitVec 64) (k : Nat) : Nat :=
   ((colTerms op scalar L k).map (Mac.val F)).sum
 
@@ -75,7 +77,8 @@ def colTotal (op : FieldOp) (scalar : Bool) (L : MulRegs) (F : VReg → BitVec 6
     2 ^ 448 * (jolt_mulhu_value (F (L.a 3)) (F (L.b 3))).toNat
 
 /-- The `p'` terms of column `k`, the part of `colTerms` that does not depend on the operation.
-Example: for the base field, column 1 is `[lo(w1·p), hi(w0·p)]`. -/
+Example: for `mulqRegs`, column 1 is `[lo(vr57·vr60), hi(vr56·vr60)]`; with `vr56 = 0`,
+`vr57 = 1` and `vr60 = 2^32 + 977`, the base-field `p'`, the terms sum to `2^32 + 977`. -/
 def corrTerms (scalar : Bool) (L : MulRegs) (k : Nat) : List Mac :=
   (if k < 4 then [.low (L.w k) L.p] else []) ++
   (if k ≤ 4 then [.high (L.w (k - 1)) L.p] else []) ++
@@ -83,7 +86,8 @@ def corrTerms (scalar : Bool) (L : MulRegs) (k : Nat) : List Mac :=
   (if scalar ∧ 2 ≤ k ∧ k ≤ 5 then [.high (L.w (k - 2)) L.p2, .word (L.w (k - 2))] else [])
 
 /-- The terms of a column are its `p'` terms followed by its product terms.
-Example: column 1 of `MULQ` is `[lo(w1·p), hi(w0·p)] ++ [lo(a0·b1), lo(a1·b0), hi(a0·b0)]`. -/
+Example: column 1 of `MULQ` is
+`[lo(vr57·vr60), hi(vr56·vr60)] ++ [lo(vr48·vr53), lo(vr49·vr52), hi(vr48·vr52)]`. -/
 theorem colTerms_eq_append (op : FieldOp) (scalar : Bool) (L : MulRegs) (k : Nat) :
     colTerms op scalar L k = corrTerms scalar L k ++ prodTerms op L k := rfl
 
@@ -120,7 +124,7 @@ theorem colTotal_eq_add (op : FieldOp) (scalar : Bool) (L : MulRegs) (F : VReg �
   omega
 
 /-- Division has the product terms of multiplication.
-Example: column 1 of both is `[lo(a0·b1), lo(a1·b0), hi(a0·b0)]`. -/
+Example: with `mulqRegs`, column 1 of both is `[lo(vr48·vr53), lo(vr49·vr52), hi(vr48·vr52)]`. -/
 theorem prodTotal_div (L : MulRegs) (F : VReg → BitVec 64) :
     prodTotal .div L F = prodTotal .mul L F := rfl
 
@@ -308,9 +312,11 @@ theorem writeAll_of_mem (f : VReg → BitVec 64) {ws : List (VReg × BitVec 64)}
       rw [writeAll_of_not_mem _ hnd.1, setV_same]
     · exact ih _ hnd.2 h
 
-/-- The pool registers the rows never write as a column register: neither accumulator nor
-scratch register. These are the operand and constant registers.
-Example: for `MULQ`, every register of `vr48..vr60`. -/
+/-- A register other than the two accumulators `L.r0`, `L.r1` and the two scratch registers
+`L.aux`, `L.aux2`, so the column rows never write it. The operand and constant registers are
+examples.
+Example: for `mulqRegs`, `vr48..vr60` and also `vr32` satisfy it; `vr61`, `vr62`, `vr63` and
+`vr127` do not. -/
 def MulRegs.OpFree (L : MulRegs) (r : VReg) : Prop := (L.col 0).Free r
 
 /-- Whether a register is free of the column registers can be decided.
@@ -405,7 +411,8 @@ Example: `(memWrite s 0x80020000 1).jolt_device = s.jolt_device`. -/
     (memWrite t ea v).jolt_device = t.jolt_device := rfl
 
 /-- Four stores at consecutive doublewords write the list of the four values.
-Example: storing `R0, …, R3` at `out + 8·k` gives `writeDwords mem out [R0, R1, R2, R3]`. -/
+Example: storing `7, 9, 0, 1` at `0x8002_0000 + 8·k` for `k = 0, 1, 2, 3` gives
+`writeDwords mem 0x8002_0000 [7, 9, 0, 1]`. -/
 theorem memWrite_four (s : SailJoltState) (e : Nat) (v0 v1 v2 v3 : BitVec 64) :
     memWrite (memWrite (memWrite (memWrite s (e + 8 * 0) v0) (e + 8 * 1) v1) (e + 8 * 2) v2)
         (e + 8 * 3) v3 =
