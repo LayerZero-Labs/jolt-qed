@@ -166,7 +166,7 @@ The generated files never set `maxRecDepth`, `maxHeartbeats` or any other option
 ## Frame instances
 
 `gen_frame_instances.py` writes `JoltBytecode/Inlines/FrameInstances.lean` from the generated rows.
-For each of the twelve in-scope inlines, the file states the write set, the store slots, the static frame check `Program.WritesWithin`, the pool-reset check and the frame corollary of `frame_of_run` (`JoltBytecode/Inlines/Frame.lean`).
+For each of the twelve in-scope inlines, the file states the write set, the store slots, the static frame check `Program.WritesWithin`, the pool-reset check, the frame corollary of `frame_of_run` and the pool-reset corollary of `Program.resetsPool_of_check` (`JoltBytecode/Inlines/Frame.lean`).
 It covers the `rd ≠ x0` case of all twelve inlines and the `rd = x0` case of the five hash inlines.
 It omits the `rd = x0` case of the seven secp256k1 inlines, because those rows store through `vr40` before any row writes it.
 Decision D7 of `docs/inline-precompiles.md` excludes those encodings.
