@@ -71,6 +71,8 @@ The operands and immediate are therefore normalized exactly as the decoder norma
 The driver fails if a word decodes to a different kind.
 The decoder never produces `NoOp`, `Unimpl`, `ANDN`, or most `Virtual*` source kinds.
 The driver builds those cases directly from a `SourceInstructionRow` with all three registers present; their case names end in `/direct`.
+A direct ANDN case has immediate 0, as an R-type word from the decoder would.
+In the random group, the other direct cases keep their random immediate.
 
 The flags come from `jolt_riscv::Flags`, the lookup table from `InstructionLookupTable::<64>::lookup_table`, and the RAF flag from `jolt_witness::witnesses::InstructionRafFlag::extract`.
 For the RAF flag the driver builds the `JoltTraceRow` that Jolt would record: a RAM read for a `Load` row, a RAM write for a `Store` row, and no RAM access otherwise.
