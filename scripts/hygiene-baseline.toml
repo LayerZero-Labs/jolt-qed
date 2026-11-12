@@ -1,0 +1,87 @@
+# Baseline of the hygiene scan (scripts/check_hygiene.py).
+#
+# Each entry records a file, a token and the exact number of occurrences the
+# scan finds today, outside comments and strings. The scan fails on any
+# occurrence not recorded here and on any entry whose count no longer matches,
+# so this file can only shrink as the debt is paid. JoltBytecode/ and
+# JoltTests/ have no entries: they are zero tolerance.
+#
+# [[known]]: JoltConstraints/ debt.
+# - Five completeness gaps (JoltConstraints/model_review.md, "Proofs owed"):
+#   (01), (08) and (11) wait on a16z/jolt#1949, (37) on #1950, (38) on #1951
+#   item 1. None is in the closure of the soundness or whole-run theorems.
+# - decide +kernel in Soundness/Layer5/DeviceMemoryObstruction.lean
+#   ("Existing tactic debt"); only the root module imports it.
+# model_review.md records no bv_decide use and no raised limit in
+# JoltConstraints/ today, and the scan agrees.
+#
+# [[generated]]: LeanRV64D/, generated from the inputs pinned in
+# sail-import/PROVENANCE.toml.
+# - Declaration-local maxRecDepth and maxHeartbeats options on seven generated
+#   declarations; docs/riscv-alignment.md section 8 lists each one and whether
+#   it is in the closure of JoltInstance.sail_soundness.
+# - The 67 floating-point axioms of the handwritten RiscvExtras.lean
+#   (riscv_f16Add and the rest), which section 8 records as not reached.
+#   get_16_random_bits is an opaque constant, not an axiom, and the scan does
+#   not count it. JoltAudit.Axioms checks that no headline theorem depends on
+#   an axiom other than propext, Classical.choice and Quot.sound.
+
+[[known]]
+file = "JoltConstraints/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean"
+token = "sorry"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Completeness/RamValEqInitialPlusPrefixRamInc.lean"
+token = "sorry"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Completeness/RamValFinalEqInitialPlusRamInc.lean"
+token = "sorry"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Completeness/RightLookupAdd.lean"
+token = "sorry"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Completeness/RightLookupEqRightInputOtherwise.lean"
+token = "sorry"
+count = 1
+
+[[known]]
+file = "JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean"
+token = "decide +kernel"
+count = 2
+
+[[generated]]
+file = "LeanRV64D/InstsEnd.lean"
+token = "maxHeartbeats"
+count = 2
+
+[[generated]]
+file = "LeanRV64D/InstsEnd.lean"
+token = "maxRecDepth"
+count = 4
+
+[[generated]]
+file = "LeanRV64D/RiscvExtras.lean"
+token = "axiom"
+count = 67
+
+[[generated]]
+file = "LeanRV64D/RvfiDii.lean"
+token = "maxHeartbeats"
+count = 1
+
+[[generated]]
+file = "LeanRV64D/SysControl.lean"
+token = "maxRecDepth"
+count = 1
+
+[[generated]]
+file = "LeanRV64D/ZicsrInsts.lean"
+token = "maxRecDepth"
+count = 2
