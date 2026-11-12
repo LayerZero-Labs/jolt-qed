@@ -45,3 +45,17 @@ leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
 [[lean_lib]]
 name = "JoltAudit"
 leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+# Comparator gate (ci/comparator/README.md): not default targets.
+# `lake comparator --config ci/comparator/config.json` builds these two modules
+# in its sandbox, which exposes only this package directory, so the gate lives
+# in the root package rather than in a package of its own. Challenge.lean ends
+# its frozen statements in `sorry` on purpose; ci/ is outside the roots of
+# scripts/check_hygiene.py.
+[[lean_lib]]
+name = "Challenge"
+srcDir = "ci/comparator"
+
+[[lean_lib]]
+name = "Solution"
+srcDir = "ci/comparator"

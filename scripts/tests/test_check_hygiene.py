@@ -31,6 +31,40 @@ class HygieneScanTest(unittest.TestCase):
     def test_nested_string_inside_interpolation(self) -> None:
         self.assertEqual(tokens('def p : String := s!"{f "x" (by sorry)}"\n'), [(1, "sorry")])
 
+    # Round-2 review: a plain literal with a brace inside an interpolation.
+    def test_plain_brace_string_inside_interpolation(self) -> None:
+        self.assertEqual(tokens('def p : String := s!"{String.length "{" + (by sorry : Nat)}"\n'),
+                         [(1, "sorry")])
+
+    # Round-2 review: brace text in an ordinary string is not code.
+    def test_brace_text_in_plain_string_is_ignored(self) -> None:
+        self.assertEqual(tokens('def message : String := "{sorry}"\n'), [])
+
+    # A plain string after `]` or after a `!` macro that takes a term must not
+    # open code at its `{`: the `"` that closes it would then start a string
+    # that hides the rest of the line.
+    def test_plain_string_after_bracket_or_bang(self) -> None:
+        src = ('def a := Function.const Nat [1] "{" ++ toString (by sorry : Nat)\n'
+               'def b : Nat := panic! "{" ++ toString (by admit : Nat)\n'
+               'def c (xs : Array String) := xs[0]! ++ "{" ++ toString (by sorry : Nat)\n')
+        self.assertEqual(tokens(src), [(1, "sorry"), (2, "admit"), (3, "sorry")])
+
+    def test_aesop_and_macro_trace_interpolate(self) -> None:
+        src = ('def a : MacroM Unit := do Macro.trace[debug] "{(by sorry : Nat)}"\n'
+               'def b := do aesop_trace[steps] "{(by sorry : Nat)}"\n'
+               'def c := do aesop_trace![steps] "{(by sorry : Nat)}"\n'
+               'def d : IO Unit := println! "{(by sorry : Nat)}"\n')
+        self.assertEqual(tokens(src), [(1, "sorry"), (2, "sorry"), (3, "sorry"), (4, "sorry")])
+
+    def test_trace_and_argument_interpolators(self) -> None:
+        src = ('def a : CoreM Unit := do trace[Meta.debug] "{(by sorry : Nat)}"\n'
+               'def b (r : Syntax) : CoreM Unit := throwErrorAt r "x {(by admit : Nat)}"\n'
+               'def c : String := toString "{sorry}"\n')
+        self.assertEqual(tokens(src), [(1, "sorry"), (2, "admit")])
+
+    def test_new_interpolating_syntax_counts(self) -> None:
+        self.assertEqual(tokens('syntax "myErr " interpolatedStr(term) : term\n'), [(1, "interpolatedStr")])
+
     def test_plain_string_with_brace_does_not_hide_later_code(self) -> None:
         src = 'def x := "{"\ntheorem t : False := sorry\ndef y := "z"\n'
         self.assertEqual(tokens(src), [(2, "sorry")])
@@ -45,6 +79,8 @@ class HygieneScanTest(unittest.TestCase):
     def test_quoted_identifier_is_not_a_comment(self) -> None:
         self.assertEqual(tokens("def «--» : Nat := by sorry\n"), [(1, "sorry")])
         self.assertEqual(tokens("def «/-» : Nat := by sorry\n"), [(1, "sorry")])
+        # Round-2 review: Lean reads a quoted identifier across lines.
+        self.assertEqual(tokens("def «/-\n» : Nat := by sorry\n"), [(2, "sorry")])
 
     def test_quoted_identifier_is_not_a_token(self) -> None:
         self.assertEqual(tokens("def «sorry» : Nat := 1\n"), [])
@@ -69,10 +105,9 @@ class HygieneScanTest(unittest.TestCase):
 
     def test_layout_is_kept(self) -> None:
         src = 'def a := s!"{x}\n" -- c\n/- d\n-/ «e f»\n'
-        for interpolate in (False, True):
-            out = hygiene.strip_comments_and_strings(src, interpolate)
-            self.assertEqual(len(out), len(src))
-            self.assertEqual(out.count("\n"), src.count("\n"))
+        out = hygiene.strip_comments_and_strings(src)
+        self.assertEqual(len(out), len(src))
+        self.assertEqual(out.count("\n"), src.count("\n"))
 
 
 if __name__ == "__main__":

@@ -33,7 +33,9 @@ With one proof in `Solution.lean` replaced by `sorry`, the same run rejects the 
 
 `Solution.lean` is the untrusted input.
 `scripts/run_comparator.sh` never builds it, or `Challenge.lean`, outside the comparator's sandbox, and deletes any of their build output left in `.lake/`.
-It builds only the jolt-qed modules that `Challenge.lean` imports, which are trusted, and it fails unless `Solution.lean` has exactly the imports of `Challenge.lean`.
+It builds only the jolt-qed modules that `Challenge.lean` imports, which are trusted.
+`scripts/check_comparator_imports.py` fails the run unless `Solution.lean` has exactly the import header of `Challenge.lean` and that header imports exactly `TRUSTED_IMPORTS`.
+It reads the header with comments removed, so a comment cannot hide an import and an `import` line inside a comment does not count.
 To change the imports, change both files and `TRUSTED_IMPORTS` in the script.
 
 The deprecated external tool, [`leanprover/comparator`](https://github.com/leanprover/comparator) with `lean4export` and `landrun`, still runs with `COMPARATOR_ENGINE=external`.
@@ -41,11 +43,10 @@ It also builds both modules inside its own sandbox.
 
 ## Layout
 
-- `lakefile.toml` declares a separate Lake package, `ComparatorGate`, that requires jolt-qed by path.
-  It shares jolt-qed's dependency directory and reuses the Mathlib cache and the root build.
-- `lake-manifest.json` records the same dependency revisions as the root manifest.
-  `lake comparator` needs a manifest, because it resolves dependencies inside its sandbox.
-- `lean-toolchain` is a copy of the root `lean-toolchain`.
+- The root `lakefile.toml` declares `Challenge` and `Solution` as libraries with `srcDir = "ci/comparator"`, outside the default targets.
+  They live in the root package because the `lake comparator` sandbox exposes only the project directory, the toolchain and the Lake home.
+  A separate package under `ci/comparator/` could not read the root package or its `.lake/packages` from inside the sandbox.
+  The script therefore runs `lake comparator` from the repository root, with the root `lake-manifest.json`.
 - `Challenge.lean` states each gated theorem verbatim and proves it with `sorry`.
   The file lives outside `JoltBytecode/` and `JoltConstraints/`, which keeps its `sorry`s outside the hygiene scan.
 - `Solution.lean` repeats each statement and proves it by applying the jolt-qed theorem.

@@ -51,6 +51,10 @@ revision = "266473f8b2872ac25f5cfaf5a4293d6421a40b5d"
 repository = "abiswas3/sail-riscv"
 
 [[other_revision]]
+revision = "81184531"
+repository = "riscv/sail-riscv"
+
+[[other_revision]]
 revision = "2ae2199f8890180a8f9653f6ea08e54cd9790220"
 repository = "rems-project/sail"
 
@@ -982,6 +986,7 @@ models = [
   "jolt-platform/src/advice.rs",
   "jolt-platform/src/cycle_tracking.rs",
   "jolt-platform/src/print.rs",
+  "tracer/src/emulator/cpu.rs",
   "tracer/src/instruction/virtual_host_io.rs",
 ]
 note = "Names no published Jolt revision."
@@ -2621,7 +2626,10 @@ checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
 
 [[file]]
 lean = "JoltConstraints/Soundness/Layer6/DivisionLayout.lean"
-models = ["crates/jolt-program/src/expand/mod.rs"]
+models = [
+  "crates/jolt-program/src/expand/division/rem.rs",
+  "crates/jolt-program/src/expand/mod.rs",
+]
 checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
 
 [[file]]
@@ -3150,11 +3158,22 @@ checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 [[file]]
 lean = "JoltConstraints/metadata.lean"
 models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/ld.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/sd.rs",
   "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
   "crates/jolt-lookup-tables/src/traits.rs",
   "crates/jolt-program/src/expand/memory/shared.rs",
   "crates/jolt-riscv/src/instructions/i/ld.rs",
   "crates/jolt-riscv/src/instructions/i/sd.rs",
+  "crates/jolt-riscv/src/instructions/virt/load_b.rs",
+  "crates/jolt-riscv/src/instructions/virt/load_h.rs",
+  "crates/jolt-riscv/src/instructions/virt/load_w.rs",
+  "crates/jolt-riscv/src/instructions/virt/shift_data_b.rs",
+  "crates/jolt-riscv/src/instructions/virt/shift_data_h.rs",
+  "crates/jolt-riscv/src/instructions/virt/shift_data_w.rs",
+  "crates/jolt-riscv/src/instructions/virt/store_b.rs",
+  "crates/jolt-riscv/src/instructions/virt/store_h.rs",
+  "crates/jolt-riscv/src/instructions/virt/store_w.rs",
   "crates/jolt-riscv/src/lib.rs",
   "crates/jolt-witness/src/witnesses/flags.rs",
   "tracer/src/instruction/format/format_load.rs",
@@ -3386,6 +3405,12 @@ lean = "JoltConstraints/witness_helpers/lookup_index.lean"
 models = [
   "crates/jolt-lookup-tables/src/instructions/riscv/addi.rs",
   "crates/jolt-lookup-tables/src/instructions/riscv/jal.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/ld.rs",
+  "crates/jolt-lookup-tables/src/instructions/riscv/sd.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_h.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_w.rs",
   "crates/jolt-lookup-tables/src/interleave.rs",
   "crates/jolt-lookup-tables/src/traits.rs",
   "crates/jolt-program/src/image/decode.rs",
@@ -3398,6 +3423,9 @@ note = "Citations tie between 5def437f2, c67035705; checked is the later one."
 lean = "JoltConstraints/witness_helpers/lookup_output.lean"
 models = [
   "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_h.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_w.rs",
   "crates/jolt-witness/src/witnesses/lookups.rs",
 ]
 checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
@@ -3525,6 +3553,7 @@ checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
 [[file]]
 lean = "JoltConstraints/witness_helpers/rd_value.lean"
 models = [
+  "tracer/src/instruction/format/format_shift_data.rs",
   "tracer/src/instruction/virtual_load_b.rs",
   "tracer/src/instruction/virtual_load_h.rs",
   "tracer/src/instruction/virtual_load_w.rs",
@@ -3534,6 +3563,7 @@ checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 [[file]]
 lean = "JoltConstraints/witness_helpers/rd_wa.lean"
 models = [
+  "tracer/src/instruction/format/format_shift_data.rs",
   "tracer/src/instruction/virtual_load_b.rs",
   "tracer/src/instruction/virtual_load_h.rs",
   "tracer/src/instruction/virtual_load_w.rs",
@@ -3557,7 +3587,10 @@ checked = "8bbb2357890928d8f83b00ca542879077c4d3d28"
 
 [[file]]
 lean = "JoltConstraints/witness_helpers/right_instruction_input.lean"
-models = ["crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs"]
+models = [
+  "crates/jolt-lookup-tables/src/instructions/riscv/ld.rs",
+  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs",
+]
 checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 
 [[file]]
@@ -3571,6 +3604,7 @@ checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 [[file]]
 lean = "JoltConstraints/witness_helpers/rs1_ra.lean"
 models = [
+  "tracer/src/instruction/format/format_shift_data.rs",
   "tracer/src/instruction/virtual_load_b.rs",
   "tracer/src/instruction/virtual_load_h.rs",
   "tracer/src/instruction/virtual_load_w.rs",
@@ -3580,6 +3614,7 @@ checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 [[file]]
 lean = "JoltConstraints/witness_helpers/rs1_value.lean"
 models = [
+  "tracer/src/instruction/format/format_shift_data.rs",
   "tracer/src/instruction/virtual_load_b.rs",
   "tracer/src/instruction/virtual_load_h.rs",
   "tracer/src/instruction/virtual_load_w.rs",
@@ -3589,6 +3624,7 @@ checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 [[file]]
 lean = "JoltConstraints/witness_helpers/rs2_ra.lean"
 models = [
+  "tracer/src/instruction/format/format_shift_data.rs",
   "tracer/src/instruction/virtual_load_b.rs",
   "tracer/src/instruction/virtual_load_h.rs",
   "tracer/src/instruction/virtual_load_w.rs",
@@ -3598,6 +3634,7 @@ checked = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 [[file]]
 lean = "JoltConstraints/witness_helpers/rs2_value.lean"
 models = [
+  "tracer/src/instruction/format/format_shift_data.rs",
   "tracer/src/instruction/virtual_load_b.rs",
   "tracer/src/instruction/virtual_load_h.rs",
   "tracer/src/instruction/virtual_load_w.rs",
@@ -3783,6 +3820,12 @@ count = 1
 file = "JoltBytecode/JoltISA/HostIO.lean"
 kind = "unchecked-model"
 text = "jolt-platform/src/print.rs"
+count = 1
+
+[[known]]
+file = "JoltBytecode/JoltISA/HostIO.lean"
+kind = "unchecked-model"
+text = "tracer/src/emulator/cpu.rs"
 count = 1
 
 [[known]]

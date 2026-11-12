@@ -1,6 +1,6 @@
 # Provenance and trust checks: T7
 
-Date: 2026-11-11, updated 2026-11-12 after the Codex review (section "Review fixes") and with the decisions in section "Decisions".
+Date: 2026-11-11, updated 2026-11-12 after two Codex reviews (section "Review fixes") and with the decisions in section "Decisions".
 This report describes four checks that Track T phase T7 adds (`docs/inline-precompiles.md`, section 7).
 
 1. `provenance.toml` names the one Jolt revision the project is checked against and, for every Lean file under `JoltBytecode/` and `JoltConstraints/`, the Jolt files it models.
@@ -10,7 +10,7 @@ This report describes four checks that Track T phase T7 adds (`docs/inline-preco
 4. `ci/comparator/` re-checks six of those theorems with Lean's built-in `lake comparator`.
    Its CI job does not block until it has passed once.
 
-The first three pass locally, and `scripts/tests/` holds 32 regression tests for the two Python checkers.
+The first three pass locally, and `scripts/tests/` holds 60 regression tests for the Python checkers and the comparator's import guard.
 The built-in `lake comparator` accepts the six theorems on macOS without its sandbox; the sandboxed run is the CI job.
 
 ## Revisions
@@ -18,7 +18,7 @@ The built-in `lake comparator` accepts the six theorems on macOS without its san
 jolt-qed: branch `inline/t7-provenance` on top of `b648846`.
 Toolchain: `leanprover/lean4:v4.35.0`.
 
-Jolt pin: a16z/jolt#2384 at `580084fcfad4788ebf48413a92dd640ca090c45f` (`580084fcf`), the revision the T1 expansion-parity, T2 decoder-sweep and T4 lookup-tables jobs check (section "Decisions").
+Jolt pin: a16z/jolt#2384 at `580084fcfad4788ebf48413a92dd640ca090c45f` (`580084fcf`), the `JOLT_REV` of the T1 expansion-parity job on this branch and of the T2 decoder-sweep and T4 lookup-tables jobs on their own branches (section "Decisions").
 `README.md` and `methods/soundness.md` still record `c97e93004fbf804409f0374fe8457c8f1562ce71` (`c97e9300`), the merge of a16z/jolt#2250, as the project pin; `provenance.toml` says so in its pin note.
 
 The provenance job also compares against the earlier Track T pin, a16z/jolt `main` at `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5` (`a6b6dc717`), and reports without failing the `models` paths missing there.
@@ -32,10 +32,14 @@ Each entry has `lean`, `models` (the Jolt paths the file transcribes or relies o
 I derived `models` and `checked` from each file's own citations.
 `checked` is the published a16z/jolt revision the file names most often, with the later commit on a tie.
 `models` are the Jolt files the file cites that exist at `checked`.
-A citation counts with brace lists expanded (`virt/{load,store}_{b,h,w}.rs` is six files) and with a bare file name read in the directory of the `.rs` path cited just before it (`tracer/src/instruction/div.rs, divu.rs, rem.rs`).
-A GitHub URL prefix or a local checkout prefix up to `/jolt/` is dropped.
+A citation counts with brace lists expanded (`virt/{load,store}_{b,h,w}.rs` is six files).
+A GitHub URL prefix, a local checkout prefix up to `/jolt/` and a leading `./` are dropped.
+A path or bare file name that is not itself a Jolt path is read relative to the directory of the Jolt file cited just before it, or to one of that directory's ancestors, longest first.
+So in `tracer/src/instruction/div.rs, divu.rs` the second file is `tracer/src/instruction/divu.rs`, and in `crates/jolt-riscv/src/instructions/i/ld.rs` and `instructions/virt/load_b.rs` the second is `crates/jolt-riscv/src/instructions/virt/load_b.rs`.
+That relative reading reaches back at most 300 characters and never across a blank line, and only a path that exists in the Jolt tree counts.
 A path the file cites that is missing at `checked` goes into the note instead.
-The review found 13 cited files missing from `models` this way (the div/rem family and `scd.rs`, `jalr.rs` in `honest_trace.lean`, three witness files in `RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean`, `shift_data_h.rs` in `RegistersReadProofHelpers.lean`); they are now in `models`, and the check enforces the rule.
+The two reviews found 42 cited files missing from `models`: 13 in the first (the div/rem family and `scd.rs`, `jalr.rs` in `honest_trace.lean`, three witness files in `RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean`, `shift_data_h.rs` in `RegistersReadProofHelpers.lean`) and 29 relative citations in the second (11 in `JoltConstraints/metadata.lean`, 6 in `witness_helpers/lookup_index.lean`, `format_shift_data.rs` in six other witness helpers, and others in `lookup_output.lean`, `right_instruction_input.lean`, `DivisionLayout.lean` and `JoltBytecode/JoltISA/HostIO.lean`).
+They are now in `models`, and the check enforces the rule.
 
 | Entries | Count |
 |---------|-------|
@@ -64,25 +68,28 @@ Every `checked` revision is reachable from an a16z/jolt branch.
 `c336a6da7` is reachable only from `feat/zicsr-remaining-forms` (a16z/jolt#2384).
 `JoltBytecode/JoltISA/Expansions/System.lean` gets `c336a6da7`, because the revision it names most, `a86ec3716`, is not published.
 
-`[[other_revision]]` lists commits of other repositories that the scanned files cite: three jolt-qed commits, the Sail RISC-V fork and compiler commits of `sail-import/PROVENANCE.toml`, a riscv-isa-manual commit and an EthLib commit.
+`[[other_revision]]` lists commits of other repositories that the scanned files cite: three jolt-qed commits, the Sail RISC-V fork and compiler commits of `sail-import/PROVENANCE.toml`, the upstream riscv/sail-riscv commit `81184531` that `docs/riscv-alignment.md` backports, a riscv-isa-manual commit and an EthLib commit.
 
 ### What the check enforces
 
 `scripts/check-provenance.py` needs only Python 3.11.
 Without `--jolt-dir`, it checks the following.
 
-- The manifest has one 40-digit pin.
+- The manifest has one 40-digit pin and no top-level key other than `jolt`, `file`, `other_revision` and `known`.
+- Every `[[other_revision]]` has exactly a `revision` of 7 to 40 lowercase hex digits and a `repository` of the form `owner/name` that is not a Jolt repository; otherwise the check stops with exit status 2.
 - Every Lean file under `JoltBytecode/` and `JoltConstraints/` has exactly one entry, every entry names an existing Lean file under those roots, and no entry has a key other than `lean`, `models`, `checked` and `note`.
 - Every `checked` revision has 40 hex digits and comes with `models`.
 - The scanned files have no local path, Jolt fork citation or Jolt revision beyond the `[[known]]` baseline.
-  The scan covers `*.lean` and `*.md` under `JoltBytecode/`, `JoltConstraints/` and `docs/`, plus `README.md` and `provenance.toml` (without the `text` lines of its own `[[known]]` entries).
+  The scan covers `*.lean` and `*.md` under `JoltBytecode/`, `JoltConstraints/` and `docs/`, plus `README.md` and the part of `provenance.toml` before its `[[known]]` tables.
   A local path is `/Users/…`, `/home/…`, `~/…` or `/private/tmp/…`, and its baseline entry quotes the whole path.
   A fork citation is a `github.com/<owner>/jolt` link with an owner other than `a16z`, and its baseline entry quotes the whole URL.
   A revision is a token of 7 to 40 hex digits with at least one digit and one letter.
-  An all-digit or all-letter token counts as a revision when a citation word precedes it (`commit`, `revision`, `rev`, `pin`, `sha`, `hash`, `checked`, or `@`) or when it is the revision of a repository-qualified citation.
-  A repository-qualified citation (`github.com/<owner>/<repo>/blob|tree|commit|commits|compare/<rev>` or `<owner>/<repo>@<rev>`) must name the pin or the file's `checked` revision when the repository is a Jolt repository, and an `[[other_revision]]` of that same repository otherwise.
+  An all-digit or all-letter token counts as a revision when a citation word precedes it (`commit`, `commits`, `revision`, `revisions`, `rev`, `pin`, `pinned`, `sha`, `hash`, `checked`, `at`, `jolt`, `head`, `tip`, `base`, `upstream`, `main`, or `@`) or when it is the revision of a repository-qualified citation.
+  A repository-qualified citation (`github.com/<owner>/<repo>/blob|tree|commit|commits|compare/<rev>` or `<owner>/<repo>@<rev>`, and both endpoints of `compare/<rev>...<rev>` or `<rev>..<rev>`) must name the pin or the file's `checked` revision when the repository is a Jolt repository, and an `[[other_revision]]` of that same repository otherwise.
   An unqualified token may match the pin, the file's own `checked` revision or any `[[other_revision]]`, by prefix.
 - Every `models` path of an entry without a `checked` revision is recorded as an `unchecked-model` entry in `[[known]]`, so a new unchecked path fails.
+- The `[[known]]` tables end the file, in exactly the form `--print-baseline` prints, and each `count` is a positive integer.
+  So a baseline entry cannot be spelled so that the scan reads it as a citation of itself.
 - Every `[[known]]` count matches the tree exactly.
   A fixed violation therefore fails the check until its entry is lowered or deleted, and replacing one baselined citation with another fails twice: the old entry goes stale and the new citation is unrecorded.
 
@@ -91,21 +98,22 @@ With `--jolt-dir <a16z/jolt clone>`, it also checks the following.
 - The pin and every `checked` revision resolve.
 - Every `models` path exists at its `checked` revision.
 - Every Jolt file a Lean file cites (as section "The provenance manifest" defines) that exists at its `checked` revision is in its `models`.
-- Every `models` path of an entry without a `checked` revision exists at the pin.
+- Every `models` path of an entry without a `checked` revision exists at the pin, and every Jolt file such a Lean file cites that exists at the pin is in its `models`.
+  A new citation in such a file therefore fails until its path is in `models`, where the `unchecked-model` baseline records it.
 
 It reads only trees, and a shallow blobless fetch of each revision is enough.
 It then reports, without failing, the `models` paths missing at the pin and at `--compare`.
 
 ### Baseline
 
-The baseline records 412 existing violations in 137 files, in 316 `[[known]]` entries.
+The baseline records 413 existing violations in 137 files, in 317 `[[known]]` entries.
 
 | Kind | Occurrences | Files | Where |
 |------|-------------|-------|-------|
 | Local path (`/Users/…`) | 47 | 32 | 6 in `JoltBytecode/`, 26 in `JoltConstraints/` |
 | Fork citation (`abiswas3/jolt`) | 60 | 50 | 2 in `JoltBytecode/`, 48 in `JoltConstraints/` |
 | Other Jolt revision | 164 | 43 | 3 in `JoltBytecode/`, 36 in `JoltConstraints/`, 3 in `docs/`, `README.md` |
-| `models` path with no `checked` revision | 141 | 88 | the 88 entries above |
+| `models` path with no `checked` revision | 142 | 88 | the 88 entries above |
 
 Moving the pin to `580084fcf` added the two citations of the old pin `a6b6dc717` in `docs/inline-precompiles.md`, which that document uses for its code references.
 The table below lists the first three kinds; `provenance.toml` lists every entry, including the exact citation text.
@@ -241,7 +249,7 @@ They occur in files whose `checked` revision is a different one.
 
 ### Result
 
-`python3 scripts/check-provenance.py` passes: 633 entries, 412 baseline violations, no new ones.
+`python3 scripts/check-provenance.py` passes: 633 entries, 413 baseline violations, no new ones.
 With `--jolt-dir` on a full a16z/jolt clone and `--compare a6b6dc717`, it passes and reports these notes.
 
 - No `models` path is missing at the pin `580084fcf`.
@@ -265,10 +273,12 @@ I checked that the check fails on each of these: a new Markdown file under `docs
 ## The hygiene scan
 
 `scripts/check_hygiene.py` blanks comments, docstrings and the text of string, raw-string and character literals, then counts these tokens: `sorry`, `admit`, `native_decide`, `decide +kernel` (also `kernel := true`), `bv_decide`, `set_option maxHeartbeats`, `maxRecDepth`, `synthInstance.*` options and the `axiom` keyword anywhere in code.
-A quoted identifier (`«…»`) is one opaque name, so `def «--»` does not start a comment.
-A text scan cannot tell whether Lean parses a string literal as interpolated: `s!"…"` is, and so is `throwError "…"` or any syntax that takes `interpolatedStr`.
-The scan therefore reads each file twice, once with the `{…}` parts of every literal blanked and once with them kept as code, and counts an occurrence that either reading finds.
-Each reading alone can be misled (a plain `"{"` misleads the second, a nested string inside `{…}` misleads the first), but a token has to hide from both to escape.
+A quoted identifier (`«…»`) is one opaque name up to its `»`, across lines as Lean reads it, so `def «--»` and `def «/-` do not start a comment.
+The scan decides for each string literal whether Lean reads it as interpolated, from the syntax just before it.
+The list of syntaxes that take an `interpolatedStr` is exact, taken from Lean v4.35.0 core and the dependencies: `s!`, `m!`, `f!`, `v!`, `println!`, `reportIssue!`, `reportDbgIssue!`, `reportEMatchIssue!`, `throwError`, `dbg_trace`, `trace[…]`, `trace_goal[…]`, `Macro.trace[…]`, Aesop's `throwPRError`, `aesop_trace[…]` and `aesop_trace![…]`, and `throwErrorAt`, `throwNamedError(At)`, `logNamedError(At)` and `logNamedWarning(At)` after their first arguments.
+In an interpolated literal the `{…}` parts are code, nested string literals included; in a plain literal they are text.
+The list is exact rather than generous, because a wrong reading hides code either way: the `{…}` of an interpolated string read as text, or a `"` after the `{` of a plain string read as the start of another string.
+A scanned file that declares new syntax with `interpolatedStr` counts as an occurrence of that token, so a new interpolating macro in this project fails the scan until it is added to the list.
 The scan is a guard against accidents and not the trust boundary: the axiom gate and the comparator decide whether a headline theorem uses `sorryAx` or another axiom.
 Each root has its own policy, and each root module (for example `JoltBytecode.lean`) is scanned with its root.
 
@@ -297,7 +307,7 @@ The `[[generated]]` baseline of `LeanRV64D/` has 67 `axiom` (the `riscv_f*` floa
 
 `python3 scripts/check_hygiene.py` passes on 778 files.
 A test file with a `sorry`, a `set_option maxHeartbeats` and an `axiom` makes it fail, and the same tokens inside a comment, a docstring or a string do not.
-`scripts/tests/test_check_hygiene.py` covers the review's bypasses (an interpolated `sorry`, `def «--» : Nat := by sorry`, `set_option … in axiom`) and the cases that must keep passing.
+`scripts/tests/test_check_hygiene.py` covers the reviews' bypasses (an interpolated `sorry`, a plain string inside an interpolation, `def «--» : Nat := by sorry`, a quoted identifier across lines, `set_option … in axiom`) and the cases that must keep passing, such as `"{sorry}"` in a plain string.
 Like `scripts/check-provenance.py`, it fails when a baseline count no longer matches.
 
 ## The axiom gate
@@ -327,14 +337,18 @@ The build ran from a cold `JoltConstraints` build and took one hour on a loaded 
 
 ## The comparator gate
 
-`ci/comparator/` is a separate Lake package that requires jolt-qed by path and shares its dependency directory.
+`ci/comparator/` holds the gate's sources; the root `lakefile.toml` declares `Challenge` and `Solution` as libraries with `srcDir = "ci/comparator"`, outside the default targets.
+They are in the root package because the `lake comparator` sandbox exposes only the project directory, the toolchain and the Lake home, so a separate package under `ci/comparator/` could not read the root package or `.lake/packages` from inside it.
 `Challenge.lean` copies six statements verbatim and proves each with `sorry`.
 `Solution.lean` repeats each statement and proves it by applying the jolt-qed theorem.
 `config.json` names the six theorems (`sail_reproduces`, `sail_soundness`, `soundness`, `joltDecode_agrees`, `joltDecode_compressed_agrees` and `joltRun_eq_execute`, each under `ComparatorGate`) and permits `propext`, `Quot.sound` and `Classical.choice`.
 
 `scripts/run_comparator.sh` runs Lean's built-in `lake comparator` by default (`COMPARATOR_ENGINE=lake`).
-It first builds the three jolt-qed modules that `Challenge.lean` imports, which is trusted code and the same build as `lean.yml`, and checks that `Solution.lean` has exactly the same imports.
-It never builds `Challenge` or `Solution` itself, and it deletes any of their build output left in `ci/comparator/.lake`.
+It first checks the import headers with `scripts/check_comparator_imports.py`: `Solution.lean` must have exactly the header of `Challenge.lean`, which must import exactly the three trusted modules.
+That check reads the header with comments removed, so a comment cannot hide an extra import and an `import` line inside a comment does not count.
+It then builds the three jolt-qed modules, which is trusted code and the same build as `lean.yml`.
+It never builds `Challenge` or `Solution` itself, and it deletes any of their build output left in `.lake/build`.
+It runs `lake comparator` from the repository root.
 `lake comparator` then builds, exports and checks both modules inside its `bwrap` sandbox, so no elaborator in `Solution.lean` runs outside the sandbox.
 The deprecated external engine (`COMPARATOR_ENGINE=external`, built by `scripts/setup_comparator_toolchain.sh` at comparator `e3dcf3083fc53d44b27a4431fabf7d43181583f5`, lean4export `5a9a355dc6c5fd82b69058d433e2ae2e8dfbf8fe` and landrun `5ed4a3db3a4ad930d577215c6b9abaa19df7f99f`) is still available and also builds both modules inside its own `landrun` sandbox.
 
@@ -385,11 +399,12 @@ Quang decided on 2026-11-12 that the project settles these points itself instead
 Each was open in the first version of this report.
 
 1. **Pin: `580084fcf`.**
-   It is the revision the T1, T2 and T4 CI jobs check, so the manifest and those jobs now agree.
+   It is the `JOLT_REV` of the T1 expansion-parity job on this branch, and of the T2 decoder-sweep and T4 lookup-tables jobs on [LayerZero-Labs/jolt-qed#56](https://github.com/LayerZero-Labs/jolt-qed/pull/56) and [LayerZero-Labs/jolt-qed#57](https://github.com/LayerZero-Labs/jolt-qed/pull/57), so the manifest and those jobs agree.
+   This branch has no T2 or T4 job.
    No `models` path is missing there (three were missing at `a6b6dc717`), and moving the pin added only two baselined citations of `a6b6dc717` in `docs/inline-precompiles.md`.
    When a16z/jolt#2384 gets a new head, the pin, the T1/T2/T4 `JOLT_REV` and this report move together in one jolt-qed pull request.
 2. **Fork and `/Users/` citations stay as baseline debt.**
-   They are in 117 existing Lean and Markdown files that T7 does not edit, and most cite `abiswas3/jolt/tree/main`, which names no revision to translate.
+   They are in 79 existing Lean files that T7 does not edit (50 with fork citations and 32 with local paths), and most fork citations name `abiswas3/jolt/tree/main`, which names no revision to translate.
    The baseline now quotes each citation exactly, so it can only shrink, and any new local path or fork citation fails.
 3. **The two `decide +kernel` in `JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean` stay as baseline debt.**
    `decide +kernel` adds no axiom, only the root module imports the file, and the axiom gate shows that no headline theorem depends on anything beyond the three standard axioms.
@@ -412,6 +427,23 @@ A Codex review (`gpt-6.1-sol`, high effort) of `b648846..1ff8284` found seven pr
 | 5 | All-digit and all-letter revisions were skipped, and other repositories' revisions were exempt in Jolt URLs | Citation-context detection; repository-qualified citations checked against their repository | `RevisionTest` |
 | 6 | The baseline recorded markers and owners, so one citation could replace another | Baseline quotes the whole citation | `BaselineTextTest` |
 | 7 | `run_comparator.sh` built `Solution` outside the sandbox | The script builds only the trusted imports and leaves both gate modules to the sandboxed comparator | Smoke run on macOS; sandboxed run in CI |
+
+A second Codex review of `1ff8284..2ea3d75` found ten more problems, eight of them gaps in the first fixes.
+
+| # | Finding | Fix | Test |
+|---|---------|-----|------|
+| 1 | A plain string inside an interpolation, and a quoted identifier across lines, hid `sorry` from both hygiene readings | One reading that decides per literal whether it is interpolated; quoted identifiers read to `»` across lines; then the exact syntax list above | `test_plain_brace_string_inside_interpolation`, `test_quoted_identifier_is_not_a_comment` (the multiline case), `test_plain_string_after_bracket_or_bang`, `test_aesop_and_macro_trace_interpolate` |
+| 2 | Relative citations (`instructions/virt/{load,store,shift_data}_{b,h,w}.rs` after a full path) were not resolved, so their files were missing from `models` | Paths resolved against the Jolt tree relative to the last cited file's directory and its ancestors; 29 paths added | `test_paths_relative_to_an_ancestor_of_the_last_citation` |
+| 3 | A new citation in a file without `checked` did not have to be in `models` | With `--jolt-dir`, such a file's citations are compared with `models` at the pin | `CloneCheckTest` (a temporary git repository as the Jolt clone) |
+| 4 | The second endpoint of a compare URL was not checked, and `Jolt at 7538215` escaped | Both endpoints checked in repository context; more citation words | `test_both_compare_endpoints_are_checked`, `test_all_digit_revision_after_at_or_jolt` |
+| 5 | `[[other_revision]]` was not validated, so `revision = "753"` exempted every revision starting with `753` | Exact keys, 7 to 40 hex digits, `owner/name`, no Jolt repository; unknown top-level keys rejected | `OtherRevisionTest` |
+| 6 | A `[[known]]` text in another TOML spelling cited itself | The `[[known]]` tables must end the file in canonical form, and the scan reads only the part before them; `count` must be a positive integer | `test_baseline_in_another_spelling_fails`, `test_known_before_other_tables_fails`, `test_known_count_must_be_a_positive_integer` |
+| 7 | The report said T2 and T4 jobs on this branch check `580084fcf`, and counted 117 files of fork and local debt | Decision 1 names the T2 and T4 pull requests; decision 2 says 79 files | |
+| 8 | The `lake comparator` sandbox could not see the parent package of `ci/comparator/` | `Challenge` and `Solution` moved into the root package | Smoke run on macOS; sandboxed run in CI |
+| 9 | The `grep` import guard missed an import after a comment and rejected an `import` line inside a comment | `scripts/check_comparator_imports.py` reads the header with comments removed | `test_check_comparator_imports.py` |
+| 10 | `"{sorry}"` in a plain string counted as `sorry` | Fixed by the per-literal reading of finding 1 | `test_brace_text_in_plain_string_is_ignored` |
+
+The review's two smaller points are fixed too: a relative file name no longer resolves across a blank line, and a leading `./` is dropped (`test_relative_names_do_not_cross_a_blank_line`, `test_dot_slash_prefix`).
 
 ## Follow-ups
 

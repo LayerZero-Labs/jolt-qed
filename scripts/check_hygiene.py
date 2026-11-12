@@ -13,17 +13,17 @@ evaluator, raised limits and new axioms in four roots, each with its own policy:
                     [[generated]] baseline in scripts/hygiene-baseline.toml.
 
 Tokens: sorry, admit, native_decide, decide +kernel (also kernel := true),
-bv_decide, set_option maxHeartbeats, maxRecDepth, synthInstance.* options and
-axiom declarations.
+bv_decide, set_option maxHeartbeats, maxRecDepth, synthInstance.* options,
+axiom declarations and new syntax that takes `interpolatedStr`.
 
 Comments (nested /- -/ blocks, docstrings and -- lines) and the text of string,
 raw-string and char literals are blanked before matching, so a token that
 appears only in prose does not count. Quoted identifiers (`«...»`) are one
-opaque name. A text scan cannot tell whether Lean parses a string literal as
-interpolated (`s!"..."`, `throwError "..."`), so the scan reads every file twice,
-once with the `{...}` parts of each literal blanked and once with them kept as
-code, and counts an occurrence that either reading finds. An `axiom` keyword
-counts wherever it appears in code, not only at the start of a line.
+opaque name. A string literal is read as interpolated, with its `{...}` parts
+kept as code, when the syntax just before it takes an interpolated string
+(`s!"..."`, `throwError "..."`, `trace[c] "..."`; see _INTERP_DIRECT); every
+other literal is plain text. New syntax declared with `interpolatedStr` counts
+as an occurrence. An `axiom` keyword counts wherever it appears in code.
 The regression tests are in scripts/tests/test_check_hygiene.py.
 Each root's root module (for example JoltBytecode.lean) is scanned with it.
 
@@ -60,6 +60,8 @@ TOKENS: dict[str, re.Pattern[str]] = {
     # `axiom` is a keyword, so any occurrence in code starts a declaration,
     # wherever it sits on the line (for example after `set_option ... in`).
     "axiom": re.compile(r"(?<![\w.'])axiom(?![\w'])"),
+    # New syntax that takes an interpolated string (see _INTERP_DIRECT).
+    "interpolatedStr": re.compile(r"(?<![\w.'])interpolatedStr(?![\w'])"),
 }
 
 # root directory -> (root module, baseline section or None for zero tolerance)
@@ -75,19 +77,45 @@ CHAR_LIT = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^\\'\n])'")
 RAW_STR_START = re.compile(r'r(#*)"')
 
 
+# Syntax that reads the next string literal as an interpolated string
+# (`interpolatedStr(term)`), from Lean v4.35.0 core and the dependencies
+# (Mathlib, Batteries and the others declare none of their own):
+#   - s!, m!, f!, v!, println!, reportIssue!, reportDbgIssue!,
+#     reportEMatchIssue!, throwError, dbg_trace and Aesop's throwPRError
+#     directly before the literal;
+#   - trace[c], trace_goal[c], Macro.trace[c], and Aesop's aesop_trace[c] and
+#     aesop_trace![c] directly before it;
+#   - throwErrorAt, throwNamedError(At), logNamedError(At), logNamedWarning(At)
+#     earlier on the same line, which take one or two arguments first.
+# Every other literal is a plain string. Reading a literal the wrong way can
+# hide code in either direction (the `{...}` of an interpolated string blanked
+# as text, or a `"` inside a plain string's `{` read as the start of another
+# string), so the list is exact rather than generous. A scanned file that
+# declares new syntax with `interpolatedStr` counts as an occurrence of that
+# token, so a new interpolating macro in this project is noticed and added here.
+_INTERP_DIRECT = re.compile(
+    r"(?<![\w'.!])(?:(?:s|m|f|v|println|reportIssue|reportDbgIssue|reportEMatchIssue)!"
+    r"|throwError|dbg_trace|throwPRError"
+    r"|(?:trace|trace_goal|Macro\.trace|aesop_trace|aesop_trace!)\[[^\]\n]*\])\s*$"
+)
+_INTERP_ARGS = re.compile(
+    r"(?<![\w'.])(?:throwErrorAt|throwNamedError|throwNamedErrorAt|logNamedError|logNamedErrorAt"
+    r"|logNamedWarning|logNamedWarningAt)(?![\w'])[^\"\n]*$"
+)
+
+
 class _Lexer:
     """Blank comments and literal text of one Lean source, keeping layout.
 
-    With interpolate=True every string literal is read as an interpolated
-    string: the text between an unescaped `{` and its matching `}` is code and
-    is kept. Lean decides from the parser whether a literal is interpolated
-    (`s!"..."`, `m!"..."`, but also `throwError "..."` and any user syntax that
-    takes `interpolatedStr`), which a text scan cannot know, so scan_file runs
-    both readings and keeps every match of either.
+    A string literal is interpolated when the syntax before it says so
+    (_INTERP_DIRECT, _INTERP_ARGS); then the code between an unescaped `{` and
+    its matching `}` is kept and lexed like any other code, nested string
+    literals included. Quoted identifiers (`«...»`, which may span lines) are
+    one opaque name.
     """
 
-    def __init__(self, src: str, interpolate: bool) -> None:
-        self.src, self.n, self.interpolate = src, len(src), interpolate
+    def __init__(self, src: str) -> None:
+        self.src, self.n = src, len(src)
         self.out: list[str] = []
 
     def blank(self, i: int, j: int) -> None:
@@ -99,6 +127,11 @@ class _Lexer:
     def run(self) -> str:
         self.code(0, in_braces=False)
         return "".join(self.out)
+
+    def interpolated_here(self) -> bool:
+        """Whether a string literal starting now is interpolated."""
+        before = "".join(self.out[-400:])[-300:]
+        return bool(_INTERP_DIRECT.search(before) or _INTERP_ARGS.search(before))
 
     def code(self, i: int, in_braces: bool) -> int:
         """Lex code from i; inside an interpolation, stop after its closing `}`."""
@@ -116,15 +149,15 @@ class _Lexer:
                 i = j
             elif c == "«":
                 j = src.find("»", i + 1)
-                if j == -1 or "\n" in src[i:j]:
+                if j == -1:
                     self.keep(i, i + 1)
                     i += 1
                 else:
                     # A quoted identifier: one opaque name, never a comment or token.
-                    self.out.append("x" * (j + 1 - i))
+                    self.out.append("".join("\n" if ch == "\n" else "x" for ch in src[i:j + 1]))
                     i = j + 1
             elif c == '"':
-                i = self.string(i)
+                i = self.string(i, self.interpolated_here())
             elif c == "r" and (i == 0 or not IDENT_CHAR.match(src[i - 1])) and RAW_STR_START.match(src, i):
                 hashes = RAW_STR_START.match(src, i).group(1)
                 close = '"' + hashes
@@ -165,7 +198,7 @@ class _Lexer:
         self.blank(i, j)
         return j
 
-    def string(self, i: int) -> int:
+    def string(self, i: int, interpolate: bool) -> int:
         src, n = self.src, self.n
         start, j = i, i + 1
         while j < n:
@@ -175,7 +208,7 @@ class _Lexer:
             elif c == '"':
                 j += 1
                 break
-            elif c == "{" and self.interpolate:
+            elif c == "{" and interpolate:
                 self.blank(start, j + 1)
                 j = self.code(j + 1, in_braces=True)
                 start = j
@@ -186,14 +219,14 @@ class _Lexer:
         return j
 
 
-def strip_comments_and_strings(src: str, interpolate: bool = False) -> str:
+def strip_comments_and_strings(src: str) -> str:
     """Blank Lean comments, string and char literal text; keep layout and code.
 
     Newlines are kept, so line numbers of the remaining code do not change.
-    Quoted identifiers (`«...»`) become one opaque name. With interpolate=True,
-    `{...}` inside every string literal is kept as code (see _Lexer).
+    Quoted identifiers (`«...»`) become one opaque name, and the `{...}` parts
+    of interpolated string literals stay code (see _Lexer).
     """
-    return _Lexer(src, interpolate).run()
+    return _Lexer(src).run()
 
 
 def scan_file(path: Path) -> list[tuple[int, str, str]]:
@@ -202,28 +235,21 @@ def scan_file(path: Path) -> list[tuple[int, str, str]]:
 
 
 def scan_text(text: str) -> list[tuple[int, str, str]]:
-    """Return (line, token, source line) for every occurrence in a Lean source.
-
-    The source is read twice, with string literals plain and with them
-    interpolated; an occurrence found by either reading counts once.
-    """
+    """Return (line, token, source line) for every occurrence in a Lean source."""
+    code = strip_comments_and_strings(text)
+    assert len(code) == len(text)
     raw_lines = text.splitlines()
     starts = [0]
-    for idx, ch in enumerate(text):
+    for idx, ch in enumerate(code):
         if ch == "\n":
             starts.append(idx + 1)
-    seen: set[tuple[int, str]] = set()
-    for interpolate in (False, True):
-        code = strip_comments_and_strings(text, interpolate)
-        assert len(code) == len(text)
-        for token, pattern in TOKENS.items():
-            for m in pattern.finditer(code):
-                seen.add((m.start() + (len(m.group(0)) - len(m.group(0).lstrip())), token))
     hits = []
-    for pos, token in seen:
-        lineno = _line_of(starts, pos)
-        raw = raw_lines[lineno - 1].strip() if lineno - 1 < len(raw_lines) else ""
-        hits.append((lineno, token, raw))
+    for token, pattern in TOKENS.items():
+        for m in pattern.finditer(code):
+            pos = m.start() + (len(m.group(0)) - len(m.group(0).lstrip()))
+            lineno = _line_of(starts, pos)
+            raw = raw_lines[lineno - 1].strip() if lineno - 1 < len(raw_lines) else ""
+            hits.append((lineno, token, raw))
     hits.sort()
     return hits
 

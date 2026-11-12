@@ -25,8 +25,13 @@
 # two modules inside their sandbox. The script first builds the jolt-qed
 # modules that Challenge imports (trusted code, the same build as lean.yml), so
 # that the sandboxed build compiles only the two gate modules. It deletes any
-# Challenge or Solution build output left in ci/comparator/.lake first, so the
+# Challenge or Solution build output left in .lake/build first, so the
 # comparator cannot reuse output built outside its sandbox.
+#
+# Challenge and Solution are libraries of the root package (lakefile.toml,
+# srcDir ci/comparator) because the `lake comparator` sandbox exposes only the
+# project directory, the toolchain and the Lake home. The script runs the
+# comparator from the repository root.
 #
 # Usage: scripts/run_comparator.sh
 # Exit status: 0 accepted, 1 rejected or build failure, 2 missing tools.
@@ -69,36 +74,29 @@ fi
 # The jolt-qed modules that Challenge.lean imports. Solution.lean must import
 # nothing else (ci/comparator/README.md).
 TRUSTED_IMPORTS=(JoltConstraints.WholeRun.Top JoltBytecode.Decode.Compressed JoltBytecode.Step.Instructions)
-if ! diff <(grep '^import ' "$GATE_DIR/Challenge.lean") <(grep '^import ' "$GATE_DIR/Solution.lean") >/dev/null; then
-  echo "ERROR: Solution.lean must have exactly the imports of Challenge.lean." >&2
-  exit 1
-fi
-for m in "${TRUSTED_IMPORTS[@]}"; do
-  grep -qx "import $m" "$GATE_DIR/Challenge.lean" || { echo "ERROR: Challenge.lean does not import $m; update TRUSTED_IMPORTS." >&2; exit 1; }
-done
-[ "$(grep -c '^import ' "$GATE_DIR/Challenge.lean")" -eq "${#TRUSTED_IMPORTS[@]}" ] || {
-  echo "ERROR: Challenge.lean imports modules missing from TRUSTED_IMPORTS." >&2; exit 1; }
+python3 "$REPO_ROOT/scripts/check_comparator_imports.py" \
+  "$GATE_DIR/Challenge.lean" "$GATE_DIR/Solution.lean" "${TRUSTED_IMPORTS[@]}"
 
 echo ">> building the trusted jolt-qed imports of the gate"
 ( cd "$REPO_ROOT" && lake build "${TRUSTED_IMPORTS[@]}" )
 
 echo ">> removing Challenge and Solution build output built outside the sandbox"
-rm -rf "$GATE_DIR/.lake/build/lib/lean/Challenge".* "$GATE_DIR/.lake/build/lib/lean/Solution".* \
-  "$GATE_DIR/.lake/build/ir/Challenge".* "$GATE_DIR/.lake/build/ir/Solution".*
+rm -rf "$REPO_ROOT/.lake/build/lib/lean/Challenge".* "$REPO_ROOT/.lake/build/lib/lean/Solution".* \
+  "$REPO_ROOT/.lake/build/ir/Challenge".* "$REPO_ROOT/.lake/build/ir/Solution".*
 
 echo ">> running the comparator ($ENGINE) on ci/comparator/config.json"
 if [ "$ENGINE" = lake ]; then
   flags=()
   if [ "${COMPARATOR_NO_SANDBOX:-0}" = 1 ]; then flags+=(--inadvisably-no-sandbox); fi
-  ( cd "$GATE_DIR" && lake comparator --config "$CONFIG" ${flags[@]+"${flags[@]}"} )
+  ( cd "$REPO_ROOT" && lake comparator --config "$CONFIG" ${flags[@]+"${flags[@]}"} )
 elif [ "${COMPARATOR_NO_SANDBOX:-0}" = 1 ]; then
-  ( cd "$GATE_DIR" && lake env "$COMPARATOR_BIN" "$CONFIG" )
+  ( cd "$REPO_ROOT" && lake env "$COMPARATOR_BIN" "$CONFIG" )
 else
-  ( cd "$GATE_DIR" && systemd-run --property=RestrictAddressFamilies=~AF_UNIX --user --pty \
+  ( cd "$REPO_ROOT" && systemd-run --property=RestrictAddressFamilies=~AF_UNIX --user --pty \
       -E PATH="$PATH" \
       ${COMPARATOR_LANDRUN:+-E COMPARATOR_LANDRUN="$COMPARATOR_LANDRUN"} \
       ${COMPARATOR_LEAN4EXPORT:+-E COMPARATOR_LEAN4EXPORT="$COMPARATOR_LEAN4EXPORT"} \
-      --working-directory "$GATE_DIR" -- \
+      --working-directory "$REPO_ROOT" -- \
       bash -c "lake env '$COMPARATOR_BIN' '$CONFIG'" )
 fi
 echo ">> comparator gate passed"

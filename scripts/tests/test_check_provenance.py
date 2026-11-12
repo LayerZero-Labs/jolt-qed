@@ -11,6 +11,7 @@ import contextlib
 import importlib.util
 import io
 import re
+import subprocess
 import tempfile
 import unittest
 from collections import Counter
@@ -32,13 +33,13 @@ def violations(text: str, checked: str | None = CHECKED) -> Counter:
     return Counter({(kind, t): n for (_, kind, t), n in found.items()})
 
 
-def run_main(manifest_text: str) -> tuple[int, str]:
+def run_main(manifest_text: str, *extra: str) -> tuple[int, str]:
     with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as f:
         f.write(manifest_text)
     out = io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
         try:
-            code = prov.main(["--manifest", f.name])
+            code = prov.main(["--manifest", f.name, *extra])
         except SystemExit as e:
             code = int(e.code)
     Path(f.name).unlink()
@@ -74,6 +75,23 @@ class RevisionTest(unittest.TestCase):
     def test_mixed_hex_revision_still_detected(self) -> None:
         self.assertEqual(violations("-- at 8bbb2357\n"), Counter({("revision", "8bbb2357"): 1}))
 
+    # Round-2 finding 4: the second endpoint of a compare URL was not checked.
+    def test_both_compare_endpoints_are_checked(self) -> None:
+        for sep in ("...", ".."):
+            text = f"-- https://github.com/a16z/jolt/compare/580084fcf{sep}7538215\n"
+            self.assertEqual(violations(text), Counter({("revision", "7538215"): 1}))
+            text = f"-- https://github.com/a16z/jolt/compare/580084fcf{sep}717aeca3\n"
+            self.assertEqual(violations(text), Counter({("revision", "717aeca3"): 1}))
+            text = f"-- https://github.com/a16z/jolt/compare/7538215{sep}{PIN}\n"
+            self.assertEqual(violations(text), Counter({("revision", "7538215"): 1}))
+        text = f"-- https://github.com/a16z/jolt/compare/{CHECKED[:9]}...{PIN[:9]}\n"
+        self.assertEqual(violations(text), Counter())
+
+    # Round-2 finding 4: "Jolt at `7538215`" escaped the citation words.
+    def test_all_digit_revision_after_at_or_jolt(self) -> None:
+        self.assertEqual(violations("-- Jolt at `7538215`\n"), Counter({("revision", "7538215"): 1}))
+        self.assertEqual(violations("-- upstream 7538215\n"), Counter({("revision", "7538215"): 1}))
+
 
 class BaselineTextTest(unittest.TestCase):
     # Review finding 6: the baseline named markers and owners, not citations.
@@ -97,6 +115,62 @@ class BaselineTextTest(unittest.TestCase):
     def test_manifest_does_not_cite_itself(self) -> None:
         code, out = run_main(MANIFEST.read_text(encoding="utf-8"))
         self.assertEqual(code, 0, out)
+
+    # Round-2 finding 6: a [[known]] text spelled another way cited itself.
+    def test_baseline_in_another_spelling_fails(self) -> None:
+        text = MANIFEST.read_text(encoding="utf-8")
+        entry = ("[[known]]\nfile = 'provenance.toml'\nkind = 'local-path'\n"
+                 "text = '/Users/self/debt.rs'\ncount = 1\n\n")
+        i = text.index("\n[[known]]\n") + 1
+        for bad in (text[:i] + entry + text[i:],
+                    text + "\n" + entry,
+                    text.replace("count = 1\n", "count  =  1\n", 1)):
+            code, out = run_main(bad)
+            self.assertEqual(code, 1, out)
+            self.assertIn("the [[known]] tables must end provenance.toml", out)
+
+    def test_known_before_other_tables_fails(self) -> None:
+        text = MANIFEST.read_text(encoding="utf-8")
+        i = text.index("\n[[file]]\nlean") + 1
+        entry = '[[known]]\nfile = "provenance.toml"\nkind = "local-path"\ntext = "/Users/self/debt.rs"\ncount = 1\n\n'
+        code, out = run_main(text[:i] + entry + text[i:])
+        self.assertEqual(code, 1, out)
+
+    def test_known_count_must_be_a_positive_integer(self) -> None:
+        text = MANIFEST.read_text(encoding="utf-8")
+        for count in ('"1"', "0", "1.0", "true"):
+            code, out = run_main(text.replace("count = 1\n", f"count = {count}\n", 1))
+            self.assertEqual(code, 1, out)
+
+
+class OtherRevisionTest(unittest.TestCase):
+    # Round-2 finding 5: [[other_revision]] tables were not validated.
+    def _with_other(self, body: str) -> tuple[int, str]:
+        text = MANIFEST.read_text(encoding="utf-8")
+        i = text.index("\n[[other_revision]]\n") + 1
+        return run_main(text[:i] + "[[other_revision]]\n" + body + "\n" + text[i:])
+
+    def test_short_or_bad_revisions_fail(self) -> None:
+        for rev in ("753", "", "75382", "XYZ1234", "7538215Z"):
+            code, out = self._with_other(f'repository = "riscv/riscv-isa-manual"\nrevision = "{rev}"\n')
+            self.assertEqual(code, 2, out)
+            self.assertIn("revision must be 7 to 40 lowercase hex digits", out)
+
+    def test_repository_must_be_owner_and_name(self) -> None:
+        code, out = self._with_other('repository = "riscv"\nrevision = "7538215"\n')
+        self.assertEqual(code, 2, out)
+        code, out = self._with_other('revision = "7538215"\n')
+        self.assertEqual(code, 2, out)
+
+    def test_jolt_repository_is_refused(self) -> None:
+        code, out = self._with_other('repository = "a16z/jolt"\nrevision = "7538215"\n')
+        self.assertEqual(code, 2, out)
+        self.assertIn("checked field", out)
+
+    def test_unknown_top_level_key_fails(self) -> None:
+        code, out = run_main("allow = true\n" + MANIFEST.read_text(encoding="utf-8"))
+        self.assertEqual(code, 1, out)
+        self.assertIn("unexpected top-level keys ['allow']", out)
 
 
 class ManifestTest(unittest.TestCase):
@@ -127,26 +201,72 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(code, 1, out)
 
 
+TREE = {
+    "tracer/src/instruction/div.rs", "tracer/src/instruction/divu.rs",
+    "tracer/src/instruction/rem.rs", "tracer/src/instruction/remuw.rs",
+    "tracer/src/instruction/virtual_host_io.rs", "tracer/src/emulator/cpu.rs",
+    "common/src/constants.rs", "crates/jolt-program/src/expand/mod.rs",
+    "crates/jolt-riscv/src/instructions/i/ld.rs",
+    *(f"crates/jolt-riscv/src/instructions/virt/{a}_{b}.rs"
+      for a in ("load", "store", "shift_data") for b in ("b", "h", "w")),
+    "crates/jolt-lookup-tables/src/traits.rs",
+    "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+    "crates/jolt-lookup-tables/src/instructions/riscv/ld.rs",
+    "crates/jolt-lookup-tables/src/instructions/riscv/sd.rs",
+}
+DIRS = {"/".join(p.split("/")[:k]) for p in TREE for k in range(1, p.count("/") + 1)}
+
+
+def cited(text: str) -> set[str]:
+    return prov.cited_paths(text, TREE, DIRS)
+
+
 class CitedPathsTest(unittest.TestCase):
     # Review finding 4: abbreviated citation lists were not expanded.
     def test_bare_names_after_a_path(self) -> None:
         text = ("-- See : jolt/tracer/src/instruction/div.rs, divu.rs, rem.rs,\n"
                 "--       remuw.rs (trace)\n")
-        self.assertTrue({"tracer/src/instruction/div.rs", "tracer/src/instruction/divu.rs",
-                         "tracer/src/instruction/rem.rs", "tracer/src/instruction/remuw.rs"}
-                        <= prov.cited_paths(text))
+        self.assertEqual(cited(text), {"tracer/src/instruction/div.rs", "tracer/src/instruction/divu.rs",
+                                       "tracer/src/instruction/rem.rs", "tracer/src/instruction/remuw.rs"})
 
     def test_brace_lists(self) -> None:
-        got = prov.cited_paths("`crates/jolt-riscv/src/instructions/virt/{load,store}_{b,h}.rs`")
-        self.assertEqual({p for p in got if p.endswith(".rs")},
-                         {f"crates/jolt-riscv/src/instructions/virt/{a}_{b}.rs"
-                          for a in ("load", "store") for b in ("b", "h")})
+        got = cited("`crates/jolt-riscv/src/instructions/virt/{load,store}_{b,h}.rs`")
+        self.assertEqual(got, {f"crates/jolt-riscv/src/instructions/virt/{a}_{b}.rs"
+                               for a in ("load", "store") for b in ("b", "h")})
 
     def test_url_and_local_prefixes_are_dropped(self) -> None:
-        got = prov.cited_paths(
-            "https://github.com/abiswas3/jolt/tree/main/common/src/constants.rs#L3\n"
-            "/Users/someone/Work/jolt/crates/jolt-program/src/expand/mod.rs\n")
-        self.assertTrue({"common/src/constants.rs", "crates/jolt-program/src/expand/mod.rs"} <= got)
+        got = cited("https://github.com/abiswas3/jolt/tree/main/common/src/constants.rs#L3\n"
+                    "/Users/someone/Work/jolt/crates/jolt-program/src/expand/mod.rs\n")
+        self.assertEqual(got, {"common/src/constants.rs", "crates/jolt-program/src/expand/mod.rs"})
+
+    # Round-2 finding 2: paths relative to an earlier citation were dropped.
+    def test_paths_relative_to_an_ancestor_of_the_last_citation(self) -> None:
+        got = cited("Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and\n"
+                    "`instructions/virt/{load,store,shift_data}_{b,h,w}.rs` (`jolt_instruction!`)\n")
+        self.assertEqual(got, {"crates/jolt-riscv/src/instructions/i/ld.rs",
+                               *(f"crates/jolt-riscv/src/instructions/virt/{a}_{b}.rs"
+                                 for a in ("load", "store", "shift_data") for b in ("b", "h", "w"))})
+        got = cited("`crates/jolt-lookup-tables/src/traits.rs`. Jolt's prover:\n"
+                    "`instructions/virt/floor_access.rs` and `instructions/riscv/{ld,sd}.rs`\n")
+        self.assertEqual(got, {"crates/jolt-lookup-tables/src/traits.rs",
+                               "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs",
+                               "crates/jolt-lookup-tables/src/instructions/riscv/ld.rs",
+                               "crates/jolt-lookup-tables/src/instructions/riscv/sd.rs"})
+        got = cited("Rust: tracer/src/instruction/virtual_host_io.rs; emulator/cpu.rs:1244-1333.")
+        self.assertEqual(got, {"tracer/src/instruction/virtual_host_io.rs", "tracer/src/emulator/cpu.rs"})
+
+    # Round-2 review nits: context crossed paragraphs, and `./` was kept.
+    def test_relative_names_do_not_cross_a_blank_line(self) -> None:
+        got = cited("See tracer/src/instruction/div.rs.\n\nThe rem.rs of another component.\n")
+        self.assertEqual(got, {"tracer/src/instruction/div.rs"})
+        got = cited("-- See tracer/src/instruction/div.rs.\n--\n-- The rem.rs of another component.\n")
+        self.assertEqual(got, {"tracer/src/instruction/div.rs"})
+
+    def test_dot_slash_prefix(self) -> None:
+        self.assertEqual(cited("see ./tracer/src/instruction/div.rs"), {"tracer/src/instruction/div.rs"})
+
+    def test_paths_not_in_the_tree_do_not_count(self) -> None:
+        self.assertEqual(cited("see tracer/src/instruction/nope.rs and foo/bar.rs"), set())
 
     def test_div_family_is_in_honest_trace_models(self) -> None:
         import tomllib
@@ -154,6 +274,46 @@ class CitedPathsTest(unittest.TestCase):
                      if e["lean"] == "JoltConstraints/honest_trace.lean")
         for name in ("div", "divu", "rem", "remu", "divw", "divuw", "remw", "remuw"):
             self.assertIn(f"tracer/src/instruction/{name}.rs", entry["models"])
+
+
+class CloneCheckTest(unittest.TestCase):
+    """--jolt-dir checks against a small Jolt tree built in a temporary git repository."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tmp = tempfile.TemporaryDirectory()
+        root = Path(cls.tmp.name)
+        for p in TREE | {"jolt-platform/src/advice.rs", "jolt-platform/src/cycle_tracking.rs",
+                         "jolt-platform/src/print.rs"}:
+            (root / p).parent.mkdir(parents=True, exist_ok=True)
+            (root / p).write_text("// test\n")
+        env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+               "GIT_COMMITTER_EMAIL": "t@t", "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"}
+        for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "tree"]):
+            subprocess.run(["git", "-C", cls.tmp.name, *cmd], check=True, env=env)
+        cls.rev = subprocess.run(["git", "-C", cls.tmp.name, "rev-parse", "HEAD"], check=True,
+                                 capture_output=True, text=True).stdout.strip()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.tmp.cleanup()
+
+    # Round-2 finding 3: an entry with no checked revision could cite a Jolt
+    # file that its models omits.
+    def test_source_citation_missing_from_unchecked_models(self) -> None:
+        text = MANIFEST.read_text(encoding="utf-8").replace(PIN, self.rev)
+        old = '  "tracer/src/emulator/cpu.rs",\n  "tracer/src/instruction/virtual_host_io.rs",'
+        self.assertIn(old, text)
+        code, out = run_main(text.replace(old, '  "tracer/src/instruction/virtual_host_io.rs",'),
+                             "--jolt-dir", self.tmp.name)
+        self.assertEqual(code, 1, out)
+        self.assertIn("HostIO.lean: cites tracer/src/emulator/cpu.rs, a file at the pin, "
+                      "but models omits it", out)
+
+    def test_no_omission_with_the_full_models(self) -> None:
+        text = MANIFEST.read_text(encoding="utf-8").replace(PIN, self.rev)
+        code, out = run_main(text, "--jolt-dir", self.tmp.name)
+        self.assertNotIn("HostIO.lean: cites", out)
 
 
 if __name__ == "__main__":
