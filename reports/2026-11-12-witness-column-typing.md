@@ -2,7 +2,9 @@
 
 Date: 2026-11-12.
 Jolt commit: a16z/jolt `a6b6dc717` (contains a16z/jolt#2190, `4e55c9a5f`).
-Lean commit: `86e3c7a` on branch `t5/advice-field`, based on `inline/t1-driver` at `b648846`.
+Lean commit: `86e3c7a` (the Lean implementation) on the pushed branch `t5/advice-field`, based on `inline/t1-driver` at `b648846`.
+The local worktree branch is `track/t5-advice-field`; `t5/advice-field` is the name to cite.
+Line numbers in the statement inventory refer to `5354ac5`, which changes only docstrings and Markdown after `86e3c7a`.
 Scope: every column of `WitnessType` (`JoltConstraints/witness.lean`) and every other input of the relation `AllConstraints` (`JoltConstraints/Constraints/All.lean`).
 For each one, this note compares the value Jolt's verifier has with the Lean type, and lists the mismatches.
 Only the untrusted-advice mismatch is fixed on this branch; the other fixes below are proposals.
@@ -78,10 +80,12 @@ When the program is committed, Jolt's verifier holds commitments `ProgramImageIn
 The Lean instance always holds the program image (`JoltInstance.program`), so the model covers only the mode where the verifier preprocesses the program itself.
 Proposed fix, not implemented: model committed-program mode as a separate instance type once it is in scope.
 
-## Planned inline advice (conflict to resolve)
+## Planned inline advice
 
 `docs/inline-precompiles.md` (phase I1b) plans a lemma `allConstraints_inline_advice` that states `AllConstraints joltInstance { privateInputs with inline_advice := words } witness`.
-After this branch `AllConstraints` takes untrusted-advice words instead of private inputs, so that plan needs the byte relation `AllConstraintsOnBytes`, or inline advice words alongside `untrustedAdvice`.
+After this branch `AllConstraints` takes untrusted-advice words instead of private inputs, so it cannot read `inline_advice` at all.
+`docs/inline-precompiles.md` now states the planned lemma on the byte relation, as `allConstraintsOnBytes_inline_advice`; the soundness proof reaches that relation through `onBytes_of_allConstraints`.
+The I1b branch (`inline/i1b-advice`) rewrote this part of the spec independently, so whichever branch lands second reconciles the two texts.
 
 ## Scope of the load argument
 
@@ -93,36 +97,258 @@ So when the inline phases (I1a, I1b of `docs/inline-precompiles.md`) add inline 
 
 ## Statement changes
 
-Changed statements of existing theorems and definitions:
+Summary:
 
-* `AllConstraints` (`Constraints/All.lean`) takes `untrustedAdvice : Nat → F` instead of `privateInputs`; the old relation is `AllConstraintsOnBytes`.
-* `ConstraintEquations` is an abbreviation for the new `FieldConstraintEquations` at `ramInitialValue initialRam`.
-* `JoltInstance.soundness` and `JoltInstance.sail_soundness` take `adviceBlockFits : joltInstance.UntrustedAdviceBlockFits` and `untrustedAdvice : Nat → F`, and assume `AllConstraints joltInstance untrustedAdvice witness`.
-* `JoltInstance.completeness` concludes `AllConstraints` at the words `adviceBlockWords` of the run's initial RAM, and `completeness_someWitness` quantifies over advice words instead of private inputs.
-* The raw RAM-history predicates `ramValEqInitialPlusPrefixRamInc` and `ramValFinalEqInitialPlusRamInc` (`Constraints/`) take a field-valued initial value; their byte users pass `ramInitialValue`.
-* The soundness lemmas of layers 1 to 4, `Layer3/History.lean`, `Layer3/State.lean` (`ramVal_initial_state`, `ramVal_initial_advance_pc`), `OrdinaryRamAgreement.initial` and `Layer6/BytecodePC.lean` take `FieldConstraintEquations` at an arbitrary `initialValue : Nat → F`, or at `ramInitialValue` where they use the bytes; none gains a hypothesis.
-* `sequenceOk` and `nativeRowOk` (`expansion_facts.lean`) include the load-window check `loadWindowsOk`.
-* `materialized_pairs` (`Layer7/AdjacentRows.lean`) is replaced by `materialized_windows`; `expand_program_pairs` keeps its statement.
-* `Soundness.initial_state_memory_layout` moves from `Soundness/Layer3/State.lean` to `advice_inputs.lean` with the same name and statement.
+* `AllConstraints` takes `untrustedAdvice : Nat → F` instead of `privateInputs`; the old relation is `AllConstraintsOnBytes`, and the old soundness theorem is `JoltInstance.soundness_onBytes`.
+* Added hypotheses: only `adviceBlockFits` on `JoltInstance.soundness` and `JoltInstance.sail_soundness`.
+* The soundness lemmas of layers 1 to 4 and 6 take `FieldConstraintEquations` at an arbitrary `initialValue : Nat → F`; none gains a hypothesis.
+* Removed: `materialized_pairs` and the private `pairs_append` and `pairs_flatten` (`Layer7/AdjacentRows.lean`), replaced by their window versions.
+* Unchanged: `InLanguage`, the execution semantics, `Pairs`, and the six fields of `TemporaryRestrictions`.
 
-Renamed, with unchanged statements: `JoltInstance.soundness_onBytes` (was `JoltInstance.soundness`), `AllConstraintsOnBytes.advice_tape_irrelevant` and `HonestTrace.allConstraintsOnBytes_prover_sizes`.
+Every changed or new declaration, with its line at `5354ac5` (paths relative to `JoltConstraints/`).
+"New" means the declaration did not exist at `b648846`.
 
-Added hypotheses: only `adviceBlockFits` on `JoltInstance.soundness` and `JoltInstance.sail_soundness`.
+`Completeness/All.lean`:
 
-New declarations:
+* `HonestTrace.allConstraintsOnBytes_prover_sizes` (line 188): renamed from `HonestTrace.allConstraints_prover_sizes`, statement unchanged.
 
-* `Constraints/All.lean`: `FieldConstraintEquations`, `JoltPrivateInputs.noUntrustedAdvice`, `untrustedAdviceWordIndex?`, `committedInitialValue`, `AllConstraintsOnBytes`.
-* `Soundness/Assumptions.lean`: `JoltInstance.UntrustedAdviceBlockFits`.
-* `Soundness/UntrustedAdvice/LoadWords.lean`: the load-window argument, ending in `load_ramReadValue_word`.
-* `Soundness/UntrustedAdvice/ShiftWitness.lean`: `shiftWitness` and `shiftWitness_equations`.
-* `Soundness/UntrustedAdvice/Bytes.lean`: `adviceWord`, `wordBytes`, `byteInitialRam` and `onBytes_of_allConstraints`.
-* `advice_inputs.lean`: `initial_state_with_untrusted_advice`, `adviceBlockWords` and `allConstraints_of_onBytes`.
-* `expansion_facts.lean`: `loadSelfChecked`, `leftOperandIsRegister`, `loadWindowsOk` and its proofs for every expansion.
-* `Layer7/AdjacentRows.lean`: `Windows` and `expand_program_windows`; `Layer6/BytecodePC.lean`: `next_of_remaining`; `witness_helpers/ram_state.lean`: `ramImageWord_of_bytes`.
+`Completeness/RamValEqInitialPlusPrefixRamInc.lean`:
+
+* `honestWitness_ramValEqInitialPlusPrefixRamInc` (line 20): passes `ramInitialValue` to the field-valued predicate.
+
+`Completeness/RamValFinalEqInitialPlusRamInc.lean`:
+
+* `honestWitness_ramValFinalEqInitialPlusRamInc` (line 23): passes `ramInitialValue` to the field-valued predicate.
+
+`Completeness/completeness.lean`:
+
+* `JoltInstance.completeness` (line 85): concludes `AllConstraints` at `adviceBlockWords` of the run's initial RAM.
+* `JoltInstance.completeness_someWitness` (line 120): quantifies over advice words instead of private inputs.
+
+`Constraints/All.lean`:
+
+* `FieldConstraintEquations` (line 78): new.
+* `ConstraintEquations` (line 157): now an abbreviation for `FieldConstraintEquations` at `ramInitialValue initialRam`.
+* `_root_.JoltPrivateInputs.noUntrustedAdvice` (line 168): new.
+* `untrustedAdviceWordIndex?` (line 176): new.
+* `committedInitialValue` (line 191): new.
+* `AllConstraintsOnBytes` (line 206): the old `AllConstraints`, statement unchanged.
+* `AllConstraints` (line 223): takes `untrustedAdvice : Nat → F` instead of `privateInputs`.
+
+`Constraints/RamValEqInitialPlusPrefixRamInc.lean`:
+
+* `ramValEqInitialPlusPrefixRamInc` (line 16): takes a field-valued initial value.
+
+`Constraints/RamValFinalEqInitialPlusRamInc.lean`:
+
+* `ramValFinalEqInitialPlusRamInc` (line 16): takes a field-valued initial value.
+
+`Soundness/Assumptions.lean`:
+
+* `JoltInstance.UntrustedAdviceBlockFits` (line 67): new.
+
+`Soundness/Layer1/Addresses.lean`:
+
+* `bytecodeRa_zero_or_one` (line 41): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `bytecodeRa_at_most_one` (line 53): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `bytecodeRa_zero_or_unique` (line 72): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ramRa_zero_or_one` (line 89): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ramRa_at_most_one` (line 102): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ramRa_zero_or_unique` (line 126): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer1/Bytecode.lean`:
+
+* `bytecode_read_of_selected` (line 50): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `unexpandedPC_ne_four` (line 69): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `nextUnexpandedPC_eq_four_of_bytecodeRa_zero` (line 83): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `bytecodeRa_unique` (line 112): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer1/BytecodeReads.lean`:
+
+* `pc_of_selected_bytecode` (line 19): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `unexpandedPC_of_selected_bytecode` (line 31): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `imm_of_selected_bytecode` (line 43): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `opFlag_of_selected_bytecode` (line 55): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionFlag_of_selected_bytecode` (line 67): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `rs1Ra_of_selected_bytecode` (line 79): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `rs2Ra_of_selected_bytecode` (line 91): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `rdWa_of_selected_bytecode` (line 103): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `lookupTableFlag_of_selected_bytecode` (line 115): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionRafFlag_of_selected_bytecode` (line 129): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer1/Chunks.lean`:
+
+* `bytecode_chunk_unique` (line 20): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instruction_chunk_unique` (line 33): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ram_weight_zero_or_one` (line 46): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ram_chunk_all_zero` (line 56): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ram_chunk_unique` (line 70): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer1/Instruction.lean`:
+
+* `instructionRa_zero_or_one` (line 42): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionRa_at_most_one` (line 56): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionRa_unique` (line 81): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer1/InstructionReads.lean`:
+
+* `instructionRa_boolean` (line 45): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionLookupRa_zero_or_one` (line 58): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionLookupRa_at_most_one` (line 69): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionLookupRa_unique` (line 88): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instruction_read_of_selected` (line 110): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `lookupOutput_of_selected` (line 131): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `leftLookupOperand_of_selected` (line 145): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `rightLookupOperand_of_selected` (line 164): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer1/Ram.lean`:
+
+* `ram_read_of_selected` (line 57): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ramRa_zero_iff_address_zero` (line 77): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ram_zero_effects` (line 99): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `ramRa_unique_of_address_ne_zero` (line 117): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer2/Registers.lean`:
+
+* `rs1Value_of_selected_bytecode` (line 60): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `rs2Value_of_selected_bytecode` (line 78): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `rdWriteValue_of_selected_bytecode` (line 96): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `registersVal_succ_of_selected_bytecode` (line 115): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer3/History.lean`:
+
+* `ramVal_zero` (line 21): takes the history predicates at an arbitrary `initialValue : Nat → F`, no new hypothesis.
+* `ramVal_succ` (line 28): takes the history predicates at an arbitrary `initialValue : Nat → F`, no new hypothesis.
+* `ramValFinal_eq_last_update` (line 39): takes the history predicates at an arbitrary `initialValue : Nat → F`, no new hypothesis.
+* `ramVal_eq_final_of_suffix_zero` (line 56): takes the history predicates at an arbitrary `initialValue : Nat → F`, no new hypothesis.
+
+`Soundness/Layer3/State.lean`:
+
+* `ramVal_initial_state` (line 39): takes the history predicate at `ramInitialValue context.initialRam`, the same byte claim as before.
+* `ramVal_initial_advance_pc` (line 56): takes the history predicate at `ramInitialValue context.initialRam`, the same byte claim as before.
+
+`Soundness/Layer4/Inputs.lean`:
+
+* `instructionInputs_of_selected_bytecode` (line 41): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `arithmeticAdviceFlags_zero_of_raf_zero` (line 62): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `lookupOperands_eq_inputs_of_raf_zero` (line 81): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer4/Interleaved.lean`:
+
+* `uninterleave_of_lookup_operands` (line 28): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionLookupRa_of_interleaved` (line 49): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `lookupOutput_of_interleaved` (line 64): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer4/Table.lean`:
+
+* `lookupOutput_of_selected_bytecode` (line 28): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `instructionRafFlag_one_of_arithmetic` (line 48): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer5/RamAgreement.lean`:
+
+* `OrdinaryRamAgreement.initial` (line 49): states the initial value through `ramInitialValue`.
+
+`Soundness/Layer6/BytecodePC.lean`:
+
+* `selected_entry` (line 26): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `selected_next_of_nonlast_virtual` (line 35): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `nonlastVirtual_of_remaining` (line 71): new.
+* `selected_next_of_remaining` (line 100): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `next_of_remaining` (line 118): new.
+* `selected_interior_current_remaining` (line 148): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `selected_interior_predecessor` (line 196): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `selected_registerShift_fed` (line 217): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `padding_persists` (line 263): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+* `padding_from` (line 338): generalized to `FieldConstraintEquations` at an arbitrary `initialValue`, no new hypothesis.
+
+`Soundness/Layer7/AdjacentRows.lean`:
+
+* `window_bound` (line 17): new.
+* `Windows` (line 25): new.
+* `windows_append` (line 41): new.
+* `windows_flatten` (line 73): new.
+* `WithinSource` (line 88): new.
+* `materialized_windows` (line 98): new.
+* `expand_program_windows` (line 128): new.
+* `expand_program_pairs` (line 160): statement unchanged, now the width-two case of `expand_program_windows`.
+
+`Soundness/UntrustedAdvice/Bytes.lean`:
+
+* `adviceWord` (line 28): new.
+* `wordBytes` (line 35): new.
+* `byteInitialRam` (line 40): new.
+* `wordBytes_size` (line 48): new.
+* `ramImageWord_wordBytes` (line 53): new.
+* `byteInitialRam_good` (line 67): new.
+* `publicIoMask_of_untrustedAdvice` (line 84): new.
+* `byteInitialRam_masked` (line 109): new.
+* `initialRamWordFromState_untrustedAdvice` (line 125): new.
+* `onBytes_of_allConstraints` (line 196): new.
+
+`Soundness/UntrustedAdvice/LoadWords.lean`:
+
+* `NarrowLoad` (line 31): new.
+* `LoadWindow` (line 40): new.
+* `loadWindowsOk_windows` (line 46): new.
+* `expand_program_loadWindows` (line 88): new.
+* `narrowLoad_window` (line 101): new.
+* `selfChecked_rdWriteValue_word` (line 156): new.
+* `narrowLoad_rdWriteValue_word` (line 180): new.
+* `load_rdWriteValue_word` (line 236): new.
+* `load_ramReadValue_word` (line 257): new.
+
+`Soundness/UntrustedAdvice/ShiftWitness.lean`:
+
+* `Untouched` (line 27): new; unrelated to `WholeRun.Untouched`.
+* `correction` (line 34): new.
+* `accessCorrection` (line 39): new.
+* `shiftWitness` (line 44): new.
+* `opFlag_zero_or_one` (line 66): new.
+* `prefix_correction` (line 76): new.
+* `ramRa_mul_accessCorrection` (line 121): new.
+* `load_mul_accessCorrection` (line 140): new.
+* `shifted_history` (line 175): new.
+* `shiftWitness_equations` (line 207): new.
+
+`Soundness/soundness.lean`:
+
+* `JoltInstance.soundness_onBytes` (line 34): renamed from `JoltInstance.soundness`, statement unchanged.
+* `JoltInstance.soundness` (line 71): new statement: committed advice words and the added premise `adviceBlockFits`.
+
+`WholeRun/Top.lean`:
+
+* `JoltInstance.sail_soundness` (line 373): committed advice words and the added premise `adviceBlockFits`.
+
+`advice_inputs.lean`:
+
+* `JoltInstance.initial_state_with_untrusted_advice` (line 53): new.
+* `AllConstraintsOnBytes.advice_tape_irrelevant` (line 104): renamed from `AllConstraints.advice_tape_irrelevant`, statement unchanged.
+* `adviceBlockWords` (line 120): new.
+* `overlay_untrusted_outside` (line 131): new.
+* `initialRamWordFromState_outside_untrustedAdvice` (line 154): new.
+* `Soundness.initial_state_memory_layout` (line 177): moved from `Soundness/Layer3/State.lean`, statement unchanged.
+* `allConstraints_of_onBytes` (line 197): new.
+
+`expansion_facts.lean`:
+
+* `loadSelfChecked` (line 201): new.
+* `leftOperandIsRegister` (line 210): new.
+* `loadWindowsOk` (line 223): new.
+* `sequenceOk` (line 239): adds the conjunct `loadWindowsOk`.
+* `sequenceOk_loadWindowsOk` (line 297): new.
+* `nativeRowOk` (line 902): adds the conjunct `loadWindowsOk`.
+* `nativeRowOk_loadWindowsOk` (line 952): new.
+
+`witness_helpers/ram_state.lean`:
+
+* `ramImageWord_of_bytes` (line 38): new.
 
 ## Checks
 
 * No new `bv_decide`, `native_decide`, `decide +kernel`, `sorry`, `maxHeartbeats` or `maxRecDepth`.
-* `#print axioms` at `86e3c7a`: `JoltInstance.soundness`, `JoltInstance.soundness_onBytes`, `JoltInstance.sail_soundness`, `allConstraints_of_onBytes` and `onBytes_of_allConstraints` use only `propext`, `Classical.choice` and `Quot.sound`; completeness keeps the `sorryAx` it had at `b648846`.
+* Build at `5354ac5`: `lake build JoltConstraints.advice_inputs JoltConstraints.Soundness.UntrustedAdvice.Bytes JoltConstraints.Soundness.UntrustedAdvice.LoadWords JoltConstraints.Soundness.UntrustedAdvice.ShiftWitness JoltConstraints.witness_helpers.ram_state JoltConstraints.Soundness.soundness JoltConstraints.Completeness.completeness JoltConstraints.WholeRun.Top` completed successfully (9774 jobs) with no errors.
+  The same command without the four `UntrustedAdvice` and `ram_state` targets also succeeded at `86e3c7a`.
+  The remaining warnings in changed files are the existing `sorry` in completeness, deprecated names, and an unused-tactic lint in `ramImageWord_getLsbD`, all present at `b648846`.
+* `#print axioms` at `86e3c7a`, and again at `5354ac5`: `JoltInstance.soundness`, `JoltInstance.soundness_onBytes`, `JoltInstance.sail_soundness`, `allConstraints_of_onBytes` and `onBytes_of_allConstraints` use only `propext`, `Classical.choice` and `Quot.sound`; completeness keeps the `sorryAx` it had at `b648846`.
 * Proof times: `lean -Dprofiler=true -Dprofiler.threshold=10000` on `LoadWords`, `ShiftWitness`, `Bytes`, `advice_inputs`, `BytecodePC`, `AdjacentRows` and `expansion_facts` reports no declaration over ten seconds.
   `expansion_facts.lean` takes about 82 seconds in all, most of it in `simp` for the per-expansion checks.
