@@ -22,7 +22,7 @@ Questions 1 and 3 and the aliasing and value-range parts of I0(f) are settled by
 | Q7. Whether `trace_file` affects proving | No. The `trace_file` argument of `register_inlines!` is read only by the generated `store_inlines`, and nothing calls `store_inlines` | Source (`git grep`) |
 | I0(f). SDK call sites | The SDK emits the twelve inlines from 11 `.insn` sites (4 hash, 7 secp256k1; plain `KECCAK256` has none). All 11 satisfy `Pre c` for callers that respect the documented invariants of the SDK's public functions: buffers are 8-aligned Rust objects in RAM, output buffers are fresh locals or `&mut self` fields, BLAKE2's flag comes from a `bool`, and secp256k1 inputs are canonical when built through the checked constructors. Five public functions let a caller break those invariants: `ECField::from_u64_arr_unchecked`, `ECField::div_assume_nonzero`, `AffinePoint::new_unchecked` and `AffinePoint::from_u64_arr_unchecked` (all safe Rust, with documented preconditions), and `unsafe fn keccak256_absorb_permute` | Source |
 | I0(f). Overlap | No overlap condition is needed for any of the twelve: every load comes before every store, and the advice reads its operands before any row runs. Every aliasing shape tried gave the same output as disjoint buffers, and `GLVR_ADV` with `rs3 = rs1` returns the correct decomposition while overwriting `k` | Run |
-| I0(f). Value ranges | BLAKE2 accepts any `is_final` but means BLAKE2 only for 0 and 1. For secp256k1, "Jolt's advice generation succeeds" and "Jolt's advice passes the rows" differ. MUL and SQUARE: generation needs `⌊a·b/q⌋ < 2^256` (`a = b = 2^256 − 1` panics), and the advice then passes the rows (`a = p, b = 1` passes; RUN PENDING for the larger non-canonical cases). DIV: generation needs `b mod q ≠ 0` (`b = p` panics), and the advice passes the rows only when the dividend `a < q` (source: `a = q, b = 1` gives `c = w = 0`, and the check `c·b = w·q + a` fails; RUN PENDING). A non-canonical divisor is fine. `GLVR_ADV` reduces `k` modulo `n` and needs no range | Run, source |
+| I0(f). Value ranges | BLAKE2 accepts any `is_final` but means BLAKE2 only for 0 and 1. For secp256k1, "Jolt's advice generation succeeds" and "Jolt's advice passes the rows" differ. MUL and SQUARE: generation needs `⌊a·b/q⌋ < 2^256` (`a = b = 2^256 − 1` panics), and the advice then passes the rows (`a = p, b = 1`, `a = b = p`, `a = 2^256 − 1, b = p − 1` and the scalar-field analogues all pass, with canonical outputs). DIV: generation needs `b mod q ≠ 0` (`b = p` panics), and the advice passes the rows only when the dividend `a < q` (`a = q, b = 1` gives `c = w = 0`, and the row check `c·b = w·q + a` fails: the tracer panics at the first `VirtualAssertEQ`). A non-canonical divisor with `b mod q ≠ 0` passes (`b = p + 1`, `b = 2^256 − 1`). `GLVR_ADV` reduces `k` modulo `n` and needs no range | Run, source |
 
 ## How the runs were made
 
@@ -41,19 +41,16 @@ The inline crates are optional dependencies behind two cargo features (`scripts/
 - `dep-sha2` makes `jolt-inlines-sha2` (with feature `host`) a dependency, and no code names it.
 - `inlines` makes all four in-scope inline crates dependencies and names each with `use jolt_inlines_X as _;` (`src/main.rs:9-16`).
 
-I built the three binaries in `~/claude-work/i0cf-scratch/inline-probe`, one after another, with
+I built the three binaries from the committed copy, one after another, with
 
 ```
-JOLT_DIR=~/claude-work/jolt-inline-pin-a6b6 CARGO_TARGET_DIR=~/claude-work/.cargo-target-i0cf ./build.sh            # then copied to inline-probe-nofeat
-JOLT_DIR=~/claude-work/jolt-inline-pin-a6b6 CARGO_TARGET_DIR=~/claude-work/.cargo-target-i0cf ./build.sh dep-sha2   # inline-probe-depsha2
-JOLT_DIR=~/claude-work/jolt-inline-pin-a6b6 CARGO_TARGET_DIR=~/claude-work/.cargo-target-i0cf ./build.sh inlines    # inline-probe-inlines
+JOLT_DIR=~/claude-work/jolt-inline-pin-a6b6 CARGO_TARGET_DIR=~/claude-work/.cargo-target-i0cf \
+  scripts/inline-open-questions/build.sh ~/claude-work/i0cf-scratch/work
 ```
 
-and ran each subcommand as `./inline-probe-<variant> <q1|q3|alias|glv|edge>`.
-The outputs are kept in `~/claude-work/i0cf-scratch/out/` and are quoted below.
-`scripts/inline-open-questions/build.sh WORK_DIR` builds the same three binaries from the committed copy into `WORK_DIR/bin/`.
-The committed `src/` is byte-identical to the source of the binaries above, and the `Cargo.toml` that `build.sh` generates is identical to the one they were built with (checked without compiling).
-I have not yet run the committed `build.sh` end to end, because the machine's single build slot was taken while I wrote this report.
+which writes `~/claude-work/i0cf-scratch/work/bin/inline-probe-{nofeat,depsha2,inlines}`, and ran each subcommand as `inline-probe-<variant> <q1|q3|alias|glv|edge>` from that directory.
+The outputs are kept in `~/claude-work/i0cf-scratch/out2/` and are quoted below.
+An earlier build of the same probe without the review cases (outputs in `~/claude-work/i0cf-scratch/out/`) gave byte-identical `q1`, `alias` and `glv` output and the same results for every `q3` and `edge` case the two share (the new `edge` lines are padded wider and add the `out < modulus` check).
 
 All runs use `MemoryConfig::default()` with the program size of the probe image.
 The resulting layout is:
@@ -159,7 +156,7 @@ Both call `assert_effective_address` (`mmu.rs:112-178`), but in a different orde
 
 The advice of the secp256k1 inlines reads its operands through `InlineAdviceContext` for `Cpu` (`tracer/src/instruction/inline.rs:71-82`), which calls `mmu.load_doubleword(...).ok()`; the MMU asserts panic instead of returning `Err`, and a bad advice read panics the same way.
 
-`./inline-probe-inlines q3` (abridged to the cases that differ; the full output is in `~/claude-work/i0cf-scratch/out/q3.txt`):
+`./inline-probe-inlines q3` (abridged to the cases that differ; the full output is in `~/claude-work/i0cf-scratch/out2/q3.txt`):
 
 ```
 SHA256: rs1 = state (read, then written), rs2 = block (read), rd = x0
@@ -206,12 +203,37 @@ MULQ: rs1 = a (read), rs2 = b (read), rs3 = out (written), valid
 
 The misaligned, wrapping, `heap_end` and gap cases of `MULQ` fail exactly as for `SHA256`.
 
+Loads in the unsupported peripheral ranges panic for all three inlines (`SHA256` lines shown; `KECCAK256_ABSORB_PERMUTE` and `MULQ` print the same):
+
+```
+  rs1 = 0x1020 (DTB range, below lowest)           rs1=0x1020 rs2=0x80000900: panic at tracer/src/emulator/mmu.rs:446: load_raw:dtb is unsupported.
+  rs2 = 0x1020 (DTB range, below lowest)           rs1=0x80000500 rs2=0x1020: panic at tracer/src/emulator/mmu.rs:446: load_raw:dtb is unsupported.
+  rs2 = 0x10000000 (UART range, below lowest)      rs1=0x80000500 rs2=0x10000000: panic at tracer/src/emulator/mmu.rs:449: load_raw:UART is unsupported.
+```
+
+`GLVR_ADV`, whose rows store through `rs3` and never load `rs1`:
+
+```
+GLVR_ADV: rs1 = k (read by the advice only), rs3 = out (written)
+  valid                                            rs1=0x80000500: ok (17 rows); remap: 0 access(es) at address 0 (no access), every other access remaps; out = [1, 594540ae4c29c708, 4475b31b4aebfc6e, 1, c2f3e5b491b43b3f, 4a5d08c56edd8059]
+  rs1 misaligned by 4                              rs1=0x80000504: panic at tracer/src/emulator/mmu.rs:321: assertion `left == right` failed: Unaligned load_doubleword
+  rs1 = 0                                          rs1=0x0: ok (17 rows); remap: 0 access(es) at address 0 (no access), every other access remaps; out = [0, 0, 0, 0, 0, 0]
+  rs1 below lowest address                         rs1=0x7fff7000: ok (17 rows); remap: 0 access(es) at address 0 (no access), every other access remaps; out = [0, 0, 0, 0, 0, 0]
+  rs1 = 0x1020 (DTB range, below lowest)           rs1=0x1020: panic at tracer/src/emulator/mmu.rs:446: load_raw:dtb is unsupported.
+  rs1 in gap above io_end                          rs1=0x7fffc110: panic at tracer/src/emulator/mmu.rs:126: I/O overflow: Attempted to read from 0x7FFFC110. Out of bounds.
+  rs1 = input_start                                rs1=0x7fffa000: ok (17 rows); remap: 0 access(es) at address 0 (no access), every other access remaps; out = [0, 3331612b9b1c56ee, 71f8f429be031929, 0, 6224359466c40437, 536b0bf3285ceb1a]
+  rs1 = heap_end                                   rs1=0x82002580: panic at tracer/src/emulator/memory.rs:36: Out of bounds memory access (4195504 >= 4195504)
+  rs1 range wraps past 2^64 (rs1 = 2^64-16)        rs1=0xfffffffffffffff0: panic at tracer/src/emulator/memory.rs:36: Out of bounds memory access (2305843008945258494 >= 4195504)
+```
+
+The advice reads `k` through the tracer's MMU and therefore fails exactly where a row load would, except that its reads record no RAM access: with `rs1 = 0` or below the lowest address the call succeeds and nothing reaches the prover's address check.
+
 In short, the tracer:
 
 - panics on every misaligned access;
 - panics on every access at or above `heap_end`, which includes every wrapping range;
 - panics on stores below the lowest address, at 0, in the input region, in the gap above `io_end`, and in the stack canary;
-- accepts loads below the lowest address (they read 0), except in the unsupported peripheral ranges `0x1020..=0x1fff` (DTB), `0x02000000..=0x0200ffff` (CLINT), `0x0c000000..=0x0fffffff` (PLIC), `0x10000000..=0x100000ff` (UART) and `0x10001000..=0x10001fff` (disk), where `load_raw` panics (`mmu.rs:446-450`; probe cases at `0x1020` and `0x10000000`: RUN PENDING);
+- accepts loads below the lowest address (they read 0), except in the unsupported peripheral ranges `0x1020..=0x1fff` (DTB), `0x02000000..=0x0200ffff` (CLINT), `0x0c000000..=0x0fffffff` (PLIC), `0x10000000..=0x100000ff` (UART) and `0x10001000..=0x10001fff` (disk), where `load_raw` panics (`mmu.rs:446-450`; runs below at `0x1020` and `0x10000000`);
 - accepts loads in the stack canary and in the input, output, panic and termination words;
 - accepts stores to the output region and to the panic and termination words, and a store to the panic word sets the panic flag.
 
@@ -275,7 +297,7 @@ Condition 2 or 3 excludes such a base already.
 
 `GLVR_ADV`'s `rs1` is the exception.
 `GlvrAdvBuilder::advice` (`jolt-inlines/secp256k1/src/sequence_builder.rs:25-35`) reads `k` through `InlineAdviceContext::load_doubleword`, which for `Cpu` calls `Mmu::load_doubleword(...).ok()` and discards the access record (`tracer/src/instruction/inline.rs:76-81`), and the 13 rows only store through `rs3`.
-With `rs1 = 0`, or any aligned `rs1` below the lowest address outside the peripheral ranges, the advice reads four zero words, the rows store the decomposition of 0, and no RAM access at a low address reaches the prover's address check or RAF (probe cases: RUN PENDING).
+With `rs1 = 0`, or any aligned `rs1` below the lowest address outside the peripheral ranges, the advice reads four zero words, the rows store the decomposition of 0, and no RAM access at a low address reaches the prover's address check or RAF (runs in the Q3 tracer section: `rs1 = 0` and `rs1 = 0x7fff7000` give `out = [0, 0, 0, 0, 0, 0]` and every recorded access remaps).
 Jolt therefore proves such a call; it is complete and harmless, because the stored words carry no guarantee in any case and the SDK checks them against the `k` it holds.
 In jolt-qed's model the rows of such a call run to the end for every advice, since no row reads `rs1`.
 What `joltAdvice c s` returns depends on how the transcription reads `k`: to match Jolt it must read through the model's MMU (`Mmu.load_doubleword`, which returns 0 below `RAM_START − 8` outside the peripheral ranges and fails in them, in the gap above `io_end` and at or above `heap_end`), not the raw memory map.
@@ -375,7 +397,7 @@ GLVR_ADV: disjoint buffers ok, 17 rows, 6 VirtualAdvice rows
   rs3 = rs1 - 16     rs1=0x80000600 rs2=0x80000900 rs3=0x800005f0: outputs equal
 ```
 
-Every applicable shape gave "outputs equal" for all twelve inlines (full output in `~/claude-work/i0cf-scratch/out/alias.txt`): `SHA256_INIT` and `BLAKE2` behave as `SHA256`; `DIVQ`, `MULR` and `DIVR` as `MULQ`; `SQUAREQ` and `SQUARER` for the three `rs3` shapes.
+Every applicable shape gave "outputs equal" for all twelve inlines (full output in `~/claude-work/i0cf-scratch/out2/alias.txt`): `SHA256_INIT` and `BLAKE2` behave as `SHA256`; `DIVQ`, `MULR` and `DIVR` as `MULQ`; `SQUAREQ` and `SQUARER` for the three `rs3` shapes.
 `KECCAK256` has only one buffer and no shape to alias.
 Row counts with the setup rows: `SHA256_INIT` 1,868, `KECCAK256` 3,090, `BLAKE2` 1,071, `SQUAREQ` 171, `DIVQ` 199, `MULR` 237, `SQUARER` 217, `DIVR` 245.
 
@@ -392,21 +414,35 @@ k = [a95514aaa, a00aaafdf80202bf, 8b13399cd1d1497a, 141dc47f2feffab4]
   after rs3 = rs1 run, memory at rs1 = [0, 91c5c8f7ed64537a, 39cb5fda3596685f, 0] (k was [a95514aaa, a00aaafdf80202bf, 8b13399cd1d1497a, 141dc47f2feffab4])
 ```
 
-Two more random scalars give the same picture (`~/claude-work/i0cf-scratch/out/glv.txt`).
+Two more random scalars give the same picture (`~/claude-work/i0cf-scratch/out2/glv.txt`).
 
 ### Value-range runs
 
 `./inline-probe-inlines edge`:
 
 ```
-MULQ a = b = 2^256 - 1 (non-canonical)              : panic at jolt-inlines/sdk/src/host.rs:73: Result does not fit in 4 limbs
-MULQ a = p, b = 1 (a = p, non-canonical)            : ok (191 rows), out = [0, 0, 0, 0]
-SQUAREQ a = 2^256 - 1                               : panic at jolt-inlines/sdk/src/host.rs:73: Result does not fit in 4 limbs
-DIVQ a = 1, b = 0                                   : panic at jolt-inlines/secp256k1/src/sequence_builder.rs:152: Attempted to invert zero in secp256k1 base field
-DIVQ a = 0, b = 0                                   : panic at jolt-inlines/secp256k1/src/sequence_builder.rs:152: Attempted to invert zero in secp256k1 base field
-DIVQ a = 1, b = p (b = 0 mod p, non-canonical)      : panic at jolt-inlines/secp256k1/src/sequence_builder.rs:152: Attempted to invert zero in secp256k1 base field
-DIVR a = 1, b = 0                                   : panic at jolt-inlines/secp256k1/src/sequence_builder.rs:146: Attempted to invert zero in secp256k1 scalar field
-GLVR_ADV k = 2^256 - 1 (k >= n)                     : ok (17 rows), out = [0, e86c90e59284eee6, 3086d221a7d46bcd, 1, e86c90e49284eb15, 3086d221a7d46bcd]
+MULQ a = b = 2^256 - 1 (non-canonical)                  : panic at jolt-inlines/sdk/src/host.rs:73: Result does not fit in 4 limbs
+MULQ a = p, b = 1 (a = p, non-canonical)                : ok (191 rows), out = [0, 0, 0, 0], out < modulus
+MULQ a = 2^256 - 1, b = 1                               : ok (191 rows), out = [1000003d0, 0, 0, 0], out < modulus
+MULQ a = 2^256 - 1, b = p - 1 (largest w below 2^256)   : ok (191 rows), out = [fffffffdfffff85f, ffffffffffffffff, ffffffffffffffff, ffffffffffffffff], out < modulus
+MULQ a = b = p                                          : ok (191 rows), out = [0, 0, 0, 0], out < modulus
+SQUAREQ a = 2^256 - 1                                   : panic at jolt-inlines/sdk/src/host.rs:73: Result does not fit in 4 limbs
+SQUAREQ a = p                                           : ok (171 rows), out = [0, 0, 0, 0], out < modulus
+SQUAREQ a = p + 1                                       : ok (171 rows), out = [1, 0, 0, 0], out < modulus
+MULR a = n, b = 1                                       : ok (237 rows), out = [0, 0, 0, 0], out < modulus
+MULR a = 2^256 - 1, b = n - 1                           : ok (237 rows), out = [7fa4bd19a06c8283, 755db9cd5e914077, fffffffffffffffd, ffffffffffffffff], out < modulus
+SQUARER a = n + 1                                       : ok (217 rows), out = [1, 0, 0, 0], out < modulus
+DIVQ a = 1, b = 0                                       : panic at jolt-inlines/secp256k1/src/sequence_builder.rs:152: Attempted to invert zero in secp256k1 base field
+DIVQ a = 0, b = 0                                       : panic at jolt-inlines/secp256k1/src/sequence_builder.rs:152: Attempted to invert zero in secp256k1 base field
+DIVQ a = 1, b = p (b = 0 mod p, non-canonical)          : panic at jolt-inlines/secp256k1/src/sequence_builder.rs:152: Attempted to invert zero in secp256k1 base field
+DIVQ a = p, b = 1 (dividend non-canonical)              : panic at tracer/src/instruction/virtual_assert_eq.rs:20: assertion `left == right` failed
+DIVQ a = p + 1, b = 1 (dividend non-canonical)          : panic at tracer/src/instruction/virtual_assert_eq.rs:20: assertion `left == right` failed
+DIVQ a = 1, b = p + 1 (divisor non-canonical)           : ok (199 rows), out = [1, 0, 0, 0], out < modulus
+DIVQ a = p - 1, b = 2^256 - 1 (divisor non-canonical)   : ok (199 rows), out = [f4d5b4da4f819497, 8376be5acb4a45d8, d8c1b4259d813097, 41bce9245fc72552], out < modulus
+DIVR a = 1, b = 0                                       : panic at jolt-inlines/secp256k1/src/sequence_builder.rs:146: Attempted to invert zero in secp256k1 scalar field
+DIVR a = n, b = 1 (dividend non-canonical)              : panic at tracer/src/instruction/virtual_assert_eq.rs:20: assertion `left == right` failed
+DIVR a = 1, b = n + 1 (divisor non-canonical)           : ok (245 rows), out = [1, 0, 0, 0], out < modulus
+GLVR_ADV k = 2^256 - 1 (k >= n)                         : ok (17 rows), out = [0, e86c90e59284eee6, 3086d221a7d46bcd, 1, e86c90e49284eb15, 3086d221a7d46bcd]
 BLAKE2 is_final = 0x0: ok (1071 rows), h[0] = 0x5fc731331f7d47db
 BLAKE2 is_final = 0x1: ok (1071 rows), h[0] = 0xffb0dff157963c3c
 BLAKE2 is_final = 0x2: ok (1071 rows), h[0] = 0xd6d54695f51a7d8b
@@ -416,12 +452,12 @@ BLAKE2 is_final = 0xffffffffffffffff: ok (1071 rows), h[0] = 0xecdecdd4ac2785ed
 Two questions are separate here: whether Jolt's advice generation succeeds, and whether the advice it generates passes the rows.
 
 - MUL and SQUARE. `mulq_quotient_advice` (`jolt-inlines/sdk/src/host.rs:98-117`) computes `w = ⌊a·b/q⌋` and `c = a·b − w·q`, and `nbiguint_to_field_limbs` asserts that each fits in four limbs (`host.rs:73`). Generation therefore succeeds exactly when `a·b < 2^256·q`.
-  The rows check `a·b + w·(2^256 − q) = 2^256·w + c` limb by limb, with a final carry check (`secp256k1/src/sequence_builder.rs:43-54`, 340-382). The generated `w` and `c` satisfy `a·b = w·q + c` exactly, and the identity follows. `a = p, b = 1` passes the rows (out = 0). RUN PENDING: the larger non-canonical cases below.
+  The rows check `a·b + w·(2^256 − q) = 2^256·w + c` limb by limb, with a final carry check (`secp256k1/src/sequence_builder.rs:43-54`, 340-382). The generated `w` and `c` satisfy `a·b = w·q + c` exactly, and the identity follows. The runs confirm it: every MUL and SQUARE case whose advice generation succeeds passes the rows, including `a = 2^256 − 1, b = p − 1`, whose quotient is the largest below 2^256, and every output is canonical.
 - DIV. `mulq_division_advice` (`host.rs:130-148`) computes `c = a·b⁻¹ mod q` with `field_inv_mul`, which panics on a divisor that is zero modulo the field (`secp256k1/src/sequence_builder.rs:146` scalar field, `152` base field), and `w = ⌊b·c/q⌋` (`host.rs:137-139`).
   Generation therefore succeeds exactly when `b mod q ≠ 0`; `b = p` is nonzero as an integer and still panics.
   The rows check `c·b + w·(2^256 − q) = 2^256·w + a`, comparing against the dividend loaded from `rs1` (first comparison at `sequence_builder.rs:216-218`).
-  Since `b·c = w·q + (a mod q)`, the generated advice passes exactly when `a mod q = a`, that is `a < q`. For `a = q, b = 1` it gives `c = w = 0`, and the first comparison fails (RUN PENDING).
-  A non-canonical divisor with `b mod q ≠ 0` passes: `c < q` and `b < 2^256` keep `w` below 2^256 (RUN PENDING: `b = p + 1`, `b = 2^256 − 1`).
+  Since `b·c = w·q + (a mod q)`, the generated advice passes exactly when `a mod q = a`, that is `a < q`. For `a = q, b = 1` it gives `c = w = 0`, and the first comparison fails: the tracer panics at `virtual_assert_eq.rs:20` for `a = p` and `a = p + 1` (DIVQ) and `a = n` (DIVR).
+  A non-canonical divisor with `b mod q ≠ 0` passes: `c < q` and `b < 2^256` keep `w` below 2^256 (runs: `b = p + 1` and `b = 2^256 − 1` for DIVQ, `b = n + 1` for DIVR).
 - `GlvrAdvBuilder::advice` (`secp256k1/src/sequence_builder.rs:25-35`) reads `k` through `load_field_element_limbs` (`host.rs:57-69`) and reduces it with `Fr::new`. Every 256-bit `k` therefore works, and the output is the decomposition of `k mod n`.
 - BLAKE2's rows compute `v14 = IV6 ^ (0 − is_final)` (`jolt-inlines/blake2/src/sequence_builder.rs:74-79`, `109-119`). The rows are total on every flag value, and only 0 and 1 give BLAKE2.
 
@@ -436,7 +472,7 @@ The findings are refinements (a statement is true but stronger or less complete 
 1. Line 407: "`Pre` collects the caller's obligations: alignment, buffers inside RAM, overlap rules, and value ranges (`is_final ∈ {0, 1}` for `BLAKE2`, inputs below the modulus for secp256k1, a nonzero divisor for DIV)."
    - "overlap rules": none of the twelve needs one. Every load precedes every store, the advice reads its inputs before any row, and every aliasing shape gave the same output as disjoint buffers.
    - "buffers inside RAM": Jolt's tracer and the prover's address check also accept buffers that rows read in the input, advice, output, panic or termination regions, and buffers that rows write in the output, panic or termination words. Whether the whole proof then verifies is open for the panic and termination words (final-memory consistency; Q3 section). Keeping "inside RAM" is sufficient for the SDK. `GLVR_ADV`'s `rs1` is read only by the advice and can be any address the tracer can read, including 0.
-   - "inputs below the modulus for secp256k1": soundness (`a·b = w·q + c`, `c·b = w·q + a`) holds for every input whose advice gets through the asserts. Completeness with Jolt's advice needs, for MUL and SQUARE, only `⌊a·b/q⌋ < 2^256` (RUN PENDING for the large cases), and for DIV a canonical dividend `a < q` and any divisor with `b mod q ≠ 0`. Canonical inputs are therefore needed for the dividend and sufficient elsewhere.
+   - "inputs below the modulus for secp256k1": soundness (`a·b = w·q + c`, `c·b = w·q + a`) holds for every input whose advice gets through the asserts. Completeness with Jolt's advice needs, for MUL and SQUARE, only `⌊a·b/q⌋ < 2^256` (run), and for DIV a canonical dividend `a < q` and any divisor with `b mod q ≠ 0`. Canonical inputs are therefore needed for the dividend and sufficient elsewhere.
    - "a nonzero divisor for DIV": with canonical inputs this is right; if `Pre` drops canonicity of the divisor it must say "nonzero modulo q".
 2. Line 466: "`mulq_division_advice` (...; it panics when `b = 0`, which `Pre c` excludes)". True but incomplete: it panics whenever `b ≡ 0 (mod q)`, which includes `b = q` (run). The completeness lemma also needs `a < q`, which line 466 does not mention and line 407's "inputs below the modulus" covers.
 
@@ -470,7 +506,7 @@ Line 120 (SHA-256 buffers), 122 (`is_final ∈ {0, 1}` needed for meaning), 147 
 
 - (b) `MulRel` and `DivRel` (soundness) need no canonical inputs and no nonzero divisor: they hold for every advice that passes the asserts.
   Completeness with Jolt's advice (`rows_jolt_advice_complete`) must keep two facts apart: advice generation succeeding, and the generated advice passing the rows.
-  For MUL and SQUARE, generation needs `⌊a·b/q⌋ < 2^256`, and generated advice then passes (RUN PENDING for the large cases); canonical inputs give the bound.
+  For MUL and SQUARE, generation needs `⌊a·b/q⌋ < 2^256`, and generated advice then passes (run); canonical inputs give the bound.
   For DIV, generation needs `b mod q ≠ 0`, and the generated advice passes the rows only if `a < q`. `Pre` for DIV must therefore keep the canonical dividend; with a canonical divisor, `b mod q ≠ 0` is `b ≠ 0`.
   `Canonical` for `GLVR_ADV` takes `k mod n` as its input: the transcription of `GlvrAdvBuilder::advice` must reduce the 256-bit `k` first, and `Pre` needs no range on `k`.
   The transcription must also read `k` through the model's MMU, or `Pre` must put `k`'s buffer in RAM (Q3 section, `GLVR_ADV`'s `rs1`).
