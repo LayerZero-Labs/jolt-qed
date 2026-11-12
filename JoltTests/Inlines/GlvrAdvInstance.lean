@@ -30,19 +30,21 @@ noncomputable section
 
 namespace JoltTests.GlvrAdvInstance
 
-/-- The scalar: four little-endian limbs. -/
+/-- The scalar: four little-endian limbs, the lowest `0x0123456789abcdef`. Its value is
+`0x1122334455667788_0f1e2d3c4b5a6978_fedcba9876543210_0123456789abcdef`. -/
 def katK : Limbs :=
   #v[0x0123456789abcdef#64, 0xfedcba9876543210#64, 0x0f1e2d3c4b5a6978#64, 0x1122334455667788#64]
 
-/-- Jolt's six advice words for `katK`: `[sign₁, k₁ low, k₁ high, sign₂, k₂ low, k₂ high]`. -/
+/-- Jolt's six advice words for `katK`: `[sign₁, k₁ low, k₁ high, sign₂, k₂ low, k₂ high]`.
+For example, `sign₁ = 1` (`k₁` enters negated) and `sign₂ = 0`. -/
 def katWords : List (BitVec 64) :=
   [0x1#64, 0x2e4cbe1fe695c34d#64, 0x213c3de8a76e3bd1#64,
     0x0#64, 0xb2eae28114375049#64, 0x08fc4249719076b4#64]
 
-/-- The address of the scalar. -/
+/-- The address of the scalar, `0x8001_0000`; `x10` holds it. -/
 def katIn : BitVec 64 := 0x80010000#64
 
-/-- The address of the output buffer. -/
+/-- The address of the output buffer, `0x8002_0000`; `x12` holds it. -/
 def katOut : BitVec 64 := 0x80020000#64
 
 /-- A memory layout whose stack ends at `0x8000_1000` and whose heap ends at `0x8010_0000`;
@@ -87,7 +89,8 @@ def katSail : SailState :=
       (regidx.Regidx 10) katIn)
     (regidx.Regidx 12) katOut
 
-/-- The machine state of the instance. -/
+/-- The machine state of the instance: `x10 = 0x8001_0000`, `x12 = 0x8002_0000`, and `katK` in
+RAM at `0x8001_0000..0x8001_0020`. -/
 def katState : SailJoltState where
   sail := katSail
   jolt_device := katDevice
@@ -121,7 +124,8 @@ private theorem kat_writable (ea : Nat) (h1 : katIn.toNat ≤ ea) (h2 : ea + 8 �
   simp only [ite_true, e1, e2, Bool.and_eq_true, Bool.or_eq_true, decide_eq_true_eq]
   omega
 
-/-- The hypotheses of the completeness theorem hold for the instance. -/
+/-- The hypotheses of the completeness theorem hold for the instance: for example, the six
+doublewords at `0x8002_0000..0x8002_0030` lie below the heap end `0x8010_0000`. -/
 theorem kat_pre : GlvrAdvPre (regidx.Regidx 12) katState where
   ram := by rw [kat_out]; decide
   no_wrap := by rw [kat_out]; decide
@@ -131,7 +135,8 @@ theorem kat_pre : GlvrAdvPre (regidx.Regidx 12) katState where
     exact kat_writable _ (by simp [katIn, katOut]; omega) (by simp [katOut]; omega)
       (by simp [katOut])
 
-/-- The scalar reads back from RAM. -/
+/-- The scalar reads back from RAM: the doubleword at `0x8001_0000` is `0x0123456789abcdef`,
+and so on. -/
 theorem kat_limbs : readLimbs? katState katIn = some katK := by
   have load : ∀ i, i < 4 → loadDword? katState (katIn + BitVec.ofNat 64 (8 * i)) =
       katK.toList[i]? := fun i hi =>
@@ -150,7 +155,8 @@ theorem kat_limbs : readLimbs? katState katIn = some katK := by
     show katIn + 24 = katIn + BitVec.ofNat 64 (8 * 3) from rfl, l3]
   rfl
 
-/-- Jolt's advice for `katK` is `katWords`. -/
+/-- Jolt's advice for `katK` is `katWords`: for example, word 1 is `0x2e4cbe1fe695c34d`, the
+low limb of `k₁`. -/
 theorem kat_advice : (glvrAdvice katK).toList = katWords := by decide
 
 /-- **The instance.** From `katState`, the `GLVR_ADV` rows (with `rs1 = x10`, `rs2 = x11`,

@@ -39,7 +39,8 @@ def DwordWritable (dev : JoltDevice) (ea : Nat) : Prop :=
   ea % 8 = 0 ∧ Mmu.effective_address_ok dev ea true = true
 
 /-- The RAM map after storing the words `ws` at consecutive doublewords from `ea`.
-Example: `writeDwords m ea [w₀, w₁]` stores `w₀` at `ea` and `w₁` at `ea + 8`. -/
+Example: `writeDwords m 0x8002_0000 [7, 9]` stores `7` at `0x8002_0000` and `9` at
+`0x8002_0008`. -/
 def writeDwords (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat) :
     List (BitVec 64) → Std.ExtHashMap Nat (BitVec 8)
   | [] => m
@@ -181,7 +182,8 @@ theorem ram_doubleword_writeDwords_of_le (m : Std.ExtHashMap Nat (BitVec 8)) (ea
     rw [writeDwords, ih _ _ (by omega), ram_doubleword_write_ne _ _ _ _ (Or.inr h)]
 
 /-- Doubleword `i` of the stored words reads back.
-Example: `ram_doubleword (writeDwords m ea [w₀, w₁]) (ea + 8) = w₁`. -/
+Example: after `writeDwords m 0x8002_0000 [7, 9]`, the doubleword at `0x8002_0008` (`i = 1`)
+is `9`. -/
 theorem ram_doubleword_writeDwords_get (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat)
     (ws : List (BitVec 64)) (i : Nat) (hi : i < ws.length) :
     Mmu.ram_doubleword (writeDwords m ea ws) (ea + 8 * i) = ws[i] := by
