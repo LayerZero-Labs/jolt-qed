@@ -192,13 +192,6 @@ theorem keccak256_run_iff {rs1 rs2 rs3 : regidx} {s s' : SailJoltState} {A : Bit
   unfold absorbF
   rw [absorbStep_vregs]
 
-@[simp] theorem blockAt_vregs (s : SailJoltState) (g : VReg → BitVec 64) (B : BitVec 64) :
-    blockAt { s with vregs := g } B = blockAt s B := by
-  unfold blockAt
-  congr 1
-  funext i
-  exact loadLane_vregs s g B i
-
 /-- Given `rs1` reading `A` and `rs2` reading `B`, with the state buffer in RAM, the
 `KECCAK256_ABSORB_PERMUTE` rows run exactly when the 25 lanes at `A` and the 17 lanes at `B`
 load and the 25 target doublewords are writable, and they end in `keccakFinal` for `absorbOut`.
@@ -390,7 +383,7 @@ theorem keccak256RdZero_rows_deterministic {rs1 rs2 : regidx} {s s₁ s₂ : Sai
   exact keccak256_rows_deterministic buf run₁ run₂
 
 /-- The `rd = x0` `KECCAK256_ABSORB_PERMUTE` program is the `rd ≠ x0` program with any `rs3`. -/
-theorem absorbPermuteRowsAutoRdZero_eq' (rs1 rs2 rs3 : regidx) :
+theorem absorbPermuteRowsAutoRdZero_eq (rs1 rs2 rs3 : regidx) :
     keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2 = keccak256AbsorbPermuteRowsAuto rs1 rs2 rs3 := by
   unfold keccak256AbsorbPermuteRowsAutoRdZero keccak256AbsorbPermuteRowsAuto
   rw [absorbPermuteRowsAutoRdZeroList_eq rs1 rs2 rs3]
@@ -400,7 +393,7 @@ theorem absorbPermuteRdZero_rows_sound {rs1 rs2 : regidx} {s s' : SailJoltState}
     (buf : KeccakBuffer rs1 s)
     (run : (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).Run s s') :
     AbsorbPermuteSpec rs1 rs2 s s' := by
-  rw [absorbPermuteRowsAutoRdZero_eq' rs1 rs2 rs1] at run
+  rw [absorbPermuteRowsAutoRdZero_eq rs1 rs2 rs1] at run
   exact absorbPermute_rows_sound buf run
 
 /-- **The stored state is the EthLib absorb-and-permute, `rd = x0`.** As
@@ -410,7 +403,7 @@ theorem absorbPermuteRdZero_rows_sound_keccakF {rs1 rs2 : regidx} {s s' : SailJo
     (run : (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).Run s s') :
     stateAt s' (keccakA rs1 s) = keccakF (absorbBlock 136 (stateAt s (keccakA rs1 s))
       (blockBytes (blockAt s (keccakB rs2 s))) 0) := by
-  rw [absorbPermuteRowsAutoRdZero_eq' rs1 rs2 rs1] at run
+  rw [absorbPermuteRowsAutoRdZero_eq rs1 rs2 rs1] at run
   exact absorbPermute_rows_sound_keccakF buf run
 
 /-- **Completeness of `KECCAK256_ABSORB_PERMUTE`, `rd = x0`.** As
@@ -419,7 +412,7 @@ theorem absorbPermuteRdZero_rows_complete {rs1 rs2 : regidx} {s : SailJoltState}
     (pre : AbsorbPermutePre rs1 rs2 s) :
     ∃ s', (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).Run s s' ∧
       AbsorbPermuteSpec rs1 rs2 s s' := by
-  rw [absorbPermuteRowsAutoRdZero_eq' rs1 rs2 rs1]
+  rw [absorbPermuteRowsAutoRdZero_eq rs1 rs2 rs1]
   exact absorbPermute_rows_complete pre
 
 /-- **Determinism of `KECCAK256_ABSORB_PERMUTE`, `rd = x0`.** As
@@ -428,7 +421,7 @@ theorem absorbPermuteRdZero_rows_deterministic {rs1 rs2 : regidx} {s s₁ s₂ :
     (buf : KeccakBuffer rs1 s)
     (run₁ : (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).Run s s₁)
     (run₂ : (keccak256AbsorbPermuteRowsAutoRdZero rs1 rs2).Run s s₂) : s₁ = s₂ := by
-  rw [absorbPermuteRowsAutoRdZero_eq' rs1 rs2 rs1] at run₁ run₂
+  rw [absorbPermuteRowsAutoRdZero_eq rs1 rs2 rs1] at run₁ run₂
   exact absorbPermute_rows_deterministic buf run₁ run₂
 
 end JoltISA.Inlines.Keccak256
