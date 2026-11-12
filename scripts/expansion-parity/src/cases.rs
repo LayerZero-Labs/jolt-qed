@@ -451,6 +451,9 @@ pub fn random_group(seed: u64, per_kind: usize) -> Result<Vec<Case>, String> {
     let (_, others) = kind_partition();
     for kind in others {
         let imm = rng.below(4096) as i128 - 2048;
+        // ANDN is an R-type instruction, and Jolt's decoder never gives it an
+        // immediate. The draw stays so that later cases keep their values.
+        let imm = if kind == SourceInstructionKind::ANDN { 0 } else { imm };
         let compressed = rng.below(2) == 1;
         let a = address(&mut rng);
         let input = direct(

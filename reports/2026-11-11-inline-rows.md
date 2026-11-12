@@ -6,13 +6,17 @@ The T1 comparison is in `reports/2026-11-11-expansion-parity.md`.
 
 ## Revisions
 
-jolt-qed: branch `inline/i0a-generated`, on top of `inline/t1-driver` at `32fdd89`.
+jolt-qed: branch `inline/i0a-generated`, with `inline/t1-driver` at `b648846` merged in.
+I ran the results at `580084fcf` below with the Lean code of commit `52b52af`.
+I ran the results at the pin and at #2414 with the round-trip code of commit `fc4606d`, except the two earlier file-level checks named in the mutation section.
 The generated rows in `JoltBytecode/Inlines/Generated/` come from the pin.
 Toolchain: `leanprover/lean4:v4.35.0`.
 
 Jolt revisions:
 
 - Pin: a16z/jolt `main` at `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5` (`a6b6dc717`), the pin of the spec.
+- a16z/jolt#2384 at `580084fcfad4788ebf48413a92dd640ca090c45f` (`580084fcf`), the revision that T1 and CI check (see the T1 report).
+  It contains `a6b6dc717` as an ancestor.
 - a16z/jolt#2414 at `f1fe17f86e7bde402adb94bd52070d437c31fad9` (`f1fe17f86`), the head when the first round trip ran.
 - a16z/jolt#2414 at `da3b89abd700d43bac9319b9c4bfe4e49d598b5e` (`da3b89abd`), the current head.
   It differs from `f1fe17f86` only in one line of `crates/jolt-program/src/expand/tests.rs`.
@@ -36,7 +40,7 @@ Build the Lean side and run the round trip and the mutation check:
 ```
 lake build JoltTests.ExpansionParity.Main
 EXPANSION_PARITY_ARGS="inline OUT/rows.jsonl OUT/inline_templates.json INLINE_DIR [TRIPLES [SEED]]" lake env lean JoltTests/ExpansionParity/Run.lean
-EXPANSION_PARITY_ARGS="mutation OUT/rows.jsonl" lake env lean JoltTests/ExpansionParity/Run.lean
+EXPANSION_PARITY_ARGS="mutation OUT/rows.jsonl [OUT/inline_templates.json]" lake env lean JoltTests/ExpansionParity/Run.lean
 ```
 
 `OUT` is `WORK_DIR/out`.
@@ -45,8 +49,8 @@ EXPANSION_PARITY_ARGS="mutation OUT/rows.jsonl" lake env lean JoltTests/Expansio
 `lean` exits with a nonzero status when a mode reports a disagreement.
 The T1 report explains why the comparator runs through `lake env lean` and `#eval` rather than an executable.
 
-The CI workflow `.github/workflows/expansion-parity.yml` runs the round trip when `JoltBytecode/Inlines/Generated/` is in the repository.
-It has not run in CI yet.
+The CI workflow `.github/workflows/expansion-parity.yml` runs the driver at `580084fcf` with the cargo feature `zicsr-remaining`.
+When `JoltBytecode/Inlines/Generated/` is in the repository it regenerates the generated Lean, fails on a diff in it, runs the round trip, and passes the templates file to the mutation check.
 
 ## Driver checks at the pin
 
@@ -134,14 +138,33 @@ It instantiates the template at the driver's two triples A and B and at 300 seed
 The Lean side renders the `JoltISA.Instr` constructors with `RowView.ofLeanRow` (`JoltTests/ExpansionParity/Row.lean`) and shares no code with the generator (`scripts/expansion-parity/src/lean.rs`).
 The table of generated definitions (`JoltTests/ExpansionParity/Inline.lean`) is written by hand.
 A renamed or missing definition fails to elaborate, and the run checks that the templates and the table name the same 27 inlines.
+`inlineCoverage` (`RoundTrip.lean`) checks that the driver's output is complete for these 27 inlines.
+Each inline needs exactly one template entry, and its `normal` case must not be null.
+Each inline needs exactly one fixture record for each of the four scenarios (`normal`, `compressed`, `rd_zero`, `aliased_operands`) in each allocator (`fresh` and `shared`).
+An `rd_zero` fixture record must hold rows when the inline's `rd_zero` template is present, and Jolt's error when that template is null.
+The run reports every missing, repeated or unexpected input as a disagreement.
+An incomplete driver output therefore cannot pass.
 Inlines with `VirtualAdvice` rows take an advice function, which the test sets to `k ↦ k`; advice values reach no rendered field.
 
 ### At the pin
 
 All 216 fixture records agree (176,600 rows), every field included.
 The templates give 16,308 instantiations (27 inlines, two cases each, 302 triples per case) with 13,333,300 rows, and every row agrees.
-The template names and the Lean table name the same 27 inlines.
+The template names and the Lean table name the same 27 inlines, and the inputs are complete (0 coverage mismatches).
 The run reports 0 field mismatches and exits with status 0; it took about 5 minutes.
+
+### At a16z/jolt#2384 (`580084fcf`)
+
+The round trip gives the same result as at the pin.
+All 216 fixture records agree (176,600 rows), and the 16,308 template instantiations (13,333,300 rows) agree.
+The inputs are complete (0 coverage mismatches), and the run reports 0 field mismatches and exits with status 0.
+
+The inline inputs at `580084fcf` are the same as at the pin.
+The 216 inline fixture records of `rows.jsonl` are identical, `inline_templates.json` differs only in its `jolt_commit` field, and Jolt's inline hash fixture `registered_inline_expand_parity_hashes.jsonl` is unchanged.
+I ran the driver at `580084fcf` with the generated Lean written to a scratch directory instead of the repository.
+Its output differs from the files generated at the pin only in the Jolt commit named in the header of each of the 27 files under `JoltBytecode/Inlines/Generated/` and in `JoltBytecode/Inlines/Generated.lean`; no row differs.
+The checked-in files are regenerated at `580084fcf`, the revision CI checks, so their headers name `580084fcf`.
+Because no row differs, the files are also the rows of the pin.
 
 ### At a16z/jolt#2414
 
@@ -153,6 +176,8 @@ The templates file has `"rd_zero": null` for the same 19 inlines, which the run 
 The 19 are the inlines that read vr40 in the `rd_zero` case at the pin (listed above).
 The other 10,570 template instantiations (12,240,664 rows), which include the `rd_zero` cases of the eight inlines Jolt still accepts with rd = x0, all agree.
 The run reports 57 field mismatches (19 + 38) and exits with status 1.
+The inputs are complete there too: the run reports 0 coverage mismatches, because each of the 38 `rd_zero` fixture records holds Jolt's error and its template is null.
+I reran the round trip at `da3b89abd` with the round-trip code of commit `fc4606d`, and it gives the same counts.
 
 The driver checks at `da3b89abd` all pass.
 The fixture file there has 19 lines with an `error` field, and Jolt returns exactly those errors.
@@ -167,23 +192,31 @@ Regenerating them at #2414 drops the 19 `RowsAutoRdZero` definitions, and the re
 ### Mutation checks
 
 The `mutation` mode corrupts one field of one row of a Rust record and checks that the comparison reports the corruption at that row and field.
-It does this for each of the 11 compared field kinds (kind, rs1, rd, immediate, virtual sequence remaining, first, compressed, circuit flags, instruction flags, lookup table, RAF flag) on the first T1 record with ten or more rows and on the first inline fixture record (`SHA256_INLINE::normal`).
-It also corrupts the 4 metadata fields of a T1 record compared on row metadata only (see the T1 report).
-At the pin all three unmutated records give 0 mismatches, and the comparisons report all 26 corruptions.
+It does this for each of the 13 compared row fields (kind, address, rd, rs1, rs2, immediate, virtual sequence remaining, first, compressed, circuit flags, instruction flags, lookup table, RAF flag) on the first T1 record with ten or more rows and on the first inline fixture record (`SHA256_INLINE::normal`).
+It also corrupts the 4 metadata fields of a T1 record compared on row metadata only, makes 17 whole-record corruptions of the source kind and the `result` object on three T1 records, and gives one T1 row the kind `NoOp` (see the T1 report).
+Given the templates file, it then changes the inputs of the round trip for the first inline (`SHA256_INLINE`) and checks that `inlineCoverage` reports each change.
+The six changes drop the `normal` template, drop the fixture records `::normal`, `::normal@shared` and `::rd_zero`, repeat the fixture record `::compressed`, and replace the rows of `::rd_zero` with an error.
+At `580084fcf` the four unmutated records and the unchanged inputs pass, and the mode reports all 54 corruptions (30 field corruptions, 17 record corruptions, the `NoOp` row and 6 input changes).
+At the pin, before the `NoOp` row check existed, the mode reported all 53 other corruptions.
 
-Two file-level checks confirm that the whole `inline` run fails when Rust's data changes.
-I ran them with the same `RoundTrip.lean` on the earlier branch `inline/t1-lean`.
+Two file-level deletion checks show that the whole `inline` run fails on incomplete inputs.
+I ran them on the driver output at `580084fcf` with `TRIPLES` set to 0, which keeps only the two fixed triples.
+
+- I deleted the fixture record `SHA256_INLINE::normal` (fresh allocator) from a copy of `rows.jsonl`; the run reports "fixture record missing or repeated" for that case and exits with status 1.
+- I set the `normal` case of `SHA256_INLINE` to null in a copy of `inline_templates.json`; the run reports "no normal template" for `SHA256_INLINE` and exits with status 1.
+
+Two earlier file-level checks confirm that the whole `inline` run fails when Rust's data changes.
+I ran them with the round-trip code of the earlier branch `inline/t1-lean`, before the completeness check existed.
 
 - I raised the immediate of row 100 of `KECCAK256_INLINE::normal` (fresh allocator) by one in a copy of `rows.jsonl`; the run reports exactly that mismatch (`imm of ANDN rows`, Rust 1, Lean 0) and exits with status 1.
 - I changed the `rs1` parameter of row 0 of `SECP256K1_MULQ`'s `normal` template from `rs1` to `rs2` in a copy of `inline_templates.json`; the run reports row 0 at both fixed triples (Rust 12, Lean 11 and Rust 22, Lean 21) and exits with status 1.
 
 ## Contradictions with the spec
 
-- The spec's round-trip check (section 11) holds at the pin; at #2414 the generated files are out of date for 19 `rd_zero` cases until they are regenerated, as described above.
+- The spec's round-trip check (section 11) holds at the pin and at `580084fcf`; at #2414 the generated files are out of date for 19 `rd_zero` cases until they are regenerated, as described above.
 - The spec asks for a test executable; the round trip runs through `lake env lean` and `#eval` for the reason given in the T1 report.
 
 ## Follow-ups
 
 - Regenerate `JoltBytecode/Inlines/Generated/` when #2414 merges and the pin moves, and rerun the round trip.
 - Decide whether BLAKE3_KEYED64's reads of vr60 and vr61 before any write need attention before BLAKE3_KEYED64 enters scope.
-- The non-blocking CI job in `.github/workflows/expansion-parity.yml` has not run yet.
