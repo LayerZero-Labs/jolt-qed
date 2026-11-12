@@ -16,8 +16,8 @@ set_option autoImplicit false
 
 namespace JoltISA.Inlines.Secp256k1
 
-/-- Rounding error of `roundedDiv` for a nonnegative numerator: `n·β - k·c` is at most
-`n/2` in absolute value.
+/-- Rounding error of `roundedDiv`: let `β = roundedDiv k c r`. For nonnegative `k, c` and
+positive `r`, `2 * |r * β - k * c| ≤ r`.
 Example: `roundedDiv 5 1 3 = 2` has error `1`, and `2 ≤ 3`. -/
 theorem roundedDiv_error (k c r : Int) (hk : 0 ≤ k) (hc : 0 ≤ c) (hr : 0 < r) :
     2 * |r * roundedDiv k c r - k * c| ≤ r := by
