@@ -48,7 +48,9 @@ def setV (f : VReg → BitVec 64) (d : VReg) (v : BitVec 64) : VReg → BitVec 6
 
 /-- The register rows: rows that read only virtual registers (or `x0`) and write one virtual
 register. The result is the destination and the value as a function of the register file.
-`ADDI` counts only with source `x0`, which is how Jolt resets pool registers.
+`ADDI` counts only with source `x0`, which is how Jolt resets pool registers, and `SUB` counts
+with a virtual or an `x0` first source (BLAKE2 negates its final-block flag with
+`SUB vr62, x0, vr62`).
 Example: `(ADD (.vreg vr62) (.vreg vr62) (.vreg vr61)).regRow?` is
 `some (vr62, fun f => f vr62 + f vr61)`. -/
 def _root_.JoltISA.Instr.regRow? : Instr → Option (VReg × ((VReg → BitVec 64) → BitVec 64))
@@ -58,7 +60,19 @@ def _root_.JoltISA.Instr.regRow? : Instr → Option (VReg × ((VReg → BitVec 6
   | .SLTU (.vreg d) (.vreg x) (.vreg y) => some (d, fun f => jolt_sltu_value (f x) (f y))
   | .LUI (.vreg d) imm => some (d, fun _ => imm)
   | .VirtualAdvice (.vreg d) v _ => some (d, fun _ => v)
+  | .SUB (.vreg d) (.vreg x) (.vreg y) => some (d, fun f => f x - f y)
+  | .XOR (.vreg d) (.vreg x) (.vreg y) => some (d, fun f => jolt_xor_value (f x) (f y))
+  | .XORI (.vreg d) (.vreg x) imm => some (d, fun f => jolt_xor_value (f x) imm)
+  | .VirtualXORROT32 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrot_value 32 (f x) (f y))
+  | .VirtualXORROT24 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrot_value 24 (f x) (f y))
+  | .VirtualXORROT16 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrot_value 16 (f x) (f y))
+  | .VirtualXORROT63 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrot_value 63 (f x) (f y))
   | .ADDI (.vreg d) (.xreg r) imm => if isX0 r then some (d, fun _ => 0 + imm) else none
+  | .SUB (.vreg d) (.xreg r) (.vreg y) => if isX0 r then some (d, fun f => 0 - f y) else none
   | _ => none
 
 private theorem readSrc_x0 {r : regidx} (h : isX0 r = true) (s : SailJoltState) :
@@ -83,19 +97,19 @@ theorem execInstr_of_regRow {i : Instr} {d : VReg} {g : (VReg → BitVec 64) →
     | (simp only [Option.some.injEq, Prod.mk.injEq] at h
        obtain ⟨rfl, rfl⟩ := h
        simp only [execInstr, EStateM.run, readSrc_vreg, readVReg_run, writeDst_vreg, bind,
-         EStateM.bind, addWide_low, mulWide_low]
+         EStateM.bind, addWide_low, subWide_low, mulWide_low]
        exact writeVReg_retire_run_of_writable _ _ s hw)
     | cases h
-  -- `ADDI` from `x0`
-  rename_i r imm
-  split at h
-  · rename_i hx
-    simp only [Option.some.injEq, Prod.mk.injEq] at h
-    obtain ⟨rfl, rfl⟩ := h
-    simp only [execInstr, EStateM.run, bind, EStateM.bind, readSrc_x0 hx s, writeDst_vreg,
-      addWide_low]
-    exact writeVReg_retire_run_of_writable _ _ s hw
-  · cases h
+  -- `ADDI` and `SUB` from `x0`
+  all_goals
+    split at h
+    · rename_i hx
+      simp only [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp only [execInstr, EStateM.run, bind, EStateM.bind, readSrc_x0 hx s, readSrc_vreg,
+        readVReg_run, writeDst_vreg, addWide_low, subWide_low]
+      exact writeVReg_retire_run_of_writable _ _ s hw
+    · cases h
 
 /-! ## Running programs row by row -/
 
