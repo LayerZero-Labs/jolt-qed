@@ -1,19 +1,21 @@
-import JoltTests.ExpansionParity.Report
+import JoltTests.ExpansionParity.RoundTrip
 
 /-!
-# expansion-parity: the T1 comparator
+# expansion-parity: Lean side of T1 and the inline round trip
 
 Usage (from the repository root, after `lake build JoltTests.ExpansionParity.Main`):
 
 ```
 EXPANSION_PARITY_ARGS="t1 ROWS.jsonl OUT_DIR" lake env lean JoltTests/ExpansionParity/Run.lean
+EXPANSION_PARITY_ARGS="inline ROWS.jsonl TEMPLATES.json OUT_DIR [TRIPLES] [SEED]" lake env lean JoltTests/ExpansionParity/Run.lean
 EXPANSION_PARITY_ARGS="mutation ROWS.jsonl" lake env lean JoltTests/ExpansionParity/Run.lean
 ```
 
 The arguments travel in an environment variable because `Run.lean` runs the
 comparison with `#eval` (see `cli` below for why there is no executable).
 
-`ROWS.jsonl` is the driver's `rows.jsonl` (`scripts/expansion-parity/README.md`).
+`ROWS.jsonl` and `TEMPLATES.json` are the driver's `rows.jsonl` and
+`inline_templates.json` (`scripts/expansion-parity/README.md`).
 
 * `t1` compares every non-inline record with `expand_instruction` and
   `metadata.lean`, and writes `OUT_DIR/t1-mismatches.jsonl` and
@@ -21,9 +23,14 @@ comparison with `#eval` (see `cli` below for why there is no executable).
   `SourceInstruction` constructor (NoOp, Unimpl and most Virtual* kinds) forms
   the separate class "row metadata compared, no Lean source constructor": each
   of its Rust rows is compared with `metadata.lean` for the row's kind and stamp.
-* `mutation` corrupts one field of one row of a T1 record, once per field
-  kind, and one metadata field of a record in the row-metadata class, and
-  checks that the comparison reports each corruption.
+* `inline` compares every `inline_fixture` record, flags included, and every
+  inline template at the driver's two triples and `TRIPLES` (default 300)
+  seeded random triples per case, with the generated Lean rows. It writes
+  `OUT_DIR/inline-mismatches.jsonl` and `OUT_DIR/inline-summary.txt`.
+* `mutation` corrupts one field of one row of a T1 record and of an inline
+  fixture record, once per field kind, and one metadata field of a record in
+  the row-metadata class, and checks that the comparisons report each
+  corruption.
 
 `Run.lean` fails (and `lean` exits with 1) when a mode finds a disagreement.
 -/
@@ -99,9 +106,10 @@ def runT1 (rowsPath outDir : String) : IO UInt32 := do
   IO.println text
   return if all.isEmpty && metaAll.isEmpty then 0 else 1
 
-/-- The mutation check on the first T1 record with at least ten rows, and on the
+/-- The mutation check on the first T1 record with at least ten rows, on the
 first record of the row-metadata class whose row 0 carries circuit and
-instruction flags and a table and agrees with `metadata.lean`. -/
+instruction flags and a table and agrees with `metadata.lean`, and on the first
+inline fixture record. -/
 def runMutation (rowsPath : String) : IO UInt32 := do
   let mut t1Rec : Option Json := none
   for line in ← readLines rowsPath do
@@ -133,8 +141,10 @@ def runMutation (rowsPath : String) : IO UInt32 := do
         metaRec := some j
         break
   let some mj := metaRec | throw <| IO.userError "no agreeing row-metadata record"
-  let ok ← mutationCheck "t1" tj t1cmp
-  let ok := (← mutationCheck "t1_metadata" mj metaCmp metadataMutations) && ok
+  let okT1 ← mutationCheck "t1" tj t1cmp
+  let okMeta ← mutationCheck "t1_metadata" mj metaCmp metadataMutations
+  let okInline ← mutationCheck "inline" (← firstInlineFixture rowsPath) compareInlineFixture
+  let ok := okT1 && okMeta && okInline
   IO.println (if ok then "mutation check: every corruption detected" else "mutation check: FAILED")
   return if ok then 0 else 1
 
@@ -144,9 +154,12 @@ entry point), so no executable that imports the model can declare its own;
 def cli (args : List String) : IO UInt32 := do
   match args with
   | ["t1", rows, out] => runT1 rows out
+  | ["inline", rows, templates, out] => runInline rows templates out 300 1949392621
+  | ["inline", rows, templates, out, n] => runInline rows templates out n.toNat! 1949392621
+  | ["inline", rows, templates, out, n, seed] => runInline rows templates out n.toNat! seed.toNat!
   | ["mutation", rows] => runMutation rows
   | _ =>
-    IO.eprintln "usage: EXPANSION_PARITY_ARGS='t1 ROWS OUT | mutation ROWS'"
+    IO.eprintln "usage: EXPANSION_PARITY_ARGS='t1 ROWS OUT | inline ROWS TEMPLATES OUT [TRIPLES [SEED]] | mutation ROWS'"
     return 2
 
 end ExpansionParity
