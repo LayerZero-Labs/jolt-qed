@@ -32,24 +32,32 @@ def Mismatch.toJson (m : Mismatch) : Json :=
       ("row", match m.row with | some r => Json.num (r : Int) | none => Json.null),
       ("field", m.field), ("rust", m.rust), ("lean", m.lean), ("cause", m.cause) ]
 
-/-- The record's identifying fields. -/
+/-- The record's identifying fields. Exactly one of `rows` and `error` is
+`some`. -/
 structure RecordInfo where
   case : String
   group : String
   allocator : String
   source : SourceView
-  /-- `none` when Rust returned an error; the error string is in `error`. -/
+  /-- The rows Rust emitted; `none` when Rust returned an error. -/
   rows : Option (List RowView)
+  /-- Rust's error; `none` when Rust emitted rows. -/
   error : Option String
 
+/-- Reads the driver's `result` object, which holds exactly one field: `rows`,
+an array of rows, or `error`, a string. Any other shape is an error, so a
+malformed record cannot pass as a rejection. -/
+def readResult (result : Json) : Except String (Option (List RowView) × Option String) := do
+  let keys := (← result.getObj?).toList.map (·.1)
+  match keys with
+  | ["rows"] =>
+      let arr ← (← getField result "rows").getArr?
+      pure (some (← arr.toList.mapM RowView.ofRustJson), none)
+  | ["error"] => pure (none, some (← (← getField result "error").getStr?))
+  | ks => throw s!"result must hold exactly one of rows and error, found fields {ks}"
+
 def RecordInfo.ofJson (j : Json) : Except String RecordInfo := do
-  let result ← getField j "result"
-  let rows ← match result.getObjVal? "rows" with
-    | .ok arr => some <$> ((← arr.getArr?).toList.mapM RowView.ofRustJson)
-    | .error _ => pure none
-  let error := match result.getObjVal? "error" with
-    | .ok e => e.getStr?.toOption
-    | .error _ => none
+  let (rows, error) ← readResult (← getField j "result")
   pure
     { case := ← (← getField j "case").getStr?
       group := ← (← getField j "group").getStr?
@@ -113,13 +121,22 @@ def compareRowMetadata (r : RecordInfo) (rust : List RowView) : List Mismatch :=
           r.mismatch "t1_metadata" (some i) d.field d.rust d.lean
             s!"{d.field} of {rr.kind} rows (Rust {d.rust}, Lean {d.lean})"
 
+/-- The mismatch for a Rust source kind that is neither mapped by
+`SourceView.toLean` nor listed in `noLeanSourceKinds`. -/
+def unknownKind (r : RecordInfo) (k : String) : Mismatch :=
+  r.mismatch "t1" none "source_kind" k "unknown" s!"unknown Rust source kind {k}"
+
 def compareT1 (r : RecordInfo) : T1Outcome :=
   let s := r.source
   if s.kind == "Inline" then .inline else
   match s.toLean, r.rows with
+  | .error (.kind k), _ =>
+      if !noLeanSourceKinds.contains k then .compared [unknownKind r k] else
+      match r.rows with
+      | none => .bothReject s!"no Lean source instruction: {(NoLeanSource.kind k).describe}"
+      | some rustRows => .metadataOnly (compareRowMetadata r rustRows)
   | .error why, none =>
       .bothReject s!"no Lean source instruction: {why.describe}"
-  | .error (.kind _), some rustRows => .metadataOnly (compareRowMetadata r rustRows)
   | .error why, some _ =>
       let cause := match why with
         | .kind k => s!"gap: no Lean SourceInstruction for Rust source kind {k}"
