@@ -94,6 +94,7 @@ Each of these has made a staged statement false before.
 ## Writing
 
 - Give every definition and public theorem a docstring that defines each term it uses and gives a concrete example.
+  Exception: a third-party file vendored unchanged under `JoltConstraints/Vendor/` keeps its upstream text, so it can later be replaced by the upstream dependency; its header names the source and commit.
 - Cite Jolt's code by file and function or item name at the pinned commit, for example `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`).
   Add line numbers only where they help someone find the code.
   When the pin moves, update a citation only if the cited code itself changed; do not spend work refreshing line numbers of unchanged code.

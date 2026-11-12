@@ -1,4 +1,5 @@
 import JoltBytecode.Inlines.Secp256k1.FieldMul
+import JoltBytecode.Inlines.Secp256k1.Prime
 
 /-!
 # secp256k1 `DIV`: soundness and completeness of the rows
@@ -22,12 +23,12 @@ it.
   else (`FieldDivSpec`).
 * `divRows_jolt_advice_complete`: with Jolt's advice, from a state where the operands and the
   buffer can be read and written (`FieldMulPre`), for a dividend below `q` and a divisor
-  coprime to `q`, the rows run, and the stored result is below `q` (`FieldMulCanonical`).
+  nonzero modulo `q`, the rows run, and the stored result is below `q` (`FieldMulCanonical`).
 * `secp256k1Divq_rows_sound` … `secp256k1Divr_rows_jolt_advice_complete`: the two theorems
   for each of the two generated row sequences.
 
-Completeness assumes `Nat.Coprime b q` rather than `b ≢ 0 (mod q)`. The two are the same because
-`p` and `n` are prime, but this development does not prove that they are prime.
+Completeness assumes only `b % q ≠ 0`. Because `p` and `n` are prime (`p_prime`, `n_prime` in
+`Prime.lean`), such a divisor is coprime to `q` and has an inverse modulo `q`.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
@@ -495,7 +496,7 @@ theorem mulqDivisionAdvice_spec {q : Nat} (hq1 : 1 < q) (hq : q ≤ 2 ^ 256) {a 
     exact hrq
 
 /-- **Completeness of the `DIV` rows with Jolt's advice.** For a call that meets its
-obligations, with a dividend `a < q` and a divisor `b` coprime to `q`, Jolt's division advice
+obligations, with a dividend `a < q` and a divisor `b` nonzero modulo `q`, Jolt's division advice
 exists, and the rows run with it (result and quotient words interleaved, as
 `divisionWords` orders them); the end state meets the specification, and the stored result is
 `a·b⁻¹ mod q`, which is below `q`.
@@ -507,7 +508,7 @@ theorem divRows_jolt_advice_complete {scalar : Bool} {L : MulRegs} (hv : L.Valid
     {a b : Limbs} (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a)
     (hb : readLimbs? s (sourceValue (.xreg rs2) s) = some b)
     (hca : limbsToNat a < (if scalar then n else p))
-    (hcop : Nat.Coprime (limbsToNat b) (if scalar then n else p)) :
+    (hb0 : limbsToNat b % (if scalar then n else p) ≠ 0) :
     ∃ c w, mulqDivisionAdvice (if scalar then n else p) a b = some (c, w) ∧
       ∃ s', (Program.seq (mulRows .div scalar L rs1 rs2 rs3
           (fun i => (divisionWords c w).getD i 0))).Run s s' ∧
@@ -516,7 +517,9 @@ theorem divRows_jolt_advice_complete {scalar : Bool} {L : MulRegs} (hv : L.Valid
   set q := if scalar then n else p with hqdef
   have hq : q ≤ 2 ^ 256 := by rw [hqdef]; cases scalar <;> decide
   have hq1 : 1 < q := by rw [hqdef]; cases scalar <;> decide
-  obtain ⟨c, w, hcw, rel, hcq⟩ := mulqDivisionAdvice_spec hq1 hq hca hcop
+  have hqp : q.Prime := by rw [hqdef]; cases scalar; exacts [p_prime, n_prime]
+  obtain ⟨c, w, hcw, rel, hcq⟩ :=
+    mulqDivisionAdvice_spec hq1 hq hca (coprime_of_mod_ne_zero hqp hb0)
   set advice : Nat → BitVec 64 := fun i => (divisionWords c w).getD i 0
   -- The register file after the prologue.
   obtain ⟨fa, fb, fw, fp, fp2⟩ := pre_vals_div hv b advice s.vregs
@@ -621,7 +624,7 @@ theorem secp256k1Divq_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec
   exact divRows_sound divqRegs_valid buf run
 
 /-- **Completeness of `SECP256K1_DIVQ` with Jolt's advice.** For a call that meets its
-obligations, with a dividend below `p` and a divisor coprime to `p`, Jolt's advice exists and
+obligations, with a dividend below `p` and a divisor nonzero modulo `p`, Jolt's advice exists and
 the rows run with it; the end state meets the specification, and the stored result is below
 `p`.
 Example: with `a = 1` at `x10 = 0x8001_0000`, `b = 2` at `x11 = 0x8001_0020` and the buffer at
@@ -630,12 +633,12 @@ theorem secp256k1Divq_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : Sail
     (pre : FieldMulPre .div rs1 rs2 rs3 s) {a b : Limbs}
     (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a)
     (hb : readLimbs? s (sourceValue (.xreg rs2) s) = some b)
-    (hca : limbsToNat a < p) (hcop : Nat.Coprime (limbsToNat b) p) :
+    (hca : limbsToNat a < p) (hb0 : limbsToNat b % p ≠ 0) :
     ∃ ws, joltAdvice .divq a b = some ws ∧
       ∃ s', (secp256k1DivqRowsAuto rs1 rs2 rs3 (fun i => ws.getD i 0)).Run s s' ∧
         FieldDivSpec p rs1 rs2 rs3 s s' ∧ FieldMulCanonical p rs3 s s' := by
   obtain ⟨c, w, hcw, s', run, spec, can⟩ :=
-    divRows_jolt_advice_complete (L := mulqRegs) divqRegs_valid pre ha hb hca hcop
+    divRows_jolt_advice_complete (L := mulqRegs) divqRegs_valid pre ha hb hca hb0
   refine ⟨divisionWords c w, ?_, s', ?_, spec, can⟩
   · show (fun cw => divisionWords cw.1 cw.2) <$> mulqDivisionAdvice p a b = _
     rw [show mulqDivisionAdvice p a b = some (c, w) from hcw]
@@ -663,12 +666,12 @@ theorem secp256k1Divr_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : Sail
     (pre : FieldMulPre .div rs1 rs2 rs3 s) {a b : Limbs}
     (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a)
     (hb : readLimbs? s (sourceValue (.xreg rs2) s) = some b)
-    (hca : limbsToNat a < n) (hcop : Nat.Coprime (limbsToNat b) n) :
+    (hca : limbsToNat a < n) (hb0 : limbsToNat b % n ≠ 0) :
     ∃ ws, joltAdvice .divr a b = some ws ∧
       ∃ s', (secp256k1DivrRowsAuto rs1 rs2 rs3 (fun i => ws.getD i 0)).Run s s' ∧
         FieldDivSpec n rs1 rs2 rs3 s s' ∧ FieldMulCanonical n rs3 s s' := by
   obtain ⟨c, w, hcw, s', run, spec, can⟩ :=
-    divRows_jolt_advice_complete (L := mulrRegs) divrRegs_valid pre ha hb hca hcop
+    divRows_jolt_advice_complete (L := mulrRegs) divrRegs_valid pre ha hb hca hb0
   refine ⟨divisionWords c w, ?_, s', ?_, spec, can⟩
   · show (fun cw => divisionWords cw.1 cw.2) <$> mulqDivisionAdvice n a b = _
     rw [show mulqDivisionAdvice n a b = some (c, w) from hcw]
