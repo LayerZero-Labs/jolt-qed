@@ -402,11 +402,15 @@ For an inline block, the words are the call's words of `inline_advice` (`inlineC
 Every whole-run lemma about a block that is not an inline reads the old statement back through `Block.Runs.executes_plain`.
 
 `JoltInstance.completeness` and `sail_reproduces` take an existing honest trace (`Completeness/completeness.lean:83-99`, `WholeRun/Top.lean:276-289`).
-Neither needs the trace's inline advice to equal Jolt's `build_advice` words, and neither is restricted to it: both must hold for every passing inline advice, including the non-canonical outputs this design admits.
+Neither needs the trace's inline advice to equal Jolt's `build_advice` words.
+Completeness holds for every passing inline advice, including the non-canonical outputs this design admits.
+`sail_reproduces` keeps its restriction to RISC-V prefixes: it requires `BlockConforms` on every block of the reproduced prefix, and `BlockConforms.riscv` (`WholeRun/Top.lean:88`) excludes inline calls, so it says nothing about a prefix that contains an inline call.
 A separate result says that Jolt's advice generator gives a passing run: `rows_jolt_advice_complete` per call (section 5.4), lifted to a call inside an honest trace in `WholeRun/InlineCalls.lean`.
 For each of the seven secp256k1 inlines, `HonestTrace.secp256k1*_jolt_advice_complete` says: if a call starts at step `base` (its `rd` is not `x0`, since `SourceInstruction.expand` rejects that encoding), the state before it meets the call's obligations, and `inline_advice` holds Jolt's words for the call at the call's position, then the state after the call's last step meets the inline's specification and stores the canonical result.
 DIV assumes, as I2 does, that the divisor is coprime to the modulus.
-It shows that Jolt's prover can produce a trace in the language; it does not restrict the language.
+These lifts identify the result of a call inside an honest trace that is already given and whose `inline_advice` holds Jolt's words for that call.
+They do not construct a whole trace, prove its stopping, configuration or output conditions, or show that replacing a call's words in an existing trace preserves the later steps.
+They do not restrict the language.
 
 The step relation of an inline call is `InlineSpec c`, a relation between states, not a function.
 For the hash inlines it is the graph of a function.
