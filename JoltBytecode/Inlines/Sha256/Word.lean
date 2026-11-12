@@ -11,10 +11,10 @@ rows (`VirtualROTRIW`, `VirtualXORROTW*`, `VirtualSRLIW`) read only the low half
 rows are best read on the low words alone. This module sets that up:
 
 * `lo f` is the low-word view of a register file, and `row32?` gives the low word that a round
-  row writes as a function of the low words it reads. `regRun_of_run32` lifts a run of the
-  32-bit evaluator `run32` to a run of `regRun` with the same low words.
+  row writes as a function of the low words it reads. `run32` runs rows on low words.
 * `Runs l L L' W` says that the rows `l` take the low-word file `L` to `L'` and write only
-  registers in `W`.
+  registers in `W`. `Runs.lift` lifts such a run to a run of `regRun` on full registers with
+  the same low words.
 * `add_spec`, `xor_spec`, `and_spec`, `bigSigma1_spec`, `bigSigma0_spec`, `ch_spec`, `maj_spec`
   and `updateRows_spec` give the value and the written registers of each block of
   `Sha256.Rows`, for registers and for folded constants alike.
@@ -221,29 +221,6 @@ theorem run32_append (l₁ l₂ : List Instr) (L : VReg → BitVec 32) :
       by_cases hd : 32 ≤ d.toNat
       · simp only [run32, h, hd, ↓reduceIte, ih]
       · simp only [run32, h, hd, ↓reduceIte, Option.bind_none]
-
-/-- **The 32-bit evaluator runs the rows.** If `run32` takes the low words of `f` to `L'`, then
-`regRun` runs the same rows from `f` to a file whose low words are `L'`.
-Example: from `run32 [ADD vr80 vr80 vr82] (lo f) = some L'`, `regRun` gives
-`setV f vr80 (f vr80 + f vr82)`, whose low words are `L'`. -/
-theorem regRun_of_run32 {l : List Instr} {f : VReg → BitVec 64} {L' : VReg → BitVec 32}
-    (h : run32 l (lo f) = some L') : ∃ f', regRun l f = some f' ∧ lo f' = L' := by
-  induction l generalizing f with
-  | nil =>
-    simp only [run32, Option.some.injEq] at h
-    exact ⟨f, rfl, h⟩
-  | cons i l ih =>
-    simp only [run32] at h
-    split at h
-    · rename_i d g hrow
-      split at h
-      · rename_i hd
-        obtain ⟨g64, hrow64, hg⟩ := regRow_of_row32 hrow
-        rw [← hg, ← lo_setV] at h
-        obtain ⟨f', h1, h2⟩ := ih h
-        exact ⟨f', by rw [regRun_cons_of hrow64 hd]; exact h1, h2⟩
-      · cases h
-    · cases h
 
 /-! ## Runs that write a set of registers -/
 

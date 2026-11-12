@@ -82,48 +82,56 @@ private theorem srliw_mask (x : BitVec 32) (k : Nat) (hk : k < 32) :
     (if wordMask k = 0 then 0 else x >>> ctz (wordMask k)) = x >>> k := by
   simp only [wordMask_ne_zero k hk, ↓reduceIte, ctz_wordMask k hk]
 
+/-- The shared proof of `bigSigma1_spec` and `bigSigma0_spec`. The rows `σ` fold a constant
+into `F` of it, or write `ss := x ⋙ k1`, `rd := (x ^ ss) ⋙ k2` and `rd := (x ^ rd) ⋙ k3`, and
+these rotations compute `F`. -/
+private theorem bigSigma_spec (σ : Val → VReg → VReg → List Instr × Val)
+    (F : BitVec 32 → BitVec 32) (k1 k2 k3 : Nat) (hk1 : k1 < 32) (hk2 : k2 < 32) (hk3 : k3 < 32)
+    (himm : ∀ v rd ss, σ (.imm v) rd ss = ([], .imm ((F (w32 v)).setWidth 64)))
+    (hreg : ∀ x rd ss, ∃ i₂ i₃, σ (.reg x) rd ss =
+        ([.VirtualROTRIW (.vreg ss) (.vreg x) (wordMask k1), i₂, i₃], .reg rd) ∧
+      row32? i₂ = some (rd, fun L => rotater (L x ^^^ L ss) k2) ∧
+      row32? i₃ = some (rd, fun L => rotater (L x ^^^ L rd) k3))
+    (hF : ∀ w, (w ^^^ (w ^^^ w.rotateRight k1).rotateRight k2).rotateRight k3 = F w)
+    (x : Val) (rd ss : VReg) (hrd : 32 ≤ rd.toNat) (hss : 32 ≤ ss.toNat)
+    (hx : x.Avoids (fun r => r = rd ∨ r = ss)) (L : VReg → BitVec 32) :
+    ∃ L', Runs (σ x rd ss).1 L L' (fun r => r = rd ∨ r = ss) ∧
+      (σ x rd ss).2.eval L' = F (x.eval L) ∧ (σ x rd ss).2.At rd := by
+  cases x with
+  | imm v =>
+    rw [himm]
+    refine ⟨L, Runs.nil L _, ?_, Or.inr ⟨_, rfl⟩⟩
+    simp only [Val.eval_imm, w32]
+    exact BitVec.setWidth_setWidth_of_le _ (by decide) |>.trans (BitVec.setWidth_eq _)
+  | reg x =>
+    obtain ⟨i₂, i₃, hσ, h₂, h₃⟩ := hreg x rd ss
+    rw [hσ]
+    have hxd : x ≠ rd := fun h => hx x rfl (Or.inl h)
+    have hxs : x ≠ ss := fun h => hx x rfl (Or.inr h)
+    refine ⟨_, Runs.mono (Runs.cons rfl hss (Runs.cons h₂ hrd (Runs.single h₃ hrd _))) ?_,
+      ?_, Or.inl rfl⟩
+    · rintro r (h | h | h) <;> simp only [h, true_or, or_true]
+    · simp only [Val.eval_reg, set32_same, set32_ne _ _ hxd, set32_ne _ _ hxs,
+        rotr_mask _ k1 hk1, rotater_eq_rotateRight (w := 32) _ k2 hk2,
+        rotater_eq_rotateRight (w := 32) _ k3 hk3]
+      exact hF _
+
 /-- **Σ1.** The rows write `rd` and `ss`, leave the result at `rd` (or fold it into a constant),
 and compute `Spec.large1` of the low word of `x`, when `x` is neither `rd` nor `ss`. -/
 theorem bigSigma1_spec (x : Val) (rd ss : VReg) (hrd : 32 ≤ rd.toNat) (hss : 32 ≤ ss.toNat)
     (hx : x.Avoids (fun r => r = rd ∨ r = ss)) (L : VReg → BitVec 32) :
     ∃ L', Runs (bigSigma1 x rd ss).1 L L' (fun r => r = rd ∨ r = ss) ∧
-      (bigSigma1 x rd ss).2.eval L' = Spec.large1 (x.eval L) ∧ (bigSigma1 x rd ss).2.At rd := by
-  cases x with
-  | imm v =>
-    refine ⟨L, Runs.nil L _, ?_, Or.inr ⟨_, rfl⟩⟩
-    simp only [bigSigma1, Val.eval_imm, w32]
-    exact BitVec.setWidth_setWidth_of_le _ (by decide) |>.trans (BitVec.setWidth_eq _)
-  | reg x =>
-    have hxd : x ≠ rd := fun h => hx x rfl (Or.inl h)
-    have hxs : x ≠ ss := fun h => hx x rfl (Or.inr h)
-    refine ⟨_, Runs.mono (Runs.cons rfl hss (Runs.cons rfl hrd (Runs.single rfl hrd _))) ?_,
-      ?_, Or.inl rfl⟩
-    · rintro r (h | h | h) <;> simp only [h, true_or, or_true]
-    · simp only [bigSigma1, Val.eval_reg, set32_same, set32_ne _ _ hxd, set32_ne _ _ hxs,
-        rotr_mask _ 18 (by decide), rotater_eq_rotateRight (w := 32) _ 19 (by decide),
-        rotater_eq_rotateRight (w := 32) _ 6 (by decide)]
-      exact large1_rows _
+      (bigSigma1 x rd ss).2.eval L' = Spec.large1 (x.eval L) ∧ (bigSigma1 x rd ss).2.At rd :=
+  bigSigma_spec bigSigma1 Spec.large1 18 19 6 (by decide) (by decide) (by decide)
+    (fun _ _ _ => rfl) (fun _ _ _ => ⟨_, _, rfl, rfl, rfl⟩) large1_rows x rd ss hrd hss hx L
 
 /-- **Σ0.** As `bigSigma1_spec`, for `Spec.large0`. -/
 theorem bigSigma0_spec (x : Val) (rd ss : VReg) (hrd : 32 ≤ rd.toNat) (hss : 32 ≤ ss.toNat)
     (hx : x.Avoids (fun r => r = rd ∨ r = ss)) (L : VReg → BitVec 32) :
     ∃ L', Runs (bigSigma0 x rd ss).1 L L' (fun r => r = rd ∨ r = ss) ∧
-      (bigSigma0 x rd ss).2.eval L' = Spec.large0 (x.eval L) ∧ (bigSigma0 x rd ss).2.At rd := by
-  cases x with
-  | imm v =>
-    refine ⟨L, Runs.nil L _, ?_, Or.inr ⟨_, rfl⟩⟩
-    simp only [bigSigma0, Val.eval_imm, w32]
-    exact BitVec.setWidth_setWidth_of_le _ (by decide) |>.trans (BitVec.setWidth_eq _)
-  | reg x =>
-    have hxd : x ≠ rd := fun h => hx x rfl (Or.inl h)
-    have hxs : x ≠ ss := fun h => hx x rfl (Or.inr h)
-    refine ⟨_, Runs.mono (Runs.cons rfl hss (Runs.cons rfl hrd (Runs.single rfl hrd _))) ?_,
-      ?_, Or.inl rfl⟩
-    · rintro r (h | h | h) <;> simp only [h, true_or, or_true]
-    · simp only [bigSigma0, Val.eval_reg, set32_same, set32_ne _ _ hxd, set32_ne _ _ hxs,
-        rotr_mask _ 11 (by decide), rotater_eq_rotateRight (w := 32) _ 12 (by decide),
-        rotater_eq_rotateRight (w := 32) _ 22 (by decide)]
-      exact large0_rows _
+      (bigSigma0 x rd ss).2.eval L' = Spec.large0 (x.eval L) ∧ (bigSigma0 x rd ss).2.At rd :=
+  bigSigma_spec bigSigma0 Spec.large0 11 12 22 (by decide) (by decide) (by decide)
+    (fun _ _ _ => rfl) (fun _ _ _ => ⟨_, _, rfl, rfl, rfl⟩) large0_rows x rd ss hrd hss hx L
 
 /-! ## Ch and Maj -/
 

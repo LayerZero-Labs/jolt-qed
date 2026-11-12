@@ -14,7 +14,7 @@ that builder in Lean, block by block, so that the proofs can follow the rounds.
 |---|---|---|---|
 | `ivLoadRows` | 0–7 | none | load the state (4 doublewords at `rs1`, two words each) into `vr72..79` |
 | `msgLoadRows` | 8–31 | 0–23 | load the block (8 doublewords at `rs2`), byte-swap each word, split into `vr56..71` |
-| `allRounds 64` | 32–1839 | 24–1811 | the 64 rounds, 20 rows each before round 16 and 31 rows after |
+| `allRounds 64` | 32–1839 | 24–1811 | the 64 rounds, 20 rows each before round 16 and 31 rows after; in `SHA256_INIT`, rounds 0–3 fold constants and have 3, 18, 20 and 19 rows |
 | `finalRows` | 1840–1847 | 1812–1819 | add the old state into the working variables `vr48..55` |
 | `storeRows` | 1848–1863 | 1820–1835 | pack two words per doubleword and store 4 doublewords to `rs1` |
 | `resetRows` | 1864–1899 | 1836–1863 | reset the pool registers to zero |
