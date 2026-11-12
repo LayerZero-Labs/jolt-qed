@@ -87,8 +87,9 @@ def glvrAdvFinal (rs3 : regidx) (advice : Nat → BitVec 64) (s : SailJoltState)
 
 /-- Given a readable `rs3` and a buffer in RAM, the rows run exactly when the six target
 doublewords are writable, and they end in `glvrAdvFinal`.
-Example: with the stack ending at `0x8000_1000`, a buffer at `0x8000_0ff8` overlaps the stack
-canary, so its first doubleword is not writable and the rows have no run. -/
+Example: with the stack ending at `0x8000_1000`, the stack canary is `0x8000_1000..0x8000_1080`.
+A buffer at `0x8000_0ff8` has its first doubleword below the canary, which is writable, and its
+second at `0x8000_1000`, in the canary, which is not; so the rows have no run. -/
 theorem glvrAdv_run_iff {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : GlvrAdvBuffer rs3 s) (hr : XReads s rs3 (glvrOut rs3 s)) :
     (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s' ↔
@@ -108,7 +109,9 @@ theorem glvrAdv_run_iff {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
 /-- **Soundness of `GLVR_ADV`.** Every run of the rows, for every advice, from a state whose
 output buffer lies in RAM, stores six words at the buffer, resets `vr48`, and changes nothing
 else; the six words read back.
-Example: `JoltTests.GlvrAdvInstance.glvrAdv_kat` applies it to a concrete state. -/
+Example: with `rs3 = x12 = 0x8002_0000` and a heap ending at `0x8010_0000`, every run stores six
+words at `0x8002_0000..0x8002_0030`, sets `vr48` to `0`, and leaves `x10`, `x12` and the rest
+of RAM as they were (`JoltTests.GlvrAdvInstance.glvrAdv_kat`). -/
 theorem glvrAdv_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : GlvrAdvBuffer rs3 s)
     (run : (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -153,7 +156,10 @@ def GlvrAdvCanonical (k : Limbs) (rs3 : regidx) (s s' : SailJoltState) : Prop :=
 /-- **Completeness of `GLVR_ADV` with Jolt's advice.** For a call that meets its obligations,
 whose scalar at `rs1` has limbs `k`, the rows run with Jolt's advice for `k`; the end state
 meets the specification, and the six stored words are `glvrAdvice k`.
-Example: `JoltTests.GlvrAdvInstance.glvrAdv_kat` applies it to a concrete state. -/
+Example: for the scalar `k` with limbs `0x0123456789abcdef, 0xfedcba9876543210,
+0x0f1e2d3c4b5a6978, 0x1122334455667788` at `x10 = 0x8001_0000` and the buffer at
+`x12 = 0x8002_0000`, the rows run and store `[1, 0x2e4cbe1fe695c34d, 0x213c3de8a76e3bd1, 0,
+0xb2eae28114375049, 0x08fc4249719076b4]` (`JoltTests.GlvrAdvInstance.glvrAdv_kat`). -/
 theorem glvrAdv_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : SailJoltState}
     {k : Limbs} (pre : GlvrAdvPre rs3 s)
     (_hk : readLimbs? s (sourceValue (.xreg rs1) s) = some k) :

@@ -100,7 +100,8 @@ theorem execInstr_of_regRow {i : Instr} {d : VReg} {g : (VReg → BitVec 64) →
 /-! ## Running programs row by row -/
 
 /-- `Program.seq` of a cons is the row followed by the rest.
-Example: `Program.seq [i, j] = .instr i (Program.seq [j])`. -/
+Example: `Program.seq [LUI vr60 5, ADD vr62 vr60 vr60]` is
+`.instr (LUI vr60 5) (Program.seq [ADD vr62 vr60 vr60])`. -/
 @[simp] theorem seq_cons (i : Instr) (l : List Instr) :
     Program.seq (i :: l) = .instr i (Program.seq l) := rfl
 
