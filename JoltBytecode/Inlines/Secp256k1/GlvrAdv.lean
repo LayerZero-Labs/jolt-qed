@@ -32,33 +32,41 @@ namespace JoltISA.Inlines.Secp256k1
 
 /-! ## Calls -/
 
-/-- The six advice words in row order. -/
+/-- The six advice words in row order.
+Example: `glvrWords (glvrAdvAdvice (natToLimbs 1)) = [0, 1, 0, 0, 0, 0]`. -/
 def glvrWords (advice : Nat → BitVec 64) : List (BitVec 64) :=
   [advice 0, advice 1, advice 2, advice 3, advice 4, advice 5]
 
-/-- The generated rows are the advice-store rows for the six words, then `ADDI vr48, x0, 0`. -/
+/-- The generated rows are the advice-store rows for the six words, then `ADDI vr48, x0, 0`.
+Example: row 1 is `SD rs3, vr48, 0` and row 11 is `SD rs3, vr48, 40`. -/
 theorem glvrAdvRowsAutoList_eq (rs1 rs2 rs3 : regidx) (advice : Nat → BitVec 64) :
     secp256k1GlvrAdvRowsAutoList rs1 rs2 rs3 advice =
       adviceStoreRows rs3 (BitVec.ofNat 7 48) 0 (glvrWords advice) ++
         [.ADDI (.vreg (BitVec.ofNat 7 48)) (.xreg (regidx.Regidx 0)) 0] := rfl
 
-/-- The output buffer of a `GLVR_ADV` call: the address in `rs3`. -/
+/-- The output buffer of a `GLVR_ADV` call: the address in `rs3`.
+Example: `0x8002_0000` when `x12 = 0x8002_0000` and `rs3 = x12`. -/
 abbrev glvrOut (rs3 : regidx) (s : SailJoltState) : BitVec 64 := sourceValue (.xreg rs3) s
 
-/-- Where the output buffer must lie for soundness: in RAM, with its 48 bytes below `2^64`. -/
+/-- Where the output buffer must lie for soundness: in RAM, with its 48 bytes below `2^64`.
+Example: a buffer at `0x8002_0000`. -/
 structure GlvrAdvBuffer (rs3 : regidx) (s : SailJoltState) : Prop where
   ram : RAM_START_ADDRESS ≤ (glvrOut rs3 s).toNat
   no_wrap : (glvrOut rs3 s).toNat + 48 ≤ 2 ^ 64
 
 /-- The caller's obligations for a `GLVR_ADV` call: the buffer conditions, a readable `rs3`,
-and six aligned doublewords that Jolt may store to. -/
+and six aligned doublewords that Jolt may store to.
+Example: `JoltTests.GlvrAdvInstance.kat_pre`, a buffer at `0x8002_0000` on a heap that ends at
+`0x8010_0000`. -/
 structure GlvrAdvPre (rs3 : regidx) (s : SailJoltState) : Prop extends GlvrAdvBuffer rs3 s where
   reads : XReads s rs3 (glvrOut rs3 s)
   writable : ∀ k < 6, DwordWritable s.jolt_device ((glvrOut rs3 s).toNat + 8 * k)
 
 /-- What a `GLVR_ADV` call may do: store some six words `ws` at the output buffer and reset
 `vr48`; nothing else changes, and loading doubleword `i` of the buffer afterwards returns
-`ws[i]`. -/
+`ws[i]`.
+Example: with `ws = [0, 1, 0, 0, 0, 0]` (Jolt's split of `k = 1`), loading the buffer's second
+doubleword returns `1`. -/
 def GlvrAdvSpec (rs3 : regidx) (s s' : SailJoltState) : Prop :=
   ∃ ws : List (BitVec 64), ws.length = 6 ∧
     s' = { s with vregs := setV s.vregs (BitVec.ofNat 7 48) 0,
@@ -68,7 +76,9 @@ def GlvrAdvSpec (rs3 : regidx) (s s' : SailJoltState) : Prop :=
 
 /-! ## Running the rows -/
 
-/-- The state after the rows with advice `advice`. -/
+/-- The state after the rows with advice `advice`.
+Example: for `advice = glvrAdvAdvice (natToLimbs 1)`, the buffer holds `[0, 1, 0, 0, 0, 0]`
+and `vr48 = 0`. -/
 def glvrAdvFinal (rs3 : regidx) (advice : Nat → BitVec 64) (s : SailJoltState) :
     SailJoltState :=
   { s with vregs := setV s.vregs (BitVec.ofNat 7 48) 0,
@@ -76,7 +86,8 @@ def glvrAdvFinal (rs3 : regidx) (advice : Nat → BitVec 64) (s : SailJoltState)
              mem := writeDwords s.sail.mem (glvrOut rs3 s).toNat (glvrWords advice) } }
 
 /-- Given a readable `rs3` and a buffer in RAM, the rows run exactly when the six target
-doublewords are writable, and they end in `glvrAdvFinal`. -/
+doublewords are writable, and they end in `glvrAdvFinal`.
+Example: a buffer that overlaps the stack canary has no run. -/
 theorem glvrAdv_run_iff {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : GlvrAdvBuffer rs3 s) (hr : XReads s rs3 (glvrOut rs3 s)) :
     (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s' ↔
@@ -95,7 +106,8 @@ theorem glvrAdv_run_iff {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
 
 /-- **Soundness of `GLVR_ADV`.** Every run of the rows, for every advice, from a state whose
 output buffer lies in RAM, stores six words at the buffer, resets `vr48`, and changes nothing
-else; the six words read back. -/
+else; the six words read back.
+Example: `JoltTests.GlvrAdvInstance.glvrAdv_kat` applies it to a concrete state. -/
 theorem glvrAdv_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : GlvrAdvBuffer rs3 s)
     (run : (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -124,19 +136,22 @@ def readLimbs? (s : SailJoltState) (a : BitVec 64) : Option Limbs := do
   pure #v[l0, l1, l2, l3]
 
 /-- Jolt's advice for the scalar `k` as row advice: `VirtualAdvice` row `i` writes word `i`
-of `glvrAdvice k`. -/
+of `glvrAdvice k`.
+Example: `glvrAdvAdvice (natToLimbs 1) 1 = 1`, and every index from `6` on gives `0`. -/
 def glvrAdvAdvice (k : Limbs) (i : Nat) : BitVec 64 :=
   if h : i < 6 then (glvrAdvice k)[i] else 0
 
 /-- The output of Jolt's advice for the scalar `k`: doubleword `i` of the buffer reads word `i`
-of `glvrAdvice k`. -/
+of `glvrAdvice k`.
+Example: for `k = 1`, the buffer reads `[0, 1, 0, 0, 0, 0]`. -/
 def GlvrAdvCanonical (k : Limbs) (rs3 : regidx) (s s' : SailJoltState) : Prop :=
   ∀ i (hi : i < 6), loadDword? s' (glvrOut rs3 s + BitVec.ofNat 64 (8 * i)) =
     some (glvrAdvice k)[i]
 
 /-- **Completeness of `GLVR_ADV` with Jolt's advice.** For a call that meets its obligations,
 whose scalar at `rs1` has limbs `k`, the rows run with Jolt's advice for `k`; the end state
-meets the specification, and the six stored words are `glvrAdvice k`. -/
+meets the specification, and the six stored words are `glvrAdvice k`.
+Example: `JoltTests.GlvrAdvInstance.glvrAdv_kat` applies it to a concrete state. -/
 theorem glvrAdv_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : SailJoltState}
     {k : Limbs} (pre : GlvrAdvPre rs3 s)
     (_hk : readLimbs? s (sourceValue (.xreg rs1) s) = some k) :
@@ -154,7 +169,8 @@ theorem glvrAdv_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : SailJoltSt
 
 /-- **What Jolt's advice stores.** The six words of `glvrAdvice k` are two sign words in
 `{0, 1}` and two 128-bit magnitudes `k₁ = v[1] + 2^64·v[2]` and `k₂ = v[4] + 2^64·v[5]` with
-`±k₁ ± λ·k₂ ≡ k (mod n)`, the recombination identity the SDK checks after the call. -/
+`±k₁ ± λ·k₂ ≡ k (mod n)`, the recombination identity the SDK checks after the call.
+Example: `glvrAdvice (natToLimbs 1) = #v[0, 1, 0, 0, 0, 0]`, so `k₁ = 1`, `k₂ = 0`. -/
 theorem glvrAdvice_correct (k : Limbs) :
     let v := glvrAdvice k
     (v[0].toNat = 0 ∨ v[0].toNat = 1) ∧ (v[3].toNat = 0 ∨ v[3].toNat = 1) ∧

@@ -12,11 +12,13 @@ inline:
   `VirtualAdvice` and `ADDI` from `x0`, all on virtual registers). A successful run of
   `l ++ rest` whose prefix `l` is register rows is a run of `rest` from the evaluated register
   file (`run_append_of_regRun`), so a proof never unfolds `execInstr` on those rows.
-* One lemma per remaining row shape the inlines use: `VirtualAssertEQ`, `VirtualAssertLTE`,
-  `LD` from an architectural base, and `SD` to an architectural base.
-  Each states what a successful run of `row :: rest` means, in both directions where the
-  completeness proofs need it.
-* `loadDword?`, the value an `LD` reads, with the read-after-write facts for stores to RAM.
+* `run_instr_iff` and `seq_cons`, which peel one row off a run.
+* `run_assertEq_iff` and `run_assertLTE_iff`: what a successful run of
+  `VirtualAssertEQ :: rest` or `VirtualAssertLTE :: rest` means, in both directions.
+
+The rows that touch memory or architectural registers (`LD` and `SD` through an architectural
+base, the value `loadDword?` an `LD` reads, and the read-after-write facts for stores to RAM)
+are in `StraightLineMemory`, which imports this module.
 
 Every lemma is proved; the module has no `sorry`.
 -/
@@ -61,14 +63,6 @@ def _root_.JoltISA.Instr.regRow? : Instr → Option (VReg × ((VReg → BitVec 6
   | .VirtualAdvice (.vreg d) v _ => some (d, fun _ => v)
   | .ADDI (.vreg d) (.xreg r) imm => if isX0 r then some (d, fun _ => 0 + imm) else none
   | _ => none
-
-private theorem bind_ok' {ε σ α β : Type} {x : EStateM ε σ α} {f : α → EStateM ε σ β}
-    {s t : σ} {r : β} (h : (x >>= f) s = .ok r t) :
-    ∃ a m, x s = .ok a m ∧ f a m = .ok r t := by
-  simp only [bind, EStateM.bind] at h
-  cases hx : x s with
-  | error e m => rw [hx] at h; cases h
-  | ok a m => rw [hx] at h; exact ⟨a, m, rfl, h⟩
 
 private theorem readSrc_x0 {r : regidx} (h : isX0 r = true) (s : SailJoltState) :
     readSrc (.xreg r) s = .ok 0 s := by

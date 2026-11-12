@@ -30,8 +30,10 @@ namespace JoltISA.Inlines
 
 /-! ## Definitions -/
 
-/-- The doubleword at RAM address `ea` is aligned and Jolt may store to it.
-Example: an 8-aligned heap address below the stack. -/
+/-- The doubleword at address `ea` is 8-aligned and `effective_address_ok` lets Jolt store to
+it. The predicate does not require `ea` to be in RAM (an aligned output-window address also
+satisfies it); the lemmas that use it take `RAM_START_ADDRESS ≤ ea` as a separate hypothesis.
+Example: an 8-aligned heap address below `heap_end`, outside the stack canary. -/
 def DwordWritable (dev : JoltDevice) (ea : Nat) : Prop :=
   ea % 8 = 0 ∧ Mmu.effective_address_ok dev ea true = true
 
@@ -92,7 +94,8 @@ theorem afterStores_jolt_device (s : SailJoltState) (d : VReg) (ea : Nat)
 
 /-! ## Running the rows -/
 
-/-- A run of an empty row list ends where it starts. -/
+/-- A run of an empty row list ends where it starts.
+Example: the rows after the last reset of an inline. -/
 theorem run_nil_iff (s s' : SailJoltState) : (Program.seq []).Run s s' ↔ s' = s := by
   simp only [Program.seq, List.foldr, Program.Run, execProgram_done, EStateM.run, pure,
     EStateM.pure]
@@ -160,7 +163,8 @@ theorem run_adviceStoreRows_iff {r : regidx} {d : VReg} (hd : 32 ≤ d.toNat) {C
 
 /-! ## Reading the words back -/
 
-/-- A RAM address Jolt may store to, it may also load from. -/
+/-- A RAM address Jolt may store to, it may also load from.
+Example: a heap address below `heap_end` passes both checks. -/
 theorem effective_address_ok_read_of_write {dev : JoltDevice} {ea : Nat}
     (hram : RAM_START_ADDRESS ≤ ea) (h : Mmu.effective_address_ok dev ea true = true) :
     Mmu.effective_address_ok dev ea false = true := by
@@ -169,7 +173,8 @@ theorem effective_address_ok_read_of_write {dev : JoltDevice} {ea : Nat}
     Bool.and_eq_true, decide_eq_true_eq] at h ⊢
   exact h.2
 
-/-- Stores at or above `ea` leave a doubleword that ends by `ea` unchanged. -/
+/-- Stores at or above `ea` leave a doubleword that ends by `ea` unchanged.
+Example: storing at `ea = 0x8000_0010` leaves the doubleword at `0x8000_0008`. -/
 theorem ram_doubleword_writeDwords_of_le (m : Std.ExtHashMap Nat (BitVec 8)) (ea b : Nat)
     (ws : List (BitVec 64)) (h : b + 8 ≤ ea) :
     Mmu.ram_doubleword (writeDwords m ea ws) b = Mmu.ram_doubleword m b := by
@@ -178,7 +183,8 @@ theorem ram_doubleword_writeDwords_of_le (m : Std.ExtHashMap Nat (BitVec 8)) (ea
   | cons w ws ih =>
     rw [writeDwords, ih _ _ (by omega), ram_doubleword_write_ne _ _ _ _ (Or.inr h)]
 
-/-- Doubleword `i` of the stored words reads back. -/
+/-- Doubleword `i` of the stored words reads back.
+Example: `ram_doubleword (writeDwords m ea [w₀, w₁]) (ea + 8) = w₁`. -/
 theorem ram_doubleword_writeDwords_get (m : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat)
     (ws : List (BitVec 64)) (i : Nat) (hi : i < ws.length) :
     Mmu.ram_doubleword (writeDwords m ea ws) (ea + 8 * i) = ws[i] := by

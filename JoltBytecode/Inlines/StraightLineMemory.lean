@@ -67,8 +67,7 @@ private theorem readReg_ok_congr {reg : Register} {σ₁ σ₂ : SailState}
     (h : (LeanRV64D.readReg reg : SailM (RegisterType reg)) σ₁ = .ok v σ₁) :
     (LeanRV64D.readReg reg : SailM (RegisterType reg)) σ₂ = .ok v σ₂ := by
   unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg at h ⊢
-  simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get, pure,
-    EStateM.pure] at h ⊢
+  simp only [bind, EStateM.bind, get, MonadStateOf.get, getThe, EStateM.get, pure] at h ⊢
   rw [← hregs]
   revert h
   cases σ₁.regs.get? reg with
@@ -162,7 +161,7 @@ theorem loadDword?_eq (s : SailJoltState) (a : BitVec 64) :
     · by_cases h3 : Mmu.effective_address_ok s.jolt_device a.toNat false = true
       · simp [h1, h2, h3]
       · simp [h1, h2, h3]
-    · simp only [h1, h2, ne_eq, not_true_eq_false, if_false]
+    · simp only [h1, h2, ne_eq, not_true_eq_false, ite_false]
       cases read_doubleword? (Mmu.load_raw? s) a.toNat <;> rfl
   · simp [h1]
 
@@ -294,7 +293,7 @@ theorem storeDword?_ram_inv {s t : SailJoltState} {a v : BitVec 64}
     rw [storeDword?_ram v hal hram hok] at h
     exact (Option.some.inj h).symm
   · exfalso
-    simp only [Mmu.store_doubleword, hnot, hram, if_false, if_true, hok] at hb
+    simp only [Mmu.store_doubleword, hnot, hram, ite_false, ite_true, hok] at hb
     cases hb
 
 /-- An `SD` of a virtual register through an architectural base that reads `base`: the run
