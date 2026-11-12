@@ -6,7 +6,9 @@ Every lemma in both files is proved, with no `sorry`.
 
 ## Pins
 
-- jolt-qed: the statement was reviewed at `c1f8c0f` on `inline/i0e-frame` (review range `41b09cc..c1f8c0f`), and the proofs were added on top of `758fd39` without changing it.
+- jolt-qed: the builds, axiom checks and generator check in this note were run at `152a44f59b1aa06b86a886f55ddb618f9f8c2de6` on branch `inline/i0e-frame`.
+  Later commits on the branch change only documentation; the Lean files are unchanged.
+  The statement was reviewed before the proofs were added, and the proofs did not change it.
 - Model Jolt pin: `c97e93004fbf804409f0374fe8457c8f1562ce71` (`JoltConstraints/model_review.md`), the commit the Lean model of Jolt's semantics follows.
 - Generated-row Jolt pin: `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`, the commit whose inline expansions `JoltBytecode/Inlines/Generated/` holds.
 
@@ -61,21 +63,21 @@ Paths are relative to `JoltConstraints/WholeRun/`.
   - It is stronger than "`x1..x31` outside the write set" because `Related.regs` compares the whole register file.
   - Readers: `Relation.lean:141-142` (`Related.regs` compares all Sail registers through `sailRegs`, and reads `nextPC`); `Basic.lean:100` (`Block.Runs.continues` reads `nextPC`); `Bundles.lean:226-227` (`pma_regions`, `htif_tohost_base`); `Bundles.lean:578` (`PC` parity); `Halt.lean:33` (`nextPC` at EBREAK); `SystemInv.lean:648-649` (`PC`, `nextPC`).
 - `choiceState`, `cycleCount`, `sailOutput`: the remaining Sail fields are unchanged; `tags` has type `Unit`.
-  - No whole-run file reads them today; `Ghost.lean:21` says a shadow may differ in them.
+  - No whole-run file reads them today; `Ghost.lean:23` says a shadow may differ in them.
   - The fields cost nothing to keep and make `Frame` a full description of the Sail state.
 - `vregs`: every virtual register outside `ws.vregs` keeps its value.
   - Readers: `SystemInv.lean:20-23` (`mstatusVReg`, `trapHandlerVReg`, `mepcVReg`, `vr32`, `vr33`); `Relation.lean:133` through `System.systemProject`, which reads the CSR and reservation overlay from `vr32..39`; `Ghost.lean:27`.
 - `mem`: a Sail memory byte outside the footprint is unchanged.
   - Readers: `Relation.lean:149` (`ram`), `Relation.lean:155-156` (`io`); `CodeInv.lean:868-872` (`JoltCodeIntact`, code bytes in `sail.mem`); `CodeInv.lean:885-887` (`NoCodeStore`, the store footprint of a block).
 - `mem_present`: a present byte stays present.
-  - Readers: `Relation.lean:151-152` (`present`); `Ghost.lean:35` (`MemoryFrame.present`); `Bundles.lean:229-230`.
+  - Readers: `Relation.lean:151-152` (`present`); `Ghost.lean:37` (`MemoryFrame.present`); `Bundles.lean:229-230`.
 - `mem_belowRam`: Sail memory below `RAM_START_ADDRESS` is unchanged.
-  - Readers: `Ghost.lean:36` (`MemoryFrame.below`); `Relation.lean:155-156`.
+  - Readers: `Ghost.lean:38` (`MemoryFrame.below`); `Relation.lean:155-156`.
 - `device`: the device changes only by successful `JoltDevice.store?` steps at footprint addresses below RAM.
   - Its corollaries are `Frame.device_same` (layout, inputs, trusted and untrusted advice unchanged, as `JoltIOSetupFrame.Same`), `Frame.panic_mono` and `Frame.outputs_size`.
-  - Readers: `Relation.lean:158` (`panic`), `Relation.lean:160` (`layout`), `Relation.lean:162-163` (`outputs_size`, through `Frame.outputs_size`), `Relation.lean:120` (`load?` of the I/O window); `RunInv.lean:285` (`heap_no_wrap` reads `heap_end`); `RunInv.lean:299-303` (`Block.Runs.layout_eq`); `Halt.lean:16` (outputs and panic flag).
+  - Readers: `Relation.lean:158` (`panic`), `Relation.lean:160` (`layout`), `Relation.lean:162-163` (`outputs_size`, through `Frame.outputs_size`), `Relation.lean:120` (`load?` of the I/O window); `RunInv.lean:285` (`heap_no_wrap` reads `heap_end`); `RunInv.lean:299-304` (`Block.Runs.layout_eq`); `Halt.lean:243-249` (`HonestTrace.matches_outputs_halt` reads the outputs and the panic flag).
 - `adviceTape`: the advice tape (bytes and cursor) is unchanged.
-  - Readers: `Ghost.lean:29`; `NonInterference.lean:365-372`; `CodeInv.lean:405-411` (the `VirtualAdviceLoad` case of the memory frame).
+  - Readers: `Ghost.lean:29`; `NonInterference.lean:360-372` (`commutes_adviceLoad`); `CodeInv.lean:402-411` (the `VirtualAdviceLoad` case of the memory frame).
 - `hostIO`: the host-I/O settings are unchanged.
   - Reader: `Ghost.lean:30`.
 
@@ -116,9 +118,11 @@ The per-row proofs use `StatePreservation.Preserves` (`ProofSupport/Preservation
 The four lemmas that the statement stage left open are proved as follows.
 
 - `execInstr_sail_effect` is the first four components of `execInstr_rowEffect`.
-- `execInstr_frame` takes the register, tape and host clauses from `execInstr_rowEffect`.
+- `execInstr_frame` takes the Sail clauses from `execInstr_sail_effect` and the virtual-register, tape and host clauses from `execInstr_rowEffect`.
   For a non-store row, `execInstr_memDevEq` shows that memory and the device are unchanged.
-  For a store row, `storeRow_run` shows that the row either leaves the state unchanged or calls `Mmu.store_doubleword` at `slot.address s`, because its operand reads leave the state unchanged (`readSrc_run`); `storeDoubleword_memStep` and the slot's membership in `ws.stores` then put every changed byte in the footprint.
+  For a store row, `storeRow_run` shows that the row either leaves the state unchanged or calls `Mmu.store_doubleword` at `slot.address s`, because its operand reads leave the state unchanged (`readSrc_run`).
+  The private lemma `readThenStore_run` handles the shared tail, a value read followed by the store, for `VirtualStoreB/H/W`.
+  Then `storeDoubleword_memStep` and the slot's membership in `ws.stores` then put every changed byte in the footprint.
   An architectural destination is `x0`, which names no Sail register (`xRegister?_of_isX0`), or a listed index, which `WritesSailReg` excludes; `wX_update_regs_get?_of_ne` covers both.
 - `Frame.sourceValue_xreg_eq` applies `sailRegs` to the register that `r` names, after `sameXReg_of_xRegister?_eq` shows that no listed index names it, and then splits on the 32 values of `r`.
 - `Program.resetsPool_of_check` follows each pool register `v` to the last row that writes it.

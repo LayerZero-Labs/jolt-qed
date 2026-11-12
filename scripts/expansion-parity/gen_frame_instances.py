@@ -26,6 +26,8 @@ Usage, from the repository root:
     python3 scripts/expansion-parity/gen_frame_instances.py --check  # exit 1 if it differs
 
 After regenerating, build with `lake build JoltBytecode.Inlines.FrameInstances`.
+Rerun the generator whenever the driver rewrites JoltBytecode/Inlines/Generated/.
+The script needs only Python 3 and reads no Rust output.
 """
 import pathlib, re, sys
 
