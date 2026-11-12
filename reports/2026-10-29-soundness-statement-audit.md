@@ -62,6 +62,10 @@ Effect on the Lean statement: the hypothesis is stronger than what Jolt's verifi
 Modeling advice words as field elements changes a core definition and needs Ari's decision.
 Trusted advice has the same representation gap; there the verifier's caller supplies the commitment, which the trust model covers.
 
+Update, 2026-11-12: closed in the model.
+`AllConstraints` now takes the untrusted-advice words as field elements, and `JoltInstance.soundness` is proved for that relation (`reports/2026-11-12-witness-column-typing.md`).
+At Jolt `a6b6dc717`, LD sets `RightOperandIsRdWriteValue` (`crates/jolt-riscv/src/instructions/i/ld.rs`), so its loaded value is range-checked and step 2 of the example fails.
+
 ### 2. END cycle marker: Lean skips a memory read that Jolt's tracer performs
 
 Jolt's tracer reads the label for both events of the cycle-marker host call: `Cpu::handle_jolt_cycle_marker` (`tracer/src/emulator/cpu.rs`) calls `self.read_string(ptr, len)?` for `JOLT_CYCLE_MARKER_START` and for `JOLT_CYCLE_MARKER_END`, and `read_string` loads each byte through `mmu.load`.
