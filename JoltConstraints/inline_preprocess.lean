@@ -18,8 +18,8 @@ See jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-205 at a6b6dc717.
 set_option autoImplicit false
 
 /-- Preprocessing accepts the rows of one source instruction at a valid address.
-For example, one `ADD` at `RAM_START_ADDRESS` preprocesses to a NoOp, its row and two
-padding NoOps. -/
+For example, `ADD x1 x2 x3` at `RAM_START_ADDRESS` expands to one row, and preprocessing
+gives the leading NoOp and that row, with no padding NoOps. -/
 theorem expand_instruction_preprocess (source : SourceInstructionRow SourceInstruction)
     (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows)
     (addressOk : bytecode_address_ok source.address = true) :

@@ -12,8 +12,11 @@ driver's output at a16z/jolt commit `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`; 
 
 `InlineKey` lists the registered inlines that jolt-qed supports. Each key has Jolt's
 encoding `(opcode, funct3, funct7)`, the generated rows of its two allocation cases
-(`rd ≠ x0` and `rd = x0`), and its row count. Jolt's decoder stores an inline's `rd`
-in the `rs3` slot (jolt/crates/jolt-program/src/image/decode.rs at the pin).
+(`rd ≠ x0` and `rd = x0`), and its row count. An inline's encoded `rd` field is the
+rows' `rs3`: Jolt's decoder keeps it as the normalized `rd`
+(jolt/crates/jolt-program/src/image/decode.rs, `format_inline_operands`), and the expander
+reads that `rd` as `rs3` (jolt/crates/jolt-program/src/expand/inline.rs,
+`InlineOperands::from_source_row`), both at the pin.
 `readsRd` records whether the rows read `rs3`; the generator computes it from the
 generated rows.
 -/
