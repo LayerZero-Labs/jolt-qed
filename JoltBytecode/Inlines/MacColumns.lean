@@ -42,8 +42,8 @@ theorem setV_ne (f : VReg → BitVec 64) {d r : VReg} (v : BitVec 64) (h : r ≠
     setV f d v r = f r := by simp [setV, h]
 
 /-- The evaluator of a concatenation.
-Example: `regRun ([LUI vr60 5] ++ [ADD vr62 vr60 vr60]) f` evaluates `LUI` first, then `ADD`
-from the result. -/
+Example: `regRun ([LUI vr60 5] ++ [ADD vr62 vr60 vr60]) f` runs `LUI` to get
+`setV f vr60 5`, then runs `ADD` from that file, which ends with `vr62 = 10`. -/
 theorem regRun_append (l₁ l₂ : List Instr) (f : VReg → BitVec 64) :
     regRun (l₁ ++ l₂) f = (regRun l₁ f).bind (regRun l₂) := by
   induction l₁ generalizing f with
@@ -67,12 +67,15 @@ theorem add_carry (x t : BitVec 64) :
   rw [jolt_sltu_value_toNat, BitVec.toNat_add]
   split <;> omega
 
-/-- A carry is `0` or `1`. -/
+/-- A carry is `0` or `1`.
+Example: `jolt_sltu_value 0 1 = 1` (the carry of `(2^64 - 1) + 1`) and
+`jolt_sltu_value 7 1 = 0`. -/
 theorem sltu_le_one (x y : BitVec 64) : (jolt_sltu_value x y).toNat ≤ 1 := by
   rw [jolt_sltu_value_toNat]
   split <;> omega
 
-/-- The value of `MULHU`: the high 64 bits of the 128-bit product. -/
+/-- The value of `MULHU`: the high 64 bits of the 128-bit product.
+Example: for `x = y = 2^32`, the product is `2^64` and `MULHU` gives `1`. -/
 theorem jolt_mulhu_value_toNat (x y : BitVec 64) :
     (jolt_mulhu_value x y).toNat = x.toNat * y.toNat / 2 ^ 64 := by
   have hx := x.isLt
@@ -82,7 +85,9 @@ theorem jolt_mulhu_value_toNat (x y : BitVec 64) :
     exact Nat.mul_lt_mul'' hx hy
   simp only [jolt_mulhu_value, JoltISA.mulWide, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hlt]
 
-/-- The low and high halves of a 64-bit product make up the product. -/
+/-- The low and high halves of a 64-bit product make up the product.
+Example: for `x = y = 2^32 + 1`, the product `2^64 + 2^33 + 1` has low half `2^33 + 1` and
+high half `1`. -/
 theorem mul_add_mulhu (x y : BitVec 64) :
     (x * y).toNat + 2 ^ 64 * (jolt_mulhu_value x y).toNat = x.toNat * y.toNat := by
   rw [BitVec.toNat_mul, jolt_mulhu_value_toNat]
@@ -92,31 +97,40 @@ theorem mul_add_mulhu (x y : BitVec 64) :
 
 /-- The registers of one column: the accumulator `c1`, the carry register `c2` (the next
 column's accumulator), and the scratch registers `aux` and `aux2` (`aux2` only for the doubled
-terms of squaring). Example: `SECP256K1_MULQ` column 1 uses `c1 = vr63`, `c2 = vr62`,
-`aux = vr61`. -/
+terms of squaring).
+Example: `SECP256K1_MULQ` column 1 uses `c1 = vr63`, `c2 = vr62`, `aux = vr61`, `aux2 = vr127`. -/
 structure MacRegs where
   c1 : VReg
   c2 : VReg
   aux : VReg
   aux2 : VReg
 
-/-- The four registers are pool registers (at or above `vr32`) and the rows that use them never
-alias them: `c1`, `c2` are distinct from each other and from both scratch registers. -/
+/-- The four registers are distinct writable virtual registers (registers `vr32` and above), so
+the rows that use them never alias them.
+Example: `⟨vr63, vr62, vr61, vr127⟩` is valid; `⟨vr63, vr63, vr61, vr127⟩` is not
+(`c1 = c2`). -/
 def MacRegs.Valid (R : MacRegs) : Prop :=
   32 ≤ R.c1.toNat ∧ 32 ≤ R.c2.toNat ∧ 32 ≤ R.aux.toNat ∧ 32 ≤ R.aux2.toNat ∧
     R.c1 ≠ R.c2 ∧ R.aux ≠ R.c1 ∧ R.aux ≠ R.c2 ∧ R.aux2 ≠ R.c1 ∧ R.aux2 ≠ R.c2 ∧ R.aux ≠ R.aux2
 
+/-- `MacRegs.Valid` is decidable, so `decide` checks it for a concrete layout.
+Example: `decide` proves `MacRegs.Valid ⟨vr63, vr62, vr61, vr127⟩`, the `col1` field of
+`mulqRegs_valid`. -/
 instance (R : MacRegs) : Decidable R.Valid := by unfold MacRegs.Valid; infer_instance
 
-/-- A register the column rows do not write. -/
+/-- A register the column rows do not write.
+Example: for `⟨vr63, vr62, vr61, vr127⟩`, `vr48` is free and `vr61` is not. -/
 def MacRegs.Free (R : MacRegs) (r : VReg) : Prop :=
   r ≠ R.c1 ∧ r ≠ R.c2 ∧ r ≠ R.aux ∧ r ≠ R.aux2
 
+/-- `MacRegs.Free` is decidable.
+Example: for `R = ⟨vr63, vr62, vr61, vr127⟩`, `decide (R.Free vr48)` evaluates to `true`. -/
 instance (R : MacRegs) (r : VReg) : Decidable (R.Free r) := by
   unfold MacRegs.Free; infer_instance
 
 /-- One term of a column: the low or high half of a product, twice the low or high half (the
-off-diagonal terms of a square), or a register value added as it is. -/
+off-diagonal terms of a square), or a register value added as it is.
+Example: column 1 of `SECP256K1_MULQ` has the term `low vr57 vr60`, the low half of `w1·p`. -/
 inductive Mac where
   | low (a b : VReg)
   | high (a b : VReg)
@@ -126,7 +140,8 @@ inductive Mac where
 
 namespace Mac
 
-/-- The registers a term reads. -/
+/-- The registers a term reads.
+Example: `(low vr48 vr52).ops = [vr48, vr52]` and `(word vr56).ops = [vr56]`. -/
 def ops : Mac → List VReg
   | low a b => [a, b]
   | high a b => [a, b]
@@ -135,7 +150,8 @@ def ops : Mac → List VReg
   | word a => [a]
 
 /-- The value a term adds to its column, in register file `f`.
-Example: `(low a b).val f` is the low 64 bits of `f a * f b`. -/
+Example: if `f vr48 = f vr52 = 2^32 + 1`, then `(low vr48 vr52).val f = 2^33 + 1`,
+`(high vr48 vr52).val f = 1` and `(low2 vr48 vr52).val f = 2^34 + 2`. -/
 def val (f : VReg → BitVec 64) : Mac → Nat
   | low a b => (f a * f b).toNat
   | high a b => (jolt_mulhu_value (f a) (f b)).toNat
@@ -143,18 +159,24 @@ def val (f : VReg → BitVec 64) : Mac → Nat
   | high2 a b => 2 * (jolt_mulhu_value (f a) (f b)).toNat
   | word a => (f a).toNat
 
-/-- `ADD c1, c1, t; SLTU c2, c1, t`: add `t` and set the carry register to the carry. -/
+/-- `ADD c1, c1, t; SLTU c2, c1, t`: add `t` and set the carry register to the carry.
+Example: for `⟨vr63, vr62, vr61, vr127⟩` and `t = vr61`, the values `vr63 = 2^64 - 1` and
+`vr61 = 1` give `vr63 = 0` and `vr62 = 1`. -/
 def addFirst (R : MacRegs) (t : VReg) : List Instr :=
   [.ADD (.vreg R.c1) (.vreg R.c1) (.vreg t), .SLTU (.vreg R.c2) (.vreg R.c1) (.vreg t)]
 
 /-- `ADD c1, c1, t; SLTU k, c1, t; ADD c2, c2, k`: add `t` and add the carry to the carry
-register, through scratch register `k`. -/
+register, through scratch register `k`.
+Example: for `⟨vr63, vr62, vr61, vr127⟩` and `t = k = vr61`, the values `vr63 = 2^64 - 1`,
+`vr61 = 1` and `vr62 = 4` give `vr63 = 0` and `vr62 = 5`. -/
 def addCarry (R : MacRegs) (t k : VReg) : List Instr :=
   [.ADD (.vreg R.c1) (.vreg R.c1) (.vreg t), .SLTU (.vreg k) (.vreg R.c1) (.vreg t),
     .ADD (.vreg R.c2) (.vreg R.c2) (.vreg k)]
 
 /-- The rows of a term, as `MulqBuilder` emits them: `first` for the first term of a column
-(`mac_low`, `mac_high`, `m2ac_low`, `m2ac_high`), otherwise the `_w_carry` variants. -/
+(`mac_low`, `mac_high`, `m2ac_low`, `m2ac_high`), otherwise the `_w_carry` variants.
+Example: for `R = ⟨vr63, vr62, vr61, vr127⟩`, `(low vr48 vr53).rows R false` is
+`MUL vr61, vr48, vr53; ADD vr63, vr63, vr61; SLTU vr61, vr63, vr61; ADD vr62, vr62, vr61`. -/
 def rows (R : MacRegs) (first : Bool) : Mac → List Instr
   | low a b => .MUL (.vreg R.aux) (.vreg a) (.vreg b) ::
       (if first then addFirst R R.aux else addCarry R R.aux R.aux)
@@ -168,7 +190,8 @@ def rows (R : MacRegs) (first : Bool) : Mac → List Instr
        else addCarry R R.aux R.aux2 ++ addCarry R R.aux R.aux2)
   | word a => if first then addFirst R a else addCarry R a R.aux
 
-/-- A term's value depends only on the registers it reads. -/
+/-- A term's value depends only on the registers it reads.
+Example: `(low vr48 vr52).val` reads only `vr48` and `vr52`, so writing `vr61` keeps it. -/
 theorem val_congr {f g : VReg → BitVec 64} (m : Mac) (h : ∀ r ∈ m.ops, g r = f r) :
     m.val g = m.val f := by
   cases m <;> simp_all [ops, val]
@@ -176,15 +199,16 @@ theorem val_congr {f g : VReg → BitVec 64} (m : Mac) (h : ∀ r ∈ m.ops, g r
 end Mac
 
 /-- The rows of a column: the first term in its `first` form, the rest with carry.
-Example: column 1 of `SECP256K1_MULQ` is
-`colRows R true [low w1 p, high w0 p, low a0 b1, low a1 b0, high a0 b0]`. -/
+Example: column 1 of `SECP256K1_MULQ` is `colRows ⟨vr63, vr62, vr61, vr127⟩ true
+[low vr57 vr60, high vr56 vr60, low vr48 vr53, low vr49 vr52, high vr48 vr52]`. -/
 def colRows (R : MacRegs) : Bool → List Mac → List Instr
   | _, [] => []
   | first, m :: ms => m.rows R first ++ colRows R false ms
 
 /-! ## The rows of one term -/
 
-/-- One register row, evaluated. Example: `ADD vr62, vr62, vr61`. -/
+/-- One register row, evaluated.
+Example: `regRun (ADD vr62, vr62, vr61 :: l) f = regRun l (setV f vr62 (f vr62 + f vr61))`. -/
 theorem regRun_cons {i : Instr} {d : VReg} {g : (VReg → BitVec 64) → BitVec 64}
     (hi : i.regRow? = some (d, g)) (hd : 32 ≤ d.toNat) (l : List Instr) (f : VReg → BitVec 64) :
     regRun (i :: l) f = regRun l (setV f d (g f)) := by
@@ -241,9 +265,10 @@ private theorem prod_cons (hv : R.Valid) (i : Instr) (P : (VReg → BitVec 64) �
     regRun (i :: l) f = regRun l (setV f R.aux (P f)) :=
   regRun_cons hi hv.2.2.1 l f
 
-/-- **The first term of a column.** Running its rows sets the pair `(c1, c2)` to the old `c1`
-plus the term's value (the old carry register is overwritten), with `c2 ≤ 2`, and keeps every
-free register. -/
+/-- **The first term of a column.** Its rows set the pair `(c1, c2)` to the old `c1` plus the
+term's value (overwriting the old carry register), with `c2 ≤ 2`, and keep every free register.
+Example: for `⟨vr63, vr62, vr61, vr127⟩`, `low vr48 vr52` with `vr48 = 3`, `vr52 = 5`,
+`vr63 = 2^64 - 1` gives `vr63 = 14` and `vr62 = 1`, whatever `vr62` held before. -/
 theorem Mac.rows_first_spec (hv : R.Valid) (m : Mac) (hops : ∀ r ∈ m.ops, R.Free r)
     (f : VReg → BitVec 64) :
     ∃ g, regRun (m.rows R true) f = some g ∧
@@ -283,7 +308,9 @@ theorem Mac.rows_first_spec (hv : R.Valid) (m : Mac) (hops : ∀ r ∈ m.ops, R.
     · rw [hfr r hr.1 hr.2.1 hr.2.2.1, hfr1 r hr.1 hr.2.1, setV_ne _ _ hr.2.2.1]
 
 /-- **A later term of a column.** Running its rows adds the term's value to the pair
-`(c1, c2)`, raises `c2` by at most `2`, and keeps every free register. -/
+`(c1, c2)`, raises `c2` by at most `2`, and keeps every free register.
+Example: for `⟨vr63, vr62, vr61, vr127⟩` and the term `low vr48 vr52`, the values `vr48 = 3`,
+`vr52 = 5`, `vr63 = 2^64 - 1`, `vr62 = 4` give `vr63 = 14` and `vr62 = 5`. -/
 theorem Mac.rows_carry_spec (hv : R.Valid) (m : Mac) (hops : ∀ r ∈ m.ops, R.Free r)
     (f : VReg → BitVec 64) (hb : (f R.c2).toNat + 2 < 2 ^ 64) :
     ∃ g, regRun (m.rows R false) f = some g ∧
@@ -335,7 +362,9 @@ end Steps
 
 /-! ## Columns -/
 
-/-- The terms after the first: each adds its value to the pair `(c1, c2)`. -/
+/-- The terms after the first: each adds its value to the pair `(c1, c2)`.
+Example: for `⟨vr63, vr62, vr61, vr127⟩`, the terms `[low vr48 vr52, word vr56]` with
+`vr48 = 3`, `vr52 = 5`, `vr56 = 2`, `vr63 = 1`, `vr62 = 0` give `vr63 = 18`, `vr62 = 0`. -/
 theorem colRows_carry_spec {R : MacRegs} (hv : R.Valid) (ms : List Mac)
     (hops : ∀ m ∈ ms, ∀ r ∈ m.ops, R.Free r) (f : VReg → BitVec 64)
     (hb : (f R.c2).toNat + 2 * ms.length < 2 ^ 64) :
@@ -369,7 +398,7 @@ theorem colRows_carry_spec {R : MacRegs} (hv : R.Valid) (ms : List Mac)
 from register file `f`, gives `g` with `g c1 + 2^64·g c2 = f c1 + Σ val f`; the carry register
 ends at most `2·(number of terms)`, and every free register keeps its value. The old carry
 register is ignored: the first term overwrites it.
-Example: column 1 of `SECP256K1_MULQ`, five terms, ends with `c2 ≤ 10`. -/
+Example: `SECP256K1_MULQ` column 1 has five terms, so its carry register `vr62` ends `≤ 10`. -/
 theorem colRows_spec {R : MacRegs} (hv : R.Valid) (ms : List Mac) (hne : ms ≠ [])
     (hops : ∀ m ∈ ms, ∀ r ∈ m.ops, R.Free r) (hlen : 2 * ms.length < 2 ^ 63)
     (f : VReg → BitVec 64) :

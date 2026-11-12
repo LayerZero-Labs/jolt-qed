@@ -63,12 +63,10 @@ private theorem two_pow_384 : (2 : ℤ) ^ 384 = (2 ^ 64) ^ 6 := by rw [← pow_m
 
 private theorem two_pow_448 : (2 : ℤ) ^ 448 = (2 ^ 64) ^ 7 := by rw [← pow_mul]
 
-private theorem two_pow_512 : (2 : ℤ) ^ 512 = (2 ^ 64) ^ 8 := by rw [← pow_mul]
-
 /-- The weighted sum of all columns, as the rows compute it: the two low terms of column 0,
 the terms of columns 1 to 6 at weight `2^(64k)`, and the high product `hi(a3·b3)` of the top
 column at weight `2^448`.
-Example: for `a = b = w = 0`, every term is `0`. -/
+Example: for `MULQ` with `a = 2`, `b = (p+1)/2` and `w = 1`, it is `2^256 + 1`. -/
 def colTotal (op : FieldOp) (scalar : Bool) (L : MulRegs) (F : VReg → BitVec 64) : Nat :=
   (F (L.a 0) * F (L.b 0)).toNat + (F (L.w 0) * F L.p).toNat +
     2 ^ 64 * colSum op scalar L F 1 + 2 ^ 128 * colSum op scalar L F 2 +
@@ -76,17 +74,64 @@ def colTotal (op : FieldOp) (scalar : Bool) (L : MulRegs) (F : VReg → BitVec 6
     2 ^ 320 * colSum op scalar L F 5 + 2 ^ 384 * colSum op scalar L F 6 +
     2 ^ 448 * (jolt_mulhu_value (F (L.a 3)) (F (L.b 3))).toNat
 
-private theorem colTotal_mul_base (L : MulRegs) (F : VReg → BitVec 64)
-    (hp : ((F L.p).toNat : ℤ) = (2 : ℤ) ^ 32 + 977) :
-    colTotal .mul false L F = limbVal L.a F * limbVal L.b F + limbVal L.w F * pPrime p := by
-  unfold colTotal
-  simp only [colSum, colTerms, prodTerms, List.range_succ, List.range_zero, List.nil_append,
+/-- The `p'` terms of column `k`, the part of `colTerms` that does not depend on the operation.
+Example: for the base field, column 1 is `[lo(w1·p), hi(w0·p)]`. -/
+def corrTerms (scalar : Bool) (L : MulRegs) (k : Nat) : List Mac :=
+  (if k < 4 then [.low (L.w k) L.p] else []) ++
+  (if k ≤ 4 then [.high (L.w (k - 1)) L.p] else []) ++
+  (if scalar ∧ k ≤ 4 then [.low (L.w (k - 1)) L.p2] else []) ++
+  (if scalar ∧ 2 ≤ k ∧ k ≤ 5 then [.high (L.w (k - 2)) L.p2, .word (L.w (k - 2))] else [])
+
+/-- The terms of a column are its `p'` terms followed by its product terms.
+Example: column 1 of `MULQ` is `[lo(w1·p), hi(w0·p)] ++ [lo(a0·b1), lo(a1·b0), hi(a0·b0)]`. -/
+theorem colTerms_eq_append (op : FieldOp) (scalar : Bool) (L : MulRegs) (k : Nat) :
+    colTerms op scalar L k = corrTerms scalar L k ++ prodTerms op L k := rfl
+
+/-- The product part of `colTotal`: `lo(a0·b0)`, the product terms of columns 1 to 6, and
+`hi(a3·b3)`.
+Example: for `MULQ` with `a = 2` and `b = (p+1)/2`, it is `p + 1`. -/
+def prodTotal (op : FieldOp) (L : MulRegs) (F : VReg → BitVec 64) : Nat :=
+  (F (L.a 0) * F (L.b 0)).toNat +
+    2 ^ 64 * ((prodTerms op L 1).map (Mac.val F)).sum +
+    2 ^ 128 * ((prodTerms op L 2).map (Mac.val F)).sum +
+    2 ^ 192 * ((prodTerms op L 3).map (Mac.val F)).sum +
+    2 ^ 256 * ((prodTerms op L 4).map (Mac.val F)).sum +
+    2 ^ 320 * ((prodTerms op L 5).map (Mac.val F)).sum +
+    2 ^ 384 * ((prodTerms op L 6).map (Mac.val F)).sum +
+    2 ^ 448 * (jolt_mulhu_value (F (L.a 3)) (F (L.b 3))).toNat
+
+/-- The `p'` part of `colTotal`: `lo(w0·p)` and the `p'` terms of columns 1 to 6.
+Example: for `MULQ` with `w = 1`, it is `p' = 2^32 + 977`. -/
+def corrTotal (scalar : Bool) (L : MulRegs) (F : VReg → BitVec 64) : Nat :=
+  (F (L.w 0) * F L.p).toNat +
+    2 ^ 64 * ((corrTerms scalar L 1).map (Mac.val F)).sum +
+    2 ^ 128 * ((corrTerms scalar L 2).map (Mac.val F)).sum +
+    2 ^ 192 * ((corrTerms scalar L 3).map (Mac.val F)).sum +
+    2 ^ 256 * ((corrTerms scalar L 4).map (Mac.val F)).sum +
+    2 ^ 320 * ((corrTerms scalar L 5).map (Mac.val F)).sum +
+    2 ^ 384 * ((corrTerms scalar L 6).map (Mac.val F)).sum
+
+/-- The column sum splits into its product part and its `p'` part.
+Example: for `MULQ` with `a = 2`, `b = (p+1)/2` and `w = 1`, `2^256 + 1 = (p + 1) + p'`. -/
+theorem colTotal_eq_add (op : FieldOp) (scalar : Bool) (L : MulRegs) (F : VReg → BitVec 64) :
+    colTotal op scalar L F = prodTotal op L F + corrTotal scalar L F := by
+  simp only [colTotal, prodTotal, corrTotal, colSum, colTerms_eq_append, List.map_append,
+    List.sum_append, Nat.mul_add]
+  omega
+
+/-- Division has the product terms of multiplication.
+Example: column 1 of both is `[lo(a0·b1), lo(a1·b0), hi(a0·b0)]`. -/
+theorem prodTotal_div (L : MulRegs) (F : VReg → BitVec 64) :
+    prodTotal .div L F = prodTotal .mul L F := rfl
+
+private theorem prodTotal_mul (L : MulRegs) (F : VReg → BitVec 64) :
+    prodTotal .mul L F = limbVal L.a F * limbVal L.b F := by
+  unfold prodTotal
+  simp only [prodTerms, List.range_succ, List.range_zero, List.nil_append,
     List.filterMap_cons, List.filterMap_nil, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT,
-    Nat.reduceLeDiff, and_self, and_false, ↓reduceIte, Nat.lt_irrefl,
-    List.cons_append, List.append_nil, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
-    Mac.val, Nat.add_zero,
-    Bool.false_eq_true, false_and, limbVal]
-  rw [pPrime_p]
+    and_self, and_false, ↓reduceIte, Nat.lt_irrefl,
+    List.cons_append, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
+    Mac.val, Nat.add_zero, false_and, limbVal]
   zify
   linear_combination (norm := skip) 2^0 * mah (F (L.a 0)) (F (L.b 0)) +
       2^64 * mah (F (L.a 0)) (F (L.b 1)) + 2^128 * mah (F (L.a 0)) (F (L.b 2)) +
@@ -96,159 +141,62 @@ private theorem colTotal_mul_base (L : MulRegs) (F : VReg → BitVec 64)
       2^192 * mah (F (L.a 2)) (F (L.b 1)) + 2^256 * mah (F (L.a 2)) (F (L.b 2)) +
       2^320 * mah (F (L.a 2)) (F (L.b 3)) + 2^192 * mah (F (L.a 3)) (F (L.b 0)) +
       2^256 * mah (F (L.a 3)) (F (L.b 1)) + 2^320 * mah (F (L.a 3)) (F (L.b 2)) +
-      2^384 * mah (F (L.a 3)) (F (L.b 3)) + 2^0 * mah (F (L.w 0)) (F L.p) +
-      2^64 * mah (F (L.w 1)) (F L.p) + 2^128 * mah (F (L.w 2)) (F L.p) +
-      2^192 * mah (F (L.w 3)) (F L.p) + (2^0 * ((F (L.w 0)).toNat : ℤ) +
-      2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
-      2^192 * ((F (L.w 3)).toNat : ℤ)) * hp
+      2^384 * mah (F (L.a 3)) (F (L.b 3))
   simp only [two_pow_128, two_pow_192, two_pow_256, two_pow_320, two_pow_384, two_pow_448]
   generalize (2 : ℤ) ^ 64 = B
   ring1
 
-private theorem colTotal_mul_scalar (L : MulRegs) (F : VReg → BitVec 64)
-    (hp : ((F L.p).toNat : ℤ) = 0x402da1732fc9bebf)
-    (hp2 : ((F L.p2).toNat : ℤ) = 0x4551231950b75fc4) :
-    colTotal .mul true L F = limbVal L.a F * limbVal L.b F + limbVal L.w F * pPrime n := by
-  unfold colTotal
-  simp only [colSum, colTerms, prodTerms, List.range_succ, List.range_zero, List.nil_append,
-    List.filterMap_cons, List.filterMap_nil, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT,
-    Nat.reduceLeDiff, and_self, and_false, ↓reduceIte, Nat.lt_irrefl,
-    List.cons_append, List.append_nil, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
-    Mac.val, Nat.add_zero,
-    false_and, limbVal]
-  rw [pPrime_n]
-  zify
-  linear_combination (norm := skip) 2^0 * mah (F (L.a 0)) (F (L.b 0)) +
-      2^64 * mah (F (L.a 0)) (F (L.b 1)) + 2^128 * mah (F (L.a 0)) (F (L.b 2)) +
-      2^192 * mah (F (L.a 0)) (F (L.b 3)) + 2^64 * mah (F (L.a 1)) (F (L.b 0)) +
-      2^128 * mah (F (L.a 1)) (F (L.b 1)) + 2^192 * mah (F (L.a 1)) (F (L.b 2)) +
-      2^256 * mah (F (L.a 1)) (F (L.b 3)) + 2^128 * mah (F (L.a 2)) (F (L.b 0)) +
-      2^192 * mah (F (L.a 2)) (F (L.b 1)) + 2^256 * mah (F (L.a 2)) (F (L.b 2)) +
-      2^320 * mah (F (L.a 2)) (F (L.b 3)) + 2^192 * mah (F (L.a 3)) (F (L.b 0)) +
-      2^256 * mah (F (L.a 3)) (F (L.b 1)) + 2^320 * mah (F (L.a 3)) (F (L.b 2)) +
-      2^384 * mah (F (L.a 3)) (F (L.b 3)) + 2^0 * mah (F (L.w 0)) (F L.p) +
-      2^64 * mah (F (L.w 0)) (F L.p2) + 2^64 * mah (F (L.w 1)) (F L.p) +
-      2^128 * mah (F (L.w 1)) (F L.p2) + 2^128 * mah (F (L.w 2)) (F L.p) +
-      2^192 * mah (F (L.w 2)) (F L.p2) + 2^192 * mah (F (L.w 3)) (F L.p) +
-      2^256 * mah (F (L.w 3)) (F L.p2) + (2^0 * ((F (L.w 0)).toNat : ℤ) +
-      2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
-      2^192 * ((F (L.w 3)).toNat : ℤ)) * hp + 2^64 * (2^0 * ((F (L.w 0)).toNat : ℤ) +
-      2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
-      2^192 * ((F (L.w 3)).toNat : ℤ)) * hp2
-  simp only [two_pow_128, two_pow_192, two_pow_256, two_pow_320, two_pow_384, two_pow_448]
-  generalize (2 : ℤ) ^ 64 = B
-  ring1
-
-private theorem colTotal_div_base (L : MulRegs) (F : VReg → BitVec 64)
-    (hp : ((F L.p).toNat : ℤ) = (2 : ℤ) ^ 32 + 977) :
-    colTotal .div false L F = limbVal L.a F * limbVal L.b F + limbVal L.w F * pPrime p := by
-  unfold colTotal
-  simp only [colSum, colTerms, prodTerms, List.range_succ, List.range_zero, List.nil_append,
-    List.filterMap_cons, List.filterMap_nil, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT,
-    Nat.reduceLeDiff, and_self, and_false, ↓reduceIte, Nat.lt_irrefl,
-    List.cons_append, List.append_nil, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
-    Mac.val, Nat.add_zero,
-    Bool.false_eq_true, false_and, limbVal]
-  rw [pPrime_p]
-  zify
-  linear_combination (norm := skip) 2^0 * mah (F (L.a 0)) (F (L.b 0)) +
-      2^64 * mah (F (L.a 0)) (F (L.b 1)) + 2^128 * mah (F (L.a 0)) (F (L.b 2)) +
-      2^192 * mah (F (L.a 0)) (F (L.b 3)) + 2^64 * mah (F (L.a 1)) (F (L.b 0)) +
-      2^128 * mah (F (L.a 1)) (F (L.b 1)) + 2^192 * mah (F (L.a 1)) (F (L.b 2)) +
-      2^256 * mah (F (L.a 1)) (F (L.b 3)) + 2^128 * mah (F (L.a 2)) (F (L.b 0)) +
-      2^192 * mah (F (L.a 2)) (F (L.b 1)) + 2^256 * mah (F (L.a 2)) (F (L.b 2)) +
-      2^320 * mah (F (L.a 2)) (F (L.b 3)) + 2^192 * mah (F (L.a 3)) (F (L.b 0)) +
-      2^256 * mah (F (L.a 3)) (F (L.b 1)) + 2^320 * mah (F (L.a 3)) (F (L.b 2)) +
-      2^384 * mah (F (L.a 3)) (F (L.b 3)) + 2^0 * mah (F (L.w 0)) (F L.p) +
-      2^64 * mah (F (L.w 1)) (F L.p) + 2^128 * mah (F (L.w 2)) (F L.p) +
-      2^192 * mah (F (L.w 3)) (F L.p) + (2^0 * ((F (L.w 0)).toNat : ℤ) +
-      2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
-      2^192 * ((F (L.w 3)).toNat : ℤ)) * hp
-  simp only [two_pow_128, two_pow_192, two_pow_256, two_pow_320, two_pow_384, two_pow_448]
-  generalize (2 : ℤ) ^ 64 = B
-  ring1
-
-private theorem colTotal_div_scalar (L : MulRegs) (F : VReg → BitVec 64)
-    (hp : ((F L.p).toNat : ℤ) = 0x402da1732fc9bebf)
-    (hp2 : ((F L.p2).toNat : ℤ) = 0x4551231950b75fc4) :
-    colTotal .div true L F = limbVal L.a F * limbVal L.b F + limbVal L.w F * pPrime n := by
-  unfold colTotal
-  simp only [colSum, colTerms, prodTerms, List.range_succ, List.range_zero, List.nil_append,
-    List.filterMap_cons, List.filterMap_nil, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT,
-    Nat.reduceLeDiff, and_self, and_false, ↓reduceIte, Nat.lt_irrefl,
-    List.cons_append, List.append_nil, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
-    Mac.val, Nat.add_zero,
-    false_and, limbVal]
-  rw [pPrime_n]
-  zify
-  linear_combination (norm := skip) 2^0 * mah (F (L.a 0)) (F (L.b 0)) +
-      2^64 * mah (F (L.a 0)) (F (L.b 1)) + 2^128 * mah (F (L.a 0)) (F (L.b 2)) +
-      2^192 * mah (F (L.a 0)) (F (L.b 3)) + 2^64 * mah (F (L.a 1)) (F (L.b 0)) +
-      2^128 * mah (F (L.a 1)) (F (L.b 1)) + 2^192 * mah (F (L.a 1)) (F (L.b 2)) +
-      2^256 * mah (F (L.a 1)) (F (L.b 3)) + 2^128 * mah (F (L.a 2)) (F (L.b 0)) +
-      2^192 * mah (F (L.a 2)) (F (L.b 1)) + 2^256 * mah (F (L.a 2)) (F (L.b 2)) +
-      2^320 * mah (F (L.a 2)) (F (L.b 3)) + 2^192 * mah (F (L.a 3)) (F (L.b 0)) +
-      2^256 * mah (F (L.a 3)) (F (L.b 1)) + 2^320 * mah (F (L.a 3)) (F (L.b 2)) +
-      2^384 * mah (F (L.a 3)) (F (L.b 3)) + 2^0 * mah (F (L.w 0)) (F L.p) +
-      2^64 * mah (F (L.w 0)) (F L.p2) + 2^64 * mah (F (L.w 1)) (F L.p) +
-      2^128 * mah (F (L.w 1)) (F L.p2) + 2^128 * mah (F (L.w 2)) (F L.p) +
-      2^192 * mah (F (L.w 2)) (F L.p2) + 2^192 * mah (F (L.w 3)) (F L.p) +
-      2^256 * mah (F (L.w 3)) (F L.p2) + (2^0 * ((F (L.w 0)).toNat : ℤ) +
-      2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
-      2^192 * ((F (L.w 3)).toNat : ℤ)) * hp + 2^64 * (2^0 * ((F (L.w 0)).toNat : ℤ) +
-      2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
-      2^192 * ((F (L.w 3)).toNat : ℤ)) * hp2
-  simp only [two_pow_128, two_pow_192, two_pow_256, two_pow_320, two_pow_384, two_pow_448]
-  generalize (2 : ℤ) ^ 64 = B
-  ring1
-
-private theorem colTotal_square_base (L : MulRegs) (F : VReg → BitVec 64) (hsq : L.b = L.a)
-    (hp : ((F L.p).toNat : ℤ) = (2 : ℤ) ^ 32 + 977) :
-    colTotal .square false L F = limbVal L.a F * limbVal L.b F + limbVal L.w F * pPrime p := by
-  unfold colTotal
+private theorem prodTotal_square (L : MulRegs) (F : VReg → BitVec 64) (hsq : L.b = L.a) :
+    prodTotal .square L F = limbVal L.a F * limbVal L.b F := by
+  unfold prodTotal
   rw [hsq]
-  simp only [colSum, colTerms, prodTerms, List.range_succ, List.range_zero, List.nil_append,
+  simp only [prodTerms, List.range_succ, List.range_zero, List.nil_append,
     List.filterMap_cons, List.filterMap_nil, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT,
-    Nat.reduceLeDiff, Nat.reduceEqDiff, and_self, and_false, ↓reduceIte, Nat.lt_irrefl,
-    List.cons_append, List.append_nil, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
-    Mac.val, Nat.add_zero,
-    Bool.false_eq_true, false_and, limbVal]
-  rw [pPrime_p]
+    Nat.reduceEqDiff, and_self, and_false, ↓reduceIte, Nat.lt_irrefl,
+    List.cons_append, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
+    Mac.val, Nat.add_zero, false_and, limbVal]
   zify
   linear_combination (norm := skip) 2^0 * mah (F (L.a 0)) (F (L.a 0)) +
       2 * 2^64 * mah (F (L.a 0)) (F (L.a 1)) + 2 * 2^128 * mah (F (L.a 0)) (F (L.a 2)) +
       2 * 2^192 * mah (F (L.a 0)) (F (L.a 3)) + 2^128 * mah (F (L.a 1)) (F (L.a 1)) +
       2 * 2^192 * mah (F (L.a 1)) (F (L.a 2)) + 2 * 2^256 * mah (F (L.a 1)) (F (L.a 3)) +
       2^256 * mah (F (L.a 2)) (F (L.a 2)) + 2 * 2^320 * mah (F (L.a 2)) (F (L.a 3)) +
-      2^384 * mah (F (L.a 3)) (F (L.a 3)) + 2^0 * mah (F (L.w 0)) (F L.p) +
-      2^64 * mah (F (L.w 1)) (F L.p) + 2^128 * mah (F (L.w 2)) (F L.p) +
-      2^192 * mah (F (L.w 3)) (F L.p) + (2^0 * ((F (L.w 0)).toNat : ℤ) +
-      2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
-      2^192 * ((F (L.w 3)).toNat : ℤ)) * hp
+      2^384 * mah (F (L.a 3)) (F (L.a 3))
   simp only [two_pow_128, two_pow_192, two_pow_256, two_pow_320, two_pow_384, two_pow_448]
   generalize (2 : ℤ) ^ 64 = B
   ring1
 
-private theorem colTotal_square_scalar (L : MulRegs) (F : VReg → BitVec 64) (hsq : L.b = L.a)
+private theorem corrTotal_base (L : MulRegs) (F : VReg → BitVec 64)
+    (hp : ((F L.p).toNat : ℤ) = (2 : ℤ) ^ 32 + 977) :
+    corrTotal false L F = limbVal L.w F * pPrime p := by
+  unfold corrTotal
+  simp only [corrTerms, Nat.reduceSub, Nat.reduceLT, Nat.reduceLeDiff,
+    and_self, and_false, ↓reduceIte, Nat.lt_irrefl, Bool.false_eq_true, false_and,
+    List.cons_append, List.nil_append, List.append_nil, List.map_cons, List.map_nil,
+    List.sum_cons, List.sum_nil, Mac.val, Nat.add_zero, Nat.mul_zero, limbVal]
+  rw [pPrime_p]
+  zify
+  linear_combination (norm := skip) 2^0 * mah (F (L.w 0)) (F L.p) +
+      2^64 * mah (F (L.w 1)) (F L.p) + 2^128 * mah (F (L.w 2)) (F L.p) +
+      2^192 * mah (F (L.w 3)) (F L.p) + (2^0 * ((F (L.w 0)).toNat : ℤ) +
+      2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
+      2^192 * ((F (L.w 3)).toNat : ℤ)) * hp
+  simp only [two_pow_128, two_pow_192, two_pow_256]
+  generalize (2 : ℤ) ^ 64 = B
+  ring1
+
+private theorem corrTotal_scalar (L : MulRegs) (F : VReg → BitVec 64)
     (hp : ((F L.p).toNat : ℤ) = 0x402da1732fc9bebf)
     (hp2 : ((F L.p2).toNat : ℤ) = 0x4551231950b75fc4) :
-    colTotal .square true L F = limbVal L.a F * limbVal L.b F + limbVal L.w F * pPrime n := by
-  unfold colTotal
-  rw [hsq]
-  simp only [colSum, colTerms, prodTerms, List.range_succ, List.range_zero, List.nil_append,
-    List.filterMap_cons, List.filterMap_nil, Nat.reduceAdd, Nat.reduceSub, Nat.reduceLT,
-    Nat.reduceLeDiff, Nat.reduceEqDiff, and_self, and_false, ↓reduceIte, Nat.lt_irrefl,
-    List.cons_append, List.append_nil, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
-    Mac.val, Nat.add_zero,
-    false_and, limbVal]
+    corrTotal true L F = limbVal L.w F * pPrime n := by
+  unfold corrTotal
+  simp only [corrTerms, Nat.reduceSub, Nat.reduceLT, Nat.reduceLeDiff,
+    and_self, and_false, ↓reduceIte, Nat.lt_irrefl, false_and,
+    List.cons_append, List.nil_append, List.append_nil, List.map_cons, List.map_nil,
+    List.sum_cons, List.sum_nil, Mac.val, Nat.add_zero, Nat.mul_zero, limbVal]
   rw [pPrime_n]
   zify
-  linear_combination (norm := skip) 2^0 * mah (F (L.a 0)) (F (L.a 0)) +
-      2 * 2^64 * mah (F (L.a 0)) (F (L.a 1)) + 2 * 2^128 * mah (F (L.a 0)) (F (L.a 2)) +
-      2 * 2^192 * mah (F (L.a 0)) (F (L.a 3)) + 2^128 * mah (F (L.a 1)) (F (L.a 1)) +
-      2 * 2^192 * mah (F (L.a 1)) (F (L.a 2)) + 2 * 2^256 * mah (F (L.a 1)) (F (L.a 3)) +
-      2^256 * mah (F (L.a 2)) (F (L.a 2)) + 2 * 2^320 * mah (F (L.a 2)) (F (L.a 3)) +
-      2^384 * mah (F (L.a 3)) (F (L.a 3)) + 2^0 * mah (F (L.w 0)) (F L.p) +
+  linear_combination (norm := skip) 2^0 * mah (F (L.w 0)) (F L.p) +
       2^64 * mah (F (L.w 0)) (F L.p2) + 2^64 * mah (F (L.w 1)) (F L.p) +
       2^128 * mah (F (L.w 1)) (F L.p2) + 2^128 * mah (F (L.w 2)) (F L.p) +
       2^192 * mah (F (L.w 2)) (F L.p2) + 2^192 * mah (F (L.w 3)) (F L.p) +
@@ -257,10 +205,9 @@ private theorem colTotal_square_scalar (L : MulRegs) (F : VReg → BitVec 64) (h
       2^192 * ((F (L.w 3)).toNat : ℤ)) * hp + 2^64 * (2^0 * ((F (L.w 0)).toNat : ℤ) +
       2^64 * ((F (L.w 1)).toNat : ℤ) + 2^128 * ((F (L.w 2)).toNat : ℤ) +
       2^192 * ((F (L.w 3)).toNat : ℤ)) * hp2
-  simp only [two_pow_128, two_pow_192, two_pow_256, two_pow_320, two_pow_384, two_pow_448]
+  simp only [two_pow_128, two_pow_192, two_pow_256, two_pow_320]
   generalize (2 : ℤ) ^ 64 = B
   ring1
-
 
 /-- **The column identity.** With `p'` loaded as the rows load it, the weighted column sum is
 `A·B + W·p'`, where `A`, `B`, `W` are the values of the limb registers `a`, `b`, `w`. For
@@ -272,21 +219,23 @@ theorem colTotal_eq {op : FieldOp} {scalar : Bool} {L : MulRegs} {F : VReg → B
     (hp2 : scalar = true → F L.p2 = pPrimeScalar1) :
     colTotal op scalar L F =
       limbVal L.a F * limbVal L.b F + limbVal L.w F * pPrime (if scalar then n else p) := by
+  have hprod : prodTotal op L F = limbVal L.a F * limbVal L.b F := by
+    cases op
+    · exact prodTotal_mul L F
+    · exact prodTotal_square L F (hsq rfl)
+    · rw [prodTotal_div]; exact prodTotal_mul L F
+  rw [colTotal_eq_add, hprod]
   cases scalar
   · have h : ((F L.p).toNat : ℤ) = (2 : ℤ) ^ 32 + 977 := by
       rw [hp]; decide
-    cases op
-    · exact colTotal_mul_base L F h
-    · exact colTotal_square_base L F (hsq rfl) h
-    · exact colTotal_div_base L F h
+    rw [corrTotal_base L F h]
+    rfl
   · have h : ((F L.p).toNat : ℤ) = 0x402da1732fc9bebf := by
       rw [hp]; decide
     have h2 : ((F L.p2).toNat : ℤ) = 0x4551231950b75fc4 := by
       rw [hp2 rfl]; decide
-    cases op
-    · exact colTotal_mul_scalar L F h h2
-    · exact colTotal_square_scalar L F (hsq rfl) h h2
-    · exact colTotal_div_scalar L F h h2
+    rw [corrTotal_scalar L F h h2]
+    rfl
 
 /-! ## The register file after the prologue -/
 
@@ -423,7 +372,7 @@ theorem run_regRow_vregs_iff {i : Instr} {d : VReg} {g : (VReg → BitVec 64) �
   exact run_append_of_regRun (s := { s with vregs := f }) h rest s'
 
 /-- Register rows from `{s with vregs := f}` change only the register file.
-Example: a whole column of `MULQ`. -/
+Example: the rows of column 1 of `MULQ`, which write only `vr61`, `vr62` and `vr63`. -/
 theorem run_regs_vregs_iff {l : List Instr} {f g : VReg → BitVec 64} (h : regRun l f = some g)
     (s : SailJoltState) (rest : List Instr) (s' : SailJoltState) :
     (Program.seq (l ++ rest)).Run { s with vregs := f } s' ↔
@@ -487,7 +436,8 @@ theorem run_sd_vregs_iff {x : VReg} {r : regidx} {imm : BitVec 64} {s₀ : SailJ
     exact ⟨_, storeDword?_ram _ hal hram hok, hrun⟩
 
 /-- `readLimbs?` succeeds exactly when its four loads do.
-Example: the operand loads of the prologue. -/
+Example: if the doublewords at `0x8001_0000 + 8i` are `1, 0, 0, 0`, the limbs read are
+`#v[1, 0, 0, 0]`. -/
 theorem readLimbs?_eq_some_iff (s : SailJoltState) (a : BitVec 64) (x : Limbs) :
     readLimbs? s a = some x ↔
       loadDword? s a = some x[0] ∧ loadDword? s (a + 8) = some x[1] ∧
@@ -521,9 +471,32 @@ theorem run_lui_vregs_iff {d : VReg} (hd : 32 ≤ d.toNat) {imm : BitVec 64} (s 
 
 /-! ## The prologue -/
 
+/-- The registers and values the constant rows write.
+Example: for the base field, `[(p, 0x1000003d1)]`; for `MULQ`, `p = vr60`. -/
+def constWrites (scalar : Bool) (L : MulRegs) : List (VReg × BitVec 64) :=
+  if scalar then [(L.p, pPrimeScalar0), (L.p2, pPrimeScalar1)] else [(L.p, pPrimeBase)]
+
+/-- **The constant rows.** From register file `f`, the `LUI` rows of `p'` run and write
+`constWrites`.
+Example: for `MULQ`, `LUI vr60, 0x1000003d1` sets `vr60`. -/
+theorem run_constRows_iff {op : FieldOp} {scalar : Bool} {L : MulRegs} (hv : L.Valid op scalar)
+    (s : SailJoltState) (f : VReg → BitVec 64) (rest : List Instr) (s' : SailJoltState) :
+    (Program.seq (constRows scalar L ++ rest)).Run { s with vregs := f } s' ↔
+      (Program.seq rest).Run { s with vregs := writeAll f (constWrites scalar L) } s' := by
+  have g := hv.pre_ge
+  cases scalar
+  · simp only [constRows, Bool.false_eq_true, ite_false, List.cons_append, List.nil_append,
+      run_lui_vregs_iff (g L.p (by cases op <;> simp [preRegs]))]
+    exact Iff.rfl
+  · simp only [constRows, ite_true, List.cons_append, List.nil_append,
+      run_lui_vregs_iff (g L.p (by cases op <;> simp [preRegs])),
+      run_lui_vregs_iff (g L.p2 (by cases op <;> simp [preRegs]))]
+    exact Iff.rfl
+
 /-- **The prologue of `MUL`.** From register file `f`, the operand loads, advice rows and
 constant rows run exactly when both operands can be read, and they write `preWrites`.
-Example: `MULQ` with `x10` and `x11` pointing at readable RAM. -/
+Example: `MULQ` with `x10 = 0x8001_0000` and `x11 = 0x8001_0020` in readable RAM loads
+`vr48..vr51` from `0x8001_0000` and `vr52..vr55` from `0x8001_0020`. -/
 theorem run_prologue_mul_iff {scalar : Bool} {L : MulRegs} (hv : L.Valid .mul scalar)
     {rs1 rs2 : regidx} {advice : Nat → BitVec 64} {s : SailJoltState} {B1 B2 : BitVec 64}
     (h1 : XReads s rs1 B1) (h2 : XReads s rs2 B2) (f : VReg → BitVec 64)
@@ -534,68 +507,39 @@ theorem run_prologue_mul_iff {scalar : Bool} {L : MulRegs} (hv : L.Valid .mul sc
         (Program.seq rest).Run
           { s with vregs := writeAll f (preWrites .mul scalar L x y advice) } s' := by
   have g := hv.pre_ge
-  cases scalar
-  · simp only [prologueRows, constRows, ldRow, List.flatMap_cons, List.flatMap_nil,
-      List.cons_append, List.nil_append, List.append_nil, Bool.false_eq_true,
-      ite_false, Nat.reduceMul,
-      run_ld_vregs_iff (g (L.a 0) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 1) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 2) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 3) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.b 0) (by simp [preRegs])) h2,
-      run_ld_vregs_iff (g (L.b 1) (by simp [preRegs])) h2,
-      run_ld_vregs_iff (g (L.b 2) (by simp [preRegs])) h2,
-      run_ld_vregs_iff (g (L.b 3) (by simp [preRegs])) h2,
-      run_va_vregs_iff (g (L.w 0) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 1) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 2) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 3) (by simp [preRegs])),
-      run_lui_vregs_iff (g L.p (by simp [preRegs]))]
-    constructor
-    · rintro ⟨x0, hx0, y0, hy0, x1, hx1, y1, hy1, x2, hx2, y2, hy2, x3, hx3, y3, hy3, hrun⟩
-      refine ⟨#v[x0, x1, x2, x3], #v[y0, y1, y2, y3],
-        (readLimbs?_eq_some_iff _ _ _).2 ⟨by simpa using hx0, by simpa using hx1,
-          by simpa using hx2, by simpa using hx3⟩,
-        (readLimbs?_eq_some_iff _ _ _).2 ⟨by simpa using hy0, by simpa using hy1,
-          by simpa using hy2, by simpa using hy3⟩, hrun⟩
-    · rintro ⟨x, y, hx, hy, hrun⟩
-      obtain ⟨hx0, hx1, hx2, hx3⟩ := (readLimbs?_eq_some_iff _ _ _).1 hx
-      obtain ⟨hy0, hy1, hy2, hy3⟩ := (readLimbs?_eq_some_iff _ _ _).1 hy
-      exact ⟨x[0], by simpa using hx0, y[0], by simpa using hy0, x[1], hx1, y[1], hy1,
-        x[2], hx2, y[2], hy2, x[3], hx3, y[3], hy3, hrun⟩
-  · simp only [prologueRows, constRows, ldRow, List.flatMap_cons, List.flatMap_nil,
-      List.cons_append, List.nil_append, List.append_nil,
-      ite_true, Nat.reduceMul,
-      run_ld_vregs_iff (g (L.a 0) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 1) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 2) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 3) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.b 0) (by simp [preRegs])) h2,
-      run_ld_vregs_iff (g (L.b 1) (by simp [preRegs])) h2,
-      run_ld_vregs_iff (g (L.b 2) (by simp [preRegs])) h2,
-      run_ld_vregs_iff (g (L.b 3) (by simp [preRegs])) h2,
-      run_va_vregs_iff (g (L.w 0) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 1) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 2) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 3) (by simp [preRegs])),
-      run_lui_vregs_iff (g L.p (by simp [preRegs])),
-      run_lui_vregs_iff (g L.p2 (by simp [preRegs]))]
-    constructor
-    · rintro ⟨x0, hx0, y0, hy0, x1, hx1, y1, hy1, x2, hx2, y2, hy2, x3, hx3, y3, hy3, hrun⟩
-      refine ⟨#v[x0, x1, x2, x3], #v[y0, y1, y2, y3],
-        (readLimbs?_eq_some_iff _ _ _).2 ⟨by simpa using hx0, by simpa using hx1,
-          by simpa using hx2, by simpa using hx3⟩,
-        (readLimbs?_eq_some_iff _ _ _).2 ⟨by simpa using hy0, by simpa using hy1,
-          by simpa using hy2, by simpa using hy3⟩, hrun⟩
-    · rintro ⟨x, y, hx, hy, hrun⟩
-      obtain ⟨hx0, hx1, hx2, hx3⟩ := (readLimbs?_eq_some_iff _ _ _).1 hx
-      obtain ⟨hy0, hy1, hy2, hy3⟩ := (readLimbs?_eq_some_iff _ _ _).1 hy
-      exact ⟨x[0], by simpa using hx0, y[0], by simpa using hy0, x[1], hx1, y[1], hy1,
-        x[2], hx2, y[2], hy2, x[3], hx3, y[3], hy3, hrun⟩
+  rw [List.append_assoc]
+  simp only [prologueRows, ldRow, List.flatMap_cons, List.flatMap_nil,
+    List.cons_append, List.nil_append, List.append_nil, Nat.reduceMul,
+    run_ld_vregs_iff (g (L.a 0) (by simp [preRegs])) h1,
+    run_ld_vregs_iff (g (L.a 1) (by simp [preRegs])) h1,
+    run_ld_vregs_iff (g (L.a 2) (by simp [preRegs])) h1,
+    run_ld_vregs_iff (g (L.a 3) (by simp [preRegs])) h1,
+    run_ld_vregs_iff (g (L.b 0) (by simp [preRegs])) h2,
+    run_ld_vregs_iff (g (L.b 1) (by simp [preRegs])) h2,
+    run_ld_vregs_iff (g (L.b 2) (by simp [preRegs])) h2,
+    run_ld_vregs_iff (g (L.b 3) (by simp [preRegs])) h2,
+    run_va_vregs_iff (g (L.w 0) (by simp [preRegs])),
+    run_va_vregs_iff (g (L.w 1) (by simp [preRegs])),
+    run_va_vregs_iff (g (L.w 2) (by simp [preRegs])),
+    run_va_vregs_iff (g (L.w 3) (by simp [preRegs])),
+    run_constRows_iff hv]
+  constructor
+  · rintro ⟨x0, hx0, y0, hy0, x1, hx1, y1, hy1, x2, hx2, y2, hy2, x3, hx3, y3, hy3, hrun⟩
+    exact ⟨#v[x0, x1, x2, x3], #v[y0, y1, y2, y3],
+      (readLimbs?_eq_some_iff _ _ _).2 ⟨by simpa using hx0, by simpa using hx1,
+        by simpa using hx2, by simpa using hx3⟩,
+      (readLimbs?_eq_some_iff _ _ _).2 ⟨by simpa using hy0, by simpa using hy1,
+        by simpa using hy2, by simpa using hy3⟩, hrun⟩
+  · rintro ⟨x, y, hx, hy, hrun⟩
+    obtain ⟨hx0, hx1, hx2, hx3⟩ := (readLimbs?_eq_some_iff _ _ _).1 hx
+    obtain ⟨hy0, hy1, hy2, hy3⟩ := (readLimbs?_eq_some_iff _ _ _).1 hy
+    exact ⟨x[0], by simpa using hx0, y[0], by simpa using hy0, x[1], hx1, y[1], hy1,
+      x[2], hx2, y[2], hy2, x[3], hx3, y[3], hy3, hrun⟩
 
 /-- **The prologue of `SQUARE`.** From register file `f`, the operand loads, advice rows and
 constant rows run exactly when the operand can be read, and they write `preWrites`.
-Example: `SQUAREQ` with `x10` pointing at readable RAM. -/
+Example: `SQUAREQ` with `x10 = 0x8001_0000` in readable RAM loads `vr48..vr51` from
+`0x8001_0000`. -/
 theorem run_prologue_square_iff {scalar : Bool} {L : MulRegs} (hv : L.Valid .square scalar)
     {rs1 rs2 : regidx} {advice : Nat → BitVec 64} {s : SailJoltState} {B1 : BitVec 64}
     (h1 : XReads s rs1 B1) (f : VReg → BitVec 64) (rest : List Instr) (s' : SailJoltState) :
@@ -605,30 +549,26 @@ theorem run_prologue_square_iff {scalar : Bool} {L : MulRegs} (hv : L.Valid .squ
         (Program.seq rest).Run
           { s with vregs := writeAll f (preWrites .square scalar L x x advice) } s' := by
   have g := hv.pre_ge
-  cases scalar
-  all_goals
-    simp only [prologueRows, constRows, ldRow, List.flatMap_cons, List.flatMap_nil,
-      List.cons_append, List.nil_append, List.append_nil, Bool.false_eq_true,
-      ite_true, ite_false, Nat.reduceMul,
-      run_ld_vregs_iff (g (L.a 0) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 1) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 2) (by simp [preRegs])) h1,
-      run_ld_vregs_iff (g (L.a 3) (by simp [preRegs])) h1,
-      run_va_vregs_iff (g (L.w 0) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 1) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 2) (by simp [preRegs])),
-      run_va_vregs_iff (g (L.w 3) (by simp [preRegs])),
-      run_lui_vregs_iff (g L.p (by simp [preRegs]))]
-  on_goal 2 => simp only [run_lui_vregs_iff (g L.p2 (by simp [preRegs]))]
-  all_goals
-    constructor
-    · rintro ⟨x0, hx0, x1, hx1, x2, hx2, x3, hx3, hrun⟩
-      exact ⟨#v[x0, x1, x2, x3],
-        (readLimbs?_eq_some_iff _ _ _).2 ⟨by simpa using hx0, by simpa using hx1,
-          by simpa using hx2, by simpa using hx3⟩, hrun⟩
-    · rintro ⟨x, hx, hrun⟩
-      obtain ⟨hx0, hx1, hx2, hx3⟩ := (readLimbs?_eq_some_iff _ _ _).1 hx
-      exact ⟨x[0], by simpa using hx0, x[1], hx1, x[2], hx2, x[3], hx3, hrun⟩
+  rw [List.append_assoc]
+  simp only [prologueRows, ldRow, List.flatMap_cons, List.flatMap_nil,
+    List.cons_append, List.nil_append, List.append_nil, Nat.reduceMul,
+    run_ld_vregs_iff (g (L.a 0) (by simp [preRegs])) h1,
+    run_ld_vregs_iff (g (L.a 1) (by simp [preRegs])) h1,
+    run_ld_vregs_iff (g (L.a 2) (by simp [preRegs])) h1,
+    run_ld_vregs_iff (g (L.a 3) (by simp [preRegs])) h1,
+    run_va_vregs_iff (g (L.w 0) (by simp [preRegs])),
+    run_va_vregs_iff (g (L.w 1) (by simp [preRegs])),
+    run_va_vregs_iff (g (L.w 2) (by simp [preRegs])),
+    run_va_vregs_iff (g (L.w 3) (by simp [preRegs])),
+    run_constRows_iff hv]
+  constructor
+  · rintro ⟨x0, hx0, x1, hx1, x2, hx2, x3, hx3, hrun⟩
+    exact ⟨#v[x0, x1, x2, x3],
+      (readLimbs?_eq_some_iff _ _ _).2 ⟨by simpa using hx0, by simpa using hx1,
+        by simpa using hx2, by simpa using hx3⟩, hrun⟩
+  · rintro ⟨x, hx, hrun⟩
+    obtain ⟨hx0, hx1, hx2, hx3⟩ := (readLimbs?_eq_some_iff _ _ _).1 hx
+    exact ⟨x[0], by simpa using hx0, x[1], hx1, x[2], hx2, x[3], hx3, hrun⟩
 
 /-! ## The columns -/
 
@@ -668,7 +608,7 @@ theorem outRows_assert (op : FieldOp) (L : MulRegs) (rs1 rs3 : regidx) {k : Nat}
   simp [outRows, hk]
 
 /-- A run of register rows to the end ends in their register file.
-Example: the resets at the end of an inline. -/
+Example: `ADDI vr48, x0, 0` as the last row of `MULQ`. -/
 theorem run_regs_end_iff {l : List Instr} {f g : VReg → BitVec 64} (h : regRun l f = some g)
     (s s' : SailJoltState) :
     (Program.seq l).Run { s with vregs := f } s' ↔ s' = { s with vregs := g } := by
@@ -677,7 +617,8 @@ theorem run_regs_end_iff {l : List Instr} {f g : VReg → BitVec 64} (h : regRun
   rw [this, run_nil_iff]
 
 /-- A column's terms have the same value in every register file that agrees on the operand
-registers. Example: column 1 of `MULQ` in the file after column 0. -/
+registers.
+Example: column 1 of `MULQ` has the same sum in two files that agree on `vr48..vr60`. -/
 theorem colSum_congr {op : FieldOp} {scalar : Bool} {L : MulRegs} {k : Nat}
     (hops : ∀ m ∈ colTerms op scalar L k, ∀ r ∈ m.ops, L.OpFree r) {F G : VReg → BitVec 64}
     (h : ∀ r, L.OpFree r → G r = F r) :
@@ -691,7 +632,7 @@ theorem colSum_congr {op : FieldOp} {scalar : Bool} {L : MulRegs} {k : Nat}
 /-- One column `k` of `1..6`, from a register file `G` that agrees with `F` on the operands:
 the column's register rows end in a file `G'` that still agrees with `F`, and
 `R + 2^64·C' = C + colSum k`, where `C`, `C'` are the carries in and out and `R` the column.
-Example: column 1 of `MULQ`. -/
+Example: column 1 of `MULQ` adds five terms into `vr63` and `vr62`. -/
 theorem col_step {op : FieldOp} {scalar : Bool} {L : MulRegs} (hv : L.Valid op scalar)
     {k : Nat} (hk : k ∈ List.range' 1 6) {F G : VReg → BitVec 64}
     (hG : ∀ r, L.OpFree r → G r = F r) :
@@ -947,7 +888,7 @@ theorem pre_vals {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠ .div
   · exact absurd rfl hop
 
 /-- A run of the rows after the prologue reads `rs3`: the first output store reads it.
-Example: `MULQ` with `rs3 = x12`. -/
+Example: `MULQ` with `rs3 = x12` and `x12 = 0x8002_0000` reads `x12` at its first store. -/
 theorem tail_reads3 {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠ .div)
     (hv : L.Valid op scalar) {rs1 rs3 : regidx} {s s' : SailJoltState} {F : VReg → BitVec 64}
     (h : (Program.seq (tailRows op scalar L rs1 rs3)).Run { s with vregs := F } s') :
@@ -1000,7 +941,7 @@ def FieldMulSpec (q : Nat) (op : FieldOp) (rs1 rs2 rs3 : regidx) (s s' : SailJol
 
 /-- **Soundness of the `MUL` and `SQUARE` rows.** Every run of the rows, for every advice, from a
 state whose output buffer lies in RAM, meets `FieldMulSpec` for the modulus of the layout.
-Example: the four instances `secp256k1Mulq_rows_sound` and the three like it. -/
+Example: for `MULQ` with `a = 2` and `b = (p+1)/2`, every run stores some `c ≡ 1 (mod p)`. -/
 theorem mulRows_sound {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠ .div)
     (hv : L.Valid op scalar) {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : FieldMulBuffer rs3 s)
@@ -1088,7 +1029,7 @@ def FieldMulCanonical (q : Nat) (rs3 : regidx) (s s' : SailJoltState) : Prop :=
 its obligations, with operands `a` and `b` (for squaring, `b = a`) for which Jolt's quotient
 advice `w = ⌊a·b / q⌋` exists, the rows run with that advice; the end state meets the
 specification, and the stored result is `a·b mod q`, which is below `q`.
-Example: the four instances `secp256k1Mulq_rows_jolt_advice_complete` and the three like it. -/
+Example: for `MULQ` with `a = 2` and `b = (p+1)/2`, the rows run with `w = 1` and store `1`. -/
 theorem mulRows_jolt_advice_complete {op : FieldOp} {scalar : Bool} {L : MulRegs}
     (hop : op ≠ .div) (hv : L.Valid op scalar) {rs1 rs2 rs3 : regidx} {s : SailJoltState}
     (pre : FieldMulPre op rs1 rs2 rs3 s) {a b w : Limbs}
@@ -1192,7 +1133,7 @@ theorem getD_quotientWords (w : Limbs) :
 
 /-- **Completeness for operands below the modulus.** When both operands are below `q`, Jolt's
 quotient advice exists, and the rows run with it as in `mulRows_jolt_advice_complete`.
-Example: the four instances `secp256k1Mulq_rows_jolt_advice_complete` and the three like it. -/
+Example: for `MULQ` with `a = 2` and `b = (p+1)/2`, the rows run with `w = 1` and store `1`. -/
 theorem mulRows_jolt_advice_complete_of_lt {op : FieldOp} {scalar : Bool} {L : MulRegs}
     (hop : op ≠ .div) (hv : L.Valid op scalar) {rs1 rs2 rs3 : regidx} {s : SailJoltState}
     (pre : FieldMulPre op rs1 rs2 rs3 s) {a b : Limbs}
@@ -1222,7 +1163,8 @@ theorem mulRows_jolt_advice_complete_of_lt {op : FieldOp} {scalar : Bool} {L : M
 /-! ## The four layouts -/
 
 /-- The `SECP256K1_MULQ` layout meets the conditions of the proofs.
-Example: its operand, quotient and constant registers are distinct pool registers. -/
+Example: its operand, quotient and `p'` registers `vr48..vr60` are distinct, and the column
+registers `vr61..vr63` are none of them. -/
 theorem mulqRegs_valid : mulqRegs.Valid .mul false where
   pre_nodup := by decide
   pre_ge := by decide
@@ -1234,7 +1176,8 @@ theorem mulqRegs_valid : mulqRegs.Valid .mul false where
   pool := by decide
 
 /-- The `SECP256K1_MULR` layout meets the conditions of the proofs.
-Example: its operand, quotient and constant registers are distinct pool registers. -/
+Example: its operand, quotient and `p'` registers `vr48..vr61` are distinct, and the column
+registers `vr62..vr64` are none of them. -/
 theorem mulrRegs_valid : mulrRegs.Valid .mul true where
   pre_nodup := by decide
   pre_ge := by decide
@@ -1246,7 +1189,8 @@ theorem mulrRegs_valid : mulrRegs.Valid .mul true where
   pool := by decide
 
 /-- The `SECP256K1_SQUAREQ` layout meets the conditions of the proofs.
-Example: its operand, quotient and constant registers are distinct pool registers. -/
+Example: its operand, quotient and `p'` registers `vr48..vr56` are distinct, and the column
+registers `vr57..vr60` are none of them. -/
 theorem squareqRegs_valid : squareqRegs.Valid .square false where
   pre_nodup := by decide
   pre_ge := by decide
@@ -1258,7 +1202,8 @@ theorem squareqRegs_valid : squareqRegs.Valid .square false where
   pool := by decide
 
 /-- The `SECP256K1_SQUARER` layout meets the conditions of the proofs.
-Example: its operand, quotient and constant registers are distinct pool registers. -/
+Example: its operand, quotient and `p'` registers `vr48..vr57` are distinct, and the column
+registers `vr58..vr61` are none of them. -/
 theorem squarerRegs_valid : squarerRegs.Valid .square true where
   pre_nodup := by decide
   pre_ge := by decide
@@ -1275,7 +1220,8 @@ theorem squarerRegs_valid : squarerRegs.Valid .square true where
 output buffer lies in RAM, stores at `rs3` a value `c` with `a·b = w·p + c` for some
 `w < 2^256`, where `a` and `b` are read at `rs1` and `rs2`; only virtual registers and the
 output buffer change.
-Example: `JoltTests.Inlines.Secp256k1FieldMulInstance` applies it to a concrete state. -/
+Example: with `a = 2` at `x10 = 0x8001_0000`, `b = (p+1)/2` at `x11 = 0x8001_0020` and the
+buffer at `x12 = 0x8002_0000`, every run stores some `c ≡ 1 (mod p)` at `0x8002_0000`. -/
 theorem secp256k1Mulq_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : FieldMulBuffer rs3 s)
     (run : (secp256k1MulqRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -1287,7 +1233,8 @@ theorem secp256k1Mulq_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec
 /-- **Completeness of `SECP256K1_MULQ` with Jolt's advice.** For a call that meets its
 obligations, with operands below `p`, Jolt's quotient advice exists and the rows run with it;
 the end state meets the specification, and the stored result is below `p`.
-Example: `JoltTests.Inlines.Secp256k1FieldMulInstance` applies it to a concrete state. -/
+Example: with `a = 2` at `x10 = 0x8001_0000`, `b = (p+1)/2` at `x11 = 0x8001_0020` and the
+buffer at `x12 = 0x8002_0000`, the rows run with quotient `w = 1` and store `1`. -/
 theorem secp256k1Mulq_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : SailJoltState}
     (pre : FieldMulPre .mul rs1 rs2 rs3 s) {a b : Limbs}
     (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a)
@@ -1311,7 +1258,8 @@ theorem secp256k1Mulq_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : Sail
 output buffer lies in RAM, stores at `rs3` a value `c` with `a·b = w·n + c` for some
 `w < 2^256`, where `a` and `b` are read at `rs1` and `rs2`; only virtual registers and the
 output buffer change.
-Example: `JoltTests.Inlines.Secp256k1FieldMulInstance` applies it to a concrete state. -/
+Example: with `a = 2` at `x10 = 0x8001_0000`, `b = (n+1)/2` at `x11 = 0x8001_0020` and the
+buffer at `x12 = 0x8002_0000`, every run stores some `c ≡ 1 (mod n)` at `0x8002_0000`. -/
 theorem secp256k1Mulr_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : FieldMulBuffer rs3 s)
     (run : (secp256k1MulrRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -1323,7 +1271,8 @@ theorem secp256k1Mulr_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec
 /-- **Completeness of `SECP256K1_MULR` with Jolt's advice.** For a call that meets its
 obligations, with operands below `n`, Jolt's quotient advice exists and the rows run with it;
 the end state meets the specification, and the stored result is below `n`.
-Example: `JoltTests.Inlines.Secp256k1FieldMulInstance` applies it to a concrete state. -/
+Example: with `a = 2` at `x10 = 0x8001_0000`, `b = (n+1)/2` at `x11 = 0x8001_0020` and the
+buffer at `x12 = 0x8002_0000`, the rows run with quotient `w = 1` and store `1`. -/
 theorem secp256k1Mulr_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : SailJoltState}
     (pre : FieldMulPre .mul rs1 rs2 rs3 s) {a b : Limbs}
     (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a)
@@ -1347,7 +1296,8 @@ theorem secp256k1Mulr_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : Sail
 whose output buffer lies in RAM, stores at `rs3` a value `c` with `a·a = w·p + c` for some
 `w < 2^256`, where `a` is read at `rs1`; only virtual registers and the
 output buffer change.
-Example: `JoltTests.Inlines.Secp256k1FieldMulInstance` applies it to a concrete state. -/
+Example: with `a = 2^128` at `x10 = 0x8001_0000` and the buffer at `x12 = 0x8002_0000`, every
+run stores some `c ≡ 2^256 ≡ 0x1000003d1 (mod p)` at `0x8002_0000`. -/
 theorem secp256k1Squareq_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : FieldMulBuffer rs3 s)
     (run : (secp256k1SquareqRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -1359,7 +1309,8 @@ theorem secp256k1Squareq_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → Bit
 /-- **Completeness of `SECP256K1_SQUAREQ` with Jolt's advice.** For a call that meets its
 obligations, with operand below `p`, Jolt's quotient advice exists and the rows run with it;
 the end state meets the specification, and the stored result is below `p`.
-Example: `JoltTests.Inlines.Secp256k1FieldMulInstance` applies it to a concrete state. -/
+Example: with `a = 2^128` at `x10 = 0x8001_0000` and the buffer at `x12 = 0x8002_0000`, the
+rows run with quotient `w = 1` and store `2^256 - p = 0x1000003d1`. -/
 theorem secp256k1Squareq_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : SailJoltState}
     (pre : FieldMulPre .square rs1 rs2 rs3 s) {a : Limbs}
     (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a) (hca : limbsToNat a < p) :
@@ -1381,7 +1332,8 @@ theorem secp256k1Squareq_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : S
 whose output buffer lies in RAM, stores at `rs3` a value `c` with `a·a = w·n + c` for some
 `w < 2^256`, where `a` is read at `rs1`; only virtual registers and the
 output buffer change.
-Example: `JoltTests.Inlines.Secp256k1FieldMulInstance` applies it to a concrete state. -/
+Example: with `a = 2^128` at `x10 = 0x8001_0000` and the buffer at `x12 = 0x8002_0000`, every
+run stores some `c ≡ 2^256 (mod n)` at `0x8002_0000`. -/
 theorem secp256k1Squarer_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : FieldMulBuffer rs3 s)
     (run : (secp256k1SquarerRowsAuto rs1 rs2 rs3 advice).Run s s') :
@@ -1393,7 +1345,8 @@ theorem secp256k1Squarer_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → Bit
 /-- **Completeness of `SECP256K1_SQUARER` with Jolt's advice.** For a call that meets its
 obligations, with operand below `n`, Jolt's quotient advice exists and the rows run with it;
 the end state meets the specification, and the stored result is below `n`.
-Example: `JoltTests.Inlines.Secp256k1FieldMulInstance` applies it to a concrete state. -/
+Example: with `a = 2^128` at `x10 = 0x8001_0000` and the buffer at `x12 = 0x8002_0000`, the
+rows run with quotient `w = 1` and store `2^256 - n`. -/
 theorem secp256k1Squarer_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : SailJoltState}
     (pre : FieldMulPre .square rs1 rs2 rs3 s) {a : Limbs}
     (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a) (hca : limbsToNat a < n) :

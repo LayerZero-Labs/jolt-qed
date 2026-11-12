@@ -41,14 +41,17 @@ set_option autoImplicit false
 
 namespace JoltISA.Inlines.Secp256k1
 
-/-- The three operations the builder implements. -/
+/-- The three operations the builder implements.
+Example: `SECP256K1_MULQ` uses `.mul`, `SECP256K1_SQUARER` uses `.square`, `SECP256K1_DIVQ`
+uses `.div`. -/
 inductive FieldOp where
   | mul
   | square
   | div
   deriving DecidableEq
 
-/-- Virtual register `n`. Example: `vr 48` is the first pool register. -/
+/-- Virtual register `n`.
+Example: `vr 48` is the first pool register, the limb `a0` in `mulqRegs`. -/
 abbrev vr (n : Nat) : VReg := BitVec.ofNat 7 n
 
 /-- The pool registers of one inline: the limbs `a`, `b` (for squaring, `b = a`) and `w`, the
@@ -71,24 +74,32 @@ structure MulRegs where
 
 namespace MulRegs
 
-/-- The accumulator of column `k`: `r0` for even `k`, `r1` for odd `k`. -/
+/-- The accumulator of column `k`: `r0` for even `k`, `r1` for odd `k`.
+Example: for `mulqRegs`, `r 0 = r 2 = vr62` and `r 1 = vr63`. -/
 def r (L : MulRegs) (k : Nat) : VReg := if k % 2 = 0 then L.r0 else L.r1
 
-/-- The column registers of column `k`: accumulator `r k`, carry register `r (k+1)`. -/
+/-- The column registers of column `k`: accumulator `r k`, carry register `r (k+1)`.
+Example: `mulqRegs.col 1 = ⟨vr63, vr62, vr61, vr127⟩` and
+`mulqRegs.col 2 = ⟨vr62, vr63, vr61, vr127⟩`. -/
 def col (L : MulRegs) (k : Nat) : MacRegs := ⟨L.r k, L.r (k + 1), L.aux, L.aux2⟩
 
 end MulRegs
 
-/-- `LD d, off(r)` with Jolt's plain fault class. -/
+/-- `LD d, off(r)` with Jolt's plain fault class.
+Example: `ldRow vr49 x10 8` is `LD vr49, 8(x10)`; with `x10 = 0x8001_0000` it loads limb `a1`
+from `0x8001_0008`. -/
 def ldRow (d : VReg) (r : regidx) (off : Nat) : Instr :=
   .LD .normal (.vreg d) (.xreg r) (BitVec.ofNat 64 off)
 
-/-- `SD v, off(r)`. -/
+/-- `SD v, off(r)`.
+Example: `sdRow x12 vr62 0` is `SD vr62, 0(x12)`; with `x12 = 0x8002_0000` it stores column 0
+of `SECP256K1_MULQ` to `0x8002_0000`. -/
 def sdRow (r : regidx) (v : VReg) (off : Nat) : Instr :=
   .SD (.xreg r) (.vreg v) (BitVec.ofNat 64 off)
 
 /-- The operand loads and advice rows, four rounds of them.
-Example: for multiplication, round `i` is `LD a_i, 8i(rs1); LD b_i, 8i(rs2); VirtualAdvice w_i`. -/
+Example: for `.mul`, `mulqRegs`, `rs1 = x10`, `rs2 = x11`, round 1 is `LD vr49, 8(x10);
+LD vr53, 8(x11); VirtualAdvice vr57 (advice 1)`. -/
 def prologueRows (op : FieldOp) (L : MulRegs) (rs1 rs2 : regidx) (advice : Nat → BitVec 64) :
     List Instr :=
   [0, 1, 2, 3].flatMap fun i =>
@@ -99,22 +110,29 @@ def prologueRows (op : FieldOp) (L : MulRegs) (rs1 rs2 : regidx) (advice : Nat �
     | .div => [ldRow (L.b i) rs2 (8 * i), .VirtualAdvice (.vreg (L.a i)) (advice (2 * i)) 0,
         .VirtualAdvice (.vreg (L.w i)) (advice (2 * i + 1)) 0]
 
-/-- The low limb of `p'` for the base field. -/
+/-- The low limb of `p'` for the base field.
+Example: `pPrimeBase = 2^32 + 977`, all of `2^256 - p`, since `p = 2^256 - 2^32 - 977`. -/
 def pPrimeBase : BitVec 64 := 0x1000003d1
 
-/-- The two low limbs of `p'` for the scalar field (its third limb is `1`). -/
+/-- The two low limbs of `p'` for the scalar field (its third limb is `1`); this is the first.
+Example: `2^256 - n = 2^128 + 0x4551231950b75fc4 · 2^64 + 0x402da1732fc9bebf`. -/
 def pPrimeScalar0 : BitVec 64 := 0x402da1732fc9bebf
 
-/-- See `pPrimeScalar0`. -/
+/-- The second limb of `p'` for the scalar field.
+Example: `2^256 - n = 2^128 + 0x4551231950b75fc4 · 2^64 + 0x402da1732fc9bebf`. -/
 def pPrimeScalar1 : BitVec 64 := 0x4551231950b75fc4
 
-/-- The `LUI` rows that load `p'`. -/
+/-- The `LUI` rows that load `p'`.
+Example: `constRows false mulqRegs = [LUI vr60 0x1000003d1]`, and `constRows true mulrRegs`
+loads `pPrimeScalar0` into `vr60` and `pPrimeScalar1` into `vr61`. -/
 def constRows (scalar : Bool) (L : MulRegs) : List Instr :=
   if scalar then [.LUI (.vreg L.p) pPrimeScalar0, .LUI (.vreg L.p2) pPrimeScalar1]
   else [.LUI (.vreg L.p) pPrimeBase]
 
 /-- The product terms of column `k`: `lo(a_i·b_j)` for `i + j = k`, then `hi(a_i·b_j)` for
-`i + j = k - 1`. For squaring only `i ≤ j` appears, with the off-diagonal terms doubled. -/
+`i + j = k - 1`. For squaring only `i ≤ j` appears, with the off-diagonal terms doubled.
+Example: `prodTerms .mul mulqRegs 1 = [low vr48 vr53, low vr49 vr52, high vr48 vr52]` and
+`prodTerms .square squareqRegs 1 = [low2 vr48 vr49, high vr48 vr48]`. -/
 def prodTerms (op : FieldOp) (L : MulRegs) (k : Nat) : List Mac :=
   ((List.range (k + 1)).filterMap fun i =>
     let j := k - i
@@ -135,7 +153,8 @@ def prodTerms (op : FieldOp) (L : MulRegs) (k : Nat) : List Mac :=
 
 /-- The terms of column `k` (`1 ≤ k ≤ 6`), in the order the builder emits them: the
 `w·p'` terms, then the product terms.
-Example: column 1 of `MULQ` is `[lo(w1·p), hi(w0·p), lo(a0·b1), lo(a1·b0), hi(a0·b0)]`. -/
+Example: `colTerms .mul false mulqRegs 1` is
+`[low vr57 vr60, high vr56 vr60, low vr48 vr53, low vr49 vr52, high vr48 vr52]`. -/
 def colTerms (op : FieldOp) (scalar : Bool) (L : MulRegs) (k : Nat) : List Mac :=
   (if k < 4 then [.low (L.w k) L.p] else []) ++
   (if k ≤ 4 then [.high (L.w (k - 1)) L.p] else []) ++
@@ -144,7 +163,9 @@ def colTerms (op : FieldOp) (scalar : Bool) (L : MulRegs) (k : Nat) : List Mac :
   prodTerms op L k
 
 /-- What happens to the finished column `k`: for `k < 4`, store it to `rs3` (division: load
-dividend limb `k` and compare); for `k ≥ 4`, compare it with `w[k-4]`. -/
+dividend limb `k` and compare); for `k ≥ 4`, compare it with `w[k-4]`.
+Example: `outRows .mul mulqRegs x10 x12 1 = [SD vr63, 8(x12)]`, a store to `0x8002_0008`, and
+`outRows .mul mulqRegs x10 x12 4 = [VirtualAssertEQ vr62 vr56]`. -/
 def outRows (op : FieldOp) (L : MulRegs) (rs1 rs3 : regidx) (k : Nat) : List Instr :=
   if k < 4 then
     match op with
@@ -152,28 +173,38 @@ def outRows (op : FieldOp) (L : MulRegs) (rs1 rs3 : regidx) (k : Nat) : List Ins
     | _ => [sdRow rs3 (L.r k) (8 * k)]
   else [.VirtualAssertEQ (.vreg (L.r k)) (.vreg (L.w (k - 4))) 0]
 
-/-- Column 0 and its output. -/
+/-- Column 0 and its output.
+Example: `col0Rows .mul mulqRegs x10 x12` is `MUL vr62, vr48, vr52`, the rows of the term
+`low vr56 vr60` in `⟨vr62, vr63, vr61, vr127⟩`, then `SD vr62, 0(x12)`. -/
 def col0Rows (op : FieldOp) (L : MulRegs) (rs1 rs3 : regidx) : List Instr :=
   .MUL (.vreg L.r0) (.vreg (L.a 0)) (.vreg (L.b 0)) ::
     (colRows (L.col 0) true [.low (L.w 0) L.p] ++ outRows op L rs1 rs3 0)
 
-/-- Column `k` (`1 ≤ k ≤ 6`) and its output. -/
+/-- Column `k` (`1 ≤ k ≤ 6`) and its output.
+Example: `colKRows .mul false mulqRegs x10 x12 1` is the rows of the five terms of column 1 in
+`⟨vr63, vr62, vr61, vr127⟩`, then `SD vr63, 8(x12)`. -/
 def colKRows (op : FieldOp) (scalar : Bool) (L : MulRegs) (rs1 rs3 : regidx) (k : Nat) :
     List Instr :=
   colRows (L.col k) true (colTerms op scalar L k) ++ outRows op L rs1 rs3 k
 
-/-- The top column: `r1 + hi(a3·b3)` must equal `w3`, and the addition must not overflow. -/
+/-- The top column: `r1 + hi(a3·b3)` must equal `w3`, and the addition must not overflow.
+Example: `finalRows mulqRegs` is `MULHU vr61, vr51, vr55; ADD vr63, vr63, vr61;
+VirtualAssertEQ vr63 vr59; VirtualAssertLTE vr61 vr63`. -/
 def finalRows (L : MulRegs) : List Instr :=
   [.MULHU (.vreg L.aux) (.vreg (L.a 3)) (.vreg (L.b 3)),
     .ADD (.vreg L.r1) (.vreg L.r1) (.vreg L.aux),
     .VirtualAssertEQ (.vreg L.r1) (.vreg (L.w 3)) 0,
     .VirtualAssertLTE (.vreg L.aux) (.vreg L.r1) 0]
 
-/-- Division stores its result, held in `a`, after every check. -/
+/-- Division stores its result, held in `a`, after every check.
+Example: `storeRows mulqRegs x12` is `SD vr48, 0(x12)` through `SD vr51, 24(x12)`, which write
+`0x8002_0000` through `0x8002_0018`. -/
 def storeRows (L : MulRegs) (rs3 : regidx) : List Instr :=
   [0, 1, 2, 3].map fun i => sdRow rs3 (L.a i) (8 * i)
 
-/-- The rows of one field inline, as `MulqBuilder::inline_sequence` emits them. -/
+/-- The rows of one field inline, as `MulqBuilder::inline_sequence` emits them.
+Example: for `SECP256K1_MULQ` with `a = 2`, `b = (p+1)/2` and `rs3 = x12 = 0x8002_0000`, the
+advice gives `w = 1` and the rows store `c = 1` there, since `a·b = p + 1 = 1·p + 1`. -/
 def mulRows (op : FieldOp) (scalar : Bool) (L : MulRegs) (rs1 rs2 rs3 : regidx)
     (advice : Nat → BitVec 64) : List Instr :=
   prologueRows op L rs1 rs2 advice ++ constRows scalar L ++ col0Rows op L rs1 rs3 ++
@@ -183,7 +214,9 @@ def mulRows (op : FieldOp) (scalar : Bool) (L : MulRegs) (rs1 rs2 rs3 : regidx)
 
 /-! ## Register layouts -/
 
-/-- `MULQ` and `DIVQ`. -/
+/-- `MULQ` and `DIVQ`.
+Example: `a = vr48..51`, `b = vr52..55`, `w = vr56..59`, `p = vr60`, `aux = vr61`, `r0 = vr62`,
+`r1 = vr63`; `p2 = vr126` and `aux2 = vr127` are unused; the resets clear `vr48..63`. -/
 def mulqRegs : MulRegs where
   a i := vr (48 + i)
   b i := vr (52 + i)
@@ -196,7 +229,9 @@ def mulqRegs : MulRegs where
   r1 := vr 63
   count := 16
 
-/-- `MULR` and `DIVR`. -/
+/-- `MULR` and `DIVR`.
+Example: `a = vr48..51`, `b = vr52..55`, `w = vr56..59`, `p = vr60`, `p2 = vr61`, `aux = vr62`,
+`r0 = vr63`, `r1 = vr64`; `aux2 = vr127` is unused; the resets clear `vr48..64`. -/
 def mulrRegs : MulRegs where
   a i := vr (48 + i)
   b i := vr (52 + i)
@@ -209,7 +244,9 @@ def mulrRegs : MulRegs where
   r1 := vr 64
   count := 17
 
-/-- `SQUAREQ`. -/
+/-- `SQUAREQ`.
+Example: `a = b = vr48..51`, `w = vr52..55`, `p = vr56`, `aux = vr57`, `aux2 = vr58`,
+`r0 = vr59`, `r1 = vr60`; `p2 = vr126` is unused; the resets clear `vr48..60`. -/
 def squareqRegs : MulRegs where
   a i := vr (48 + i)
   b i := vr (48 + i)
@@ -222,7 +259,9 @@ def squareqRegs : MulRegs where
   r1 := vr 60
   count := 13
 
-/-- `SQUARER`. -/
+/-- `SQUARER`.
+Example: `a = b = vr48..51`, `w = vr52..55`, `p = vr56`, `p2 = vr57`, `aux = vr58`,
+`aux2 = vr59`, `r0 = vr60`, `r1 = vr61`; the resets clear `vr48..61`. -/
 def squarerRegs : MulRegs where
   a i := vr (48 + i)
   b i := vr (48 + i)
@@ -248,7 +287,9 @@ theorem eq_append_of_take_drop {α : Type} {l A B : List α} (h1 : l.take A.leng
     (h2 : l.drop A.length = B) : l = A ++ B := by
   rw [← h1, ← h2, List.take_append_drop]
 
-/-- Splits `mulRows` into its segments and checks each against the generated rows. -/
+/-- Splits `mulRows` into its segments and checks each against the generated rows.
+Example: `by mul_rows_eq` proves `secp256k1MulqRowsAutoList_eq`; its first `rfl` checks the 12
+prologue rows, starting with `LD vr48, 0(rs1)`. -/
 macro "mul_rows_eq" : tactic => `(tactic| (
   simp only [mulRows, List.range', List.flatMap_cons, List.flatMap_nil, List.append_assoc,
     List.append_nil, List.nil_append, reduceCtorEq, ↓reduceIte, Nat.reduceAdd]
