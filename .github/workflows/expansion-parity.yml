@@ -99,5 +99,8 @@ jobs:
         if: ${{ !cancelled() && steps.comparator.outcome == 'success' }}
         run: |
           out="$RUNNER_TEMP/expansion-parity/out"
-          EXPANSION_PARITY_ARGS="mutation $out/rows.jsonl" \
-            lake env lean JoltTests/ExpansionParity/Run.lean
+          args="mutation $out/rows.jsonl"
+          if [ "${{ steps.generated.outputs.present }}" = true ]; then
+            args="$args $out/inline_templates.json"
+          fi
+          EXPANSION_PARITY_ARGS="$args" lake env lean JoltTests/ExpansionParity/Run.lean
