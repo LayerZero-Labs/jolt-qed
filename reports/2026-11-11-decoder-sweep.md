@@ -2,7 +2,7 @@
 
 Date: 2026-11-12 (Track T phase T2 of `docs/inline-precompiles.md`).
 Jolt: a16z/jolt#2384 at `580084fcfad4788ebf48413a92dd640ca090c45f` (primary run), and the Track T pin `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5` (second run).
-Lean: this branch, on `inline/t1-driver` at `b648846`.
+Lean and the comparator: branch `inline/t2-decoder-sweep` at `08f56a2f0` (based on `inline/t1-driver` at `b648846`); later commits on the branch change only this report.
 How to run it: `scripts/expansion-parity/DECODER-SWEEP.md`.
 
 ## Result
@@ -16,7 +16,7 @@ Every disagreement in acceptance falls into one of two explained classes, neithe
 At the pin `a6b6dc717` the comparison has 672 mismatches, all of one kind: Lean decodes CSRRC, CSRRWI, CSRRSI and CSRRCI, which Jolt decodes only from #2384.
 This is expected, because Lean's system decoding transcribes #2384.
 
-The mutation check detects all 8 corruptions it makes.
+The mutation check detects all 12 corruptions it makes.
 
 ## What this covers and what it does not
 
@@ -34,8 +34,9 @@ The argument that the sweep stands for every word has two halves, and only the f
    The driver decodes all 2^30 words with low bits `0b11` (1,073,741,824 words, 310,321,155 accepted) and verifies, for every selector class, that:
    - the decoded kind, or the rejection, depends on the operand bits only through which operand fields are zero (no violations);
    - every accepted word in a class has the same kind, and its output fields (rd, rs1, rs2, imm) are affine over GF(2) in the operand bits (all 310,321,155 accepted words checked, none skipped, no violations).
+   The check fails unless every accepted word was checked, so a class with a second accepted kind cannot pass with words left out.
    The sweep's patterns contain every zero/non-zero combination of the operand fields and a basis of single-bit differences, so in each class they determine Jolt's result on every word.
-   This ran at `580084fcf` in 324 seconds; the pin run skipped it.
+   This ran at `580084fcf` in 273 seconds; the pin run skipped it.
 2. Lean's side is argued by reading `joltDecode` (`JoltBytecode/Decode/Jolt.lean:64`), not checked.
    It extracts fixed bit ranges, and its only operand-dependent tests are equalities of whole fields with zero (LR's `rs2 = 0` at lines 152-153, and the exact ECALL, EBREAK and MRET words at lines 176-178) and the CSR address at line 51, which lies in the SYSTEM selector class.
    Under this reading Lean's result has the same structure as Jolt's, and the sweep determines it too.
@@ -51,11 +52,12 @@ Jolt's `field-inline` feature adds a decoder for opcode 0x7b (`decode.rs:87-88`)
 For each input the comparator `JoltTests/DecoderSweep/Main.lean` compares Jolt's result with `joltDecode w 0`.
 
 - Both reject.
-- Both accept: T1's `SourceView.toLean` maps Jolt's record to `.riscv j`, and `joltDecode` returns `i` with `erase i = j`.
-  `erase` (`Main.lean:62`) clears the division advice and the atomic `aq`/`rl` bits, which Jolt's record does not carry.
-  `ImageDecoded` quantifies the advice existentially, so comparing at advice 0 loses nothing.
-- Jolt-only kind: Jolt accepts with a kind that `toLean` maps to a `.jolt` source instruction, a kind in T1's `noLeanSourceKinds`, or `Inline` (`joltOnlyDecodeKinds`, `Main.lean:149`), and `joltDecode` returns `none`.
-- Rejected by Jolt's expansion: see the next section (`rejectedAtExpansion`, `Main.lean:162`).
+- Both accept: T1's `SourceView.toLean` maps Jolt's record to `.riscv j`, and `joltDecode` returns `i` with `eraseAdvice i = withOrdering aq rl j`.
+  Jolt's record carries neither the division advice nor the atomic `aq`/`rl` bits, so the comparison settles them separately.
+  `eraseAdvice` (`Main.lean:64`) sets the advice of `i` to 0; `ImageDecoded` quantifies the advice existentially, so comparing at advice 0 loses nothing.
+  `withOrdering` (`Main.lean:80`) sets the ordering bits of `j` from the word, `aq` from bit 26 and `rl` from bit 25, so a Lean decoder that dropped or swapped them would be reported.
+- Jolt-only kind: Jolt accepts with a kind that `toLean` maps to a `.jolt` source instruction, a kind in T1's `noLeanSourceKinds`, or `Inline` (`joltOnlyDecodeKinds`, `Main.lean:159`), and `joltDecode` returns `none`.
+- Rejected by Jolt's expansion: see the next section (`rejectedAtExpansion`, `Main.lean:176`).
 - Anything else is a mismatch.
 
 A parcel is compared in two steps: `joltUncompress` must give the same 32-bit word as Jolt's `uncompress_rv64_instruction`, and then the two decoders must agree on that word (Jolt decodes it with `is_compressed = true`).
@@ -96,7 +98,9 @@ Lean's `csr` (`JoltBytecode/Decode/Jolt.lean:51`) accepts exactly these six, so 
 
 The two pipelines therefore reject the same words, at different stages.
 A program image with such a word fails Jolt's expansion and yields no committed row, so `ImageDecoded` does not need to cover it.
-The comparator counts a word in this class only when its kind is one of the six Zicsr kinds, its CSR address is outside the six, and the same record at address 0x300 maps to a Lean instruction.
+Jolt's expansion reads the address as `imm & 0xfff` (`csr_address`, `expand/operands.rs:46`), and Jolt's record holds the sign-extended 12-bit field as its immediate.
+The comparator counts a word in this class only when all of these hold: its kind is one of the six Zicsr kinds; its immediate is a sign-extended 12-bit value whose low 12 bits equal the word's bits 31..20; that address is outside the six; and the same record at address 0x300 maps to a Lean instruction.
+A record with any other immediate, for example one whose masked address is supported, is a mismatch.
 At the six supported addresses the two decoders agree on all forms (168 words per form, in the "both accept" count).
 
 ## Results at the pin `a6b6dc717`
@@ -116,11 +120,13 @@ Outside the system opcode the per-class counts of the two runs are identical.
 ## Mutation check
 
 `DECODER_SWEEP_ARGS="mutation OUT"` corrupts one input of each shape in memory and checks that the comparator reports a mismatch.
-At `580084fcf` it detects all 8:
+At `580084fcf` it detects all 12:
 
 - rd changed, immediate changed, kind changed;
 - an accepted word turned into an error, and a rejected word turned into ADDI;
-- a supported CSR address changed to an unsupported one (0x301), and an unsupported one changed to mstatus, which checks the boundary of the expansion class;
+- a supported CSR address changed to an unsupported one (0x301), and an unsupported one changed to mstatus;
+- for a word rejected at expansion, its immediate moved outside the 12-bit range (plus 0x1000), and its address changed to an unsupported address other than the word's; these check the boundary of the expansion class;
+- for an AMO word, Lean's `aq` bit flipped, and Lean's `rl` bit flipped;
 - an uncompressed word changed.
 
 ## CI
@@ -134,7 +140,7 @@ It had not run in CI when this report was written.
 
 Local runs on a shared, heavily loaded Apple Silicon machine:
 
-- Driver at `580084fcf`: 328 seconds wall time, of which the exhaustive check took 324 seconds.
-- Lean comparison of all 2,316,288 inputs: 8 minutes 22 seconds (42 minutes in an earlier run under heavier load).
-- Mutation check: 6 minutes 52 seconds, mostly spent reading the input files.
-- First `lake build JoltTests.DecoderSweep.Main` on a populated cache: about 13 minutes.
+- Driver at `580084fcf`, including the incremental Rust build: 324 seconds wall time, of which the exhaustive check took 273 seconds.
+- Lean comparison of all 2,316,288 inputs: 4 minutes 6 seconds (42 minutes in an earlier run under heavier load).
+- Mutation check: 3 minutes 7 seconds, mostly spent reading the input files.
+- `lake build JoltTests.DecoderSweep.Main` after changing only the comparator: about 5 minutes; the first build on a populated cache took about 13 minutes.
