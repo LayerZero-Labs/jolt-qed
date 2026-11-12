@@ -41,7 +41,8 @@ theorem rotlMask_eq (k : Nat) (h : k < 64) : rotlMask k = 2 ^ (64 - k) * (2 ^ k 
 Example: `ctz (rotlMask 1) = 63`. -/
 theorem ctz_rotlMask (k : Nat) (h0 : 0 < k) (h : k < 64) : ctz (rotlMask k) = 64 - k := by
   have hm : 0 < 2 ^ k - 1 := by
-    have : 2 ≤ 2 ^ k := le_trans (show (2 : Nat) ≤ 2 ^ 1 by norm_num) (Nat.pow_le_pow_right (by omega) h0)
+    have : 2 ≤ 2 ^ k :=
+      le_trans (show (2 : Nat) ≤ 2 ^ 1 by norm_num) (Nat.pow_le_pow_right (by omega) h0)
     omega
   rw [rotlMask_eq k h, ctz_mul_pow2 _ hm, ctz_of_odd (pow2_sub_one_odd h0)]
   rfl
@@ -73,7 +74,8 @@ theorem rotri_rotlMask (x : BitVec 64) (k : Nat) (h0 : 0 < k) (h : k < 64) :
 
 /-- `VirtualXORROTL1` is `x ^ rotl y 1` with EthLib's `rotl`. -/
 theorem xorrotl1_eq (x y : BitVec 64) :
-    jolt_virtual_xorrotl1_value x y = x ^^^ (JoltSpec.Keccak.rotl (UInt64.ofBitVec y) 1).toBitVec := by
+    jolt_virtual_xorrotl1_value x y =
+      x ^^^ (JoltSpec.Keccak.rotl (UInt64.ofBitVec y) 1).toBitVec := by
   rw [show (1 : UInt64) = UInt64.ofNat 1 from rfl, toBitVec_rotl y 1 (by omega) (by omega),
     jolt_virtual_xorrotl1_value]
   congr 1
@@ -199,7 +201,8 @@ theorem foldl_eval_out (ops : List Op) (h : ops.all Op.ok = true) (f : VReg → 
 /-- The 37 pool registers: lanes `a0..a24` (`vr48..72`), `C` (`vr73..77`), `D[0..2]`
 (`vr78..80`), the rho-pi temporary, the two chi temporaries and the scratch register. -/
 structure Regs where
-  (a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 c0 c1 c2 c3 c4 d0 d1 d2 pt t3 t4 sc : BitVec 64)
+  (a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24
+    c0 c1 c2 c3 c4 d0 d1 d2 pt t3 t4 sc : BitVec 64)
 
 /-- Register number `n` of the record; `0` outside `48..84`. -/
 def Regs.get (R : Regs) : Nat → BitVec 64
@@ -286,11 +289,19 @@ def Regs.set (R : Regs) (n : Nat) (v : BitVec 64) : Regs :=
 
 /-- The pool registers of a register file. -/
 def regsOf (f : VReg → BitVec 64) : Regs :=
-  ⟨f (vr 48), f (vr 49), f (vr 50), f (vr 51), f (vr 52), f (vr 53), f (vr 54), f (vr 55), f (vr 56), f (vr 57), f (vr 58), f (vr 59), f (vr 60), f (vr 61), f (vr 62), f (vr 63), f (vr 64), f (vr 65), f (vr 66), f (vr 67), f (vr 68), f (vr 69), f (vr 70), f (vr 71), f (vr 72), f (vr 73), f (vr 74), f (vr 75), f (vr 76), f (vr 77), f (vr 78), f (vr 79), f (vr 80), f (vr 81), f (vr 82), f (vr 83), f (vr 84)⟩
+  ⟨f (vr 48), f (vr 49), f (vr 50), f (vr 51), f (vr 52), f (vr 53), f (vr 54), f (vr 55),
+    f (vr 56), f (vr 57), f (vr 58), f (vr 59), f (vr 60), f (vr 61), f (vr 62), f (vr 63),
+    f (vr 64), f (vr 65), f (vr 66), f (vr 67), f (vr 68), f (vr 69), f (vr 70), f (vr 71),
+    f (vr 72), f (vr 73), f (vr 74), f (vr 75), f (vr 76), f (vr 77), f (vr 78), f (vr 79),
+    f (vr 80), f (vr 81), f (vr 82), f (vr 83), f (vr 84)⟩
 
 /-- The 25 lanes of the record as an EthLib state. -/
 def stateOf (R : Regs) : State :=
-  ⟨.ofBitVec R.a0, .ofBitVec R.a1, .ofBitVec R.a2, .ofBitVec R.a3, .ofBitVec R.a4, .ofBitVec R.a5, .ofBitVec R.a6, .ofBitVec R.a7, .ofBitVec R.a8, .ofBitVec R.a9, .ofBitVec R.a10, .ofBitVec R.a11, .ofBitVec R.a12, .ofBitVec R.a13, .ofBitVec R.a14, .ofBitVec R.a15, .ofBitVec R.a16, .ofBitVec R.a17, .ofBitVec R.a18, .ofBitVec R.a19, .ofBitVec R.a20, .ofBitVec R.a21, .ofBitVec R.a22, .ofBitVec R.a23, .ofBitVec R.a24⟩
+  ⟨.ofBitVec R.a0, .ofBitVec R.a1, .ofBitVec R.a2, .ofBitVec R.a3, .ofBitVec R.a4,
+    .ofBitVec R.a5, .ofBitVec R.a6, .ofBitVec R.a7, .ofBitVec R.a8, .ofBitVec R.a9,
+    .ofBitVec R.a10, .ofBitVec R.a11, .ofBitVec R.a12, .ofBitVec R.a13, .ofBitVec R.a14,
+    .ofBitVec R.a15, .ofBitVec R.a16, .ofBitVec R.a17, .ofBitVec R.a18, .ofBitVec R.a19,
+    .ofBitVec R.a20, .ofBitVec R.a21, .ofBitVec R.a22, .ofBitVec R.a23, .ofBitVec R.a24⟩
 
 /-- An op on the record. -/
 def Op.evalR (R : Regs) (o : Op) : Regs := R.set o.dst (o.val R.get)
@@ -365,7 +376,8 @@ theorem chi_ops (R : Regs) : stateOf (chiOps.foldl Op.evalR R) = chi (piState R)
 
 /-- The iota row computes `iota`. -/
 theorem iota_op (ir : Fin ROUNDS) (R : Regs) :
-    stateOf (Op.evalR R (Op.xori (lane 0 0) (lane 0 0) (RC[ir]).toBitVec)) = iota ir (stateOf R) := by
+    stateOf (Op.evalR R (Op.xori (lane 0 0) (lane 0 0) (RC[ir]).toBitVec)) =
+      iota ir (stateOf R) := by
   cases R
   rfl
 
