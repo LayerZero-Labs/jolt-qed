@@ -187,7 +187,21 @@ fn encodings() -> Vec<Enc> {
         v.push(enc(w, 0x2f, 2, 0, Amo { funct5, lr }));
         v.push(enc(d, 0x2f, 3, 0, Amo { funct5, lr }));
     }
+    // CSRRC and the immediate forms, which a16z/jolt#2384 adds to the decoder.
+    // The immediate forms carry their five-bit constant in the rs1 field.
+    #[cfg(feature = "zicsr-remaining")]
+    v.extend([
+        enc(K::CSRRC, 0x73, 3, 0, I),
+        enc(K::CSRRWI, 0x73, 5, 0, I),
+        enc(K::CSRRSI, 0x73, 6, 0, I),
+        enc(K::CSRRCI, 0x73, 7, 0, I),
+    ]);
     v
+}
+
+/// Whether the kind is a Zicsr instruction, whose I-type immediate is a CSR address.
+fn is_csr(kind: SourceInstructionKind) -> bool {
+    kind.name().starts_with("CSRR")
 }
 
 /// Register and immediate choices for one encoding. `imm` holds raw field
@@ -248,7 +262,7 @@ fn encode(e: &Enc, f: Fields) -> u32 {
 fn fixed_imm(e: &Enc) -> u32 {
     match e.fmt {
         Fmt::I => match e.kind {
-            k if k == SourceInstructionKind::CSRRW || k == SourceInstructionKind::CSRRS => 0x300,
+            k if is_csr(k) => 0x300,
             k if k == SourceInstructionKind::FENCE => 0x0ff,
             _ => 0xff8, // -8
         },
@@ -287,8 +301,7 @@ const SUPPORTED_CSRS: [u32; 6] = [0x300, 0x305, 0x340, 0x341, 0x342, 0x343];
 
 fn random_imm(e: &Enc, rng: &mut Rng) -> u32 {
     let raw = rng.next_u64() as u32;
-    let is_csr = e.kind == SourceInstructionKind::CSRRW || e.kind == SourceInstructionKind::CSRRS;
-    if is_csr && rng.below(4) != 0 {
+    if is_csr(e.kind) && rng.below(4) != 0 {
         return SUPPORTED_CSRS[rng.below(SUPPORTED_CSRS.len() as u64) as usize];
     }
     // One draw in four takes an edge value of the field; encode() masks it.
@@ -378,6 +391,33 @@ pub fn register_group(group: &str, rd: u8, rs1: u8, rs2: u8) -> Result<Vec<Case>
             input: direct(kind, rd, rs1, rs2, 0, address, false),
         });
         address += 4;
+    }
+    Ok(cases)
+}
+
+/// Group `csr` (feature `zicsr-remaining` only): every Zicsr kind on each of the
+/// six CSRs Jolt models, with rd in {x0, x9} and rs1 (the five-bit constant for
+/// the immediate forms) in {0, 2, 3, 8, 9, 31}. The values cover a zero
+/// source, the reserved mtvec MODE bit (2), mstatus.MIE (8), rs1 = rd (9) and
+/// all five bits set.
+#[cfg(feature = "zicsr-remaining")]
+pub fn csr_group() -> Result<Vec<Case>, String> {
+    let mut cases = Vec::new();
+    let mut address = RAM_BASE;
+    for e in encodings().into_iter().filter(|e| is_csr(e.kind)) {
+        for csr in SUPPORTED_CSRS {
+            for rd in [0u32, 9] {
+                for rs1 in [0u32, 2, 3, 8, 9, 31] {
+                    let f = Fields { rd, rs1, rs2: 0, imm: csr };
+                    let input = decode(&e, f, address, false)?;
+                    cases.push(Case {
+                        name: format!("csr/{}/{csr:#x}/rd{rd}/rs1_{rs1}", e.kind.name()),
+                        input,
+                    });
+                    address += 4;
+                }
+            }
+        }
     }
     Ok(cases)
 }

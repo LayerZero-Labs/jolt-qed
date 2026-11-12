@@ -29,6 +29,11 @@ sha2 = "0.11"
 hex = "0.4"
 rayon = "1"
 
+[features]
+# Encodings for CSRRC, CSRRWI, CSRRSI and CSRRCI. Enable it only against a
+# Jolt checkout whose decoder has them (a16z/jolt#2384).
+zicsr-remaining = []
+
 [profile.release]
 debug = false
 

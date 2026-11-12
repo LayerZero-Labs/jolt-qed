@@ -18,6 +18,8 @@ The driver exits with status 0 when every check passes, 1 when a check fails, an
 `build.sh WORK_DIR` assembles the crate in `WORK_DIR/expansion-parity` the way `scripts/difftest/build.sh` assembles `jolt-trace`.
 It fills `@JOLT_DIR@` in `Cargo.toml.in`, links `src/`, and copies Jolt's `Cargo.lock` and `rust-toolchain.toml`.
 It also copies Jolt's `[patch]` tables with absolute paths, because the crate is its own workspace and would otherwise take arkworks from crates.io instead of Jolt's fork.
+`EXPANSION_PARITY_FEATURES` passes cargo features to the build.
+The one feature, `zicsr-remaining`, adds encodings for CSRRC, CSRRWI, CSRRSI and CSRRCI and a T1 group `csr`, which runs every Zicsr kind on each of the six CSRs Jolt models with several rd and rs1 values; enable it only against a Jolt checkout whose decoder has these kinds, such as a16z/jolt#2384.
 
 Driver options:
 

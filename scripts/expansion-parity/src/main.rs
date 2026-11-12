@@ -206,6 +206,8 @@ fn run() -> Result<bool, String> {
     t1.push(("rs1_zero", cases::register_group("rs1_zero", 7, 0, 6)?));
     t1.push(("random", cases::random_group(args.seed, args.random_per_kind)?));
     t1.push(("native_kind", cases::register_group("native_kind", 9, 5, 6)?));
+    #[cfg(feature = "zicsr-remaining")]
+    t1.push(("csr", cases::csr_group()?));
     let (decoded_kinds, direct_kinds) = cases::kind_partition();
     for (group, cs) in &t1 {
         for c in cs {

@@ -7,6 +7,8 @@
 # Environment:
 #   JOLT_DIR  a16z/jolt checkout to build against (required; for example
 #             ~/claude-work/jolt-inline-pin-a6b6 at a6b6dc717)
+#   EXPANSION_PARITY_FEATURES  cargo features of the driver (optional; for
+#             example zicsr-remaining against a16z/jolt#2384)
 #
 # The crate is assembled in WORK_DIR/expansion-parity the way
 # scripts/difftest/build.sh assembles jolt-trace: Cargo.toml comes from
@@ -62,7 +64,10 @@ cp "$JOLT_DIR/Cargo.lock" "$crate/Cargo.lock"
 cp "$JOLT_DIR/rust-toolchain.toml" "$crate/rust-toolchain.toml"
 commit="$(git -C "$JOLT_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
 say "building expansion-parity against $JOLT_DIR ($commit)"
-(cd "$crate" && cargo build --release --quiet) || fail "expansion-parity build failed"
+features=()
+[[ -n "${EXPANSION_PARITY_FEATURES:-}" ]] && features=(--features "$EXPANSION_PARITY_FEATURES")
+(cd "$crate" && cargo build --release --quiet ${features[@]+"${features[@]}"}) ||
+  fail "expansion-parity build failed"
 
 {
   printf 'EXPANSION_PARITY=%q\n' "$crate/target/release/expansion-parity"
