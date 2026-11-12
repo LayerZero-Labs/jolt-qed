@@ -6,9 +6,14 @@ The script writes two files:
 - JoltBytecode/Inlines/Keys.lean: the type `InlineKey` of supported registered
   inlines, each key's encoding (opcode, funct3, funct7), its generated rows for both
   allocation cases, its row count, and whether its rows read the source `rd` (`rs3`).
-- JoltConstraints/inline_rows_ok.lean: for every key and allocation case, the
-  per-row check `ExpansionFacts.inlineRowOk` on each generated chunk, proved by
-  `rfl`, and the assembled facts `InlineKey.rows_ok` and `InlineKey.rowsRdZero_ok`.
+- JoltConstraints/inline_rows_ok.lean: for every allocation case that jolt-qed
+  accepts, the per-row check `ExpansionFacts.inlineRowOk` on each generated chunk,
+  proved by `rfl`. jolt-qed rejects the `rd = x0` case of a key that reads `rs3`
+  (decision D7), so for that case the file states only the length of each chunk.
+  The assembled facts are `InlineKey.rows_ok`, `InlineKey.rowsRdZero_ok` (which
+  requires `readsRd = false`) and `InlineKey.rowsRdZero_length` (for every key).
+  For example, `secp256k1MulqRdZero_rows_length` states only the length of the
+  `rd = x0` rows of SECP256K1_MULQ.
 
 The encodings come from the expansion-parity driver's `inline_templates.json`
 (written by `scripts/expansion-parity/run.sh` to WORK_DIR/out). The rows come from
