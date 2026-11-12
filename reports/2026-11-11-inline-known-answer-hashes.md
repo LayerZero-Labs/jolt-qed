@@ -14,7 +14,9 @@ Every case that has a published answer (FIPS 180-4, Keccak-256, `KeccakKAT-3`, R
 The checker also confirmed that the corpus is complete: it comes from the pinned Jolt commit, covers all five inlines with at least the required number of judged cases, and contains all 24 known-answer cases of its manifest with the recorded inputs and answers.
 Two further `BLAKE2` cases, with final-block flags 2 and `2^64 - 1`, are informational: the specification does not cover them, and the tracer computes the compression with `0 - flag` XORed into word 14 of the work vector.
 `lake build JoltTests.InlineKat.Vectors` succeeds, so the specifications alone also give the published answers.
-The report found two places where `docs/inline-precompiles.md` is incomplete or inaccurate; the last section lists them.
+The copies also carry EthLib's proofs about the constants, and its proof `toLanes_permutation` that the Keccak lane code equals the FIPS 202 bit model.
+Nine of these proofs use `decide +kernel`, as in EthLib, and each kernel check takes under two seconds when checked alone.
+The report found two places where `docs/inline-precompiles.md` was incomplete or inaccurate; the last section lists them, and commit `91d2680` has corrected the second.
 
 ## What was run
 
@@ -94,14 +96,11 @@ Every inline gets 64 seeded random cases, plus these.
 
 `Vectors.lean` checks, by `#guard`:
 
-- SHA-256 digests of `"abc"`, `""` and the two-block message, and the derivation of `IV` and `K` from the primes (EthLib's `IV_from_primes` and `K_from_primes`).
-- Keccak-256 digests of `""` and `"abc"`, Keccak-f[1600] of the zero state and of its result, and the derivation of `RC` and `RHO` (EthLib's `roundConstants_eq` and `rhoOffsets_eq`).
-- The three constant facts behind EthLib's proof that the lane code equals the bit model (`rhoOffset_eq`, `rhoOffset_lt`, `roundConstantBit_eq`) on all their inputs, and the equation `toLanes (permutation (ofLanes S)) = keccakF S` itself on five sample states.
-- BLAKE2b `Spec.compress` on EIP-152 vectors 4 to 7 (0, 12 and 1 rounds) and on BLAKE2b-512 of the empty message, and the checks of EthLib's `IV_sqrt` and `SIGMA_perm`.
+- SHA-256 digests of `"abc"`, `""` and the two-block message, and that the model's initial state is `IV`.
+- Keccak-256 digests of `""` and `"abc"`, and Keccak-f[1600] of the zero state and of its result.
+- BLAKE2b `Spec.compress` on EIP-152 vectors 4 to 7 (0, 12 and 1 rounds) and on BLAKE2b-512 of the empty message.
 
-The bit model builds each state as a chain of closures, so evaluating it directly takes exponential time.
-`Vectors.lean` evaluates it through tables instead, and proves that each table version equals the model (`permutationTab_eq`, `roundConstantBitTab_eq`).
-So the `#guard` checks there are statements about the model itself.
+The derivations of the constants and the equation between the Keccak lane code and the bit model are theorems of the copies (see "What the copies contain"), so `Vectors.lean` no longer evaluates them.
 
 ## Per-inline results
 
@@ -140,24 +139,68 @@ Each altered copy exits with status 1, and the unaltered JSON exits with status 
 With `--jolt-commit 0000...` the checker accepts the corpus with the zero commit.
 
 `lake exe inline-kat` takes about 25 seconds of CPU on the 356 cases, most of it in the SHA-256 message schedule, which the specification computes by unmemoized recursion.
-`lake build JoltTests.InlineKat.Vectors` takes 10 to 30 seconds, depending on the machine's load,, including five Keccak-f evaluations of the bit model through tables.
-`JoltBytecode/Inlines/Blake2b/Spec.lean` takes 157 to 190 seconds to build, most of it in EthLib's bijectivity proofs.
+`lake build JoltTests.InlineKat.Vectors` takes 4 to 15 seconds, depending on the load.
+The specification files check in a few seconds each; "What the copies contain" gives the times before and after the restored proofs.
 
-## What the copies leave out
+## What the copies contain
 
-The copies keep every definition the five specifications need, unchanged; `scripts/check-ethlib-copies.sh` checks 143 declarations against EthLib `5310b3e`, and the workflow `.github/workflows/ethlib-copies.yml` runs it on pull requests that touch `JoltBytecode/Inlines` or the script.
-They leave out these EthLib proofs, which use `decide` with the `+kernel` option, which jolt-qed's checking standard forbids:
+The copies keep every definition the five specifications need, unchanged; `scripts/check-ethlib-copies.sh` checks 173 declarations against EthLib `5310b3e`, and the workflow `.github/workflows/ethlib-copies.yml` runs it on pull requests that touch `JoltBytecode/Inlines` or the script.
 
-- SHA-256: `IV_from_primes` and `K_from_primes`.
-- Keccak: `roundConstants_eq` and `rhoOffsets_eq`, and `rhoOffset_eq`, `rhoOffset_lt` and `roundConstantBit_eq`, on which EthLib's proof `toLanes_permutation` (the lane code equals the bit model) rests. So `toLanes_permutation` and its step lemmas are left out too.
+They also carry, unchanged, EthLib's proofs about the constants and the bit model.
+The script requires each of these to be present:
+
+- SHA-256: `IV_from_primes` and `K_from_primes`, which derive `IV` and `K` from the primes.
+- Keccak:
+  - `roundConstants_eq` and `rhoOffsets_eq`, which derive `RC` and `RHO` from FIPS 202 Algorithms 5, 6 and 2;
+  - all of `Proofs/Hash/KeccakBitsPermutation.lean`: `toLanes_permutation` (the lane code equals the bit model on every state), the step lemmas `theta_ofLanes`, `rho_ofLanes`, `pi_ofLanes`, `chi_ofLanes`, `iota_ofLanes`, `round_ofLanes`, `roundsFrom_ofLanes` and `permutation_ofLanes`, the three constant facts `rhoOffset_eq`, `rhoOffset_lt` and `roundConstantBit_eq`, and the lemmas about `ofLanes` and `toLanes`;
+  - five lane lemmas of `Proofs/Hash/KeccakPermutation.lean` that the proof needs: `getLsbD_rotl`, `lane_ext`, `lane_ofLanes`, `ofLanes_lane` and `State.ext_lane`.
+  `lane_ofLanes` uses Mathlib's `fin_cases`, so the Keccak copy now imports `Mathlib.Data.Fintype.Basic` and `Mathlib.Tactic.FinCases`.
 - BLAKE2b: `IV_sqrt` and `SIGMA_perm`.
 
-`Vectors.lean` evaluates every one of these statements with `#guard` instead, and checks `toLanes_permutation` on five sample states.
+`#print axioms` on each of the 28 public restored theorems lists only `propext`, `Classical.choice` and `Quot.sound`, or a subset; `IV_from_primes`, `K_from_primes` and `rhoOffset_lt` depend on no axiom.
 
-They also leave out what the inline specifications do not need:
+### Uses of `decide +kernel`
+
+Nine of the restored proofs use `decide +kernel`, as in EthLib.
+`AGENTS.md` allows it when it is efficient: it adds no axiom, and a use whose kernel check takes more than about ten seconds is not allowed.
+
+| Use | Theorem | Alone | In its file | Axioms |
+| --- | --- | --- | --- | --- |
+| `JoltBytecode/Inlines/Sha256/Spec.lean:235` | `Sha256.IV_from_primes` | 0.01 s | 0.02–0.03 s | none |
+| `JoltBytecode/Inlines/Sha256/Spec.lean:248` | `Sha256.K_from_primes` | 0.10 s | 0.23–0.68 s | none |
+| `JoltBytecode/Inlines/Keccak256/Spec.lean:599` | `Keccak.roundConstants_eq` | 0.10 s | 0.5–1.6 s | `propext`, `Quot.sound` |
+| `JoltBytecode/Inlines/Keccak256/Spec.lean:606` | `Keccak.rhoOffsets_eq` | 0.07 s | 1.1–2.6 s | `propext`, `Quot.sound` |
+| `JoltBytecode/Inlines/Keccak256/Spec.lean:875` | `KeccakBits.rhoOffset_eq` | 0.17 s | 1.7–4.1 s | `propext`, `Quot.sound` |
+| `JoltBytecode/Inlines/Keccak256/Spec.lean:879` | `KeccakBits.rhoOffset_lt` | 0.04 s | 1.8–4.4 s | none |
+| `JoltBytecode/Inlines/Keccak256/Spec.lean:922` | `KeccakBits.roundConstantBit_eq` | 1.44 s | 7.6–20 s | `propext`, `Quot.sound` |
+| `JoltBytecode/Inlines/Blake2b/Spec.lean:280` | `Blake2b.IV_sqrt` | 0.02 s | 0.02 s | `propext`, `Quot.sound` |
+| `JoltBytecode/Inlines/Blake2b/Spec.lean:287` | `Blake2b.SIGMA_perm` | 0.06 s | 0.19–0.29 s | `propext`, `Classical.choice`, `Quot.sound` |
+
+Both time columns are wall-clock times of elaboration plus the kernel check, from `trace.profiler` ("elaborating proof of ..."), on a 10-core machine whose load average stayed between 17 and 40 throughout.
+
+- "Alone" checks a copy of the theorem, with the same statement and proof, in a file that imports the built specifications. Nearly all of it is the kernel check.
+- "In its file" is the range over two or three runs of the whole specification file. There the file's other proofs check in parallel with it, so these times include waiting for a core.
+- In CPU time, `roundConstantBit_eq` alone adds 0.4 to 1.1 seconds of user time to a file that only imports the specifications.
+
+So every use checks in under two seconds by itself.
+The 20-second time of `roundConstantBit_eq` in one run of its file comes from the machine's load, not from the check.
+
+The whole files, checked with `lake env lean` twice each before and after the restored proofs, at load average 17 to 25:
+
+| File | Before (wall, user CPU) | After (wall, user CPU) |
+| --- | --- | --- |
+| `Sha256/Spec.lean` | 1.5–5.6 s, 0.8–1.3 s | 2.5–2.7 s, 1.3–1.4 s |
+| `Keccak256/Spec.lean` | 3.6–4.0 s, 2.8–3.1 s | 11.9–15.3 s, 7.0–8.2 s |
+| `Blake2b/Spec.lean` | 9.7–14.0 s, 9.6–10.1 s | 10.1–20.9 s, 10.4–13.3 s |
+
+Part of the Keccak increase is the new Mathlib imports; `lake build` reported 21 seconds for the Keccak file at that load.
+
+### What the copies leave out
+
+They leave out what the inline specifications do not need:
 
 - SHA-256: EthLib's executable `UInt32` code and its proofs (`compress_toState`, `hash_eq_spec`), since the specification is the model `Spec.compression` itself.
-- Keccak: the padding lemmas and `keccakF_bijective`, whose lane lemmas use Mathlib's `fin_cases`.
+- Keccak: the padding lemmas and `keccakF_bijective`, with the rest of the rotation and XOR lemmas of `Proofs/Hash/KeccakPermutation.lean`.
 
 ## Layout and byte order
 
@@ -207,10 +250,10 @@ It found two places where the plan says less or something other than what holds.
    The inline reads one `u64` counter and keeps `v[13] = IV[5]`, so its specification is `Spec.compress 12 h m t f` with `t < 2^64`, that is with `t1 = 0`.
    Only section 12.3 mentions a 64-bit counter, and only for the SDK.
    The I2 statement for `BLAKE2` should take the counter as a `u64` and widen it to 128 bits.
-2. Section 5.6 says that the SHA-256 and BLAKE2b proof files use `decide +kernel` "twice each", which suggests that only those two files need it.
+2. Section 5.6 said that the SHA-256 and BLAKE2b proof files use `decide +kernel` "twice each", which suggested that only those two files need it.
    The Keccak proof files use it five times: `roundConstants_eq` and `rhoOffsets_eq` in `Proofs/Hash/Keccak.lean`, and `rhoOffset_eq`, `rhoOffset_lt` and `roundConstantBit_eq` in `Proofs/Hash/KeccakBitsPermutation.lean`.
    The last three carry EthLib's `toLanes_permutation`, which section 5.6 lists among the theorems the Keccak specification comes with.
-   So under the strict standard jolt-qed cannot copy `toLanes_permutation` as it is: it has to re-prove the three constant facts without `decide +kernel`, or state the Keccak inlines against the lane code `Keccak.keccakF` and leave the bit model as a test-only cross-check, as this phase does.
+   Commit `91d2680` corrected section 5.6, and the copies now carry all nine uses (see "Uses of `decide +kernel`").
 
 One wording in sections 3 and 12.3 can mislead: both say that the inline expects "a big-endian block" through `rs2`.
 The bytes at `rs2` are the message bytes in order, which is what the SDK passes; the builder reads them as big-endian words.

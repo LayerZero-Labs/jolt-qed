@@ -14,9 +14,10 @@ The definitions are copied from EthLib.
 - Licence: CC0-1.0
 - Source files:
   - `EthLib/Cryptography/Hash/Sha256.lean`: `K`, `IV`;
-  - `EthLib/Cryptography/Proofs/Hash/Sha256.lean`: the whole `Spec` namespace, and the
+  - `EthLib/Cryptography/Proofs/Hash/Sha256.lean`: the whole `Spec` namespace, the
     definitions `smallPrime`, `smallPrimes`, `wholeSquareRoot`, `wholeCubeRoot`,
-    `squareRootFraction` and `cubeRootFraction`.
+    `squareRootFraction` and `cubeRootFraction`, and the theorems `IV_from_primes` and
+    `K_from_primes`, which derive `IV` and `K` from the primes.
 
 Each copied declaration, with its docstring, is unchanged except for these edits:
 
@@ -27,12 +28,12 @@ Each copied declaration, with its docstring, is unchanged except for these edits
 
 `scripts/check-ethlib-copies.sh` checks every declaration of this file against EthLib.
 
+`IV_from_primes` and `K_from_primes` are proved, as in EthLib, by `decide +kernel`. `AGENTS.md`
+allows it when the kernel check is fast, and each check here takes under a second
+(`reports/2026-11-11-inline-known-answer-hashes.md` lists the times).
+
 ## What was left out
 
-- `IV_from_primes` and `K_from_primes`, which derive `IV` and `K` from the primes: their proofs
-  use `decide` with the `+kernel` option, which jolt-qed's checking standard forbids.
-  The test module `JoltTests/InlineKat/Vectors.lean` evaluates the same Boolean checks with
-  `#guard`, on the copied helper definitions below.
 - EthLib's executable `UInt32` implementation (`State`, `round`, `compress`, `hash`, ...) and its
   proofs (`compress_toState`, `hash_eq_spec`, ...): Jolt's inline rows are specified by the model
   `Spec.compression` directly, so the executable layer is not needed.
@@ -219,5 +220,31 @@ With `root = ⌊∛prime⌋ · 2^32 + word`, it is exactly when `root³ ≤ prim
 def cubeRootFraction (prime word : Nat) : Bool :=
   let root := wholeCubeRoot prime * 2 ^ 32 + word
   root ^ 3 ≤ prime * 2 ^ 96 && prime * 2 ^ 96 < (root + 1) ^ 3
+
+/--
+The initial hash value is the one that FIPS 180-4 §5.3.3 derives.
+
+It comes from the square roots of the first 8 primes.
+
+So no initial word is taken on trust.
+-/
+theorem IV_from_primes :
+    (smallPrimes 20).length = 8 ∧ IV.toList.length = 8 ∧
+      ((smallPrimes 20).zip (IV.toList.map UInt32.toNat)).all
+        (fun pair => squareRootFraction pair.1 pair.2) = true := by
+  decide +kernel
+
+/--
+The round constants are the ones that FIPS 180-4 §4.2.2 derives.
+
+They come from the cube roots of the first 64 primes.
+
+So no round constant is taken on trust.
+-/
+theorem K_from_primes :
+    (smallPrimes 312).length = 64 ∧ K.toList.length = 64 ∧
+      ((smallPrimes 312).zip (K.toList.map UInt32.toNat)).all
+        (fun pair => cubeRootFraction pair.1 pair.2) = true := by
+  decide +kernel
 
 end JoltSpec.Sha256

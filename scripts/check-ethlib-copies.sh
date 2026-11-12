@@ -13,7 +13,9 @@
 #   EthLib.Base                   ->  JoltSpec.Base
 #
 # It fails if a copied declaration differs from EthLib's, if a copy holds a
-# declaration EthLib does not have, or if a copy records another commit.
+# declaration EthLib does not have, if a copy records another commit, or if a
+# copy lacks one of the EthLib proofs listed in REQUIRED (the proofs about the
+# constants and the bit model, some of which use `decide +kernel`).
 #
 # Usage:
 #   scripts/check-ethlib-copies.sh [ETHLIB_DIR]
@@ -66,6 +68,7 @@ COPIES = {
         "EthLib/Base/Bytes.lean",
         "EthLib/Cryptography/Hash/Keccak.lean",
         "EthLib/Cryptography/Proofs/Hash/Keccak.lean",
+        "EthLib/Cryptography/Proofs/Hash/KeccakPermutation.lean",
         "EthLib/Cryptography/Proofs/Models/KeccakBits.lean",
         "EthLib/Cryptography/Proofs/Hash/KeccakBitsPermutation.lean",
     ],
@@ -73,6 +76,34 @@ COPIES = {
         "EthLib/Base/Proofs/BitVec.lean",
         "EthLib/Cryptography/Hash/Blake2b.lean",
         "EthLib/Cryptography/Proofs/Hash/Blake2b.lean",
+    ],
+}
+
+# EthLib's proofs about the constants and the bit model, which each copy must
+# keep: the proofs by `decide +kernel` and the theorems that rest on them.
+REQUIRED = {
+    "JoltBytecode/Inlines/Sha256/Spec.lean": [
+        "JoltSpec.Sha256.IV_from_primes",
+        "JoltSpec.Sha256.K_from_primes",
+    ],
+    "JoltBytecode/Inlines/Keccak256/Spec.lean": [
+        "JoltSpec.Keccak.roundConstants_eq",
+        "JoltSpec.Keccak.rhoOffsets_eq",
+        "JoltSpec.KeccakBits.rhoOffset_eq",
+        "JoltSpec.KeccakBits.rhoOffset_lt",
+        "JoltSpec.KeccakBits.roundConstantBit_eq",
+        "JoltSpec.KeccakBits.theta_ofLanes",
+        "JoltSpec.KeccakBits.rho_ofLanes",
+        "JoltSpec.KeccakBits.pi_ofLanes",
+        "JoltSpec.KeccakBits.chi_ofLanes",
+        "JoltSpec.KeccakBits.iota_ofLanes",
+        "JoltSpec.KeccakBits.round_ofLanes",
+        "JoltSpec.KeccakBits.permutation_ofLanes",
+        "JoltSpec.KeccakBits.toLanes_permutation",
+    ],
+    "JoltBytecode/Inlines/Blake2b/Spec.lean": [
+        "JoltSpec.Blake2b.IV_sqrt",
+        "JoltSpec.Blake2b.SIGMA_perm",
     ],
 }
 
@@ -156,6 +187,9 @@ for copy, sources in COPIES.items():
     for source in sources:
         for name, body in declarations(normalize(ethlib_file(source))).items():
             theirs.setdefault(name, (source, body))
+    for name in REQUIRED[copy]:
+        if name not in ours:
+            failures.append(f"{copy}: the EthLib proof {name} is missing")
     for name, body in ours.items():
         if name not in theirs:
             failures.append(f"{copy}: {name} is not a declaration of {', '.join(sources)}")

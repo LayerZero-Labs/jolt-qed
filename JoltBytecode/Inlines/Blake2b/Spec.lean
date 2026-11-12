@@ -29,8 +29,9 @@ The definitions and proofs are copied from EthLib.
   - `EthLib/Base/Proofs/BitVec.lean`: `rotateRight_rotateRight_sub`;
   - `EthLib/Cryptography/Hash/Blake2b.lean`: the whole file (`IV`, `SIGMA`, `rotr`, `mix`,
     `round`, `roundsFrom`, `compress`);
-  - `EthLib/Cryptography/Proofs/Hash/Blake2b.lean`: the whole file except `IV_sqrt` and
-    `SIGMA_perm` (the model `Spec`, the bijectivity proofs and `compress_toBitVec`).
+  - `EthLib/Cryptography/Proofs/Hash/Blake2b.lean`: the whole file (the model `Spec`, the
+    checks `IV_sqrt` and `SIGMA_perm` of the constants, the bijectivity proofs and
+    `compress_toBitVec`).
 
 Each copied declaration, with its docstring, is unchanged except for these edits:
 
@@ -44,12 +45,9 @@ Each copied declaration, with its docstring, is unchanged except for these edits
 
 `scripts/check-ethlib-copies.sh` checks every declaration of this file against EthLib.
 
-## What was left out
-
-- `IV_sqrt` and `SIGMA_perm`, which check `IV` against the square roots of the first eight
-  primes and each row of `SIGMA` for being a permutation: their proofs use `decide` with the
-  `+kernel` option, which jolt-qed's checking standard forbids.
-  The test module `JoltTests/InlineKat/Vectors.lean` evaluates the same checks with `#guard`.
+`IV_sqrt` and `SIGMA_perm` are proved, as in EthLib, by `decide +kernel`. `AGENTS.md` allows it
+when the kernel check is fast, and each check here takes under a second
+(`reports/2026-11-11-inline-known-answer-hashes.md` lists the times).
 -/
 
 namespace JoltSpec.Base
@@ -265,6 +263,28 @@ def compress (r : Nat) (h : Vector Word 8) (m : Vector Word 16) (t : BitVec 128)
   Vector.ofFn fun i => h[i] ^^^ v[i] ^^^ v[i.val + 8]
 
 end Spec
+
+/-! ## The constants -/
+
+/-- Word `i` of the IV is `floor(2^64 * frac(sqrt(p)))`, for `p` the `(i + 1)`-th prime, RFC 7693 §2.6.
+
+- The primes are 2, 3, 5, 7, 11, 13, 17 and 19.
+- Let `n = floor(sqrt(p))` and `s = 2^64 * n + IV[i]`.
+- The word is right exactly when `s = floor(2^64 * sqrt(p))`.
+- That is `s^2 <= 2^128 * p < (s + 1)^2`. -/
+theorem IV_sqrt (i : Fin 8) :
+    let p := #v[2, 3, 5, 7, 11, 13, 17, 19][i]
+    let s := 2 ^ 64 * #v[1, 1, 2, 2, 3, 3, 4, 4][i] + IV[i].toNat
+    s ^ 2 ≤ 2 ^ 128 * p ∧ 2 ^ 128 * p < (s + 1) ^ 2 := by
+  revert i
+  decide +kernel
+
+/-- Each row of the message schedule is a permutation of the indices 0 to 15, RFC 7693 §2.7.
+
+So each round reads every message word exactly once. -/
+theorem SIGMA_perm (i : Fin 10) : SIGMA[i].toList.Perm (List.finRange 16) := by
+  revert i
+  decide +kernel
 
 /-! ## The rounds -/
 

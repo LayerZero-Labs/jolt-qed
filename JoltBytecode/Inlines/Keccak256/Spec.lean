@@ -1,3 +1,6 @@
+import Mathlib.Data.Fintype.Basic
+import Mathlib.Tactic.FinCases
+
 /-!
 # Keccak-f[1600] and absorb-then-permute: the specification
 
@@ -6,6 +9,8 @@ This file is the specification of Jolt's `KECCAK256` and `KECCAK256_ABSORB_PERMU
 `KECCAK256_ABSORB_PERMUTE` computes `Keccak.keccakF (Keccak.Internal.absorbBlock 136 S block 0)`.
 The lane code is specified by the bit-level model `KeccakBits.permutation` of FIPS 202, copied
 below with the maps `KeccakBits.ofLanes` and `KeccakBits.toLanes` between the two state types.
+EthLib's theorem `KeccakBits.toLanes_permutation`, copied below with its proof, says that the two
+agree: `toLanes (permutation a) = keccakF (toLanes a)`.
 
 ## Provenance
 
@@ -20,11 +25,15 @@ The definitions are copied from EthLib.
     the algorithms that define them, the five step mappings, `keccakF`, the sponge with
     `Internal.absorbBlock`, `keccak256`, `keccak512` and the incremental `Hasher`);
   - `EthLib/Cryptography/Proofs/Hash/Keccak.lean`: the definitions `State.lane`,
-    `State.ofLanes` and `State.column`, and the theorems `theta_eq`, `rho_eq`, `pi_eq`, `chi_eq`
-    and `iota_eq` (each proved by `rfl`);
+    `State.ofLanes` and `State.column`, the theorems `theta_eq`, `rho_eq`, `pi_eq`, `chi_eq`
+    and `iota_eq` (each proved by `rfl`), and `roundConstants_eq` and `rhoOffsets_eq`, which
+    derive `RC` and `RHO` from FIPS 202 Algorithms 5, 6 and 2;
+  - `EthLib/Cryptography/Proofs/Hash/KeccakPermutation.lean`: the lane lemmas
+    `getLsbD_rotl`, `lane_ext`, `lane_ofLanes`, `ofLanes_lane` and `State.ext_lane`, which the
+    proof below needs;
   - `EthLib/Cryptography/Proofs/Models/KeccakBits.lean`: the whole file (the bit model);
-  - `EthLib/Cryptography/Proofs/Hash/KeccakBitsPermutation.lean`: the definitions `ofLanes` and
-    `toLanes`.
+  - `EthLib/Cryptography/Proofs/Hash/KeccakBitsPermutation.lean`: the whole file, which proves
+    `toLanes_permutation` through one lemma per step mapping.
 
 Each copied declaration, with its docstring, is unchanged except for these edits:
 
@@ -32,26 +41,24 @@ Each copied declaration, with its docstring, is unchanged except for these edits
   `EthLib.Base` are renamed `JoltSpec.Keccak`, `JoltSpec.KeccakBits` and `JoltSpec.Base`, and
   `open EthLib.Base (byteAt)` becomes `open JoltSpec.Base (byteAt)`;
 - the module-system markers (`module`, `public import`, `@[expose] public section`) are dropped,
-  because jolt-qed does not use the module system, and the file imports nothing;
+  because jolt-qed does not use the module system;
+- the imports of the source files are replaced by `Mathlib.Data.Fintype.Basic` and
+  `Mathlib.Tactic.FinCases`, which `lane_ofLanes` needs for `fin_cases`;
 - the section headers between declarations are adapted to this file.
 
 `scripts/check-ethlib-copies.sh` checks every declaration of this file against EthLib.
 
+Five proofs use `decide +kernel`, as in EthLib: `roundConstants_eq`, `rhoOffsets_eq`, and the
+three constant facts `rhoOffset_eq`, `rhoOffset_lt` and `roundConstantBit_eq` on which
+`toLanes_permutation` rests. `AGENTS.md` allows it when the kernel check is fast. Checked alone,
+each takes under two seconds, the slowest being `roundConstantBit_eq` at 1.4 seconds
+(`reports/2026-11-11-inline-known-answer-hashes.md` lists the times).
+
 ## What was left out
 
-- The proof that the lane code equals the bit model, `toLanes_permutation` (with
-  `permutation_ofLanes`, `round_ofLanes`, `rho_ofLanes`, `iota_ofLanes` and the per-step lemmas
-  of `Proofs/Hash/KeccakBitsPermutation.lean`): it rests on `rhoOffset_eq`, `rhoOffset_lt` and
-  `roundConstantBit_eq`, whose proofs use `decide` with the `+kernel` option, which jolt-qed's
-  checking standard forbids.
-  The test module `JoltTests/InlineKat/Vectors.lean` checks the equation on sample states, and
-  the three constant facts on all their inputs, by evaluation.
-- `roundConstants_eq` and `rhoOffsets_eq` (`Proofs/Hash/Keccak.lean`), which derive `RC` and `RHO`
-  from FIPS 202 Algorithms 5, 6 and 2: their proofs use `decide` with the `+kernel` option.
-  The test module evaluates both equations with `#guard`.
 - The padding lemmas of `Proofs/Hash/Keccak.lean` (`padding_data`, `pad_injective`, ...) and the
-  bijectivity proof `keccakF_bijective` of `Proofs/Hash/KeccakPermutation.lean`: the inline
-  specifications do not need them, and the lane lemmas there use Mathlib's `fin_cases`.
+  bijectivity proof `keccakF_bijective` of `Proofs/Hash/KeccakPermutation.lean`, with the rest of
+  that file's rotation and XOR lemmas: the inline specifications do not need them.
 -/
 
 namespace JoltSpec.Base
@@ -581,6 +588,66 @@ theorem iota_eq (ir : Fin ROUNDS) (A : State) :
       if x = 0 ∧ y = 0 then A.lane x y ^^^ RC[ir] else A.lane x y :=
   rfl
 
+
+/-! ## The derived constants -/
+
+/-- The table of round constants is what FIPS 202 §3.2.5, Algorithm 6 derives.
+
+So no round constant is taken on trust. -/
+theorem roundConstants_eq : RC = Vector.ofFn fun ir => Internal.roundConstant ir := by
+  -- 24 constants of 7 bits each, with at most 167 register steps per bit.
+  decide +kernel
+
+/-- The table of rotation offsets is what FIPS 202 §3.2.2, Algorithm 2 derives.
+
+So no rotation offset is taken on trust. -/
+theorem rhoOffsets_eq : RHO.map UInt64.toNat = Internal.rhoOffsets := by
+  -- The walk of 24 steps, run by the kernel.
+  decide +kernel
+
+/-! ## Rotations and lanes -/
+
+/-- Bit `i` of a lane rotated by `n` is bit `i - n` of the lane, mod 64. -/
+theorem getLsbD_rotl (v n : UInt64) (hn : n.toNat ≤ 64) (i : Nat) (hi : i < 64) :
+    (rotl v n).toBitVec.getLsbD i = v.toBitVec.getLsbD ((i + 64 - n.toNat % 64) % 64) := by
+  unfold rotl
+  simp only [UInt64.toBitVec_or, UInt64.toBitVec_shiftLeft, UInt64.toBitVec_shiftRight,
+    BitVec.getLsbD_or]
+  simp [hi]
+  rw [show (18446744073709551616 - n.toNat) % 64 = (64 - n.toNat % 64) % 64 by omega]
+  generalize hk : n.toNat % 64 = k
+  have k64 : k < 64 := by omega
+  by_cases h0 : k = 0
+  · subst h0
+    simp [Nat.mod_eq_of_lt hi, BitVec.getLsbD_eq_getElem, hi]
+  by_cases hlt : i < k
+  · rw [Nat.mod_eq_of_lt (by omega : 64 - k < 64), Nat.mod_eq_of_lt (by omega : i + 64 - k < 64)]
+    rw [show 64 - k + i = i + 64 - k by omega]
+    simp [hlt]
+  · rw [Nat.mod_eq_of_lt (by omega : 64 - k < 64), BitVec.getLsbD_of_ge _ _ (by omega)]
+    rw [show (i + 64 - k) % 64 = i - k by omega]
+    simp [hlt, BitVec.getLsbD_eq_getElem, (by omega : i - k < 64)]
+
+/-- Two lanes are equal when all their 64 bits are. -/
+theorem lane_ext {v w : UInt64} (h : ∀ i < 64, v.toBitVec.getLsbD i = w.toBitVec.getLsbD i) :
+    v = w :=
+  UInt64.toBitVec_inj.1 (BitVec.eq_of_getLsbD_eq h)
+
+/-- Each lane of a state built from lanes is the lane it was given. -/
+theorem lane_ofLanes (f : Fin 5 → Fin 5 → UInt64) (x y : Fin 5) :
+    (State.ofLanes f).lane x y = f x y := by
+  fin_cases x <;> fin_cases y <;> rfl
+
+/-- A state is the state built from its own lanes. -/
+theorem ofLanes_lane (A : State) : State.ofLanes A.lane = A := by
+  cases A
+  rfl
+
+/-- Two states with the same lanes are equal. -/
+theorem State.ext_lane {A B : State} (h : ∀ x y, A.lane x y = B.lane x y) : A = B := by
+  rw [← ofLanes_lane A, ← ofLanes_lane B]
+  exact congrArg State.ofLanes (funext fun x => funext (h x))
+
 end JoltSpec.Keccak
 
 namespace JoltSpec.KeccakBits
@@ -765,16 +832,174 @@ def keccak512 (msg : ByteArray) : Vector UInt8 64 :=
   sponge (rateBits := 576) (by decide) (by decide) (by decide) msg
 
 
-/-! ## Lane states and bit states -/
-
 open JoltSpec
+
+/-! ## Bit coordinates -/
 
 /-- A lane state viewed at the bit coordinates of FIPS 202 §3.1.2. -/
 def ofLanes (a : Keccak.State) : State := fun x y z => (a.lane x y).toBitVec.getLsbD z.val
+
+/-- The bit view of a state built lane by lane reads the bits of those lanes. -/
+theorem ofLanes_ofLanes (f : Fin 5 → Fin 5 → UInt64) :
+    ofLanes (Keccak.State.ofLanes f) = fun x y z => (f x y).toBitVec.getLsbD z.val := by
+  funext x y z
+  simp only [ofLanes, Keccak.lane_ofLanes]
+
+/-- Flattening a coordinate and reading it recovers that coordinate. -/
+theorem stateBit_index (a : State) (x y : Fin 5) (z : Fin 64) :
+    stateBit a (index x y z) = a x y z := by
+  have hx := x.isLt
+  have hy := y.isLt
+  have hz := z.isLt
+  unfold stateBit index xy zcoord
+  congr 1 <;> apply Fin.ext <;> simp only <;> omega
+
+/-- The `Fin 5` sums of the lane formulas are the wrapped sums of the bit model. -/
+private theorem coordinates :
+    (∀ x y : Fin 5, x + 3 * y = xy (x.val + 3 * y.val)) ∧
+    (∀ x : Fin 5, x - 1 = xy (x.val + 4)) ∧ (∀ x : Fin 5, x + 1 = xy (x.val + 1)) ∧
+    (∀ x : Fin 5, x + 2 = xy (x.val + 2)) := by
+  decide
+
+/-! ## The step mappings -/
+
+/-- Pi agrees with the lane implementation at every state bit. -/
+theorem pi_ofLanes (a : Keccak.State) : ofLanes (Keccak.pi a) = pi (ofLanes a) := by
+  rw [Keccak.pi_eq, ofLanes_ofLanes]
+  funext x y z
+  simp only [pi, ofLanes, coordinates.1]
+
+/-- The rho walk of the model gives the offset of the lane table at every lane. -/
+theorem rhoOffset_eq : ∀ x y : Fin 5,
+    rhoOffset x y = (Keccak.RHO[x.val + 5 * y.val]'(by simp only [Keccak.LANES]; omega)).toNat := by
+  decide +kernel
+
+/-- Every offset of the rho walk is below the lane width. -/
+theorem rhoOffset_lt : ∀ x y : Fin 5, rhoOffset x y < 64 := by
+  decide +kernel
+
+/-- Rho agrees with the lane implementation at every state bit. -/
+theorem rho_ofLanes (a : Keccak.State) : ofLanes (Keccak.rho a) = rho (ofLanes a) := by
+  rw [Keccak.rho_eq, ofLanes_ofLanes]
+  funext x y z
+  have offset := rhoOffset_eq x y
+  have bound := rhoOffset_lt x y
+  simp only [rho, ofLanes, zcoord]
+  rw [Keccak.getLsbD_rotl _ _ (by omega) _ z.isLt, ← offset, Nat.mod_eq_of_lt bound]
+
+/-- A bit of a lane column parity is the column parity of the model. -/
+private theorem column_bit (a : Keccak.State) (x : Fin 5) (z : Fin 64) :
+    (a.column x).toBitVec.getLsbD z.val = column (ofLanes a) x z := by
+  simp [Keccak.State.column, column, ofLanes, UInt64.toBitVec_xor]
+
+/-- Theta agrees with the lane implementation at every state bit. -/
+theorem theta_ofLanes (a : Keccak.State) : ofLanes (Keccak.theta a) = theta (ofLanes a) := by
+  rw [Keccak.theta_eq, ofLanes_ofLanes]
+  funext x y z
+  simp only [UInt64.toBitVec_xor, BitVec.getLsbD_xor]
+  rw [Keccak.getLsbD_rotl _ _ (by decide) _ z.isLt, column_bit, coordinates.2.1]
+  -- The rotation by one reads bit `z - 1`, which is bit `z + 63` mod 64.
+  have shift : (z.val + 64 - (1 : UInt64).toNat % 64) % 64 = (z.val + 63) % 64 := by
+    simp only [UInt64.reduceToNat]
+    omega
+  rw [shift, coordinates.2.2.1]
+  have col := column_bit a (xy (x.val + 1)) ⟨(z.val + 63) % 64, Nat.mod_lt _ (by decide)⟩
+  rw [col]
+  rfl
+
+/-- Chi agrees with the lane implementation at every state bit. -/
+theorem chi_ofLanes (a : Keccak.State) : ofLanes (Keccak.chi a) = chi (ofLanes a) := by
+  rw [Keccak.chi_eq, ofLanes_ofLanes]
+  funext x y z
+  simp only [chi, ofLanes, coordinates.2.2.1, coordinates.2.2.2,
+    UInt64.toBitVec_xor, UInt64.toBitVec_and, UInt64.toBitVec_not,
+    BitVec.getLsbD_xor, BitVec.getLsbD_and, BitVec.getLsbD_not, z.isLt, decide_true,
+    Bool.true_and]
+
+/-- Every round-constant bit of the model is the bit of the lane table. -/
+theorem roundConstantBit_eq : ∀ (ir : Fin Keccak.ROUNDS) (z : Fin 64),
+    roundConstantBit ir.val z = (Keccak.RC[ir]).toBitVec.getLsbD z.val := by
+  decide +kernel
+
+/-- Iota agrees with the lane implementation at every state bit. -/
+theorem iota_ofLanes (a : Keccak.State) (ir : Fin Keccak.ROUNDS) :
+    ofLanes (Keccak.iota ir a) = iota ir.val (ofLanes a) := by
+  rw [Keccak.iota_eq, ofLanes_ofLanes]
+  funext x y z
+  -- Lane `(0, 0)` is the one whose coordinates are both zero.
+  have zero : (x = 0 ∧ y = 0) ↔ (x.val = 0 ∧ y.val = 0) := by
+    constructor
+    · rintro ⟨rfl, rfl⟩
+      exact ⟨rfl, rfl⟩
+    · rintro ⟨hx, hy⟩
+      exact ⟨Fin.ext hx, Fin.ext hy⟩
+  by_cases h : x.val = 0 ∧ y.val = 0
+  · obtain ⟨hx, hy⟩ := zero.mpr h
+    subst hx hy
+    simp [iota, ofLanes, roundConstantBit_eq]
+  · have h' : ¬ (x = 0 ∧ y = 0) := fun e => h (zero.mp e)
+    simp only [h', ite_false, iota, h, ofLanes]
+
+/-! ## The permutation -/
+
+/-- One round of the model agrees with one lane round. -/
+theorem round_ofLanes (a : Keccak.State) (ir : Fin Keccak.ROUNDS) :
+    ofLanes (Keccak.round ir a) = round ir.val (ofLanes a) := by
+  simp only [Keccak.round, round, iota_ofLanes, chi_ofLanes, pi_ofLanes, rho_ofLanes,
+    theta_ofLanes]
+
+/-- The lane rounds from `i` to 23 agree with the model rounds from `i` to 23. -/
+theorem roundsFrom_ofLanes (n i : Nat) (h : i + n = 24) (a : Keccak.State) :
+    ofLanes (Keccak.keccakF.roundsFrom i a) =
+      (List.range' i n).foldl (fun s ir => round ir s) (ofLanes a) := by
+  induction n generalizing i a with
+  | zero =>
+    -- At round 24 no round is left.
+    rw [Keccak.keccakF.roundsFrom, dite_eq_right (by simp only [Keccak.ROUNDS]; omega)]
+    rfl
+  | succ n ih =>
+    -- Run round `i`, then the rounds after it.
+    have hi : i < Keccak.ROUNDS := by simp only [Keccak.ROUNDS]; omega
+    rw [Keccak.keccakF.roundsFrom, dite_eq_left hi, ih (i + 1) (by omega), round_ofLanes,
+      List.range'_succ, List.foldl_cons]
+
+/-- Keccak-f[1600] on lanes agrees with the 24 rounds of the model on every state. -/
+theorem permutation_ofLanes (a : Keccak.State) :
+    ofLanes (Keccak.keccakF a) = permutation (ofLanes a) := by
+  rw [Keccak.keccakF, roundsFrom_ofLanes 24 0 rfl, permutation, List.range_eq_range']
+
+/-! ## Packing bits into lanes -/
 
 /-- Pack the bits of each lane coordinate into its 64-bit lane, bit `z` in bit `z`. -/
 def toLanes (a : State) : Keccak.State :=
   Keccak.State.ofLanes fun x y => UInt64.ofBitVec ((BitVec.ofBoolListLE
     (List.ofFn fun z : Fin 64 => a x y z)).cast (by simp))
+
+/-- Each bit of a packed lane is the bit at the same coordinate. -/
+theorem toLanes_bit (a : State) (x y : Fin 5) (z : Fin 64) :
+    ((toLanes a).lane x y).toBitVec.getLsbD z.val = a x y z := by
+  simp only [toLanes, Keccak.lane_ofLanes, UInt64.toBitVec_ofBitVec, BitVec.getLsbD_cast,
+    BitVec.getLsbD_ofBoolListLE, List.getD_eq_getElem?_getD]
+  rw [List.getElem?_eq_getElem (by simp)]
+  simp only [Option.getD_some, List.getElem_ofFn]
+
+/-- Packing a bit state and reading it back gives the same bit state. -/
+theorem ofLanes_toLanes (a : State) : ofLanes (toLanes a) = a := by
+  funext x y z
+  exact toLanes_bit a x y z
+
+/-- Reading a lane state and packing it back gives the same lane state. -/
+theorem toLanes_ofLanes (a : Keccak.State) : toLanes (ofLanes a) = a := by
+  apply Keccak.State.ext_lane
+  intro x y
+  apply Keccak.lane_ext
+  intro z hz
+  exact toLanes_bit (ofLanes a) x y ⟨z, hz⟩
+
+/-- The model permutation, packed into lanes, is Keccak-f[1600] on the packed state. -/
+theorem toLanes_permutation (a : State) :
+    toLanes (permutation a) = Keccak.keccakF (toLanes a) := by
+  have h := congrArg toLanes (permutation_ofLanes (toLanes a))
+  simpa only [ofLanes_toLanes, toLanes_ofLanes] using h.symm
 
 end JoltSpec.KeccakBits
