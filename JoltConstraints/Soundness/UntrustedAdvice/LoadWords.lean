@@ -42,7 +42,10 @@ def LoadWindow (window : Fin 3 → JoltISA.Instr) : Prop :=
     bytecodeRdRegister (window 1) ≠ some register ∧
     ExpansionFacts.leftOperandIsRegister register (window 2) = true
 
-/-- The expansion checker places every narrow load at the start of a load window. -/
+/-- The expansion checker places every narrow load at the start of a load window.
+For example, the checker accepts the `LB` expansion
+`[VirtualLoadB, VirtualWindowMaskB, VirtualPextSigned]`, and its narrow load at position 0
+starts the load window at position 0. -/
 theorem loadWindowsOk_windows : ∀ instructions : List JoltISA.Instr,
     ExpansionFacts.loadWindowsOk instructions = true →
       Windows NarrowLoad LoadWindow 0 instructions
@@ -84,7 +87,9 @@ theorem loadWindowsOk_windows : ∀ instructions : List JoltISA.Instr,
       exact related
 
 /-- Every narrow load in an expanded program starts a load window inside its own
-source instruction. -/
+source instruction.
+For example, the `VirtualLoadB` row of an `LB` in the program is followed by that `LB`'s
+mask row and its `VirtualPextSigned` row. -/
 theorem expand_program_loadWindows (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode) :
     Windows (fun row => NarrowLoad row.instruction) (WithinSource LoadWindow) 0
@@ -97,7 +102,9 @@ theorem expand_program_loadWindows (image : Rv64ProgramImage SourceInstruction)
 
 /-- A narrow load at bytecode slot `slot` is followed by its mask row and its
 consumer row at the next two slots, and neither the load nor the mask row ends
-its source instruction. -/
+its source instruction.
+For example, for an `LB` expanded at slots 10, 11 and 12, the `VirtualLoadB` row at slot
+10 has its mask row at slot 11 and its `VirtualPextSigned` consumer at slot 12. -/
 theorem narrowLoad_window {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {params : WitnessParams}
     (context : ConstraintContext joltInstance privateInputs params)
@@ -176,7 +183,9 @@ theorem selfChecked_rdWriteValue_word (t : Fin params.traceLength)
 
 /-- A narrow load writes a 64-bit word.
 Its destination register is unchanged by the mask row and is read two rows later as
-the left lookup operand, which is the left half of a lookup address. -/
+the left lookup operand, which is the left half of a lookup address.
+For example, the doubleword that `VirtualLoadB` writes to `dw` is the left lookup operand
+of `VirtualPextSigned` two rows later, so it is a 64-bit word. -/
 theorem narrowLoad_rdWriteValue_word (t : Fin params.traceLength)
     (slot : Fin (2 ^ params.logBytecodeK)) (selected : bytecodeRa witness slot t = 1)
     {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
@@ -232,7 +241,9 @@ theorem narrowLoad_rdWriteValue_word (t : Fin params.traceLength)
     inputs, rs1, raf, lookupAddressLeft_eq_uninterleave, step2, step1] at operand
   exact ⟨(uninterleave address).1, by simpa using operand⟩
 
-/-- Every row with the Load flag writes a 64-bit word to its destination. -/
+/-- Every row with the Load flag writes a 64-bit word to its destination.
+For example, it covers `LD` through `selfChecked_rdWriteValue_word` and `VirtualLoadW`
+through `narrowLoad_rdWriteValue_word`. -/
 theorem load_rdWriteValue_word (t : Fin params.traceLength)
     (load : witness.OpFlags .Load t = 1) :
     ∃ value : BitVec 64, witness.RdWriteValue t = (value.toNat : F) := by
@@ -253,7 +264,9 @@ theorem load_rdWriteValue_word (t : Fin params.traceLength)
         rowIs self
 
 /-- Every row with the Load flag reads a 64-bit word from RAM.
-Constraint 04 equates the read value with the destination value. -/
+Constraint 04 equates the read value with the destination value.
+For example, an `LD` row reads from RAM the same 64-bit word that it writes to its
+destination. -/
 theorem load_ramReadValue_word (t : Fin params.traceLength)
     (load : witness.OpFlags .Load t = 1) :
     ∃ value : BitVec 64, witness.RamReadValue t = (value.toNat : F) := by

@@ -21,9 +21,9 @@ open TraceWitness
 
 open Classical in
 /-- The 64-bit word stored at untrusted-advice index `index`: the committed word if it is
-the cast of a 64-bit word, and zero otherwise. For example, if `untrustedAdvice 3` is the
-cast of `0x0102`, then `adviceWord untrustedAdvice 3 = 0x0102`; if `untrustedAdvice 3` is
-`2 ^ 64` in a field of characteristic above `2 ^ 64`, then
+the cast of a 64-bit word, and zero otherwise. For example, in a field of characteristic
+above `2 ^ 64`, if `untrustedAdvice 3` is the cast of `0x0102`, then
+`adviceWord untrustedAdvice 3 = 0x0102`, and if `untrustedAdvice 3` is `2 ^ 64`, then
 `adviceWord untrustedAdvice 3 = 0`. -/
 noncomputable def adviceWord {F : Type} [Field F] (untrustedAdvice : Nat → F) (index : Nat) :
     BitVec 64 :=
@@ -36,7 +36,11 @@ def wordBytes (words : Nat → BitVec 64) (size : Nat) : Array (BitVec 8) :=
   Array.ofFn (n := size) fun k => (words (k.val / 8)).extractLsb' (8 * (k.val % 8)) 8
 
 /-- The 64-bit initial RAM after the reduction: `adviceWord` in the untrusted-advice block
-and `fixedRam` elsewhere. -/
+and `fixedRam` elsewhere.
+For example, in a field of characteristic above `2 ^ 64`, if the block starts at remapped
+word 100 and holds at least one word, and `untrustedAdvice 0` is the cast of `5`, then
+`byteInitialRam layout fixedRam untrustedAdvice 100 = 5`; outside the block the value is
+`fixedRam address`. -/
 noncomputable def byteInitialRam {F : Type} [Field F] (layout : MemoryLayout)
     (fixedRam : Nat → BitVec 64) (untrustedAdvice : Nat → F) (address : Nat) : BitVec 64 :=
   match untrustedAdviceWordIndex? layout address with
@@ -49,7 +53,8 @@ theorem wordBytes_size (words : Nat → BitVec 64) (size : Nat) :
     (wordBytes words size).size = size := by
   simp [wordBytes]
 
-/-- A whole word of `wordBytes` packs back to the word. -/
+/-- A whole word of `wordBytes` packs back to the word.
+For example, bytes 8 through 15 of `wordBytes words 16` pack back to `words 1`. -/
 theorem ramImageWord_wordBytes (words : Nat → BitVec 64) (size index : Nat)
     (fits : 8 * index + 8 ≤ size) :
     ramImageWord (fun k => (wordBytes words size)[k]?.getD 0) (8 * index) = words index := by
@@ -63,7 +68,10 @@ theorem ramImageWord_wordBytes (words : Nat → BitVec 64) (size index : Nat)
 variable {F : Type} [Field F]
 
 /-- Wherever the committed initial value is a 64-bit word, the byte initial RAM gives the
-same value. -/
+same value.
+For example, outside the untrusted-advice block both sides are the cast of
+`fixedRam address`, and inside it a committed word that is the cast of `0x0102` gives
+`0x0102` on both sides. -/
 theorem byteInitialRam_good (layout : MemoryLayout) (fixedRam : Nat → BitVec 64)
     (untrustedAdvice : Nat → F) (address : Nat)
     (word : ∃ value : BitVec 64,
@@ -80,7 +88,9 @@ theorem byteInitialRam_good (layout : MemoryLayout) (fixedRam : Nat → BitVec 6
     rw [dite_eq_left word]
     exact word.choose_spec.symm
 
-/-- The untrusted-advice block lies below the public I/O mask. -/
+/-- The untrusted-advice block lies below the public I/O mask.
+For example, if the block holds remapped words 100 and 101, the mask is zero at both,
+because the public input region starts above the block. -/
 theorem publicIoMask_of_untrustedAdvice (config : MemoryConfig) (io : JoltDevice)
     (built : MemoryLayout.new config = some io.memory_layout) {address index : Nat}
     (indexIs : untrustedAdviceWordIndex? io.memory_layout address = some index) :
@@ -105,7 +115,9 @@ theorem publicIoMask_of_untrustedAdvice (config : MemoryConfig) (io : JoltDevice
     omega
 
 /-- The public I/O mask vanishes wherever the byte initial RAM differs from the committed
-initial values. -/
+initial values.
+For example, if a committed advice word is `2 ^ 64` in a field of characteristic above
+`2 ^ 64`, the two initial values differ at that word, and the mask there is zero. -/
 theorem byteInitialRam_masked (config : MemoryConfig) (io : JoltDevice)
     (built : MemoryLayout.new config = some io.memory_layout) (fixedRam : Nat → BitVec 64)
     (untrustedAdvice : Nat → F) (address : Nat) :
@@ -121,7 +133,10 @@ theorem byteInitialRam_masked (config : MemoryConfig) (io : JoltDevice)
 
 /-- Replacing empty untrusted advice by the bytes of the reconstructed words changes the
 tracer's initial RAM exactly in the untrusted-advice block, where it becomes the
-reconstructed words. -/
+reconstructed words.
+For example, if the block holds 2 words and the committed words are the casts of `1` and
+`2`, the new state's initial RAM holds `1` and `2` at the block's two words and keeps
+every other word. -/
 theorem initialRamWordFromState_untrustedAdvice (untrustedAdvice : Nat → F)
     (state state' : SailJoltState)
     (empty : state.jolt_device.untrusted_advice = #[])
@@ -192,7 +207,10 @@ other one becomes zero.
 The tracer receives the little-endian bytes of these words, one per byte of the
 untrusted-advice block, and the witness is shifted so that its RAM values start from
 these words (`shiftWitness`).
-The block must fit the tracer's size check (`JoltInstance.UntrustedAdviceBlockFits`). -/
+The block must fit the tracer's size check (`JoltInstance.UntrustedAdviceBlockFits`).
+For example, in a field of characteristic above `2 ^ 64`, a 16-byte block with committed
+words `0x0102` and `2 ^ 64` gives the advice bytes `0x02, 0x01` followed by fourteen zero
+bytes. -/
 theorem onBytes_of_allConstraints (joltField : JoltField F)
     {params : WitnessParams} {joltInstance : JoltInstance SourceInstruction}
     (blockFits : joltInstance.UntrustedAdviceBlockFits)

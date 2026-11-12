@@ -23,24 +23,34 @@ namespace JoltConstraints.Soundness.UntrustedAdvice
 
 variable {F : Type} [Field F] {params : WitnessParams}
 
-/-- No row before cycle `bound` selects RAM word `address`. -/
+/-- No row before cycle `bound` selects RAM word `address`.
+For example, if the first access to `address` is at cycle 5, then
+`Untouched witness address 5` holds and `Untouched witness address 6` does not. -/
 def Untouched (witness : WitnessType F params) (address : Fin params.ramSize) (bound : Nat) :
     Prop :=
   ∀ cycle : Fin params.traceLength, cycle.val < bound → witness.RamRa address cycle = 0
 
 open Classical in
 /-- The amount subtracted from word `address` at cycle `bound`: `gap address` until the
-word's first access, and zero from then on. -/
+word's first access, and zero from then on.
+For example, if the word's first access is at cycle 5, then
+`correction witness gap address 5 = gap address` and
+`correction witness gap address 6 = 0`. -/
 noncomputable def correction (witness : WitnessType F params) (gap : Fin params.ramSize → F)
     (address : Fin params.ramSize) (bound : Nat) : F :=
   if Untouched witness address bound then gap address else 0
 
-/-- The correction of the word that cycle `t` accesses, or zero if it accesses none. -/
+/-- The correction of the word that cycle `t` accesses, or zero if it accesses none.
+For example, if cycle 5 is the first access to `address` and selects only that word, then
+`accessCorrection witness gap 5 = gap address`. -/
 noncomputable def accessCorrection (witness : WitnessType F params)
     (gap : Fin params.ramSize → F) (t : Fin params.traceLength) : F :=
   ∑ address, witness.RamRa address t * correction witness gap address t.val
 
-/-- The witness with `gap` moved from the initial RAM into each word's first access. -/
+/-- The witness with `gap` moved from the initial RAM into each word's first access.
+For example, if word `address` has gap 3 and is first accessed at cycle 5, the shifted
+witness lowers its `RamVal` by 3 at cycles 0 through 5, lowers `RamReadValue` at cycle 5
+by 3, and raises `RamInc` at cycle 5 by 3. -/
 noncomputable def shiftWitness (witness : WitnessType F params)
     (gap : Fin params.ramSize → F) : WitnessType F params :=
   { witness with
@@ -72,7 +82,9 @@ theorem opFlag_zero_or_one (flag : CircuitFlags) (t : Fin params.traceLength) :
 
 omit charAbove2pow127 in
 /-- Before `bound`, the corrections applied at a word's accesses add up to the part of
-`gap` already released: `gap` after the first access, and zero before it. -/
+`gap` already released: `gap` after the first access, and zero before it.
+For example, if the word's first access is at cycle 5 and selects it with `RamRa = 1`, the
+sum is zero for `bound ≤ 5` and `gap address` for `bound ≥ 6`. -/
 theorem prefix_correction (gap : Fin params.ramSize → F) (address : Fin params.ramSize)
     (bound : Nat) :
     (∑ cycle : Fin params.traceLength,
@@ -117,7 +129,9 @@ theorem prefix_correction (gap : Fin params.ramSize → F) (address : Fin params
     · intro absent
       exact absurd (Finset.mem_univ _) absent
 
-/-- At a cycle that selects `address`, the access correction is that word's correction. -/
+/-- At a cycle that selects `address`, the access correction is that word's correction.
+For example, if cycle 5 selects only `address`, both sides are
+`correction witness gap address 5`. -/
 theorem ramRa_mul_accessCorrection (gap : Fin params.ramSize → F)
     (address : Fin params.ramSize) (t : Fin params.traceLength) :
     witness.RamRa address t * accessCorrection witness gap t =
@@ -136,7 +150,9 @@ theorem ramRa_mul_accessCorrection (gap : Fin params.ramSize → F)
 
 /-- A load never accesses a word before its value becomes a 64-bit word.
 At a word's first access, the read value is the initial value; a load reads a
-64-bit word, and `gap` is zero at every such initial value. -/
+64-bit word, and `gap` is zero at every such initial value.
+For example, if a load at cycle 5 is the first access to a word whose initial value is
+the cast of `7`, that word's gap is zero, so the product is zero. -/
 theorem load_mul_accessCorrection (gap : Fin params.ramSize → F)
     (good : ∀ address : Fin params.ramSize,
       (∃ value : BitVec 64, initialValue address.val = (value.toNat : F)) → gap address = 0)
@@ -203,7 +219,9 @@ theorem shifted_history (byteRam : Nat → BitVec 64) (gap : Fin params.ramSize 
 
 /-- The shifted witness satisfies the equations with the 64-bit initial RAM `byteRam`.
 `byteRam` must agree with `initialValue` wherever `initialValue` is a 64-bit word, and
-the public I/O mask must vanish wherever they differ. -/
+the public I/O mask must vanish wherever they differ.
+For example, `onBytes_of_allConstraints` applies it with `byteInitialRam`, which meets
+the first condition by `byteInitialRam_good` and the second by `byteInitialRam_masked`. -/
 theorem shiftWitness_equations (byteRam : Nat → BitVec 64)
     (good : ∀ address : Fin params.ramSize,
       (∃ value : BitVec 64, initialValue address.val = (value.toNat : F)) →

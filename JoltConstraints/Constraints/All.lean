@@ -164,7 +164,9 @@ abbrev ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
 
 /-- The private inputs with no untrusted advice and an empty advice tape.
 `AllConstraints` builds the instance's fixed initial RAM from these inputs and takes the
-untrusted-advice words separately, as field elements. -/
+untrusted-advice words separately, as field elements.
+For example, `JoltPrivateInputs.noUntrustedAdvice.untrusted_advice` is `#[]`, so the
+untrusted-advice block of the fixed initial RAM holds zeros. -/
 def _root_.JoltPrivateInputs.noUntrustedAdvice : JoltPrivateInputs :=
   { untrusted_advice := #[], advice_tape := #[] }
 
@@ -172,7 +174,10 @@ def _root_.JoltPrivateInputs.noUntrustedAdvice : JoltPrivateInputs :=
 The block starts at the remapped word of `untrusted_advice_start` and holds
 `max_untrusted_advice_size / 8` words, rounded down.
 Rust: `ram_val_check_advice_block` in
-jolt/crates/jolt-verifier/src/stages/stage4/ram_val_check.rs:482 at a6b6dc717. -/
+jolt/crates/jolt-verifier/src/stages/stage4/ram_val_check.rs:482 at a6b6dc717.
+For example, if `untrusted_advice_start` remaps to word 100 and
+`max_untrusted_advice_size` is 16, then word 101 has index `some 1` and word 102 has
+index `none`. -/
 def untrustedAdviceWordIndex? (layout : MemoryLayout) (address : Nat) : Option Nat :=
   match TraceWitness.remapRamAddress layout layout.untrusted_advice_start with
   | none => none
@@ -187,7 +192,10 @@ fixed 64-bit word `fixedRam address` elsewhere.
 Jolt's verifier adds the committed block's evaluation to the evaluation of the public
 initial RAM, which is zero in the block, so the sum equals this replacement.
 Rust: jolt/crates/jolt-verifier/src/stages/stage4/ram_val_check.rs:482 at a6b6dc717
-(a16z/jolt#2190). -/
+(a16z/jolt#2190).
+For example, if `untrusted_advice_start` remaps to word 100 and the block holds 2 words,
+then the value at word 101 is `untrustedAdvice 1`, and the value at word 102 is the cast
+of `fixedRam 102`. -/
 noncomputable def committedInitialValue {F : Type} [Field F] (layout : MemoryLayout)
     (fixedRam : Nat → BitVec 64) (untrustedAdvice : Nat → F) (address : Nat) : F :=
   match untrustedAdviceWordIndex? layout address with
@@ -202,7 +210,9 @@ The context is existential only to name preprocessing results: its certificates
 bind every bytecode row, initial RAM word, public I/O value and entry slot to
 these inputs. No execution trace or honest-witness construction is an input.
 `AllConstraints` is the relation Jolt's verifier checks; this byte relation is the
-special case where every committed advice word is a 64-bit word. -/
+special case where every committed advice word is a 64-bit word.
+For example, `privateInputs.untrusted_advice = #[1, 2]` puts the word `0x0201` at the
+start of the untrusted-advice block of the initial RAM the constraints use. -/
 def AllConstraintsOnBytes {F : Type} [Field F] {params : WitnessParams}
     (joltInstance : JoltInstance SourceInstruction) (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params) : Prop :=

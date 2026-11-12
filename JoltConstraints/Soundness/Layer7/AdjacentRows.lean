@@ -13,7 +13,9 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness.AdjacentRows
 
-/-- Index `i` of a window starting at `j` stays inside a list that holds the window. -/
+/-- Index `i` of a window starting at `j` stays inside a list that holds the window.
+For example, a window of width 3 starting at `j = 4` in a list of length 7 has its last
+index `4 + 2 = 6 < 7`. -/
 theorem window_bound {length j width : Nat} (fits : j + width ≤ length) (i : Fin width) :
     j + i.val < length := by
   have := i.isLt
@@ -84,7 +86,10 @@ private theorem windows_flatten {α : Type} (selected : α → Prop) {width : Na
 /-- A window of rows inside one source instruction's expansion whose instructions satisfy
 `relation`.
 Every row but the last continues the expansion, and no row after the first starts a
-source instruction. -/
+source instruction.
+For example, the three rows of an `LB` expansion (`VirtualLoadB`, `VirtualWindowMaskB`,
+`VirtualPextSigned`) form such a window: the first two continue the expansion, and the
+last two do not start a source instruction. -/
 def WithinSource {width : Nat} (relation : (Fin width → JoltISA.Instr) → Prop)
     (window : Fin width → JoltInstructionRow) : Prop :=
   relation (fun i => (window i).instruction) ∧
@@ -94,7 +99,10 @@ def WithinSource {width : Nat} (relation : (Fin width → JoltISA.Instr) → Pro
 /-- Lift an arbitrary instruction-list property `property` to its materialized rows.
 The supplied `windows` consequence identifies windows of consecutive instructions within
 that list.
-Only `ExpandedRows` metadata and the rows' instructions are used. -/
+Only `ExpandedRows` metadata and the rows' instructions are used.
+For example, with `property := fun l => ExpansionFacts.loadWindowsOk l = true`, it turns
+the load windows of one expansion's instruction list into load windows of its
+materialized rows. -/
 theorem materialized_windows (property : List JoltISA.Instr → Prop)
     (selected : JoltISA.Instr → Prop) {width : Nat}
     (relation : (Fin width → JoltISA.Instr) → Prop) (side : Fin width)
@@ -124,7 +132,10 @@ theorem materialized_windows (property : List JoltISA.Instr → Prop)
 /-- Lift a list property of every materialized expansion to the program's bytecode.
 `windows` interprets that property as windows of consecutive instructions.
 Every resulting window stays within one expansion, as witnessed by continuation of all
-but its last row and the false `starts_source` flag of all but its first row. -/
+but its last row and the false `starts_source` flag of all but its first row.
+For example, `expand_program_loadWindows` uses it with the width-3 relation `LoadWindow`
+to place every narrow load of the program at the start of a load window inside its own
+expansion. -/
 theorem expand_program_windows (property : List JoltISA.Instr → Prop)
     (selected : JoltISA.Instr → Prop) {width : Nat}
     (relation : (Fin width → JoltISA.Instr) → Prop) (side : Fin width)
