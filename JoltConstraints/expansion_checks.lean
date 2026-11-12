@@ -362,7 +362,7 @@ def straightLineRow : JoltISA.Instr → Bool
   | _ => true
 
 /-- The row writes none of the eight reserved virtual registers `vr32` to `vr39`, which
-hold Jolt's CSR mirrors. Example: `ADDI vr40 x10 0` passes; `ADDI vr39 x10 0` does not. -/
+hold Jolt's persistent system state: the LR/SC reservation and the CSR mirrors. Example: `ADDI vr40 x10 0` passes; `ADDI vr39 x10 0` does not. -/
 def reservedFree (row : JoltISA.Instr) : Bool :=
   match row.destination? with
   | some (.vreg v) => decide (v.toNat < 32) || decide (40 ≤ v.toNat)
@@ -377,6 +377,8 @@ def inlineRowOk (row : JoltISA.Instr) : Bool :=
   sequenceRowOk row && ordinary row && fastImmShiftOk row && !isRegisterShift row &&
     noTempRead row && straightLineRow row && reservedFree row
 
+/-- A mask that passes the fast check is a well-formed right-shift mask: its shift, the
+number of trailing zeros, is below 64. For example, `rightShiftMask 7` passes both. -/
 theorem maskOk_of_fast (mask : Nat) (fast : fastMaskOk mask = true) : maskOk mask = true := by
   obtain ⟨shift, below, same⟩ := List.any_eq_true.mp fast
   have below : shift < 64 := List.mem_range.mp below
@@ -384,6 +386,8 @@ theorem maskOk_of_fast (mask : Nat) (fast : fastMaskOk mask = true) : maskOk mas
   subst same
   simp [maskOk, ctz_rightShiftMask _ below, below]
 
+/-- A mask that passes the fast word check is a well-formed word right-shift mask: its
+shift is below 32. For example, `wordShiftMask 7` passes both. -/
 theorem wordMaskOk_of_fast (mask : Nat) (fast : fastWordMaskOk mask = true) :
     wordMaskOk mask = true := by
   obtain ⟨shift, below, same⟩ := List.any_eq_true.mp fast
@@ -392,13 +396,14 @@ theorem wordMaskOk_of_fast (mask : Nat) (fast : fastWordMaskOk mask = true) :
   subst same
   simp [wordMaskOk, ctz_wordShiftMask _ below, below]
 
+/-- A row that passes the fast immediate-shift check passes `immShiftOk`. For example,
+`VirtualROTRI vr48 vr49 (rightShiftMask 7)` passes both. -/
 theorem immShiftOk_of_fast (row : JoltISA.Instr) (fast : fastImmShiftOk row = true) :
     immShiftOk row = true := by
   cases row <;> simp only [fastImmShiftOk, immShiftOk] at fast ⊢ <;>
     first
     | exact maskOk_of_fast _ fast
     | exact wordMaskOk_of_fast _ fast
-    | rfl
 
 private theorem inlineRowOk_parts {row : JoltISA.Instr} (ok : inlineRowOk row = true) :
     sequenceRowOk row = true ∧ ordinary row = true ∧ immShiftOk row = true ∧

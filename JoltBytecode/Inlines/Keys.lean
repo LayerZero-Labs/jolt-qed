@@ -111,12 +111,6 @@ def ofEncoding (opcode : BitVec 7) (funct3 : BitVec 3) (funct7 : BitVec 7) :
     Option InlineKey :=
   all.find? fun key => key.opcode == opcode && key.funct3 == funct3 && key.funct7 == funct7
 
-/-- Every key is found again from its own encoding.
-Example: `ofEncoding blake2.opcode blake2.funct3 blake2.funct7 = some blake2`. -/
-theorem ofEncoding_self (key : InlineKey) :
-    ofEncoding key.opcode key.funct3 key.funct7 = some key := by
-  cases key <;> rfl
-
 /-- The rows of the `rd ≠ x0` case: the generated `<name>RowsAutoList`.
 `rs3` is the source `rd`.
 Example: the first row of `keccak256AbsorbPermute.rows x10 x11 x12` loads `vr48` from `x10`. -/

@@ -496,7 +496,8 @@ local macro "plain_rows_safe" : tactic =>
       JoltISA.numReservedVirtualRegisters, outside_window 32 40 r hlo hhi]))
 
 /-- Rows that pass `inlineRowOk` write no reserved virtual register. For example, the
-rows of any registered hash inline leave the CSR mirrors `vr32` to `vr39` alone. -/
+rows of any registered hash inline leave `vr32` to `vr39`, the reservation registers and
+the CSR mirrors, alone. -/
 private theorem inline_rows_avoid (rows : List JoltISA.Instr)
     (ok : rows.all ExpansionFacts.inlineRowOk = true) :
     AvoidsWindow 32 40 (JoltISA.Program.seq rows) := by

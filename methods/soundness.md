@@ -205,9 +205,10 @@ addresses from it and the constraints.
 
 **Source-language scope.** Both targets cover programs represented by
 [`SourceInstruction`](../JoltConstraints/expansion_helpers.lean): the modeled
-RISC-V instructions and the listed Jolt custom instructions at opcode `0x5B`.
-Jolt's inline/precompile opcodes `0x0B` and `0x2B`, including the SHA-256 and
-Keccak inlines, and field-inline opcode `0x7B` are outside that type. The SDK's
+RISC-V instructions, the listed Jolt custom instructions at opcode `0x5B`, and
+five registered inlines at opcode `0x0B` (SHA256, SHA256_INIT, KECCAK256,
+KECCAK256_ABSORB_PERMUTE and BLAKE2). Every other `0x0B` encoding, opcode `0x2B`
+and field-inline opcode `0x7B` are outside that type. The SDK's
 `field_to_limbs!` and `field_from_limbs!` emit `0x7B` instructions. Any guest containing these instructions is
 outside the theorem's scope by construction. This is an existing language restriction,
 not an added soundness premise.

@@ -135,8 +135,11 @@ driver's output at a16z/jolt commit `{commit}`; do not edit by hand.
 
 `InlineKey` lists the registered inlines that jolt-qed supports. Each key has Jolt's
 encoding `(opcode, funct3, funct7)`, the generated rows of its two allocation cases
-(`rd ≠ x0` and `rd = x0`), and its row count. Jolt's decoder stores an inline's `rd`
-in the `rs3` slot (jolt/crates/jolt-program/src/image/decode.rs at the pin).
+(`rd ≠ x0` and `rd = x0`), and its row count. An inline's encoded `rd` field is the
+rows' `rs3`: Jolt's decoder keeps it as the normalized `rd`
+(jolt/crates/jolt-program/src/image/decode.rs, `format_inline_operands`), and the expander
+reads that `rd` as `rs3` (jolt/crates/jolt-program/src/expand/inline.rs,
+`InlineOperands::from_source_row`), both at the pin.
 `readsRd` records whether the rows read `rs3`; the generator computes it from the
 generated rows.
 -/
@@ -205,12 +208,6 @@ Example: `ofEncoding 0x0B 1 1 = some keccak256AbsorbPermute`, and
 def ofEncoding (opcode : BitVec 7) (funct3 : BitVec 3) (funct7 : BitVec 7) :
     Option InlineKey :=
   all.find? fun key => key.opcode == opcode && key.funct3 == funct3 && key.funct7 == funct7
-
-/-- Every key is found again from its own encoding.
-Example: `ofEncoding blake2.opcode blake2.funct3 blake2.funct7 = some blake2`. -/
-theorem ofEncoding_self (key : InlineKey) :
-    ofEncoding key.opcode key.funct3 key.funct7 = some key := by
-  cases key <;> rfl
 ''')
 out.append("/-- The rows of the `rd ≠ x0` case: the generated `<name>RowsAutoList`.\n"
            "`rs3` is the source `rd`.\n"

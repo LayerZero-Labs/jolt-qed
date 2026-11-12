@@ -2,8 +2,10 @@
 The base non-succinct soundness statement: a witness that satisfies every modeled
 constraint shows the instance is in Jolt's language, under the premises below.
 Source programs are limited to the instructions represented by `SourceInstruction`.
-Jolt's inline/precompile opcodes 0x0B and 0x2B, including the SHA-256 and Keccak
-inlines, are outside that type. Guests using them are outside this theorem's scope.
+That type includes five registered inlines at opcode 0x0B: SHA256, SHA256_INIT,
+KECCAK256, KECCAK256_ABSORB_PERMUTE and BLAKE2 (`JoltBytecode/Inlines/Keys.lean`).
+Every other 0x0B encoding, opcode 0x2B and the field-inline opcode 0x7B are outside
+that type. Guests using them are outside this theorem's scope.
 Akita's extra constraints are to be modeled separately; PCS security is out of scope.
 The top-level proof is a short chain of named helpers. B6's known
 counterexamples are excluded by temporary restrictions

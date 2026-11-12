@@ -37,10 +37,13 @@ inductive SourceInstruction where
   | riscv (instruction : RiscvInstruction)
   | jolt (instruction : JoltCustomInstruction)
   /-- A call of the registered inline `key`: `.insn r 0x0B, funct3, funct7, rd, rs1, rs2`.
-  Jolt's decoder stores `rd` in the `rs3` slot, so `rs3` is the source `rd`.
-  For example, the SDK calls `KECCAK256_ABSORB_PERMUTE` with `rs3 = x0`.
-  See jolt/crates/jolt-program/src/image/decode.rs (`decode_instruction`, opcodes
-  0x0B and 0x2B) at a6b6dc717. -/
+  `rs3` is the encoded `rd` field. Jolt's decoder keeps it as the normalized `rd`
+  (jolt/crates/jolt-program/src/image/decode.rs, `format_inline_operands`), and the
+  expander and tracer read that `rd` as `rs3`
+  (jolt/crates/jolt-program/src/expand/inline.rs, `InlineOperands::from_source_row`;
+  jolt/tracer/src/instruction/format/format_inline.rs, `FormatInline::parse` and its
+  `NormalizedOperands` conversions), all at a6b6dc717.
+  For example, the SDK calls `KECCAK256_ABSORB_PERMUTE` with `rs3 = x0`. -/
   | inline (key : JoltISA.Inlines.InlineKey) (rs1 rs2 rs3 : regidx)
 
 /-- The fields of a raw inline encoding, `.insn r opcode, funct3, funct7, rd, rs1, rs2`,
@@ -73,24 +76,6 @@ def InlineEncoding.register (encoding : InlineEncoding) : Option SourceInstructi
   | some key =>
       if JoltISA.isX0 encoding.rd && key.readsRd then none
       else some (.inline key encoding.rs1 encoding.rs2 encoding.rd)
-
-/-- A supported key's own encoding registers as that key, with any registers, unless
-`rd = x0` and the key's rows read `rd`. For example, every hash key registers with
-`rd = x0`, since none of them reads `rd`. -/
-theorem InlineEncoding.register_key (key : JoltISA.Inlines.InlineKey) (rd rs1 rs2 : regidx)
-    (usable : (JoltISA.isX0 rd && key.readsRd) = false) :
-    InlineEncoding.register ⟨key.opcode, key.funct3, key.funct7, rd, rs1, rs2⟩ =
-      some (.inline key rs1 rs2 rd) := by
-  simp only [InlineEncoding.register, JoltISA.Inlines.InlineKey.ofEncoding_self, usable,
-    Bool.false_eq_true, ↓reduceIte]
-
-/-- An encoding that matches no supported key is rejected. For example, opcode 0x0B
-with funct3 3 and funct7 0 is rejected. -/
-theorem InlineEncoding.register_unsupported (encoding : InlineEncoding)
-    (unsupported : JoltISA.Inlines.InlineKey.ofEncoding encoding.opcode encoding.funct3
-      encoding.funct7 = none) :
-    encoding.register = none := by
-  simp only [InlineEncoding.register, unsupported]
 
 -- What Rust's dispatch_source returns for one source instruction.
 -- See : jolt/crates/jolt-program/src/expand/materialize.rs:71-101 (dispatch_source)

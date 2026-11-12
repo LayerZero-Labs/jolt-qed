@@ -11,6 +11,12 @@ bitmask, like the shift tables: set exactly at bits `s` and above (for VIRTUAL_R
 at bits `s` to 31). Inline rows use them through `VirtualROTRI` and `VirtualROTRIW`,
 for example in SHA-256's Σ functions and Keccak's ρ step.
 
+At Jolt a6b6dc717:
+See : jolt/crates/jolt-lookup-tables/src/tables/virtual_rotr.rs (`VirtualROTRTable::materialize_entry`)
+See : jolt/crates/jolt-lookup-tables/src/tables/virtual_rotrw.rs (`VirtualROTRWTable::materialize_entry`)
+See : jolt/tracer/src/instruction/virtual_rotri.rs (`VirtualROTRI::exec`)
+See : jolt/tracer/src/instruction/virtual_rotriw.rs (`VirtualROTRIW::exec`)
+
 Each loop keeps three accumulators. `firstSum` follows the VIRTUAL_SRL recurrence and
 ends as `x >>> s`. `prodOnePlusY` doubles at every set mask bit, so at a clear bit
 `i < s` it is `2^(n - s)`, and `secondSum` collects `x`'s bits below `s`, moved up by

@@ -7,8 +7,8 @@ open LeanRV64D
 The expansion's `immShiftOk` fact supplies the mask shape required by Layer 4.
 Inline rows are the only source of the two rotates.
 At Jolt a6b6dc717:
-See : jolt/tracer/src/instruction/virtual_rotri.rs
-See : jolt/tracer/src/instruction/virtual_rotriw.rs
+See : jolt/tracer/src/instruction/virtual_rotri.rs (`VirtualROTRI::exec`)
+See : jolt/tracer/src/instruction/virtual_rotriw.rs (`VirtualROTRIW::exec`)
 At public pin 8bbb2357:
 See : jolt/tracer/src/instruction/virtual_srli.rs:20-31
 See : jolt/tracer/src/instruction/virtual_srai.rs:20-28

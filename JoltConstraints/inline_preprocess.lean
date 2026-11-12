@@ -44,13 +44,13 @@ theorem expand_instruction_preprocess (source : SourceInstructionRow SourceInstr
     | nil => exact absurd rfl nonempty
     | cons first _ => simp [same first List.mem_cons_self]
   unfold preprocess pc_map_ok
-  simp only [List.toList_toArray, split, List.all_cons, List.all_nil, Bool.and_true,
+  simp only [split, List.all_cons, List.all_nil, Bool.and_true,
     List.filterMap_cons, List.filterMap_nil, firstAddress, List.nodup_singleton,
     decide_true, countdown, List.size_toArray]
   have allOk : rows.all (fun row => bytecode_address_ok row.address) = true :=
     List.all_eq_true.mpr fun row member => by rw [same row member]; exact addressOk
   simp only [allOk, Bool.true_and, decide_eq_true_eq]
-  rw [if_pos (by omega)]
+  rw [ite_eq_left (by omega)]
   rfl
 
 /-- KECCAK256_ABSORB_PERMUTE expands to its 3,121 rows at any valid address, whether

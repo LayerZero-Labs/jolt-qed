@@ -68,7 +68,8 @@ theorem lookupOutput_sraw
     t slot selected lhs rhs raf left right, table]
   exact ShiftTables.sraw_entry _ lhs rhs (uninterleave_interleave lhs rhs) shift shiftLt mask
 
-/-- VirtualROTR returns the right rotation specified by its right-shift mask. -/
+/-- VirtualROTR returns the right rotation specified by its right-shift mask.
+For example, with `lhs = 0x1` and the mask for shift 4, the output is `0x1000000000000000`. -/
 theorem lookupOutput_rotr
     (table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some .VirtualROTR)
@@ -80,7 +81,9 @@ theorem lookupOutput_rotr
   exact ShiftTables.rotr_entry _ lhs rhs (uninterleave_interleave lhs rhs) shift shiftLt mask
 
 /-- VirtualROTRW returns the low-word right rotation specified by its right-shift mask,
-zero-extended. -/
+zero-extended. For example, with `lhs = 0xFFFFFFFF00000001` and the word mask for shift 4,
+the low word `0x00000001` rotates to `0x10000000`; with shift 1 it rotates to `0x80000000`,
+whose bit 31 is set, and the output is still `0x0000000080000000`. -/
 theorem lookupOutput_rotrw
     (table : (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some .VirtualROTRW)
