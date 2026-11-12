@@ -11,7 +11,7 @@ Agreement with Jolt holds only at the sampled indices.
 ## Revisions
 
 - jolt-qed: branch `inline/t4-lookup-tables`, on `inline/t1-driver` at `b648846`.
-  I ran the results below with the emitter of commit `b8be11c` and the twin and comparator of commit `5e9691f`.
+  I ran the results below with the emitter of commit `b8be11c`, the twin of commit `41fff36`, and the comparator of commit `02f6f84`, which added the coverage checks and the four-case mutation run.
 - Jolt: a16z/jolt#2384 (branch `feat/zicsr-remaining-forms`) at `580084fcfad4788ebf48413a92dd640ca090c45f` (`580084fcf`), the commit that the expansion-parity and decoder-sweep jobs use.
   Its `crates/jolt-lookup-tables` is byte-identical to the one at the Track T pin `a6b6dc717`: `git diff a6b6dc717 580084fcf -- crates/jolt-lookup-tables` is empty, and both commits have tree `080fd63f` for that directory.
 - Toolchain: `leanprover/lean4:v4.35.0`; Rust from Jolt's `rust-toolchain.toml`, release profile (wrapping arithmetic, as in Jolt's own release profile).
