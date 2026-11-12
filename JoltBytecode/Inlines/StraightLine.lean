@@ -182,6 +182,13 @@ def regRun : List Instr → (VReg → BitVec 64) → Option (VReg → BitVec 64)
     | some (d, g) => if 32 ≤ d.toNat then regRun l (setV f d (g f)) else none
     | none => none
 
+/-- A register row with a writable destination: evaluation sets the destination and goes on.
+Example: `regRun (LUI vr60 5 :: l) f = regRun l (setV f vr60 5)`. -/
+theorem regRun_cons_of {i : Instr} {d : VReg} {g : (VReg → BitVec 64) → BitVec 64}
+    (h : i.regRow? = some (d, g)) (hd : 32 ≤ d.toNat) (l : List Instr) (f : VReg → BitVec 64) :
+    regRun (i :: l) f = regRun l (setV f d (g f)) := by
+  simp only [regRun, h, hd, ↓reduceIte]
+
 /-- **Register rows run as evaluated.** If the register rows `l` evaluate to `f` from the
 register file of `s`, a run of `l ++ rest` from `s` is a run of `rest` from `s` with register
 file `f`. Nothing else in the state changes.

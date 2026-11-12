@@ -303,6 +303,35 @@ theorem Runs.frame {l : List Instr} {L L' : VReg → BitVec 32} {W : VReg → Pr
       · cases hrun
     · cases hrun
 
+/-- **A low-word run is a register run.** If the rows `l` take the low words of `f` to `L'` and
+write only registers in `W`, then `regRun` runs them from `f` to a file whose low words are `L'`
+and that keeps every register outside `W` whole.
+Example: `Runs [ADD vr80 vr80 vr82] (lo f) L' (· = vr80)` gives a file equal to `f` except at
+`vr80`. -/
+theorem Runs.lift {l : List Instr} {f : VReg → BitVec 64} {L' : VReg → BitVec 32}
+    {W : VReg → Prop} (h : Runs l (lo f) L' W) :
+    ∃ f', regRun l f = some f' ∧ lo f' = L' ∧ ∀ r, ¬ W r → f' r = f r := by
+  obtain ⟨hrun, hW⟩ := h
+  induction l generalizing f with
+  | nil =>
+    simp only [run32, Option.some.injEq] at hrun
+    exact ⟨f, rfl, hrun, fun _ _ => rfl⟩
+  | cons i l ih =>
+    simp only [run32] at hrun
+    split at hrun
+    · rename_i d g hrow
+      split at hrun
+      · rename_i hd
+        obtain ⟨g64, hrow64, hg⟩ := regRow_of_row32 hrow
+        rw [← hg, ← lo_setV] at hrun
+        obtain ⟨f', h1, h2, h3⟩ := ih hrun (fun j hj => hW j (List.mem_cons_of_mem _ hj))
+        refine ⟨f', by rw [regRun_cons_of hrow64 hd]; exact h1, h2, fun r hr => ?_⟩
+        have hrd : r ≠ d := fun e => hr (e ▸ hW i List.mem_cons_self d g hrow)
+        rw [h3 r hr]
+        simp only [setV, hrd, ↓reduceIte]
+      · cases hrun
+    · cases hrun
+
 /-! ## Values -/
 
 /-- The low word of a value in the low-word file `L`.

@@ -65,13 +65,6 @@ theorem regRun_append (l₁ l₂ : List Instr) (f : VReg → BitVec 64) :
       · simp only [regRun, h, hd, ↓reduceIte, ih]
       · simp only [regRun, h, hd, ↓reduceIte, Option.bind_none]
 
-/-- A register row with a writable destination: evaluation sets the destination and goes on.
-Example: `regRun (LUI vr60 5 :: l) f = regRun l (setV f vr60 5)`. -/
-theorem regRun_cons_of {i : Instr} {d : VReg} {g : (VReg → BitVec 64) → BitVec 64}
-    (h : i.regRow? = some (d, g)) (hd : 32 ≤ d.toNat) (l : List Instr) (f : VReg → BitVec 64) :
-    regRun (i :: l) f = regRun l (setV f d (g f)) := by
-  simp only [regRun, h, hd, ↓reduceIte]
-
 namespace Blake2b
 
 open JoltSpec.Blake2b

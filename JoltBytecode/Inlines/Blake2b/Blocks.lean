@@ -413,35 +413,6 @@ Example: `poolReset f vr60 = 0` and `poolReset f vr40 = f vr40`. -/
 def poolReset (f : VReg → BitVec 64) : VReg → BitVec 64 :=
   fun r => if InPool r then 0 else f r
 
-private theorem regRun_resets (ks : List Nat) (hks : ∀ k ∈ ks, 48 + k < 128) (G : VReg → BitVec 64) :
-    regRun (ks.map fun k =>
-        .ADDI (.vreg (BitVec.ofNat 7 (48 + k))) (.xreg (regidx.Regidx 0)) 0) G =
-      some (fun r => if 48 ≤ r.toNat ∧ r.toNat - 48 ∈ ks then 0 else G r) := by
-  induction ks generalizing G with
-  | nil => simp [regRun]
-  | cons k ks ih =>
-    have hk : 48 + k < 128 := hks k List.mem_cons_self
-    have hd : (BitVec.ofNat 7 (48 + k)).toNat = 48 + k := by
-      show (48 + k) % 128 = 48 + k; omega
-    rw [List.map_cons, regRun_cons_of rfl (by rw [hd]; omega),
-      ih (fun j hj => hks j (List.mem_cons_of_mem _ hj))]
-    congr 1
-    funext r
-    simp only [setV, List.mem_cons]
-    by_cases h1 : 48 ≤ r.toNat ∧ r.toNat - 48 ∈ ks
-    · simp only [h1, and_self, or_true, ↓reduceIte]
-    · by_cases h2 : r = BitVec.ofNat 7 (48 + k)
-      · subst h2
-        simp [hd]
-      · have h3 : ¬ (48 ≤ r.toNat ∧ (r.toNat - 48 = k ∨ r.toNat - 48 ∈ ks)) := by
-          rintro ⟨h4, h5 | h5⟩
-          · apply h2
-            apply BitVec.eq_of_toNat_eq
-            rw [hd]
-            omega
-          · exact h1 ⟨h4, h5⟩
-        simp only [h1, h2, h3, ↓reduceIte]
-
 /-- The 40 reset rows evaluate to `poolReset`.
 Example: afterwards `vr48 = 0` and `vr40` is unchanged. -/
 theorem regRun_resetRows (G : VReg → BitVec 64) : regRun resetRows G = some (poolReset G) := by
