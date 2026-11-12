@@ -6,7 +6,8 @@ The T1 comparison is in `reports/2026-11-11-expansion-parity.md`.
 
 ## Revisions
 
-jolt-qed: branch `inline/i0a-generated`, on top of `inline/t1-driver` at `32fdd89`.
+jolt-qed: branch `inline/i0a-generated`, on top of `inline/t1-driver` at `34445b3`.
+I ran every round-trip and mutation result below with the Lean code of commit `c2da1e9`, except the two earlier file-level checks named in the mutation section.
 The generated rows in `JoltBytecode/Inlines/Generated/` come from the pin.
 Toolchain: `leanprover/lean4:v4.35.0`.
 
@@ -134,13 +135,19 @@ It instantiates the template at the driver's two triples A and B and at 300 seed
 The Lean side renders the `JoltISA.Instr` constructors with `RowView.ofLeanRow` (`JoltTests/ExpansionParity/Row.lean`) and shares no code with the generator (`scripts/expansion-parity/src/lean.rs`).
 The table of generated definitions (`JoltTests/ExpansionParity/Inline.lean`) is written by hand.
 A renamed or missing definition fails to elaborate, and the run checks that the templates and the table name the same 27 inlines.
+`inlineCoverage` (`RoundTrip.lean`) checks that the driver's output is complete for these 27 inlines.
+Each inline needs exactly one template entry, and its `normal` case must not be null.
+Each inline needs exactly one fixture record for each of the four scenarios (`normal`, `compressed`, `rd_zero`, `aliased_operands`) in each allocator (`fresh` and `shared`).
+An `rd_zero` fixture record must hold rows when the inline's `rd_zero` template is present, and Jolt's error when that template is null.
+The run reports every missing, repeated or unexpected input as a disagreement.
+An incomplete driver output therefore cannot pass.
 Inlines with `VirtualAdvice` rows take an advice function, which the test sets to `k ↦ k`; advice values reach no rendered field.
 
 ### At the pin
 
 All 216 fixture records agree (176,600 rows), every field included.
 The templates give 16,308 instantiations (27 inlines, two cases each, 302 triples per case) with 13,333,300 rows, and every row agrees.
-The template names and the Lean table name the same 27 inlines.
+The template names and the Lean table name the same 27 inlines, and the inputs are complete (0 coverage mismatches).
 The run reports 0 field mismatches and exits with status 0; it took about 5 minutes.
 
 ### At a16z/jolt#2414
@@ -153,6 +160,8 @@ The templates file has `"rd_zero": null` for the same 19 inlines, which the run 
 The 19 are the inlines that read vr40 in the `rd_zero` case at the pin (listed above).
 The other 10,570 template instantiations (12,240,664 rows), which include the `rd_zero` cases of the eight inlines Jolt still accepts with rd = x0, all agree.
 The run reports 57 field mismatches (19 + 38) and exits with status 1.
+The inputs are complete there too: the run reports 0 coverage mismatches, because each of the 38 `rd_zero` fixture records holds Jolt's error and its template is null.
+I reran the round trip at `da3b89abd` with the code of commit `c2da1e9`, and it gives the same counts.
 
 The driver checks at `da3b89abd` all pass.
 The fixture file there has 19 lines with an `error` field, and Jolt returns exactly those errors.
@@ -167,12 +176,20 @@ Regenerating them at #2414 drops the 19 `RowsAutoRdZero` definitions, and the re
 ### Mutation checks
 
 The `mutation` mode corrupts one field of one row of a Rust record and checks that the comparison reports the corruption at that row and field.
-It does this for each of the 11 compared field kinds (kind, rs1, rd, immediate, virtual sequence remaining, first, compressed, circuit flags, instruction flags, lookup table, RAF flag) on the first T1 record with ten or more rows and on the first inline fixture record (`SHA256_INLINE::normal`).
-It also corrupts the 4 metadata fields of a T1 record compared on row metadata only (see the T1 report).
-At the pin all three unmutated records give 0 mismatches, and the comparisons report all 26 corruptions.
+It does this for each of the 13 compared row fields (kind, address, rd, rs1, rs2, immediate, virtual sequence remaining, first, compressed, circuit flags, instruction flags, lookup table, RAF flag) on the first T1 record with ten or more rows and on the first inline fixture record (`SHA256_INLINE::normal`).
+It also corrupts the 4 metadata fields of a T1 record compared on row metadata only, and makes 17 whole-record corruptions of the source kind and the `result` object on three T1 records (see the T1 report).
+Given the templates file, it then changes the inputs of the round trip for the first inline (`SHA256_INLINE`) and checks that `inlineCoverage` reports each change.
+The six changes drop the `normal` template, drop the fixture records `::normal`, `::normal@shared` and `::rd_zero`, repeat the fixture record `::compressed`, and replace the rows of `::rd_zero` with an error.
+At the pin the four unmutated records and the unchanged inputs pass, and the mode reports all 53 corruptions (30 field corruptions, 17 record corruptions and 6 input changes).
 
-Two file-level checks confirm that the whole `inline` run fails when Rust's data changes.
-I ran them with the same `RoundTrip.lean` on the earlier branch `inline/t1-lean`.
+Two file-level deletion checks show that the whole `inline` run fails on incomplete inputs.
+I ran them with `TRIPLES` set to 0, which keeps only the two fixed triples.
+
+- I deleted the fixture record `SHA256_INLINE::normal` (fresh allocator) from a copy of `rows.jsonl`; the run reports "fixture record missing or repeated" for that case and exits with status 1.
+- I set the `normal` case of `SHA256_INLINE` to null in a copy of `inline_templates.json`; the run reports "no normal template" for `SHA256_INLINE` and exits with status 1.
+
+Two earlier file-level checks confirm that the whole `inline` run fails when Rust's data changes.
+I ran them with the round-trip code of the earlier branch `inline/t1-lean`, before the completeness check existed.
 
 - I raised the immediate of row 100 of `KECCAK256_INLINE::normal` (fresh allocator) by one in a copy of `rows.jsonl`; the run reports exactly that mismatch (`imm of ANDN rows`, Rust 1, Lean 0) and exits with status 1.
 - I changed the `rs1` parameter of row 0 of `SECP256K1_MULQ`'s `normal` template from `rs1` to `rs2` in a copy of `inline_templates.json`; the run reports row 0 at both fixed triples (Rust 12, Lean 11 and Rust 22, Lean 21) and exits with status 1.
