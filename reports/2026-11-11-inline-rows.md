@@ -162,8 +162,9 @@ The inputs are complete (0 coverage mismatches), and the run reports 0 field mis
 The inline inputs at `580084fcf` are the same as at the pin.
 The 216 inline fixture records of `rows.jsonl` are identical, `inline_templates.json` differs only in its `jolt_commit` field, and Jolt's inline hash fixture `registered_inline_expand_parity_hashes.jsonl` is unchanged.
 I ran the driver at `580084fcf` with the generated Lean written to a scratch directory instead of the repository.
-Its output differs from the checked-in files only in the Jolt commit named in the header of each of the 27 files under `JoltBytecode/Inlines/Generated/` and in `JoltBytecode/Inlines/Generated.lean`; no row differs.
-I did not regenerate the checked-in files.
+Its output differs from the files generated at the pin only in the Jolt commit named in the header of each of the 27 files under `JoltBytecode/Inlines/Generated/` and in `JoltBytecode/Inlines/Generated.lean`; no row differs.
+The checked-in files are regenerated at `580084fcf`, the revision CI checks, so their headers name `580084fcf`.
+Because no row differs, the files are also the rows of the pin.
 
 ### At a16z/jolt#2414
 
@@ -219,6 +220,3 @@ I ran them with the round-trip code of the earlier branch `inline/t1-lean`, befo
 
 - Regenerate `JoltBytecode/Inlines/Generated/` when #2414 merges and the pin moves, and rerun the round trip.
 - Decide whether BLAKE3_KEYED64's reads of vr60 and vr61 before any write need attention before BLAKE3_KEYED64 enters scope.
-- The CI step "Fail on a diff in the generated Lean" regenerates the files at `580084fcf`, and the header of each of the 27 generated files then names `580084fcf` instead of `a6b6dc717`.
-  The step therefore fails on this branch until the files are regenerated at `580084fcf` or the step ignores the header line; the rows themselves are equal.
-  The CI job has not run on this branch yet.
