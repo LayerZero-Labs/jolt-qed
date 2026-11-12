@@ -253,7 +253,7 @@ theorem wView_initF (F : VReg → BitVec 64) :
   simp only [initF, wView_setV, setV_wReg_hReg, setV_wReg_wReg]
   apply Vector.ext
   intro k hk
-  interval_cases k <;> simp [Vector.getElem_set, initVec]
+  interval_cases k <;> simp [initVec]
 
 theorem mView_initF (F : VReg → BitVec 64) : mView (initF F) = mView F := by
   simp only [initF, mView_setV]
@@ -360,7 +360,7 @@ theorem hView_finalF (G : VReg → BitVec 64) :
   simp only [finalF, hView_xorH, wView_xorH, hView_stepW, wView_stepW]
   apply Vector.ext
   intro k hk
-  interval_cases k <;> simp [Vector.getElem_set]
+  interval_cases k <;> simp
 
 theorem finalF_out (G : VReg → BitVec 64) (r : VReg) (hr : ¬ InPool r) : finalF G r = G r := by
   simp only [finalF, xorH, stepW, setV, ne_of_pool hr (wReg_pool _), ne_of_pool hr (hReg_pool _),
@@ -473,7 +473,6 @@ theorem initVec_eq (h : Vector (BitVec 64) 8) (t flag : BitVec 64) (hf : flag = 
     rw [Nat.mod_eq_of_lt (by omega), Nat.shiftRight_eq_div_pow, Nat.div_eq_of_lt (by omega)]
     rfl
   have hd0 : decide ((0 : BitVec 64) = 1) = false := by decide
-  have hd1 : decide ((1 : BitVec 64) = 1) = true := by decide
   simp only [IV_bits, ht, hz]
   simp only [append_eq_lit]
   rcases hf with rfl | rfl
@@ -481,12 +480,12 @@ theorem initVec_eq (h : Vector (BitVec 64) 8) (t flag : BitVec 64) (hf : flag = 
     apply Vector.ext
     intro k hk
     interval_cases k <;>
-      simp [initVec, Vector.getElem_set, BitVec.xor_comm]
-  · simp only [hd1, ↓reduceIte]
+      simp [initVec, BitVec.xor_comm]
+  · simp only
     apply Vector.ext
     intro k hk
     interval_cases k <;>
-      simp [initVec, Vector.getElem_set, BitVec.xor_comm]
+      simp [initVec, BitVec.xor_comm]
 
 /-- **The rows compute `Spec.compress 12`** when the flag is 0 or 1. -/
 theorem rowsOut_eq_compress (x : Input) (hf : x.flag = 0 ∨ x.flag = 1) :
