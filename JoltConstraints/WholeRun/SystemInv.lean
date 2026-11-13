@@ -2,6 +2,7 @@ import JoltConstraints.WholeRun.Basic
 import JoltConstraints.WholeRun.Bridge
 import JoltConstraints.WholeRun.Init
 import JoltConstraints.nextpc_frame
+import JoltConstraints.inline_rows_ok
 import JoltBytecode.Step.Ecall
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
@@ -459,6 +460,7 @@ private def TouchesSystem : SourceInstruction → Prop
         .CSRRW .. | .CSRRS .. | .CSRRC .. | .CSRRWI .. | .CSRRSI .. | .CSRRCI .. => True
     | _ => False
   | .jolt _ => False
+  | .inline .. => False
 
 local macro "plain_rows_safe" : tactic =>
   `(tactic| (
@@ -493,6 +495,26 @@ local macro "plain_rows_safe" : tactic =>
       JoltISA.inlineRegisterBase, JoltISA.riscvRegisterBase, JoltISA.riscvRegisterCount,
       JoltISA.numReservedVirtualRegisters, outside_window 32 40 r hlo hhi]))
 
+/-- Rows that pass `inlineRowOk` write no reserved virtual register. For example, the
+rows of any registered hash inline leave `vr32` to `vr39`, the reservation registers and
+the CSR mirrors, alone. -/
+private theorem inline_rows_avoid (rows : List JoltISA.Instr)
+    (ok : rows.all ExpansionFacts.inlineRowOk = true) :
+    AvoidsWindow 32 40 (JoltISA.Program.seq rows) := by
+  intro r hlo hhi
+  induction rows with
+  | nil => trivial
+  | cons row rest ih =>
+    simp only [List.all_cons, Bool.and_eq_true] at ok
+    refine ⟨?_, ih ok.2⟩
+    have free : ExpansionFacts.reservedFree row = true := by
+      have parts := ok.1
+      simp only [ExpansionFacts.inlineRowOk, Bool.and_eq_true] at parts
+      exact parts.2
+    intro same
+    simp only [ExpansionFacts.reservedFree, same, Bool.or_eq_true, decide_eq_true_eq] at free
+    omega
+
 private theorem plain_source_safe (source : SourceInstruction) (expanded : ExpandedSource)
     (hplain : ¬ TouchesSystem source) (he : source.expand = some expanded) :
     ExpandedSafe expanded := by
@@ -510,6 +532,10 @@ private theorem plain_source_safe (source : SourceInstruction) (expanded : Expan
     all_goals simp only [SourceInstruction.expand, Option.some.injEq] at he
     all_goals subst expanded
     all_goals plain_rows_safe
+  | inline key rs1 rs2 rd =>
+    simp only [SourceInstruction.expand, Option.some.injEq] at he
+    subst expanded
+    exact inline_rows_avoid _ (JoltISA.Inlines.InlineKey.expandRows_rowsOk key rs1 rs2 rd)
 
 private theorem patch_avoids (r : JoltISA.VReg) (values : List (BitVec 64))
     (rows : List JoltISA.Instr) (hsafe : ProgramAvoids r (JoltISA.Program.seq rows)) :
@@ -679,6 +705,7 @@ private theorem system_program_data (source : SourceInstruction) (ht : TouchesSy
       (∀ s, source.honestTracerAdvice s = []) ∧ SystemPreserves p := by
   cases source with
   | jolt i => exact False.elim ht
+  | inline _ _ _ _ => exact False.elim ht
   | riscv i =>
     cases i
     all_goals simp only [TouchesSystem] at ht

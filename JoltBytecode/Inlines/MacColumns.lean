@@ -41,21 +41,6 @@ namespace JoltISA.Inlines
 theorem setV_ne (f : VReg → BitVec 64) {d r : VReg} (v : BitVec 64) (h : r ≠ d) :
     setV f d v r = f r := by simp [setV, h]
 
-/-- The evaluator of a concatenation.
-Example: `regRun ([LUI vr60 5] ++ [ADD vr62 vr60 vr60]) f` runs `LUI` to get
-`setV f vr60 5`, then runs `ADD` from that file, which ends with `vr62 = 10`. -/
-theorem regRun_append (l₁ l₂ : List Instr) (f : VReg → BitVec 64) :
-    regRun (l₁ ++ l₂) f = (regRun l₁ f).bind (regRun l₂) := by
-  induction l₁ generalizing f with
-  | nil => rfl
-  | cons i l ih =>
-    simp only [List.cons_append, regRun]
-    split
-    · split
-      · exact ih _
-      · rfl
-    · rfl
-
 /-! ## Carries -/
 
 /-- The carry out of a 64-bit addition is `SLTU` of the sum and an addend.

@@ -84,7 +84,8 @@ For example, a block running `ADDI` satisfies every field but `riscv` trivially,
 panic word nonzero. -/
 structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Block) : Prop where
   /-- Scope: the row is a RISC-V instruction. Jolt's own instructions (`SourceInstruction.jolt`,
-  `docs/riscv-alignment.md` section 7) have no block theorem yet. -/
+  `docs/riscv-alignment.md` section 7) and registered inlines (`SourceInstruction.inline`,
+  `docs/inline-precompiles.md`) have no block theorem yet. -/
   riscv : ∃ i, b.row.instruction = .riscv i
   /-- Deviation: the block stores into no byte of the program's code (`NoCodeStore`). -/
   no_code_store : NoCodeStore program b
@@ -125,7 +126,8 @@ theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
     hinv.heap_no_wrap (hconf.no_flag_word_load i hrow) (hlow i hrow)
     (hconf.panic_store_nonzero i hrow) (hconf.amo_no_flag_word i hrow) s hrel
   exact ⟨v, s', hstep, hrel', RunInv.of_block hruns hrows hinv,
-    JoltCodeIntact.of_block hruns hconf.no_code_store hcode⟩
+    JoltCodeIntact.of_block hruns (fun _ _ _ _ same => by rw [hrow] at same; cases same)
+      hconf.no_code_store hcode⟩
 
 /-! ## Where the run stops -/
 
@@ -365,7 +367,8 @@ Premises, by class:
   * `PanicStoreNonzero`: a store into the panic word leaves it nonzero;
   * `AmoNoFlagWord`: no atomic on the I/O window touches the panic or termination word.
 * scope: every block of the prefix runs a RISC-V row; Jolt's own instructions
-  (`SourceInstruction.jolt`) have no block theorem yet.
+  (`SourceInstruction.jolt`) and registered inlines (`SourceInstruction.inline`) have no block
+  theorem yet.
 
 The theorem goes one way, stops in front of the first EBREAK, and compares outputs after dropping
 trailing zero bytes. `docs/whole-run-theorem.md` lists what it does not say.

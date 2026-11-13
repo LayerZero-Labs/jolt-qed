@@ -24,8 +24,9 @@ Its workhorse is `HonestTrace.allConstraints_prover_sizes` (`Completeness/All.le
 `Trace.prover_config` models Jolt's checked sizing policy, and `HonestTrace.witness_params` takes its trace length and RAM size.
 The models of Jolt's prover RAM size (`ProverConfig.checkedRamSize`) and Jolt's verifier maximum (`VerifierSizes.maxRamSize`) follow [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250), which made the fix that #1951 item 4 proposes, `touched + 1` and `div_ceil(8)`, so `HonestTrace.prover_config_holds_highest_slot` is proved; see `reports/2026-11-03-ram-k-fix-experiment.md`.
 
-**Source-language scope.** Completeness and soundness cover programs represented by `SourceInstruction`: the modeled RISC-V instructions and the listed Jolt custom instructions at opcode `0x5B`.
-Jolt's inline/precompile opcodes `0x0B` and `0x2B`, including the SHA-256 and Keccak inlines, and its field-inline opcode `0x7B` are outside this type.
+**Source-language scope.** Completeness and soundness cover programs represented by `SourceInstruction`: the modeled RISC-V instructions, the listed Jolt custom instructions at opcode `0x5B`, and five registered inlines at opcode `0x0B` (SHA256, SHA256_INIT, KECCAK256, KECCAK256_ABSORB_PERMUTE and BLAKE2; see `docs/inline-precompiles.md`).
+Every other `0x0B` encoding, opcode `0x2B` and the field-inline opcode `0x7B` are outside this type.
+The Sail whole-run theorems (`JoltConstraints/WholeRun/Top.lean`) cover RISC-V blocks only: `BlockConforms.riscv` excludes custom instructions and inlines.
 The SDK's `field_to_limbs!` and `field_from_limbs!` conversions emit `0x7B` instructions.
 A guest containing these instructions is outside the theorems' scope by construction.
 This restriction is recorded in [`expansion_helpers.lean`](./expansion_helpers.lean); it is not an additional premise or a verifier check.

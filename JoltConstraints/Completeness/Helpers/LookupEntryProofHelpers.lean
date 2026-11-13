@@ -7,6 +7,7 @@ import JoltConstraints.Soundness.Layer4.BitwiseEntry
 import JoltConstraints.Soundness.Layer4.ComparisonEntry
 import JoltConstraints.Soundness.Layer4.ConditionalEntry
 import JoltConstraints.Soundness.Layer4.RotateEntry
+import JoltConstraints.Soundness.Layer4.RotrEntry
 import JoltConstraints.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupPextProofHelpers
 import JoltConstraints.Completeness.Helpers.LookupShiftProofHelpers
@@ -508,12 +509,13 @@ an honest trace, from the expansions: an immediate mask is a bitmask in the byte
 and a register mask was written by the `VirtualShiftRightBitmask(W)` row just before.
 -/
 
-/-- The mask a shift row reads is a right-shift bitmask, and no rotate runs. -/
+/-- The mask a shift or rotate row reads is a right-shift bitmask. For example,
+`VirtualROTRI d s (rightShiftMask 7)` satisfies it in every state. -/
 def ShiftMaskOk (instruction : JoltISA.Instr) (state : SailJoltState) : Prop :=
   match instruction with
-  | .VirtualSRLI _ _ mask | .VirtualSRAI _ _ mask =>
+  | .VirtualSRLI _ _ mask | .VirtualSRAI _ _ mask | .VirtualROTRI _ _ mask =>
       ∃ s < 64, mask = ExpansionFacts.rightShiftMask s
-  | .VirtualSRLIW _ _ mask | .VirtualSRAIW _ _ mask =>
+  | .VirtualSRLIW _ _ mask | .VirtualSRAIW _ _ mask | .VirtualROTRIW _ _ mask =>
       ∃ s < 32, mask = ExpansionFacts.wordShiftMask s
   | .VirtualSRL _ _ mask | .VirtualSRA _ _ mask =>
       ∃ s < 64, JoltISA.sourceValue mask state =
@@ -521,7 +523,6 @@ def ShiftMaskOk (instruction : JoltISA.Instr) (state : SailJoltState) : Prop :=
   | .VirtualSRLW _ _ mask | .VirtualSRAW _ _ mask =>
       ∃ s < 32, JoltISA.sourceValue mask state =
         BitVec.ofNat 64 (ExpansionFacts.wordShiftMask s)
-  | .VirtualROTRI .. | .VirtualROTRIW .. => False
   | _ => True
 
 theorem maskOk_mask (mask : Nat) (ok : ExpansionFacts.maskOk mask = true) :
@@ -749,22 +750,31 @@ theorem lookupEntryCorrect_VirtualSRAW (row : HonestTraceRow bytecode)
     simp only [jolt_virtual_sraw_value, maskValue, wordShiftMask_toNat s sLt]
     exact sraw_mask_entry _ s sLt
 
--- No expansion emits a rotate, so these tables are never used.
+/-- Inline rows rotate through VirtualROTRI, whose table reads a checked bitmask. -/
 theorem lookupEntryCorrect_VirtualROTR (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTR)
     (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F .VirtualROTR row := by
   lookup_cases
   rw [hi] at maskOk
-  exact maskOk.elim
+  obtain ⟨s, sLt, rfl⟩ := maskOk
+  simp only [jolt_virtual_rotri_value, ExpansionFacts.ctz_rightShiftMask s sLt]
+  exact ShiftTables.rotr_entry _ _ _ (uninterleave_interleave _ _) s sLt
+    (rightShiftMask_shape s sLt)
 
+/-- Inline rows rotate a word through VirtualROTRIW, whose table reads a checked
+bitmask. -/
 theorem lookupEntryCorrect_VirtualROTRW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .VirtualROTRW)
     (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :
     LookupEntryCorrect F .VirtualROTRW row := by
   lookup_cases
   rw [hi] at maskOk
-  exact maskOk.elim
+  obtain ⟨s, sLt, rfl⟩ := maskOk
+  have shift := ExpansionFacts.ctz_wordShiftMask s sLt
+  rw [ShiftTables.rotriw_value_eq _ _ (by omega), shift]
+  exact ShiftTables.rotrw_entry _ _ _ (uninterleave_interleave _ _) s sLt
+    (wordShiftMask_shape s sLt)
 
 theorem lookupEntryCorrect_Pext (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .Pext) :

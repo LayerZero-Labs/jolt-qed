@@ -1,9 +1,10 @@
 import JoltConstraints.Soundness.Layer4.Interleaved
 import JoltConstraints.Soundness.Layer4.ShiftEntry
+import JoltConstraints.Soundness.Layer4.RotrEntry
 
 open LeanRV64D
 
-/-! Shift lookup outputs on right-shift masks. Mask shape is a local obligation
+/-! Shift and rotate lookup outputs on right-shift masks. Mask shape is a local obligation
 for the expansion proof; no executed trace is assumed here. -/
 
 set_option autoImplicit false
@@ -66,5 +67,32 @@ theorem lookupOutput_sraw
   rw [lookupOutput_of_interleaved charAbove2pow127 context equations
     t slot selected lhs rhs raf left right, table]
   exact ShiftTables.sraw_entry _ lhs rhs (uninterleave_interleave lhs rhs) shift shiftLt mask
+
+/-- VirtualROTR returns the right rotation specified by its right-shift mask.
+For example, with `lhs = 0x1` and the mask for shift 4, the output is `0x1000000000000000`. -/
+theorem lookupOutput_rotr
+    (table : (bytecodeRow context.bytecode slot.val).bind
+      (fun row => JoltMetadata.lookupTable row.instruction) = some .VirtualROTR)
+    (shift : Nat) (shiftLt : shift < 64)
+    (mask : ∀ i < 64, rhs.getLsbD i = decide (shift ≤ i)) :
+    witness.LookupOutput t = ((LeanRV64D.Functions.rotater lhs shift).toNat : F) := by
+  rw [lookupOutput_of_interleaved charAbove2pow127 context equations
+    t slot selected lhs rhs raf left right, table]
+  exact ShiftTables.rotr_entry _ lhs rhs (uninterleave_interleave lhs rhs) shift shiftLt mask
+
+/-- VirtualROTRW returns the low-word right rotation specified by its right-shift mask,
+zero-extended. For example, with `lhs = 0xFFFFFFFF00000001` and the word mask for shift 4,
+the low word `0x00000001` rotates to `0x10000000`; with shift 1 it rotates to `0x80000000`,
+whose bit 31 is set, and the output is still `0x0000000080000000`. -/
+theorem lookupOutput_rotrw
+    (table : (bytecodeRow context.bytecode slot.val).bind
+      (fun row => JoltMetadata.lookupTable row.instruction) = some .VirtualROTRW)
+    (shift : Nat) (shiftLt : shift < 32)
+    (mask : ∀ i < 32, rhs.getLsbD i = decide (shift ≤ i)) :
+    witness.LookupOutput t =
+      (((LeanRV64D.Functions.rotater (lhs.setWidth 32) shift).setWidth 64).toNat : F) := by
+  rw [lookupOutput_of_interleaved charAbove2pow127 context equations
+    t slot selected lhs rhs raf left right, table]
+  exact ShiftTables.rotrw_entry _ lhs rhs (uninterleave_interleave lhs rhs) shift shiftLt mask
 
 end JoltConstraints.Soundness

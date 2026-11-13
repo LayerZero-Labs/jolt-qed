@@ -130,3 +130,8 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
         some (.ofNative (JoltISA.Encoded.VirtualAssertEQ (.xreg rs1) (.xreg rs2) imm))
     -- No operands: jolt/crates/jolt-program/src/image/decode.rs:335-339 at 5def437f.
     | .VirtualHostIO => some (.ofNative .VirtualHostIO)
+  -- A registered inline: the generated rows, stamped as one sequence. With rd = x0
+  -- Rust substitutes the instruction temporary vr40 for rd (`InlineKey.expandRows`).
+  -- See : jolt/crates/jolt-program/src/expand/mod.rs (expand_source_instruction_with_provider)
+  --       jolt/crates/jolt-program/src/expand/materialize.rs (materialize_inline) at a6b6dc717
+  | .inline key rs1 rs2 rs3 => some (.sequence (key.expandRows rs1 rs2 rs3))

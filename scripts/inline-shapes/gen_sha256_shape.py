@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+"""Generate JoltBytecode/Inlines/Sha256/Shape.lean.
+
+The generated SHA-256 rows (JoltBytecode/Inlines/Generated/Sha256.lean and
+Sha256Init.lean) come in chunks of 100 rows. Sha256/Rows.lean names the blocks
+of the compression function (loads, 64 rounds, final additions, stores,
+resets). This script writes, for each chunk, the lemma that the chunk is the
+corresponding run of blocks, with a round cut by a chunk boundary written as
+`(roundRows b n).take k` at the end of one chunk and `(roundRows b n).drop k`
+at the start of the next. Lean checks each lemma by `rfl`; the script only
+decides which blocks to name, so a wrong guess fails the build.
+
+The row count of a round depends on which working variables are constants:
+`SHA256_INIT` folds the initial hash value into rounds 0-3. The script mirrors
+the constant folding of Rows.lean (`bin`, `ch`, `maj`, ...) to count them.
+
+Usage: scripts/inline-shapes/gen_sha256_shape.py > JoltBytecode/Inlines/Sha256/Shape.lean
+"""
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+GEN = {
+    False: (ROOT / "JoltBytecode/Inlines/Generated/Sha256.lean", "sha256RowsAuto"),
+    True: (ROOT / "JoltBytecode/Inlines/Generated/Sha256Init.lean", "sha256InitRowsAuto"),
+}
+
+
+def is_imm(initial, n, c):
+    """Whether working variable c is a constant at the start of round n (`cur`)."""
+    return initial and n < 4 and n <= c % 4
+
+
+def bin_rows(x_imm, y_imm):
+    """Rows and constness of a folded binary operation (`bin`)."""
+    return (0, True) if x_imm and y_imm else (1, False)
+
+
+def round_rows(initial, n):
+    imm = [is_imm(initial, n, c) for c in range(8)]
+    rows = 0
+    r, hk = bin_rows(True, imm[7]); rows += r
+    s1 = imm[4]; rows += 0 if s1 else 3
+    r, a1 = bin_rows(hk, s1); rows += r
+    # ch e f g
+    r, ef = bin_rows(imm[4], imm[5]); rows += r
+    if not imm[4] and not imm[6]:
+        rows += 2
+        chv = False
+    else:
+        r, ne = bin_rows(imm[4], True); rows += r
+        r, neg = bin_rows(ne, imm[6]); rows += r
+        r, chv = bin_rows(ef, neg); rows += r
+    r, a2 = bin_rows(a1, chv); rows += r
+    if n >= 16:
+        rows += 11
+    r, t1 = bin_rows(a2, False); rows += r
+    s0 = imm[0]; rows += 0 if s0 else 3
+    # maj a b c
+    r, bc = bin_rows(imm[1], imm[2]); rows += r
+    r, bxc = bin_rows(imm[1], imm[2]); rows += r
+    r, abxc = bin_rows(imm[0], bxc); rows += r
+    r, mj = bin_rows(bc, abxc); rows += r
+    r, t2 = bin_rows(s0, mj); rows += r
+    r, _ = bin_rows(t1, t2); rows += r
+    r, _ = bin_rows(t1, imm[3]); rows += r
+    return rows
+
+
+def blocks(initial):
+    b = "true" if initial else "false"
+    out = [("term", 24 if initial else 32, "loadRows %s rs1 rs2" % b)]
+    out += [("round", round_rows(initial, n), n) for n in range(64)]
+    out += [("term", 8, "finalRows %s" % b), ("term", 16, "storeRows rs1"),
+            ("term", 28 if initial else 36, "resetRows %s" % b)]
+    return out
+
+
+def chunk_sizes(initial):
+    path, name = GEN[initial]
+    text = path.read_text()
+    sizes = []
+    for k in range(100):
+        m = re.search(r"def %sChunk%d \([^)]*\)[^\[]*\[(.*?)\n\]" % (name, k), text, re.S)
+        if not m:
+            break
+        sizes.append(len([l for l in m.group(1).splitlines() if l.strip().startswith(".")]))
+    return sizes
+
+
+def chunk_pieces(initial):
+    b = "true" if initial else "false"
+    sizes = chunk_sizes(initial)
+    bl = blocks(initial)
+    total = sum(n for _, n, _ in bl)
+    if sum(sizes) != total:
+        sys.exit("row count mismatch (initial=%s): chunks %d, blocks %d"
+                 % (initial, sum(sizes), total))
+    chunks = []
+    bi = 0
+    boff = 0
+    for k, n in enumerate(sizes):
+        pieces = []
+        left = n
+        while left > 0:
+            kind, rows, val = bl[bi]
+            take = min(rows - boff, left)
+            if kind == "round":
+                term = "roundRows %s %d" % (b, val)
+                if boff == 0 and take == rows:
+                    pieces.append(term)
+                elif boff == 0:
+                    pieces.append("(%s).take %d" % (term, take))
+                elif boff + take == rows:
+                    pieces.append("(%s).drop %d" % (term, boff))
+                else:
+                    sys.exit("chunk %d cuts round %d twice" % (k, val))
+            else:
+                if boff != 0 or take != rows:
+                    sys.exit("chunk %d cuts block %s" % (k, val))
+                pieces.append(val)
+            left -= take
+            boff += take
+            if boff == rows:
+                bi += 1
+                boff = 0
+        chunks.append(pieces)
+    return sizes, chunks
+
+
+def main():
+    out = []
+    w = out.append
+    w("import JoltBytecode.Inlines.Sha256.Rows")
+    w("")
+    w("/-!")
+    w("# The generated `SHA256` and `SHA256_INIT` rows are the blocks of `Sha256.Rows`")
+    w("")
+    w("Generated by `scripts/inline-shapes/gen_sha256_shape.py`; do not edit by hand.")
+    w("")
+    w("Each `chunkN_eq` says that chunk `N` of the generated rows (100 rows) is a run of the")
+    w("blocks of `Sha256.Rows`, and Lean checks it by `rfl`. A round that a chunk boundary cuts")
+    w("appears as `(roundRows b n).take k` at the end of one chunk and `(roundRows b n).drop k`")
+    w("at the start of the next. `sha256RowsAutoList_eq` and `sha256InitRowsAutoList_eq`")
+    w("assemble the chunks. A single `rfl` on all rows exceeds the default recursion depth, as")
+    w("for the frame checks of `FrameInstances`.")
+    w("-/")
+    w("")
+    w("open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D")
+    w("  LeanRV64D.Functions JoltISA.Inlines.Generated")
+    w("")
+    w("set_option autoImplicit false")
+    w("")
+    w("namespace JoltISA.Inlines.Sha256")
+    w("")
+    w("/-- A list cut in two and put back together, in front of a tail.")
+    w("Example: `[1, 2, 3].take 1 ++ ([1, 2, 3].drop 1 ++ [4]) = [1, 2, 3] ++ [4]`. -/")
+    w("private theorem take_append_drop_append {α : Type} (l r : List α) (k : Nat) :")
+    w("    l.take k ++ (l.drop k ++ r) = l ++ r := by")
+    w("  rw [← List.append_assoc, List.take_append_drop]")
+    w("")
+    w("/-- The 64 rounds, one after another.")
+    w("Example: the first 20 rows of `allRounds false 64` are `roundRows false 0`. -/")
+    w("theorem allRounds_sixtyFour (b : Bool) :")
+    w("    allRounds b 64 =")
+    w("      " + " ++\n        ".join("roundRows b %d" % n for n in range(64)) + " := by")
+    w("  simp only [allRounds, List.nil_append, List.append_assoc]")
+    w("")
+    for initial in (False, True):
+        b = "true" if initial else "false"
+        _, name = GEN[initial]
+        prefix = "sha256Init" if initial else "sha256"
+        sizes, chunks = chunk_pieces(initial)
+        for k, pieces in enumerate(chunks):
+            w("/-- Chunk %d of the generated `%s` rows as blocks. -/"
+              % (k, "SHA256_INIT" if initial else "SHA256"))
+            w("theorem %sChunk%d_eq (rs1 rs2 rs3 : regidx) :" % (prefix, k))
+            w("    %sChunk%d rs1 rs2 rs3 =" % (name, k))
+            w("      " + " ++\n      ".join(pieces) + " := rfl")
+            w("")
+        key = "SHA256_INIT" if initial else "SHA256"
+        w("/-- **The generated `%s` rows are the blocks of the compression function.**" % key)
+        w("Example: the first row of both sides is `%s`. -/"
+          % ("LD vr56, 0(rs2)" if initial else "LD vr72, 0(rs1)"))
+        w("theorem %sList_eq (rs1 rs2 rs3 : regidx) :" % name)
+        w("    %sList rs1 rs2 rs3 = sha256Rows %s rs1 rs2 := by" % (name, b))
+        names = ["%sList" % name] + ["%sChunk%d_eq" % (prefix, k) for k in range(len(sizes))]
+        line = "  simp only ["
+        for i, nm in enumerate(names):
+            piece = nm + ","
+            if len(line) + len(piece) + 1 > 100:
+                w(line.rstrip())
+                line = "    "
+            line += piece + " "
+        w(line.rstrip())
+        if initial:
+            w("    sha256Rows, loadRows, allRounds_sixtyFour, ↓reduceIte, List.nil_append,")
+        else:
+            w("    sha256Rows, loadRows, allRounds_sixtyFour, Bool.false_eq_true, ↓reduceIte,")
+        w("    List.append_assoc, take_append_drop_append]")
+        w("")
+        w("/-- The `rd = x0` rows of `%s` are the `rd ≠ x0` rows: the inline never reads `rd`."
+          % key)
+        w("Example: both start with `%s`. -/"
+          % ("LD vr56, 0(rs2)" if initial else "LD vr72, 0(rs1)"))
+        w("theorem %sRdZeroList_eq (rs1 rs2 rs3 : regidx) :" % name)
+        w("    %sRdZeroList rs1 rs2 = %sList rs1 rs2 rs3 := by" % (name, name))
+        w("  simp only [%sRdZeroList, %sList]" % (name, name))
+        w("  rfl")
+        w("")
+    w("end JoltISA.Inlines.Sha256")
+    print("\n".join(out))
+
+
+main()

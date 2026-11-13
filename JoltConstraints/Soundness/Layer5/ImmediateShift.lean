@@ -3,8 +3,12 @@ import JoltConstraints.Soundness.Layer4.Shift
 
 open LeanRV64D
 
-/-! Immediate right shifts use a checked bitmask in their bytecode row. The
-expansion's `immShiftOk` fact supplies the mask shape required by Layer 4.
+/-! Immediate right shifts and rotates use a checked bitmask in their bytecode row.
+The expansion's `immShiftOk` fact supplies the mask shape required by Layer 4.
+Inline rows are the only source of the two rotates.
+At Jolt a6b6dc717:
+See : jolt/tracer/src/instruction/virtual_rotri.rs (`VirtualROTRI::exec`)
+See : jolt/tracer/src/instruction/virtual_rotriw.rs (`VirtualROTRIW::exec`)
 At public pin 8bbb2357:
 See : jolt/tracer/src/instruction/virtual_srli.rs:20-31
 See : jolt/tracer/src/instruction/virtual_srai.rs:20-28
@@ -18,7 +22,7 @@ namespace JoltConstraints.Soundness
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 inductive ImmediateShift where
-  | srl | sra | srlw | sraw
+  | srl | sra | srlw | sraw | rotr | rotrw
 
 def ImmediateShift.instruction (operation : ImmediateShift)
     (destination : Dst) (source : Src) (mask : Nat) : Instr :=
@@ -27,6 +31,8 @@ def ImmediateShift.instruction (operation : ImmediateShift)
   | .sra => .VirtualSRAI destination source mask
   | .srlw => .VirtualSRLIW destination source mask
   | .sraw => .VirtualSRAIW destination source mask
+  | .rotr => .VirtualROTRI destination source mask
+  | .rotrw => .VirtualROTRIW destination source mask
 
 def ImmediateShift.value (operation : ImmediateShift)
     (source : BitVec 64) (mask : Nat) : BitVec 64 :=
@@ -35,12 +41,16 @@ def ImmediateShift.value (operation : ImmediateShift)
   | .sra => jolt_virtual_srai_value source mask
   | .srlw => jolt_virtual_srliw_value source mask
   | .sraw => jolt_virtual_sraiw_value source mask
+  | .rotr => jolt_virtual_rotri_value source mask
+  | .rotrw => jolt_virtual_rotriw_value source mask
 
 private def ImmediateShift.table : ImmediateShift → LookupTableKind
   | .srl => .VirtualSRL
   | .sra => .VirtualSRA
   | .srlw => .VirtualSRLW
   | .sraw => .VirtualSRAW
+  | .rotr => .VirtualROTR
+  | .rotrw => .VirtualROTRW
 
 private theorem mask64_bits (mask : Nat) (ok : ExpansionFacts.maskOk mask = true) :
     ∀ i < 64, (BitVec.ofNat 64 mask).getLsbD i = decide (ctz mask ≤ i) := by
@@ -159,8 +169,24 @@ private theorem immediateShift_write_value {pre : SailJoltState}
       (sourceValue source pre) (BitVec.ofNat 64 mask) raf leftLookup rightLookup
       table (ctz mask) shiftLt (mask32_bits mask ok)
     simpa only [ImmediateShift.value, jolt_virtual_sraiw_value] using output
+  | rotr =>
+    have ok : ExpansionFacts.maskOk mask = true := by
+      simpa only [instructionIs, ImmediateShift.instruction, ExpansionFacts.immShiftOk] using valid
+    have shiftLt := mask64_shift_lt mask ok
+    have output := lookupOutput_rotr bound context equations t slot selected
+      (sourceValue source pre) (BitVec.ofNat 64 mask) raf leftLookup rightLookup
+      table (ctz mask) shiftLt (mask64_bits mask ok)
+    simpa only [ImmediateShift.value, jolt_virtual_rotri_value] using output
+  | rotrw =>
+    have ok : ExpansionFacts.wordMaskOk mask = true := by
+      simpa only [instructionIs, ImmediateShift.instruction, ExpansionFacts.immShiftOk] using valid
+    have shiftLt := mask32_shift_lt mask ok
+    have output := lookupOutput_rotrw bound context equations t slot selected
+      (sourceValue source pre) (BitVec.ofNat 64 mask) raf leftLookup rightLookup
+      table (ctz mask) shiftLt (mask32_bits mask ok)
+    simpa only [ImmediateShift.value, ShiftTables.rotriw_value_eq _ mask shiftLt] using output
 
-/-- All four immediate right-shift rows execute with their checked bitmask
+/-- All six immediate right-shift and rotate rows execute with their checked bitmask
 result and preserve register agreement at the next cycle.
 The source is live; the destination joins the live set after the row.
 For example, VirtualSRLI can read a live source and initialize a temporary. -/
