@@ -19,3 +19,4 @@ import JoltBytecode.Step.Ecall
 import JoltBytecode.Inlines.Generated
 import JoltBytecode.Inlines.FrameInstances
 import JoltBytecode.Inlines.Secp256k1.Advice
+import JoltBytecode.Inlines.Spec
