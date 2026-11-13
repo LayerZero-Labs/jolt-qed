@@ -63,7 +63,11 @@ local macro "overlay_keys" " => " finish:tactic : tactic =>
          hvalid, haddr, hwidth, hm, hinc, hpma, hmisa⟩ := hkey
        $finish))
 
-private theorem ghost_projects {jt : SailJoltState} {s : SailState} (h : Related jt s) :
+/-- **A related Sail state is its own projection.** Viewing a Sail state `s` related to `jt` as a
+Jolt state with `jt`'s virtual registers and projecting it back (`System.systemProject`) gives
+`s`: the system registers `Related` fixes are the ones the projection overlays.
+For example, Sail's `mtvec` in `s` is the value of Jolt's trap-handler register in `jt`. -/
+theorem ghost_projects {jt : SailJoltState} {s : SailState} (h : Related jt s) :
     System.systemProject { jt with sail := s } = s := by
   obtain ⟨pc, m, inc, _, hregs⟩ := h.regs
   have he : (System.systemProject { jt with sail := s }).regs = s.regs := by
@@ -180,11 +184,19 @@ theorem executeAndFinish_congr (cast ast : instruction) (bits : BitVec 32) (s : 
   unfold Step.executeAndFinish
   simp only [bind, EStateM.bind, h s hs]
 
-private def finishState (s : SailState) (pc m : BitVec 64) (inc : Bool) : SailState :=
+/-- The state after Sail's retiring finish: `PC` is `pc`, and `minstret` is `m + 1` when `inc`
+holds and unchanged otherwise.
+For example, `finishState s 0x80000004 7 true` has `PC = 0x80000004` and `minstret = 8`. -/
+def finishState (s : SailState) (pc m : BitVec 64) (inc : Bool) : SailState :=
   if inc then Step.setReg (Step.setReg s .PC pc) .minstret (BitVec.addInt m 1)
   else Step.setReg s .PC pc
 
-private theorem finish_run (s : SailState) (hinv : Step.StepInvariant s)
+/-- **Sail's retiring finish.** From an invariant state whose `nextPC` is `pc`, `minstret` is `m`
+and `minstret_increment` is `inc`, Sail's `stepFinish` after a retiring execution returns
+`false` and the state `finishState s pc m inc`.
+For example, after an ADDI at `0x80000000` with `nextPC = 0x80000004`, the finish sets `PC` to
+`0x80000004`. -/
+theorem finish_run (s : SailState) (hinv : Step.StepInvariant s)
     (bits : BitVec 32) (pc m : BitVec 64) (inc : Bool)
     (hpc : s.regs.get? Register.nextPC = some pc)
     (hm : s.regs.get? Register.minstret = some m)
@@ -230,7 +242,9 @@ private theorem projected_reads (pre post ghost : SailJoltState) (m : BitVec 64)
   simp [System.systemProject, hr, overlayRows, withReg, Step.setReg,
     Std.ExtDHashMap.get?_insert]
 
-private theorem finish_mem (s : SailState) (pc m : BitVec 64) (inc : Bool) :
+/-- The finish changes no memory. For example, a byte at `0x80000000` reads the same after
+`finishState` as before. -/
+theorem finish_mem (s : SailState) (pc m : BitVec 64) (inc : Bool) :
     (finishState s pc m inc).mem = s.mem := by
   cases inc <;> rfl
 
@@ -241,6 +255,108 @@ private theorem panicWord_eq {device : JoltDevice} {s t : SailState}
   unfold sailPanicWord read_doubleword?
   rw [h _ (by omega), h _ (by omega), h _ (by omega), h _ (by omega),
     h _ (by omega), h _ (by omega), h _ (by omega), h _ (by omega)]
+
+/-- **A block's rows, run from Sail's state, land in the relation.** Take a block whose rows
+`instrs` run from `b.start` to `b.post` and keep the device, and a Sail state `s` related to
+`b.pre`. Run Sail's prelude with increment flag `inc`, view the result as a Jolt state with
+`b.pre`'s virtual registers and device (`Step.preludeJolt`), and run `instrs` on it. The run
+retires in a state `ghostPost`. Sail's retiring finish (`Step.stepFinish`) on the projection of
+`ghostPost` gives a Sail state related to `b.post`.
+This is the part of a block step that does not depend on what Sail executes: a RISC-V block
+matches the run of `instrs` with Sail's `execute`, and an inline block takes the run as the
+platform's execution of the inline.
+For example, for an ADD block, `ghostPost` holds the sum in the destination register, and the
+finish moves Sail's PC to the next instruction. -/
+theorem ghost_rows (program : Rv64ProgramImage SourceInstruction) (b : Block)
+    (hruns : b.Runs program) (hdevice : b.post.jolt_device = b.pre.jolt_device)
+    (s : SailState) (hrel : Related b.pre s) (pc m : BitVec 64) (oldInc inc : Bool)
+    (hnext : b.pre.sail.regs.get? Register.nextPC = some pc)
+    (hregs : s.regs = (sailRegs b.pre pc m oldInc).regs)
+    (instrs : List JoltISA.Instr)
+    (hrun : JoltISA.execProgram (JoltISA.Program.seq instrs) b.start = .ok RETIRE_SUCCESS b.post)
+    (bits : BitVec 32) :
+    ∃ (ghostPost : SailJoltState) (next : BitVec 64),
+      JoltISA.execProgram (JoltISA.Program.seq instrs)
+          (Step.preludeJolt { b.pre with sail := s } inc pc
+            (if b.row.is_compressed then 2 else 4)) = .ok RETIRE_SUCCESS ghostPost ∧
+      (System.systemProject ghostPost).regs.get? Register.nextPC = some next ∧
+      (System.systemProject ghostPost).regs.get? Register.minstret = some m ∧
+      (System.systemProject ghostPost).regs.get? Register.minstret_increment = some inc ∧
+      Step.StepInvariant (System.systemProject ghostPost) ∧
+      Step.stepFinish (.Step_Execute (RETIRE_SUCCESS, bits)) (System.systemProject ghostPost) =
+        .ok false (finishState (System.systemProject ghostPost) next m inc) ∧
+      Related b.post (finishState (System.systemProject ghostPost) next m inc) := by
+  have hp : pc = b.row.address := Option.some.inj (hnext.symm.trans hruns.continues)
+  let Gs := Step.preludeJolt { b.pre with sail := s } inc pc
+    (if b.row.is_compressed then 2 else 4)
+  have hshadow : Shadow (overlayRows b.pre.vregs m inc b.start) Gs :=
+    prelude_shadow b s pc m oldInc inc hp hregs hrel.ram
+  have hpatched := execProgram_overlayRows (JoltISA.Program.seq instrs) b.pre.vregs m inc
+    b.start b.post hrun
+  have hsync := execProgram_shadow (JoltISA.Program.seq instrs) _ _ hshadow
+  rw [hpatched] at hsync
+  obtain ⟨ghostPost, hghost, hpost, _, hmem⟩ := hsync.ok_exists
+  have hGp : System.systemProject Gs = Step.preludeState s inc pc
+      (if b.row.is_compressed then 2 else 4) := by
+    dsimp only [Gs]
+    rw [Step.systemProject_preludeJolt, ghost_projects hrel]
+  have hinvPre : Step.StepInvariant (System.systemProject Gs) := by
+    rw [hGp]
+    exact hrel.inv.preludeState inc pc _
+  have hframe := Step.execProgram_regFrame (JoltISA.Program.seq instrs) Gs
+  rw [hghost] at hframe
+  change Step.RegFrame Gs ghostPost at hframe
+  have hinvPost := hinvPre.systemProject_regFrame hframe
+  obtain ⟨next, hnextGhost⟩ := (hinvPost.present Register.nextPC).exists_value
+  obtain ⟨hn, hcount, hcountInc⟩ := projected_reads b.pre b.post ghostPost m inc hpost
+  have hnextPost : b.post.sail.regs.get? Register.nextPC = some next := hn.symm.trans hnextGhost
+  let s' := finishState (System.systemProject ghostPost) next m inc
+  have hfinish := finish_run (System.systemProject ghostPost) hinvPost bits
+    next m inc hnextGhost hcount hcountInc
+  refine ⟨ghostPost, next, hghost, hnextGhost, hcount, hcountInc, hinvPost, hfinish, ?_⟩
+  have hmem' : s'.mem = ghostPost.sail.mem := finish_mem _ next m inc
+  have hbelow : ∀ a, a < RAM_START_ADDRESS → s'.mem.get? a = s.mem.get? a := by
+    intro a ha
+    rw [hmem']
+    exact hmem.below a ha
+  have hhtif : (System.systemProject ghostPost).regs.get? Register.htif_tohost_base = some none := by
+    rw [Step.systemProject_get?_of_not_overlaid _ (by simp [Step.Overlaid]),
+      hframe.keep Register.htif_tohost_base (by simp [Step.JoltWritable])]
+    change (Step.preludeState s inc pc _).regs.get? Register.htif_tohost_base = some none
+    simpa [Step.preludeState, Step.setReg, Std.ExtDHashMap.get?_insert] using hrel.htif
+  refine
+    { regs := ⟨next, (if inc then BitVec.addInt m 1 else m), inc, hnextPost,
+        finish_regs b.pre b.post ghostPost m next inc hpost⟩
+      inv := hinvPost.stepFinish_retire bits hfinish
+      htif := ?_
+      ram := ?_
+      present := ?_
+      io := ?_
+      panic := ?_
+      layout := by rw [hdevice]; exact hrel.layout
+      outputs_size := by rw [hdevice]; exact hrel.outputs_size }
+  · cases inc <;> simpa [finishState, Step.setReg, Std.ExtDHashMap.get?_insert] using hhtif
+  · intro a ha
+    rw [hmem']
+    exact hpost.ram a ha
+  · intro a hlo hhi
+    rw [hdevice] at hlo hhi
+    obtain ⟨byte, hb⟩ := hrel.present a hlo hhi
+    have hs : (Gs.sail.mem.get? a).isSome := by
+      change (s.mem.get? a).isSome
+      rw [hb]
+      rfl
+    have hpresent := hmem.present a hs
+    rw [← hmem'] at hpresent
+    exact Option.isSome_iff_exists.mp hpresent
+  · intro a hlo hhi hflag
+    rw [hdevice] at hlo hflag ⊢
+    exact (hbelow a hhi).trans (hrel.io a hlo hhi hflag)
+  · rw [hdevice]
+    obtain ⟨config, hconfig⟩ := hrel.layout
+    obtain ⟨_, _, hterm, hend, hbound⟩ := new_io_geometry config _ hconfig
+    rw [panicWord_eq (by omega) hbelow]
+    exact hrel.panic
 
 /-- A retiring lifted source block is one Sail `try_step`, where Sail decodes the fetched
 encoding to `cast` and `cast` executes like the matching instruction `ast`.
@@ -296,11 +412,9 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
     have he := (advice_shadow i _ _ hshadow).trans
       (advice_overlayRows i b.pre.vregs m inc b.start)
     simp only [blockInstrs, hrow, he]
-  have hpatched := execProgram_overlayRows (Program.seq instrs) b.pre.vregs m inc
-    b.start b.post hrun
-  have hsync := execProgram_shadow (Program.seq instrs) _ _ hshadow
-  rw [hpatched] at hsync
-  obtain ⟨ghostPost, hghost, hpost, _, hmem⟩ := hsync.ok_exists
+  obtain ⟨ghostPost, next, hghost, -, -, -, -, hfinish, hrelPost⟩ :=
+    ghost_rows program b hruns hdevice s hrel pc m oldInc inc hnext hregs instrs hrun
+      encoding.bits
   have hproject := blockInstrs_project i b.row.address b.row.is_compressed Gs instrs
     (by simpa only [← hrow] using hadvice.trans hblock)
   have hexec : execute ast (System.systemProject Gs) =
@@ -315,72 +429,17 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
   have hinvPre : Step.StepInvariant (System.systemProject Gs) := by
     rw [hGp]
     exact hrel.inv.preludeState inc pc _
-  have hframe := Step.execProgram_regFrame (Program.seq instrs) Gs
-  rw [hghost] at hframe
-  change Step.RegFrame Gs ghostPost at hframe
-  have hinvPost := hinvPre.systemProject_regFrame hframe
-  obtain ⟨next, hnextGhost⟩ := (hinvPost.present Register.nextPC).exists_value
-  obtain ⟨hn, hcount, hcountInc⟩ := projected_reads b.pre b.post ghostPost m inc hpost
-  have hnextPost : b.post.sail.regs.get? Register.nextPC = some next := hn.symm.trans hnextGhost
-  let s' := finishState (System.systemProject ghostPost) next m inc
-  have hfinish := finish_run (System.systemProject ghostPost) hinvPost encoding.bits
-    next m inc hnextGhost hcount hcountInc
   have hpc : s.regs.get? Register.PC = some pc := by
     simp [hregs, sailRegs, Step.setReg, Std.ExtDHashMap.get?_insert,
       System.systemProject]
   have htry := encoding_try_step encoding s hrel.inv inc hinc pc hpc cast hfetch hdecode
-  have hstep : try_step 0 false s = .ok false s' := by
-    rw [htry]
-    simp only [← hwidth]
-    rw [← hGp, executeAndFinish_congr cast ast _ _ hinvPre hbridge]
-    unfold Step.executeAndFinish Step.executeFull
-    simp only [bind, EStateM.bind, hexec, RETIRE_SUCCESS, pure, EStateM.pure]
-    exact hfinish
-  refine ⟨false, s', hstep, ?_⟩
-  have hmem' : s'.mem = ghostPost.sail.mem := finish_mem _ next m inc
-  have hbelow : ∀ a, a < RAM_START_ADDRESS → s'.mem.get? a = s.mem.get? a := by
-    intro a ha
-    rw [hmem']
-    exact hmem.below a ha
-  have hhtif : (System.systemProject ghostPost).regs.get? Register.htif_tohost_base = some none := by
-    rw [Step.systemProject_get?_of_not_overlaid _ (by simp [Step.Overlaid]),
-      hframe.keep Register.htif_tohost_base (by simp [Step.JoltWritable])]
-    change (Step.preludeState s inc pc _).regs.get? Register.htif_tohost_base = some none
-    simpa [Step.preludeState, Step.setReg, Std.ExtDHashMap.get?_insert] using hrel.htif
-  refine
-    { regs := ⟨next, (if inc then BitVec.addInt m 1 else m), inc, hnextPost,
-        finish_regs b.pre b.post ghostPost m next inc hpost⟩
-      inv := hinvPost.stepFinish_retire encoding.bits hfinish
-      htif := ?_
-      ram := ?_
-      present := ?_
-      io := ?_
-      panic := ?_
-      layout := by rw [hdevice]; exact hrel.layout
-      outputs_size := by rw [hdevice]; exact hrel.outputs_size }
-  · change (finishState _ next m inc).regs.get? Register.htif_tohost_base = some none
-    cases inc <;> simpa [finishState, Step.setReg, Std.ExtDHashMap.get?_insert] using hhtif
-  · intro a ha
-    rw [hmem']
-    exact hpost.ram a ha
-  · intro a hlo hhi
-    rw [hdevice] at hlo hhi
-    obtain ⟨byte, hb⟩ := hrel.present a hlo hhi
-    have hs : (Gs.sail.mem.get? a).isSome := by
-      change (s.mem.get? a).isSome
-      rw [hb]
-      rfl
-    have hpresent := hmem.present a hs
-    rw [← hmem'] at hpresent
-    exact Option.isSome_iff_exists.mp hpresent
-  · intro a hlo hhi hflag
-    rw [hdevice] at hlo hflag ⊢
-    exact (hbelow a hhi).trans (hrel.io a hlo hhi hflag)
-  · rw [hdevice]
-    obtain ⟨config, hconfig⟩ := hrel.layout
-    obtain ⟨_, _, hterm, hend, hbound⟩ := new_io_geometry config _ hconfig
-    rw [panicWord_eq (by omega) hbelow]
-    exact hrel.panic
+  refine ⟨false, _, ?_, hrelPost⟩
+  rw [htry]
+  simp only [← hwidth]
+  rw [← hGp, executeAndFinish_congr cast ast _ _ hinvPre hbridge]
+  unfold Step.executeAndFinish Step.executeFull
+  simp only [bind, EStateM.bind, hexec, RETIRE_SUCCESS, pure, EStateM.pure]
+  exact hfinish
 
 /-- A retiring lifted source block is one Sail `try_step`, for either a base
 or compressed encoding.

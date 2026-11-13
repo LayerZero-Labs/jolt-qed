@@ -136,7 +136,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 | Premise | Meaning | What would remove it |
 | --- | --- | --- |
-| `riscv` (a field of `BlockConforms`) | Every block of the halt prefix runs a RISC-V instruction. Jolt's own instructions on opcode `0x5B`, such as its hash and big-integer instructions, have no block theorem yet. | A Lean specification of each of Jolt's instructions, and a step that runs those by their specification and every other instruction by `try_step` ([`riscv-alignment.md`](riscv-alignment.md) section 7). |
+| `riscv` (a field of `BlockConforms`) | Every block of the halt prefix runs a RISC-V instruction. Jolt's seven custom instructions on opcode `0x5B` (the advice loads, `VirtualRev8W`, `VirtualAssertEQ` and `VirtualHostIO`) and the inline precompiles on opcodes `0x0B` and `0x2B`, such as the hash and big-integer inlines, have no block theorem under `BlockConforms`. The `_with_inlines` theorems (section "Guests that call inlines") drop this field and cover the twelve registered inlines. | A Lean specification of each of Jolt's instructions, and a step that runs those by their specification and every other instruction by `try_step` ([`riscv-alignment.md`](riscv-alignment.md) section 7). |
 
 ### Soundness premises (`sail_soundness` only)
 
@@ -144,7 +144,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 - `JoltField F`: the field's characteristic is above `2^128 - 2^64`. Both of Jolt's fields satisfy this: BN254 (the default Dory build) and `p = 2^128 - 1780711455` (the `akita` build, Jolt's production field since a16z/jolt#2403); `JoltField.akita` and `JoltField.bn254` (`Soundness/FieldModuli.lean`) prove it, including each modulus's primality, by Pratt certificates checked in Lean. Below characteristic `2^128` the constraints include Akita's canonical-address check (63), which Jolt's `akita` build enforces; it is what makes `2^128 - 2^64` enough.
 - `SoundnessAssumptions.ramRegionFits`: the whole maximum padded RAM region lies below `2^64`. The comment in `Assumptions.lean` records it as still to be confirmed with a16z.
-- `TemporaryRestrictions`: six restrictions that exclude programs exposing reported or suspected Jolt bugs.
+- `TemporaryRestrictions`: four restrictions that exclude programs exposing reported or suspected Jolt bugs.
   Jolt's verifier makes none of these checks.
 - `UntrustedAdviceBlockFits`: a seventh temporary restriction, passed as the separate premise `adviceBlockFits` because soundness for advice given as bytes (`JoltInstance.soundness_onBytes`) does not need it.
   It excludes a configured maximum untrusted-advice size that is not a multiple of 8, where Jolt's verifier lets the prover commit block bytes no tracer run can hold.
@@ -153,15 +153,18 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 | Restriction | What it excludes |
 | --- | --- |
 | `tracerAddressChecks` | A load or store that fails Jolt's tracer address checks (a16z/jolt#2044 and related cases). |
-| `hostCallsSucceed` | A host call (`VirtualHostIO`) that fails in the modelled execution. |
-| `noMaxLengthTrace` | A trace that fills the largest power-of-two length the verifier admits, which Jolt's prover cannot produce. |
 | `terminationThenStall` | A program whose next jump after a store to the termination word is not the stall (a JAL with offset 0), or that loads the termination word again. |
 | `panicStoresOne` | A store to the panic word of any value other than 1, and a load of the panic word after such a store. |
 | `claimsNoPanic` | An instance that claims a panic. With this restriction, the panic clause of `sail_soundness` says that Sail's panic word is zero. |
 
-Four restrictions (`tracerAddressChecks`, `hostCallsSucceed`, `terminationThenStall` and `panicStoresOne`) constrain the next row the program attempts after every prefix of a relaxed execution, for every private input.
+Three restrictions (`tracerAddressChecks`, `terminationThenStall` and `panicStoresOne`) constrain the next row the program attempts after every prefix of a relaxed execution, for every private input.
 A relaxed execution is one in which every advice read gets an arbitrary answer; the attempted row need not succeed.
-`noMaxLengthTrace` constrains every completed relaxed trace, and `claimsNoPanic` and `adviceBlockFits` constrain only the instance.
+`claimsNoPanic` and `adviceBlockFits` constrain only the instance.
+
+Two earlier restrictions are gone, because Jolt fixed the bugs they excluded and the model follows the fix at Jolt `3cc6e7bd1`:
+
+- `hostCallsSucceed` excluded a host call that fails. Since a16z/jolt#2410 Jolt's tracer never fails a host call: it ignores an unknown call or event and skips a byte range it cannot read (`tracer/src/emulator/host_io.rs:50-85`). `execHostIO` follows it, so a host call retires whenever its argument registers are present.
+- `noMaxLengthTrace` excluded a trace that fills the largest power-of-two length the verifier admits. Since a16z/jolt#2407 Jolt's prover pads a run of `T` rows to `max(next_pow2(T), 256)` and reserves no padding row (`crates/jolt-prover/src/config.rs:49-64`). A final jump at `T - 1` has `ShouldJump = 0`, because the missing successor counts as a no-op (`crates/jolt-witness/src/witnesses/flags.rs:116-128`).
 The deviation premises in `BlockConforms` are stated differently, as the next section explains.
 
 ## Conformance is a premise on a trace the verifier does not see
@@ -177,12 +180,25 @@ It is still an argument about the program, which neither the theorem nor Jolt's 
 
 Every deviation premise that Jolt's constraints come to enforce leaves `BlockConforms`, and with it this argument.
 
+## Guests that call inlines
+
+`JoltConstraints/WholeRun/Platform.lean` states the two theorems for guests that call Jolt's twelve registered inlines (`docs/inline-precompiles.md`, result R5): `HonestTrace.sail_reproduces_with_inlines` and `JoltInstance.sail_soundness_with_inlines`.
+They have the same premises and conclusions, with two changes:
+
+- `PlatformRun n s s'` replaces `sailRun n s = .ok s'`. A platform run is `n` platform steps (`PlatformStep`). At a word that `InlineEncoding.register` accepts as an inline call, the platform step runs the call: it keeps the frame of the call's write set, meets the call's specification (`InlineKey.Spec`) when the call's precondition (`InlineKey.Pre`) holds and its input buffers lie in RAM (`InlineKey.InputsInRam`), and then runs Sail's retiring finish, which moves `PC` four bytes on. At every other word the platform step is Sail's `try_step`.
+- `PlatformConforms` replaces `BlockConforms`. It drops the scope field `riscv`: a block may run a RISC-V instruction or a registered inline call. Its new field `inline_stores` asks every byte an inline call may store (the footprint of its write set) to lie in RAM and outside the code. Every block that satisfies `BlockConforms` satisfies `PlatformConforms` (`BlockConforms.platformConforms`).
+
+`DecodedFrom` now also says that each inline row is the registered inline of the four-byte word at its address. This slightly strengthens the premise of the RISC-V-only theorems too; their statements and proofs are otherwise unchanged.
+
+The specifications keep the known gaps of the per-call theorems: `SECP256K1_GLVR_ADV` stores six unconstrained words, the field operations may store a non-canonical result, and the DIV operations accept any stored result when both operands are zero.
+The theorems do not say that a guest computes SHA-256 or verifies an ECDSA signature.
+
 ## What the theorems do not say
 
 - **They do not say anything about Jolt's verifier.** `AllConstraints` checks every constraint equation directly on the whole witness. Jolt's verifier instead runs sumchecks, reductions and a polynomial commitment scheme, which jolt-qed has not verified (see the [README](../README.md)). "Accepted" in `sail_soundness` means "has a witness that satisfies the modelled constraints".
 - **They are one-directional.** Every honest Jolt run up to its first EBREAK is reproduced by Sail. The converse is not claimed: a Sail run need not correspond to a Jolt run, and the theorems say nothing about programs whose runs Jolt's tracer aborts.
 - **They stop at the first EBREAK.** Jolt treats EBREAK as the end of the program, and the RISC-V reading of that is entering debug mode. The Sail model does not implement the debug extension, and the theorems stop in front of the first EBREAK or C.EBREAK without executing it ([`riscv-alignment.md`](riscv-alignment.md) section 4). They say nothing about later instructions.
-- **They do not cover Jolt's own instructions**, the inline opcodes `0x0B` and `0x2B`, or the advice tape (see the scope premise above).
+- **They do not cover Jolt's own instructions**, inline opcodes other than the twelve registered `0x0B` inlines, or the advice tape (see the scope premise above). Only the `_with_inlines` variants cover the twelve inlines.
 - **They describe a particular Jolt revision.** The system expansions, the decoder and the ELF loader (`decode_elf`) transcribe a16z/jolt `c336a6da7`, the head of a16z/jolt#2384. That change is not on Jolt `main` until a16z/jolt#2383 and #2384 merge ([`riscv-alignment.md`](riscv-alignment.md), Sources).
 - **They compare outputs only up to trailing zero bytes**, as `JoltInstance.soundness` does.
 - **They describe one hart configuration.** The Sail model is configured as an RV64IMAC hart with only M-mode and no interrupts, with Jolt's memory map ([`riscv-alignment.md`](riscv-alignment.md) sections 1 and 2). They say nothing about other configurations.
@@ -191,6 +207,6 @@ Every deviation premise that Jolt's constraints come to enforce leaves `BlockCon
 
 - **The Sail model is the specification.** `LeanRV64D/` is generated from the model commit, compiler and patches pinned in `sail-import/PROVENANCE.toml`. The patches adapt the model's handwritten Lean support to the Lean version in use and configure the model as Jolt's hart; `PROVENANCE.toml` lists each change, including the fixes to the pinned model. `scripts/check-sail-model.sh` regenerates the model in CI and requires it to match the checked-in tree byte for byte.
 - **Five generated declarations raise a Lean limit.** Three CSR if-chains and the two decoder mappings in the closure of the theorems carry declaration-local `maxRecDepth` options between 550 and 1450, and one of them a `maxHeartbeats` of 250000 ([`riscv-alignment.md`](riscv-alignment.md) section 8). No proof in `JoltBytecode/` or `JoltConstraints/` sets a limit.
-- **The Lean models of Jolt are faithful.** Applying the theorems to Jolt itself requires trusting that the Lean definitions of its tracer, expansions, decoder, ELF loader and constraints match the cited Jolt revisions, and that the sections given to `DecodedFrom` are what the `object` crate parses from the guest ELF. The theorems do not prove that correspondence. The differential test in [`scripts/difftest/`](../scripts/difftest/) (jolt-qed#40) runs real binaries on the Sail emulator and on Jolt's tracer and compares the results; that is evidence for the correspondence, not a proof of it.
+- **The Lean models of Jolt are faithful.** Applying the theorems to Jolt itself requires trusting that the Lean definitions of its tracer, expansions, decoder, ELF loader and constraints match the cited Jolt revisions, and that the sections given to `DecodedFrom` are what the `object` crate parses from the guest ELF. The theorems do not prove that correspondence. The [coverage ledger](coverage-ledger.md) lists the check behind each modelled artifact: some are generated from Jolt and proved equal, some are tested against Jolt on samples, and the rest are supported only by reading Jolt's source. The differential test in [`scripts/difftest/`](../scripts/difftest/) (jolt-qed#40) is not one of these checks. It runs real binaries on Sail's C++ emulator and on Jolt's tracer and compares the results; Lean takes no part in it, so it compares Jolt's tracer with Sail, not the Lean models with Jolt.
 - **The Sail compiler preserves the model's meaning.** The CI check shows that the generated files are reproducible, not that the compiler translates the Sail model correctly.
 - **Lean's kernel checks the proofs using three standard axioms.** Nothing in the closure of the theorems uses `sorry`, `native_decide`, `bv_decide` or `decide +kernel`.

@@ -132,7 +132,8 @@ At Lean HEAD `7096dca` on 2026-10-23, `JoltInstance.soundness` was proved, under
 The theorem chains four helpers in `Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) to get `InLanguage`.
 Helper A returns an `UntrustedAnswerTrace` represented at every actual row, from execution-prefix agreement (Layer 6, `Soundness/Layer6/ExecutionPrefix.lean`) and the stopping theorem (`Soundness/Layer7/Stopping.lean`).
 Helper B checks the output and panic words through constraint 26 and final RAM agreement, with no panic restriction; `Represents.finalRam` covers every RAM index except the termination word.
-Helper C shows Jolt's prover accepts the trace, using the base verifier's 256-cycle floor (`ConstraintContext.traceLengthFloor`) and the approved `noMaxLengthTrace` restriction.
+Helper C shows Jolt's prover accepts the trace, using the base verifier's 256-cycle floor (`ConstraintContext.traceLengthFloor`) and the witness length bound.
+Until 2026-11-12 it also used the restriction `noMaxLengthTrace`; since a16z/jolt#2407 (Jolt `3cc6e7bd1`) Jolt's prover pads to `max(next_pow2(T), 256)`, so a run that fills a verifier-admissible domain is accepted.
 Helper D shows no spoil assert fails, using the checker's `noSpoilAsserts`.
 Layer 6 proves execution-prefix agreement by strong induction over source instructions; inside an expansion, registers agree only where they are live.
 The prefix cuts at the first stable stall, padding, or the last witness cycle and owns RAM agreement at that boundary; the stopping theorem carries it to final RAM.
@@ -237,8 +238,9 @@ The premises are bundled in
 `JoltField F` (`2^128 - 2^64 < ringChar F`, with constraint (63) on below `2^128`); `JoltInstance.SoundnessAssumptions`
 (`RamRegionFits`); and the temporary
 `JoltInstance.TemporaryRestrictions` (`TracerAddressChecks`,
-`HostCallsSucceed`, `NoMaxLengthTrace`, `TerminationThenStall`, `PanicStoresOne`,
-`ClaimsNoPanic`).
+`TerminationThenStall`, `PanicStoresOne`, `ClaimsNoPanic`).
+`HostCallsSucceed` and `NoMaxLengthTrace` were removed on 2026-11-12, after
+a16z/jolt#2410 and #2407 fixed the bugs they excluded (Jolt `3cc6e7bd1`).
 On 2026-10-10, Ari approved `RamRegionFits`: for the instance's layout and
 successfully computed maximum RAM size, `lowest + 8 * maxRamSize ≤ 2^64`.
 **NOTE: to confirm with a16z.** The definition is in
@@ -1054,7 +1056,8 @@ with the state-transition lemma.
 - `TracerAddressChecks` supplies the address checks for attempted LD/SD rows.
   Narrow or remove it as the address cases documented above are resolved.
 - Host calls that fail in Jolt's tracer but pass the constraints as no-op
-  rows: `HostCallsSucceed`.
+  rows: `HostCallsSucceed`. Removed on 2026-11-12: since a16z/jolt#2410 a host
+  call never fails, and `host_call_exec_sail_frame` proves that it retires.
 - The termination word, where the device ignores stores and loads 0 while the
   RAM table keeps the stored bytes: `TerminationThenStall`, whose load clause
   forbids loading that word after storing to it.
@@ -1198,7 +1201,7 @@ privately, as Markdown files over a Slack channel, not as public GitHub issues
    with a FIXME to narrow or remove it as each case is resolved and proved.
 4. **Temporary restrictions added since, each needing a write-up for the batch.**
    - `HostCallsSucceed`: host calls that fail in Jolt's tracer pass the
-     constraints as no-op rows.
+     constraints as no-op rows. Fixed by a16z/jolt#2410; removed on 2026-11-12.
    - `TerminationThenStall`: a witness that stops early at a jump, and the
      termination word's device/table mismatch.
    - `PanicStoresOne`: a store of 0 proved as "no panic", and loads of the panic word after a store.
@@ -1206,5 +1209,6 @@ privately, as Markdown files over a Slack channel, not as public GitHub issues
    - `ClaimsNoPanic`: stopping early on a "panicked" claim.
      Written up in `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`.
    - `NoMaxLengthTrace`: Jolt's verifier accepts a full-length witness that Jolt's prover cannot produce.
+     Fixed by a16z/jolt#2407; removed on 2026-11-12.
      Written up in `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/prover-verifier-trace-length/index.md`.
    - Each finding gets its own post under `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/`.

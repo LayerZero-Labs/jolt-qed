@@ -40,10 +40,12 @@ def Trace.execution_dimensions (trace : Trace) : ExecutionDimensions :=
 namespace ProverConfig
 
 /-- The checked padding path in `derive_from_dimensions`, before the public
-maximum check. Both the addition and the rounding can fail. -/
+maximum check: round the row count up to a power of two, at least 256. The
+rounding can fail. No padding row is reserved (a16z/jolt#2407).
+See jolt/crates/jolt-prover/src/config.rs:49-64 (`ProverConfig::padded_trace_length`)
+at 3cc6e7bd1. -/
 def checkedTraceLength (rows : Nat) : Option Nat := do
-  let withNoop ← MemoryLayout.checkedAdd rows 1
-  let rounded ← JoltConstraints.VerifierSizes.checkedNextPowerOfTwo withNoop
+  let rounded ← JoltConstraints.VerifierSizes.checkedNextPowerOfTwo rows
   return max rounded 256
 
 /-- Validate the nonzero address bounds and remap the largest address. -/
@@ -99,19 +101,18 @@ theorem checkedRound_some (value rounded : Nat)
 
 private theorem checkedTraceLength_rounding (rows padded : Nat)
     (accepted : checkedTraceLength rows = some padded) :
-    padded = max (2 ^ Nat.clog 2 (rows + 1)) 256 ∧
-      2 ^ Nat.clog 2 (rows + 1) < 2 ^ 64 := by
+    padded = max (2 ^ Nat.clog 2 rows) 256 ∧
+      2 ^ Nat.clog 2 rows < 2 ^ 64 := by
   unfold checkedTraceLength at accepted
   simp only [bind_some_iff] at accepted
-  obtain ⟨withNoop, added, rounded, roundedOk, result⟩ := accepted
-  obtain ⟨rfl, _⟩ := checkedAdd_some added
+  obtain ⟨rounded, roundedOk, result⟩ := accepted
   obtain ⟨rfl, bound⟩ := checkedRound_some _ _ roundedOk
   cases result
   exact ⟨rfl, bound⟩
 
 theorem checkedTraceLength_eq (rows padded : Nat)
     (accepted : checkedTraceLength rows = some padded) :
-    padded = max (2 ^ Nat.clog 2 (rows + 1)) 256 :=
+    padded = max (2 ^ Nat.clog 2 rows) 256 :=
   (checkedTraceLength_rounding rows padded accepted).1
 
 theorem deriveFromDimensions_sizes (dimensions : ExecutionDimensions) (layout : MemoryLayout)

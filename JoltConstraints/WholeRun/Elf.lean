@@ -180,25 +180,43 @@ def BlockEncoding.decodedWord : BlockEncoding → BitVec 32
   | .base w => w
   | .compressed h => Decode.joltUncompress h
 
+/-- The raw inline fields of a 32-bit word, read as an R-type encoding: `opcode` is bits 6..0,
+`rd` bits 11..7, `funct3` bits 14..12, `rs1` bits 19..15, `rs2` bits 24..20 and `funct7`
+bits 31..25. Jolt's `decode_instruction` reads an inline word this way before the registry
+lookup (`InlineEncoding.register`).
+For example, the word `0x02B5050B` gives opcode `0x0B`, funct3 0, funct7 1, `rd = x10`,
+`rs1 = x10` and `rs2 = x11`. -/
+def inlineEncodingOf (w : BitVec 32) : InlineEncoding where
+  opcode := w.extractLsb 6 0
+  funct3 := w.extractLsb 14 12
+  funct7 := w.extractLsb 31 25
+  rd := Decode.rd w
+  rs1 := Decode.rs1 w
+  rs2 := Decode.rs2 w
+
 /-- A source row is what `decode_instruction` makes of a parcel: it has the parcel's address
-and width, and a RISC-V row is `joltDecode` of the parcel's word for some advice operand, which
-the encoding does not carry. A row of one of Jolt's own instructions (`SourceInstruction.jolt`)
-is constrained only in address and width, because Lean has no transcription of Jolt's
-`decode_custom`.
+and width, a RISC-V row is `joltDecode` of the parcel's word for some advice operand, which
+the encoding does not carry, and an inline row is the registered inline of the parcel's base
+word (`InlineEncoding.register`). A row of one of Jolt's own instructions
+(`SourceInstruction.jolt`) is constrained only in address and width, because Lean has no
+transcription of Jolt's `decode_custom`.
 For example, the parcel `(0x80000000, .base 0x00100093)` gives the row at `0x80000000`, not
-compressed, holding `.riscv (.ADDI x1 x0 1)`. -/
+compressed, holding `.riscv (.ADDI x1 x0 1)`, and the parcel `(0x80000004, .base 0x02B5050B)`
+gives the row holding `.inline .sha256 x10 x11 x10`. -/
 def RowFromParcel (parcel : Nat × BlockEncoding) (row : SourceInstructionRow SourceInstruction) :
     Prop :=
   row.address.toNat = parcel.1 ∧ row.is_compressed = parcel.2.isCompressed ∧
-    ∀ i, row.instruction = .riscv i →
-      ∃ advice, Decode.joltDecode parcel.2.decodedWord advice = some i
+    (∀ i, row.instruction = .riscv i →
+      ∃ advice, Decode.joltDecode parcel.2.decodedWord advice = some i) ∧
+    ∀ key rs1 rs2 rd, row.instruction = .inline key rs1 rs2 rd →
+      ∃ w, parcel.2 = .base w ∧ (inlineEncodingOf w).register = some row.instruction
 
 /-- **The program agrees with what `decode_elf` builds from the ELF's sections.** The layout of
 `elf` exists; the program's `memory_init`, `program_end` and `entry_address` are the layout's;
 and its rows correspond, one to one and in order, to the layout's parcels (`RowFromParcel`).
 
-The relation fixes the layout and the decoding of every RISC-V row. It does not fix which of
-Jolt's own instructions a `.jolt` row holds, and it leaves out the checks by which
+The relation fixes the layout and the decoding of every RISC-V row and every inline row. It does
+not fix which of Jolt's own instructions a `.jolt` row holds, and it leaves out the checks by which
 `decode_instruction` rejects a program. Every program Jolt builds from the ELF satisfies it.
 This premise replaces `ImageDecoded` in the whole-run theorems. What stays trusted is that
 `elf` is what the `object` crate parses from the guest ELF, and that Jolt's preprocessing and the
@@ -402,21 +420,34 @@ theorem exists_of_forall₂_right {α β : Type} {R : α → β → Prop} :
 
 /-! ## The image is decoded -/
 
-/-- **A program built from the ELF's sections satisfies `ImageDecoded`.** Each RISC-V row comes
-from a parcel `decodeText` found in a merged text range. Every address of that range has a byte
-in `memory_init`, because each address lies in a text section, whose data covers it
-(`mergeRanges_covered`, `ElfSection.lastByte_isSome`). The bytes `decode_elf` reads are
-therefore the image's bytes, and the row is what `joltDecode` makes of them.
-For example, for the `.text` section at `0x80000000` holding `addi x1, x0, 1`, the ADDI row has
-`RowDecodes … (.base 0x00100093)`. -/
-theorem _root_.Rv64ProgramImage.DecodedFrom.imageDecoded
+/-- The bytes of a row's parcel in the image: the image holds the parcel at the row's address,
+and the width the low two bits give is the row's width.
+For example, the ADDI row at `0x80000000` built from the word `0x00100093` has
+`ParcelInImage … (.base 0x00100093)`. -/
+def ParcelInImage (program : Rv64ProgramImage SourceInstruction)
+    (row : SourceInstructionRow SourceInstruction) : BlockEncoding → Prop
+  | .base w => row.is_compressed = false ∧
+      imageWord? program row.address.toNat = some w ∧ w.extractLsb 1 0 = 0b11#2
+  | .compressed h => row.is_compressed = true ∧
+      imageParcel? program row.address.toNat = some h ∧ h.extractLsb 1 0 ≠ 0b11#2
+
+/-- **Every row of a program built from the ELF's sections comes from a parcel in the image.**
+The row comes from a parcel `decodeText` found in a merged text range (`RowFromParcel`). Every
+address of that range has a byte in `memory_init`, because each address lies in a text
+section, whose data covers it (`mergeRanges_covered`, `ElfSection.lastByte_isSome`). The bytes
+`decode_elf` reads are therefore the image's bytes.
+For example, for the `.text` section at `0x80000000` holding `addi x1, x0, 1`, the ADDI row comes
+from the parcel `(0x80000000, .base 0x00100093)`, which the image holds. -/
+theorem _root_.Rv64ProgramImage.DecodedFrom.parcel
     {program : Rv64ProgramImage SourceInstruction} {elf : ElfSections}
-    (hdecoded : program.DecodedFrom elf) : ImageDecoded program := by
+    (hdecoded : program.DecodedFrom elf) {row : SourceInstructionRow SourceInstruction}
+    (hrow : row ∈ program.instructions) :
+    ∃ p : Nat × BlockEncoding, RowFromParcel p row ∧ ParcelInImage program row p.2 := by
   obtain ⟨layout, hlayout, hmem, -, -, hrows⟩ := hdecoded
-  intro row hrow i hi
-  obtain ⟨p, hp, haddr, hcomp, hdec⟩ :=
+  obtain ⟨p, hp, hfrom⟩ :=
     exists_of_forall₂_right hrows row (Array.mem_toList_iff.mpr hrow)
-  obtain ⟨advice, hadvice⟩ := hdec i hi
+  refine ⟨p, hfrom, ?_⟩
+  obtain ⟨haddr, hcomp, -⟩ := hfrom
   dsimp only [ElfSections.layout?] at hlayout
   split at hlayout
   · rename_i hall
@@ -448,16 +479,52 @@ theorem _root_.Rv64ProgramImage.DecodedFrom.imageDecoded
     cases hp2 : p.2 with
     | base w =>
       obtain ⟨hw, hlow⟩ := hword w hp2
-      refine ⟨.base w, ?_, by rw [haddr]; exact hw, hlow, advice, ?_⟩
-      · rw [hcomp, hp2]
-        rfl
-      · simpa [BlockEncoding.decodedWord, hp2] using hadvice
+      exact ⟨by rw [hcomp, hp2]; rfl, by rw [haddr]; exact hw, hlow⟩
     | compressed h =>
       obtain ⟨hh, hlow⟩ := hparcel h hp2
-      refine ⟨.compressed h, ?_, by rw [haddr]; exact hh, hlow, advice, ?_⟩
-      · rw [hcomp, hp2]
-        rfl
-      · simpa [BlockEncoding.decodedWord, hp2] using hadvice
+      exact ⟨by rw [hcomp, hp2]; rfl, by rw [haddr]; exact hh, hlow⟩
   · simp at hlayout
+
+/-- **A program built from the ELF's sections satisfies `ImageDecoded`.** Each RISC-V row comes
+from a parcel in the image (`DecodedFrom.parcel`), and the row is what `joltDecode` makes of it.
+For example, for the `.text` section at `0x80000000` holding `addi x1, x0, 1`, the ADDI row has
+`RowDecodes … (.base 0x00100093)`. -/
+theorem _root_.Rv64ProgramImage.DecodedFrom.imageDecoded
+    {program : Rv64ProgramImage SourceInstruction} {elf : ElfSections}
+    (hdecoded : program.DecodedFrom elf) : ImageDecoded program := by
+  intro row hrow i hi
+  obtain ⟨p, ⟨-, -, hdec, -⟩, hin⟩ := hdecoded.parcel hrow
+  obtain ⟨advice, hadvice⟩ := hdec i hi
+  cases hp2 : p.2 with
+  | base w =>
+    rw [hp2] at hin hadvice
+    exact ⟨.base w, hin.1, hin.2.1, hin.2.2, advice, hadvice⟩
+  | compressed h =>
+    rw [hp2] at hin hadvice
+    exact ⟨.compressed h, hin.1, hin.2.1, hin.2.2, advice, hadvice⟩
+
+/-- **The image's bytes for an inline row.** The row is four bytes wide, and the image holds at
+its address a base word whose registered inline is the row's instruction.
+For example, a `SHA256` row at `0x80000004` built from the word `0x02B5050B` has
+`InlineDecodes … 0x02B5050B`. -/
+def InlineDecodes (program : Rv64ProgramImage SourceInstruction)
+    (row : SourceInstructionRow SourceInstruction) (w : BitVec 32) : Prop :=
+  row.is_compressed = false ∧ imageWord? program row.address.toNat = some w ∧
+    w.extractLsb 1 0 = 0b11#2 ∧ (inlineEncodingOf w).register = some row.instruction
+
+/-- **Every inline row of a program built from the ELF's sections is decoded from the image.**
+For example, the `SHA256` row built from the word `0x02B5050B` has the four bytes of that word in
+the image at its address. -/
+theorem _root_.Rv64ProgramImage.DecodedFrom.inlineDecoded
+    {program : Rv64ProgramImage SourceInstruction} {elf : ElfSections}
+    (hdecoded : program.DecodedFrom elf) {row : SourceInstructionRow SourceInstruction}
+    (hrow : row ∈ program.instructions) {key : JoltISA.Inlines.InlineKey}
+    {rs1 rs2 rd : LeanRV64D.regidx}
+    (hinline : row.instruction = .inline key rs1 rs2 rd) :
+    ∃ w, InlineDecodes program row w := by
+  obtain ⟨p, ⟨-, -, -, hdec⟩, hin⟩ := hdecoded.parcel hrow
+  obtain ⟨w, hw, hreg⟩ := hdec key rs1 rs2 rd hinline
+  rw [hw] at hin
+  exact ⟨w, hin.1, hin.2.1, hin.2.2, hreg⟩
 
 end WholeRun

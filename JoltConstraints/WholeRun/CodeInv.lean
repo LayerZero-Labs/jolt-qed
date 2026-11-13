@@ -351,33 +351,29 @@ private theorem mkeeps_load_doubleword (address : BitVec 64) :
   repeat' split at h
   all_goals first | (cases h; exact mkeep_refl _) | cases h
 
-private theorem mkeeps_readHostBytes
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
+private theorem mkeeps_hostLoad (address : BitVec 64) :
+    MKeeps (JoltISA.Mmu.hostLoad address) := by
+  intro s t v h
+  cases h
+  exact mkeep_refl _
+
+private theorem mkeeps_readHostBytes {width : Nat}
     (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    MKeeps (JoltISA.readHostBytes JoltISA.Mmu.load overflowChecks incrementAfterLast
-      pointer n bytes) := by
+    MKeeps (JoltISA.readHostBytes JoltISA.Mmu.hostLoad pointer n bytes) := by
   induction n generalizing pointer bytes with
   | zero => exact mkeeps_pure _
   | succ n ih =>
     dsimp only [JoltISA.readHostBytes]
-    refine mkeeps_bind (mkeeps_load _) (fun result => ?_)
+    refine mkeeps_bind (mkeeps_hostLoad _) (fun result => ?_)
     cases result with
-    | Err e => exact mkeeps_pure _
-    | Ok byte =>
-      split_ifs
-      · exact mkeeps_bind (mkeeps_throw _) (fun _ => ih _ _)
-      · exact mkeeps_bind (mkeeps_pure _) (fun _ => ih _ _)
+    | none => exact mkeeps_pure _
+    | some byte => exact ih _ _
 
 private theorem mkeeps_hostIO : MKeeps JoltISA.execHostIO := by
-  unfold JoltISA.execHostIO JoltISA.execHostIOWith
-  refine mkeeps_bind mkeeps_get (fun config => ?_)
-  dsimp only
-  split
-  · exact mkeeps_pure _
-  · refine mkeeps_bind (mkeeps_readSrc _) (fun callId => ?_)
-    preservation_auto [mkeeps_readHostBytes _ _ _ _ _, mkeeps_readSrc _,
-      mkeeps_pure _, mkeeps_throw _, mkeeps_modify _ (fun _ => rfl)]
-      using (StatePreservation.bind_rule mkeep_trans)
+  unfold JoltISA.execHostIO JoltISA.execHostIOWith JoltISA.readHostRange
+  preservation_auto [mkeeps_readHostBytes _ _ _, mkeeps_readSrc _,
+    mkeeps_pure _, mkeeps_get, mkeeps_modify _ (fun _ => rfl)]
+    using (StatePreservation.bind_rule mkeep_trans)
 
 local macro "jolt_keep" : tactic =>
   `(tactic| repeat' (first

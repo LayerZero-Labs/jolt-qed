@@ -21,6 +21,8 @@ that the high limbs equal `w`. So `a·b + w·p' = c + 2^256·w`, that is `a·b =
 * `secp256k1Mulq_rows_sound` … `secp256k1Squarer_rows_jolt_advice_complete`: the two theorems
   for each of the four generated row sequences. Completeness assumes operands below `q`, which
   is what makes Jolt's advice exist.
+* `mulRows_advice_of_canonical`: a run that stores a canonical result took Jolt's quotient
+  words as advice. The rows check `a·b = w·q + c` but not `c < q`; a canonical `c` fixes `w`.
 
 The concrete known-answer instances are in `JoltTests.Inlines.Secp256k1FieldMulInstance`.
 -/
@@ -954,14 +956,27 @@ def FieldMulSpec (q : Nat) (op : FieldOp) (rs1 rs2 rs3 : regidx) (s s' : SailJol
                       mem := writeDwords s.sail.mem (fieldOut rs3 s).toNat c.toList } }) ∧
     ∀ i < 4, loadDword? s' (fieldOut rs3 s + BitVec.ofNat 64 (8 * i)) = c.toList[i]?
 
-/-- **Soundness of the `MUL` and `SQUARE` rows.** Every run of the rows, for every advice, from a
-state whose output buffer lies in RAM, meets `FieldMulSpec` for the modulus of the layout.
-Example: for `MULQ` with `a = 2` and `b = (p+1)/2`, every run stores some `c ≡ 1 (mod p)`. -/
-theorem mulRows_sound {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠ .div)
+/-- **Soundness of the `MUL` and `SQUARE` rows, with the quotient named.** Every run of the
+rows, for every advice, from a state whose output buffer lies in RAM, meets the conditions of
+`FieldMulSpec` for the modulus of the layout, with the quotient `w` equal to the first four
+advice words, the words the rows' VirtualAdvice rows write.
+Example: for `MULQ` with `a = 2`, `b = (p+1)/2` and advice words `1, 0, 0, 0`, every run stores
+`c = 1`; with advice words `0, 0, 0, 0` it stores `c = p + 1`. -/
+theorem mulRows_sound_advice {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠ .div)
     (hv : L.Valid op scalar) {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : FieldMulBuffer rs3 s)
     (run : (Program.seq (mulRows op scalar L rs1 rs2 rs3 advice)).Run s s') :
-    FieldMulSpec (if scalar then n else p) op rs1 rs2 rs3 s s' := by
+    ∃ a b c : Limbs,
+      readLimbs? s (sourceValue (.xreg rs1) s) = some a ∧
+      (op = .square → b = a) ∧
+      (op ≠ .square → readLimbs? s (sourceValue (.xreg rs2) s) = some b) ∧
+      MulRel (if scalar then n else p) (limbsToNat a) (limbsToNat b)
+        (limbsToNat #v[advice 0, advice 1, advice 2, advice 3]) (limbsToNat c) ∧
+      (∃ V : VReg → BitVec 64,
+        s' = { s with vregs := V,
+                      sail := { s.sail with
+                        mem := writeDwords s.sail.mem (fieldOut rs3 s).toNat c.toList } }) ∧
+      ∀ i < 4, loadDword? s' (fieldOut rs3 s + BitVec.ofNat 64 (8 * i)) = c.toList[i]? := by
   rw [mulRows_eq_append] at run
   -- The prologue: read the operands.
   obtain ⟨x, y, hx, hy, hsq, tail⟩ : ∃ x y : Limbs,
@@ -990,7 +1005,7 @@ theorem mulRows_sound {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠
       exact ⟨x, x, hx, fun h => absurd rfl h, fun _ => rfl, h⟩
     · exact absurd rfl hop
   -- The columns.
-  obtain ⟨fa, fb, -, fp, fp2⟩ := pre_vals hop hv hsq advice s.vregs
+  obtain ⟨fa, fb, fw, fp, fp2⟩ := pre_vals hop hv hsq advice s.vregs
   have h3 := tail_reads3 hop hv tail
   obtain ⟨R0, R1, R2, R3, R4, R5, R6, C, V, heq, hiff⟩ :=
     run_tail_iff hop hv h3 buf.ram buf.no_wrap (writeAll s.vregs (preWrites op scalar L x y advice))
@@ -1004,9 +1019,12 @@ theorem mulRows_sound {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠
   have hc : limbsToNat #v[R0, R1, R2, R3] =
       R0.toNat + 2 ^ 64 * R1.toNat + 2 ^ 128 * R2.toNat + 2 ^ 192 * R3.toNat := rfl
   have hq : (if scalar then n else p) ≤ 2 ^ 256 := by cases scalar <;> decide
-  refine ⟨x, y, #v[F (L.w 0), F (L.w 1), F (L.w 2), F (L.w 3)], #v[R0, R1, R2, R3], hx,
+  have hWa : #v[advice 0, advice 1, advice 2, advice 3] =
+      #v[F (L.w 0), F (L.w 1), F (L.w 2), F (L.w 3)] := by
+    rw [fw 0 (by decide), fw 1 (by decide), fw 2 (by decide), fw 3 (by decide)]
+  refine ⟨x, y, #v[R0, R1, R2, R3], hx,
     hsq, hy, ⟨?_, limbsToNat_lt _, limbsToNat_lt _⟩, ⟨V, rfl⟩, fun i hi => ?_⟩
-  · rw [← rows_identity_iff _ _ _ _ _ hq, ← fa, ← fb, ← hW, hc, ← hct, ← heq]
+  · rw [hWa, ← rows_identity_iff _ _ _ _ _ hq, ← fa, ← fb, ← hW, hc, ← hct, ← heq]
     simp only [limbVal]
     subst e4 e5 e6
     omega
@@ -1015,6 +1033,17 @@ theorem mulRows_sound {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠
       (t := { s with vregs := V, sail := { s.sail with mem := m' } }) rfl buf.ram
       (by simpa using buf.no_wrap)
       (fun j hj => hw j (by simpa using hj)) (by simpa using hi)
+
+/-- **Soundness of the `MUL` and `SQUARE` rows.** Every run of the rows, for every advice, from a
+state whose output buffer lies in RAM, meets `FieldMulSpec` for the modulus of the layout.
+Example: for `MULQ` with `a = 2` and `b = (p+1)/2`, every run stores some `c ≡ 1 (mod p)`. -/
+theorem mulRows_sound {op : FieldOp} {scalar : Bool} {L : MulRegs} (hop : op ≠ .div)
+    (hv : L.Valid op scalar) {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
+    {s s' : SailJoltState} (buf : FieldMulBuffer rs3 s)
+    (run : (Program.seq (mulRows op scalar L rs1 rs2 rs3 advice)).Run s s') :
+    FieldMulSpec (if scalar then n else p) op rs1 rs2 rs3 s s' := by
+  obtain ⟨a, b, c, ha, hsq, hb, rel, state, loads⟩ := mulRows_sound_advice hop hv buf run
+  exact ⟨a, b, _, c, ha, hsq, hb, rel, state, loads⟩
 
 /-! ## Completeness with Jolt's advice -/
 
@@ -1381,4 +1410,65 @@ theorem secp256k1Squarer_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : S
   · unfold secp256k1SquarerRowsAuto
     rw [secp256k1SquarerRowsAutoList_eq]
     exact run
+/-! ## A canonical result forces Jolt's advice
+
+The rows do not check that the stored result `c` is below `q`, so they admit more than one
+advice (`MulRel`). Once the result is canonical, the advice is unique: from `a·b = w·q + c` and
+`c < q`, `w = ⌊a·b / q⌋`, which is Jolt's quotient advice (`mulqQuotientAdvice`).
+-/
+
+/-- Four limbs are determined by their value.
+Example: only `#v[1, 0, 0, 0]` has value `1`. -/
+theorem limbs_eq_of_limbsToNat_eq {x y : Limbs} (h : limbsToNat x = limbsToNat y) : x = y := by
+  have x0 := x[0].isLt
+  have x1 := x[1].isLt
+  have x2 := x[2].isLt
+  have x3 := x[3].isLt
+  have y0 := y[0].isLt
+  have y1 := y[1].isLt
+  have y2 := y[2].isLt
+  have y3 := y[3].isLt
+  simp only [limbsToNat] at h
+  refine Vector.ext fun i hi => BitVec.eq_of_toNat_eq ?_
+  interval_cases i <;> omega
+
+/-- The limbs of the value of four limbs are those limbs.
+Example: `natToLimbs (limbsToNat #v[1, 2, 3, 4]) = #v[1, 2, 3, 4]`. -/
+theorem natToLimbs_limbsToNat (l : Limbs) : natToLimbs (limbsToNat l) = l :=
+  limbs_eq_of_limbsToNat_eq (by rw [limbsToNat_natToLimbs, Nat.mod_eq_of_lt (limbsToNat_lt l)])
+
+/-- Four limbs are determined by their list entries.
+Example: if `c.toList[i]? = c'.toList[i]?` for `i = 0, 1, 2, 3`, then `c = c'`. -/
+theorem limbs_eq_of_toList {c c' : Limbs} (h : ∀ i < 4, c.toList[i]? = c'.toList[i]?) :
+    c = c' := by
+  refine Vector.ext fun i hi => ?_
+  simpa [hi] using h i hi
+
+/-- **A canonical `MUL` or `SQUARE` run used Jolt's advice.** If a run of the rows from a state
+whose output buffer lies in RAM stores a result below `q`, then the operands read from memory,
+and Jolt's quotient advice for them exists and equals the first four advice words.
+Example: for `MULQ` with `a = 2`, `b = (p+1)/2`, a run that stores `1` had advice words
+`1, 0, 0, 0`; the run with advice words `0, 0, 0, 0` stores `p + 1`, which is not canonical. -/
+theorem mulRows_advice_of_canonical {op : FieldOp} {scalar : Bool} {L : MulRegs}
+    (hop : op ≠ .div) (hv : L.Valid op scalar) {rs1 rs2 rs3 : regidx}
+    {advice : Nat → BitVec 64} {s s' : SailJoltState} (buf : FieldMulBuffer rs3 s)
+    (run : (Program.seq (mulRows op scalar L rs1 rs2 rs3 advice)).Run s s')
+    (canonical : FieldMulCanonical (if scalar then n else p) rs3 s s') :
+    ∃ a b : Limbs,
+      readLimbs? s (sourceValue (.xreg rs1) s) = some a ∧
+      (op = .square → b = a) ∧
+      (op ≠ .square → readLimbs? s (sourceValue (.xreg rs2) s) = some b) ∧
+      mulqQuotientAdvice (if scalar then n else p) a b =
+        some #v[advice 0, advice 1, advice 2, advice 3] := by
+  obtain ⟨a, b, c, ha, hsq, hb, ⟨rel, -, -⟩, -, loads⟩ := mulRows_sound_advice hop hv buf run
+  obtain ⟨c', hc', loads'⟩ := canonical
+  obtain rfl : c = c' := limbs_eq_of_toList fun i hi => by rw [← loads i hi, loads' i hi]
+  have hq : 0 < (if scalar then n else p) := by cases scalar <;> decide
+  refine ⟨a, b, ha, hsq, hb, ?_⟩
+  have hw : limbsToNat a * limbsToNat b / (if scalar then n else p) =
+      limbsToNat #v[advice 0, advice 1, advice 2, advice 3] := by
+    rw [rel, Nat.add_comm, Nat.add_mul_div_right _ _ hq, Nat.div_eq_of_lt hc', Nat.zero_add]
+  simp only [mulqQuotientAdvice, fieldLimbs?, hw, limbsToNat_lt, ↓reduceIte,
+    natToLimbs_limbsToNat]
+
 end JoltISA.Inlines.Secp256k1

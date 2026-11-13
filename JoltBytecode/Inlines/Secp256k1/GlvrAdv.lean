@@ -14,6 +14,8 @@ so the rows admit any six words (section 5.3 of `docs/inline-precompiles.md`).
 * `glvrAdv_rows_jolt_advice_complete`: with Jolt's advice for the scalar `k` read at `rs1`
   (`glvrAdvice`), the rows run, and the six words read back are `glvrAdvice k`
   (`GlvrAdvCanonical`).
+* `glvrAdv_advice_of_canonical`: a run that leaves `glvrAdvice k` in the buffer took
+  `glvrAdvice k` as advice, since the rows store the six words unchanged.
 * `glvrAdvice_correct`: those six words are two sign words in `{0, 1}` and two 128-bit
   magnitudes with `±k₁ ± λ·k₂ ≡ k (mod n)`, the identity the SDK checks after the call.
 
@@ -106,6 +108,28 @@ theorem glvrAdv_run_iff {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
   simp only [Nat.add_zero, afterStores_setV]
   rfl
 
+/-- **The words a `GLVR_ADV` run stores are its advice words.** Every run of the rows from a
+state whose output buffer lies in RAM ends in `glvrAdvFinal`, and doubleword `i` of the buffer
+reads advice word `i`.
+Example: a run with advice words `[0, 1, 0, 0, 0, 0]` leaves the buffer's second doubleword
+reading `1`. -/
+theorem glvrAdv_rows_sound_advice {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
+    {s s' : SailJoltState} (buf : GlvrAdvBuffer rs3 s)
+    (run : (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s') :
+    s' = glvrAdvFinal rs3 advice s ∧
+      ∀ i < 6, loadDword? s' (glvrOut rs3 s + BitVec.ofNat 64 (8 * i)) = (glvrWords advice)[i]? := by
+  have hr : XReads s rs3 (glvrOut rs3 s) := by
+    have h := run
+    unfold secp256k1GlvrAdvRowsAuto at h
+    rw [glvrAdvRowsAutoList_eq, glvrWords, adviceStoreRows, List.cons_append, seq_cons,
+      run_instr_iff (execInstr_of_regRow rfl (by decide) s)] at h
+    exact XReads.of_run_sd (s := { s with vregs := setV s.vregs (BitVec.ofNat 7 48) (advice 0) }) h
+  obtain ⟨hall, rfl⟩ := (glvrAdv_run_iff buf hr).1 run
+  refine ⟨rfl, fun i hi => ?_⟩
+  exact loadDword?_of_mem_writeDwords (t := glvrAdvFinal rs3 advice s) rfl buf.ram
+    (by simp only [glvrWords, List.length_cons, List.length_nil]; have := buf.no_wrap; omega)
+    (fun j hj => hall j (by simpa [glvrWords] using hj)) (by simpa [glvrWords] using hi)
+
 /-- **Soundness of `GLVR_ADV`.** Every run of the rows, for every advice, from a state whose
 output buffer lies in RAM, stores six words at the buffer, resets `vr48`, and changes nothing
 else; the six words read back.
@@ -116,17 +140,8 @@ theorem glvrAdv_rows_sound {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
     {s s' : SailJoltState} (buf : GlvrAdvBuffer rs3 s)
     (run : (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s') :
     GlvrAdvSpec rs3 s s' := by
-  have hr : XReads s rs3 (glvrOut rs3 s) := by
-    have h := run
-    unfold secp256k1GlvrAdvRowsAuto at h
-    rw [glvrAdvRowsAutoList_eq, glvrWords, adviceStoreRows, List.cons_append, seq_cons,
-      run_instr_iff (execInstr_of_regRow rfl (by decide) s)] at h
-    exact XReads.of_run_sd (s := { s with vregs := setV s.vregs (BitVec.ofNat 7 48) (advice 0) }) h
-  obtain ⟨hall, rfl⟩ := (glvrAdv_run_iff buf hr).1 run
-  refine ⟨glvrWords advice, rfl, rfl, fun i hi => ?_⟩
-  exact loadDword?_of_mem_writeDwords (t := glvrAdvFinal rs3 advice s) rfl buf.ram
-    (by simp only [glvrWords, List.length_cons, List.length_nil]; have := buf.no_wrap; omega)
-    (fun j hj => hall j (by simpa [glvrWords] using hj)) (by simpa [glvrWords] using hi)
+  obtain ⟨rfl, loads⟩ := glvrAdv_rows_sound_advice buf run
+  exact ⟨glvrWords advice, rfl, rfl, loads⟩
 
 /-! ## Completeness with Jolt's advice -/
 
@@ -152,6 +167,21 @@ Example: for `k = 1`, the buffer reads `[0, 1, 0, 0, 0, 0]`. -/
 def GlvrAdvCanonical (k : Limbs) (rs3 : regidx) (s s' : SailJoltState) : Prop :=
   ∀ i (hi : i < 6), loadDword? s' (glvrOut rs3 s + BitVec.ofNat 64 (8 * i)) =
     some (glvrAdvice k)[i]
+
+/-- **A canonical `GLVR_ADV` run used Jolt's advice.** If a run of the rows from a state whose
+output buffer lies in RAM leaves the buffer holding `glvrAdvice k`, then its six advice words
+are the words of `glvrAdvice k`: the rows store their advice words unchanged.
+Example: a run that leaves the buffer reading `[0, 1, 0, 0, 0, 0]` for `k = 1` had advice
+words `0, 1, 0, 0, 0, 0`. -/
+theorem glvrAdv_advice_of_canonical {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64}
+    {s s' : SailJoltState} {k : Limbs} (buf : GlvrAdvBuffer rs3 s)
+    (run : (secp256k1GlvrAdvRowsAuto rs1 rs2 rs3 advice).Run s s')
+    (canonical : GlvrAdvCanonical k rs3 s s') :
+    ∀ i (hi : i < 6), advice i = (glvrAdvice k)[i] := by
+  intro i hi
+  have h := (glvrAdv_rows_sound_advice buf run).2 i hi
+  rw [canonical i hi] at h
+  interval_cases i <;> simpa [glvrWords] using h.symm
 
 /-- **Completeness of `GLVR_ADV` with Jolt's advice.** For a call that meets its obligations,
 whose scalar at `rs1` has limbs `k`, the rows run with Jolt's advice for `k`; the end state

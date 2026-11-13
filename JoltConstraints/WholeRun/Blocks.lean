@@ -552,13 +552,15 @@ private structure TracedBlock (trace : Trace) (program : Rv64ProgramImage Source
   finishes : trace.bytecode[(trace.rows[stop - 1]'(by omega)).rowIndex].virtual_sequence_remaining.getD 0 = 0
   address : trace.bytecode[(trace.rows[stop - 1]'(by omega)).rowIndex].address = block.row.address
 
-/-- **An inline call in an honest trace.** If a source expansion starts at step `base` and
-its source row is a registered inline, then that row's expansion rows, patched in order with
-the call's inline advice words (`inlineCallAdvice`), run from the state before step `base`
-to the state after the call's last step.
+/-- **An inline call in an honest trace.** Let a source expansion start at step `base`. Each of
+its steps belongs to the expansion that starts at `base`, and the step after its last step,
+if any, starts a new expansion. If its source row is a registered inline, then that row's
+expansion rows, patched in order with the call's inline advice words (`inlineCallAdvice`),
+run from the state before step `base` to the state after the call's last step, and step
+`base + k` records the advice of patched row `k`.
 For example, a SECP256K1_MULQ call that starts at step 100 runs its 186 rows, with its four
 VirtualAdvice rows taking the next four words of `inline_advice`, from the state before step
-100 to the state after step 285. -/
+100 to the state after step 285; step 286, if the trace has it, starts a new expansion. -/
 theorem HonestTrace.inline_call_exec {joltInstance : JoltInstance SourceInstruction}
     {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs)
     (base : Nat) (hbase : base < trace.rows.size)
@@ -567,11 +569,17 @@ theorem HonestTrace.inline_call_exec {joltInstance : JoltInstance SourceInstruct
       expand_instruction source = some rows ∧
       trace.bytecode[(trace.rows[base]'hbase).rowIndex].address = source.address ∧
       ∃ lastBound : base + rows.length - 1 < trace.rows.size,
+        (∀ k, k < rows.length → startOfExpansionContainingStepN trace.rows (base + k) = base) ∧
+        (base + rows.length < trace.rows.size →
+          stepNOfTraceIsStartOfNewExpansion trace.rows (base + rows.length) = true) ∧
         ∀ key rs1 rs2 rs3, source.instruction = .inline key rs1 rs2 rs3 →
           JoltISA.execProgram (JoltISA.Program.seq
             (patchAdvice (inlineCallAdvice joltInstance.program inputs trace.rows base rows.length)
               (rows.map (·.instruction)))) (trace.rows[base]'hbase).preState =
-            .ok RETIRE_SUCCESS (trace.rows[base + rows.length - 1]'lastBound).postState := by
+            .ok RETIRE_SUCCESS (trace.rows[base + rows.length - 1]'lastBound).postState ∧
+          ∀ k (hk : k < rows.length), (trace.rows[base + k]'(by omega)).someTracerAdvice? =
+            ((patchAdvice (inlineCallAdvice joltInstance.program inputs trace.rows base
+              rows.length) (rows.map (·.instruction)))[k]?).bind (·.adviceValue?) := by
   have accepted := accepted_pc_map_ok joltInstance trace.bytecode trace.expands trace.accepted
   obtain ⟨source, rows, before, after, atSource, emits, splitRows, position⟩ :=
     source_segment joltInstance.program trace.bytecode trace.expands accepted
@@ -592,13 +600,35 @@ theorem HonestTrace.inline_call_exec {joltInstance : JoltInstance SourceInstruct
     simpa only [Nat.add_zero, expand_instruction_address source rows emits _
       (List.getElem_mem positive)] using eq
   have lastBound : base + rows.length - 1 < trace.rows.size := by omega
-  refine ⟨source, rows, atSource, emits, firstAddress, lastBound, ?_⟩
+  have next : base + rows.length < trace.rows.size →
+      stepNOfTraceIsStartOfNewExpansion trace.rows (base + rows.length) = true := by
+    intro nextBound
+    have lastIn : rows.length - 1 < rows.length := by omega
+    have finished : trace.bytecode[(trace.rows[base + (rows.length - 1)]'(by omega)).rowIndex
+        ].virtual_sequence_remaining.getD 0 = 0 := by
+      have count := expand_instruction_countdown source rows emits _ lastIn
+      rw [← ordered _ lastIn] at count
+      exact BitVec.eq_of_toNat_eq (by rw [count]; simp)
+    have linked := trace.linked (base + (rows.length - 1)) _ (trace.rows[base + rows.length]'nextBound)
+      (Array.getElem?_eq_getElem (by omega))
+      (by rw [show base + (rows.length - 1) + 1 = base + rows.length by omega]
+          exact Array.getElem?_eq_getElem nextBound)
+    rw [ite_eq_right (not_not.mpr finished)] at linked
+    obtain ⟨_, _, _, startsNext, _⟩ := linked
+    simpa only [stepNOfTraceIsStartOfNewExpansion, Array.getElem?_eq_getElem nextBound,
+      Option.map_some, Option.getD_some] using startsNext
+  refine ⟨source, rows, atSource, emits, firstAddress, lastBound,
+    segment_starts trace base source rows emits inside ordered, next, ?_⟩
   intro key rs1 rs2 rs3 isInline
   let values := inlineCallAdvice joltInstance.program inputs trace.rows base rows.length
-  exact segment_exec trace base hbase source rows emits inside ordered lastBound
-    values (segment_patched trace base rows inside ordered values
-      (segment_agrees_inline trace base hbase source rows emits atSource inside ordered
-        key rs1 rs2 rs3 isInline))
+  have patched := segment_patched trace base rows inside ordered values
+    (segment_agrees_inline trace base hbase source rows emits atSource inside ordered
+      key rs1 rs2 rs3 isInline)
+  refine ⟨segment_exec trace base hbase source rows emits inside ordered lastBound values patched,
+    fun k hk => ?_⟩
+  rw [List.getElem?_eq_getElem (by rw [patchAdvice_length, List.length_map]; exact hk),
+    Option.bind_some, patched k hk]
+  rfl
 
 private theorem block_at {joltInstance : JoltInstance SourceInstruction}
     {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs)

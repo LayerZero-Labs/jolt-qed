@@ -62,6 +62,13 @@ Sail compiler and Sail RISC-V model are distributed under the BSD 2-Clause
 License. The complete notice is included in
 [`LeanRV64D/LICENSE`](LeanRV64D/LICENSE).
 
+[`provenance.toml`](provenance.toml) records the Jolt revision the proofs are checked against and, for each Lean file under `JoltBytecode/` and `JoltConstraints/`, the Jolt files it models.
+CI checks that manifest with `scripts/check-provenance.py`, scans the Lean sources for `sorry`, trusted tactics, raised limits and axioms with `scripts/check_hygiene.py`, and checks with `lake build JoltAudit` that the headline theorems use only `propext`, `Classical.choice` and `Quot.sound`.
+[`reports/2026-11-11-provenance.md`](reports/2026-11-11-provenance.md) describes these checks, their baselines of existing violations, and the comparator gate in `ci/comparator/`.
+[`docs/coverage-ledger.md`](docs/coverage-ledger.md) lists, for each field of `AllConstraints` and each other Jolt artifact the proofs model, the check that compares it with Jolt, the CI job that runs the check, and the Jolt revision checked.
+The differential test in [`scripts/difftest/`](scripts/difftest/) runs real binaries on Sail's C++ emulator and on Jolt's tracer and compares their state after every instruction.
+Lean takes no part in it, so it checks Jolt's tracer against Sail; it does not check the Lean models of Jolt.
+
 
 ## AI Usage And Miscellany
 

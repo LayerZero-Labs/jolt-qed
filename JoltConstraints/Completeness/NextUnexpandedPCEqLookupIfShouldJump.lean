@@ -185,8 +185,9 @@ private theorem jump_next_row_address {joltInstance : JoltInstance SourceInstruc
   rw [htarget] at haddr
   exact Option.some.inj haddr.symm
 
-/-- Completeness target for a complete Rust trace, with its mandatory padding.
-There is no jump-only or nonwrapping-arithmetic assumption. -/
+/-- Completeness target for a complete Rust trace. A run may fill its domain:
+at the final cycle `ShouldJump` is zero. There is no jump-only or
+nonwrapping-arithmetic assumption. -/
 theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
@@ -200,9 +201,10 @@ theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
     (TraceWitness.NextUnexpandedPC params trace t -
       TraceWitness.LookupOutput params trace t) = 0
   by_cases hreal : t.val < trace.rows.size
-  · have hnextWitness : t.val + 1 < params.traceLength := by
-      have hpad := tracePadded.2
-      omega
+  · by_cases hnextWitness : t.val + 1 < params.traceLength
+    swap
+    · -- the final cycle: its missing successor counts as a no-op
+      simp [TraceWitness.ShouldJump, hnextWitness]
     by_cases hnextReal : t.val + 1 < trace.rows.size
     · by_cases hjump : JoltMetadata.circuitFlag
         trace.bytecode[trace.rows[t.val].rowIndex] .Jump = true

@@ -1,0 +1,67 @@
+name: expansion-recipes
+
+# T6 check that Lean's expansions still equal Jolt's built-in expansion recipes
+# (scripts/expansion-parity/EXPANSION-RECIPES.md,
+# reports/2026-11-12-expansion-recipes.md).
+# It checks out Jolt at JOLT_REV, rebuilds the expansion-recipes binary,
+# derives every modelled kind's recipe from all of its decoded instruction
+# words, regenerates JoltBytecode/JoltISA/ExpansionsAutomated.lean and
+# JoltConstraints/ExpansionGen/{Generated,Equiv}.lean, fails if the result
+# differs from the committed files, and builds the Lean proof that
+# `SourceInstruction.expand` equals the generated recipes.
+#
+# The job fails when the generator's own checks fail (status 1), when the
+# generator cannot run (status 2), when the regenerated files differ from the
+# committed ones, or when the equivalence proofs no longer build.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: expansion-recipes-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  expansion-recipes:
+    name: expansion-recipes
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      # a16z/jolt#2384 at the commit the expansion-parity job uses.
+      JOLT_REV: 3cc6e7bd179900cfad6a052335c32ea1ef749536
+      EXPANSION_PARITY_FEATURES: zicsr-remaining
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: a16z/jolt
+          ref: ${{ env.JOLT_REV }}
+          path: jolt-rev
+          persist-credentials: false
+      # Exit status 1 means a generator check failed; status 2 means the
+      # generator could not run. Either fails the job.
+      - name: Regenerate the expansion recipes
+        run: |
+          JOLT_DIR="$GITHUB_WORKSPACE/jolt-rev" \
+            scripts/expansion-parity/run-expansion-recipes.sh "$RUNNER_TEMP/expansion-recipes"
+      - name: Fail if the generated files changed
+        run: |
+          files=(JoltBytecode/JoltISA/ExpansionsAutomated.lean JoltConstraints/ExpansionGen)
+          git add -N "${files[@]}"
+          if ! git diff --exit-code --stat -- "${files[@]}"; then
+            git diff -- "${files[@]}" | head -200
+            echo "::error::Regenerated expansion recipes differ from the committed files."
+            exit 1
+          fi
+      - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
+        with:
+          build: false
+          use-github-cache: false
+      - name: Build the equivalence proofs
+        run: lake build JoltConstraints.ExpansionGen.Equiv

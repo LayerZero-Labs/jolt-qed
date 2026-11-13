@@ -458,6 +458,64 @@ theorem extractLsb_append_low (hi lo : BitVec 16) :
   · simp [h]
 
 
+/-- **Sail fetches a base word from the code in memory.** For a four-byte row whose word `w` the
+image holds at its address, with the bytes intact in `t`, Sail's `fetch` at the row's PC returns
+`w`.
+For example, an ADDI row at `0x80000000` whose image bytes are `0x93 0x00 0x10 0x00` is fetched as
+`F_Base 0x00100093`. -/
+theorem base_word_fetch (program : Rv64ProgramImage SourceInstruction)
+    (row : SourceInstructionRow SourceInstruction) (hrowmem : row ∈ program.instructions)
+    (w : BitVec 32) (hc : row.is_compressed = false)
+    (hw : imageWord? program row.address.toNat = some w) (hlow : w.extractLsb 1 0 = 0b11#2)
+    (t : SailState) (hinv : Step.StepInvariant t)
+    (hpc : t.regs.get? Register.PC = some row.address) (heven : row.address.getLsbD 0 = false)
+    (hpma : t.regs.get? Register.pma_regions = some platformPma)
+    (hhtif : t.regs.get? Register.htif_tohost_base = some none)
+    (hcode : CodeIntact program t) :
+    fetch () t = .ok (.F_Base w) t := by
+  have hw64 := row.address.isLt
+  have hpe := program.program_end.isLt
+  obtain ⟨lo, hi, hlo, hhi, rfl⟩ := imageWord?_eq_some.mp hw
+  obtain ⟨b0, b1, hb0, hb1, rfl⟩ := imageParcel?_eq_some.mp hlo
+  obtain ⟨b2, b3, hb2, hb3, rfl⟩ := imageParcel?_eq_some.mp hhi
+  have hk : ∀ k, k < 4 → ∀ b, imageByte? program (row.address.toNat + k) = some b →
+      t.mem.get? (row.address.toNat + k) = some b := fun k hk b hb =>
+    hcode row hrowmem k (by simp [hc, hk]) b hb
+  have m0 := hk 0 (by omega) b0 hb0
+  have m1 := hk 1 (by omega) b1 hb1
+  have m2 := hk 2 (by omega) b2 hb2
+  have m3 := hk 3 (by omega) b3 hb3
+  obtain ⟨hR, hend⟩ := imageByte?_bounds program hb0
+  obtain ⟨_, hend3⟩ := imageByte?_bounds program hb3
+  have hhi2 : (row.address + 2#64).toNat = row.address.toNat + 2 := by
+    apply BitVec.toNat_add_of_lt
+    change row.address.toNat + 2 < 2 ^ 64
+    omega
+  have hlowp : (b1 ++ b0 : BitVec 16).extractLsb 1 0 = 0b11#2 := by
+    have := hlow
+    rwa [extractLsb_append_low] at this
+  have hp0 := memParcel_eq_of_bytes t row.address.toNat b0 b1 m0 m1
+  have hp2 := memParcel_eq_of_bytes t (row.address.toNat + 2) b2 b3 m2 m3
+  have hfetch := fetch_regions t hinv row.address hpc heven platformPma ramRegion hpma rfl rfl
+    hR (by omega)
+    ((bundlesHelper% matching_platform_ram) row.address 2 hR (by omega) (by omega) (by omega))
+    hhtif (by
+      intro j hj
+      interval_cases j
+      · exact ⟨b0, by simpa using m0⟩
+      · exact ⟨b1, m1⟩)
+    (by
+      intro _
+      refine ⟨?_, by omega, ?_⟩
+      · exact (bundlesHelper% matching_platform_ram) (row.address + 2#64) 2
+          (by rw [hhi2]; omega) (by omega) (by omega) (by rw [hhi2]; omega)
+      · intro j hj
+        interval_cases j
+        · exact ⟨b2, by simpa using m2⟩
+        · exact ⟨b3, by simpa using m3⟩)
+  rw [hfetch]
+  simp only [fetchedAt, hp0, hlowp, hp2, ↓reduceIte]
+
 /-- **Sail fetches and decodes a decoded row from the code in memory.** For a row of a decoded
 image whose bytes are intact in `t`, Sail's `fetch` at the row's PC returns its encoding, and
 Sail's decoder returns an AST `cast` that executes like an AST `ast` matching Jolt's
@@ -481,49 +539,9 @@ theorem rowDecodes_fetch_decode (program : Rv64ProgramImage SourceInstruction)
   cases e with
   | base w =>
     obtain ⟨hc, hw, hlow, adv, hdec⟩ := hd
-    obtain ⟨lo, hi, hlo, hhi, rfl⟩ := imageWord?_eq_some.mp hw
-    obtain ⟨b0, b1, hb0, hb1, rfl⟩ := imageParcel?_eq_some.mp hlo
-    obtain ⟨b2, b3, hb2, hb3, rfl⟩ := imageParcel?_eq_some.mp hhi
-    have hk : ∀ k, k < 4 → ∀ b, imageByte? program (row.address.toNat + k) = some b →
-        t.mem.get? (row.address.toNat + k) = some b := fun k hk b hb =>
-      hcode row hrowmem k (by simp [hc, hk]) b hb
-    have m0 := hk 0 (by omega) b0 hb0
-    have m1 := hk 1 (by omega) b1 hb1
-    have m2 := hk 2 (by omega) b2 hb2
-    have m3 := hk 3 (by omega) b3 hb3
-    obtain ⟨hR, hend⟩ := imageByte?_bounds program hb0
-    obtain ⟨_, hend3⟩ := imageByte?_bounds program hb3
-    have hhi2 : (row.address + 2#64).toNat = row.address.toNat + 2 := by
-      apply BitVec.toNat_add_of_lt
-      change row.address.toNat + 2 < 2 ^ 64
-      omega
-    have hlowp : (b1 ++ b0 : BitVec 16).extractLsb 1 0 = 0b11#2 := by
-      have := hlow
-      rwa [extractLsb_append_low] at this
-    have hp0 := memParcel_eq_of_bytes t row.address.toNat b0 b1 m0 m1
-    have hp2 := memParcel_eq_of_bytes t (row.address.toNat + 2) b2 b3 m2 m3
-    have hfetch := fetch_regions t hinv row.address hpc heven platformPma ramRegion hpma rfl rfl
-      hR (by omega)
-      ((bundlesHelper% matching_platform_ram) row.address 2 hR (by omega) (by omega) (by omega))
-      hhtif (by
-        intro j hj
-        interval_cases j
-        · exact ⟨b0, by simpa using m0⟩
-        · exact ⟨b1, m1⟩)
-      (by
-        intro _
-        refine ⟨?_, by omega, ?_⟩
-        · exact (bundlesHelper% matching_platform_ram) (row.address + 2#64) 2
-            (by rw [hhi2]; omega) (by omega) (by omega) (by rw [hhi2]; omega)
-        · intro j hj
-          interval_cases j
-          · exact ⟨b2, by simpa using m2⟩
-          · exact ⟨b3, by simpa using m3⟩)
-    refine ⟨?_, ?_⟩
-    · rw [hfetch]
-      simp only [fetchedAt, hp0, hlowp, hp2, ↓reduceIte, BlockEncoding.fetched]
-    · obtain ⟨ast, hast, hm⟩ := Decode.joltDecode_agrees _ adv i hdec t hinv hmisa
-      exact ⟨ast, ast, hm, fun _ _ => rfl, hast, fun _ _ => rfl⟩
+    refine ⟨base_word_fetch program row hrowmem w hc hw hlow t hinv hpc heven hpma hhtif hcode, ?_⟩
+    obtain ⟨ast, hast, hm⟩ := Decode.joltDecode_agrees _ adv i hdec t hinv hmisa
+    exact ⟨ast, ast, hm, fun _ _ => rfl, hast, fun _ _ => rfl⟩
   | compressed h =>
     obtain ⟨hc, hp, hlow, adv, hdec⟩ := hd
     obtain ⟨b0, b1, hb0, hb1, rfl⟩ := imageParcel?_eq_some.mp hp

@@ -30,6 +30,8 @@ The lift has three parts.
 These theorems do not restrict the language: `JoltInstance.completeness` holds
 for every passing inline advice, and these results say that Jolt's own advice
 is one of them (design note `docs/inline-precompiles.md`, section 5.3).
+`WholeRun/InlineCompleteness.lean` goes the other way: a trace whose calls store
+Jolt's outputs is honest for Jolt's words.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
@@ -227,6 +229,36 @@ theorem glvrAdvRows_congr (rs1 rs2 rs3 : regidx) {advice advice' : Nat → BitVe
 
 /-! ## The lift -/
 
+/-- **The rows of an inline call.** If a source row is the call `key rd, rs1, rs2` and Jolt's
+expander emits `rows` for it, then the call is one that `SourceInstruction.expand` accepts
+(`rd ≠ x0` when the key reads `rd`, decision D7), and `rows` runs the key's `expandRows`.
+Example: a SECP256K1_MULQ source row with `rd = x12` emits its 186 rows
+`secp256k1Mulq.expandRows rs1 rs2 x12`. -/
+theorem inline_expand_rows {source : SourceInstructionRow SourceInstruction}
+    {rows : List JoltInstructionRow} (emits : expand_instruction source = some rows)
+    {key : InlineKey} {rs1 rs2 rd : regidx} (isInline : source.instruction = .inline key rs1 rs2 rd) :
+    (key.readsRd = true → JoltISA.isX0 rd = false) ∧
+      rows.map (·.instruction) = key.expandRows rs1 rs2 rd := by
+  have checks := ExpansionFacts.expand_instruction_checks source rows emits
+  rw [isInline] at checks
+  have accepted : key.readsRd = true → JoltISA.isX0 rd = false := by
+    intro reads
+    cases zero : JoltISA.isX0 rd
+    · rfl
+    · have rejected : (SourceInstruction.inline key rs1 rs2 rd).expand = none := by
+        simp only [SourceInstruction.expand, zero, reads, Bool.and_self, ↓reduceIte]
+      rw [rejected] at checks
+      exact False.elim checks
+  have registered : (SourceInstruction.inline key rs1 rs2 rd).expand =
+      some (.sequence (key.expandRows rs1 rs2 rd)) := by
+    cases reads : key.readsRd
+    · simp only [SourceInstruction.expand, reads, Bool.and_false, Bool.false_eq_true,
+        ↓reduceIte]
+    · simp only [SourceInstruction.expand, accepted reads, Bool.false_and, Bool.false_eq_true,
+        ↓reduceIte]
+  rw [registered] at checks
+  exact ⟨accepted, checks.1⟩
+
 /-- **An inline call with given advice, in an honest trace.** Let a source expansion start
 at step `base` with the inline call `key rd=rs3, rs1, rs2`, for a key that reads `rs3`.
 Since `SourceInstruction.expand` rejects `rs3 = x0` for such a key (decision D7), the call
@@ -260,26 +292,14 @@ theorem HonestTrace.inline_call_result {joltInstance : JoltInstance SourceInstru
     (run : (JoltISA.Program.seq (rowsOf advice)).Run (trace.rows[base]'hbase).preState s') :
     ∃ last, ∃ lastBound : last < trace.rows.size, last = base + key.rowCount - 1 ∧
       (trace.rows[last]'lastBound).postState = s' := by
-  obtain ⟨source, rows, atSource, emits, address, lastBound, exec⟩ :=
+  obtain ⟨source, rows, atSource, emits, address, lastBound, -, -, exec⟩ :=
     HonestTrace.inline_call_exec trace base hbase starts
   have isInline : source.instruction = .inline key rs1 rs2 rs3 := by
     rw [address, show joltInstance.program.instructionAt source.address =
       (rowAt joltInstance.program source.address).map (·.instruction) from rfl, atSource] at call
     exact Option.some.inj call
-  have checks := ExpansionFacts.expand_instruction_checks source rows emits
-  rw [isInline] at checks
-  have rd : JoltISA.isX0 rs3 = false := by
-    cases zero : JoltISA.isX0 rs3
-    · rfl
-    · have rejected : (SourceInstruction.inline key rs1 rs2 rs3).expand = none := by
-        simp only [SourceInstruction.expand, zero, reads, Bool.and_self, ↓reduceIte]
-      rw [rejected] at checks
-      exact False.elim checks
-  have registered : (SourceInstruction.inline key rs1 rs2 rs3).expand =
-      some (.sequence (key.expandRows rs1 rs2 rs3)) := by
-    simp only [SourceInstruction.expand, rd, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
-  rw [registered] at checks
-  have expanded : rows.map (·.instruction) = key.expandRows rs1 rs2 rs3 := checks.1
+  obtain ⟨accepted, expanded⟩ := inline_expand_rows emits isInline
+  have rd := accepted reads
   have mapped : rows.map (·.instruction) = rowsOf fun _ => 0 := by
     rw [expanded, InlineKey.expandRows, rd, ite_eq_right Bool.false_ne_true, rowsEq]
   have length : rows.length = key.rowCount := by
@@ -292,7 +312,7 @@ theorem HonestTrace.inline_call_result {joltInstance : JoltInstance SourceInstru
     have inside : i < rows.length := by omega
     rw [← words i hi]
     simp [inlineCallAdvice, List.getD_eq_getElem?_getD, List.getElem?_range inside]
-  have done := exec key rs1 rs2 rs3 isInline
+  have done := (exec key rs1 rs2 rs3 isInline).1
   rw [patched] at done
   refine ⟨base + rows.length - 1, lastBound, by rw [length], ?_⟩
   have both : JoltISA.execProgram (JoltISA.Program.seq (rowsOf advice))

@@ -53,8 +53,7 @@ theorem JoltInstance.soundness_onBytes {F : Type} [Field F] (joltField : JoltFie
   refine ⟨inputs, trace, ?_, ?_, ?_⟩
   · exact soundness_matches_outputs joltField joltInstance inputs witness
       (context.withInlineAdvice words) equations trace represented
-  · exact soundness_prover_accepts joltField joltInstance restrictions.noMaxLengthTrace
-      inputs witness
+  · exact soundness_prover_accepts joltField joltInstance inputs witness
       (context.withInlineAdvice words) equations trace bytecodeEq represented
   · exact soundness_spoil_asserts_pass joltField joltInstance inputs witness
       (context.withInlineAdvice words) equations trace bytecodeEq represented

@@ -125,6 +125,17 @@ def load (address : BitVec 64) : JoltMonad (Result (BitVec 8) ExecutionResult) :
   | some value => .ok (.Ok value) state
   | none => .error (Error.Assertion "Load Failed") state
 
+/-- One byte as a host call reads it: the byte `load` would return, or `none`
+where `load` would fail. It never fails and changes no state. Jolt's tracer
+first asks `Mmu::is_host_readable` whether `Mmu::load` returns normally at every
+byte of the range, and only then loads them (`Mmu::load_host_byte`); a host call
+that meets an unreadable byte loads nothing. For example, a host read at a
+stack-canary address gives `none` where a guest load would panic.
+See : jolt/tracer/src/emulator/mmu.rs:975-995 (`impl HostMemory for Mmu`)
+at 3cc6e7bd1 (a16z/jolt#2410). -/
+def hostLoad (address : BitVec 64) : JoltMonad (Option (BitVec 8)) := fun state =>
+  .ok (load? state address.toNat) state
+
 -- RAM: Rust checks only the start address, then reads 64 bits.
 -- Device: Rust reads 8 addresses one at a time through load_raw.
 -- See : jolt/tracer/src/emulator/mmu.rs:329-337 (load_doubleword)

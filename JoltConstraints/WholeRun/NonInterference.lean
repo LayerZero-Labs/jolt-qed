@@ -315,23 +315,24 @@ private theorem commutes_store_doubleword (address w : BitVec 64) :
     JoltISA.Mmu.store_raw? s (address.toNat + k) (w.extractLsb' (8 * k) 8)) (some js) = stored
   cases stored <;> simp only [Option.map_none, Option.map_some, mapState_ite] <;> rfl
 
+private theorem commutes_hostLoad (address : BitVec 64) :
+    Commutes r v (JoltISA.Mmu.hostLoad address) := by
+  intro js
+  rfl
+
 private theorem commutes_readHostBytes
-    (loadByte : BitVec 64 → JoltMonad (Result (BitVec 8) ExecutionResult))
-    (hload : ∀ address, Commutes r v (loadByte address))
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
+    (loadByte : BitVec 64 → JoltMonad (Option (BitVec 8)))
+    (hload : ∀ address, Commutes r v (loadByte address)) {width : Nat}
     (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    Commutes r v
-      (JoltISA.readHostBytes loadByte overflowChecks incrementAfterLast pointer count bytes) := by
+    Commutes r v (JoltISA.readHostBytes loadByte pointer count bytes) := by
   induction count generalizing pointer bytes with
   | zero => exact commutes_pure _
   | succ count ih =>
     unfold JoltISA.readHostBytes
     refine commutes_bind (hload _) fun result => ?_
     cases result with
-    | Err _ => exact commutes_pure _
-    | Ok byte =>
-      dsimp only
-      exact commutes_ite (commutes_bind (commutes_throw _) fun _ => ih _ _) (ih _ _)
+    | none => exact commutes_pure _
+    | some byte => exact ih _ _
 
 set_option hygiene false in
 local macro "jolt_commutes" : tactic =>
@@ -353,10 +354,24 @@ local macro "jolt_commutes" : tactic =>
     | split))
 
 private theorem commutes_hostIO (hr : Inert r) : Commutes r v JoltISA.execHostIO := by
-  unfold JoltISA.execHostIO JoltISA.execHostIOWith
-  refine commutes_get_bind (fun _ => rfl) (fun _ => ?_)
-  jolt_commutes
-  all_goals exact commutes_readHostBytes _ commutes_load _ _ _ _ _
+  unfold JoltISA.execHostIO JoltISA.execHostIOWith JoltISA.readHostRange
+  have range : ∀ {width : Nat} (pointer : BitVec width) (count limit : Nat),
+      Commutes r v (if pointer.toNat + count ≤ limit then
+        JoltISA.readHostBytes JoltISA.Mmu.hostLoad pointer count #[] else pure none) :=
+    fun _ _ _ => commutes_ite (commutes_readHostBytes _ commutes_hostLoad _ _ _) (commutes_pure _)
+  refine commutes_bind (commutes_readSrc hr _) fun _ => ?_
+  refine commutes_ite ?_ (commutes_ite ?_ (commutes_pure _))
+  · refine commutes_bind (commutes_readSrc hr _) fun _ => ?_
+    refine commutes_bind (commutes_readSrc hr _) fun _ => ?_
+    refine commutes_bind (range _ _ _) fun result => ?_
+    cases result with
+    | none => exact commutes_pure _
+    | some _ => exact commutes_bind (commutes_modify _ fun _ => rfl) fun _ => commutes_pure _
+  · refine commutes_bind (commutes_readSrc hr _) fun _ => ?_
+    refine commutes_bind (commutes_readSrc hr _) fun _ => ?_
+    refine commutes_bind (commutes_readSrc hr _) fun _ => ?_
+    refine commutes_get_bind (fun _ => rfl) fun _ => ?_
+    exact commutes_ite (commutes_bind (range _ _ _) fun _ => commutes_pure _) (commutes_pure _)
 
 private theorem commutes_adviceLoad (hr : Inert r) (rd : JoltISA.Dst)
     (num_bytes : BitVec 64) :
