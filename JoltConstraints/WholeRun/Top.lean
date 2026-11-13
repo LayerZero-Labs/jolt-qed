@@ -2,6 +2,7 @@ import JoltConstraints.Soundness.soundness
 import JoltConstraints.WholeRun.Halt
 import JoltConstraints.WholeRun.CodeInv
 import JoltConstraints.WholeRun.Decoded
+import JoltConstraints.WholeRun.Elf
 import JoltConstraints.WholeRun.Init
 import JoltConstraints.WholeRun.RunInv
 import JoltConstraints.WholeRun.LoadAddress
@@ -111,7 +112,7 @@ EBREAK, conforms and loads at or above `memLow` (`NoLowLoad`) is matched by one 
 lands in the relation for the block's last state. `HaltPrefix.sailRun` obtains `NoLowLoad` from
 the prover's address check. -/
 theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
-    (himage : ImageDecoded program) (hrows : program.RowsAligned)
+    {elf : ElfSections} (hdecoded : program.DecodedFrom elf) (hrows : program.RowsAligned)
     {b : Block} (hruns : b.Runs program)
     (hconf : BlockConforms program b)
     (hlow : ∀ i, b.row.instruction = .riscv i → i.IoAccess b.start → i.NoLowLoad b.start)
@@ -120,8 +121,8 @@ theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
   obtain ⟨i, hrow⟩ := hconf.riscv
   have hi : i ≠ .EBREAK := fun h => hbreak (by rw [hrow, h])
   rintro s ⟨hrel, hinv, hcode⟩
-  obtain ⟨v, s', hstep, hrel'⟩ := block_simulates_image program b hruns himage i hrow hi
-    hinv.system (hruns.pc_even hrows) (fun _ hr => CodeIntact.of_related hr hcode)
+  obtain ⟨v, s', hstep, hrel'⟩ := block_simulates_image program b hruns hdecoded.imageDecoded i
+    hrow hi hinv.system (hruns.pc_even hrows) (fun _ hr => CodeIntact.of_related hr hcode)
     hinv.heap_no_wrap (hconf.no_flag_word_load i hrow) (hlow i hrow)
     (hconf.panic_store_nonzero i hrow) (hconf.amo_no_flag_word i hrow) s hrel
   exact ⟨v, s', hstep, hrel', RunInv.of_block hruns hrows hinv,
@@ -229,7 +230,8 @@ relation for `halt`. For example, an ADDI followed by EBREAK gives one successfu
 theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {trace : HonestTrace joltInstance privateInputs}
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
-    (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
+    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
@@ -241,7 +243,7 @@ theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
   | cons first rest =>
     obtain ⟨l, s, hl, hrun, hrel⟩ := sailRun_of_chain (RunRel joltInstance.program)
       (first :: rest) hp.chain
-      (fun b hb => BlockConforms.simulates himage hrows (hp.runs b hb).1
+      (fun b hb => BlockConforms.simulates hdecoded hrows (hp.runs b hb).1
         (hconf b hb) (fun i hi hio => by
           obtain ⟨k, hk⟩ := hp.traced b hb
           apply Block.FirstRowAt.noLowLoad trace hk hcfg hi
@@ -264,7 +266,8 @@ halt prefix `pre` of it (the blocks before the first EBREAK, ending at `halt`), 
 
 Premises, by class:
 * prover acceptance: `hcfg` (`trace.prover_config.isSome`);
-* platform: `himage` (`ImageDecoded`), `hrows` (`RowsAligned`), `hheap` (`HeapNoWrap`);
+* platform: `hdecoded` (`DecodedFrom`: the program agrees with what Jolt's `decode_elf` builds
+  from the sections `elf` of the guest ELF), `hrows` (`RowsAligned`), `hheap` (`HeapNoWrap`);
 * documented deviation: the deviation fields of `BlockConforms` on the blocks of `pre`;
 * scope: the `riscv` field of `BlockConforms`.
 
@@ -277,7 +280,8 @@ the state before the `ebreak`, and `s` with `a0` one larger than at the start an
 `ebreak`. -/
 theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
+    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
@@ -289,7 +293,7 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
         trimTrailingZeros final.jolt_device.outputs ∧
       (sailPanicWord trace.initialState.jolt_device s ≠ 0 ↔ final.jolt_device.panic = true) ∧
       (SailHalted joltInstance.program s ∨ halt = final) := by
-  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun himage hrows hheap hcfg hconf
+  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun hdecoded hrows hheap hcfg hconf
   have hlayout : halt.jolt_device.memory_layout = trace.initialState.jolt_device.memory_layout := by
     cases pre with
     | nil => rw [hp.empty rfl]
@@ -350,9 +354,11 @@ Premises, by class:
     after such a store;
   * `claimsNoPanic`: the instance claims no panic. With this restriction, the panic clause of the
     conclusion says that Sail's panic word is zero.
-* platform: `himage` (`ImageDecoded`: the committed bytecode is what Jolt's decoder makes of the
-  image), `hrows` (`RowsAligned`: every row's address is even), `hheap` (`HeapNoWrap`: the heap
-  ends at least eight bytes below `2^64`).
+* platform: `hdecoded` (`DecodedFrom`: the program agrees with what Jolt's `decode_elf` builds
+  from the sections `elf` of the guest ELF; `DecodedFrom.imageDecoded` derives from it that each
+  RISC-V row is what Jolt's decoder makes of the image's bytes), `hrows` (`RowsAligned`: every
+  row's address is even), `hheap` (`HeapNoWrap`: the heap ends at least eight bytes below
+  `2^64`).
 * documented deviation: five, on the blocks of the prefix:
   * `NoCodeStore`: no store into the code;
   * `NoFlagWordLoad`: no read of the panic or termination word;
@@ -376,7 +382,8 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
     {params : WitnessParams} (givenInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
-    (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
+    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
@@ -398,7 +405,7 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
   obtain ⟨pre, halt, final, hp⟩ := trace.haltPrefix
   refine ⟨privateInputs, trace, hmo, hcfg, hspoil, pre, halt, final, hp, fun hconf => ?_⟩
   obtain ⟨n, s, hrun, hrel, houts, hpanic, hstop⟩ :=
-    trace.sail_reproduces himage hrows hheap hcfg hp hconf
+    trace.sail_reproduces hdecoded hrows hheap hcfg hp hconf
   obtain ⟨hmo_out, hmo_panic⟩ :=
     (trace.matches_outputs_halt final final hp.back rfl).1 hmo
   refine ⟨n, s, hrun, hrel, houts.trans hmo_out, ?_, hstop⟩

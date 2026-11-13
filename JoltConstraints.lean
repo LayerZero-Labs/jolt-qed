@@ -3,6 +3,7 @@ import JoltConstraints.Completeness.completeness
 import JoltConstraints.advice_inputs
 import JoltConstraints.inline_preprocess
 import JoltConstraints.Soundness.soundness
+import JoltConstraints.Soundness.FieldModuli
 import JoltConstraints.Soundness.Layer0.Bounds
 import JoltConstraints.Soundness.Layer0.Words
 import JoltConstraints.Soundness.Layer1.OneHot
@@ -109,6 +110,7 @@ import JoltConstraints.WholeRun.Io
 import JoltConstraints.WholeRun.IoAmo
 import JoltConstraints.WholeRun.RunInv
 import JoltConstraints.WholeRun.Decoded
+import JoltConstraints.WholeRun.Elf
 import JoltConstraints.WholeRun.Halt
 import JoltConstraints.WholeRun.CodeInv
 import JoltConstraints.WholeRun.Top

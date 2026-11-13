@@ -31,7 +31,7 @@ private theorem operand_value {F : Type} [Field F] {params : WitnessParams}
 /-- Live sources identify both selected operand values in the prepared state.
 For example, AND reads two live sources, whereas LUI has two zero observations. -/
 theorem row_operand_observations {F : Type} [Field F] {params : WitnessParams}
-    (joltField : 2 ^ 128 < ringChar F) {witness : WitnessType F params} {live : Fin 128 → Prop}
+    (joltField : 2 ^ 128 - 2 ^ 64 < ringChar F) {witness : WitnessType F params} {live : Fin 128 → Prop}
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)

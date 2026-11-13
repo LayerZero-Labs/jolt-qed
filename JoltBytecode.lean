@@ -22,6 +22,9 @@ import JoltBytecode.Inlines.FrameInstances
 import JoltBytecode.Inlines.Secp256k1.Advice
 import JoltBytecode.Inlines.Secp256k1.GlvBound
 import JoltBytecode.Inlines.Secp256k1.GlvrAdv
+import JoltBytecode.Inlines.Secp256k1.Prime
+import JoltBytecode.Inlines.Secp256k1.FieldMul
+import JoltBytecode.Inlines.Secp256k1.FieldDiv
 import JoltBytecode.Inlines.Blake2b.Sound
 import JoltBytecode.Inlines.Keccak256.Sound
 import JoltBytecode.Inlines.Sha256.Sound
