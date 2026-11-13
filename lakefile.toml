@@ -48,3 +48,24 @@ root = "JoltTests.Secp256k1Kat.Main"
 [[lean_exe]]
 name = "inline-kat"
 root = "JoltTests.InlineKat.Main"
+
+# Axiom allowlist for the headline theorems: not a default target.
+# `lake build JoltAudit` fails if a theorem gated in JoltAudit/Axioms.lean
+# depends on an axiom other than propext, Classical.choice and Quot.sound.
+[[lean_lib]]
+name = "JoltAudit"
+leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+# Comparator gate (ci/comparator/README.md): not default targets.
+# `lake comparator --config ci/comparator/config.json` builds these two modules
+# in its sandbox, which exposes only this package directory, so the gate lives
+# in the root package rather than in a package of its own. Challenge.lean ends
+# its frozen statements in `sorry` on purpose; ci/ is outside the roots of
+# scripts/check_hygiene.py.
+[[lean_lib]]
+name = "Challenge"
+srcDir = "ci/comparator"
+
+[[lean_lib]]
+name = "Solution"
+srcDir = "ci/comparator"

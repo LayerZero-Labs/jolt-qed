@@ -75,3 +75,7 @@ jobs:
           # The composite action's GitHub cache steps use floating action tags.
           # Keep those steps disabled; Mathlib's dependency cache remains enabled.
           use-github-cache: false
+      # Fails if a headline theorem depends on an axiom other than propext,
+      # Classical.choice and Quot.sound (JoltAudit/Axioms.lean).
+      - name: Check the headline theorems' axioms
+        run: lake build JoltAudit

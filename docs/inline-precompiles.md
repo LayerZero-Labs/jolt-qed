@@ -66,10 +66,14 @@ If `ecdsa_verify` had a bug that accepted a forged signature, Jolt would correct
 Any public statement of the results (the README, a paper, a blog post) states this boundary next to the theorem.
 Section 12 describes the gap, what can go wrong in it, and how a later track would close it.
 
-### 1.3 Terminology
+### 1.3 Terms
 
-jolt-qed uses "inline" for three things: any virtual sequence (constraint `NextPCEqPCPlusOneIfInline` covers division and atomics too), the scratch register pools `inlineTmp` and `largeInlineTmp`, and the precompile opcodes.
-This note uses "inline" only for the registered precompiles on `0x0B` and `0x2B`.
+- **inline**: jolt-qed uses the word for three things.
+  1. A registered inline precompile: an R-type instruction on opcode `0x0B` or `0x2B`, keyed by `(opcode, funct3, funct7)`, that Jolt's expander replaces with a straight-line sequence of ordinary rows (section 2). This note uses "inline" only in this sense.
+  2. Any virtual sequence, the rows one source instruction expands into. Constraint `NextPCEqPCPlusOneIfInline` uses the word this way, and it covers division and atomics too.
+  3. The scratch register pools `inlineTmp` and `largeInlineTmp`, which inline sequences and other virtual sequences write.
+- **Jolt's custom instructions**: the seven instructions on opcode `0x5B` (the advice loads `AdviceLB`, `AdviceLH`, `AdviceLW` and `AdviceLD`, `VirtualRev8W`, `VirtualAssertEQ` and `VirtualHostIO`). They are not inlines; `SourceInstruction.jolt` models them.
+- **field-inline**: Jolt's field instructions on opcode `0x7B`, behind the cargo feature `field-inline`. They add constraints of their own, and jolt-qed does not model them.
 
 ## 2. How Jolt runs an inline
 
@@ -600,13 +604,14 @@ Every Jolt artifact in the headline statement reaches Lean by hand or through a 
 Only the Sail model is regenerated and diffed in CI.
 The dangerous translation errors are the ones proofs cannot catch: a Lean constraint, flag or table that is correct, or stronger, where Jolt's is wrong, or weaker.
 Track T shares its driver with the inlines.
+This paragraph describes the state before Track T. The [coverage ledger](coverage-ledger.md) records the check that now stands behind each artifact, the CI job that runs it and the Jolt revision checked.
 
 | Step | Work | Output | Size |
 |---|---|---|---|
 | T1 (first) | Rust driver in `scripts/expansion-parity/`, built like `scripts/difftest/jolt-trace` with `JOLT_DIR` at the pin. It emits stamped rows through the production entry point for Jolt's 360 golden-fixture inputs, aliased operands, `rd = x0`, `rs1 = x0`, a few hundred random operands and immediates (compressed and not), and every native kind once, together with each kind's circuit flags, instruction flags, lookup table and RAF flag. A Lean test executable compares them with `SourceInstruction.expand`, `stamp_sequence` and `metadata.lean` and lists every mismatch | Mismatch report at the current pin; a CI job, non-blocking until clean | 2–4 days plus fixes |
 | T2 | Raw decoder sweep: all 2^16 compressed parcels and 32-bit words per opcode class, `joltDecode` and `joltUncompress` against `decode.rs` (not the tracer's decoder) | Agreement report; CI job | 1–2 days |
 | T3 | Constraint data: emit the 22 R1CS rows, per-kind flag vectors, table assignments and the four `UnbatchedClaimExpr` relations as generated Lean; prove each handwritten equation and `metadata.lean` entry equal to the generated form (the sp1-lean pattern); CI regenerates and diffs | `Generated/Constraints.lean`, `Faithful/*.lean` | 1–2 weeks |
-| T3b | Coverage ledger: one row per field of `AllConstraints` and per modelled artifact, with the kind of check behind it (generated and proved equal, sampled test, source audit, outside the model) and the Jolt revision checked | `docs/coverage-ledger.md`, kept current by T1–T7 | 1–2 days, then upkeep |
+| T3b | Coverage ledger: one row per field of `AllConstraints` and per modelled artifact, with the kind of check behind it (generated and proved equal, sampled test, source audit, outside the model) and the Jolt revision checked | [`docs/coverage-ledger.md`](coverage-ledger.md), kept current by T1–T7 | 1–2 days, then upkeep |
 | T4 | Lookup tables: emit `materialize_entry` vectors at edge and random indices and check them against a computable twin proved equal to the generic-field tables; this samples entries and does not prove agreement at every index | Table test module | 3–5 days |
 | T5 | Witness-typing review: for each witness column, write down what Jolt's verifier knows (committed field element, range-checked value, public value) and compare it with the Lean type; then fix the untrusted-advice gap (Lean advice words are 64-bit; Jolt's verifier accepts any committed field element) and any other mismatch | Review note, then a model change | 2–3 days of review; the fix is separate |
 | T6 | Symbolic recipe emission for built-in expansions, including branches on register identity; bring the System expansions and the native mapping under the same data; define `*ProgramAuto` from the data or prove the existing definitions equal | Regenerable `ExpansionsAutomated.lean`; the sampling generator retired | 1–2 weeks |
@@ -673,6 +678,7 @@ Each is a small PR or issue.
 - J6. Reject `rd = x0` for inlines that read `rs3` before writing it (D7). Opened as a16z/jolt#2414.
 
 jolt-qed housekeeping that goes with I0: fix `docs/whole-run-theorem.md:124`, which says that `0x5B` holds the hash and big-integer instructions; correct the description of difftest in the README and in `docs/whole-run-theorem.md:175`, which presents it as evidence for the Lean models' faithfulness although Lean takes no part in it; add a glossary entry for the three meanings of "inline"; update issue #37 with this plan.
+LayerZero-Labs/jolt-qed#56 makes the first three changes (section 1.3 holds the glossary entry); issue #37 is not yet updated.
 
 ## 10. Open questions for I0
 
