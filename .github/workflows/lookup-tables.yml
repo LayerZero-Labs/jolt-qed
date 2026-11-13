@@ -1,0 +1,79 @@
+name: lookup-tables
+
+# T4 check of Jolt's lookup tables against a computable twin of the Lean
+# tables (scripts/expansion-parity/LOOKUP-TABLES.md,
+# reports/2026-11-11-lookup-table-vectors.md).
+# It checks out Jolt at JOLT_REV, builds the emitter, writes the vectors of
+# LookupTableKind::<64>::materialize_entry at edge and seeded random indices,
+# then runs the Lean comparator and its mutation check. The check samples
+# indices; it does not prove agreement at every index.
+#
+# The job fails on any value mismatch, name gap or coverage error (vector counts
+# that differ from the emitter's summary) at JOLT_REV and on a missed mutation. The comparison was clean at JOLT_REV when this job was added
+# (reports/2026-11-11-lookup-table-vectors.md); the job had been run locally
+# only, not in CI.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lookup-tables-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lookup-tables:
+    name: lookup-tables
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      # a16z/jolt#2384 at the commit the expansion-parity job uses. Its
+      # crates/jolt-lookup-tables equals the one at the Track T pin a6b6dc717.
+      JOLT_REV: 580084fcfad4788ebf48413a92dd640ca090c45f
+      EXPANSION_PARITY_FEATURES: zicsr-remaining
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: a16z/jolt
+          ref: ${{ env.JOLT_REV }}
+          path: jolt-rev
+          persist-credentials: false
+      # Exit status 1 means a table panicked; the Lean steps still run on the
+      # vectors written. Status 2 means the emitter could not run.
+      - name: Build the emitter and write the vectors
+        id: emitter
+        run: |
+          set +e
+          JOLT_DIR="$GITHUB_WORKSPACE/jolt-rev" \
+            scripts/expansion-parity/run-lookup-tables.sh "$RUNNER_TEMP/lookup-tables"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "lookup-tables exit status: $status"
+          test "$status" -eq 0
+      - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
+        if: ${{ !cancelled() && steps.emitter.outputs.status != '2' }}
+        with:
+          build: false
+          use-github-cache: false
+      - name: Build the twin and the comparator
+        id: comparator
+        if: ${{ !cancelled() && steps.emitter.outputs.status != '2' }}
+        run: lake build JoltTests.LookupTables.Main
+      - name: Compare
+        if: ${{ !cancelled() && steps.comparator.outcome == 'success' }}
+        run: |
+          w="$RUNNER_TEMP/lookup-tables"
+          LOOKUP_TABLES_ARGS="compare $w/out $w/report" \
+            lake env lean JoltTests/LookupTables/Run.lean
+      - name: Mutation check
+        if: ${{ !cancelled() && steps.comparator.outcome == 'success' }}
+        run: |
+          w="$RUNNER_TEMP/lookup-tables"
+          LOOKUP_TABLES_ARGS="mutation $w/out" \
+            lake env lean JoltTests/LookupTables/Run.lean
