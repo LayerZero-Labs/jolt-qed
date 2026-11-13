@@ -35,6 +35,16 @@ moreLeancArgs = ["-fbracket-depth=500"]
 # `lake env lean JoltTests/ExpansionParity/Run.lean` rather than a `lean_exe`:
 # `LeanRV64D.lean` declares a root `main`, which every executable importing the
 # model would inherit.
+# `lake build JoltTests.InlineKat.Vectors` and `lake exe inline-kat CASES.json`
+# (see scripts/inline-kat/build.sh).
 [[lean_lib]]
 name = "JoltTests"
 leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+[[lean_exe]]
+name = "secp256k1-kat"
+root = "JoltTests.Secp256k1Kat.Main"
+
+[[lean_exe]]
+name = "inline-kat"
+root = "JoltTests.InlineKat.Main"

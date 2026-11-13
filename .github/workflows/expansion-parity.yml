@@ -30,7 +30,7 @@ jobs:
       # a16z/jolt#2384 (branch feat/zicsr-remaining-forms) at its restacked
       # head. Lean's system expansions and decoder follow #2384, and the driver
       # covers its CSR forms with the cargo feature zicsr-remaining.
-      JOLT_REV: 580084fcfad4788ebf48413a92dd640ca090c45f
+      JOLT_REV: 3cc6e7bd179900cfad6a052335c32ea1ef749536
       EXPANSION_PARITY_FEATURES: zicsr-remaining
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,5 +99,8 @@ jobs:
         if: ${{ !cancelled() && steps.comparator.outcome == 'success' }}
         run: |
           out="$RUNNER_TEMP/expansion-parity/out"
-          EXPANSION_PARITY_ARGS="mutation $out/rows.jsonl" \
-            lake env lean JoltTests/ExpansionParity/Run.lean
+          args="mutation $out/rows.jsonl"
+          if [ "${{ steps.generated.outputs.present }}" = true ]; then
+            args="$args $out/inline_templates.json"
+          fi
+          EXPANSION_PARITY_ARGS="$args" lake env lean JoltTests/ExpansionParity/Run.lean

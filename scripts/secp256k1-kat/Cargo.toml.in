@@ -1,0 +1,22 @@
+[package]
+name = "secp256k1-kat"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tracer = { path = "@JOLT_DIR@/tracer", features = ["std", "test-utils"] }
+jolt-inlines-sdk = { path = "@JOLT_DIR@/jolt-inlines/sdk", features = ["host"] }
+jolt-inlines-secp256k1 = { path = "@JOLT_DIR@/jolt-inlines/secp256k1", features = ["host"] }
+num-bigint = "0.4.6"
+num-integer = "0.1.45"
+serde_json = "1"
+
+# Jolt's own crates.io overrides for arkworks (root Cargo.toml, [patch.crates-io]).
+[patch.crates-io]
+ark-bn254 = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-ff = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-ec = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-serialize = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+
+[workspace]

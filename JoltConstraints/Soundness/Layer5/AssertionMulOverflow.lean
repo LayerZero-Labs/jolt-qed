@@ -20,7 +20,7 @@ private theorem mulWide_lt_128 (lhs rhs : BitVec 64) : mulWide lhs rhs < 2 ^ 128
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -36,14 +36,14 @@ private theorem mulAssertion_canonical :
   simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,
     Bool.and_eq_true] using (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem mulAssertion_passes {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
     (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     mulWide (sourceValue lhs pre) (sourceValue rhs pre) < 2 ^ 64 := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have canonical := mulAssertion_canonical context rowIs instructionIs
   obtain ⟨left, right⟩ := agrees.registerInputs bound context equations selected rowIs
     lhs rhs canonical.1 canonical.2
@@ -62,8 +62,9 @@ private theorem mulAssertion_passes {pre : SailJoltState}
   have encoded := rightLookupOperand_mul equations.rightLookupEqProductIfMul
     equations.productEqLeftInputMulRightInput t active
     (sourceValue lhs pre) (sourceValue rhs pre) left right
-  have output := lookupOutput_mulUNoOverflow_of_identity charAbove2pow128
-    context equations t slot selected _ raf encoded
+  have valueBelow := mulWideIndex_lt (sourceValue lhs pre) (sourceValue rhs pre)
+  have output := lookupOutput_mulUNoOverflow_of_identity charAbove2pow128Minus2pow64
+    context equations t slot selected _ raf encoded valueBelow
     (by simp only [rowIs, Option.bind_some, instructionIs, JoltMetadata.lookupTable])
   have passes := predicate_of_assert equations.assertLookupOne t assertion _ output
   simpa only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt
@@ -86,7 +87,7 @@ theorem mulAssertion_step {pre : SailJoltState}
   have canonical := mulAssertion_canonical context rowIs instructionIs
   have leftRead := (agrees.read lhs canonical.1 leftLive).1
   have rightRead := (agrees.read rhs canonical.2 rightLive).1
-  have passes := mulAssertion_passes charAbove2pow128 context equations
+  have passes := mulAssertion_passes charAbove2pow128Minus2pow64 context equations
     selected rowIs instructionIs agrees leftLive rightLive
   refine ⟨passes, ?_, ?_⟩
   · rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl),
@@ -94,7 +95,7 @@ theorem mulAssertion_step {pre : SailJoltState}
     simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind,
       leftRead, rightRead, if_pos passes, pure, EStateM.pure]
   · intro next
-    exact agrees.noWrite (two_pow_127_lt_char charAbove2pow128) context equations
+    exact agrees.noWrite (two_pow_127_lt_char charAbove2pow128Minus2pow64) context equations
       next slot selected rowIs (by rw [instructionIs]; rfl)
 
 end JoltConstraints.Soundness

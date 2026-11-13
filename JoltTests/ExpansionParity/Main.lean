@@ -1,19 +1,21 @@
-import JoltTests.ExpansionParity.Report
+import JoltTests.ExpansionParity.RoundTrip
 
 /-!
-# expansion-parity: the T1 comparator
+# expansion-parity: Lean side of T1 and the inline round trip
 
 Usage (from the repository root, after `lake build JoltTests.ExpansionParity.Main`):
 
 ```
 EXPANSION_PARITY_ARGS="t1 ROWS.jsonl OUT_DIR" lake env lean JoltTests/ExpansionParity/Run.lean
-EXPANSION_PARITY_ARGS="mutation ROWS.jsonl" lake env lean JoltTests/ExpansionParity/Run.lean
+EXPANSION_PARITY_ARGS="inline ROWS.jsonl TEMPLATES.json OUT_DIR [TRIPLES] [SEED]" lake env lean JoltTests/ExpansionParity/Run.lean
+EXPANSION_PARITY_ARGS="mutation ROWS.jsonl [TEMPLATES.json]" lake env lean JoltTests/ExpansionParity/Run.lean
 ```
 
 The arguments travel in an environment variable because `Run.lean` runs the
 comparison with `#eval` (see `cli` below for why there is no executable).
 
-`ROWS.jsonl` is the driver's `rows.jsonl` (`scripts/expansion-parity/README.md`).
+`ROWS.jsonl` and `TEMPLATES.json` are the driver's `rows.jsonl` and
+`inline_templates.json` (`scripts/expansion-parity/README.md`).
 
 * `t1` compares every non-inline record with `expand_instruction` and
   `metadata.lean`, and writes `OUT_DIR/t1-mismatches.jsonl` and
@@ -27,12 +29,21 @@ comparison with `#eval` (see `cli` below for why there is no executable).
   A record whose source kind is neither mapped to Lean nor listed in
   `noLeanSourceKinds` is reported as an unknown kind, and a record whose
   `result` is not exactly one of a rows array and an error string stops the run.
-* `mutation` corrupts one field of one row of a T1 record, once per compared
-  field, and one metadata field of a record in the row-metadata class, and
-  checks that the comparison reports each corruption. It also replaces the
+* `inline` compares every `inline_fixture` record, flags included, and every
+  inline template at the driver's two triples and `TRIPLES` (default 300)
+  seeded random triples per case, with the generated Lean rows. It also checks
+  that the inputs are complete (`inlineCoverage`): every inline has a `normal`
+  template and all eight fixture records. It writes
+  `OUT_DIR/inline-mismatches.jsonl` and `OUT_DIR/inline-summary.txt`.
+* `mutation` corrupts one field of one row of a T1 record and of an inline
+  fixture record, once per compared field, and one metadata field of a record
+  in the row-metadata class, and checks that the comparisons report each
+  corruption. It also replaces the
   source kind with an unknown one and the `result` object with malformed ones,
   on a T1 record, a row-metadata record and a record both sides reject, and
-  checks that each of these records is flagged.
+  checks that each of these records is flagged. Given `TEMPLATES`, it also
+  drops a `normal` template and drops, repeats or changes inline fixture
+  records, and checks that the round trip reports each change.
 
 `Run.lean` fails (and `lean` exits with 1) when a mode finds a disagreement.
 -/
@@ -122,8 +133,10 @@ def runT1 (rowsPath outDir : String) : IO UInt32 := do
 /-- The mutation check on the first T1 record with at least ten rows, on the
 first record of the row-metadata class whose row 0 carries circuit and
 instruction flags and a table and agrees with `metadata.lean`, and on the first
-record that both sides reject because Lean has no constructor for its kind. -/
-def runMutation (rowsPath : String) : IO UInt32 := do
+record that both sides reject because Lean has no constructor for its kind, and
+on the first inline fixture record. Given the templates file, it also deletes
+and repeats inputs of the inline round trip (`coverageMutationCheck`). -/
+def runMutation (rowsPath : String) (templatesPath : Option String) : IO UInt32 := do
   let mut t1Rec : Option Json := none
   for line in ← readLines rowsPath do
     let j ← IO.ofExcept (Json.parse line)
@@ -174,6 +187,10 @@ def runMutation (rowsPath : String) : IO UInt32 := do
   let noOpCaught := !(noOpRows withNoOp "noop_rows").isEmpty
   IO.println s!"noop_rows: {withNoOp.case} with row 0 of kind NoOp: {if noOpCaught then "detected" else "NOT DETECTED"}"
   let ok := noOpCaught && ok
+  let ok := (← mutationCheck "inline" (← firstInlineFixture rowsPath) compareInlineFixture) && ok
+  let ok ← match templatesPath with
+    | some t => pure ((← coverageMutationCheck rowsPath t) && ok)
+    | none => pure ok
   IO.println (if ok then "mutation check: every corruption detected" else "mutation check: FAILED")
   return if ok then 0 else 1
 
@@ -183,9 +200,13 @@ entry point), so no executable that imports the model can declare its own;
 def cli (args : List String) : IO UInt32 := do
   match args with
   | ["t1", rows, out] => runT1 rows out
-  | ["mutation", rows] => runMutation rows
+  | ["inline", rows, templates, out] => runInline rows templates out 300 1949392621
+  | ["inline", rows, templates, out, n] => runInline rows templates out n.toNat! 1949392621
+  | ["inline", rows, templates, out, n, seed] => runInline rows templates out n.toNat! seed.toNat!
+  | ["mutation", rows] => runMutation rows none
+  | ["mutation", rows, templates] => runMutation rows (some templates)
   | _ =>
-    IO.eprintln "usage: EXPANSION_PARITY_ARGS='t1 ROWS OUT | mutation ROWS'"
+    IO.eprintln "usage: EXPANSION_PARITY_ARGS='t1 ROWS OUT | inline ROWS TEMPLATES OUT [TRIPLES [SEED]] | mutation ROWS [TEMPLATES]'"
     return 2
 
 end ExpansionParity

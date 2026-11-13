@@ -33,7 +33,7 @@ theorem host_call_selected_step
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam
       context.io context.entry witness)
@@ -69,7 +69,7 @@ theorem host_call_selected_step
     exact instruction
   obtain ⟨post, executes, sail, vregs⟩ := host_call_exec_sail_frame
     restricted run nextRow pre ready answer instructionRun advice
-  have nextAgrees := agrees.noWrite (two_pow_127_lt_char charAbove2pow128)
+  have nextAgrees := agrees.noWrite (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations nextCycle slot selected rowIs (by rw [instruction]; rfl)
   refine ⟨post, executes, sail ▸ nextAgrees.present, ?_⟩
   intro register

@@ -23,7 +23,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -44,7 +44,7 @@ theorem StoreRow.canonical :
   rw [storeRow.metadata.canonical] at valid
   simpa only [Bool.and_eq_true] using valid
 
-include charAbove2pow128 context equations selected rowIs storeRow
+include charAbove2pow128Minus2pow64 context equations selected rowIs storeRow
 
 /-- A selected store row writes its live value source to RamWriteValue.
 For example, VirtualStoreB writes the merged doubleword in its second source. -/
@@ -52,7 +52,7 @@ theorem store_write_value {live : Fin 128 → Prop} {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RamWriteValue t = ((sourceValue source pre).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have facts := storeRow.metadata
   have sourceIs := agrees.rs2Value bound context equations selected rowIs source
     (storeRow.canonical context rowIs).2 facts.rs2Register sourceLive
@@ -102,17 +102,17 @@ theorem store_ram_step (regionFits : joltInstance.RamRegionFits)
         witness.RamValFinal index =
           if index = chosen then (value.toNat : F) else witness.RamVal index t) := by
   dsimp only
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have facts := storeRow.metadata
   have canonical := storeRow.canonical context rowIs
   have baseRead := (agrees.read base canonical.1 baseLive).1
   have sourceRead := (agrees.read source canonical.2 sourceLive).1
   have baseIs := agrees.rs1Value bound context equations selected rowIs base canonical.1
     facts.rs1Register baseLive
-  obtain ⟨encoded, aligned, -⟩ := AccessRow.address_encoded charAbove2pow128 context equations
+  obtain ⟨encoded, aligned, -⟩ := AccessRow.address_encoded charAbove2pow128Minus2pow64 context equations
     selected rowIs storeRow.access regionFits (sourceValue base pre) baseIs
   have wordAligned := ramAddress_mask_aligned bound context equations t _ encoded
-  have stored := store_write_value charAbove2pow128 context equations selected rowIs storeRow
+  have stored := store_write_value charAbove2pow128Minus2pow64 context equations selected rowIs storeRow
     agrees sourceLive
   have legal : Mmu.effective_address_ok pre.jolt_device
       (width.accessed (sourceValue base pre + imm)).toNat true = true := by

@@ -20,7 +20,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -36,14 +36,14 @@ private theorem assertLTE_canonical :
   simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,
     Bool.and_eq_true] using (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem assertLTE_passes {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (leftLive : live (TraceWitness.sourceRegisterAddress lhs))
     (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     (sourceValue lhs pre).toNat ≤ (sourceValue rhs pre).toNat := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have canonical := assertLTE_canonical context rowIs instructionIs
   obtain ⟨left, right⟩ := agrees.registerInputs bound context equations selected rowIs
     lhs rhs canonical.1 canonical.2
@@ -81,13 +81,13 @@ theorem assertLTE_step {pre : SailJoltState} (agrees : RegisterAgreementOn live 
   have canonical := assertLTE_canonical context rowIs instructionIs
   have leftRead := (agrees.read lhs canonical.1 leftLive).1
   have rightRead := (agrees.read rhs canonical.2 rightLive).1
-  have passes := assertLTE_passes charAbove2pow128 context equations selected rowIs instructionIs agrees leftLive rightLive
+  have passes := assertLTE_passes charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs agrees leftLive rightLive
   refine ⟨passes, ?_, ?_⟩
   · rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
     simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind, leftRead, rightRead,
       passes, ↓reduceIte, pure, EStateM.pure]
   · intro next
-    exact agrees.noWrite (two_pow_127_lt_char charAbove2pow128) context equations next slot selected
+    exact agrees.noWrite (two_pow_127_lt_char charAbove2pow128Minus2pow64) context equations next slot selected
       rowIs (by rw [instructionIs]; rfl)
 
 end JoltConstraints.Soundness
