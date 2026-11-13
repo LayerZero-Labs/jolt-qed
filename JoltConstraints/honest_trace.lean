@@ -290,8 +290,11 @@ def Trace.SpoilAssertsPass (trace : Trace) : Prop :=
 -- not compared yet (model_review.md).
 -- See : jolt/crates/jolt-program/src/preprocess/public_io.rs:21-65
 --       jolt/crates/jolt-verifier/src/verifier.rs:432-439
-def Trace.matches_outputs (joltInstance : JoltInstance SourceInstruction)
-    (trace : Trace) : Prop :=
-  let finalState := (trace.rows.back?.map (·.postState)).getD trace.initialState
-  trimTrailingZeros finalState.jolt_device.outputs = trimTrailingZeros joltInstance.outputs ∧
-    finalState.jolt_device.panic = joltInstance.panic
+def Trace.matches_outputs (joltInstance : JoltInstance SourceInstruction) (trace : Trace) : Prop :=
+  -- if the last row is not none get `postState` (the state after running the instruction)
+  -- the map will return an `Option SailJoltSate` and so we use getD and trace.initialState is just a 
+  -- dummy it is never used unless the last row was none in the first place
+  let finalState : SailJoltState := (trace.rows.back?.map (fun row => row.postState)).getD trace.initialState
+  -- The claim: The output claimed is the actual output on the final states device region, likewise for the claimed panic and what 
+  -- happened.
+  trimTrailingZeros finalState.jolt_device.outputs = trimTrailingZeros joltInstance.outputs ∧ finalState.jolt_device.panic = joltInstance.panic

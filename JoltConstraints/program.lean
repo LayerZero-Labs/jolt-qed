@@ -192,6 +192,9 @@ structure Rv64ProgramImage (Source : Type) where
   memory_init : List (BitVec 64 × BitVec 8)
   program_end : BitVec 64
   entry_address : BitVec 64
+
+  -- Facts that the fields above must satisfy.
+  -- Provide proofs of these facts when constructing the image.
   -- decode_elf starts program_end at RAM_START_ADDRESS and only raises it.
   -- See : jolt/crates/jolt-program/src/image/elf.rs:43, 52
   program_end_ge_ram_start : JoltISA.RAM_START_ADDRESS ≤ program_end.toNat
@@ -200,7 +203,7 @@ structure Rv64ProgramImage (Source : Type) where
   -- in [RAM_START_ADDRESS, program_end), which is below stack_end.
   -- See : jolt/crates/jolt-program/src/image/elf.rs:45-66
   memory_init_in_program : ∀ entry ∈ memory_init,
-    JoltISA.RAM_START_ADDRESS ≤ entry.1.toNat ∧ entry.1.toNat < program_end.toNat
+    (JoltISA.RAM_START_ADDRESS ≤ entry.1.toNat) ∧ (entry.1.toNat < program_end.toNat)
   -- decode_elf rejects a section whose end, its start plus its size, passes 2^64 - 1,
   -- and decode_text_section rejects an instruction cut off at the end of its text
   -- range. So every instruction's next PC, its address plus its length (2 if
@@ -233,8 +236,7 @@ def Rv64ProgramImage.program_size {Source : Type} (image : Rv64ProgramImage Sour
   image.program_end - BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS
 
 -- A pure RISC-V image is a Jolt image with no custom instructions.
-def Rv64ProgramImage.toJolt (image : Rv64ProgramImage RiscvInstruction) :
-    Rv64ProgramImage SourceInstruction :=
+def Rv64ProgramImage.toJolt (image : Rv64ProgramImage RiscvInstruction) : Rv64ProgramImage SourceInstruction :=
   { image with
     instructions := image.instructions.map fun row =>
       { row with instruction := .riscv row.instruction }
@@ -364,8 +366,7 @@ structure JoltInstance (Source : Type) where
   max_padded_trace_length : BitVec 64
 
 -- The pure RISC-V instance seen as a Jolt instance.
-def JoltInstance.toJolt (joltInstance : JoltInstance RiscvInstruction) :
-    JoltInstance SourceInstruction :=
+def JoltInstance.toJolt (joltInstance : JoltInstance RiscvInstruction) : JoltInstance SourceInstruction :=
   { joltInstance with program := joltInstance.program.toJolt }
 
 -- Prover-chosen inputs. The execution tape is used by the tracer; the constraint

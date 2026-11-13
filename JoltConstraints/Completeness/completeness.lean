@@ -20,7 +20,7 @@ theorem HonestTrace.exists_preprocessed {joltInstance : JoltInstance SourceInstr
     ∃ slots, preprocess trace.bytecode = some slots := by
   have pcMapOk := accepted_pc_map_ok joltInstance trace.bytecode trace.expands trace.accepted
   unfold preprocess
-  rw [if_pos pcMapOk]
+  rw [ite_eq_left pcMapOk]
   exact ⟨_, rfl⟩
 
 -- Jolt's verifier finds the entry slot with get_first_pc. For the honest trace it is
@@ -34,7 +34,7 @@ theorem HonestTrace.first_pc_eq_entry {joltInstance : JoltInstance SourceInstruc
   have nonempty := trace.nonempty
   have first := trace.starts_at_entry slots preprocessed (getElem trace.rows 0 nonempty)
     (Array.getElem?_eq_getElem nonempty)
-  rw [TraceWitness.bytecodePc, dif_pos nonempty]
+  rw [TraceWitness.bytecodePc, dite_eq_left nonempty]
   exact first
 
 /-- The witness's starting slot, `TraceWitness.bytecodePc trace 0`, lies in the bytecode
