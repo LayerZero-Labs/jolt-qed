@@ -10,23 +10,23 @@ This report describes four checks that Track T phase T7 adds (`docs/inline-preco
 4. `ci/comparator/` re-checks six of those theorems with Lean's built-in `lake comparator`.
    Its CI job does not block until it has passed once.
 
-The first three pass locally, and `scripts/tests/` holds 69 regression tests for the Python checkers and the comparator's import guard.
+The first three pass locally, and `scripts/tests/` holds 72 regression tests for the Python checkers and the comparator's import guard.
 The built-in `lake comparator` accepts the six theorems on macOS without its sandbox; the sandboxed run is the CI job.
 
 ## Revisions
 
-jolt-qed: branch `inline/t7-provenance` on top of `b648846`.
+jolt-qed: written on branch `inline/t7-provenance` (on top of `b648846`), then folded into `inline/t2-decoder-sweep` ([LayerZero-Labs/jolt-qed#56](https://github.com/LayerZero-Labs/jolt-qed/pull/56)); section "Folding into #56" describes the changes there.
 Toolchain: `leanprover/lean4:v4.35.0`.
 
-Jolt pin: a16z/jolt#2384 at `580084fcfad4788ebf48413a92dd640ca090c45f` (`580084fcf`), the `JOLT_REV` of the T1 expansion-parity job on this branch and of the T2 decoder-sweep and T4 lookup-tables jobs on their own branches (section "Decisions").
+Jolt pin: a16z/jolt#2384 at `3cc6e7bd179900cfad6a052335c32ea1ef749536` (`3cc6e7bd1`), the `JOLT_REV` of the expansion-parity, decoder-sweep, lookup-tables and constraint-generation jobs on #56. The T7 branch first pinned `580084fcf`, an earlier head of the same pull request (sections "Decisions" and "Folding into #56").
 `README.md` and `methods/soundness.md` still record `c97e93004fbf804409f0374fe8457c8f1562ce71` (`c97e9300`), the merge of a16z/jolt#2250, as the project pin; `provenance.toml` says so in its pin note.
 
 The provenance job also compares against the earlier Track T pin, a16z/jolt `main` at `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5` (`a6b6dc717`), and reports without failing the `models` paths missing there.
-`a6b6dc717` is an ancestor of `580084fcf`.
+`a6b6dc717` is an ancestor of `580084fcf` and `3cc6e7bd1`.
 
 ## The provenance manifest
 
-`provenance.toml` has one `[jolt]` table with the pin and one `[[file]]` entry for each of the 633 Lean files under `JoltBytecode/` and `JoltConstraints/`.
+`provenance.toml` has one `[jolt]` table with the pin and one `[[file]]` entry for each of the 680 Lean files under `JoltBytecode/` and `JoltConstraints/`.
 Each entry has `lean`, `models` (the Jolt paths the file transcribes or relies on), an optional `checked` revision and an optional `note`.
 
 I derived `models` and `checked` from each file's own citations.
@@ -47,13 +47,13 @@ They are now in `models`, and the check enforces the rule.
 
 | Entries | Count |
 |---------|-------|
-| All entries | 633 |
-| With `models` | 262 |
-| With `models` and a `checked` revision | 174 |
-| With `models` and no `checked` revision | 88 |
-| Without `models` (no Jolt counterpart) | 371 |
+| All entries | 680 |
+| With `models` | 271 |
+| With `models` and a `checked` revision | 181 |
+| With `models` and no `checked` revision | 90 |
+| Without `models` (no Jolt counterpart) | 409 |
 
-The 88 entries without a `checked` revision cite Jolt paths but name no published a16z/jolt revision.
+The 90 entries without a `checked` revision cite Jolt paths but name no published a16z/jolt revision.
 Most are `JoltConstraints/Constraints/` files that cite `abiswas3/jolt/tree/main`.
 `JoltBytecode/Decode/Agreement.lean` names only `b65455e6d`, which is not on GitHub.
 
@@ -62,9 +62,11 @@ Most are `JoltConstraints/Constraints/` files that cite `abiswas3/jolt/tree/main
 | `5def437f21a0006e13c063a03f0b5a7c9b93cd6f` | 60 |
 | `c6703570588e88033b8722bd4dec47c7f46f3b16` | 56 |
 | `8bbb2357890928d8f83b00ca542879077c4d3d28` | 49 |
-| `c336a6da706d0a0d11c3489c7aef71ee80c2e370` | 3 |
+| `c336a6da706d0a0d11c3489c7aef71ee80c2e370` | 4 |
+| `c97e93004fbf804409f0374fe8457c8f1562ce71` | 4 |
+| `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5` | 2 |
+| `3cc6e7bd179900cfad6a052335c32ea1ef749536` | 2 |
 | `0249591a293aa40dc4ebba92818e1367c66ea633` | 2 |
-| `c97e93004fbf804409f0374fe8457c8f1562ce71` | 2 |
 | `e012da54c3bb26a6436b5ca74e86c19bb39695ad` | 1 |
 | `8e536f199735ac8187156aa589ed1387722a079a` | 1 |
 
@@ -112,14 +114,14 @@ It then reports, without failing, the `models` paths missing at the pin and at `
 
 ### Baseline
 
-The baseline records 413 existing violations in 137 files, in 317 `[[known]]` entries.
+The baseline records 425 existing violations in 143 files, in 328 `[[known]]` entries.
 
 | Kind | Occurrences | Files | Where |
 |------|-------------|-------|-------|
 | Local path (`/Users/…`) | 47 | 32 | 6 in `JoltBytecode/`, 26 in `JoltConstraints/` |
 | Fork citation (`abiswas3/jolt`) | 60 | 50 | 2 in `JoltBytecode/`, 48 in `JoltConstraints/` |
-| Other Jolt revision | 164 | 43 | 3 in `JoltBytecode/`, 36 in `JoltConstraints/`, 3 in `docs/`, `README.md` |
-| `models` path with no `checked` revision | 142 | 88 | the 88 entries above |
+| Other Jolt revision | 170 | 47 | 6 in `JoltBytecode/`, 37 in `JoltConstraints/`, 3 in `docs/`, `README.md` |
+| `models` path with no `checked` revision | 148 | 90 | the 90 entries above |
 
 Moving the pin to `580084fcf` added the two citations of the old pin `a6b6dc717` in `docs/inline-precompiles.md`, which that document uses for its code references.
 The table below lists the first three kinds; `provenance.toml` lists every entry, including the exact citation text.
@@ -255,16 +257,17 @@ They occur in files whose `checked` revision is a different one.
 
 ### Result
 
-`python3 scripts/check-provenance.py` passes: 633 entries, 413 baseline violations, no new ones.
-With `--jolt-dir` on a full a16z/jolt clone and `--compare a6b6dc717`, it passes and reports these notes.
+`python3 scripts/check-provenance.py` passes: 680 entries, 425 baseline violations, no new ones.
+With `--jolt-dir` on a full a16z/jolt clone and `--compare 580084fcf --compare a6b6dc717`, it passes and reports these notes.
 
-- No `models` path is missing at the pin `580084fcf`.
+- No `models` path is missing at the pin `3cc6e7bd1` or at `580084fcf`.
 - Three `models` paths of `JoltBytecode/JoltISA/Expansions/System.lean` are missing at `a6b6dc717`: `crates/jolt-program/src/expand/control_flow/csr.rs`, `csr_immediate.rs` and `csrrc.rs`.
   #2384 adds them.
-- Three revisions in the files are not a16z/jolt commits.
+- Four revisions in the files are not a16z/jolt commits.
   `b65455e6d` (`JoltBytecode/Decode/Agreement.lean`) and `a86ec3716` (`System.lean`) exist only in local Jolt clones, and GitHub's API returns 422 for both.
   `3cb4e24361ae2006e9713ae65d58a3fa51fd0518` (`JoltConstraints/Completeness/BytecodeRaAtEntryEqOne.lean`) is in no a16z/jolt clone I have.
-- 88 entries name `models` but no `checked` revision.
+  `10000000` (`JoltBytecode/Inlines/Keccak256/Spec.lean`) is a bit pattern after the word "at", not a revision (section "Folding into #56").
+- 90 entries name `models` but no `checked` revision.
 
 The same run on a shallow blobless fetch of the pin, the eight `checked` revisions and `a6b6dc717` passes with the same notes, except the one on revisions that are not commits, which the check skips in a shallow clone.
 That fetch, the one CI does, took 7 seconds and 1.4 MB.
@@ -297,7 +300,7 @@ Each root has its own policy, and each root module (for example `JoltBytecode.le
 
 | Root | Policy | Occurrences |
 |------|--------|-------------|
-| `JoltBytecode/` | Zero tolerance | 0 |
+| `JoltBytecode/` | Zero tolerance, except the `[[ethlib]]` baseline | 9 |
 | `JoltConstraints/` | `[[known]]` baseline | 7 |
 | `JoltTests/` | Zero tolerance | 0 |
 | `LeanRV64D/` | `[[generated]]` baseline | 86 |
@@ -319,7 +322,7 @@ The `[[generated]]` baseline of `LeanRV64D/` has 9 ambiguous strings (above), 67
 | `LeanRV64D/SysControl.lean` | `maxRecDepth` | 1 |
 | `LeanRV64D/ZicsrInsts.lean` | `maxRecDepth` | 2 |
 
-`python3 scripts/check_hygiene.py` passes on 778 files.
+`python3 scripts/check_hygiene.py` passes on 837 files.
 A test file with a `sorry`, a `set_option maxHeartbeats` and an `axiom` makes it fail, and the same tokens inside a comment, a docstring or a string do not.
 `scripts/tests/test_check_hygiene.py` covers the reviews' bypasses (an interpolated `sorry`, a plain string inside an interpolation, `def «--» : Nat := by sorry`, a quoted identifier across lines, `set_option … in axiom`) and the cases that must keep passing, such as text in a plain string without braces.
 A token in the braces of a plain string, as in `"{sorry}"`, fails the scan by design; the passing spelling is `"\x7bsorry}"`.
@@ -430,6 +433,30 @@ Each was open in the first version of this report.
    The change was small: the job drops the Go setup and the three external builds and installs `bubblewrap` instead.
    It also fixes review finding 7, because the comparator now does the only build of `Challenge` and `Solution`.
    The local test is the unsandboxed run above; the sandboxed run is the CI job, which stays non-blocking until it passes once.
+
+## Folding into #56
+
+On 2026-11-12 the T7 commits moved to `inline/t2-decoder-sweep` ([LayerZero-Labs/jolt-qed#56](https://github.com/LayerZero-Labs/jolt-qed/pull/56)), together with T2, T3, T4 and the inline foundations of #44.
+The first CI run of the T7 jobs on that branch failed, because those pull requests add Lean files the manifest did not list and copy EthLib proofs that use `decide +kernel`.
+I changed the following.
+
+1. **Pin: `3cc6e7bd1`.**
+   Every Jolt CI job on #56 (expansion-parity, decoder-sweep, lookup-tables, constraint-generation) checks a16z/jolt#2384 at `3cc6e7bd1`, so the manifest pin moved there, following decision 1.
+   No `models` path is missing at `3cc6e7bd1`, and no scanned file cites `580084fcf`, so the move adds no baseline entry.
+2. **47 new `[[file]]` entries,** derived from each file's own citations by the rule in section "The provenance manifest".
+   Seven have a `checked` revision: the two `Secp256k1` files at `a6b6dc717`, the two `InstructionAddressCanonical.lean` files at `c97e9300`, `WholeRun/Elf.lean` at `c336a6da7`, and the generated `R1CS.lean` and `Relations.lean` at the pin.
+   Two `ConstraintGen` files cite six Jolt files but name no revision, so their `models` are `unchecked-model` debt.
+   The other 38, including the 27 generated inline row files, cite no Jolt file, so their `models` are empty.
+3. **New baseline entries.**
+   `Frame.lean` and `FrameInstances.lean` name `a6b6dc717` without citing a Jolt file, `Soundness/Assumptions.lean` names `25d87ba6` (a16z/jolt#2403), and `JoltConstraints/constraints.md` cites `c97e9300` twice.
+   `10000000` in the EthLib copy `Keccak256/Spec.lean` is a bit pattern after "starts at", which the scan reads as a revision; the baseline records it, because the copy must stay identical to EthLib.
+4. **CompPoly commit.**
+   `Soundness/FieldModuli.lean` and `Vendor/PrattCertificate.lean` cite CompPoly commit `e28da34`, now an `[[other_revision]]` of `Verified-zkEVM/CompPoly`.
+5. **EthLib `decide +kernel`.**
+   AGENTS.md now allows `decide +kernel` when its kernel check is fast (commit `91d2680`), and the BLAKE2b, Keccak and SHA-256 specifications under `JoltBytecode/Inlines/` copy EthLib's constant proofs, which use it nine times.
+   A new `[[ethlib]]` section of `scripts/hygiene-baseline.toml` records those nine uses exactly.
+   It accepts only `decide +kernel` and only files under `JoltBytecode/Inlines/` (`EthlibBaselineTest`), so every other token stays at zero tolerance in `JoltBytecode/`, and the `ethlib-copies` job checks that the files match EthLib.
+   This supersedes decision 3's remark that AGENTS.md forbids the tactic in new code.
 
 ## Review fixes
 
