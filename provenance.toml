@@ -4142,6 +4142,10 @@ lean = "JoltConstraints/WholeRun/Platform.lean"
 models = []
 
 [[file]]
+lean = "JoltConstraints/WholeRun/RiscvFollows.lean"
+models = []
+
+[[file]]
 lean = "JoltConstraints/WholeRun/SailCompleteness.lean"
 models = []
 
