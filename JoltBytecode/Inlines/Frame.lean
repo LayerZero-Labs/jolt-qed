@@ -838,7 +838,9 @@ theorem MemStep.rowEffect {F : Nat → Prop} (d : Option Dst) {s t : SailJoltSta
   ⟨h.choiceState, h.cycleCount, h.sailOutput, Or.inl h.regs, fun vr _ => by rw [h.vregs],
     h.adviceTape, h.hostIO⟩
 
-private theorem foldl_insert_get?_of_ne (L : List Nat) (f : Nat → BitVec 8) (ea a : Nat)
+/-- Inserting bytes at addresses `ea + k`, `k ∈ L`, leaves every other address unchanged.
+Example: storing the doubleword at `0x8000_0000` leaves the byte at `0x8000_0008` alone. -/
+theorem foldl_insert_get?_of_ne (L : List Nat) (f : Nat → BitVec 8) (ea a : Nat)
     (mem : Std.ExtHashMap Nat (BitVec 8)) (h : ∀ k ∈ L, ea + k ≠ a) :
     (L.foldl (fun mem k => mem.insert (ea + k) (f k)) mem).get? a = mem.get? a := by
   induction L generalizing mem with
