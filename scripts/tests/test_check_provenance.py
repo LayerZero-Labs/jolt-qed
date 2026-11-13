@@ -327,7 +327,7 @@ class CloneCheckTest(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         root = Path(cls.tmp.name)
         for p in TREE | {"jolt-platform/src/advice.rs", "jolt-platform/src/cycle_tracking.rs",
-                         "jolt-platform/src/print.rs"}:
+                         "jolt-platform/src/print.rs", "tracer/src/emulator/host_io.rs"}:
             (root / p).parent.mkdir(parents=True, exist_ok=True)
             (root / p).write_text("// test\n")
         env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
@@ -345,9 +345,11 @@ class CloneCheckTest(unittest.TestCase):
     # file that its models omits.
     def test_source_citation_missing_from_unchecked_models(self) -> None:
         text = MANIFEST.read_text(encoding="utf-8").replace(PIN, self.rev)
-        old = '  "tracer/src/emulator/cpu.rs",\n  "tracer/src/instruction/virtual_host_io.rs",'
+        old = ('  "tracer/src/emulator/cpu.rs",\n  "tracer/src/emulator/host_io.rs",\n'
+               '  "tracer/src/instruction/virtual_host_io.rs",')
         self.assertIn(old, text)
-        code, out = run_main(text.replace(old, '  "tracer/src/instruction/virtual_host_io.rs",'),
+        new = '  "tracer/src/emulator/host_io.rs",\n  "tracer/src/instruction/virtual_host_io.rs",'
+        code, out = run_main(text.replace(old, new),
                              "--jolt-dir", self.tmp.name)
         self.assertEqual(code, 1, out)
         self.assertIn("HostIO.lean: cites tracer/src/emulator/cpu.rs, a file at the pin, "
