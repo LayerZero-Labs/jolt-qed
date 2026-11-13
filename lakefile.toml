@@ -29,3 +29,22 @@ leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
 name = "LeanRV64D"
 leanOptions.weak.linter.style.nameCheck = false
 moreLeancArgs = ["-fbracket-depth=500"]
+
+# Tests: not a default target.
+# The expansion-parity comparator runs through
+# `lake env lean JoltTests/ExpansionParity/Run.lean` rather than a `lean_exe`:
+# `LeanRV64D.lean` declares a root `main`, which every executable importing the
+# model would inherit.
+# `lake build JoltTests.InlineKat.Vectors` and `lake exe inline-kat CASES.json`
+# (see scripts/inline-kat/build.sh).
+[[lean_lib]]
+name = "JoltTests"
+leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
+
+[[lean_exe]]
+name = "secp256k1-kat"
+root = "JoltTests.Secp256k1Kat.Main"
+
+[[lean_exe]]
+name = "inline-kat"
+root = "JoltTests.InlineKat.Main"

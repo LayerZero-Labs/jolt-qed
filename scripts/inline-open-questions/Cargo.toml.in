@@ -1,0 +1,35 @@
+[package]
+name = "inline-probe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# build.sh substitutes the a16z/jolt checkout path and appends Jolt's
+# [patch] tables, so dependencies resolve exactly as in Jolt's workspace.
+[dependencies]
+tracer = { path = "@JOLT_DIR@/tracer", features = ["std"] }
+common = { path = "@JOLT_DIR@/common", default-features = false, features = ["std"] }
+jolt-riscv = { path = "@JOLT_DIR@/crates/jolt-riscv", features = ["serialization"] }
+jolt-program = { path = "@JOLT_DIR@/crates/jolt-program", features = ["image", "serialization"] }
+jolt-host = { path = "@JOLT_DIR@/crates/jolt-host" }
+jolt-inlines-sha2 = { path = "@JOLT_DIR@/jolt-inlines/sha2", features = ["host"], optional = true }
+jolt-inlines-keccak256 = { path = "@JOLT_DIR@/jolt-inlines/keccak256", features = ["host"], optional = true }
+jolt-inlines-blake2 = { path = "@JOLT_DIR@/jolt-inlines/blake2", features = ["host"], optional = true }
+jolt-inlines-secp256k1 = { path = "@JOLT_DIR@/jolt-inlines/secp256k1", features = ["host"], optional = true }
+
+[features]
+# The SHA-256 crate is a dependency but no code names it (the way a host crate
+# forgets `use jolt_inlines_sha2 as _;`).
+dep-sha2 = ["dep:jolt-inlines-sha2"]
+# All four in-scope inline crates linked and named with `use ... as _`.
+inlines = [
+  "dep:jolt-inlines-sha2",
+  "dep:jolt-inlines-keccak256",
+  "dep:jolt-inlines-blake2",
+  "dep:jolt-inlines-secp256k1",
+]
+
+[profile.release]
+debug = false
+
+[workspace]
