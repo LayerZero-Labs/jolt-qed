@@ -1,0 +1,64 @@
+name: constraint-generation
+
+# T3 check that the R1CS rows, the four relations and the per-kind flag and
+# lookup-table data in JoltConstraints/ConstraintGen/Generated/ still match
+# Jolt (scripts/expansion-parity/CONSTRAINT-GEN.md,
+# reports/2026-11-12-t3-constraint-generation.md).
+# It checks out Jolt at JOLT_REV, rebuilds constraint-gen, regenerates the Lean
+# data, fails if the result differs from the committed files, and builds the
+# Lean proofs that the handwritten constraints equal the generated data.
+#
+# The job fails when the generator's own checks fail (status 1), when the
+# generator cannot run (status 2), when the regenerated files differ from the
+# committed ones, or when the equivalence proofs no longer build.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: constraint-generation-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  constraint-generation:
+    name: constraint-generation
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      # a16z/jolt#2384 at the commit the expansion-parity job uses.
+      JOLT_REV: 580084fcfad4788ebf48413a92dd640ca090c45f
+      EXPANSION_PARITY_FEATURES: zicsr-remaining
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: a16z/jolt
+          ref: ${{ env.JOLT_REV }}
+          path: jolt-rev
+          persist-credentials: false
+      # Exit status 1 means a generator check failed; status 2 means the
+      # generator could not run. Either fails the job.
+      - name: Regenerate the constraint data
+        run: |
+          JOLT_DIR="$GITHUB_WORKSPACE/jolt-rev" \
+            scripts/expansion-parity/run-constraint-gen.sh "$RUNNER_TEMP/constraint-gen"
+      - name: Fail if the generated files changed
+        run: |
+          git add -N JoltConstraints/ConstraintGen/Generated
+          if ! git diff --exit-code --stat -- JoltConstraints/ConstraintGen/Generated; then
+            git diff -- JoltConstraints/ConstraintGen/Generated | head -200
+            echo "::error::Regenerated constraint data differs from the committed files."
+            exit 1
+          fi
+      - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
+        with:
+          build: false
+          use-github-cache: false
+      - name: Build the equivalence proofs
+        run: lake build JoltConstraints.ConstraintGen.Equiv
