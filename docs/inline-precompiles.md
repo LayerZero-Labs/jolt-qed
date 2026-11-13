@@ -153,6 +153,7 @@ The seven secp256k1 inlines use `rs3` as the output pointer, and the SDK always 
   The whole-run theorems exclude `.jolt` rows through the scope premise `BlockConforms.riscv`.
 - `joltDecode` returns `none` for `0x0B`, `0x2B`, `0x5B` and `0x7B`.
   `ImageDecoded` constrains only `.riscv` rows; #43 derives it from a transcription of Jolt's `decode_elf`.
+  I3 extends `DecodedFrom` so that it also fixes every `.inline` row as the registered inline of the four-byte word at its address (`Rv64ProgramImage.DecodedFrom.inlineDecoded`).
 - The inline rows use only existing `Instr` constructors (91 at `09aaeab`), including `ANDN`, `VirtualAdvice`, `VirtualAssertEQ`, `VirtualAssertLTE`, `VirtualROTRI` and `VirtualXORROT*`.
   The work can reuse `Layer5/XorRotation.lean`, the `largeInlineTmp` register pool, constraint 18, and the DIV/REM proof pattern: generated rows, a phase split proved by `rfl`, run lemmas, `*_math` files, and a two-direction theorem.
 - Four parts of the model need revisiting:
@@ -415,7 +416,7 @@ Every whole-run lemma about a block that is not an inline reads the old statemen
 `JoltInstance.completeness` and `sail_reproduces` take an existing honest trace (`Completeness/completeness.lean:83-99`, `WholeRun/Top.lean:276-289`).
 Neither needs the trace's inline advice to equal Jolt's `build_advice` words.
 Completeness holds for every passing inline advice, including the non-canonical outputs this design admits.
-`sail_reproduces` keeps its restriction to RISC-V prefixes: it requires `BlockConforms` on every block of the reproduced prefix, and `BlockConforms.riscv` (`WholeRun/Top.lean:88`) excludes inline calls, so it says nothing about a prefix that contains an inline call.
+`sail_reproduces` keeps its restriction to RISC-V prefixes: it requires `BlockConforms` on every block of the reproduced prefix, and `BlockConforms.riscv` (`WholeRun/Top.lean`) excludes inline calls. I3 adds `sail_reproduces_with_inlines` (`WholeRun/Platform.lean`), which covers prefixes with inline calls (section 6).
 A separate result says that Jolt's advice generator gives a passing run: `rows_jolt_advice_complete` per call (section 5.4), lifted to a call inside an honest trace in `WholeRun/InlineCalls.lean`.
 For each of the seven secp256k1 inlines, `HonestTrace.secp256k1*_jolt_advice_complete` says: if a call starts at step `base` (its `rd` is not `x0`, since `SourceInstruction.expand` rejects that encoding), the state before it meets the call's obligations, and `inline_advice` holds Jolt's words for the call at the call's position, then the state after the call's last step meets the inline's specification and stores the canonical result.
 DIV assumes, as I2 does, that the divisor is nonzero modulo the modulus; since `p` and `n` are prime (`Secp256k1/Prime.lean`), such a divisor has an inverse.
@@ -562,6 +563,10 @@ EthLib covers all four families, each with a `BitVec` model written in the stand
 | R3 | Bug regression | The pre-`db9679295` secp256k1 DIV rows admit a run under `rd = rs1` whose output is not `a / b mod q`; the current rows satisfy `rows_sound` | I2 for DIV |
 | R4 | Inline-level soundness under the modelled acceptance relation | R1 plus R2: if the witness satisfies `AllConstraints`, every inline call satisfies its frame and footprint, and every call whose state satisfies `Pre c` satisfies `InlineSpec c` | R1, R2 |
 | R5 | Whole run for guests that call the twelve | `sail_soundness` and `sail_reproduces` against `platformRun`: Sail's `try_step` plus, on supported inline encodings, a step that always satisfies the frame and satisfies `InlineSpec c` when `Pre c` holds; the per-call preconditions are a premise or an invariant the guest supplies | I3 |
+
+Status:
+- R4 is `JoltInstance.soundness_inline_calls` (`WholeRun/InlineSoundness.lean`). The frame and specification come from one contract per call, `InlineKey.call_contract` (`WholeRun/InlineContract.lean`), which holds for every advice the run patched in. The footprint is the store footprint of the write set (`Frame.mem`). The completeness half of R4 is not yet proved: `JoltInstance.completeness` takes a given honest trace, and no theorem yet builds an honest trace with Jolt's advice for a guest that calls inlines; the secp256k1 lifts in `WholeRun/InlineCalls.lean` cover single calls inside a given trace.
+- R5 is `JoltInstance.sail_soundness_with_inlines` and `HonestTrace.sail_reproduces_with_inlines` (`WholeRun/Platform.lean`). The platform step (`PlatformStep`) is a relation: on a registered inline word it keeps the frame and meets `InlineKey.Spec` when `InlineKey.Pre` holds and the input buffers lie in RAM (`InlineKey.InputsInRam`). Both guards are conditions of the step, not premises of the theorem. The theorem's only new premise is the `inline_stores` field of `PlatformConforms`: each call stores only in RAM and outside the code.
 
 "Accepted" in R4 and R5 means the modelled relation `AllConstraints`, as for the existing theorems.
 Connecting it to Jolt's verifier needs the sumcheck and commitment layers, which are outside this plan.

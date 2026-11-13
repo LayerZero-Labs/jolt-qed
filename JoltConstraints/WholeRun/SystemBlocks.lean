@@ -94,7 +94,7 @@ theorem block_simulates_ecall (program : Rv64ProgramImage SourceInstruction) (b 
   obtain ⟨inc, w, hinc, hfetch, hdecode⟩ := hinputs s hrel pc m oldInc hnext hregs
   have hp : pc = b.row.address := Option.some.inj (hnext.symm.trans hruns.continues)
   let js : SailJoltState := { b.pre with sail := s }
-  have hproject : System.systemProject js = s := (blockHelper% ghost_projects) hrel
+  have hproject : System.systemProject js = s := ghost_projects hrel
   have hpc : s.regs.get? Register.PC = some pc := by
     simp [hregs, sailRegs, Step.setReg, Std.ExtDHashMap.get?_insert, System.systemProject]
   have htry := RiscvInstruction.joltStep_eq_try_step_ecall 0 js
@@ -259,7 +259,7 @@ theorem block_simulates_via (program : Rv64ProgramImage SourceInstruction) (b : 
     (by simpa only [← hrow] using hadvice.trans hblock)
   have hlink : System.systemProject Gs = Gs.sail := by
     dsimp only [Gs]
-    rw [Step.systemProject_preludeJolt, (blockHelper% ghost_projects) hrel]
+    rw [Step.systemProject_preludeJolt, ghost_projects hrel]
     rfl
   have hinv : Step.StepInvariant Gs.sail := hrel.inv.preludeState inc pc _
   have hramG : RamAccess i Gs := ramAccess_of_sources i b.start Gs

@@ -177,12 +177,25 @@ It is still an argument about the program, which neither the theorem nor Jolt's 
 
 Every deviation premise that Jolt's constraints come to enforce leaves `BlockConforms`, and with it this argument.
 
+## Guests that call inlines
+
+`JoltConstraints/WholeRun/Platform.lean` states the two theorems for guests that call Jolt's twelve registered inlines (`docs/inline-precompiles.md`, result R5): `HonestTrace.sail_reproduces_with_inlines` and `JoltInstance.sail_soundness_with_inlines`.
+They have the same premises and conclusions, with two changes:
+
+- `PlatformRun n s s'` replaces `sailRun n s = .ok s'`. A platform run is `n` platform steps (`PlatformStep`). At a word that `InlineEncoding.register` accepts as an inline call, the platform step runs the call: it keeps the frame of the call's write set, meets the call's specification (`InlineKey.Spec`) when the call's precondition (`InlineKey.Pre`) holds and its input buffers lie in RAM (`InlineKey.InputsInRam`), and then runs Sail's retiring finish, which moves `PC` four bytes on. At every other word the platform step is Sail's `try_step`.
+- `PlatformConforms` replaces `BlockConforms`. It drops the scope field `riscv`: a block may run a RISC-V instruction or a registered inline call. Its new field `inline_stores` asks every byte an inline call may store (the footprint of its write set) to lie in RAM and outside the code. Every block that satisfies `BlockConforms` satisfies `PlatformConforms` (`BlockConforms.platformConforms`).
+
+`DecodedFrom` now also says that each inline row is the registered inline of the four-byte word at its address. This slightly strengthens the premise of the RISC-V-only theorems too; their statements and proofs are otherwise unchanged.
+
+The specifications keep the known gaps of the per-call theorems: `SECP256K1_GLVR_ADV` stores six unconstrained words, the field operations may store a non-canonical result, and the DIV operations accept any stored result when both operands are zero.
+The theorems do not say that a guest computes SHA-256 or verifies an ECDSA signature.
+
 ## What the theorems do not say
 
 - **They do not say anything about Jolt's verifier.** `AllConstraints` checks every constraint equation directly on the whole witness. Jolt's verifier instead runs sumchecks, reductions and a polynomial commitment scheme, which jolt-qed has not verified (see the [README](../README.md)). "Accepted" in `sail_soundness` means "has a witness that satisfies the modelled constraints".
 - **They are one-directional.** Every honest Jolt run up to its first EBREAK is reproduced by Sail. The converse is not claimed: a Sail run need not correspond to a Jolt run, and the theorems say nothing about programs whose runs Jolt's tracer aborts.
 - **They stop at the first EBREAK.** Jolt treats EBREAK as the end of the program, and the RISC-V reading of that is entering debug mode. The Sail model does not implement the debug extension, and the theorems stop in front of the first EBREAK or C.EBREAK without executing it ([`riscv-alignment.md`](riscv-alignment.md) section 4). They say nothing about later instructions.
-- **They do not cover Jolt's own instructions**, the inline opcodes `0x0B` and `0x2B`, or the advice tape (see the scope premise above).
+- **They do not cover Jolt's own instructions**, inline opcodes other than the twelve registered `0x0B` inlines, or the advice tape (see the scope premise above). Only the `_with_inlines` variants cover the twelve inlines.
 - **They describe a particular Jolt revision.** The system expansions, the decoder and the ELF loader (`decode_elf`) transcribe a16z/jolt `c336a6da7`, the head of a16z/jolt#2384. That change is not on Jolt `main` until a16z/jolt#2383 and #2384 merge ([`riscv-alignment.md`](riscv-alignment.md), Sources).
 - **They compare outputs only up to trailing zero bytes**, as `JoltInstance.soundness` does.
 - **They describe one hart configuration.** The Sail model is configured as an RV64IMAC hart with only M-mode and no interrupts, with Jolt's memory map ([`riscv-alignment.md`](riscv-alignment.md) sections 1 and 2). They say nothing about other configurations.

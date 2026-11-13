@@ -197,7 +197,7 @@ theorem HonestTrace.haltPrefix {joltInstance : JoltInstance SourceInstruction}
 
 /-- Every block of a chain that runs from `p` starts and ends with `p`'s memory layout.
 For example, an ADDI block has the same layout before and after it runs. -/
-private theorem chain_layout (program : Rv64ProgramImage SourceInstruction) :
+theorem chain_layout (program : Rv64ProgramImage SourceInstruction) :
     ∀ (bs : List Block) (p : SailJoltState), bs.IsChain (fun b c => b.post = c.pre) →
       (∀ b ∈ bs, b.Runs program) → (∀ f ∈ bs.head?, f.pre = p) →
       ∀ b ∈ bs, b.pre.jolt_device.memory_layout = p.jolt_device.memory_layout ∧

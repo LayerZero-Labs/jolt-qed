@@ -2798,7 +2798,7 @@ theorem block_simulates_io_via (program : Rv64ProgramImage SourceInstruction) (b
   have hGp : System.systemProject Gs = Step.preludeState s inc pc
       (if b.row.is_compressed then 2 else 4) := by
     dsimp only [Gs]
-    rw [Step.systemProject_preludeJolt, (blockHelper% ghost_projects) hrel]
+    rw [Step.systemProject_preludeJolt, ghost_projects hrel]
   have hlink : System.systemProject Gs = Gs.sail := hGp
   have hinvG : Step.StepInvariant Gs.sail := hrel.inv.preludeState inc pc _
   have hsources : ∀ r, sourceValue (.xreg r) Gs = sourceValue (.xreg r) b.start := fun r =>
@@ -2835,15 +2835,15 @@ theorem block_simulates_io_via (program : Rv64ProgramImage SourceInstruction) (b
     hinvPost.of_agree (fun r _ => by rw [htregs]) (fun r => by
       obtain ⟨v, hv⟩ := (hinvPost.present r).exists_value
       exact ⟨v, by rw [htregs]; exact hv⟩)
-  let s' := (blockHelper% finishState) t next m inc
-  have hfinish := (blockHelper% finish_run) t hinvT encoding.bits next m inc
+  let s' := finishState t next m inc
+  have hfinish := finish_run t hinvT encoding.bits next m inc
     (by rw [htregs]; exact hnextGhost) (by rw [htregs]; exact hcount)
     (by rw [htregs]; exact hcountInc)
   have hfs : ∀ (s : SailState) (pc m : BitVec 64) (inc : Bool),
-      (blockHelper% finishState) s pc m inc =
+      finishState s pc m inc =
         if inc then Step.setReg (Step.setReg s .PC pc) .minstret (BitVec.addInt m 1)
         else Step.setReg s .PC pc := fun _ _ _ _ => rfl
-  have hft : s'.regs = ((blockHelper% finishState) (System.systemProject ghostPost) next m inc).regs := by
+  have hft : s'.regs = (finishState (System.systemProject ghostPost) next m inc).regs := by
     cases inc <;> simp [s', hfs, Step.setReg, htregs]
   have hpcS : s.regs.get? Register.PC = some pc := by
     simp [hregs, sailRegs, Step.setReg, Std.ExtDHashMap.get?_insert, System.systemProject]
@@ -2857,7 +2857,7 @@ theorem block_simulates_io_via (program : Rv64ProgramImage SourceInstruction) (b
     simp only [bind, EStateM.bind, hexec', RETIRE_SUCCESS, pure, EStateM.pure]
     exact hfinish
   refine ⟨false, s', hstep, ?_⟩
-  have hmem' : s'.mem = t.mem := (blockHelper% finish_mem) t next m inc
+  have hmem' : s'.mem = t.mem := finish_mem t next m inc
   have hdev : ghostPost.jolt_device = b.post.jolt_device := hpost.device
   have hmemT : MemRel b.post.jolt_device s' := by
     rw [← hdev]
@@ -2873,10 +2873,10 @@ theorem block_simulates_io_via (program : Rv64ProgramImage SourceInstruction) (b
         hft.trans ((blockHelper% finish_regs) b.pre b.post ghostPost m next inc hpost)⟩
       inv := hinvT.stepFinish_retire encoding.bits hfinish
       htif := by
-        change ((blockHelper% finishState) t next m inc).regs.get? Register.htif_tohost_base =
+        change (finishState t next m inc).regs.get? Register.htif_tohost_base =
           some none
-        rw [show ((blockHelper% finishState) t next m inc).regs =
-          ((blockHelper% finishState) (System.systemProject ghostPost) next m inc).regs from hft]
+        rw [show (finishState t next m inc).regs =
+          (finishState (System.systemProject ghostPost) next m inc).regs from hft]
         cases inc <;> simpa [hfs, Step.setReg,
           Std.ExtDHashMap.get?_insert] using hhtifT
       ram := fun a ha => by
