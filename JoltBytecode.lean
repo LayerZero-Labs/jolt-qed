@@ -24,4 +24,5 @@ import JoltBytecode.Inlines.Secp256k1.GlvBound
 import JoltBytecode.Inlines.Secp256k1.GlvrAdv
 import JoltBytecode.Inlines.Blake2b.Sound
 import JoltBytecode.Inlines.Keccak256.Sound
+import JoltBytecode.Inlines.Sha256.Sound
 import JoltBytecode.Inlines.Spec

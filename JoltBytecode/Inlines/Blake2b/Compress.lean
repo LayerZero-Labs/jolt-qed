@@ -30,13 +30,14 @@ namespace JoltISA.Inlines
 
 /-! ## Rotation and register runs (any inline) -/
 
-/-- Sail's `rotater` on a 64-bit word is `BitVec.rotateRight`, for shifts below 64.
+/-- Sail's `rotater` is `BitVec.rotateRight`, for shifts below the width. BLAKE2 uses it on
+64-bit words and SHA-256 on 32-bit words.
 Example: `rotater 1#64 1 = 0x8000000000000000#64`. -/
-theorem rotater_eq_rotateRight (z : BitVec 64) (s : Nat) (hs : s < 64) :
+theorem rotater_eq_rotateRight {w : Nat} (z : BitVec w) (s : Nat) (hs : s < w) :
     rotater z s = z.rotateRight s := by
-  have h : rotater z s = (z >>> s) ||| (z <<< (64 - s)) := by
+  have h : rotater z s = (z >>> s) ||| (z <<< (w - s)) := by
     unfold rotater
-    have : (Sail.BitVec.length z -i (s : Int)) = ((64 - s : Nat) : Int) := by
+    have : (Sail.BitVec.length z -i (s : Int)) = ((w - s : Nat) : Int) := by
       simp only [Sail.BitVec.length]; omega
     rw [this]
     rfl
@@ -63,13 +64,6 @@ theorem regRun_append (l₁ l₂ : List Instr) (f : VReg → BitVec 64) :
       by_cases hd : 32 ≤ d.toNat
       · simp only [regRun, h, hd, ↓reduceIte, ih]
       · simp only [regRun, h, hd, ↓reduceIte, Option.bind_none]
-
-/-- A register row with a writable destination: evaluation sets the destination and goes on.
-Example: `regRun (LUI vr60 5 :: l) f = regRun l (setV f vr60 5)`. -/
-theorem regRun_cons_of {i : Instr} {d : VReg} {g : (VReg → BitVec 64) → BitVec 64}
-    (h : i.regRow? = some (d, g)) (hd : 32 ≤ d.toNat) (l : List Instr) (f : VReg → BitVec 64) :
-    regRun (i :: l) f = regRun l (setV f d (g f)) := by
-  simp only [regRun, h, hd, ↓reduceIte]
 
 namespace Blake2b
 

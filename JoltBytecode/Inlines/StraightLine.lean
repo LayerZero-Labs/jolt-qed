@@ -48,9 +48,10 @@ def setV (f : VReg → BitVec 64) (d : VReg) (v : BitVec 64) : VReg → BitVec 6
 
 /-- The register rows: rows that read only virtual registers (or `x0`) and write one virtual
 register. The result is the destination and the value as a function of the register file.
-`ADDI` counts only with source `x0`, which is how Jolt resets pool registers, and `SUB` counts
-with a virtual or an `x0` first source (BLAKE2 negates its final-block flag with
-`SUB vr62, x0, vr62`).
+`ADDI` counts with a virtual source or with source `x0`, which is how Jolt resets pool
+registers, and `SUB` counts with a virtual or an `x0` first source (BLAKE2 negates its
+final-block flag with `SUB vr62, x0, vr62`). The bitwise, shift, rotation and byte-swap rows
+are the ones the SHA-256 inlines use.
 Example: `(ADD (.vreg vr62) (.vreg vr62) (.vreg vr61)).regRow?` is
 `some (vr62, fun f => f vr62 + f vr61)`. -/
 def _root_.JoltISA.Instr.regRow? : Instr → Option (VReg × ((VReg → BitVec 64) → BitVec 64))
@@ -71,6 +72,30 @@ def _root_.JoltISA.Instr.regRow? : Instr → Option (VReg × ((VReg → BitVec 6
     some (d, fun f => jolt_virtual_xorrot_value 16 (f x) (f y))
   | .VirtualXORROT63 (.vreg d) (.vreg x) (.vreg y) =>
     some (d, fun f => jolt_virtual_xorrot_value 63 (f x) (f y))
+  | .ADDI (.vreg d) (.vreg x) imm => some (d, fun f => f x + imm)
+  | .AND (.vreg d) (.vreg x) (.vreg y) => some (d, fun f => Riscv.andi (f x) (f y))
+  | .ANDI (.vreg d) (.vreg x) imm => some (d, fun f => Riscv.andi (f x) imm)
+  | .ANDN (.vreg d) (.vreg x) (.vreg y) => some (d, fun f => jolt_andn_value (f x) (f y))
+  | .OR (.vreg d) (.vreg x) (.vreg y) => some (d, fun f => Riscv.ori (f x) (f y))
+  | .VirtualMULI (.vreg d) (.vreg x) imm =>
+    some (d, fun f => jolt_virtual_muli_value (f x) imm)
+  | .VirtualSRLI (.vreg d) (.vreg x) m => some (d, fun f => jolt_virtual_srli_value (f x) m)
+  | .VirtualSRLIW (.vreg d) (.vreg x) m => some (d, fun f => jolt_virtual_srliw_value (f x) m)
+  | .VirtualROTRIW (.vreg d) (.vreg x) m =>
+    some (d, fun f => jolt_virtual_rotriw_value (f x) m)
+  | .VirtualRev8W (.vreg d) (.vreg x) _ => some (d, fun f => jolt_virtual_rev8w_value (f x))
+  | .VirtualZeroExtendWord (.vreg d) (.vreg x) _ =>
+    some (d, fun f => jolt_virtual_zero_extend_word_value (f x))
+  | .VirtualXORROTW22 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrotw_value 22 (f x) (f y))
+  | .VirtualXORROTW19 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrotw_value 19 (f x) (f y))
+  | .VirtualXORROTW12 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrotw_value 12 (f x) (f y))
+  | .VirtualXORROTW7 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrotw_value 7 (f x) (f y))
+  | .VirtualXORROTW6 (.vreg d) (.vreg x) (.vreg y) =>
+    some (d, fun f => jolt_virtual_xorrotw_value 6 (f x) (f y))
   | .ADDI (.vreg d) (.xreg r) imm => if isX0 r then some (d, fun _ => 0 + imm) else none
   | .SUB (.vreg d) (.xreg r) (.vreg y) => if isX0 r then some (d, fun f => 0 - f y) else none
   | _ => none
@@ -156,6 +181,13 @@ def regRun : List Instr → (VReg → BitVec 64) → Option (VReg → BitVec 64)
     match i.regRow? with
     | some (d, g) => if 32 ≤ d.toNat then regRun l (setV f d (g f)) else none
     | none => none
+
+/-- A register row with a writable destination: evaluation sets the destination and goes on.
+Example: `regRun (LUI vr60 5 :: l) f = regRun l (setV f vr60 5)`. -/
+theorem regRun_cons_of {i : Instr} {d : VReg} {g : (VReg → BitVec 64) → BitVec 64}
+    (h : i.regRow? = some (d, g)) (hd : 32 ≤ d.toNat) (l : List Instr) (f : VReg → BitVec 64) :
+    regRun (i :: l) f = regRun l (setV f d (g f)) := by
+  simp only [regRun, h, hd, ↓reduceIte]
 
 /-- **Register rows run as evaluated.** If the register rows `l` evaluate to `f` from the
 register file of `s`, a run of `l ++ rest` from `s` is a run of `rest` from `s` with register
