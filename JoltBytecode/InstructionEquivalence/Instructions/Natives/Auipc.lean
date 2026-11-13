@@ -31,32 +31,6 @@ private theorem getArchPC_preservesSystemProjectRegs
   unfold get_arch_pc
   exact Projection.readReg_preservesSystemProjectRegs Register.PC s
 
-private theorem stateAfterWrite_preservesSystemProjectRegs
-    (s : SailState)
-    (rd : regidx)
-    (value : BitVec 64) :
-    Projection.PreservesSystemProjectRegs s (stateAfterWrite s rd value) := by
-  refine
-    { mstatus := ?_
-      mtvec := ?_
-      mscratch := ?_
-      mepc := ?_
-      mcause := ?_
-      mtval := ?_ }
-  all_goals
-    reg_cases rd <;>
-      simp_all [stateAfterWrite, wX_update_regs, Std.ExtDHashMap.get?_insert]
-
-private theorem wX_bits_preservesSystemProjectRegs
-    (rd : regidx)
-    (value : BitVec 64)
-    (s : SailState) :
-    Projection.ResultPreservesSystemProjectRegs s ((wX_bits rd value) s) := by
-  obtain ⟨s', hwrite⟩ := wX_shape rd value s
-  simp only [hwrite, Projection.ResultPreservesSystemProjectRegs]
-  rw [wX_bits_eq_stateAfterWrite rd value s s' hwrite]
-  exact stateAfterWrite_preservesSystemProjectRegs s rd value
-
 private theorem executeAUIPC_preservesSystemProjectRegs
     (imm : BitVec 20)
     (rd : regidx)
@@ -72,7 +46,7 @@ private theorem executeAUIPC_preservesSystemProjectRegs
           (pc + sign_extend (m := 64) (imm +++ (0x000#12 : BitVec 12))))
         (fun value s1 _hvalue =>
           Projection.bind_preservesSystemProjectRegs
-            (wX_bits_preservesSystemProjectRegs rd value s1)
+            (Projection.wX_bits_preservesSystemProjectRegs rd value s1)
             (fun _ s2 _hwrite =>
               Projection.pure_preservesSystemProjectRegs s2 RETIRE_SUCCESS)))
 

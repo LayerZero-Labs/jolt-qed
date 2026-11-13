@@ -3,8 +3,6 @@ import LeanRV64D.Errors
 import LeanRV64D.MemMetadata
 import LeanRV64D.ReadWriteV1
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -195,6 +193,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -328,7 +327,7 @@ def write_ram_ea (_wk : write_kind) (app_1 : physaddr) (_width : Nat) : Unit :=
   let .Physaddr _addr := app_1
   ()
 
-/-- Type quantifiers: k_ex255004_ : Bool, width : Nat, width ≥ 0, 0 < width ∧
+/-- Type quantifiers: k_ex255066_ : Bool, width : Nat, width ≥ 0, 0 < width ∧
   width ≤ max_mem_access -/
 def read_ram (rk : read_kind) (app_1 : physaddr) (width : Nat) (read_meta : Bool) : SailM ((BitVec (8 * width)) × Unit) := do
   let .Physaddr addr := app_1

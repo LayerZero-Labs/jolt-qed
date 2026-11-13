@@ -1,7 +1,5 @@
 import LeanRV64D.Common
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -192,6 +190,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -199,13 +198,13 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_ex254584_ : Nat, List.elem k_ex254584_ [16, 32, 64, 128] -/
-def float_is_normal (op : (BitVec k_ex254584_)) : Bool :=
+/-- Type quantifiers: k_ex254646_ : Nat, List.elem k_ex254646_ [16, 32, 64, 128] -/
+def float_is_normal (op : (BitVec k_ex254646_)) : Bool :=
   let { exp := exp, sign := _, mantissa := _ } := (float_decompose op)
   ((! (is_all_ones exp)) && (! (is_all_zeros exp)))
 
-/-- Type quantifiers: k_ex254586_ : Nat, List.elem k_ex254586_ [16, 32, 64, 128] -/
-def float_is_subnormal (op : (BitVec k_ex254586_)) : Bool :=
+/-- Type quantifiers: k_ex254648_ : Nat, List.elem k_ex254648_ [16, 32, 64, 128] -/
+def float_is_subnormal (op : (BitVec k_ex254648_)) : Bool :=
   let { exp := exp, mantissa := mantissa, sign := _ } := (float_decompose op)
   ((is_all_zeros exp) && (! (is_all_zeros mantissa)))
 

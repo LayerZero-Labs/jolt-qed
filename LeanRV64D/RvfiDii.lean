@@ -1,8 +1,6 @@
 import LeanRV64D.Prelude
 import LeanRV64D.Errors
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -193,6 +191,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -1171,6 +1170,7 @@ def rvfi_get_mem_data (_ : Unit) : SailM (BitVec 704) := do
 def rvfi_encode_width_mask (width : Nat) : (BitVec 32) :=
   (0xFFFFFFFF#32 >>> (32 -i width))
 
+set_option maxHeartbeats 1000000000 in
 def print_rvfi_exec (_ : Unit) : SailM Unit := do
   (pure (print_bits "rvfi_intr     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_intr (← readReg rvfi_inst_data))))

@@ -47,7 +47,7 @@ private def WordArithmetic.table : WordArithmetic → LookupTableKind
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -66,7 +66,7 @@ private theorem wordArithmetic_canonical :
       JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem wordArithmetic_write_value {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
@@ -74,7 +74,7 @@ private theorem wordArithmetic_write_value {pre : SailJoltState}
     (rhsLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue lhs pre) (sourceValue rhs pre)).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have canonical := wordArithmetic_canonical context rowIs operation instructionIs
   obtain ⟨left, right⟩ := agrees.registerInputs bound context equations selected rowIs
     lhs rhs canonical.1.2 canonical.2
@@ -99,19 +99,19 @@ private theorem wordArithmetic_write_value {pre : SailJoltState}
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   cases operation with
   | addw =>
-    have output := lookupOutput_signExtendWord_add charAbove2pow128 context equations
+    have output := lookupOutput_signExtendWord_add charAbove2pow128Minus2pow64 context equations
       t slot selected table active _ _ left right
     simpa only [WordArithmetic.value, jolt_addw_value, addWide_low] using output
   | subw =>
-    have output := lookupOutput_signExtendWord_sub charAbove2pow128 context equations
+    have output := lookupOutput_signExtendWord_sub charAbove2pow128Minus2pow64 context equations
       t slot selected table active _ _ left right
     simpa only [WordArithmetic.value, jolt_subw_value, subWide_low] using output
   | mulw =>
-    have output := lookupOutput_signExtendWord_mul charAbove2pow128 context equations
+    have output := lookupOutput_signExtendWord_mul charAbove2pow128Minus2pow64 context equations
       t slot selected table active _ _ left right
     simpa only [WordArithmetic.value, jolt_mulw_value, mulWide_low] using output
   | mulhu =>
-    have output := lookupOutput_upperWord_mul charAbove2pow128 context equations
+    have output := lookupOutput_upperWord_mul charAbove2pow128Minus2pow64 context equations
       t slot selected table active _ _ left right
     simpa only [WordArithmetic.value, jolt_mulhu_value, JoltISA.mulWide] using output
 
@@ -135,9 +135,9 @@ theorem wordArithmetic_step {pre : SailJoltState} (agrees : RegisterAgreementOn 
   have canonical := wordArithmetic_canonical context rowIs operation instructionIs
   have leftRead := (agrees.read lhs canonical.1.2 lhsLive).1
   have rightRead := (agrees.read rhs canonical.2 rhsLive).1
-  have encoded := wordArithmetic_write_value charAbove2pow128 context equations selected rowIs
+  have encoded := wordArithmetic_write_value charAbove2pow128Minus2pow64 context equations selected rowIs
     operation instructionIs agrees lhsLive rhsLive
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by cases operation <;> rw [instructionIs] <;> rfl)]

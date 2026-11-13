@@ -1271,10 +1271,10 @@ private theorem amoswapwProgramAuto_eq_sail
     exact amoswapwProgram_concrete_aligned rs2 rs1 rd js h.cur_privilege h.mstatus_mprv
       h.rs1_val h.rs2_val (amoWordBundleOld amoop.AMOSWAP rs2 rs1 rd js h)
       h.rs1_read h.rs2_read (Assumptions.DwordPresent.memBytesPresentAt h.dword_present)
-      (by simpa using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega))
-      (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega))
-      (by simpa using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega))
-      (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega))
+      (by simpa using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
+      (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
+      (by simpa using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
+      (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
       halign h.jolt_ram_load h.jolt_ram_store
       (by apply amo_word_sign_extend_64_injective
           simpa only [amoWordShiftedOld, amoWordBundleOld] using

@@ -71,7 +71,7 @@ Premises or fields of the final theorems, with their source or reason.
 
 | Assumption | Where | Why |
 |---|---|---|
-| The field's characteristic exceeds `2^128` | `JoltField F`, soundness premise `joltField` | Ari, 2026-10-10: the base relation must distinguish full 128-bit lookup addresses. BN254 satisfies this; model Akita's field and extra address guard separately. PCS security is outside this work |
+| The field's characteristic exceeds `2^128 - 2^64` | `JoltField F`, soundness premise `joltField` | Ari, 2026-10-10: the relation must distinguish full 128-bit lookup addresses. On 2026-11-10 the premise was weakened from `2^128` so Akita's `p = 2^128 - 1780711455` (Jolt's production field since a16z/jolt#2403) satisfies it; below characteristic `2^128` constraint (63), Akita's address guard, keeps identity-RAF addresses below `2^128 - 2^64`. BN254 also satisfies it. PCS security is outside this work |
 | Every attempted native or floor load/store passes the tracer's address assertions (temporary) | `JoltInstance.TracerAddressChecks` in `Soundness/Layer5/MemoryAccessRestriction.lean`, field `tracerAddressChecks` | Approved for #2044 and the zero-store, I/O-gap, canary and heap-bound candidates; the floor-row extension was applied at `e299498`, checking the containing doubleword without supplying alignment or device-value agreement. |
 | Every attempted HostIO call succeeds (temporary) | `JoltInstance.HostCallsSucceed` in `Soundness/Layer5/HostCallRestriction.lean`, field `hostCallsSucceed` | Excludes host-call failures in live mode, which the constraints do not encode; program-execution condition approved by Ari pending the a16z batch |
 | Termination is followed by a stall and no later termination load (temporary) | `JoltInstance.TerminationThenStall` in `Soundness/Layer5/TerminationRestriction.lean`, field `terminationThenStall` | Approved by Ari for a witness that stops early at a jump, and the termination word's device/table mismatch. Ari approved on 2026-11-03 extending it and `StoresTerminationAt` to the floor loads and stores at their containing doubleword `ea &&& ~~~7`, only to fit the new ISA |
@@ -100,6 +100,7 @@ Since a16z/jolt#2129, Jolt's ELF decoder (`decode_elf` in `crates/jolt-program/s
 On 2026-10-23, `lake build JoltBytecode JoltConstraints` passed (8,832 jobs) and `#print axioms JoltInstance.soundness` listed only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
 On 2026-11-03, with the Step 4 changes on top of `e299498`, `lake build JoltConstraints` passed against the migrated model (8,837 jobs), and `#print axioms JoltInstance.soundness` lists the same four axioms and no `sorryAx`.
 No soundness proof has a `sorry`, and no blocker lemma was staged.
+Since the Sail model was regenerated with the Jolt hart patch, `sys_enable_experimental_extensions` is a definition, not an axiom, and `#print axioms JoltInstance.soundness` lists only `propext`, `Classical.choice` and `Quot.sound`.
 The proof's structure is in `methods/soundness.md`, "The argument in brief".
 See the [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md).
 
@@ -122,26 +123,20 @@ No `bv_decide` remains in `JoltBytecode` or `JoltConstraints`; all 21 uses were 
 
 ### Bytecode
 
-The seven source `sorry` occurrences are all present at Lean HEAD `7096dca` and in the working tree.
-`lake build JoltBytecode` passed on 2026-11-02 with exit 0 and 8459 jobs.
+`JoltBytecode/` has no `sorry`.
+At Lean HEAD `7096dca` it had seven: ECALL, EBREAK, LR.W, SC.W, LR.D and SC.D in the dispatcher `equivalenceStatement_holds`, and MRET's exception-handler postlude in `InstructionEquivalence/Instructions/System/Mret.lean`.
+The MRET theorem is now proved.
+`joltRun_eq_execute` (`JoltBytecode/Step/Instructions.lean`) replaces the dispatcher, and the step theorems in `JoltBytecode/Step/` cover ECALL's trap entry and LR/SC against `try_step`.
+EBREAK is not executed: the whole-run theorem stops in front of it (`docs/riscv-alignment.md` section 4).
 
-| Instruction | Source occurrence | Existing obligation |
-|---|---|---|
-| ECALL | `JoltBytecode/RiscvInstruction.lean:805` | Dispatcher equivalence case remains admitted. |
-| EBREAK | `JoltBytecode/RiscvInstruction.lean:807` | Dispatcher equivalence case remains admitted. |
-| LR.W | `JoltBytecode/RiscvInstruction.lean:813` | Load-reserved equivalence remains admitted. |
-| SC.W | `JoltBytecode/RiscvInstruction.lean:815` | Store-conditional equivalence remains admitted. |
-| LR.D | `JoltBytecode/RiscvInstruction.lean:817` | Load-reserved equivalence remains admitted. |
-| SC.D | `JoltBytecode/RiscvInstruction.lean:819` | Store-conditional equivalence remains admitted. |
-| MRET | `JoltBytecode/InstructionEquivalence/Instructions/System/Mret.lean:162` | The generated Sail exception-handler postlude remains unproved. |
-
-Do not weaken a main statement to close one of these gaps.
+Do not weaken a main statement to close a gap.
 
 ### Existing tactic debt
 
 These are source debt, not permission to add such tactics or raise limits during repair.
 - `decide +kernel` at `JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean:52` and `:59`; `AGENTS.md` bans it.
-- Raised heartbeat limits: `set_option maxHeartbeats 1000000` at `JoltConstraints/Completeness/Helpers/LookupWriteProofHelpers.lean:4`, and `400000` at `JoltConstraints/Completeness/Helpers/TracePCProofHelpers.lean:7`.
+- `decide +kernel` is outside the closure of `JoltInstance.sail_soundness`: `DeviceMemoryObstruction` formalizes the termination-device obstruction (#1950/#1951), and only the root module imports it.
+- No raised limits remain in `JoltBytecode/` or `JoltConstraints/` (2026-11-09); the generated model's remaining declaration-local limits are listed in `docs/riscv-alignment.md` section 8.
 - No executable `bv_decide` use remains in `JoltBytecode/` or `JoltConstraints/`; the only textual match is a comment in `Soundness/Layer4/Interleave.lean:17`.
 
 ### Constraints migration (2026-11-03)
@@ -188,7 +183,7 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
   Lean does not represent missing captures or noncanonical NoOp rows; Jolt's row-constructor checks are producer checks, not verifier constraints or premises.
 - **Not modeled.** The Akita build's 4096-cycle padding floor, program commitments (ProgramBytecode, ProgramImageInit), and the advice witness columns and commitment protocols.
   Trusted advice contents are modeled directly as part of the instance; Lean has no flag for a trusted-advice commitment being absent.
-- **Akita.** The base relation omits Akita's instruction-address canonicality guard, which Jolt enables with the `akita` feature; Akita is to be modeled separately (`methods/soundness.md`, Layer 4).
+- **Akita.** The relation includes Akita's instruction-address canonicality guard as constraint (63), on exactly when the characteristic is below `2^128`, as Jolt's `akita` feature turns it on together with the fp128 field (`methods/soundness.md`, Layer 4).
 - **Expansions.** `SourceInstruction.expand` uses the bytecode project's programs.
   On 2026-10-29 every source kind's rows were compared with Jolt's expander at `5def437f` and match (2026-10-29 report).
   The header of `JoltBytecode/JoltISA/ExpansionsAutomated.lean` says it is generated by `jolt-lean-gen`, but the generator at the pin cannot produce it; the local generator patches are in `methods/model_update/`.

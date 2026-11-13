@@ -6,8 +6,6 @@ import LeanRV64D.Vmem
 import LeanRV64D.StepExt
 import LeanRV64D.ValidateConfig
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -198,6 +196,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -223,5 +222,5 @@ def init_boot_requirements (_ : Unit) : SailM Unit := do
   (wX (Regno 10) (← readReg mhartid))
   (wX (Regno 11)
     (trunc (m := 64)
-      (0b0000000000000000000000000000000000000000000000000001000000000000#64 : (BitVec 64))))
+      (0b0000000000000000000000000000000000000000000000000000000000000000#64 : (BitVec 64))))
 

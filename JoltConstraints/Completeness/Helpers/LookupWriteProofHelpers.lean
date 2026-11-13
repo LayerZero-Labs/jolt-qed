@@ -3,7 +3,6 @@ import JoltConstraints.Completeness.Helpers.JumpReturnProofHelpers
 open LeanRV64D
 
 set_option autoImplicit false
-set_option maxHeartbeats 1000000
 set_option linter.unusedSimpArgs false
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 

@@ -21,26 +21,18 @@ Jolt rows:
 No runtime advice supplies SC success. Rust source:
 https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-program/src/expand/memory/scd.rs
 
-The generated Lean Sail semantics for `SC.D` instead uses opaque reservation
-hooks. The store-conditional memory path checks `match_reservation`, and the
-instruction later clears reservation state through `cancel_reservation`.
+The generated Lean Sail semantics for `SC.D` checks `match_reservation` on the
+store-conditional memory path and clears the reservation with
+`cancel_reservation`. The Sail model holds the reservation in the registers
+`reservation_valid`, `reservation_addr` and `reservation_width`
+(`model/sys/sys_reservation.sail` after
+`sail-import/patches/sail-riscv-jolt-hart.patch`): an SC succeeds when a
+reservation is held at its exact address and the SC is no wider than the LR.
+Both hooks are ordinary functions of the Sail state rather than axioms.
 
-Those hooks are axioms:
-
-```
-axiom match_reservation : Arch.pa -> Bool
-axiom cancel_reservation : Unit -> SailM Unit
-```
-
-The Sail state has no visible reservation field in `SequentialState`, and the
-`regs` map is keyed only by the generated architectural `Register` enum. There
-is no `Register` key for LR/SC reservation state. Since `match_reservation` is a
-pure function, it cannot inspect `regs` or any other Sail state field.
-
-As a result, a closed equivalence theorem for `SC.D` is not currently provable.
-It would require a trusted contract connecting Sail's opaque reservation hooks
-to Jolt's concrete virtual-register reservation model and derived `success`
-bit.
+The theorem relating those registers to Jolt's `reservation_w` and
+`reservation_d` virtual registers is not stated yet; the policy it will use is
+described in `docs/riscv-alignment.md`, section 3.
 -/
 
 set_option linter.unusedVariables false

@@ -72,11 +72,11 @@ theorem rightLookupOperand_mul (multiplication : rightLookupEqProductIfMul witne
   simpa only [JoltISA.mulWide, Nat.cast_mul] using sub_eq_zero.mp relation
 
 variable {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
 
-include charAbove2pow128 context equations
+include charAbove2pow128Minus2pow64 context equations
 
 /-- A RangeCheck addition cycle returns the wrapped 64-bit sum of its inputs. -/
 theorem lookupOutput_rangeCheck_add (t : Fin params.traceLength)
@@ -87,10 +87,11 @@ theorem lookupOutput_rangeCheck_add (t : Fin params.traceLength)
     (left : witness.LeftInstructionInput t = (lhs.toNat : F))
     (right : witness.RightInstructionInput t = (rhs.toNat : F)) :
     witness.LookupOutput t = ((lhs + rhs).toNat : F) := by
-  have raf := instructionRafFlag_one_of_arithmetic (two_pow_127_lt_char charAbove2pow128)
+  have raf := instructionRafFlag_one_of_arithmetic (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations t (Or.inl active)
-  have output := lookupOutput_rangeCheck_of_identity charAbove2pow128 context equations
+  have output := lookupOutput_rangeCheck_of_identity charAbove2pow128Minus2pow64 context equations
     t slot selected table _ raf (rightLookupOperand_add equations.rightLookupAdd t active lhs rhs left right)
+    (addWideIndex_lt lhs rhs)
   simpa only [BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128), JoltISA.addWide_low] using output
 
 /-- A RangeCheck subtraction cycle returns the wrapped 64-bit difference. -/
@@ -102,10 +103,11 @@ theorem lookupOutput_rangeCheck_sub (t : Fin params.traceLength)
     (left : witness.LeftInstructionInput t = (lhs.toNat : F))
     (right : witness.RightInstructionInput t = (rhs.toNat : F)) :
     witness.LookupOutput t = ((lhs - rhs).toNat : F) := by
-  have raf := instructionRafFlag_one_of_arithmetic (two_pow_127_lt_char charAbove2pow128)
+  have raf := instructionRafFlag_one_of_arithmetic (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations t (Or.inr (Or.inl active))
-  have output := lookupOutput_rangeCheck_of_identity charAbove2pow128 context equations
+  have output := lookupOutput_rangeCheck_of_identity charAbove2pow128Minus2pow64 context equations
     t slot selected table _ raf (rightLookupOperand_sub equations.rightLookupSub t active lhs rhs left right)
+    (subWideIndex_lt lhs rhs)
   simpa only [BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128), JoltISA.subWide_low] using output
 
 /-- A RangeCheck multiplication cycle returns the wrapped 64-bit product. -/
@@ -117,11 +119,12 @@ theorem lookupOutput_rangeCheck_mul (t : Fin params.traceLength)
     (left : witness.LeftInstructionInput t = (lhs.toNat : F))
     (right : witness.RightInstructionInput t = (rhs.toNat : F)) :
     witness.LookupOutput t = ((lhs * rhs).toNat : F) := by
-  have raf := instructionRafFlag_one_of_arithmetic (two_pow_127_lt_char charAbove2pow128)
+  have raf := instructionRafFlag_one_of_arithmetic (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations t (Or.inr (Or.inr active))
-  have output := lookupOutput_rangeCheck_of_identity charAbove2pow128 context equations
+  have output := lookupOutput_rangeCheck_of_identity charAbove2pow128Minus2pow64 context equations
     t slot selected table _ raf (rightLookupOperand_mul equations.rightLookupEqProductIfMul
       equations.productEqLeftInputMulRightInput t active lhs rhs left right)
+    (mulWideIndex_lt lhs rhs)
   simpa only [BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128), JoltISA.mulWide_low] using output
 
 end JoltConstraints.Soundness

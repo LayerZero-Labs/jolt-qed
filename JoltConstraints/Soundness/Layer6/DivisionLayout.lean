@@ -22,6 +22,72 @@ For example, REM into x1 satisfies this predicate, whereas AdviceLD does not. -/
 private def SourceInternalAdvice (source : SourceInstruction) : Prop :=
   source.expand.any expandedInternalAdvice = true
 
+-- Observe only internal advice, independently of register encodings and values.
+private def programInternalAdvice (program : JoltISA.Program) : Bool :=
+  program.instrs.any (·.adviceValue?.isSome)
+
+private theorem programInternalAdvice_instr (row : JoltISA.Instr) (next : JoltISA.Program) :
+    programInternalAdvice (.instr row next) =
+      (row.adviceValue?.isSome || programInternalAdvice next) := rfl
+
+private theorem programInternalAdvice_done (result : ExecutionResult) :
+    programInternalAdvice (.done result) = false := rfl
+
+private theorem programInternalAdvice_ite (condition : Prop) [Decidable condition]
+    (yes no : JoltISA.Program) :
+    programInternalAdvice (if condition then yes else no) =
+      if condition then programInternalAdvice yes else programInternalAdvice no := by
+  split <;> rfl
+
+private theorem programInternalAdvice_csrReadInto
+    (csr : JoltISA.SystemCSR) (rd : regidx) (next : JoltISA.Program) :
+    programInternalAdvice (JoltISA.csrReadInto csr rd next) = programInternalAdvice next := by
+  unfold JoltISA.csrReadInto
+  split
+  · rfl
+  · split <;> rfl
+
+private theorem programInternalAdvice_csrSwapWrite
+    (csr : JoltISA.SystemCSR) (source : JoltISA.Src) :
+    programInternalAdvice (JoltISA.csrSwapWrite csr source) = false := by
+  cases csr <;> rfl
+
+private theorem programInternalAdvice_noop :
+    programInternalAdvice JoltISA.pureWritebackRdZeroProgram = false := rfl
+
+-- Each combinator is reduced once; CSR operands remain symbolic.
+macro "csr_advice_free " program:ident : tactic => `(tactic| (
+  change programInternalAdvice _ = false
+  unfold $program
+  simp only [programInternalAdvice_ite, programInternalAdvice_instr,
+    programInternalAdvice_done, programInternalAdvice_csrReadInto,
+    programInternalAdvice_csrSwapWrite, programInternalAdvice_noop,
+    JoltISA.Instr.adviceValue?, Option.isSome_none, Bool.false_or, Bool.false_eq_true, Bool.true_eq_false, ite_self, ↓reduceIte]))
+
+/-- CSRRW requests no internal advice; for example, mtvec's scratch rows are deterministic. -/
+private theorem csrrw_no_internalAdvice (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+    (JoltISA.csrrwProgram csr rs1 rd).instrs.any (·.adviceValue?.isSome) = false := by
+  csr_advice_free JoltISA.csrrwProgram
+
+/-- Register CSR bit updates request no internal advice; for example, CSRRC uses ANDN. -/
+private theorem csrBitUpdate_no_internalAdvice
+    (clear : Bool) (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+    (JoltISA.csrBitUpdateProgram clear csr rs1 rd).instrs.any
+      (·.adviceValue?.isSome) = false := by
+  cases clear <;> csr_advice_free JoltISA.csrBitUpdateProgram
+
+/-- CSRRWI requests no internal advice; for example, its masked immediate is known statically. -/
+private theorem csrrwi_no_internalAdvice (csr : JoltISA.SystemCSR) (uimm : BitVec 5) (rd : regidx) :
+    (JoltISA.csrrwiProgram csr uimm rd).instrs.any (·.adviceValue?.isSome) = false := by
+  cases csr <;> csr_advice_free JoltISA.csrrwiProgram
+
+/-- Immediate CSR bit updates request no internal advice; for example, a zero mask is a read. -/
+private theorem csrImmediateBitUpdate_no_internalAdvice
+    (clear : Bool) (csr : JoltISA.SystemCSR) (uimm : BitVec 5) (rd : regidx) :
+    (JoltISA.csrImmediateBitUpdateProgram clear csr uimm rd).instrs.any
+      (·.adviceValue?.isSome) = false := by
+  cases clear <;> csr_advice_free JoltISA.csrImmediateBitUpdateProgram
+
 private theorem division_source_kind (kind : DivisionKind) (rd rs1 rs2 : regidx)
     (q : BitVec 64) (advice : SourceInternalAdvice (kind.source rd rs1 rs2 q)) :
     ∃ (kind' : DivisionKind) (rd' rs1' rs2' : regidx) (q' : BitVec 64),
@@ -50,6 +116,13 @@ private theorem source_advice_kind (source : SourceInstruction)
   case riscv.REMU => exact division_source_kind .remu _ _ _ _ advice
   case riscv.REMW => exact division_source_kind .remw _ _ _ _ advice
   case riscv.REMUW => exact division_source_kind .remuw _ _ _ _ advice
+  -- CSR reads, swaps and bit updates never request internal advice.
+  case riscv.CSRRW | riscv.CSRRS | riscv.CSRRC | riscv.CSRRWI | riscv.CSRRSI | riscv.CSRRCI =>
+    simp only [SourceInternalAdvice, SourceInstruction.expand, ExpandedSource.ofProgram,
+      expandedInternalAdvice, Option.any_some, csrrsProgram, csrrcProgram,
+      csrrsiProgram, csrrciProgram, csrrw_no_internalAdvice,
+      csrBitUpdate_no_internalAdvice, csrrwi_no_internalAdvice,
+      csrImmediateBitUpdate_no_internalAdvice, Bool.false_eq_true] at advice
   -- Move conditional choices through each observer before unfolding the observer.
   all_goals simp only [SourceInternalAdvice, SourceInstruction.expand, expandedInternalAdvice,
         ExpandedSource.ofNative, ExpandedSource.ofProgram, ExpandedSource.ofPureProgram,

@@ -1,4 +1,5 @@
 import JoltBytecode.Bundles
+import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 
 open LeanRV64D
@@ -67,9 +68,9 @@ theorem jalrInstr_eq_sail
   obtain ⟨rustPC, hNextPC⟩ := h.nextPC_readable.exists_value
   -- Establish Rust's full state update before applying the Sail projection.
   rw [jalrNative_run imm rs1 rd js rustPC h.rs1_val hNextPC h.rs1_read]
-  -- The disabled Zicfilp hook leaves the Sail state unchanged.
+  -- The hart has no Zicfilp, so the landing-pad hook leaves the state unchanged.
   have hUpdate : update_elp_state rs1 js.sail = .ok () js.sail := by
-    simp only [update_elp_state, h.zicfilp_disabled.value, bind, EStateM.bind,
+    simp only [update_elp_state, HartConfig.currentlyEnabled_Zicfilp_run, bind, EStateM.bind,
       Bool.false_eq_true, if_false, pure, EStateM.pure]
   -- The bundle guarantees that Sail accepts Rust's bit-0-cleared target.
   simp only [execute_JALR, EStateM.run, bind, EStateM.bind, hUpdate, get_next_pc,

@@ -66,7 +66,7 @@ is assumed. Runtime advice is applied exactly as in UntrustedAnswerRun.executes.
 The destination becomes live; for example, a VirtualAdvice write initializes
 temporary 40 even when its incoming value does not agree.
 The write and execution conclusions also cover the last cycle. -/
-theorem registerWriteOn_step {live : Fin 128 → Prop} (charAbove2pow128 : 2 ^ 128 < ringChar F)
+theorem registerWriteOn_step {live : Fin 128 → Prop} (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     {pre : SailJoltState} (agrees : RegisterAgreementOn live witness t pre)
     (destination : Dst) (destinationIs : row.instruction.destination? = some destination)
     (value : BitVec 64) (encoded : witness.RdWriteValue t = (value.toNat : F))
@@ -87,7 +87,7 @@ theorem registerWriteOn_step {live : Fin 128 → Prop} (charAbove2pow128 : 2 ^ 1
   · rw [rule]
     simp only [bind, EStateM.bind, written, pure, EStateM.pure]
   · intro next
-    exact agrees.write charAbove2pow128 context equations next slot selected rowIs
+    exact agrees.write charAbove2pow128Minus2pow64 context equations next slot selected rowIs
       destinationIs value encoded written
 
 omit charAbove2pow127 in
@@ -96,7 +96,7 @@ equation. Canonicality proves that the write succeeds; no successful execution
 is assumed. Runtime advice is applied exactly as in UntrustedAnswerRun.executes.
 The write and execution conclusions also cover the last cycle.
 For example, AND uses this full-agreement wrapper to finish its row step. -/
-theorem registerWrite_step (charAbove2pow128 : 2 ^ 128 < ringChar F)
+theorem registerWrite_step (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     {pre : SailJoltState} (agrees : RegisterAgreement witness t pre)
     (destination : Dst) (destinationIs : row.instruction.destination? = some destination)
     (value : BitVec 64) (encoded : witness.RdWriteValue t = (value.toNat : F))
@@ -110,7 +110,7 @@ theorem registerWrite_step (charAbove2pow128 : 2 ^ 128 < ringChar F)
     ∀ next : t.val + 1 < params.traceLength,
       RegisterAgreement witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   obtain ⟨valueEq, runs, nextAgrees⟩ := registerWriteOn_step context equations selected rowIs
-    charAbove2pow128 (agrees.toOn (fun _ => True)) destination destinationIs value encoded
+    charAbove2pow128Minus2pow64 (agrees.toOn (fun _ => True)) destination destinationIs value encoded
     answer advice (by rw [withRuntimeAdvice_eq_of_noAdvice _ advice absent]; exact rule)
   exact ⟨valueEq, runs, fun next => (nextAgrees next).toFull (fun _ => Or.inl True.intro)⟩
 

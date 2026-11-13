@@ -83,7 +83,7 @@ theorem word_load_pmp_ok
     h.load_pmp.subaccess
       (offset :=
         (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat)
-      (accessWidth := 4)
+      (accessWidth := 4) (by decide)
       (word_offset_fits h.rs1_val imm hAlign)
 
 /-- The enclosing Jolt non-MMIO window contains Sail's word-sized access. -/
@@ -98,7 +98,7 @@ theorem word_not_readable_mmio
     h.not_readable_mmio.subaccess
       (offset :=
         (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat)
-      (accessWidth := 4)
+      (accessWidth := 4) (by decide)
       (word_offset_fits h.rs1_val imm hAlign)
 
 /-- An aligned effective word address has room for all four bytes. -/
