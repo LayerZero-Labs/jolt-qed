@@ -210,8 +210,10 @@ addresses from it and the constraints.
 **Source-language scope.** Both targets cover programs represented by
 [`SourceInstruction`](../JoltConstraints/expansion_helpers.lean): the modeled
 RISC-V instructions, the listed Jolt custom instructions at opcode `0x5B`, and
-five registered inlines at opcode `0x0B` (SHA256, SHA256_INIT, KECCAK256,
-KECCAK256_ABSORB_PERMUTE and BLAKE2). Every other `0x0B` encoding, opcode `0x2B`
+twelve registered inlines at opcode `0x0B` (SHA256, SHA256_INIT, KECCAK256,
+KECCAK256_ABSORB_PERMUTE, BLAKE2, and the secp256k1 inlines MULQ, SQUAREQ, DIVQ,
+MULR, SQUARER, DIVR and GLVR_ADV; `JoltBytecode/Inlines/Keys.lean`). Every other
+`0x0B` encoding, including the `rd = x0` encodings of the secp256k1 inlines, opcode `0x2B`
 and field-inline opcode `0x7B` are outside that type. The SDK's
 `field_to_limbs!` and `field_from_limbs!` emit `0x7B` instructions. Any guest containing these instructions is
 outside the theorem's scope by construction. This is an existing language restriction,
@@ -220,16 +222,17 @@ not an added soundness premise.
 An instance is a claim about one program.
 It gives the program, its public inputs and trusted advice, and the output bytes and panic flag the program is claimed to produce.
 The private inputs are what the prover picks and Jolt's verifier never sees.
-In the existing specification they are the untrusted advice, which is loaded into RAM, and the advice tape, which the guest reads while the program runs. The relaxed specification, used only inside the proof, supplies independent answers in the existentially chosen trace (Layer 5a). It retains the tape state for exact inclusion, but the relaxed tape instructions do not consult its bytes or enforce exhaustion.
+In the existing specification they are the untrusted advice, which is loaded into RAM, the advice tape, which the guest reads while the program runs, and the inline advice words (`inline_advice`), which the VirtualAdvice rows of the secp256k1 inlines write, in trace order.
+Jolt's prover fills `inline_advice` with each inline's `build_advice` output, but the language allows any words that pass the inline's own assertions, including non-canonical ones (`JoltConstraints/language.lean`, decision D2 in `docs/inline-precompiles.md`). The relaxed specification, used only inside the proof, supplies independent answers in the existentially chosen trace (Layer 5a). It retains the tape state for exact inclusion, but the relaxed tape instructions do not consult its bytes or enforce exhaustion.
 A step is one row of the expanded bytecode being run; an expandable instruction such as DIV takes several steps.
 A witness `w` is a set of tables indexed by `params.traceLength` cycles.
 The proof must establish which cycles describe execution steps and which are padding.
 In the non-succinct model, the verifier receives `w` in the clear and checks every modeled constraint.
 
 The theorem says: if some `w` satisfies every constraint, then there are private inputs, including one advice tape, and an `HonestTrace` on them whose final device holds the claimed output bytes, after trimming trailing zeros, and the claimed panic flag. Jolt's prover must also accept that trace (`prover_config.isSome`), and none of its spoil asserts may fail (`SpoilAssertsPass`). On 2026-10-15 Ari added these two to `InLanguage`, because Jolt's code says it proves only such runs; L is exactly what Jolt's code says, nothing more or less.
-The existing `HonestTrace` describes Jolt's tracer running with a fixed tape: each step's bytecode row, its state before and after, the runtime advice Jolt's tracer computes, and the step where Jolt's tracer stops.
+The existing `HonestTrace` describes Jolt's tracer running with a fixed tape: each step's bytecode row, its state before and after, the runtime advice Jolt's tracer computes (for a VirtualAdvice step of a registered inline, the next word of `inline_advice` instead), and the step where Jolt's tracer stops.
 The proof first builds a relaxed trace, which allows independent tape answers while retaining the other execution, internal runtime-advice and stopping requirements. Its definition and the inclusion of fixed-tape traces are implemented in Layer 5a. Layer 7 then rebuilds one tape from the answers, giving an `HonestTrace`.
-We aim to preserve the supplied untrusted advice in RAM and choose the tape answers from the witness. The audit has found no constraint linking those answers to one tape; none is needed, because one tape can be rebuilt from them.
+We aim to preserve the supplied untrusted advice in RAM and choose the tape answers and the inline advice words from the witness: `soundness_reconstruct_trace` reads the inline advice words off the run's inline advice steps (`collectInlineAdvice`). The audit has found no constraint linking those answers to one tape; none is needed, because one tape can be rebuilt from them.
 
 The premises are bundled in
 [Soundness/Assumptions.lean](../JoltConstraints/Soundness/Assumptions.lean):
