@@ -136,7 +136,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 | Premise | Meaning | What would remove it |
 | --- | --- | --- |
-| `riscv` (a field of `BlockConforms`) | Every block of the halt prefix runs a RISC-V instruction. Jolt's seven custom instructions on opcode `0x5B` (the advice loads, `VirtualRev8W`, `VirtualAssertEQ` and `VirtualHostIO`) and the inline precompiles on opcodes `0x0B` and `0x2B`, such as the hash and big-integer inlines, have no block theorem yet. | A Lean specification of each of Jolt's instructions, and a step that runs those by their specification and every other instruction by `try_step` ([`riscv-alignment.md`](riscv-alignment.md) section 7). |
+| `riscv` (a field of `BlockConforms`) | Every block of the halt prefix runs a RISC-V instruction. Jolt's seven custom instructions on opcode `0x5B` (the advice loads, `VirtualRev8W`, `VirtualAssertEQ` and `VirtualHostIO`) and the inline precompiles on opcodes `0x0B` and `0x2B`, such as the hash and big-integer inlines, have no block theorem under `BlockConforms`. The `_with_inlines` theorems (section "Guests that call inlines") drop this field and cover the twelve registered inlines. | A Lean specification of each of Jolt's instructions, and a step that runs those by their specification and every other instruction by `try_step` ([`riscv-alignment.md`](riscv-alignment.md) section 7). |
 
 ### Soundness premises (`sail_soundness` only)
 
