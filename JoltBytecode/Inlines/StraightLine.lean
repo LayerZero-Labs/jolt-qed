@@ -189,6 +189,21 @@ theorem regRun_cons_of {i : Instr} {d : VReg} {g : (VReg → BitVec 64) → BitV
     regRun (i :: l) f = regRun l (setV f d (g f)) := by
   simp only [regRun, h, hd, ↓reduceIte]
 
+/-- The evaluator of a concatenation.
+Example: `regRun ([LUI vr60 5] ++ [ADD vr62 vr60 vr60]) f` runs `LUI` to get
+`setV f vr60 5`, then runs `ADD` from that file, which ends with `vr62 = 10`. -/
+theorem regRun_append (l₁ l₂ : List Instr) (f : VReg → BitVec 64) :
+    regRun (l₁ ++ l₂) f = (regRun l₁ f).bind (regRun l₂) := by
+  induction l₁ generalizing f with
+  | nil => rfl
+  | cons i l ih =>
+    simp only [List.cons_append, regRun]
+    split
+    · split
+      · exact ih _
+      · rfl
+    · rfl
+
 /-- **Register rows run as evaluated.** If the register rows `l` evaluate to `f` from the
 register file of `s`, a run of `l ++ rest` from `s` is a run of `rest` from `s` with register
 file `f`. Nothing else in the state changes.

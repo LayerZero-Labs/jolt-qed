@@ -16,7 +16,8 @@ message from `vr64..79` (`mView`):
   `n - 1` compute `Spec.rounds`.
 
 The lemmas about rows `ADD`, `XOR` and `VirtualXORROT*` on a register file are stated for any
-register numbering, so SHA-256 and Keccak can reuse `regRun_append` and `xorrot_eq`.
+register numbering, so SHA-256 and Keccak can reuse `xorrot_eq`. `regRun_append` is in
+`StraightLine`.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
@@ -48,22 +49,6 @@ Example: `jolt_virtual_xorrot_value 32 x 0 = x.rotateRight 32`. -/
 theorem xorrot_eq (n : Nat) (hn : n < 64) (x y : BitVec 64) :
     jolt_virtual_xorrot_value n x y = (x ^^^ y).rotateRight n :=
   rotater_eq_rotateRight _ n hn
-
-/-- Evaluating a concatenation evaluates the first part, then the second.
-Example: `regRun ([LUI vr60 5] ++ [LUI vr61 6]) f = some (setV (setV f vr60 5) vr61 6)`. -/
-theorem regRun_append (l₁ l₂ : List Instr) (f : VReg → BitVec 64) :
-    regRun (l₁ ++ l₂) f = (regRun l₁ f).bind (regRun l₂) := by
-  induction l₁ generalizing f with
-  | nil => rfl
-  | cons i l ih =>
-    rw [List.cons_append]
-    cases h : i.regRow? with
-    | none => simp only [regRun, h, Option.bind_none]
-    | some p =>
-      obtain ⟨d, g⟩ := p
-      by_cases hd : 32 ≤ d.toNat
-      · simp only [regRun, h, hd, ↓reduceIte, ih]
-      · simp only [regRun, h, hd, ↓reduceIte, Option.bind_none]
 
 namespace Blake2b
 
