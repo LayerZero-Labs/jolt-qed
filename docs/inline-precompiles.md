@@ -370,13 +370,15 @@ def BuiltinAdviceHonest (program : Rv64ProgramImage SourceInstruction)
   ∀ n : Fin rows.size, stepNOfTraceIsInlineAdvice program rows n = false →
     rows[n].someTracerAdvice? = builtinAdviceAtStepN program rows n
 
--- The byte relation does not read `inline_advice` (`advice_inputs.lean`).
+-- The constraints do not read `inline_advice` (`advice_inputs.lean`): a context for some
+-- private inputs is one for the same inputs with other inline advice words, with the same
+-- bytecode, initial RAM, I/O and entry, so the same equations hold.
 -- `AllConstraints` takes the committed untrusted-advice words `untrustedAdvice : Nat → F`
 -- instead of private inputs, so it cannot read `inline_advice` at all, and the soundness
--- proof reaches the byte relation through `onBytes_of_allConstraints`.
-theorem AllConstraintsOnBytes.inline_advice_irrelevant (words : Array (BitVec 64)) :
-    AllConstraintsOnBytes joltInstance { privateInputs with inline_advice := words } witness ↔
-      AllConstraintsOnBytes joltInstance privateInputs witness
+-- proof reaches the byte relation `AllConstraintsOnBytes` through `onBytes_of_allConstraints`.
+def ConstraintContext.withInlineAdvice (context : ConstraintContext joltInstance privateInputs params)
+    (words : Array (BitVec 64)) :
+    ConstraintContext joltInstance { privateInputs with inline_advice := words } params
 
 -- With the collected words in the field, every step is honest.
 theorem honest_of_builtin (program : Rv64ProgramImage SourceInstruction)

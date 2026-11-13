@@ -123,23 +123,6 @@ theorem AllConstraintsOnBytes.advice_tape_irrelevant {F : Type} [Field F]
   · rintro ⟨context, equations⟩
     exact ⟨context.withAdviceTape tape, equations⟩
 
-/-- The relation cannot distinguish two choices of inline advice words, because
-initialization does not read them. For example, a witness satisfies the relation for
-`inline_advice = #[]` exactly when it does for `inline_advice = #[5]`.
-`AllConstraints` takes no private inputs, so this is the form in which the constraints
-ignore `inline_advice`. -/
-theorem AllConstraintsOnBytes.inline_advice_irrelevant {F : Type} [Field F]
-    {params : WitnessParams}
-    (joltInstance : JoltInstance SourceInstruction) (privateInputs : JoltPrivateInputs)
-    (witness : WitnessType F params) (words : Array (BitVec 64)) :
-    AllConstraintsOnBytes joltInstance { privateInputs with inline_advice := words } witness ↔
-      AllConstraintsOnBytes joltInstance privateInputs witness := by
-  constructor
-  · rintro ⟨context, equations⟩
-    exact ⟨context.withInlineAdvice privateInputs.inline_advice, equations⟩
-  · rintro ⟨context, equations⟩
-    exact ⟨context.withInlineAdvice words, equations⟩
-
 /-- The untrusted-advice words of a 64-bit initial RAM: word `index` of the
 untrusted-advice block, cast into the field. For example, if `untrusted_advice_start`
 remaps to word 100, then `adviceBlockWords layout initialRam 1` is the field cast of

@@ -21,7 +21,7 @@ The gaps are in the other inputs of the relation, which Lean modelled as bytes o
 | Trusted advice | A commitment, made by a trusted party | Bytes in `JoltInstance.trusted_advice` | Unchanged; holds if the trusted party commits to packed bytes |
 | Program image and bytecode in committed-program mode | Commitments `ProgramImageInit` and `ProgramBytecode` | Public `JoltInstance.program` | Out of scope of the current model |
 | Execution tape (`advice_tape`) | Nothing: it is not an input of the verifier | Bytes in `JoltPrivateInputs.advice_tape` | No gap: the relation ignores it (`AllConstraintsOnBytes.advice_tape_irrelevant`) |
-| Inline advice (`inline_advice`, added by I1b) | Nothing directly: the words appear only as values of `VirtualAdvice` rows, which are witness columns | 64-bit words in `JoltPrivateInputs.inline_advice` | No gap: the relation ignores it (`AllConstraintsOnBytes.inline_advice_irrelevant`, on the merged branch `inline/i1b-t5`) |
+| Inline advice (`inline_advice`, added by I1b) | Nothing directly: the words appear only as values of `VirtualAdvice` rows, which are witness columns | 64-bit words in `JoltPrivateInputs.inline_advice` | No gap: the relation ignores it (`ConstraintContext.withInlineAdvice`, on the merged branch `inline/i1b-t5`) |
 
 ## Witness columns
 
@@ -86,8 +86,8 @@ Proposed fix, not implemented: model committed-program mode as a separate instan
 `docs/inline-precompiles.md` (phase I1b) plans a lemma `allConstraints_inline_advice` that states `AllConstraints joltInstance { privateInputs with inline_advice := words } witness`.
 After this branch `AllConstraints` takes untrusted-advice words instead of private inputs, so it cannot read `inline_advice` at all.
 On `t5/advice-field` alone, `docs/inline-precompiles.md` stated the planned lemma on the byte relation, as `allConstraintsOnBytes_inline_advice`.
-The merged branch `inline/i1b-t5` proves it as `AllConstraintsOnBytes.inline_advice_irrelevant` (`advice_inputs.lean`), next to `AllConstraintsOnBytes.advice_tape_irrelevant`, and the spec names it so.
-The soundness proof reaches the byte relation through `onBytes_of_allConstraints`, and `JoltInstance.soundness_onBytes` moves the reconstructed run to the inline advice words with `ConstraintContext.withInlineAdvice`.
+On the merged branch `inline/i1b-t5`, the fact is I1b's `ConstraintContext.withInlineAdvice` (`advice_inputs.lean`): a context for some private inputs is one for the same inputs with other inline advice words, with the same equations.
+The soundness proof reaches the byte relation through `onBytes_of_allConstraints`, and `JoltInstance.soundness_onBytes` moves the reconstructed run to the inline advice words with `ConstraintContext.withInlineAdvice`; the spec names that definition.
 
 ## Scope of the load argument
 
