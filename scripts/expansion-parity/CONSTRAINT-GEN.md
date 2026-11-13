@@ -16,7 +16,7 @@ that reading.
 
 ## Regenerate
 
-Check out a16z/jolt at the pinned commit (`580084fcf`, the commit of the
+Check out a16z/jolt at the pinned commit (`3cc6e7bd1`, the commit of the
 expansion-parity job), then run from the repository root:
 
 ```bash

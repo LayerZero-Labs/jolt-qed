@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 240
     env:
       # a16z/jolt#2384 at the commit the expansion-parity job uses.
-      JOLT_REV: 580084fcfad4788ebf48413a92dd640ca090c45f
+      JOLT_REV: 3cc6e7bd179900cfad6a052335c32ea1ef749536
       EXPANSION_PARITY_FEATURES: zicsr-remaining
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

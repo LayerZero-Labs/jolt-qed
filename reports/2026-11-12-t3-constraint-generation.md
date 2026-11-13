@@ -1,14 +1,15 @@
 # Constraint generation: T3
 
 Date: 2026-11-12.
-T3 finds zero mismatches at a16z/jolt#2384 head `580084fcf`.
+T3 finds zero mismatches at a16z/jolt#2384 head `3cc6e7bd1`.
 Lean now proves that each handwritten R1CS row, each handwritten claim of the four relations, and Lean's per-instruction flags, lookup table and RAF flag equal the data that a new generator extracts from Jolt's own code.
 A new CI job regenerates that data at the pinned commit, fails on any diff, and rebuilds the proofs.
 
 ## Revisions
 
-- jolt-qed: branch `inline/t3-constraints` on top of `inline/t1-driver` at `b648846`.
-- Jolt: a16z/jolt#2384 at `580084fcfad4788ebf48413a92dd640ca090c45f` (`580084fcf`), the commit the T1 and T4 CI jobs check.
+- jolt-qed: branch `inline/t3-constraints`, cut from `inline/t1-driver` at `b648846` and merged with `spec/inline-precompiles` at `5c7556a`, its PR base.
+- Jolt: a16z/jolt#2384 at `3cc6e7bd179900cfad6a052335c32ea1ef749536` (`3cc6e7bd1`), the commit the expansion-parity CI job checks.
+  I first generated the data at the previous pin `580084fcf`. Regenerating at `3cc6e7bd1` changed only the commit in each file's header, and none of the Jolt sources cited below changed between the two commits.
   The generator runs with the cargo feature `zicsr-remaining`, like the T1 driver.
 - Toolchain: `leanprover/lean4:v4.35.0`, Mathlib `v4.35.0`.
 
@@ -20,7 +21,7 @@ If the generated files change, the new CI job fails until someone commits them a
 `scripts/expansion-parity/src/bin/constraint-gen.rs` is a new binary in the T1 crate.
 It links Jolt's crates and writes three files under `JoltConstraints/ConstraintGen/Generated/`.
 
-| File | Contents | Jolt source at `580084fcf` |
+| File | Contents | Jolt source at `3cc6e7bd1` |
 | --- | --- | --- |
 | `R1CS.lean` | The 38 per-cycle variables in column order, and the 22 rows of `rv64_trace_constraints` as `(variable, integer coefficient)` lists for A, B and C | `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs` (`RV64_VARIABLE_NAMES` at line 77, `RV64_CONSTRAINT_NAMES` at 139, `rv64_trace_constraints` at 458) |
 | `Relations.lean` | The four relations of `extracted_claims` in `zklean-extractor/src/sumchecks.rs:24`: 12 claims, each with input relation, input and output expressions, output weight and offset | `unbatched_relation` in `relations/ram/read_write_checking.rs:59`, `relations/registers/read_write_checking.rs:64`, `relations/instruction/input_virtualization.rs:73`, `relations/spartan/shift.rs:69` (under `crates/jolt-claims/src/protocols/jolt/`) |
@@ -49,7 +50,7 @@ The generator also runs these checks, and exits with status 1 if any fails:
     This is the collapse `stampClass` uses in Lean.
 - `raf_stamp_independent`: over the same 4108 stamps, the RAF flag does not change with the stamp.
 
-All checks pass at `580084fcf`.
+All checks pass at `3cc6e7bd1`.
 
 ## How Lean reads the generated data
 
@@ -180,7 +181,7 @@ I made each change below on its own, rebuilt `Equiv.lean`, and restored the file
 
 ## How to run
 
-Regenerate (needs a Jolt checkout at `580084fcf`):
+Regenerate (needs a Jolt checkout at `3cc6e7bd1`):
 
 ```
 JOLT_DIR=/path/to/jolt EXPANSION_PARITY_FEATURES=zicsr-remaining scripts/expansion-parity/run-constraint-gen.sh WORK_DIR
@@ -196,6 +197,6 @@ lake build JoltConstraints.ConstraintGen.Equiv
 
 ## CI
 
-`.github/workflows/constraint-generation.yml` checks out Jolt at `JOLT_REV = 580084fcf`, runs the generator, fails if any file under `JoltConstraints/ConstraintGen/Generated/` changes, and builds `JoltConstraints.ConstraintGen.Equiv`.
+`.github/workflows/constraint-generation.yml` checks out Jolt at `JOLT_REV = 3cc6e7bd1`, runs the generator, fails if any file under `JoltConstraints/ConstraintGen/Generated/` changes, and builds `JoltConstraints.ConstraintGen.Equiv`.
 `JoltConstraints.lean` imports `Equiv`, so the existing `lean` job also builds the proofs.
 I ran the generator and the Lean build locally on the Mac; the CI job has not run yet.
