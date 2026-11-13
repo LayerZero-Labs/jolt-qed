@@ -31,7 +31,8 @@ open WholeRun
 (`JoltConstraints/WholeRun/Top.lean`). -/
 theorem sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
+    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
@@ -50,10 +51,12 @@ theorem sail_soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
-    {params : WitnessParams} (givenInputs : JoltPrivateInputs)
+    (adviceBlockFits : joltInstance.UntrustedAdviceBlockFits)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
-    (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness)
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
+    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
@@ -78,9 +81,10 @@ theorem soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
-    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (adviceBlockFits : joltInstance.UntrustedAdviceBlockFits)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance privateInputs witness) :
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness) :
     joltInstance.InLanguage := sorry
 
 section Decode

@@ -23,7 +23,8 @@ open WholeRun
 (`JoltConstraints/WholeRun/Top.lean`). -/
 theorem sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
+    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
@@ -35,7 +36,7 @@ theorem sail_reproduces {joltInstance : JoltInstance SourceInstruction}
         trimTrailingZeros final.jolt_device.outputs ∧
       (sailPanicWord trace.initialState.jolt_device s ≠ 0 ↔ final.jolt_device.panic = true) ∧
       (SailHalted joltInstance.program s ∨ halt = final) :=
-  WholeRun.HonestTrace.sail_reproduces trace himage hrows hheap hcfg hp hconf
+  WholeRun.HonestTrace.sail_reproduces trace hdecoded hrows hheap hcfg hp hconf
 
 /-- Proof of the frozen statement of `JoltInstance.sail_soundness`
 (`JoltConstraints/WholeRun/Top.lean`). -/
@@ -43,10 +44,12 @@ theorem sail_soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
-    {params : WitnessParams} (givenInputs : JoltPrivateInputs)
+    (adviceBlockFits : joltInstance.UntrustedAdviceBlockFits)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
-    (himage : ImageDecoded joltInstance.program) (hrows : joltInstance.program.RowsAligned)
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness)
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
+    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
@@ -62,8 +65,8 @@ theorem sail_soundness {F : Type} [Field F] (joltField : JoltField F)
               trimTrailingZeros joltInstance.outputs ∧
             (sailPanicWord trace.initialState.jolt_device s ≠ 0 ↔ joltInstance.panic = true) ∧
             (SailHalted joltInstance.program s ∨ halt = final)) :=
-  JoltInstance.sail_soundness joltField joltInstance assumptions restrictions givenInputs
-    witness satisfied himage hrows hheap
+  JoltInstance.sail_soundness joltField joltInstance assumptions restrictions adviceBlockFits
+    untrustedAdvice witness satisfied hdecoded hrows hheap
 
 end WholeRun
 
@@ -73,11 +76,13 @@ theorem soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
-    {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+    (adviceBlockFits : joltInstance.UntrustedAdviceBlockFits)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance privateInputs witness) :
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness) :
     joltInstance.InLanguage :=
-  JoltInstance.soundness joltField joltInstance assumptions restrictions privateInputs witness
+  JoltInstance.soundness joltField joltInstance assumptions restrictions adviceBlockFits
+    untrustedAdvice witness
     satisfied
 
 section Decode
