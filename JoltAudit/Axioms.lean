@@ -22,6 +22,7 @@ import JoltConstraints.ExpansionGen.Equiv
 import JoltConstraints.WholeRun.InlineSoundness
 import JoltConstraints.WholeRun.Platform
 import JoltConstraints.WholeRun.InlineCompleteness
+import JoltConstraints.WholeRun.SailCompleteness
 import JoltConstraints.Completeness.completeness
 
 open Lean Elab Command
@@ -139,6 +140,7 @@ extra axiom. Move a theorem to `#audit_axioms` once those gaps are closed. -/
 #audit_axioms_known_sorry
   JoltInstance.completeness,
   JoltInstance.completeness_someWitness,
-  JoltInstance.completeness_jolt_inline_advice
+  JoltInstance.completeness_jolt_inline_advice,
+  JoltInstance.sail_completeness
 
 end JoltAudit

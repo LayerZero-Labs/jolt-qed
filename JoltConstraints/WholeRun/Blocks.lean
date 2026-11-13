@@ -77,7 +77,9 @@ private theorem source_segment (image : Rv64ProgramImage SourceInstruction)
   exact ⟨source, rows, before, after, source_at image bytecode expanded accepted source member,
     emits, splitRows, firstIndex.symm⟩
 
-private theorem segment_row {bytecode : Array JoltInstructionRow}
+/-- Row `k` of an expansion that sits in the bytecode after `before` is bytecode row
+`before.length + k`. -/
+theorem segment_row {bytecode : Array JoltInstructionRow}
     {rows before after : List JoltInstructionRow}
     (splitRows : bytecode.toList = before ++ rows ++ after)
     (k : Nat) (inside : k < rows.length) :
@@ -86,7 +88,8 @@ private theorem segment_row {bytecode : Array JoltInstructionRow}
     List.getElem?_append_right (by omega), Nat.add_sub_cancel_left,
     List.getElem?_append_left inside, List.getElem?_eq_getElem inside]
 
-private theorem segment_get {bytecode : Array JoltInstructionRow}
+/-- `segment_row` for a bytecode index given as a `Fin`. -/
+theorem segment_get {bytecode : Array JoltInstructionRow}
     {rows before after : List JoltInstructionRow}
     (splitRows : bytecode.toList = before ++ rows ++ after)
     (k : Nat) (inside : k < rows.length) (i : Fin bytecode.size)
@@ -95,7 +98,9 @@ private theorem segment_get {bytecode : Array JoltInstructionRow}
   rw [← position, Array.getElem?_eq_getElem i.isLt] at h
   exact Option.some.inj h
 
-private theorem segment_compressed {bytecode : Array JoltInstructionRow}
+/-- The first bytecode row of an expansion records whether its source instruction is
+compressed. -/
+theorem segment_compressed {bytecode : Array JoltInstructionRow}
     {source : SourceInstructionRow SourceInstruction} {rows before after : List JoltInstructionRow}
     (emits : expand_instruction source = some rows)
     (splitRows : bytecode.toList = before ++ rows ++ after)
@@ -152,23 +157,28 @@ private theorem trace_segment {joltInstance : JoltInstance SourceInstruction}
 
 /-- Patch the next available advice value into one instruction, for example the
 quotient into a VirtualAdvice row of DIV. -/
-private def patchHead (values : List (BitVec 64)) : JoltISA.Instr → JoltISA.Instr
+def patchHead (values : List (BitVec 64)) : JoltISA.Instr → JoltISA.Instr
   | .VirtualAdvice dst placeholder imm => .VirtualAdvice dst (values.headD placeholder) imm
   | instruction => instruction
 
-private theorem patchAdvice_cons (values : List (BitVec 64))
+/-- `patchAdvice` patches the first instruction and moves on to the next advice value if that
+instruction takes one. -/
+theorem patchAdvice_cons (values : List (BitVec 64))
     (instruction : JoltISA.Instr) (rest : List JoltISA.Instr) :
     patchAdvice values (instruction :: rest) = patchHead values instruction ::
       patchAdvice (if instruction.adviceValue?.isSome then values.tail else values) rest := by
   cases instruction <;> rfl
 
-private theorem patchAdvice_length (values : List (BitVec 64)) (instructions : List JoltISA.Instr) :
+/-- Patching advice keeps the number of instructions. -/
+theorem patchAdvice_length (values : List (BitVec 64)) (instructions : List JoltISA.Instr) :
     (patchAdvice values instructions).length = instructions.length := by
   induction instructions generalizing values with
   | nil => rfl
   | cons instruction rest ih => rw [patchAdvice_cons]; simp only [List.length_cons, ih]
 
-private theorem patchAdvice_get (values : List (BitVec 64)) (instructions : List JoltISA.Instr)
+/-- Instruction `k` after patching takes the advice value after those used by the advice
+instructions before it. -/
+theorem patchAdvice_get (values : List (BitVec 64)) (instructions : List JoltISA.Instr)
     (k : Nat) (inside : k < instructions.length) :
     (patchAdvice values instructions)[k]'(by rw [patchAdvice_length]; exact inside) =
       patchHead (values.drop ((instructions.take k).filter (·.adviceValue?.isSome)).length)
@@ -194,7 +204,9 @@ private theorem patchHead_runtime (values : List (BitVec 64))
     Option.map_some, patchHead] at agrees ⊢
   exact congrArg (fun v => JoltISA.Instr.VirtualAdvice _ v _) (Option.some.inj agrees)
 
-private theorem segment_start {bytecode : Array JoltInstructionRow}
+/-- If a new expansion starts at trace row `base` and none starts in the next `offset` rows,
+the expansion containing row `base + offset` starts at `base`. -/
+theorem segment_start {bytecode : Array JoltInstructionRow}
     (traceRows : Array (TraceRow bytecode)) (base offset : Nat)
     (starts : stepNOfTraceIsStartOfNewExpansion traceRows base = true)
     (later : ∀ k, 0 < k → k ≤ offset →
@@ -211,7 +223,9 @@ private theorem segment_start {bytecode : Array JoltInstructionRow}
     rw [show base + offset + 1 = base + (offset + 1) by omega, noStart]
     exact ih (fun k positive inside => later k positive (by omega))
 
-private theorem segment_advice_count {bytecode : Array JoltInstructionRow}
+/-- Within one expansion, the advice steps before row `base + offset` are the advice
+instructions among the expansion's first `offset` rows. -/
+theorem segment_advice_count {bytecode : Array JoltInstructionRow}
     (traceRows : Array (TraceRow bytecode)) (base : Nat) (rows : List JoltInstructionRow)
     (inside : base + rows.length ≤ traceRows.size)
     (ordered : ∀ k (hk : k < rows.length),
@@ -463,7 +477,9 @@ private theorem segment_agrees_inline {joltInstance : JoltInstance SourceInstruc
       List.getElem?_map, List.getElem?_range short, Option.map_some, Option.getD_some]
       using honest
 
-private theorem exec_seq (instructions : List JoltISA.Instr) (states : Nat → SailJoltState)
+/-- A sequence of instructions that each retire from one state to the next runs as a program
+from the first state to the last. -/
+theorem exec_seq (instructions : List JoltISA.Instr) (states : Nat → SailJoltState)
     (runs : ∀ k (hk : k < instructions.length),
       JoltISA.execInstr instructions[k] (states k) = .ok RETIRE_SUCCESS (states (k + 1))) :
     JoltISA.execProgram (JoltISA.Program.seq instructions) (states 0) =

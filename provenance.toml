@@ -4142,6 +4142,14 @@ lean = "JoltConstraints/WholeRun/Platform.lean"
 models = []
 
 [[file]]
+lean = "JoltConstraints/WholeRun/SailCompleteness.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/TraceOfBlocks.lean"
+models = []
+
+[[file]]
 lean = "JoltConstraints/expansion_checks.lean"
 models = [
   "crates/jolt-program/src/expand/control_flow/csrrs.rs",
