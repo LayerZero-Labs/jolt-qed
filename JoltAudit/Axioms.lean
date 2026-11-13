@@ -18,6 +18,7 @@ import JoltBytecode.Decode.Agreement
 import JoltBytecode.Decode.Compressed
 import JoltBytecode.Step.Instructions
 import JoltBytecode.Step.Ecall
+import JoltConstraints.ExpansionGen.Equiv
 
 open Lean Elab Command
 
@@ -79,6 +80,13 @@ The whole-run theorems and the soundness theorem they compose with
   RiscvInstruction.joltStep_eq_try_step_base,
   RiscvInstruction.joltStep_eq_try_step_compressed,
   RiscvInstruction.joltStep_eq_try_step_ecall
+
+/-! The proof that the model's expansion of every source instruction equals the
+recipe the T6 generator derived from Jolt (`JoltConstraints/ExpansionGen/`,
+`scripts/expansion-parity/EXPANSION-RECIPES.md`). -/
+
+#audit_axioms
+  ExpansionGen.expand_eq_generated
 
 /-! Not gated: `JoltInstance.completeness` and
 `JoltInstance.completeness_someWitness`

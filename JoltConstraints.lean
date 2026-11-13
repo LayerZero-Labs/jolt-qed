@@ -115,3 +115,4 @@ import JoltConstraints.WholeRun.Halt
 import JoltConstraints.WholeRun.CodeInv
 import JoltConstraints.WholeRun.Top
 import JoltConstraints.ConstraintGen.Equiv
+import JoltConstraints.ExpansionGen.Equiv
