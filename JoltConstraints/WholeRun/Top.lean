@@ -342,14 +342,11 @@ Premises, by class:
 * soundness's own premises: `joltField` (characteristic above `2^128`), `assumptions`
   (`SoundnessAssumptions`), `restrictions` (`TemporaryRestrictions`), `adviceBlockFits`
   (`UntrustedAdviceBlockFits`), and committed advice words and a witness that satisfy
-  `AllConstraints`. The six restrictions and `adviceBlockFits` exclude programs that expose
-  reported or suspected Jolt bugs. The first four restrictions constrain the row the program
-  attempts after every prefix of a relaxed execution, for every private input;
-  `noMaxLengthTrace` constrains completed relaxed traces, and `claimsNoPanic` and
-  `adviceBlockFits` only the instance. Jolt's verifier checks none of them:
+  `AllConstraints`. The four restrictions and `adviceBlockFits` exclude programs that expose
+  reported or suspected Jolt bugs. The first three restrictions constrain the row the program
+  attempts after every prefix of a relaxed execution, for every private input; `claimsNoPanic`
+  and `adviceBlockFits` constrain only the instance. Jolt's verifier checks none of them:
   * `tracerAddressChecks`: every load and store passes Jolt's tracer address checks;
-  * `hostCallsSucceed`: every host call succeeds;
-  * `noMaxLengthTrace`: no trace fills the largest power-of-two length the verifier admits;
   * `terminationThenStall`: after a store to the termination word, the next jump is the stall,
     and the termination word is not loaded again;
   * `panicStoresOne`: every store to the panic word stores 1, and the panic word is not loaded

@@ -158,14 +158,13 @@ theorem soundness_matches_outputs {F : Type} [Field F] (joltField : JoltField F)
 
 /-- C. The represented rows and verifier bounds give Jolt prover acceptance.
 The proof uses the last-jump check, the RAM-address check, and the padded
-length derived from the 256-cycle verifier floor, the witness length bound and
-`NoMaxLengthTrace`. For example, under a maximum of 1024, a 256-row run may
-be padded to 512, while the restriction excludes a 1024-row run.
-See jolt/crates/jolt-prover/src/config.rs
-(`ProverConfig::derive_from_dimensions`) at 5def437f. -/
+length derived from the 256-cycle verifier floor and the witness length bound.
+For example, under a maximum of 1024, a 256-row run pads to 256 and a 1024-row
+run pads to 1024.
+See jolt/crates/jolt-prover/src/config.rs:49-114
+(`ProverConfig::padded_trace_length`, `derive_from_dimensions`) at 3cc6e7bd1. -/
 theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (noMaxLengthTrace : joltInstance.NoMaxLengthTrace)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
@@ -180,7 +179,6 @@ theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
   obtain ⟨padded, padding, fits⟩ := checked_trace_length_fits trace.rows.size
     params.logT joltInstance.max_padded_trace_length represented.rowsBound
     context.traceLengthBound (context.traceLengthFloor.trans context.traceLengthBound)
-    (noMaxLengthTrace privateInputs trace)
   obtain ⟨ramK, ramSize⟩ := represented_ram_size_computes joltField joltInstance
     privateInputs witness context equations trace.toUntrustedAnswerRun.toTrace
     trace.initialized represented.rowsBound represented.ramAddress

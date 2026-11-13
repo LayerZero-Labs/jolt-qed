@@ -126,12 +126,12 @@ theorem checkedTraceLength_eq_padded (rows padded : Nat)
   rw [checkedTraceLength_eq rows padded accepted]
   unfold padded_trace_length
   split
-  · have exponent : Nat.clog 2 (rows + 1) ≤ 8 :=
+  · have exponent : Nat.clog 2 rows ≤ 8 :=
       Nat.clog_le_of_le_pow (by omega)
-    have rounded : 2 ^ Nat.clog 2 (rows + 1) ≤ 256 :=
+    have rounded : 2 ^ Nat.clog 2 rows ≤ 256 :=
       Nat.pow_le_pow_right (by decide) exponent
     exact max_eq_right rounded
-  · have roundedUp := Nat.le_pow_clog (by decide : 1 < 2) (rows + 1)
+  · have roundedUp := Nat.le_pow_clog (by decide : 1 < 2) rows
     exact max_eq_left (by omega)
 
 end ProverConfig

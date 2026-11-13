@@ -24,7 +24,7 @@ private theorem virtual_flag_eq_last_of_not_continues (row : JoltInstructionRow)
       subst n
       simp [JoltMetadata.circuitFlag, hs]
 
-/-- Completeness target for a complete Rust trace, with its mandatory padding.
+/-- Completeness target for a complete Rust trace, which may fill its domain.
 A nonempty trace stops as Rust's tracer does (`HonestTrace.terminated`), for every
 opcode allowed by Rust's repeated-PC stopping rule.
 There is no jump-only or nonwrapping-arithmetic assumption. -/
@@ -60,7 +60,7 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
         else _) at hsucc
       simp only [hcont, ↓reduceIte] at hsucc
       have hnextWitness : t.val + 1 < params.traceLength :=
-        hnext.trans tracePadded.2
+        hnext.trans_le tracePadded.2
       have hpc : TraceWitness.NextPC (F := F) params trace t =
           TraceWitness.PC params trace t + 1 := by
         simp only [TraceWitness.NextPC, dif_pos hnextWitness, TraceWitness.PC,

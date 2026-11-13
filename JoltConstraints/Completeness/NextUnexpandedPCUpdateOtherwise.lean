@@ -114,7 +114,7 @@ private theorem nextUnexpandedPC_eq_current_of_continues
       simpa only [← hlast] using hend
     exact Bool.false_ne_true (hend'.symm.trans hcont)
   have hnextWitness : t.val + 1 < params.traceLength :=
-    hnext.trans tracePadded.2
+    hnext.trans_le tracePadded.2
   have hsucc := trace.successor t.val ht hnext
   simp only [hcont, ↓reduceIte] at hsucc
   obtain ⟨haddr, _, _, _⟩ := trace.layout.next
@@ -124,7 +124,7 @@ private theorem nextUnexpandedPC_eq_current_of_continues
     TraceWitness.UnexpandedPC, dif_pos hnext, dif_pos ht]
   exact congrArg (fun address : BitVec 64 => (address.toNat : F)) haddr
 
-/-- Completeness target for a complete Rust trace, with its mandatory padding.
+/-- Completeness target for a complete Rust trace, which may fill its domain.
 A nonempty trace stops as Rust's tracer does (`HonestTrace.terminated`), for every
 opcode allowed by Rust's repeated-PC stopping rule.
 There is no jump-only premise. `noWrap` is the image's `NextPCNoWrap`, which
@@ -223,7 +223,7 @@ theorem honestWitness_nextUnexpandedPCUpdateOtherwise
           have hnext : t.val + 1 < trace.rows.size :=
             sourceEnd_has_next_of_frame trace terminated t.val ht hend hframe
           have hnextPadded : t.val + 1 < params.traceLength :=
-            hnext.trans tracePadded.2
+            hnext.trans_le tracePadded.2
           have hpre := jump_trace_nextPC trace t.val ht
           rw [jump_sourceLength_at_end trace row.rowIndex hend]
             at hpre

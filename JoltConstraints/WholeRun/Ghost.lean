@@ -447,21 +447,28 @@ private theorem sail_jump (pc : BitVec 64) : SailTracks (jump_to pc) := by
   · exact sailE_ite (sailE_pure _)
       (sailE_bind (sailE_lift (sail_next_pc _)) fun _ => sailE_pure _)
 
+private theorem tracks_hostLoad (address : BitVec 64) : Tracks (Mmu.hostLoad address) := by
+  intro s g h
+  have he : Mmu.load? g address.toNat = Mmu.load? s address.toNat := by
+    unfold Mmu.load?
+    rw [h.device, load_raw_shadow h]
+  unfold Mmu.hostLoad
+  rw [he]
+  exact .ok _ ⟨h, .refl _, .refl _⟩
+
 private theorem tracks_readHostBytes
-    (loadByte : BitVec 64 → JoltMonad (Result (BitVec 8) ExecutionResult))
-    (hload : ∀ a, Tracks (loadByte a)) (overflowChecks incrementAfterLast : Bool)
+    (loadByte : BitVec 64 → JoltMonad (Option (BitVec 8)))
+    (hload : ∀ a, Tracks (loadByte a))
     {width : Nat} (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    Tracks (readHostBytes loadByte overflowChecks incrementAfterLast pointer count bytes) := by
+    Tracks (readHostBytes loadByte pointer count bytes) := by
   induction count generalizing pointer bytes with
   | zero => exact tracks_pure _
   | succ count ih =>
     unfold readHostBytes
     refine tracks_bind (hload _) fun result => ?_
     cases result with
-    | Err _ => exact tracks_pure _
-    | Ok _ =>
-      dsimp only
-      exact tracks_ite (tracks_bind (tracks_throw _) fun _ => ih _ _) (ih _ _)
+    | none => exact tracks_pure _
+    | some _ => exact ih _ _
 
 private theorem tracks_tape_modify (f : JoltAdviceTape → JoltAdviceTape) :
     Tracks (modify fun s : SailJoltState => { s with adviceTape := f s.adviceTape }) := by
@@ -489,12 +496,16 @@ local macro "jolt_tracks" : tactic =>
     | split))
 
 private theorem tracks_hostIO : Tracks execHostIO := by
-  unfold execHostIO execHostIOWith
-  refine tracks_get_bind (fun _ _ h => by rw [h.host]) fun _ => ?_
-  jolt_tracks
-  all_goals first
-    | exact tracks_readHostBytes _ tracks_load _ _ _ _ _
+  unfold execHostIO execHostIOWith readHostRange
+  repeat' (first
+    | exact tracks_readHostBytes _ tracks_hostLoad _ _ _
+    | exact tracks_readSrc _
+    | exact tracks_pure _
     | exact tracks_tape_modify (fun tape => { tape with bytes := tape.bytes ++ _ })
+    | refine tracks_get_bind (fun _ _ h => by rw [h.host]) fun _ => ?_
+    | apply tracks_ite
+    | refine tracks_bind ?_ (fun _ => ?_)
+    | split)
 
 private theorem tracks_adviceLoad (rd : Dst) (n : BitVec 64) :
     Tracks (execInstr (.VirtualAdviceLoad rd n)) := by

@@ -38,17 +38,18 @@ structure JoltAdviceTape where
   bytes : Array (BitVec 8)
   readPosition : Nat
 
-/-- Rust `tracer::emulator::cpu::HostIo`: replay suppresses host effects. -/
+/-- Rust `tracer::emulator::cpu::HostIo`: replay suppresses prints and cycle
+markers; advice writes stay live in both modes. -/
 inductive JoltHostIOMode where
   | live
   | replay
   deriving DecidableEq, Repr
 
-/-- Host execution settings. Unchecked arithmetic matches Rust's release
-profile; test/build-fast profiles enable overflow checks. -/
+/-- Host execution settings: the host-I/O mode of Jolt's tracer. Host calls
+cannot fail since a16z/jolt#2410, so no arithmetic profile is modeled.
+See : jolt/tracer/src/emulator/cpu.rs:186-201 (`HostIo`) at 3cc6e7bd1. -/
 structure JoltHostIOConfig where
   mode : JoltHostIOMode := .live
-  overflowChecks : Bool := false
 
 structure SailJoltState where
   sail : SailState

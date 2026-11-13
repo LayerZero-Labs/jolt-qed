@@ -74,22 +74,24 @@ theorem load_rule (address : BitVec 64) : Preserves (JoltISA.Mmu.load address) :
   rw [JoltISA.Mmu.load_state runs]
   exact ⟨rfl, rfl⟩
 
--- Reading host-call bytes through MMU loads changes neither component.
-theorem readHostBytes_rule (overflowChecks incrementAfterLast : Bool) {width : Nat}
+-- A host-call byte read changes neither component.
+theorem hostLoad_rule (address : BitVec 64) : Preserves (JoltISA.Mmu.hostLoad address) := by
+  intro state after value runs
+  cases runs
+  exact ⟨rfl, rfl⟩
+
+-- Reading host-call bytes changes neither component.
+theorem readHostBytes_rule {width : Nat}
     (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (JoltISA.readHostBytes JoltISA.Mmu.load
-      overflowChecks incrementAfterLast pointer count bytes) := by
+    Preserves (JoltISA.readHostBytes JoltISA.Mmu.hostLoad pointer count bytes) := by
   induction count generalizing pointer bytes with
   | zero => exact pure_rule _
   | succ count ih =>
     dsimp only [JoltISA.readHostBytes]
-    refine bind_rule (load_rule _) (fun result => ?_)
+    refine bind_rule (hostLoad_rule _) (fun result => ?_)
     cases result with
-    | Err failure => exact pure_rule _
-    | Ok byte =>
-      split_ifs
-      · exact bind_rule (throw_rule _) (fun _ => ih _ _)
-      · exact bind_rule (pure_rule _) (fun _ => ih _ _)
+    | none => exact pure_rule _
+    | some byte => exact ih _ _
 
 end SailAndVRegsUnchanged
 
@@ -111,16 +113,12 @@ theorem execHostIO_keeps_state (state after : SailJoltState) (result : Execution
     (runs : JoltISA.execHostIO state = .ok result after) :
     after.sail = state.sail ∧ after.vregs = state.vregs := by
   have keeps : SailAndVRegsUnchanged.Preserves JoltISA.execHostIO := by
-    unfold JoltISA.execHostIO JoltISA.execHostIOWith
-    refine SailAndVRegsUnchanged.bind_rule SailAndVRegsUnchanged.get_rule (fun config => ?_)
-    dsimp only
-    split
-    · exact SailAndVRegsUnchanged.pure_rule _
-    · preservation_auto [SailAndVRegsUnchanged.readHostBytes_rule _ _ _ _ _,
-        SailAndVRegsUnchanged.read_rule _, SailAndVRegsUnchanged.pure_rule _,
-        SailAndVRegsUnchanged.throw_rule _,
-        SailAndVRegsUnchanged.modify_rule _ (fun _ => ⟨rfl, rfl⟩)]
-        using SailAndVRegsUnchanged.bind_rule
+    unfold JoltISA.execHostIO JoltISA.execHostIOWith JoltISA.readHostRange
+    preservation_auto [SailAndVRegsUnchanged.readHostBytes_rule _ _ _,
+      SailAndVRegsUnchanged.read_rule _, SailAndVRegsUnchanged.pure_rule _,
+      SailAndVRegsUnchanged.get_rule,
+      SailAndVRegsUnchanged.modify_rule _ (fun _ => ⟨rfl, rfl⟩)]
+      using SailAndVRegsUnchanged.bind_rule
   exact keeps state after result runs
 
 theorem execHostIO_keeps_sail (state after : SailJoltState) (result : ExecutionResult)

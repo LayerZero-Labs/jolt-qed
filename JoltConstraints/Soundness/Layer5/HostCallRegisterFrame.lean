@@ -1,4 +1,4 @@
-import JoltConstraints.Soundness.Layer5.HostCallRestriction
+import JoltConstraints.Soundness.Layer5.HostCallSuccess
 import JoltConstraints.Soundness.Layer5.Registers
 
 open LeanRV64D
@@ -37,10 +37,8 @@ theorem host_call_selected_step
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam
       context.io context.entry witness)
-    (restricted : joltInstance.HostCallsSucceed)
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (nextRow : Fin run.bytecode.size) (pre : SailJoltState)
-    (ready : run.NextStep nextRow pre)
     {t : Fin params.traceLength} (nextCycle : t.val + 1 < params.traceLength)
     (slot : Fin (2 ^ params.logBytecodeK))
     (slotPosition : slot.val = nextRow.val + 1)
@@ -68,7 +66,7 @@ theorem host_call_selected_step
     rw [rowEq]
     exact instruction
   obtain ⟨post, executes, sail, vregs⟩ := host_call_exec_sail_frame
-    restricted run nextRow pre ready answer instructionRun advice
+    run nextRow pre agrees.present answer instructionRun advice
   have nextAgrees := agrees.noWrite (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations nextCycle slot selected rowIs (by rw [instruction]; rfl)
   refine ⟨post, executes, sail ▸ nextAgrees.present, ?_⟩

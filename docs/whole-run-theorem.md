@@ -144,7 +144,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 - `JoltField F`: the field's characteristic is above `2^128 - 2^64`. Both of Jolt's fields satisfy this: BN254 (the default Dory build) and `p = 2^128 - 1780711455` (the `akita` build, Jolt's production field since a16z/jolt#2403); `JoltField.akita` and `JoltField.bn254` (`Soundness/FieldModuli.lean`) prove it, including each modulus's primality, by Pratt certificates checked in Lean. Below characteristic `2^128` the constraints include Akita's canonical-address check (63), which Jolt's `akita` build enforces; it is what makes `2^128 - 2^64` enough.
 - `SoundnessAssumptions.ramRegionFits`: the whole maximum padded RAM region lies below `2^64`. The comment in `Assumptions.lean` records it as still to be confirmed with a16z.
-- `TemporaryRestrictions`: six restrictions that exclude programs exposing reported or suspected Jolt bugs.
+- `TemporaryRestrictions`: four restrictions that exclude programs exposing reported or suspected Jolt bugs.
   Jolt's verifier makes none of these checks.
 - `UntrustedAdviceBlockFits`: a seventh temporary restriction, passed as the separate premise `adviceBlockFits` because soundness for advice given as bytes (`JoltInstance.soundness_onBytes`) does not need it.
   It excludes a configured maximum untrusted-advice size that is not a multiple of 8, where Jolt's verifier lets the prover commit block bytes no tracer run can hold.
@@ -153,15 +153,18 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 | Restriction | What it excludes |
 | --- | --- |
 | `tracerAddressChecks` | A load or store that fails Jolt's tracer address checks (a16z/jolt#2044 and related cases). |
-| `hostCallsSucceed` | A host call (`VirtualHostIO`) that fails in the modelled execution. |
-| `noMaxLengthTrace` | A trace that fills the largest power-of-two length the verifier admits, which Jolt's prover cannot produce. |
 | `terminationThenStall` | A program whose next jump after a store to the termination word is not the stall (a JAL with offset 0), or that loads the termination word again. |
 | `panicStoresOne` | A store to the panic word of any value other than 1, and a load of the panic word after such a store. |
 | `claimsNoPanic` | An instance that claims a panic. With this restriction, the panic clause of `sail_soundness` says that Sail's panic word is zero. |
 
-Four restrictions (`tracerAddressChecks`, `hostCallsSucceed`, `terminationThenStall` and `panicStoresOne`) constrain the next row the program attempts after every prefix of a relaxed execution, for every private input.
+Three restrictions (`tracerAddressChecks`, `terminationThenStall` and `panicStoresOne`) constrain the next row the program attempts after every prefix of a relaxed execution, for every private input.
 A relaxed execution is one in which every advice read gets an arbitrary answer; the attempted row need not succeed.
-`noMaxLengthTrace` constrains every completed relaxed trace, and `claimsNoPanic` and `adviceBlockFits` constrain only the instance.
+`claimsNoPanic` and `adviceBlockFits` constrain only the instance.
+
+Two earlier restrictions are gone, because Jolt fixed the bugs they excluded and the model follows the fix at Jolt `3cc6e7bd1`:
+
+- `hostCallsSucceed` excluded a host call that fails. Since a16z/jolt#2410 Jolt's tracer never fails a host call: it ignores an unknown call or event and skips a byte range it cannot read (`tracer/src/emulator/host_io.rs:50-85`). `execHostIO` follows it, so a host call retires whenever its argument registers are present.
+- `noMaxLengthTrace` excluded a trace that fills the largest power-of-two length the verifier admits. Since a16z/jolt#2407 Jolt's prover pads a run of `T` rows to `max(next_pow2(T), 256)` and reserves no padding row (`crates/jolt-prover/src/config.rs:49-64`). A final jump at `T - 1` has `ShouldJump = 0`, because the missing successor counts as a no-op (`crates/jolt-witness/src/witnesses/flags.rs:116-128`).
 The deviation premises in `BlockConforms` are stated differently, as the next section explains.
 
 ## Conformance is a premise on a trace the verifier does not see

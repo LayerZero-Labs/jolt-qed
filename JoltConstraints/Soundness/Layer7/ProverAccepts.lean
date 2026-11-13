@@ -109,53 +109,30 @@ theorem represented_trace_ends_in_jump
     exact False.elim (nonzero (by
       simpa only [dif_neg noNext] using equations.nextUnexpandedPCEqShift finalCycle))
 
-/-- Checked padding adds a no-op, rounds up to a power of two and enforces the
-256-cycle floor, within a 64-bit public maximum.
-The row count fits a power-of-two witness domain within that maximum and differs
-from the largest admissible power of two; the caller obtains this last condition
-from `NoMaxLengthTrace`.
-For example, 256 rows under maximum 1024 pad to 512, while 1024 rows are excluded.
-See jolt/crates/jolt-prover/src/config.rs
-(`ProverConfig::derive_from_dimensions`) and jolt/crates/jolt-verifier/src/config.rs
+/-- Checked padding rounds the row count up to a power of two and enforces the
+256-cycle floor, within a 64-bit public maximum. A row count that fits a
+power-of-two witness domain within that maximum pads within it too.
+For example, 256 rows under maximum 1024 pad to 256, and 1024 rows pad to 1024.
+See jolt/crates/jolt-prover/src/config.rs:49-64 (`ProverConfig::padded_trace_length`)
+at 3cc6e7bd1 (a16z/jolt#2407) and jolt/crates/jolt-verifier/src/config.rs
 (`MIN_PADDED_TRACE_LENGTH`, base/Dory) at 5def437f. -/
 theorem checked_trace_length_fits
     (rows logT : Nat) (maximum : BitVec 64)
     (rowsBound : rows ≤ 2 ^ logT)
     (witnessBound : 2 ^ logT ≤ maximum.toNat)
-    (floor : 256 ≤ maximum.toNat)
-    (notMax : rows ≠ 2 ^ Nat.log2 maximum.toNat) :
+    (floor : 256 ≤ maximum.toNat) :
     ∃ padded, ProverConfig.checkedTraceLength rows = some padded ∧
       padded ≤ maximum.toNat := by
-  let maxPower := 2 ^ Nat.log2 maximum.toNat
-  have maximumPositive : maximum.toNat ≠ 0 := by omega
-  have maxPowerBound : maxPower ≤ maximum.toNat := by
-    dsimp [maxPower]
-    rw [Nat.log2_eq_log_two]
-    exact Nat.pow_log_le_self 2 maximumPositive
-  have exponentBound : logT ≤ Nat.log2 maximum.toNat := by
-    rw [Nat.log2_eq_log_two]
-    exact Nat.le_log_of_pow_le (by decide : 1 < 2) witnessBound
-  have rowsBound' : rows ≤ maxPower :=
-    rowsBound.trans (Nat.pow_le_pow_right (by decide) exponentBound)
-  have withNoopBound : rows + 1 ≤ maxPower := by
-    have different : rows ≠ maxPower := notMax
-    omega
-  have roundedExponentBound : Nat.clog 2 (rows + 1) ≤ Nat.log2 maximum.toNat :=
-    Nat.clog_le_of_le_pow withNoopBound
-  have roundedBound : 2 ^ Nat.clog 2 (rows + 1) ≤ maxPower :=
-    Nat.pow_le_pow_right (by decide) roundedExponentBound
-  have withNoopFits : rows + 1 < 2 ^ 64 :=
-    lt_of_le_of_lt (withNoopBound.trans maxPowerBound) maximum.isLt
-  have roundedFits : 2 ^ Nat.clog 2 (rows + 1) < 2 ^ 64 :=
-    lt_of_le_of_lt (roundedBound.trans maxPowerBound) maximum.isLt
-  have added : MemoryLayout.checkedAdd rows 1 = some (rows + 1) := by
-    simp only [MemoryLayout.checkedAdd, if_pos withNoopFits]
-  have rounded : JoltConstraints.VerifierSizes.checkedNextPowerOfTwo (rows + 1) =
-      some (2 ^ Nat.clog 2 (rows + 1)) := by
+  have roundedBound : 2 ^ Nat.clog 2 rows ≤ 2 ^ logT :=
+    Nat.pow_le_pow_right (by decide) (Nat.clog_le_of_le_pow rowsBound)
+  have roundedFits : 2 ^ Nat.clog 2 rows < 2 ^ 64 :=
+    lt_of_le_of_lt (roundedBound.trans witnessBound) maximum.isLt
+  have rounded : JoltConstraints.VerifierSizes.checkedNextPowerOfTwo rows =
+      some (2 ^ Nat.clog 2 rows) := by
     simp only [JoltConstraints.VerifierSizes.checkedNextPowerOfTwo, if_pos roundedFits]
-  refine ⟨max (2 ^ Nat.clog 2 (rows + 1)) 256, ?_, ?_⟩
-  · simp [ProverConfig.checkedTraceLength, added, rounded]
-  · exact max_le (roundedBound.trans maxPowerBound) floor
+  refine ⟨max (2 ^ Nat.clog 2 rows) 256, ?_, ?_⟩
+  · simp [ProverConfig.checkedTraceLength, rounded]
+  · exact max_le (roundedBound.trans witnessBound) floor
 
 /-- Represented row addresses fit in 64 bits and, unless zero, lie at or above
 the constraint layout's lowest address.

@@ -90,19 +90,19 @@ theorem HonestTrace.store_offset_aligned {joltInstance : JoltInstance SourceInst
     trace.initialState trace.initialized
   omega
 
--- Rust's padded length is a power of two, at least 256, and larger than the run, so
--- the witness always ends with at least one padding row.
--- See : jolt/crates/jolt-prover/src/config.rs:63-70 at 5def437f (successful padding)
+-- Rust's padded length is a power of two, at least 256, that holds the run. A run
+-- can fill it, so the witness need not end with a padding row.
+-- See : jolt/crates/jolt-prover/src/config.rs:49-64 at 3cc6e7bd1 (successful padding)
 theorem padded_trace_length_spec (rows : Nat) :
-    rows < padded_trace_length rows ∧ 256 ≤ padded_trace_length rows ∧
+    rows ≤ padded_trace_length rows ∧ 256 ≤ padded_trace_length rows ∧
     ∃ log, padded_trace_length rows = 2 ^ log := by
   unfold padded_trace_length
   split
   · -- a short run pads to 256 = 2^8
     exact ⟨by omega, Nat.le_refl _, 8, rfl⟩
-  · -- a longer run pads to the power of two that holds it plus one
-    have holds := Nat.le_pow_clog (by decide : 1 < 2) (rows + 1)
-    exact ⟨by omega, by omega, _, rfl⟩
+  · -- a longer run pads to the power of two that holds it
+    have holds := Nat.le_pow_clog (by decide : 1 < 2) rows
+    exact ⟨holds, by omega, _, rfl⟩
 
 -- A guard that passes had a true condition.
 theorem guard_some {condition : Prop} [Decidable condition] {passed : Unit}

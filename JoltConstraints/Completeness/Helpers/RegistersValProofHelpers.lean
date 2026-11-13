@@ -616,37 +616,48 @@ theorem loadByte_rule (addr : BitVec 64) : Preserves (JoltISA.Mmu.load addr) := 
   intro s t v h
   rw [JoltISA.Mmu.load_state h]
 
-theorem readHostBytes_frame
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
+theorem hostLoad_rule (addr : BitVec 64) : Preserves (JoltISA.Mmu.hostLoad addr) := by
+  intro s t v h
+  cases h
+  rfl
+
+theorem readHostBytes_frame {width : Nat}
     (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (JoltISA.readHostBytes JoltISA.Mmu.load
-      overflowChecks incrementAfterLast pointer n bytes) := by
+    Preserves (JoltISA.readHostBytes JoltISA.Mmu.hostLoad pointer n bytes) := by
   induction n generalizing pointer bytes with
   | zero => exact pure_rule _
   | succ n ih =>
-      dsimp only [JoltISA.readHostBytes]
-      refine bind_rule (loadByte_rule _) (fun result => ?_)
-      cases result with
-      | Err e => exact pure_rule _
-      | Ok byte =>
-          split_ifs with h
-          · exact bind_rule (throw_rule _) (fun _ => ih _ _)
-          · exact bind_rule (pure_rule _) (fun _ => ih _ _)
+    dsimp only [JoltISA.readHostBytes]
+    refine bind_rule (hostLoad_rule _) (fun result => ?_)
+    cases result with
+    | none => exact pure_rule _
+    | some byte => exact ih _ _
 
 theorem execHostIO_frame : Preserves JoltISA.execHostIO := by
-  unfold JoltISA.execHostIO JoltISA.execHostIOWith
-  refine bind_rule get_rule (fun config => ?_)
-  dsimp only
+  unfold JoltISA.execHostIO JoltISA.execHostIOWith JoltISA.readHostRange
+  refine bind_rule (read_rule _) fun _ => ?_
   split
-  · exact pure_rule _
-  · repeat' first
-      | exact readHostBytes_frame _ _ _ _ _
-      | exact read_rule _
-      | exact pure_rule _
-      | exact throw_rule _
-      | exact modifyAdvice_rule _ (by intro s; rfl)
-      | split
-      | refine bind_rule ?_ (fun x => ?_)
+  · refine bind_rule (read_rule _) fun _ => ?_
+    refine bind_rule (read_rule _) fun _ => ?_
+    refine bind_rule ?_ fun result => ?_
+    · split
+      · exact readHostBytes_frame _ _ _
+      · exact (pure_rule _)
+    · cases result with
+      | none => exact (pure_rule _)
+      | some _ => exact bind_rule (modifyAdvice_rule _ (by intro s; rfl)) fun _ => (pure_rule _)
+  · split
+    · refine bind_rule (read_rule _) fun _ => ?_
+      refine bind_rule (read_rule _) fun _ => ?_
+      refine bind_rule (read_rule _) fun _ => ?_
+      refine bind_rule get_rule fun _ => ?_
+      split
+      · refine bind_rule ?_ fun _ => (pure_rule _)
+        split
+        · exact readHostBytes_frame _ _ _
+        · exact (pure_rule _)
+      · exact (pure_rule _)
+    · exact (pure_rule _)
 
 end Register42VRegs
 

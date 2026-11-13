@@ -291,10 +291,11 @@ def remap_address (layout : MemoryLayout) (address : Nat) : Option Nat :=
   else some ((address - layout.get_lowest_address.toNat) / 8)
 
 -- The witness length Rust's prover pads a run to: the smallest power of two that
--- is larger than the run, and at least 256.
--- See : jolt/crates/jolt-prover/src/config.rs:63-70 at 5def437f
+-- holds the run, and at least 256. No padding row is reserved: a run of 512 rows
+-- fills a 512-row witness (a16z/jolt#2407).
+-- See : jolt/crates/jolt-prover/src/config.rs:49-64 (`padded_trace_length`) at 3cc6e7bd1
 def padded_trace_length (rows : Nat) : Nat :=
-  if rows < 256 then 256 else 2 ^ Nat.clog 2 (rows + 1)
+  if rows ≤ 256 then 256 else 2 ^ Nat.clog 2 rows
 
 -- The rows that carry Rust's Jump circuit flag: JAL and JALR.
 -- See : jolt/crates/jolt-riscv/src/instructions/i/jal.rs:6, jalr.rs:6

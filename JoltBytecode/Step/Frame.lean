@@ -311,22 +311,23 @@ private theorem frames_store_doubleword (address v : BitVec 64) :
           (fun s hs => by cases hs; rfl) js' h)
       · exact RegFrame.refl js
 
+private theorem frames_hostLoad (address : BitVec 64) :
+    Frames (JoltISA.Mmu.hostLoad address) :=
+  fun js => RegFrame.refl js
+
 private theorem frames_readHostBytes
-    (loadByte : BitVec 64 → JoltMonad (Result (BitVec 8) ExecutionResult))
-    (hload : ∀ address, Frames (loadByte address))
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
+    (loadByte : BitVec 64 → JoltMonad (Option (BitVec 8)))
+    (hload : ∀ address, Frames (loadByte address)) {width : Nat}
     (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    Frames (JoltISA.readHostBytes loadByte overflowChecks incrementAfterLast pointer count bytes) := by
+    Frames (JoltISA.readHostBytes loadByte pointer count bytes) := by
   induction count generalizing pointer bytes with
   | zero => exact frames_pure _
   | succ count ih =>
     unfold JoltISA.readHostBytes
     refine frames_bind (hload _) fun result => ?_
     cases result with
-    | Err _ => exact frames_pure _
-    | Ok byte =>
-      dsimp only
-      exact frames_ite (frames_bind (frames_throw _) fun _ => ih _ _) (ih _ _)
+    | none => exact frames_pure _
+    | some byte => exact ih _ _
 
 local macro "jolt_frame" : tactic =>
   `(tactic| repeat' (first
@@ -348,9 +349,9 @@ local macro "jolt_frame" : tactic =>
     | split))
 
 private theorem frames_hostIO : Frames JoltISA.execHostIO := by
-  unfold JoltISA.execHostIO JoltISA.execHostIOWith
+  unfold JoltISA.execHostIO JoltISA.execHostIOWith JoltISA.readHostRange
   jolt_frame
-  all_goals exact frames_readHostBytes _ frames_load _ _ _ _ _
+  all_goals exact frames_readHostBytes _ frames_hostLoad _ _ _
 
 /-- A single Jolt row preserves every Sail register outside `JoltWritable`
 and never removes a present register, on success or error.
