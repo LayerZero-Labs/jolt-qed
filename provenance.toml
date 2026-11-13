@@ -5824,6 +5824,90 @@ text = "c97e9300"
 count = 1
 
 [[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "2d30091"
+count = 1
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "580084fcf"
+count = 10
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "580084fcfad4788ebf48413a92dd640ca090c45f"
+count = 1
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "5c7556a"
+count = 2
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "5def437f2"
+count = 16
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "8bbb23578"
+count = 2
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "8e4875f"
+count = 1
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "a0372ce"
+count = 3
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "a6b6dc717"
+count = 13
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5"
+count = 1
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "c336a6da7"
+count = 3
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "c67035705"
+count = 2
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "c97e93004"
+count = 1
+
+[[known]]
+file = "docs/coverage-ledger.md"
+kind = "revision"
+text = "f76aafe"
+count = 1
+
+[[known]]
 file = "docs/inline-precompiles.md"
 kind = "revision"
 text = "4e55c9a5f"

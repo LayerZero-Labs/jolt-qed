@@ -5,7 +5,7 @@ It has one row per field of `AllConstraints` and one row per other modelled arti
 Use it to keep claims of coverage no broader than the checks behind them: a row marked "audit by reading" has no machine check against Jolt.
 
 It is phase T3b of the trust track (`docs/inline-precompiles.md`, section 7).
-State: branch `inline/t2-decoder-sweep` (LayerZero-Labs/jolt-qed#56) at `5306348`, 2026-11-12.
+State: branch `inline/t2-decoder-sweep` (LayerZero-Labs/jolt-qed#56) after `a0372ce`, 2026-11-12.
 Sections 4 and 5 record what later PRs in the stack add.
 Every PR that adds a check, moves a pin or adds a modelled artifact updates its row here.
 
@@ -30,8 +30,8 @@ For an audit it is the `checked` revision that `provenance.toml` records for the
 
 Short names used below:
 
-- `3cc6e7bd1`: a16z/jolt#2384 at `3cc6e7bd179900cfad6a052335c32ea1ef749536`, the `JOLT_REV` of every Jolt-facing CI job on this branch.
-- `580084fcf`: a16z/jolt#2384 at `580084fcfad4788ebf48413a92dd640ca090c45f`, the revision of the T1, T2 and T4 reports and the pin in `provenance.toml`.
+- `3cc6e7bd1`: a16z/jolt#2384 at `3cc6e7bd179900cfad6a052335c32ea1ef749536`, the `JOLT_REV` of every Jolt-facing CI job on this branch and the pin in `provenance.toml`.
+- `580084fcf`: a16z/jolt#2384 at `580084fcfad4788ebf48413a92dd640ca090c45f`, the revision of the T1, T2 and T4 reports.
 - `a6b6dc717`: a16z/jolt `main` at `a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5`, the pin of the inline spec.
 - `rv64.rs`: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs` (`rv64_trace_constraints`).
 - `claims/`: `crates/jolt-claims/src/protocols/jolt/`.
@@ -41,13 +41,13 @@ Short names used below:
 
 | Job | Workflow | What it checks | Jolt revision | Result recorded |
 | --- | --- | --- | --- | --- |
-| `expansion-parity` | `.github/workflows/expansion-parity.yml` | T1: every non-inline expansion and its row metadata against Lean; the generated inline rows regenerated and diffed; the inline round trip; a mutation check | `3cc6e7bd1` | Clean at `580084fcf` (`reports/2026-11-11-expansion-parity.md`, `reports/2026-11-11-inline-rows.md`). At `3cc6e7bd1` the run on `spec/inline-precompiles` at `5c7556a` failed on the generated row headers, which `2d30091` regenerated; the run at `5306348` was in progress when this ledger was written. |
-| `decoder-sweep` | `.github/workflows/decoder-sweep.yml` | T2: `joltDecode` and `joltUncompress` against `decode.rs` | `3cc6e7bd1` | Clean at `580084fcf` (`reports/2026-11-11-decoder-sweep.md`; CI run on `f76aafe`). At `3cc6e7bd1`: in progress at `5306348`. |
-| `constraint-generation` | `.github/workflows/constraint-generation.yml` | T3: regenerates the R1CS rows, four relations and kind tables, fails on a diff, builds the equality proofs | `3cc6e7bd1` | Clean at `3cc6e7bd1`, run locally (`reports/2026-11-12-t3-constraint-generation.md`). First CI run in progress at `5306348`. |
-| `lookup-tables` | `.github/workflows/lookup-tables.yml` | T4: sampled `materialize_entry` vectors against the Lean tables' computable twin | `3cc6e7bd1` | Clean at `580084fcf` (`reports/2026-11-11-lookup-table-vectors.md`). CI passed at `3cc6e7bd1` on `8e4875f`. |
-| `build` | `.github/workflows/lean.yml` | `lake build` (including `JoltConstraints.ConstraintGen.Equiv`); `lake build JoltAudit`, which fails if a headline theorem uses an axiom other than `propext`, `Classical.choice` and `Quot.sound`; when a PR touches the Sail model or its inputs, regenerates `LeanRV64D/` and requires a byte-for-byte match | none | In progress at `5306348`. |
-| `provenance` | `.github/workflows/provenance.yml` | `scripts/check-provenance.py`: one Jolt pin, no new local paths, fork citations or unlisted revisions | pin `580084fcf` | Failing at `5306348`: the manifest predates the inline files merged from LayerZero-Labs/jolt-qed#44 and the move to `3cc6e7bd1`. The T7 work on this PR is updating it. |
-| `hygiene` | `.github/workflows/provenance.yml` | `scripts/check_hygiene.py`: `sorry`, `native_decide`, `decide +kernel`, `bv_decide`, raised limits and axioms against `scripts/hygiene-baseline.toml` | none | Failing at `5306348`: nine `decide +kernel` in the EthLib copies under `JoltBytecode/Inlines/` are not in the baseline. |
+| `expansion-parity` | `.github/workflows/expansion-parity.yml` | T1: every non-inline expansion and its row metadata against Lean; the generated inline rows regenerated and diffed; the inline round trip; a mutation check | `3cc6e7bd1` | Clean at `580084fcf` (`reports/2026-11-11-expansion-parity.md`, `reports/2026-11-11-inline-rows.md`). At `3cc6e7bd1` the run on `spec/inline-precompiles` at `5c7556a` failed on the generated row headers, which `2d30091` regenerated; no run at `3cc6e7bd1` had finished when this ledger was written. |
+| `decoder-sweep` | `.github/workflows/decoder-sweep.yml` | T2: `joltDecode` and `joltUncompress` against `decode.rs` | `3cc6e7bd1` | Clean at `580084fcf` (`reports/2026-11-11-decoder-sweep.md`; CI run on `f76aafe`). No CI run at `3cc6e7bd1` had finished when this ledger was written. |
+| `constraint-generation` | `.github/workflows/constraint-generation.yml` | T3: regenerates the R1CS rows, four relations and kind tables, fails on a diff, builds the equality proofs | `3cc6e7bd1` | Clean at `3cc6e7bd1`, run locally (`reports/2026-11-12-t3-constraint-generation.md`). No CI run had finished when this ledger was written. |
+| `lookup-tables` | `.github/workflows/lookup-tables.yml` | T4: sampled `materialize_entry` vectors against the Lean tables' computable twin | `3cc6e7bd1` | Clean at `580084fcf` (`reports/2026-11-11-lookup-table-vectors.md`). CI passed at `3cc6e7bd1` on `8e4875f` and `5306348`. |
+| `build` | `.github/workflows/lean.yml` | `lake build` (including `JoltConstraints.ConstraintGen.Equiv`); `lake build JoltAudit`, which fails if a headline theorem uses an axiom other than `propext`, `Classical.choice` and `Quot.sound`; when a PR touches the Sail model or its inputs, regenerates `LeanRV64D/` and requires a byte-for-byte match | none | Passed on the PR branches below this one (for example `spec/inline-precompiles` at `5c7556a`); no run on this branch had finished when this ledger was written. |
+| `provenance` | `.github/workflows/provenance.yml` | `scripts/check-provenance.py`: every Lean file has a manifest entry; no new local paths, fork citations or unlisted revisions | pin `3cc6e7bd1` | Passed at `a0372ce`. |
+| `hygiene` | `.github/workflows/provenance.yml` | `scripts/check_hygiene.py`: `sorry`, `native_decide`, `decide +kernel`, `bv_decide`, raised limits and axioms against `scripts/hygiene-baseline.toml` | none | Passed at `a0372ce`. The nine `decide +kernel` proofs copied from EthLib are baselined. |
 | `comparator (untested)` | `.github/workflows/provenance.yml` | Replays the frozen headline statements in `ci/comparator/` with `lake comparator` | none | Never passed; failures are warnings only (`ci/comparator/README.md`). |
 | `ethlib-copies` | `.github/workflows/ethlib-copies.yml` | `scripts/check-ethlib-copies.sh`: the hash specifications in `JoltBytecode/Inlines/` equal the EthLib commit they were copied from | EthLib `5310b3e` | Passes on the PR branches that carry the copies. |
 
@@ -147,7 +147,7 @@ No CI job compares them with Jolt; `build` only checks that the proofs about the
 | `lookupOutputEqInstructionReadRaf` | none cited | none named | Gap: the file cites no Jolt path. Its siblings cite `stage5/instruction_read_raf.rs`. |
 | `leftLookupOperandEqInstructionRaf` | `stage5/instruction_read_raf.rs` | none named | |
 | `rightLookupOperandEqInstructionRaf` | `stage5/instruction_read_raf.rs` | none named | |
-| `instructionAddressCanonical` | `claims/geometry/instruction.rs` (`CANONICAL_INSTRUCTION_ADDRESS`), `crates/jolt-akita/src/adapters.rs` | `c97e9300` (file citation; no `provenance.toml` entry yet) | Applies only below characteristic `2^128` (the Akita build). |
+| `instructionAddressCanonical` | `claims/geometry/instruction.rs` (`CANONICAL_INSTRUCTION_ADDRESS`), `crates/jolt-akita/src/adapters.rs`, `stage5/instruction_read_raf.rs` | `c97e93004` | Applies only below characteristic `2^128` (the Akita build). |
 | `registersValEqPrefixRdInc` | `claims/relations/registers/val_evaluation.rs` | none named | |
 | `pcEqBytecodeRead` | `claims/geometry/bytecode.rs` | `5def437f2` | |
 | `unexpandedPCEqBytecodeRead` | `claims/geometry/bytecode.rs` | `5def437f2` | |
@@ -183,7 +183,7 @@ Count: 22 rows and 12 claims (34 conjuncts) are generated and proved equal; 29 a
 | Inline frame instances | `JoltBytecode/Inlines/FrameInstances.lean`; the frame lemma `frame_of_run` in `JoltBytecode/Inlines/Frame.lean` | generated rows | Generated from the generated rows; the frame lemma is proved | `gen_frame_instances.py --check`, local only | rows at `3cc6e7bd1` | No CI job runs the `--check`. |
 | Decoder | `joltDecode` (`JoltBytecode/Decode/Jolt.lean`) | `crates/jolt-program/src/image/decode.rs` | Sampled test with an exhaustive Rust-side argument (T2): 2,250,752 words over every selector class; the driver checks all 2^30 words with low bits `0b11` to show that the sample determines Jolt's result. That Lean's result has the same structure is argued by reading `joltDecode`, not checked. | `decoder-sweep` | `3cc6e7bd1`; last clean result `580084fcf`. `provenance.toml` records `c336a6da7`. | `joltDecode` returns `none` for opcodes `0x0B`, `0x2B` and `0x5B` (inlines and Jolt's custom instructions). The `field-inline` decoder for `0x7B` is not exercised and not modelled. |
 | Uncompressor | `joltUncompress` (`JoltBytecode/Decode/Jolt.lean`), `JoltBytecode/Decode/Compressed.lean` | `crates/jolt-riscv/src/uncompress.rs` | Exhaustive test (T2): all 65,536 16-bit parcels | `decoder-sweep` | `3cc6e7bd1`; last clean result `580084fcf` | |
-| ELF loader | `Rv64ProgramImage.DecodedFrom` and `ElfSections.layout?` (`JoltConstraints/WholeRun/Elf.lean`); `ImageDecoded` (`JoltConstraints/WholeRun/Decoded.lean`) is derived from it by proof | `decode_elf`, `merge_ranges`, `decode_text_section` in `crates/jolt-program/src/image/elf.rs` | Audit by reading | none | `c336a6da7` (file citation; no `provenance.toml` entry yet) | The sections given to `DecodedFrom` are trusted to be what the `object` crate parses (outside the model). |
+| ELF loader | `Rv64ProgramImage.DecodedFrom` and `ElfSections.layout?` (`JoltConstraints/WholeRun/Elf.lean`); `ImageDecoded` (`JoltConstraints/WholeRun/Decoded.lean`) is derived from it by proof | `decode_elf`, `merge_ranges`, `decode_text_section` in `crates/jolt-program/src/image/elf.rs` | Audit by reading | none | `c336a6da7` | The sections given to `DecodedFrom` are trusted to be what the `object` crate parses (outside the model). |
 | Lookup tables (55) | `lookupTableEntry` (`JoltConstraints/lookup_table.lean`), `LookupTableKind` (`JoltConstraints/witness.lean`) | `LookupTableKind::materialize_entry` in `crates/jolt-lookup-tables` | Sampled test (T4): 162,551 (table, index) pairs at edge and seeded random indices. Lean proves the tested twin equal to the tables (`lookupTableEntry_eq_twin`) | `lookup-tables` | `3cc6e7bd1` (passed in CI); the lookup-table crate is the same at `580084fcf` and `a6b6dc717` | Agreement holds only at the sampled indices. The Lean file cites `c67035705` and, for `VirtualXORROTL1`, a fork. |
 | Semantics of Jolt's rows (tracer) | `execProgram` (`JoltBytecode/JoltISA/Semantics.lean`), `MemoryAccess.lean`, `RegisterAccess.lean`, `DeviceMemory.lean`, `HostIO.lean`, `AdviceTape.lean` under `JoltBytecode/JoltISA/` | `tracer/src/instruction/`, `tracer/src/emulator/` | Audit by reading | none | `DeviceMemory.lean`: `5def437f2`; the others name no published revision | Difftest compares Jolt's tracer with Sail, not with these definitions. |
 | Division and remainder advice | `SourceInstruction.honestTracerAdvice` (`JoltConstraints/honest_trace.lean`) | `tracer/src/instruction/div.rs`, `rem.rs` and the unsigned and word forms | Audit by reading | none | `5def437f2` | |
@@ -237,6 +237,6 @@ They use the same CI jobs as this branch, with `JOLT_REV` `3cc6e7bd1`, but not t
 - Five completeness proofs are `sorry`: three wait on a16z/jolt#1949, one on the termination-word RAM history bug, one on a16z/jolt#1951 item 1.
 - The ELF loader, the tracer semantics, the memory layout, preprocessing and the witness types are audited only.
 - The hash and secp256k1 known-answer tests and the frame and key generator checks run only locally, and the known-answer tests ran at `a6b6dc717`, not `3cc6e7bd1`.
-- The `provenance` and `hygiene` jobs fail at `5306348`; `provenance.toml` still pins `580084fcf` and has no entries for the inline files.
+- Many audited files name no published Jolt revision, or an older one than the pin (`provenance.toml` notes and `[[known]]` baseline).
 - The comparator gate has never passed.
 - Trusted advice is still modelled as bytes (section 4).
