@@ -6,6 +6,7 @@ Run from the repository root: python3 -m unittest discover -s scripts/tests
 from __future__ import annotations
 
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -151,6 +152,32 @@ class HygieneScanTest(unittest.TestCase):
         self.assertEqual(len(out), len(src))
         self.assertEqual(out.count("\n"), src.count("\n"))
 
+
+class EthlibBaselineTest(unittest.TestCase):
+    """The [[ethlib]] section records only `decide +kernel` in EthLib copies."""
+
+    def load(self, entry: str) -> dict:
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "baseline.toml"
+            path.write_text(entry, encoding="utf-8")
+            return hygiene.load_baseline(path)
+
+    def test_decide_kernel_in_an_inline_spec_loads(self) -> None:
+        got = self.load('[[ethlib]]\nfile = "JoltBytecode/Inlines/Sha256/Spec.lean"\n'
+                        'token = "decide +kernel"\ncount = 2\n')
+        self.assertEqual(got["ethlib"][("JoltBytecode/Inlines/Sha256/Spec.lean",
+                                        "decide +kernel")], 2)
+
+    def test_other_tokens_are_rejected(self) -> None:
+        for token in ("sorry", "native_decide", "bv_decide", "axiom"):
+            with self.assertRaises(SystemExit, msg=token):
+                self.load('[[ethlib]]\nfile = "JoltBytecode/Inlines/Sha256/Spec.lean"\n'
+                          f'token = "{token}"\ncount = 1\n')
+
+    def test_files_outside_the_inlines_are_rejected(self) -> None:
+        with self.assertRaises(SystemExit):
+            self.load('[[ethlib]]\nfile = "JoltBytecode/Decode/Compressed.lean"\n'
+                      'token = "decide +kernel"\ncount = 1\n')
 
 if __name__ == "__main__":
     unittest.main()

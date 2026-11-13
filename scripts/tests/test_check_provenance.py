@@ -22,7 +22,7 @@ _spec = importlib.util.spec_from_file_location("check_provenance", SCRIPTS / "ch
 prov = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(prov)
 
-PIN = "580084fcfad4788ebf48413a92dd640ca090c45f"
+PIN = "3cc6e7bd179900cfad6a052335c32ea1ef749536"
 CHECKED = "c6703570588e88033b8722bd4dec47c7f46f3b16"
 OTHERS = [{"revision": "717aeca3", "repository": "riscv/riscv-isa-manual"}]
 MANIFEST = SCRIPTS.parent / "provenance.toml"
@@ -78,9 +78,9 @@ class RevisionTest(unittest.TestCase):
     # Round-2 finding 4: the second endpoint of a compare URL was not checked.
     def test_both_compare_endpoints_are_checked(self) -> None:
         for sep in ("...", ".."):
-            text = f"-- https://github.com/a16z/jolt/compare/580084fcf{sep}7538215\n"
+            text = f"-- https://github.com/a16z/jolt/compare/{PIN[:9]}{sep}7538215\n"
             self.assertEqual(violations(text), Counter({("revision", "7538215"): 1}))
-            text = f"-- https://github.com/a16z/jolt/compare/580084fcf{sep}717aeca3\n"
+            text = f"-- https://github.com/a16z/jolt/compare/{PIN[:9]}{sep}717aeca3\n"
             self.assertEqual(violations(text), Counter({("revision", "717aeca3"): 1}))
             text = f"-- https://github.com/a16z/jolt/compare/7538215{sep}{PIN}\n"
             self.assertEqual(violations(text), Counter({("revision", "7538215"): 1}))
