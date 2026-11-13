@@ -24,6 +24,7 @@ flowchart LR
 
 [`JoltConstraints/WholeRun/Top.lean`](JoltConstraints/WholeRun/Top.lean) proves that the Sail RISC-V model reproduces every run of Jolt's tracer up to its first EBREAK, and in particular every run behind an instance that Jolt's constraints accept.
 The theorems hold under premises stated with them, and they check the constraints directly, not through Jolt's sumcheck-based verifier.
+They cover both of Jolt's fields: BN254 and Akita's `p = 2^128 - 1780711455`, Jolt's production field since a16z/jolt#2403. `JoltField.akita` and `JoltField.bn254` prove that both fields meet the field premise, with primality checked by Pratt certificates. The field premise `JoltField` asks for characteristic above `2^128 - 2^64`, and below `2^128` the constraints include the canonical lookup-address check that Jolt's `akita` build enforces.
 [What the whole-run theorems prove](docs/whole-run-theorem.md) states both theorems, every premise, and what they do not say.
 Read it before citing the result.
 [`docs/riscv-alignment.md`](docs/riscv-alignment.md) explains each modelling decision behind them.
@@ -31,7 +32,7 @@ Read it before citing the result.
 ## Status
 
 The recorded Jolt pin is `c97e9300`, the merge of a16z/jolt#2250.
-The system expansions and the decoder transcribe a later revision, a16z/jolt `c336a6da7`, the head of a16z/jolt#2384 (see [`docs/riscv-alignment.md`](docs/riscv-alignment.md), Sources).
+The system expansions, the decoder and the ELF loader (`decode_elf`) transcribe a later revision, a16z/jolt `c336a6da7`, the head of a16z/jolt#2384 (see [`docs/riscv-alignment.md`](docs/riscv-alignment.md), Sources).
 `lake build JoltBytecode` and `lake build JoltConstraints` pass, and `JoltBytecode/` has no `sorry`.
 The remaining `sorry`s are in completeness proofs under `JoltConstraints/Completeness/`.
 None of them is used by the soundness or whole-run theorems, whose `#print axioms` lists only `propext`, `Classical.choice` and `Quot.sound`.

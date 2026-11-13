@@ -551,7 +551,7 @@ theorem storesPanicAt_iff
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -560,7 +560,7 @@ variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F 
   {width : MemoryWidth} {base : Src} {imm : BitVec 64}
   (access : AccessRow row.instruction width base imm)
 
-include charAbove2pow128 context equations selected rowIs access
+include charAbove2pow128Minus2pow64 context equations selected rowIs access
 
 /-- The lookup output of a selected access row is a small offset: zero for a
 native row, and the AddressOffset entry for a floor row.
@@ -574,7 +574,7 @@ private theorem AccessRow.lookup_offset (baseValue : BitVec 64)
       ∀ sum : Nat, sum < 2 ^ 64 →
         ((sum : Int) : F) = (((baseValue.toNat : Int) + imm.toInt : Int) : F) →
         offset = sum &&& width.offsetMask.toNat := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   obtain ⟨-, immediate, -, tableIs⟩ := access.metadata
   obtain ⟨chosen, lookupSelected, _⟩ := instructionLookupRa_unique bound context equations t
   have output := lookupOutput_of_selected_bytecode bound context equations t slot selected
@@ -617,7 +617,8 @@ private theorem AccessRow.lookup_offset (baseValue : BitVec 64)
     · simpa only [MemoryWidth.table?, Nat.reduceSub, entry 4 (by norm_num)] using! output
   · intro sum sumSmall sumIs
     have same : chosen.val = sum := natCast_injective_below_char
-      (lt_trans chosen.isLt charAbove2pow128) (lt_trans sumSmall (two_pow_64_lt_char bound))
+      (identityAddress_lt_char charAbove2pow128Minus2pow64 context equations t chosen lookupSelected raf)
+      (lt_trans sumSmall (two_pow_64_lt_char bound))
       (by
         rw [addition]
         push_cast at sumIs
@@ -639,7 +640,7 @@ theorem AccessRow.address_encoded (regionFits : joltInstance.RamRegionFits)
     witness.RamAddress t = ((width.accessed (baseValue + imm)).toNat : F) ∧
       (baseValue + imm) &&& width.alignMask = 0 ∧
       width.recorded (baseValue + imm) = width.accessed (baseValue + imm) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   obtain ⟨flags, immediate, -, -⟩ := access.metadata
   have active : witness.OpFlags .Load t + witness.OpFlags .Store t = 1 := by
     rw [opFlag_of_selected_bytecode bound context equations .Load t slot selected,
@@ -652,7 +653,7 @@ theorem AccessRow.address_encoded (regionFits : joltInstance.RamRegionFits)
   have sum := ramAddress_eq_sum equations.ramAddrEqRs1PlusImmMinusLookupIfLoadStore
     t active baseValue imm source immediateIs
   obtain ⟨offset, offsetSmall, output, offsetIs⟩ :=
-    access.lookup_offset charAbove2pow128 context equations selected rowIs baseValue source
+    access.lookup_offset charAbove2pow128Minus2pow64 context equations selected rowIs baseValue source
   obtain ⟨word, wordIs, wordFits⟩ : ∃ word : Nat,
       witness.RamAddress t = (word : F) ∧ word + 7 < 2 ^ 64 := by
     rcases ramRa_zero_or_unique bound context equations t with zero | ⟨chosen, one, _⟩

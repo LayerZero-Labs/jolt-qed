@@ -69,7 +69,7 @@ private def VirtualBinary.offset : VirtualBinary → BitVec 64
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -90,7 +90,7 @@ private theorem virtualBinary_canonical :
       JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 /-- The virtual row's inputs encode its first register and its second register
 plus the signed address immediate (zero for extraction and negation).
@@ -103,7 +103,7 @@ private theorem virtualBinary_inputs {pre : SailJoltState}
     witness.LeftInstructionInput t = ((sourceValue lhs pre).toNat : F) ∧
     witness.RightInstructionInput t =
       ((sourceValue rhs pre + operation.offset).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have canonical := virtualBinary_canonical context rowIs operation instructionIs
   have sourceLeft := agrees.rs1Value bound context equations selected rowIs lhs
     canonical.1.2 (by cases operation <;> rw [instructionIs] <;> rfl) leftLive
@@ -148,8 +148,8 @@ private theorem virtualBinary_write_value {pre : SailJoltState}
     (rightLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue lhs pre) (sourceValue rhs pre)).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
-  obtain ⟨left, right⟩ := virtualBinary_inputs charAbove2pow128 context equations
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
+  obtain ⟨left, right⟩ := virtualBinary_inputs charAbove2pow128Minus2pow64 context equations
     selected rowIs operation instructionIs agrees leftLive rightLive
   apply lookupWrite_value_of_raf_zero bound context equations selected rowIs
     (sourceValue lhs pre) (sourceValue rhs pre + operation.offset) _ operation.table
@@ -206,9 +206,9 @@ theorem virtualBinary_step {pre : SailJoltState} (agrees : RegisterAgreementOn l
   have canonical := virtualBinary_canonical context rowIs operation instructionIs
   have leftRead := (agrees.read lhs canonical.1.2 leftLive).1
   have rightRead := (agrees.read rhs canonical.2 rightLive).1
-  have encoded := virtualBinary_write_value charAbove2pow128 context equations selected rowIs
+  have encoded := virtualBinary_write_value charAbove2pow128Minus2pow64 context equations selected rowIs
     operation instructionIs agrees leftLive rightLive
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by cases operation <;> rw [instructionIs] <;> rfl)]
   cases operation <;> rw [instructionIs] <;>
