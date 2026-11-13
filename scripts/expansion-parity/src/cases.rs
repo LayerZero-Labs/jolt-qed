@@ -20,8 +20,8 @@ pub struct Case {
 }
 
 /// How the free fields of an encoding are laid out.
-#[derive(Clone, Copy)]
-enum Fmt {
+#[derive(Clone, Copy, Debug)]
+pub enum Fmt {
     /// rd, rs1, rs2 in their usual fields; `funct7` fixed.
     R,
     /// rd, rs1, imm[11:0].
@@ -46,12 +46,12 @@ enum Fmt {
     HostIo,
 }
 
-struct Enc {
-    kind: SourceInstructionKind,
-    opcode: u32,
-    funct3: u32,
-    funct7: u32,
-    fmt: Fmt,
+pub struct Enc {
+    pub kind: SourceInstructionKind,
+    pub opcode: u32,
+    pub funct3: u32,
+    pub funct7: u32,
+    pub fmt: Fmt,
 }
 
 const fn enc(
@@ -70,7 +70,7 @@ const fn enc(
     }
 }
 
-fn encodings() -> Vec<Enc> {
+pub fn encodings() -> Vec<Enc> {
     use Fmt::*;
     use SourceInstructionKind as K;
     let mut v = vec![
@@ -200,21 +200,21 @@ fn encodings() -> Vec<Enc> {
 }
 
 /// Whether the kind is a Zicsr instruction, whose I-type immediate is a CSR address.
-fn is_csr(kind: SourceInstructionKind) -> bool {
+pub fn is_csr(kind: SourceInstructionKind) -> bool {
     kind.name().starts_with("CSRR")
 }
 
 /// Register and immediate choices for one encoding. `imm` holds raw field
 /// bits; each format keeps only the bits its field has.
 #[derive(Clone, Copy)]
-struct Fields {
-    rd: u32,
-    rs1: u32,
-    rs2: u32,
-    imm: u32,
+pub struct Fields {
+    pub rd: u32,
+    pub rs1: u32,
+    pub rs2: u32,
+    pub imm: u32,
 }
 
-fn encode(e: &Enc, f: Fields) -> u32 {
+pub fn encode(e: &Enc, f: Fields) -> u32 {
     let (rd, rs1, rs2) = (f.rd & 31, f.rs1 & 31, f.rs2 & 31);
     let base = e.opcode | (e.funct3 << 12);
     match e.fmt {
@@ -297,7 +297,7 @@ impl Rng {
     }
 }
 
-const SUPPORTED_CSRS: [u32; 6] = [0x300, 0x305, 0x340, 0x341, 0x342, 0x343];
+pub const SUPPORTED_CSRS: [u32; 6] = [0x300, 0x305, 0x340, 0x341, 0x342, 0x343];
 
 fn random_imm(e: &Enc, rng: &mut Rng) -> u32 {
     let raw = rng.next_u64() as u32;
@@ -311,7 +311,7 @@ fn random_imm(e: &Enc, rng: &mut Rng) -> u32 {
     raw
 }
 
-fn decode(e: &Enc, f: Fields, address: u64, compressed: bool) -> Result<SourceInstruction, String> {
+pub fn decode(e: &Enc, f: Fields, address: u64, compressed: bool) -> Result<SourceInstruction, String> {
     let word = encode(e, f);
     let decoded = decode_instruction(word, address, compressed, RV64IMAC_JOLT_ALL_INLINES)
         .map_err(|err| format!("{} word {word:#010x}: decoder error {err:?}", e.kind.name()))?;
@@ -325,7 +325,7 @@ fn decode(e: &Enc, f: Fields, address: u64, compressed: bool) -> Result<SourceIn
     Ok(decoded)
 }
 
-fn direct(
+pub fn direct(
     kind: SourceInstructionKind,
     rd: u8,
     rs1: u8,
