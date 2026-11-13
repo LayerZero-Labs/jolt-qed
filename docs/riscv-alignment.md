@@ -13,7 +13,7 @@ Later work (the Sail configuration, the model patches, the step-level and whole-
   jolt-qed's expansions were generated from `c6703570`.
   Every Jolt file cited below is identical at the two commits, except four added lines in `tracer/src/emulator/cpu.rs` that do not touch the code cited.
 - The Jolt changes for this alignment, a16z/jolt `c336a6da7`, the head of a16z/jolt#2384 (stacked on a16z/jolt#2383, with `main` merged in after a16z/jolt#2381).
-  The inline expansions under `crates/jolt-program/src/expand`, `crates/jolt-program/src/image/decode.rs` and `crates/jolt-riscv/src/uncompress.rs` are transcribed from this commit.
+  The inline expansions under `crates/jolt-program/src/expand`, `crates/jolt-program/src/image/decode.rs`, `crates/jolt-program/src/image/elf.rs` (`decode_elf`) and `crates/jolt-riscv/src/uncompress.rs` are transcribed from this commit.
   It contains a16z/jolt#2381, which rejects the reserved C.LUI parcel (section 5).
   The pin moves to a16z/jolt `main` once a16z/jolt#2383 and #2384 merge.
   The system expansions (`JoltBytecode/JoltISA/Expansions/System.lean`) and the decoder (`JoltBytecode/Decode/Jolt.lean`) transcribe this revision, not `9407f93f`: there, a CSR read of `mstatus` returns `v39 | 0x1800`, MRET restores `mstatus` before it jumps, and the decoder accepts CSRRC, CSRRWI, CSRRSI and CSRRCI.
@@ -369,7 +369,16 @@ Of the low-address loads of jolt-qed#37, only loads from the doubleword at addre
 It holds initially and is preserved by every source block, including CSR writes, MRET, LR/SC and ECALL, assuming the separately supplied run invariant that the source PC is even.
 `WholeRun.block_simulates` combines these facts with the platform RAM assumptions and fetch/decode results to simulate every RISC-V block before EBREAK by one Sail `try_step`.
 `WholeRun.block_simulates_decoded` removes the fetch and decode premises: Sail's `fetch` and decode at the block's PC come from the program image (`WholeRun/Decoded.lean`).
-`ImageDecoded` is a platform premise: each RISC-V row of the image is what Jolt's decoder (`joltDecode`, and `joltUncompress` for a compressed row) gives for the bytes `memory_init` loads at its address.
+`ImageDecoded` says that each RISC-V row of the image is what Jolt's decoder (`joltDecode`, and `joltUncompress` for a compressed row) gives for the bytes `memory_init` loads at its address.
+No constraint checks it, because it describes how the bytecode was produced.
+The whole-run theorems derive it from the platform premise `DecodedFrom` (`WholeRun/Elf.lean`): the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF.
+`DecodedFrom` fixes the layout and every RISC-V row, and every program Jolt builds satisfies it; it does not fix which of Jolt's own instructions a row holds.
+`ElfSections.layout?` transcribes `decode_elf` up to the call of `decode_instruction`: the loaded sections, `memory_init`, `program_end`, `merge_ranges` and `decode_text_section`.
+`decode_elf` reads a merged text range from its byte map with `unwrap_or(0)`.
+The `object` crate reports a section as text only when it is `SHT_PROGBITS`, and it gives such a section exactly `sh_size` bytes of data or fails.
+`ElfSection.text_data_length` records this for every text section `decode_elf` loads, that is, at or above `RAM_START_ADDRESS`.
+Every address of a merged text range therefore has a byte, and `DecodedFrom.imageDecoded` proves that the default 0 never applies.
+The parsing of the ELF file into its sections (`object::File::parse`, section kinds, `entry`) stays outside Lean and is trusted.
 `CodeIntact` says Sail's memory still holds those bytes at every row; it holds at `sailInit` (`codeIntact_sailInit`).
 Its Jolt-side version `JoltCodeIntact` (`WholeRun/CodeInv.lean`) is a run invariant under the documented deviation `NoCodeStore`: the block stores into no instruction byte, counting the whole doubleword Jolt's narrow stores rewrite.
 Jolt does not forbid a store into the code, and its tracer keeps fetching the committed bytecode afterwards, while Sail's model fetches coherently from memory; without Zifencei the specification permits either (`unpriv/zifencei.adoc`).
@@ -400,7 +409,7 @@ The premises, by class:
 | Premise | Class | Where |
 | --- | --- | --- |
 | `hcfg` (`sail_reproduces` only) | prover acceptance | Jolt's prover accepts the trace; `sail_soundness` obtains it from `soundness` |
-| `ImageDecoded` | platform | the committed bytecode is what Jolt's decoder makes of the image |
+| `DecodedFrom` | platform | the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF; `ImageDecoded` follows from it |
 | `RowsAligned` | platform | every row address is even; Jolt's ELF loader does not check that the text section starts at an even address |
 | `HeapNoWrap` | platform | the layout ends at least eight bytes below `2^64` |
 | `BlockConforms.amo_no_flag_word` | documented deviation | an AMO on the I/O window touches no panic or termination byte (section 2) |

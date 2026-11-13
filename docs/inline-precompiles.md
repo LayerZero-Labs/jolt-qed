@@ -524,7 +524,8 @@ Each `rows_sound` is instantiated on a concrete known-answer input, to show that
 - Hash specifications follow a two-layer pattern: a reference specification that reads like the standard, a fast specification shaped like the inline's rounds, and a proof that the two agree.
 - Bit-vector reasoning uses `BitVec` lemmas and `omega`.
   `bv_decide` may be used during exploration to find counterexamples, never in a committed proof in the headline import closure.
-- The checking standard is strict: only `propext`, `Classical.choice` and `Quot.sound`; no `bv_decide`, `decide +kernel`, `native_decide`, or heartbeat and recursion-depth overrides in the headline import closure.
+- The checking standard is strict: only `propext`, `Classical.choice` and `Quot.sound`; no `bv_decide`, `native_decide`, or heartbeat and recursion-depth overrides in the headline import closure.
+  `decide +kernel` adds no axiom and is allowed where its kernel check is fast (`AGENTS.md`).
 - A proof that gets stuck is a candidate bug (Scroll's `is_final` under-constraint was found this way).
   Record it before weakening a statement.
 
@@ -544,9 +545,10 @@ EthLib covers all four families, each with a `BitVec` model written in the stand
   `GLVR_ADV`'s rows check nothing, and its specification is "six words at the output buffer"; the GLV mathematics enters its completeness lemma.
 - jolt-qed copies the specification definitions (the `Spec` sections, the Keccak bit model, the field definitions) rather than importing EthLib.
   CC0 allows this.
-  Copying avoids EthLib's dependency on VCVio and keeps EthLib's `decide +kernel` constant proofs out of the headline import closure (the SHA-256 and BLAKE2b proof files use it twice each).
+  Copying avoids EthLib's dependency on VCVio.
+  EthLib's constant proofs use `decide +kernel` (twice each in the SHA-256 and BLAKE2b proof files, five times in the Keccak proof files); jolt-qed copies them unchanged when their kernel check is fast.
   Each copied file records the EthLib commit, and a CI job diffs the copies against EthLib.
-- jolt-qed also copies, or re-proves without `decide +kernel`, the equations between EthLib's word-level code and its models where the proofs need them.
+- jolt-qed also copies the equations between EthLib's word-level code and its models where the proofs need them.
 - Clean's Keccak `absorbBlock` is not used: `hash-specs` reports that it XORs the block into the wrong lanes.
   `hash-specs` itself has no licence file.
   No GPL or LGPL source (`fips-180-4-lean`, `LeanSha256`) is used; jolt-qed is Apache-2.0.

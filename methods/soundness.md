@@ -234,7 +234,7 @@ The audit has found no constraint linking those answers to one tape; none is nee
 
 The premises are bundled in
 [Soundness/Assumptions.lean](../JoltConstraints/Soundness/Assumptions.lean):
-`JoltField F` (`2^128 < ringChar F`); `JoltInstance.SoundnessAssumptions`
+`JoltField F` (`2^128 - 2^64 < ringChar F`, with constraint (63) on below `2^128`); `JoltInstance.SoundnessAssumptions`
 (`RamRegionFits`); and the temporary
 `JoltInstance.TemporaryRestrictions` (`TracerAddressChecks`,
 `HostCallsSucceed`, `NoMaxLengthTrace`, `TerminationThenStall`, `PanicStoresOne`,
@@ -283,8 +283,8 @@ The proof derives alignment and excludes peripheral addresses separately, in Lay
 The known panic, termination and stopping discrepancies are covered by the `PanicStoresOne`, `ClaimsNoPanic` and `TerminationThenStall` restrictions, and stopping is proved in Layer 7.
 On 2026-10-10, Ari also decided to treat every advice-tape answer as untrusted for the planned soundness theorem, pending a16z's confirmation. Retain the fixed-tape specification for completeness and add the relaxed specification alongside it, as recorded in Layer 5a.
 On 2026-10-15, Ari decided the theorem keeps the fixed-tape language. Jolt's tracer reads one tape, in order; "untrusted" means the prover chooses its contents, which the ∃ over private inputs already allows. The relaxed specification stays, as a proof device.
-On 2026-10-10, Ari chose to model Akita separately. The current theorem covers the base constraint relation over fields with characteristic above `2^128`, including BN254. Akita's prime is smaller and its extra lookup-address guard is outside this relation. The audit in Layer 4 records that distinction.
-The separate Akita work will model its field and deterministic, non-succinct constraint relation, including that guard. PCS security, commitments, and opening protocols are outside the current proof scope.
+On 2026-10-10, Ari chose to model Akita separately. On 2026-11-10, after a16z/jolt#2403 made `p = 2^128 - 1780711455` Jolt's production field, the model took in Akita's one extra relation instead: the canonical lookup-address check, constraint (63), on when the characteristic is below `2^128`. The theorem now covers fields with characteristic above `2^128 - 2^64`, including BN254 and Akita's field. The audit in Layer 4 records the argument.
+PCS security, commitments, and opening protocols are outside the current proof scope.
 `reports/2026-10-29-soundness-statement-audit.md` checks that the modeled constraints are the ones Jolt's verifier checks.
 They are, except that Lean requires untrusted-advice words to be 64-bit values (its finding 1).
 
@@ -503,7 +503,7 @@ What: distinct natural numbers below the field's characteristic stay distinct in
 Also derive `2^chunkBits < ringChar F` from the verifier's setup check and `charAbove2pow127`.
 Why: constraints are equations over the field `F`, but registers and memory hold 64-bit words.
 To conclude `a = b` from `(a : F) = (b : F)`, both must be below the characteristic.
-The existing Layer 0–1 lemmas use only `charAbove2pow127 : 2^127 < ringChar F`, which covers 64-bit words but not every 128-bit integer. Their bounds stay unchanged; the base soundness theorem supplies `charAbove2pow128 : 2^128 < ringChar F`, the stronger bound needed in Layer 4. `two_pow_127_lt_char` in `Layer0/Field.lean` provides the bridge; Layer 2's zero-lookup and x0 proofs already use it.
+The existing Layer 0–1 lemmas use only `charAbove2pow127 : 2^127 < ringChar F`, which covers 64-bit words but not every 128-bit integer. Their bounds stay unchanged; the base soundness theorem supplies `charAbove2pow128Minus2pow64 : 2^128 - 2^64 < ringChar F`, which with constraint (63) gives the 128-bit address bound needed in Layer 4 (`identityAddress_lt_char`). `two_pow_127_lt_char` in `Layer0/Field.lean` provides the bridge; Layer 2's zero-lookup and x0 proofs already use it.
 The chunk-width bound ensures that one-hot Hamming-weight sums cannot wrap in the field, so their field values determine the number of selected entries.
 Uses: `charAbove2pow127`, `ConstraintContext.oneHotFitsSetup`, bounds on parameters and expressions.
 
@@ -697,8 +697,8 @@ Tape answers (`VirtualAdviceLoad`) are untrusted under the Layer 5a decision.
 
 **Field-scope audit before this layer:** an identity-RAF row
 (`InstructionRafFlag = 1`) equates the full lookup address with the right operand
-only in the field. For Akita's prime `p = 2^128 - 2^32 + 22537`, both `s` and
-`s + p` fit in 128 bits when `s < 4294944759`; they have the same field encoding
+only in the field. For Akita's prime `p = 2^128 - 1780711455`, both `s` and
+`s + p` fit in 128 bits when `s < 1780711455`; they have the same field encoding
 but different `RangeCheck` outputs. The base equations alone therefore do not
 support an injectivity argument from the former `2^127 < ringChar F` premise.
 This is an obstruction to the proposed argument, not a constructed witness
@@ -718,13 +718,24 @@ identity address it rules out an all-ones upper half, hence gives
 `jolt-claims/akita`. This rules out the proposed alias in that build; this audit
 read the code and did not run an end-to-end forged proof.
 
-Our [constraint checklist](../JoltConstraints/constraints.md) explicitly leaves
-this Akita condition outside the current base model. On 2026-10-10, Ari approved
-restricting this theorem to `2^128 < ringChar F` and modeling Akita separately.
-Layer 4 must use that stronger bound to recover full lookup addresses. The
-separate Akita relation must include the guard and its actual field: merely
-adding the upper-half guard would still not cover every characteristic above
-`2^127`. That modeling work is pending and does not include PCS security.
+On 2026-10-10, Ari approved restricting this theorem to `2^128 < ringChar F` and
+modeling Akita separately. On 2026-11-10 a16z/jolt#2403 made
+`p = 2^128 - 1780711455` Jolt's production field, so the model now includes the
+guard as constraint (63) of the [constraint checklist](../JoltConstraints/constraints.md)
+(`Constraints/InstructionAddressCanonical.lean`). The constraint is on exactly when
+`ringChar F < 2^128`, matching Jolt, whose `akita` feature both selects the fp128
+field and turns the guard on. `JoltField` is now `2^128 - 2^64 < ringChar F`.
+`identityAddress_lt_char` (Layer 1) puts every identity-RAF address below the
+characteristic: at characteristic `2^128` or more trivially, and below it because
+(63) rejects addresses at or above `2^128 - 2^64`. Layer 4 recovers a full lookup
+address from a value below `2^128 - 2^64` (`instructionLookupRa_of_identity`'s
+`valueBelow`); adds, subtracts, products of two words and widened words all are.
+The upper-half guard alone would not cover every characteristic above `2^127`;
+the `2^128 - 2^64` bound is the one it needs.
+An audit of the `akita` build at `c97e9300` and at a16z/jolt `d2aacbe08` found no
+other relation it drops or weakens: its fused increment and digit-zero
+hamming-weight encodings only re-encode or add constraints. PCS security is outside
+this scope.
 
 ### Layer 5: advice tape and execution
 
