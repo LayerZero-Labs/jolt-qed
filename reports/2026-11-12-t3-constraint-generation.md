@@ -38,9 +38,14 @@ The generator also runs these checks, and exits with status 1 if any fails:
 - `r1cs_shape`: 22 rows over 38 variables.
 - `r1cs_outer_is_prefix`: the Spartan outer matrices are the first 19 rows of the full matrices.
 - `r1cs_variable_names_unique` and `kind_names_unique`.
+- `relations_match_extractor`: the generator's four relations are the `X::unbatched_relation()` calls in the body of `extracted_claims` in `zklean-extractor/src/sumchecks.rs`, in the same order.
+  The extractor is a binary crate, so the generator reads that list from its source.
 - `relations_count`: exactly four relations.
-- `stamp_uniformity`: for every kind, every `virtual_sequence_remaining` in `None`, `0..=1024` and `65535`, and both values of `is_first_in_sequence` and `is_compressed`, the circuit flags equal the kind's canonical flags plus the stamp's flags, and the instruction flags and lookup table do not change.
-- `raf_stamp_independent`: the RAF flag does not change with the stamp.
+- `stamp_uniformity`: over 4108 stamps (every `virtual_sequence_remaining` in `None`, `0..=1024` and `65535`, times both values of `is_first_in_sequence` and `is_compressed`):
+  - for every kind, the circuit flags equal the kind's canonical flags plus the stamp's flags, and the instruction flags and lookup table do not change;
+  - every stamp adds exactly the flags of its representative, the same stamp with a nonzero count replaced by `1`.
+    This is the collapse `stampClass` uses in Lean.
+- `raf_stamp_independent`: over the same 4108 stamps, the RAF flag does not change with the stamp.
 
 All checks pass at `580084fcf`.
 
@@ -57,14 +62,20 @@ It is handwritten and short, and a reviewer should read it in full.
   - `*_EqCycle` sums the output over all addresses at the same cycle (RAM addresses or the 128 registers).
   - `InstructionInput_EqProduct` equates input and output at each cycle.
   - `SpartanShift_EqPlusOne*` equates the input at cycle `t` with the output at `t + 1`, and with `0` at the last cycle.
-  It also checks that `offset` is true exactly for the shift weights.
+  `RelationClaim.WellFormed` restricts this reading to claims that fit their weight: the input relation must be the one the weight's opening point comes from, `offset` must be true exactly for the shift weights, the input may mention only cycle polynomials, and the output only cycle polynomials and polynomials over the weight's address space.
+  `Relation.Holds` also requires every claim's weight to belong to the relation.
+  The two shift weights use different opening points (`crates/jolt-verifier/src/stages/stage3/spartan_shift.rs:102-110`), so a claim that paired `EqPlusOneOuter` with the product relation would fail these checks.
 - `kindOf` maps each `JoltISA.Instr` constructor to the Jolt kind of the same name.
+  A `run_meta` check in `Equiv.lean` confirms this name match for every constructor when the file elaborates, and also fails if a Jolt kind other than `NoOp` has no Lean constructor.
 - `stampClass` replaces a nonzero `virtual_sequence_remaining` by `1`.
   Jolt's `jolt_instruction!` reads the count only through `is_some`, `== Some(0)` and `unwrap_or(0) != 0`.
-  The generator's `stamp_uniformity` check covers counts `1..=1024` and `65535`.
+  The generator's `stamp_uniformity` check confirms that counts `1..=1024` and `65535` add the same flags as count `1`.
 
-Every map is an exhaustive `match` on a generated inductive type.
-If Jolt renames or adds a variable, polynomial, weight or kind, the generated type changes and `Semantics.lean` stops compiling until someone maps the new name.
+Every map from a generated name is an exhaustive `match` on a generated inductive type.
+If Jolt renames or adds a variable, polynomial or weight, the generated type changes and `Semantics.lean` stops compiling until someone maps the new name.
+Kinds work the other way round, since `kindOf` matches on Lean instructions: a new Jolt kind fails the `run_meta` check in `Equiv.lean` until Lean gets an instruction of that name.
+The relation reading also trusts one convention: an address-indexed polynomial outside its own sum evaluates to `0`.
+`WellFormed` rules out every claim that would use it, so no current claim depends on it.
 
 ## What is proved equal
 
@@ -82,6 +93,7 @@ If Jolt renames or adds a variable, polynomial, weight or kind, the generated ty
 | `kindInstructionFlags_kindOf` | The same for `instructionFlag`. |
 | `kindLookupTable_kindOf` | `kindLookupTable (kindOf i) = lookupTable i`. |
 | `kindRafFlag_kindOf` | `kindRafFlag (kindOf i) = instructionRafFlag i`. |
+| `run_meta` check (no name) | `kindOf` maps every Lean instruction to the Jolt kind of the same name, and every Jolt kind except `NoOp` has a Lean instruction. |
 | `circuitFlag_iff_generated` | For every bytecode row, `circuitFlag row f` is set iff `f` is in the kind's flags or the stamp's flags. |
 | `padding_circuitFlag`, `padding_instructionFlag`, `padding_lookupTable_rafFlag` | The padding branch of `bytecodeCircuitFlag`, `bytecodeInstructionFlag`, `bytecodeLookupTableFlag` and `bytecodeRafFlag` equals Jolt's `NoOp` kind. |
 | `ConstraintEquations.generated` | A witness that satisfies `ConstraintEquations` satisfies all 22 generated rows and the four generated relations. |
@@ -114,7 +126,7 @@ R1CS rows and their handwritten constraints (all in `JoltConstraints/Constraints
 | 21 | `ShouldJump` | `shouldJumpEqJumpMulNotNextIsNoop` |
 
 The R1CS proofs unfold both sides and close each direction with `linear_combination`.
-The relation proofs are definitional except the `NextIsNoop` claim.
+The relation proofs check `WellFormed` with `decide` and are otherwise definitional, except the `NextIsNoop` claim.
 Jolt states that claim as `1 - NextIsNoop = shift(1 - IsNoop)`, which forces `NextIsNoop = 1` at the last cycle; that is the handwritten `else 1`.
 The kind proofs are `cases i <;> rfl` over the 91 `JoltISA.Instr` constructors.
 
@@ -137,10 +149,12 @@ The extra Jolt kind is `NoOp`, which Lean models as the padding branch of the by
 
 ## Mutation check
 
-I changed two generated values and rebuilt `Equiv.lean`, then restored both files:
+I made each change below on its own, rebuilt `Equiv.lean`, and restored the file:
 
 - Row 13's constant `-4` to `-2` in `R1CS.lean`: `rv64Row13_holds_iff` failed (`ring failed`).
 - `ADD`'s lookup table from `RangeCheck` to `And` in `KindTables.lean`: `kindLookupTable_kindOf` failed (`rfl` failed).
+- The `NextPC` claim's weight from `EqPlusOneOuter` to `EqPlusOneProduct` in `Relations.lean`: `spartanShift_holds_iff` failed.
+- `kindOf`'s `FENCE` arm from `.FENCE` to `.NoOp` in `Semantics.lean`: the `run_meta` check failed with `kindOf maps JoltISA.Instr.FENCE to …JoltKind.NoOp`, and two kind theorems failed.
 
 ## What stays handwritten, and why
 

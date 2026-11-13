@@ -18,6 +18,8 @@ under the reading in `ConstraintGen/Semantics.lean`.
 * `kindCircuitFlags_kindOf`, `kindInstructionFlags_kindOf`,
   `kindLookupTable_kindOf`, `kindRafFlag_kindOf`: Lean's per-instruction
   metadata equals Jolt's per-kind table at every instruction.
+* A `run_meta` check: `kindOf` maps every Lean instruction to the Jolt kind of
+  the same name, and every Jolt kind except `NoOp` has a Lean instruction.
 * `circuitFlag_iff_generated`: a bytecode row's circuit flag, including the
   flags its sequence stamp sets, matches the generated tables.
 * `padding_*`: the padding row of `bytecodeCircuitFlag` and its neighbors
@@ -163,13 +165,15 @@ theorem rv64Rows_holds_iff (w : WitnessType F params) :
 /-! ## The four relations -/
 
 /-- Close `claim.Holds w ↔ def w` when the claim's pointwise identity is the
-handwritten definition up to unfolding. -/
-macro "claim_rfl" : tactic => `(tactic| exact ⟨fun h => h.2, fun h => ⟨rfl, h⟩⟩)
+handwritten definition up to unfolding; `decide` checks that the claim is well
+formed. -/
+macro "claim_rfl" : tactic => `(tactic| exact ⟨fun h => h.2, fun h => ⟨by decide, h⟩⟩)
 
 theorem ramReadWriteChecking_holds_iff (w : WitnessType F params) :
     ramReadWriteChecking.Holds w ↔
       ramReadValueEqRamRead w ∧ ramWriteValueEqRamReadWrite w := by
-  simp only [Relation.Holds, ramReadWriteChecking, List.mem_cons, List.not_mem_nil, or_false,
+  refine (and_iff_right (by decide)).trans ?_
+  simp only [ramReadWriteChecking, List.mem_cons, List.not_mem_nil, or_false,
     forall_eq_or_imp, forall_eq]
   refine and_congr ?_ ?_ <;> claim_rfl
 
@@ -177,7 +181,8 @@ theorem registersReadWriteChecking_holds_iff (w : WitnessType F params) :
     registersReadWriteChecking.Holds w ↔
       rdWriteValueEqRegistersReadWrite w ∧ rs1ValueEqRegistersRead w ∧
         rs2ValueEqRegistersRead w := by
-  simp only [Relation.Holds, registersReadWriteChecking, List.mem_cons, List.not_mem_nil,
+  refine (and_iff_right (by decide)).trans ?_
+  simp only [registersReadWriteChecking, List.mem_cons, List.not_mem_nil,
     or_false, forall_eq_or_imp, forall_eq]
   refine and_congr ?_ (and_congr ?_ ?_) <;> claim_rfl
 
@@ -185,7 +190,8 @@ theorem registersReadWriteChecking_holds_iff (w : WitnessType F params) :
 theorem instructionInputVirtualization_holds_iff (w : WitnessType F params) :
     instructionInputVirtualization.Holds w ↔
       rightInstructionInputEqSelection w ∧ leftInstructionInputEqSelection w := by
-  simp only [Relation.Holds, instructionInputVirtualization, List.mem_cons, List.not_mem_nil,
+  refine (and_iff_right (by decide)).trans ?_
+  simp only [instructionInputVirtualization, List.mem_cons, List.not_mem_nil,
     or_false, forall_eq_or_imp, forall_eq]
   refine and_congr ?_ ?_ <;> claim_rfl
 
@@ -196,12 +202,17 @@ theorem spartanShift_holds_iff (w : WitnessType F params) :
     spartanShift.Holds w ↔
       nextUnexpandedPCEqShift w ∧ nextPCEqShift w ∧ nextIsVirtualEqShift w ∧
         nextIsFirstInSequenceEqShift w ∧ nextIsNoopEqShift w := by
-  simp only [Relation.Holds, spartanShift, List.mem_cons, List.not_mem_nil, or_false,
+  refine (and_iff_right (by decide)).trans ?_
+  simp only [spartanShift, List.mem_cons, List.not_mem_nil, or_false,
     forall_eq_or_imp, forall_eq]
-  refine and_congr ?_ (and_congr ?_ (and_congr ?_ (and_congr ?_ ?_))) <;> try claim_rfl
+  refine and_congr ?_ (and_congr ?_ (and_congr ?_ (and_congr ?_ ?_)))
+  · claim_rfl
+  · claim_rfl
+  · claim_rfl
+  · claim_rfl
   unfold RelationClaim.Holds nextIsNoopEqShift
-  simp only [ClaimExpr.eval, RelationPoly.cycleValue, RelationWeight.offset, Int.cast_one,
-    true_and]
+  refine (and_iff_right (by decide)).trans ?_
+  simp only [ClaimExpr.eval, RelationPoly.cycleValue, Int.cast_one]
   refine forall_congr' fun t => ?_
   split_ifs <;> constructor <;> intro h <;> linear_combination -h
 
@@ -231,6 +242,33 @@ theorem kindLookupTable_kindOf (i : JoltISA.Instr) :
 theorem kindRafFlag_kindOf (i : JoltISA.Instr) :
     kindRafFlag (kindOf i) = JoltMetadata.instructionRafFlag i := by
   cases i <;> rfl
+
+/-! `kindOf` maps each `JoltISA.Instr` constructor to the Jolt kind of the same
+name, and every Jolt kind except `NoOp` (the padding row) has such a
+constructor. The check below runs when the file elaborates, so a Jolt kind
+added without a Lean instruction, or a `kindOf` arm that names the wrong kind,
+fails the build. -/
+
+open Lean Meta in
+run_meta do
+  let env ← getEnv
+  let some (.inductInfo instr) := env.find? ``JoltISA.Instr
+    | throwError "JoltISA.Instr is not an inductive type"
+  let some (.inductInfo kind) := env.find? ``Generated.JoltKind
+    | throwError "JoltKind is not an inductive type"
+  let instrNames := instr.ctors.map (·.lastComponentAsString)
+  for c in instr.ctors do
+    let ctor ← getConstInfoCtor c
+    let image ← forallTelescope ctor.type fun xs _ =>
+      whnf (mkApp (mkConst ``kindOf) (mkAppN (mkConst c) xs))
+    let some k := image.constName?
+      | throwError "kindOf {c} does not reduce to a JoltKind constructor"
+    unless k.lastComponentAsString == c.lastComponentAsString do
+      throwError "kindOf maps {c} to {k}"
+  for k in kind.ctors do
+    let n := k.lastComponentAsString
+    unless n == "NoOp" || instrNames.contains n do
+      throwError "Jolt kind {n} has no JoltISA.Instr constructor"
 
 theorem mem_kindCircuitFlags_kindOf (i : JoltISA.Instr) (f : CircuitFlags) :
     f ∈ kindCircuitFlags (kindOf i) ↔ JoltMetadata.opcodeFlag i f = true := by

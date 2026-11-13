@@ -188,7 +188,8 @@ def kindOf : JoltISA.Instr → JoltKind
 nonzero count replaced by `1`. Jolt reads the count only through `is_some`,
 `== Some(0)` and `unwrap_or(0) != 0` (`jolt_instruction!` in
 `crates/jolt-riscv/src/lib.rs`), so all nonzero counts give the same flags. The
-generator checks this on the counts `1..=1024` and `65535`. -/
+generator checks that every count in `1..=1024` and `65535` adds the same flags
+as count `1` (`stamp_uniformity`). -/
 def stampClass (row : JoltInstructionRow) : Option Nat × Bool × Bool :=
   (row.virtual_sequence_remaining.map (fun n => if n = 0 then 0 else 1),
     row.is_first_in_sequence, row.is_compressed)
@@ -220,6 +221,12 @@ three shapes (Jolt: `crates/jolt-claims/src/protocols/jolt/ids.rs`,
 * `SpartanShift_EqPlusOne*` is `eq+1(r, cycle)`, which selects the next cycle.
   At the last cycle there is no next one, so the right side is zero there.
   These are the only claims with `offset = true`.
+
+This reading is valid only for a claim whose input relation, offset and
+polynomials fit its weight, and for a relation whose weights all belong to it.
+`RelationClaim.WellFormed` and `Relation.Holds` check those conditions, so a
+generated claim that pairs a weight with the wrong relation, offset or
+polynomial fails the proofs in `Equiv.lean`.
 
 Read pointwise, each claim is an identity between witness columns at every
 cycle. `Holds` states that identity. -/
@@ -281,6 +288,81 @@ def Generated.RelationPoly.registerValue (w : WitnessType F params) (r : Fin 128
   | .Rs2Ra => w.Rs2Ra r t
   | p => p.cycleValue w t
 
+/-- Which witness space a relation polynomial lives in. -/
+inductive PolyDomain where
+  | cycle
+  | ram
+  | registers
+  deriving DecidableEq, Repr
+
+/-- The witness space of each relation polynomial. -/
+def Generated.RelationPoly.domain : RelationPoly → PolyDomain
+  | .Imm => .cycle
+  | .InstructionFlags_IsNoop => .cycle
+  | .InstructionFlags_LeftOperandIsPC => .cycle
+  | .InstructionFlags_LeftOperandIsRs1Value => .cycle
+  | .InstructionFlags_RightOperandIsImm => .cycle
+  | .InstructionFlags_RightOperandIsRdWriteValue => .cycle
+  | .InstructionFlags_RightOperandIsRs2Value => .cycle
+  | .LeftInstructionInput => .cycle
+  | .NextIsFirstInSequence => .cycle
+  | .NextIsNoop => .cycle
+  | .NextIsVirtual => .cycle
+  | .NextPC => .cycle
+  | .NextUnexpandedPC => .cycle
+  | .OpFlags_IsFirstInSequence => .cycle
+  | .OpFlags_VirtualInstruction => .cycle
+  | .PC => .cycle
+  | .RamInc => .cycle
+  | .RamRa => .ram
+  | .RamReadValue => .cycle
+  | .RamVal => .ram
+  | .RamWriteValue => .cycle
+  | .RdInc => .cycle
+  | .RdWa => .registers
+  | .RdWriteValue => .cycle
+  | .RegistersVal => .registers
+  | .RightInstructionInput => .cycle
+  | .Rs1Ra => .registers
+  | .Rs1Value => .cycle
+  | .Rs2Ra => .registers
+  | .Rs2Value => .cycle
+  | .UnexpandedPC => .cycle
+
+/-- The address space an output weight sums over (`cycle` when it sums over
+none). -/
+def Generated.RelationWeight.outputDomain : RelationWeight → PolyDomain
+  | .RamReadWrite_EqCycle => .ram
+  | .RegistersReadWrite_EqCycle => .registers
+  | .InstructionInput_EqProduct | .SpartanShift_EqPlusOneOuter
+  | .SpartanShift_EqPlusOneProduct => .cycle
+
+/-- The relation whose sumcheck uses this weight. -/
+def Generated.RelationWeight.outputRelation : RelationWeight → RelationId
+  | .RamReadWrite_EqCycle => .RamReadWriteChecking
+  | .RegistersReadWrite_EqCycle => .RegistersReadWriteChecking
+  | .InstructionInput_EqProduct => .InstructionInputVirtualization
+  | .SpartanShift_EqPlusOneOuter | .SpartanShift_EqPlusOneProduct => .SpartanShift
+
+/-- The relation whose opening point this weight is built from, and so the
+input relation of every claim that uses it. The two shift weights use
+different opening points (Jolt:
+`crates/jolt-verifier/src/stages/stage3/spartan_shift.rs:102-110`), so the
+pointwise reading below is valid only when each is paired with its own input
+relation. -/
+def Generated.RelationWeight.inputRelation : RelationWeight → RelationId
+  | .RamReadWrite_EqCycle => .SpartanOuter
+  | .RegistersReadWrite_EqCycle => .RegistersClaimReduction
+  | .InstructionInput_EqProduct => .SpartanProductVirtualization
+  | .SpartanShift_EqPlusOneOuter => .SpartanOuter
+  | .SpartanShift_EqPlusOneProduct => .SpartanProductVirtualization
+
+/-- The polynomials a claim expression mentions. -/
+def ClaimExpr.polys {P : Type} : ClaimExpr P → List P
+  | .const _ => []
+  | .poly p => [p]
+  | .add l r | .mul l r | .sub l r => l.polys ++ r.polys
+
 /-- The value of a claim expression under a valuation of its polynomials. -/
 def ClaimExpr.eval {P : Type} (value : P → F) : ClaimExpr P → F
   | .const c => (c : F)
@@ -294,11 +376,23 @@ def Generated.RelationWeight.offset : RelationWeight → Bool
   | .RamReadWrite_EqCycle | .RegistersReadWrite_EqCycle | .InstructionInput_EqProduct => false
   | .SpartanShift_EqPlusOneOuter | .SpartanShift_EqPlusOneProduct => true
 
+/-- The conditions under which `Holds` may read a claim pointwise: the claim's
+input relation and offset are the ones its weight belongs with, its input
+mentions only cycle polynomials, and its output mentions only cycle
+polynomials and polynomials over the weight's address space. -/
+def RelationClaim.WellFormed (claim : RelationClaim RelationId RelationPoly RelationWeight) :
+    Bool :=
+  claim.inputRelation == claim.outputWeight.inputRelation &&
+    claim.offset == claim.outputWeight.offset &&
+    claim.input.polys.all (·.domain == .cycle) &&
+    claim.output.polys.all fun p =>
+      p.domain == .cycle || p.domain == claim.outputWeight.outputDomain
+
 /-- What a claim says about a witness, read pointwise as described above. The
-first conjunct checks that the claim's `offset` agrees with its weight. -/
+first conjunct requires the claim to be well formed. -/
 def RelationClaim.Holds (claim : RelationClaim RelationId RelationPoly RelationWeight)
     (w : WitnessType F params) : Prop :=
-  claim.offset = claim.outputWeight.offset ∧
+  claim.WellFormed = true ∧
   ∀ t : Fin params.traceLength,
     claim.input.eval (RelationPoly.cycleValue w t) =
       match claim.outputWeight with
@@ -312,9 +406,11 @@ def RelationClaim.Holds (claim : RelationClaim RelationId RelationPoly RelationW
             claim.output.eval (RelationPoly.cycleValue w ⟨t.val + 1, next⟩)
           else 0
 
-/-- A relation holds when each of its claims does. -/
+/-- A relation holds when every claim's weight belongs to it and each claim
+holds. -/
 def Relation.Holds (relation : Relation RelationId RelationPoly RelationWeight)
     (w : WitnessType F params) : Prop :=
-  ∀ claim ∈ relation.claims, claim.Holds w
+  relation.claims.all (·.outputWeight.outputRelation == relation.outputRelation) = true ∧
+    ∀ claim ∈ relation.claims, claim.Holds w
 
 end JoltConstraints.ConstraintGen

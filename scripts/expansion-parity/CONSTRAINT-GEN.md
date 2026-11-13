@@ -47,14 +47,21 @@ lake build JoltConstraints.ConstraintGen.Equiv
 * `r1cs_outer_is_prefix`: the matrices of the Spartan outer sumcheck are the
   first 19 rows (the eq-conditional ones) of the full matrices.
 * `r1cs_variable_names_unique`: no two variables share a name.
-* `relations_count`: `extracted_claims` lists exactly four relations.
+* `relations_match_extractor`: the generator's relations are the
+  `X::unbatched_relation()` calls in `extracted_claims`
+  (`zklean-extractor/src/sumchecks.rs`), in order. The generator reads that
+  list from the extractor's source, since the extractor is a binary crate.
+* `relations_count`: the generator emits exactly four relations.
 * `kind_names_unique`: no two instruction kinds share a name.
 * `stamp_uniformity`: for every kind and every stamp
   (`virtual_sequence_remaining` in `None`, `0..=1024` and `65535`, times
   `is_first_in_sequence` and `is_compressed`), the circuit flags are the
   kind's canonical flags plus the stamp's flags, and the instruction flags and
-  lookup table do not depend on the stamp.
-* `raf_stamp_independent`: the RAF flag does not depend on the stamp.
+  lookup table do not depend on the stamp. Each stamp must also add exactly
+  the flags of the same stamp with a nonzero count replaced by `1`, which is
+  how Lean's `stampClass` reads it.
+* `raf_stamp_independent`: over the same stamps, the RAF flag does not depend
+  on the stamp.
 
 ## CI
 
@@ -65,8 +72,10 @@ reruns the generator, fails if any generated file changes, and builds
 ## When Jolt changes
 
 If the regenerated files differ, read the diff first. A renamed or added
-variable, polynomial or kind changes a generated inductive type, so
-`Semantics.lean` stops compiling until someone maps the new name. A changed
+variable, polynomial or weight changes a generated inductive type, so
+`Semantics.lean` stops compiling until someone maps the new name. A new
+instruction kind fails the `run_meta` check in `Equiv.lean` until Lean has an
+instruction of that name. A changed
 coefficient, flag or table makes a proof in `Equiv.lean` fail. Decide whether
 Jolt or the handwritten model is wrong before you change either. Do not edit
 the generated files by hand.

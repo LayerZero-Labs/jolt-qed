@@ -297,8 +297,63 @@ fn relations() -> Vec<(&'static str, UnbatchedRelation)> {
     ]
 }
 
-fn relations_lean(commit: &str, checks: &mut Checks) -> Result<(String, Value), String> {
+/// The Jolt types whose `unbatched_relation` `relations()` calls, in order.
+const RELATION_TYPES: [&str; 4] =
+    ["RamReadWriteChecking", "RegistersReadWriteChecking", "InputVirtualization", "Shift"];
+
+/// The `X::unbatched_relation()` calls in the body of `extracted_claims` in
+/// `zklean-extractor/src/sumchecks.rs`, in order. The generator cannot link
+/// the extractor (a binary crate), so it reads the selection from its source.
+fn extractor_relation_types(jolt_dir: &Path) -> Result<Vec<String>, String> {
+    let path = jolt_dir.join("zklean-extractor/src/sumchecks.rs");
+    let src = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let start = src
+        .find("fn extracted_claims()")
+        .ok_or_else(|| format!("{}: no fn extracted_claims()", path.display()))?;
+    let body = &src[start..];
+    let open = body.find('{').ok_or("extracted_claims: no body")?;
+    let mut depth = 0usize;
+    let mut end = None;
+    for (i, ch) in body[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(open + i);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let body = &body[open..end.ok_or("extracted_claims: unbalanced braces")?];
+    // Every piece before a `::unbatched_relation()` call ends with the type name.
+    let pieces: Vec<&str> = body.split("::unbatched_relation()").collect();
+    let types = pieces[..pieces.len() - 1]
+        .iter()
+        .map(|piece| {
+            let start = piece
+                .rfind(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .map_or(0, |i| i + 1);
+            piece[start..].to_string()
+        })
+        .collect();
+    Ok(types)
+}
+
+fn relations_lean(
+    commit: &str,
+    jolt_dir: &Path,
+    checks: &mut Checks,
+) -> Result<(String, Value), String> {
     let rels = relations();
+    let extractor = extractor_relation_types(jolt_dir)?;
+    checks.record(
+        "relations_match_extractor",
+        extractor == RELATION_TYPES,
+        json!({ "extractor": extractor, "generated": RELATION_TYPES }),
+    );
     let mut names = RelationNames {
         relations: BTreeSet::new(),
         polys: BTreeMap::new(),
@@ -421,6 +476,12 @@ fn checked_stamps() -> Vec<Stamp> {
     v
 }
 
+/// The stamp whose flags Lean uses for `stamp`: a nonzero sequence count
+/// becomes 1, everything else stays.
+fn representative(stamp: Stamp) -> Stamp {
+    Stamp { vsr: stamp.vsr.map(|n| if n == 0 { 0 } else { 1 }), ..stamp }
+}
+
 fn row_of(kind: JoltInstructionKind, stamp: Stamp) -> JoltInstructionRow {
     JoltInstructionRow {
         instruction_kind: kind,
@@ -528,6 +589,20 @@ fn kind_tables(
             }
         }
     }
+    // Lean reads a nonzero sequence count as 1 (`stampClass` in
+    // ConstraintGen/Semantics.lean), so each stamp must add exactly the flags of
+    // its representative: the same stamp with a nonzero count replaced by 1.
+    for &stamp in &stamps {
+        let rep = representative(stamp);
+        if stamp_sets[&stamp] != stamp_sets[&rep] && failures.len() < 20 {
+            failures.push(json!({
+                "stamp": format!("{stamp:?}"),
+                "flags": circuit_names(&stamp_sets[&stamp]),
+                "representative": format!("{rep:?}"),
+                "representative_flags": circuit_names(&stamp_sets[&rep]),
+            }));
+        }
+    }
     checks.record(
         "stamp_uniformity",
         failures.is_empty(),
@@ -535,14 +610,14 @@ fn kind_tables(
     );
     // RAF depends on the stamp only through the circuit flags; check it too.
     let mut raf_failures = Vec::new();
-    for stamp in emitted_stamps() {
+    for stamp in stamps.iter().copied() {
         for (&kind, d) in JoltInstructionKind::ALL.iter().zip(&data) {
             if kind == JoltInstructionKind::NoOp && stamp != CANONICAL {
                 // JoltTraceRow::new rejects a NoOp carrying sequence metadata.
                 continue;
             }
             let raf = annotator.raf(&row_of(kind, stamp))?;
-            if raf != d.raf {
+            if raf != d.raf && raf_failures.len() < 20 {
                 raf_failures.push(json!({ "kind": d.name, "stamp": format!("{stamp:?}") }));
             }
         }
@@ -665,7 +740,7 @@ fn run() -> Result<bool, String> {
 
     let rows = r1cs_rows(&mut checks)?;
     let r1cs = r1cs_lean(&commit, &rows);
-    let (relations, relation_summary) = relations_lean(&commit, &mut checks)?;
+    let (relations, relation_summary) = relations_lean(&commit, &args.jolt_dir, &mut checks)?;
     let (kinds, stamps) = kind_tables(&mut checks)?;
     let kind_text = kinds_lean(&commit, &kinds, &stamps);
 
