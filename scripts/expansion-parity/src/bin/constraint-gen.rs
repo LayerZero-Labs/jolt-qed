@@ -301,45 +301,84 @@ fn relations() -> Vec<(&'static str, UnbatchedRelation)> {
 const RELATION_TYPES: [&str; 4] =
     ["RamReadWriteChecking", "RegistersReadWriteChecking", "InputVirtualization", "Shift"];
 
-/// The `X::unbatched_relation()` calls in the body of `extracted_claims` in
+/// Remove `//` and `/* */` comments from Rust source. The body this reads has
+/// no string or character literals; `extractor_relation_types` rejects any
+/// that remain.
+fn strip_comments(src: &str) -> String {
+    let mut out = String::new();
+    let mut chars = src.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '/' && chars.peek() == Some(&'/') {
+            for d in chars.by_ref() {
+                if d == '\n' {
+                    out.push('\n');
+                    break;
+                }
+            }
+        } else if c == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            let mut prev = ' ';
+            for d in chars.by_ref() {
+                if prev == '*' && d == '/' {
+                    break;
+                }
+                prev = d;
+            }
+            out.push(' ');
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// The `X::unbatched_relation()` calls in `extracted_claims` in
 /// `zklean-extractor/src/sumchecks.rs`, in order. The generator cannot link
 /// the extractor (a binary crate), so it reads the selection from its source.
+/// It accepts only a body of the form `{ vec![A::unbatched_relation(), ...] }`
+/// after removing comments and whitespace, and returns an error otherwise.
 fn extractor_relation_types(jolt_dir: &Path) -> Result<Vec<String>, String> {
     let path = jolt_dir.join("zklean-extractor/src/sumchecks.rs");
     let src = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let src = strip_comments(&src);
     let start = src
         .find("fn extracted_claims()")
         .ok_or_else(|| format!("{}: no fn extracted_claims()", path.display()))?;
-    let body = &src[start..];
-    let open = body.find('{').ok_or("extracted_claims: no body")?;
+    let rest = &src[start..];
+    let open = rest.find('{').ok_or("extracted_claims: no body")?;
     let mut depth = 0usize;
     let mut end = None;
-    for (i, ch) in body[open..].char_indices() {
+    for (i, ch) in rest[open..].char_indices() {
         match ch {
             '{' => depth += 1,
             '}' => {
                 depth -= 1;
                 if depth == 0 {
-                    end = Some(open + i);
+                    end = Some(open + i + 1);
                     break;
                 }
             }
             _ => {}
         }
     }
-    let body = &body[open..end.ok_or("extracted_claims: unbalanced braces")?];
-    // Every piece before a `::unbatched_relation()` call ends with the type name.
-    let pieces: Vec<&str> = body.split("::unbatched_relation()").collect();
-    let types = pieces[..pieces.len() - 1]
-        .iter()
-        .map(|piece| {
-            let start = piece
-                .rfind(|c: char| !(c.is_alphanumeric() || c == '_'))
-                .map_or(0, |i| i + 1);
-            piece[start..].to_string()
-        })
+    let body: String = rest[open..end.ok_or("extracted_claims: unbalanced braces")?]
+        .chars()
+        .filter(|c| !c.is_whitespace())
         .collect();
-    Ok(types)
+    let inner = body
+        .strip_prefix("{vec![")
+        .and_then(|b| b.strip_suffix("]}"))
+        .ok_or_else(|| format!("extracted_claims: unexpected body {body}"))?;
+    inner
+        .split(',')
+        .filter(|item| !item.is_empty())
+        .map(|item| {
+            item.strip_suffix("::unbatched_relation()")
+                .filter(|t| !t.is_empty() && t.chars().all(|c| c.is_alphanumeric() || c == '_'))
+                .map(str::to_string)
+                .ok_or_else(|| format!("extracted_claims: unexpected item {item}"))
+        })
+        .collect()
 }
 
 fn relations_lean(

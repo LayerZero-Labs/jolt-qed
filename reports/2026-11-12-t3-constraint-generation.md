@@ -40,6 +40,8 @@ The generator also runs these checks, and exits with status 1 if any fails:
 - `r1cs_variable_names_unique` and `kind_names_unique`.
 - `relations_match_extractor`: the generator's four relations are the `X::unbatched_relation()` calls in the body of `extracted_claims` in `zklean-extractor/src/sumchecks.rs`, in the same order.
   The extractor is a binary crate, so the generator reads that list from its source.
+  It removes comments first and accepts only a body of the form `vec![A::unbatched_relation(), …]`; any other body makes the generator exit with status 2.
+  I tested this on a scratch copy of `sumchecks.rs`: with the `Shift` line commented out the check fails (status 1), and with `.clone()` appended to a call the generator exits with status 2.
 - `relations_count`: exactly four relations.
 - `stamp_uniformity`: over 4108 stamps (every `virtual_sequence_remaining` in `None`, `0..=1024` and `65535`, times both values of `is_first_in_sequence` and `is_compressed`):
   - for every kind, the circuit flags equal the kind's canonical flags plus the stamp's flags, and the instruction flags and lookup table do not change;

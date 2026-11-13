@@ -50,7 +50,9 @@ lake build JoltConstraints.ConstraintGen.Equiv
 * `relations_match_extractor`: the generator's relations are the
   `X::unbatched_relation()` calls in `extracted_claims`
   (`zklean-extractor/src/sumchecks.rs`), in order. The generator reads that
-  list from the extractor's source, since the extractor is a binary crate.
+  list from the extractor's source, since the extractor is a binary crate. It
+  removes comments and accepts only `vec![A::unbatched_relation(), ...]`; any
+  other body of `extracted_claims` is an error (status 2).
 * `relations_count`: the generator emits exactly four relations.
 * `kind_names_unique`: no two instruction kinds share a name.
 * `stamp_uniformity`: for every kind and every stamp
