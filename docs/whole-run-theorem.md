@@ -141,7 +141,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 `sail_soundness` keeps every premise of `JoltInstance.soundness` (`JoltConstraints/Soundness/Assumptions.lean`):
 
-- `JoltField F`: the field's characteristic is above `2^128`. BN254 satisfies this; Akita's prime does not.
+- `JoltField F`: the field's characteristic is above `2^128 - 2^64`. Both of Jolt's fields satisfy this: BN254 (the default Dory build) and `p = 2^128 - 1780711455` (the `akita` build, Jolt's production field since a16z/jolt#2403); `JoltField.akita` and `JoltField.bn254` (`Soundness/FieldModuli.lean`) prove it, including each modulus's primality, by Pratt certificates checked in Lean. Below characteristic `2^128` the constraints include Akita's canonical-address check (63), which Jolt's `akita` build enforces; it is what makes `2^128 - 2^64` enough.
 - `SoundnessAssumptions.ramRegionFits`: the whole maximum padded RAM region lies below `2^64`. The comment in `Assumptions.lean` records it as still to be confirmed with a16z.
 - `TemporaryRestrictions`: six restrictions that exclude programs exposing reported or suspected Jolt bugs. Jolt's verifier makes none of these checks.
 

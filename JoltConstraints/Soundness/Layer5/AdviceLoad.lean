@@ -50,7 +50,7 @@ See jolt/crates/jolt-lookup-tables/src/instructions/virt/advice_load.rs
 theorem adviceLoad_register_step {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -70,7 +70,7 @@ theorem adviceLoad_register_step {F : Type} [Field F] {params : WitnessParams}
         RegisterAgreementOn
           (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
           witness ⟨t.val + 1, next⟩ post := by
-  obtain ⟨value, encoded⟩ := rangeCheck_write_value (two_pow_127_lt_char charAbove2pow128)
+  obtain ⟨value, encoded⟩ := rangeCheck_write_value (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations selected rowIs (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
   have valid := expanded_adviceLoad_width _ _ context.expands rowIs instructionIs
   have destinationIs : row.instruction.destination? = some destination := by rw [instructionIs]; rfl
@@ -83,7 +83,7 @@ theorem adviceLoad_register_step {F : Type} [Field F] {params : WitnessParams}
     intro register member
     simpa only [sourceValue] using agrees.values register member
   have written := writeDst_afterWriteDst destination canonical value prepared
-  refine ⟨value, encoded, ?_, fun next => preparedAgrees.write charAbove2pow128
+  refine ⟨value, encoded, ?_, fun next => preparedAgrees.write charAbove2pow128Minus2pow64
     context equations next slot selected rowIs destinationIs value encoded written⟩
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
   simp only [execWithTapeAnswer, valid, if_true]

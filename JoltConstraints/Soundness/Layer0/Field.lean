@@ -5,11 +5,11 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
-/-- The full lookup-address bound implies the weaker bound used for words and chunks. -/
+/-- The field bound of `JoltField`, `2^128 - 2^64 < ringChar F`, implies the
+weaker bound used for words and chunks. -/
 theorem two_pow_127_lt_char {F : Type} [Field F]
-    (charAbove2pow128 : 2 ^ 128 < ringChar F) : 2 ^ 127 < ringChar F :=
-  lt_of_le_of_lt (Nat.pow_le_pow_right (by decide : 0 < 2) (by decide : 127 ≤ 128))
-    charAbove2pow128
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F) : 2 ^ 127 < ringChar F :=
+  lt_of_le_of_lt (by omega) charAbove2pow128Minus2pow64
 
 /-- Natural numbers below the characteristic have distinct field encodings. -/
 theorem natCast_injective_below_char {F : Type} [Field F] {a b : Nat}

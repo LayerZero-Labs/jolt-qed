@@ -24,6 +24,7 @@ flowchart LR
 
 [`JoltConstraints/WholeRun/Top.lean`](JoltConstraints/WholeRun/Top.lean) proves that the Sail RISC-V model reproduces every run of Jolt's tracer up to its first EBREAK, and in particular every run behind an instance that Jolt's constraints accept.
 The theorems hold under premises stated with them, and they check the constraints directly, not through Jolt's sumcheck-based verifier.
+They cover both of Jolt's fields: BN254 and Akita's `p = 2^128 - 1780711455`, Jolt's production field since a16z/jolt#2403. `JoltField.akita` and `JoltField.bn254` prove that both fields meet the field premise, with primality checked by Pratt certificates. The field premise `JoltField` asks for characteristic above `2^128 - 2^64`, and below `2^128` the constraints include the canonical lookup-address check that Jolt's `akita` build enforces.
 [What the whole-run theorems prove](docs/whole-run-theorem.md) states both theorems, every premise, and what they do not say.
 Read it before citing the result.
 [`docs/riscv-alignment.md`](docs/riscv-alignment.md) explains each modelling decision behind them.
