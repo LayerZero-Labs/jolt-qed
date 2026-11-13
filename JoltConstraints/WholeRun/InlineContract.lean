@@ -91,6 +91,32 @@ private theorem absorbPermute_noAdvice (rs1 rs2 rs3 : regidx) :
   simp only [List.all_append, Bool.and_eq_true, keccakRounds_noAdvice]
   and_intros <;> first | rfl | trivial
 
+/-- **Hash rows ignore advice.** Patching any words into the rows of a hash inline leaves them as
+they are: neither the `rd ≠ x0` rows nor the `rd = x0` rows have a VirtualAdvice row.
+Example: `patchAdvice [7] (blake2.expandRows x10 x11 x0) = blake2.expandRows x10 x11 x0`. -/
+theorem hash_patchAdvice (key : InlineKey) (hash : key.readsRd = false) (rs1 rs2 rd : regidx)
+    (values : List (BitVec 64)) :
+    patchAdvice values (key.expandRows rs1 rs2 rd) = key.expandRows rs1 rs2 rd := by
+  cases key <;> simp only [InlineKey.readsRd, Bool.true_eq_false] at hash <;>
+    cases zero : isX0 rd <;>
+    simp only [InlineKey.expandRows, InlineKey.rows, InlineKey.rowsRdZero, zero,
+      Bool.false_eq_true, ↓reduceIte]
+  · exact patch_of_all values (sha256_noAdvice rs1 rs2 rd)
+  · exact patch_of_all values
+      (Sha256.sha256RowsAutoRdZeroList_eq rs1 rs2 rs1 ▸ sha256_noAdvice rs1 rs2 rs1)
+  · exact patch_of_all values (sha256Init_noAdvice rs1 rs2 rd)
+  · exact patch_of_all values (Sha256.sha256InitRowsAutoRdZeroList_eq rs1 rs2 rs1 ▸
+      sha256Init_noAdvice rs1 rs2 rs1)
+  · exact patch_of_all values (keccak256_noAdvice rs1 rs2 rd)
+  · exact patch_of_all values (Keccak256.keccak256RowsAutoRdZeroList_eq rs1 rs2 rs1 ▸
+      keccak256_noAdvice rs1 rs2 rs1)
+  · exact patch_of_all values (absorbPermute_noAdvice rs1 rs2 rd)
+  · exact patch_of_all values (Keccak256.absorbPermuteRowsAutoRdZeroList_eq rs1 rs2 rs1 ▸
+      absorbPermute_noAdvice rs1 rs2 rs1)
+  · exact patch_of_all values (blake2_noAdvice rs1 rs2 rd)
+  · exact patch_of_all values (Blake2b.blake2RowsAutoRdZeroList_eq rs1 rs2 rs1 ▸
+      blake2_noAdvice rs1 rs2 rs1)
+
 end WholeRun
 
 /-! ## The contract -/

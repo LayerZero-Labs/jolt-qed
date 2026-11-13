@@ -118,4 +118,5 @@ import JoltConstraints.WholeRun.Top
 import JoltConstraints.WholeRun.InlineCalls
 import JoltConstraints.WholeRun.InlineContract
 import JoltConstraints.WholeRun.InlineSoundness
+import JoltConstraints.WholeRun.InlineCompleteness
 import JoltConstraints.WholeRun.Platform

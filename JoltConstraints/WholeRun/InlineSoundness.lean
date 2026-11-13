@@ -40,25 +40,8 @@ theorem Block.Runs.inline_rows {program : Rv64ProgramImage SourceInstruction} {b
         .ok RETIRE_SUCCESS b.post := by
   obtain ⟨values, instrs, -, patched, executed⟩ := runs.executes
   obtain ⟨rows, expanded, rfl⟩ := Option.map_eq_some_iff.mp patched
-  have checks := ExpansionFacts.expand_instruction_checks b.row rows expanded
-  rw [call] at checks
-  have accepted : key.readsRd = true → isX0 rd = false := by
-    intro reads
-    cases zero : isX0 rd
-    · rfl
-    · have rejected : (SourceInstruction.inline key rs1 rs2 rd).expand = none := by
-        simp only [SourceInstruction.expand, zero, reads, Bool.and_self, ↓reduceIte]
-      rw [rejected] at checks
-      exact False.elim checks
-  have registered : (SourceInstruction.inline key rs1 rs2 rd).expand =
-      some (.sequence (key.expandRows rs1 rs2 rd)) := by
-    cases reads : key.readsRd
-    · simp only [SourceInstruction.expand, reads, Bool.and_false, Bool.false_eq_true,
-        ↓reduceIte]
-    · simp only [SourceInstruction.expand, accepted reads, Bool.false_and, Bool.false_eq_true,
-        ↓reduceIte]
-  rw [registered] at checks
-  rw [checks.1] at executed
+  obtain ⟨accepted, rowsEq⟩ := inline_expand_rows expanded call
+  rw [rowsEq] at executed
   exact ⟨accepted, values, executed⟩
 
 /-- **An inline block keeps the contract of its call.** A block of an honest trace whose

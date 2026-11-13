@@ -424,6 +424,17 @@ These lifts identify the result of a call inside an honest trace that is already
 They do not construct a whole trace, prove its stopping, configuration or output conditions, or show that replacing a call's words in an existing trace preserves the later steps.
 They do not restrict the language.
 
+`JoltInstance.completeness_jolt_inline_advice` (`WholeRun/InlineCompleteness.lean`) closes the completeness half of R4.
+It takes an honest trace that `JoltInstance.completeness` accepts and in which every inline call stores Jolt's output (`InlineKey.JoltOutput`).
+It concludes that the same trace with `inline_advice` set to Jolt's words (`joltInlineAdvice`) is an honest trace with the same rows, outputs and prover configuration, and that its honest witness satisfies `AllConstraints`.
+Jolt's output means: for MUL and SQUARE, a result below the modulus in an output buffer in RAM; for DIV, the same plus a dividend below the modulus and a divisor nonzero modulo it; for `GLVR_ADV`, Jolt's split of the scalar in an output buffer in RAM; for the hash inlines, nothing.
+These premises are needed.
+The rows check `a·b = w·q + c` and `c·b = w·q + a` but not `c < q`, so an honest trace may store `c + q` with the quotient `w - 1`, and the words of such a trace are not Jolt's.
+Jolt's DIV prover panics when the divisor is zero modulo the modulus, and for a dividend at least the modulus its words do not satisfy the rows.
+`GLVR_ADV`'s rows check nothing.
+Under these premises the stored output fixes the advice: `mulRows_advice_of_canonical`, `divRows_advice_of_canonical` and `glvrAdv_advice_of_canonical` show that a run storing Jolt's output took Jolt's words, so the trace's recorded words are `joltInlineAdvice` (`collectInlineAdvice_eq_joltInlineAdvice`).
+Stopping, the prover configuration and the outputs are properties of the guest's run, which the theorem keeps from the given trace.
+
 The step relation of an inline call is `InlineSpec c`, a relation between states, not a function.
 For the hash inlines it is the graph of a function.
 For the field operations it is the integer relation of section 3 with a bounded quotient witness.
@@ -565,7 +576,7 @@ EthLib covers all four families, each with a `BitVec` model written in the stand
 | R5 | Whole run for guests that call the twelve | `sail_soundness` and `sail_reproduces` against `platformRun`: Sail's `try_step` plus, on supported inline encodings, a step that always satisfies the frame and satisfies `InlineSpec c` when `Pre c` holds; the per-call preconditions are a premise or an invariant the guest supplies | I3 |
 
 Status:
-- R4 is `JoltInstance.soundness_inline_calls` (`WholeRun/InlineSoundness.lean`). The frame and specification come from one contract per call, `InlineKey.call_contract` (`WholeRun/InlineContract.lean`), which holds for every advice the run patched in. The footprint is the store footprint of the write set (`Frame.mem`). The completeness half of R4 is not yet proved: `JoltInstance.completeness` takes a given honest trace, and no theorem yet builds an honest trace with Jolt's advice for a guest that calls inlines; the secp256k1 lifts in `WholeRun/InlineCalls.lean` cover single calls inside a given trace.
+- R4 is `JoltInstance.soundness_inline_calls` (`WholeRun/InlineSoundness.lean`). The frame and specification come from one contract per call, `InlineKey.call_contract` (`WholeRun/InlineContract.lean`), which holds for every advice the run patched in. The footprint is the store footprint of the write set (`Frame.mem`). The completeness half of R4 is `JoltInstance.completeness_jolt_inline_advice` (`WholeRun/InlineCompleteness.lean`, section 5.3): an honest trace whose inline calls store Jolt's outputs stays honest, with the same rows, outputs and prover configuration, when `inline_advice` holds Jolt's words, and its honest witness satisfies `AllConstraints`. It inherits the open goals of `Completeness/`.
 - R5 is `JoltInstance.sail_soundness_with_inlines` and `HonestTrace.sail_reproduces_with_inlines` (`WholeRun/Platform.lean`). The platform step (`PlatformStep`) is a relation: on a registered inline word it keeps the frame and meets `InlineKey.Spec` when `InlineKey.Pre` holds and the input buffers lie in RAM (`InlineKey.InputsInRam`). Both guards are conditions of the step, not premises of the theorem. The theorem's only new premise is the `inline_stores` field of `PlatformConforms`: each call stores only in RAM and outside the code.
 
 "Accepted" in R4 and R5 means the modelled relation `AllConstraints`, as for the existing theorems.

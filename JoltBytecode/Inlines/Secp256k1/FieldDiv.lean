@@ -26,6 +26,8 @@ it.
   nonzero modulo `q`, the rows run, and the stored result is below `q` (`FieldMulCanonical`).
 * `secp256k1Divq_rows_sound` … `secp256k1Divr_rows_jolt_advice_complete`: the two theorems
   for each of the two generated row sequences.
+* `divRows_advice_of_canonical`: a run that stores a canonical result, for a dividend below
+  `q` and a divisor nonzero modulo `q`, took Jolt's eight words as advice.
 
 Completeness assumes only `b % q ≠ 0`. Because `p` and `n` are prime (`p_prime`, `n_prime` in
 `Prime.lean`), such a divisor is coprime to `q` and has an inverse modulo `q`.
@@ -37,23 +39,6 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 set_option autoImplicit false
 
 namespace JoltISA.Inlines.Secp256k1
-
-/-! ## Limbs -/
-
-/-- Four limbs are determined by their value.
-Example: only `#v[1, 0, 0, 0]` has value `1`. -/
-theorem limbs_eq_of_limbsToNat_eq {x y : Limbs} (h : limbsToNat x = limbsToNat y) : x = y := by
-  have x0 := x[0].isLt
-  have x1 := x[1].isLt
-  have x2 := x[2].isLt
-  have x3 := x[3].isLt
-  have y0 := y[0].isLt
-  have y1 := y[1].isLt
-  have y2 := y[2].isLt
-  have y3 := y[3].isLt
-  simp only [limbsToNat] at h
-  refine Vector.ext fun i hi => BitVec.eq_of_toNat_eq ?_
-  interval_cases i <;> omega
 
 /-! ## The prologue -/
 
@@ -380,17 +365,30 @@ def FieldDivSpec (q : Nat) (rs1 rs2 rs3 : regidx) (s s' : SailJoltState) : Prop 
                       mem := writeDwords s.sail.mem (fieldOut rs3 s).toNat c.toList } }) ∧
     ∀ i < 4, loadDword? s' (fieldOut rs3 s + BitVec.ofNat 64 (8 * i)) = c.toList[i]?
 
-/-- **Soundness of the `DIV` rows.** Every run of the rows, for every advice, from a state
-whose output buffer lies in RAM, meets `FieldDivSpec` for the modulus of the layout. This holds
-when `rs3` equals `rs1`: the dividend in the specification is read before the call.
-Example: for `DIVQ` with `a = 1` at `x10 = 0x8001_0000` and `b = 2` at `x11 = 0x8001_0020`,
-every run, for any advice, stores `c = (p+1)/2`: it is the only `c < 2^256` with
-`2c = w·p + 1` for some `w < 2^256`. -/
-theorem divRows_sound {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
+/-- **Soundness of the `DIV` rows, with the result and quotient named.** Every run of the
+rows, for every advice, from a state whose output buffer lies in RAM, meets the conditions of
+`FieldDivSpec` for the modulus of the layout, with the stored result `c` equal to the even
+advice words `0, 2, 4, 6` and the quotient `w` equal to the odd advice words `1, 3, 5, 7`, in
+the order the rows' VirtualAdvice rows write them (`divisionWords`).
+Example: for `DIVQ` with `a = 1`, `b = 2`, every run has advice words `0, 2, 4, 6` equal to the
+limbs of `(p+1)/2` and advice words `1, 3, 5, 7` equal to the limbs of `1`. -/
+theorem divRows_sound_advice {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
     {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64} {s s' : SailJoltState}
     (buf : FieldMulBuffer rs3 s)
     (run : (Program.seq (mulRows .div scalar L rs1 rs2 rs3 advice)).Run s s') :
-    FieldDivSpec (if scalar then n else p) rs1 rs2 rs3 s s' := by
+    ∃ a b : Limbs,
+      readLimbs? s (sourceValue (.xreg rs1) s) = some a ∧
+      readLimbs? s (sourceValue (.xreg rs2) s) = some b ∧
+      DivRel (if scalar then n else p) (limbsToNat a) (limbsToNat b)
+        (limbsToNat #v[advice 1, advice 3, advice 5, advice 7])
+        (limbsToNat #v[advice 0, advice 2, advice 4, advice 6]) ∧
+      (∃ V : VReg → BitVec 64,
+        s' = { s with vregs := V,
+                      sail := { s.sail with
+                        mem := writeDwords s.sail.mem (fieldOut rs3 s).toNat
+                          (#v[advice 0, advice 2, advice 4, advice 6] : Limbs).toList } }) ∧
+      ∀ i < 4, loadDword? s' (fieldOut rs3 s + BitVec.ofNat 64 (8 * i)) =
+        (#v[advice 0, advice 2, advice 4, advice 6] : Limbs).toList[i]? := by
   rw [mulRows_eq_append, tailRows_div] at run
   -- The prologue: read the divisor.
   have h2 : XReads s rs2 (sourceValue (.xreg rs2) s) := by
@@ -421,7 +419,7 @@ theorem divRows_sound {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
     intro i hi
     apply hv.pre_free
     interval_cases i <;> cases scalar <;> simp [preRegs]
-  obtain ⟨-, fb, -, fp, fp2⟩ := pre_vals_div hv y advice s.vregs
+  obtain ⟨fa, fb, fw, fp, fp2⟩ := pre_vals_div hv y advice s.vregs
   have hct := colTotal_eq (op := .div) (fun h => absurd h (by decide)) fp fp2
   set F := writeAll s.vregs (preWrites .div scalar L y y advice)
   set H := jolt_mulhu_value (F (L.a 3)) (F (L.b 3))
@@ -429,13 +427,19 @@ theorem divRows_sound {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
   rw [e7] at hCH
   rw [hG _ (oa 0 (by decide)), hG _ (oa 1 (by decide)), hG _ (oa 2 (by decide)),
     hG _ (oa 3 (by decide))]
+  have hCa : (#v[advice 0, advice 2, advice 4, advice 6] : Limbs) =
+      #v[F (L.a 0), F (L.a 1), F (L.a 2), F (L.a 3)] := by
+    rw [fa 0 (by decide), fa 1 (by decide), fa 2 (by decide), fa 3 (by decide)]
+  have hWa : (#v[advice 1, advice 3, advice 5, advice 7] : Limbs) =
+      #v[F (L.w 0), F (L.w 1), F (L.w 2), F (L.w 3)] := by
+    rw [fw 0 (by decide), fw 1 (by decide), fw 2 (by decide), fw 3 (by decide)]
+  rw [hCa, hWa]
   have hA : limbVal L.a F = limbsToNat #v[F (L.a 0), F (L.a 1), F (L.a 2), F (L.a 3)] := rfl
   have hW : limbVal L.w F = limbsToNat #v[F (L.w 0), F (L.w 1), F (L.w 2), F (L.w 3)] := rfl
   have hc : limbsToNat #v[R0, R1, R2, R3] =
       R0.toNat + 2 ^ 64 * R1.toNat + 2 ^ 128 * R2.toNat + 2 ^ 192 * R3.toNat := rfl
   have hq : (if scalar then n else p) ≤ 2 ^ 256 := by cases scalar <;> decide
-  refine ⟨#v[R0, R1, R2, R3], y, #v[F (L.w 0), F (L.w 1), F (L.w 2), F (L.w 3)],
-    #v[F (L.a 0), F (L.a 1), F (L.a 2), F (L.a 3)], hx, hy,
+  refine ⟨#v[R0, R1, R2, R3], y, hx, hy,
     ⟨?_, limbsToNat_lt _, limbsToNat_lt _⟩, ⟨V, rfl⟩, fun i hi => ?_⟩
   · rw [← rows_identity_iff _ _ _ _ _ hq, ← hA, ← fb, ← hW, hc, ← hct, ← heq]
     simp only [limbVal]
@@ -447,6 +451,20 @@ theorem divRows_sound {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
       (t := { s with vregs := V, sail := { s.sail with mem := m' } }) rfl buf.ram
       (by simpa using buf.no_wrap)
       (fun j hj => hw j (by simpa using hj)) (by simpa using hi)
+
+/-- **Soundness of the `DIV` rows.** Every run of the rows, for every advice, from a state
+whose output buffer lies in RAM, meets `FieldDivSpec` for the modulus of the layout. This holds
+when `rs3` equals `rs1`: the dividend in the specification is read before the call.
+Example: for `DIVQ` with `a = 1` at `x10 = 0x8001_0000` and `b = 2` at `x11 = 0x8001_0020`,
+every run, for any advice, stores `c = (p+1)/2`: it is the only `c < 2^256` with
+`2c = w·p + 1` for some `w < 2^256`. -/
+theorem divRows_sound {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
+    {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64} {s s' : SailJoltState}
+    (buf : FieldMulBuffer rs3 s)
+    (run : (Program.seq (mulRows .div scalar L rs1 rs2 rs3 advice)).Run s s') :
+    FieldDivSpec (if scalar then n else p) rs1 rs2 rs3 s s' := by
+  obtain ⟨a, b, ha, hb, rel, state, loads⟩ := divRows_sound_advice hv buf run
+  exact ⟨a, b, _, _, ha, hb, rel, state, loads⟩
 
 /-! ## Completeness with Jolt's advice -/
 
@@ -679,5 +697,60 @@ theorem secp256k1Divr_rows_jolt_advice_complete {rs1 rs2 rs3 : regidx} {s : Sail
   · unfold secp256k1DivrRowsAuto
     rw [secp256k1DivrRowsAutoList_eq]
     exact run
+
+/-! ## A canonical result forces Jolt's advice
+
+The rows admit more than one advice (`DivRel`). For a dividend `a < q` and a divisor `b` nonzero
+modulo `q`, a canonical result is unique: `c·b ≡ a (mod q)` and `q` is prime, so `c ≡ a·b⁻¹`,
+and with `c < q` it is Jolt's result; then `w·q = c·b - a` fixes the quotient. Without
+`a < q`, Jolt's prover panics or disagrees with the rows: its quotient `⌊b·c / q⌋` satisfies
+`c·b = w·q + (a mod q)`, not `c·b = w·q + a`.
+-/
+
+/-- **A canonical `DIV` run used Jolt's advice.** Let a run of the rows from a state whose output
+buffer lies in RAM store a result below `q`, with dividend `a < q` and divisor `b` nonzero
+modulo `q`. Then Jolt's division advice is the even advice words (the result) and the odd
+advice words (the quotient).
+Example: for `DIVQ` with `a = 1`, `b = 2`, a run that stores `(p+1)/2` had advice words
+`0, 2, 4, 6` equal to the limbs of `(p+1)/2` and words `1, 3, 5, 7` equal to the limbs of `1`. -/
+theorem divRows_advice_of_canonical {scalar : Bool} {L : MulRegs} (hv : L.Valid .div scalar)
+    {rs1 rs2 rs3 : regidx} {advice : Nat → BitVec 64} {s s' : SailJoltState}
+    (buf : FieldMulBuffer rs3 s)
+    (run : (Program.seq (mulRows .div scalar L rs1 rs2 rs3 advice)).Run s s')
+    (canonical : FieldMulCanonical (if scalar then n else p) rs3 s s')
+    {a b : Limbs} (ha : readLimbs? s (sourceValue (.xreg rs1) s) = some a)
+    (hb : readLimbs? s (sourceValue (.xreg rs2) s) = some b)
+    (hca : limbsToNat a < (if scalar then n else p))
+    (hb0 : limbsToNat b % (if scalar then n else p) ≠ 0) :
+    mulqDivisionAdvice (if scalar then n else p) a b =
+      some (#v[advice 0, advice 2, advice 4, advice 6],
+        #v[advice 1, advice 3, advice 5, advice 7]) := by
+  set q := if scalar then n else p with hqdef
+  have hq : q ≤ 2 ^ 256 := by rw [hqdef]; cases scalar <;> decide
+  have hq1 : 1 < q := by rw [hqdef]; cases scalar <;> decide
+  have hqp : q.Prime := by rw [hqdef]; cases scalar; exacts [p_prime, n_prime]
+  obtain ⟨a', b', ha', hb', ⟨rel, -, -⟩, -, loads⟩ := divRows_sound_advice hv buf run
+  obtain rfl : a = a' := Option.some.inj (ha.symm.trans ha')
+  obtain rfl : b = b' := Option.some.inj (hb.symm.trans hb')
+  obtain ⟨c', hc', loads'⟩ := canonical
+  obtain rfl : (#v[advice 0, advice 2, advice 4, advice 6] : Limbs) = c' :=
+    limbs_eq_of_toList fun i hi => by rw [← loads i hi, loads' i hi]
+  have hcop := coprime_of_mod_ne_zero hqp hb0
+  obtain ⟨c, w, hcw, rel', hcq⟩ := mulqDivisionAdvice_spec hq1 hq hca hcop
+  -- Jolt's result and the stored result agree modulo `q`, and both are below `q`.
+  have hmod : limbsToNat c ≡ limbsToNat #v[advice 0, advice 2, advice 4, advice 6] [MOD q] := by
+    refine Nat.ModEq.cancel_right_of_coprime (c := limbsToNat b) hcop.symm ?_
+    show limbsToNat c * limbsToNat b % q = _ % q
+    rw [rel', rel, Nat.add_comm, Nat.add_mul_mod_self_right, Nat.add_comm,
+      Nat.add_mul_mod_self_right]
+  have hc : c = #v[advice 0, advice 2, advice 4, advice 6] := by
+    refine limbs_eq_of_limbsToNat_eq ?_
+    unfold Nat.ModEq at hmod
+    rwa [Nat.mod_eq_of_lt hcq, Nat.mod_eq_of_lt hc'] at hmod
+  subst hc
+  have hw : w = #v[advice 1, advice 3, advice 5, advice 7] :=
+    limbs_eq_of_limbsToNat_eq
+      (Nat.eq_of_mul_eq_mul_right (by omega) (Nat.add_right_cancel (rel'.symm.trans rel)))
+  rw [hcw, hw]
 
 end JoltISA.Inlines.Secp256k1
