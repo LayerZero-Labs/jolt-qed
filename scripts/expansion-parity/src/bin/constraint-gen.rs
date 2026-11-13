@@ -301,70 +301,64 @@ fn relations() -> Vec<(&'static str, UnbatchedRelation)> {
 const RELATION_TYPES: [&str; 4] =
     ["RamReadWriteChecking", "RegistersReadWriteChecking", "InputVirtualization", "Shift"];
 
-/// Remove `//` and `/* */` comments from Rust source. The body this reads has
-/// no string or character literals; `extractor_relation_types` rejects any
-/// that remain.
-fn strip_comments(src: &str) -> String {
-    let mut out = String::new();
-    let mut chars = src.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '/' && chars.peek() == Some(&'/') {
-            for d in chars.by_ref() {
-                if d == '\n' {
-                    out.push('\n');
-                    break;
-                }
-            }
-        } else if c == '/' && chars.peek() == Some(&'*') {
-            chars.next();
-            let mut prev = ' ';
-            for d in chars.by_ref() {
-                if prev == '*' && d == '/' {
-                    break;
-                }
-                prev = d;
-            }
-            out.push(' ');
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
 /// The `X::unbatched_relation()` calls in `extracted_claims` in
 /// `zklean-extractor/src/sumchecks.rs`, in order. The generator cannot link
-/// the extractor (a binary crate), so it reads the selection from its source.
-/// It accepts only a body of the form `{ vec![A::unbatched_relation(), ...] }`
-/// after removing comments and whitespace, and returns an error otherwise.
+/// the extractor (a binary crate), so it reads the selection from its source
+/// under a restricted grammar, and returns an error for anything outside it:
+///
+/// * the file declares `fn extracted_claims()` exactly once, at the start of a
+///   line (after indentation);
+/// * the body may contain `//` line comments, which are dropped, but no block
+///   comment, string or character literal;
+/// * without comments and whitespace, the body is
+///   `{vec![A::unbatched_relation(),...]}`.
 fn extractor_relation_types(jolt_dir: &Path) -> Result<Vec<String>, String> {
     let path = jolt_dir.join("zklean-extractor/src/sumchecks.rs");
     let src = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let src = strip_comments(&src);
-    let start = src
-        .find("fn extracted_claims()")
-        .ok_or_else(|| format!("{}: no fn extracted_claims()", path.display()))?;
-    let rest = &src[start..];
+    const DECL: &str = "fn extracted_claims()";
+    let decls: Vec<usize> = src.match_indices(DECL).map(|(i, _)| i).collect();
+    let [start] = decls[..] else {
+        return Err(format!("{}: expected one `{DECL}`, found {}", path.display(), decls.len()));
+    };
+    let line_start = src[..start].rfind('\n').map_or(0, |i| i + 1);
+    if !src[line_start..start].trim().is_empty() {
+        return Err(format!("{}: `{DECL}` does not start its line", path.display()));
+    }
+    let rest = &src[start + DECL.len()..];
     let open = rest.find('{').ok_or("extracted_claims: no body")?;
+    let mut body = String::new();
     let mut depth = 0usize;
-    let mut end = None;
-    for (i, ch) in rest[open..].char_indices() {
-        match ch {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
-                if depth == 0 {
-                    end = Some(open + i + 1);
-                    break;
+    let mut chars = rest[open..].chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '/' if chars.peek() == Some(&'/') => {
+                for d in chars.by_ref() {
+                    if d == '\n' {
+                        break;
+                    }
                 }
+                continue;
             }
+            '/' if chars.peek() == Some(&'*') => {
+                return Err("extracted_claims: block comments are not supported".into());
+            }
+            '"' | '\'' => {
+                return Err("extracted_claims: literals are not supported".into());
+            }
+            '{' => depth += 1,
+            '}' => depth -= 1,
             _ => {}
         }
+        if !c.is_whitespace() {
+            body.push(c);
+        }
+        if depth == 0 {
+            break;
+        }
     }
-    let body: String = rest[open..end.ok_or("extracted_claims: unbalanced braces")?]
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect();
+    if depth != 0 {
+        return Err("extracted_claims: unbalanced braces".into());
+    }
     let inner = body
         .strip_prefix("{vec![")
         .and_then(|b| b.strip_suffix("]}"))
