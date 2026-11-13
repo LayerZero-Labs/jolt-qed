@@ -10,8 +10,10 @@ edit by hand.
 
 One theorem per modelled source kind states that `SourceInstruction.expand`
 equals the recipe that `JoltConstraints/ExpansionGen/Generated.lean` derives from
-Jolt; `expand_eq_generated` collects them. The table lemmas prove the shift
-helpers of the model equal Jolt's immediate for every shift amount.
+Jolt; `expand_eq_generated` collects them for every source instruction other
+than a registered inline, for which T6 derives no recipe. The table lemmas
+prove the shift helpers of the model equal Jolt's immediate for every shift
+amount.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
@@ -720,9 +722,15 @@ theorem expand_amomaxud (rd rs1 rs2 : regidx) (b0 b1 : Bool) :
     SourceInstruction.expand (.riscv (.AMOMAXU_D rd rs1 rs2 b0 b1)) = genAMOMAXUD rd rs1 rs2 := by
   recipe [genAMOMAXUD, amomaxudProgramAuto]
 
-/-- `SourceInstruction.expand` is Jolt's generated recipe for every source instruction. -/
-theorem expand_eq_generated (i : SourceInstruction) : i.expand = expand i := by
-  rcases i with (i | i) <;> cases i <;>
-    simp only [expand, expand_lui, expand_auipc, expand_jal, expand_jalr, expand_beq, expand_bne, expand_blt, expand_bge, expand_bltu, expand_bgeu, expand_ld, expand_sd, expand_addi, expand_slti, expand_sltiu, expand_xori, expand_ori, expand_andi, expand_addiw, expand_fence, expand_ecall, expand_ebreak, expand_mret, expand_csrrw, expand_csrrs, expand_csrrc, expand_csrrwi, expand_csrrsi, expand_csrrci, expand_virtualrev8w, expand_virtualasserteq, expand_virtualhostio, expand_add, expand_sub, expand_slt, expand_sltu, expand_xor, expand_or, expand_and, expand_andn, expand_addw, expand_subw, expand_mul, expand_mulhu, expand_mulw, expand_lb, expand_lh, expand_lw, expand_lbu, expand_lhu, expand_lwu, expand_sb, expand_sh, expand_sw, expand_slli, expand_srli, expand_srai, expand_slliw, expand_srliw, expand_sraiw, expand_sll, expand_srl, expand_sra, expand_sllw, expand_srlw, expand_sraw, expand_mulh, expand_mulhsu, expand_div, expand_divu, expand_rem, expand_remu, expand_divw, expand_divuw, expand_remw, expand_remuw, expand_lrw, expand_lrd, expand_advicelb, expand_advicelh, expand_advicelw, expand_adviceld, expand_scw, expand_scd, expand_amoswapw, expand_amoaddw, expand_amoandw, expand_amoorw, expand_amoxorw, expand_amominw, expand_amomaxw, expand_amominuw, expand_amomaxuw, expand_amoswapd, expand_amoaddd, expand_amoandd, expand_amoord, expand_amoxord, expand_amomind, expand_amomaxd, expand_amominud, expand_amomaxud]
+/-- `SourceInstruction.expand` is Jolt's generated recipe for every source instruction
+other than a registered inline. -/
+theorem expand_eq_generated (i : SourceInstruction)
+    (notInline : ∀ key rs1 rs2 rs3, i ≠ .inline key rs1 rs2 rs3) :
+    i.expand = expand i := by
+  cases i with
+  | inline key rs1 rs2 rs3 => exact absurd rfl (notInline key rs1 rs2 rs3)
+  | riscv i | jolt i =>
+    cases i <;>
+      simp only [expand, expand_lui, expand_auipc, expand_jal, expand_jalr, expand_beq, expand_bne, expand_blt, expand_bge, expand_bltu, expand_bgeu, expand_ld, expand_sd, expand_addi, expand_slti, expand_sltiu, expand_xori, expand_ori, expand_andi, expand_addiw, expand_fence, expand_ecall, expand_ebreak, expand_mret, expand_csrrw, expand_csrrs, expand_csrrc, expand_csrrwi, expand_csrrsi, expand_csrrci, expand_virtualrev8w, expand_virtualasserteq, expand_virtualhostio, expand_add, expand_sub, expand_slt, expand_sltu, expand_xor, expand_or, expand_and, expand_andn, expand_addw, expand_subw, expand_mul, expand_mulhu, expand_mulw, expand_lb, expand_lh, expand_lw, expand_lbu, expand_lhu, expand_lwu, expand_sb, expand_sh, expand_sw, expand_slli, expand_srli, expand_srai, expand_slliw, expand_srliw, expand_sraiw, expand_sll, expand_srl, expand_sra, expand_sllw, expand_srlw, expand_sraw, expand_mulh, expand_mulhsu, expand_div, expand_divu, expand_rem, expand_remu, expand_divw, expand_divuw, expand_remw, expand_remuw, expand_lrw, expand_lrd, expand_advicelb, expand_advicelh, expand_advicelw, expand_adviceld, expand_scw, expand_scd, expand_amoswapw, expand_amoaddw, expand_amoandw, expand_amoorw, expand_amoxorw, expand_amominw, expand_amomaxw, expand_amominuw, expand_amomaxuw, expand_amoswapd, expand_amoaddd, expand_amoandd, expand_amoord, expand_amoxord, expand_amomind, expand_amomaxd, expand_amominud, expand_amomaxud]
 
 end ExpansionGen

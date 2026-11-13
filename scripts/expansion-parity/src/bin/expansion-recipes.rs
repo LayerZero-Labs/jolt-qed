@@ -1369,7 +1369,11 @@ data: the fault class and alignment exception of memory rows, and the value of
 the `VirtualAdvice` row (the division's advice parameter `q`).
 
 `JoltConstraints/ExpansionGen/Equiv.lean` proves `SourceInstruction.expand`
-equal to `ExpansionGen.expand`.
+equal to `ExpansionGen.expand` on every source instruction other than a
+registered inline. T6 derives no recipe for the registered inlines
+(`SourceInstruction.inline`), so `expand` maps them to `none`. Their rows are
+generated into `JoltBytecode/Inlines/Generated/`, and the expansion-parity job
+regenerates and diffs them.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions\nopen JoltISA
@@ -1416,6 +1420,7 @@ namespace ExpansionGen
         let pat = spec.pattern.to_string();
         writeln!(out, "  | {pat} => {} {}", spec.gen, args.join(" ")).unwrap();
     }
+    writeln!(out, "  | .inline .. => none").unwrap();
     writeln!(out).unwrap();
     writeln!(out, "end ExpansionGen").unwrap();
     Ok(out)
@@ -1726,8 +1731,10 @@ edit by hand.
 
 One theorem per modelled source kind states that `SourceInstruction.expand`
 equals the recipe that `JoltConstraints/ExpansionGen/Generated.lean` derives from
-Jolt; `expand_eq_generated` collects them. The table lemmas prove the shift
-helpers of the model equal Jolt's immediate for every shift amount.
+Jolt; `expand_eq_generated` collects them for every source instruction other
+than a registered inline, for which T6 derives no recipe. The table lemmas
+prove the shift helpers of the model equal Jolt's immediate for every shift
+amount.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions\nopen JoltISA
@@ -1847,11 +1854,17 @@ namespace ExpansionGen
         writeln!(out, "  {prefix}recipe [{}]", unfold.join(", ")).unwrap();
         writeln!(out).unwrap();
     }
-    writeln!(out, "/-- `SourceInstruction.expand` is Jolt's generated recipe for every source instruction. -/").unwrap();
-    writeln!(out, "theorem expand_eq_generated (i : SourceInstruction) : i.expand = expand i := by").unwrap();
-    writeln!(out, "  rcases i with (i | i) <;> cases i <;>").unwrap();
+    writeln!(out, "/-- `SourceInstruction.expand` is Jolt's generated recipe for every source instruction").unwrap();
+    writeln!(out, "other than a registered inline. -/").unwrap();
+    writeln!(out, "theorem expand_eq_generated (i : SourceInstruction)").unwrap();
+    writeln!(out, "    (notInline : ∀ key rs1 rs2 rs3, i ≠ .inline key rs1 rs2 rs3) :").unwrap();
+    writeln!(out, "    i.expand = expand i := by").unwrap();
+    writeln!(out, "  cases i with").unwrap();
+    writeln!(out, "  | inline key rs1 rs2 rs3 => exact absurd rfl (notInline key rs1 rs2 rs3)").unwrap();
+    writeln!(out, "  | riscv i | jolt i =>").unwrap();
+    writeln!(out, "    cases i <;>").unwrap();
     let names: Vec<String> = specs.iter().map(|s| format!("expand_{}", s.kind.to_ascii_lowercase())).collect();
-    writeln!(out, "    simp only [expand, {}]", names.join(", ")).unwrap();
+    writeln!(out, "      simp only [expand, {}]", names.join(", ")).unwrap();
     writeln!(out).unwrap();
     writeln!(out, "end ExpansionGen").unwrap();
     Ok(out)

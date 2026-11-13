@@ -20,7 +20,11 @@ data: the fault class and alignment exception of memory rows, and the value of
 the `VirtualAdvice` row (the division's advice parameter `q`).
 
 `JoltConstraints/ExpansionGen/Equiv.lean` proves `SourceInstruction.expand`
-equal to `ExpansionGen.expand`.
+equal to `ExpansionGen.expand` on every source instruction other than a
+registered inline. T6 derives no recipe for the registered inlines
+(`SourceInstruction.inline`), so `expand` maps them to `none`. Their rows are
+generated into `JoltBytecode/Inlines/Generated/`, and the expansion-parity job
+regenerates and diffs them.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
@@ -7991,5 +7995,6 @@ def expand : SourceInstruction → Option ExpandedSource
   | .riscv (.AMOMAX_D rd rs1 rs2 _ _) => genAMOMAXD rd rs1 rs2
   | .riscv (.AMOMINU_D rd rs1 rs2 _ _) => genAMOMINUD rd rs1 rs2
   | .riscv (.AMOMAXU_D rd rs1 rs2 _ _) => genAMOMAXUD rd rs1 rs2
+  | .inline .. => none
 
 end ExpansionGen
