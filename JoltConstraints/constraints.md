@@ -1,7 +1,7 @@
 # Jolt constraints
 
 Source: the base RV64 relations at [public Rust pin `8bbb2357`](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs). GitHub links are documentation pointers; reviews of current behavior must scan the local Jolt checkout.
-On 2026-10-29 all 62 equations, the per-instruction flag tables and the 55 lookup tables were rechecked against Jolt's base verifier at the previous pin `5def437f` and match (`reports/2026-10-29-soundness-statement-audit.md`).
+On 2026-10-29 all 62 base equations, the per-instruction flag tables and the 55 lookup tables were rechecked against Jolt's base verifier at the previous pin `5def437f` and match (`reports/2026-10-29-soundness-statement-audit.md`).
 
 Status at 2026-11-03: Step 1 definitions were reviewed and remain uncommitted.
 Step 2 repairs target `c6703570`; see [the completeness migration report](../reports/2026-11-03-constraints-migration-completeness.md).
@@ -14,12 +14,12 @@ A `DONE` label records the individual theorem's proof status, not completion of 
 
 A checked box means the stated honest-witness theorem is proved in Lean without `sorryAx` under its stated premises.
 The labels are `DONE:` for a checked proof, `TODO:` for unfinished proof or correspondence work, and `FIXME:` for a confirmed issue.
-The original 62 targets were checked by source inspection and `#print axioms`.
+The original 62 base targets were checked by source inspection and `#print axioms`.
 The review rechecked the assembled theorem's axioms against the target and confirmed its recorded `sorryAx` dependency.
-The current checklist has 57 checked targets and five `FIXME:` targets.
+The current checklist has 58 checked targets, including Akita's (63) added on 2026-11-10, and five `FIXME:` targets.
 
 Each checklist item links to its constraint definition and matching completeness
-module. [AllConstraints](Constraints/All.lean) bundles the 62 relations, and
+module. [AllConstraints](Constraints/All.lean) bundles the 63 relations, and
 [honestWitness_constraintEquations](Completeness/All.lean) assembles their proofs
 under the stated conditions.
 
@@ -52,8 +52,10 @@ Equations (43)–(47) were rechecked against public Rust pin `8bbb2357`. Their h
 
 The remaining equations (23)–(26), (37)–(38), (40)–(41), (48)–(53), and (59)
 were also checked against public Rust pin `8bbb2357`.
-This checklist covers the base RV64 relations; optional `akita` relations,
-including its extra instruction-address canonicality condition, are outside it.
+This checklist covers the base RV64 relations and the `akita` build's
+instruction-address canonicality condition (63). The `akita` build's other
+changes (fused increments, digit-zero hamming weights, advice openings) only
+re-encode or add constraints, so the model does not need them for soundness.
 The final-RAM completeness target (38) is blocked by
 [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1. Constraint (53) takes the public entry slot
 explicitly and requires the trace to start there. Constraint (50) selects the
@@ -409,6 +411,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (39) DONE: [Lookup output from the selected table](Constraints/LookupOutputEqInstructionReadRaf.lean) · [completeness](Completeness/LookupOutputEqInstructionReadRaf.lean)
 - [x] (40) DONE: [Left lookup operand reconstruction](Constraints/LeftLookupOperandEqInstructionRaf.lean) · [completeness](Completeness/LeftLookupOperandEqInstructionRaf.lean)
 - [x] (41) DONE: [Right lookup operand reconstruction](Constraints/RightLookupOperandEqInstructionRaf.lean) · [completeness](Completeness/RightLookupOperandEqInstructionRaf.lean)
+- [x] (63) DONE: [Canonical instruction address, Akita build only](Constraints/InstructionAddressCanonical.lean) · [completeness](Completeness/InstructionAddressCanonical.lean)
 
 [Rust: constraint](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs#L90); [operand coefficients](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L180).
 
@@ -440,6 +443,20 @@ LookupRa(x,t) = ∏_{j=0}^{J−1} InstructionRa_j(v_j(x),t)
        Σ_{x ∈ X} LookupRa(x,t)
          · ((1 − InstructionRafFlag(t)) · Right(x) + InstructionRafFlag(t) · x)
 ```
+
+Constraint (63) is checked only when `ringChar F < 2^128`, matching Jolt, whose
+`akita` feature selects both the field `p = 2^128 - 1780711455` and this check
+([Rust: flag](https://github.com/a16z/jolt/blob/c97e93004fbf804409f0374fe8457c8f1562ce71/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs); [verifier term](https://github.com/a16z/jolt/blob/c97e93004fbf804409f0374fe8457c8f1562ce71/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L198-L212)).
+With `U(x) = 1` when the upper 64 bits of `x` are all ones and `U(x) = 0` otherwise:
+
+```text
+(63) InstructionRafFlag(t) · Σ_{x ∈ X} LookupRa(x,t) · U(x) = 0
+```
+
+Without (63), a field with `p < 2^128` lets (41) hold for an address `x ≥ p`
+that aliases `x − p`. With it, a selected identity-RAF address is below
+`2^128 − 2^64`, which is below the characteristic whenever `JoltField F` holds.
+Every index the honest prover forms with identity RAF is below that bound.
 
 ## RegistersValEvaluation — stage 5
 

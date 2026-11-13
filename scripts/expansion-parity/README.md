@@ -159,4 +159,8 @@ Loads and stores use the `.normal` fault class with `E_Load_Addr_Align` for load
 Inlines with `VirtualAdvice` rows take `(advice : Nat → BitVec 64)`, and the k-th `VirtualAdvice` row in row order (from 0) writes `advice k`.
 A function indexed by advice-row position keeps the signature the same size for every inline, and the advice lemmas of section 5.3 can state the honest value of each position.
 
-The chunk size and elaboration times measured at the pin are in the T1/I0 report; see the header of each generated file for the Jolt commit.
+**Chunking.**
+The generator writes 100-row chunks by default.
+At a6b6dc717 the unchunked form (one nested `.instr … <|` term per definition) fails on `KECCAK256_ABSORB_PERMUTE_INLINE` (3,121 rows) with "maximum recursion depth has been reached" at row 250.
+With 100-row chunks the file elaborates under the default limits: `lake env lean` on it took 34 s of wall time and 15.5 s of CPU time on a machine with load average 30.
+The generated files never set `maxRecDepth`, `maxHeartbeats` or any other option.

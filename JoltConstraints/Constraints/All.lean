@@ -5,6 +5,7 @@ import JoltConstraints.Constraints.BytecodeRaAtEntryEqOne
 import JoltConstraints.Constraints.BytecodeRaChunkBooleanity
 import JoltConstraints.Constraints.BytecodeRaChunkHammingWeight
 import JoltConstraints.Constraints.ImmEqBytecodeRead
+import JoltConstraints.Constraints.InstructionAddressCanonical
 import JoltConstraints.Constraints.InstructionFlagsEqBytecodeRead
 import JoltConstraints.Constraints.InstructionRaChunkBooleanity
 import JoltConstraints.Constraints.InstructionRaChunkHammingWeight
@@ -123,6 +124,8 @@ structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
   lookupOutputEqInstructionReadRaf : JoltConstraints.lookupOutputEqInstructionReadRaf witness
   leftLookupOperandEqInstructionRaf : JoltConstraints.leftLookupOperandEqInstructionRaf witness
   rightLookupOperandEqInstructionRaf : JoltConstraints.rightLookupOperandEqInstructionRaf witness
+  -- Akita build only (characteristic below 2^128): canonical identity-RAF addresses.
+  instructionAddressCanonical : JoltConstraints.instructionAddressCanonical witness
   registersValEqPrefixRdInc : JoltConstraints.registersValEqPrefixRdInc witness
   -- Stage 6: bytecode and selector relations
   pcEqBytecodeRead : JoltConstraints.pcEqBytecodeRead witness
