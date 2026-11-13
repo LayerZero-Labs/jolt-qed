@@ -31,8 +31,12 @@
 
 [jolt]
 repository = "a16z/jolt"
-pin = "580084fcfad4788ebf48413a92dd640ca090c45f"
-note = "The a16z/jolt#2384 head, the revision the expansion-parity, decoder-sweep and lookup-tables jobs check. Chosen over the earlier Track T pin a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5 on 2026-11-12 (reports/2026-11-11-provenance.md, Decisions). README.md and methods/soundness.md still name c97e93004fbf804409f0374fe8457c8f1562ce71, the merge of a16z/jolt#2250, which methods/soundness.md records as the project pin since 2026-11-05."
+pin = "3cc6e7bd179900cfad6a052335c32ea1ef749536"
+note = "The a16z/jolt#2384 head, the revision the expansion-parity, decoder-sweep, lookup-tables and constraint-generation jobs check. Moved on 2026-11-12 from 580084fcfad4788ebf48413a92dd640ca090c45f, an earlier head of the same pull request, when those jobs moved; every models path of an entry with no checked revision exists at both. 580084fcf replaced the earlier Track T pin a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5 (reports/2026-11-11-provenance.md, Decisions). README.md and methods/soundness.md still name c97e93004fbf804409f0374fe8457c8f1562ce71, the merge of a16z/jolt#2250, which methods/soundness.md records as the project pin since 2026-11-05."
+
+[[other_revision]]
+revision = "e28da34817c3775cfb935376acf5d416f555d64f"
+repository = "Verified-zkEVM/CompPoly"
 
 [[other_revision]]
 revision = "e29949809bbf2c54c315c2ca55ae3b90c7fd37a6"
@@ -116,6 +120,160 @@ models = []
 
 [[file]]
 lean = "JoltBytecode/HartConfig.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Blake2b/Spec.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Frame.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/FrameInstances.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Bigint256Mul.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Blake2.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Blake3.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Blake3Keyed64.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/GrumpkinDivqAdv.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/GrumpkinDivrAdv.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/GrumpkinGlvrAdv.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Keccak256.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Keccak256AbsorbPermute.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Ntt64I32Forward.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Ntt64I32PointwiseDot6.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/P256Divq.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/P256Divr.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/P256FakeGlvAdv.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/P256Mulq.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/P256Mulr.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/P256Squareq.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/P256Squarer.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Secp256k1Divq.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Secp256k1Divr.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Secp256k1GlvrAdv.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Secp256k1Mulq.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Secp256k1Mulr.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Secp256k1Squareq.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Secp256k1Squarer.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Sha256.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Generated/Sha256Init.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Keccak256/Spec.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Secp256k1/Advice.lean"
+models = [
+  "jolt-inlines/sdk/src/host.rs",
+  "jolt-inlines/secp256k1/src/glv.rs",
+  "jolt-inlines/secp256k1/src/lib.rs",
+  "jolt-inlines/secp256k1/src/sequence_builder.rs",
+]
+checked = "a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5"
+
+[[file]]
+lean = "JoltBytecode/Inlines/Secp256k1/Spec.lean"
+models = [
+  "jolt-inlines/sdk/src/host.rs",
+  "jolt-inlines/secp256k1/src/sequence_builder.rs",
+]
+checked = "a6b6dc7177ec5ea5a3c60bd5cea4409c07ca6dc5"
+
+[[file]]
+lean = "JoltBytecode/Inlines/Sha256/Spec.lean"
+models = []
+
+[[file]]
+lean = "JoltBytecode/Inlines/Spec.lean"
 models = []
 
 [[file]]
@@ -1301,6 +1459,14 @@ lean = "JoltConstraints/Completeness/ImmEqBytecodeRead.lean"
 models = []
 
 [[file]]
+lean = "JoltConstraints/Completeness/InstructionAddressCanonical.lean"
+models = [
+  "crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs",
+  "crates/jolt-kernels/src/optimized/instruction_read_raf.rs",
+]
+checked = "c97e93004fbf804409f0374fe8457c8f1562ce71"
+
+[[file]]
 lean = "JoltConstraints/Completeness/InstructionFlagsEqBytecodeRead.lean"
 models = []
 
@@ -1575,6 +1741,48 @@ lean = "JoltConstraints/Completeness.lean"
 models = []
 
 [[file]]
+lean = "JoltConstraints/ConstraintGen/Equiv.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/ConstraintGen/Generated/KindTables.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/ConstraintGen/Generated/R1CS.lean"
+models = ["crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"]
+checked = "3cc6e7bd179900cfad6a052335c32ea1ef749536"
+
+[[file]]
+lean = "JoltConstraints/ConstraintGen/Generated/Relations.lean"
+models = [
+  "crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs",
+  "crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs",
+  "crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs",
+  "crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs",
+  "zklean-extractor/src/sumchecks.rs",
+]
+checked = "3cc6e7bd179900cfad6a052335c32ea1ef749536"
+
+[[file]]
+lean = "JoltConstraints/ConstraintGen/Semantics.lean"
+models = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs",
+  "crates/jolt-claims/src/protocols/jolt/ids.rs",
+  "crates/jolt-riscv/src/lib.rs",
+  "crates/jolt-verifier/src/stages/stage3/spartan_shift.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
+lean = "JoltConstraints/ConstraintGen/Types.lean"
+models = [
+  "crates/jolt-claims/src/protocols/jolt/unbatched.rs",
+  "crates/jolt-r1cs/src/constraint.rs",
+]
+note = "Names no published Jolt revision."
+
+[[file]]
 lean = "JoltConstraints/Constraints/All.lean"
 models = []
 
@@ -1627,6 +1835,15 @@ note = "Also cites 5def437f2 (2)."
 lean = "JoltConstraints/Constraints/ImmEqBytecodeRead.lean"
 models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
 checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Constraints/InstructionAddressCanonical.lean"
+models = [
+  "crates/jolt-akita/src/adapters.rs",
+  "crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs",
+  "crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs",
+]
+checked = "c97e93004fbf804409f0374fe8457c8f1562ce71"
 
 [[file]]
 lean = "JoltConstraints/Constraints/InstructionFlagsEqBytecodeRead.lean"
@@ -1940,6 +2157,10 @@ models = []
 lean = "JoltConstraints/Soundness/Assumptions.lean"
 models = ["crates/jolt-prover/src/config.rs"]
 checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/Soundness/FieldModuli.lean"
+models = []
 
 [[file]]
 lean = "JoltConstraints/Soundness/Helpers/PrefixSum.lean"
@@ -2861,6 +3082,10 @@ lean = "JoltConstraints/Soundness/soundness.lean"
 models = []
 
 [[file]]
+lean = "JoltConstraints/Vendor/PrattCertificate.lean"
+models = []
+
+[[file]]
 lean = "JoltConstraints/WholeRun/Basic.lean"
 models = []
 
@@ -2892,6 +3117,11 @@ note = "Names no published Jolt revision."
 [[file]]
 lean = "JoltConstraints/WholeRun/Decoded.lean"
 models = []
+
+[[file]]
+lean = "JoltConstraints/WholeRun/Elf.lean"
+models = ["crates/jolt-program/src/image/elf.rs"]
+checked = "c336a6da706d0a0d11c3489c7aef71ee80c2e370"
 
 [[file]]
 lean = "JoltConstraints/WholeRun/Fetch.lean"
@@ -3698,6 +3928,24 @@ text = "crates/jolt-program/src/image/decode.rs"
 count = 1
 
 [[known]]
+file = "JoltBytecode/Inlines/Frame.lean"
+kind = "revision"
+text = "a6b6dc717"
+count = 1
+
+[[known]]
+file = "JoltBytecode/Inlines/FrameInstances.lean"
+kind = "revision"
+text = "a6b6dc717"
+count = 1
+
+[[known]]
+file = "JoltBytecode/Inlines/Keccak256/Spec.lean"
+kind = "revision"
+text = "10000000"
+count = 1
+
+[[known]]
 file = "JoltBytecode/InstructionEquivalence/Instructions/AtomicFamily/WordLane.lean"
 kind = "unchecked-model"
 text = "crates/jolt-program/src/expand/memory/shared.rs"
@@ -4175,6 +4423,42 @@ count = 3
 file = "JoltConstraints/Completeness/completeness.lean"
 kind = "unchecked-model"
 text = "crates/jolt-program/src/preprocess/bytecode.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/ConstraintGen/Semantics.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/ConstraintGen/Semantics.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/ids.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/ConstraintGen/Semantics.lean"
+kind = "unchecked-model"
+text = "crates/jolt-riscv/src/lib.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/ConstraintGen/Semantics.lean"
+kind = "unchecked-model"
+text = "crates/jolt-verifier/src/stages/stage3/spartan_shift.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/ConstraintGen/Types.lean"
+kind = "unchecked-model"
+text = "crates/jolt-claims/src/protocols/jolt/unbatched.rs"
+count = 1
+
+[[known]]
+file = "JoltConstraints/ConstraintGen/Types.lean"
+kind = "unchecked-model"
+text = "crates/jolt-r1cs/src/constraint.rs"
 count = 1
 
 [[known]]
@@ -4778,6 +5062,12 @@ text = "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs"
 count = 1
 
 [[known]]
+file = "JoltConstraints/Soundness/Assumptions.lean"
+kind = "revision"
+text = "25d87ba6"
+count = 1
+
+[[known]]
 file = "JoltConstraints/Soundness/Layer4/Interleave.lean"
 kind = "revision"
 text = "8bbb2357890928d8f83b00ca542879077c4d3d28"
@@ -4944,6 +5234,12 @@ file = "JoltConstraints/constraints.md"
 kind = "revision"
 text = "c97e9300"
 count = 1
+
+[[known]]
+file = "JoltConstraints/constraints.md"
+kind = "revision"
+text = "c97e93004fbf804409f0374fe8457c8f1562ce71"
+count = 2
 
 [[known]]
 file = "JoltConstraints/execution_conditions.lean"

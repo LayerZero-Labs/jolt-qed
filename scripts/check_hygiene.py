@@ -4,7 +4,10 @@
 The scan looks for proof holes, tactics that trust the compiler or the kernel's
 evaluator, raised limits and new axioms in four roots, each with its own policy:
 
-  JoltBytecode/     zero tolerance for every token below.
+  JoltBytecode/     zero tolerance for every token below, except the
+                    `decide +kernel` uses that the [[ethlib]] baseline records
+                    in files copied unchanged from EthLib (AGENTS.md allows a
+                    fast `decide +kernel`); no other token may be recorded.
   JoltConstraints/  zero tolerance, except the debt recorded under [[known]] in
                     scripts/hygiene-baseline.toml.
   JoltTests/        zero tolerance; tests may use #eval and IO, which the scan
@@ -71,11 +74,15 @@ TOKEN_NAMES = (*TOKENS, AMBIGUOUS)
 
 # root directory -> (root module, baseline section or None for zero tolerance)
 ROOTS: dict[str, tuple[str, str | None]] = {
-    "JoltBytecode": ("JoltBytecode.lean", None),
+    "JoltBytecode": ("JoltBytecode.lean", "ethlib"),
     "JoltConstraints": ("JoltConstraints.lean", "known"),
     "JoltTests": ("JoltTests.lean", None),
     "LeanRV64D": ("LeanRV64D.lean", "generated"),
 }
+
+# Baseline sections that may record only some tokens: [[ethlib]] holds only
+# the `decide +kernel` proofs copied unchanged from EthLib.
+SECTION_TOKENS: dict[str, tuple[str, ...]] = {"ethlib": ("decide +kernel",)}
 
 IDENT_CHAR = re.compile(r"[\w'!?.²-³¹⁰-ₜα-ωΑ-Ωᴀ-ᶿ℀-⅏]")
 CHAR_LIT = re.compile(r"'(?:\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|.)|[^\\'\n])'")
@@ -332,12 +339,16 @@ def load_baseline(path: Path) -> dict[str, Counter]:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as e:
         raise SystemExit(f"error: cannot read baseline {path}: {e}")
-    out: dict[str, Counter] = {"known": Counter(), "generated": Counter()}
+    out: dict[str, Counter] = {"known": Counter(), "generated": Counter(), "ethlib": Counter()}
     for section in out:
         for entry in data.get(section, []):
             key = (entry["file"], entry["token"])
-            if entry["token"] not in TOKEN_NAMES:
-                raise SystemExit(f"error: unknown token {entry['token']!r} in baseline")
+            if section == "ethlib" and not entry["file"].startswith("JoltBytecode/Inlines/"):
+                raise SystemExit(f"error: baseline [[ethlib]] entry {entry['file']} is "
+                                 "outside JoltBytecode/Inlines/")
+            if entry["token"] not in SECTION_TOKENS.get(section, TOKEN_NAMES):
+                raise SystemExit(f"error: token {entry['token']!r} is not allowed in "
+                                 f"baseline [[{section}]]")
             if key in out[section]:
                 raise SystemExit(f"error: duplicate baseline entry {key}")
             out[section][key] = int(entry["count"])

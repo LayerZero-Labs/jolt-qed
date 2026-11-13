@@ -3,8 +3,16 @@
 # Each entry records a file, a token and the exact number of occurrences the
 # scan finds today, outside comments and strings. The scan fails on any
 # occurrence not recorded here and on any entry whose count no longer matches,
-# so this file can only shrink as the debt is paid. JoltBytecode/ and
-# JoltTests/ have no entries: they are zero tolerance.
+# so this file can only shrink as the debt is paid. JoltTests/ has no entries:
+# it is zero tolerance. JoltBytecode/ is zero tolerance except for [[ethlib]].
+#
+# [[ethlib]]: JoltBytecode/Inlines/ hash specifications copied unchanged from
+# ethereum/EthLib 5310b3ec007b05a2bfe33b01125392b07df5f636, which
+# scripts/check-ethlib-copies.sh (the ethlib-copies job) checks. EthLib proves
+# their constants with `decide +kernel`: twice each in the SHA-256 and BLAKE2b
+# files, five times in the Keccak file. AGENTS.md allows `decide +kernel` when
+# its kernel check is fast (commit 91d2680). It adds no axiom. The section may
+# record only `decide +kernel`, and only under JoltBytecode/Inlines/.
 #
 # [[known]]: JoltConstraints/ debt.
 # - Five completeness gaps (JoltConstraints/model_review.md, "Proofs owed"):
@@ -28,6 +36,21 @@
 # - Nine plain string literals in DeviceTree.lean (the device-tree text, with
 #   unbalanced `{`) whose end would differ if Lean read them as interpolated.
 #   Lean reads them as plain strings, which is also how the scan continues.
+
+[[ethlib]]
+file = "JoltBytecode/Inlines/Blake2b/Spec.lean"
+token = "decide +kernel"
+count = 2
+
+[[ethlib]]
+file = "JoltBytecode/Inlines/Keccak256/Spec.lean"
+token = "decide +kernel"
+count = 5
+
+[[ethlib]]
+file = "JoltBytecode/Inlines/Sha256/Spec.lean"
+token = "decide +kernel"
+count = 2
 
 [[known]]
 file = "JoltConstraints/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean"
