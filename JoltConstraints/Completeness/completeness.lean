@@ -85,10 +85,14 @@ theorem JoltInstance.completeness {F : Type} [Field F]
     (assumptions : joltInstance.CompletenessAssumptions)
     (privateInputs : JoltPrivateInputs)
     (trace : HonestTrace joltInstance privateInputs)
+     -- These are the same as saying x in the language 
+     -- we say it for all private inputs and all honest traces
     (claimsRunOutputs : trace.matches_outputs joltInstance)
     (spoilAssertsPass : trace.SpoilAssertsPass)
     (config : ProverConfig)
-    (proverAccepts : trace.prover_config joltInstance = some config) :
+    (proverAccepts : trace.prover_config joltInstance = some config) 
+    -- In the language end.
+    :
     JoltConstraints.AllConstraints joltInstance privateInputs
       (HonestTrace.honestWitness (F := F) (trace.witness_params config proverAccepts) trace) := by
   obtain ⟨slots, preprocessed⟩ := trace.exists_preprocessed
