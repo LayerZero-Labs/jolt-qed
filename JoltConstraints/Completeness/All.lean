@@ -9,7 +9,7 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-/-- Assemble the 62 honest-witness equations, for example the RAM-address
+/-- Assemble the 63 honest-witness equations, for example the RAM-address
 equation (01) and operand selection (33), under their existing trace premises.
 The bundle inherits the gaps listed in `model_review.md`, "Proofs owed".
 Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
@@ -87,6 +87,7 @@ theorem honestWitness_constraintEquations
     lookupOutputEqInstructionReadRaf := honestWitness_lookupOutputEqInstructionReadRaf params trace ramFits traceFits bytecodeDomain
     leftLookupOperandEqInstructionRaf := honestWitness_leftLookupOperandEqInstructionRaf params trace ramFits traceFits bytecodeDomain
     rightLookupOperandEqInstructionRaf := honestWitness_rightLookupOperandEqInstructionRaf params trace ramFits traceFits bytecodeDomain
+    instructionAddressCanonical := honestWitness_instructionAddressCanonical params trace ramFits traceFits bytecodeDomain
     registersValEqPrefixRdInc := honestWitness_registersValEqPrefixRdInc params trace ramFits traceFits bytecodeDomain initialRegistersZero
     -- Stage 6: bytecode and selector relations
     pcEqBytecodeRead := honestWitness_pcEqBytecodeRead params trace ramFits traceFits bytecodeDomain

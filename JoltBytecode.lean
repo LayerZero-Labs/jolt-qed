@@ -24,3 +24,4 @@ import JoltBytecode.Inlines.Secp256k1.GlvrAdv
 import JoltBytecode.Inlines.Secp256k1.Prime
 import JoltBytecode.Inlines.Secp256k1.FieldMul
 import JoltBytecode.Inlines.Secp256k1.FieldDiv
+import JoltBytecode.Inlines.Spec

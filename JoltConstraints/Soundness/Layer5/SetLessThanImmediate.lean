@@ -16,7 +16,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -32,14 +32,14 @@ private theorem sltiu_canonical :
   simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,
     Bool.and_eq_true] using (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem sltiu_inputs {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.LeftInstructionInput t = ((sourceValue source pre).toNat : F) ∧
     witness.RightInstructionInput t = (imm.toNat : F) := by
-  exact agrees.immediateInputs (two_pow_127_lt_char charAbove2pow128)
+  exact agrees.immediateInputs (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations selected rowIs source imm
     (sltiu_canonical context rowIs instructionIs).2
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
@@ -50,13 +50,13 @@ private theorem sltiu_write_value {pre : SailJoltState}
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t = ((jolt_sltu_value (sourceValue source pre) imm).toNat : F) := by
   obtain ⟨left, right⟩ :=
-    sltiu_inputs charAbove2pow128 context equations selected rowIs instructionIs agrees sourceLive
-  apply lookupWrite_value_of_raf_zero (two_pow_127_lt_char charAbove2pow128)
+    sltiu_inputs charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs agrees sourceLive
+  apply lookupWrite_value_of_raf_zero (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations selected rowIs (sourceValue source pre) imm _ .UnsignedLessThan
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
     (by rw [instructionIs]; rfl) left right
   intro raf leftLookup rightLookup table
-  have output := lookupOutput_unsignedLessThan (two_pow_127_lt_char charAbove2pow128)
+  have output := lookupOutput_unsignedLessThan (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations t slot selected (sourceValue source pre) imm raf
     leftLookup rightLookup table
   simpa only [jolt_sltu_value_toNat, BitVec.lt_def, Nat.cast_ite, Nat.cast_one,
@@ -81,10 +81,10 @@ theorem sltiu_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witn
         witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have sourceCanonical := (sltiu_canonical context rowIs instructionIs).2
-  have encoded := sltiu_write_value charAbove2pow128 context equations
+  have encoded := sltiu_write_value charAbove2pow128Minus2pow64 context equations
     selected rowIs instructionIs agrees sourceLive
   have read := (agrees.read source sourceCanonical sourceLive).1
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by rw [instructionIs]; rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by rw [instructionIs]; rfl)]
