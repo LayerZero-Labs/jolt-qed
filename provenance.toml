@@ -1136,7 +1136,9 @@ note = "Cites a86ec3716, which a16z/jolt does not publish."
 
 [[file]]
 lean = "JoltBytecode/JoltISA/ExpansionsAutomated.lean"
-models = []
+models = ["crates/jolt-program/src/expand/mod.rs"]
+checked = "3cc6e7bd179900cfad6a052335c32ea1ef749536"
+note = "Written by scripts/expansion-parity/src/bin/expansion-recipes.rs at the pin (reports/2026-11-12-expansion-recipes.md); the expansion-recipes CI job regenerates it and fails on any diff."
 
 [[file]]
 lean = "JoltBytecode/JoltISA/HostIO.lean"
@@ -2148,6 +2150,20 @@ note = "Names no published Jolt revision."
 lean = "JoltConstraints/Constraints/UnexpandedPCEqBytecodeRead.lean"
 models = ["crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs"]
 checked = "5def437f21a0006e13c063a03f0b5a7c9b93cd6f"
+
+[[file]]
+lean = "JoltConstraints/ExpansionGen/Equiv.lean"
+models = []
+
+[[file]]
+lean = "JoltConstraints/ExpansionGen/Generated.lean"
+models = ["crates/jolt-program/src/expand/mod.rs"]
+checked = "3cc6e7bd179900cfad6a052335c32ea1ef749536"
+note = "Written by scripts/expansion-parity/src/bin/expansion-recipes.rs from every decoded instruction word of each source kind at the pin (reports/2026-11-12-expansion-recipes.md); the expansion-recipes CI job regenerates it and fails on any diff."
+
+[[file]]
+lean = "JoltConstraints/ExpansionGen/Tactic.lean"
+models = []
 
 [[file]]
 lean = "JoltConstraints/ProgramLayout.lean"

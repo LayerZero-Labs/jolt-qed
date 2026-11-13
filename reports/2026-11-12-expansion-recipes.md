@@ -10,7 +10,7 @@ Jolt's sampling generator `crates/jolt-lean-gen` is retired.
 
 ## Revisions
 
-- jolt-qed: branch `track/t6-recipes`, cut from `inline/t2-decoder-sweep` at `5306348`.
+- jolt-qed: branch `track/t6-recipes`, cut from `inline/t2-decoder-sweep` at `5306348`; the generator, the generated files and the proofs are commit `8ae01b2`, which `lake build JoltConstraints.ExpansionGen.Equiv` and `lake build JoltAudit` built, and which merges into `inline/t2-decoder-sweep` after `4278d18`.
 - Jolt: a16z/jolt#2384 at `3cc6e7bd179900cfad6a052335c32ea1ef749536` (`3cc6e7bd1`), the commit the expansion-parity CI job checks, built with the cargo feature `zicsr-remaining`.
 - Toolchain: `leanprover/lean4:v4.35.0`, Mathlib `v4.35.0`.
 
@@ -70,6 +70,12 @@ The generator fails, naming the kind, register pattern and row, if a later Jolt 
 - The fault class and alignment exception of memory rows, which Jolt's rows do not carry: atomics, `LR` and `SC` use `.amo`; stores, `SC` and atomics fault with `E_SAMO_Addr_Align`.
 - The value of the `VirtualAdvice` row of a division or remainder, which is Lean's advice parameter `q`.
 - The System programs in `JoltBytecode/JoltISA/Expansions/System.lean` and the native-row construction in `JoltConstraints/expansions.lean` stay as they are; `Equiv.lean` proves them equal to the generated recipes.
+
+## Other files changed
+
+- `JoltConstraints.lean` imports `JoltConstraints.ExpansionGen.Equiv`, so the default build checks the proof.
+- `provenance.toml` has entries for the three new Lean files and records `3cc6e7bd1` for `ExpansionsAutomated.lean` and `Generated.lean`.
+- `JoltConstraints/model_review.md` and `docs/coverage-ledger.md` describe the expansions as generated and proved equal, and drop the open gap "T6 is not done".
 
 ## Limits
 
