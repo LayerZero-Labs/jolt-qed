@@ -5849,7 +5849,7 @@ count = 1
 file = "docs/coverage-ledger.md"
 kind = "revision"
 text = "580084fcf"
-count = 10
+count = 8
 
 [[known]]
 file = "docs/coverage-ledger.md"
