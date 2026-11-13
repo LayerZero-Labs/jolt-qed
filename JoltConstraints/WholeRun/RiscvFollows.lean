@@ -241,4 +241,22 @@ theorem Block.runs_of_sailRetires {program : Rv64ProgramImage SourceInstruction}
   exact ⟨post, hat, hnext,
     ⟨_, instrs, Or.inr rfl, by simp only [hrows, Option.map_some, instrs]; rfl, hpost⟩⟩
 
+/-- `Block.runs_of_sailRetires` with the `misa` premise in the form that `JoltFollows` provides
+(`MisaC`). -/
+theorem Block.runs_of_sailRetires_misaC {program : Rv64ProgramImage SourceInstruction}
+    {jt : SailJoltState} {s : SailState} (hrel : Related jt s) (hsys : SystemInv jt)
+    (hheap : jt.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8) (hmisa : MisaC jt)
+    {row : SourceInstructionRow SourceInstruction}
+    (hnext : jt.sail.regs.get? Register.nextPC = some row.address)
+    (hat : rowAt program row.address = some row) (hexp : (expand_instruction row).isSome)
+    {i : RiscvInstruction} (hrow : row.instruction = .riscv i) (hlift : i.Lifted)
+    (heven : i.EvenOffsets) (hpc : row.address.getLsbD 0 = false)
+    (hram : RamAccess i (advance_pc row.address row.is_compressed jt))
+    (hmem : MemoryConditions i (advance_pc row.address row.is_compressed jt))
+    (retires : SailRetires i s row.address (if row.is_compressed then 2 else 4)) :
+    ∃ post, (Block.mk row jt post).Runs program :=
+  let ⟨_, hm, hc⟩ := hmisa
+  Block.runs_of_sailRetires hrel hsys hheap hm hc hnext hat hexp hrow hlift heven hpc hram hmem
+    retires
+
 end WholeRun

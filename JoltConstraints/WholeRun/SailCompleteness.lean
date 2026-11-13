@@ -198,12 +198,57 @@ theorem JoltStep.lands {program : Rv64ProgramImage SourceInstruction} {elf : Elf
     exact hR'
   · exact h.inline_lands key rs1 rs2 rd call
 
+/-- Jolt's embedded `misa` holds a value with the C bit set. Jolt's initial state has one, and Jolt's
+rows keep it (`MisaC.of_runs`). -/
+def MisaC (jt : SailJoltState) : Prop :=
+  ∃ misa : RegisterType Register.misa,
+    jt.sail.regs.get? Register.misa = some misa ∧ _get_Misa_C misa = 1#1
+
+/-- A Jolt program that runs keeps the embedded `misa`. -/
+theorem execProgram_keeps_misa (p : JoltISA.Program) (s t : SailJoltState)
+    {r : ExecutionResult} (h : JoltISA.execProgram p s = .ok r t) :
+    t.sail.regs.get? Register.misa = s.sail.regs.get? Register.misa := by
+  induction p generalizing s t with
+  | done result =>
+    simp only [JoltISA.execProgram, pure, EStateM.pure, EStateM.Result.ok.injEq] at h
+    rw [h.2]
+  | instr i rest ih =>
+    simp only [JoltISA.execProgram, bind, EStateM.bind] at h
+    cases hi : JoltISA.execInstr i s with
+    | error e s' => simp [hi] at h
+    | ok result s' =>
+      have step := JoltConstraints.Soundness.execInstr_keeps_misa i s s' result hi
+      simp only [hi] at h
+      cases result with
+      | Retire_Success u => exact (ih s' t h).trans step.symm
+      | _ =>
+        simp only [pure, EStateM.pure, EStateM.Result.ok.injEq] at h
+        rw [← h.2]
+        exact step.symm
+
+/-- A block that runs keeps `MisaC`. -/
+theorem MisaC.of_runs {program : Rv64ProgramImage SourceInstruction} {b : Block}
+    (runs : b.Runs program) (h : MisaC b.pre) : MisaC b.post := by
+  obtain ⟨_, _, _, _, executed⟩ := runs.executes
+  rw [MisaC, execProgram_keeps_misa _ _ _ executed, Block.start,
+    JoltConstraints.Soundness.advance_pc_misa]
+  exact h
+
+/-- Jolt's initial state satisfies `MisaC`. -/
+theorem MisaC.initial {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} {init : SailJoltState}
+    (initialized : joltInstance.initial_state privateInputs = some init) : MisaC init :=
+  ⟨_, JoltConstraints.Soundness.initial_state_misa joltInstance privateInputs init initialized,
+    by decide⟩
+
 /-- **Jolt follows the Sail run.** At each of the first `n` steps of `run`, from every Jolt state
-related to Sail's state, Jolt runs a block that meets `JoltStep`.
+related to Sail's state whose embedded `misa` has the C bit set (`MisaC`), Jolt runs a block that
+meets `JoltStep`.
 Example: a run of RISC-V instructions whose accesses stay in RAM, on a conforming guest. -/
 def JoltFollows (program : Rv64ProgramImage SourceInstruction) (lowest : Nat)
     (run : Nat → SailState) (n : Nat) : Prop :=
-  ∀ k < n, ∀ jt, RunRel program jt (run k) → ∃ b, JoltStep program lowest jt (run (k + 1)) b
+  ∀ k < n, ∀ jt, RunRel program jt (run k) → MisaC jt →
+    ∃ b, JoltStep program lowest jt (run (k + 1)) b
 
 /-- **The blocks of a Sail run.** If Jolt follows the first `n` steps of a run from a state
 related to Jolt's `init`, then for every `m ≤ n` a chain of `m` blocks starts at `init`, block `k`
@@ -213,7 +258,7 @@ Example: a run of two ADDI steps gives two ADDI blocks. -/
 theorem blocks_of_run {program : Rv64ProgramImage SourceInstruction} {elf : ElfSections}
     (hdecoded : program.DecodedFrom elf) (hrows : program.RowsAligned) {lowest : Nat}
     {run : Nat → SailState} {n : Nat} {init : SailJoltState}
-    (start : RunRel program init (run 0))
+    (start : RunRel program init (run 0)) (startMisa : MisaC init)
     (steps : ∀ k < n, PlatformStep (run k) (run (k + 1)))
     (follows : JoltFollows program lowest run n) :
     ∀ m ≤ n, ∃ blocks : List Block, blocks.length = m ∧
@@ -221,19 +266,21 @@ theorem blocks_of_run {program : Rv64ProgramImage SourceInstruction} {elf : ElfS
       blocks.IsChain (fun b c => b.post = c.pre) ∧
       (∀ f ∈ blocks.head?, f.pre = init) ∧
       RunRel program ((blocks.getLast?.map (·.post)).getD init) (run m) ∧
+      MisaC ((blocks.getLast?.map (·.post)).getD init) ∧
       ∀ k (hk : k < blocks.length),
         RunRel program blocks[k].pre (run k) ∧ RunRel program blocks[k].post (run (k + 1)) := by
   intro m
   induction m with
   | zero =>
     intro _
-    exact ⟨[], rfl, by simp, List.isChain_nil, by simp, start, fun k hk => absurd hk (by simp)⟩
+    exact ⟨[], rfl, by simp, List.isChain_nil, by simp, start, startMisa,
+      fun k hk => absurd hk (by simp)⟩
   | succ m ih =>
     intro hm
-    obtain ⟨blocks, len, props, chain, first, endRel, each⟩ := ih (by omega)
-    obtain ⟨b, hb⟩ := follows m (by omega) _ endRel
+    obtain ⟨blocks, len, props, chain, first, endRel, endMisa, each⟩ := ih (by omega)
+    obtain ⟨b, hb⟩ := follows m (by omega) _ endRel endMisa
     have post := hb.lands hdecoded hrows (steps m (by omega)) endRel
-    refine ⟨blocks ++ [b], by simp [len], ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨blocks ++ [b], by simp [len], ?_, ?_, ?_, ?_, ?_, ?_⟩
     · intro c hc
       rcases List.mem_append.mp hc with hc | hc
       · exact props c hc
@@ -259,6 +306,9 @@ theorem blocks_of_run {program : Rv64ProgramImage SourceInstruction} {elf : ElfS
         exact first _ rfl
     · simpa only [List.getLast?_append, List.getLast?_singleton, Option.some_or,
         Option.map_some, Option.getD_some] using post
+    · simp only [List.getLast?_append, List.getLast?_singleton, Option.some_or,
+        Option.map_some, Option.getD_some]
+      exact MisaC.of_runs hb.runs (hb.pre ▸ endMisa)
     · intro k hk
       by_cases early : k < blocks.length
       · rw [List.getElem_append_left early]
@@ -525,8 +575,8 @@ theorem JoltInstance.sail_completeness {F : Type} [Field F]
   have start' : RunRel joltInstance.program init (run 0) := by
     rw [start]
     exact RunRel.ofInitialized initialized hheap
-  obtain ⟨blocks, len, props, chain, first, endRel, each⟩ :=
-    blocks_of_run hdecoded hrows start' steps follows n le_rfl
+  obtain ⟨blocks, len, props, chain, first, endRel, -, each⟩ :=
+    blocks_of_run hdecoded hrows start' (MisaC.initial initialized) steps follows n le_rfl
   obtain ⟨npos, lastStall, lastJump⟩ := stops
   have stallIff : ∀ k (hk : k < blocks.length),
       blocks[k].Stalls ↔ SailStalls joltInstance.program (run k) (run (k + 1)) :=

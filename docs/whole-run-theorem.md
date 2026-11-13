@@ -251,7 +251,8 @@ The premises:
 | `follows` | Jolt follows the run (`JoltFollows`, below) |
 | `claimsOutputs`, `claimsPanic` | the instance claims the run's outputs, up to trailing zero bytes, and its panic flag |
 
-`JoltFollows program lowest run n` says that at each step `k < n`, from every Jolt state related to `run k` (`RunRel`), Jolt runs a block `b` that satisfies `JoltStep`:
+`JoltFollows program lowest run n` says that at each step `k < n`, from every Jolt state related to `run k` (`RunRel`) whose embedded `misa` has the C bit set (`MisaC`), Jolt runs a block `b` that satisfies `JoltStep`.
+The theorem proves `MisaC` along the run: Jolt's initial state has it (`MisaC.initial`) and every block keeps it (`MisaC.of_runs`). The `JoltStep` fields are:
 
 - `runs`: Jolt's tracer runs the block (`Block.Runs`). The block's expanded rows execute from the related state with honest advice, and none of them fails.
 - `accesses`: every RAM address the block's rows access is 0 or at least the layout's lowest address (`Block.AccessesInMap`). Jolt's MMU accepts some reads below that address, so `runs` alone does not exclude them.
@@ -263,8 +264,9 @@ The `runs` field excludes every access where Jolt's tracer faults, including the
 The `not_ebreak` field ends the run before the first EBREAK.
 
 `JoltFollows` is a premise, not a theorem.
-For RISC-V blocks it should follow from the instruction theorems `joltRun_eq_execute`, once their assumption bundle (`equivAssumptions`) is built from address conditions on the Sail state instead of from a retiring Jolt run as `equivAssumptions_of_retire` does today.
-For inline calls it should follow from the `*_rows_complete` lemmas and `InlineKey.JoltOutput`.
+`WholeRun/RiscvFollows.lean` discharges its `runs` field for a RISC-V instruction whose memory accesses go to RAM: `Block.runs_of_sailRetires_misaC` shows that Jolt's block runs when Sail's step retires the instruction (`SailRetires`) and the instruction's memory conditions hold (`MemoryConditions`, the address-level form of the memory-map premise).
+It uses `equivAssumptions_of_conditions`, which builds the assumption bundle of `joltRun_eq_execute` from `MemoryConditions` instead of from a retiring Jolt run.
+Still open: the I/O-access and ECALL cases of `runs`, the other `JoltStep` fields as consequences of Sail's step, and the inline case, which should follow from the `*_rows_complete` lemmas and `InlineKey.JoltOutput`.
 Until then, the theorem shows that a Sail run that Jolt follows step by step gives an accepted Jolt trace: it builds the trace from the blocks (`HonestTrace.ofBlocks`), shows that the rows pass their assertions (`expand_instruction_no_spoil`) and that the prover accepts the trace (`prover_config_some`), and composes with `JoltInstance.completeness`.
 
 The theorem inherits the five open goals of `JoltInstance.completeness` (`JoltConstraints/model_review.md`, "Proofs owed"): (01), (08) and (11) wait on a16z/jolt#1949, (37) on a16z/jolt#1950 and (38) on a16z/jolt#1951 item 1.

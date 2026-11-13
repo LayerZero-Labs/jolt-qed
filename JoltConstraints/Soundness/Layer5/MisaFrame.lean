@@ -114,6 +114,31 @@ theorem execWithTapeAnswer_keeps_misa (instruction : Instr) (answer : BitVec 64)
       StatePreservation.get_rule (relation := SameMisa) (fun _ => rfl)]
       using StatePreservation.bind_rule sameMisa_trans
 
+/-- Every successful Jolt row preserves Sail's `misa` register, including a row that reads the
+advice tape. For example, an ADD row leaves the enabled ISA extensions unchanged. -/
+theorem execInstr_keeps_misa (instruction : Instr) :
+    StatePreservation.Preserves
+      (fun s t : SailJoltState => s.sail.regs.get? Register.misa =
+        t.sail.regs.get? Register.misa) (execInstr instruction) := by
+  change StatePreservation.Preserves SameMisa _
+  cases instruction <;> simp only [execInstr, get_arch_pc]
+  case VirtualAdviceLoad dst width =>
+    intro s t v runs
+    beta_reduce at runs
+    split at runs
+    · cases runs
+    · have kept := StatePreservation.bind_rule sameMisa_trans (write_rule dst _)
+        (fun _ => StatePreservation.pure_rule (relation := SameMisa)
+          (fun _ => rfl) RETIRE_SUCCESS) _ _ _ runs
+      exact kept
+  all_goals
+    preservation_auto [read_rule _, write_rule _ _, readReg_rule _, writeNextPC_rule _,
+      readReg_rule Register.PC, jump_rule _, load_rule _, store_rule _ _, host_rule,
+      StatePreservation.pure_rule (relation := SameMisa) (fun _ => rfl) _,
+      StatePreservation.throw_rule SameMisa _,
+      StatePreservation.get_rule (relation := SameMisa) (fun _ => rfl)]
+      using StatePreservation.bind_rule sameMisa_trans
+
 /-- Preparing an instruction changes PC and nextPC, leaving `misa` fixed.
 For example, fetching a compressed instruction advances nextPC by two without
 changing the enabled ISA extensions.
@@ -123,7 +148,9 @@ theorem advance_pc_misa (address : BitVec 64) (compressed : Bool) (state : SailJ
       state.sail.regs.get? Register.misa := by
   simp [advance_pc, Std.ExtDHashMap.get?_insert]
 
-private theorem initial_state_misa {Source : Type}
+/-- Jolt's initial state holds Jolt's initial `misa` value, which has the C bit set.
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::new`) at 5def437f. -/
+theorem initial_state_misa {Source : Type}
     (joltInstance : JoltInstance Source) (inputs : JoltPrivateInputs) (state : SailJoltState)
     (initialized : joltInstance.initial_state inputs = some state) :
     state.sail.regs.get? Register.misa = some 0x800000008014312f := by
