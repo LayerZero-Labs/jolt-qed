@@ -47,7 +47,7 @@ namespace JoltISA.Inlines.Sha256
 /-! ## Registers -/
 
 /-- Virtual register number `n`.
-Example: `vr 48` is the register of `a` before round 0. -/
+Example: after round 63, `a` is in `vr 48`. -/
 abbrev vr (n : Nat) : VReg := BitVec.ofNat 7 n
 
 /-- The register of working variable `c` (`a = 0`, ..., `h = 7`) at round `n`, once a round
