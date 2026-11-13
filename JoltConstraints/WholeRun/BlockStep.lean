@@ -291,7 +291,7 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
     (if b.row.is_compressed then 2 else 4)
   have hshadow : Shadow (overlayRows b.pre.vregs m inc b.start) Gs :=
     prelude_shadow b s pc m oldInc inc hp hregs hrel.ram
-  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
+  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes_riscv hrow
   have hadvice : blockInstrs b.row Gs = blockInstrs b.row b.start := by
     have he := (advice_shadow i _ _ hshadow).trans
       (advice_overlayRows i b.pre.vregs m inc b.start)

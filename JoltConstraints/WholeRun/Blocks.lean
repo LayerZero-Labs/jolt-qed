@@ -237,7 +237,110 @@ private theorem segment_advice_count {bytecode : Array JoltInstructionRow}
     simp only [List.filter_cons, List.filter_nil, atOffset]
     split <;> simp_all only [List.length_singleton, List.length_nil]
 
+/-- Every step of a block's segment belongs to the expansion that starts at the
+segment's first step. For example, if a nine-row expansion starts at step 10, then
+step 14 belongs to the expansion that starts at step 10. -/
+private theorem segment_starts {joltInstance : JoltInstance SourceInstruction}
+    {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs)
+    (base : Nat) (source : SourceInstructionRow SourceInstruction) (rows : List JoltInstructionRow)
+    (emits : expand_instruction source = some rows)
+    (inside : base + rows.length ≤ trace.rows.size)
+    (ordered : ∀ k (hk : k < rows.length),
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex] = rows[k]) :
+    ∀ k, k < rows.length → startOfExpansionContainingStepN trace.rows (base + k) = base := by
+  have positive : 0 < rows.length := List.length_pos_iff.mpr
+    (expand_instruction_nonempty source rows emits)
+  have markers : ∀ k (hk : k < rows.length),
+      stepNOfTraceIsStartOfNewExpansion trace.rows (base + k) = (k == 0) := by
+    intro k hk
+    simp only [stepNOfTraceIsStartOfNewExpansion,
+      Array.getElem?_eq_getElem (show base + k < trace.rows.size by omega),
+      Option.map_some, Option.getD_some, ordered k hk,
+      expand_instruction_starts_source source rows emits k hk]
+  intro k hk
+  apply segment_start
+  · simpa only [Nat.add_zero, beq_self_eq_true] using markers 0 positive
+  · intro j hj hjk
+    rw [markers j (by omega)]
+    exact beq_eq_false_iff_ne.mpr (by omega)
+
+/-- Inside a registered inline's expansion, a step is an inline advice step exactly
+when it runs a VirtualAdvice row. For example, the VirtualAdvice steps of a
+SECP256K1_MULQ call are its inline advice steps. -/
+private theorem inline_flag_in_segment {bytecode : Array JoltInstructionRow}
+    (program : Rv64ProgramImage SourceInstruction) (traceRows : Array (TraceRow bytecode))
+    (base n : Nat) (bound : base < traceRows.size)
+    (start : startOfExpansionContainingStepN traceRows n = base)
+    (key : JoltISA.Inlines.InlineKey) (rs1 rs2 rs3 : regidx)
+    (inline : program.instructionAt bytecode[(traceRows[base]'bound).rowIndex].address =
+      some (.inline key rs1 rs2 rs3)) :
+    stepNOfTraceIsInlineAdvice program traceRows n = stepNOfTraceIsAdvice traceRows n := by
+  simp only [stepNOfTraceIsInlineAdvice, start, Array.getElem?_eq_getElem bound,
+    Option.bind_some, inline, Bool.and_true]
+
+/-- The inline advice steps before a step inside an inline's expansion are those
+before the expansion, plus the VirtualAdvice steps of the expansion before that
+step. For example, the third VirtualAdvice step of the second SECP256K1_MULQ call,
+after a first call with 4 of them, has 6 inline advice steps before it. -/
+private theorem segment_inline_count {bytecode : Array JoltInstructionRow}
+    (program : Rv64ProgramImage SourceInstruction) (traceRows : Array (TraceRow bytecode))
+    (base : Nat) (bound : base < traceRows.size)
+    (key : JoltISA.Inlines.InlineKey) (rs1 rs2 rs3 : regidx)
+    (inline : program.instructionAt bytecode[(traceRows[base]'bound).rowIndex].address =
+      some (.inline key rs1 rs2 rs3)) (k : Nat)
+    (start : ∀ j, j < k → startOfExpansionContainingStepN traceRows (base + j) = base) :
+    inlineAdviceStepsBeforeStepN program traceRows (base + k) =
+      inlineAdviceStepsBeforeStepN program traceRows base +
+        ((List.range' base k).filter (stepNOfTraceIsAdvice traceRows)).length := by
+  induction k with
+  | zero => simp
+  | succ k ih =>
+    have flag := inline_flag_in_segment program traceRows base (base + k) bound
+      (start k (by omega)) key rs1 rs2 rs3 inline
+    unfold inlineAdviceStepsBeforeStepN at ih ⊢
+    rw [show base + (k + 1) = (base + k) + 1 by omega, List.range_succ, List.filter_append,
+      List.length_append, ih (fun j hj => start j (by omega)), List.range'_concat,
+      List.filter_append, List.length_append, Nat.one_mul]
+    simp only [List.filter_cons, List.filter_nil, flag]
+    split <;> simp only [List.length_singleton, List.length_nil] <;> omega
+
+/-- If each step of a block's segment records the advice that `values` gives it,
+the patched rows are the rows the trace runs. For example, a DIV block whose
+VirtualAdvice step records the quotient runs `patchAdvice [quotient] rows`. -/
 private theorem segment_patched {joltInstance : JoltInstance SourceInstruction}
+    {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs)
+    (base : Nat) (rows : List JoltInstructionRow)
+    (inside : base + rows.length ≤ trace.rows.size)
+    (ordered : ∀ k (hk : k < rows.length),
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex] = rows[k])
+    (values : List (BitVec 64))
+    (agrees : ∀ k (hk : k < rows.length),
+      (trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.withRuntimeAdvice
+        (trace.rows[base + k]'(by omega)).runtimeAdvice).adviceValue? =
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.adviceValue?.map
+        (fun placeholder => (values.drop
+          (((rows.map (·.instruction)).take k).filter (·.adviceValue?.isSome)).length).headD
+            placeholder)) :
+    ∀ k (hk : k < rows.length),
+      (patchAdvice values (rows.map (·.instruction)))[k]'
+            (by rw [patchAdvice_length, List.length_map]; exact hk) =
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.withRuntimeAdvice
+        (trace.rows[base + k]'(by omega)).runtimeAdvice := by
+  intro k hk
+  have patched := patchHead_runtime
+    (values.drop (((rows.map (·.instruction)).take k).filter (·.adviceValue?.isSome)).length)
+    _ (trace.rows[base + k]'(by omega)).runtimeAdvice (agrees k hk)
+  have byteEq := congrArg JoltInstructionRow.instruction (ordered k hk)
+  rw [patchAdvice_get]
+  have mapEq := List.getElem_map (fun row : JoltInstructionRow => row.instruction)
+    (l := rows) (i := k) (h := by simpa only [List.length_map] using hk)
+  exact (congrArg (patchHead _) mapEq).trans
+    (patched.trans (congrArg (patchHead _) byteEq)).symm
+
+/-- A block that is not a registered inline records, at each VirtualAdvice step,
+the honest tracer's value for that step, from the state the block starts in.
+For example, a DIV block records its quotient. -/
+private theorem segment_agrees_plain {joltInstance : JoltInstance SourceInstruction}
     {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs)
     (base : Nat) (firstBound : base < trace.rows.size)
     (source : SourceInstructionRow SourceInstruction) (rows : List JoltInstructionRow)
@@ -245,13 +348,16 @@ private theorem segment_patched {joltInstance : JoltInstance SourceInstruction}
     (atSource : rowAt joltInstance.program source.address = some source)
     (inside : base + rows.length ≤ trace.rows.size)
     (ordered : ∀ k (hk : k < rows.length),
-      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex] = rows[k]) :
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex] = rows[k])
+    (plain : ∀ key rs1 rs2 rs3, source.instruction ≠ .inline key rs1 rs2 rs3) :
     ∀ k (hk : k < rows.length),
-      (patchAdvice (source.instruction.honestTracerAdvice
-        (trace.rows[base]'firstBound).preState) (rows.map (·.instruction)))[k]'
-            (by rw [patchAdvice_length, List.length_map]; exact hk) =
-      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.withRuntimeAdvice
-        (trace.rows[base + k]'(by omega)).runtimeAdvice := by
+      (trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.withRuntimeAdvice
+        (trace.rows[base + k]'(by omega)).runtimeAdvice).adviceValue? =
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.adviceValue?.map
+        (fun placeholder => ((source.instruction.honestTracerAdvice
+          (trace.rows[base]'firstBound).preState).drop
+          (((rows.map (·.instruction)).take k).filter (·.adviceValue?.isSome)).length).headD
+            placeholder) := by
   have positive : 0 < rows.length := List.length_pos_iff.mpr
     (expand_instruction_nonempty source rows emits)
   have firstAddress : trace.bytecode[(trace.rows[base]'firstBound).rowIndex].address = source.address := by
@@ -261,41 +367,101 @@ private theorem segment_patched {joltInstance : JoltInstance SourceInstruction}
   have instructionAt : joltInstance.program.instructionAt source.address = some source.instruction := by
     simpa only [Rv64ProgramImage.instructionAt, rowAt, Option.map_some] using
       congrArg (Option.map (·.instruction)) atSource
-  have markers : ∀ k (hk : k < rows.length),
-      stepNOfTraceIsStartOfNewExpansion trace.rows (base + k) = (k == 0) := by
-    intro k hk
-    simp only [stepNOfTraceIsStartOfNewExpansion,
-      Array.getElem?_eq_getElem (show base + k < trace.rows.size by omega),
-      Option.map_some, Option.getD_some, ordered k hk,
-      expand_instruction_starts_source source rows emits k hk]
   intro k hk
-  have start : startOfExpansionContainingStepN trace.rows (base + k) = base := by
-    apply segment_start
-    · simpa only [Nat.add_zero, beq_self_eq_true] using markers 0 positive
-    · intro j hj hjk
-      rw [markers j (by omega)]
-      exact beq_eq_false_iff_ne.mpr (by omega)
+  have start := segment_starts trace base source rows emits inside ordered k hk
   have counter := segment_advice_count trace.rows base rows inside ordered k (by omega) start
-  let values := source.instruction.honestTracerAdvice (trace.rows[base]'firstBound).preState
   have honest := trace.advice_from_honest_tracer ⟨base + k, by omega⟩
   change (trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.withRuntimeAdvice
     (trace.rows[base + k]'(by omega)).runtimeAdvice).adviceValue? = _ at honest
-  simp only [honestTracerAdviceAtStepN,
-    Array.getElem?_eq_getElem (show base + k < trace.rows.size by omega), bind, Option.bind,
-    pure, start, Array.getElem?_eq_getElem firstBound, firstAddress, instructionAt,
-    counter] at honest
-  have patched := patchHead_runtime
-    (values.drop (((rows.map (·.instruction)).take k).filter (·.adviceValue?.isSome)).length)
-    _ (trace.rows[base + k]'(by omega)).runtimeAdvice (by
-      cases flag : trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.adviceValue? <;>
-        simpa only [values, List.headD_eq_head?_getD, List.head?_drop, Option.map,
-          flag] using honest)
-  have byteEq := congrArg JoltInstructionRow.instruction (ordered k hk)
-  rw [patchAdvice_get]
-  have mapEq := List.getElem_map (fun row : JoltInstructionRow => row.instruction)
-    (l := rows) (i := k) (h := by simpa only [List.length_map] using hk)
-  exact (congrArg (patchHead _) mapEq).trans
-    (patched.trans (congrArg (patchHead _) byteEq)).symm
+  cases flag : trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.adviceValue? with
+  | none =>
+    simpa only [honestTracerAdviceAtStepN,
+      Array.getElem?_eq_getElem (show base + k < trace.rows.size by omega), bind, Option.bind,
+      flag, Option.map_none] using honest
+  | some placeholder =>
+    simp only [honestTracerAdviceAtStepN,
+      Array.getElem?_eq_getElem (show base + k < trace.rows.size by omega), bind, Option.bind,
+      pure, flag, start, Array.getElem?_eq_getElem firstBound, firstAddress, instructionAt,
+      counter] at honest
+    simpa only [Option.map_some, List.headD_eq_head?_getD, List.head?_drop] using honest
+
+/-- The advice words a registered inline's block takes: the call's VirtualAdvice
+steps take the inline advice words in order, from the first one no earlier inline
+call used. A word missing from `inline_advice` reads as 0, as in
+`honestTracerAdviceAtStepN`. There is one word per row of the expansion, which is at
+least one per VirtualAdvice row. For example, a SECP256K1_MULQ call after a first
+SECP256K1_MULQ call, which has 4 VirtualAdvice rows, takes words 4, 5, and so on. -/
+def inlineCallAdvice (program : Rv64ProgramImage SourceInstruction)
+    (inputs : JoltPrivateInputs) {bytecode : Array JoltInstructionRow}
+    (traceRows : Array (TraceRow bytecode)) (base length : Nat) : List (BitVec 64) :=
+  (List.range length).map fun j =>
+    inputs.inline_advice[inlineAdviceStepsBeforeStepN program traceRows base + j]?.getD 0
+
+/-- A registered inline's block records, at each VirtualAdvice step, the next word of
+the private input `inline_advice` (`inlineCallAdvice`). For example, the first
+VirtualAdvice step of the first SECP256K1_MULQ call records word 0. -/
+private theorem segment_agrees_inline {joltInstance : JoltInstance SourceInstruction}
+    {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs)
+    (base : Nat) (firstBound : base < trace.rows.size)
+    (source : SourceInstructionRow SourceInstruction) (rows : List JoltInstructionRow)
+    (emits : expand_instruction source = some rows)
+    (atSource : rowAt joltInstance.program source.address = some source)
+    (inside : base + rows.length ≤ trace.rows.size)
+    (ordered : ∀ k (hk : k < rows.length),
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex] = rows[k])
+    (key : JoltISA.Inlines.InlineKey) (rs1 rs2 rs3 : regidx)
+    (inline : source.instruction = .inline key rs1 rs2 rs3) :
+    ∀ k (hk : k < rows.length),
+      (trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.withRuntimeAdvice
+        (trace.rows[base + k]'(by omega)).runtimeAdvice).adviceValue? =
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.adviceValue?.map
+        (fun placeholder => ((inlineCallAdvice joltInstance.program inputs trace.rows base
+          rows.length).drop
+          (((rows.map (·.instruction)).take k).filter (·.adviceValue?.isSome)).length).headD
+            placeholder) := by
+  have positive : 0 < rows.length := List.length_pos_iff.mpr
+    (expand_instruction_nonempty source rows emits)
+  have firstAddress : trace.bytecode[(trace.rows[base]'firstBound).rowIndex].address = source.address := by
+    have eq := congrArg JoltInstructionRow.address (ordered 0 positive)
+    simpa only [Nat.add_zero, expand_instruction_address source rows emits _
+      (List.getElem_mem positive)] using eq
+  have instructionAt : joltInstance.program.instructionAt source.address = some source.instruction := by
+    simpa only [Rv64ProgramImage.instructionAt, rowAt, Option.map_some] using
+      congrArg (Option.map (·.instruction)) atSource
+  have inlineAt : joltInstance.program.instructionAt
+      trace.bytecode[(trace.rows[base]'firstBound).rowIndex].address =
+        some (.inline key rs1 rs2 rs3) := by
+    rw [firstAddress, instructionAt, inline]
+  intro k hk
+  have start := segment_starts trace base source rows emits inside ordered k hk
+  have counter := segment_advice_count trace.rows base rows inside ordered k (by omega) start
+  have inlineCount := segment_inline_count joltInstance.program trace.rows base firstBound
+    key rs1 rs2 rs3 inlineAt k
+    (fun j hj => segment_starts trace base source rows emits inside ordered j (by omega))
+  have priorAdvice : adviceStepsBeforeStepN trace.rows (base + k) =
+      ((List.range' base k).filter (stepNOfTraceIsAdvice trace.rows)).length := by
+    unfold adviceStepsBeforeStepN
+    simp only [start, Nat.add_sub_cancel_left]
+  rw [← priorAdvice, counter] at inlineCount
+  have short : (((rows.map (·.instruction)).take k).filter (·.adviceValue?.isSome)).length <
+      rows.length :=
+    Nat.lt_of_le_of_lt ((List.length_filter_le _ _).trans (by simp)) hk
+  have honest := trace.advice_from_honest_tracer ⟨base + k, by omega⟩
+  change (trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.withRuntimeAdvice
+    (trace.rows[base + k]'(by omega)).runtimeAdvice).adviceValue? = _ at honest
+  cases flag : trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.adviceValue? with
+  | none =>
+    simpa only [honestTracerAdviceAtStepN,
+      Array.getElem?_eq_getElem (show base + k < trace.rows.size by omega), bind, Option.bind,
+      flag, Option.map_none] using honest
+  | some placeholder =>
+    simp only [honestTracerAdviceAtStepN,
+      Array.getElem?_eq_getElem (show base + k < trace.rows.size by omega), bind, Option.bind,
+      pure, flag, start, Array.getElem?_eq_getElem firstBound, firstAddress, instructionAt,
+      inline, inlineCount] at honest
+    simpa only [Option.map_some, List.headD_eq_head?_getD, List.head?_drop, inlineCallAdvice,
+      List.getElem?_map, List.getElem?_range short, Option.map_some, Option.getD_some]
+      using honest
 
 private theorem exec_seq (instructions : List JoltISA.Instr) (states : Nat → SailJoltState)
     (runs : ∀ k (hk : k < instructions.length),
@@ -320,20 +486,21 @@ private theorem segment_exec {joltInstance : JoltInstance SourceInstruction}
     (base : Nat) (firstBound : base < trace.rows.size)
     (source : SourceInstructionRow SourceInstruction) (rows : List JoltInstructionRow)
     (emits : expand_instruction source = some rows)
-    (atSource : rowAt joltInstance.program source.address = some source)
     (inside : base + rows.length ≤ trace.rows.size)
     (ordered : ∀ k (hk : k < rows.length),
       trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex] = rows[k])
-    (lastBound : base + rows.length - 1 < trace.rows.size) :
+    (lastBound : base + rows.length - 1 < trace.rows.size) (values : List (BitVec 64))
+    (patched : ∀ k (hk : k < rows.length),
+      (patchAdvice values (rows.map (·.instruction)))[k]'
+            (by rw [patchAdvice_length, List.length_map]; exact hk) =
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex].instruction.withRuntimeAdvice
+        (trace.rows[base + k]'(by omega)).runtimeAdvice) :
     JoltISA.execProgram (JoltISA.Program.seq
-      (patchAdvice (source.instruction.honestTracerAdvice (trace.rows[base]'firstBound).preState)
-        (rows.map (·.instruction)))) (trace.rows[base]'firstBound).preState =
+      (patchAdvice values (rows.map (·.instruction)))) (trace.rows[base]'firstBound).preState =
       .ok RETIRE_SUCCESS (trace.rows[base + rows.length - 1]'lastBound).postState := by
   have positive : 0 < rows.length := List.length_pos_iff.mpr
     (expand_instruction_nonempty source rows emits)
-  let instructions := patchAdvice
-    (source.instruction.honestTracerAdvice (trace.rows[base]'firstBound).preState)
-    (rows.map (·.instruction))
+  let instructions := patchAdvice values (rows.map (·.instruction))
   have sizes : instructions.length = rows.length := by
     simp only [instructions, patchAdvice_length, List.length_map]
   let states (k : Nat) : SailJoltState := if h : k < rows.length then
@@ -344,7 +511,7 @@ private theorem segment_exec {joltInstance : JoltInstance SourceInstruction}
     intro k hk
     have kr : k < rows.length := by omega
     have currentBound : base + k < trace.rows.size := by omega
-    have instructionEq := segment_patched trace base firstBound source rows emits atSource inside ordered k kr
+    have instructionEq := patched k kr
     change instructions[k] = _ at instructionEq
     have stateAt : states k = (trace.rows[base + k]'currentBound).preState := by
       simp only [states, dite_eq_left kr]
@@ -385,6 +552,54 @@ private structure TracedBlock (trace : Trace) (program : Rv64ProgramImage Source
   finishes : trace.bytecode[(trace.rows[stop - 1]'(by omega)).rowIndex].virtual_sequence_remaining.getD 0 = 0
   address : trace.bytecode[(trace.rows[stop - 1]'(by omega)).rowIndex].address = block.row.address
 
+/-- **An inline call in an honest trace.** If a source expansion starts at step `base` and
+its source row is a registered inline, then that row's expansion rows, patched in order with
+the call's inline advice words (`inlineCallAdvice`), run from the state before step `base`
+to the state after the call's last step.
+For example, a SECP256K1_MULQ call that starts at step 100 runs its 186 rows, with its four
+VirtualAdvice rows taking the next four words of `inline_advice`, from the state before step
+100 to the state after step 285. -/
+theorem HonestTrace.inline_call_exec {joltInstance : JoltInstance SourceInstruction}
+    {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs)
+    (base : Nat) (hbase : base < trace.rows.size)
+    (starts : trace.bytecode[(trace.rows[base]'hbase).rowIndex].starts_source = true) :
+    ∃ source rows, rowAt joltInstance.program source.address = some source ∧
+      expand_instruction source = some rows ∧
+      trace.bytecode[(trace.rows[base]'hbase).rowIndex].address = source.address ∧
+      ∃ lastBound : base + rows.length - 1 < trace.rows.size,
+        ∀ key rs1 rs2 rs3, source.instruction = .inline key rs1 rs2 rs3 →
+          JoltISA.execProgram (JoltISA.Program.seq
+            (patchAdvice (inlineCallAdvice joltInstance.program inputs trace.rows base rows.length)
+              (rows.map (·.instruction)))) (trace.rows[base]'hbase).preState =
+            .ok RETIRE_SUCCESS (trace.rows[base + rows.length - 1]'lastBound).postState := by
+  have accepted := accepted_pc_map_ok joltInstance trace.bytecode trace.expands trace.accepted
+  obtain ⟨source, rows, before, after, atSource, emits, splitRows, position⟩ :=
+    source_segment joltInstance.program trace.bytecode trace.expands accepted
+      (trace.rows[base]'hbase).rowIndex starts
+  have positive : 0 < rows.length := List.length_pos_iff.mpr
+    (expand_instruction_nonempty source rows emits)
+  have orderedIndices := trace_segment trace base hbase emits splitRows position
+  have inside : base + rows.length ≤ trace.rows.size := by
+    obtain ⟨bound, _⟩ := orderedIndices (rows.length - 1) (by omega)
+    omega
+  have ordered : ∀ k (hk : k < rows.length),
+      trace.bytecode[(trace.rows[base + k]'(by omega)).rowIndex] = rows[k] := by
+    intro k hk
+    obtain ⟨bound, atK⟩ := orderedIndices k hk
+    exact segment_get splitRows k hk _ atK
+  have firstAddress : trace.bytecode[(trace.rows[base]'hbase).rowIndex].address = source.address := by
+    have eq := congrArg JoltInstructionRow.address (ordered 0 positive)
+    simpa only [Nat.add_zero, expand_instruction_address source rows emits _
+      (List.getElem_mem positive)] using eq
+  have lastBound : base + rows.length - 1 < trace.rows.size := by omega
+  refine ⟨source, rows, atSource, emits, firstAddress, lastBound, ?_⟩
+  intro key rs1 rs2 rs3 isInline
+  let values := inlineCallAdvice joltInstance.program inputs trace.rows base rows.length
+  exact segment_exec trace base hbase source rows emits inside ordered lastBound
+    values (segment_patched trace base rows inside ordered values
+      (segment_agrees_inline trace base hbase source rows emits atSource inside ordered
+        key rs1 rs2 rs3 isInline))
+
 private theorem block_at {joltInstance : JoltInstance SourceInstruction}
     {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs)
     (base : Nat) (hbase : base < trace.rows.size) (pre : SailJoltState)
@@ -423,11 +638,28 @@ private theorem block_at {joltInstance : JoltInstance SourceInstruction}
   have runs : block.Runs joltInstance.program := by
     refine ⟨atSource, ?_, ?_⟩
     · simpa only [block, firstAddress] using continues
-    · refine ⟨patchAdvice (source.instruction.honestTracerAdvice
-        (trace.rows[base]'hbase).preState) (rows.map (·.instruction)), ?_, ?_⟩
-      · simp only [blockInstrs, block, emits, Option.map_some, startEq]
-      · rw [startEq]
-        exact segment_exec trace base hbase source rows emits atSource inside ordered lastBound
+    · by_cases inline : ∃ key rs1 rs2 rs3, source.instruction = .inline key rs1 rs2 rs3
+      · obtain ⟨key, rs1, rs2, rs3, isInline⟩ := inline
+        let values := inlineCallAdvice joltInstance.program inputs trace.rows base rows.length
+        refine ⟨values, patchAdvice values (rows.map (·.instruction)),
+          Or.inl ⟨key, rs1, rs2, rs3, isInline⟩, ?_, ?_⟩
+        · simp only [block, emits, Option.map_some]
+        · rw [startEq]
+          exact segment_exec trace base hbase source rows emits inside ordered lastBound
+            values (segment_patched trace base rows inside ordered values
+              (segment_agrees_inline trace base hbase source rows emits atSource inside ordered
+                key rs1 rs2 rs3 isInline))
+      · have plain : ∀ key rs1 rs2 rs3, source.instruction ≠ .inline key rs1 rs2 rs3 :=
+          fun key rs1 rs2 rs3 isInline => inline ⟨key, rs1, rs2, rs3, isInline⟩
+        let values := source.instruction.honestTracerAdvice (trace.rows[base]'hbase).preState
+        refine ⟨values, patchAdvice values (rows.map (·.instruction)), Or.inr ?_, ?_, ?_⟩
+        · simp only [values, block, startEq]
+        · simp only [block, emits, Option.map_some]
+        · rw [startEq]
+          exact segment_exec trace base hbase source rows emits inside ordered lastBound
+            values (segment_patched trace base rows inside ordered values
+              (segment_agrees_plain trace base hbase source rows emits atSource inside ordered
+                plain))
   have lastInside : rows.length - 1 < rows.length := by omega
   have lastIndex : base + (rows.length - 1) = base + rows.length - 1 := by omega
   refine ⟨⟨block, base + rows.length, by omega, inside, rfl, runs, ?_, rfl, ?_, ?_⟩⟩

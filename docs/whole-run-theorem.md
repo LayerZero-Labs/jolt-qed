@@ -30,9 +30,10 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
-    {params : WitnessParams} (givenInputs : JoltPrivateInputs)
+    (adviceBlockFits : joltInstance.UntrustedAdviceBlockFits)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
     (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap) :
@@ -143,7 +144,11 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 - `JoltField F`: the field's characteristic is above `2^128 - 2^64`. Both of Jolt's fields satisfy this: BN254 (the default Dory build) and `p = 2^128 - 1780711455` (the `akita` build, Jolt's production field since a16z/jolt#2403); `JoltField.akita` and `JoltField.bn254` (`Soundness/FieldModuli.lean`) prove it, including each modulus's primality, by Pratt certificates checked in Lean. Below characteristic `2^128` the constraints include Akita's canonical-address check (63), which Jolt's `akita` build enforces; it is what makes `2^128 - 2^64` enough.
 - `SoundnessAssumptions.ramRegionFits`: the whole maximum padded RAM region lies below `2^64`. The comment in `Assumptions.lean` records it as still to be confirmed with a16z.
-- `TemporaryRestrictions`: six restrictions that exclude programs exposing reported or suspected Jolt bugs. Jolt's verifier makes none of these checks.
+- `TemporaryRestrictions`: six restrictions that exclude programs exposing reported or suspected Jolt bugs.
+  Jolt's verifier makes none of these checks.
+- `UntrustedAdviceBlockFits`: a seventh temporary restriction, passed as the separate premise `adviceBlockFits` because soundness for advice given as bytes (`JoltInstance.soundness_onBytes`) does not need it.
+  It excludes a configured maximum untrusted-advice size that is not a multiple of 8, where Jolt's verifier lets the prover commit block bytes no tracer run can hold.
+  Jolt's verifier does not check it.
 
 | Restriction | What it excludes |
 | --- | --- |
@@ -156,7 +161,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 Four restrictions (`tracerAddressChecks`, `hostCallsSucceed`, `terminationThenStall` and `panicStoresOne`) constrain the next row the program attempts after every prefix of a relaxed execution, for every private input.
 A relaxed execution is one in which every advice read gets an arbitrary answer; the attempted row need not succeed.
-`noMaxLengthTrace` constrains every completed relaxed trace, and `claimsNoPanic` constrains only the instance.
+`noMaxLengthTrace` constrains every completed relaxed trace, and `claimsNoPanic` and `adviceBlockFits` constrain only the instance.
 The deviation premises in `BlockConforms` are stated differently, as the next section explains.
 
 ## Conformance is a premise on a trace the verifier does not see

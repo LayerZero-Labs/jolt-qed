@@ -108,6 +108,23 @@ def JoltInstance.NoMaxLengthTrace
     (trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs),
     trace.rows.size ≠ 2 ^ Nat.log2 joltInstance.max_padded_trace_length.toNat
 
+/-- Temporary restriction (FIXME) of the soundness theorem for committed advice words.
+The untrusted-advice block Jolt's verifier checks holds no more bytes than the
+configured maximum the tracer enforces. Equivalently, that maximum is a multiple
+of 8: the layout rounds it up to a multiple of 8, and the block holds the rounded
+size. Otherwise Jolt's verifier lets the prover commit to the whole rounded block,
+and the tracer accepts only the configured number of bytes. For example, with a
+maximum of 12 the verifier's block has 2 words, and the prover may set the top 4
+bytes of the second word, which no tracer run can hold. Jolt's verifier does not
+check it. It is a separate premise, not a field of `TemporaryRestrictions`, because
+soundness for advice given as bytes (`JoltInstance.soundness_onBytes`) does not need
+it. Remove when Jolt's tracer or `MemoryLayout::new` checks the rounded size. -/
+def JoltInstance.UntrustedAdviceBlockFits {Source : Type} (joltInstance : JoltInstance Source) :
+    Prop :=
+  ∀ layout : MemoryLayout, joltInstance.memory_layout = some layout →
+    layout.max_untrusted_advice_size.toNat ≤
+      joltInstance.memory_config.max_untrusted_advice_size.toNat
+
 -- Temporary program restrictions. Each excludes programs that expose reported
 -- or suspected Jolt bugs. None is a check Jolt's verifier makes. Remove each
 -- once Jolt and the model are fixed and the unrestricted proof is established.

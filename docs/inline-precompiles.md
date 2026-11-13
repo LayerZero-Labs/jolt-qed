@@ -233,6 +233,8 @@ Jolt @ pin ──► driver (Rust, scripts/expansion-parity)
   The SDK never emits such an encoding, and the exclusion follows the precedent of `SC.W` and `SC.D`, excluded with Ari's approval on 2026-10-10.
   a16z/jolt#2414 makes Jolt reject the same encodings at expansion, for every registered inline whose rows read `rd` before writing it (19 of the 27), and records the rejection in Jolt's parity fixture (decision D7).
   Once it merges, the registration check and Jolt's expander reject the same set, and T2's comparison of the combined pipelines checks that they agree.
+  `SourceInstruction.expand` returns `none` for the same encodings, so the model's expansion agrees with the registration check (I1b).
+  For those keys `inline_rows_ok.lean` states only the length of the `rd = x0` rows, which read the unwritten `vr40` and fail `inlineRowOk`.
 
 ### 5.3 Inline advice is a private input, like the advice tape
 
@@ -348,11 +350,11 @@ def honestTracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
 ```
 
 `HonestTrace.advice_from_honest_tracer` passes `privateInputs` to `honestTracerAdviceAtStepN`.
-The text of `InLanguage` and `JoltInstance.soundness` does not change.
+I1b does not change the text of `InLanguage` or `JoltInstance.soundness`.
+(T5, `t5/advice-field`, changes `JoltInstance.soundness` separately: it takes the committed untrusted-advice words in place of private inputs and adds the premise `adviceBlockFits`.)
 Every other step keeps today's rule, and programs without inline advice rows are unaffected.
 
-The proof adds the facts below.
-Their exact homes in Layers 5 to 7 are decided in I1b.
+The proof adds the facts below, in `Soundness/Layer5/InlineAdvice.lean`.
 
 ```lean
 -- The witness's inline advice words, in trace order.
@@ -362,45 +364,76 @@ def collectInlineAdvice (program : Rv64ProgramImage SourceInstruction)
     if stepNOfTraceIsInlineAdvice program rows n then rows[n]?.bind (·.someTracerAdvice?)
     else none).toArray
 
--- The constraints do not read `inline_advice`.
-theorem allConstraints_inline_advice (words : Array (BitVec 64)) :
-    AllConstraints joltInstance { privateInputs with inline_advice := words } witness ↔
-      AllConstraints joltInstance privateInputs witness
+-- Every step that is not an inline advice step records its built-in advice.
+def BuiltinAdviceHonest (program : Rv64ProgramImage SourceInstruction)
+    (rows : Array (TraceRow bytecode)) : Prop :=
+  ∀ n : Fin rows.size, stepNOfTraceIsInlineAdvice program rows n = false →
+    rows[n].someTracerAdvice? = builtinAdviceAtStepN program rows n
 
--- With the collected words in the field, every inline advice step is honest.
-theorem collectInlineAdvice_honest (rows : Array (TraceRow bytecode)) (n : Fin rows.size)
-    (inline : stepNOfTraceIsInlineAdvice program rows n) :
-    rows[n].someTracerAdvice? =
+-- The constraints do not read `inline_advice` (`advice_inputs.lean`): a context for some
+-- private inputs is one for the same inputs with other inline advice words, with the same
+-- bytecode, initial RAM, I/O and entry, so the same equations hold.
+-- `AllConstraints` takes the committed untrusted-advice words `untrustedAdvice : Nat → F`
+-- instead of private inputs, so it cannot read `inline_advice` at all, and the soundness
+-- proof reaches the byte relation `AllConstraintsOnBytes` through `onBytes_of_allConstraints`.
+def ConstraintContext.withInlineAdvice (context : ConstraintContext joltInstance privateInputs params)
+    (words : Array (BitVec 64)) :
+    ConstraintContext joltInstance { privateInputs with inline_advice := words } params
+
+-- With the collected words in the field, every step is honest.
+theorem honest_of_builtin (program : Rv64ProgramImage SourceInstruction)
+    (privateInputs : JoltPrivateInputs) (rows : Array (TraceRow bytecode))
+    (builtin : BuiltinAdviceHonest program rows) :
+    ∀ n : Fin rows.size, rows[n].someTracerAdvice? =
       honestTracerAdviceAtStepN program
         { privateInputs with inline_advice := collectInlineAdvice program rows } rows n
 ```
 
-The proof fixes the field before Layer 6 starts, not after.
-Layer 6 already needs honest advice while it extends a prefix: `BoundaryState.honestAdvice` (`Layer6/PrefixState.lean:39-41`) and the `NextStep.honestRuntimeAdvice` certificate (`Layer5/MemoryAccessRestriction.lean:35-37`) that memory-row execution consumes (`Layer6/MemoryRowExecution.lean:18, 55, 91`).
-The proof therefore collects the inline advice words from the witness's cycles, in cycle order, and runs Layers 5 to 7 with private inputs whose `inline_advice` is that array.
-Two further facts make each prefix honest under the fixed array:
+`builtinAdviceAtStepN` is the `| _ =>` branch of `honestTracerAdviceAtStepN` above, and `honestTracerAdviceAtStepN_eq` splits the honest rule into the two cases.
+
+The proof does not fix the field in advance.
+Layers 5 to 7 rebuild the run from the witness while tracking only the advice steps that are not an inline's (`BuiltinAdviceHonest`, `Layer5/InlineAdvice.lean`); an inline's advice step may record any word.
+`NextStep.honestRuntimeAdvice` (`Layer5/MemoryAccessRestriction.lean`) and `BoundaryState.honestAdvice` (`Layer6/PrefixState.lean`) carry this weaker invariant, and `BuiltinAdviceHonest.push` extends it by one row.
+Inline expansions take the row-by-row path of Layer 6 (`row_step`, `Layer6/RowStep.lean`): an inline's VirtualAdvice row is an inline advice step (`inline_expansion_step_flag`), so it adds nothing to the invariant.
+The division path (`Layer6/Division*.lean`) applies only to expansions that are not inlines.
+At the end, `soundness_reconstruct_trace` (`Soundness/TopLevel.lean`) reads the words off the run's inline advice steps (`collectInlineAdvice`), and `honest_of_builtin` shows the run is honest for private inputs whose `inline_advice` holds them.
+The run carries over to those inputs unchanged (`UntrustedAnswerRun.withInlineAdvice`), because initialization does not read the field, and neither do the constraints.
+So the reconstructed trace is a trace for `{ privateInputs with inline_advice := words }`, which is what `InLanguage` asks for.
+
+Two facts make the invariant local to a prefix (`*_extract` in `Layer5/InlineAdvice.lean`):
 
 - `honestTracerAdviceAtStepN` at step `n` depends only on rows `0..n` and the field;
-- when Layer 6 extends a prefix by one row, the inline advice steps of the prefix keep their indices, and the new row's index is the number of inline advice steps before it, which equals its position in the witness's collection.
+- when Layer 6 extends a prefix by one row, the inline advice steps of the prefix keep their indices.
 
-Layer 7's `rebuiltInputs` replaces only `advice_tape` and copies the field unchanged. Its replay changes the rows' pre- and post-states (`Layer7/TapeRebuild.lean:947-955`) but keeps their order, bytecode indices and recorded runtime advice, which keeps every index.
+Layer 7's `rebuiltInputs` replaces only `advice_tape` and copies the field unchanged. Its replay changes the rows' pre- and post-states (`Layer7/TapeRebuild.lean`) but keeps their order, bytecode indices and recorded runtime advice, which keeps every index.
+
+The whole-run proof (`WholeRun/`) changes in one place.
+`Block.Runs.executes` (`WholeRun/Basic.lean`) now says that a block's rows, patched with some advice words, run from the block's start to its end; for a block that is not an inline, the words are `honestTracerAdvice` of the start state, as before.
+For an inline block, the words are the call's words of `inline_advice` (`inlineCallAdvice`, `WholeRun/Blocks.lean`).
+Every whole-run lemma about a block that is not an inline reads the old statement back through `Block.Runs.executes_plain`.
 
 `JoltInstance.completeness` and `sail_reproduces` take an existing honest trace (`Completeness/completeness.lean:83-99`, `WholeRun/Top.lean:276-289`).
-Neither needs the trace's inline advice to equal Jolt's `build_advice` words, and neither is restricted to it: both must hold for every passing inline advice, including the non-canonical outputs this design admits.
-A separate result says that Jolt's advice generator gives a passing run: `rows_jolt_advice_complete` per call (section 5.4), lifted to a whole trace once I2 has proved the per-call lemmas (I1b states the lift with `sorry` until then).
-It shows that Jolt's prover can produce a trace in the language; it does not restrict the language.
+Neither needs the trace's inline advice to equal Jolt's `build_advice` words.
+Completeness holds for every passing inline advice, including the non-canonical outputs this design admits.
+`sail_reproduces` keeps its restriction to RISC-V prefixes: it requires `BlockConforms` on every block of the reproduced prefix, and `BlockConforms.riscv` (`WholeRun/Top.lean:88`) excludes inline calls, so it says nothing about a prefix that contains an inline call.
+A separate result says that Jolt's advice generator gives a passing run: `rows_jolt_advice_complete` per call (section 5.4), lifted to a call inside an honest trace in `WholeRun/InlineCalls.lean`.
+For each of the seven secp256k1 inlines, `HonestTrace.secp256k1*_jolt_advice_complete` says: if a call starts at step `base` (its `rd` is not `x0`, since `SourceInstruction.expand` rejects that encoding), the state before it meets the call's obligations, and `inline_advice` holds Jolt's words for the call at the call's position, then the state after the call's last step meets the inline's specification and stores the canonical result.
+DIV assumes, as I2 does, that the divisor is nonzero modulo the modulus; since `p` and `n` are prime (`Secp256k1/Prime.lean`), such a divisor has an inverse.
+These lifts identify the result of a call inside an honest trace that is already given and whose `inline_advice` holds Jolt's words for that call.
+They do not construct a whole trace, prove its stopping, configuration or output conditions, or show that replacing a call's words in an existing trace preserves the later steps.
+They do not restrict the language.
 
 The step relation of an inline call is `InlineSpec c`, a relation between states, not a function.
 For the hash inlines it is the graph of a function.
 For the field operations it is the integer relation of section 3 with a bounded quotient witness.
 For `GLVR_ADV` it allows any six words at the output buffer.
 
-The change touches the contracts of Layers 5a, 6 and 7, which already treat the tape this way; I1b lists and adapts each.
+The change touches the contracts of Layers 5a, 6 and 7, which already treat the tape this way; the paragraphs above list how I1b adapts each.
 DIV and REM keep their present treatment.
 A later cleanup can move them to the private input and retire part of the 3,400-line honest-advice reconstruction in `Layer6/Division*.lean`.
 
 This design changes `JoltPrivateInputs` and `honestTracerAdviceAtStepN`, which define the language.
-`AGENTS.md` requires Ari's approval for that, and I1b waits for it (decision D2).
+Quang approved the design on 2026-11-11 (decision D2), and I1b implements it. `AGENTS.md` still requires Ari's review of the change.
 
 ### 5.4 Per-inline theorems
 
@@ -596,7 +629,7 @@ Order and parallelism:
   The alternatives were to transcribe Jolt's advice functions into the honest rule, which keeps today's statement but leaves it false for guests that output an inline's stored words, or to leave the secp256k1 inlines out.
   The chosen design keeps the theorem's shape, keeps the meaning of every existing theorem, and states what Jolt's verifier enforces.
   It widens the honest run beyond what Jolt's prover code computes.
-  It changes definitions behind `InLanguage`, and Ari's approval is required before I1b.
+  It changes definitions behind `InLanguage`. Quang approved it on 2026-11-11; `AGENTS.md` still requires Ari's review.
 - **D3. Specifications** come from EthLib, copied with provenance (section 5.6).
 - **D4. Driver location:** `scripts/expansion-parity/`, next to difftest.
   A stable JSON export from Jolt (J5) can come later.

@@ -71,7 +71,8 @@ structure UntrustedAnswerTrace (joltInstance : JoltInstance SourceInstruction)
   -- At every step of the trace, the advice value recorded (`someTracerAdvice?`) is
   -- the value the honest tracer gives it (`honestTracerAdviceAtStepN`).
   advice_from_honest_tracer : ∀ n : Fin rows.size,
-    rows[n].someTracerAdvice? = honestTracerAdviceAtStepN joltInstance.program rows n
+    rows[n].someTracerAdvice? =
+      honestTracerAdviceAtStepN joltInstance.program privateInputs rows n
   -- The tracer stops at a self-jump only when re-execution jumps there again.
   -- See : a16z/jolt PR #2109, merge commit 0249591a, `Cpu::tick`.
   stops : ∀ last ∈ rows.back?, last.StableStall

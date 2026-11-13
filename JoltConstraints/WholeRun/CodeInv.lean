@@ -840,7 +840,7 @@ private theorem block_mem {program : Rv64ProgramImage SourceInstruction} {b : Bl
     (hinline : ∀ key rs1 rs2 rd, b.row.instruction ≠ .inline key rs1 rs2 rd) (a : Nat)
     (ha : ∀ base, b.row.instruction.storeBase b.start = some base → ¬ InDword base a) :
     b.post.sail.mem.get? a = b.pre.sail.mem.get? a := by
-  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
+  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes_plain hinline
   suffices h : b.post.sail.mem.get? a = b.start.sail.mem.get? a from h
   cases hi : b.row.instruction with
   | riscv i =>

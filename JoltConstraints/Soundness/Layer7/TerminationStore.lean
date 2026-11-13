@@ -3,6 +3,7 @@ import JoltConstraints.Soundness.Layer7.LastJump
 import JoltConstraints.Soundness.Layer5.TerminationRestriction
 import JoltConstraints.Soundness.Layer5.PanicRestriction
 import JoltConstraints.Soundness.Layer5.MemoryRows
+import JoltConstraints.Soundness.Layer5.InlineAdvice
 import JoltConstraints.Soundness.Layer3.Address
 import JoltConstraints.Completeness.Helpers.IOSetupFrame
 
@@ -158,88 +159,6 @@ theorem UntrustedAnswerRun.truncate_storesTerminationAt
   change storeTouches TouchesTermination (run.rows.extract 0 n)[j]
   rw [hrow]
   exact (storesTerminationAt_iff run i).mp stored
-
-/-- Reading row `k` before the cut gives the same optional row in the prefix.
-For example, row 1 is unchanged by a cut after row 3. -/
-private theorem extract_getElem?_before {α : Type} (rows : Array α)
-    (n k : Nat) (within : n ≤ rows.size) (before : k < n) :
-    (rows.extract 0 n)[k]? = rows[k]? := by
-  simp only [Array.getElem?_extract, Nat.min_eq_left within, Nat.sub_zero,
-    Nat.zero_add, if_pos before]
-
-/-- The flag that row `k` starts an expansion is unchanged before a cut.
-For example, an ECALL expansion start at row 2 remains a start after row 3. -/
-private theorem stepNOfTraceIsStartOfNewExpansion_extract
-    {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode))
-    (n k : Nat) (within : n ≤ rows.size) (before : k < n) :
-    stepNOfTraceIsStartOfNewExpansion (rows.extract 0 n) k =
-      stepNOfTraceIsStartOfNewExpansion rows k := by
-  simp only [stepNOfTraceIsStartOfNewExpansion,
-    extract_getElem?_before rows n k within before]
-
-/-- The expansion containing row `k` begins at the same row in a prefix.
-For example, the start of a DIV expansion at row 2 remains row 2 after a later cut. -/
-private theorem startOfExpansionContainingStepN_extract
-    {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode))
-    (n k : Nat) (within : n ≤ rows.size) (before : k < n) :
-    startOfExpansionContainingStepN (rows.extract 0 n) k =
-      startOfExpansionContainingStepN rows k := by
-  induction k with
-  | zero => rfl
-  | succ k ih =>
-      simp only [startOfExpansionContainingStepN,
-        stepNOfTraceIsStartOfNewExpansion_extract rows n (k + 1) within before]
-      by_cases h : stepNOfTraceIsStartOfNewExpansion rows (k + 1)
-      · simp [h]
-      · simp [h, ih (by omega)]
-
-/-- The VirtualAdvice flag at row `k` is unchanged before a cut.
-For example, row 2 remains an advice row in a prefix ending after row 3. -/
-private theorem stepNOfTraceIsAdvice_extract
-    {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode))
-    (n k : Nat) (within : n ≤ rows.size) (before : k < n) :
-    stepNOfTraceIsAdvice (rows.extract 0 n) k = stepNOfTraceIsAdvice rows k := by
-  simp only [stepNOfTraceIsAdvice, extract_getElem?_before rows n k within before]
-
-/-- The number of earlier advice rows in an expansion is unchanged by a later cut.
-For example, a DIV advice row still sees the same earlier advice count. -/
-private theorem adviceStepsBeforeStepN_extract
-    {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode))
-    (n i : Nat) (within : n ≤ rows.size) (earlier : i < n) :
-    adviceStepsBeforeStepN (rows.extract 0 n) i = adviceStepsBeforeStepN rows i := by
-  simp only [adviceStepsBeforeStepN,
-    startOfExpansionContainingStepN_extract rows n i within earlier]
-  congr 1
-  apply List.filter_congr
-  intro k hk
-  have hk' : k < i := by
-    rw [List.mem_range'] at hk
-    obtain ⟨j, hj, rfl⟩ := hk
-    omega
-  exact stepNOfTraceIsAdvice_extract rows n k within (by omega)
-
-/-- Honest tracer advice at row `i` depends only on rows through `i`.
-For example, truncating a five-row DIV trace after row 3 preserves row 2's advice. -/
-theorem honestTracerAdviceAtStepN_extract
-    (program : Rv64ProgramImage SourceInstruction)
-    {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode))
-    (n i : Nat) (within : n ≤ rows.size) (earlier : i < n) :
-    honestTracerAdviceAtStepN program (rows.extract 0 n) i =
-      honestTracerAdviceAtStepN program rows i := by
-  simp only [honestTracerAdviceAtStepN,
-    extract_getElem?_before rows n i within earlier,
-    startOfExpansionContainingStepN_extract rows n i within earlier,
-    adviceStepsBeforeStepN_extract rows n i within earlier]
-  have hstart : startOfExpansionContainingStepN rows i ≤ i := by
-    induction i with
-    | zero => simp [startOfExpansionContainingStepN]
-    | succ i ih =>
-        simp only [startOfExpansionContainingStepN]
-        split
-        · omega
-        · omega
-  rw [extract_getElem?_before rows n (startOfExpansionContainingStepN rows i)
-    within (by omega)]
 
 /-- Each retained row uses the layout fixed by the emulator's initial device.
 For example, an SD at row 3 interprets the termination region using the same
@@ -834,40 +753,6 @@ theorem soundness_termination_store_exists
       context equations run bytecodeEq represented address atTermination
       cycle inRun effect⟩
 
-/-- A truncated run keeps the original honest runtime advice on every retained
-row. For example, cutting after row 3 leaves row 2's advice unchanged. -/
-private theorem truncate_honest_runtime_advice
-    (joltInstance : JoltInstance SourceInstruction)
-    (privateInputs : JoltPrivateInputs)
-    (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
-    (advice : ∀ n : Fin run.rows.size,
-      run.rows[n].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program run.rows n)
-    (i : Fin run.rows.size) :
-    ∀ m : Fin (run.truncate i.val (Nat.le_of_lt i.isLt)).rows.size,
-      (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[m].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program
-          (run.truncate i.val (Nat.le_of_lt i.isLt)).rows m := by
-  intro m
-  have hm : m.val < i.val := by
-    have hs := run.truncate_rows_size i.val (Nat.le_of_lt i.isLt)
-    have hlt : m.val < (run.rows.extract 0 i.val).size := m.isLt
-    omega
-  have hm' : m.val < run.rows.size := by omega
-  have hrow : (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[m] =
-      run.rows[m.val]'hm' := by
-    have hlt : m.val < (run.rows.extract 0 i.val).size := m.isLt
-    change (run.rows.extract 0 i.val)[m.val]'hlt = run.rows[m.val]'hm'
-    simp only [Array.getElem_extract, Nat.zero_add]
-  have hadvice := advice ⟨m.val, hm'⟩
-  have hextract := honestTracerAdviceAtStepN_extract joltInstance.program
-    run.rows i.val m.val (Nat.le_of_lt i.isLt) hm
-  change (run.truncate i.val (Nat.le_of_lt i.isLt)).rows[m].someTracerAdvice? =
-    honestTracerAdviceAtStepN joltInstance.program
-      (run.truncate i.val (Nat.le_of_lt i.isLt)).rows m.val
-  rw [hrow]
-  exact hadvice.trans hextract.symm
-
 /-- Truncation preserves the certificate that no retained row before another
 retained row is a stable stall. For example, rows 1 and 2 keep that property. -/
 private theorem truncate_no_earlier_stall
@@ -913,16 +798,15 @@ theorem soundness_prefix_next_step
     (noEarlierStop : ∀ (n : Nat) (current next : TraceRow run.bytecode),
       run.rows[n]? = some current → run.rows[n + 1]? = some next →
       ¬ current.StableStall)
-    (advice : ∀ n : Fin run.rows.size,
-      run.rows[n].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program run.rows n)
+    (advice : BuiltinAdviceHonest joltInstance.program run.rows)
     (i : Fin run.rows.size) :
     (run.truncate i.val (Nat.le_of_lt i.isLt)).NextStep
       run.rows[i].rowIndex run.rows[i].preState := by
   let cutRun := run.truncate i.val (Nat.le_of_lt i.isLt)
   change cutRun.NextStep run.rows[i].rowIndex run.rows[i].preState
   constructor
-  · exact truncate_honest_runtime_advice joltInstance privateInputs run advice i
+  · exact BuiltinAdviceHonest.of_extract joltInstance.program run.rows i.val
+      (Nat.le_of_lt i.isLt) advice
   · exact truncate_no_earlier_stall joltInstance privateInputs run noEarlierStop i
   · have hrowAt : run.rows[i.val]? = some run.rows[i] := by
       exact Array.getElem?_eq_getElem i.isLt
@@ -1014,9 +898,7 @@ theorem soundness_termination_last_stall
     (noEarlierStop : ∀ (n : Nat) (current next : TraceRow run.bytecode),
       run.rows[n]? = some current → run.rows[n + 1]? = some next →
       ¬ current.StableStall)
-    (advice : ∀ n : Fin run.rows.size,
-      run.rows[n].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program run.rows n)
+    (advice : BuiltinAdviceHonest joltInstance.program run.rows)
     (lastJump : ∀ last ∈ run.rows.back?,
       run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0 ∧
       ((∃ dst imm, run.bytecode[last.rowIndex].instruction = .JAL dst imm) ∨

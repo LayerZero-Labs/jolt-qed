@@ -2,6 +2,7 @@ import JoltConstraints.Soundness.Layer3.History
 import JoltConstraints.constraint_context
 import JoltConstraints.honest_trace
 import JoltConstraints.layout_facts
+import JoltConstraints.advice_inputs
 
 open LeanRV64D
 
@@ -33,31 +34,13 @@ theorem initialRamWordFromState_advance_pc
       { state with sail := { state.sail with mem := memory }, jolt_device := device } index)
     address compressed state
 
-/-- The actual initializer and the constraint context use the same RAM layout,
-so their remapping bases and device regions agree. -/
-theorem initial_state_memory_layout
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    {params : WitnessParams} (context : ConstraintContext joltInstance privateInputs params)
-    {initialState : SailJoltState}
-    (built : joltInstance.initial_state privateInputs = some initialState) :
-    initialState.jolt_device.memory_layout = context.io.memory_layout := by
-  have initialLayout := (initial_state_device joltInstance privateInputs initialState built).1
-  have publicIo := context.publicIo
-  unfold JoltInstance.public_io at publicIo
-  obtain ⟨layout, hasLayout, sameIo⟩ := Option.bind_eq_some_iff.mp publicIo
-  have publicLayout : layout = context.io.memory_layout :=
-    congrArg JoltDevice.memory_layout (Option.some.inj sameIo)
-  have same : layout = initialState.jolt_device.memory_layout :=
-    Option.some.inj (hasLayout.symm.trans initialLayout)
-  exact same.symm.trans publicLayout
-
 /-- Every initial RAM-table entry agrees with the actual initial state.
 The context binds its initial image to that same initialization computation. -/
 theorem ramVal_initial_state
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (context : ConstraintContext joltInstance privateInputs params)
-    (history : ramValEqInitialPlusPrefixRamInc context.initialRam witness)
+    (history : ramValEqInitialPlusPrefixRamInc (ramInitialValue context.initialRam) witness)
     {initialState : SailJoltState}
     (built : joltInstance.initial_state privateInputs = some initialState)
     (index : Fin params.ramSize) :
@@ -74,7 +57,7 @@ theorem ramVal_initial_advance_pc
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (context : ConstraintContext joltInstance privateInputs params)
-    (history : ramValEqInitialPlusPrefixRamInc context.initialRam witness)
+    (history : ramValEqInitialPlusPrefixRamInc (ramInitialValue context.initialRam) witness)
     {initialState : SailJoltState}
     (built : joltInstance.initial_state privateInputs = some initialState)
     (address : BitVec 64) (compressed : Bool) (index : Fin params.ramSize) :

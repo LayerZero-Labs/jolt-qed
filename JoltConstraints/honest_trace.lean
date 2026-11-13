@@ -169,17 +169,50 @@ def SourceInstruction.honestTracerAdvice (source : SourceInstruction) (state : S
   | .riscv (.REMUW _ rs1 rs2 _) => [sail_divuw_advice (value rs1) (value rs2)]
   | _ => []
 
+section
+variable {bytecode : Array JoltInstructionRow}
+
+/-- Whether step `n` of the trace runs a VirtualAdvice row of a registered inline's
+expansion. Step `n` is `rows[n]`; the result is false if the trace has no step `n`.
+For example, each of the 4 VirtualAdvice steps of a SECP256K1_MULQ call is an inline
+advice step, and the VirtualAdvice step of a DIV is not. -/
+def stepNOfTraceIsInlineAdvice (program : Rv64ProgramImage SourceInstruction)
+    (rows : Array (TraceRow bytecode)) (n : Nat) : Bool :=
+  stepNOfTraceIsAdvice rows n &&
+    match rows[startOfExpansionContainingStepN rows n]?.bind
+        (fun first => program.instructionAt bytecode[first.rowIndex].address) with
+    | some (.inline ..) => true
+    | _ => false
+
+/-- How many inline advice steps the trace runs before step `n`, over all inline calls.
+`honestTracerAdviceAtStepN` uses this count as the index into
+`privateInputs.inline_advice`. For example, if the trace runs two SECP256K1_MULQ calls,
+each with 4 VirtualAdvice rows, the first advice step of the second call has 4 inline
+advice steps before it, and its third advice step has 6. -/
+def inlineAdviceStepsBeforeStepN (program : Rv64ProgramImage SourceInstruction)
+    (rows : Array (TraceRow bytecode)) (n : Nat) : Nat :=
+  ((List.range n).filter (stepNOfTraceIsInlineAdvice program rows)).length
+
+end
+
 -- The value the honest tracer gives the VirtualAdvice at step `n`, where step `n` is
 -- `rows[n]`; none if step `n` does not run a VirtualAdvice.
--- When the honest tracer starts an expansion, it computes the list of all advice
--- values the expansion needs (`honestTracerAdvice`), from the state at that moment.
--- Each VirtualAdvice of the expansion then takes the next value from the list: the
--- first VirtualAdvice takes the first value, the second takes the second, and so on.
+-- A registered inline's advice is a private input: its k-th VirtualAdvice step over
+-- the whole trace takes `privateInputs.inline_advice[k]`, or 0 if the array has no
+-- entry `k`. Jolt's prover fills that array with the words its advice functions
+-- compute; only the inline's own assertions check them.
+-- For any other instruction, when the honest tracer starts its expansion, it computes
+-- the list of all advice values the expansion needs (`honestTracerAdvice`), from the
+-- state at that moment. Each VirtualAdvice of the expansion then takes the next value
+-- from the list: the first VirtualAdvice takes the first value, the second takes the
+-- second, and so on.
 -- For example, a DIV's expansion has one VirtualAdvice, and the list holds one value:
 -- the quotient of the DIV's two source registers, as they were just before the
 -- expansion began.
 -- See : jolt/tracer/src/instruction/mod.rs:207-233 (trace_inline_sequence_with_advice)
+--       jolt/tracer/src/instruction/inline.rs:320-368 (INLINE::trace_sequence) at a6b6dc717
 def honestTracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
+    (privateInputs : JoltPrivateInputs)
     {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode)) (n : Nat) :
     Option (BitVec 64) := do
   let row ← rows[n]?
@@ -189,13 +222,24 @@ def honestTracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
   let first ← rows[startOfExpansionContainingStepN rows n]?
   -- the instruction step `n`'s expansion came from
   let instruction ← program.instructionAt bytecode[first.rowIndex].address
-  -- the honest tracer's advice values for it, from the state before its expansion began
-  let values := instruction.honestTracerAdvice first.preState
-  pure (values[adviceStepsBeforeStepN rows n]?.getD bytecodeValue)
+  match instruction with
+  | .inline .. =>
+    -- the next unused word of the inline advice input
+    pure (privateInputs.inline_advice[inlineAdviceStepsBeforeStepN program rows n]?.getD 0)
+  | _ =>
+    -- the honest tracer's advice values, from the state before the expansion began
+    let values := instruction.honestTracerAdvice first.preState
+    pure (values[adviceStepsBeforeStepN rows n]?.getD bytecodeValue)
 
--- The rows Rust's tracer records when it runs the instance's program on these
--- private inputs: a valid run that uses Rust's runtime advice and stops where
--- Rust's tracer stops. The trace executes the expanded bytecode, while Jolt's
+-- A valid run of the instance's program on these private inputs that stops where
+-- Rust's tracer stops. Its advice steps outside registered inlines take the values
+-- Rust's tracer computes, and the VirtualAdvice steps of registered inlines take the
+-- words of `privateInputs.inline_advice` in order (`honestTracerAdviceAtStepN`).
+-- This relation is larger than the set of traces Rust's tracer records at the pin:
+-- that tracer fills each inline's advice with the words its `build_advice` function
+-- returns, while an honest trace allows any words that pass the inline's assertions,
+-- such as a noncanonical stored result (decision D2, `docs/inline-precompiles.md`
+-- section 5.3). For programs without inlines the two coincide. The trace executes the expanded bytecode, while Jolt's
 -- tracer decodes each instruction from memory as it starts; the two agree because
 -- a16z confirmed on 2026-10-07 that a program does not change its own code
 -- (a16z/jolt#1952). That is a modeling assumption, not a premise of any theorem.
@@ -212,7 +256,8 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   -- At every step of the trace, the advice value recorded (`someTracerAdvice?`) is
   -- the value the honest tracer gives it (`honestTracerAdviceAtStepN`).
   advice_from_honest_tracer : ∀ n : Fin rows.size,
-    rows[n].someTracerAdvice? = honestTracerAdviceAtStepN joltInstance.program rows n
+    rows[n].someTracerAdvice? =
+      honestTracerAdviceAtStepN joltInstance.program privateInputs rows n
   -- The tracer stops only at a self-jump that repeats on re-execution.
   -- See : a16z/jolt PR #2109, merge commit 0249591a, `Cpu::tick`.
   stops : ∀ last ∈ rows.back?, last.StableStall

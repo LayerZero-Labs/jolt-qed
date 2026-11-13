@@ -7,9 +7,19 @@ the inclusion into the relaxed tape-answer language. -/
 
 set_option autoImplicit false
 
-/-- An instance is in Jolt's language when, for some private inputs, Jolt's tracer
-records an honest trace that Jolt proves: one with these three properties, and
-nothing else. -/
+/-- An instance is in Jolt's language when, for some private inputs, the model has an
+honest trace (`HonestTrace`) with these three properties, and nothing else.
+
+An honest trace gives each advice step outside registered inlines the value Jolt's
+tracer computes, and takes the advice words of inline calls from the private input
+`inline_advice`, in order. Any words that pass the inline's own assertions are
+allowed (decision D2, `docs/inline-precompiles.md` section 5.3). The language is
+therefore larger than the set of instances whose trace Jolt's tracer generates at the
+pin, which always fills an inline's advice with the words of its `build_advice`
+function. For example, a run with a SECP256K1_MULQ call whose advice stores a
+noncanonical result that passes the call's assertions can be in the language, although
+Jolt's tracer would store the canonical result. For programs without inlines the two
+coincide. -/
 def JoltInstance.InLanguage (joltInstance : JoltInstance SourceInstruction) : Prop :=
   ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
     -- The run ends with the claimed outputs (trailing zero bytes dropped) and panic flag.

@@ -133,7 +133,7 @@ theorem block_simulates_ecall (program : Rv64ProgramImage SourceInstruction) (b 
     exact (Step.overlayLocal_trapFinish.run gp).trans hfinish
   have hactual := block_program_run b.row b.start b.post ecallProgram
     (by simp [hrow, SourceInstruction.expand])
-    (by simp [hrow, SourceInstruction.honestTracerAdvice]) rfl hruns.executes
+    (by simp [hrow, SourceInstruction.honestTracerAdvice]) rfl (hruns.executes_riscv hrow)
   have hpa : b.start.sail.regs.get? Register.PC = some pc := by
     simp [Block.start, advance_pc, hp, Std.ExtDHashMap.get?_insert]
   have hna : b.start.sail.regs.get? Register.nextPC =
@@ -229,7 +229,7 @@ theorem block_simulates_via (program : Rv64ProgramImage SourceInstruction) (b : 
   have hlift : i.Lifted := by
     clear hinputs
     cases i <;> simp_all [RiscvInstruction.Lifted]
-  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
+  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes_riscv hrow
   have hraw := blockInstrs_run i b.row.address b.row.is_compressed b.start instrs
     (by simpa only [← hrow] using hblock)
   have hhonest : RiscvInstruction.joltRun (honestInstr i b.start) b.start =

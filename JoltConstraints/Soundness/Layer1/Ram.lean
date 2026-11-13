@@ -56,7 +56,9 @@ private theorem ram_address_value_ne_zero (charAbove2pow127 : 2 ^ 127 < ringChar
 /-- A selected RAM address determines every read weighted by the full RAM selector. -/
 theorem ram_read_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) (value : Fin params.ramSize → F)
     (chosen : Fin params.ramSize) (one : witness.RamRa chosen t = 1) :
     (∑ address, value address * witness.RamRa address t) = value chosen := by
@@ -74,7 +76,9 @@ column is zero. The verifier's positive remapping base and field bounds rule
 out a selected address whose encoding is zero. -/
 theorem ramRa_zero_iff_address_zero (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) :
     (∀ address, witness.RamRa address t = 0) ↔ witness.RamAddress t = 0 := by
   constructor
@@ -94,7 +98,9 @@ or per-word increment. `RamInc` itself need not be zero. This describes the
 RAM constraints; execution of a zero-address instruction is a later obligation. -/
 theorem ram_zero_effects (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) (addressZero : witness.RamAddress t = 0) :
     witness.RamReadValue t = 0 ∧ witness.RamWriteValue t = 0 ∧
       ∀ address, witness.RamRa address t * witness.RamInc t = 0 := by
@@ -110,7 +116,9 @@ theorem ram_zero_effects (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- Every nonzero raw RAM address has exactly one selected in-domain RAM index. -/
 theorem ramRa_unique_of_address_ne_zero (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) (nonzero : witness.RamAddress t ≠ 0) :
     ∃! address, witness.RamRa address t = 1 := by
   rcases ramRa_zero_or_unique charAbove2pow127 context equations t with zero | selected

@@ -48,7 +48,7 @@ variable {params : WitnessParams} {witness : WitnessType F params}
 disjointness of advice/input overlays is proved from the checked layout. -/
 theorem OrdinaryRamAgreement.initial
     (context : ConstraintContext joltInstance privateInputs params)
-    (history : ramValEqInitialPlusPrefixRamInc context.initialRam witness)
+    (history : ramValEqInitialPlusPrefixRamInc (ramInitialValue context.initialRam) witness)
     {state : SailJoltState} (built : joltInstance.initial_state privateInputs = some state) :
     OrdinaryRamAgreement context.io.memory_layout
       (fun index => witness.RamVal index ⟨0, Nat.two_pow_pos _⟩) state := by

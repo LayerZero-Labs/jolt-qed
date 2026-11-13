@@ -40,7 +40,9 @@ variable {F : Type} [Field F]
 /-- Every full bytecode selector entry is zero or one. -/
 theorem bytecodeRa_zero_or_one
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (address : Fin (2 ^ params.logBytecodeK)) (t : Fin params.traceLength) :
     bytecodeRa witness address t = 0 ∨ bytecodeRa witness address t = 1 :=
   boolean_prod_zero_or_one _ (fun chunk =>
@@ -50,7 +52,9 @@ theorem bytecodeRa_zero_or_one
 This does not assert that any address is selected. -/
 theorem bytecodeRa_at_most_one (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) (a b : Fin (2 ^ params.logBytecodeK))
     (selectedA : bytecodeRa witness a t = 1)
     (selectedB : bytecodeRa witness b t = 1) : a = b := by
@@ -67,7 +71,9 @@ theorem bytecodeRa_at_most_one (charAbove2pow127 : 2 ^ 127 < ringChar F)
 exactly one address. Ruling out the zero alternative needs further constraints. -/
 theorem bytecodeRa_zero_or_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) :
     (∀ address, bytecodeRa witness address t = 0) ∨
       ∃! address, bytecodeRa witness address t = 1 := by
@@ -82,7 +88,9 @@ theorem bytecodeRa_zero_or_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
 are no RAM chunks: the product constraint then makes the entry one. -/
 theorem ramRa_zero_or_one
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (address : Fin params.ramSize) (t : Fin params.traceLength) :
     witness.RamRa address t = 0 ∨ witness.RamRa address t = 1 := by
   rw [equations.ramRaEqChunkProduct address t]
@@ -93,7 +101,9 @@ theorem ramRa_zero_or_one
 assuming a positive number of RAM chunks or a RAM weight of one. -/
 theorem ramRa_at_most_one (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) (a b : Fin params.ramSize)
     (selectedA : witness.RamRa a t = 1) (selectedB : witness.RamRa b t = 1) : a = b := by
   rw [equations.ramRaEqChunkProduct a t] at selectedA
@@ -115,7 +125,9 @@ theorem ramRa_at_most_one (charAbove2pow127 : 2 ^ 127 < ringChar F)
 exactly one address. `Ram.lean` identifies the zero alternative with `RamAddress = 0`. -/
 theorem ramRa_zero_or_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io
+      context.entry witness)
     (t : Fin params.traceLength) :
     (∀ address, witness.RamRa address t = 0) ∨
       ∃! address, witness.RamRa address t = 1 := by

@@ -30,7 +30,11 @@ namespace JoltInstance
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- A. Reconstruct a relaxed-answer trace whose every executed row and every
-nontermination final RAM word agrees with the witness. -/
+nontermination final RAM word agrees with the witness. The trace keeps the witness's
+words on inline advice rows, so it is a trace for the private inputs whose
+`inline_advice` holds those words (`collectInlineAdvice`); the constraints do not read
+`inline_advice`. For example, a witness for one SECP256K1_MULQ call gives the call's
+advice words. -/
 theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
@@ -40,7 +44,8 @@ theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField 
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
     (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
       context.io context.entry witness) :
-    ∃ trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs,
+    ∃ (words : Array (BitVec 64)) (trace : JoltConstraints.Soundness.UntrustedAnswerTrace
+        joltInstance { privateInputs with inline_advice := words }),
       trace.bytecode = context.bytecode ∧
         Represents witness trace.toUntrustedAnswerRun.toTrace := by
   obtain ⟨run, bytecodeEq, representedRows, realRows, noEarlierStop, cut, advice⟩ :=
@@ -53,16 +58,20 @@ theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField 
   have accepted : joltInstance.bytecode.isSome := by
     obtain ⟨slots, preprocessed, entry⟩ := context.entryIsRust
     simp [JoltInstance.bytecode, context.expands, preprocessed, entry]
-  let trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs := {
-    toUntrustedAnswerRun := run
+  let words := JoltConstraints.Soundness.collectInlineAdvice joltInstance.program run.rows
+  let trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance
+      { privateInputs with inline_advice := words } := {
+    toUntrustedAnswerRun := run.withInlineAdvice words
     accepted := accepted
     valid_inputs := context.validInputs
-    advice_from_honest_tracer := advice
+    advice_from_honest_tracer :=
+      JoltConstraints.Soundness.honest_of_builtin joltInstance.program privateInputs
+        run.rows advice
     stops := stops
     runs_until_stop := noEarlierStop
     nonempty := nonempty
   }
-  exact ⟨trace, bytecodeEq,
+  exact ⟨words, trace, bytecodeEq,
     { toRepresentsRows := representedRows.toRepresentsRows, finalRam := finalRam }⟩
 
 /-- B. Constraint 26 checks the relaxed trace's output and panic words, while

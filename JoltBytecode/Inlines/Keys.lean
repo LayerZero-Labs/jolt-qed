@@ -3,6 +3,13 @@ import JoltBytecode.Inlines.Generated.Sha256Init
 import JoltBytecode.Inlines.Generated.Keccak256
 import JoltBytecode.Inlines.Generated.Keccak256AbsorbPermute
 import JoltBytecode.Inlines.Generated.Blake2
+import JoltBytecode.Inlines.Generated.Secp256k1Mulq
+import JoltBytecode.Inlines.Generated.Secp256k1Mulr
+import JoltBytecode.Inlines.Generated.Secp256k1Squareq
+import JoltBytecode.Inlines.Generated.Secp256k1Squarer
+import JoltBytecode.Inlines.Generated.Secp256k1Divq
+import JoltBytecode.Inlines.Generated.Secp256k1Divr
+import JoltBytecode.Inlines.Generated.Secp256k1GlvrAdv
 
 /-!
 # Supported registered inlines
@@ -42,6 +49,20 @@ inductive InlineKey where
   | keccak256AbsorbPermute
   /-- `BLAKE2_INLINE`: funct3 0, funct7 2. -/
   | blake2
+  /-- `SECP256K1_MULQ`: funct3 0, funct7 5. -/
+  | secp256k1Mulq
+  /-- `SECP256K1_MULR`: funct3 4, funct7 5. -/
+  | secp256k1Mulr
+  /-- `SECP256K1_SQUAREQ`: funct3 1, funct7 5. -/
+  | secp256k1Squareq
+  /-- `SECP256K1_SQUARER`: funct3 5, funct7 5. -/
+  | secp256k1Squarer
+  /-- `SECP256K1_DIVQ`: funct3 2, funct7 5. -/
+  | secp256k1Divq
+  /-- `SECP256K1_DIVR`: funct3 6, funct7 5. -/
+  | secp256k1Divr
+  /-- `SECP256K1_GLVR_ADV`: funct3 7, funct7 5. -/
+  | secp256k1GlvrAdv
   deriving DecidableEq, Repr
 
 namespace InlineKey
@@ -49,7 +70,7 @@ namespace InlineKey
 /-- Every supported key, in constructor order.
 Example: the first is `sha256`. -/
 def all : List InlineKey :=
-  [.sha256, .sha256Init, .keccak256, .keccak256AbsorbPermute, .blake2]
+  [.sha256, .sha256Init, .keccak256, .keccak256AbsorbPermute, .blake2, .secp256k1Mulq, .secp256k1Mulr, .secp256k1Squareq, .secp256k1Squarer, .secp256k1Divq, .secp256k1Divr, .secp256k1GlvrAdv]
 
 /-- Jolt's name for the inline.
 Example: `sha256.name = "SHA256_INLINE"`. -/
@@ -59,6 +80,13 @@ def name : InlineKey → String
   | .keccak256 => "KECCAK256_INLINE"
   | .keccak256AbsorbPermute => "KECCAK256_ABSORB_PERMUTE_INLINE"
   | .blake2 => "BLAKE2_INLINE"
+  | .secp256k1Mulq => "SECP256K1_MULQ"
+  | .secp256k1Mulr => "SECP256K1_MULR"
+  | .secp256k1Squareq => "SECP256K1_SQUAREQ"
+  | .secp256k1Squarer => "SECP256K1_SQUARER"
+  | .secp256k1Divq => "SECP256K1_DIVQ"
+  | .secp256k1Divr => "SECP256K1_DIVR"
+  | .secp256k1GlvrAdv => "SECP256K1_GLVR_ADV"
 
 /-- The major opcode; every registered inline uses `0x0B`.
 Example: `blake2.opcode = 0x0B`. -/
@@ -68,6 +96,13 @@ def opcode : InlineKey → BitVec 7
   | .keccak256 => 0x0b
   | .keccak256AbsorbPermute => 0x0b
   | .blake2 => 0x0b
+  | .secp256k1Mulq => 0x0b
+  | .secp256k1Mulr => 0x0b
+  | .secp256k1Squareq => 0x0b
+  | .secp256k1Squarer => 0x0b
+  | .secp256k1Divq => 0x0b
+  | .secp256k1Divr => 0x0b
+  | .secp256k1GlvrAdv => 0x0b
 
 /-- The `funct3` field of the encoding.
 Example: `sha256Init.funct3 = 1`. -/
@@ -77,6 +112,13 @@ def funct3 : InlineKey → BitVec 3
   | .keccak256 => 0
   | .keccak256AbsorbPermute => 1
   | .blake2 => 0
+  | .secp256k1Mulq => 0
+  | .secp256k1Mulr => 4
+  | .secp256k1Squareq => 1
+  | .secp256k1Squarer => 5
+  | .secp256k1Divq => 2
+  | .secp256k1Divr => 6
+  | .secp256k1GlvrAdv => 7
 
 /-- The `funct7` field of the encoding.
 Example: `keccak256.funct7 = 1`. -/
@@ -86,15 +128,30 @@ def funct7 : InlineKey → BitVec 7
   | .keccak256 => 1
   | .keccak256AbsorbPermute => 1
   | .blake2 => 2
+  | .secp256k1Mulq => 5
+  | .secp256k1Mulr => 5
+  | .secp256k1Squareq => 5
+  | .secp256k1Squarer => 5
+  | .secp256k1Divq => 5
+  | .secp256k1Divr => 5
+  | .secp256k1GlvrAdv => 5
 
 /-- Whether the key's rows read the source `rd` (the `rs3` operand).
-Example: no hash inline reads it, so `sha256.readsRd = false`. -/
+Example: no hash inline reads it, so `sha256.readsRd = false`; the secp256k1
+inlines store their output at the address in it, so `secp256k1Mulq.readsRd = true`. -/
 def readsRd : InlineKey → Bool
   | .sha256 => false
   | .sha256Init => false
   | .keccak256 => false
   | .keccak256AbsorbPermute => false
   | .blake2 => false
+  | .secp256k1Mulq => true
+  | .secp256k1Mulr => true
+  | .secp256k1Squareq => true
+  | .secp256k1Squarer => true
+  | .secp256k1Divq => true
+  | .secp256k1Divr => true
+  | .secp256k1GlvrAdv => true
 
 /-- The number of final rows of the key's expansion, in both allocation cases.
 Example: `keccak256AbsorbPermute.rowCount = 3121`. -/
@@ -104,6 +161,13 @@ def rowCount : InlineKey → Nat
   | .keccak256 => 3087
   | .keccak256AbsorbPermute => 3121
   | .blake2 => 1067
+  | .secp256k1Mulq => 186
+  | .secp256k1Mulr => 232
+  | .secp256k1Squareq => 167
+  | .secp256k1Squarer => 213
+  | .secp256k1Divq => 194
+  | .secp256k1Divr => 240
+  | .secp256k1GlvrAdv => 13
 
 /-- The supported key with this encoding, if any.
 Jolt's decoder accepts any `funct3` and `funct7` under opcodes `0x0B` and `0x2B`;
@@ -115,7 +179,8 @@ def ofEncoding (opcode : BitVec 7) (funct3 : BitVec 3) (funct7 : BitVec 7) :
   all.find? fun key => key.opcode == opcode && key.funct3 == funct3 && key.funct7 == funct7
 
 /-- The rows of the `rd ≠ x0` case: the generated `<name>RowsAutoList`.
-`rs3` is the source `rd`.
+`rs3` is the source `rd`. A key with `VirtualAdvice` rows gets the placeholder
+advice `fun _ => 0`; the trace replaces each value with the row's runtime advice.
 Example: the first row of `keccak256AbsorbPermute.rows x10 x11 x12` loads `vr48` from `x10`. -/
 def rows : InlineKey → regidx → regidx → regidx → List JoltISA.Instr
   | .sha256, rs1, rs2, rs3 =>
@@ -128,16 +193,49 @@ def rows : InlineKey → regidx → regidx → regidx → List JoltISA.Instr
     Generated.keccak256AbsorbPermuteRowsAutoList rs1 rs2 rs3
   | .blake2, rs1, rs2, rs3 =>
     Generated.blake2RowsAutoList rs1 rs2 rs3
+  | .secp256k1Mulq, rs1, rs2, rs3 =>
+    Generated.secp256k1MulqRowsAutoList rs1 rs2 rs3 (fun _ => 0)
+  | .secp256k1Mulr, rs1, rs2, rs3 =>
+    Generated.secp256k1MulrRowsAutoList rs1 rs2 rs3 (fun _ => 0)
+  | .secp256k1Squareq, rs1, rs2, rs3 =>
+    Generated.secp256k1SquareqRowsAutoList rs1 rs2 rs3 (fun _ => 0)
+  | .secp256k1Squarer, rs1, rs2, rs3 =>
+    Generated.secp256k1SquarerRowsAutoList rs1 rs2 rs3 (fun _ => 0)
+  | .secp256k1Divq, rs1, rs2, rs3 =>
+    Generated.secp256k1DivqRowsAutoList rs1 rs2 rs3 (fun _ => 0)
+  | .secp256k1Divr, rs1, rs2, rs3 =>
+    Generated.secp256k1DivrRowsAutoList rs1 rs2 rs3 (fun _ => 0)
+  | .secp256k1GlvrAdv, rs1, rs2, rs3 =>
+    Generated.secp256k1GlvrAdvRowsAutoList rs1 rs2 rs3 (fun _ => 0)
 
 /-- The rows of the `rd = x0` case, after Rust substitutes the instruction temporary
 `vr40` for `rd`: the generated `<name>RowsAutoRdZeroList`.
 Example: `sha256.rowsRdZero x10 x11` has 1900 rows. -/
 def rowsRdZero : InlineKey → regidx → regidx → List JoltISA.Instr
-  | .sha256, rs1, rs2 => Generated.sha256RowsAutoRdZeroList rs1 rs2
-  | .sha256Init, rs1, rs2 => Generated.sha256InitRowsAutoRdZeroList rs1 rs2
-  | .keccak256, rs1, rs2 => Generated.keccak256RowsAutoRdZeroList rs1 rs2
-  | .keccak256AbsorbPermute, rs1, rs2 => Generated.keccak256AbsorbPermuteRowsAutoRdZeroList rs1 rs2
-  | .blake2, rs1, rs2 => Generated.blake2RowsAutoRdZeroList rs1 rs2
+  | .sha256, rs1, rs2 =>
+    Generated.sha256RowsAutoRdZeroList rs1 rs2
+  | .sha256Init, rs1, rs2 =>
+    Generated.sha256InitRowsAutoRdZeroList rs1 rs2
+  | .keccak256, rs1, rs2 =>
+    Generated.keccak256RowsAutoRdZeroList rs1 rs2
+  | .keccak256AbsorbPermute, rs1, rs2 =>
+    Generated.keccak256AbsorbPermuteRowsAutoRdZeroList rs1 rs2
+  | .blake2, rs1, rs2 =>
+    Generated.blake2RowsAutoRdZeroList rs1 rs2
+  | .secp256k1Mulq, rs1, rs2 =>
+    Generated.secp256k1MulqRowsAutoRdZeroList rs1 rs2 (fun _ => 0)
+  | .secp256k1Mulr, rs1, rs2 =>
+    Generated.secp256k1MulrRowsAutoRdZeroList rs1 rs2 (fun _ => 0)
+  | .secp256k1Squareq, rs1, rs2 =>
+    Generated.secp256k1SquareqRowsAutoRdZeroList rs1 rs2 (fun _ => 0)
+  | .secp256k1Squarer, rs1, rs2 =>
+    Generated.secp256k1SquarerRowsAutoRdZeroList rs1 rs2 (fun _ => 0)
+  | .secp256k1Divq, rs1, rs2 =>
+    Generated.secp256k1DivqRowsAutoRdZeroList rs1 rs2 (fun _ => 0)
+  | .secp256k1Divr, rs1, rs2 =>
+    Generated.secp256k1DivrRowsAutoRdZeroList rs1 rs2 (fun _ => 0)
+  | .secp256k1GlvrAdv, rs1, rs2 =>
+    Generated.secp256k1GlvrAdvRowsAutoRdZeroList rs1 rs2 (fun _ => 0)
 
 /-- The rows Jolt's expander emits for the inline call `rd, rs1, rs2` with this key.
 With `rd = x0`, Rust allocates an instruction temporary and passes it as `rd`

@@ -204,8 +204,7 @@ private theorem expansion_ready {F : Type} [Field F] (joltField : JoltField F)
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (first : Fin context.bytecode.size)
     (state : ExpansionState witness context run first (expansionRowCount context.bytecode first))
-    (honestAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program run.rows n)
+    (honestAdvice : BuiltinAdviceHonest joltInstance.program run.rows)
     (atBoundary : ∀ last ∈ run.rows.back?,
       run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0) :
     ∀ bound : run.rows.size < params.traceLength,
@@ -272,8 +271,7 @@ theorem expansion_finish {F : Type} [Field F] (joltField : JoltField F)
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (first : Fin context.bytecode.size)
     (state : ExpansionState witness context run first (expansionRowCount context.bytecode first))
-    (honestAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program run.rows n) :
+    (honestAdvice : BuiltinAdviceHonest joltInstance.program run.rows) :
     BoundaryState witness context run := by
   have atBoundary := expansion_at_boundary joltInstance privateInputs witness context
     run first state

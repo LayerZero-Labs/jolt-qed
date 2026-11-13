@@ -20,22 +20,26 @@ Older findings below keep the revision at which they were established.
 
 The completeness theorem is `JoltInstance.completeness` (`Completeness/completeness.lean`): for every instance that meets `JoltInstance.CompletenessAssumptions`, and every honest trace that meets the three conditions of `JoltInstance.InLanguage` (`language.lean`) with Jolt's prover config `config`, the honest witness at Jolt's own sizes (`HonestTrace.witness_params`) satisfies `AllConstraints`.
 The earlier existential form, some private inputs and some witness, is `JoltInstance.completeness_someWitness`, proved from it by unpacking `InLanguage`.
-Its workhorse is `HonestTrace.allConstraints_prover_sizes` (`Completeness/All.lean`).
+Its workhorse is `HonestTrace.allConstraintsOnBytes_prover_sizes` (`Completeness/All.lean`), which gives the byte relation; `allConstraints_of_onBytes` (`advice_inputs.lean`) turns it into `AllConstraints` with the advice words of the run's initial RAM.
 `Trace.prover_config` models Jolt's checked sizing policy, and `HonestTrace.witness_params` takes its trace length and RAM size.
 The models of Jolt's prover RAM size (`ProverConfig.checkedRamSize`) and Jolt's verifier maximum (`VerifierSizes.maxRamSize`) follow [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250), which made the fix that #1951 item 4 proposes, `touched + 1` and `div_ceil(8)`, so `HonestTrace.prover_config_holds_highest_slot` is proved; see `reports/2026-11-03-ram-k-fix-experiment.md`.
 
-**Source-language scope.** Completeness and soundness cover programs represented by `SourceInstruction`: the modeled RISC-V instructions, the listed Jolt custom instructions at opcode `0x5B`, and five registered inlines at opcode `0x0B` (SHA256, SHA256_INIT, KECCAK256, KECCAK256_ABSORB_PERMUTE and BLAKE2; see `docs/inline-precompiles.md`).
+**Source-language scope.** Completeness and soundness cover programs represented by `SourceInstruction`: the modeled RISC-V instructions, the listed Jolt custom instructions at opcode `0x5B`, and twelve registered inlines at opcode `0x0B` (SHA256, SHA256_INIT, KECCAK256, KECCAK256_ABSORB_PERMUTE, BLAKE2 and the seven secp256k1 inlines; see `docs/inline-precompiles.md`).
 Every other `0x0B` encoding, opcode `0x2B` and the field-inline opcode `0x7B` are outside this type.
 The Sail whole-run theorems (`JoltConstraints/WholeRun/Top.lean`) cover RISC-V blocks only: `BlockConforms.riscv` excludes custom instructions and inlines.
 The SDK's `field_to_limbs!` and `field_from_limbs!` conversions emit `0x7B` instructions.
 A guest containing these instructions is outside the theorems' scope by construction.
 This restriction is recorded in [`expansion_helpers.lean`](./expansion_helpers.lean); it is not an additional premise or a verifier check.
 
-`AllConstraints joltInstance privateInputs witness` binds the constraint data to the instance through `ConstraintContext` (`constraint_context.lean`).
-Bytecode, initial RAM, public I/O and the entry slot cannot be chosen independently of these inputs.
+`AllConstraints joltInstance untrustedAdvice witness` binds the constraint data to the instance through `ConstraintContext` (`constraint_context.lean`).
+Bytecode, initial RAM, public I/O and the entry slot cannot be chosen independently of the instance and the advice words.
 Trusted advice is part of the instance; Jolt's verifier holds a commitment to it, and we model its contents directly.
-Untrusted advice is prover-chosen.
+Untrusted advice is prover-chosen: `untrustedAdvice : Nat → F` gives one committed field element per word of the untrusted-advice block, as Jolt's verifier sees it.
+`AllConstraintsOnBytes joltInstance privateInputs witness` is the same relation with the untrusted advice given as bytes; `JoltInstance.soundness` reduces to it.
 Both contribute to initial RAM without being public I/O.
+The private input `inline_advice` holds the words that the VirtualAdvice rows of registered inlines write, in trace order; the honest rule `honestTracerAdviceAtStepN` gives an inline's advice step the next word, so every passing word, canonical or not, is in the language (`docs/inline-precompiles.md`, section 5.3).
+Initialization and the constraints do not read it.
+Quang approved this language change on 2026-11-11 (decision D2); `AGENTS.md` requires Ari's review of it.
 The context also checks the instance's input/output sizes and lowest address, the padded trace length, the bytecode domain, and the verifier's RAM bounds.
 `ConstraintEquations` is the underlying equation bundle over those data.
 
@@ -86,7 +90,7 @@ Premises or fields of the final theorems, with their source or reason.
 | No spoil assert fails | `Trace.SpoilAssertsPass`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): a spoiled run is meant to have no proof (`jolt-platform/src/spoil.rs`) |
 | Jolt's prover accepts the trace | `(trace.prover_config joltInstance).isSome`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): Jolt's prover refuses other traces (`ProverConfig::derive_from_dimensions`). `JoltInstance.completeness` takes the accepted config `config` and uses Jolt's sizes, modeled with the fix of [#1951](https://github.com/a16z/jolt/issues/1951) item 4 from [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) |
 
-`TracerAddressChecks` quantifies over every private input and relaxed prefix with honest internal runtime advice and checks the next attempted row without assuming that execution succeeds.
+`TracerAddressChecks` quantifies over every private input and relaxed prefix whose advice steps outside registered inlines are honest (`BuiltinAdviceHonest`) and checks the next attempted row without assuming that execution succeeds.
 It checks permissions at the starting address in RAM and at every accessed byte below RAM; floor rows use `ea &&& ~~~7`.
 It remains a temporary execution restriction to narrow or remove as the cases are resolved, not a verifier check.
 
@@ -167,9 +171,9 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 
 ## Gaps in our model
 
-- **Untrusted-advice words.** Lean builds untrusted advice from bytes, so every advice word in initial RAM is a 64-bit value; Jolt's verifier takes those words from a committed polynomial and does not range-check them.
-  The soundness hypothesis is therefore stronger than Jolt's check, and the gap appears to allow a false claim (2026-10-29 report, finding 1; not reproduced).
-  Modeling the words as field elements changes a core definition and waits for Ari.
+- **Untrusted-advice block size.** Jolt's tracer accepts at most the configured number of untrusted-advice bytes, while the verifier's block spans that size rounded up to a multiple of 8, so a prover can commit block bytes no tracer run holds.
+  The temporary premise `UntrustedAdviceBlockFits` of `JoltInstance.soundness` excludes a configured size that is not a multiple of 8 (2026-11-12 witness-column report).
+- **Trusted advice.** The instance holds trusted advice as bytes; Jolt's verifier holds a commitment, so the model assumes the trusted party commits to packed bytes (2026-11-12 witness-column report).
 - **HostIO END marker.** Lean's `execHostIOWith` does not read the label for a cycle-marker END, while Jolt's tracer does and can abort on it (2026-10-29 report, finding 2).
 - **ELF sections and `tohost`.** Lean's initial RAM uses preprocessing's `memory_init` for the run; Jolt's tracer loads fewer section kinds, and sizes RAM differently when the ELF defines `tohost` (2026-10-29 report, findings 3 and 4).
 - **Termination word.** `InLanguage` compares only the outputs and the panic flag; Jolt's verifier also checks the termination word, so the theorem says less than Jolt enforces (2026-10-29 report, finding 5).

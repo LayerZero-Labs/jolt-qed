@@ -26,8 +26,8 @@ short:
   a Jolt counterpart, or about programs whose runs Jolt's tracer aborts.
 * They stop in front of the first EBREAK.
 * `sail_soundness` keeps every premise of `JoltInstance.soundness`, including the six
-  `TemporaryRestrictions`. One of them, `claimsNoPanic`, limits it to instances that claim no
-  panic.
+  `TemporaryRestrictions` and the temporary premise `UntrustedAdviceBlockFits`. One of the
+  restrictions, `claimsNoPanic`, limits it to instances that claim no panic.
 * Outputs are compared after dropping trailing zero bytes, as in `JoltInstance.soundness`.
 
 The proof chains the per-block theorem `block_simulates_image` along the halt prefix of the trace
@@ -340,11 +340,13 @@ and every halt prefix of it.
 
 Premises, by class:
 * soundness's own premises: `joltField` (characteristic above `2^128`), `assumptions`
-  (`SoundnessAssumptions`), `restrictions` (`TemporaryRestrictions`), and a witness that
-  satisfies `AllConstraints`. The six restrictions exclude programs that expose reported or
-  suspected Jolt bugs. The first four constrain the row the program attempts after every prefix
-  of a relaxed execution, for every private input; `noMaxLengthTrace` constrains completed
-  relaxed traces, and `claimsNoPanic` only the instance. Jolt's verifier checks none of them:
+  (`SoundnessAssumptions`), `restrictions` (`TemporaryRestrictions`), `adviceBlockFits`
+  (`UntrustedAdviceBlockFits`), and committed advice words and a witness that satisfy
+  `AllConstraints`. The six restrictions and `adviceBlockFits` exclude programs that expose
+  reported or suspected Jolt bugs. The first four restrictions constrain the row the program
+  attempts after every prefix of a relaxed execution, for every private input;
+  `noMaxLengthTrace` constrains completed relaxed traces, and `claimsNoPanic` and
+  `adviceBlockFits` only the instance. Jolt's verifier checks none of them:
   * `tracerAddressChecks`: every load and store passes Jolt's tracer address checks;
   * `hostCallsSucceed`: every host call succeeds;
   * `noMaxLengthTrace`: no trace fills the largest power-of-two length the verifier admits;
@@ -354,6 +356,8 @@ Premises, by class:
     after such a store;
   * `claimsNoPanic`: the instance claims no panic. With this restriction, the panic clause of the
     conclusion says that Sail's panic word is zero.
+  * `adviceBlockFits`, a separate premise because soundness for advice given as bytes does not
+    need it: the configured maximum untrusted-advice size is a multiple of 8.
 * platform: `hdecoded` (`DecodedFrom`: the program agrees with what Jolt's `decode_elf` builds
   from the sections `elf` of the guest ELF; `DecodedFrom.imageDecoded` derives from it that each
   RISC-V row is what Jolt's decoder makes of the image's bytes), `hrows` (`RowsAligned`: every
@@ -379,9 +383,10 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
     (restrictions : joltInstance.TemporaryRestrictions)
-    {params : WitnessParams} (givenInputs : JoltPrivateInputs)
+    (adviceBlockFits : joltInstance.UntrustedAdviceBlockFits)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
     (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap) :
@@ -400,8 +405,8 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
             (sailPanicWord trace.initialState.jolt_device s ≠ 0 ↔ joltInstance.panic = true) ∧
             (SailHalted joltInstance.program s ∨ halt = final)) := by
   obtain ⟨privateInputs, trace, hmo, hcfg, hspoil⟩ :=
-    JoltInstance.soundness joltField joltInstance assumptions restrictions givenInputs witness
-      satisfied
+    JoltInstance.soundness joltField joltInstance assumptions restrictions adviceBlockFits
+      untrustedAdvice witness satisfied
   obtain ⟨pre, halt, final, hp⟩ := trace.haltPrefix
   refine ⟨privateInputs, trace, hmo, hcfg, hspoil, pre, halt, final, hp, fun hconf => ?_⟩
   obtain ⟨n, s, hrun, hrel, houts, hpanic, hstop⟩ :=

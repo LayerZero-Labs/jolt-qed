@@ -510,7 +510,7 @@ private theorem inline_rows_avoid (rows : List JoltISA.Instr)
     have free : ExpansionFacts.reservedFree row = true := by
       have parts := ok.1
       simp only [ExpansionFacts.inlineRowOk, Bool.and_eq_true] at parts
-      exact parts.2
+      exact parts.1.2
     intro same
     simp only [ExpansionFacts.reservedFree, same, Bool.or_eq_true, decide_eq_true_eq] at free
     omega
@@ -533,9 +533,14 @@ private theorem plain_source_safe (source : SourceInstruction) (expanded : Expan
     all_goals subst expanded
     all_goals plain_rows_safe
   | inline key rs1 rs2 rd =>
-    simp only [SourceInstruction.expand, Option.some.injEq] at he
-    subst expanded
-    exact inline_rows_avoid _ (JoltISA.Inlines.InlineKey.expandRows_rowsOk key rs1 rs2 rd)
+    simp only [SourceInstruction.expand] at he
+    split at he
+    · cases he
+    · next registered =>
+      simp only [Option.some.injEq] at he
+      subst expanded
+      exact inline_rows_avoid _
+        (JoltISA.Inlines.InlineKey.expandRows_rowsOk key rs1 rs2 rd (by simpa using registered))
 
 private theorem patch_avoids (r : JoltISA.VReg) (values : List (BitVec 64))
     (rows : List JoltISA.Instr) (hsafe : ProgramAvoids r (JoltISA.Program.seq rows)) :
@@ -576,8 +581,7 @@ private theorem expand_plain_safe (row : SourceInstructionRow SourceInstruction)
 private theorem plain_block_preserves (program : Rv64ProgramImage SourceInstruction)
     (b : Block) (hruns : b.Runs program) (hplain : ¬ TouchesSystem b.row.instruction)
     (hs : SystemInv b.pre) : SystemInv b.post := by
-  obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
-  unfold blockInstrs at hblock
+  obtain ⟨_values, instrs, -, hblock, hrun⟩ := hruns.executes
   obtain ⟨rows, hexpand, hpatch⟩ := Option.map_eq_some_iff.mp hblock
   subst instrs
   have hsafe := expand_plain_safe b.row hplain rows hexpand
@@ -760,7 +764,8 @@ theorem SystemInv.of_block {program : Rv64ProgramImage SourceInstruction} {b : B
     (hs : SystemInv b.pre) : SystemInv b.post := by
   by_cases ht : TouchesSystem b.row.instruction
   · obtain ⟨p, hexpand, hseq, hadvice, hpres⟩ := system_program_data b.row.instruction ht
-    have hrun := block_program_run b.row b.start b.post p hexpand (hadvice b.start) hseq hruns.executes
+    have hrun := block_program_run b.row b.start b.post p hexpand (hadvice b.start) hseq
+      (hruns.executes_plain fun key rs1 rs2 rs3 inline => by rw [inline] at ht; exact ht)
     exact hpres b.start b.post b.row.address
       (b.row.address + if b.row.is_compressed then 2 else 4) (hs.of_vregs rfl) hpc
       (by simp [Block.start, advance_pc, Std.ExtDHashMap.get?_insert])

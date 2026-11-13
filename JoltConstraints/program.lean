@@ -400,10 +400,18 @@ def JoltInstance.toJolt (joltInstance : JoltInstance RiscvInstruction) :
   { joltInstance with program := joltInstance.program.toJolt }
 
 -- Prover-chosen inputs. The execution tape is used by the tracer; the constraint
--- relation observes untrusted_advice through initial RAM, but not advice_tape.
+-- relation observes untrusted_advice through initial RAM, but not advice_tape or
+-- inline_advice.
 structure JoltPrivateInputs where
   untrusted_advice : Array (BitVec 8)
   advice_tape : Array (BitVec 8)
+  -- The words the VirtualAdvice rows of registered inlines write, in the order the
+  -- trace runs those rows, over all inline calls. Jolt's prover fills it with each
+  -- inline's `build_advice`; any words are allowed, and the inline's own assertions
+  -- decide which pass. For example, a run with one SECP256K1_MULQ call whose rows
+  -- write the advice words w0, w1, ... has inline_advice = #[w0, w1, ...].
+  -- See : jolt/tracer/src/instruction/inline.rs:320-368 (INLINE::trace_sequence) at a6b6dc717
+  inline_advice : Array (BitVec 64)
 
 -- The host overwrites program_size with the size of the program image.
 -- Checked layout failures propagate as none, including a padded I/O start at zero.

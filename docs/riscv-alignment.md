@@ -31,7 +31,7 @@ Jolt's decoder (`tracer/src/instruction/mod.rs`, `Instruction::decode`) accepts 
 - Zca: `uncompress_instruction` expands C.FLD and C.FSD into F-extension words that the decoder then rejects, and treats the Zcb encodings as reserved, so neither Zcd nor Zcb is accepted;
 - from Zicsr, only CSRRW and CSRRS, and only on `mstatus`, `mtvec`, `mscratch`, `mepc`, `mcause` and `mtval` (`tracer/src/utils/virtual_registers.rs`, `is_supported_csr`); the Jolt changes for this alignment (`c336a6da7`, a16z/jolt#2383 and #2384) add CSRRC, CSRRWI, CSRRSI and CSRRCI on the same six CSRs, and with them Jolt accepts all of Zicsr on those CSRs; funct3 4 stays reserved;
 - Jolt's own instructions on the custom-2 major opcode `0x5B` (advice loads, `VirtualRev8W`, `VirtualAssertEQ`, `VirtualHostIO`; section 7);
-- the inline opcodes `0x0B` (custom-0) and `0x2B` (custom-1). `SourceInstruction` includes five registered hash inlines at `0x0B`, but the whole-run theorem leaves all inline rows out of scope for now (section 7).
+- the inline opcodes `0x0B` (custom-0) and `0x2B` (custom-1). `SourceInstruction` includes twelve registered inlines (five hash, seven secp256k1) at `0x0B`, but the whole-run theorem leaves all inline rows out of scope for now (section 7).
 
 Every other encoding makes Jolt's tracer panic, so no run that contains one has a Jolt trace.
 
@@ -298,7 +298,7 @@ Advice loads read from the advice tape, which the whole-run theorem quantifies o
 `VirtualAssertEQ` has no successor state when its operands differ.
 `VirtualHostIO` changes no RISC-V state: it reads guest memory for the host call named in `a0`, and the advice-write call appends those bytes to the advice tape (`JoltBytecode/JoltISA/HostIO.lean`), so the tape is part of the platform state that the relation of section 5 carries.
 `VirtualRev8W` reverses the bytes within each 32-bit half of a register.
-Inline rows are out of scope for the whole-run theorem for now. `SourceInstruction` includes five registered hash inlines at `0x0B` (`docs/inline-precompiles.md`), and `BlockConforms.riscv` excludes them from the whole-run theorem, as it excludes Jolt's custom instructions. Opcode `0x2B` and every other `0x0B` encoding are outside `SourceInstruction`.
+Inline rows are out of scope for the whole-run theorem for now. `SourceInstruction` includes twelve registered inlines (five hash, seven secp256k1) at `0x0B` (`docs/inline-precompiles.md`), and `BlockConforms.riscv` excludes them from the whole-run theorem, as it excludes Jolt's custom instructions. Opcode `0x2B` and every other `0x0B` encoding are outside `SourceInstruction`.
 
 ## 8. Remaining assumptions and where they go
 

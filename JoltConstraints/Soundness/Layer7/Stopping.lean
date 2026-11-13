@@ -36,9 +36,7 @@ theorem soundness_stopping {F : Type} [Field F] (joltField : JoltField F)
       ∃ bound : run.rows.size < params.traceLength,
         witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 1 ∨
         ∃ last ∈ run.rows.back?, last.StableStall)
-    (advice : ∀ n : Fin run.rows.size,
-      run.rows[n].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program run.rows n) :
+    (advice : JoltConstraints.Soundness.BuiltinAdviceHonest joltInstance.program run.rows) :
     (∀ last ∈ run.rows.back?, last.StableStall) ∧
     0 < run.rows.size ∧
     (∀ address : Fin params.ramSize,

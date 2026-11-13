@@ -1,5 +1,6 @@
 import JoltConstraints.Soundness.Layer6.ExecutionPrefix
 import JoltConstraints.Soundness.Layer5.Registers
+import JoltConstraints.Soundness.Layer5.InlineAdvice
 
 open LeanRV64D
 
@@ -36,9 +37,7 @@ structure BoundaryState {F : Type} [Field F] {params : WitnessParams}
   noEarlierStop : ∀ (i : Nat) (current next : TraceRow run.bytecode),
     run.rows[i]? = some current → run.rows[i + 1]? = some next →
     ¬ current.StableStall
-  honestAdvice : ∀ n : Fin run.rows.size,
-    run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN joltInstance.program run.rows n
+  honestAdvice : BuiltinAdviceHonest joltInstance.program run.rows
   atBoundary : ∀ last ∈ run.rows.back?,
     run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0
   registers : ∀ bound : run.rows.size < params.traceLength,
@@ -75,6 +74,15 @@ def ExpansionHasAdvice (bytecode : Array JoltInstructionRow)
     (first : Fin bytecode.size) : Prop :=
   ∃ offset < expansionRowCount bytecode first,
     ∃ row ∈ bytecode[first.val + offset]?, row.instruction.adviceValue? ≠ none
+
+/-- The source whose expansion begins at `first` is a registered inline. Inline
+expansions may contain VirtualAdvice rows; their words come from the inline advice
+input, so reconstruction leaves them unconstrained (`BuiltinAdviceHonest`).
+For example, a SECP256K1_MULQ call's expansion is inline, while a DIV's is not. -/
+def ExpansionIsInline (program : Rv64ProgramImage SourceInstruction)
+    (bytecode : Array JoltInstructionRow) (first : Fin bytecode.size) : Prop :=
+  ∃ key rs1 rs2 rs3, program.instructionAt bytecode[first].address =
+    some (.inline key rs1 rs2 rs3)
 
 /-- A register is live after `done` rows if it is persistent, or if the source
 is unfinished and one of its already executed rows wrote that register.

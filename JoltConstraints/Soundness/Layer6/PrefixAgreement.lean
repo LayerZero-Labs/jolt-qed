@@ -19,7 +19,8 @@ execute a whole source instruction to obtain a larger run satisfying the same
 boundary invariant. The conclusion requires progress, without specifying the
 array extension used to construct that run.
 For example, a REM step retains all nine expanded rows with honest quotient
-advice, even when the witness's quotient differs in instruction temporaries. -/
+advice, even when the witness's quotient differs in instruction temporaries.
+A registered inline runs row by row and keeps the witness's advice words. -/
 theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
@@ -42,21 +43,25 @@ theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
   have complete : ∃ run' : UntrustedAnswerRun joltInstance privateInputs,
       run'.rows.size = run.rows.size + count ∧
       ExpansionState witness context run' first count ∧
-      (∀ n : Fin run'.rows.size, run'.rows[n].someTracerAdvice? =
-        honestTracerAdviceAtStepN joltInstance.program run'.rows n) := by
-    by_cases hasAdvice : ExpansionHasAdvice context.bytecode first
-    · obtain ⟨run', _, size, state, advice⟩ := division_block joltField witness context
-        equations run first initial boundary.honestAdvice hasAdvice
+      BuiltinAdviceHonest joltInstance.program run'.rows := by
+    by_cases divisionCase : ExpansionHasAdvice context.bytecode first ∧
+        ¬ ExpansionIsInline joltInstance.program context.bytecode first
+    · obtain ⟨hasAdvice, notInline⟩ := divisionCase
+      obtain ⟨run', _, size, state, advice⟩ := division_block joltField witness context
+        equations run first initial boundary.honestAdvice hasAdvice notInline
       exact ⟨run', size, state, advice⟩
+    have adviceFree : ¬ ExpansionHasAdvice context.bytecode first ∨
+        ExpansionIsInline joltInstance.program context.bytecode first := by
+      by_cases inline : ExpansionIsInline joltInstance.program context.bytecode first
+      · exact Or.inr inline
+      · exact Or.inl fun hasAdvice => divisionCase ⟨hasAdvice, inline⟩
     have finish : ∀ remaining done (current : UntrustedAnswerRun joltInstance privateInputs),
         count - done = remaining → ExpansionState witness context current first done →
-        (∀ n : Fin current.rows.size, current.rows[n].someTracerAdvice? =
-          honestTracerAdviceAtStepN joltInstance.program current.rows n) →
+        (BuiltinAdviceHonest joltInstance.program current.rows) →
         ∃ result : UntrustedAnswerRun joltInstance privateInputs,
           result.rows.size = current.rows.size + (count - done) ∧
           ExpansionState witness context result first count ∧
-          (∀ n : Fin result.rows.size, result.rows[n].someTracerAdvice? =
-            honestTracerAdviceAtStepN joltInstance.program result.rows n) := by
+          (BuiltinAdviceHonest joltInstance.program result.rows) := by
       intro remaining
       induction remaining with
       | zero =>
@@ -70,7 +75,7 @@ theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
         have unfinished : done < count := by omega
         obtain ⟨next, _, size, state', advice'⟩ := row_step joltField joltInstance
           assumptions restrictions privateInputs witness context equations current first
-          done state unfinished advice hasAdvice
+          done state unfinished advice adviceFree
         obtain ⟨result, total, completed, honest⟩ := ih (done + 1) next
           (by omega) state' advice'
         exact ⟨result, by omega, completed, honest⟩
@@ -82,7 +87,9 @@ theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
 
 /-- Reconstruct witness rows through the first stable stall, or through padding
 or the last cycle when no stall occurs. Every retained row is real, no retained
-row stops before the last, and its observations and internal advice agree. -/
+row stops before the last, its observations agree, and its built-in internal advice
+is honest. Inline advice rows keep the witness's words; `honest_of_builtin` makes the
+run honest for the private inputs that carry those words. -/
 theorem soundness_execution_prefix_agreement {F : Type} [Field F]
     (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -105,9 +112,7 @@ theorem soundness_execution_prefix_agreement {F : Type} [Field F]
         ∃ bound : run.rows.size < params.traceLength,
           witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 1 ∨
           ∃ last ∈ run.rows.back?, last.StableStall) ∧
-      (∀ n : Fin run.rows.size,
-        run.rows[n].someTracerAdvice? =
-          honestTracerAdviceAtStepN joltInstance.program run.rows n) := by
+      BuiltinAdviceHonest joltInstance.program run.rows := by
   classical
   obtain ⟨run, empty, boundary⟩ := boundaryState_empty joltField witness context equations
   clear empty

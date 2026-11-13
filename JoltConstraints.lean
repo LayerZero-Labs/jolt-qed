@@ -43,6 +43,7 @@ import JoltConstraints.Soundness.Layer4.Inputs
 import JoltConstraints.Soundness.Layer4.Outputs
 import JoltConstraints.Soundness.Layer4.Advice
 import JoltConstraints.Soundness.Layer5.TapeTrace
+import JoltConstraints.Soundness.Layer5.InlineAdvice
 import JoltConstraints.Soundness.Layer5.NarrowAdvice
 import JoltConstraints.Soundness.Layer5.MemoryAddress
 import JoltConstraints.Soundness.Layer5.RamAlignment
@@ -114,3 +115,4 @@ import JoltConstraints.WholeRun.Elf
 import JoltConstraints.WholeRun.Halt
 import JoltConstraints.WholeRun.CodeInv
 import JoltConstraints.WholeRun.Top
+import JoltConstraints.WholeRun.InlineCalls

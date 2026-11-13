@@ -78,8 +78,7 @@ theorem append_host_row
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
     (state : ExpansionState witness context run first done)
     (unfinished : done < expansionRowCount context.bytecode first)
-    (honestAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN inst.program run.rows n)
+    (honestAdvice : BuiltinAdviceHonest inst.program run.rows)
     (bound : run.rows.size < params.traceLength)
     (next : Fin run.bytecode.size) (pre : SailJoltState)
     (indexIs : next.val = first.val + done) (entry : RawRowEntry run next pre)

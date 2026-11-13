@@ -1,5 +1,4 @@
 import JoltConstraints.Soundness.Layer6.DivisionPrograms
-import JoltConstraints.inline_rows_ok
 
 open LeanRV64D
 
@@ -100,27 +99,12 @@ private theorem division_source_kind (kind : DivisionKind) (rd rs1 rs2 : regidx)
     SourceInstruction.expand, ExpandedSource.ofPureProgram, isX0,
     Instr.canonicalNoOp, Instr.adviceValue?] at advice
 
-/-- Rows that pass `inlineRowOk` contain no internal advice. For example, no row of a
-registered hash inline is a `VirtualAdvice` row. -/
-private theorem inline_rows_no_advice (rows : List Instr)
-    (ok : rows.all ExpansionFacts.inlineRowOk = true) :
-    rows.any (·.adviceValue?.isSome) = false := by
-  induction rows with
-  | nil => rfl
-  | cons row rest ih =>
-    simp only [List.all_cons, Bool.and_eq_true] at ok
-    have straight : ExpansionFacts.straightLineRow row = true := by
-      have parts := ok.1
-      simp only [ExpansionFacts.inlineRowOk, Bool.and_eq_true] at parts
-      exact parts.1.2
-    simp only [List.any_cons, ih ok.2, Bool.or_false]
-    cases row <;> first | rfl | simp [ExpansionFacts.straightLineRow] at straight
-
-/-- A source expansion containing internal advice is one of the division
-families with a nonzero architectural destination; for example, DIV x1,x2,x3
-uses advice, while the floor-memory rows in an SB expansion do not. -/
+/-- A source expansion containing internal advice that is not a registered inline is
+one of the division families with a nonzero architectural destination; for example,
+DIV x1,x2,x3 uses advice, while the floor-memory rows in an SB expansion do not. -/
 private theorem source_advice_kind (source : SourceInstruction)
-    (advice : SourceInternalAdvice source) :
+    (advice : SourceInternalAdvice source)
+    (notInline : ∀ key rs1 rs2 rs3, source ≠ .inline key rs1 rs2 rs3) :
     ∃ (kind : DivisionKind) (rd rs1 rs2 : regidx) (q : BitVec 64),
       source = kind.source rd rs1 rs2 q ∧ rd ≠ .Regidx 0 := by
   -- Classify source constructors once, keeping division programs symbolic.
@@ -133,12 +117,8 @@ private theorem source_advice_kind (source : SourceInstruction)
   case riscv.REMU => exact division_source_kind .remu _ _ _ _ advice
   case riscv.REMW => exact division_source_kind .remw _ _ _ _ advice
   case riscv.REMUW => exact division_source_kind .remuw _ _ _ _ advice
-  -- Registered inline rows never request internal advice.
-  case inline.Regidx key rs1 rs2 rd =>
-    simp only [SourceInternalAdvice, SourceInstruction.expand, Option.any_some,
-      expandedInternalAdvice,
-      inline_rows_no_advice _ (Inlines.InlineKey.expandRows_rowsOk key rs1 rs2 (.Regidx rd)),
-      Bool.false_eq_true] at advice
+  -- Registered inlines are excluded by hypothesis.
+  case inline.Regidx key rs1 rs2 rd => exact absurd rfl (notInline key rs1 rs2 (.Regidx rd))
   -- CSR reads, swaps and bit updates never request internal advice.
   case riscv.CSRRW | riscv.CSRRS | riscv.CSRRC | riscv.CSRRWI | riscv.CSRRSI | riscv.CSRRCI =>
     simp only [SourceInternalAdvice, SourceInstruction.expand, ExpandedSource.ofProgram,
@@ -316,7 +296,8 @@ private theorem expanded_division_shape
     divisionRows_arithmetic _ (division_program_rows kind rd rs1 rs2 q),
     ExpansionFacts.sequenceOk_tempsReadAfterWrite _ checks.2.1⟩
 
-/-- Identify an advice-bearing source and its generated instruction family.
+/-- Identify an advice-bearing source that is not a registered inline, and its
+generated instruction family.
 Successful preprocessing supplies address uniqueness for `instructionAt`;
 `starts` and the expansion certificate locate the whole source, not merely
 an arbitrary row with the same address.
@@ -330,7 +311,8 @@ theorem division_expansion_layout
     (expanded : expand_program image = some bytecode)
     (preprocessed : ∃ slots, preprocess bytecode = some slots)
     (first : Fin bytecode.size) (starts : bytecode[first].starts_source = true)
-    (hasAdvice : ExpansionHasAdvice bytecode first) :
+    (hasAdvice : ExpansionHasAdvice bytecode first)
+    (notInline : ¬ ExpansionIsInline image bytecode first) :
     ∃ (kind : DivisionKind) (rd rs1 rs2 : regidx) (placeholder : BitVec 64),
       rd ≠ .Regidx 0 ∧
       image.instructionAt bytecode[first].address =
@@ -360,10 +342,12 @@ theorem division_expansion_layout
   obtain ⟨adviceRow, adviceMember, sameInstruction⟩ := List.mem_map.mp inBlock
   have sourceAdvice := source_internal_advice_of_rows source rows emits
     ⟨adviceRow, adviceMember, by rwa [sameInstruction]⟩
+  have sourceAt := source_instructionAt image bytecode expanded accepted source member
   obtain ⟨kind, rd, rs1, rs2, placeholder, sourceEq, nonzero⟩ :=
-    source_advice_kind source.instruction sourceAdvice
+    source_advice_kind source.instruction sourceAdvice fun key rs1 rs2 rs3 isInline =>
+      notInline ⟨key, rs1, rs2, rs3, by rw [address, sourceAt, isInline]⟩
   refine ⟨kind, rd, rs1, rs2, placeholder, nonzero, ?_, ?_, ?_⟩
-  · rw [address, source_instructionAt image bytecode expanded accepted source member, sourceEq]
+  · rw [address, sourceAt, sourceEq]
   · rw [block, List.length_map, count]
   · rw [block]
     exact expanded_division_shape source rows emits kind rd rs1 rs2 placeholder sourceEq nonzero

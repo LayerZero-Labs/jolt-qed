@@ -273,6 +273,64 @@ theorem expansion_row_remaining
   change 0 + offset + 1 = expansionRowCount bytecode first at countdown
   omega
 
+/-- Only the first row of a stamped expansion starts a source instruction.
+For example, rows 1 to 8 of a nine-row REM block do not start a source.
+See jolt/crates/jolt-program/src/expand/metadata.rs (`stamp_sequence_metadata`)
+at 5def437f. -/
+theorem expansion_later_not_start
+    (image : Rv64ProgramImage SourceInstruction)
+    (bytecode : Array JoltInstructionRow)
+    (expanded : expand_program image = some bytecode)
+    (first : Fin bytecode.size) (starts : bytecode[first].starts_source = true)
+    (offset : Nat) (positive : 0 < offset)
+    (inside : offset < expansionRowCount bytecode first)
+    (row : JoltInstructionRow) (atRow : bytecode[first.val + offset]? = some row) :
+    row.starts_source = false := by
+  have endBound := (expand_program_layout image bytecode expanded).endInBounds first
+  have prevBound : first.val + (offset - 1) < bytecode.size := by
+    unfold expansionRowCount at inside
+    omega
+  have currentBound : first.val + offset < bytecode.size := by
+    unfold expansionRowCount at inside
+    omega
+  let previous : Fin bytecode.size := ⟨first.val + (offset - 1), prevBound⟩
+  let current : Fin bytecode.size := ⟨first.val + offset, currentBound⟩
+  have remaining := expansion_row_remaining image bytecode expanded first starts
+    (offset - 1) (by omega) bytecode[previous]
+    (by simp only [previous, Array.getElem?_eq_getElem prevBound, Fin.getElem_fin])
+  have continues : bytecode[previous].continues = true := by
+    simpa only [JoltInstructionRow.continues, bne_iff_ne] using remaining
+  have layout := (expand_program_layout image bytecode expanded).next previous current
+    (by simp only [previous, current]; omega) continues
+  rw [Array.getElem?_eq_getElem currentBound] at atRow
+  have rowIs : row = bytecode[current] := by
+    exact (Option.some.inj atRow).symm
+  rw [rowIs]
+  unfold JoltInstructionRow.starts_source
+  simp only [layout.2.1, layout.2.2.1, Option.isNone_some, Bool.false_or]
+
+/-- A trace step `offset` steps after an expansion start, with no start in between,
+lies in the expansion that begins at `base`. For example, if step 10 starts a REM and
+steps 11 to 18 do not start a source, step 15 lies in the expansion that starts at 10. -/
+theorem expansion_start_of_segment {bytecode : Array JoltInstructionRow}
+    (rows : Array (TraceRow bytecode)) (base offset : Nat)
+    (starts : stepNOfTraceIsStartOfNewExpansion rows base = true)
+    (later : ∀ k, 0 < k → k ≤ offset →
+      stepNOfTraceIsStartOfNewExpansion rows (base + k) = false) :
+    startOfExpansionContainingStepN rows (base + offset) = base := by
+  induction offset with
+  | zero =>
+      by_cases empty : base = 0
+      · subst base
+        rfl
+      · obtain ⟨previous, rfl⟩ := Nat.exists_eq_succ_of_ne_zero empty
+        simp [startOfExpansionContainingStepN, starts]
+  | succ offset ih =>
+      have noStart := later (offset + 1) (by omega) (by omega)
+      rw [Nat.add_succ, startOfExpansionContainingStepN]
+      rw [show base + offset + 1 = base + (offset + 1) by omega, noStart]
+      exact ih (fun k positive inside => later k positive (by omega))
+
 private theorem expansion_order_push (bytecode : Array JoltInstructionRow)
     (rows : Array (TraceRow bytecode)) (first done : Nat)
     (retained : done ≤ rows.size)
