@@ -203,6 +203,7 @@ def compareWith (w : BitVec 32) (lean : Option RiscvInstruction) (jolt : JoltRes
           else .mismatch s!"both accept {v.kind}, operands differ"
             s!"{jsonOf jolt}; expected {reprStr expected}; Lean {reprStr i}"
       | .ok (.jolt _) => .mismatch s!"Jolt gives custom {v.kind}, Lean gives {ctorName i}" (reprStr i)
+      | .ok (.inline ..) => .mismatch s!"Jolt gives inline {v.kind}, Lean gives {ctorName i}" (reprStr i)
       | .error e => .mismatch s!"Jolt {v.kind} has no Lean source form ({e.describe}), Lean gives {ctorName i}"
           (reprStr i)
 
