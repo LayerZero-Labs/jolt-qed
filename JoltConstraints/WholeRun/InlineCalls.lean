@@ -486,7 +486,7 @@ theorem HonestTrace.secp256k1Squarer_jolt_advice_complete
 /-- **SECP256K1_DIVQ with Jolt's advice, in an honest trace.** Let the call
 `SECP256K1_DIVQ rd=rs3, rs1, rs2` start at step `base`, and let the state `s` before that
 step meet the call's obligations, with a dividend `a` below `p` at `rs1` and a divisor `b`
-coprime to `p` at `rs2`. If `inline_advice` holds Jolt's eight words for `a / b` at the
+nonzero modulo `p` at `rs2`. If `inline_advice` holds Jolt's eight words for `a / b` at the
 call's position, then the state after the call's last step meets `FieldDivSpec` and stores
 a canonical result.
 Example: with `a = 1`, `b = 2` and `inline_advice` holding Jolt's words for
@@ -501,7 +501,7 @@ theorem HonestTrace.secp256k1Divq_jolt_advice_complete
       (sourceValue (.xreg rs1) (trace.rows[base]'at_.bound).preState) = some a)
     (hb : readLimbs? (trace.rows[base]'at_.bound).preState
       (sourceValue (.xreg rs2) (trace.rows[base]'at_.bound).preState) = some b)
-    (hca : limbsToNat a < p) (hcop : Nat.Coprime (limbsToNat b) p)
+    (hca : limbsToNat a < p) (hb0 : limbsToNat b % p ≠ 0)
     (jolt : ∀ ws, joltAdvice .divq a b = some ws → HonestTrace.InlineWordsAt trace base ws) :
     ∃ last, ∃ lastBound : last < trace.rows.size, last = base + InlineKey.secp256k1Divq.rowCount - 1 ∧
       FieldDivSpec p rs1 rs2 rs3 (trace.rows[base]'at_.bound).preState
@@ -509,7 +509,7 @@ theorem HonestTrace.secp256k1Divq_jolt_advice_complete
       FieldMulCanonical p rs3 (trace.rows[base]'at_.bound).preState
         (trace.rows[last]'lastBound).postState := by
   obtain ⟨ws, hws, s', run, spec, canonical⟩ :=
-    secp256k1Divq_rows_jolt_advice_complete pre ha hb hca hcop
+    secp256k1Divq_rows_jolt_advice_complete pre ha hb hca hb0
   obtain ⟨last, lastBound, lastEq, post⟩ := field_call_result at_ rfl .div false mulqRegs
     (Generated.secp256k1DivqRowsAutoList rs1 rs2 rs3) rfl
     (secp256k1DivqRowsAutoList_eq rs1 rs2 rs3) (by decide) (division_length hws)
@@ -530,7 +530,7 @@ theorem HonestTrace.secp256k1Divr_jolt_advice_complete
       (sourceValue (.xreg rs1) (trace.rows[base]'at_.bound).preState) = some a)
     (hb : readLimbs? (trace.rows[base]'at_.bound).preState
       (sourceValue (.xreg rs2) (trace.rows[base]'at_.bound).preState) = some b)
-    (hca : limbsToNat a < n) (hcop : Nat.Coprime (limbsToNat b) n)
+    (hca : limbsToNat a < n) (hb0 : limbsToNat b % n ≠ 0)
     (jolt : ∀ ws, joltAdvice .divr a b = some ws → HonestTrace.InlineWordsAt trace base ws) :
     ∃ last, ∃ lastBound : last < trace.rows.size, last = base + InlineKey.secp256k1Divr.rowCount - 1 ∧
       FieldDivSpec n rs1 rs2 rs3 (trace.rows[base]'at_.bound).preState
@@ -538,7 +538,7 @@ theorem HonestTrace.secp256k1Divr_jolt_advice_complete
       FieldMulCanonical n rs3 (trace.rows[base]'at_.bound).preState
         (trace.rows[last]'lastBound).postState := by
   obtain ⟨ws, hws, s', run, spec, canonical⟩ :=
-    secp256k1Divr_rows_jolt_advice_complete pre ha hb hca hcop
+    secp256k1Divr_rows_jolt_advice_complete pre ha hb hca hb0
   obtain ⟨last, lastBound, lastEq, post⟩ := field_call_result at_ rfl .div true mulrRegs
     (Generated.secp256k1DivrRowsAutoList rs1 rs2 rs3) rfl
     (secp256k1DivrRowsAutoList_eq rs1 rs2 rs3) (by decide) (division_length hws)
