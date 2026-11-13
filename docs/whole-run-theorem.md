@@ -193,10 +193,90 @@ They have the same premises and conclusions, with two changes:
 The specifications keep the known gaps of the per-call theorems: `SECP256K1_GLVR_ADV` stores six unconstrained words, the field operations may store a non-canonical result, and the DIV operations accept any stored result when both operands are zero.
 The theorems do not say that a guest computes SHA-256 or verifies an ECDSA signature.
 
+## Completeness from Sail
+
+`JoltConstraints/WholeRun/SailCompleteness.lean` proves a theorem in the other direction, `JoltInstance.sail_completeness`.
+It starts from a run of Sail plus the platform and concludes that Jolt's prover accepts the run.
+
+```lean
+theorem JoltInstance.sail_completeness {F : Type} [Field F]
+    (joltInstance : JoltInstance SourceInstruction)
+    (assumptions : joltInstance.CompletenessAssumptions)
+    (privateInputs : JoltPrivateInputs) {init : SailJoltState}
+    (initialized : joltInstance.initial_state privateInputs = some init)
+    (accepted : joltInstance.bytecode.isSome) (valid : joltInstance.validate_inputs = true)
+    (ramBounds : ∃ minimum maximum,
+      joltInstance.verifier_ram_bounds = some (minimum, maximum) ∧ minimum ≤ maximum)
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
+    (hrows : joltInstance.program.RowsAligned) (hheap : joltInstance.HeapNoWrap)
+    (run : Nat → SailState) (n : Nat) (start : run 0 = sailInit init)
+    (steps : ∀ k < n, PlatformStep (run k) (run (k + 1)))
+    (stops : 0 < n ∧ SailStalls joltInstance.program (run (n - 1)) (run n) ∧
+      SailAtJump joltInstance.program (run (n - 1)))
+    (runsUntilStop : ∀ k, k + 1 < n → ¬ SailStalls joltInstance.program (run k) (run (k + 1)))
+    (fits : ∃ padded,
+      ProverConfig.checkedTraceLength (sailRowCount joltInstance.program run n) = some padded ∧
+      padded ≤ joltInstance.max_padded_trace_length.toNat)
+    (follows : JoltFollows joltInstance.program
+      init.jolt_device.memory_layout.get_lowest_address.toNat run n)
+    (claimsOutputs : trimTrailingZeros (sailOutputs init.jolt_device (run n)) =
+      trimTrailingZeros joltInstance.outputs)
+    (claimsPanic : sailPanicWord init.jolt_device (run n) ≠ 0 ↔ joltInstance.panic = true) :
+    ∃ (words : Array (BitVec 64))
+      (trace : HonestTrace joltInstance { privateInputs with inline_advice := words })
+      (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config),
+      trace.initialState = init ∧ trace.matches_outputs joltInstance ∧ trace.SpoilAssertsPass ∧
+      JoltConstraints.AllConstraints joltInstance
+        (JoltConstraints.adviceBlockWords trace.initialState.jolt_device.memory_layout
+          (TraceWitness.initialRamWord trace))
+        (HonestTrace.honestWitness (F := F) (trace.witness_params config proverAccepts) trace)
+```
+
+In words: let `run 0, ..., run n` be a run of Sail plus the platform (`PlatformStep`, section [Guests that call inlines](#guests-that-call-inlines)) that starts from `sailInit init`, where `init` is Jolt's initial state for the private inputs.
+Suppose the run stops at Jolt's termination convention, fits Jolt's trace length, and Jolt follows each of its steps.
+Then Jolt's tracer has an honest trace from `init`, whose inline advice words are the ones its inline calls record.
+The trace has the instance's outputs and panic flag, its rows pass their assertions, Jolt's prover accepts it, and the witness the prover builds from it satisfies `AllConstraints`.
+
+The premises:
+
+| Premise | What it says |
+|---|---|
+| `assumptions` | `CompletenessAssumptions`, the premises of `JoltInstance.completeness` |
+| `initialized`, `accepted`, `valid` | `init` is Jolt's initial state for `privateInputs`, Jolt's preprocessing builds the bytecode, and `validate_inputs` passes |
+| `ramBounds` | the verifier's RAM bounds exist and the lower bound is at most the upper bound |
+| `hdecoded`, `hrows`, `hheap` | the platform premises of the soundness theorems |
+| `start`, `steps` | `run` is a run of `n` platform steps from `sailInit init` |
+| `stops`, `runsUntilStop` | the run stops at Jolt's termination convention: the last step is a stable self-jump (`SailStalls`: `PC` stays at an image row whose last Jolt rows repeat themselves), that row's last Jolt row is a jump (`SailAtJump`), and no earlier step stalls |
+| `fits` | the run's Jolt row count (`sailRowCount`), padded by Jolt's `checked_trace_length`, is at most `max_padded_trace_length` |
+| `follows` | Jolt follows the run (`JoltFollows`, below) |
+| `claimsOutputs`, `claimsPanic` | the instance claims the run's outputs, up to trailing zero bytes, and its panic flag |
+
+`JoltFollows program lowest run n` says that at each step `k < n`, from every Jolt state related to `run k` (`RunRel`) whose embedded `misa` has the C bit set (`MisaC`), Jolt runs a block `b` that satisfies `JoltStep`.
+The theorem proves `MisaC` along the run: Jolt's initial state has it (`MisaC.initial`) and every block keeps it (`MisaC.of_runs`). The `JoltStep` fields are:
+
+- `runs`: Jolt's tracer runs the block (`Block.Runs`). The block's expanded rows execute from the related state with honest advice, and none of them fails.
+- `accesses`: every RAM address the block's rows access is 0 or at least the layout's lowest address (`Block.AccessesInMap`). Jolt's MMU accepts some reads below that address, so `runs` alone does not exclude them.
+- `conforms`, `no_low_load`, `not_ebreak`: the conditions of the soundness theorems (`PlatformConforms`, `NoLowLoad`, and the row is not EBREAK).
+- `inline_lands`: an inline call's last Jolt state is related to Sail's state after the step. The platform step may store any result that meets the call's specification, and this field says that it stored Jolt's result.
+
+This premise carries the conditions on the guest that Jolt needs and Sail does not.
+The `runs` field excludes every access where Jolt's tracer faults, including the I/O gap `[io_end, RAM_START)` and the heap padding, and every SC that Jolt's store checks reject ([`riscv-alignment.md`](riscv-alignment.md) section 3).
+The `not_ebreak` field ends the run before the first EBREAK.
+
+`JoltFollows` is a premise, not a theorem.
+`WholeRun/RiscvFollows.lean` discharges its `runs` field for a RISC-V instruction whose memory accesses go to RAM: `Block.runs_of_sailRetires_misaC` shows that Jolt's block runs when Sail's step retires the instruction (`SailRetires`) and the instruction's memory conditions hold (`MemoryConditions`, the address-level form of the memory-map premise).
+It uses `equivAssumptions_of_conditions`, which builds the assumption bundle of `joltRun_eq_execute` from `MemoryConditions` instead of from a retiring Jolt run.
+Still open: the I/O-access and ECALL cases of `runs`, the other `JoltStep` fields as consequences of Sail's step, and the inline case, which should follow from the `*_rows_complete` lemmas and `InlineKey.JoltOutput`.
+Until then, the theorem shows that a Sail run that Jolt follows step by step gives an accepted Jolt trace: it builds the trace from the blocks (`HonestTrace.ofBlocks`), shows that the rows pass their assertions (`expand_instruction_no_spoil`) and that the prover accepts the trace (`prover_config_some`), and composes with `JoltInstance.completeness`.
+
+The theorem inherits the five open goals of `JoltInstance.completeness` (`JoltConstraints/model_review.md`, "Proofs owed"): (01), (08) and (11) wait on a16z/jolt#1949, (37) on a16z/jolt#1950 and (38) on a16z/jolt#1951 item 1.
+`JoltAudit/Axioms.lean` audits it under `#audit_axioms_known_sorry`.
+No other declaration in its closure uses `sorry`.
+
 ## What the theorems do not say
 
 - **They do not say anything about Jolt's verifier.** `AllConstraints` checks every constraint equation directly on the whole witness. Jolt's verifier instead runs sumchecks, reductions and a polynomial commitment scheme, which jolt-qed has not verified (see the [README](../README.md)). "Accepted" in `sail_soundness` means "has a witness that satisfies the modelled constraints".
-- **They are one-directional.** Every honest Jolt run up to its first EBREAK is reproduced by Sail. The converse is not claimed: a Sail run need not correspond to a Jolt run, and the theorems say nothing about programs whose runs Jolt's tracer aborts.
+- **The soundness theorems are one-directional.** Every honest Jolt run up to its first EBREAK is reproduced by Sail. The converse, `sail_completeness` ([Completeness from Sail](#completeness-from-sail)), assumes that Jolt follows each step of the Sail run (`JoltFollows`). No theorem says anything about programs whose runs Jolt's tracer aborts.
 - **They stop at the first EBREAK.** Jolt treats EBREAK as the end of the program, and the RISC-V reading of that is entering debug mode. The Sail model does not implement the debug extension, and the theorems stop in front of the first EBREAK or C.EBREAK without executing it ([`riscv-alignment.md`](riscv-alignment.md) section 4). They say nothing about later instructions.
 - **They do not cover Jolt's own instructions**, inline opcodes other than the twelve registered `0x0B` inlines, or the advice tape (see the scope premise above). Only the `_with_inlines` variants cover the twelve inlines.
 - **They describe a particular Jolt revision.** The system expansions, the decoder and the ELF loader (`decode_elf`) transcribe a16z/jolt `c336a6da7`, the head of a16z/jolt#2384. That change is not on Jolt `main` until a16z/jolt#2383 and #2384 merge ([`riscv-alignment.md`](riscv-alignment.md), Sources).
@@ -209,4 +289,4 @@ The theorems do not say that a guest computes SHA-256 or verifies an ECDSA signa
 - **Five generated declarations raise a Lean limit.** Three CSR if-chains and the two decoder mappings in the closure of the theorems carry declaration-local `maxRecDepth` options between 550 and 1450, and one of them a `maxHeartbeats` of 250000 ([`riscv-alignment.md`](riscv-alignment.md) section 8). No proof in `JoltBytecode/` or `JoltConstraints/` sets a limit.
 - **The Lean models of Jolt are faithful.** Applying the theorems to Jolt itself requires trusting that the Lean definitions of its tracer, expansions, decoder, ELF loader and constraints match the cited Jolt revisions, and that the sections given to `DecodedFrom` are what the `object` crate parses from the guest ELF. The theorems do not prove that correspondence. The [coverage ledger](coverage-ledger.md) lists the check behind each modelled artifact: some are generated from Jolt and proved equal, some are tested against Jolt on samples, and the rest are supported only by reading Jolt's source. The differential test in [`scripts/difftest/`](../scripts/difftest/) (jolt-qed#40) is not one of these checks. It runs real binaries on Sail's C++ emulator and on Jolt's tracer and compares the results; Lean takes no part in it, so it compares Jolt's tracer with Sail, not the Lean models with Jolt.
 - **The Sail compiler preserves the model's meaning.** The CI check shows that the generated files are reproducible, not that the compiler translates the Sail model correctly.
-- **Lean's kernel checks the proofs using three standard axioms.** Nothing in the closure of the theorems uses `sorry`, `native_decide`, `bv_decide` or `decide +kernel`.
+- **Lean's kernel checks the proofs using three standard axioms.** Nothing in the closure of the theorems uses `sorry`, `native_decide`, `bv_decide` or `decide +kernel`. `sail_completeness` also depends on `sorryAx` through the five open goals of `JoltInstance.completeness` ([Completeness from Sail](#completeness-from-sail)).

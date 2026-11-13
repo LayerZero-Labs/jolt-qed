@@ -120,5 +120,8 @@ import JoltConstraints.WholeRun.InlineContract
 import JoltConstraints.WholeRun.InlineSoundness
 import JoltConstraints.WholeRun.InlineCompleteness
 import JoltConstraints.WholeRun.Platform
+import JoltConstraints.WholeRun.TraceOfBlocks
+import JoltConstraints.WholeRun.SailCompleteness
+import JoltConstraints.WholeRun.RiscvFollows
 import JoltConstraints.ConstraintGen.Equiv
 import JoltConstraints.ExpansionGen.Equiv

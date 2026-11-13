@@ -676,7 +676,10 @@ private theorem reservation_store_plan (double : Bool) (rd rs1 rs2 : regidx) :
     | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
     | apply StorePlan.scratch _ _ (by simp [ScratchRow])
 
-private structure ReservationMemory (store double : Bool) (rs1 : regidx)
+/-- The memory conditions of an LR (`store = false`) or SC (`store = true`): the address in
+`rs1` is aligned to the access width, Jolt's tracer accepts a load from the reservation's
+doubleword, and for SC also a store to it. -/
+structure ReservationMemory (store double : Bool) (rs1 : regidx)
     (js : SailJoltState) : Prop where
   align : JoltISA.sourceValue (.xreg rs1) js &&& (if double then 7#64 else 3#64) = 0#64
   load : Assumptions.JoltRamLoadOk
@@ -710,7 +713,12 @@ private theorem reservation_conditions (store double : Bool) (rd rs1 rs2 : regid
     obtain ⟨hstore, hdev⟩ := hs (by simpa only [heq] using hram) hrun
     exact ⟨⟨ha, hl, by simpa only [heq, ite_true] using hstore⟩, hdev⟩
 
-private def MemoryConditions : RiscvInstruction → SailJoltState → Prop
+/-- The memory conditions of a RISC-V instruction in the Jolt state `js`: Jolt's tracer accepts the
+load or store of the doubleword the instruction accesses (`Assumptions.JoltRamLoadOk`,
+`Assumptions.JoltRamStoreOk`, `ReservationMemory`). Instructions that access no memory have no
+condition.
+For example, `LB rd rs1 imm` needs the load of the doubleword holding `rs1 + imm` to be accepted. -/
+def MemoryConditions : RiscvInstruction → SailJoltState → Prop
   | .LB _ rs1 imm, js | .LH _ rs1 imm, js | .LW _ rs1 imm, js
   | .LBU _ rs1 imm, js | .LHU _ rs1 imm, js | .LWU _ rs1 imm, js
   | .LD _ rs1 imm, js =>
@@ -1200,18 +1208,11 @@ private def csrRegBundle (js : SailJoltState) (rs1 : regidx) (hsys : SystemInv j
     RiscvInstruction.CsrRegEqAssumptions rs1 js :=
   { csrBundle js hsys hlink hinv, unarySource js hinv hlink rs1 with }
 
-/-- A retiring RAM instruction has the Sail equivalence bundle and honest advice.
-For example, an honest `LB` run supplies its heap bound, while memory presence
-supplies the eight bytes of the enclosing doubleword.
-The additional premises are: `hsys` (invariant: legal persistent system values),
-`hmstatus` (invariant: Jolt retains only MIE/MPIE),
-`hlayout` (invariant: the device layout was constructed successfully),
-`heven` (from decoding: relative offsets are even),
-`hpc` (invariant: the current PC is even), and
-`hheap` (platform: the heap leaves eight bytes before address wrap).
-The run supplies the heap and stack-canary checks made by Jolt's tracer in
-`tracer/src/emulator/mmu.rs` (`Mmu::assert_effective_address`) at `5def437f`. -/
-theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
+/-- An instruction whose memory conditions hold (`MemoryConditions`) has the Sail equivalence
+bundle and honest advice. The premises are those of `equivAssumptions_of_retire`, with the
+memory conditions in place of a retiring Jolt run.
+For example, an `LB` whose doubleword load Jolt's tracer accepts has its load bundle. -/
+theorem equivAssumptions_of_conditions (i : RiscvInstruction) (hi : i.Lifted)
     (js : SailJoltState) (hsys : SystemInv js)
     (hlink : System.systemProject js = js.sail)
     (hinv : Step.StepInvariant js.sail)
@@ -1225,11 +1226,9 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
     (hpresent : ∀ a, memLow js.jolt_device ≤ a → a < memHigh js.jolt_device →
       ∃ b, js.sail.mem.get? a = some b)
     (hram : RamAccess i js)
-    (hok : ∃ js', RiscvInstruction.joltRun (honestInstr i js) js = .ok RETIRE_SUCCESS js') :
+    (hc : MemoryConditions i js) :
     ∃ h : RiscvInstruction.equivAssumptions (honestInstr i js) js,
       RiscvInstruction.AdviceHonest (honestInstr i js) js h := by
-  obtain ⟨js', hrun⟩ := hok
-  have hc := (retire_conditions i hi js js' hram hrun).1
   have hmprv := mprv_zero js hlink hmstatus
   have window (base : BitVec 64)
       (hram : JoltISA.RAM_START_ADDRESS ≤ base.toNat)
@@ -1367,6 +1366,38 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
   all_goals first
     | exact ⟨unarySource js hinv hlink _, True.intro⟩
     | exact ⟨binarySource js hinv hlink _ _, by first | exact True.intro | rfl⟩
+
+/-- A retiring RAM instruction has the Sail equivalence bundle and honest advice.
+For example, an honest `LB` run supplies its heap bound, while memory presence
+supplies the eight bytes of the enclosing doubleword.
+The additional premises are: `hsys` (invariant: legal persistent system values),
+`hmstatus` (invariant: Jolt retains only MIE/MPIE),
+`hlayout` (invariant: the device layout was constructed successfully),
+`heven` (from decoding: relative offsets are even),
+`hpc` (invariant: the current PC is even), and
+`hheap` (platform: the heap leaves eight bytes before address wrap).
+The run supplies the heap and stack-canary checks made by Jolt's tracer in
+`tracer/src/emulator/mmu.rs` (`Mmu::assert_effective_address`) at `5def437f`. -/
+theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
+    (js : SailJoltState) (hsys : SystemInv js)
+    (hlink : System.systemProject js = js.sail)
+    (hinv : Step.StepInvariant js.sail)
+    (hmstatus : js.vregs JoltISA.mstatusVReg &&& ~~~(0x88 : BitVec 64) = 0)
+    (hlayout : ∃ config, MemoryLayout.new config = some js.jolt_device.memory_layout)
+    (heven : i.EvenOffsets)
+    (hpc : ∀ pc, js.sail.regs.get? Register.PC = some pc → pc.getLsbD 0 = false)
+    (hheap : js.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8)
+    (hpma : js.sail.regs.get? Register.pma_regions = some platformPma)
+    (hhtif : js.sail.regs.get? Register.htif_tohost_base = some none)
+    (hpresent : ∀ a, memLow js.jolt_device ≤ a → a < memHigh js.jolt_device →
+      ∃ b, js.sail.mem.get? a = some b)
+    (hram : RamAccess i js)
+    (hok : ∃ js', RiscvInstruction.joltRun (honestInstr i js) js = .ok RETIRE_SUCCESS js') :
+    ∃ h : RiscvInstruction.equivAssumptions (honestInstr i js) js,
+      RiscvInstruction.AdviceHonest (honestInstr i js) js h := by
+  obtain ⟨js', hrun⟩ := hok
+  exact equivAssumptions_of_conditions i hi js hsys hlink hinv hmstatus hlayout heven hpc hheap
+    hpma hhtif hpresent hram (retire_conditions i hi js js' hram hrun).1
 
 /-- A retiring instruction whose doubleword access is in RAM preserves the
 entire Jolt device, including its outputs and panic flag.

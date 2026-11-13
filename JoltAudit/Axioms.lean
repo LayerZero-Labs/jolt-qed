@@ -22,6 +22,8 @@ import JoltConstraints.ExpansionGen.Equiv
 import JoltConstraints.WholeRun.InlineSoundness
 import JoltConstraints.WholeRun.Platform
 import JoltConstraints.WholeRun.InlineCompleteness
+import JoltConstraints.WholeRun.SailCompleteness
+import JoltConstraints.WholeRun.RiscvFollows
 import JoltConstraints.Completeness.completeness
 
 open Lean Elab Command
@@ -120,6 +122,13 @@ whole-run theorems with inlines (`JoltConstraints/WholeRun/Platform.lean`). -/
   WholeRun.HonestTrace.sail_reproduces_with_inlines,
   JoltInstance.sail_soundness_with_inlines
 
+/-! The progress lemma for completeness from Sail: Jolt's block runs when Sail's
+step retires a RISC-V instruction whose accesses go to RAM
+(`JoltConstraints/WholeRun/RiscvFollows.lean`). -/
+
+#audit_axioms
+  WholeRun.Block.runs_of_sailRetires_misaC
+
 /-! ## Known `sorry`
 
 The completeness theorems depend on `sorryAx` through the five completeness gaps
@@ -139,6 +148,7 @@ extra axiom. Move a theorem to `#audit_axioms` once those gaps are closed. -/
 #audit_axioms_known_sorry
   JoltInstance.completeness,
   JoltInstance.completeness_someWitness,
-  JoltInstance.completeness_jolt_inline_advice
+  JoltInstance.completeness_jolt_inline_advice,
+  JoltInstance.sail_completeness
 
 end JoltAudit
