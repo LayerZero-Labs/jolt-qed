@@ -2,10 +2,10 @@
 # Build the expansion-parity crate and generate the T3 constraint data.
 #
 # Usage:
-#   JOLT_DIR=<a16z/jolt checkout at 580084fcf> EXPANSION_PARITY_FEATURES=zicsr-remaining \
+#   JOLT_DIR=<a16z/jolt checkout at 3cc6e7bd1> EXPANSION_PARITY_FEATURES=zicsr-remaining \
 #     scripts/expansion-parity/run-constraint-gen.sh WORK_DIR [--no-lean]
 #
-# EXPANSION_PARITY_FEATURES is passed to build.sh; a16z/jolt#2384 (580084fcf)
+# EXPANSION_PARITY_FEATURES is passed to build.sh; a16z/jolt#2384 (3cc6e7bd1)
 # needs zicsr-remaining for the expansion-parity binary in the same crate.
 # The script calls build.sh WORK_DIR, which builds every binary of the crate,
 # then runs the constraint-gen binary. It writes the generated Lean to

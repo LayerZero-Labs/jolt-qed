@@ -13,7 +13,7 @@ A new CI job regenerates that data at the pinned commit, fails on any diff, and 
   The generator runs with the cargo feature `zicsr-remaining`, like the T1 driver.
 - Toolchain: `leanprover/lean4:v4.35.0`, Mathlib `v4.35.0`.
 
-When PR #59 moves the CI pin to `3cc6e7bd1`, rerun the generator there.
+If a later change moves the CI pin, rerun the generator at the new commit.
 If the generated files change, the new CI job fails until someone commits them and the proofs build again.
 
 ## What is generated
@@ -164,7 +164,7 @@ I made each change below on its own, rebuilt `Equiv.lean`, and restored the file
 - `Semantics.lean`, as described above.
   It is the part of T3 a reader must trust.
   It is short and every map in it is exhaustive.
-- The other 28 of the 62 conjuncts of `ConstraintEquations` (`JoltConstraints/Constraints/All.lean`): the bytecode reads, RAM and register value histories, `ramAddressEqRamRaf`, `ramOutputEqPublicIo`, instruction lookup reads, chunk products, booleanity and Hamming weights.
+- The other 29 of the 63 conjuncts of `ConstraintEquations` (`JoltConstraints/Constraints/All.lean`): the bytecode reads, RAM and register value histories, `ramAddressEqRamRaf`, `ramOutputEqPublicIo`, instruction lookup reads, `instructionAddressCanonical` (added by the base branch; it applies only to the Akita build), chunk products, booleanity and Hamming weights.
   They are not R1CS rows and not among `zklean-extractor`'s four relations, so T3 does not generate them.
   Generating them would mean extending the generator to more of Jolt's `unbatched_relation`s; the task did not ask for that.
 - The bytecode read constraints still use `JoltMetadata` (`opcodeFlag`, `instructionFlag`, `lookupTable`, `instructionRafFlag`).
