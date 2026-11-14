@@ -1,4 +1,4 @@
-import JoltConstraints.theorems.execution_facts
+import JoltConstraints.translation.honest_trace
 import JoltConstraints.translation.metadata
 import JoltConstraints.translation.honest_witness_helpers.ram_read_value
 import JoltConstraints.translation.witness_helpers.ram_write_value

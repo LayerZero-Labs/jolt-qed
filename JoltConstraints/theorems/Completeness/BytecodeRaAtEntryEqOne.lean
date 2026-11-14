@@ -3,6 +3,8 @@ import JoltConstraints.translation.Constraints.BytecodeRaAtEntryEqOne
 import JoltConstraints.translation.Constraints.BytecodeReadSelectors
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.ProgramLayout
+import JoltConstraints.theorems.trace_interface
+import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D
 

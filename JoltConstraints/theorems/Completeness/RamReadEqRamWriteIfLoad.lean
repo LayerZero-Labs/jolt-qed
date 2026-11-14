@@ -2,6 +2,7 @@ import JoltConstraints.translation.Constraints.RamReadEqRamWriteIfLoad
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.theorems.Completeness.Helpers.MemoryValueFacts
+import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D
 

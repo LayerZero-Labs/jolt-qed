@@ -1,5 +1,6 @@
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.translation.Constraints.InstructionLookupRa
+import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D
 

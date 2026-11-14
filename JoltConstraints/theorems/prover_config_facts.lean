@@ -1,4 +1,5 @@
 import JoltConstraints.translation.prover_config
+import JoltConstraints.theorems.trace_facts
 
 open LeanRV64D
 
@@ -118,6 +119,51 @@ theorem checkedTouched_fold (addresses : List Nat) (layout : MemoryLayout) (touc
 end ExecutionDimensions
 
 namespace ProverConfig
+
+/-- Successful checked power-of-two rounding returns `2 ^ Nat.clog 2 value`
+within the 64-bit host range; for example, rounding 9 returns 16.
+See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
+`checked_next_power_of_two`) at 5def437f. -/
+theorem checkedRound_some (value rounded : Nat)
+    (accepted : JoltConstraints.VerifierSizes.checkedNextPowerOfTwo value = some rounded) :
+    rounded = 2 ^ Nat.clog 2 value ∧ rounded < 2 ^ 64 := by
+  dsimp only [JoltConstraints.VerifierSizes.checkedNextPowerOfTwo] at accepted
+  split at accepted
+  · cases accepted
+    exact ⟨rfl, by assumption⟩
+  · cases accepted
+
+private theorem checkedTraceLength_rounding (rows padded : Nat)
+    (accepted : checkedTraceLength rows = some padded) :
+    padded = max (2 ^ Nat.clog 2 (rows + 1)) 256 ∧
+      2 ^ Nat.clog 2 (rows + 1) < 2 ^ 64 := by
+  unfold checkedTraceLength at accepted
+  simp only [bind_some_iff] at accepted
+  obtain ⟨withNoop, added, rounded, roundedOk, result⟩ := accepted
+  obtain ⟨rfl, _⟩ := checkedAdd_some added
+  obtain ⟨rfl, bound⟩ := checkedRound_some _ _ roundedOk
+  cases result
+  exact ⟨rfl, bound⟩
+
+theorem checkedTraceLength_eq (rows padded : Nat)
+    (accepted : checkedTraceLength rows = some padded) :
+    padded = max (2 ^ Nat.clog 2 (rows + 1)) 256 :=
+  (checkedTraceLength_rounding rows padded accepted).1
+
+theorem deriveFromDimensions_sizes (dimensions : ExecutionDimensions) (layout : MemoryLayout)
+    (minBytecodeAddress imageWords maximum : Nat) (config : ProverConfig)
+    (accepted : deriveFromDimensions dimensions layout minBytecodeAddress imageWords maximum =
+      some config) :
+    (dimensions.trace_length = 0 ∨ dimensions.ends_in_jump = true) ∧
+    checkedTraceLength dimensions.trace_length = some config.trace_length ∧
+    checkedRamSize dimensions layout minBytecodeAddress imageWords = some config.ram_K ∧
+    config.trace_length ≤ maximum := by
+  unfold deriveFromDimensions at accepted
+  simp only [bind_some_iff] at accepted
+  obtain ⟨_, jump, traceLength, traceSize, ramK, ramSize, _, limit, result⟩ := accepted
+  cases result
+  exact ⟨guard_some jump, traceSize, ramSize,
+    guard_some limit⟩
 
 /-- Successful checked Rust padding equals the previous mathematical formula. -/
 theorem checkedTraceLength_eq_padded (rows padded : Nat)

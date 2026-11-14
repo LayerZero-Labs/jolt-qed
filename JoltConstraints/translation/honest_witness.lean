@@ -5,9 +5,6 @@ import JoltConstraints.translation.witness_helpers
 import JoltConstraints.translation.honest_witness_helpers.ram_read_value
 import JoltConstraints.translation.honest_witness_helpers.ram_inc
 import JoltConstraints.translation.honest_witness_helpers.ram_val
-import JoltConstraints.theorems.trace_interface
-import JoltConstraints.theorems.witness_domain
-import JoltConstraints.theorems.execution_conditions
 
 open LeanRV64D
 

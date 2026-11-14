@@ -2,6 +2,7 @@ import JoltConstraints.translation.honest_witness
 import JoltConstraints.translation.metadata
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
+import JoltConstraints.theorems.trace_interface
 
 open LeanRV64D
 

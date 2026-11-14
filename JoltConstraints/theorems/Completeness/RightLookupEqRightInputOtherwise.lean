@@ -4,6 +4,7 @@ import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.AddressSum
 import JoltConstraints.theorems.Soundness.Layer4.Interleave
+import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D
 

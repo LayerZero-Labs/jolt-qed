@@ -2,6 +2,7 @@ import JoltConstraints.translation.Constraints.NextIsNoopEqShift
 import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
+import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D
 

@@ -4,6 +4,7 @@ import JoltConstraints.theorems.Completeness.Helpers.IOSetupFrame
 import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.theorems.Completeness.Helpers.FloorMemory
 import JoltConstraints.theorems.Completeness.Helpers.MemoryValueFacts
+import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D
 
