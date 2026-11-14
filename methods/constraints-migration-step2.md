@@ -7,13 +7,13 @@ Delete this file once the step is reviewed and its content is in the code, in `J
 
 - Step 1 changed the model definitions to match Jolt at `c6703570`; see `methods/constraints-migration-step1.md` and `reports/2026-11-02-constraints-migration-definitions.md`.
   Step 1 was reviewed and is uncommitted, on top of Lean commit `5a48604`.
-- The last full build failed in 17 modules; 11 are under `JoltConstraints/Completeness/`.
+- The last full build failed in 17 modules; 11 are under `JoltConstraints/theorems/Completeness/`.
   Modules that depend on them were not built, so more failures may appear as these are fixed.
 - Jolt's code: `/Users/ari.biswas/Work-with-A16z/jolt`, read with `git -C /Users/ari.biswas/Work-with-A16z/jolt show c6703570:<path>`.
 
 ## Goal
 
-`lake build JoltConstraints.Completeness` succeeds.
+`lake build JoltConstraints.theorems.Completeness` succeeds.
 The only `sorry`s left in completeness are the four already listed in `JoltConstraints/model_review.md` ("Proofs owed", Completeness), namely (01), (37), (38) and `HonestTrace.corrected_witness_params_ram_bounds`, plus the wrap lemmas of work items 6 and 7.
 No other new `sorry`.
 
@@ -56,9 +56,9 @@ Work order: first fix every module that does not depend on a wrap case, then the
    - The cells: `crates/jolt-witness/src/witnesses/ram.rs` (`RamAddress`),
      `registers.rs` (`Rs1Value`), `operands.rs` (`Imm`) and `lookups.rs` (`LookupOutput`). -/
    ```
-   Update `Completeness/All.lean`, `Completeness.lean`, the (01) links in `constraints.md` and the (01) row in `model_review.md`.
+   Update `theorems/Completeness/All.lean`, `Completeness.lean`, the (01) links in `constraints.md` and the (01) row in `model_review.md`.
 4. Lookup entries, outline items 6 and 8.
-   In `Completeness/Helpers/LookupEntryProofHelpers.lean`, retire `lookupEntryCorrect_AlignAddr`, `lookupEntryCorrect_HalfwordAlignment` and `lookupEntryCorrect_WordAlignment`, and the use of `jolt_virtual_align_addr_value64`.
+   In `theorems/Completeness/Helpers/LookupEntryProofHelpers.lean`, retire `lookupEntryCorrect_AlignAddr`, `lookupEntryCorrect_HalfwordAlignment` and `lookupEntryCorrect_WordAlignment`, and the use of `jolt_virtual_align_addr_value64`.
    Prove the AddressOffset entries once, over the width, and derive B, H and W from it; update the dispatch.
 5. Constraint (41), `RightLookupOperandEqInstructionRaf.lean`.
    Its old proof splits on every instruction and now hits the heartbeat limit at line 51.
@@ -167,9 +167,9 @@ Work order: first fix every module that does not depend on a wrap case, then the
    For any further wrap case below, give its lemma a short docstring that states the fact and links #1949, and mark it as pending Ari's wording.
    If another honest-witness theorem fails only because an address sum `rs1 + imm` or `rs2 + imm` wraps below 0 or past `2^64`, handle it the same way without stopping, and list it in the report.
    Every such lemma is stated for one row of an honest trace, never for arbitrary bitvectors, and is used only in the case it covers.
-8. `Soundness/Layer4/WordEntry.lean`, outline item 8.
-   `Completeness/Helpers/LookupEntryProofHelpers.lean` imports it, and it still uses the retired `alignAddrTableEntry`, so the completeness root cannot build.
-   Repair it as a proof repair under "Approved without asking", so that `JoltConstraints.Completeness` builds.
+8. `theorems/Soundness/Layer4/WordEntry.lean`, outline item 8.
+   `theorems/Completeness/Helpers/LookupEntryProofHelpers.lean` imports it, and it still uses the retired `alignAddrTableEntry`, so the completeness root cannot build.
+   Repair it as a proof repair under "Approved without asking", so that `JoltConstraints.theorems.Completeness` builds.
    Do not repair other soundness modules in this step.
    Add each such lemma to "Proofs owed" in `model_review.md`, as false until #1949 is fixed.
 
@@ -190,7 +190,7 @@ A blocker is:
 
 - An honest-witness theorem that looks false for some honest trace for a reason other than the address wrap of work item 7.
   Give the exact missing fact; do not add a premise or a `sorry`.
-- A fix needs a change to a step 1 definition, to anything under `Soundness/` other than `Soundness/Layer4/WordEntry.lean`, or to `TracerAddressChecks`.
+- A fix needs a change to a step 1 definition, to anything under `theorems/Soundness/` other than `theorems/Soundness/Layer4/WordEntry.lean`, or to `TracerAddressChecks`.
 - A rule in "When stuck, discuss first" of `AGENTS.md` applies.
 
 ## Rules
@@ -207,7 +207,7 @@ In addition:
 ## Build
 
 Check for a running Lake process (`pgrep -fl lake`), then build serially.
-Work towards `lake build JoltConstraints.Completeness`.
+Work towards `lake build JoltConstraints.theorems.Completeness`.
 At the end, run `lake build JoltConstraints` once and record every failing module with its first error; the soundness failures are expected and are step 3.
 
 ## Deliverables

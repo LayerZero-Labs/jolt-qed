@@ -18,9 +18,9 @@ The constraints were migrated to `c6703570`; of the seven commits from it to the
 The previous pin was `5def437f`.
 Older findings below keep the revision at which they were established.
 
-The completeness theorem is `JoltInstance.completeness` (`Completeness/completeness.lean`): for every instance that meets `JoltInstance.CompletenessAssumptions`, and every honest trace that meets the three conditions of `JoltInstance.InLanguage` (`language.lean`) with Jolt's prover config `config`, the honest witness at Jolt's own sizes (`HonestTrace.witness_params`) satisfies `AllConstraints`.
+The completeness theorem is `JoltInstance.completeness` (`theorems/Completeness/completeness.lean`): for every instance that meets `JoltInstance.CompletenessAssumptions`, and every honest trace that meets the three conditions of `JoltInstance.InLanguage` (`language.lean`) with Jolt's prover config `config`, the honest witness at Jolt's own sizes (`HonestTrace.witness_params`) satisfies `AllConstraints`.
 The earlier existential form, some private inputs and some witness, is `JoltInstance.completeness_someWitness`, proved from it by unpacking `InLanguage`.
-Its workhorse is `HonestTrace.allConstraints_prover_sizes` (`Completeness/All.lean`).
+Its workhorse is `HonestTrace.allConstraints_prover_sizes` (`theorems/Completeness/All.lean`).
 `Trace.prover_config` models Jolt's checked sizing policy, and `HonestTrace.witness_params` takes its trace length and RAM size.
 The models of Jolt's prover RAM size (`ProverConfig.checkedRamSize`) and Jolt's verifier maximum (`VerifierSizes.maxRamSize`) follow [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250), which made the fix that #1951 item 4 proposes, `touched + 1` and `div_ceil(8)`, so `HonestTrace.prover_config_holds_highest_slot` is proved; see `reports/2026-11-03-ram-k-fix-experiment.md`.
 
@@ -72,13 +72,13 @@ Premises or fields of the final theorems, with their source or reason.
 | Assumption | Where | Why |
 |---|---|---|
 | The field's characteristic exceeds `2^128` | `JoltField F`, soundness premise `joltField` | Ari, 2026-10-10: the base relation must distinguish full 128-bit lookup addresses. BN254 satisfies this; model Akita's field and extra address guard separately. PCS security is outside this work |
-| Every attempted native or floor load/store passes the tracer's address assertions (temporary) | `JoltInstance.TracerAddressChecks` in `Soundness/Layer5/MemoryAccessRestriction.lean`, field `tracerAddressChecks` | Approved for #2044 and the zero-store, I/O-gap, canary and heap-bound candidates; the floor-row extension was applied at `e299498`, checking the containing doubleword without supplying alignment or device-value agreement. |
-| Every attempted HostIO call succeeds (temporary) | `JoltInstance.HostCallsSucceed` in `Soundness/Layer5/HostCallRestriction.lean`, field `hostCallsSucceed` | Excludes host-call failures in live mode, which the constraints do not encode; program-execution condition approved by Ari pending the a16z batch |
-| Termination is followed by a stall and no later termination load (temporary) | `JoltInstance.TerminationThenStall` in `Soundness/Layer5/TerminationRestriction.lean`, field `terminationThenStall` | Approved by Ari for a witness that stops early at a jump, and the termination word's device/table mismatch. Ari approved on 2026-11-03 extending it and `StoresTerminationAt` to the floor loads and stores at their containing doubleword `ea &&& ~~~7`, only to fit the new ISA |
-| Every store to the panic word stores 1, and no load reads the panic word after such a store (temporary) | `JoltInstance.PanicStoresOne` in `Soundness/Layer5/PanicRestriction.lean`, field `panicStoresOne` | Added 2026-10-20 to exclude a store of 0 being proved as "no panic" (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction. Ari approved on 2026-11-03 extending it and `StoresPanicAt` to the floor loads and stores at their containing doubleword `ea &&& ~~~7`, only to fit the new ISA |
-| The claim says "no panic" (temporary) | `JoltInstance.ClaimsNoPanic` in `Soundness/Layer5/PanicRestriction.lean`, field `claimsNoPanic` | Added 2026-10-20 to exclude a "panicked" claim proved from an execution cut short at a jump (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction |
+| Every attempted native or floor load/store passes the tracer's address assertions (temporary) | `JoltInstance.TracerAddressChecks` in `theorems/Soundness/Layer5/MemoryAccessRestriction.lean`, field `tracerAddressChecks` | Approved for #2044 and the zero-store, I/O-gap, canary and heap-bound candidates; the floor-row extension was applied at `e299498`, checking the containing doubleword without supplying alignment or device-value agreement. |
+| Every attempted HostIO call succeeds (temporary) | `JoltInstance.HostCallsSucceed` in `theorems/Soundness/Layer5/HostCallRestriction.lean`, field `hostCallsSucceed` | Excludes host-call failures in live mode, which the constraints do not encode; program-execution condition approved by Ari pending the a16z batch |
+| Termination is followed by a stall and no later termination load (temporary) | `JoltInstance.TerminationThenStall` in `theorems/Soundness/Layer5/TerminationRestriction.lean`, field `terminationThenStall` | Approved by Ari for a witness that stops early at a jump, and the termination word's device/table mismatch. Ari approved on 2026-11-03 extending it and `StoresTerminationAt` to the floor loads and stores at their containing doubleword `ea &&& ~~~7`, only to fit the new ISA |
+| Every store to the panic word stores 1, and no load reads the panic word after such a store (temporary) | `JoltInstance.PanicStoresOne` in `theorems/Soundness/Layer5/PanicRestriction.lean`, field `panicStoresOne` | Added 2026-10-20 to exclude a store of 0 being proved as "no panic" (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction. Ari approved on 2026-11-03 extending it and `StoresPanicAt` to the floor loads and stores at their containing doubleword `ea &&& ~~~7`, only to fit the new ISA |
+| The claim says "no panic" (temporary) | `JoltInstance.ClaimsNoPanic` in `theorems/Soundness/Layer5/PanicRestriction.lean`, field `claimsNoPanic` | Added 2026-10-20 to exclude a "panicked" claim proved from an execution cut short at a jump (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction |
 | No relaxed trace has exactly the largest power-of-two number of real rows within the instance maximum (temporary) | `JoltInstance.NoMaxLengthTrace`, field `noMaxLengthTrace` | Ari, 2026-10-22: excludes the full-length prover/verifier mismatch in `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/prover-verifier-trace-length/index.md`, preserves a 256-row run under maximum 1024 that Jolt's prover pads to 512, and must be removed when Jolt resolves the mismatch |
-| The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10. With the verifier's RAM-size check, all eight bytes of each in-domain word fit, so satisfying LD/SD cycles have nonwrapping addresses. NOTE: to confirm with a16z. An instance restriction, not a verifier check |
+| The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `theorems/Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10. With the verifier's RAM-size check, all eight bytes of each in-domain word fit, so satisfying LD/SD cycles have nonwrapping addresses. NOTE: to confirm with a16z. An instance restriction, not a verifier check |
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Jolt's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Jolt's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
 | A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | Modeling assumption, not a theorem premise: traces execute the expanded bytecode, while Jolt's tracer decodes each instruction from memory (`HonestTrace` docstring, `honest_trace.lean`) | a16z, 2026-10-07. The unused premise `codeUnchanged` was removed from soundness on 2026-11-03 with Ari's approval |
 | A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | ASSUMPTION in `finalRamWord` | a16z, 2026-10-07 |
@@ -96,7 +96,7 @@ Since a16z/jolt#2129, Jolt's ELF decoder (`decode_elf` in `crates/jolt-program/s
 
 ## Proofs owed
 
-**Soundness.** At Lean HEAD `7096dca`, `JoltInstance.soundness` (`Soundness/soundness.lean`) had no `sorry`.
+**Soundness.** At Lean HEAD `7096dca`, `JoltInstance.soundness` (`theorems/Soundness/soundness.lean`) had no `sorry`.
 On 2026-10-23, `lake build JoltBytecode JoltConstraints` passed (8,832 jobs) and `#print axioms JoltInstance.soundness` listed only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
 On 2026-11-03, with the Step 4 changes on top of `e299498`, `lake build JoltConstraints` passed against the migrated model (8,837 jobs), and `#print axioms JoltInstance.soundness` lists the same four axioms and no `sorryAx`.
 No soundness proof has a `sorry`, and no blocker lemma was staged.
@@ -105,16 +105,16 @@ See the [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md
 
 **Completeness.** On 2026-11-03 (Step 5), `JoltInstance.completeness` states that the honest witness at the sizes Jolt's prover picks satisfies `AllConstraints`; the earlier existential statement is `JoltInstance.completeness_someWitness`.
 `#print axioms` for both lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
-`lake build JoltConstraints.Completeness` and `lake build JoltConstraints.Completeness.completeness` pass.
+`lake build JoltConstraints.theorems.Completeness` and `lake build JoltConstraints.theorems.Completeness.completeness` pass.
 The working tree has these five completeness gaps, including Ari's two approved #1949 wrap lemmas; see the [Step 2 report](../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
 The #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot` is proved under the fix of [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) ([experiment report](../reports/2026-11-03-ram-k-fix-experiment.md)).
-The verifier's RAM bounds at Jolt's sizes, `HonestTrace.witness_params_ram_bounds` (`Completeness/Helpers/VerifierSizes.lean`), are proved, including that both bounds compute.
+The verifier's RAM bounds at Jolt's sizes, `HonestTrace.witness_params_ram_bounds` (`theorems/Completeness/Helpers/VerifierSizes.lean`), are proved, including that both bounds compute.
 
 | Theorem | What it needs |
 |---|---|
-| (01) `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` (`Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean:33`) | false until #1949 is fixed |
-| (08) `HonestTrace.floorAccess_address_nonneg` (`Completeness/RightLookupAdd.lean:50`) | false until #1949 is fixed: the signed base-plus-immediate sum must be nonnegative on an actual floor row of an honest trace |
-| (11) `HonestTrace.shiftData_address_noWrap` (`Completeness/RightLookupEqRightInputOtherwise.lean:49`) | false until #1949 is fixed: the signed address-plus-immediate sum must lie in `[0, 2^64)` on an actual ShiftData row of an honest trace |
+| (01) `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` (`theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean:33`) | false until #1949 is fixed |
+| (08) `HonestTrace.floorAccess_address_nonneg` (`theorems/Completeness/RightLookupAdd.lean:50`) | false until #1949 is fixed: the signed base-plus-immediate sum must be nonnegative on an actual floor row of an honest trace |
+| (11) `HonestTrace.shiftData_address_noWrap` (`theorems/Completeness/RightLookupEqRightInputOtherwise.lean:49`) | false until #1949 is fixed: the signed address-plus-immediate sum must lie in `[0, 2^64)` on an actual ShiftData row of an honest trace |
 | (37) `honestWitness_ramValEqInitialPlusPrefixRamInc` | false until #1950 is fixed |
 | (38) `honestWitness_ramValFinalEqInitialPlusRamInc` | false until #1951 item 1 is fixed |
 
@@ -140,9 +140,9 @@ Do not weaken a main statement to close one of these gaps.
 ### Existing tactic debt
 
 These are source debt, not permission to add such tactics or raise limits during repair.
-- `decide +kernel` at `JoltConstraints/Soundness/Layer5/DeviceMemoryObstruction.lean:52` and `:59`; `AGENTS.md` bans it.
-- Raised heartbeat limits: `set_option maxHeartbeats 1000000` at `JoltConstraints/Completeness/Helpers/LookupWriteProofHelpers.lean:4`, and `400000` at `JoltConstraints/Completeness/Helpers/TracePCProofHelpers.lean:7`.
-- No executable `bv_decide` use remains in `JoltBytecode/` or `JoltConstraints/`; the only textual match is a comment in `Soundness/Layer4/Interleave.lean:17`.
+- `decide +kernel` at `JoltConstraints/theorems/Soundness/Layer5/DeviceMemoryObstruction.lean:52` and `:59`; `AGENTS.md` bans it.
+- Raised heartbeat limits: `set_option maxHeartbeats 1000000` at `JoltConstraints/theorems/Completeness/Helpers/LookupWriteProofHelpers.lean:4`, and `400000` at `JoltConstraints/theorems/Completeness/Helpers/TracePCProofHelpers.lean:7`.
+- No executable `bv_decide` use remains in `JoltBytecode/` or `JoltConstraints/`; the only textual match is a comment in `theorems/Soundness/Layer4/Interleave.lean:17`.
 
 ### Constraints migration (2026-11-03)
 
@@ -150,7 +150,7 @@ Steps 1–3 targeting `c6703570` are committed through `e299498`.
 Completeness builds with its six listed gaps, including the two approved honest-row address-wrap obligations.
 Step 3 extends `TracerAddressChecks` to floor loads and stores at their containing doubleword.
 Step 4 repairs input routing, ShiftData, retired alignment helpers, plain-row classifiers, stall flags and replay-address preservation.
-It classifies LD/SD and the floor rows once by width (`Soundness/Layer5/MemoryRows.lean`) and proves every memory step over that classification.
+It classifies LD/SD and the floor rows once by width (`theorems/Soundness/Layer5/MemoryRows.lean`) and proves every memory step over that classification.
 Ari approved on 2026-11-03 extending `PanicStoresOne`, `TerminationThenStall`, `StoresPanicAt` and `StoresTerminationAt` to the floor rows; no other restriction changed.
 The main theorem, `InLanguage`, assumptions and completeness files are unchanged by Step 4.
 The eleven migration items are in [constraints.md](constraints.md#migration-outline).
@@ -166,7 +166,7 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 - `source_expansion_split` and `expansion_block_eq` (`Layer6/DivisionLayout.lean`) repeat part of the private `expand_program_block` (`Layer6/PlainRow.lean`); generalize it and derive both.
 - `source_advice_kind` (`Layer6/DivisionLayout.lean`) classifies every source instruction with a long `simp` list; a checker fact would be shorter.
 - Delete the unused `fence_step` (`Layer5/Fence.lean`) and `HonestTrace.code_unchanged` (`honest_trace.lean`).
-- `Soundness/Layer5/DeviceMemoryObstruction.lean` uses `decide +kernel`, which `AGENTS.md` bans; only `JoltConstraints.lean` imports it and no proof uses it, so delete it or move its finding to the docs.
+- `theorems/Soundness/Layer5/DeviceMemoryObstruction.lean` uses `decide +kernel`, which `AGENTS.md` bans; only `JoltConstraints.lean` imports it and no proof uses it, so delete it or move its finding to the docs.
 - `append_load_row` and `append_store_row` (`Layer6/RowStepMemory.lean`) share their operand and append steps, as their LD/SD predecessors did; extract the shared part once both are reviewed.
 
 ## Gaps in our model
@@ -202,10 +202,10 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 ## Classifier call sites
 
 Step 1 replaced `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` by `opcodeFlag_load_cases` and `opcodeFlag_store_cases`, covering LD/SD and the floor rows with unchanged hypotheses.
-Step 2 migrated both completeness load callers through `Completeness/Helpers/MemoryValueFacts.lean` and the store caller in `Completeness/Rs2EqRamWriteIfStore.lean`.
+Step 2 migrated both completeness load callers through `theorems/Completeness/Helpers/MemoryValueFacts.lean` and the store caller in `theorems/Completeness/Rs2EqRamWriteIfStore.lean`.
 These proofs use the shared classification and retain their original premises.
-Step 4 migrates `plain_no_memory` (`Soundness/Layer6/PlainRow.lean`) and `stable_stall_source_no_store` (`Soundness/Layer7/StallSuffix.lean`) to the widened classifiers.
-`loadRow_of_flag` and `storeRow_of_flag` (`Soundness/Layer5/MemoryRows.lean`) wrap them as the `LoadRow`/`StoreRow` classification used by `row_kind` (`Soundness/Layer6/RowStepKinds.lean`), `row_panic_of_no_store` (`Soundness/Layer5/DeviceMemory.lean`) and `termination_effect_is_store` (`Soundness/Layer7/TerminationStore.lean`).
+Step 4 migrates `plain_no_memory` (`theorems/Soundness/Layer6/PlainRow.lean`) and `stable_stall_source_no_store` (`theorems/Soundness/Layer7/StallSuffix.lean`) to the widened classifiers.
+`loadRow_of_flag` and `storeRow_of_flag` (`theorems/Soundness/Layer5/MemoryRows.lean`) wrap them as the `LoadRow`/`StoreRow` classification used by `row_kind` (`theorems/Soundness/Layer6/RowStepKinds.lean`), `row_panic_of_no_store` (`theorems/Soundness/Layer5/DeviceMemory.lean`) and `termination_effect_is_store` (`theorems/Soundness/Layer7/TerminationStore.lean`).
 No call to the old SD-only or LD-only classifiers remains.
 
 ## Correspondence migration (2026-11-03)
@@ -213,5 +213,5 @@ No call to the old SD-only or LD-only classifiers remains.
 - Step 1 migrated the seven instruction flags, AddressOffset tables, metadata, register selectors and floor-row observations; Ari reviewed those definitions.
 - Step 2 migrates the completeness proofs with no new premises and only the approved (08) and (11) wrap gaps.
   Its AddressOffset dispatch and constraint (39) now build after the approved `Soundness.Layer4.WordEntry` repair.
-- `TracerAddressChecks` (`Soundness/Layer5/MemoryAccessRestriction.lean:87`) now covers native and floor loads/stores, as approved in Step 3.
+- `TracerAddressChecks` (`theorems/Soundness/Layer5/MemoryAccessRestriction.lean:87`) now covers native and floor loads/stores, as approved in Step 3.
   `PanicStoresOne`, `TerminationThenStall` and their completed-store predicates cover them too, as approved by Ari on 2026-11-03 (Step 4, work item 5).

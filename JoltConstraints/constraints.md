@@ -5,7 +5,7 @@ On 2026-10-29 all 62 equations, the per-instruction flag tables and the 55 looku
 
 Status at 2026-11-03: Step 1 definitions were reviewed and remain uncommitted.
 Step 2 repairs target `c6703570`; see [the completeness migration report](../reports/2026-11-03-constraints-migration-completeness.md).
-`lake build JoltConstraints.Completeness` and the assembled `Completeness.completeness` module both pass after the approved `WordEntry` repair.
+`lake build JoltConstraints.theorems.Completeness` and the assembled `theorems.Completeness.completeness` module both pass after the approved `WordEntry` repair.
 Step 5 restates `JoltInstance.completeness` for the honest witness at the sizes Jolt's prover picks; see [the Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
 At those sizes the verifier's RAM bounds are proved.
 The RAM sizes follow the fix that #1951 item 4 proposes, which [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) made in Jolt at the pin `c97e9300`, and `HonestTrace.prover_config_holds_highest_slot` is proved.
@@ -19,8 +19,8 @@ The review rechecked the assembled theorem's axioms against the target and confi
 The current checklist has 57 checked targets and five `FIXME:` targets.
 
 Each checklist item links to its constraint definition and matching completeness
-module. [AllConstraints](Constraints/All.lean) bundles the 62 relations, and
-[honestWitness_constraintEquations](Completeness/All.lean) assembles their proofs
+module. [AllConstraints](translation/Constraints/All.lean) bundles the 62 relations, and
+[honestWitness_constraintEquations](theorems/Completeness/All.lean) assembles their proofs
 under the stated conditions.
 
 The `FIXME:` targets are (01), (08) and (11), blocked by the address-wrap issue [a16z/jolt#1949](https://github.com/a16z/jolt/issues/1949); (37), blocked by the [termination-word RAM history bug](../bug-report/ram-val-termination/README.md); and (38), blocked by [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1.
@@ -89,7 +89,7 @@ Current definition state after Step 1:
    Append `RightOperandIsRdWriteValue` after `IsNoop` in `InstructionFlags` (`witness.lean:22`), matching `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`).
    The target and Lean type both have seven instruction flags.
 2. **RAM-address equation, Jolt R1CS row 0, Lean (01) — definition implemented and built.**
-   Renamed the definition and its `Constraints/All.lean` field to `ramAddrEqRs1PlusImmMinusLookupIfLoadStore`, with the matching module name.
+   Renamed the definition and its `translation/Constraints/All.lean` field to `ramAddrEqRs1PlusImmMinusLookupIfLoadStore`, with the matching module name.
    The matching completeness theorem, module, import and assembly field now use the new name; its existing #1949 gap remains.
    Its target right side is `Rs1Value + Imm - LookupOutput`, from the row's comment in `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`.
 3. **Right-input routing, (33) and (11) — definitions and proofs migrated.**
@@ -98,7 +98,7 @@ Current definition state after Step 1:
    Do not add the term again to (11) as a separate term, or it counts twice.
 4. **Bytecode flag reads, (46) and (47) — definition domain and metadata implemented and built.**
    The instruction-flag domain and metadata now include the new flag.
-   `Constraints/BytecodeReadData.lean` and (47) already range over the whole flag type; (46) uses the unchanged circuit-flag type, so neither definition needed an edit.
+   `translation/Constraints/BytecodeReadData.lean` and (47) already range over the whole flag type; (46) uses the unchanged circuit-flag type, so neither definition needed an edit.
    Their existing proofs build with the enlarged flag type.
    `RightOperandIsRdWriteValue` belongs to (47), not to (46)'s circuit flags.
    In the target's stage-3 combination it has gamma power 7, with `VirtualInstruction` and `IsFirstInSequence` at powers 8 and 9.
@@ -110,7 +110,7 @@ Current definition state after Step 1:
    Retired `lookupEntryCorrect_AlignAddr`, `lookupEntryCorrect_HalfwordAlignment` and `lookupEntryCorrect_WordAlignment` and their unused alignment helpers.
    `addressOffset_entry` proves the width-parametric mask equation without new premises or `sorry`.
    `lookupEntryCorrect_AddressOffsetB/H/W` instantiate widths 1, 2 and 4.
-   The complete dispatch and (39) build after removal of the retired `alignAddr_entry` theorem from `Soundness/Layer4/WordEntry.lean`, approved for Step 2.
+   The complete dispatch and (39) build after removal of the retired `alignAddr_entry` theorem from `theorems/Soundness/Layer4/WordEntry.lean`, approved for Step 2.
 7. **Metadata and row observations — implemented and built; Step 1 reviewed.**
    Give LD `RightOperandIsRdWriteValue` (`crates/jolt-riscv/src/instructions/i/ld.rs`).
    Give floor loads `[Load, AddOperands]` and floor stores `[Store, AddOperands]`, each with `[LeftOperandIsRs1Value, RightOperandIsImm]` and the width's AddressOffset table (`instructions/virt/{load,store}_{b,h,w}.rs`).
@@ -121,8 +121,8 @@ Current definition state after Step 1:
    `HonestWitness.RamReadValue` reads old store words at the accessed address, and the generalized store-presence proof builds from the existing honest-trace premises.
 8. **Address helper uses — completeness migrated; soundness pending.**
    Replace the four constraint-side uses of `jolt_virtual_align_addr_value64` with reasoning about AddressOffset and the floor rows.
-   Only the two soundness uses remain, at `Soundness/Layer5/AddressMasks.lean:32` and `:124`.
-   `witness_helpers/lookup_output.lean` now returns each floor row's offset.
+   Only the two soundness uses remain, at `theorems/Soundness/Layer5/AddressMasks.lean:32` and `:124`.
+   `translation/witness_helpers/lookup_output.lean` now returns each floor row's offset.
    Do not replace an aligned address by an offset without checking the equation that consumes it.
 9. **Classifier theorems — completeness callers migrated; soundness callers pending.**
    Replaced `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` with `opcodeFlag_load_cases` and `opcodeFlag_store_cases`, covering floor constructors with unchanged hypotheses.
@@ -130,7 +130,7 @@ Current definition state after Step 1:
    The remaining soundness call sites are in [model_review.md](model_review.md#classifier-call-sites).
 10. **Tracer address checks: approved temporary premise, added in the migration.**
     Ari approved on 2026-11-02 extending `TracerAddressChecks` to floor-row accesses as a temporary premise, added only to fit the new ISA; temporary premises are removed eventually, so that fit is acceptable.
-    `Soundness/Layer5/MemoryAccessRestriction.lean` checks only LD and SD and returns `True` for every other row.
+    `theorems/Soundness/Layer5/MemoryAccessRestriction.lean` checks only LD and SD and returns `True` for every other row.
     The predicate for a floor row follows `tracer/src/instruction/floor_access.rs` (`addresses`, lines 59–75 at `c6703570`).
     There, the recorded address is `ea - (ea & offset_mask)`, which the tracer asserts is a multiple of 8, outside its test-only misaligned mode.
     The accessed doubleword is `ea & !7`.
@@ -190,25 +190,25 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanOuter — stage 1
 
-- [ ] (01) FIXME: [RAM address for loads and stores](Constraints/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean) · [completeness](Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean)
-- [x] (02) DONE: [Zero RAM address for other instructions](Constraints/RamAddrEqZeroIfNotLoadStore.lean) · [completeness](Completeness/RamAddrEqZeroIfNotLoadStore.lean)
-- [x] (03) DONE: [Loads preserve RAM](Constraints/RamReadEqRamWriteIfLoad.lean) · [completeness](Completeness/RamReadEqRamWriteIfLoad.lean)
-- [x] (04) DONE: [Loads copy RAM to the destination](Constraints/RamReadEqRdWriteIfLoad.lean) · [completeness](Completeness/RamReadEqRdWriteIfLoad.lean)
-- [x] (05) DONE: [Stores copy the second source to RAM](Constraints/Rs2EqRamWriteIfStore.lean) · [completeness](Completeness/Rs2EqRamWriteIfStore.lean)
-- [x] (06) DONE: [Zero left lookup operand for add/subtract/multiply](Constraints/LeftLookupZeroIfAddSubMul.lean) · [completeness](Completeness/LeftLookupZeroIfAddSubMul.lean)
-- [x] (07) DONE: [Left lookup operand for other modes](Constraints/LeftLookupEqLeftInputOtherwise.lean) · [completeness](Completeness/LeftLookupEqLeftInputOtherwise.lean)
-- [ ] (08) FIXME: [Addition lookup operand](Constraints/RightLookupAdd.lean) · [completeness](Completeness/RightLookupAdd.lean)
-- [x] (09) DONE: [Subtraction lookup operand](Constraints/RightLookupSub.lean) · [completeness](Completeness/RightLookupSub.lean)
-- [x] (10) DONE: [Multiplication lookup operand](Constraints/RightLookupEqProductIfMul.lean) · [completeness](Completeness/RightLookupEqProductIfMul.lean)
-- [ ] (11) FIXME: [Right lookup operand for other modes](Constraints/RightLookupEqRightInputOtherwise.lean) · [completeness](Completeness/RightLookupEqRightInputOtherwise.lean)
-- [x] (12) DONE: [Assertion lookup output](Constraints/AssertLookupOne.lean) · [completeness](Completeness/AssertLookupOne.lean)
-- [x] (13) DONE: [Write lookup output to the destination](Constraints/RdWriteEqLookupIfWriteLookupToRd.lean) · [completeness](Completeness/RdWriteEqLookupIfWriteLookupToRd.lean)
-- [x] (14) DONE: [Jump return address](Constraints/RdWriteEqPCPlusConstIfJump.lean) · [completeness](Completeness/RdWriteEqPCPlusConstIfJump.lean)
-- [x] (15) DONE: [Next address after a jump](Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean) · [completeness](Completeness/NextUnexpandedPCEqLookupIfShouldJump.lean)
-- [x] (16) DONE: [Next address after a taken branch](Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean) · [completeness](Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean)
-- [x] (17) DONE: [Next address for other rows](Constraints/NextUnexpandedPCUpdateOtherwise.lean) · [completeness](Completeness/NextUnexpandedPCUpdateOtherwise.lean)
-- [x] (18) DONE: [Next expanded PC within a virtual sequence](Constraints/NextPCEqPCPlusOneIfInline.lean) · [completeness](Completeness/NextPCEqPCPlusOneIfInline.lean)
-- [x] (19) DONE: [Start virtual sequences at their beginning](Constraints/MustStartSequenceFromBeginning.lean) · [completeness](Completeness/MustStartSequenceFromBeginning.lean)
+- [ ] (01) FIXME: [RAM address for loads and stores](translation/Constraints/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean) · [completeness](theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean)
+- [x] (02) DONE: [Zero RAM address for other instructions](translation/Constraints/RamAddrEqZeroIfNotLoadStore.lean) · [completeness](theorems/Completeness/RamAddrEqZeroIfNotLoadStore.lean)
+- [x] (03) DONE: [Loads preserve RAM](translation/Constraints/RamReadEqRamWriteIfLoad.lean) · [completeness](theorems/Completeness/RamReadEqRamWriteIfLoad.lean)
+- [x] (04) DONE: [Loads copy RAM to the destination](translation/Constraints/RamReadEqRdWriteIfLoad.lean) · [completeness](theorems/Completeness/RamReadEqRdWriteIfLoad.lean)
+- [x] (05) DONE: [Stores copy the second source to RAM](translation/Constraints/Rs2EqRamWriteIfStore.lean) · [completeness](theorems/Completeness/Rs2EqRamWriteIfStore.lean)
+- [x] (06) DONE: [Zero left lookup operand for add/subtract/multiply](translation/Constraints/LeftLookupZeroIfAddSubMul.lean) · [completeness](theorems/Completeness/LeftLookupZeroIfAddSubMul.lean)
+- [x] (07) DONE: [Left lookup operand for other modes](translation/Constraints/LeftLookupEqLeftInputOtherwise.lean) · [completeness](theorems/Completeness/LeftLookupEqLeftInputOtherwise.lean)
+- [ ] (08) FIXME: [Addition lookup operand](translation/Constraints/RightLookupAdd.lean) · [completeness](theorems/Completeness/RightLookupAdd.lean)
+- [x] (09) DONE: [Subtraction lookup operand](translation/Constraints/RightLookupSub.lean) · [completeness](theorems/Completeness/RightLookupSub.lean)
+- [x] (10) DONE: [Multiplication lookup operand](translation/Constraints/RightLookupEqProductIfMul.lean) · [completeness](theorems/Completeness/RightLookupEqProductIfMul.lean)
+- [ ] (11) FIXME: [Right lookup operand for other modes](translation/Constraints/RightLookupEqRightInputOtherwise.lean) · [completeness](theorems/Completeness/RightLookupEqRightInputOtherwise.lean)
+- [x] (12) DONE: [Assertion lookup output](translation/Constraints/AssertLookupOne.lean) · [completeness](theorems/Completeness/AssertLookupOne.lean)
+- [x] (13) DONE: [Write lookup output to the destination](translation/Constraints/RdWriteEqLookupIfWriteLookupToRd.lean) · [completeness](theorems/Completeness/RdWriteEqLookupIfWriteLookupToRd.lean)
+- [x] (14) DONE: [Jump return address](translation/Constraints/RdWriteEqPCPlusConstIfJump.lean) · [completeness](theorems/Completeness/RdWriteEqPCPlusConstIfJump.lean)
+- [x] (15) DONE: [Next address after a jump](translation/Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean) · [completeness](theorems/Completeness/NextUnexpandedPCEqLookupIfShouldJump.lean)
+- [x] (16) DONE: [Next address after a taken branch](translation/Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean) · [completeness](theorems/Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean)
+- [x] (17) DONE: [Next address for other rows](translation/Constraints/NextUnexpandedPCUpdateOtherwise.lean) · [completeness](theorems/Completeness/NextUnexpandedPCUpdateOtherwise.lean)
+- [x] (18) DONE: [Next expanded PC within a virtual sequence](translation/Constraints/NextPCEqPCPlusOneIfInline.lean) · [completeness](theorems/Completeness/NextPCEqPCPlusOneIfInline.lean)
+- [x] (19) DONE: [Start virtual sequences at their beginning](translation/Constraints/MustStartSequenceFromBeginning.lean) · [completeness](theorems/Completeness/MustStartSequenceFromBeginning.lean)
 
 [Rust: the 19 equality-conditional rows](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs#L121).
 
@@ -263,9 +263,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanProductVirtualization — stage 2
 
-- [x] (20) DONE: [Product of instruction inputs](Constraints/ProductEqLeftInputMulRightInput.lean) · [completeness](Completeness/ProductEqLeftInputMulRightInput.lean)
-- [x] (21) DONE: [ShouldBranch product](Constraints/ShouldBranchEqLookupOutputMulBranch.lean) · [completeness](Completeness/ShouldBranchEqLookupOutputMulBranch.lean)
-- [x] (22) DONE: [ShouldJump product](Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean) · [completeness](Completeness/ShouldJumpEqJumpMulNotNextIsNoop.lean)
+- [x] (20) DONE: [Product of instruction inputs](translation/Constraints/ProductEqLeftInputMulRightInput.lean) · [completeness](theorems/Completeness/ProductEqLeftInputMulRightInput.lean)
+- [x] (21) DONE: [ShouldBranch product](translation/Constraints/ShouldBranchEqLookupOutputMulBranch.lean) · [completeness](theorems/Completeness/ShouldBranchEqLookupOutputMulBranch.lean)
+- [x] (22) DONE: [ShouldJump product](translation/Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean) · [completeness](theorems/Completeness/ShouldJumpEqJumpMulNotNextIsNoop.lean)
 
 [Rust: the three product rows](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs#L367); [sumcheck](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/spartan/product_remainder.rs).
 
@@ -281,8 +281,8 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamReadWriteChecking — stage 2
 
-- [x] (23) DONE: [RAM read-value selection](Constraints/RamReadValueEqRamRead.lean) · [completeness](Completeness/RamReadValueEqRamRead.lean)
-- [x] (24) DONE: [RAM write-value selection](Constraints/RamWriteValueEqRamReadWrite.lean) · [completeness](Completeness/RamWriteValueEqRamReadWrite.lean)
+- [x] (23) DONE: [RAM read-value selection](translation/Constraints/RamReadValueEqRamRead.lean) · [completeness](theorems/Completeness/RamReadValueEqRamRead.lean)
+- [x] (24) DONE: [RAM write-value selection](translation/Constraints/RamWriteValueEqRamReadWrite.lean) · [completeness](theorems/Completeness/RamWriteValueEqRamReadWrite.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs#L89).
 
@@ -296,7 +296,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamRafEvaluation — stage 2
 
-- [x] (25) DONE: [RAM address reconstruction](Constraints/RamAddressEqRamRaf.lean) · [completeness](Completeness/RamAddressEqRamRaf.lean)
+- [x] (25) DONE: [RAM address reconstruction](translation/Constraints/RamAddressEqRamRaf.lean) · [completeness](theorems/Completeness/RamAddressEqRamRaf.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs#L133).
 
@@ -309,7 +309,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamOutputCheck — stage 2
 
-- [x] (26) DONE: [Public RAM output](Constraints/RamOutputEqPublicIo.lean) · [completeness](Completeness/RamOutputEqPublicIo.lean)
+- [x] (26) DONE: [Public RAM output](translation/Constraints/RamOutputEqPublicIo.lean) · [completeness](theorems/Completeness/RamOutputEqPublicIo.lean)
 
 [Rust: constraint](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs#L115); [public arrays](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-program/src/preprocess/public_io.rs#L20).
 
@@ -322,11 +322,11 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanShift — stage 3
 
-- [x] (27) DONE: [NextUnexpandedPC shift](Constraints/NextUnexpandedPCEqShift.lean) · [completeness](Completeness/NextUnexpandedPCEqShift.lean)
-- [x] (28) DONE: [NextPC shift](Constraints/NextPCEqShift.lean) · [completeness](Completeness/NextPCEqShift.lean)
-- [x] (29) DONE: [NextIsVirtual shift](Constraints/NextIsVirtualEqShift.lean) · [completeness](Completeness/NextIsVirtualEqShift.lean)
-- [x] (30) DONE: [NextIsFirstInSequence shift](Constraints/NextIsFirstInSequenceEqShift.lean) · [completeness](Completeness/NextIsFirstInSequenceEqShift.lean)
-- [x] (31) DONE: [NextIsNoop shift](Constraints/NextIsNoopEqShift.lean) · [completeness](Completeness/NextIsNoopEqShift.lean)
+- [x] (27) DONE: [NextUnexpandedPC shift](translation/Constraints/NextUnexpandedPCEqShift.lean) · [completeness](theorems/Completeness/NextUnexpandedPCEqShift.lean)
+- [x] (28) DONE: [NextPC shift](translation/Constraints/NextPCEqShift.lean) · [completeness](theorems/Completeness/NextPCEqShift.lean)
+- [x] (29) DONE: [NextIsVirtual shift](translation/Constraints/NextIsVirtualEqShift.lean) · [completeness](theorems/Completeness/NextIsVirtualEqShift.lean)
+- [x] (30) DONE: [NextIsFirstInSequence shift](translation/Constraints/NextIsFirstInSequenceEqShift.lean) · [completeness](theorems/Completeness/NextIsFirstInSequenceEqShift.lean)
+- [x] (31) DONE: [NextIsNoop shift](translation/Constraints/NextIsNoopEqShift.lean) · [completeness](theorems/Completeness/NextIsNoopEqShift.lean)
 
 [Rust: constraint](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/spartan/shift.rs#L103); [non-wrapping successor](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-poly/src/eq_plus_one.rs#L1).
 
@@ -351,8 +351,8 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## InstructionInputVirtualization — stage 3
 
-- [x] (32) DONE: [Left instruction-input selection](Constraints/LeftInstructionInputEqSelection.lean) · [completeness](Completeness/LeftInstructionInputEqSelection.lean)
-- [x] (33) DONE: [Right instruction-input selection](Constraints/RightInstructionInputEqSelection.lean) · [completeness](Completeness/RightInstructionInputEqSelection.lean)
+- [x] (32) DONE: [Left instruction-input selection](translation/Constraints/LeftInstructionInputEqSelection.lean) · [completeness](theorems/Completeness/LeftInstructionInputEqSelection.lean)
+- [x] (33) DONE: [Right instruction-input selection](translation/Constraints/RightInstructionInputEqSelection.lean) · [completeness](theorems/Completeness/RightInstructionInputEqSelection.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs#L102).
 
@@ -371,9 +371,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RegistersReadWriteChecking — stage 4
 
-- [x] (34) DONE: [Destination register write-value selection](Constraints/RdWriteValueEqRegistersReadWrite.lean) · [completeness](Completeness/RdWriteValueEqRegistersReadWrite.lean)
-- [x] (35) DONE: [First source register value selection](Constraints/Rs1ValueEqRegistersRead.lean) · [completeness](Completeness/Rs1ValueEqRegistersRead.lean)
-- [x] (36) DONE: [Second source register value selection](Constraints/Rs2ValueEqRegistersRead.lean) · [completeness](Completeness/Rs2ValueEqRegistersRead.lean)
+- [x] (34) DONE: [Destination register write-value selection](translation/Constraints/RdWriteValueEqRegistersReadWrite.lean) · [completeness](theorems/Completeness/RdWriteValueEqRegistersReadWrite.lean)
+- [x] (35) DONE: [First source register value selection](translation/Constraints/Rs1ValueEqRegistersRead.lean) · [completeness](theorems/Completeness/Rs1ValueEqRegistersRead.lean)
+- [x] (36) DONE: [Second source register value selection](translation/Constraints/Rs2ValueEqRegistersRead.lean) · [completeness](theorems/Completeness/Rs2ValueEqRegistersRead.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs#L97).
 
@@ -389,8 +389,8 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamValCheck — stage 4
 
-- [ ] (37) FIXME: [RAM value from preceding increments](Constraints/RamValEqInitialPlusPrefixRamInc.lean) · [completeness](Completeness/RamValEqInitialPlusPrefixRamInc.lean) — [Rust-accepted termination-word counterexample](../bug-report/ram-val-termination/README.md)
-- [ ] (38) FIXME: [Final RAM value from all increments](Constraints/RamValFinalEqInitialPlusRamInc.lean) · [completeness](Completeness/RamValFinalEqInitialPlusRamInc.lean) — [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1: a run that never stores to the termination word
+- [ ] (37) FIXME: [RAM value from preceding increments](translation/Constraints/RamValEqInitialPlusPrefixRamInc.lean) · [completeness](theorems/Completeness/RamValEqInitialPlusPrefixRamInc.lean) — [Rust-accepted termination-word counterexample](../bug-report/ram-val-termination/README.md)
+- [ ] (38) FIXME: [Final RAM value from all increments](translation/Constraints/RamValFinalEqInitialPlusRamInc.lean) · [completeness](theorems/Completeness/RamValFinalEqInitialPlusRamInc.lean) — [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1: a run that never stores to the termination word
 
 [Rust: constraint](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135); [initial public RAM](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-program/src/preprocess/ram.rs#L134).
 
@@ -406,9 +406,9 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## InstructionReadRaf — stage 5
 
-- [x] (39) DONE: [Lookup output from the selected table](Constraints/LookupOutputEqInstructionReadRaf.lean) · [completeness](Completeness/LookupOutputEqInstructionReadRaf.lean)
-- [x] (40) DONE: [Left lookup operand reconstruction](Constraints/LeftLookupOperandEqInstructionRaf.lean) · [completeness](Completeness/LeftLookupOperandEqInstructionRaf.lean)
-- [x] (41) DONE: [Right lookup operand reconstruction](Constraints/RightLookupOperandEqInstructionRaf.lean) · [completeness](Completeness/RightLookupOperandEqInstructionRaf.lean)
+- [x] (39) DONE: [Lookup output from the selected table](translation/Constraints/LookupOutputEqInstructionReadRaf.lean) · [completeness](theorems/Completeness/LookupOutputEqInstructionReadRaf.lean)
+- [x] (40) DONE: [Left lookup operand reconstruction](translation/Constraints/LeftLookupOperandEqInstructionRaf.lean) · [completeness](theorems/Completeness/LeftLookupOperandEqInstructionRaf.lean)
+- [x] (41) DONE: [Right lookup operand reconstruction](translation/Constraints/RightLookupOperandEqInstructionRaf.lean) · [completeness](theorems/Completeness/RightLookupOperandEqInstructionRaf.lean)
 
 [Rust: constraint](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs#L90); [operand coefficients](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L180).
 
@@ -443,7 +443,7 @@ LookupRa(x,t) = ∏_{j=0}^{J−1} InstructionRa_j(v_j(x),t)
 
 ## RegistersValEvaluation — stage 5
 
-- [x] (42) DONE: [Register value from preceding increments](Constraints/RegistersValEqPrefixRdInc.lean) · [completeness](Completeness/RegistersValEqPrefixRdInc.lean)
+- [x] (42) DONE: [Register value from preceding increments](translation/Constraints/RegistersValEqPrefixRdInc.lean) · [completeness](theorems/Completeness/RegistersValEqPrefixRdInc.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs#L69).
 
@@ -456,17 +456,17 @@ The empty sum at `t = 0` is zero.
 
 ## BytecodeReadRaf — stages 6a–6b
 
-- [x] (43) DONE: [Expanded PC from bytecode](Constraints/PCEqBytecodeRead.lean) · [completeness](Completeness/PCEqBytecodeRead.lean)
-- [x] (44) DONE: [Unexpanded PC from bytecode](Constraints/UnexpandedPCEqBytecodeRead.lean) · [completeness](Completeness/UnexpandedPCEqBytecodeRead.lean)
-- [x] (45) DONE: [Immediate from bytecode](Constraints/ImmEqBytecodeRead.lean) · [completeness](Completeness/ImmEqBytecodeRead.lean)
-- [x] (46) DONE: [Circuit flags from bytecode](Constraints/OpFlagsEqBytecodeRead.lean) · [completeness](Completeness/OpFlagsEqBytecodeRead.lean)
-- [x] (47) DONE: [Instruction flags from bytecode](Constraints/InstructionFlagsEqBytecodeRead.lean) · [completeness](Completeness/InstructionFlagsEqBytecodeRead.lean)
-- [x] (48) DONE: [First source selector from bytecode](Constraints/Rs1RaEqBytecodeRead.lean) · [completeness](Completeness/Rs1RaEqBytecodeRead.lean)
-- [x] (49) DONE: [Second source selector from bytecode](Constraints/Rs2RaEqBytecodeRead.lean) · [completeness](Completeness/Rs2RaEqBytecodeRead.lean)
-- [x] (50) DONE: [Destination selector from bytecode](Constraints/RdWaEqBytecodeRead.lean) · [completeness](Completeness/RdWaEqBytecodeRead.lean)
-- [x] (51) DONE: [Lookup-table flags from bytecode](Constraints/LookupTableFlagEqBytecodeRead.lean) · [completeness](Completeness/LookupTableFlagEqBytecodeRead.lean)
-- [x] (52) DONE: [Instruction RAF flag from bytecode](Constraints/InstructionRafFlagEqBytecodeRead.lean) · [completeness](Completeness/InstructionRafFlagEqBytecodeRead.lean)
-- [x] (53) DONE: [Entry bytecode row](Constraints/BytecodeRaAtEntryEqOne.lean) · [completeness](Completeness/BytecodeRaAtEntryEqOne.lean)
+- [x] (43) DONE: [Expanded PC from bytecode](translation/Constraints/PCEqBytecodeRead.lean) · [completeness](theorems/Completeness/PCEqBytecodeRead.lean)
+- [x] (44) DONE: [Unexpanded PC from bytecode](translation/Constraints/UnexpandedPCEqBytecodeRead.lean) · [completeness](theorems/Completeness/UnexpandedPCEqBytecodeRead.lean)
+- [x] (45) DONE: [Immediate from bytecode](translation/Constraints/ImmEqBytecodeRead.lean) · [completeness](theorems/Completeness/ImmEqBytecodeRead.lean)
+- [x] (46) DONE: [Circuit flags from bytecode](translation/Constraints/OpFlagsEqBytecodeRead.lean) · [completeness](theorems/Completeness/OpFlagsEqBytecodeRead.lean)
+- [x] (47) DONE: [Instruction flags from bytecode](translation/Constraints/InstructionFlagsEqBytecodeRead.lean) · [completeness](theorems/Completeness/InstructionFlagsEqBytecodeRead.lean)
+- [x] (48) DONE: [First source selector from bytecode](translation/Constraints/Rs1RaEqBytecodeRead.lean) · [completeness](theorems/Completeness/Rs1RaEqBytecodeRead.lean)
+- [x] (49) DONE: [Second source selector from bytecode](translation/Constraints/Rs2RaEqBytecodeRead.lean) · [completeness](theorems/Completeness/Rs2RaEqBytecodeRead.lean)
+- [x] (50) DONE: [Destination selector from bytecode](translation/Constraints/RdWaEqBytecodeRead.lean) · [completeness](theorems/Completeness/RdWaEqBytecodeRead.lean)
+- [x] (51) DONE: [Lookup-table flags from bytecode](translation/Constraints/LookupTableFlagEqBytecodeRead.lean) · [completeness](theorems/Completeness/LookupTableFlagEqBytecodeRead.lean)
+- [x] (52) DONE: [Instruction RAF flag from bytecode](translation/Constraints/InstructionRafFlagEqBytecodeRead.lean) · [completeness](theorems/Completeness/InstructionRafFlagEqBytecodeRead.lean)
+- [x] (53) DONE: [Entry bytecode row](translation/Constraints/BytecodeRaAtEntryEqOne.lean) · [completeness](theorems/Completeness/BytecodeRaAtEntryEqOne.lean)
 
 [Rust: row values](https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L594); [PC and entry](https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L360).
 
@@ -523,9 +523,9 @@ For the program's `entry_bytecode_index = e`:
 
 ## Booleanity — stages 6a–6b
 
-- [x] (54) DONE: [Instruction chunk selector booleanity](Constraints/InstructionRaChunkBooleanity.lean) · [completeness](Completeness/InstructionRaChunkBooleanity.lean)
-- [x] (55) DONE: [Bytecode chunk selector booleanity](Constraints/BytecodeRaChunkBooleanity.lean) · [completeness](Completeness/BytecodeRaChunkBooleanity.lean)
-- [x] (56) DONE: [RAM chunk selector booleanity](Constraints/RamRaChunkBooleanity.lean) · [completeness](Completeness/RamRaChunkBooleanity.lean)
+- [x] (54) DONE: [Instruction chunk selector booleanity](translation/Constraints/InstructionRaChunkBooleanity.lean) · [completeness](theorems/Completeness/InstructionRaChunkBooleanity.lean)
+- [x] (55) DONE: [Bytecode chunk selector booleanity](translation/Constraints/BytecodeRaChunkBooleanity.lean) · [completeness](theorems/Completeness/BytecodeRaChunkBooleanity.lean)
+- [x] (56) DONE: [RAM chunk selector booleanity](translation/Constraints/RamRaChunkBooleanity.lean) · [completeness](theorems/Completeness/RamRaChunkBooleanity.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs#L25).
 
@@ -541,7 +541,7 @@ For the program's `entry_bytecode_index = e`:
 
 ## RamHammingBooleanity — stage 6b
 
-- [x] (57) DONE: [RAM hamming-weight booleanity](Constraints/RamHammingWeightBooleanity.lean) · [completeness](Completeness/RamHammingWeightBooleanity.lean)
+- [x] (57) DONE: [RAM hamming-weight booleanity](translation/Constraints/RamHammingWeightBooleanity.lean) · [completeness](theorems/Completeness/RamHammingWeightBooleanity.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs#L85).
 
@@ -552,7 +552,7 @@ For the program's `entry_bytecode_index = e`:
 
 ## RamRaVirtualization — stage 6b
 
-- [x] (58) DONE: [RAM address selector from chunks](Constraints/RamRaEqChunkProduct.lean) · [completeness](Completeness/RamRaEqChunkProduct.lean)
+- [x] (58) DONE: [RAM address selector from chunks](translation/Constraints/RamRaEqChunkProduct.lean) · [completeness](theorems/Completeness/RamRaEqChunkProduct.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/ra_virtualization.rs); [chunk product](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/geometry/ram.rs#L163).
 
@@ -563,7 +563,7 @@ For the program's `entry_bytecode_index = e`:
 
 ## InstructionRaVirtualization — stage 6b
 
-- [x] (59) DONE: [Virtual instruction selectors from small chunks](Constraints/InstructionRaEqChunkProduct.lean) · [completeness](Completeness/InstructionRaEqChunkProduct.lean)
+- [x] (59) DONE: [Virtual instruction selectors from small chunks](translation/Constraints/InstructionRaEqChunkProduct.lean) · [completeness](theorems/Completeness/InstructionRaEqChunkProduct.lean)
 
 [Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/instruction/ra_virtualization.rs); [chunk grouping](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs#L402).
 
@@ -577,9 +577,9 @@ Here `digit_h(v)` splits the `nb`-bit virtual chunk into its `n` small chunks.
 
 ## Hamming weights — HammingWeightClaimReduction, stage 7
 
-- [x] (60) DONE: [Instruction chunk hamming weights](Constraints/InstructionRaChunkHammingWeight.lean) · [completeness](Completeness/InstructionRaChunkHammingWeight.lean)
-- [x] (61) DONE: [Bytecode chunk hamming weights](Constraints/BytecodeRaChunkHammingWeight.lean) · [completeness](Completeness/BytecodeRaChunkHammingWeight.lean)
-- [x] (62) DONE: [RAM chunk hamming weights](Constraints/RamRaChunkHammingWeight.lean) · [completeness](Completeness/RamRaChunkHammingWeight.lean)
+- [x] (60) DONE: [Instruction chunk hamming weights](translation/Constraints/InstructionRaChunkHammingWeight.lean) · [completeness](theorems/Completeness/InstructionRaChunkHammingWeight.lean)
+- [x] (61) DONE: [Bytecode chunk hamming weights](translation/Constraints/BytecodeRaChunkHammingWeight.lean) · [completeness](theorems/Completeness/BytecodeRaChunkHammingWeight.lean)
+- [x] (62) DONE: [RAM chunk hamming weights](translation/Constraints/RamRaChunkHammingWeight.lean) · [completeness](theorems/Completeness/RamRaChunkHammingWeight.lean)
 
 [Rust: prescribed weights](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs#L82); [sumcheck](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/claim_reductions/hamming_weight.rs#L102).
 

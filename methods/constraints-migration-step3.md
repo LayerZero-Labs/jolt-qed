@@ -10,7 +10,7 @@ Delete this file once the step is reviewed and its content is in the code and in
   Read `AGENTS.md` first; it overrides your defaults.
 - The Lean model of Jolt is being migrated from Jolt commit `5def437f` to `c6703570`.
   Jolt's code is in `/Users/ari.biswas/Work-with-A16z/jolt`; read it with `git -C /Users/ari.biswas/Work-with-A16z/jolt show c6703570:<path>`.
-- Steps 1 and 2 are done and committed: the model definitions match `c6703570`, and `lake build JoltConstraints.Completeness` succeeds.
+- Steps 1 and 2 are done and committed: the model definitions match `c6703570`, and `lake build JoltConstraints.theorems.Completeness` succeeds.
   Read `reports/2026-11-02-constraints-migration-definitions.md` and `reports/2026-11-03-constraints-migration-completeness.md`.
   Six soundness modules still fail to build; they are not part of this step.
 - In the new ISA, sub-word loads and stores expand into new rows: `VirtualLoadB/H/W (faultClass dst base imm fault)` and `VirtualStoreB/H/W (base value imm fault)`, declared in `JoltBytecode/JoltISA/Instruction.lean`.
@@ -20,16 +20,16 @@ Delete this file once the step is reviewed and its content is in the code and in
 
 ## Task A: style fix
 
-The two lemmas `_root_.HonestTrace.shiftData_address_noWrap` (`JoltConstraints/Completeness/RightLookupEqRightInputOtherwise.lean:46`) and `_root_.HonestTrace.floorAccess_address_nonneg` (`JoltConstraints/Completeness/RightLookupAdd.lean:47`) use `_root_.` in their names.
+The two lemmas `_root_.HonestTrace.shiftData_address_noWrap` (`JoltConstraints/theorems/Completeness/RightLookupEqRightInputOtherwise.lean:46`) and `_root_.HonestTrace.floorAccess_address_nonneg` (`JoltConstraints/theorems/Completeness/RightLookupAdd.lean:47`) use `_root_.` in their names.
 Ari's rule is that no declaration name uses `_root_`.
 Declare each one outside `namespace JoltConstraints`, for example by closing the namespace before it and reopening it after, so its name is `HonestTrace.shiftData_address_noWrap` or `HonestTrace.floorAccess_address_nonneg` and dot notation still works.
 Change nothing else about them: the statements, the docstrings (approved by Ari) and the `sorry` bodies stay exactly as they are.
-Then check that `lake build JoltConstraints.Completeness` still succeeds.
+Then check that `lake build JoltConstraints.theorems.Completeness` still succeeds.
 
 ## Task B: draft the tracer-address premise for the new rows
 
-`JoltInstance.TracerAddressChecks` (`JoltConstraints/Soundness/Layer5/MemoryAccessRestriction.lean:86`) is a temporary premise of the soundness theorem, through the field `tracerAddressChecks` (`JoltConstraints/Soundness/Assumptions.lean:86`).
-It says: for any private inputs, any partial run of the program (`UntrustedAnswerRun`, `JoltConstraints/Soundness/Layer5/TapeTrace.lean:21`) and the row it would execute next (`UntrustedAnswerRun.NextStep`), an LD's address passes the tracer's read checks and an SD's address passes the write checks (`DoublewordAddressChecks`, same file, line 63, built on `Mmu.effective_address_ok` in `JoltBytecode/JoltISA/DeviceMemory.lean:41`).
+`JoltInstance.TracerAddressChecks` (`JoltConstraints/theorems/Soundness/Layer5/MemoryAccessRestriction.lean:86`) is a temporary premise of the soundness theorem, through the field `tracerAddressChecks` (`JoltConstraints/theorems/Soundness/Assumptions.lean:86`).
+It says: for any private inputs, any partial run of the program (`UntrustedAnswerRun`, `JoltConstraints/theorems/Soundness/Layer5/TapeTrace.lean:21`) and the row it would execute next (`UntrustedAnswerRun.NextStep`), an LD's address passes the tracer's read checks and an SD's address passes the write checks (`DoublewordAddressChecks`, same file, line 63, built on `Mmu.effective_address_ok` in `JoltBytecode/JoltISA/DeviceMemory.lean:41`).
 Every other row gets `True`.
 Its docstring says LD and SD are the only memory accesses after expansion; that is no longer true, so the new rows are now unchecked.
 

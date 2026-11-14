@@ -1,0 +1,143 @@
+import JoltConstraints.theorems.Soundness.Layer5.RamStore
+import JoltConstraints.theorems.Soundness.Layer5.MemoryRows
+import JoltConstraints.theorems.Soundness.Layer3.Updates
+
+open LeanRV64D
+
+/-! Connect a selected store row to an actual ordinary-RAM write. The rows are
+SD and the floor stores VirtualStoreB/H/W, classified by `StoreRow`. Register
+agreement supplies both operands; the constraints force the accessed doubleword,
+natural alignment, stored value and single-word table update. The address checks
+are the local facts supplied by the existing TracerAddressChecks restriction
+through `StoreRow.address_checks`. The ordinary-RAM case starts at
+RAM_START_ADDRESS; device stores need a separate argument about their effects.
+Jolt's tracer at c6703570: `tracer/src/instruction/sd.rs` (`SD::exec`),
+`tracer/src/instruction/floor_access.rs` (`store`) and
+`tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`). -/
+
+set_option autoImplicit false
+
+namespace JoltConstraints.Soundness
+
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
+
+variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
+  {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (context : ConstraintContext joltInstance privateInputs params)
+  (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+  {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
+  (selected : bytecodeRa witness slot t = 1)
+  {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
+  {width : MemoryWidth} {base source : Src} {imm : BitVec 64}
+  (storeRow : StoreRow row.instruction width base source imm)
+
+include context rowIs storeRow in
+/-- A selected store row has canonical base and value operands.
+For example, a virtual source cannot alias architectural register x1.
+See jolt/crates/jolt-program/src/expand/allocator.rs
+(`RISCV_REGISTER_BASE`, `ExpansionAllocator::allocate`) at 5def437f. -/
+theorem StoreRow.canonical :
+    JoltRegisterEncoding.sourceIsCanonical base = true ∧
+    JoltRegisterEncoding.sourceIsCanonical source = true := by
+  have valid := (bytecodeRow_rowOk context rowIs).canonical
+  rw [storeRow.metadata.canonical] at valid
+  simpa only [Bool.and_eq_true] using valid
+
+include charAbove2pow128 context equations selected rowIs storeRow
+
+/-- A selected store row writes its live value source to RamWriteValue.
+For example, VirtualStoreB writes the merged doubleword in its second source. -/
+theorem store_write_value {live : Fin 128 → Prop} {pre : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t pre)
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
+    witness.RamWriteValue t = ((sourceValue source pre).toNat : F) := by
+  have bound := two_pow_127_lt_char charAbove2pow128
+  have facts := storeRow.metadata
+  have sourceIs := agrees.rs2Value bound context equations selected rowIs source
+    (storeRow.canonical context rowIs).2 facts.rs2Register sourceLive
+  have store : witness.OpFlags .Store t = 1 := by
+    simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.store] using!
+      opFlag_of_selected_bytecode bound context equations .Store t slot selected
+  have relation := equations.rs2EqRamWriteIfStore t
+  rw [store, one_mul, sourceIs] at relation
+  exact (sub_eq_zero.mp relation).symm
+
+/-- In the ordinary-RAM case, a store row succeeds with the constrained value and
+exact byte-map update at its accessed doubleword. The selected table word
+receives that value, all other words stay unchanged, and register agreement is
+preserved. The final-cycle case updates RamValFinal rather than assuming a
+following trace column exists.
+Only the base and stored-value registers must be live; for example, both may
+be temporaries initialized by earlier rows of the same expansion. -/
+theorem store_ram_step (regionFits : joltInstance.RamRegionFits)
+    {live : Fin 128 → Prop} {pre : SailJoltState}
+    (agrees : RegisterAgreementOn live witness t pre)
+    (baseLive : live (TraceWitness.sourceRegisterAddress base))
+    (sourceLive : live (TraceWitness.sourceRegisterAddress source))
+    (inRam : RAM_START_ADDRESS ≤ (width.accessed (sourceValue base pre + imm)).toNat)
+    (checked : DoublewordAddressChecks pre.jolt_device
+      (width.accessed (sourceValue base pre + imm)) true)
+    (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
+    let address := width.accessed (sourceValue base pre + imm)
+    let value := sourceValue source pre
+    let post := { pre with sail := { pre.sail with
+      mem := Mmu.write_ram_doubleword pre.sail.mem address.toNat value } }
+    witness.RamWriteValue t = (value.toNat : F) ∧
+    execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
+      .ok RETIRE_SUCCESS post ∧
+    ∃ chosen : Fin params.ramSize,
+      witness.RamRa chosen t = 1 ∧
+      address.toNat = ramLowestAddress context.io.memory_layout + 8 * chosen.val ∧
+      (∀ index : Fin params.ramSize,
+        Mmu.ram_doubleword post.sail.mem
+          (ramLowestAddress context.io.memory_layout + 8 * index.val) =
+          if index = chosen then value else Mmu.ram_doubleword pre.sail.mem
+            (ramLowestAddress context.io.memory_layout + 8 * index.val)) ∧
+      (∀ next : t.val + 1 < params.traceLength,
+        RegisterAgreementOn live witness ⟨t.val + 1, next⟩ post ∧
+        ∀ index, witness.RamVal index ⟨t.val + 1, next⟩ =
+          if index = chosen then (value.toNat : F) else witness.RamVal index t) ∧
+      (∀ _last : t.val + 1 = params.traceLength, ∀ index,
+        witness.RamValFinal index =
+          if index = chosen then (value.toNat : F) else witness.RamVal index t) := by
+  dsimp only
+  have bound := two_pow_127_lt_char charAbove2pow128
+  have facts := storeRow.metadata
+  have canonical := storeRow.canonical context rowIs
+  have baseRead := (agrees.read base canonical.1 baseLive).1
+  have sourceRead := (agrees.read source canonical.2 sourceLive).1
+  have baseIs := agrees.rs1Value bound context equations selected rowIs base canonical.1
+    facts.rs1Register baseLive
+  obtain ⟨encoded, aligned, -⟩ := AccessRow.address_encoded charAbove2pow128 context equations
+    selected rowIs storeRow.access regionFits (sourceValue base pre) baseIs
+  have wordAligned := ramAddress_mask_aligned bound context equations t _ encoded
+  have stored := store_write_value charAbove2pow128 context equations selected rowIs storeRow
+    agrees sourceLive
+  have legal : Mmu.effective_address_ok pre.jolt_device
+      (width.accessed (sourceValue base pre + imm)).toNat true = true := by
+    simpa only [DoublewordAddressChecks, inRam, ↓reduceIte] using checked
+  have write := Mmu.store_doubleword_ram pre (width.accessed (sourceValue base pre + imm))
+    (sourceValue source pre) wordAligned inRam legal
+  have nonzero := ramAddress_nonzero_of_inRam bound t _ encoded inRam
+  obtain ⟨chosen, one, _⟩ := ramRa_unique_of_address_ne_zero bound context equations t nonzero
+  have addressIs := ramAddress_eq_of_selected bound context equations t chosen one _ encoded
+  refine ⟨stored, storeRow.exec_rule pre _ baseRead sourceRead aligned _ write answer advice,
+    chosen, one, addressIs, ?_, ?_, ?_⟩
+  · intro index
+    simpa only [Fin.val_inj] using ram_store_index pre.sail
+      (width.accessed (sourceValue base pre + imm)) (sourceValue source pre)
+      (ramLowestAddress context.io.memory_layout) chosen.val index.val addressIs
+  · intro next
+    have after : RegisterAgreementOn live witness t
+        { pre with sail := { pre.sail with
+          mem := Mmu.write_ram_doubleword pre.sail.mem
+            (width.accessed (sourceValue base pre + imm)).toNat (sourceValue source pre) } } :=
+      ⟨agrees.present, agrees.values⟩
+    refine ⟨after.noWrite bound context equations next slot selected rowIs facts.noDestination, ?_⟩
+    intro index
+    rw [ramVal_succ_of_selected bound context equations index t next chosen one, stored]
+  · intro last index
+    rw [ramValFinal_of_selected bound context equations index t last chosen one, stored]
+
+end JoltConstraints.Soundness

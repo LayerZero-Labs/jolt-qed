@@ -72,8 +72,8 @@ If you believe a staged statement is false, stop and report the exact missing fa
 4. Split cases on a small classification proved once, such as `stable_stall_control_flow` (a stall is a JAL, a JALR or a branch), not on the whole instruction set inside each lemma.
 5. Use the existing frameworks before writing new ones:
    - `StatePreservation.Preserves` and `preservation_auto` (`JoltBytecode/InstructionEquivalence/ProofSupport/Preservation.lean`) for frame properties;
-   - `expand_program_layout` and `ExpansionRows` (`JoltConstraints/program_facts.lean`) for bytecode layout;
-   - the Layer 1 to 4 witness lemmas under `JoltConstraints/Soundness/`.
+   - `expand_program_layout` and `ExpansionRows` (`JoltConstraints/theorems/program_facts.lean`) for bytecode layout;
+   - the Layer 1 to 4 witness lemmas under `JoltConstraints/theorems/Soundness/`.
 6. Treat these as signs that a lemma is missing:
    - a proof longer than about 60 lines;
    - a blanket `cases … <;> simp_all` with `all_goals try`;
@@ -86,7 +86,7 @@ Each of these has made a staged statement false before.
 1. A trace row or state given on its own carries no execution certificate.
    A property of its post-state, such as `StableStall`, says nothing about its instruction unless the lemma also has the run (`last ∈ run.rows.back?`) or an explicit execution fact.
 2. Witness values are field sums that do not wrap; Sail stores 64-bit words that do.
-   Comparing them needs a bound, such as `NextPCNoWrap` (`joltInstance.program.next_pc_no_wrap`), as in `Soundness/Layer5/Jal.lean`.
+   Comparing them needs a bound, such as `NextPCNoWrap` (`joltInstance.program.next_pc_no_wrap`), as in `theorems/Soundness/Layer5/Jal.lean`.
 3. Some flags are set per row, not per source instruction.
    `stamp_sequence` sets `is_compressed` only on an expansion's last row; use `source_is_compressed` for any row.
 4. A fact about "every row at an address" needs unique addresses: `pc_map_ok` with `pc_map_ok_distinct_addresses`.

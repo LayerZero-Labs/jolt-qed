@@ -126,8 +126,8 @@ and use the actual honest-witness definitions. Check that any helper theorem
 does not merely move the `sorry` or the same unproved obligation elsewhere.
 
 Before declaring a blocker, inspect the facts already available about an honest
-trace. A row is a [`TraceRow`](../JoltConstraints/trace.lean); `trace.row i h` gives
-the [`HonestTraceRow`](../JoltConstraints/honest_trace.lean) view with its execution
+trace. A row is a [`TraceRow`](../JoltConstraints/translation/trace.lean); `trace.row i h` gives
+the [`HonestTraceRow`](../JoltConstraints/translation/honest_trace.lean) view with its execution
 certificate. For a row `trace.rows[i]`, use:
 
 | Row fact | Available fact |
@@ -164,13 +164,13 @@ lemmas for registers, translation, and memory. Match every helper's exact
 premises to the trace.
 
 For reusable frame facts, check
-[`nextpc_frame.lean`](../JoltConstraints/nextpc_frame.lean) (formerly `Completeness/Helpers/NextPCFrame.lean`) and
-[`HostIOFrame.lean`](../JoltConstraints/Completeness/Helpers/HostIOFrame.lean).
+[`nextpc_frame.lean`](../JoltConstraints/theorems/nextpc_frame.lean) (formerly `Completeness/Helpers/NextPCFrame.lean`) and
+[`HostIOFrame.lean`](../JoltConstraints/theorems/Completeness/Helpers/HostIOFrame.lean).
 The latter proves that a HostIO call leaves Sail state unchanged (its byte reads
 go through `JoltISA.Mmu.load`, which changes no state) and derives the HostIO
 nextPC frame from `executes`. Constraint
 (17) is the worked example in
-[`NextUnexpandedPCUpdateOtherwise.lean`](../JoltConstraints/Constraints/NextUnexpandedPCUpdateOtherwise.lean).
+[`NextUnexpandedPCUpdateOtherwise.lean`](../JoltConstraints/translation/Constraints/NextUnexpandedPCUpdateOtherwise.lean).
 
 **Never add a premise to a completeness theorem without the user's explicit
 permission. NEVER.** This includes adding a condition to a bundled validity

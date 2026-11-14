@@ -11,7 +11,7 @@ Delete this file once the step is reviewed and its content is in the code and in
   Read `AGENTS.md` first; it overrides your defaults.
 - Jolt's code is in `/Users/ari.biswas/Work-with-A16z/jolt`; read it with `git -C /Users/ari.biswas/Work-with-A16z/jolt show c6703570:<path>`.
 - Read `reports/2026-11-03-constraints-migration-completeness.md` for the current state of completeness.
-  `lake build JoltConstraints.Completeness` succeeds at `e299498`.
+  `lake build JoltConstraints.theorems.Completeness` succeeds at `e299498`.
 
 ## Why the statement changes
 
@@ -19,14 +19,14 @@ Jolt is a proof system: a prover and a verifier.
 With the cryptography removed, the prover sends its table of witness columns in the clear, and the verifier checks `AllConstraints` on it.
 Completeness of Jolt says: for every instance and every witness that puts it in the language, the verifier accepts the table Jolt's prover builds, at the sizes Jolt's prover picks.
 
-The current `JoltInstance.completeness` (`JoltConstraints/Completeness/completeness.lean:69`) proves something weaker: that some table is accepted.
+The current `JoltInstance.completeness` (`JoltConstraints/theorems/Completeness/completeness.lean:69`) proves something weaker: that some table is accepted.
 Its proof uses the honest trace at corrected sizes (`HonestTrace.corrected_prover_config`, RAM size `K = pow2(h + 1)`, where `h` is the index of the highest RAM word the run touched).
-Jolt's prover instead picks `K = pow2(h)` (`Trace.prover_config` in `JoltConstraints/prover_config.lean`, modelling `ProverConfig::derive_from_dimensions` in `crates/jolt-prover/src/config.rs`).
+Jolt's prover instead picks `K = pow2(h)` (`Trace.prover_config` in `JoltConstraints/translation/prover_config.lean`, modelling `ProverConfig::derive_from_dimensions` in `crates/jolt-prover/src/config.rs`).
 An array of `K` words holds indices `0` to `K - 1`, so Jolt's table cannot hold word `h` when `h` is a power of two (a16z/jolt#1951 item 4, `bug-report/ram-k-off-by-one/`).
 
 ## Work
 
-1. Add `HonestTrace.witness_params (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config) : WitnessParams`: the witness sizes Jolt's prover picks, built from Jolt's `ProverConfig` the way `HonestTrace.corrected_witness_params` (`JoltConstraints/witness_params.lean:145`) is built from the corrected one.
+1. Add `HonestTrace.witness_params (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config) : WitnessParams`: the witness sizes Jolt's prover picks, built from Jolt's `ProverConfig` the way `HonestTrace.corrected_witness_params` (`JoltConstraints/translation/witness_params.lean:145`) is built from the corrected one.
    Its fields must match what Jolt's prover uses; cite the Jolt code.
 2. Restate `JoltInstance.completeness` exactly as Ari approved:
 
