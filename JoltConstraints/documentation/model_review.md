@@ -112,9 +112,9 @@ The verifier's RAM bounds at Jolt's sizes, `HonestTrace.witness_params_ram_bound
 
 | Theorem | What it needs |
 |---|---|
-| (01) `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` (`theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean:33`) | false until #1949 is fixed |
-| (08) `HonestTrace.floorAccess_address_nonneg` (`theorems/Completeness/RightLookupAdd.lean:50`) | false until #1949 is fixed: the signed base-plus-immediate sum must be nonnegative on an actual floor row of an honest trace |
-| (11) `HonestTrace.shiftData_address_noWrap` (`theorems/Completeness/RightLookupEqRightInputOtherwise.lean:49`) | false until #1949 is fixed: the signed address-plus-immediate sum must lie in `[0, 2^64)` on an actual ShiftData row of an honest trace |
+| (01) `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` (`theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean:36`) | false until #1949 is fixed |
+| (08) `HonestTrace.floorAccess_address_nonneg` (`theorems/Completeness/RightLookupAdd.lean:53`) | false until #1949 is fixed: the signed base-plus-immediate sum must be nonnegative on an actual floor row of an honest trace |
+| (11) `HonestTrace.shiftData_address_noWrap` (`theorems/Completeness/RightLookupEqRightInputOtherwise.lean:52`) | false until #1949 is fixed: the signed address-plus-immediate sum must lie in `[0, 2^64)` on an actual ShiftData row of an honest trace |
 | (37) `honestWitness_ramValEqInitialPlusPrefixRamInc` | false until #1950 is fixed |
 | (38) `honestWitness_ramValFinalEqInitialPlusRamInc` | false until #1951 item 1 is fixed |
 
@@ -127,22 +127,22 @@ The seven source `sorry` occurrences are all present at Lean HEAD `7096dca` and 
 
 | Instruction | Source occurrence | Existing obligation |
 |---|---|---|
-| ECALL | `JoltBytecode/RiscvInstruction.lean:805` | Dispatcher equivalence case remains admitted. |
-| EBREAK | `JoltBytecode/RiscvInstruction.lean:807` | Dispatcher equivalence case remains admitted. |
-| LR.W | `JoltBytecode/RiscvInstruction.lean:813` | Load-reserved equivalence remains admitted. |
-| SC.W | `JoltBytecode/RiscvInstruction.lean:815` | Store-conditional equivalence remains admitted. |
-| LR.D | `JoltBytecode/RiscvInstruction.lean:817` | Load-reserved equivalence remains admitted. |
-| SC.D | `JoltBytecode/RiscvInstruction.lean:819` | Store-conditional equivalence remains admitted. |
-| MRET | `JoltBytecode/InstructionEquivalence/Instructions/System/Mret.lean:162` | The generated Sail exception-handler postlude remains unproved. |
+| ECALL | `JoltBytecode/RiscvInstruction.lean:807` | Dispatcher equivalence case remains admitted. |
+| EBREAK | `JoltBytecode/RiscvInstruction.lean:809` | Dispatcher equivalence case remains admitted. |
+| LR.W | `JoltBytecode/RiscvInstruction.lean:815` | Load-reserved equivalence remains admitted. |
+| SC.W | `JoltBytecode/RiscvInstruction.lean:817` | Store-conditional equivalence remains admitted. |
+| LR.D | `JoltBytecode/RiscvInstruction.lean:819` | Load-reserved equivalence remains admitted. |
+| SC.D | `JoltBytecode/RiscvInstruction.lean:821` | Store-conditional equivalence remains admitted. |
+| MRET | `JoltBytecode/InstructionEquivalence/Instructions/System/Mret.lean:163` | The generated Sail exception-handler postlude remains unproved. |
 
 Do not weaken a main statement to close one of these gaps.
 
 ### Existing tactic debt
 
 These are source debt, not permission to add such tactics or raise limits during repair.
-- `decide +kernel` at `JoltConstraints/theorems/Soundness/Layer5/DeviceMemoryObstruction.lean:52` and `:59`; `AGENTS.md` bans it.
-- Raised heartbeat limits: `set_option maxHeartbeats 1000000` at `JoltConstraints/theorems/Completeness/Helpers/LookupWriteProofHelpers.lean:4`, and `400000` at `JoltConstraints/theorems/Completeness/Helpers/TracePCProofHelpers.lean:7`.
-- No executable `bv_decide` use remains in `JoltBytecode/` or `JoltConstraints/`; the only textual match is a comment in `theorems/Soundness/Layer4/Interleave.lean:17`.
+- `decide +kernel` at `JoltConstraints/theorems/Soundness/Layer5/DeviceMemoryObstruction.lean:54` and `:61`; `AGENTS.md` bans it.
+- Raised heartbeat limits: `set_option maxHeartbeats 1000000` at `JoltConstraints/theorems/Completeness/Helpers/LookupWriteProofHelpers.lean:6`, and `400000` at `JoltConstraints/theorems/Completeness/Helpers/TracePCProofHelpers.lean:9`.
+- No executable `bv_decide` use remains in `JoltBytecode/` or `JoltConstraints/`; the only textual match is a comment in `theorems/Soundness/Layer4/Interleave.lean:19`.
 
 ### Constraints migration (2026-11-03)
 
@@ -213,5 +213,5 @@ No call to the old SD-only or LD-only classifiers remains.
 - Step 1 migrated the seven instruction flags, AddressOffset tables, metadata, register selectors and floor-row observations; Ari reviewed those definitions.
 - Step 2 migrates the completeness proofs with no new premises and only the approved (08) and (11) wrap gaps.
   Its AddressOffset dispatch and constraint (39) now build after the approved `Soundness.Layer4.WordEntry` repair.
-- `TracerAddressChecks` (`theorems/Soundness/Layer5/MemoryAccessRestriction.lean:87`) now covers native and floor loads/stores, as approved in Step 3.
+- `TracerAddressChecks` (`theorems/Soundness/Layer5/MemoryAccessRestriction.lean:89`) now covers native and floor loads/stores, as approved in Step 3.
   `PanicStoresOne`, `TerminationThenStall` and their completed-store predicates cover them too, as approved by Ari on 2026-11-03 (Step 4, work item 5).

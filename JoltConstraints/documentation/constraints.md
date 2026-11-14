@@ -1,15 +1,15 @@
 # Jolt constraints
 
-Source: the base RV64 relations at [public Rust pin `8bbb2357`](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs). GitHub links are documentation pointers; reviews of current behavior must scan the local Jolt checkout.
+Source: the base RV64 relations at [the Rust pin `c97e9300`](https://github.com/a16z/jolt/blob/c97e93004fbf804409f0374fe8457c8f1562ce71/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs). GitHub links are documentation pointers; reviews of current behavior must scan the local Jolt checkout.
 On 2026-10-29 all 62 equations, the per-instruction flag tables and the 55 lookup tables were rechecked against Jolt's base verifier at the previous pin `5def437f` and match (`reports/2026-10-29-soundness-statement-audit.md`).
 
-Status at 2026-11-03: Step 1 definitions were reviewed and remain uncommitted.
+Steps 1 to 5 of the migration to `c6703570` were reviewed and committed in #34.
 Step 2 repairs target `c6703570`; see [the completeness migration report](../../reports/2026-11-03-constraints-migration-completeness.md).
 `lake build JoltConstraints.theorems.Completeness` and the assembled `theorems.Completeness.completeness` module both pass after the approved `WordEntry` repair.
 Step 5 restates `JoltInstance.completeness` for the honest witness at the sizes Jolt's prover picks; see [the Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md).
 At those sizes the verifier's RAM bounds are proved.
 The RAM sizes follow the fix that #1951 item 4 proposes, which [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) made in Jolt at the pin `c97e9300`, and `HonestTrace.prover_config_holds_highest_slot` is proved.
-The full soundness migration remains Step 3.
+Step 4 migrated the soundness proof; `JoltInstance.soundness` is proved with no `sorry`.
 A `DONE` label records the individual theorem's proof status, not completion of the [migration outline](#migration-outline).
 
 A checked box means the stated honest-witness theorem is proved in Lean without `sorryAx` under its stated premises.
@@ -71,9 +71,7 @@ certify every current completeness statement.
 ## Migration outline
 
 This outline covers the move from the pin `5def437f` to the migration target `c6703570`.
-Step 1 definitions were reviewed; Step 2 completeness repairs are awaiting review.
-All ten required Step 1 modules build.
-The completeness integration build passes; remaining soundness failures from the final full build are listed in the Step 2 report.
+All steps are committed and `lake build JoltConstraints` passes.
 The target's facts below were read from `git show c6703570:<path>` in the local Jolt checkout, which is `origin/main` of the fork `abiswas3/jolt`.
 
 Current definition state after Step 1:
@@ -86,7 +84,7 @@ Current definition state after Step 1:
 - Step 2 repairs the affected completeness proofs and records the remaining full-build failures in its own report.
 
 1. **Flag set — implemented and built; Step 1 reviewed.**
-   Append `RightOperandIsRdWriteValue` after `IsNoop` in `InstructionFlags` (`witness.lean:22`), matching `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`).
+   Append `RightOperandIsRdWriteValue` after `IsNoop` in `InstructionFlags` (`translation/witness.lean:26`), matching `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`).
    The target and Lean type both have seven instruction flags.
 2. **RAM-address equation, Jolt R1CS row 0, Lean (01) — definition implemented and built.**
    Renamed the definition and its `translation/Constraints/All.lean` field to `ramAddrEqRs1PlusImmMinusLookupIfLoadStore`, with the matching module name.
@@ -119,18 +117,18 @@ Current definition state after Step 1:
    Check `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs` for the table assignments.
    Operand encodings, trace witness helpers, `TraceRow.ram_address` and temporary-source liveness now describe the new memory rows and build.
    `HonestWitness.RamReadValue` reads old store words at the accessed address, and the generalized store-presence proof builds from the existing honest-trace premises.
-8. **Address helper uses — completeness migrated; soundness pending.**
+8. **Address helper uses — migrated.**
    Replace the four constraint-side uses of `jolt_virtual_align_addr_value64` with reasoning about AddressOffset and the floor rows.
-   Only the two soundness uses remain, at `theorems/Soundness/Layer5/AddressMasks.lean:32` and `:124`.
+   No use of `jolt_virtual_align_addr_value64` remains in `JoltConstraints`.
    `translation/witness_helpers/lookup_output.lean` now returns each floor row's offset.
    Do not replace an aligned address by an offset without checking the equation that consumes it.
-9. **Classifier theorems — completeness callers migrated; soundness callers pending.**
+9. **Classifier theorems — migrated.**
    Replaced `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` with `opcodeFlag_load_cases` and `opcodeFlag_store_cases`, covering floor constructors with unchanged hypotheses.
    Both load proofs use `MemoryValueFacts`; the store proof uses `opcodeFlag_store_cases`.
-   The remaining soundness call sites are in [model_review.md](model_review.md#classifier-call-sites).
+   Step 4 migrated the soundness callers; see [model_review.md](model_review.md#classifier-call-sites).
 10. **Tracer address checks: approved temporary premise, added in the migration.**
     Ari approved on 2026-11-02 extending `TracerAddressChecks` to floor-row accesses as a temporary premise, added only to fit the new ISA; temporary premises are removed eventually, so that fit is acceptable.
-    `theorems/Soundness/Layer5/MemoryAccessRestriction.lean` checks only LD and SD and returns `True` for every other row.
+    `theorems/Soundness/Layer5/MemoryAccessRestriction.lean` now checks LD, SD and the floor loads and stores.
     The predicate for a floor row follows `tracer/src/instruction/floor_access.rs` (`addresses`, lines 59–75 at `c6703570`).
     There, the recorded address is `ea - (ea & offset_mask)`, which the tracer asserts is a multiple of 8, outside its test-only misaligned mode.
     The accessed doubleword is `ea & !7`.
