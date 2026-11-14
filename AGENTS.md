@@ -12,7 +12,7 @@ Never write a bottom-up lemma that no staged statement needs.
 The state of the proof lives in the repository, not in any one session:
 
 - `methods/soundness.md`: the plan, the layers, and the current status.
-- `JoltConstraints/model_review.md`, "Proofs owed": every remaining `sorry` and what it needs.
+- `JoltConstraints/documentation/model_review.md`, "Proofs owed": every remaining `sorry` and what it needs.
 - `reports/`: dated audit reports, named `YYYY-MM-DD-<topic>.md`.
   Read the newest before starting.
   `reports/2026-10-29-soundness-statement-audit.md` checks the soundness statement against Jolt at `5def437f`.
@@ -53,7 +53,7 @@ If you believe a staged statement is false, stop and report the exact missing fa
 - Never replace a proved fact with `sorry`.
 - Do not use `native_decide` or `decide +kernel`, and never raise `maxHeartbeats`.
 - `bv_decide` is accepted for now, to make progress; it will be removed later.
-  List every new use in your report, and add it to the `bv_decide` list in "Proofs owed" (`JoltConstraints/model_review.md`).
+  List every new use in your report, and add it to the `bv_decide` list in "Proofs owed" (`JoltConstraints/documentation/model_review.md`).
 - Delete every lemma no proof uses.
 - For now (Ari, 2026-10-22), correctness comes before speed: the first goal is to learn whether the soundness theorem is true.
   There is no time target for proofs; list any proof that takes more than about ten seconds in your report, so it can be sped up later.

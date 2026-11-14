@@ -2,7 +2,7 @@
 
 Ari approved this step on 2026-11-03.
 It is written for an agent that has not seen the earlier steps.
-Delete this file once the step is reviewed and its content is in the code and in `JoltConstraints/model_review.md`.
+Delete this file once the step is reviewed and its content is in the code and in `JoltConstraints/documentation/model_review.md`.
 
 ## Context
 
@@ -90,7 +90,7 @@ A blocker is a fact the proof needs, other than the one in work item 5, that you
 ## Deliverables
 
 1. The diff in this worktree, uncommitted.
-2. "Proofs owed" in `JoltConstraints/model_review.md` updated to match the code, and the completeness lines of `JoltConstraints/constraints.md` if they change.
+2. "Proofs owed" in `JoltConstraints/documentation/model_review.md` updated to match the code, and the completeness lines of `JoltConstraints/documentation/constraints.md` if they change.
 3. A report, `reports/2026-11-03-completeness-jolt-prover.md`, one sentence per line, giving the Lean commit `e299498`, every declaration changed or added with file and line, every statement change, the build commands and results, `#print axioms` for both theorems, any proof slower than about ten seconds, and every blocker.
 
 Then stop for review.

@@ -3,7 +3,7 @@
 Ari approved this list on 2026-11-02.
 Each approval holds only if the change matches Jolt's code at `c6703570`.
 Check every change against the cited Rust, and stop if one does not match.
-Delete this file once the step is reviewed and its content is in the code and in `JoltConstraints/constraints.md`.
+Delete this file once the step is reviewed and its content is in the code and in `JoltConstraints/documentation/constraints.md`.
 
 ## Context
 
@@ -102,7 +102,7 @@ Delete this file once the step is reviewed and its content is in the code and in
 19. Classifier helpers (`metadata.lean:215`, `:220`).
     Replace `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` with `opcodeFlag_load_cases` and `opcodeFlag_store_cases`.
     Each keeps its hypothesis; the conclusion becomes "LD or one of the new loads" (respectively "SD or one of the new stores").
-    Their seven call sites are in proofs (`JoltConstraints/model_review.md`, "Classifier call sites"); leave them for the proof step and list them in the report.
+    Their seven call sites are in proofs (`JoltConstraints/documentation/model_review.md`, "Classifier call sites"); leave them for the proof step and list them in the report.
 
 20. Proof repairs on the build path (approved by Ari on 2026-11-02).
     `TraceRow.ram_address_lt` (`JoltConstraints/translation/witness_params.lean:41`) gets a case for the new loads and stores; its statement does not change.
@@ -113,7 +113,7 @@ Constraints (46) and (47) need no edit: (47) ranges over every instruction flag,
 
 ## Out of scope
 
-- Outline items 6, 8, 10 and 11 of `JoltConstraints/constraints.md`, except as listed above.
+- Outline items 6, 8, 10 and 11 of `JoltConstraints/documentation/constraints.md`, except as listed above.
 - Proofs under `theorems/Soundness/` and `theorems/Completeness/`.
 - `InLanguage`, the assumption bundles, the restrictions and `TracerAddressChecks`.
 - JoltBytecode.
@@ -155,7 +155,7 @@ Do not fix those.
 ## Deliverables
 
 1. The diff, uncommitted.
-2. In `JoltConstraints/constraints.md`, update equations (01) and (33), and mark the finished outline items.
+2. In `JoltConstraints/documentation/constraints.md`, update equations (01) and (33), and mark the finished outline items.
 3. A report, `reports/YYYY-MM-DD-constraints-migration-definitions.md`, giving:
    - the date, the Jolt commits (`5def437f`, `c6703570`) and the Lean base commit `5a48604`;
    - for each change above, every declaration changed or removed, with file and line, and the Rust it follows;

@@ -2,7 +2,7 @@
 
 Ari approved this step on 2026-11-03.
 It is written for an agent that has not seen the earlier steps.
-Delete this file once the step is reviewed and its content is in the code and in `JoltConstraints/model_review.md`.
+Delete this file once the step is reviewed and its content is in the code and in `JoltConstraints/documentation/model_review.md`.
 
 ## Context
 

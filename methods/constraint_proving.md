@@ -7,7 +7,7 @@ equation is only the starting point; it does not establish completeness.
 
 ## Current state (2026-11-02)
 
-Start with [soundness.md](soundness.md#current-state-2026-11-02) for the pins and build status, and with [constraints.md](../JoltConstraints/constraints.md#migration-outline) for the migration order.
+Start with [soundness.md](soundness.md#current-state-2026-11-02) for the pins and build status, and with [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline) for the migration order.
 The bytecode library builds with its seven existing `sorry`s, but the constraints do not build against the migrated bytecode.
 Do not read an old `DONE` label as a claim about `c6703570`.
 An equation definition, a proof body in source, a successful module build and a source-correspondence audit are different evidence; report which of these you have actually checked.
@@ -84,10 +84,10 @@ tracing paths before assuming a jump must be last.
 ## 1. Select and read one target
 
 Pick an open completeness theorem from
-[`constraints.md`](../JoltConstraints/constraints.md), working from easier
+[`constraints.md`](../JoltConstraints/documentation/constraints.md), working from easier
 targets toward harder ones. Read the exact Lean theorem, its current premises,
 the constraint predicate, the witness fields it uses, and their dependencies.
-Check [`model_review.md`](../JoltConstraints/model_review.md) for prior findings,
+Check [`model_review.md`](../JoltConstraints/documentation/model_review.md) for prior findings,
 but revalidate claims against the current source. Record the selected target
 and what is already proved or admitted; do not count a theorem containing
 `sorry` as closed.

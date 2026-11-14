@@ -8,8 +8,8 @@ lean_head: e29949809bbf2c54c315c2ca55ae3b90c7fd37a6
 # Open issues
 
 This file lists what the theorems rest on that is not proved: Jolt issues, assumptions, owed proofs and gaps in the model.
-`JoltInstance.soundness` was proved at Lean HEAD `7096dca`, under the temporary restrictions, with no `sorry`; see the [current status](../methods/soundness.md#current-top-level-status-2026-10-23).
-With the Step 4 changes on top of `e299498`, `JoltConstraints` builds against the migrated model and `JoltInstance.soundness` is again proved with no `sorry`; see [Current state](../methods/soundness.md#current-state-2026-11-03).
+`JoltInstance.soundness` was proved at Lean HEAD `7096dca`, under the temporary restrictions, with no `sorry`; see the [current status](../../methods/soundness.md#current-top-level-status-2026-10-23).
+With the Step 4 changes on top of `e299498`, `JoltConstraints` builds against the migrated model and `JoltInstance.soundness` is again proved with no `sorry`; see [Current state](../../methods/soundness.md#current-state-2026-11-03).
 `JoltInstance.completeness` still has the `sorry`s listed under "Proofs owed".
 The latest check of the soundness statement against Jolt's code is `reports/2026-10-29-soundness-statement-audit.md`.
 
@@ -28,7 +28,7 @@ The models of Jolt's prover RAM size (`ProverConfig.checkedRamSize`) and Jolt's 
 Jolt's inline/precompile opcodes `0x0B` and `0x2B`, including the SHA-256 and Keccak inlines, and its field-inline opcode `0x7B` are outside this type.
 The SDK's `field_to_limbs!` and `field_from_limbs!` conversions emit `0x7B` instructions.
 A guest containing these instructions is outside the theorems' scope by construction.
-This restriction is recorded in [`expansion_helpers.lean`](./expansion_helpers.lean); it is not an additional premise or a verifier check.
+This restriction is recorded in [`expansion_helpers.lean`](../translation/expansion_helpers.lean); it is not an additional premise or a verifier check.
 
 `AllConstraints joltInstance privateInputs witness` binds the constraint data to the instance through `ConstraintContext` (`constraint_context.lean`).
 Bytecode, initial RAM, public I/O and the entry slot cannot be chosen independently of these inputs.
@@ -101,13 +101,13 @@ On 2026-10-23, `lake build JoltBytecode JoltConstraints` passed (8,832 jobs) and
 On 2026-11-03, with the Step 4 changes on top of `e299498`, `lake build JoltConstraints` passed against the migrated model (8,837 jobs), and `#print axioms JoltInstance.soundness` lists the same four axioms and no `sorryAx`.
 No soundness proof has a `sorry`, and no blocker lemma was staged.
 The proof's structure is in `methods/soundness.md`, "The argument in brief".
-See the [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md).
+See the [Step 4 report](../../reports/2026-11-03-constraints-migration-soundness.md).
 
 **Completeness.** On 2026-11-03 (Step 5), `JoltInstance.completeness` states that the honest witness at the sizes Jolt's prover picks satisfies `AllConstraints`; the earlier existential statement is `JoltInstance.completeness_someWitness`.
 `#print axioms` for both lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
 `lake build JoltConstraints.theorems.Completeness` and `lake build JoltConstraints.theorems.Completeness.completeness` pass.
-The working tree has these five completeness gaps, including Ari's two approved #1949 wrap lemmas; see the [Step 2 report](../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
-The #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot` is proved under the fix of [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) ([experiment report](../reports/2026-11-03-ram-k-fix-experiment.md)).
+The working tree has these five completeness gaps, including Ari's two approved #1949 wrap lemmas; see the [Step 2 report](../../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md).
+The #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot` is proved under the fix of [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) ([experiment report](../../reports/2026-11-03-ram-k-fix-experiment.md)).
 The verifier's RAM bounds at Jolt's sizes, `HonestTrace.witness_params_ram_bounds` (`theorems/Completeness/Helpers/VerifierSizes.lean`), are proved, including that both bounds compute.
 
 | Theorem | What it needs |
@@ -154,8 +154,8 @@ It classifies LD/SD and the floor rows once by width (`theorems/Soundness/Layer5
 Ari approved on 2026-11-03 extending `PanicStoresOne`, `TerminationThenStall`, `StoresPanicAt` and `StoresTerminationAt` to the floor rows; no other restriction changed.
 The main theorem, `InLanguage`, assumptions and completeness files are unchanged by Step 4.
 The eleven migration items are in [constraints.md](constraints.md#migration-outline).
-See the [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md).
-Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every corrected-size helper to them; see the [Step 5 report](../reports/2026-11-03-completeness-jolt-prover.md).
+See the [Step 4 report](../../reports/2026-11-03-constraints-migration-soundness.md).
+Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every corrected-size helper to them; see the [Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md).
 
 ### Cleanup
 

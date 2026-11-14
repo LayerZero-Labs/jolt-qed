@@ -13,9 +13,9 @@ Read these before beginning work:
 
 1. [The high-level account of Jolt](https://randomwalks.xyz/blog/jolt-qed/01-jolt-why/).
 2. [The completeness proof and bug-finding workflow](./constraint_proving.md).
-3. [Known model gaps and proof obligations](../JoltConstraints/model_review.md).
+3. [Known model gaps and proof obligations](../JoltConstraints/documentation/model_review.md).
 4. The current state, in the next section.
-5. The constraints migration outline in [constraints.md](../JoltConstraints/constraints.md#migration-outline).
+5. The constraints migration outline in [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline).
 
 The issue writeups live in `LayerZero-Research/LZ-Notes` under `content/projects/jolt-qed/blog/`.
 
@@ -34,7 +34,7 @@ The Step 4 proof repairs are uncommitted and await review.
   The Layer 5 load and store steps, the Layer 6 row extension and the Layer 7 termination-store proofs now cover every memory row through this classification.
 - `lake build JoltConstraints` passes (8,837 jobs), and `#print axioms JoltInstance.soundness` lists `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`, as at `7096dca`.
   No soundness proof has a `sorry`.
-- The six completeness admissions and seven bytecode admissions remain unchanged; see [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
+- The six completeness admissions and seven bytecode admissions remain unchanged; see [Proofs owed](../JoltConstraints/documentation/model_review.md#proofs-owed).
 - The [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md) lists every repair, statement change and validation result.
 
 Bytecode migration in the working tree:
@@ -54,8 +54,8 @@ Jolt's tracer implements floor accesses in `tracer/src/instruction/floor_access.
 
 How to start, with no prior context:
 
-1. This section, then the open proof obligations under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
-2. The migration order in [constraints.md](../JoltConstraints/constraints.md#migration-outline).
+1. This section, then the open proof obligations under [Proofs owed](../JoltConstraints/documentation/model_review.md#proofs-owed).
+2. The migration order in [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline).
 3. The proof method in [constraint_proving.md](constraint_proving.md).
 4. The newest dated report in `reports/`, currently [`2026-11-03-constraints-migration-soundness.md`](../reports/2026-11-03-constraints-migration-soundness.md).
 
@@ -133,7 +133,7 @@ The prefix cuts at the first stable stall, padding, or the last witness cycle an
 The stopping rule mirrors a16z/jolt PR #2109 at merge commit `0249591a`; no additional restriction is used for the JALR self-jump case.
 The audit `reports/2026-10-29-soundness-statement-audit.md` checks the statement against Jolt at `5def437f`.
 It finds one serious gap: Lean requires untrusted-advice words to be 64-bit values, which Jolt's verifier does not check (its finding 1).
-The axiom result and the remaining cleanup are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
+The axiom result and the remaining cleanup are under [Proofs owed](../JoltConstraints/documentation/model_review.md#proofs-owed).
 
 ### When the proof uncovers an issue
 
@@ -172,7 +172,7 @@ Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
 ## Remaining work (2026-11-02)
 
-0. Migrate the constraints to the `c6703570` ISA, as the eleven items in [constraints.md](../JoltConstraints/constraints.md#migration-outline) describe, then repair the dependent proofs and rebuild both libraries.
+0. Migrate the constraints to the `c6703570` ISA, as the eleven items in [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline) describe, then repair the dependent proofs and rebuild both libraries.
    Helper statements may change within the approved scope; the main statements do not.
 1. The open findings of `reports/2026-10-29-soundness-statement-audit.md`: how to model untrusted-advice words (finding 1) and the HostIO END marker's missing read (finding 2).
 2. The cleanup list under "Proofs owed" in `model_review.md`: long proofs, repeated unpacking, unused declarations and checker speed.
@@ -709,7 +709,7 @@ identity address it rules out an all-ones upper half, hence gives
 `jolt-claims/akita`. This rules out the proposed alias in that build; this audit
 read the code and did not run an end-to-end forged proof.
 
-Our [constraint checklist](../JoltConstraints/constraints.md) explicitly leaves
+Our [constraint checklist](../JoltConstraints/documentation/constraints.md) explicitly leaves
 this Akita condition outside the current base model. On 2026-10-10, Ari approved
 restricting this theorem to `2^128 < ringChar F` and modeling Akita separately.
 Layer 4 must use that stronger bound to recover full lookup addresses. The

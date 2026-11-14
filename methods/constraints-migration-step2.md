@@ -1,7 +1,7 @@
 # Constraints migration, step 2: completeness proofs
 
 Ari approved this step on 2026-11-02.
-Delete this file once the step is reviewed and its content is in the code, in `JoltConstraints/constraints.md` and in `JoltConstraints/model_review.md`.
+Delete this file once the step is reviewed and its content is in the code, in `JoltConstraints/documentation/constraints.md` and in `JoltConstraints/documentation/model_review.md`.
 
 ## Context
 
@@ -14,7 +14,7 @@ Delete this file once the step is reviewed and its content is in the code, in `J
 ## Goal
 
 `lake build JoltConstraints.theorems.Completeness` succeeds.
-The only `sorry`s left in completeness are the four already listed in `JoltConstraints/model_review.md` ("Proofs owed", Completeness), namely (01), (37), (38) and `HonestTrace.corrected_witness_params_ram_bounds`, plus the wrap lemmas of work items 6 and 7.
+The only `sorry`s left in completeness are the four already listed in `JoltConstraints/documentation/model_review.md` ("Proofs owed", Completeness), namely (01), (37), (38) and `HonestTrace.corrected_witness_params_ram_bounds`, plus the wrap lemmas of work items 6 and 7.
 No other new `sorry`.
 
 Work order: first fix every module that does not depend on a wrap case, then the wrap cases.
@@ -213,7 +213,7 @@ At the end, run `lake build JoltConstraints` once and record every failing modul
 ## Deliverables
 
 1. The diff, uncommitted.
-2. `JoltConstraints/constraints.md`: update the (01) links and any completeness checkbox this step changes.
+2. `JoltConstraints/documentation/constraints.md`: update the (01) links and any completeness checkbox this step changes.
 3. A report, `reports/YYYY-MM-DD-constraints-migration-completeness.md`, one sentence per line, giving:
    - the date, the Jolt commits (`5def437f`, `c6703570`) and the Lean base commit `5a48604` with step 1 uncommitted;
    - every declaration changed, added or removed, with file and line;

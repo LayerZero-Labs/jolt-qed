@@ -2,7 +2,7 @@
 
 Ari approved this step on 2026-11-03.
 It is written for an agent that has not seen the earlier steps.
-Delete this file once the step is reviewed and its content is in the code, in `methods/soundness.md` and in `JoltConstraints/model_review.md`.
+Delete this file once the step is reviewed and its content is in the code, in `methods/soundness.md` and in `JoltConstraints/documentation/model_review.md`.
 
 ## Context
 
@@ -135,7 +135,7 @@ A blocker is:
 ## Deliverables
 
 1. The diff, uncommitted.
-2. Update `methods/soundness.md` ("Current state") and "Proofs owed" in `JoltConstraints/model_review.md` to match the code.
+2. Update `methods/soundness.md` ("Current state") and "Proofs owed" in `JoltConstraints/documentation/model_review.md` to match the code.
 3. A report, `reports/YYYY-MM-DD-constraints-migration-soundness.md`, one sentence per line, giving:
    - the date, the Jolt commits (`5def437f`, `c6703570`) and the Lean commit you started from;
    - every declaration changed, added or removed, with file and line;

@@ -1,7 +1,7 @@
 /-
 The immediate obligations below `JoltInstance.soundness`. Each unfinished helper
 has a name and a concrete statement so the main theorem can be assembled without
-adding premises. See `JoltConstraints/model_review.md`, "Proofs owed".
+adding premises. See `JoltConstraints/documentation/model_review.md`, "Proofs owed".
 -/
 import JoltConstraints.translation.Constraints.All
 import JoltConstraints.theorems.Soundness.Assumptions
