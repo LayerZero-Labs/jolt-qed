@@ -107,17 +107,4 @@ theorem sum_interleave_odd_bits {F : Type} [Field F] (left right : BitVec 64) :
   have h2 : (2 * bit.val + 1) / 2 = bit.val := by omega
   simp only [interleaveLookupOperands_testBit left right hj, h1, h2, ↓reduceIte]
 
-/-- Deinterleaving the even bits of an interleaved index recovers its right operand. -/
-theorem sum_interleave_even_bits {F : Type} [Field F] (left right : BitVec 64) :
-    (∑ bit : Fin 64,
-      if (TraceWitness.interleaveLookupOperands left right).toNat.testBit (2 * bit.val)
-      then (2 : F) ^ bit.val else 0) = (right.toNat : F) := by
-  rw [bitVec_toNat_cast_eq_sum]
-  refine Finset.sum_congr rfl fun bit _ => ?_
-  have hj : 2 * bit.val < 128 := by omega
-  have h1 : 2 * bit.val % 2 = 0 := by omega
-  have h2 : 2 * bit.val / 2 = bit.val := by omega
-  simp only [interleaveLookupOperands_testBit left right hj, h1, h2, Nat.zero_ne_one,
-    ↓reduceIte]
-
 end JoltConstraints

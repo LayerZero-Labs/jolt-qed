@@ -1,7 +1,6 @@
 import JoltConstraints.theorems.Completeness.Helpers.RamOutputProofHelpers
 import JoltConstraints.translation.Constraints.RamOutputEqPublicIo
 import JoltConstraints.theorems.Completeness.Helpers.IOSetupFrame
-import JoltConstraints.translation.Constraints.MemoryLayout
 
 open LeanRV64D
 
@@ -18,8 +17,8 @@ the layout and both advice buffers (`finalTraceState_ioSame`), so the final
 RAM image and the public I/O array share the input, output, panic, and
 termination overlays. They differ only below the input: the zero RAM image
 below `RAM_START_ADDRESS` and the advice buffers. `adviceBelowInput` keeps the
-advice buffers out of the public interval; `AdviceBelowInput.of_memoryLayout`
-proves that every Rust-constructed device satisfies it. Output growth needs no
+advice buffers out of the public interval; `HonestTrace.advice_below_input`
+proves it for every honest trace. Output growth needs no
 premise here: both sides overlay the same final output buffer. -/
 theorem honestWitness_ramOutputEqPublicIo
     {F : Type} [Field F] (params : WitnessParams)
