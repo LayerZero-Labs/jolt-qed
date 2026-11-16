@@ -27,7 +27,6 @@ assertion rows require lookup output one.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
 def assertLookupOne {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
-  ∀ t : Fin params.traceLength,
-    witness.OpFlags .Assert t * (witness.LookupOutput t - 1) = 0
+  ∀ t : Fin params.traceLength, witness.OpFlags .Assert t * (witness.LookupOutput t - 1) = 0
 
 end JoltConstraints
