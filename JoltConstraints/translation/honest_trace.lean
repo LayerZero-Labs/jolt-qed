@@ -49,10 +49,10 @@ def source_is_compressed (bytecode : Array JoltInstructionRow)
   let last := start.val + (bytecode[start].virtual_sequence_remaining.getD 0).toNat
   (bytecode[last]?.map (·.is_compressed)).getD false
 
--- A run of the instance's program on these private inputs: it starts at the entry
--- from the initial state, every row runs a row of the expanded bytecode, and each
--- row follows the previous one as in Rust's tracer. It says nothing about when the
--- run stops or which runtime advice it uses; `HonestTrace` adds both.
+-- A ValidRun is a trace with additioal properties 
+-- The user supplied guest program made of a RISC-V program expands into Jolt Bytecode without error
+-- futhermore, every instruction retires successfully
+-- the initial state is initialised as described in TODO: (ari) insert blog here
 structure ValidRun (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) extends Trace where
   expands : expand_program joltInstance.program = some bytecode

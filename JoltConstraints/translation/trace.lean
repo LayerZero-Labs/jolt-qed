@@ -31,10 +31,10 @@ def JoltISA.Instr.withRuntimeAdvice (instruction : JoltISA.Instr)
   | .VirtualAdvice dst _ imm => .VirtualAdvice dst advice imm
   | instruction => instruction
 
--- One step of a trace: the bytecode row it runs, the advice value it recorded, and
--- the states before and after. The trace comes from some tracer, honest or not; all
--- we know is that it type-checks. `ValidRun` and `HonestTrace` say what an honest
--- tracer records.
+-- bytecode is an array of Jolt Instructions 
+-- rowIndex is simply which instruction this step runs 
+-- runtimeAdvice is the contents on the advice tape, which only returns a BitVec 64
+-- if the instruction is `VirtualAdvice`
 structure TraceRow (bytecode : Array JoltInstructionRow) where
   rowIndex : Fin bytecode.size
   runtimeAdvice : bytecode[rowIndex].instruction.RuntimeAdvice
@@ -65,10 +65,10 @@ def TraceRow.ram_address {bytecode : Array JoltInstructionRow}
       some (ea - (ea &&& 4)).toNat
   | _ => none
 
--- A candidate execution: its bytecode, recorded transitions and initial state.
--- Rows represent actual modeled cycles. Canonical trailing padding is implicit,
--- matching Rust TraceData::proof_rows(); witness helpers supply default padding.
--- This does not represent arbitrary interior or noncanonical Rust NoOp rows.
+-- A trace is simply a program given by bytecode, and 
+-- before/after records have having executed those instructions given by TraceRow
+-- and the initial state.
+-- There is no guarantee this trace is correct, or follows the Jolt ISA.
 structure Trace where
   bytecode : Array JoltInstructionRow
   rows : Array (TraceRow bytecode)
