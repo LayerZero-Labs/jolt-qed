@@ -7,7 +7,6 @@ set_option autoImplicit false
 -- Rust paths below refer to public pin 8bbb2357, inspected in the local checkout.
 
 -- Rust: crates/jolt-riscv/src/flags.rs::CircuitFlags.
--- of what it means.
 -- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
 set_option backward.isDefEq.respectTransparency false in
 inductive CircuitFlags where
