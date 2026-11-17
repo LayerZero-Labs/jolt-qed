@@ -8,6 +8,18 @@ open LeanRV64D
 
 set_option autoImplicit false
 
+/-- Every recorded RAM byte address fits in 64 bits, including a floor row's
+`ea - (ea &&& mask)`; for example, a byte floor row at effective address 11
+records 8, which is still below `2^64`.
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`) and
+`crates/jolt-riscv/src/trace_row.rs` (`ram_address`) at `c6703570`. -/
+theorem TraceRow.ram_address_lt {bytecode : Array JoltInstructionRow}
+    (row : TraceRow bytecode) (address : Nat) (touches : row.ram_address = some address) :
+    address < 2 ^ 64 := by
+  unfold TraceRow.ram_address at touches
+  split at touches <;> cases touches
+  all_goals exact BitVec.isLt _
+
 namespace JoltInstance
 
 /-- From the last represented stable branch onward, every witness cycle has

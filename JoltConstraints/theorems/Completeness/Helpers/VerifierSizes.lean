@@ -6,6 +6,75 @@ open LeanRV64D
 
 set_option autoImplicit false
 
+-- The largest of a list of numbers below a bound is below it; an empty list gives 0.
+theorem max?_getD_lt (numbers : List Nat) (bound : Nat) (positive : 0 < bound)
+    (allBelow : ∀ number ∈ numbers, number < bound) :
+    numbers.max?.getD 0 < bound := by
+  cases largest : numbers.max? with
+  | none => exact positive
+  | some number => exact allBelow number (List.max?_mem largest)
+
+-- The smallest of a list of numbers below a bound is below it; an empty list gives 0.
+theorem min?_getD_lt (numbers : List Nat) (bound : Nat) (positive : 0 < bound)
+    (allBelow : ∀ number ∈ numbers, number < bound) :
+    numbers.min?.getD 0 < bound := by
+  cases smallest : numbers.min? with
+  | none => exact positive
+  | some number => exact allBelow number (List.min?_mem smallest)
+
+/-- The word index `(address - lowest) / 8` of an address below `bound` is below the number
+of words that start below `bound`, `⌈(bound - lowest) / 8⌉ = (bound - lowest + 7) / 8`,
+where `lowest` is the layout's lowest address, below `bound`; address 0 (no access) and
+an address below `lowest` count as index 0.
+For example, with lowest address 16, an address 40 below a bound 44 has index
+`3 < (44 - 16 + 7) / 8 = 4`. -/
+theorem remap_address_lt (layout : MemoryLayout) (address bound : Nat)
+    (lowestBelow : layout.get_lowest_address.toNat < bound) (below : address < bound) :
+    (remap_address layout address).getD 0 <
+      (bound - layout.get_lowest_address.toNat + 7) / 8 := by
+  unfold remap_address
+  split
+  · dsimp only [Option.getD]
+    omega
+  · dsimp only [Option.getD]
+    omega
+
+/-- The program image's lowest address, `min_bytecode_address`, is below any positive
+`bound` that every image address is below; an empty image gives 0.
+For example, an image of bytes at `0x80000000` and `0x80000004` has lowest address
+`0x80000000`, below its program end `0x80000008`. -/
+theorem min_bytecode_address_lt (memory_init : List (BitVec 64 × BitVec 8)) (bound : Nat)
+    (positive : 0 < bound) (allBelow : ∀ entry ∈ memory_init, entry.1.toNat < bound) :
+    min_bytecode_address memory_init < bound := by
+  unfold min_bytecode_address
+  apply min?_getD_lt _ _ positive
+  intro address member
+  obtain ⟨entry, inImage, isAddress⟩ := List.mem_map.mp member
+  rw [← isAddress]
+  exact allBelow entry inImage
+
+/-- When every image address is below a positive `bound`, the program image's first
+word index `min_bytecode_address / 8` plus its word count `program_image_len_words`
+(the span from its lowest byte's word to the word of its highest byte plus 3, the rest
+of a 4-byte instruction) is at most `(bound + 9) / 8 + 1`.
+For example, one byte at `0x80000000` with bound `0x80000001` gives first word
+`0x10000000` and 2 words, and `0x10000002 ≤ 0x10000001 + 1`.
+At `bound = 2^64` the image spans at most `2^61 + 2` words. -/
+theorem program_image_len_words_le (memory_init : List (BitVec 64 × BitVec 8)) (bound : Nat)
+    (positive : 0 < bound) (allBelow : ∀ entry ∈ memory_init, entry.1.toNat < bound) :
+    min_bytecode_address memory_init / 8 + program_image_len_words memory_init ≤
+      (bound + 9) / 8 + 1 := by
+  have highestBelow : ((memory_init.map (·.1.toNat)).max?).getD 0 < bound := by
+    apply max?_getD_lt _ _ positive
+    intro address member
+    obtain ⟨entry, inImage, isAddress⟩ := List.mem_map.mp member
+    rw [← isAddress]
+    exact allBelow entry inImage
+  have lowestBelow := min_bytecode_address_lt memory_init bound positive allBelow
+  unfold program_image_len_words
+  dsimp only
+  omega
+
 namespace JoltConstraints
 
 -- A nonempty image starts in RAM, by the program image's existing certificate.
