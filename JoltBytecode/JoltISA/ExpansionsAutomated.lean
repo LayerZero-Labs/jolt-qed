@@ -419,7 +419,7 @@ def remwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LRW` expansion. -/
-def lrwProgramAuto (rd rs1 rs2 : regidx) : Program :=
+def lrwProgramAuto (rd rs1 _rs2 : regidx) : Program :=
   if isX0 rd then
     .instr (.LUI (.vreg (BitVec.ofNat 7 41)) (2147483648 : BitVec 64)) <|
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 128)) <|
@@ -744,7 +744,7 @@ def amomaxuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LRD` expansion. -/
-def lrdProgramAuto (rd rs1 rs2 : regidx) : Program :=
+def lrdProgramAuto (rd rs1 _rs2 : regidx) : Program :=
   if isX0 rd then
     .instr (.LUI (.vreg (BitVec.ofNat 7 41)) (2147483648 : BitVec 64)) <|
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 128)) <|

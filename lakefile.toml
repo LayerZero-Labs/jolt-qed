@@ -15,12 +15,20 @@ name = "Sail"
 git = "https://github.com/rems-project/lean-sail"
 rev = "v8"
 
+# allowNonModules only silences a Lake warning; it fixes nothing.
+# Mathlib v4.35 is written for Lean's module system, and Lake warns whenever a
+# file without a `module` header imports it. Our files cannot become modules yet:
+# Lean refuses to let a module file import a non-module file, and almost all of
+# them depend on the generated LeanRV64D and the Sail package, which are not
+# modules. Remove this once those are modules and our files are converted.
 [[lean_lib]]
 name = "JoltBytecode"
+allowNonModules = true
 leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
 
 [[lean_lib]]
 name = "JoltConstraints"
+allowNonModules = true  # see the comment above JoltBytecode
 leanOptions = {autoImplicit = false, relaxedAutoImplicit = false}
 
 # Trusted generated layer: not a default target. Lake rebuilds imported modules

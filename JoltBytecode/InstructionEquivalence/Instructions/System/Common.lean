@@ -97,7 +97,7 @@ theorem extDHashMap_get?_insert_of_ne {α : Type} [BEq α] [Hashable α]
   rw [Std.ExtDHashMap.get?_insert]
   have hfalse : (written == read) = false := beq_false_of_ne h
   simp only [hfalse, Bool.false_eq_true]
-  rw [dif_neg (by intro hf; cases hf)]
+  rw [dite_eq_right (by intro hf; cases hf)]
 
 /-- Two writes to one dependent-map key do not affect reads from a different
 key. -/
@@ -178,7 +178,7 @@ theorem systemProject_get_unmodified
   unfold systemProject
   simp only [Std.ExtDHashMap.get?_insert, hmstatus, hmtval, hmcause, hmepc,
     hmscratch, hmtvec, Bool.false_eq_true]
-  repeat rw [dif_neg (by intro h; cases h)]
+  repeat rw [dite_eq_right (by intro h; cases h)]
 
 /-- `systemProject` preserves architectural integer-register reads: it overlays
 only machine CSR registers, never `x0`-`x31`. -/
@@ -542,7 +542,7 @@ theorem vregWrite_self (vregs : BitVec 7 → BitVec 64) (vr : JoltISA.VReg)
     (value : BitVec 64) :
     vregWrite vregs vr value vr = value := by
   unfold vregWrite
-  exact if_pos rfl
+  exact ite_eq_left rfl
 
 /-- Writing one virtual register leaves every different virtual register alone. -/
 theorem vregWrite_other (vregs : BitVec 7 → BitVec 64)
@@ -550,7 +550,7 @@ theorem vregWrite_other (vregs : BitVec 7 → BitVec 64)
     (h_ne : read ≠ written) :
     vregWrite vregs written value read = vregs read := by
   unfold vregWrite
-  exact if_neg h_ne
+  exact ite_eq_right h_ne
 
 /-- `ADDI x, 0` leaves a 64-bit Jolt value unchanged. -/
 theorem addi_zero_value (x : BitVec 64) :

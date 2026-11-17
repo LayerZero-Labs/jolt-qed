@@ -13,9 +13,9 @@ Read these before beginning work:
 
 1. [The high-level account of Jolt](https://randomwalks.xyz/blog/jolt-qed/01-jolt-why/).
 2. [The completeness proof and bug-finding workflow](./constraint_proving.md).
-3. [Known model gaps and proof obligations](../JoltConstraints/model_review.md).
+3. [Known model gaps and proof obligations](../JoltConstraints/documentation/model_review.md).
 4. The current state, in the next section.
-5. The constraints migration outline in [constraints.md](../JoltConstraints/constraints.md#migration-outline).
+5. The constraints migration outline in [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline).
 
 The issue writeups live in `LayerZero-Research/LZ-Notes` under `content/projects/jolt-qed/blog/`.
 
@@ -29,12 +29,12 @@ The Step 4 proof repairs are uncommitted and await review.
 - Steps 1–3 are committed: migrated definitions, completeness repairs, and the approved extension of `TracerAddressChecks` to the containing doubleword of floor loads and stores.
 - Step 4 repairs the six initial failing modules and their callers: destination-value input routing, ShiftData's signed immediate, retired alignment rows, plain-row classification, stall flags and tape replay addresses.
 - Ari approved on 2026-11-03 extending `PanicStoresOne`, `TerminationThenStall`, `StoresPanicAt` and `StoresTerminationAt` to `VirtualLoadB/H/W` and `VirtualStoreB/H/W` at their containing doubleword `ea &&& ~~~7`; no other restriction or assumption changed, and the statements of `JoltInstance.soundness` and `InLanguage` are unchanged.
-- `Soundness/Layer5/MemoryRows.lean` classifies LD, SD and the six floor rows once by width (`MemoryWidth`, `LoadRow`, `StoreRow`).
+- `theorems/Soundness/Layer5/MemoryRows.lean` classifies LD, SD and the six floor rows once by width (`MemoryWidth`, `LoadRow`, `StoreRow`).
   `AccessRow.address_encoded` proves from constraint (01), the AddressOffset lookup, RAM selection and `RamRegionFits` that the RAM address is the accessed doubleword and that the effective address is naturally aligned for its width.
   The Layer 5 load and store steps, the Layer 6 row extension and the Layer 7 termination-store proofs now cover every memory row through this classification.
 - `lake build JoltConstraints` passes (8,837 jobs), and `#print axioms JoltInstance.soundness` lists `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`, as at `7096dca`.
   No soundness proof has a `sorry`.
-- The six completeness admissions and seven bytecode admissions remain unchanged; see [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
+- The six completeness admissions and seven bytecode admissions remain unchanged; see [Proofs owed](../JoltConstraints/documentation/model_review.md#proofs-owed).
 - The [Step 4 report](../reports/2026-11-03-constraints-migration-soundness.md) lists every repair, statement change and validation result.
 
 Bytecode migration in the working tree:
@@ -54,8 +54,8 @@ Jolt's tracer implements floor accesses in `tracer/src/instruction/floor_access.
 
 How to start, with no prior context:
 
-1. This section, then the open proof obligations under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
-2. The migration order in [constraints.md](../JoltConstraints/constraints.md#migration-outline).
+1. This section, then the open proof obligations under [Proofs owed](../JoltConstraints/documentation/model_review.md#proofs-owed).
+2. The migration order in [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline).
 3. The proof method in [constraint_proving.md](constraint_proving.md).
 4. The newest dated report in `reports/`, currently [`2026-11-03-constraints-migration-soundness.md`](../reports/2026-11-03-constraints-migration-soundness.md).
 
@@ -123,8 +123,8 @@ every source instruction with the same registers and memory (Layer 7).
 
 At Lean HEAD `7096dca` on 2026-10-23, `JoltInstance.soundness` was proved, under the temporary restrictions, with no `sorry`.
 `lake build JoltBytecode JoltConstraints` passed then (8,832 jobs), and `#print axioms JoltInstance.soundness` listed only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
-The theorem chains four helpers in `Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) to get `InLanguage`.
-Helper A returns an `UntrustedAnswerTrace` represented at every actual row, from execution-prefix agreement (Layer 6, `Soundness/Layer6/ExecutionPrefix.lean`) and the stopping theorem (`Soundness/Layer7/Stopping.lean`).
+The theorem chains four helpers in `theorems/Soundness/TopLevel.lean` to get the relaxed language, then applies the reverse inclusion `untrustedAnswerLanguage_implies_inLanguage` (Layer 7) to get `InLanguage`.
+Helper A returns an `UntrustedAnswerTrace` represented at every actual row, from execution-prefix agreement (Layer 6, `theorems/Soundness/Layer6/ExecutionPrefix.lean`) and the stopping theorem (`theorems/Soundness/Layer7/Stopping.lean`).
 Helper B checks the output and panic words through constraint 26 and final RAM agreement, with no panic restriction; `Represents.finalRam` covers every RAM index except the termination word.
 Helper C shows Jolt's prover accepts the trace, using the base verifier's 256-cycle floor (`ConstraintContext.traceLengthFloor`) and the approved `noMaxLengthTrace` restriction.
 Helper D shows no spoil assert fails, using the checker's `noSpoilAsserts`.
@@ -133,7 +133,7 @@ The prefix cuts at the first stable stall, padding, or the last witness cycle an
 The stopping rule mirrors a16z/jolt PR #2109 at merge commit `0249591a`; no additional restriction is used for the JALR self-jump case.
 The audit `reports/2026-10-29-soundness-statement-audit.md` checks the statement against Jolt at `5def437f`.
 It finds one serious gap: Lean requires untrusted-advice words to be 64-bit values, which Jolt's verifier does not check (its finding 1).
-The axiom result and the remaining cleanup are under [Proofs owed](../JoltConstraints/model_review.md#proofs-owed).
+The axiom result and the remaining cleanup are under [Proofs owed](../JoltConstraints/documentation/model_review.md#proofs-owed).
 
 ### When the proof uncovers an issue
 
@@ -172,7 +172,7 @@ Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
 ## Remaining work (2026-11-02)
 
-0. Migrate the constraints to the `c6703570` ISA, as the eleven items in [constraints.md](../JoltConstraints/constraints.md#migration-outline) describe, then repair the dependent proofs and rebuild both libraries.
+0. Migrate the constraints to the `c6703570` ISA, as the eleven items in [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline) describe, then repair the dependent proofs and rebuild both libraries.
    Helper statements may change within the approved scope; the main statements do not.
 1. The open findings of `reports/2026-10-29-soundness-statement-audit.md`: how to model untrusted-advice words (finding 1) and the HostIO END marker's missing read (finding 2).
 2. The cleanup list under "Proofs owed" in `model_review.md`: long proofs, repeated unpacking, unused declarations and checker speed.
@@ -192,18 +192,18 @@ The previous pin was `5def437f`; the statement was checked against it in `report
 
 ## Soundness statement
 
-The current target is [`JoltInstance.soundness`](../JoltConstraints/Soundness/soundness.lean).
+The current target is [`JoltInstance.soundness`](../JoltConstraints/theorems/Soundness/soundness.lean).
 It concludes the fixed-tape language `JoltInstance.InLanguage`, and keeps it:
 on 2026-10-15 Ari decided this is Jolt's language (see
 [Choosing the private inputs](#choosing-the-private-inputs)). Layer 5a defines the
-relaxed language in [TapeTrace.lean](../JoltConstraints/Soundness/Layer5/TapeTrace.lean),
+relaxed language in [TapeTrace.lean](../JoltConstraints/theorems/Soundness/Layer5/TapeTrace.lean),
 used only inside the proof, and proves fixed-tape language inclusion.
 Layer 5a is built and reviewed by reading. Ari approved the
 instance-only RAM-region premise below; Layer 5b begins by deriving nonwrapping
 addresses from it and the constraints.
 
 **Source-language scope.** Both targets cover programs represented by
-[`SourceInstruction`](../JoltConstraints/expansion_helpers.lean): the modeled
+[`SourceInstruction`](../JoltConstraints/translation/expansion_helpers.lean): the modeled
 RISC-V instructions and the listed Jolt custom instructions at opcode `0x5B`.
 Jolt's inline/precompile opcodes `0x0B` and `0x2B`, including the SHA-256 and
 Keccak inlines, and field-inline opcode `0x7B` are outside that type. The SDK's
@@ -226,7 +226,7 @@ The proof first builds a relaxed trace, which allows independent tape answers wh
 We aim to preserve the supplied untrusted advice in RAM and choose the tape answers from the witness. The audit has found no constraint linking those answers to one tape; none is needed, because one tape can be rebuilt from them.
 
 The premises are bundled in
-[Soundness/Assumptions.lean](../JoltConstraints/Soundness/Assumptions.lean):
+[theorems/Soundness/Assumptions.lean](../JoltConstraints/theorems/Soundness/Assumptions.lean):
 `JoltField F` (`2^128 < ringChar F`); `JoltInstance.SoundnessAssumptions`
 (`RamRegionFits`); and the temporary
 `JoltInstance.TemporaryRestrictions` (`TracerAddressChecks`,
@@ -235,7 +235,7 @@ The premises are bundled in
 On 2026-10-10, Ari approved `RamRegionFits`: for the instance's layout and
 successfully computed maximum RAM size, `lowest + 8 * maxRamSize ≤ 2^64`.
 **NOTE: to confirm with a16z.** The definition is in
-[Layer3/Layout.lean](../JoltConstraints/Soundness/Layer3/Layout.lean).
+[Layer3/Layout.lean](../JoltConstraints/theorems/Soundness/Layer3/Layout.lean).
 This restricts the instance's maximum padded RAM region, not its execution runs.
 Together with `ConstraintContext.ramSizeBounds`, it bounds all eight bytes of
 every in-domain word. Layer 5b recovers integer address sums from satisfying
@@ -254,7 +254,7 @@ stores at zero, the I/O padding gap, stores to the stack canary, and accesses
 at or above `heap_end`. Each remains individually tracked in Layer 5b below;
 #2044 does not establish a counterexample for any of those four cases.
 The definition is in
-[Layer5/MemoryAccessRestriction.lean](../JoltConstraints/Soundness/Layer5/MemoryAccessRestriction.lean).
+[Layer5/MemoryAccessRestriction.lean](../JoltConstraints/theorems/Soundness/Layer5/MemoryAccessRestriction.lean).
 The restriction covers LD and SD; Ari approved on 2026-11-02 extending it to the floor-row accesses as a temporary premise (constraints.md, migration item 10).
 For every private input and initialized prefix under relaxed tape semantics,
 with honest internal runtime advice and no earlier PC stall, the next attempted
@@ -475,10 +475,10 @@ dependency, but using its results can.
 
 ## Proof layers
 
-Proofs live in `JoltConstraints/Soundness/Layer0/` through `Layer8/`, matching the
+Proofs live in `JoltConstraints/theorems/Soundness/Layer0/` through `Layer8/`, matching the
 layers below. Create each directory as its proofs are added. The final theorem
-stays in `JoltConstraints/Soundness/soundness.lean`.
-Algebraic helpers shared across layers live in `JoltConstraints/Soundness/Helpers/`.
+stays in `JoltConstraints/theorems/Soundness/soundness.lean`.
+Algebraic helpers shared across layers live in `JoltConstraints/theorems/Soundness/Helpers/`.
 Layer 5 has two parts: 5a adds the relaxed semantics for tape answers, used inside the proof, and
 5b proves execution steps, one file per instruction family in `Layer5/`.
 At Lean HEAD `7096dca`, all layers were proved and `JoltInstance.soundness` had no `sorry`.
@@ -523,7 +523,7 @@ Sail discards writes to x0. Derive
 `ExpansionRows.expand_program_rowOk` and `ExpansionRows.RowOk.valid`, then use
 the canonical no-op's constraints to prove the increment is zero.
 Both of these narrower lemmas have only the standard three axioms. Prefer them
-to the larger [`expand_program_rows_valid`](../JoltConstraints/trace_interface.lean)
+to the larger [`expand_program_rows_valid`](../JoltConstraints/theorems/trace_interface.lean)
 bundle for this fact: its `noEarlyNextPCChange` field depends on
 `sys_enable_experimental_extensions`. That named Sail constant is allowed by
 the axiom policy above, but Layer 2 does not need it.
@@ -543,13 +543,13 @@ not a general register-history or execution theorem, so this order avoids a
 circular dependency. The current x0 value being zero is an induction hypothesis,
 not a new soundness premise.
 
-For initialization, connect the zero table to the initial state's registers using [`initial_state_sourceValue`](../JoltConstraints/execution_facts.lean).
+For initialization, connect the zero table to the initial state's registers using [`initial_state_sourceValue`](../JoltConstraints/theorems/execution_facts.lean).
 This existing lemma takes an `initial_state` equation and a source register; it does not require an `HonestTrace`.
 Prove the connection for every register-table index using the register-address map, and prove that `advance_pc` preserves these values.
 Prove the required encoding/decoding identities and injectivity on **canonical**
 source and destination operands, using
-[`register_encoding.lean`](../JoltConstraints/register_encoding.lean) and
-[`register_address.lean`](../JoltConstraints/witness_helpers/register_address.lean).
+[`register_encoding.lean`](../JoltConstraints/translation/register_encoding.lean) and
+[`register_address.lean`](../JoltConstraints/translation/witness_helpers/register_address.lean).
 Architectural registers occupy indices 0–31, and canonical virtual registers
 occupy 32–127. The raw constructors can alias (for example, x0 and virtual
 register 0), so unrestricted injectivity would be false. Derive each row's
@@ -572,7 +572,7 @@ Agreement after executing an instruction remains part of Layer 5b.
 What: the RAM table starts at the instance's initial memory, which includes the untrusted advice.
 Each cycle changes at most the word it accesses, a read returns the table's value, and `RamValFinal` is the initial RAM plus every increment.
 Reuse `sum_before_succ` from
-[`Soundness/Helpers/PrefixSum.lean`](../JoltConstraints/Soundness/Helpers/PrefixSum.lean)
+[`theorems/Soundness/Helpers/PrefixSum.lean`](../JoltConstraints/theorems/Soundness/Helpers/PrefixSum.lean)
 for the RAM prefix sums; Layer 2 already uses this shared lemma for registers.
 Cycles that do not touch memory and the remapping of addresses to RAM indices must be accounted for.
 Prove the last-cycle update into `RamValFinal`, as well as updates between `RamVal` columns.
@@ -597,7 +597,7 @@ while execution wraps the sum at 64 bits. The layout premise states
 `lowest + 8 * maxRamSize ≤ 2^64`. The verifier's RAM-size check then bounds the
 entire witness RAM domain, including every byte of its last word.
 
-[Layer5/MemoryAddress.lean](../JoltConstraints/Soundness/Layer5/MemoryAddress.lean)
+[Layer5/MemoryAddress.lean](../JoltConstraints/theorems/Soundness/Layer5/MemoryAddress.lean)
 derives `encoded` as follows. Write `base` for a 64-bit base-register value,
 `imm` for the immediate, and `S := base.toNat + imm.toInt`, an integer.
 
@@ -709,7 +709,7 @@ identity address it rules out an all-ones upper half, hence gives
 `jolt-claims/akita`. This rules out the proposed alias in that build; this audit
 read the code and did not run an end-to-end forged proof.
 
-Our [constraint checklist](../JoltConstraints/constraints.md) explicitly leaves
+Our [constraint checklist](../JoltConstraints/documentation/constraints.md) explicitly leaves
 this Akita condition outside the current base model. On 2026-10-10, Ari approved
 restricting this theorem to `2^128 < ringChar F` and modeling Akita separately.
 Layer 4 must use that stronger bound to recover full lookup addresses. The
@@ -724,7 +724,7 @@ adding the upper-half guard would still not cover every characteristic above
 **Where tape instructions come from.** No RISC-V instruction expands to a tape instruction.
 `VirtualAdviceLoad` comes from Jolt's custom source instructions (opcode `0x5B`):
 `AdviceLB`, `AdviceLH`, `AdviceLW` and `AdviceLD`
-([`expansions.lean`](../JoltConstraints/expansions.lean)). These are the SDK reads
+([`expansions.lean`](../JoltConstraints/translation/expansions.lean)). These are the SDK reads
 used by `#[jolt::advice]`. PR #2049 removes `bytes_remaining()` and the
 `VirtualAdviceLen` source and final-row constructors.
 
@@ -787,9 +787,9 @@ result, so the tape of the answers' low bytes gives the same registers and
 memory at the end of every source instruction
 ([Choosing the private inputs](#choosing-the-private-inputs)). With
 `bytes_remaining()` removed, no instruction can see the tape's length.
-The [modeled metadata](../JoltConstraints/metadata.lean) still gives
+The [modeled metadata](../JoltConstraints/translation/metadata.lean) still gives
 `VirtualAdviceLoad` the `Advice` flag and a `RangeCheck` lookup.
-[`rightLookupEqRightInputOtherwise`](../JoltConstraints/Constraints/RightLookupEqRightInputOtherwise.lean)
+[`rightLookupEqRightInputOtherwise`](../JoltConstraints/translation/Constraints/RightLookupEqRightInputOtherwise.lean)
 still leaves its right lookup operand unconstrained by the instruction input.
 
 **Historical length-query candidate, removed by PR #2049.** At revision
@@ -805,7 +805,7 @@ including their sign extension and x0 temporary-register branch, are unchanged.
 
 #### Layer 5b: one execution step
 
-Files: one per instruction family in `JoltConstraints/Soundness/Layer5/`; the
+Files: one per instruction family in `JoltConstraints/theorems/Soundness/Layer5/`; the
 dispatcher that composes them is `row_step` (`Layer6/RowStep.lean`).
 
 What: for `t < n`, given `Agrees w t prefix state` and the step's advice compatibility facts, prove that the step succeeds under the untrusted-answer semantics and returns a post-state matching the witness's writes.
@@ -821,7 +821,7 @@ x0 with Layer 2's zero-table invariant. These local execution and value facts
 remain obligations of each instruction family; the shared write lemma does
 not establish them. It applies when `t + 1 < N`, since there is no register
 table at cycle `N`.
-[AddImmediate.lean](../JoltConstraints/Soundness/Layer5/AddImmediate.lean)
+[AddImmediate.lean](../JoltConstraints/theorems/Soundness/Layer5/AddImmediate.lean)
 now discharges these local obligations for ADDI. Its `addi_step` derives
 source/immediate encodings, the addition and write flags, and the RangeCheck
 table from the selected row, then proves execution and next-cycle register
@@ -989,7 +989,7 @@ resolved and proved; both its definition and the main theorem carry that FIXME.
 
 For a runtime-advice step, justify the local lemma's advice hypotheses using the relevant expansion constraints; a tape-reading step takes its answer from the witness.
 For `AdviceLB`, `AdviceLH` and `AdviceLW`,
-[AdviceExpansion.lean](../JoltConstraints/Soundness/Layer5/AdviceExpansion.lean)
+[AdviceExpansion.lean](../JoltConstraints/theorems/Soundness/Layer5/AdviceExpansion.lean)
 now proves the source expansion shapes and full execution of their
 `VirtualAdviceLoad`, `VirtualMULI` and `VirtualSRAI` rows in order. Both the
 ordinary-destination and x0 temporary-register branches are covered. The
@@ -1069,7 +1069,7 @@ Uses: the PC and sequence constraints, Layer 5b.
 Layers 5b–6 are proved; see [Current top-level status](#current-top-level-status-2026-10-23).
 
 **Entry and interior slots.**
-[BytecodePC.lean](../JoltConstraints/Soundness/Layer6/BytecodePC.lean)
+[BytecodePC.lean](../JoltConstraints/theorems/Soundness/Layer6/BytecodePC.lean)
 proves that cycle zero selects the preprocessed entry slot, including the
 address-zero case. A nonlast virtual row selects the following bytecode slot
 on the next cycle: the proof uses constraint (18), the shifted expanded PC,
@@ -1081,7 +1081,7 @@ nonlast-virtual condition. Finally `selected_registerShift_fed` combines that
 adjacency with the checked expansion's `ShiftPairs` fact, proving the previous
 selected instruction feeds the register shift's mask.
 
-**Entry address zero:** neither the [program image type nor entry preprocessing](../JoltConstraints/program.lean) excludes it; `get_first_pc` maps it to slot 0.
+**Entry address zero:** neither the [program image type nor entry preprocessing](../JoltConstraints/translation/program.lean) excludes it; `get_first_pc` maps it to slot 0.
 The earlier tracer initialized `prev_pc` to 0 and could produce no rows at entry address 0.
 PR #2109, merged as `0249591a`, starts `Cpu.stalled` as false (`jolt/tracer/src/emulator/cpu.rs:441-453` at `5def437f`), but a first fetch at address 0 may still fail because address 0 is not program memory.
 `get_first_pc` still maps address 0 to the no-op entry, as checked in `crates/jolt-program/src/preprocess/bytecode.rs:224-232`.

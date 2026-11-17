@@ -95,7 +95,7 @@ theorem sail_rem_value_of_zero_remu (dividend divisor : BitVec 64)
   subst h
   unfold sail_rem_value
   simp only [BitVec.toNatInt, BitVec.toNat_zero, beq_iff_eq, ↓reduceIte]
-  rw [if_pos (show Int.ofNat 0 = 0 from rfl)]
+  rw [ite_eq_left (show Int.ofNat 0 = 0 from rfl)]
   rw [trunc64_eq_intCast_remu]
   apply BitVec.eq_of_toNat_eq
   rw [BitVec.toNat_intCast]
@@ -117,7 +117,7 @@ theorem sail_rem_value_of_normal_remu (dividend divisor : BitVec 64)
   have hbeq_false : ¬ Int.ofNat divisor.toNat = 0 := by
     intro h
     exact hdivNat_ne (Int.ofNat_eq_zero.mp h)
-  rw [if_neg hbeq_false]
+  rw [ite_eq_right hbeq_false]
   rw [trunc64_eq_intCast_remu]
   apply BitVec.eq_of_toNat_eq
   rw [BitVec.toNat_intCast, BitVec.toNat_umod]

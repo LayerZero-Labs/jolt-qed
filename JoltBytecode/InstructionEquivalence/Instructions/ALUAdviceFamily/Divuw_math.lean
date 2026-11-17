@@ -104,7 +104,7 @@ private lemma extractLsb_signExtend_32_64_uw (x : BitVec 32) :
     simpa only [Nat.blt_eq, decide_eq_true_eq] using this
   simp (disch := omega) only [BitVec.getLsbD_extractLsb, BitVec.getLsbD_signExtend,
     Nat.reduceSub, Nat.reduceAdd, hi32_bool, hi64_bool, Bool.true_and, Nat.zero_add,
-    if_pos]
+    ite_eq_left]
 
 private lemma eq_zero_of_zeroExtend32_eq_zero_uw (x : BitVec 32)
     (h : zero_extend (m := 64) x = 0#64) : x = 0#32 := by

@@ -1,0 +1,120 @@
+/-
+Facts about the honest trace as a whole: how its rows sit in the program's bytecode.
+Each one is proved from honest_trace.lean and the program facts.
+-/
+import JoltConstraints.theorems.program_facts
+import JoltConstraints.translation.honest_trace
+import JoltConstraints.theorems.execution_facts
+import JoltConstraints.theorems.layout_facts
+
+open LeanRV64D
+
+set_option autoImplicit false
+
+-- The trace starts at the slot Rust's get_first_pc picks for the entry address: one
+-- past the first row's position, since the NoOp takes slot 0.
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
+theorem HonestTrace.starts_at_entry {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
+    (first : TraceRow trace.bytecode) (firstRow : trace.rows[0]? = some first) :
+    get_first_pc slots joltInstance.program.entry_address = some (first.rowIndex.val + 1) := by
+  obtain ⟨entryAddress, entryStarts, _⟩ := trace.starts first firstRow
+  have accepted := accepted_pc_map_ok joltInstance trace.bytecode trace.expands trace.accepted
+  obtain ⟨noopFirst, rowsAfter, _, _⟩ := preprocess_slots trace.bytecode slots preprocessed
+  -- the entry address is a row's address, so it is at least RAM_START_ADDRESS, not 0
+  have addressOk := pc_map_ok_addresses trace.bytecode accepted first.rowIndex first.rowIndex.isLt
+  have notZero : joltInstance.program.entry_address ≠ 0 := by
+    intro zero
+    rw [Fin.getElem_fin] at entryAddress
+    rw [entryAddress, zero] at addressOk
+    unfold bytecode_address_ok JoltISA.RAM_START_ADDRESS at addressOk
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at addressOk
+    have zeroValue : (0 : BitVec 64).toNat = 0 := rfl
+    omega
+  -- get_first_pc searches the slots for the first row at the entry address
+  unfold get_first_pc
+  rw [ite_eq_right notZero, Array.findIdx?_eq_some_iff_getElem]
+  obtain ⟨inSlots, slotIsRow⟩ := Array.getElem?_eq_some_iff.mp (rowsAfter _ first.rowIndex.isLt)
+  refine ⟨inSlots, ?_, ?_⟩
+  · -- the first row's slot holds a row at the entry address
+    rw [slotIsRow]
+    simp only [beq_iff_eq]
+    exact entryAddress
+  · -- no earlier slot does: slot 0 is the NoOp, and no earlier row has that address
+    intro slot before
+    cases slot with
+    | zero =>
+      obtain ⟨_, slotIsNoop⟩ := Array.getElem?_eq_some_iff.mp noopFirst
+      rw [slotIsNoop]
+      dsimp only
+      exact Bool.false_ne_true
+    | succ position =>
+      obtain ⟨_, slotIsEarlier⟩ :=
+        Array.getElem?_eq_some_iff.mp (rowsAfter position (by omega))
+      rw [slotIsEarlier]
+      simp only [beq_iff_eq]
+      intro sameAddress
+      rw [Fin.getElem_fin] at entryAddress entryStarts
+      have later := expand_program_first_of_address joltInstance.program trace.bytecode
+        trace.expands accepted position first.rowIndex (by omega) first.rowIndex.isLt
+        (sameAddress.trans entryAddress.symm) entryStarts
+      omega
+
+-- In an honest trace, every LD reads from a whole number of 64-bit units above the
+-- lowest address, as Rust's witness needs to place it in its RAM table.
+-- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:260 (remapped_ram_address)
+theorem HonestTrace.load_offset_aligned {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (row : HonestTraceRow trace.bytecode) (faultClass : JoltISA.LoadFaultClass)
+    (dst : JoltISA.Dst) (base : JoltISA.Src) (imm : BitVec 64)
+    (isLoad : trace.bytecode[row.rowIndex].instruction = .LD faultClass dst base imm) :
+    ((JoltISA.sourceValue base row.preState + imm).toNat -
+      trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat) % 8 = 0 := by
+  have address := row.load_aligned faultClass dst base imm isLoad
+  have lowest := initial_state_lowest_address_aligned joltInstance privateInputs
+    trace.initialState trace.initialized
+  omega
+
+-- In an honest trace, every SD writes to a whole number of 64-bit units above the
+-- lowest address, as Rust's witness needs to place it in its RAM table.
+-- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:260 (remapped_ram_address)
+theorem HonestTrace.store_offset_aligned {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (row : HonestTraceRow trace.bytecode) (base value : JoltISA.Src) (imm : BitVec 64)
+    (isStore : trace.bytecode[row.rowIndex].instruction = .SD base value imm) :
+    ((JoltISA.sourceValue base row.preState + imm).toNat -
+      trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat) % 8 = 0 := by
+  have address := row.store_aligned base value imm isStore
+  have lowest := initial_state_lowest_address_aligned joltInstance privateInputs
+    trace.initialState trace.initialized
+  omega
+
+-- Rust's padded length is a power of two, at least 256, and larger than the run, so
+-- the witness always ends with at least one padding row.
+-- See : jolt/crates/jolt-prover/src/config.rs:63-70 at 5def437f (successful padding)
+theorem padded_trace_length_spec (rows : Nat) :
+    rows < padded_trace_length rows ∧ 256 ≤ padded_trace_length rows ∧
+    ∃ log, padded_trace_length rows = 2 ^ log := by
+  unfold padded_trace_length
+  split
+  · -- a short run pads to 256 = 2^8
+    exact ⟨by omega, Nat.le_refl _, 8, rfl⟩
+  · -- a longer run pads to the power of two that holds it plus one
+    have holds := Nat.le_pow_clog (by decide : 1 < 2) (rows + 1)
+    exact ⟨by omega, by omega, _, rfl⟩
+
+-- A guard that passes had a true condition.
+theorem guard_some {condition : Prop} [Decidable condition] {passed : Unit}
+    (checked : (guard condition : Option Unit) = some passed) : condition := by
+  unfold guard at checked
+  split at checked
+  · assumption
+  · cases checked
+
+-- The program image spans at least one 64-bit slot.
+theorem program_image_len_words_pos (memory_init : List (BitVec 64 × BitVec 8)) :
+    1 ≤ program_image_len_words memory_init := by
+  unfold program_image_len_words
+  dsimp only
+  omega

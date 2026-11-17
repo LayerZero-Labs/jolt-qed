@@ -35,7 +35,7 @@ theorem execInstr_sd_vreg_run (base value : VReg) (imm : BitVec 12)
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos h_align]
+  rw [ite_eq_left h_align]
   simp only [EStateM.bind, Mmu.store_doubleword_ram _ _ _ h_align h_ram h_legal, EStateM.pure]
 
 -- The same, from architectural-register base and value sources.
@@ -61,7 +61,7 @@ theorem execInstr_sd_xreg_xreg_run
   dsimp only
   rw [hvalue]
   dsimp only
-  rw [if_pos h_align]
+  rw [ite_eq_left h_align]
   simp only [EStateM.bind, Mmu.store_doubleword_ram _ _ _ h_align h_ram h_legal, EStateM.pure]
 
 end JoltISA

@@ -190,11 +190,11 @@ private theorem csrrsProgram_project_run
           (csrrsJoltFinal js csr rs1 rd rs1Val)) := by
   unfold JoltISA.csrrsProgram csrrsJoltFinal
   cases hRs1 : JoltISA.isX0 rs1
-  · simp only [Bool.false_eq_true, if_false]
+  · simp only [Bool.false_eq_true, ite_false]
     cases hRd : JoltISA.isX0 rd
-    · simp only [Bool.false_eq_true, if_false]
+    · simp only [Bool.false_eq_true, ite_false]
       cases hSame : JoltISA.sameXReg rd rs1
-      · simp only [Bool.false_eq_true, if_false]
+      · simp only [Bool.false_eq_true, ite_false]
         let oldCsr := js.vregs (JoltISA.SystemCSR.vreg csr)
         let jsAfterRd : SailJoltState :=
           { js with sail := stateAfterWrite js.sail rd oldCsr }
@@ -236,7 +236,7 @@ private theorem csrrsProgram_project_run
           (csrrsAfterReadSet js csr rd oldCsr rs1Val) hCsrRun]
         simp only [oldCsr, JoltISA.execProgram_done, EStateM.run, pure,
           EStateM.pure, systemProjectResult]
-      · simp only [if_true]
+      · simp only [ite_true]
         let oldCsr := js.vregs (JoltISA.SystemCSR.vreg csr)
         let jsScratch : SailJoltState :=
           joltSetVReg js JoltISA.systemScratchVReg rs1Val
@@ -298,7 +298,7 @@ private theorem csrrsProgram_project_run
           (csrrsAfterSameReg js csr rd oldCsr rs1Val) hCsrRun]
         simp only [oldCsr, JoltISA.execProgram_done, EStateM.run, pure,
           EStateM.pure, systemProjectResult]
-    · simp only [if_true]
+    · simp only [ite_true]
       have hCsrRun :
           (JoltISA.execInstr
               (.OR (.vreg (JoltISA.SystemCSR.vreg csr))
@@ -315,7 +315,7 @@ private theorem csrrsProgram_project_run
       simp only [JoltISA.execProgram_done, EStateM.run, pure, EStateM.pure,
         systemProjectResult]
   · cases hRd : JoltISA.isX0 rd
-    · simp only [if_true, Bool.false_eq_true, if_false]
+    · simp only [ite_true, Bool.false_eq_true, ite_false]
       have hReadRun :
           (JoltISA.execInstr
               (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (JoltISA.SystemCSR.vreg csr))
@@ -339,7 +339,7 @@ private theorem csrrsProgram_project_run
         (csrrsAfterReadOnly js csr rd) hReadRun]
       simp only [JoltISA.execProgram_done, EStateM.run, pure, EStateM.pure,
         systemProjectResult]
-    · simp only [if_true]
+    · simp only [ite_true]
       rw [JoltISA.pureWritebackRdZeroProgram_run js]
       simp only [csrrsAfterReadOnly,
         JoltISA.stateAfterWrite_of_isX0_eq_true hRd, systemProjectResult]
@@ -389,7 +389,7 @@ private theorem execute_CSRReg_CSRRS_machine_run
   simp only [bind, EStateM.bind, pure, get, getThe, MonadStateOf.get, EStateM.get]
   simp only [EStateM.pure, hCurPrivProject]
   simp only [hCheck]
-  simp only [sail_not_true, sail_not_false, Bool.false_eq_true, ↓reduceIte]
+  simp only [sail_not_true, Bool.false_eq_true, ↓reduceIte]
   simp only [EStateM.bind, EStateM.get]
   simp only [hCurPrivProject, EStateM.pure]
   simp only [ext_check_CSR_true, sail_not_true, Bool.false_eq_true, ↓reduceIte, EStateM.bind]
@@ -399,11 +399,11 @@ private theorem execute_CSRReg_CSRRS_machine_run
     simp only [Bool.false_eq_true, ↓reduceIte, hAccess]
     have hReadAccess :
         (CSRAccessType.CSRReadWrite != CSRAccessType.CSRWrite) = true := by decide
-    simp only [hReadAccess, if_true]
+    simp only [hReadAccess, ite_true]
     simp only [hRead]
     have hWriteAccess :
         (CSRAccessType.CSRReadWrite != CSRAccessType.CSRRead) = true := by decide
-    simp only [hWriteAccess, if_true, EStateM.bind]
+    simp only [hWriteAccess, ite_true, EStateM.bind]
     rw [← hNewVal]
     simp only [hWrite hRs1, EStateM.bind]
     simp only [hWriteCallback hRs1]
@@ -414,11 +414,11 @@ private theorem execute_CSRReg_CSRRS_machine_run
     simp only [↓reduceIte, hAccess]
     have hReadAccess :
         (CSRAccessType.CSRRead != CSRAccessType.CSRWrite) = true := by decide
-    simp only [hReadAccess, if_true]
+    simp only [hReadAccess, ite_true]
     simp only [hRead]
     have hWriteAccess :
         ¬ ((CSRAccessType.CSRRead != CSRAccessType.CSRRead) = true) := by decide
-    simp only [hWriteAccess, Bool.false_eq_true, if_false, EStateM.bind]
+    simp only [hWriteAccess, Bool.false_eq_true, ite_false, EStateM.bind]
     simp only [hReadCallback]
     rw [wX_bits_stateAfterWrite rd oldCsr (systemProject js)]
     simp only [EStateM.pure]
@@ -435,7 +435,7 @@ private theorem check_CSR_systemCSR_machine_run
       stateen_allows_CSR_access privLevel_to_CSR_privbits csrPriv csrAccess
       JoltISA.SystemCSR.address zopz0zKzJ_u <;>
     simp [bind, EStateM.bind, pure, EStateM.pure, andM, toBool]
-  all_goals first | decide | rfl
+  all_goals rfl
 
 private theorem csr_id_read_callback_systemCSR_run
     (s : SailState) (csr : JoltISA.SystemCSR) (value : BitVec 64) :
@@ -982,9 +982,9 @@ private theorem csrrs_eq_sail_projected_from_facts
     rs1 rd rs1Val oldCsr newVal sAfterCsrWrite hSourceSail hCurPrivProject
     hCheck hRead hReadCallback hNewVal hWrite hWriteCallback]
   cases hRs1 : rs1 == zreg
-  · simp only [Bool.false_eq_true, if_false]
+  · simp only [Bool.false_eq_true, ite_false]
     rw [hJoltFinalSet hRs1]
-  · simp only [if_true]
+  · simp only [ite_true]
     rw [hJoltFinalReadOnly hRs1]
 
 /-! ## Main theorem -/
@@ -1041,19 +1041,19 @@ theorem csrrsProgram_eq_sail_projected
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_true_of_beq_zreg_true hRs1]
-        simp only [if_true]
+        simp only [ite_true]
         exact systemProject_csrrsAfterReadOnly js JoltISA.SystemCSR.mstatus rd)
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_false_of_beq_zreg_false hRs1]
-        simp only [Bool.false_eq_true, if_false]
+        simp only [Bool.false_eq_true, ite_false]
         cases hRd : rd == zreg
         · rw [isX0_eq_false_of_beq_zreg_false hRd]
-          simp only [Bool.false_eq_true, if_false]
+          simp only [Bool.false_eq_true, ite_false]
           cases hSame : JoltISA.sameXReg rd rs1
-          · simp only [Bool.false_eq_true, if_false]
+          · simp only [Bool.false_eq_true, ite_false]
             exact systemProject_csrrsAfterReadSet_mstatus js rd h_sys.rs1_val
-          · simp only [if_true]
+          · simp only [ite_true]
             change
               systemProject
                   (csrrsAfterSameReg js JoltISA.SystemCSR.mstatus rd oldCsr
@@ -1063,7 +1063,7 @@ theorem csrrsProgram_eq_sail_projected
               JoltISA.SystemCSR.mstatus rd oldCsr h_sys.rs1_val rfl]
             exact systemProject_csrrsAfterReadSet_mstatus js rd h_sys.rs1_val
         · rw [isX0_eq_true_of_beq_zreg_true hRd]
-          simp only [if_true]
+          simp only [ite_true]
           rw [systemProject_csrrsAfterCsrSet_mstatus]
           exact (stateAfterWrite_of_beq_zreg_true hRd sAfterCsrWrite oldCsr).symm)
   · -- `mtvec`
@@ -1097,19 +1097,19 @@ theorem csrrsProgram_eq_sail_projected
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_true_of_beq_zreg_true hRs1]
-        simp only [if_true]
+        simp only [ite_true]
         exact systemProject_csrrsAfterReadOnly js JoltISA.SystemCSR.mtvec rd)
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_false_of_beq_zreg_false hRs1]
-        simp only [Bool.false_eq_true, if_false]
+        simp only [Bool.false_eq_true, ite_false]
         cases hRd : rd == zreg
         · rw [isX0_eq_false_of_beq_zreg_false hRd]
-          simp only [Bool.false_eq_true, if_false]
+          simp only [Bool.false_eq_true, ite_false]
           cases hSame : JoltISA.sameXReg rd rs1
-          · simp only [Bool.false_eq_true, if_false]
+          · simp only [Bool.false_eq_true, ite_false]
             exact systemProject_csrrsAfterReadSet_mtvec js rd h_sys.rs1_val
-          · simp only [if_true]
+          · simp only [ite_true]
             change
               systemProject
                   (csrrsAfterSameReg js JoltISA.SystemCSR.mtvec rd oldCsr
@@ -1119,7 +1119,7 @@ theorem csrrsProgram_eq_sail_projected
               JoltISA.SystemCSR.mtvec rd oldCsr h_sys.rs1_val rfl]
             exact systemProject_csrrsAfterReadSet_mtvec js rd h_sys.rs1_val
         · rw [isX0_eq_true_of_beq_zreg_true hRd]
-          simp only [if_true]
+          simp only [ite_true]
           rw [systemProject_csrrsAfterCsrSet_mtvec]
           exact (stateAfterWrite_of_beq_zreg_true hRd sAfterCsrWrite oldCsr).symm)
   · -- `mscratch`
@@ -1152,19 +1152,19 @@ theorem csrrsProgram_eq_sail_projected
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_true_of_beq_zreg_true hRs1]
-        simp only [if_true]
+        simp only [ite_true]
         exact systemProject_csrrsAfterReadOnly js JoltISA.SystemCSR.mscratch rd)
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_false_of_beq_zreg_false hRs1]
-        simp only [Bool.false_eq_true, if_false]
+        simp only [Bool.false_eq_true, ite_false]
         cases hRd : rd == zreg
         · rw [isX0_eq_false_of_beq_zreg_false hRd]
-          simp only [Bool.false_eq_true, if_false]
+          simp only [Bool.false_eq_true, ite_false]
           cases hSame : JoltISA.sameXReg rd rs1
-          · simp only [Bool.false_eq_true, if_false]
+          · simp only [Bool.false_eq_true, ite_false]
             exact systemProject_csrrsAfterReadSet_mscratch js rd h_sys.rs1_val
-          · simp only [if_true]
+          · simp only [ite_true]
             change
               systemProject
                   (csrrsAfterSameReg js JoltISA.SystemCSR.mscratch rd oldCsr
@@ -1174,7 +1174,7 @@ theorem csrrsProgram_eq_sail_projected
               JoltISA.SystemCSR.mscratch rd oldCsr h_sys.rs1_val rfl]
             exact systemProject_csrrsAfterReadSet_mscratch js rd h_sys.rs1_val
         · rw [isX0_eq_true_of_beq_zreg_true hRd]
-          simp only [if_true]
+          simp only [ite_true]
           rw [systemProject_csrrsAfterCsrSet_mscratch]
           exact (stateAfterWrite_of_beq_zreg_true hRd sAfterCsrWrite oldCsr).symm)
   · -- `mepc`
@@ -1208,19 +1208,19 @@ theorem csrrsProgram_eq_sail_projected
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_true_of_beq_zreg_true hRs1]
-        simp only [if_true]
+        simp only [ite_true]
         exact systemProject_csrrsAfterReadOnly js JoltISA.SystemCSR.mepc rd)
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_false_of_beq_zreg_false hRs1]
-        simp only [Bool.false_eq_true, if_false]
+        simp only [Bool.false_eq_true, ite_false]
         cases hRd : rd == zreg
         · rw [isX0_eq_false_of_beq_zreg_false hRd]
-          simp only [Bool.false_eq_true, if_false]
+          simp only [Bool.false_eq_true, ite_false]
           cases hSame : JoltISA.sameXReg rd rs1
-          · simp only [Bool.false_eq_true, if_false]
+          · simp only [Bool.false_eq_true, ite_false]
             exact systemProject_csrrsAfterReadSet_mepc js rd h_sys.rs1_val
-          · simp only [if_true]
+          · simp only [ite_true]
             change
               systemProject
                   (csrrsAfterSameReg js JoltISA.SystemCSR.mepc rd oldCsr
@@ -1230,7 +1230,7 @@ theorem csrrsProgram_eq_sail_projected
               JoltISA.SystemCSR.mepc rd oldCsr h_sys.rs1_val rfl]
             exact systemProject_csrrsAfterReadSet_mepc js rd h_sys.rs1_val
         · rw [isX0_eq_true_of_beq_zreg_true hRd]
-          simp only [if_true]
+          simp only [ite_true]
           rw [systemProject_csrrsAfterCsrSet_mepc]
           exact (stateAfterWrite_of_beq_zreg_true hRd sAfterCsrWrite oldCsr).symm)
   · -- `mcause`
@@ -1263,19 +1263,19 @@ theorem csrrsProgram_eq_sail_projected
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_true_of_beq_zreg_true hRs1]
-        simp only [if_true]
+        simp only [ite_true]
         exact systemProject_csrrsAfterReadOnly js JoltISA.SystemCSR.mcause rd)
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_false_of_beq_zreg_false hRs1]
-        simp only [Bool.false_eq_true, if_false]
+        simp only [Bool.false_eq_true, ite_false]
         cases hRd : rd == zreg
         · rw [isX0_eq_false_of_beq_zreg_false hRd]
-          simp only [Bool.false_eq_true, if_false]
+          simp only [Bool.false_eq_true, ite_false]
           cases hSame : JoltISA.sameXReg rd rs1
-          · simp only [Bool.false_eq_true, if_false]
+          · simp only [Bool.false_eq_true, ite_false]
             exact systemProject_csrrsAfterReadSet_mcause js rd h_sys.rs1_val
-          · simp only [if_true]
+          · simp only [ite_true]
             change
               systemProject
                   (csrrsAfterSameReg js JoltISA.SystemCSR.mcause rd oldCsr
@@ -1285,7 +1285,7 @@ theorem csrrsProgram_eq_sail_projected
               JoltISA.SystemCSR.mcause rd oldCsr h_sys.rs1_val rfl]
             exact systemProject_csrrsAfterReadSet_mcause js rd h_sys.rs1_val
         · rw [isX0_eq_true_of_beq_zreg_true hRd]
-          simp only [if_true]
+          simp only [ite_true]
           rw [systemProject_csrrsAfterCsrSet_mcause]
           exact (stateAfterWrite_of_beq_zreg_true hRd sAfterCsrWrite oldCsr).symm)
   · -- `mtval`
@@ -1318,19 +1318,19 @@ theorem csrrsProgram_eq_sail_projected
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_true_of_beq_zreg_true hRs1]
-        simp only [if_true]
+        simp only [ite_true]
         exact systemProject_csrrsAfterReadOnly js JoltISA.SystemCSR.mtval rd)
       (fun hRs1 => by
         unfold csrrsJoltFinal
         rw [isX0_eq_false_of_beq_zreg_false hRs1]
-        simp only [Bool.false_eq_true, if_false]
+        simp only [Bool.false_eq_true, ite_false]
         cases hRd : rd == zreg
         · rw [isX0_eq_false_of_beq_zreg_false hRd]
-          simp only [Bool.false_eq_true, if_false]
+          simp only [Bool.false_eq_true, ite_false]
           cases hSame : JoltISA.sameXReg rd rs1
-          · simp only [Bool.false_eq_true, if_false]
+          · simp only [Bool.false_eq_true, ite_false]
             exact systemProject_csrrsAfterReadSet_mtval js rd h_sys.rs1_val
-          · simp only [if_true]
+          · simp only [ite_true]
             change
               systemProject
                   (csrrsAfterSameReg js JoltISA.SystemCSR.mtval rd oldCsr
@@ -1340,7 +1340,7 @@ theorem csrrsProgram_eq_sail_projected
               JoltISA.SystemCSR.mtval rd oldCsr h_sys.rs1_val rfl]
             exact systemProject_csrrsAfterReadSet_mtval js rd h_sys.rs1_val
         · rw [isX0_eq_true_of_beq_zreg_true hRd]
-          simp only [if_true]
+          simp only [ite_true]
           rw [systemProject_csrrsAfterCsrSet_mtval]
           exact (stateAfterWrite_of_beq_zreg_true hRd sAfterCsrWrite oldCsr).symm)
 

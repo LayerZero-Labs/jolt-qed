@@ -28,7 +28,7 @@ theorem vregs_write_self (js : SailJoltState) (vd : BitVec 7) (v : BitVec 64) :
        vregs := fun r => if r = vd then v else js.vregs r } : SailJoltState).vregs vd
       = v := by
   show (if vd = vd then v else js.vregs vd) = v
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
 
 /-- After writing `v` to vreg `vd`, other vregs are preserved. -/
 theorem vregs_write_pres (js : SailJoltState) (vd : BitVec 7) (v : BitVec 64)
@@ -37,7 +37,7 @@ theorem vregs_write_pres (js : SailJoltState) (vd : BitVec 7) (v : BitVec 64)
        vregs := fun r => if r = vd then v else js.vregs r } : SailJoltState).vregs k
       = js.vregs k := by
   show (if k = vd then v else js.vregs k) = js.vregs k
-  rw [if_neg h]
+  rw [ite_eq_right h]
 
 /-- Package a single-virtual-register write into the standard existential
 post-state used by straight-line expansion proofs.  From a run that writes

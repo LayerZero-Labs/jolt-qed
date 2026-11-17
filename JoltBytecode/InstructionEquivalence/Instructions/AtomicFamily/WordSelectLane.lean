@@ -55,8 +55,8 @@ theorem amo_word_select_lane_tail_run
   have hmul := JoltISA.mul_run_vreg_vreg_vreg new new take sub hnew
   have hadd := JoltISA.add_run_vreg_vreg_vreg new new old mul hnew
   simp only [hold] at hsub
-  simp only [sub, stateAfterVRegWrite, ite_true, if_neg htn, hflag] at hmul
-  simp only [mul, sub, stateAfterVRegWrite, ite_true, if_neg hon, hold] at hadd
+  simp only [sub, stateAfterVRegWrite, ite_true, ite_eq_right htn, hflag] at hmul
+  simp only [mul, sub, stateAfterVRegWrite, ite_true, ite_eq_right hon, hold] at hadd
   change (JoltISA.execProgram (.instr _ (.instr _ (.instr _ (.done RETIRE_SUCCESS))))).run js = _
   rw [JoltISA.execProgram_instr_run_retire _ _ _ _ hsub,
     JoltISA.execProgram_instr_run_retire _ _ _ _ hmul,

@@ -28,9 +28,9 @@ theorem bv_abs_ne_zero {x : BitVec 64} (h : x ≠ 0#64) :
     bv_abs x ≠ 0#64 := by
   unfold bv_abs
   by_cases hsign : x.msb = true
-  · rw [if_pos hsign]
+  · rw [ite_eq_left hsign]
     exact fun hneg => h (BitVec.neg_eq_zero_iff.mp hneg)
-  · rw [if_neg hsign]
+  · rw [ite_eq_right hsign]
     exact h
 
 theorem bv_abs_neg (x : BitVec 64) : bv_abs (-x) = bv_abs x := by
@@ -42,10 +42,10 @@ theorem bv_abs_neg (x : BitVec 64) : bv_abs (-x) = bv_abs x := by
   unfold bv_abs
   by_cases hx : x.msb = true
   · have hn : (-x).msb = false := by simp [hneg, hx]
-    rw [if_pos hx, if_neg (by simp [hn])]
+    rw [ite_eq_left hx, ite_eq_right (by simp [hn])]
   · have hx' : x.msb = false := by simpa using hx
     have hn : (-x).msb = true := by simp [hneg, hx']
-    rw [if_neg hx, if_pos hn, neg_neg]
+    rw [ite_eq_right hx, ite_eq_left hn, neg_neg]
 
 theorem negate_if_injective (sign : BitVec 64) :
     Function.Injective (jolt_virtual_negate_if_value sign) := by
@@ -73,14 +73,14 @@ private theorem bv_abs_udiv_bv_abs (x y : BitVec 64) :
     BitVec.abs x / BitVec.abs y
   rw [BitVec.abs_eq]
   by_cases hq : (BitVec.abs x / BitVec.abs y).msb = true
-  · rw [if_pos hq]
+  · rw [ite_eq_left hq]
     rw [BitVec.msb_udiv] at hq
     simp only [Bool.and_eq_true, beq_iff_eq] at hq
     obtain ⟨hx, hy⟩ := hq
     rw [BitVec.msb_abs] at hx
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hx
     rw [hx.1, BitVec.abs_intMin, hy, BitVec.udiv_one, BitVec.neg_intMin]
-  · rw [if_neg hq]
+  · rw [ite_eq_right hq]
 
 /-- The ordinary absolute value of a signed quotient is the same unsigned
 magnitude used by the `REM` expansion. -/
@@ -89,10 +89,10 @@ theorem bv_abs_sdiv (x y : BitVec 64) :
   have hsigned := negate_if_xor_sdiv x y
   unfold signedQuotientMagnitude jolt_virtual_negate_if_value at hsigned
   by_cases hsign : (x ^^^ y).msb = true
-  · rw [if_pos hsign] at hsigned
+  · rw [ite_eq_left hsign] at hsigned
     rw [← bv_abs_neg (BitVec.sdiv x y), hsigned]
     exact bv_abs_udiv_bv_abs x y
-  · rw [if_neg hsign] at hsigned
+  · rw [ite_eq_right hsign] at hsigned
     rw [hsigned]
     exact bv_abs_udiv_bv_abs x y
 
@@ -102,8 +102,8 @@ theorem negate_if_bv_abs (x : BitVec 64) :
     jolt_virtual_negate_if_value x (bv_abs x) = x := by
   unfold jolt_virtual_negate_if_value bv_abs
   by_cases hsign : x.msb = true
-  · rw [if_pos hsign, if_pos hsign, neg_neg]
-  · rw [if_neg hsign, if_neg hsign]
+  · rw [ite_eq_left hsign, ite_eq_left hsign, neg_neg]
+  · rw [ite_eq_right hsign, ite_eq_right hsign]
 
 /-- Sign-correcting the unsigned remainder of the operand magnitudes gives
 `srem`. -/
@@ -134,7 +134,7 @@ theorem rem_advice_value_eq_unsigned_quotient
     rem_advice_value dividend divisor =
       sail_div_value (bv_abs dividend) (bv_abs divisor) true := by
   unfold rem_advice_value
-  rw [if_neg hdivisor, sail_div_value_eq_sdiv_of_ne dividend divisor hdivisor,
+  rw [ite_eq_right hdivisor, sail_div_value_eq_sdiv_of_ne dividend divisor hdivisor,
     bv_abs_sdiv,
     sail_div_value_of_normal_u (bv_abs dividend) (bv_abs divisor)
       (bv_abs_ne_zero hdivisor)]

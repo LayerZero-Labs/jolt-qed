@@ -1,9 +1,13 @@
-import Mathlib.Data.BitVec
-import Mathlib.Tactic
+module
+
+public import Mathlib.Data.BitVec
+public import Mathlib.Tactic
 
 /-! Bit-mask identities shared by bytecode equivalence and constraint completeness. -/
 
 set_option autoImplicit false
+
+public section
 
 namespace BitVec
 

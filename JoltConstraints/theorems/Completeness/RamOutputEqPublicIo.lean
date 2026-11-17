@@ -1,0 +1,47 @@
+import JoltConstraints.theorems.Completeness.Helpers.RamOutputProofHelpers
+import JoltConstraints.translation.Constraints.RamOutputEqPublicIo
+import JoltConstraints.theorems.Completeness.Helpers.IOSetupFrame
+
+open LeanRV64D
+
+set_option autoImplicit false
+
+namespace JoltConstraints
+
+open scoped BigOperators
+
+/-- Completeness of constraint (26) for the honest witness.
+
+The final device is the last recorded post-state's device. Execution preserves
+the layout and both advice buffers (`finalTraceState_ioSame`), so the final
+RAM image and the public I/O array share the input, output, panic, and
+termination overlays. They differ only below the input: the zero RAM image
+below `RAM_START_ADDRESS` and the advice buffers. `adviceBelowInput` keeps the
+advice buffers out of the public interval; `HonestTrace.advice_below_input`
+proves it for every honest trace. Output growth needs no
+premise here: both sides overlay the same final output buffer. -/
+theorem honestWitness_ramOutputEqPublicIo
+    {F : Type} [Field F] (params : WitnessParams)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
+    : ramOutputEqPublicIo (TraceWitness.finalTraceState trace).jolt_device
+      (HonestTrace.honestWitness (F := F) params trace) := by
+  intro address
+  change ramPublicIoMask (TraceWitness.finalTraceState trace).jolt_device address.val *
+    (TraceWitness.RamValFinal (F := F) params trace address -
+      ((ramPublicIoWord (TraceWitness.finalTraceState trace).jolt_device address.val).toNat : F)) = 0
+  have hlayout := (finalTraceState_ioSame trace).1
+  unfold ramPublicIoMask
+  dsimp only
+  rw [hlayout]
+  split_ifs with hmask
+  · rw [TraceWitness.RamValFinal,
+      finalRamWord_eq_ramPublicIoWord trace (finalTraceState_ioSame trace)
+        adviceBelowInput address.val hmask.1 hmask.2,
+      sub_self, mul_zero]
+  · rw [zero_mul]
+
+end JoltConstraints

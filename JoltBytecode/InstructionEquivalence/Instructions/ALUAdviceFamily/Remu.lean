@@ -45,7 +45,7 @@ theorem remuProgramAuto_eq_phases_of_ne_zero
       remuProgramPhases rs2 rs1 rd quotient := by
   unfold remuProgramAuto remuProgramPhases
   rw [isX0_eq_false_of_ne_zero hrd]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   rw [pureWritebackTraceProgram_of_ne_zero hrd]
   rfl
 

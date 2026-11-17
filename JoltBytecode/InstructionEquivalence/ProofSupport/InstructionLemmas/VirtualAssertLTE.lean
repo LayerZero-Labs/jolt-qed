@@ -26,7 +26,7 @@ theorem virtual_assert_lte_real_run_ok (lhs : VReg) (rhs : regidx)
   unfold execInstr readSrc readVReg liftSail
   simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos hguard]
+  rw [ite_eq_left hguard]
   rfl
 
 /-- Failed real-source unsigned LTE assertion. -/
@@ -39,7 +39,7 @@ theorem virtual_assert_lte_real_run_err (lhs : VReg) (rhs : regidx)
   unfold execInstr readSrc readVReg liftSail
   simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg hguard]
+  rw [ite_eq_right hguard]
   rfl
 
 /-- Successful virtual-source unsigned LTE assertion. -/
@@ -50,7 +50,7 @@ theorem virtual_assert_lte_run_ok (lhs rhs : VReg) (js : SailJoltState)
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos hguard]
+  rw [ite_eq_left hguard]
   rfl
 
 /-- Failed virtual-source unsigned LTE assertion. -/
@@ -61,7 +61,7 @@ theorem virtual_assert_lte_run_err (lhs rhs : VReg) (js : SailJoltState)
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg hguard]
+  rw [ite_eq_right hguard]
   rfl
 
 end JoltISA

@@ -60,7 +60,7 @@ theorem execute_RTYPE_SRA_factored
   simp only [execute_RTYPE]
   simp only [bind_pure_comp]
   simp only [map_eq_pure_bind]
-  simp only [bind_assoc, pure_bind, sra_sail_operation]
+  simp only [pure_bind, sra_sail_operation]
 
 /-- Program-level concrete theorem for `SRA`.
 
@@ -113,7 +113,6 @@ theorem sraProgramAuto_concrete
   -- The instruction trace leaves `rd` containing the Jolt SRA value.
   have h_final_jolt_value :
       js_afterSra.sail = stateAfterWrite js.sail rd jolt_val := by
-    change js_afterSra.sail = stateAfterWrite js.sail rd jolt_val
     exact h_virtual_sra_writes_jolt_val
 
   -- No more execution reasoning remains.

@@ -283,7 +283,7 @@ theorem execute_SH_misaligned (imm : BitVec 12) (rs2 rs1 : regidx)
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure, EStateM.pure,
-       EStateM.run, if_true]
+       EStateM.run, ite_true]
   unfold vmem_write
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have hmis' :
@@ -311,7 +311,7 @@ theorem shProgramAuto_preserves_projected_vregs
     simp only [JoltISA.ProgramWritesNoProtectedVReg,
       JoltISA.InstrWritesNoProtectedVReg,
       JoltISA.DstWritesNoProtectedVReg,
-      true_and, and_true]
+      and_true]
     repeat' apply And.intro
     all_goals exact JoltISA.not_protected_of_instructionTmp rfl
   exact Projection.execProgram_preserves_projected_vregs_of_no_protected_writes

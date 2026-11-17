@@ -237,7 +237,7 @@ theorem execute_LH_reduces
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
-    EStateM.pure, EStateM.run, if_true]
+    EStateM.pure, EStateM.run, ite_true]
   rw [vmem_read_halfword_reduces
     (imm := imm)
     (rs1 := rs1)
@@ -261,7 +261,7 @@ theorem execute_LH_reduces
       (hpmp := halfword_load_pmp_ok imm rs1 js h hAlign)
       (hmmio := halfword_not_readable_mmio imm rs1 js h hAlign))]
 
-  simp only [extend_value, Bool.false_eq_true, if_false, EStateM.bind,
+  simp only [extend_value, Bool.false_eq_true, ite_false, EStateM.bind,
     EStateM.pure]
   obtain ⟨s', hw⟩ := wX_shape rd (writeValue imm rs1 js h hAlign) js.sail
   rw [hw]
@@ -285,7 +285,7 @@ theorem execute_LHU_reduces
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
-    EStateM.pure, EStateM.run, if_true]
+    EStateM.pure, EStateM.run, ite_true]
   rw [vmem_read_halfword_reduces
     (imm := imm)
     (rs1 := rs1)
@@ -309,7 +309,7 @@ theorem execute_LHU_reduces
       (hpmp := halfword_load_pmp_ok imm rs1 js h hAlign)
       (hmmio := halfword_not_readable_mmio imm rs1 js h hAlign))]
 
-  simp only [extend_value, if_true, EStateM.bind, EStateM.pure]
+  simp only [extend_value, ite_true, EStateM.bind, EStateM.pure]
   obtain ⟨s', hw⟩ :=
     wX_shape rd (writeValueUnsigned imm rs1 js h hAlign) js.sail
   rw [hw]
@@ -333,7 +333,7 @@ theorem execute_LH_misaligned
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
-    EStateM.pure, EStateM.run, if_true]
+    EStateM.pure, EStateM.run, ite_true]
   unfold vmem_read
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have hmis :
@@ -362,7 +362,7 @@ theorem execute_LHU_misaligned
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
-    EStateM.pure, EStateM.run, if_true]
+    EStateM.pure, EStateM.run, ite_true]
   unfold vmem_read
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have hmis :

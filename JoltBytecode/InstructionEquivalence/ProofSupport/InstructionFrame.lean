@@ -52,11 +52,11 @@ structure NonStoreRules (relation : SailJoltState → SailJoltState → Prop) : 
     { state with adviceTape :=
       { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } }
 
-private def Rules.nonStore {relation : SailJoltState → SailJoltState → Prop}
+private theorem Rules.nonStore {relation : SailJoltState → SailJoltState → Prop}
     (rules : Rules relation) : NonStoreRules relation :=
   ⟨rules.refl, rules.trans, rules.sail, rules.vreg, rules.append⟩
 
-private def NonStoreRules.withStore {relation : SailJoltState → SailJoltState → Prop}
+private theorem NonStoreRules.withStore {relation : SailJoltState → SailJoltState → Prop}
     (rules : NonStoreRules relation)
     (store : ∀ state device address value,
       JoltDevice.store? state.jolt_device address value = some device →

@@ -403,7 +403,7 @@ private theorem swWordShiftStep (rest : JoltISA.Program) (js : SailJoltState) :
     by_cases hr : r = JoltISA.inlineTmp0
     · subst r
       exact h_value
-    · rw [if_neg hr, if_neg hr]
+    · rw [ite_eq_right hr, ite_eq_right hr]
   unfold JoltISA.slliBlock
   exact JoltISA.execProgram_instr_run_retire _ _ js (swWordShiftState js) h
 
@@ -445,7 +445,7 @@ private theorem swWordBaseMaskStep (rest : JoltISA.Program) (js : SailJoltState)
     by_cases hr : r = JoltISA.inlineTmp3
     · subst r
       exact h_value
-    · rw [if_neg hr, if_neg hr]
+    · rw [ite_eq_right hr, ite_eq_right hr]
   unfold JoltISA.srliBlock
   exact JoltISA.execProgram_instr_run_retire _ _ js (swWordBaseMaskState js) h
 
@@ -969,7 +969,7 @@ theorem byteSpliceBlock (rest : JoltISA.Program)
     by_cases hr : r = JoltISA.inlineTmp3
     · subst r
       exact h_value
-    · rw [if_neg hr, if_neg hr]
+    · rw [ite_eq_right hr, ite_eq_right hr]
   have hslli_run : ∀ tail,
       (JoltISA.execProgram
         (JoltISA.slliBlock (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) (3 : BitVec 6) tail)).run js_load =
@@ -1233,7 +1233,7 @@ theorem halfwordSpliceBlock (rest : JoltISA.Program)
     by_cases hr : r = JoltISA.inlineTmp3
     · subst r
       exact h_value
-    · rw [if_neg hr, if_neg hr]
+    · rw [ite_eq_right hr, ite_eq_right hr]
   have hslli_run : ∀ tail,
       (JoltISA.execProgram
         (JoltISA.slliBlock (.vreg JoltISA.inlineTmp3) (.vreg JoltISA.inlineTmp0) (3 : BitVec 6) tail)).run js_load =
