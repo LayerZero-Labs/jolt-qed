@@ -436,7 +436,7 @@ theorem amo_word_checked_mem_read_eq_loaded_word
     .ok (Ok (loaded_word_at s addr hbytes h_no_ovf, default_meta)) s := by
   unfold checked_mem_read
   simp only [bind, EStateM.bind, pure, EStateM.pure, hatomic_pmp, hread_mmio.sail,
-    Bool.false_eq_true, if_false]
+    Bool.false_eq_true, ite_false]
   unfold read_kind_of_flags
   simp only [pure, EStateM.pure]
   rw [amo_word_read_ram_reserved_eq_loaded_word addr s hbytes h_no_ovf]
@@ -464,12 +464,12 @@ theorem amo_word_mem_read_eq_loaded_word
   simp only [bind, EStateM.bind, pure, EStateM.pure, h_ms_read, h_priv]
   unfold effectivePrivilege
   simp only [h_mprv, bne, BEq.beq, instBEqMemoryAccessType.beq,
-    Bool.not_false, h_mpp_check, Bool.and_false, Bool.false_eq_true, if_false]
+    Bool.not_false, h_mpp_check, Bool.and_false, Bool.false_eq_true, ite_false]
   unfold mem_read_priv_meta
   simp only [bind, EStateM.bind, pure, EStateM.pure,
     Bool.false_or, Bool.true_and, h_paddr_aligned]
   unfold LeanRV64D.Functions.not
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
+  simp only [Bool.not_true, Bool.false_eq_true, ite_false]
   rw [amo_word_checked_mem_read_eq_loaded_word
     op addr s hbytes h_no_ovf hatomic_pmp hread_mmio]
   rfl
@@ -485,7 +485,7 @@ theorem amo_word_mem_write_ea_ok
   unfold mem_write_ea
   simp only [Bool.false_or, Bool.true_and, h_paddr_aligned]
   unfold LeanRV64D.Functions.not
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
+  simp only [Bool.not_true, Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   unfold write_ram_ea
   change
@@ -532,10 +532,10 @@ theorem amo_word_mem_write_value_eq_state_after_word_store
   simp only [bind, EStateM.bind, pure, h_ms_read, h_priv]
   unfold effectivePrivilege
   simp only [h_mprv, bne, BEq.beq, instBEqMemoryAccessType.beq,
-    Bool.not_false, h_mpp_check, Bool.and_false, Bool.false_eq_true, if_false]
+    Bool.not_false, h_mpp_check, Bool.and_false, Bool.false_eq_true, ite_false]
   simp only [Bool.false_or, Bool.true_and, h_paddr_aligned]
   unfold LeanRV64D.Functions.not
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
+  simp only [Bool.not_true, Bool.false_eq_true, ite_false]
   change
     (EStateM.bind
       (EStateM.bind
@@ -562,7 +562,7 @@ theorem amo_word_mem_write_value_eq_state_after_word_store
     .ok (Ok true) (state_after_word_store s addr data)
   simp only [EStateM.bind, hatomic_pmp]
   simp only [hwrite_mmio.sail]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
   rw [amo_word_write_ram_conditional_eq_state_after_word_store addr data s]
@@ -613,7 +613,7 @@ theorem execute_AMO_word_misaligned
   simp only [bind, pure]
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp only [amo_word_execute_width_assert_true, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, pure,
-    EStateM.run, if_true]
+    EStateM.run, ite_true]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have haddr0 : addr + zeros (n := 64) = addr := by
     unfold zeros
@@ -642,7 +642,7 @@ theorem amo_word_sign_extend_4x8_eq_self (value : BitVec 32) :
   have hi_bool : (i <b 32) = true := by
     simpa only [Nat.blt_eq, decide_eq_true_eq] using hi
   simp (disch := omega) only [BitVec.getLsbD_signExtend, Nat.reduceMul, hi_bool,
-    Bool.true_and, if_pos]
+    Bool.true_and, ite_eq_left]
 
 /-- The generated word-width writeback cast leaves the old word writeback
 unchanged. -/
@@ -963,7 +963,7 @@ theorem execute_AMO_word_non_cas_aligned_core
     simp only [bind, pure]
     unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
     simp only [amo_word_execute_width_assert_true, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, pure,
-      EStateM.run, if_true]
+      EStateM.run, ite_true]
     unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
     simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
       ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
@@ -971,7 +971,7 @@ theorem execute_AMO_word_non_cas_aligned_core
       Functor.map, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
       MonadExceptOf.throw, ext_data_get_addr, hrs1, haddr0,
       h_vaddr_aligned, sail_not_true, ↓reduceIte,
-      Bool.false_eq_true, if_false, if_true, htranslate,
+      Bool.false_eq_true, ite_false, ite_true, htranslate,
       amo_word_width4_true, hrs2, hea, hread, hrd_read, hcas_check,
       Bool.false_and, instBEqAmoop.beq, BEq.beq, andM, toBool]
     rw [hwrite_value]
@@ -1209,22 +1209,22 @@ theorem amo_word_add_middle_run
   · change
       (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then old + rs2Val
         else js_pre.vregs JoltISA.amoNewVReg) = rs2Val + old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_word_add_comm old rs2Val
   · change
       (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then old + rs2Val
         else js_pre.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_old
   · change
       (if JoltISA.amoDwordVReg = JoltISA.amoNewVReg then old + rs2Val
         else js_pre.vregs JoltISA.amoDwordVReg) = dword
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_dword
   · change
       (if JoltISA.amoShiftVReg = JoltISA.amoNewVReg then old + rs2Val
         else js_pre.vregs JoltISA.amoShiftVReg) = shift
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_shift
 
 /-- Selected-register version of `amo_word_add_middle_run`. -/
@@ -1261,22 +1261,22 @@ theorem amo_word_add_middle_run_into
   · change
       (if newReg = newReg then old + rs2Val
         else js_pre.vregs newReg) = rs2Val + old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_word_add_comm old rs2Val
   · change
       (if oldReg = newReg then old + rs2Val
         else js_pre.vregs oldReg) = old
-    rw [if_neg hold_ne_new]
+    rw [ite_eq_right hold_ne_new]
     exact h_old
   · change
       (if dwordReg = newReg then old + rs2Val
         else js_pre.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_new]
+    rw [ite_eq_right hdword_ne_new]
     exact h_dword
   · change
       (if shiftReg = newReg then old + rs2Val
         else js_pre.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_new]
+    rw [ite_eq_right hshift_ne_new]
     exact h_shift
 
 /-- The `AMOAND.W` middle instruction writes `rs2 & old` to `amoNewVReg` and
@@ -1309,22 +1309,22 @@ theorem amo_word_and_middle_run
   · change
       (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then old &&& rs2Val
         else js_pre.vregs JoltISA.amoNewVReg) = rs2Val &&& old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_word_and_comm old rs2Val
   · change
       (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then old &&& rs2Val
         else js_pre.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_old
   · change
       (if JoltISA.amoDwordVReg = JoltISA.amoNewVReg then old &&& rs2Val
         else js_pre.vregs JoltISA.amoDwordVReg) = dword
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_dword
   · change
       (if JoltISA.amoShiftVReg = JoltISA.amoNewVReg then old &&& rs2Val
         else js_pre.vregs JoltISA.amoShiftVReg) = shift
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_shift
 
 /-- Selected-register version of `amo_word_and_middle_run`. -/
@@ -1361,22 +1361,22 @@ theorem amo_word_and_middle_run_into
   · change
       (if newReg = newReg then old &&& rs2Val
         else js_pre.vregs newReg) = rs2Val &&& old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_word_and_comm old rs2Val
   · change
       (if oldReg = newReg then old &&& rs2Val
         else js_pre.vregs oldReg) = old
-    rw [if_neg hold_ne_new]
+    rw [ite_eq_right hold_ne_new]
     exact h_old
   · change
       (if dwordReg = newReg then old &&& rs2Val
         else js_pre.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_new]
+    rw [ite_eq_right hdword_ne_new]
     exact h_dword
   · change
       (if shiftReg = newReg then old &&& rs2Val
         else js_pre.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_new]
+    rw [ite_eq_right hshift_ne_new]
     exact h_shift
 
 /-- The `AMOOR.W` middle instruction writes `rs2 | old` to `amoNewVReg` and
@@ -1409,22 +1409,22 @@ theorem amo_word_or_middle_run
   · change
       (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then old ||| rs2Val
         else js_pre.vregs JoltISA.amoNewVReg) = rs2Val ||| old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_word_or_comm old rs2Val
   · change
       (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then old ||| rs2Val
         else js_pre.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_old
   · change
       (if JoltISA.amoDwordVReg = JoltISA.amoNewVReg then old ||| rs2Val
         else js_pre.vregs JoltISA.amoDwordVReg) = dword
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_dword
   · change
       (if JoltISA.amoShiftVReg = JoltISA.amoNewVReg then old ||| rs2Val
         else js_pre.vregs JoltISA.amoShiftVReg) = shift
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_shift
 
 /-- Selected-register version of `amo_word_or_middle_run`. -/
@@ -1461,22 +1461,22 @@ theorem amo_word_or_middle_run_into
   · change
       (if newReg = newReg then old ||| rs2Val
         else js_pre.vregs newReg) = rs2Val ||| old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_word_or_comm old rs2Val
   · change
       (if oldReg = newReg then old ||| rs2Val
         else js_pre.vregs oldReg) = old
-    rw [if_neg hold_ne_new]
+    rw [ite_eq_right hold_ne_new]
     exact h_old
   · change
       (if dwordReg = newReg then old ||| rs2Val
         else js_pre.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_new]
+    rw [ite_eq_right hdword_ne_new]
     exact h_dword
   · change
       (if shiftReg = newReg then old ||| rs2Val
         else js_pre.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_new]
+    rw [ite_eq_right hshift_ne_new]
     exact h_shift
 
 /-- The `AMOXOR.W` middle instruction writes `rs2 ^ old` to `amoNewVReg` and
@@ -1509,22 +1509,22 @@ theorem amo_word_xor_middle_run
   · change
       (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then old ^^^ rs2Val
         else js_pre.vregs JoltISA.amoNewVReg) = rs2Val ^^^ old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_word_xor_comm old rs2Val
   · change
       (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then old ^^^ rs2Val
         else js_pre.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_old
   · change
       (if JoltISA.amoDwordVReg = JoltISA.amoNewVReg then old ^^^ rs2Val
         else js_pre.vregs JoltISA.amoDwordVReg) = dword
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_dword
   · change
       (if JoltISA.amoShiftVReg = JoltISA.amoNewVReg then old ^^^ rs2Val
         else js_pre.vregs JoltISA.amoShiftVReg) = shift
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     exact h_shift
 
 /-- Selected-register version of `amo_word_xor_middle_run`. -/
@@ -1561,22 +1561,22 @@ theorem amo_word_xor_middle_run_into
   · change
       (if newReg = newReg then old ^^^ rs2Val
         else js_pre.vregs newReg) = rs2Val ^^^ old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_word_xor_comm old rs2Val
   · change
       (if oldReg = newReg then old ^^^ rs2Val
         else js_pre.vregs oldReg) = old
-    rw [if_neg hold_ne_new]
+    rw [ite_eq_right hold_ne_new]
     exact h_old
   · change
       (if dwordReg = newReg then old ^^^ rs2Val
         else js_pre.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_new]
+    rw [ite_eq_right hdword_ne_new]
     exact h_dword
   · change
       (if shiftReg = newReg then old ^^^ rs2Val
         else js_pre.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_new]
+    rw [ite_eq_right hshift_ne_new]
     exact h_shift
 
 /-- After the common word prelude, the `AMOADD.W` middle instruction is ready
@@ -1884,12 +1884,12 @@ theorem amo_word_exists_state_after_and_run_vreg_vreg_vreg
   · change
       (if vd = vd then js.vregs lhs &&& js.vregs rhs else js.vregs vd) =
         x &&& y
-    rw [if_pos rfl, h_lhs, h_rhs]
+    rw [ite_eq_left rfl, h_lhs, h_rhs]
   · intro r hne
     change
       (if r = vd then js.vregs lhs &&& js.vregs rhs else js.vregs r) =
         js.vregs r
-    rw [if_neg hne]
+    rw [ite_eq_right hne]
   · exact JoltISA.execInstr_and_vreg_vreg_vreg_run vd lhs rhs js hvd
 
 /-- The shifted new word and shifted mask implement the store-family word
@@ -3252,7 +3252,7 @@ theorem amo_word_merge_program_aligned_run
     amo_word_lane_store_eq_word_store js.sail addr value hbytes halign
   have hstore_old : stored.vregs old = sign_extend (m := 64) oldWord := by
     simpa only [stored, amoWordLaneMergeState, stateAfterVRegWrite,
-      if_neg hod, if_neg hol] using hold
+      ite_eq_right hod, ite_eq_right hol] using hold
   obtain ⟨jsf, hsail, hcopy⟩ := amo_word_copy_old_run_from old rd stored js.sail addr
     (Sail.BitVec.extractLsb value 31 0) oldWord hstore_sail hstore_old
   exact ⟨jsf, hmerge.append hcopy, hsail⟩
@@ -3340,7 +3340,7 @@ theorem amo_word_binop_program_concrete_aligned
     (by simpa only [hsail] using hmiddle.dword_vreg) hmiddle.shift_vreg
     (by simp only [JoltISA.readSrc, readVReg, EStateM.run, bind, EStateM.bind,
           get, getThe, MonadStateOf.get, EStateM.get, pure, EStateM.pure,
-          stateAfterVRegWrite, if_neg hregs.2.2.2.2.2]
+          stateAfterVRegWrite, ite_eq_right hregs.2.2.2.2.2]
         rw [show middle.vregs newReg = result64 from hmiddle.result_vreg])
     (hmiddle.old_vreg.trans hpext)
     hregs.1 hregs.2.1 hregs.2.2.1 hregs.2.2.2.1 hregs.2.2.2.2.1 h_align

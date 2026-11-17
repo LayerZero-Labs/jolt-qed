@@ -78,7 +78,7 @@ private theorem wordMask_ne_zero (mask : Nat)
   have falseAtZero : ExpansionFacts.wordMaskOk 0 = false := by
     change ((0 == ExpansionFacts.wordShiftMask (ctz 0)) &&
       decide (ctz 0 < 32)) = false
-    rw [show ctz 0 = 0 by unfold ctz; exact if_pos rfl]
+    rw [show ctz 0 = 0 by unfold ctz; exact ite_eq_left rfl]
     decide
   rw [zero, falseAtZero] at ok
   cases ok

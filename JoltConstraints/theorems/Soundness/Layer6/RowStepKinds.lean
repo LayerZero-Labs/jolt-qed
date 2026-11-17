@@ -98,7 +98,7 @@ Porting `host_call_selected_step` to live agreement belongs to the future proof.
 See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`) at 5def437f. -/
 theorem host_row_step
     (instruction : run.bytecode[next].instruction = .VirtualHostIO)
-    (terminal : done + 1 = expansionRowCount context.bytecode first) :
+    (_terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
   exact append_host_row joltField restrictions witness context equations run first done state
     unfinished honestAdvice bound next pre indexIs entry registers instruction
@@ -116,7 +116,7 @@ assumption; PC preparation is supplied before execution, not from the new run.
 See jolt/tracer/src/instruction/jal.rs (`JAL::exec`) at 5def437f. -/
 theorem jal_row_step {destination : Dst} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .JAL destination imm)
-    (terminal : done + 1 = expansionRowCount context.bytecode first) :
+    (_terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
   exact append_jal_row joltField witness context equations run first done state
     unfinished bound next pre indexIs entry registers pc nextPC instruction
@@ -127,7 +127,7 @@ The future proof must supply the missing Layer 5 rule and the shared append fact
 See jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at 5def437f. -/
 theorem jalr_row_step {destination : Dst} {base : Src} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .JALR destination base imm)
-    (terminal : done + 1 = expansionRowCount context.bytecode first) :
+    (_terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
   exact append_jalr_row joltField witness context equations run first done state
     unfinished bound next pre indexIs entry registers nextPC instruction

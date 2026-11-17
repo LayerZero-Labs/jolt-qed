@@ -44,8 +44,8 @@ private theorem bytecodeAddress_lt_chunks (params : WitnessParams)
 
 theorem bytecodeRa_honest {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (address : Fin (2 ^ params.logBytecodeK)) (t : Fin params.traceLength) :
     bytecodeRa (HonestTrace.honestWitness (F := F) params trace) address t =

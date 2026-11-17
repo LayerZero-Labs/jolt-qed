@@ -363,7 +363,7 @@ private theorem represented_last_boundary
       simp [show ¬ cycle.val + 1 < params.traceLength by omega]
     · rw [equations.nextUnexpandedPCEqShift cycle]
       have next : cycle.val + 1 < params.traceLength := by omega
-      simp only [dif_pos next]
+      simp only [dite_eq_left next]
       have cutEq : (⟨cycle.val + 1, next⟩ : Fin params.traceLength) =
           ⟨run.rows.size, cutBound⟩ := Fin.ext (by omega)
       rw [cutEq]
@@ -649,7 +649,7 @@ theorem soundness_last_row_is_jump
     (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
     (bytecodeEq : run.bytecode = context.bytecode)
     (represented : RepresentsRows witness run.toTrace)
-    (realRows : ∀ cycle : Fin params.traceLength,
+    (_realRows : ∀ cycle : Fin params.traceLength,
       cycle.val < run.rows.size → witness.InstructionFlags .IsNoop cycle = 0)
     (nonempty : 0 < run.rows.size)
     (boundary : run.rows.size = params.traceLength ∨

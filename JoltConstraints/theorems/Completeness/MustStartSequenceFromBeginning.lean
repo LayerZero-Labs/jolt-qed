@@ -43,9 +43,9 @@ termination and arithmetic bounds are required separately where used. -/
 theorem honestWitness_mustStartSequenceFromBeginning
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_ramFits : params.RamFits trace)
+    (_tracePadded : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     mustStartSequenceFromBeginning
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
@@ -67,7 +67,7 @@ theorem honestWitness_mustStartSequenceFromBeginning
           simpa only [bytecodeRow, row] using! hflag
         dsimp [mustStartSequenceFromBeginning, HonestTrace.honestWitness,
           TraceWitness.OpFlags]
-        simp only [dif_pos ht]
+        simp only [dite_eq_left ht]
         simp only [array_fin_index] at hflag' ⊢
         simp [hflag']
       · have hfalse : bytecodeRow.continues = false := Bool.eq_false_iff.mpr hcont
@@ -87,7 +87,7 @@ theorem honestWitness_mustStartSequenceFromBeginning
         dsimp [mustStartSequenceFromBeginning, HonestTrace.honestWitness,
           TraceWitness.NextIsVirtual, TraceWitness.NextIsFirstInSequence,
           TraceWitness.OpFlags]
-        simp only [dif_pos hnextWitness, dif_pos hnextTrace, dif_pos ht]
+        simp only [dite_eq_left hnextWitness, dite_eq_left hnextTrace, dite_eq_left ht]
         simp only [array_fin_index] at hflags' ⊢
         rw [hflags']
         ring

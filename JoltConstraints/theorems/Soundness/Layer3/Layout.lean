@@ -98,7 +98,7 @@ theorem public_io_words_fit_ram
               (Nat.le_pow_clog (by decide : 1 < 2) _)
           · cases minimumIs
         unfold VerifierSizes.remapWordAddress at remappedIo
-        simp only [if_neg (by decide : JoltISA.RAM_START_ADDRESS ≠ 0)] at remappedIo
+        simp only [ite_eq_right (by decide : JoltISA.RAM_START_ADDRESS ≠ 0)] at remappedIo
         cases subtracted : MemoryLayout.checkedSub JoltISA.RAM_START_ADDRESS
             layout.get_lowest_address.toNat with
         | none => simp [subtracted] at remappedIo

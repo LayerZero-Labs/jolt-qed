@@ -115,10 +115,10 @@ theorem UntrustedAnswerRun.truncate_linked
     omega
   have hcurrent' : run.rows[i]? = some current := by
     simpa only [Array.getElem?_extract, Nat.min_eq_left within, Nat.sub_zero,
-      Nat.zero_add, if_pos hi] using hcurrent
+      Nat.zero_add, ite_eq_left hi] using hcurrent
   have hnext' : run.rows[i + 1]? = some next := by
     simpa only [Array.getElem?_extract, Nat.min_eq_left within, Nat.sub_zero,
-      Nat.zero_add, if_pos hj] using hnext
+      Nat.zero_add, ite_eq_left hj] using hnext
   exact run.linked i current next hcurrent' hnext'
 
 /-- The first `n` rows form an untrusted-answer run with literally the same
@@ -165,7 +165,7 @@ private theorem extract_getElem?_before {α : Type} (rows : Array α)
     (n k : Nat) (within : n ≤ rows.size) (before : k < n) :
     (rows.extract 0 n)[k]? = rows[k]? := by
   simp only [Array.getElem?_extract, Nat.min_eq_left within, Nat.sub_zero,
-    Nat.zero_add, if_pos before]
+    Nat.zero_add, ite_eq_left before]
 
 /-- The flag that row `k` starts an expansion is unchanged before a cut.
 For example, an ECALL expansion start at row 2 remains a start after row 3. -/
@@ -301,7 +301,7 @@ theorem ramPublicIoWord_termination (config : MemoryConfig) (layout : MemoryLayo
   let index := (layout.termination.toNat - ramLowestAddress layout) / 8
   have remap : TraceWitness.remapRamAddress layout layout.termination = some index := by
     unfold TraceWitness.remapRamAddress
-    rw [if_neg (by omega)]
+    rw [ite_eq_right (by omega)]
     rfl
   unfold ramPublicIoWord
   rw [sameLayout, noPanic, remap]
@@ -351,16 +351,16 @@ private theorem overlayRamBytes_after_end
         change (if start.toNat = 0 ∨ start.toNat < ramLowestAddress layout then none
           else some ((start.toNat - ramLowestAddress layout) / 8)) = some firstWord at remap
         intro bad
-        rw [if_pos bad] at remap
+        rw [ite_eq_left bad] at remap
         cases remap
       have startGe : ramLowestAddress layout ≤ start.toNat := by omega
       have firstIs : firstWord =
           (start.toNat - ramLowestAddress layout) / 8 := by
         change (if start.toNat = 0 ∨ start.toNat < ramLowestAddress layout then none
           else some ((start.toNat - ramLowestAddress layout) / 8)) = some firstWord at remap
-        rw [if_neg hGuard] at remap
+        rw [ite_eq_right hGuard] at remap
         exact (Option.some.inj remap).symm
-      apply if_neg
+      apply ite_eq_right
       intro takes
       obtain ⟨firstLe, readLt⟩ := takes
       rw [firstIs] at firstLe readLt
@@ -434,7 +434,7 @@ theorem initialRamWord_after_output_zero
       TraceWitness.ramImageWord (fun i => (state.sail.mem.get? i).getD 0)
         (ramLowestAddress layout + 8 * word)
     else 0) = 0
-  rw [if_neg belowRam]
+  rw [ite_eq_right belowRam]
 
 /-- The initial RAM image contains zero at the termination word because the
 advice and input buffers end before it. For example, SDK exit changes that
@@ -570,7 +570,7 @@ private theorem termination_effect_exists
   have existsCycle : ∃ cycle : Fin params.traceLength,
       witness.RamRa address cycle * witness.RamInc cycle ≠ 0 := by
     by_contra none
-    push_neg at none
+    push Not at none
     have allZero : (∑ cycle : Fin params.traceLength,
         witness.RamRa address cycle * witness.RamInc cycle) = 0 := by
       apply Finset.sum_eq_zero
@@ -720,7 +720,7 @@ private theorem termination_store_touches_termination
   have recordedEncoded : witness.RamAddress cycle = ((width.recorded ea).toNat : F) := by
     rw [represented.ramAddress cycle inRun]
     unfold TraceWitness.RamAddress
-    simp only [dif_pos inRun]
+    simp only [dite_eq_left inRun]
     change (match TraceWitness.ramAccessAddress
       run.bytecode[run.rows[i].rowIndex].instruction run.rows[i].preState with
       | some address => (address.toNat : F)
@@ -816,7 +816,7 @@ theorem soundness_termination_store_exists
     (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
     (bytecodeEq : run.bytecode = context.bytecode)
     (represented : RepresentsPrefix witness run.toTrace)
-    (realRows : ∀ cycle : Fin params.traceLength,
+    (_realRows : ∀ cycle : Fin params.traceLength,
       cycle.val < run.rows.size → witness.InstructionFlags .IsNoop cycle = 0)
     (cut : run.rows.size = params.traceLength ∨
       ∃ bound : run.rows.size < params.traceLength,

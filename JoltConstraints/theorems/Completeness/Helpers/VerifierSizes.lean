@@ -83,7 +83,7 @@ theorem HonestTrace.prover_config_ram_K_of_nonempty
     trace.prover_config_ram_K config proverAccepts
   have unfolded := remapped
   unfold VerifierSizes.remapWordAddress at unfolded
-  simp only [if_neg imageNonzero, pure_bind] at unfolded
+  simp only [ite_eq_right imageNonzero, pure_bind] at unfolded
   rw [bind_some_iff] at unfolded
   obtain ⟨offset, subtracted, unfolded⟩ := unfolded
   obtain ⟨rfl, lowestBelow⟩ := checkedSub_some subtracted
@@ -120,7 +120,7 @@ theorem HonestTrace.witness_params_ram_minimum_of_nonempty
   cases remappedImage
   unfold VerifierSizes.remapWordAddress at remappedIo
   have ramNonzero : JoltISA.RAM_START_ADDRESS ≠ 0 := by decide
-  simp only [if_neg ramNonzero, pure_bind] at remappedIo
+  simp only [ite_eq_right ramNonzero, pure_bind] at remappedIo
   rw [bind_some_iff] at remappedIo
   obtain ⟨ioOffset, ioSubtracted, remappedIo⟩ := remappedIo
   cases remappedIo
@@ -295,12 +295,12 @@ theorem HonestTrace.verifier_ram_minimum_computes
         trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat) / 8 +
           program_image_len_words joltInstance.program.memory_init) := by
     unfold MemoryLayout.checkedAdd
-    rw [if_pos (by omega)]
+    rw [ite_eq_left (by omega)]
   have ioRemapped : VerifierSizes.remapWordAddress trace.initialState.jolt_device.memory_layout
       JoltISA.RAM_START_ADDRESS = some (some ((JoltISA.RAM_START_ADDRESS -
         trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat) / 8)) := by
     unfold VerifierSizes.remapWordAddress MemoryLayout.checkedSub
-    simp only [if_neg ramNonzero, if_pos lowestBelow]
+    simp only [ite_eq_right ramNonzero, ite_eq_left lowestBelow]
     rfl
   refine ⟨2 ^ Nat.clog 2 ((min_bytecode_address joltInstance.program.memory_init -
       trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat) / 8 +
@@ -309,7 +309,7 @@ theorem HonestTrace.verifier_ram_minimum_computes
   rw [remapped]
   simp only [Option.getD_some, Option.bind_eq_bind, Option.bind_some, endAdded, ioRemapped]
   rw [Nat.max_eq_left (by omega)]
-  simp only [VerifierSizes.checkedNextPowerOfTwo, if_pos rounded]
+  simp only [VerifierSizes.checkedNextPowerOfTwo, ite_eq_left rounded]
 
 /-- When Jolt's prover accepts the honest trace (`proverAccepts`) of a nonempty program,
 Jolt's verifier computes its RAM maximum (`VerifierSizes.maxRamSize`, Jolt's
@@ -362,10 +362,10 @@ theorem HonestTrace.witness_params_ram_maximum
         trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat + 7) / 8),
     ?_, ?_⟩
   · unfold VerifierSizes.maxRamSize
-    simp only [MemoryLayout.checkedSub, if_pos (by omega :
+    simp only [MemoryLayout.checkedSub, ite_eq_left (by omega :
       trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤
         trace.initialState.jolt_device.memory_layout.heap_end.toNat), Option.bind_eq_bind,
-      Option.bind_some, VerifierSizes.checkedNextPowerOfTwo, if_pos maximumFits]
+      Option.bind_some, VerifierSizes.checkedNextPowerOfTwo, ite_eq_left maximumFits]
   · -- both numbers Jolt's prover rounds are at most the number of words below heap_end
     rw [trace.witness_params_ram_size config proverAccepts, sizeIs]
     apply Nat.pow_le_pow_right (by decide : 0 < 2)

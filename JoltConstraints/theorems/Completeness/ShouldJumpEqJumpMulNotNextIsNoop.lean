@@ -16,9 +16,9 @@ Strict padding ensures that the final cycle is a no-op, as in Rust
 theorem honestWitness_shouldJumpEqJumpMulNotNextIsNoop
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
+    (_ramFits : params.RamFits trace)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     shouldJumpEqJumpMulNotNextIsNoop
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t

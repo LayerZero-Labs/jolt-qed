@@ -48,7 +48,7 @@ theorem ramValFinal_eq_last_update
     intro cycle
     rw [last]
     exact cycle.isLt
-  simp only [full, if_true] at sum
+  simp only [full, ite_true] at sum
   rw [finalHistory address, history address t, sum, add_assoc]
 
 /-- If every remaining increment for a word is zero, its current value equals
@@ -65,7 +65,7 @@ theorem ramVal_eq_final_of_suffix_zero
   apply Finset.sum_congr rfl
   intro cycle _
   by_cases before : cycle.val < t.val
-  · simp only [before, if_true]
-  · simp only [before, if_false, suffixZero cycle (by omega)]
+  · simp only [before, ite_true]
+  · simp only [before, ite_false, suffixZero cycle (by omega)]
 
 end JoltConstraints.Soundness

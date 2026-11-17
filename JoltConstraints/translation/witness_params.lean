@@ -171,9 +171,9 @@ noncomputable def HonestTrace.witness_params
     · decide
   chunkBits_dvd_virtual := by
     by_cases small : Nat.log2 config.trace_length < 25
-    · rw [if_pos small, if_pos small]
+    · rw [ite_eq_left small, ite_eq_left small]
       decide
-    · rw [if_neg small, if_neg small]
+    · rw [ite_eq_right small, ite_eq_right small]
       decide
   virtualChunkBits_dvd_lookup := by
     split
@@ -195,8 +195,8 @@ theorem HonestTrace.witness_params_chunk_config
   unfold WitnessParams.ProverChunkConfig HonestTrace.witness_params
   dsimp only
   by_cases small : Nat.log2 config.trace_length < 25
-  · exact Or.inl ⟨small, if_pos small, if_pos small⟩
-  · exact Or.inr ⟨by omega, if_neg small, if_neg small⟩
+  · exact Or.inl ⟨small, ite_eq_left small, ite_eq_left small⟩
+  · exact Or.inr ⟨by omega, ite_eq_right small, ite_eq_right small⟩
 
 -- For n ≥ 1, the smallest power of two that holds n + 1 is the one just above n.
 theorem clog_succ_eq_log2_succ (n : Nat) (positive : 1 ≤ n) :

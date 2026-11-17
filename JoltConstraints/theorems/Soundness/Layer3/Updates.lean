@@ -26,9 +26,9 @@ private theorem ram_update_of_selected (address : Fin params.ramSize)
       if address = chosen then witness.RamWriteValue t else witness.RamVal address t := by
   by_cases same : address = chosen
   · subst address
-    rw [selected, one_mul, if_pos rfl]
+    rw [selected, one_mul, ite_eq_left rfl]
     exact (ramWriteValue_of_selected charAbove2pow127 context equations t chosen selected).symm
-  · rw [if_neg same]
+  · rw [ite_eq_right same]
     rcases ramRa_zero_or_one context equations address t with zero | one
     · simp [zero]
     · exact False.elim (same (ramRa_at_most_one charAbove2pow127 context equations

@@ -61,11 +61,11 @@ theorem finalRamWord_ordinary
   rw [show (TraceWitness.remapRamAddress layout layout.termination == some index) = false from
     beq_eq_false_iff_ne.mpr termOff]
   simp only [Bool.and_false, Bool.false_eq_true, ↓reduceIte]
-  rw [if_neg panicOff]
+  rw [ite_eq_right panicOff]
   rw [overlays _ _ (by omega), overlays _ _ (by rw [inputsIs]; omega),
     overlays _ _ (by omega), overlays _ _ (by omega)]
   change (if RAM_START_ADDRESS ≤ ramLowestAddress layout + 8 * index then _ else _) = _
-  rw [if_pos inRam]
+  rw [ite_eq_left inRam]
   rfl
 
 private theorem ordinary_index_ne_termination
@@ -125,7 +125,7 @@ theorem ordinary_memory_step
     (ramNext : ∀ next : t.val + 1 < params.traceLength,
       OrdinaryRamAgreement context.io.memory_layout
         (fun index => witness.RamVal index ⟨t.val + 1, next⟩) step.postState)
-    (ramFinal : ∀ last : t.val + 1 = params.traceLength,
+    (ramFinal : ∀ _last : t.val + 1 = params.traceLength,
       OrdinaryRamAgreement context.io.memory_layout witness.RamValFinal step.postState) :
     DeviceMemoryStepAgreement witness t run.toTrace step
       (∃ i : Fin run.rows.size, run.StoresTerminationAt i) := by
@@ -153,7 +153,7 @@ theorem ordinary_memory_step
       TraceWitness.finalRamWord {run.toTrace with rows := run.rows.push step} index =
         TraceWitness.finalRamWord run.toTrace index := by
     unfold ramLowestAddress at below
-    simp only [TraceWitness.finalRamWord, finalTraceState_push, sameDevice, if_neg (Nat.not_le.mpr below)]
+    simp only [TraceWitness.finalRamWord, finalTraceState_push, sameDevice, ite_eq_right (Nat.not_le.mpr below)]
   constructor
   · intro next
     refine ⟨by rw [layoutEq]; exact ramNext next, ?_, ?_⟩

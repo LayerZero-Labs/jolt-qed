@@ -20,8 +20,8 @@ theorem honestWitness_ramRaChunkHammingWeight
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     ramRaChunkHammingWeight
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro chunk t
@@ -34,7 +34,7 @@ theorem honestWitness_ramRaChunkHammingWeight
     dsimp [ramRaChunkHammingWeight, HonestTrace.honestWitness,
       TraceWitness.RamRaChunk, TraceWitness.RamHammingWeight,
       TraceWitness.remappedRamAddress]
-    simp only [dif_pos h]
+    simp only [dite_eq_left h]
     cases ha : TraceWitness.ramAccessAddress instruction row.preState with
     | none => simp [TraceWitness.addressChunkEntry]
     | some raw =>

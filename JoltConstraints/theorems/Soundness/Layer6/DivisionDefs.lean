@@ -116,7 +116,7 @@ private theorem witnessWord_of_encoded {F : Type} [Field F] {params : WitnessPar
     (encoded : witness.RdWriteValue cycle = (value.toNat : F)) :
     witnessWord witness cycle.val = value := by
   unfold witnessWord
-  rw [dif_pos cycle.isLt, dif_pos ⟨value, encoded⟩]
+  rw [dite_eq_left cycle.isLt, dite_eq_left ⟨value, encoded⟩]
   apply BitVec.eq_of_toNat_eq
   apply natCast_injective_below_char (F := F)
   · have bound := two_pow_64_lt_char (two_pow_127_lt_char joltField)

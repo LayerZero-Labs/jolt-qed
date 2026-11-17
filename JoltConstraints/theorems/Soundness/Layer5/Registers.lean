@@ -279,9 +279,9 @@ theorem RegisterAgreementOn.write {live : Fin 128 → Prop}
     destinationIs, Option.map_some]
   by_cases same : register = TraceWitness.destinationRegisterAddress destination
   · subst register
-    rw [if_pos rfl, encoded, source_of_destination destination canonical,
+    rw [ite_eq_left rfl, encoded, source_of_destination destination canonical,
       sourceValue_writeDst_same destination value pre post zero written]
-  · rw [if_neg same, agrees.values register (member.resolve_right same)]
+  · rw [ite_eq_right same, agrees.values register (member.resolve_right same)]
     rw [sourceValue_writeDst_other destination _ value pre post
       (by simpa only [source_encode_decode, BitVec.toFin_ofFin] using same)
       agrees.present written]

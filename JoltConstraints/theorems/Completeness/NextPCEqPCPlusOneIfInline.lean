@@ -33,9 +33,9 @@ There is no jump-only or nonwrapping-arithmetic assumption. -/
 theorem honestWitness_nextPCEqPCPlusOneIfInline
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
+    (_ramFits : params.RamFits trace)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     nextPCEqPCPlusOneIfInline
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
@@ -65,8 +65,8 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
         hnext.trans tracePadded.2
       have hpc : TraceWitness.NextPC (F := F) params trace t =
           TraceWitness.PC params trace t + 1 := by
-        simp only [TraceWitness.NextPC, dif_pos hnextWitness, TraceWitness.PC,
-          TraceWitness.bytecodePc, dif_pos ht, dif_pos hnext]
+        simp only [TraceWitness.NextPC, dite_eq_left hnextWitness, TraceWitness.PC,
+          TraceWitness.bytecodePc, dite_eq_left ht, dite_eq_left hnext]
         rw [hsucc]
         push_cast
         ring
@@ -77,7 +77,7 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
       have hflags := virtual_flag_eq_last_of_not_continues bytecodeRow hfalse
       dsimp [nextPCEqPCPlusOneIfInline, HonestTrace.honestWitness,
         TraceWitness.OpFlags]
-      simp only [dif_pos ht]
+      simp only [dite_eq_left ht]
       rw [hflags]
       ring
   · simp [HonestTrace.honestWitness,

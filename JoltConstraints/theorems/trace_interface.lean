@@ -121,10 +121,10 @@ theorem HonestTrace.linkedState {joltInstance : JoltInstance SourceInstruction}
   unfold JoltInstructionRow.continues
   split at link
   · rename_i notLast
-    rw [if_pos (bne_iff_ne.mpr notLast)]
+    rw [ite_eq_left (bne_iff_ne.mpr notLast)]
     exact link.2
   · rename_i isLast
-    rw [if_neg (by rw [bne_iff_ne]; exact isLast)]
+    rw [ite_eq_right (by rw [bne_iff_ne]; exact isLast)]
     obtain ⟨address, _, sameAddress, _, startState⟩ := link
     rw [prepareSource_eq_advance_pc, sameAddress]
     exact startState
@@ -146,10 +146,10 @@ theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
   unfold JoltInstructionRow.continues
   split at link
   · rename_i notLast
-    rw [if_pos (bne_iff_ne.mpr notLast)]
+    rw [ite_eq_left (bne_iff_ne.mpr notLast)]
     exact link.1
   · rename_i isLast
-    rw [if_neg (by rw [bne_iff_ne]; exact isLast)]
+    rw [ite_eq_right (by rw [bne_iff_ne]; exact isLast)]
     obtain ⟨address, nextPC, sameAddress, starts, _⟩ := link
     exact ⟨by rw [sameAddress]; exact nextPC, starts⟩
 

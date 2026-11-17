@@ -117,9 +117,9 @@ Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
 theorem honestWitness_rightLookupAdd
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     rightLookupAdd
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t

@@ -86,7 +86,7 @@ theorem adviceLoad_register_step {F : Type} [Field F] {params : WitnessParams}
   refine ⟨value, encoded, ?_, fun next => preparedAgrees.write charAbove2pow128
     context equations next slot selected rowIs destinationIs value encoded written⟩
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
-  simp only [execWithTapeAnswer, valid, if_true]
+  simp only [execWithTapeAnswer, valid, ite_true]
   change (do writeDst destination value; pure RETIRE_SUCCESS) prepared = _
   simp only [bind, EStateM.bind, written, pure, EStateM.pure]
   rfl

@@ -54,7 +54,7 @@ theorem represented_branch_stall_replays
           witness context equations ⟨n + 1, bound⟩ padding
         apply targetNonzero
         have shifted := equations.nextUnexpandedPCEqShift previous
-        simpa only [previous, dif_pos bound, nextZero] using shifted
+        simpa only [previous, dite_eq_left bound, nextZero] using shifted
   intro cycle afterLast
   obtain ⟨notPadding, invariant⟩ := replay cycle.val (by omega) cycle.isLt
   exact (stall_branch_replay joltField joltInstance privateInputs witness context
@@ -107,7 +107,7 @@ theorem represented_trace_ends_in_jump
       dsimp [finalCycle]
       omega
     exact False.elim (nonzero (by
-      simpa only [dif_neg noNext] using equations.nextUnexpandedPCEqShift finalCycle))
+      simpa only [dite_eq_right noNext] using equations.nextUnexpandedPCEqShift finalCycle))
 
 /-- Checked padding adds a no-op, rounds up to a power of two and enforces the
 256-cycle floor, within a 64-bit public maximum.
@@ -149,10 +149,10 @@ theorem checked_trace_length_fits
   have roundedFits : 2 ^ Nat.clog 2 (rows + 1) < 2 ^ 64 :=
     lt_of_le_of_lt (roundedBound.trans maxPowerBound) maximum.isLt
   have added : MemoryLayout.checkedAdd rows 1 = some (rows + 1) := by
-    simp only [MemoryLayout.checkedAdd, if_pos withNoopFits]
+    simp only [MemoryLayout.checkedAdd, ite_eq_left withNoopFits]
   have rounded : JoltConstraints.VerifierSizes.checkedNextPowerOfTwo (rows + 1) =
       some (2 ^ Nat.clog 2 (rows + 1)) := by
-    simp only [JoltConstraints.VerifierSizes.checkedNextPowerOfTwo, if_pos roundedFits]
+    simp only [JoltConstraints.VerifierSizes.checkedNextPowerOfTwo, ite_eq_left roundedFits]
   refine ⟨max (2 ^ Nat.clog 2 (rows + 1)) 256, ?_, ?_⟩
   · simp [ProverConfig.checkedTraceLength, added, rounded]
   · exact max_le (roundedBound.trans maxPowerBound) floor
@@ -188,7 +188,7 @@ theorem represented_ram_addresses_bounded
   have encoded : witness.RamAddress cycle = (raw.toNat : F) := by
     simp only [Fin.getElem_fin] at access
     rw [ramAddress cycle inRun]
-    simp only [TraceWitness.RamAddress, cycle, dif_pos inRun, rowAt, access]
+    simp only [TraceWitness.RamAddress, cycle, dite_eq_left inRun, rowAt, access]
   have charBound := JoltConstraints.Soundness.two_pow_127_lt_char joltField
   have nonzero : witness.RamAddress cycle ≠ 0 := by
     intro vanishes
@@ -331,7 +331,7 @@ theorem represented_ram_size_computes
       refine ⟨2 ^ Nat.clog 2 (max (touched + 1) (finish + 1)), ?_⟩
       simp only [ProverConfig.checkedRamSize, bind_some_iff]
       refine ⟨touched, touchedComputed, start, remapped, finish, added, finish + 1, ?_, ?_⟩
-      · simp only [MemoryLayout.checkedAdd, if_pos sentinelFits]
-      · simp only [JoltConstraints.VerifierSizes.checkedNextPowerOfTwo, if_pos roundedFits]
+      · simp only [MemoryLayout.checkedAdd, ite_eq_left sentinelFits]
+      · simp only [JoltConstraints.VerifierSizes.checkedNextPowerOfTwo, ite_eq_left roundedFits]
 
 end JoltInstance

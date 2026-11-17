@@ -109,7 +109,7 @@ private theorem execWithTapeAnswer_load_width (dst : Dst) (width answer : BitVec
       .ok (.Retire_Success ()) post) :
     width.toNat = 1 ∨ width.toNat = 2 ∨ width.toNat = 4 ∨ width.toNat = 8 := by
   by_contra invalid
-  simp only [execWithTapeAnswer, if_neg invalid] at runs
+  simp only [execWithTapeAnswer, ite_eq_right invalid] at runs
   contradiction
 
 private theorem UntrustedAnswerRun.load_width
@@ -445,7 +445,7 @@ theorem rebuiltTape_read_exact
     have sizeLe : (rebuiltTape run).size ≤ (rebuiltTape run ++ hostSuffix).size := by simp
     omega
   unfold readAdviceTape
-  simp only [widthValid, ↓reduceIte, boundAppend, dif_pos]
+  simp only [widthValid, ↓reduceIte, boundAppend, dite_eq_left]
   congr 1
   · have byteFn : (fun value (offset : Fin width.toNat) =>
         value ||| (((rebuiltTape run ++ hostSuffix)[rebuiltTapeOffset run step + offset.val]'(by
@@ -970,7 +970,7 @@ private theorem advicePairsOk_head (dst : Dst) (width : BitVec 64)
     ∃ rd tail, dst = sideEffectingRdZeroDst rd ∧
       rest = .VirtualMULI (sideEffectingRdZeroDst rd) (adviceReadSource rd)
         (slliMultiplier (BitVec.ofNat 6 (64 - 8 * width.toNat))) :: tail := by
-  simp only [advicePairsOk, if_pos narrow, Bool.and_eq_true] at ok
+  simp only [advicePairsOk, ite_eq_left narrow, Bool.and_eq_true] at ok
   have checked := ok.1.2
   split at checked
   · rename_i nextDst src multiplier tail
@@ -1064,7 +1064,7 @@ private theorem narrowLoadAt?_eq_some (bytecode : Array JoltInstructionRow)
     · rename_i destination width load
       have loadEq := Option.some.inj load
       by_cases narrow : width.toNat < 8
-      · simp only [if_pos narrow, Option.some.injEq, Prod.mk.injEq]
+      · simp only [ite_eq_left narrow, Option.some.injEq, Prod.mk.injEq]
         constructor
         · rintro ⟨rfl, rfl⟩
           exact ⟨bound, width, loadEq, narrow, rfl⟩
@@ -1072,7 +1072,7 @@ private theorem narrowLoadAt?_eq_some (bytecode : Array JoltInstructionRow)
           rw [loadEq] at load'
           cases load'
           exact ⟨rfl, rfl⟩
-      · simp only [if_neg narrow, reduceCtorEq, false_iff]
+      · simp only [ite_eq_right narrow, reduceCtorEq, false_iff]
         rintro ⟨_, width', load', narrow', _⟩
         rw [loadEq] at load'
         cases load'
@@ -1103,7 +1103,7 @@ private theorem pendingBefore?_shape (image : Rv64ProgramImage SourceInstruction
       bytecode[k].instruction = .VirtualMULI (sideEffectingRdZeroDst rd)
         (adviceReadSource rd) (slliMultiplier (BitVec.ofNat 6 (64 - 8 * w))) := by
   have nonzero : k ≠ 0 := by intro zero; simp [pendingBefore?, zero] at pending
-  rw [pendingBefore?, if_neg nonzero] at pending
+  rw [pendingBefore?, ite_eq_right nonzero] at pending
   obtain ⟨previous, width, load, narrow, equalWidth⟩ := (narrowLoadAt?_eq_some _ _ _ _).mp pending
   obtain ⟨rd, dstEq, _, _, multiply⟩ :=
     narrow_load_shape image bytecode expanded (k - 1) previous dst width load narrow
@@ -1163,7 +1163,7 @@ private theorem narrowAdvicePending_pre_iff (image : Rv64ProgramImage SourceInst
     exact (narrowLoadAt?_eq_some _ _ _ _).mpr ⟨start.isLt, width, load, narrow, rfl⟩
   · rintro ⟨w, pending⟩
     have nonzero : k ≠ 0 := by intro zero; simp [pendingBefore?, zero] at pending
-    rw [pendingBefore?, if_neg nonzero] at pending
+    rw [pendingBefore?, ite_eq_right nonzero] at pending
     obtain ⟨bound, width, load, narrow, _⟩ := (narrowLoadAt?_eq_some _ _ _ _).mp pending
     obtain ⟨rd, dstEq, _, next, multiply⟩ :=
       narrow_load_shape image bytecode expanded (k - 1) bound dst width load narrow
@@ -1400,7 +1400,7 @@ private theorem replay_load_eq_answer
   have cursor := run.preCursor_eq_rebuiltTapeOffset step
   have valid := run.load_width step dst width load
   simp only [replayState, rebaseTapeState, swapBytes, execInstr, cursor, read,
-    execWithTapeAnswer, if_pos valid]
+    execWithTapeAnswer, ite_eq_left valid]
 
 private theorem replayRow_executes_load
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -1424,10 +1424,10 @@ private theorem replayRow_executes_load
   by_cases narrow : width.toNat < 8
   · obtain ⟨rd, dstEq, _, _⟩ := narrow_load_shape _ _ run.expands _ run.rows[step].rowIndex.isLt dst width load narrow
     subst dst
-    simp only [execWithTapeAnswer, if_pos valid, bind, EStateM.bind,
+    simp only [execWithTapeAnswer, ite_eq_left valid, bind, EStateM.bind,
       NativeDispatch.writeDst_run, pure, EStateM.pure] at runs
     have postEq := (EStateM.Result.ok.inj runs).2
-    simp only [if_pos narrow, replayState, execWithTapeAnswer, if_pos valid,
+    simp only [ite_eq_left narrow, replayState, execWithTapeAnswer, ite_eq_left valid,
       bind, EStateM.bind, NativeDispatch.writeDst_run, pure, EStateM.pure,
       ← postEq, dstSource_sideEffecting, sourceValue_afterDst, replaceDst_sideEffecting,
       rebaseTapeState_afterDst, afterDst_afterDst]
@@ -1436,7 +1436,7 @@ private theorem replayRow_executes_load
     have fullAnswer : lowAnswer (run.answers step) width.toNat = run.answers step := by
       apply BitVec.eq_of_toNat_eq
       simp [lowAnswer, wide, Nat.mod_eq_of_lt (BitVec.isLt _)]
-    simp only [if_neg narrow, fullAnswer, replayState]
+    simp only [ite_eq_right narrow, fullAnswer, replayState]
     exact exec_rebased _ (swapInvariant_to_append (swap_answer_load dst width (run.answers step)))
       _ _ _ _ (run.initial_bytes_prefix step) _ runs
 
@@ -2001,9 +2001,9 @@ private theorem startOfExpansion_is_start_or_zero
   | zero => exact Or.inl rfl
   | succ n ih =>
     by_cases h : stepNOfTraceIsStartOfNewExpansion rows (n + 1) = true
-    · simp only [startOfExpansionContainingStepN, if_pos h]
+    · simp only [startOfExpansionContainingStepN, ite_eq_left h]
       exact Or.inr h
-    · simp only [startOfExpansionContainingStepN, if_neg h]
+    · simp only [startOfExpansionContainingStepN, ite_eq_right h]
       exact ih
 
 private theorem UntrustedAnswerRun.expansionStart_starts_source

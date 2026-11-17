@@ -158,7 +158,7 @@ theorem rs1Ra_real
           if register = TraceWitness.sourceRegisterAddress src then 1 else 0
       | none => 0 := by
   unfold TraceWitness.Rs1Ra
-  simp only [dif_pos hb]
+  simp only [dite_eq_left hb]
   cases instr :
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs1Operand?]
@@ -176,7 +176,7 @@ theorem rs1Value_real
       | some src => ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F)
       | none => 0 := by
   unfold TraceWitness.Rs1Value
-  simp only [dif_pos hb]
+  simp only [dite_eq_left hb]
   cases instr :
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs1Operand?]
@@ -193,7 +193,7 @@ theorem rs2Ra_real
           if register = TraceWitness.sourceRegisterAddress src then 1 else 0
       | none => 0 := by
   unfold TraceWitness.Rs2Ra
-  simp only [dif_pos hb]
+  simp only [dite_eq_left hb]
   cases instr :
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs2Operand?]
@@ -211,7 +211,7 @@ theorem rs2Value_real
       | some src => ((JoltISA.sourceValue src (trace.rows[t.val]'hb).preState).toNat : F)
       | none => 0 := by
   unfold TraceWitness.Rs2Value
-  simp only [dif_pos hb]
+  simp only [dite_eq_left hb]
   cases instr :
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [rs2Operand?]

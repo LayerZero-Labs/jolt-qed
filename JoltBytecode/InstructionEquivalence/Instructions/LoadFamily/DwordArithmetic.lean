@@ -85,7 +85,7 @@ theorem loaded_dword_byte_k (s : SailState) (V : BitVec 64) (k : Nat)
     simp (disch := omega) only [hi_bool, Bool.true_and, BitVec.getLsbD_setWidth,
       BitVec.getLsbD_ushiftRight, Nat.reduceMul, Nat.reduceAdd]
     repeat rw [BitVec.getLsbD_append]
-    simp (disch := omega) only [if_pos, if_neg, BitVec.add_zero]
+    simp (disch := omega) only [ite_eq_left, ite_eq_right, BitVec.add_zero]
     congr 1
     omega
 
@@ -633,7 +633,7 @@ private lemma sll_srai56_extracts_byte_k (d : BitVec 64) (k sh : Nat)
     have hnotlt7 : ¬63 < 8 * (7 - k) := by omega
     have hidx7 : 63 - 8 * (7 - k) = 8 * k + 7 := by omega
     simp only [hi, hnot64, decide_false, Bool.not_false, Bool.true_and,
-      hge64, if_false, hi8]
+      hge64, ite_false, hi8]
     rw [BitVec.msb_eq_getLsbD_last]
     change (d <<< (8 * (7 - k))).getLsbD 63 =
       (BitVec.setWidth 8 (d >>> (8 * k))).getLsbD 7
@@ -761,7 +761,7 @@ private lemma sll_srai48_extracts_halfword_k (d : BitVec 64) (k sh : Nat)
     have hnotlt15 : ¬63 < 8 * (6 - k) := by omega
     have hidx15 : 63 - 8 * (6 - k) = 8 * k + 15 := by omega
     simp only [hi, hnot64, decide_false, Bool.not_false, Bool.true_and,
-      hge64, if_false, hi16]
+      hge64, ite_false, hi16]
     rw [BitVec.msb_eq_getLsbD_last]
     change (d <<< (8 * (6 - k))).getLsbD 63 =
       (BitVec.setWidth 16 (d >>> (8 * k))).getLsbD 15

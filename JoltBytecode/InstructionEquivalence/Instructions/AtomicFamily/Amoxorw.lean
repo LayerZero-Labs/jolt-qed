@@ -38,7 +38,7 @@ private theorem amoxorwProgramAuto_eq_core (rs2 rs1 rd : regidx) :
       JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor,
       JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor,
       JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst,
-      hrd, Bool.false_eq_true, if_false, if_true] <;> rfl
+      hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
 
 private theorem amoxorwProgramCore_doesNotWriteProtectedVRegs
     (rs2 rs1 rd : regidx) :

@@ -314,7 +314,7 @@ theorem new_panic_lt_termination (config : MemoryConfig) (layout : MemoryLayout)
     constructor
     · exact checkedAdd_some
     · rintro ⟨rfl, fits⟩
-      simp only [MemoryLayout.checkedAdd, if_pos fits]
+      simp only [MemoryLayout.checkedAdd, ite_eq_left fits]
   simp only [checked] at *
   simp only [BitVec.toNat_ofNat]
   omega
@@ -364,7 +364,7 @@ theorem store_raw_device_readable (before after : SailJoltState) (address : Nat)
     (stored : JoltISA.Mmu.store_raw? before address value = some after) :
     (before.jolt_device.load? address).isSome := by
   unfold JoltISA.Mmu.store_raw? at stored
-  rw [if_neg (by omega)] at stored
+  rw [ite_eq_right (by omega)] at stored
   split at stored
   · cases stored
   · split at stored
@@ -440,10 +440,10 @@ theorem store_doubleword_old_present (state after : SailJoltState) (address valu
       · rename_i valid
         have belowHeap : address.toNat < state.jolt_device.memory_layout.heap_end.toNat := by
           simp only [JoltISA.Mmu.effective_address_ok,
-            if_neg (by omega : ¬ address.toNat < JoltISA.RAM_START_ADDRESS),
+            ite_eq_right (by omega : ¬ address.toNat < JoltISA.RAM_START_ADDRESS),
             ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at valid
           exact valid.2
-        rw [JoltISA.trace_doubleword?, if_neg (by omega)]
+        rw [JoltISA.trace_doubleword?, ite_eq_right (by omega)]
         apply read_doubleword_present
         intro k hk
         apply present _ (by omega)
@@ -455,7 +455,7 @@ theorem store_doubleword_old_present (state after : SailJoltState) (address valu
     · rename_i notRam
       split at stored
       · rename_i finalState writes
-        rw [JoltISA.trace_doubleword?, if_pos (by omega)]
+        rw [JoltISA.trace_doubleword?, ite_eq_left (by omega)]
         apply read_doubleword_present
         intro k hk
         apply store_bytes_device_readable address.toNat value (List.range 8) state finalState

@@ -22,9 +22,9 @@ The proof must relate the replayed register history to the captured ISA values. 
 theorem honestWitness_rdWriteValueEqRegistersReadWrite
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
+    (_ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src trace.initialState = 0) :
     rdWriteValueEqRegistersReadWrite
@@ -48,12 +48,12 @@ theorem honestWitness_rdWriteValueEqRegistersReadWrite
         TraceWitness.rdValue instr row.postState -
           TraceWitness.rdValue instr row.preState := by
       unfold TraceWitness.RdInc
-      simp only [dif_pos hb]
+      simp only [dite_eq_left hb]
       rfl
     have hwrite : TraceWitness.RdWriteValue (F := F) params trace t =
         TraceWitness.rdValue instr row.postState := by
       unfold TraceWitness.RdWriteValue
-      simp only [dif_pos hb]
+      simp only [dite_eq_left hb]
       rfl
     simp only [hwa]
     rw [hwrite, register42_rdValue_eq_destination]

@@ -22,9 +22,9 @@ The proof must relate the replayed register history to the captured ISA values. 
 theorem honestWitness_rs2ValueEqRegistersRead
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
+    (_ramFits : params.RamFits trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src trace.initialState = 0) :
     rs2ValueEqRegistersRead

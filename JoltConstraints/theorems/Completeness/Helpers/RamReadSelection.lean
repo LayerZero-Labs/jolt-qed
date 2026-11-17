@@ -107,12 +107,12 @@ theorem JoltISA.Mmu.load_doubleword_below_heap_end (address : BitVec 64) (state 
     address.toNat < state.jolt_device.memory_layout.heap_end.toNat := by
   obtain ⟨result, after, loaded⟩ := loaded
   unfold JoltISA.Mmu.load_doubleword at loaded
-  simp only [if_pos inRam] at loaded
+  simp only [ite_eq_left inRam] at loaded
   split at loaded
   · cases loaded
   · split at loaded
     · rename_i valid
-      simpa only [JoltISA.Mmu.effective_address_ok, if_neg (Nat.not_lt.mpr inRam),
+      simpa only [JoltISA.Mmu.effective_address_ok, ite_eq_right (Nat.not_lt.mpr inRam),
         Bool.false_eq_true, ↓reduceIte, decide_eq_true_eq] using valid
     · cases loaded
 
@@ -128,12 +128,12 @@ theorem JoltISA.Mmu.store_doubleword_below_heap_end (address value : BitVec 64)
     address.toNat < state.jolt_device.memory_layout.heap_end.toNat := by
   obtain ⟨result, after, stored⟩ := stored
   unfold JoltISA.Mmu.store_doubleword at stored
-  simp only [if_pos inRam] at stored
+  simp only [ite_eq_left inRam] at stored
   split at stored
   · cases stored
   · split at stored
     · rename_i valid
-      simp only [JoltISA.Mmu.effective_address_ok, if_neg (Nat.not_lt.mpr inRam),
+      simp only [JoltISA.Mmu.effective_address_ok, ite_eq_right (Nat.not_lt.mpr inRam),
         ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at valid
       exact valid.2
     · cases stored
@@ -384,7 +384,7 @@ open scoped BigOperators
 /-- A missing RAM address has no hot selector. -/
 theorem ramRa_sum_none {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
+    (_ramFits : params.RamFits trace)
     (t : Fin params.traceLength)
     (hnone : TraceWitness.remappedRamAddress trace t.val = none)
     (value : Fin params.ramSize → F) :

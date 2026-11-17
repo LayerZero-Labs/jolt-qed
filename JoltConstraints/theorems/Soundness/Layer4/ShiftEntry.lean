@@ -156,7 +156,7 @@ theorem sign_foldl (top : Nat) (y : BitVec 64) (s : Nat)
           _ ≤ _ := Nat.pow_le_pow_right (by decide) (le_max_left _ _)
       simp only [ne_eq, not_true_eq_false, ite_false, pow_zero]
       rw [Nat.sub_eq_zero_of_le (by omega), Nat.sub_eq_zero_of_le (by omega)]
-    · rw [if_pos zero, bit_word y, shape (top - n) (by omega)]
+    · rw [ite_eq_left zero, bit_word y, shape (top - n) (by omega)]
       by_cases high : top + 1 - s ≤ n
       · have below : 2 ^ (max 1 (top + 1 - s)) ≤ 2 ^ n :=
           Nat.pow_le_pow_right (by decide) (by omega)
@@ -256,7 +256,7 @@ theorem sraw_bits (x : BitVec 64) (s i : Nat) :
       (decide (i < 64) && if i + s < 32 then x.getLsbD (i + s) else x.getLsbD 31) := by
   rw [BitVec.getLsbD_signExtend, BitVec.msb_sshiftRight, BitVec.msb_setWidth]
   by_cases small : i < 32
-  · rw [if_pos small, BitVec.getLsbD_sshiftRight, BitVec.msb_setWidth, BitVec.getLsbD_setWidth]
+  · rw [ite_eq_left small, BitVec.getLsbD_sshiftRight, BitVec.msb_setWidth, BitVec.getLsbD_setWidth]
     by_cases inside : i + s < 32
     · simp [inside, Nat.add_comm s i, show ¬ 32 ≤ i by omega]
     · simp [show ¬ s + i < 32 by omega, inside, show ¬ 32 ≤ i by omega]

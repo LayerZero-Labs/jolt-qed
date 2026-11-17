@@ -32,7 +32,7 @@ private theorem boundsFor_observe (addresses : List Nat) (bounds : Option (Nat �
   · cases bounds with
     | none =>
       simp only [BoundsFor] at valid
-      simp only [observe, if_neg zero, BoundsFor, List.mem_append, List.mem_singleton]
+      simp only [observe, ite_eq_right zero, BoundsFor, List.mem_append, List.mem_singleton]
       refine ⟨Or.inr trivial, Or.inr trivial, zero, zero, ?_⟩
       intro a member
       rcases member with member | rfl
@@ -41,7 +41,7 @@ private theorem boundsFor_observe (addresses : List Nat) (bounds : Option (Nat �
     | some pair =>
       rcases pair with ⟨lo, hi⟩
       obtain ⟨loMem, hiMem, loNonzero, hiNonzero, bounded⟩ := valid
-      simp only [observe, if_neg zero, BoundsFor, List.mem_append, List.mem_singleton]
+      simp only [observe, ite_eq_right zero, BoundsFor, List.mem_append, List.mem_singleton]
       refine ⟨?_, ?_, by omega, by omega, ?_⟩
       · by_cases h : lo ≤ address
         · exact Or.inl (by simpa [min_eq_left h] using loMem)
@@ -340,7 +340,7 @@ theorem HonestTrace.prover_config_ram_fits
     have slotIs : remap_address trace.initialState.jolt_device.memory_layout address =
         some ((address - trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat) / 8) := by
       unfold remap_address
-      rw [if_neg zero]
+      rw [ite_eq_right zero]
     have atMost := List.le_max?_getD_of_mem (k := 0)
       (List.mem_filterMap.mpr ⟨address, member, slotIs⟩)
     exact Or.inr ⟨above, _, slotIs,

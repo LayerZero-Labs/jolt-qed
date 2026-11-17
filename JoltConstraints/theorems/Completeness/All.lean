@@ -159,7 +159,7 @@ theorem HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruction}
   have first := trace.starts_at_entry slots preprocessed (getElem trace.rows 0 nonempty)
     (Array.getElem?_eq_getElem nonempty)
   rw [first] at entryIsRust
-  rw [TraceWitness.bytecodePc, dif_pos nonempty]
+  rw [TraceWitness.bytecodePc, dite_eq_left nonempty]
   exact Option.some.inj entryIsRust
 
 -- The run's final state, as matches_outputs reads it, is the witness's final state.

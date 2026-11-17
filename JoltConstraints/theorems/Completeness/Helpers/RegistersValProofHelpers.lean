@@ -836,7 +836,7 @@ theorem register42_RdWa_real
           if register = TraceWitness.destinationRegisterAddress dst then 1 else 0
       | none => 0 := by
   unfold TraceWitness.RdWa
-  simp only [dif_pos hb]
+  simp only [dite_eq_left hb]
   cases instr :
       trace.bytecode[(trace.rows[t.val]'hb).rowIndex].instruction <;>
     simp [JoltISA.Instr.destination?, TraceWitness.capturedDestination] <;>
@@ -872,7 +872,7 @@ theorem register42_row_step
       TraceWitness.rdValue instr row.postState -
         TraceWitness.rdValue instr row.preState := by
     unfold TraceWitness.RdInc
-    simp only [dif_pos hb]
+    simp only [dite_eq_left hb]
     rfl
   have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
     trace.registerOperandsCanonical row.rowIndex

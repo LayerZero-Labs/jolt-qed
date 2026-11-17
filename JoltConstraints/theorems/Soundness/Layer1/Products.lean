@@ -29,7 +29,7 @@ theorem boolean_prod_zero_or_one {F : Type} [Field F] {ι : Type} [Fintype ι]
   classical
   by_cases allOne : ∀ i, entry i = 1
   · exact Or.inr ((boolean_prod_eq_one_iff entry boolean).mpr allOne)
-  · push_neg at allOne
+  · push Not at allOne
     obtain ⟨i, notOne⟩ := allOne
     have zero := (eq_zero_or_one_of_boolean (boolean i)).resolve_right notOne
     exact Or.inl (Finset.prod_eq_zero (Finset.mem_univ i) zero)

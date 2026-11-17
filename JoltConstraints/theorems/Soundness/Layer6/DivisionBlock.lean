@@ -30,7 +30,7 @@ theorem division_append_honest {F : Type} [Field F]
     (first : Fin context.bytecode.size)
     (state : ExpansionState witness context run first 0)
     (kind : DivisionKind) (rd rs1 rs2 : regidx) (placeholder : BitVec 64)
-    (nonzero : rd ≠ .Regidx 0)
+    (_nonzero : rd ≠ .Regidx 0)
     (source : joltInstance.program.instructionAt context.bytecode[first].address =
       some (kind.source rd rs1 rs2 placeholder))
     (count : (expansionInstructions context.bytecode first).length =

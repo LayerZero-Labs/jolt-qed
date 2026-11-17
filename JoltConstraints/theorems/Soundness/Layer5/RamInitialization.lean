@@ -142,7 +142,7 @@ theorem initialRamWord_eq_ram_doubleword
   rw [inputs, untrusted, trusted]
   change (if RAM_START_ADDRESS ≤ ramLowestAddress state.jolt_device.memory_layout + 8 * index
     then _ else _) = _
-  rw [if_pos inRam]
+  rw [ite_eq_left inRam]
   rfl
 
 end JoltConstraints.Soundness

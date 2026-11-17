@@ -729,7 +729,7 @@ theorem lookupEntryCorrect_VirtualSRLW (row : HonestTraceRow bytecode)
   lookup_cases
   · rw [hi] at maskOk
     obtain ⟨s, sLt, rfl⟩ := maskOk
-    simp only [jolt_virtual_srliw_value, if_neg (wordShiftMask_ne_zero s sLt)]
+    simp only [jolt_virtual_srliw_value, ite_eq_right (wordShiftMask_ne_zero s sLt)]
     exact srlw_mask_entry _ s sLt
   · rw [hi] at maskOk
     obtain ⟨s, sLt, maskValue⟩ := maskOk
@@ -790,7 +790,7 @@ theorem lookupEntryCorrect_UnsignedLessThanEqual (row : HonestTraceRow bytecode)
   have h1 := lookup_read_bind _ _ _ _ _ hexec
   have h2 := lookup_read_bind _ _ _ _ _ h1
   split_ifs at h2 with hc
-  · rw [unsignedLessThanEqual_entry, if_pos (BitVec.le_def.mpr hc)]
+  · rw [unsignedLessThanEqual_entry, ite_eq_left (BitVec.le_def.mpr hc)]
     simp
   · exact absurd h2 (by simp [throw, throwThe, MonadExceptOf.throw, EStateM.throw])
 
@@ -806,7 +806,7 @@ theorem lookupEntryCorrect_MulUNoOverflow (row : HonestTraceRow bytecode)
   have h2 := lookup_read_bind _ _ _ _ _ h1
   split_ifs at h2 with hc
   · simp only [mulUNoOverflowTableEntry, BitVec.ofFin_toFin]
-    rw [if_pos (upper_zero_of_lt _ hc)]
+    rw [ite_eq_left (upper_zero_of_lt _ hc)]
     simp
   · exact absurd h2 (by simp [throw, throwThe, MonadExceptOf.throw, EStateM.throw])
 
@@ -822,7 +822,7 @@ theorem lookupEntryCorrect_ValidDiv0 (row : HonestTraceRow bytecode)
   have h2 := lookup_read_bind _ _ _ _ _ h1
   split_ifs at h2 with hc
   · exact absurd h2 (by simp [throw, throwThe, MonadExceptOf.throw, EStateM.throw])
-  · rw [validDiv0_entry, if_neg (by simpa using hc)]
+  · rw [validDiv0_entry, ite_eq_right (by simpa using hc)]
     simp
 
 theorem lookupEntryCorrect_ValidUnsignedRemainder (row : HonestTraceRow bytecode)
@@ -836,7 +836,7 @@ theorem lookupEntryCorrect_ValidUnsignedRemainder (row : HonestTraceRow bytecode
   have h1 := lookup_read_bind _ _ _ _ _ hexec
   have h2 := lookup_read_bind _ _ _ _ _ h1
   split_ifs at h2 with hc
-  · rw [validUnsignedRemainder_entry, if_pos (by simpa [BitVec.lt_def] using hc)]
+  · rw [validUnsignedRemainder_entry, ite_eq_left (by simpa [BitVec.lt_def] using hc)]
     simp
   · exact absurd h2 (by simp [throw, throwThe, MonadExceptOf.throw, EStateM.throw])
 

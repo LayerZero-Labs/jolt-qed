@@ -89,7 +89,7 @@ theorem jump_trace_nextPC {joltInstance : JoltInstance SourceInstruction} {priva
         rw [hlink, hpres]
         rw [hp, ← haddr, hlen]
       · change ¬ trace.bytecode[trace.rows[m].rowIndex].continues = true at hc
-        simp only [if_neg hc] at hlink
+        simp only [ite_eq_right hc] at hlink
         change curr.preState.sail.regs.get? Register.nextPC = _
         rw [hlink]
         exact jump_prepareSource_nextPC trace curr.rowIndex _

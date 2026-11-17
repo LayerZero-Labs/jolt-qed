@@ -129,7 +129,7 @@ theorem sail_div_value_of_normal (dividend divisor : BitVec 64)
         2 ^ ((LeanRV64D.Functions.xlen : Int) - 1)) = false := by
     show decide _ = false
     apply decide_eq_false
-    push_neg
+    push Not
     simpa using! hquotient_lt
   rw [hge_false]
   simp only [Bool.false_eq_true, ↓reduceIte]

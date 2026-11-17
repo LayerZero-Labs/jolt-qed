@@ -105,14 +105,14 @@ private theorem branch_target_even
   have next : t.val + 1 < params.traceLength := by
     by_contra last
     have zero := equations.nextUnexpandedPCEqShift t
-    rw [dif_neg last, target] at zero
+    rw [dite_eq_right last, target] at zero
     exact nonzero zero
   have real : witness.InstructionFlags .IsNoop ⟨t.val + 1, next⟩ ≠ 1 := by
     intro padding
     have zero := JoltInstance.unexpanded_zero_of_padding joltField joltInstance privateInputs
       witness context equations _ padding
     have shift := equations.nextUnexpandedPCEqShift t
-    rw [dif_pos next] at shift
+    rw [dite_eq_left next] at shift
     exact nonzero (target.symm.trans (shift.trans zero))
   obtain ⟨successor, successorEq, _, even⟩ := JoltInstance.terminal_real_successor_address
     joltField joltInstance privateInputs witness context equations t next real
@@ -190,13 +190,13 @@ theorem branch_step {F : Type} [Field F] {params : WitnessParams}
   simp only [bind, EStateM.bind, readLeft, readRight]
   by_cases taken : branchDecisionPure row.instruction (sourceValue lhs pre) (sourceValue rhs pre) = true
   · have even := branch_target_even joltField context equations selected rowIs branch shapes
-      (by simpa only [taken, if_true] using decision)
+      (by simpa only [taken, ite_true] using decision)
     have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok row.address pre := by
       unfold liftSail
       rw [readReg_eq_of_get? Register.PC pre.sail row.address pc]
     refine ⟨{ pre with sail := System.setNextPCState pre.sail (row.address + imm.setWidth 64) },
       ?_, fun next => (preserved next).setNextPC _⟩
-    simp only [taken, if_true, EStateM.bind, readPC]
+    simp only [taken, ite_true, EStateM.bind, readPC]
     simp only [liftSail, jump_even _ _ even enabled]
   · exact ⟨pre, by simp only [taken]; rfl, preserved⟩
 

@@ -80,7 +80,7 @@ private theorem first_row_of_entry_slot
   obtain ⟨noopSlot, rowSlots, paddingSlots, _⟩ :=
     preprocess_slots bytecode slots preprocessed
   unfold get_first_pc at found
-  rw [if_neg addressNonzero, Array.findIdx?_eq_some_iff_getElem] at found
+  rw [ite_eq_right addressNonzero, Array.findIdx?_eq_some_iff_getElem] at found
   obtain ⟨inSlots, slotMatches, noEarlierSlot⟩ := found
   have inRows : slot - 1 < bytecode.size := by
     by_contra outside
@@ -252,7 +252,7 @@ private theorem empty_run_ram_word
   rw [outputOverlay]
   dsimp only [layout] at noTermination
   simp only [Bool.not_false, Bool.true_and, beq_iff_eq]
-  rw [if_neg noTermination]
+  rw [ite_eq_right noTermination]
   by_cases atPanic : TraceWitness.remapRamAddress layout layout.panic = some address
   · have initialZero : TraceWitness.initialRamWordFromState run.initialState address = 0 := by
       change (if layout.panic.toNat = 0 ∨
@@ -265,10 +265,10 @@ private theorem empty_run_ram_word
       · simp only [bad, ↓reduceIte, Option.some.injEq] at atPanic
         simpa [layout, ← atPanic] using panicZero
     dsimp only [layout] at atPanic
-    rw [if_pos atPanic]
+    rw [ite_eq_left atPanic]
     exact initialZero.symm
   · dsimp only [layout] at atPanic
-    rw [if_neg atPanic]
+    rw [ite_eq_right atPanic]
     rfl
 
 /-- The instance's initialized state admits an empty run satisfying the boundary

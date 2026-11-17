@@ -21,9 +21,9 @@ NoOp's slot 0 there. -/
 theorem honestWitness_bytecodeRaAtEntryEqOne
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (entry : Fin (2 ^ params.logBytecodeK))
     (startsAtEntry : TraceWitness.bytecodePc trace 0 = entry.val)
     : bytecodeRaAtEntryEqOne entry
@@ -72,7 +72,7 @@ theorem honestWitness_bytecodeRaAtEntryEqOne_of_address
     trace.expands accepted (getElem trace.rows 0 nonempty).rowIndex.val entry.val
     (getElem trace.rows 0 nonempty).rowIndex.isLt entry.isLt sameAddress entryIsStart
   apply honestWitness_bytecodeRaAtEntryEqOne params trace ramFits traceFits bytecodeDomain
-  rw [TraceWitness.bytecodePc, dif_pos nonempty]
+  rw [TraceWitness.bytecodePc, dite_eq_left nonempty]
   change (getElem trace.rows 0 nonempty).rowIndex.val + 1 = entry.val + 1
   omega
 

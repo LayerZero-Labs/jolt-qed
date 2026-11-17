@@ -40,7 +40,7 @@ private theorem pext_low_mask (width x : Nat) :
       have hdiv : (2 ^ (width + 1) - 1) / 2 = 2 ^ width - 1 := by
         rw [pow_succ]
         omega
-      rw [jolt_pext_nat, if_pos hodd, hdiv, ih]
+      rw [jolt_pext_nat, ite_eq_left hodd, hdiv, ih]
       rw [pow_succ, mul_comm (2 ^ width) 2, mod_two_mul]
 
 private theorem pext_contiguous (offset width x : Nat) :
@@ -58,7 +58,7 @@ private theorem pext_contiguous (offset width x : Nat) :
       rw [show (offset + 1) + width = (offset + width) + 1 by omega]
       rw [hmask, jolt_pext_nat]
       have heven : 2 * ((2 ^ width - 1) * 2 ^ offset) % 2 = 0 := by omega
-      rw [heven, if_neg (by decide : (0 : Nat) ≠ 1),
+      rw [heven, ite_eq_right (by decide : (0 : Nat) ≠ 1),
         show 2 * ((2 ^ width - 1) * 2 ^ offset) / 2 =
           (2 ^ width - 1) * 2 ^ offset by omega, ih]
       rw [Nat.div_div_eq_div_mul, pow_succ, mul_comm (2 ^ offset) 2]
@@ -68,7 +68,7 @@ private theorem pext_zero_mask (fuel x : Nat) :
   induction fuel generalizing x with
   | zero => rfl
   | succ fuel ih =>
-      rw [jolt_pext_nat, if_neg (by decide : (0 : Nat) ≠ 1), Nat.zero_div, ih]
+      rw [jolt_pext_nat, ite_eq_right (by decide : (0 : Nat) ≠ 1), Nat.zero_div, ih]
 
 private theorem pext_extend_fuel (fuel extra x mask : Nat)
     (hmask : mask < 2 ^ fuel) :
@@ -87,9 +87,9 @@ private theorem pext_extend_fuel (fuel extra x mask : Nat)
       rw [show (fuel + 1) + extra = (fuel + extra) + 1 by omega]
       rw [jolt_pext_nat, jolt_pext_nat]
       by_cases hbit : mask % 2 = 1
-      · rw [if_pos hbit, if_pos hbit,
+      · rw [ite_eq_left hbit, ite_eq_left hbit,
           ih (x := x / 2) (mask := mask / 2) hdiv]
-      · rw [if_neg hbit, if_neg hbit,
+      · rw [ite_eq_right hbit, ite_eq_right hbit,
           ih (x := x / 2) (mask := mask / 2) hdiv]
 
 /-- `VirtualPext` with a contiguous `width`-bit mask at `offset` is exactly a
@@ -222,7 +222,7 @@ private theorem sign_extend_eq_pext_extension {width : Nat} (lane : BitVec width
   rw [BitVec.getLsbD_signExtend]
   simp only [hi64, Bool.true_and, hmsb]
   by_cases hiwidth : i < width
-  · rw [if_pos hiwidth]
+  · rw [ite_eq_left hiwidth]
     have hiwidthb : (i <b width) = true := by
       simpa only [Nat.blt_eq, decide_eq_true_eq] using hiwidth
     have himask : (BitVec.ofNat 64 (2 ^ width - 1)).getLsbD i = true := by
@@ -232,11 +232,11 @@ private theorem sign_extend_eq_pext_extension {width : Nat} (lane : BitVec width
       simp only [zero_extend, Sail.BitVec.zeroExtend, BitVec.getLsbD_setWidth,
         hi64, Bool.true_and]
     by_cases hsign : lane.getLsbD (width - 1) = true
-    · rw [if_pos hsign, BitVec.getLsbD_or, hiext, BitVec.getLsbD_not,
+    · rw [ite_eq_left hsign, BitVec.getLsbD_or, hiext, BitVec.getLsbD_not,
         hi64, Bool.true_and, himask]
       simp only [Bool.not_true, Bool.or_false]
-    · rw [if_neg hsign, hiext]
-  · rw [if_neg hiwidth]
+    · rw [ite_eq_right hsign, hiext]
+  · rw [ite_eq_right hiwidth]
     have hiwidthb : (i <b width) = false := by
       simpa only [Nat.blt_eq, decide_eq_false_iff_not] using hiwidth
     have himask : (BitVec.ofNat 64 (2 ^ width - 1)).getLsbD i = false := by
@@ -249,12 +249,12 @@ private theorem sign_extend_eq_pext_extension {width : Nat} (lane : BitVec width
       exact Nat.testBit_lt_two_pow
         (lt_of_lt_of_le lane.isLt (Nat.pow_le_pow_right (by omega) (by omega)))
     by_cases hsign : lane.getLsbD (width - 1) = true
-    · rw [if_pos hsign, BitVec.getLsbD_or, hiext, BitVec.getLsbD_not,
+    · rw [ite_eq_left hsign, BitVec.getLsbD_or, hiext, BitVec.getLsbD_not,
         hi64, Bool.true_and, himask, hsign]
       simp only [Bool.not_false, Bool.false_or]
     · have hsign_false : lane.getLsbD (width - 1) = false :=
         Bool.eq_false_of_not_eq_true hsign
-      rw [if_neg hsign, hiext, hsign_false]
+      rw [ite_eq_right hsign, hiext, hsign_false]
 
 /-- `VirtualPextSigned` with a contiguous nonempty mask extracts the selected
 window and sign-extends it to 64 bits. -/
@@ -265,7 +265,7 @@ theorem pext_signed_value_contiguous (x : BitVec 64) (offset width : Nat)
       sign_extend (m := 64) ((x >>> offset).setWidth width) := by
   unfold jolt_virtual_pext_signed_value
   rw [popcount_value_contiguous offset width hfit]
-  rw [if_neg (Nat.ne_of_gt hwidth)]
+  rw [ite_eq_right (Nat.ne_of_gt hwidth)]
   rw [pext_value_contiguous x offset width hfit]
   exact sign_extend_eq_pext_extension ((x >>> offset).setWidth width)
     hwidth (by omega)

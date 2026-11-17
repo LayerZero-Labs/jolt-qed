@@ -822,7 +822,7 @@ theorem accepted_pc_map_ok (joltInstance : JoltInstance SourceInstruction)
   -- preprocessing rejects rows that fail the PC map checks, so Rust rejects the program
   have noSlots : preprocess bytecode = none := by
     unfold preprocess
-    rw [if_neg rejected]
+    rw [ite_eq_right rejected]
   have rejectedProgram : joltInstance.bytecode = none := by
     unfold JoltInstance.bytecode
     rw [expanded]
@@ -863,7 +863,7 @@ theorem preprocess_slots (rows : Array JoltInstructionRow) (slots : Array Byteco
     · -- every slot after the rows is padding
       intro position after inSlots
       rw [Array.getElem?_append_right (by rw [baseSize]; omega), Array.getElem?_replicate]
-      rw [if_pos (by
+      rw [ite_eq_left (by
         simp only [Array.size_append, Array.size_replicate, baseSize] at inSlots
         rw [baseSize]
         omega)]

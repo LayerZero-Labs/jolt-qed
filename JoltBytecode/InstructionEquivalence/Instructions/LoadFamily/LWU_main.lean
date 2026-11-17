@@ -164,7 +164,7 @@ theorem lwuProgramAuto_nonzero_run
       { jsMask with sail := stateAfterWrite jsMask.sail rd pextValue }
     (JoltISA.execProgram (JoltISA.lwuProgramAuto rd rs1 imm)).run js =
       .ok RETIRE_SUCCESS jsPext := by
-  simp only [JoltISA.lwuProgramAuto, if_neg hx0]
+  simp only [JoltISA.lwuProgramAuto, ite_eq_right hx0]
   change JoltISA.Program.Run
     (JoltISA.laneWindowOpen .word (.vreg (Vreg 40)) (.vreg (Vreg 41))
       (.xreg rs1) (sign_extend (m := 64) imm) .normal (ExceptionType.E_Load_Addr_Align ())
@@ -334,7 +334,7 @@ theorem lwuProgramAuto_x0_run
     let jsPext := stateAfterVRegWrite jsMask (Vreg 40) pextValue
     (JoltISA.execProgram (JoltISA.lwuProgramAuto rd rs1 imm)).run js =
       .ok RETIRE_SUCCESS jsPext := by
-  simp only [JoltISA.lwuProgramAuto, hx0, if_true]
+  simp only [JoltISA.lwuProgramAuto, hx0, ite_true]
   change JoltISA.Program.Run
     (JoltISA.laneWindowOpen .word (.vreg (Vreg 41)) (.vreg (Vreg 42))
       (.xreg rs1) (sign_extend (m := 64) imm) .normal (ExceptionType.E_Load_Addr_Align ())

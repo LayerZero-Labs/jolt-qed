@@ -52,10 +52,10 @@ theorem exists_state_after_virtual_zero_extend_word_run_vreg_xreg
   refine ⟨js', ?_, ?_, ?_, rfl⟩
   · simpa only [js'] using virtual_zero_extend_word_run_vreg_xreg vd rs js x h hvd
   · show (if vd = vd then _ else js.vregs vd) = _
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · intro k hk
     show (if k = vd then _ else js.vregs k) = js.vregs k
-    rw [if_neg hk]
+    rw [ite_eq_right hk]
 
 end JoltISA
 

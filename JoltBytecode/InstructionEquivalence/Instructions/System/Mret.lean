@@ -112,7 +112,7 @@ private theorem systemProject_mretJoltFinal
         systemProject { js with sail := setNextPCState js.sail target } := by
     unfold systemProject
     simp only [hMtvec, hMscratch, hMepc, hMcause, hMtval, hMstatus,
-      if_false]
+      ite_false]
   rw [hScratchIgnored]
   exact systemProject_setNextPCState js target
 

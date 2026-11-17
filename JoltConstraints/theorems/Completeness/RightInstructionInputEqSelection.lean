@@ -17,15 +17,15 @@ Jolt's verifier: `crates/jolt-claims/src/protocols/jolt/relations/instruction/in
 theorem honestWitness_rightInstructionInputEqSelection
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     rightInstructionInputEqSelection
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
   by_cases h : t.val < trace.rows.size
   · simp only [HonestTrace.honestWitness, TraceWitness.RightInstructionInput,
-      TraceWitness.InstructionFlags, dif_pos h, ite_mul, one_mul, zero_mul]
+      TraceWitness.InstructionFlags, dite_eq_left h, ite_mul, one_mul, zero_mul]
   · simp [HonestTrace.honestWitness, TraceWitness.RightInstructionInput,
       TraceWitness.InstructionFlags, h]
 

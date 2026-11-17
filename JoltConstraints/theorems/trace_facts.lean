@@ -34,7 +34,7 @@ theorem HonestTrace.starts_at_entry {joltInstance : JoltInstance SourceInstructi
     omega
   -- get_first_pc searches the slots for the first row at the entry address
   unfold get_first_pc
-  rw [if_neg notZero, Array.findIdx?_eq_some_iff_getElem]
+  rw [ite_eq_right notZero, Array.findIdx?_eq_some_iff_getElem]
   obtain ⟨inSlots, slotIsRow⟩ := Array.getElem?_eq_some_iff.mp (rowsAfter _ first.rowIndex.isLt)
   refine ⟨inSlots, ?_, ?_⟩
   · -- the first row's slot holds a row at the entry address

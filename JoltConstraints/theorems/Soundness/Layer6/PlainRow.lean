@@ -287,7 +287,7 @@ private theorem expansion_order_push (bytecode : Array JoltInstructionRow)
     by_cases old : offset < done
     · obtain ⟨row, atIndex, index⟩ := ordered offset old
       refine ⟨row, ?_, index⟩
-      rw [Array.getElem?_push, if_neg (by omega)]
+      rw [Array.getElem?_push, ite_eq_right (by omega)]
       exact atIndex
     · have same : offset = done := by omega
       subst offset
@@ -379,7 +379,7 @@ noncomputable def appendUntrustedRow
   initialized := run.initialized
   executes index := by
     by_cases before : index.val < run.rows.size
-    · simp only [dif_pos before]
+    · simp only [dite_eq_left before]
       have same : (run.rows.push step)[index.val] = run.rows[index.val] := Array.getElem_push_lt before
       change (fun row : TraceRow run.bytecode =>
         execWithTapeAnswer (run.bytecode[row.rowIndex].instruction.withRuntimeAdvice row.runtimeAdvice)
@@ -388,7 +388,7 @@ noncomputable def appendUntrustedRow
       rw [same]
       exact run.executes ⟨index.val, before⟩
     · have equal : index.val = run.rows.size := by have h := index.isLt; simp at h; omega
-      simp only [dif_neg before]
+      simp only [dite_eq_right before]
       have same : (run.rows.push step)[index.val] = step := by simp only [equal, Array.getElem_push_eq]
       change (fun row : TraceRow run.bytecode =>
         execWithTapeAnswer (run.bytecode[row.rowIndex].instruction.withRuntimeAdvice row.runtimeAdvice)
@@ -402,7 +402,7 @@ noncomputable def appendUntrustedRow
     · have equal : step = first := by simpa only [Array.getElem?_push, empty, ↓reduceIte, Option.some.injEq] using atFirst
       subst first
       exact starts empty
-    · rw [Array.getElem?_push, if_neg (Ne.symm empty)] at atFirst
+    · rw [Array.getElem?_push, ite_eq_right (Ne.symm empty)] at atFirst
       exact run.starts first atFirst
   linked := adjacent_push run.rows step _ run.linked linked
 
@@ -419,7 +419,7 @@ private theorem trace_push_observations {F : Type} [Field F] {params : WitnessPa
         TraceWitness.RamAddress params trace t := by
   have larger : t.val < (trace.rows.push step).size := by simp only [Array.size_push]; omega
   simp only [TraceWitness.PC, TraceWitness.bytecodePc, TraceWitness.Rs1Value,
-    TraceWitness.Rs2Value, TraceWitness.RamAddress, dif_pos old, dif_pos larger,
+    TraceWitness.Rs2Value, TraceWitness.RamAddress, dite_eq_left old, dite_eq_left larger,
     Array.getElem_push_lt old, and_self]
 
 /-- Four observations for a new row extend representation of the old rows.
@@ -1040,8 +1040,8 @@ theorem rawEntry_linked
   change run.rows.back? = some last at atEnd
   simp only [RawRowEntry, atEnd] at entry
   by_cases remaining : run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0
-  · simpa only [if_pos remaining] using entry
-  · simp only [if_neg remaining] at entry ⊢
+  · simpa only [ite_eq_left remaining] using entry
+  · simp only [ite_eq_right remaining] at entry ⊢
     obtain ⟨address, pc, _, addressIs, starts, preIs⟩ := entry
     exact ⟨address, pc, addressIs, starts, preIs⟩
 
@@ -1112,7 +1112,7 @@ private theorem append_interior_next {F : Type} [Field F] {params : WitnessParam
     ?_, next, step.postState, nextSlot, nextIs, ?_, by omega, ?_⟩
   · simpa only [appendUntrustedRow, Array.size_push] using realNext
   · simpa only [appendUntrustedRow, Array.size_push] using chosen
-  · simp only [RawRowEntry, appendUntrustedRow, Array.back?_push, if_pos remaining]
+  · simp only [RawRowEntry, appendUntrustedRow, Array.back?_push, ite_eq_left remaining]
     exact ⟨nextIs, True.intro⟩
 
 private theorem real_push {F : Type} [Field F] {params : WitnessParams}
@@ -1184,7 +1184,7 @@ theorem append_expansion_row_of_termination {F : Type} [Field F] {params : Witne
   refine ⟨candidate, rfl, ?_, ?_, ?_, ?_⟩
   · intro index atEnd
     change (if old : index.val < run.rows.size then run.answers ⟨index.val, old⟩ else answer) = answer
-    rw [dif_neg (by omega)]
+    rw [dite_eq_right (by omega)]
   · exact ⟨rfl, by simp [candidate, appendUntrustedRow]⟩
   · exact Array.size_push step
   · refine {
@@ -1677,7 +1677,7 @@ theorem plain_row_step {F : Type} [Field F] (joltField : JoltField F)
   by_cases arithmetic : ∀ row ∈ context.bytecode[first.val + done]?, DivisionArithmeticRow row.instruction
   · exact arithmetic_plain_row_step joltField witness context equations run first done state unfinished bound arithmetic
   · apply plain_row_step_other joltField witness context equations run first done state unfinished bound plain
-    push_neg at arithmetic
+    push Not at arithmetic
     obtain ⟨row, atRow, other⟩ := arithmetic
     intro same atSame
     have eq : row = same := Option.some.inj (atRow.symm.trans atSame)

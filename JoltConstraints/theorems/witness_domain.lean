@@ -127,8 +127,8 @@ theorem HonestTrace.witness_params_ram_fits {joltInstance : JoltInstance SourceI
       rw [MemoryLayout.get_lowest_address_toNat] at above remapped
       have notZero : rawAddress.toNat ≠ 0 := by
         intro isZero
-        rw [if_pos isZero] at remapped
+        rw [ite_eq_left isZero] at remapped
         cases remapped
-      rw [if_neg notZero] at remapped
-      rw [if_neg (by omega)]
+      rw [ite_eq_right notZero] at remapped
+      rw [ite_eq_right (by omega)]
       exact remapped

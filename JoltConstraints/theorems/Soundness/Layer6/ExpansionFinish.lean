@@ -233,7 +233,7 @@ private theorem expansion_ready {F : Type} [Field F] (joltField : JoltField F)
     atBoundary last (by simp [atEnd])
   have endState : TraceWitness.finalTraceState run.toTrace = last.postState := by
     unfold TraceWitness.finalTraceState
-    simp only [dif_pos rowsPositive]
+    simp only [dite_eq_left rowsPositive]
     have atLast : run.rows[run.rows.size - 1]? = some last := by
       simpa only [Array.back?_eq_getElem?] using atEnd
     exact congrArg TraceRow.postState (Array.getElem?_eq_some_iff.mp atLast).2

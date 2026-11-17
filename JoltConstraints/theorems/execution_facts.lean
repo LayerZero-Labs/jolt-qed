@@ -668,19 +668,19 @@ theorem fold_insert_get (value : (register : Register) → RegisterType register
   induction registers with
   | nil =>
     intro start register
-    rw [if_neg List.not_mem_nil]
+    rw [ite_eq_right List.not_mem_nil]
     rfl
   | cons head tail ih =>
     intro start register
     rw [List.foldl_cons, ih]
     by_cases inTail : register ∈ tail
-    · rw [if_pos inTail, if_pos (List.mem_cons_of_mem _ inTail)]
-    · rw [if_neg inTail]
+    · rw [ite_eq_left inTail, ite_eq_left (List.mem_cons_of_mem _ inTail)]
+    · rw [ite_eq_right inTail]
       by_cases isHead : head = register
       · subst isHead
-        rw [Std.ExtDHashMap.get?_insert_self, if_pos List.mem_cons_self]
-      · rw [Std.ExtDHashMap.get?_insert, dif_neg (by rw [beq_iff_eq]; exact isHead)]
-        rw [if_neg (fun member => by
+        rw [Std.ExtDHashMap.get?_insert_self, ite_eq_left List.mem_cons_self]
+      · rw [Std.ExtDHashMap.get?_insert, dite_eq_right (by rw [beq_iff_eq]; exact isHead)]
+        rw [ite_eq_right (fun member => by
           rcases List.mem_cons.mp member with same | later
           · exact isHead same.symm
           · exact inTail later)]
@@ -693,7 +693,7 @@ theorem init_state_register (entryAddress : BitVec 64) (ram : Array (BitVec 8))
       some (initialRegisterValue entryAddress ram.size register) := by
   unfold init_state
   dsimp only
-  rw [fold_insert_get, if_pos (Finset.mem_toList.mpr (Finset.mem_univ register))]
+  rw [fold_insert_get, ite_eq_left (Finset.mem_toList.mpr (Finset.mem_univ register))]
 
 -- Every register, real or virtual, starts at 0.
 theorem init_state_sourceValue (entryAddress : BitVec 64) (ram : Array (BitVec 8))
@@ -922,7 +922,7 @@ theorem execInstr_load_zero (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA
     simp only [bind, EStateM.bind, baseRead] at runs
     rw [middleSame, baseIs, atZero] at runs
     -- address 0 is aligned, and the load reads 0 without changing the state
-    rw [if_pos (by decide), EStateM.bind, JoltISA.Mmu.load_doubleword_zero state config built aboveEight]
+    rw [ite_eq_left (by decide), EStateM.bind, JoltISA.Mmu.load_doubleword_zero state config built aboveEight]
       at runs
     dsimp only at runs
     rw [EStateM.bind] at runs
@@ -962,7 +962,7 @@ theorem execInstr_store_nonzero (base value : JoltISA.Src) (imm : BitVec 64)
       rw [valueRead] at runs
       dsimp only at runs
       -- address 0 is aligned, and the store fails there
-      rw [storedSame, baseIs, atZero, if_pos (by decide), EStateM.bind] at runs
+      rw [storedSame, baseIs, atZero, ite_eq_left (by decide), EStateM.bind] at runs
       obtain ⟨failure, fails⟩ :=
         JoltISA.Mmu.store_doubleword_zero state config built aboveEight storedValue
       rw [fails] at runs

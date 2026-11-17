@@ -16,8 +16,8 @@ theorem honestWitness_ramAddressEqRamRaf
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (validAccesses : ramAccessesValid trace)
     : ramAddressEqRamRaf trace.initialState.jolt_device.memory_layout
       (HonestTrace.honestWitness (F := F) params trace) := by

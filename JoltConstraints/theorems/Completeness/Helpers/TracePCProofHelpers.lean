@@ -329,7 +329,7 @@ theorem lookup_trace_PC {joltInstance : JoltInstance SourceInstruction} {private
         rw [hlink, hpres, hp]
         exact congrArg some haddr.symm
       · change ¬ trace.bytecode[trace.rows[m].rowIndex].continues = true at hc
-        simp only [if_neg hc] at hlink
+        simp only [ite_eq_right hc] at hlink
         change curr.preState.sail.regs.get? Register.PC = _
         rw [hlink]
         exact lookup_prepareSource_PC trace curr.rowIndex _

@@ -22,7 +22,7 @@ theorem shouldBranch_eq_branchTaken
       if JoltNextPCFrame.BranchTaken
           trace.bytecode[(trace.rows[t.val]'ht).rowIndex].instruction
           (trace.rows[t.val]'ht).preState then 1 else 0 := by
-  simp only [TraceWitness.ShouldBranch, dif_pos ht]
+  simp only [TraceWitness.ShouldBranch, dite_eq_left ht]
   generalize hi :
     trace.bytecode[(trace.rows[t.val]'ht).rowIndex].instruction = instr
   cases instr <;> rfl
@@ -121,8 +121,8 @@ private theorem nextUnexpandedPC_eq_current_of_continues
   obtain ⟨haddr, _, _, _⟩ := trace.layout.next
     (trace.rows[t.val]'ht).rowIndex
     (trace.rows[t.val + 1]'hnext).rowIndex hsucc hcont
-  simp only [TraceWitness.NextUnexpandedPC, dif_pos hnextWitness,
-    TraceWitness.UnexpandedPC, dif_pos hnext, dif_pos ht]
+  simp only [TraceWitness.NextUnexpandedPC, dite_eq_left hnextWitness,
+    TraceWitness.UnexpandedPC, dite_eq_left hnext, dite_eq_left ht]
   exact congrArg (fun address : BitVec 64 => (address.toNat : F)) haddr
 
 /-- Completeness target for a complete Rust trace, with its mandatory padding.
@@ -135,9 +135,9 @@ existing assumption bundle, including live HostIO byte reads. -/
 theorem honestWitness_nextUnexpandedPCUpdateOtherwise
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
+    (_ramFits : params.RamFits trace)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (noWrap : joltInstance.program.NextPCNoWrap) :
     nextUnexpandedPCUpdateOtherwise
       (HonestTrace.honestWitness (F := F) params trace) := by

@@ -14,9 +14,9 @@ namespace JoltConstraints
 theorem honestWitness_shouldBranchEqLookupOutputMulBranch
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     shouldBranchEqLookupOutputMulBranch
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
@@ -26,7 +26,7 @@ theorem honestWitness_shouldBranchEqLookupOutputMulBranch
     dsimp [shouldBranchEqLookupOutputMulBranch, HonestTrace.honestWitness,
       TraceWitness.ShouldBranch, TraceWitness.LookupOutput,
       TraceWitness.InstructionFlags]
-    simp only [dif_pos h]
+    simp only [dite_eq_left h]
     cases hi : bytecodeRow.instruction
     all_goals simp only [bytecodeRow, row] at hi
     all_goals simp [JoltMetadata.instructionFlag]

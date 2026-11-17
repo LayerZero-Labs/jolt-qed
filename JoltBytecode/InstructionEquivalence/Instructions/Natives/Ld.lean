@@ -53,7 +53,7 @@ private theorem sign_extend_64_eq_self (value : BitVec 64) :
   have hi_bool : (i <b 64) = true := by
     simpa only [Nat.blt_eq, decide_eq_true_eq] using hi
   simp (disch := omega) only [BitVec.getLsbD_signExtend, hi_bool,
-    Bool.true_and, if_pos]
+    Bool.true_and, ite_eq_left]
 
 private theorem vmem_read_dword_reduces (imm : BitVec 12) (rs1 : regidx)
     (s : SailState)
@@ -105,10 +105,10 @@ private theorem execute_LD_reduces (imm : BitVec 12) (rs1 rd : regidx)
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind,
-    pure, EStateM.pure, EStateM.run, if_true]
+    pure, EStateM.pure, EStateM.run, ite_true]
   rw [vmem_read_dword_reduces imm rs1 js.sail hpriv hmprv val hrx
     haligned hbytes hload_pmp hread_mmio]
-  simp only [extend_value, Bool.false_eq_true, if_false, EStateM.bind,
+  simp only [extend_value, Bool.false_eq_true, ite_false, EStateM.bind,
     EStateM.pure]
   rw [sign_extend_64_eq_self]
   rw [wX_bits_stateAfterWrite]
@@ -127,7 +127,7 @@ private theorem execute_LD_misaligned (imm : BitVec 12) (rs1 rd : regidx)
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind,
-    pure, EStateM.pure, EStateM.run, if_true]
+    pure, EStateM.pure, EStateM.run, ite_true]
   unfold vmem_read
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have hmis :
@@ -162,7 +162,7 @@ private theorem ldJolt_aligned_reduces (imm : BitVec 12) (rs1 rd : regidx)
     .ok RETIRE_SUCCESS (stateAfterWrite js.sail rd loaded) := by
   unfold JoltISA.ldNativeInstr JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst liftSail
   simp only [bind, EStateM.bind, pure, EStateM.run, hrx]
-  rw [if_pos (by
+  rw [ite_eq_left (by
     simpa [load_effective_address, Memory.effectiveAddr12] using h_align)]
   simp only [EStateM.bind]
   rw [JoltISA.Mmu.load_doubleword_eq_sail js _ hpriv hmprv
@@ -234,7 +234,7 @@ private theorem ldJolt_misaligned (imm : BitVec 12) (rs1 rd : regidx)
       js.sail := by
   unfold JoltISA.ldNativeInstr JoltISA.execInstr JoltISA.readSrc liftSail
   simp only [bind, EStateM.bind, pure, EStateM.run, hrx]
-  rw [if_neg (by
+  rw [ite_eq_right (by
     simpa [load_effective_address, Memory.effectiveAddr12] using h_align)]
   simp only [JoltISA.LoadFaultClass.alignFault, EStateM.pure,
     System.systemProjectResult]

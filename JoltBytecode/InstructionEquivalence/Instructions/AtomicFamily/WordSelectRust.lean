@@ -1521,7 +1521,7 @@ theorem amo_word_rust_select_signed_extend_phase_run
     change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectNewVReg then rs2Ext
         else js.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
   have hold_run :
       (JoltISA.execInstr
         (.VirtualSignExtendWord (.vreg JoltISA.amoWordSelectMaskVReg)
@@ -1542,35 +1542,35 @@ theorem amo_word_rust_select_signed_extend_phase_run
   · change
       (if JoltISA.amoWordSelectNewVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectNewVReg) = rs2Ext
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     change
       (if JoltISA.amoWordSelectNewVReg = JoltISA.amoWordSelectNewVReg then rs2Ext
         else js.vregs JoltISA.amoWordSelectNewVReg) = rs2Ext
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change
       (if JoltISA.amoWordSelectMaskVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectMaskVReg) = oldExt
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hold_afterRs2]
+    rw [ite_eq_right (by decide), hold_afterRs2]
   · change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectNewVReg then rs2Ext
         else js.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide), hdword]
+    rw [ite_eq_right (by decide), hdword]
   · change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectNewVReg then rs2Ext
         else js.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide), hshift]
+    rw [ite_eq_right (by decide), hshift]
 
 /-- The unsigned word-select extension phase prepares unsigned comparison
 operands for `AMOMINU.W` and `AMOMAXU.W`. -/
@@ -1618,7 +1618,7 @@ theorem amo_word_rust_select_unsigned_extend_phase_run
     change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectNewVReg then rs2Ext
         else js.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
   have hold_run :
       (JoltISA.execInstr
         (.VirtualZeroExtendWord (.vreg JoltISA.amoWordSelectMaskVReg)
@@ -1639,35 +1639,35 @@ theorem amo_word_rust_select_unsigned_extend_phase_run
   · change
       (if JoltISA.amoWordSelectNewVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectNewVReg) = rs2Ext
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     change
       (if JoltISA.amoWordSelectNewVReg = JoltISA.amoWordSelectNewVReg then rs2Ext
         else js.vregs JoltISA.amoWordSelectNewVReg) = rs2Ext
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change
       (if JoltISA.amoWordSelectMaskVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectMaskVReg) = oldExt
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hold_afterRs2]
+    rw [ite_eq_right (by decide), hold_afterRs2]
   · change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectNewVReg then rs2Ext
         else js.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide), hdword]
+    rw [ite_eq_right (by decide), hdword]
   · change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectMaskVReg then oldExt
         else js_afterRs2.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectNewVReg then rs2Ext
         else js.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide), hshift]
+    rw [ite_eq_right (by decide), hshift]
 
 /-- A signed word-select comparison phase writes the signed less-than flag
 between two prepared virtual operands. -/
@@ -1709,19 +1709,19 @@ theorem amo_word_rust_select_slt_compare_phase_run_vreg_vreg
       (if JoltISA.amoWordSelectMaskVReg = JoltISA.amoWordSelectMaskVReg then flag
         else js.vregs JoltISA.amoWordSelectMaskVReg) =
       zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y))
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectMaskVReg then flag
         else js.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
   · change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectMaskVReg then flag
         else js.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide), hdword]
+    rw [ite_eq_right (by decide), hdword]
   · change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectMaskVReg then flag
         else js.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide), hshift]
+    rw [ite_eq_right (by decide), hshift]
 
 /-- An unsigned word-select comparison phase writes the unsigned less-than flag
 between two prepared virtual operands. -/
@@ -1759,19 +1759,19 @@ theorem amo_word_rust_select_sltu_compare_phase_run_vreg_vreg
   · change
       (if JoltISA.amoWordSelectMaskVReg = JoltISA.amoWordSelectMaskVReg then flag
         else js.vregs JoltISA.amoWordSelectMaskVReg) = jolt_sltu_value x y
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectMaskVReg then flag
         else js.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
   · change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectMaskVReg then flag
         else js.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide), hdword]
+    rw [ite_eq_right (by decide), hdword]
   · change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectMaskVReg then flag
         else js.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide), hshift]
+    rw [ite_eq_right (by decide), hshift]
 
 /-- The word-select tail turns the comparison flag into the selected new value
 while preserving the prelude registers needed by the postlude. -/
@@ -1804,27 +1804,27 @@ theorem amo_word_rust_select_tail_phase_run
     change
       (if JoltISA.amoWordSelectNewVReg = JoltISA.amoWordSelectNewVReg then delta
         else js.vregs JoltISA.amoWordSelectNewVReg) = delta
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hsub_flag : js_afterSub.vregs JoltISA.amoWordSelectMaskVReg = flag := by
     change
       (if JoltISA.amoWordSelectMaskVReg = JoltISA.amoWordSelectNewVReg then delta
         else js.vregs JoltISA.amoWordSelectMaskVReg) = flag
-    rw [if_neg (by decide), hflag]
+    rw [ite_eq_right (by decide), hflag]
   have hsub_old : js_afterSub.vregs JoltISA.amoWordSelectOldVReg = old := by
     change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectNewVReg then delta
         else js.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
   have hsub_dword : js_afterSub.vregs JoltISA.amoWordSelectDwordVReg = dword := by
     change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectNewVReg then delta
         else js.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide), hdword]
+    rw [ite_eq_right (by decide), hdword]
   have hsub_shift : js_afterSub.vregs JoltISA.amoWordSelectShiftVReg = shift := by
     change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectNewVReg then delta
         else js.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide), hshift]
+    rw [ite_eq_right (by decide), hshift]
   have hsub_run :
       (JoltISA.execInstr
         (.SUB (.vreg JoltISA.amoWordSelectNewVReg)
@@ -1839,22 +1839,22 @@ theorem amo_word_rust_select_tail_phase_run
     change
       (if JoltISA.amoWordSelectNewVReg = JoltISA.amoWordSelectNewVReg then scaled
         else js_afterSub.vregs JoltISA.amoWordSelectNewVReg) = scaled
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hmul_old : js_afterMul.vregs JoltISA.amoWordSelectOldVReg = old := by
     change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectNewVReg then scaled
         else js_afterSub.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hsub_old]
+    rw [ite_eq_right (by decide), hsub_old]
   have hmul_dword : js_afterMul.vregs JoltISA.amoWordSelectDwordVReg = dword := by
     change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectNewVReg then scaled
         else js_afterSub.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide), hsub_dword]
+    rw [ite_eq_right (by decide), hsub_dword]
   have hmul_shift : js_afterMul.vregs JoltISA.amoWordSelectShiftVReg = shift := by
     change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectNewVReg then scaled
         else js_afterSub.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide), hsub_shift]
+    rw [ite_eq_right (by decide), hsub_shift]
   have hmul_run :
       (JoltISA.execInstr
         (.MUL (.vreg JoltISA.amoWordSelectNewVReg)
@@ -1873,22 +1873,22 @@ theorem amo_word_rust_select_tail_phase_run
       (if JoltISA.amoWordSelectNewVReg = JoltISA.amoWordSelectNewVReg then scaled + old
         else js_afterMul.vregs JoltISA.amoWordSelectNewVReg) =
       (rs2Val - old) * flag + old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hadd_old : js_afterAdd.vregs JoltISA.amoWordSelectOldVReg = old := by
     change
       (if JoltISA.amoWordSelectOldVReg = JoltISA.amoWordSelectNewVReg then scaled + old
         else js_afterMul.vregs JoltISA.amoWordSelectOldVReg) = old
-    rw [if_neg (by decide), hmul_old]
+    rw [ite_eq_right (by decide), hmul_old]
   have hadd_dword : js_afterAdd.vregs JoltISA.amoWordSelectDwordVReg = dword := by
     change
       (if JoltISA.amoWordSelectDwordVReg = JoltISA.amoWordSelectNewVReg then scaled + old
         else js_afterMul.vregs JoltISA.amoWordSelectDwordVReg) = dword
-    rw [if_neg (by decide), hmul_dword]
+    rw [ite_eq_right (by decide), hmul_dword]
   have hadd_shift : js_afterAdd.vregs JoltISA.amoWordSelectShiftVReg = shift := by
     change
       (if JoltISA.amoWordSelectShiftVReg = JoltISA.amoWordSelectNewVReg then scaled + old
         else js_afterMul.vregs JoltISA.amoWordSelectShiftVReg) = shift
-    rw [if_neg (by decide), hmul_shift]
+    rw [ite_eq_right (by decide), hmul_shift]
   have hadd_run :
       (JoltISA.execInstr
         (.ADD (.vreg JoltISA.amoWordSelectNewVReg)
@@ -2038,7 +2038,7 @@ theorem amo_word_rust_select_signed_extend_phase_run_for
         newReg rs2 js rs2Val hrs2 hnew_w
   have hold_afterRs2 : js_afterRs2.vregs oldReg = old := by
     change (if oldReg = newReg then rs2Ext else js.vregs oldReg) = old
-    rw [if_neg hold_ne_new, hold]
+    rw [ite_eq_right hold_ne_new, hold]
   have hold_run :
       (JoltISA.execInstr
         (.VirtualSignExtendWord (.vreg maskReg) (.vreg oldReg))).run
@@ -2057,25 +2057,25 @@ theorem amo_word_rust_select_signed_extend_phase_run_for
   · rfl
   · change (if newReg = maskReg then oldExt else js_afterRs2.vregs newReg) =
       rs2Ext
-    rw [if_neg hnew_ne_mask]
+    rw [ite_eq_right hnew_ne_mask]
     change (if newReg = newReg then rs2Ext else js.vregs newReg) = rs2Ext
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if maskReg = maskReg then oldExt else js_afterRs2.vregs maskReg) =
       oldExt
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if oldReg = maskReg then oldExt else js_afterRs2.vregs oldReg) =
       old
-    rw [if_neg hold_ne_mask, hold_afterRs2]
+    rw [ite_eq_right hold_ne_mask, hold_afterRs2]
   · change (if dwordReg = maskReg then oldExt else js_afterRs2.vregs dwordReg) =
       dword
-    rw [if_neg hdword_ne_mask]
+    rw [ite_eq_right hdword_ne_mask]
     change (if dwordReg = newReg then rs2Ext else js.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_new, hdword]
+    rw [ite_eq_right hdword_ne_new, hdword]
   · change (if shiftReg = maskReg then oldExt else js_afterRs2.vregs shiftReg) =
       shift
-    rw [if_neg hshift_ne_mask]
+    rw [ite_eq_right hshift_ne_mask]
     change (if shiftReg = newReg then rs2Ext else js.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_new, hshift]
+    rw [ite_eq_right hshift_ne_new, hshift]
 
 /-- Selected-register unsigned extension phase for word-select AMOs. -/
 theorem amo_word_rust_select_unsigned_extend_phase_run_for
@@ -2156,7 +2156,7 @@ theorem amo_word_rust_select_unsigned_extend_phase_run_for
         newReg rs2 js rs2Val hrs2 hnew_w
   have hold_afterRs2 : js_afterRs2.vregs oldReg = old := by
     change (if oldReg = newReg then rs2Ext else js.vregs oldReg) = old
-    rw [if_neg hold_ne_new, hold]
+    rw [ite_eq_right hold_ne_new, hold]
   have hold_run :
       (JoltISA.execInstr
         (.VirtualZeroExtendWord (.vreg maskReg) (.vreg oldReg))).run
@@ -2175,25 +2175,25 @@ theorem amo_word_rust_select_unsigned_extend_phase_run_for
   · rfl
   · change (if newReg = maskReg then oldExt else js_afterRs2.vregs newReg) =
       rs2Ext
-    rw [if_neg hnew_ne_mask]
+    rw [ite_eq_right hnew_ne_mask]
     change (if newReg = newReg then rs2Ext else js.vregs newReg) = rs2Ext
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if maskReg = maskReg then oldExt else js_afterRs2.vregs maskReg) =
       oldExt
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if oldReg = maskReg then oldExt else js_afterRs2.vregs oldReg) =
       old
-    rw [if_neg hold_ne_mask, hold_afterRs2]
+    rw [ite_eq_right hold_ne_mask, hold_afterRs2]
   · change (if dwordReg = maskReg then oldExt else js_afterRs2.vregs dwordReg) =
       dword
-    rw [if_neg hdword_ne_mask]
+    rw [ite_eq_right hdword_ne_mask]
     change (if dwordReg = newReg then rs2Ext else js.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_new, hdword]
+    rw [ite_eq_right hdword_ne_new, hdword]
   · change (if shiftReg = maskReg then oldExt else js_afterRs2.vregs shiftReg) =
       shift
-    rw [if_neg hshift_ne_mask]
+    rw [ite_eq_right hshift_ne_mask]
     change (if shiftReg = newReg then rs2Ext else js.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_new, hshift]
+    rw [ite_eq_right hshift_ne_new, hshift]
 
 /-- Selected-register signed comparison phase for word-select AMOs. -/
 theorem amo_word_rust_select_slt_compare_phase_run_vreg_vreg_for
@@ -2249,13 +2249,13 @@ theorem amo_word_rust_select_slt_compare_phase_run_vreg_vreg_for
   · rfl
   · change (if maskReg = maskReg then flag else js.vregs maskReg) =
       zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y))
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if oldReg = maskReg then flag else js.vregs oldReg) = old
-    rw [if_neg hold_ne_mask, hold]
+    rw [ite_eq_right hold_ne_mask, hold]
   · change (if dwordReg = maskReg then flag else js.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_mask, hdword]
+    rw [ite_eq_right hdword_ne_mask, hdword]
   · change (if shiftReg = maskReg then flag else js.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_mask, hshift]
+    rw [ite_eq_right hshift_ne_mask, hshift]
 
 /-- Selected-register unsigned comparison phase for word-select AMOs. -/
 theorem amo_word_rust_select_sltu_compare_phase_run_vreg_vreg_for
@@ -2308,13 +2308,13 @@ theorem amo_word_rust_select_sltu_compare_phase_run_vreg_vreg_for
   · rfl
   · change (if maskReg = maskReg then flag else js.vregs maskReg) =
       jolt_sltu_value x y
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if oldReg = maskReg then flag else js.vregs oldReg) = old
-    rw [if_neg hold_ne_mask, hold]
+    rw [ite_eq_right hold_ne_mask, hold]
   · change (if dwordReg = maskReg then flag else js.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_mask, hdword]
+    rw [ite_eq_right hdword_ne_mask, hdword]
   · change (if shiftReg = maskReg then flag else js.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_mask, hshift]
+    rw [ite_eq_right hshift_ne_mask, hshift]
 
 /-- Selected-register select tail for word-select AMOs. -/
 theorem amo_word_rust_select_tail_phase_run_for
@@ -2366,19 +2366,19 @@ theorem amo_word_rust_select_tail_phase_run_for
     split <;> decide
   have hsub_new : js_afterSub.vregs newReg = delta := by
     change (if newReg = newReg then delta else js.vregs newReg) = delta
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hsub_flag : js_afterSub.vregs maskReg = flag := by
     change (if maskReg = newReg then delta else js.vregs maskReg) = flag
-    rw [if_neg hmask_ne_new, hflag]
+    rw [ite_eq_right hmask_ne_new, hflag]
   have hsub_old : js_afterSub.vregs oldReg = old := by
     change (if oldReg = newReg then delta else js.vregs oldReg) = old
-    rw [if_neg hold_ne_new, hold]
+    rw [ite_eq_right hold_ne_new, hold]
   have hsub_dword : js_afterSub.vregs dwordReg = dword := by
     change (if dwordReg = newReg then delta else js.vregs dwordReg) = dword
-    rw [if_neg hdword_ne_new, hdword]
+    rw [ite_eq_right hdword_ne_new, hdword]
   have hsub_shift : js_afterSub.vregs shiftReg = shift := by
     change (if shiftReg = newReg then delta else js.vregs shiftReg) = shift
-    rw [if_neg hshift_ne_new, hshift]
+    rw [ite_eq_right hshift_ne_new, hshift]
   have hsub_run :
       (JoltISA.execInstr
         (.SUB (.vreg newReg) (.xreg rs2) (.vreg oldReg))).run js =
@@ -2390,19 +2390,19 @@ theorem amo_word_rust_select_tail_phase_run_for
   have hmul_new : js_afterMul.vregs newReg = scaled := by
     change (if newReg = newReg then scaled else js_afterSub.vregs newReg) =
       scaled
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hmul_old : js_afterMul.vregs oldReg = old := by
     change (if oldReg = newReg then scaled else js_afterSub.vregs oldReg) =
       old
-    rw [if_neg hold_ne_new, hsub_old]
+    rw [ite_eq_right hold_ne_new, hsub_old]
   have hmul_dword : js_afterMul.vregs dwordReg = dword := by
     change (if dwordReg = newReg then scaled else js_afterSub.vregs dwordReg) =
       dword
-    rw [if_neg hdword_ne_new, hsub_dword]
+    rw [ite_eq_right hdword_ne_new, hsub_dword]
   have hmul_shift : js_afterMul.vregs shiftReg = shift := by
     change (if shiftReg = newReg then scaled else js_afterSub.vregs shiftReg) =
       shift
-    rw [if_neg hshift_ne_new, hsub_shift]
+    rw [ite_eq_right hshift_ne_new, hsub_shift]
   have hmul_run :
       (JoltISA.execInstr
         (.MUL (.vreg newReg) (.vreg newReg) (.vreg maskReg))).run js_afterSub =
@@ -2415,21 +2415,21 @@ theorem amo_word_rust_select_tail_phase_run_for
       js_afterAdd.vregs newReg = (rs2Val - old) * flag + old := by
     change (if newReg = newReg then scaled + old else js_afterMul.vregs newReg) =
       (rs2Val - old) * flag + old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hadd_old : js_afterAdd.vregs oldReg = old := by
     change (if oldReg = newReg then scaled + old else js_afterMul.vregs oldReg) =
       old
-    rw [if_neg hold_ne_new, hmul_old]
+    rw [ite_eq_right hold_ne_new, hmul_old]
   have hadd_dword : js_afterAdd.vregs dwordReg = dword := by
     change
       (if dwordReg = newReg then scaled + old else js_afterMul.vregs dwordReg) =
         dword
-    rw [if_neg hdword_ne_new, hmul_dword]
+    rw [ite_eq_right hdword_ne_new, hmul_dword]
   have hadd_shift : js_afterAdd.vregs shiftReg = shift := by
     change
       (if shiftReg = newReg then scaled + old else js_afterMul.vregs shiftReg) =
         shift
-    rw [if_neg hshift_ne_new, hmul_shift]
+    rw [ite_eq_right hshift_ne_new, hmul_shift]
   have hadd_run :
       (JoltISA.execInstr
         (.ADD (.vreg newReg) (.vreg newReg) (.vreg oldReg))).run js_afterMul =

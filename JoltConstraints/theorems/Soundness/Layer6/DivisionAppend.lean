@@ -114,7 +114,7 @@ private theorem division_replay_interior_entry
     run.expands first starts (offset - 1) (by omega) _ atPrevious
   unfold RawRowEntry
   rw [atBack]
-  simp only [if_pos remaining]
+  simp only [ite_eq_left remaining]
   exact ⟨by omega, preEq⟩
 
 private theorem division_next_step_raw_entry
@@ -129,8 +129,8 @@ private theorem division_next_step_raw_entry
   | some last =>
       simp only [lastAt] at ready ⊢
       by_cases remaining : run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0
-      · simpa only [if_pos remaining] using ready
-      · simp only [if_neg remaining] at ready ⊢
+      · simpa only [ite_eq_left remaining] using ready
+      · simp only [ite_eq_right remaining] at ready ⊢
         exact ready
 
 private theorem division_replay_first_row
@@ -800,7 +800,7 @@ private theorem DivisionArithmeticRow.ramAddress_zero
       trace.bytecode[(trace.rows[t.val]'inside).rowIndex].instruction) :
     TraceWitness.RamAddress (F := F) params trace t = 0 := by
   unfold TraceWitness.RamAddress
-  simp only [dif_pos inside]
+  simp only [dite_eq_left inside]
   have noRam := DivisionArithmeticRow.ram_none
     trace.bytecode[(trace.rows[t.val]'inside).rowIndex].instruction
     (trace.rows[t.val]'inside).preState arithmetic
@@ -876,7 +876,7 @@ private theorem division_segment_pre_frame
     have priorSailStep := (rowFrame previous priorInside prior priorAt).2 (by omega)
     have linked := trace.linked (base + previous) prior row priorAt
       (by simpa only [Nat.add_assoc] using! rowAt)
-    rw [if_pos (remaining previous (by omega) prior priorAt)] at linked
+    rw [ite_eq_left (remaining previous (by omega) prior priorAt)] at linked
     have preEq : row.preState = prior.postState := linked.2
     refine ⟨row, by simpa only [Nat.add_assoc] using rowAt, ?_, ?_⟩
     · rw [preEq]
@@ -984,7 +984,7 @@ private theorem RunExtends.prefix_get?
     omega
   have atPrefix := congrArg (fun rows : Array (TraceRow run.bytecode) => rows[i]?) retained
   simpa only [Array.getElem?_extract, sizeEq, Nat.min_eq_left bound, Nat.zero_add,
-    Nat.sub_zero, if_pos inside] using atPrefix
+    Nat.sub_zero, ite_eq_left inside] using atPrefix
 
 private theorem RunExtends.prefix_post
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -1129,16 +1129,16 @@ private theorem RunExtends.prefix_observations
     exact sameRow
   constructor
   · simp only [TraceWitness.PC, TraceWitness.bytecodePc,
-      dif_pos candidateInside, dif_pos replayInside, sameRow]
+      dite_eq_left candidateInside, dite_eq_left replayInside, sameRow]
   constructor
-  · simp only [TraceWitness.Rs1Value, dif_pos candidateInside,
-      dif_pos replayInside, sameRow]
+  · simp only [TraceWitness.Rs1Value, dite_eq_left candidateInside,
+      dite_eq_left replayInside, sameRow]
   constructor
-  · simp only [TraceWitness.Rs2Value, dif_pos candidateInside,
-      dif_pos replayInside, sameRow]
+  · simp only [TraceWitness.Rs2Value, dite_eq_left candidateInside,
+      dite_eq_left replayInside, sameRow]
   constructor
-  · simp only [TraceWitness.RamAddress, dif_pos candidateInside,
-      dif_pos replayInside, sameRow]
+  · simp only [TraceWitness.RamAddress, dite_eq_left candidateInside,
+      dite_eq_left replayInside, sameRow]
   constructor
   · simp only [TraceRow.StableStall, sameRow]
   · simp only [UntrustedAnswerRun.StoresTerminationAt, sameAt]
@@ -1222,8 +1222,8 @@ private theorem division_candidate_first_pre
           candidate.bytecode[prior.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 := by
         rw [bytecodeAt]
         exact remaining
-      rw [if_pos candidateRemaining] at linked
-      rw [if_pos remaining] at ready
+      rw [ite_eq_left candidateRemaining] at linked
+      rw [ite_eq_left remaining] at ready
       calc
         row.preState = prior.postState := linked.2
         _ = last.postState := postEq
@@ -1232,8 +1232,8 @@ private theorem division_candidate_first_pre
           ¬ candidate.bytecode[prior.rowIndex].virtual_sequence_remaining.getD 0 ≠ 0 := by
         rw [bytecodeAt]
         exact remaining
-      rw [if_neg candidateRemaining] at linked
-      rw [if_neg remaining] at ready
+      rw [ite_eq_right candidateRemaining] at linked
+      rw [ite_eq_right remaining] at ready
       obtain ⟨candidateAddress, candidatePC, _, _, candidatePre⟩ := linked
       obtain ⟨runAddress, runPC, _, _, _, runPre⟩ := ready
       have addressEq : candidateAddress = runAddress := by
@@ -1408,7 +1408,7 @@ theorem RunExtends.honestAdvice_before
       (runRows[n.val]'before).someTracerAdvice? := by
     have h := congrArg (fun rows : Array (TraceRow replayBytecode) => rows[n.val]?) rowsEq
     simp only [Array.getElem?_extract, Nat.min_eq_left within, Nat.zero_add, Nat.sub_zero,
-      if_pos before, Array.getElem?_eq_getElem n.isLt,
+      ite_eq_left before, Array.getElem?_eq_getElem n.isLt,
       Array.getElem?_eq_getElem before] at h
     exact congrArg TraceRow.someTracerAdvice? (Option.some.inj h)
   rw [rowEq]
@@ -1557,8 +1557,8 @@ private theorem division_replay_selected_value {F : Type} [Field F]
       (ri : t < replay.rows.size),
       candidate.bytecode[candidate.rows[t].rowIndex].instruction =
         replay.bytecode[replay.rows[t].rowIndex].instruction)
-    (oldEq : ∀ (t : Fin params.traceLength) (old : t.val < run.rows.size)
-      (ci : t.val < candidate.rows.size) (ri : t.val < replay.rows.size),
+    (oldEq : ∀ (t : Fin params.traceLength) (_old : t.val < run.rows.size)
+      (_ci : t.val < candidate.rows.size) (_ri : t.val < replay.rows.size),
       observe candidate.toTrace t = observe replay.toTrace t)
     (t : Fin params.traceLength)
     (candidateInside : t.val < candidate.rows.size)
@@ -1660,7 +1660,7 @@ private theorem division_replay_complete_transfer
             have value := complete.represents.pc t candidateInside
             rw [value]
             unfold TraceWitness.PC TraceWitness.bytecodePc
-            simp only [dif_pos candidateInside, dif_pos inside, indexEq]
+            simp only [dite_eq_left candidateInside, dite_eq_left inside, indexEq]
           rs1 := by
             intro t inside persistent
             have candidateInside : t.val < candidate.rows.size := by
@@ -1978,7 +1978,7 @@ For example, a REM by zero records quotient magnitude zero on its advice row. -/
 theorem division_replay_honest_new
     {F : Type} [Field F] {joltInstance : JoltInstance SourceInstruction}
     {params : WitnessParams} {privateInputs : JoltPrivateInputs}
-    (witness : WitnessType F params)
+    (_witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
     (run replay : UntrustedAnswerRun joltInstance privateInputs)
     (first : Fin context.bytecode.size)

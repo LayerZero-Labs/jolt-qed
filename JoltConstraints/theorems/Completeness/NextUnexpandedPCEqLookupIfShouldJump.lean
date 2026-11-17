@@ -191,9 +191,9 @@ There is no jump-only or nonwrapping-arithmetic assumption. -/
 theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
+    (_ramFits : params.RamFits trace)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     nextUnexpandedPCEqLookupIfShouldJump
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
@@ -210,9 +210,9 @@ theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
       · have haddr := jump_next_row_address trace t.val hreal hnextReal hjump
         have hvalues : TraceWitness.NextUnexpandedPC (F := F) params trace t =
             TraceWitness.LookupOutput (F := F) params trace t := by
-          simp only [TraceWitness.NextUnexpandedPC, dif_pos hnextWitness,
-            TraceWitness.UnexpandedPC, dif_pos hnextReal,
-            TraceWitness.LookupOutput, dif_pos hreal]
+          simp only [TraceWitness.NextUnexpandedPC, dite_eq_left hnextWitness,
+            TraceWitness.UnexpandedPC, dite_eq_left hnextReal,
+            TraceWitness.LookupOutput, dite_eq_left hreal]
           exact congrArg (fun address : BitVec 64 => (address.toNat : F)) haddr
         rw [hvalues]
         simp
@@ -221,7 +221,7 @@ theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
               trace.bytecode[trace.rows[t.val].rowIndex] .Jump = false := by
             cases h : JoltMetadata.circuitFlag
               trace.bytecode[trace.rows[t.val].rowIndex] .Jump <;> simp_all
-          simp only [TraceWitness.OpFlags, dif_pos hreal]
+          simp only [TraceWitness.OpFlags, dite_eq_left hreal]
           change (if JoltMetadata.circuitFlag
               trace.bytecode[trace.rows[t.val].rowIndex] .Jump
             then (1 : F) else 0) = 0

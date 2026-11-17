@@ -19,9 +19,9 @@ temporary no-early-nextPC-change and jump-at-source-end assumptions. -/
 theorem honestWitness_rdWriteEqPCPlusConstIfJump
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (noWrap : joltInstance.program.NextPCNoWrap) :
     rdWriteEqPCPlusConstIfJump
       (HonestTrace.honestWitness (F := F) params trace) := by
@@ -74,7 +74,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
             ((bc.address + BitVec.ofNat 64
               (sourceLength trace.bytecode row.rowIndex)).toNat : F) := by
           unfold TraceWitness.RdWriteValue
-          simp only [dif_pos hb]
+          simp only [dite_eq_left hb]
           change TraceWitness.rdValue (F := F)
             trace.bytecode[row.rowIndex.val].instruction row.postState = _
           rw [hinstNat]
@@ -89,7 +89,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row] <;> rfl
         have hflag : TraceWitness.OpFlags (F := F) params trace .Jump t = 1 := by
           unfold TraceWitness.OpFlags
-          simp only [dif_pos hb]
+          simp only [dite_eq_left hb]
           have hjumpNat : JoltMetadata.circuitFlag
               trace.bytecode[row.rowIndex.val] .Jump = true := by
             exact hjump
@@ -134,7 +134,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
             ((bc.address + BitVec.ofNat 64
               (sourceLength trace.bytecode row.rowIndex)).toNat : F) := by
           unfold TraceWitness.RdWriteValue
-          simp only [dif_pos hb]
+          simp only [dite_eq_left hb]
           change TraceWitness.rdValue (F := F)
             trace.bytecode[row.rowIndex.val].instruction row.postState = _
           rw [hinstNat]
@@ -149,7 +149,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
           simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row] <;> rfl
         have hflag : TraceWitness.OpFlags (F := F) params trace .Jump t = 1 := by
           unfold TraceWitness.OpFlags
-          simp only [dif_pos hb]
+          simp only [dite_eq_left hb]
           have hjumpNat : JoltMetadata.circuitFlag
               trace.bytecode[row.rowIndex.val] .Jump = true := by
             exact hjump

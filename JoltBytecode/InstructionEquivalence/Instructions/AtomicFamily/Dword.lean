@@ -103,7 +103,7 @@ theorem amo_dword_ld_xreg_misaligned_run
     writeVReg
   simp only [bind, EStateM.bind, pure, EStateM.run, hrs1]
   rw [haddr0]
-  rw [if_neg (by simpa using h_align)]
+  rw [ite_eq_right (by simpa using h_align)]
   rfl
 
 /-- A 64-bit value is unchanged by Sail sign-extension to 64 bits. -/
@@ -115,7 +115,7 @@ theorem amo_dword_sign_extend_64_eq_self (value : BitVec 64) :
   have hi_bool : (i <b 64) = true := by
     simpa only [Nat.blt_eq, decide_eq_true_eq] using hi
   simp (disch := omega) only [BitVec.getLsbD_signExtend, hi_bool, Bool.true_and,
-    if_pos]
+    ite_eq_left]
 
 /-- A 64-bit value is unchanged by Sail sign-extension at the generated `8 * 8`
 width. -/
@@ -127,7 +127,7 @@ theorem amo_dword_sign_extend_8x8_eq_self (value : BitVec 64) :
   have hi_bool : (i <b 64) = true := by
     simpa only [Nat.blt_eq, decide_eq_true_eq] using hi
   simp (disch := omega) only [BitVec.getLsbD_signExtend, Nat.reduceMul, hi_bool,
-    Bool.true_and, if_pos]
+    Bool.true_and, ite_eq_left]
 
 /-- The generated dword width cast leaves an already-64-bit value unchanged. -/
 theorem amo_dword_setWidth_8x8_eq_self (value : BitVec 64) :
@@ -199,7 +199,7 @@ theorem amo_dword_ld_old_run_into
         (by rw [haddr0]; exact hmmio) (by rw [haddr0]; exact hjolt)
   · rfl
   · change (if oldReg = oldReg then oldVal else js.vregs oldReg) = oldVal
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
 
 /-- `LD old, 0(rs1)` reads the old dword into the standard dword-select and
 swap old-value register. -/
@@ -309,7 +309,7 @@ theorem amo_dword_sd_xreg_vreg_run_of_write
   unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst readVReg liftSail
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get, hbase, hvalue]
-  rw [if_pos h_align]
+  rw [ite_eq_left h_align]
   simp only [EStateM.bind]
   rw [JoltISA.Mmu.store_doubleword_eq_sail js _ _ hpriv hmprv
     (aligned_dword_access_of_align _ h_align) hpmp hmmio
@@ -635,11 +635,11 @@ theorem amo_dword_add_middle_run_into
   · change
       (if newReg = newReg then old + rs2Val else js_afterLoad.vregs newReg) =
         rs2Val + old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_dword_add_comm old rs2Val
   · change
       (if oldReg = newReg then old + rs2Val else js_afterLoad.vregs oldReg) = old
-    rw [if_neg hne]
+    rw [ite_eq_right hne]
     exact hold
 
 /-- The `AMOADD.D` middle instruction writes `rs2 + old` to `amoNewVReg` and
@@ -692,11 +692,11 @@ theorem amo_dword_xor_middle_run_into
   · change
       (if newReg = newReg then old ^^^ rs2Val else js_afterLoad.vregs newReg) =
         rs2Val ^^^ old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_dword_xor_comm old rs2Val
   · change
       (if oldReg = newReg then old ^^^ rs2Val else js_afterLoad.vregs oldReg) = old
-    rw [if_neg hne]
+    rw [ite_eq_right hne]
     exact hold
 
 /-- The `AMOXOR.D` middle instruction writes `rs2 ^ old` to `amoNewVReg` and
@@ -749,11 +749,11 @@ theorem amo_dword_and_middle_run_into
   · change
       (if newReg = newReg then old &&& rs2Val else js_afterLoad.vregs newReg) =
         rs2Val &&& old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_dword_and_comm old rs2Val
   · change
       (if oldReg = newReg then old &&& rs2Val else js_afterLoad.vregs oldReg) = old
-    rw [if_neg hne]
+    rw [ite_eq_right hne]
     exact hold
 
 /-- The `AMOAND.D` middle instruction writes `rs2 & old` to `amoNewVReg` and
@@ -806,11 +806,11 @@ theorem amo_dword_or_middle_run_into
   · change
       (if newReg = newReg then old ||| rs2Val else js_afterLoad.vregs newReg) =
         rs2Val ||| old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact amo_dword_or_comm old rs2Val
   · change
       (if oldReg = newReg then old ||| rs2Val else js_afterLoad.vregs oldReg) = old
-    rw [if_neg hne]
+    rw [ite_eq_right hne]
     exact hold
 
 /-- The `AMOOR.D` middle instruction writes `rs2 | old` to `amoNewVReg` and
@@ -1295,15 +1295,15 @@ theorem amo_dword_select_tail_phase_run
   have hsub_new : js_afterSub.vregs JoltISA.amoNewVReg = flag := by
     change (if JoltISA.amoNewVReg = JoltISA.amoTmpVReg then delta
       else js.vregs JoltISA.amoNewVReg) = flag
-    rw [if_neg (by decide), hflag]
+    rw [ite_eq_right (by decide), hflag]
   have hsub_old : js_afterSub.vregs JoltISA.amoOldVReg = old := by
     change (if JoltISA.amoOldVReg = JoltISA.amoTmpVReg then delta
       else js.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
   have hsub_tmp : js_afterSub.vregs JoltISA.amoTmpVReg = delta := by
     change (if JoltISA.amoTmpVReg = JoltISA.amoTmpVReg then delta
       else js.vregs JoltISA.amoTmpVReg) = delta
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hsub_run :
       (JoltISA.execInstr
         (.SUB (.vreg JoltISA.amoTmpVReg)
@@ -1317,11 +1317,11 @@ theorem amo_dword_select_tail_phase_run
   have hmul_old : js_afterMul.vregs JoltISA.amoOldVReg = old := by
     change (if JoltISA.amoOldVReg = JoltISA.amoTmpVReg then scaled
       else js_afterSub.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide), hsub_old]
+    rw [ite_eq_right (by decide), hsub_old]
   have hmul_tmp : js_afterMul.vregs JoltISA.amoTmpVReg = scaled := by
     change (if JoltISA.amoTmpVReg = JoltISA.amoTmpVReg then scaled
       else js_afterSub.vregs JoltISA.amoTmpVReg) = scaled
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hmul_run :
       (JoltISA.execInstr
         (.MUL (.vreg JoltISA.amoTmpVReg)
@@ -1336,14 +1336,14 @@ theorem amo_dword_select_tail_phase_run
   have hadd_old : js_afterAdd.vregs JoltISA.amoOldVReg = old := by
     change (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then old + scaled
       else js_afterMul.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide), hmul_old]
+    rw [ite_eq_right (by decide), hmul_old]
   have hadd_result :
       js_afterAdd.vregs JoltISA.amoNewVReg =
         old + (rs2Val - old) * flag := by
     change (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then old + scaled
       else js_afterMul.vregs JoltISA.amoNewVReg) =
         old + (rs2Val - old) * flag
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hadd_run :
       (JoltISA.execInstr
         (.ADD (.vreg JoltISA.amoNewVReg)
@@ -1400,13 +1400,13 @@ theorem amo_dword_select_tail_phase_run_into
     exact Ne.symm htmp_ne_new
   have hsub_new : js_afterSub.vregs newReg = flag := by
     change (if newReg = tmpReg then delta else js.vregs newReg) = flag
-    rw [if_neg hnew_ne_tmp, hflag]
+    rw [ite_eq_right hnew_ne_tmp, hflag]
   have hsub_old : js_afterSub.vregs oldReg = old := by
     change (if oldReg = tmpReg then delta else js.vregs oldReg) = old
-    rw [if_neg hold_ne_tmp, hold]
+    rw [ite_eq_right hold_ne_tmp, hold]
   have hsub_tmp : js_afterSub.vregs tmpReg = delta := by
     change (if tmpReg = tmpReg then delta else js.vregs tmpReg) = delta
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hsub_run :
       (JoltISA.execInstr
         (.SUB (.vreg tmpReg) (.xreg rs2) (.vreg oldReg))).run js =
@@ -1418,11 +1418,11 @@ theorem amo_dword_select_tail_phase_run_into
   have hmul_old : js_afterMul.vregs oldReg = old := by
     change (if oldReg = tmpReg then scaled
       else js_afterSub.vregs oldReg) = old
-    rw [if_neg hold_ne_tmp, hsub_old]
+    rw [ite_eq_right hold_ne_tmp, hsub_old]
   have hmul_tmp : js_afterMul.vregs tmpReg = scaled := by
     change (if tmpReg = tmpReg then scaled
       else js_afterSub.vregs tmpReg) = scaled
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hmul_run :
       (JoltISA.execInstr
         (.MUL (.vreg tmpReg) (.vreg tmpReg) (.vreg newReg))).run
@@ -1435,14 +1435,14 @@ theorem amo_dword_select_tail_phase_run_into
   have hadd_old : js_afterAdd.vregs oldReg = old := by
     change (if oldReg = newReg then old + scaled
       else js_afterMul.vregs oldReg) = old
-    rw [if_neg hold_ne_new, hmul_old]
+    rw [ite_eq_right hold_ne_new, hmul_old]
   have hadd_result :
       js_afterAdd.vregs newReg =
         old + (rs2Val - old) * flag := by
     change (if newReg = newReg then old + scaled
       else js_afterMul.vregs newReg) =
         old + (rs2Val - old) * flag
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hadd_run :
       (JoltISA.execInstr
         (.ADD (.vreg newReg) (.vreg oldReg) (.vreg tmpReg))).run
@@ -1507,10 +1507,10 @@ theorem amo_dword_minu_compare_phase_run
   · rfl
   · change (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then flag
       else js.vregs JoltISA.amoNewVReg) = jolt_sltu_value rs2Val old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then flag
       else js.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
 
 /-- Selected-register version of `amo_dword_minu_compare_phase_run`. -/
 theorem amo_dword_minu_compare_phase_run_into
@@ -1550,9 +1550,9 @@ theorem amo_dword_minu_compare_phase_run_into
   · rfl
   · change (if newReg = newReg then flag else js.vregs newReg) =
       jolt_sltu_value rs2Val old
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if oldReg = newReg then flag else js.vregs oldReg) = old
-    rw [if_neg hold_ne_new, hold]
+    rw [ite_eq_right hold_ne_new, hold]
 
 /-- A dword select middle block composes an instruction-specific comparison
 phase with the shared select-tail phase. -/
@@ -1767,10 +1767,10 @@ theorem amo_dword_min_compare_phase_run
   · change (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then flag
       else js.vregs JoltISA.amoNewVReg) =
       zero_extend (m := 64) (bool_to_bit (zopz0zI_s rs2Val old))
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then flag
       else js.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
 
 /-- Selected-register version of `amo_dword_min_compare_phase_run`. -/
 theorem amo_dword_min_compare_phase_run_into
@@ -1812,9 +1812,9 @@ theorem amo_dword_min_compare_phase_run_into
   · rfl
   · change (if newReg = newReg then flag else js.vregs newReg) =
       zero_extend (m := 64) (bool_to_bit (zopz0zI_s rs2Val old))
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if oldReg = newReg then flag else js.vregs oldReg) = old
-    rw [if_neg hold_ne_new, hold]
+    rw [ite_eq_right hold_ne_new, hold]
 
 /-- `AMOMIN.D`'s select middle block chooses `rs2` exactly when `rs2 < old`
 as signed dwords. -/
@@ -2004,10 +2004,10 @@ theorem amo_dword_max_compare_phase_run
   · change (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then flag
       else js.vregs JoltISA.amoNewVReg) =
       zero_extend (m := 64) (bool_to_bit (zopz0zI_s old rs2Val))
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then flag
       else js.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
 
 /-- Selected-register version of `amo_dword_max_compare_phase_run`. -/
 theorem amo_dword_max_compare_phase_run_into
@@ -2049,9 +2049,9 @@ theorem amo_dword_max_compare_phase_run_into
   · rfl
   · change (if newReg = newReg then flag else js.vregs newReg) =
       zero_extend (m := 64) (bool_to_bit (zopz0zI_s old rs2Val))
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if oldReg = newReg then flag else js.vregs oldReg) = old
-    rw [if_neg hold_ne_new, hold]
+    rw [ite_eq_right hold_ne_new, hold]
 
 /-- `AMOMAX.D`'s select middle block chooses `rs2` exactly when `rs2 > old`
 as signed dwords. -/
@@ -2382,10 +2382,10 @@ theorem amo_dword_maxu_compare_phase_run
   · rfl
   · change (if JoltISA.amoNewVReg = JoltISA.amoNewVReg then flag
       else js.vregs JoltISA.amoNewVReg) = jolt_sltu_value old rs2Val
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if JoltISA.amoOldVReg = JoltISA.amoNewVReg then flag
       else js.vregs JoltISA.amoOldVReg) = old
-    rw [if_neg (by decide), hold]
+    rw [ite_eq_right (by decide), hold]
 
 /-- Selected-register version of `amo_dword_maxu_compare_phase_run`. -/
 theorem amo_dword_maxu_compare_phase_run_into
@@ -2425,9 +2425,9 @@ theorem amo_dword_maxu_compare_phase_run_into
   · rfl
   · change (if newReg = newReg then flag else js.vregs newReg) =
       jolt_sltu_value old rs2Val
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · change (if oldReg = newReg then flag else js.vregs oldReg) = old
-    rw [if_neg hold_ne_new, hold]
+    rw [ite_eq_right hold_ne_new, hold]
 
 /-- `AMOMAXU.D`'s select middle block chooses `rs2` exactly when `rs2 > old`
 as unsigned dwords. -/
@@ -2893,7 +2893,7 @@ theorem amo_dword_checked_mem_read_eq_loaded_dword
     .ok (Ok (loaded_dword_at s addr hbytes h_no_ovf, default_meta)) s := by
   unfold checked_mem_read
   simp only [bind, EStateM.bind, pure, EStateM.pure, hatomic_pmp, hread_mmio.sail,
-    Bool.false_eq_true, if_false]
+    Bool.false_eq_true, ite_false]
   unfold read_kind_of_flags
   simp only [pure, EStateM.pure]
   rw [amo_dword_read_ram_reserved_eq_loaded_dword addr s hbytes h_no_ovf]
@@ -2921,12 +2921,12 @@ theorem amo_dword_mem_read_eq_loaded_dword
   simp only [bind, EStateM.bind, pure, EStateM.pure, h_ms_read, h_priv]
   unfold effectivePrivilege
   simp only [h_mprv, bne, BEq.beq, instBEqMemoryAccessType.beq,
-    Bool.not_false, h_mpp_check, Bool.and_false, Bool.false_eq_true, if_false]
+    Bool.not_false, h_mpp_check, Bool.and_false, Bool.false_eq_true, ite_false]
   unfold mem_read_priv_meta
   simp only [bind, EStateM.bind, pure, EStateM.pure,
     Bool.false_or, Bool.true_and, h_paddr_aligned]
   unfold LeanRV64D.Functions.not
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
+  simp only [Bool.not_true, Bool.false_eq_true, ite_false]
   rw [amo_dword_checked_mem_read_eq_loaded_dword
     op addr s hbytes h_no_ovf hatomic_pmp hread_mmio]
   rfl
@@ -2942,7 +2942,7 @@ theorem amo_dword_mem_write_ea_ok
   unfold mem_write_ea
   simp only [Bool.false_or, Bool.true_and, h_paddr_aligned]
   unfold LeanRV64D.Functions.not
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
+  simp only [Bool.not_true, Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   unfold write_ram_ea
   change
@@ -2989,10 +2989,10 @@ theorem amo_dword_mem_write_value_eq_state_after_dword_store
   simp only [bind, EStateM.bind, pure, h_ms_read, h_priv]
   unfold effectivePrivilege
   simp only [h_mprv, bne, BEq.beq, instBEqMemoryAccessType.beq,
-    Bool.not_false, h_mpp_check, Bool.and_false, Bool.false_eq_true, if_false]
+    Bool.not_false, h_mpp_check, Bool.and_false, Bool.false_eq_true, ite_false]
   simp only [Bool.false_or, Bool.true_and, h_paddr_aligned]
   unfold LeanRV64D.Functions.not
-  simp only [Bool.not_true, Bool.false_eq_true, if_false]
+  simp only [Bool.not_true, Bool.false_eq_true, ite_false]
   change
     (EStateM.bind
       (EStateM.bind
@@ -3019,7 +3019,7 @@ theorem amo_dword_mem_write_value_eq_state_after_dword_store
     .ok (Ok true) (state_after_dword_store s addr data)
   simp only [EStateM.bind, hatomic_pmp]
   simp only [hwrite_mmio.sail]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
   rw [amo_dword_write_ram_conditional_eq_state_after_dword_store addr data s]
@@ -3165,7 +3165,7 @@ theorem execute_AMO_dword_non_cas_aligned_core
     unfold execute_AMO
     simp only [bind, pure]
     unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
-    simp only [amo_dword_width_assert_true, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, pure, EStateM.run, if_true]
+    simp only [amo_dword_width_assert_true, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, pure, EStateM.run, ite_true]
     unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
     simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
       ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
@@ -3173,7 +3173,7 @@ theorem execute_AMO_dword_non_cas_aligned_core
       Functor.map, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
       MonadExceptOf.throw, ext_data_get_addr, hrs1, haddr0,
       h_vaddr_aligned, sail_not_true, ↓reduceIte,
-      Bool.false_eq_true, if_false, if_true, htranslate, amo_dword_width8_true, hrs2,
+      Bool.false_eq_true, ite_false, ite_true, htranslate, amo_dword_width8_true, hrs2,
       hea, hread, hrd_read, hcas_check, Bool.false_and,
       instBEqAmoop.beq, BEq.beq, andM, toBool]
     rw [hwrite_value]
@@ -3325,7 +3325,7 @@ theorem execute_AMO_dword_misaligned
   have hwidth_assert :
       (8 ≤b (((8 : Nat) : Int) * (2 : Int)).toNat) = true := by
     decide
-  simp only [hwidth_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, pure, EStateM.run, if_true]
+  simp only [hwidth_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, pure, EStateM.run, ite_true]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have haddr0 : addr + zeros (n := 64) = addr := by
     unfold zeros

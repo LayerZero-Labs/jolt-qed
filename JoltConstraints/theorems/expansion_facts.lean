@@ -260,7 +260,7 @@ theorem ctz_eq_of_bits : ∀ (s n : Nat), (∀ i < s, n.testBit i = false) → n
   | 0, n, _, bit => by
     rw [Nat.testBit_zero, decide_eq_true_eq] at bit
     unfold ctz
-    rw [if_neg (by omega), if_pos bit]
+    rw [ite_eq_right (by omega), ite_eq_left bit]
   | s + 1, n, low, bit => by
     have even : n % 2 = 0 := by
       have := low 0 (by omega)
@@ -270,7 +270,7 @@ theorem ctz_eq_of_bits : ∀ (s n : Nat), (∀ i < s, n.testBit i = false) → n
       rintro rfl
       simp at bit
     unfold ctz
-    rw [if_neg nonzero, if_neg (by omega), ctz_eq_of_bits s (n / 2)]
+    rw [ite_eq_right nonzero, ite_eq_right (by omega), ctz_eq_of_bits s (n / 2)]
     · omega
     · intro i below
       rw [← Nat.testBit_succ]

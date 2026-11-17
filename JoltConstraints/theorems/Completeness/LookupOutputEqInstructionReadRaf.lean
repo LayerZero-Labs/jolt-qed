@@ -47,25 +47,25 @@ theorem honestWitness_lookupOutputEqInstructionReadRaf
           table t * lookupTableEntry table a) t]
     have hidx : (⟨(TraceWitness.lookupIndex trace t.val).toNat,
         (TraceWitness.lookupIndex trace t.val).isLt⟩ : Fin (2 ^ 128)) = rowLookupAddress row := by
-      simp only [TraceWitness.lookupIndex, dif_pos inBounds, rowLookupAddress, rowLookupIndex, hrow]
+      simp only [TraceWitness.lookupIndex, dite_eq_left inBounds, rowLookupAddress, rowLookupIndex, hrow]
       rfl
     rw [hidx]
     have hflag : ∀ table : LookupTableKind,
         (HonestTrace.honestWitness (F := F) params trace).LookupTableFlag
           table t = if JoltMetadata.lookupTable (rowInstruction row) = some table then 1 else 0 := by
       intro table
-      simp only [HonestTrace.honestWitness, TraceWitness.LookupTableFlag, dif_pos inBounds,
+      simp only [HonestTrace.honestWitness, TraceWitness.LookupTableFlag, dite_eq_left inBounds,
         JoltMetadata.lookupTableFlag, beq_iff_eq, rowInstruction, hrow]
     have hout : (HonestTrace.honestWitness (F := F) params trace).LookupOutput t
         = ((TraceWitness.rowLookupOutput row.toTraceRow).toNat : F) := by
-      simp only [HonestTrace.honestWitness, TraceWitness.LookupOutput, dif_pos inBounds]
+      simp only [HonestTrace.honestWitness, TraceWitness.LookupOutput, dite_eq_left inBounds]
       rfl
     simp only [hflag, hout, ite_mul, one_mul, zero_mul]
     cases hk : JoltMetadata.lookupTable (rowInstruction row) with
     | none =>
       simp [rowLookupOutput_eq_zero_of_lookupTable_none row hk]
     | some k =>
-      simp only [Option.some.injEq, Finset.sum_ite_eq, Finset.mem_univ, if_true]
+      simp only [Option.some.injEq, Finset.sum_ite_eq, Finset.mem_univ, ite_true]
       exact (lookupEntryCorrect_of_lookupTable row k hk
         (shiftMaskOk_of_honest trace t.val inBounds)).symm
   · -- Padding has zero output and every table flag is zero.

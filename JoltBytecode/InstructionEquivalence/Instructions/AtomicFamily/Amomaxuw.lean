@@ -42,7 +42,7 @@ private theorem amomaxuwProgramAuto_eq_core (rs2 rs1 rd : regidx) :
       JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor,
       JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoWordTakeVRegFor,
       JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst,
-      hrd, Bool.false_eq_true, if_false, if_true] <;> rfl
+      hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
 
 private theorem amomaxuwProgramCore_doesNotWriteProtectedVRegs
     (rs2 rs1 rd : regidx) :
@@ -92,7 +92,7 @@ private theorem amomaxuwProgram_core_eq_sail
     amo_word_sltu_run_vreg_vreg_vreg
     (by
       intro new old
-      simp only [amoWordSelectFlag, if_true,
+      simp only [amoWordSelectFlag, ite_true,
         amo_word_sltu_sign_extend, amoWordSailResult]
       rfl)
     (by decide) rs2 rs1 rd js h (amomaxuwProgramCore_doesNotWriteProtectedVRegs rs2 rs1 rd)

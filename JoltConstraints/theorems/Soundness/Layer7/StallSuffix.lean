@@ -268,7 +268,7 @@ theorem selected_last_represented_row
     (bytecodeEq : run.bytecode = context.bytecode)
     (represented : RepresentsRows witness run.toTrace)
     (last : TraceRow run.bytecode) (atEnd : last ∈ run.rows.back?)
-    (cutBound : run.rows.size < params.traceLength) :
+    (_cutBound : run.rows.size < params.traceLength) :
     ∃ (before : Fin params.traceLength) (slot : Fin (2 ^ params.logBytecodeK)),
       before.val + 1 = run.rows.size ∧
       run.rows[before.val]? = some last ∧
@@ -525,7 +525,7 @@ theorem next_cycle_address
       right
       have shifted : witness.UnexpandedPC ⟨cycle.val + 1, next⟩ =
           witness.NextUnexpandedPC cycle := by
-        simpa only [equations.nextUnexpandedPCEqShift cycle, dif_pos next]
+        simpa only [equations.nextUnexpandedPCEqShift cycle, dite_eq_left next]
       have encoded := JoltConstraints.Soundness.unexpandedPC_of_selected_bytecode
         charAbove2pow127 context equations ⟨cycle.val + 1, next⟩ slot selected
       exact ⟨slot, row, selected, present,
@@ -682,7 +682,7 @@ theorem stall_jal_next_target
         charAbove2pow127 context equations .Jump cycle slot selected
   have nextNoop : witness.NextIsNoop cycle = 0 := by
     have shifted := equations.nextIsNoopEqShift cycle
-    simp only [dif_pos next] at shifted
+    simp only [dite_eq_left next] at shifted
     obtain ⟨nextSlot, nextSelected, _⟩ :=
       JoltConstraints.Soundness.bytecodeRa_unique charAbove2pow127 context equations
         ⟨cycle.val + 1, next⟩
@@ -1135,9 +1135,9 @@ theorem untrusted_prepared_pc
     simp only [lastIs] at entry ⊢
     split at entry
     · rename_i continues
-      simpa only [if_pos continues] using entry
+      simpa only [ite_eq_left continues] using entry
     · rename_i terminal
-      rw [if_neg terminal]
+      rw [ite_eq_right terminal]
       obtain ⟨address, nextPC, _, sourceAddress, starts, prepared⟩ := entry
       exact ⟨address, nextPC, sourceAddress, starts, prepared⟩
 
@@ -2169,7 +2169,7 @@ theorem selected_jalr_next_target
         charAbove2pow127 context equations .Jump cycle slot selected
   have nextNoop : witness.NextIsNoop cycle = 0 := by
     have shifted := equations.nextIsNoopEqShift cycle
-    simp only [dif_pos next] at shifted
+    simp only [dite_eq_left next] at shifted
     obtain ⟨nextSlot, nextSelected, _⟩ :=
       JoltConstraints.Soundness.bytecodeRa_unique charAbove2pow127 context equations
         ⟨cycle.val + 1, next⟩
@@ -2525,7 +2525,7 @@ theorem selected_written_jalr_base_succ
     have sameAddress : TraceWitness.sourceRegisterAddress (.xreg rd) =
         TraceWitness.destinationRegisterAddress (.xreg rd) := rfl
     simpa only [rowAt, Option.bind_some, jump, JoltConstraints.bytecodeRdRegister,
-      TraceWitness.capturedDestination, if_pos sameAddress] using after
+      TraceWitness.capturedDestination, ite_eq_left sameAddress] using after
   exact afterWrite.trans (linkWrite.trans
     (congrArg (fun value : BitVec 64 => (value.toNat : F)) modelLink.symm))
 
@@ -2575,7 +2575,7 @@ theorem stall_jalr_written_base_step
         TraceWitness.sourceRegisterAddress (.xreg rd) ∧
         (TraceWitness.sourceRegisterAddress (.xreg rd)).val ≠ 0 :=
       ⟨rfl, nonzeroAddress⟩
-    simpa only [jump, if_pos activeGuard] using control
+    simpa only [jump, ite_eq_left activeGuard] using control
   by_cases nextPadding :
       witness.InstructionFlags .IsNoop ⟨cycle.val + 1, next⟩ = 1
   · exact Or.inl nextPadding
@@ -2604,7 +2604,7 @@ theorem stall_jalr_written_base_step
           TraceWitness.sourceRegisterAddress (.xreg rd) ∧
           (TraceWitness.sourceRegisterAddress (.xreg rd)).val ≠ 0 :=
         ⟨rfl, nonzeroAddress⟩
-      simpa only [jump, if_pos activeGuard] using baseNext⟩
+      simpa only [jump, ite_eq_left activeGuard] using baseNext⟩
 
 /-- A virtual-destination, virtual-base JALR in expanded bytecode has no row
 at the same source address writing its virtual base's register address.
@@ -3153,7 +3153,7 @@ theorem stall_suffix_initial_jalr
           have activeGuard : TraceWitness.destinationRegisterAddress (.xreg rd) =
               TraceWitness.sourceRegisterAddress (.xreg rd) ∧
               (TraceWitness.sourceRegisterAddress (.xreg rd)).val ≠ 0 := ⟨rfl, nonzeroAddress⟩
-          rw [JoltConstraints.Soundness.destinationSource, if_pos activeGuard]
+          rw [JoltConstraints.Soundness.destinationSource, ite_eq_left activeGuard]
           exact selected_written_jalr_base_succ joltField joltInstance noWrap privateInputs
             witness context equations run last atEnd stable rd imm jump nonzero
             before next slot selected rowAtContext

@@ -46,12 +46,12 @@ theorem systemProject_rdZeroRewriteVReg (js : SailJoltState) (value : BitVec 64)
           if r = JoltISA.rdZeroRewriteVReg then value else js.vregs r } =
       System.systemProject js := by
   unfold System.systemProject
-  simp only [if_neg (show JoltISA.trapHandlerVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
-    if_neg (show JoltISA.mscratchVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
-    if_neg (show JoltISA.mepcVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
-    if_neg (show JoltISA.mcauseVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
-    if_neg (show JoltISA.mtvalVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
-    if_neg (show JoltISA.mstatusVReg ≠ JoltISA.rdZeroRewriteVReg by decide)]
+  simp only [ite_eq_right (show JoltISA.trapHandlerVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    ite_eq_right (show JoltISA.mscratchVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    ite_eq_right (show JoltISA.mepcVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    ite_eq_right (show JoltISA.mcauseVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    ite_eq_right (show JoltISA.mtvalVReg ≠ JoltISA.rdZeroRewriteVReg by decide),
+    ite_eq_right (show JoltISA.mstatusVReg ≠ JoltISA.rdZeroRewriteVReg by decide)]
 
 /-- Under the linked-CSR invariant, `systemProject` agrees with the old plain
 projection on the initial state. -/
@@ -396,7 +396,7 @@ theorem jump_to_of_aligned (target : BitVec 64) (s : SailState)
       have hbit0 : (BitVec.access target 0 == 0#1) = true := by
         cases zca <;>
           simp only [hzca, bind, EStateM.bind, pure, EStateM.pure,
-            Bool.false_eq_true, if_false, if_true,
+            Bool.false_eq_true, ite_false, ite_true,
             EStateM.Result.ok.injEq, and_true] at ha
         all_goals
           rw [← ha]
@@ -408,7 +408,7 @@ theorem jump_to_of_aligned (target : BitVec 64) (s : SailState)
         | true => simp [LeanRV64D.Functions.not]
         | false =>
             simp only [hzca, bind, EStateM.bind, pure, EStateM.pure,
-              Bool.false_eq_true, if_false, EStateM.Result.ok.injEq, and_true] at ha
+              Bool.false_eq_true, ite_false, EStateM.Result.ok.injEq, and_true] at ha
             rw [← ha]
             simp [bit_to_bool, bool_bit_backwards, LeanRV64D.Functions.not,
               Sail.BitVec.access, Sail.BitVec.updateSubrange,

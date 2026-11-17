@@ -106,7 +106,7 @@ theorem selected_store_one_disagrees
     exact (sub_eq_zero.mp relation).symm
   have updated : witness.RamVal address ⟨t.val + 1, next⟩ = 1 := by
     rw [ramVal_succ_of_selected charAbove2pow127 context equations address t next address selected,
-      if_pos rfl, write]
+      ite_eq_left rfl, write]
   refine ⟨updated, ?_⟩
   rw [updated]
   change (1 : F) ≠ ((0 : Nat) : F)

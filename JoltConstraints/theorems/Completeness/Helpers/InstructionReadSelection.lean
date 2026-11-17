@@ -12,9 +12,9 @@ open scoped BigOperators
 
 theorem instructionLookupRa_honest {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (address : Fin (2 ^ 128)) (t : Fin params.traceLength) :
     instructionLookupRa
       (HonestTrace.honestWitness (F := F) params trace)
@@ -63,7 +63,7 @@ theorem instructionLookupRa_honest {F : Type} [Field F] (params : WitnessParams)
       (TraceWitness.lookupIndex trace t.val).toNat /
         2 ^ ((params.virtualInstructionChunks - 1 - chunk.val) * params.virtualChunkBits) %
           2 ^ params.virtualChunkBits at hneq
-    exact if_neg hneq
+    exact ite_eq_right hneq
 
 /-- A fixed instruction-read column evaluates at the honest lookup index. -/
 theorem instructionRead_honest {F : Type} [Field F] (params : WitnessParams)

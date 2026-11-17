@@ -37,7 +37,7 @@ theorem jolt_pext_nat_peel (p : Nat) : ∀ (fuel x q : Nat), p < fuel →
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by omega⟩
     rw [jolt_pext_nat, jolt_pext_nat]
     simp only [zero_add, pow_zero, pow_one, one_mul, Nat.div_one]
-    rw [if_pos (by omega), if_neg (by omega)]
+    rw [ite_eq_left (by omega), ite_eq_right (by omega)]
     rw [(show (2 * q + 1) / 2 = q by omega), (show 2 * q / 2 = q by omega)]
   | succ p ih =>
     intro fuel x q hp
@@ -45,7 +45,7 @@ theorem jolt_pext_nat_peel (p : Nat) : ∀ (fuel x q : Nat), p < fuel →
     rw [jolt_pext_nat, jolt_pext_nat]
     have e1 : 2 ^ (p + 1) * (2 * q + 1) = 2 * (2 ^ p * (2 * q + 1)) := by ring
     have e2 : 2 ^ (p + 1 + 1) * q = 2 * (2 ^ (p + 1) * q) := by ring
-    rw [e1, e2, if_neg (by omega), if_neg (by omega),
+    rw [e1, e2, ite_eq_right (by omega), ite_eq_right (by omega),
       Nat.mul_div_cancel_left _ (by decide), Nat.mul_div_cancel_left _ (by decide),
       ih f (x / 2) q (by omega), Nat.div_div_eq_div_mul, pow_succ, mul_comm (2 ^ p) 2]
 
@@ -53,7 +53,7 @@ theorem jolt_pext_nat_peel (p : Nat) : ∀ (fuel x q : Nat), p < fuel →
 theorem jolt_pext_nat_zero (fuel x : Nat) : jolt_pext_nat fuel x 0 = 0 := by
   induction fuel generalizing x with
   | zero => rfl
-  | succ fuel ih => rw [jolt_pext_nat, if_neg (by decide), Nat.zero_div, ih]
+  | succ fuel ih => rw [jolt_pext_nat, ite_eq_right (by decide), Nat.zero_div, ih]
 
 /-- A low-ones mask (`n &&& (n+1) = 0`) extracts by masking. -/
 theorem jolt_pext_nat_of_low_ones : ∀ (fuel x n : Nat), n < 2 ^ fuel → n &&& (n + 1) = 0 →
@@ -110,7 +110,7 @@ private theorem pext_general (x y : BitVec 64) (hy : y ≠ 0)
     (hc : ¬ (y >>> y.ctz.toNat) &&& ((y >>> y.ctz.toNat) + 1) = 0) :
     pext x y = ((List.range 64).foldl (fun r _ => pextStep x r) ⟨y, 0, 0⟩).2.1 := by
   unfold pext
-  simp only [Id.run, hy, if_false, hc, pure_bind]
+  simp only [Id.run, hy, ite_false, hc, pure_bind]
   rw [forIn_eq_foldl_of (pextStep x)]
   · simp only [pure_bind]
     generalize List.foldl _ _ _ = r
@@ -118,7 +118,7 @@ private theorem pext_general (x y : BitVec 64) (hy : y ≠ 0)
   · rintro _ ⟨b, o, k⟩
     by_cases h0 : b = 0
     · subst h0; simp [pextStep]
-    · simp only [pextStep]; rw [if_neg h0, if_pos h0]
+    · simp only [pextStep]; rw [ite_eq_right h0, ite_eq_left h0]
 
 private theorem two_pow_mul_odd_and_pred (p q : Nat) :
     (2 ^ p * (2 * q + 1)) &&& (2 ^ p * (2 * q + 1) - 1) = 2 ^ (p + 1) * q := by
@@ -132,12 +132,12 @@ private theorem two_pow_mul_odd_and_pred (p q : Nat) :
   rw [Nat.testBit_and, Nat.testBit_two_pow_mul_add _ h1, Nat.testBit_two_pow_mul_add _ (by omega),
     Nat.testBit_two_pow_mul]
   by_cases hj : j < p + 1
-  · simp only [hj, if_true, Nat.testBit_two_pow, Nat.testBit_two_pow_sub_one]
+  · simp only [hj, ite_true, Nat.testBit_two_pow, Nat.testBit_two_pow_sub_one]
     have h3 : ¬ (p + 1 ≤ j) := by omega
     by_cases hjp : p = j
     · subst hjp; simp
     · simp [hjp, ge_iff_le, h3]
-  · simp only [hj, if_false, Bool.and_self]
+  · simp only [hj, ite_false, Bool.and_self]
     simp; omega
 
 private theorem eq_two_pow_mul_odd (m p : Nat) (hlow : m % 2 ^ p = 0) (hbit : m.testBit p = true) :
@@ -170,9 +170,9 @@ private theorem pextInv_step (x y : BitVec 64) (n : Nat)
   simp only at hJ ho hk hd
   by_cases hb : b = 0
   · subst hb
-    simp only [pextStep, if_true]
+    simp only [pextStep, ite_true]
     exact ⟨hJ, ho, show k ≤ n + 1 by omega, by simp⟩
-  · simp only [pextStep, if_neg hb]
+  · simp only [pextStep, ite_eq_right hb]
     generalize hp : b.ctz.toNat = p
     have hlow : b.toNat % 2 ^ p = 0 := by
       apply Nat.eq_of_testBit_eq; intro i
@@ -251,7 +251,7 @@ theorem jolt_pext_nat_two_pow_mul (f X : Nat) : ∀ (t m : Nat),
     intro m
     rw [show f + (t + 1) = (f + t) + 1 by omega, jolt_pext_nat,
       show 2 ^ (t + 1) * m = 2 * (2 ^ t * m) by rw [pow_succ]; ring,
-      if_neg (by omega), Nat.mul_div_cancel_left _ (by decide), ih,
+      ite_eq_right (by omega), Nat.mul_div_cancel_left _ (by decide), ih,
       Nat.div_div_eq_div_mul, pow_succ, mul_comm (2 ^ t) 2]
 
 private theorem toNat_mod_two_pow_ctz (b : BitVec 64) : b.toNat % 2 ^ b.ctz.toNat = 0 := by
@@ -273,7 +273,7 @@ private theorem pext_eq_of_contiguous (x y : BitVec 64) (hy : y ≠ 0)
     pext x y = jolt_virtual_pext_value x y := by
   have hpx : pext x y = (x >>> y.ctz.toNat) &&& (y >>> y.ctz.toNat) := by
     unfold pext
-    simp only [Id.run, hy, if_false, hc, if_true, pure_bind]
+    simp only [Id.run, hy, ite_false, hc, ite_true, pure_bind]
     rfl
   rw [hpx]
   generalize ht : y.ctz.toNat = t at hc
@@ -403,7 +403,7 @@ theorem jolt_pext_nat_testBit_top : ∀ (f X m : Nat), m ≠ 0 → m < 2 ^ f →
         simp [Nat.testBit_zero]
       · have hpos := jolt_popcount_nat_pos f (m / 2) h0 hlt'
         have hlog : m.log2 = (m / 2).log2 + 1 := by
-          rw [Nat.log2_def, if_pos (by omega)]
+          rw [Nat.log2_def, ite_eq_left (by omega)]
         rw [h, hlog, show 1 + jolt_popcount_nat f (m / 2) - 1 =
             (jolt_popcount_nat f (m / 2) - 1) + 1 by omega, Nat.testBit_succ, Nat.testBit_succ,
           show (X % 2 + 2 * jolt_pext_nat f (X / 2) (m / 2)) / 2 = jolt_pext_nat f (X / 2) (m / 2)
@@ -411,7 +411,7 @@ theorem jolt_pext_nat_testBit_top : ∀ (f X m : Nat), m ≠ 0 → m < 2 ^ f →
         exact ih _ _ h0 hlt'
     · have h0 : m / 2 ≠ 0 := by omega
       have hlog : m.log2 = (m / 2).log2 + 1 := by
-        rw [Nat.log2_def, if_pos (by omega)]
+        rw [Nat.log2_def, ite_eq_left (by omega)]
       rw [show m % 2 = 0 by omega, zero_add, hlog, Nat.testBit_succ]
       exact ih _ _ h0 hlt'
 
@@ -427,7 +427,7 @@ theorem pextSigned_eq_jolt_virtual_pext_signed_value (x y : BitVec 64) :
   generalize hP : jolt_popcount_nat 64 y.toNat = P
   by_cases hP0 : P = 0
   · simp [hP0]
-  simp only [hP0, if_false]
+  simp only [hP0, ite_false]
   have hy : y ≠ 0 := by
     rintro rfl
     rw [show (0 : BitVec 64).toNat = 0 from rfl, jolt_popcount_nat_zero] at hP; exact hP0 hP.symm
@@ -441,11 +441,11 @@ theorem pextSigned_eq_jolt_virtual_pext_signed_value (x y : BitVec 64) :
     rw [← BitVec.testBit_toNat, hE, ← hP]; exact jolt_pext_nat_testBit_top 64 _ _ hY y.isLt
   have hsign : (windowSignBit x y = 1) ↔ x.toNat.testBit y.toNat.log2 = true := by
     unfold windowSignBit
-    rw [if_neg hy, ← BitVec.toNat_inj, shift_and_one_toNat, Nat.testBit_eq_decide_div_mod_eq]
+    rw [ite_eq_right hy, ← BitVec.toNat_inj, shift_and_one_toNat, Nat.testBit_eq_decide_div_mod_eq]
     simp
   rw [htop]
   by_cases hb : x.toNat.testBit y.toNat.log2 = true
-  · rw [if_pos (hsign.mpr hb), if_pos hb]
+  · rw [ite_eq_left (hsign.mpr hb), ite_eq_left hb]
     apply BitVec.eq_of_toNat_eq
     have hsub : (((1#128 <<< 64) - (1#128 <<< P)).setWidth 64).toNat = 2 ^ 64 - 2 ^ P := by
       rw [BitVec.toNat_setWidth, BitVec.toNat_sub, BitVec.toNat_shiftLeft, BitVec.toNat_shiftLeft,
@@ -465,6 +465,6 @@ theorem pextSigned_eq_jolt_virtual_pext_signed_value (x y : BitVec 64) :
       ← Nat.two_pow_add_eq_or_of_lt hJ, ← hsplit, Nat.mod_eq_of_lt (by omega)]
     omega
   · have hns : ¬ windowSignBit x y = 1 := fun h => hb (hsign.mp h)
-    rw [if_neg hns, if_neg hb]; simp
+    rw [ite_eq_right hns, ite_eq_right hb]; simp
 
 end JoltConstraints

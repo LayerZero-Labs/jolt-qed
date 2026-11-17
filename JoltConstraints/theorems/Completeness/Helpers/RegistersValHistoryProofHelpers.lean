@@ -71,12 +71,12 @@ private theorem register42_real_write_delta
       TraceWitness.rdValue instr row.postState -
         TraceWitness.rdValue instr row.preState := by
     unfold TraceWitness.RdInc
-    simp only [dif_pos hb]
+    simp only [dite_eq_left hb]
     rfl
   have hwrite : TraceWitness.RdWriteValue (F := F) p trace t =
       TraceWitness.rdValue instr row.postState := by
     unfold TraceWitness.RdWriteValue
-    simp only [dif_pos hb]
+    simp only [dite_eq_left hb]
     rfl
   have hcanon : JoltRegisterEncoding.instructionIsCanonical instr = true :=
     trace.registerOperandsCanonical row.rowIndex
@@ -115,7 +115,7 @@ private theorem register42_trace_register_link
         prepareSource trace.bytecode
           (trace.rows[n + 1]'hnext).rowIndex (trace.rows[n]'hn).postState) = _
     simp only [hc, ↓reduceIte]
-  · simp only [if_neg hc]
+  · simp only [ite_eq_right hc]
     exact register42_prepareSource_preserves_sourceValue trace _ _ src
 
 private theorem register42_registersVal_real_step

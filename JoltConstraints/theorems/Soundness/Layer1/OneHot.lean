@@ -72,7 +72,7 @@ theorem selector_eq_ite {F : Type} [Field F] {ι : Type} [DecidableEq ι]
   intro i
   by_cases same : i = chosen
   · simp [same, one]
-  · rw [if_neg same]
+  · rw [ite_eq_right same]
     rcases eq_zero_or_one_of_boolean (boolean i) with zero | isOne
     · exact zero
     · exact False.elim (same (unique i isOne))

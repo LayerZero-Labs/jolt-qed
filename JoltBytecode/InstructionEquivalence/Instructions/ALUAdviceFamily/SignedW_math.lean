@@ -195,7 +195,7 @@ theorem sail_divw_value_of_normal_signedw (dividend divisor : BitVec 64)
       (Int.tdiv x.toInt y.toInt ≥b (2 ^i (31 : Int))) = false := by
     show decide _ = false
     apply decide_eq_false
-    push_neg
+    push Not
     simpa using! hquotientLt
   simp only [show LeanRV64D.Functions.not false = true from rfl,
     Bool.true_and, hgeFalse, Bool.false_eq_true, ↓reduceIte]
@@ -212,7 +212,7 @@ theorem divw_advice_value_eq_sail_div_signed_words
       (signedWordValue_eq_zero_iff divisor).2 hzero
     have hadvice : divw_advice_value dividend divisor = (-1 : BitVec 64) := by
       unfold divw_advice_value
-      rw [if_pos hzero]
+      rw [ite_eq_left hzero]
     rw [hadvice, sail_div_value_of_zero _ _ hwordZero]
   · have hwordNe : signedWordValue divisor ≠ 0#64 :=
       fun h => hzero ((signedWordValue_eq_zero_iff divisor).1 h)
@@ -223,7 +223,7 @@ theorem divw_advice_value_eq_sail_div_signed_words
       have hadvice :
           divw_advice_value dividend divisor = (1 : BitVec 64) <<< 31 := by
         unfold divw_advice_value
-        rw [if_neg hzero, if_pos ⟨hdividend, hdivisor⟩]
+        rw [ite_eq_right hzero, ite_eq_left ⟨hdividend, hdivisor⟩]
       rw [hadvice, sail_div_value_eq_sdiv_of_ne _ _ hwordNe]
       unfold signedWordValue
       rw [hdividend, hdivisor]
@@ -232,7 +232,7 @@ theorem divw_advice_value_eq_sail_div_signed_words
           divw_advice_value dividend divisor =
             sail_divw_value dividend divisor false := by
         unfold divw_advice_value
-        rw [if_neg hzero, if_neg hoverflow]
+        rw [ite_eq_right hzero, ite_eq_right hoverflow]
       rw [hadvice,
         sail_divw_value_of_normal_signedw dividend divisor hzero hoverflow,
         sail_div_value_eq_sdiv_of_ne _ _ hwordNe]
@@ -245,7 +245,7 @@ theorem sign_extend_divw_advice_value (dividend divisor : BitVec 64) :
   by_cases hzero : Sail.BitVec.extractLsb divisor 31 0 = 0#32
   · have hadvice : divw_advice_value dividend divisor = (-1 : BitVec 64) := by
       unfold divw_advice_value
-      rw [if_pos hzero]
+      rw [ite_eq_left hzero]
     rw [hadvice, sail_divw_value_of_zero_signedw dividend divisor hzero]
     decide
   · by_cases hoverflow :
@@ -255,7 +255,7 @@ theorem sign_extend_divw_advice_value (dividend divisor : BitVec 64) :
       have hadvice :
           divw_advice_value dividend divisor = (1 : BitVec 64) <<< 31 := by
         unfold divw_advice_value
-        rw [if_neg hzero, if_pos ⟨hdividend, hdivisor⟩]
+        rw [ite_eq_right hzero, ite_eq_left ⟨hdividend, hdivisor⟩]
       rw [hadvice,
         sail_divw_value_of_overflow_signedw dividend divisor hdividend hdivisor]
       decide
@@ -263,7 +263,7 @@ theorem sign_extend_divw_advice_value (dividend divisor : BitVec 64) :
           divw_advice_value dividend divisor =
             sail_divw_value dividend divisor false := by
         unfold divw_advice_value
-        rw [if_neg hzero, if_neg hoverflow]
+        rw [ite_eq_right hzero, ite_eq_right hoverflow]
       rw [hadvice,
         sail_divw_value_of_normal_signedw dividend divisor hzero hoverflow]
       exact signExtend32_extract_roundtrip _
@@ -338,7 +338,7 @@ theorem bv_abs_sail_divw_eq_signed_words
           divw_advice_value dividend divisor =
             sail_divw_value dividend divisor false := by
         unfold divw_advice_value
-        rw [if_neg hzero, if_neg hoverflow]
+        rw [ite_eq_right hzero, ite_eq_right hoverflow]
       rw [← hadvice, divw_advice_value_eq_sail_div_signed_words]
 
 theorem remw_advice_value_eq_rem_signed_words
@@ -349,11 +349,11 @@ theorem remw_advice_value_eq_rem_signed_words
   · have hwordZero : signedWordValue divisor = 0#64 :=
       (signedWordValue_eq_zero_iff divisor).2 hzero
     unfold remw_advice_value rem_advice_value
-    rw [if_pos hzero, if_pos hwordZero]
+    rw [ite_eq_left hzero, ite_eq_left hwordZero]
   · have hwordNe : signedWordValue divisor ≠ 0#64 :=
       fun h => hzero ((signedWordValue_eq_zero_iff divisor).1 h)
     unfold remw_advice_value rem_advice_value
-    rw [if_neg hzero, if_neg hwordNe,
+    rw [ite_eq_right hzero, ite_eq_right hwordNe,
       bv_abs_sail_divw_eq_signed_words]
 
 end

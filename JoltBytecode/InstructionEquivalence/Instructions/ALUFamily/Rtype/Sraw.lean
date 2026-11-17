@@ -156,7 +156,7 @@ theorem srawProgram_eq_sail
     unfold JoltISA.execInstr JoltISA.readSrc JoltISA.writeDst liftSail
     simp only [h_read_rs1_tmp, bind, EStateM.bind]
     simp only [readVReg_run]
-    simp only [js_tmp, if_pos]
+    simp only [js_tmp, ite_eq_left]
     rw [h_value]
     rw [h_write]
     rfl

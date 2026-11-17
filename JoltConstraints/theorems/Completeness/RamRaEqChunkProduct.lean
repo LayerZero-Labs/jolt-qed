@@ -20,8 +20,8 @@ theorem honestWitness_ramRaEqChunkProduct
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (ramChunksPos : 0 < params.ramChunks) :
     ramRaEqChunkProduct
       (HonestTrace.honestWitness (F := F) params trace) := by
@@ -70,7 +70,7 @@ theorem honestWitness_ramRaEqChunkProduct
         obtain ⟨chunk, hneq⟩ := hdiff
         have hopt : (some b : Option Nat) ≠ some address.val := by
           simp [heq]
-        rw [if_neg hopt]
+        rw [ite_eq_right hopt]
         symm
         apply Finset.prod_eq_zero (Finset.mem_univ chunk)
         change address.val /
@@ -82,6 +82,6 @@ theorem honestWitness_ramRaEqChunkProduct
           2 ^ ((params.ramChunks - 1 - chunk.val) * params.chunkBits) %
           2 ^ params.chunkBits = TraceWitness.addressChunk params.chunkBits chunk b
           then (1 : F) else 0) = 0
-        exact if_neg hneq
+        exact ite_eq_right hneq
 
 end JoltConstraints

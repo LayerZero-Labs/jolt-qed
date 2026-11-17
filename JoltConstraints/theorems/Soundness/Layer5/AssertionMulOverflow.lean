@@ -92,7 +92,7 @@ theorem mulAssertion_step {pre : SailJoltState}
   · rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl),
       instructionIs]
     simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind,
-      leftRead, rightRead, if_pos passes, pure, EStateM.pure]
+      leftRead, rightRead, ite_eq_left passes, pure, EStateM.pure]
   · intro next
     exact agrees.noWrite (two_pow_127_lt_char charAbove2pow128) context equations
       next slot selected rowIs (by rw [instructionIs]; rfl)

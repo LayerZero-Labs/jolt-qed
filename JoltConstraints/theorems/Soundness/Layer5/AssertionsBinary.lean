@@ -99,7 +99,7 @@ theorem binaryAssertion_passes_of_inputs (leftWord rightWord : BitVec 64)
         BinaryAssertion.instruction, JoltMetadata.lookupTable])
     change ¬ (leftWord = 0 ∧ rightWord ≠ -1)
     intro bad
-    rw [if_pos bad] at output
+    rw [ite_eq_left bad] at output
     exact zero_ne_one (output.symm.trans accepted)
   | remainder =>
     have output := lookupOutput_validUnsignedRemainder bound context equations t slot selected
@@ -160,14 +160,14 @@ theorem binaryAssertion_step {pre : SailJoltState}
       have noBad : ¬ (sourceValue lhs pre = 0#64 ∧ sourceValue rhs pre ≠ -1) := by
         simpa only using! passes
       simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind,
-        leftRead, rightRead, if_neg noBad, pure, EStateM.pure]
+        leftRead, rightRead, ite_eq_right noBad, pure, EStateM.pure]
     | remainder =>
       simp only [BinaryAssertion.instruction, BinaryAssertion.Passes] at passes ⊢
       have succeeds : sourceValue rhs pre = 0#64 ∨
           (sourceValue lhs pre).toNat < (sourceValue rhs pre).toNat := by
         simpa only [BitVec.lt_def] using! passes
       simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind,
-        leftRead, rightRead, if_pos succeeds, pure, EStateM.pure]
+        leftRead, rightRead, ite_eq_left succeeds, pure, EStateM.pure]
   · intro next
     exact agrees.noWrite (two_pow_127_lt_char charAbove2pow128) context equations
       next slot selected rowIs (by cases kind <;> rw [instructionIs] <;> rfl)

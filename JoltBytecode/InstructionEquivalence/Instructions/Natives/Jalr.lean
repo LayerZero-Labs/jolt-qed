@@ -70,7 +70,7 @@ theorem jalrInstr_eq_sail
   -- The disabled Zicfilp hook leaves the Sail state unchanged.
   have hUpdate : update_elp_state rs1 js.sail = .ok () js.sail := by
     simp only [update_elp_state, h.zicfilp_disabled.value, bind, EStateM.bind,
-      Bool.false_eq_true, if_false, pure, EStateM.pure]
+      Bool.false_eq_true, ite_false, pure, EStateM.pure]
   -- The bundle guarantees that Sail accepts Rust's bit-0-cleared target.
   simp only [execute_JALR, EStateM.run, bind, EStateM.bind, hUpdate, get_next_pc,
     readReg_eq_of_get? Register.nextPC js.sail rustPC hNextPC, h.rs1_read,

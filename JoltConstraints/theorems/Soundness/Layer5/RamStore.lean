@@ -70,9 +70,9 @@ theorem ram_store_index (state : SailState) (base value : BitVec 64)
     Mmu.ram_doubleword (Mmu.write_ram_doubleword state.mem base.toNat value) (lowest + 8 * index) =
       if index = chosen then value else Mmu.ram_doubleword state.mem (lowest + 8 * index) := by
   by_cases same : index = chosen
-  · rw [if_pos same, same, ← addressIs]
+  · rw [ite_eq_left same, same, ← addressIs]
     exact ram_store_word state base value
-  · rw [if_neg same]
+  · rw [ite_eq_right same]
     exact ram_store_other state base value _ (by omega)
 
 end JoltConstraints.Soundness

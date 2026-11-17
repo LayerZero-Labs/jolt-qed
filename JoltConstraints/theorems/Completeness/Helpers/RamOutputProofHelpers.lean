@@ -26,10 +26,10 @@ theorem overlayRamBytes_below_input (layout : MemoryLayout)
   dsimp only
   by_cases hnone : start.toNat = 0 ∨
       start.toNat < min layout.trusted_advice_start.toNat layout.untrusted_advice_start.toNat
-  · rw [if_pos hnone]
-  · rw [if_neg hnone]
+  · rw [ite_eq_left hnone]
+  · rw [ite_eq_right hnone]
     dsimp only
-    rw [if_neg]
+    rw [ite_eq_right]
     omega
 
 /-- On the public I/O interval, the final RAM word is the public I/O word.
@@ -62,7 +62,7 @@ theorem finalRamWord_eq_ramPublicIoWord (trace : Trace)
     adviceBelowInput.inputWordAligned adviceBelowInput.untrustedAdviceBelowInput address lower
   unfold TraceWitness.finalRamWord ramPublicIoWord
   dsimp only
-  rw [hlayout, htrusted, huntrusted, if_neg hram, htrustedOverlay, huntrustedOverlay]
+  rw [hlayout, htrusted, huntrusted, ite_eq_right hram, htrustedOverlay, huntrustedOverlay]
 
 -- Trimming keeps the bytes before the trailing zeros: each kept byte is the byte at the
 -- same place, and every byte after the kept ones is 0.
@@ -114,7 +114,7 @@ theorem trimTrailingZeros_of_padded_eq (a b : Array (BitVec 8)) (limit : Nat)
     rw [Array.getElem?_append]
     split_ifs with within
     · rfl
-    · rw [Array.getElem?_replicate, if_pos (by omega), Array.getElem?_eq_none (by omega)]
+    · rw [Array.getElem?_replicate, ite_eq_left (by omega), Array.getElem?_eq_none (by omega)]
       rfl
   have padEq : a ++ Array.replicate (limit - a.size) 0 =
       b ++ Array.replicate (limit - b.size) 0 := by
@@ -178,18 +178,18 @@ theorem overlayRamBytes_trailing_zeros (layout : MemoryLayout) (start : BitVec 6
   · rename_i firstWord remapped
     by_cases inTrimmed : firstWord ≤ address ∧ (address - firstWord) * 8 < trimmed.size
     · -- inside the kept bytes, both read the same bytes
-      rw [if_pos inTrimmed, if_pos ⟨inTrimmed.1, by omega⟩, sameBytes]
-    · rw [if_neg inTrimmed]
+      rw [ite_eq_left inTrimmed, ite_eq_left ⟨inTrimmed.1, by omega⟩, sameBytes]
+    · rw [ite_eq_right inTrimmed]
       by_cases inBytes : firstWord ≤ address ∧ (address - firstWord) * 8 < bytes.size
       · -- past the kept bytes, the word underneath and the zero bytes are both 0
-        rw [if_pos inBytes, previousZero firstWord remapped inBytes.1, ← sameBytes]
+        rw [ite_eq_left inBytes, previousZero firstWord remapped inBytes.1, ← sameBytes]
         symm
         apply ramImageWord_zero
         intro offset _
         have past : trimmed.size ≤ (address - firstWord) * 8 + offset := by omega
         rw [Array.getElem?_eq_none past]
         rfl
-      · rw [if_neg inBytes]
+      · rw [ite_eq_right inBytes]
 
 /-- `q` counts words from the output start; word `q` holds output bytes `8*q`
 through `8*q+7`, with missing bytes read as zero.
@@ -250,22 +250,22 @@ theorem ramPublicIoWord_output (config : MemoryConfig) (layout : MemoryLayout)
   have remapInput : TraceWitness.remapRamAddress layout layout.input_start =
       some inputFirst := by
     unfold TraceWitness.remapRamAddress
-    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rw [ite_eq_right (by dsimp only [low, ramLowestAddress] at *; omega)]
     rfl
   have remapOutput : TraceWitness.remapRamAddress layout layout.output_start =
       some outputFirst := by
     unfold TraceWitness.remapRamAddress
-    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rw [ite_eq_right (by dsimp only [low, ramLowestAddress] at *; omega)]
     rfl
   have remapPanic : TraceWitness.remapRamAddress layout layout.panic =
       some panicFirst := by
     unfold TraceWitness.remapRamAddress
-    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rw [ite_eq_right (by dsimp only [low, ramLowestAddress] at *; omega)]
     rfl
   have remapTermination : TraceWitness.remapRamAddress layout layout.termination =
       some terminationFirst := by
     unfold TraceWitness.remapRamAddress
-    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rw [ite_eq_right (by dsimp only [low, ramLowestAddress] at *; omega)]
     rfl
   have inputZero : TraceWitness.overlayRamBytes layout layout.input_start
       io.inputs (outputFirst + q) 0 = 0 := by
@@ -278,7 +278,7 @@ theorem ramPublicIoWord_output (config : MemoryConfig) (layout : MemoryLayout)
       have : (outputFirst + q - inputFirst) * 8 ≥ layout.max_input_size.toNat := by
         omega
       omega
-    rw [if_neg hInputNot]
+    rw [ite_eq_right hInputNot]
   have outputPacked : TraceWitness.overlayRamBytes layout layout.output_start
       io.outputs (outputFirst + q) 0 =
         TraceWitness.ramImageWord (fun i => io.outputs[i]?.getD 0) (8 * q) := by
@@ -286,10 +286,10 @@ theorem ramPublicIoWord_output (config : MemoryConfig) (layout : MemoryLayout)
     rw [remapOutput]
     dsimp only
     by_cases within : 8 * q < io.outputs.size
-    · rw [if_pos (by omega)]
+    · rw [ite_eq_left (by omega)]
       congr 1
       omega
-    · rw [if_neg (by omega)]
+    · rw [ite_eq_right (by omega)]
       symm
       apply ramImageWord_zero
       intro offset offsetLt
@@ -341,12 +341,12 @@ theorem ramPublicIoWord_panic (config : MemoryConfig) (layout : MemoryLayout)
   have remapPanic : TraceWitness.remapRamAddress layout layout.panic =
       some panicFirst := by
     unfold TraceWitness.remapRamAddress
-    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rw [ite_eq_right (by dsimp only [low, ramLowestAddress] at *; omega)]
     rfl
   have remapTermination : TraceWitness.remapRamAddress layout layout.termination =
       some terminationFirst := by
     unfold TraceWitness.remapRamAddress
-    rw [if_neg (by dsimp only [low, ramLowestAddress] at *; omega)]
+    rw [ite_eq_right (by dsimp only [low, ramLowestAddress] at *; omega)]
     rfl
   unfold ramPublicIoWord
   rw [sameLayout, remapPanic, remapTermination]
@@ -378,7 +378,7 @@ theorem ramPublicIoWord_trimmed (io run : JoltDevice) (config : MemoryConfig)
   split
   · rfl
   · rename_i inputFirst inputRemapped
-    rw [if_neg]
+    rw [ite_eq_right]
     rintro ⟨_, inInputs⟩
     unfold TraceWitness.remapRamAddress at outputRemapped inputRemapped
     dsimp only at outputRemapped inputRemapped

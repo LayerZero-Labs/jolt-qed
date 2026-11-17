@@ -80,7 +80,7 @@ theorem execInstr_branch_target (instr : JoltISA.Instr) (lhs rhs : JoltISA.Src)
         dsimp only at runs
         rw [rightSame] at runs
         rw [← leftIs, ← rightIs] at taken
-        rw [if_pos taken] at runs
+        rw [ite_eq_left taken] at runs
         -- the branch reads PC and jumps to PC plus its offset
         rw [EStateM.bind, readPC] at runs
         dsimp only at runs
@@ -129,9 +129,9 @@ the next row starts at the branch target. -/
 theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
+    (_ramFits : params.RamFits trace)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (lastIsJump : (trace.rows.back?.all fun last =>
       trace.bytecode[last.rowIndex].instruction.is_jump) = true) :
     nextUnexpandedPCEqPCPlusImmIfShouldBranch
@@ -187,8 +187,8 @@ theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
           rfl
       -- the witness reads the next row's address, this row's address and the offset
       have hnextWitness : t.val + 1 < params.traceLength := hnext.trans tracePadded.2
-      simp only [TraceWitness.NextUnexpandedPC, dif_pos hnextWitness, TraceWitness.UnexpandedPC,
-        dif_pos hnext, dif_pos ht, TraceWitness.Imm]
+      simp only [TraceWitness.NextUnexpandedPC, dite_eq_left hnextWitness, TraceWitness.UnexpandedPC,
+        dite_eq_left hnext, dite_eq_left ht, TraceWitness.Imm]
       simp only [Fin.getElem_fin] at nextIs immIs
       rw [immIs, nextIs]
       rw [nextIs] at toRam

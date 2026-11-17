@@ -18,7 +18,7 @@ private theorem floor_index_low (base imm : BitVec 64) :
     apply BitVec.eq_of_getLsbD_eq
     intro i hi
     simp only [BitVec.getLsbD_setWidth, BitVec.getLsbD_signExtend, hi,
-      show i < 128 by omega, decide_true, Bool.true_and, if_true]
+      show i < 128 by omega, decide_true, Bool.true_and, ite_true]
 
 /-- AddressOffset returns the effective address masked by `8 - width`, for
 any width; widths 1, 2 and 4 give masks 7, 6 and 4 respectively.

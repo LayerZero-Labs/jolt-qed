@@ -46,7 +46,7 @@ theorem selected_next_of_nonlast_virtual
     rw [virtual, nonlast] at relation
     linear_combination relation
   have shifted : witness.NextPC t = witness.PC ⟨t.val + 1, next⟩ := by
-    simpa only [nextPCEqShift, dif_pos next] using equations.nextPCEqShift t
+    simpa only [nextPCEqShift, dite_eq_left next] using equations.nextPCEqShift t
   have oldPC := pc_of_selected_bytecode charAbove2pow127 context equations t slot selected
   have newPC := pc_of_selected_bytecode charAbove2pow127 context equations
     ⟨t.val + 1, next⟩ nextSlot nextSelected
@@ -121,14 +121,14 @@ theorem selected_interior_current_remaining
     | some n => rfl
   have nextVirtual : witness.NextIsVirtual t = 1 := by
     rw [equations.nextIsVirtualEqShift t]
-    simp only [dif_pos next]
+    simp only [dite_eq_left next]
     rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
       .VirtualInstruction ⟨t.val + 1, next⟩ nextSlot nextSelected]
     simp only [bytecodeCircuitFlag, nextRowIs, JoltMetadata.circuitFlag,
       some, ↓reduceIte]
   have nextFirst : witness.NextIsFirstInSequence t = 0 := by
     rw [equations.nextIsFirstInSequenceEqShift t]
-    simp only [dif_pos next]
+    simp only [dite_eq_left next]
     rw [opFlag_of_selected_bytecode charAbove2pow127 context equations
       .IsFirstInSequence ⟨t.val + 1, next⟩ nextSlot nextSelected]
     simp only [bytecodeCircuitFlag, nextRowIs, JoltMetadata.circuitFlag,
@@ -250,7 +250,7 @@ theorem padding_persists
     rw [doNotUpdate] at update
     linear_combination update
   have shifted : witness.UnexpandedPC ⟨t.val + 1, next⟩ = 0 := by
-    simpa only [equations.nextUnexpandedPCEqShift t, dif_pos next] using nextPC
+    simpa only [equations.nextUnexpandedPCEqShift t, dite_eq_left next] using nextPC
   obtain ⟨nextSlot, nextSelected, _⟩ :=
     bytecodeRa_unique charAbove2pow127 context equations ⟨t.val + 1, next⟩
   have nextNoRow : bytecodeRow context.bytecode nextSlot.val = none := by

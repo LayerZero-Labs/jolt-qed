@@ -52,7 +52,7 @@ theorem remapRamAddress_of_selected (t : Fin params.traceLength)
   have above : ¬ raw.toNat < ramLowestAddress context.io.memory_layout := by omega
   change (if raw.toNat = 0 ∨ raw.toNat < ramLowestAddress context.io.memory_layout then none
     else some ((raw.toNat - ramLowestAddress context.io.memory_layout) / 8)) = _
-  rw [if_neg (by simp [nonzero, above]), address]
+  rw [ite_eq_right (by simp [nonzero, above]), address]
   simp
 
 end JoltConstraints.Soundness

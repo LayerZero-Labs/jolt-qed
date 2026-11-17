@@ -80,9 +80,9 @@ Jolt's sizes satisfy (`HonestTrace.witness_params_chunk_config`). -/
 theorem honestWitness_instructionRaEqChunkProduct
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (chunkConfig : params.ProverChunkConfig) :
     instructionRaEqChunkProduct
       (HonestTrace.honestWitness (F := F) params trace) := by
@@ -117,7 +117,7 @@ theorem honestWitness_instructionRaEqChunkProduct
     apply Finset.prod_eq_one
     intro offset _
     dsimp [TraceWitness.addressChunkEntry]
-    rw [if_pos]
+    rw [ite_eq_left]
     calc
       (instructionVirtualAddressDigit params address offset).val =
           TraceWitness.addressChunk params.chunkBits offset address.val := digit offset
@@ -146,6 +146,6 @@ theorem honestWitness_instructionRaEqChunkProduct
     symm
     apply Finset.prod_eq_zero (Finset.mem_univ offset)
     dsimp [TraceWitness.addressChunkEntry]
-    exact if_neg hne
+    exact ite_eq_right hne
 
 end JoltConstraints

@@ -19,9 +19,9 @@ private theorem leftOperandFlagsExclusive (instruction : JoltISA.Instr) :
 theorem honestWitness_leftInstructionInputEqSelection
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     leftInstructionInputEqSelection
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
@@ -33,7 +33,7 @@ theorem honestWitness_leftInstructionInputEqSelection
     have hex := leftOperandFlagsExclusive instruction
     dsimp [leftInstructionInputEqSelection, HonestTrace.honestWitness,
       TraceWitness.LeftInstructionInput, TraceWitness.InstructionFlags]
-    simp only [dif_pos h]
+    simp only [dite_eq_left h]
     by_cases hpc : JoltMetadata.instructionFlag instruction .LeftOperandIsPC = true
     · have hrs : JoltMetadata.instructionFlag instruction .LeftOperandIsRs1Value = false := by
         cases hf : JoltMetadata.instructionFlag instruction .LeftOperandIsRs1Value with

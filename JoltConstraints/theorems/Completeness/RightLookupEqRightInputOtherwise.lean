@@ -94,7 +94,7 @@ private theorem lookupIndex_right_eq_input {F : Type} [Field F] (params : Witnes
   have unpackZero : uninterleave (0 : Fin (2^128)) = (0, 0) := rfl
   simp only [Fin.getElem_fin] at separate
   simp only [TraceWitness.lookupIndex, TraceWitness.RightInstructionInput,
-    TraceWitness.Rs2Value, TraceWitness.Imm, TraceWitness.RdWriteValue, ht, dif_pos]
+    TraceWitness.Rs2Value, TraceWitness.Imm, TraceWitness.RdWriteValue, ht, dite_eq_left]
   generalize hi : trace.bytecode[(trace.rows[t.val]'ht).rowIndex.val].instruction = instruction
     at separate ⊢
   cases instruction <;>
@@ -125,9 +125,9 @@ Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
 theorem honestWitness_rightLookupEqRightInputOtherwise
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
     rightLookupEqRightInputOtherwise
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t

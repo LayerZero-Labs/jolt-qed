@@ -149,7 +149,7 @@ theorem srliwProgram_eq_sail (shamt : BitVec 5) (rs1 rd : regidx) (js : SailJolt
       rw [Nat.shiftLeft_eq, Nat.shiftLeft_eq, Nat.one_mul, Nat.one_mul]
       exact Nat.sub_ne_zero_of_lt (Nat.pow_lt_pow_right (by decide) (by simpa using shamt.isLt))
     unfold jolt_virtual_srliw_value srliw_sail_operation
-    rw [if_neg hmask]
+    rw [ite_eq_right hmask]
     rw [ctz_word_shift_bitmask shamt.toNat shamt.isLt]
     unfold sign_extend shift_bits_right
     simp [Sail.BitVec.signExtend, Sail.BitVec.extractLsb,
