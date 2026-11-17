@@ -1,6 +1,7 @@
 import JoltConstraints.translation.Constraints.RamOutputEqPublicIo
 import JoltConstraints.theorems.Completeness.Helpers.IOSetupFrame
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.theorems.advice_below_input
 
 open LeanRV64D
 

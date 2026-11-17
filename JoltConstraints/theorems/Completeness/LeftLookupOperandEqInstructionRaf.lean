@@ -1,6 +1,6 @@
 import JoltConstraints.theorems.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.translation.Constraints.LeftLookupOperandEqInstructionRaf
-import JoltConstraints.translation.Constraints.LookupOperandData
+import JoltConstraints.theorems.interleave_facts
 
 open LeanRV64D
 

@@ -2,6 +2,7 @@ import JoltConstraints.translation.Constraints.All
 import JoltConstraints.theorems.Completeness
 import JoltConstraints.theorems.Completeness.Helpers.VerifierSizes
 import JoltConstraints.theorems.prover_config_facts
+import JoltConstraints.theorems.advice_below_input
 
 open LeanRV64D
 
@@ -115,26 +116,6 @@ theorem honestWitness_constraintEquations
 end JoltConstraints
 
 open JoltConstraints
-
--- Every assert in the run has equal sides: an ordinary one (imm = 0) executed, so its
--- sides were equal; a spoil one (imm ≠ 0) is assumed to pass.
-theorem HonestTrace.assert_eq_passes {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (spoilAssertsPass : trace.SpoilAssertsPass) : assertEqPasses trace := by
-  intro t
-  dsimp only
-  split
-  · rename_i lhs rhs imm isAssert
-    by_cases zero : imm = 0
-    · -- an ordinary assert
-      subst zero
-      have runs := trace.executes trace.rows[t] (Array.getElem_mem t.isLt)
-      rw [withRuntimeAdvice_assert (instruction := trace.bytecode[trace.rows[t].rowIndex].instruction)
-        _ lhs rhs 0 isAssert] at runs
-      exact assert_eq_holds lhs rhs _ _ _ runs
-    · -- a spoil assert
-      exact spoilAssertsPass _ (Array.getElem_mem t.isLt) lhs rhs imm isAssert zero
-  · trivial
 
 -- Both advice buffers of the starting device lie below the inputs, which start a whole
 -- number of 64-bit words above the lowest address.

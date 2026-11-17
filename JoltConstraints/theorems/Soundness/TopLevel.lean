@@ -20,6 +20,7 @@ import JoltConstraints.translation.witness_helpers.pc
 import JoltConstraints.translation.witness_helpers.rs1_value
 import JoltConstraints.translation.witness_helpers.rs2_value
 import JoltConstraints.translation.witness_helpers.ram_address
+import JoltConstraints.theorems.advice_below_input
 
 open LeanRV64D
 

@@ -2,6 +2,7 @@ import JoltConstraints.theorems.Soundness.Layer6.PrefixState
 import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
 import JoltConstraints.theorems.Soundness.Layer7.TerminationStore
 import JoltConstraints.theorems.Soundness.Layer3.State
+import JoltConstraints.theorems.advice_below_input
 
 open LeanRV64D
 
