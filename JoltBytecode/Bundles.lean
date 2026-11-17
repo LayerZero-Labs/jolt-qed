@@ -149,26 +149,26 @@ structure BinarySourceReadWithLinkedCSRs
     extends BinarySourceReadAssumptions rs2 rs1 js,
       LinkedCSRRegisterAssumptions js
 
-def LinkedCSRRegisterAssumptions.linkedCSRs
+theorem LinkedCSRRegisterAssumptions.linkedCSRs
     {js : SailJoltState}
     (h : LinkedCSRRegisterAssumptions js) :
     LinkedCSRs js :=
   ⟨h.mstatus_matches, h.mtvec_matches, h.mscratch_matches, h.mepc_matches,
     h.mcause_matches, h.mtval_matches⟩
 
-def NoSourceReadWithLinkedCSRs.linkedCSRs
+theorem NoSourceReadWithLinkedCSRs.linkedCSRs
     {js : SailJoltState}
     (h : NoSourceReadWithLinkedCSRs js) :
     LinkedCSRs js :=
   h.toLinkedCSRRegisterAssumptions.linkedCSRs
 
-def UnarySourceReadWithLinkedCSRs.linkedCSRs
+theorem UnarySourceReadWithLinkedCSRs.linkedCSRs
     {rs1 : regidx} {js : SailJoltState}
     (h : UnarySourceReadWithLinkedCSRs rs1 js) :
     LinkedCSRs js :=
   h.toLinkedCSRRegisterAssumptions.linkedCSRs
 
-def BinarySourceReadWithLinkedCSRs.linkedCSRs
+theorem BinarySourceReadWithLinkedCSRs.linkedCSRs
     {rs2 rs1 : regidx} {js : SailJoltState}
     (h : BinarySourceReadWithLinkedCSRs rs2 rs1 js) :
     LinkedCSRs js :=
@@ -183,7 +183,7 @@ structure AuipcInstrEqSailAssumptions (js : SailJoltState)
     extends NoSourceReadWithLinkedCSRs js where
   pc_readable : Assumptions.SailRegReadable Register.PC js.sail
 
-def AuipcInstrEqSailAssumptions.linkedCSRs
+theorem AuipcInstrEqSailAssumptions.linkedCSRs
     {js : SailJoltState} (h : AuipcInstrEqSailAssumptions js) : LinkedCSRs js :=
   h.toNoSourceReadWithLinkedCSRs.linkedCSRs
 
@@ -203,7 +203,7 @@ structure JalInstrEqSailAssumptions (imm : BitVec 21) (js : SailJoltState)
   target_aligned : Assumptions.MepcReadAligned
     (pc_readable.exists_value.choose + sign_extend (m := 64) imm) js.sail
 
-def JalInstrEqSailAssumptions.linkedCSRs
+theorem JalInstrEqSailAssumptions.linkedCSRs
     {imm : BitVec 21} {js : SailJoltState}
     (h : JalInstrEqSailAssumptions imm js) :
     LinkedCSRs js :=
@@ -225,7 +225,7 @@ structure JalrInstrEqSailAssumptions (imm : BitVec 12) (rs1 : regidx) (js : Sail
   target_aligned : Assumptions.MepcReadAligned
     (BitVec.update (rs1_val + sign_extend (m := 64) imm) 0 0#1) js.sail
 
-def JalrInstrEqSailAssumptions.linkedCSRs
+theorem JalrInstrEqSailAssumptions.linkedCSRs
     {imm : BitVec 12} {rs1 : regidx} {js : SailJoltState}
     (h : JalrInstrEqSailAssumptions imm rs1 js) :
     LinkedCSRs js :=
@@ -274,7 +274,7 @@ structure LoadProgramEqSailAssumptions (imm : BitVec 12) (rs1 : regidx)
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
   jolt_ram : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address rs1_val imm) js
 
-def LoadProgramEqSailAssumptions.linkedCSRs
+theorem LoadProgramEqSailAssumptions.linkedCSRs
     {imm : BitVec 12} {rs1 : regidx} {js : SailJoltState}
     (h : LoadProgramEqSailAssumptions imm rs1 js) :
     Assumptions.MstatusVRegMatchesSail js ∧
@@ -298,7 +298,7 @@ structure StoreProgramEqSailAssumptions
   rs2_read : rX_bits rs2 js.sail = .ok rs2_val js.sail
   jolt_ram_store : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address rs1_val imm) js
 
-def StoreProgramEqSailAssumptions.linkedCSRs
+theorem StoreProgramEqSailAssumptions.linkedCSRs
     {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
     (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) :
     Assumptions.MstatusVRegMatchesSail js ∧
@@ -345,14 +345,14 @@ structure AmoDwordProgramEqSailAssumptions
   jolt_ram_load : Assumptions.JoltRamLoadOk rs1_val js
   jolt_ram_store : Assumptions.JoltRamStoreOk rs1_val js
 
-def AmoDwordProgramEqSailAssumptions.rdReadable
+theorem AmoDwordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
     (h : AmoDwordProgramEqSailAssumptions op rs2 rs1 rd js) :
     Assumptions.XRegReadable rd js.sail :=
   h.toAmoRegisterAssumptions.rd_readable
 
 /-- TODO: Docs -/
-def AmoDwordProgramEqSailAssumptions.linkedCSRs
+theorem AmoDwordProgramEqSailAssumptions.linkedCSRs
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
     (h : AmoDwordProgramEqSailAssumptions op rs2 rs1 rd js) :
     LinkedCSRs js :=
@@ -368,14 +368,14 @@ structure AmoWordProgramEqSailAssumptions
   jolt_ram_load : Assumptions.JoltRamLoadOk (amoWordBase rs1_val) js
   jolt_ram_store : Assumptions.JoltRamStoreOk (amoWordBase rs1_val) js
 
-def AmoWordProgramEqSailAssumptions.rdReadable
+theorem AmoWordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
     (h : AmoWordProgramEqSailAssumptions op rs2 rs1 rd js) :
     Assumptions.XRegReadable rd js.sail :=
   h.toAmoRegisterAssumptions.rd_readable
 
 /-- TODO: Docs -/
-def AmoWordProgramEqSailAssumptions.linkedCSRs
+theorem AmoWordProgramEqSailAssumptions.linkedCSRs
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
     (h : AmoWordProgramEqSailAssumptions op rs2 rs1 rd js) :
     LinkedCSRs js :=
