@@ -525,7 +525,7 @@ theorem next_cycle_address
       right
       have shifted : witness.UnexpandedPC ⟨cycle.val + 1, next⟩ =
           witness.NextUnexpandedPC cycle := by
-        simpa only [equations.nextUnexpandedPCEqShift cycle, dite_eq_left next]
+        simp only [equations.nextUnexpandedPCEqShift cycle, dite_eq_left next]
       have encoded := JoltConstraints.Soundness.unexpandedPC_of_selected_bytecode
         charAbove2pow127 context equations ⟨cycle.val + 1, next⟩ slot selected
       exact ⟨slot, row, selected, present,
@@ -1009,8 +1009,8 @@ private theorem source_compressed_next
 private theorem prefix_back_succ {α : Type} (rows : Array α) (n : Nat)
     (inside : n < rows.size) :
     (rows.extract 0 (n + 1)).back? = some rows[n] := by
-  simp [Array.back?_eq_getElem?, Array.size_extract, Nat.min_eq_left (by omega : n + 1 ≤ rows.size),
-    Array.getElem?_extract, inside]
+  simp [Array.back?_eq_getElem?, Array.size_extract,
+    inside]
 
 private theorem untrusted_entry_at
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -2068,9 +2068,9 @@ theorem jalr_destination_base_address_eq_iff
   have canonicalDstSource :
       JoltRegisterEncoding.sourceIsCanonical
         (JoltConstraints.Soundness.destinationSource dst) = true := by
-    cases dst <;> simpa [JoltConstraints.Soundness.destinationSource,
+    cases dst <;> simp_all [JoltConstraints.Soundness.destinationSource,
       JoltRegisterEncoding.sourceIsCanonical,
-      JoltRegisterEncoding.destinationIsCanonical] using canonicalDst
+      JoltRegisterEncoding.destinationIsCanonical]
   have sameEncoding : TraceWitness.sourceRegisterAddress
       (JoltConstraints.Soundness.destinationSource dst) =
       TraceWitness.destinationRegisterAddress dst := by
@@ -2661,7 +2661,7 @@ theorem expanded_virtual_jalr_source
   have sourceEq := (jalr_destination_base_address_eq_iff dst (.vreg rs1)
     dstCanonical baseCanonical).mp sameRegister
   have dstEq : dst = .vreg rs1 := by
-    cases dst <;> simpa [JoltConstraints.Soundness.destinationSource] using sourceEq
+    cases dst <;> simp_all [JoltConstraints.Soundness.destinationSource]
   subst dst
   simp only [ExpansionTempLiveness.writes, destination, beq_self_eq_true] at noWrite
   cases noWrite

@@ -1,5 +1,4 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Basic
-import Mathlib.Tactic
 
 open LeanRV64D
 

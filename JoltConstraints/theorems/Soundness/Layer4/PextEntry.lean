@@ -110,7 +110,7 @@ private theorem pext_general (x y : BitVec 64) (hy : y ≠ 0)
     (hc : ¬ (y >>> y.ctz.toNat) &&& ((y >>> y.ctz.toNat) + 1) = 0) :
     pext x y = ((List.range 64).foldl (fun r _ => pextStep x r) ⟨y, 0, 0⟩).2.1 := by
   unfold pext
-  simp only [Id.run, hy, ite_false, hc, pure_bind]
+  simp only [Id.run, hy, ite_false, hc]
   rw [forIn_eq_foldl_of (pextStep x)]
   · simp only [pure_bind]
     generalize List.foldl _ _ _ = r
@@ -273,7 +273,7 @@ private theorem pext_eq_of_contiguous (x y : BitVec 64) (hy : y ≠ 0)
     pext x y = jolt_virtual_pext_value x y := by
   have hpx : pext x y = (x >>> y.ctz.toNat) &&& (y >>> y.ctz.toNat) := by
     unfold pext
-    simp only [Id.run, hy, ite_false, hc, ite_true, pure_bind]
+    simp only [Id.run, hy, ite_false, hc, ite_true]
     rfl
   rw [hpx]
   generalize ht : y.ctz.toNat = t at hc

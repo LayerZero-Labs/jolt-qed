@@ -1,7 +1,6 @@
 import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.theorems.Completeness.Helpers.JumpReturnProofHelpers
 import JoltConstraints.translation.Constraints.RdWriteEqPCPlusConstIfJump
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.execution_conditions
@@ -86,7 +85,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
         have hcomp : TraceWitness.OpFlags (F := F) params trace .IsCompressed t =
             (if bc.is_compressed then (1 : F) else 0) := by
           -- the two sides can differ only in their `Decidable` instances
-          simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row] <;> rfl
+          simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row]; rfl
         have hflag : TraceWitness.OpFlags (F := F) params trace .Jump t = 1 := by
           unfold TraceWitness.OpFlags
           simp only [dite_eq_left hb]
@@ -146,7 +145,7 @@ theorem honestWitness_rdWriteEqPCPlusConstIfJump
         have hcomp : TraceWitness.OpFlags (F := F) params trace .IsCompressed t =
             (if bc.is_compressed then (1 : F) else 0) := by
           -- the two sides can differ only in their `Decidable` instances
-          simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row] <;> rfl
+          simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, hb, bc, row]; rfl
         have hflag : TraceWitness.OpFlags (F := F) params trace .Jump t = 1 := by
           unfold TraceWitness.OpFlags
           simp only [dite_eq_left hb]

@@ -439,7 +439,7 @@ theorem register42_jump_to_shape
         ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
         pure, EStateM.pure] at hjump
       cases hjump
-      first | exact Or.inl rfl | exact Or.inr rfl
+      exact Or.inr rfl
     · simp only [andM, toBool, bit1, bind, EStateM.bind, pure, EStateM.pure,
         ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.mk, EStateM.map] at hjump
       cases hz : currentlyEnabled extension.Ext_Zca s with

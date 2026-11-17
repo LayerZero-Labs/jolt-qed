@@ -1,4 +1,3 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.trace
 import JoltConstraints.translation.metadata

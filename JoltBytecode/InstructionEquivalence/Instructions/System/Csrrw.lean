@@ -517,7 +517,7 @@ private theorem execute_CSRReg_CSRRW_machine_run
   simp only [bind, EStateM.bind, pure, get, getThe, MonadStateOf.get, EStateM.get]
   simp only [EStateM.pure, hCurPrivProject]
   simp only [hCheck]
-  simp only [sail_not_true, sail_not_false, Bool.false_eq_true, ↓reduceIte]
+  simp only [sail_not_true, Bool.false_eq_true, ↓reduceIte]
   simp only [EStateM.bind, EStateM.get]
   simp only [hCurPrivProject, EStateM.pure]
   simp only [ext_check_CSR_true, sail_not_true, Bool.false_eq_true, ↓reduceIte, EStateM.bind]
@@ -561,7 +561,7 @@ private theorem check_CSR_systemCSR_machine_run
       stateen_allows_CSR_access privLevel_to_CSR_privbits csrPriv csrAccess
       JoltISA.SystemCSR.address zopz0zKzJ_u <;>
     simp [bind, EStateM.bind, pure, EStateM.pure, andM, toBool]
-  all_goals first | decide | rfl
+  all_goals rfl
 
 private theorem write_CSR_mtvec_direct_run
     (js : SailJoltState) (value : BitVec 64)

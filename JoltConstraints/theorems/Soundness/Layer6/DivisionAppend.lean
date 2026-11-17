@@ -318,7 +318,7 @@ private theorem DivisionReplayRows.push
       base.rows.size + offset < current.rows.size := by
     rw [replayed.size]
     omega
-  refine ⟨replayed.extendsRun.trans ⟨rfl, by simp [extended, appendUntrustedRow]⟩,
+  refine ⟨replayed.extendsRun.trans ⟨rfl, by simp [appendUntrustedRow]⟩,
     by rw [extendedSize, replayed.size]; omega, ?_, ?_, ?_, ?_⟩
   · intro offset inside
     by_cases old : offset < done
@@ -340,7 +340,7 @@ private theorem DivisionReplayRows.push
       simpa only [Array.getElem?_push_lt firstBefore,
         Array.getElem?_eq_getElem firstBefore] using atRow
     exact replayed.firstPre row oldAt
-  · simpa only [extended, appendUntrustedRow, finalTraceState_push, postEq]
+  · simp only [appendUntrustedRow, finalTraceState_push, postEq]
   · intro offset inside row atRow
     by_cases old : offset < done
     · have oldAt : row ∈ current.rows[base.rows.size + offset]? := by
@@ -400,7 +400,7 @@ private theorem division_replay_next_entry
     exact atPrevious
   have postEq : middle = previous.postState := by
     rw [← replayed.finalPost, finalTraceState_back]
-    simp only [UntrustedAnswerRun.toTrace, atBack, Option.map_some, Option.getD_some]
+    simp only [atBack, Option.map_some, Option.getD_some]
   refine ⟨next, rfl, ?_⟩
   have inside' : done < expansionRowCount current.bytecode first' := by
     unfold expansionRowCount at inside ⊢
@@ -502,7 +502,7 @@ private theorem division_replay_suffix
       omega
     rw [empty] at tailRun
     have same : middle = post := by
-      simp [Program.seq, Program.Run, execProgram] at tailRun
+      simp [Program.seq, Program.Run] at tailRun
       cases tailRun
       rfl
     subst done
@@ -1310,7 +1310,7 @@ private theorem division_replay_advice_flag
   change replay.rows[run.rows.size + offset]? = some row at rowAt
   unfold stepNOfTraceIsAdvice
   rw [rowAt]
-  simpa only [Option.bind_some, Option.isSome, instrEq]
+  simp only [Option.bind_some, Option.isSome, instrEq]
 
 private theorem division_replay_advice_before_zero
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -1346,14 +1346,14 @@ private theorem division_replay_advice_before_zero
     have earlierFlag := division_replay_advice_flag run replay first expanded count pre post
       advice replayed k kInside
     cases flag : stepNOfTraceIsAdvice replay.rows (run.rows.size + k) with
-    | false => simpa only [one_mul, flag, Bool.false_eq_true, not_false_eq_true]
+    | false => simp only [one_mul, flag, Bool.false_eq_true, not_false_eq_true]
     | true =>
         have kAdvice : ((expansionInstructions bytecode first)[k]'(by omega)).adviceValue?.isSome = true := by
           rw [← earlierFlag]
           exact flag
         have kIndex := unique k (by rw [count]; exact kInside) kAdvice
         omega
-  simpa only [Nat.add_sub_cancel_left, empty, List.length_nil]
+  simp only [Nat.add_sub_cancel_left, empty, List.length_nil]
 
 private theorem division_replay_first_source
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -1478,13 +1478,14 @@ private theorem divisionFrame_selectedOperandValue {F : Type} [Field F]
       | none => 0) := by
   subst candidateInstruction
   cases h : operand replayInstruction with
-  | none => simp only [h]
+  | none => rfl
   | some source =>
       have keep : ¬ IsInstructionTemporary (TraceWitness.sourceRegisterAddress source) := by
         apply persistent (TraceWitness.sourceRegisterAddress source)
         rw [selectorEq, h]
         simp
-      simp only [h]
+      change ((sourceValue source candidatePre).toNat : F) =
+        ((sourceValue source replayPre).toNat : F)
       rw [divisionFrame_sourceValue source pre candidatePre candidateFrame candidateSail keep,
         divisionFrame_sourceValue source pre replayPre replayFrame replaySail keep]
 

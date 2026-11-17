@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.translation.Constraints.RdWriteEqLookupIfWriteLookupToRd
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers

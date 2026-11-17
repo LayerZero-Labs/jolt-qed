@@ -289,7 +289,7 @@ theorem jump_to_preservesSystemProjectRegs
   unfold jump_to ext_control_check_pc
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp only [ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
-    ExceptT.pure, bind, EStateM.bind, pure, EStateM.pure,
+    ExceptT.pure, bind, EStateM.bind, pure,
     LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert]
   by_cases hbit0 : (BitVec.access target 0 == 0#1) = true
   · -- `<&&>` short-circuits: `Ext_Zca` is queried only when bit 1 is set.
@@ -419,7 +419,7 @@ theorem jump_to_of_aligned (target : BitVec 64) (s : SailState)
       -- `<&&>` short-circuits: `Ext_Zca` is queried only when bit 1 is set.
       cases hbit1 : bit_to_bool (BitVec.access target 1) <;>
         simp only [hbit1, Bool.true_and] at hAlignOk <;>
-        simp only [andM, toBool, hbit1, hbit0, hzca, hAlignOk, Bool.false_eq_true,
+        simp only [andM, toBool, hbit0, hzca, hAlignOk, Bool.false_eq_true,
           ↓reduceIte, bind, EStateM.bind, pure, EStateM.pure,
           ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
           ExceptT.pure, ExceptT.lift, MonadLift.monadLift, monadLift, liftM,

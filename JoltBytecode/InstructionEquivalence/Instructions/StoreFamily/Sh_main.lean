@@ -311,7 +311,7 @@ theorem shProgramAuto_preserves_projected_vregs
     simp only [JoltISA.ProgramWritesNoProtectedVReg,
       JoltISA.InstrWritesNoProtectedVReg,
       JoltISA.DstWritesNoProtectedVReg,
-      true_and, and_true]
+      and_true]
     repeat' apply And.intro
     all_goals exact JoltISA.not_protected_of_instructionTmp rfl
   exact Projection.execProgram_preserves_projected_vregs_of_no_protected_writes

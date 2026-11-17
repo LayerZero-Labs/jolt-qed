@@ -1,6 +1,5 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Alignment
-import Mathlib.Tactic.IntervalCases
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.SD
 
 open LeanRV64D

@@ -10,7 +10,6 @@ import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LW_SailSide
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
 import JoltBytecode.InstructionEquivalence.ProofSupport.StateLemmas
-import Mathlib.Tactic.IntervalCases
 
 open LeanRV64D
 

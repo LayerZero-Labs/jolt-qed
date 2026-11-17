@@ -151,8 +151,7 @@ theorem word_of_dword_eq_bytes (d : BitVec 64) (k : Nat)
     intro i hi <;>
     interval_cases i <;>
     simp [BitVec.getLsbD_eq_getElem, BitVec.getElem_setWidth] <;>
-    repeat rw [BitVec.getElem_append] <;>
-    simp [BitVec.getElem_setWidth]
+    repeat rw [BitVec.getElem_append]; simp [BitVec.getElem_setWidth]
 
 /-- The word starting at byte-offset `k` of the loaded dword at `V` is the
     same as the direct word load at `V + k`. Proof: decompose the word into

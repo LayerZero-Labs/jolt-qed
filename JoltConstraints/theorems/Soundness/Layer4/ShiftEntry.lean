@@ -97,7 +97,7 @@ theorem srl_entry (address : Fin (2 ^ 128)) (x y : BitVec 64)
     (shape : ∀ i < 64, y.getLsbD i = decide (s ≤ i)) :
     virtualSRLTableEntry (F := F) address = ((x >>> s).toNat : F) := by
   unfold virtualSRLTableEntry
-  simp only [split, Id.run, pure_bind, List.forIn_pure_yield_eq_foldl, bind_pure]
+  simp only [split, Id.run, List.forIn_pure_yield_eq_foldl, bind_pure]
   change ((((List.range 64).reverse.foldl (srlStep x y) 0).toNat : Nat) : F) = _
   rw [srl_foldl x y s 64 shape 64 le_rfl, zero_mul, zero_add, Nat.mod_eq_of_lt x.isLt,
     shiftRight_ofNat]
@@ -227,7 +227,7 @@ theorem sra_entry (address : Fin (2 ^ 128)) (x y : BitVec 64)
     (shape : ∀ i < 64, y.getLsbD i = decide (s ≤ i)) :
     virtualSRATableEntry (F := F) address = ((x.sshiftRight s).toNat : F) := by
   unfold virtualSRATableEntry
-  simp only [split, Id.run, pure_bind]
+  simp only [split, Id.run]
   rw [forIn_eq_foldl (sraStep x y) _ (by
     intro i r
     by_cases zero : i = 0 <;> simp [sraStep, srlStep, signStep, zero])]
@@ -320,7 +320,7 @@ theorem sraw_entry (address : Fin (2 ^ 128)) (x y : BitVec 64)
     virtualSRAWTableEntry (F := F) address =
       ((((x.setWidth 32).sshiftRight s).signExtend 64).toNat : F) := by
   unfold virtualSRAWTableEntry
-  simp only [split, Id.run, pure_bind]
+  simp only [split, Id.run]
   rw [forIn_eq_foldl (srawStep x y) _ (by
     intro i r
     by_cases zero : i = 0 <;> simp [srawStep, srlStep, signStep, zero])]
@@ -381,7 +381,7 @@ theorem srlw_entry (address : Fin (2 ^ 128)) (x y : BitVec 64)
     virtualSRLWTableEntry (F := F) address =
       ((((x.setWidth 32) >>> s).signExtend 64).toNat : F) := by
   unfold virtualSRLWTableEntry
-  simp only [split, Id.run, pure_bind]
+  simp only [split, Id.run]
   rw [forIn_eq_foldl (srlwStep x y) _ (by intro i r; rfl)]
   simp only [pure_bind]
   have last : (List.range 32).reverse = ((List.range 31).map Nat.succ).reverse ++ [0] := by

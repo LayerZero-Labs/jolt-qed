@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.memory_presence
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.trace
 import JoltConstraints.translation.witness_helpers.rd_value

@@ -60,7 +60,7 @@ theorem execute_RTYPE_SRL_factored
   simp only [execute_RTYPE]
   simp only [bind_pure_comp]
   simp only [map_eq_pure_bind]
-  simp only [bind_assoc, pure_bind, srl_sail_operation]
+  simp only [pure_bind, srl_sail_operation]
 
 /-- Program-level concrete theorem for `SRL`.
 
@@ -113,7 +113,6 @@ theorem srlProgramAuto_concrete
   -- The instruction trace leaves `rd` containing the Jolt SRL value.
   have h_final_jolt_value :
       js_afterSrl.sail = stateAfterWrite js.sail rd jolt_val := by
-    change js_afterSrl.sail = stateAfterWrite js.sail rd jolt_val
     exact h_virtual_srl_writes_jolt_val
 
   -- No more execution reasoning remains.

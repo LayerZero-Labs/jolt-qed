@@ -1,4 +1,3 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.constraint_context
 import JoltConstraints.translation.Constraints.AssertLookupOne
 import JoltConstraints.translation.Constraints.BytecodeRaAtEntryEqOne

@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.RightLookupAdd
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.AddressSum
@@ -143,7 +142,7 @@ theorem honestWitness_rightLookupAdd
         all_goals (try simp [addWide_cast, narrow_mod_128, JoltMetadata.immediate])
         all_goals first
         | exact floor_lookup_sum trace t.val h (by simp [floorAccess?, hi])
-        | (simp [masked_mod_128] <;> norm_cast)
+        | (simp [masked_mod_128]; norm_cast)
       simp [HonestTrace.honestWitness, TraceWitness.OpFlags,
         JoltMetadata.circuitFlag, h, heq]
     · simp [HonestTrace.honestWitness,

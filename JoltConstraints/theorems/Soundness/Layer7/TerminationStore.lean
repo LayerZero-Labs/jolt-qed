@@ -490,7 +490,6 @@ theorem context_initial_termination_zero
   have stateLayout :=
     (initial_state_device joltInstance privateInputs state initialized).1
   have sameLayout := Option.some.inj (stateLayout.symm.trans (by
-    change joltInstance.memory_layout = some context.io.memory_layout
     exact built))
   have adviceFacts :=
     initial_state_advice_below_input joltInstance privateInputs state initialized
@@ -931,7 +930,7 @@ theorem soundness_prefix_next_step
     · have hEmpty : cutRun.rows.back? = none := by
         change (run.rows.extract 0 i.val).back? = none
         simp [iz]
-      have hfirst : run.rows[0]? = some run.rows[i] := by simpa [iz] using hrowAt
+      have hfirst : run.rows[0]? = some run.rows[i] := by simp [iz]
       have start := run.starts run.rows[i] hfirst
       rw [hEmpty]
       exact start

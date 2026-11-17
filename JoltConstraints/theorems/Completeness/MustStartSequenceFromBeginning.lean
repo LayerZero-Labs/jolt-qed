@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.translation.Constraints.MustStartSequenceFromBeginning
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.execution_conditions

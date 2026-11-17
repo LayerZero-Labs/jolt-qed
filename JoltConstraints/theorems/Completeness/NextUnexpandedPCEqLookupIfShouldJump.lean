@@ -1,7 +1,6 @@
 import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.translation.Constraints.NextUnexpandedPCEqLookupIfShouldJump
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.execution_conditions

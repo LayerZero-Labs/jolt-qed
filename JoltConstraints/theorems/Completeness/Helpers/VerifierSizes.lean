@@ -152,7 +152,7 @@ theorem HonestTrace.prover_config_ram_K_of_nonempty
     trace.prover_config_ram_K config proverAccepts
   have unfolded := remapped
   unfold VerifierSizes.remapWordAddress at unfolded
-  simp only [ite_eq_right imageNonzero, pure_bind] at unfolded
+  simp only [ite_eq_right imageNonzero] at unfolded
   rw [bind_some_iff] at unfolded
   obtain ⟨offset, subtracted, unfolded⟩ := unfolded
   obtain ⟨rfl, lowestBelow⟩ := checkedSub_some subtracted
@@ -189,7 +189,7 @@ theorem HonestTrace.witness_params_ram_minimum_of_nonempty
   cases remappedImage
   unfold VerifierSizes.remapWordAddress at remappedIo
   have ramNonzero : JoltISA.RAM_START_ADDRESS ≠ 0 := by decide
-  simp only [ite_eq_right ramNonzero, pure_bind] at remappedIo
+  simp only [ite_eq_right ramNonzero] at remappedIo
   rw [bind_some_iff] at remappedIo
   obtain ⟨ioOffset, ioSubtracted, remappedIo⟩ := remappedIo
   cases remappedIo

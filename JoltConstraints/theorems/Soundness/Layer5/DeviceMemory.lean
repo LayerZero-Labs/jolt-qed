@@ -241,7 +241,7 @@ private theorem initial_panic_false {inst : JoltInstance SourceInstruction} {inp
   split at initialized
   · cases initialized
   · repeat' split at initialized
-    all_goals first | cases initialized | skip
+    all_goals try cases initialized
     all_goals simp_all [pure, Pure.pure]
     rw [← initialized, init_state_jolt_device]
 

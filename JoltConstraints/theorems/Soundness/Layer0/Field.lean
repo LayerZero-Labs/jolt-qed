@@ -1,7 +1,11 @@
-import Mathlib.Algebra.CharP.Basic
-import Mathlib.Algebra.Field.Defs
+module
+
+public import Mathlib.Algebra.CharP.Basic
+public import Mathlib.Algebra.Field.Defs
 
 set_option autoImplicit false
+
+public section
 
 namespace JoltConstraints.Soundness
 

@@ -54,8 +54,7 @@ theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionR
   change JoltMetadata.circuitFlag bc .WriteLookupOutputToRD = true at hflag
   change TraceWitness.rdValue (F := F) bc.instruction row.postState = _
   by_cases hnoop : bc.instruction = JoltISA.Instr.canonicalNoOp
-  · change TraceWitness.rdValue (F := F) bc.instruction row.postState = _
-    simp only [TraceWitness.rowLookupOutput, show
+  · simp only [TraceWitness.rowLookupOutput, show
       bytecode[row.rowIndex.val].instruction =
         JoltISA.Instr.canonicalNoOp from hnoop, hnoop,
       JoltISA.Instr.canonicalNoOp, TraceWitness.rdValue,

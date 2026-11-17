@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.Rs2EqRamWriteIfStore
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.witness_domain
@@ -34,7 +33,7 @@ theorem honestWitness_rs2EqRamWriteIfStore
       rcases hInstr with hInstr | ⟨fault, hInstr | hInstr | hInstr⟩ <;>
         dsimp [instruction] at hInstr <;>
         simp [TraceWitness.OpFlags, TraceWitness.Rs2Value, TraceWitness.RamWriteValue,
-          HonestTrace.row, JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag,
+          JoltMetadata.circuitFlag, JoltMetadata.opcodeFlag,
           inBounds, hInstr]
     · dsimp [instruction] at hStore
       simp [TraceWitness.OpFlags, JoltMetadata.circuitFlag, inBounds, hStore]

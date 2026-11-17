@@ -1,9 +1,13 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
-import Mathlib.Data.Fintype.Fin
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+public import Mathlib.Data.Fintype.Fin
 
 /-! Prefix-sum identities shared by register and RAM history proofs. -/
 
 set_option autoImplicit false
+
+public section
 
 namespace JoltConstraints.Soundness
 

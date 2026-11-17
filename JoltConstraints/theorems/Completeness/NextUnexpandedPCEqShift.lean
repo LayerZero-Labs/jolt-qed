@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.NextUnexpandedPCEqShift
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.witness_domain

@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.RamAddrEqZeroIfNotLoadStore
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.witness_domain

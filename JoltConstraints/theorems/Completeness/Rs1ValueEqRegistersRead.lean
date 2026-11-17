@@ -1,7 +1,5 @@
 import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.translation.Constraints.Rs1ValueEqRegistersRead
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers

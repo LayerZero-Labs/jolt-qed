@@ -251,20 +251,20 @@ theorem jump_to_shape (target : BitVec 64) (sail after : SailState)
   simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
-    bind, EStateM.bind, pure, EStateM.pure,
+    bind, EStateM.bind, pure,
     LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at runs
   by_cases evenTarget : (BitVec.access target 0 == 0#1) = true
   · simp only [evenTarget, ↓reduceIte, pure, EStateM.pure, EStateM.bind,
-      ExceptT.bindCont, EStateM.map] at runs
+      ExceptT.bindCont] at runs
     -- `<&&>` short-circuits: `Ext_Zca` is read only when bit 1 is set.
     cases bit1 : bit_to_bool (BitVec.access target 1)
-    · simp only [andM, toBool, bit1, ExceptT.bindCont, EStateM.map, Bool.false_eq_true,
-        ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
-        pure, EStateM.pure] at runs
+    · simp only [andM, toBool, bit1,
+        set_next_pc, LeanRV64D.writeReg, bind,
+        pure] at runs
       cases runs
-      first | exact Or.inl rfl | exact Or.inr rfl
+      exact Or.inr rfl
     · simp only [andM, toBool, bit1, bind, EStateM.bind, pure, EStateM.pure,
-        ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.mk, EStateM.map] at runs
+        ExceptT.bind, ExceptT.bindCont, ExceptT.mk, EStateM.map] at runs
       cases zcaRun : currentlyEnabled extension.Ext_Zca sail with
       | error failure middle =>
         simp only [zcaRun] at runs
@@ -289,20 +289,20 @@ theorem jump_to_retires (target : BitVec 64) (sail after : SailState)
   simp only [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run, ExceptT.mk,
     ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.lift,
     liftM, monadLift, MonadLift.monadLift, Functor.map, EStateM.map,
-    bind, EStateM.bind, pure, EStateM.pure,
+    bind, EStateM.bind, pure,
     LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert] at runs
   by_cases evenTarget : (BitVec.access target 0 == 0#1) = true
   · simp only [evenTarget, ↓reduceIte, pure, EStateM.pure, EStateM.bind,
-      ExceptT.bindCont, EStateM.map] at runs
+      ExceptT.bindCont] at runs
     -- `<&&>` short-circuits: `Ext_Zca` is read only when bit 1 is set.
     cases bit1 : bit_to_bool (BitVec.access target 1)
-    · simp only [andM, toBool, bit1, ExceptT.bindCont, EStateM.map, Bool.false_eq_true,
-        ↓reduceIte, set_next_pc, LeanRV64D.writeReg, bind, EStateM.bind,
-        pure, EStateM.pure] at runs
+    · simp only [andM, toBool, bit1,
+        set_next_pc, LeanRV64D.writeReg, bind,
+        pure] at runs
       cases runs
       rfl
     · simp only [andM, toBool, bit1, bind, EStateM.bind, pure, EStateM.pure,
-        ExceptT.bind, ExceptT.bindCont, ExceptT.pure, ExceptT.mk, EStateM.map] at runs
+        ExceptT.bind, ExceptT.bindCont, ExceptT.mk, EStateM.map] at runs
       cases zcaRun : currentlyEnabled extension.Ext_Zca sail with
       | error failure middle =>
         simp only [zcaRun] at runs
@@ -528,7 +528,6 @@ theorem initial_state_registers_present {Source : Type} (joltInstance : JoltInst
     simp only [layoutResult, bind, Option.bind] at built
     repeat' split at built
     all_goals first
-      | exact init_state_registers_present _ _ _ _ _
       | (cases built
          exact init_state_registers_present _ _ _ _ _)
       | cases built
@@ -732,7 +731,6 @@ theorem initial_state_sourceValue {Source : Type} (joltInstance : JoltInstance S
     simp only [layoutResult, bind, Option.bind] at built
     repeat' split at built
     all_goals first
-      | exact init_state_sourceValue _ _ _ _ _ source
       | (cases built
          exact init_state_sourceValue _ _ _ _ _ source)
       | cases built

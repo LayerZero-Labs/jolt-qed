@@ -325,7 +325,7 @@ private theorem rebuiltTape_split
       answerBytesAt run step ++
       ((List.finRange run.rows.size).drop (step.val + 1)).flatMap (answerBytesAt run) := by
   have split := List.take_append_drop step.val (List.finRange run.rows.size)
-  rw [List.drop_eq_getElem_cons (by simpa using step.isLt)] at split
+  rw [List.drop_eq_getElem_cons (by simp)] at split
   have atStep : (List.finRange run.rows.size)[step.val] = step := by simp
   rw [atStep] at split
   change ((List.finRange run.rows.size).flatMap (answerBytesAt run)).toArray.toList = _
@@ -636,7 +636,7 @@ private theorem swap_store_raw (s : SailJoltState) (b : Array (BitVec 8))
     Mmu.store_raw? (swapBytes s b) ea v =
       (Mmu.store_raw? s ea v).map (swapBytes · b) := by
   simp [Mmu.store_raw?, swapBytes]
-  split_ifs <;> simp_all <;> rfl
+  split_ifs <;> simp_all; rfl
 
 private theorem swap_store_fold (b : Array (BitVec 8)) (ea : Nat)
     (value : BitVec 64) (l : List Nat) (start : Option SailJoltState) :
@@ -1807,7 +1807,7 @@ theorem RebuildAgreement.execution_dimensions_eq
   · have addressListEq : original.rows.toList.map (·.ram_address) =
         replay.rows.toList.map (·.ram_address) := by
       apply List.ext_getElem
-      · simpa [agreement.length]
+      · simp [agreement.length]
       · intro i oldIn newIn
         have oldBound : i < original.rows.size := by simpa using oldIn
         have newBound : i < replay.rows.size := by simpa using newIn

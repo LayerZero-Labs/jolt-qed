@@ -315,7 +315,7 @@ theorem amo_dword_sd_xreg_vreg_run_of_write
     (aligned_dword_access_of_align _ h_align) hpmp hmmio
     (JoltISA.Mmu.effective_address_ok_of_store h_ram hjolt)]
   unfold liftSail
-  simp [EStateM.bind, hwrite]
+  simp [hwrite]
   rfl
 
 /-- `SD valueReg, 0(rs1)` writes a computed AMO dword result and preserves
@@ -3170,11 +3170,11 @@ theorem execute_AMO_dword_non_cas_aligned_core
     simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
       ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont,
       ExceptT.pure, ExceptT.lift, MonadLift.monadLift, liftM, monadLift,
-      Functor.map, SailME.throw, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.throw,
-      MonadExceptOf.throw, ext_data_get_addr, hrs1, haddr0,
+      Functor.map,
+      ext_data_get_addr, hrs1, haddr0,
       h_vaddr_aligned, sail_not_true, ↓reduceIte,
-      Bool.false_eq_true, ite_false, ite_true, htranslate, amo_dword_width8_true, hrs2,
-      hea, hread, hrd_read, hcas_check, Bool.false_and,
+      Bool.false_eq_true, htranslate, amo_dword_width8_true, hrs2,
+      hea, hread, hcas_check, Bool.false_and,
       instBEqAmoop.beq, BEq.beq, andM, toBool]
     rw [hwrite_value]
     simp only [EStateM.bind, EStateM.map, ExceptT.bindCont, EStateM.pure,

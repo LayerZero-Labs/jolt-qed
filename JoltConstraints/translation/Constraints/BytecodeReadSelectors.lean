@@ -1,4 +1,3 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.Constraints.BytecodeReadData
 import JoltConstraints.translation.witness_helpers.register_address
 import JoltConstraints.translation.witness_helpers.destination_capture

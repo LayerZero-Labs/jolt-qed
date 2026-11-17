@@ -1,7 +1,11 @@
-import Mathlib.Data.Int.Cast.Lemmas
-import Mathlib.Algebra.Field.Defs
+module
+
+public import Mathlib.Data.Int.Cast.Lemmas
+public import Mathlib.Algebra.Field.Defs
 
 set_option autoImplicit false
+
+public section
 
 namespace JoltConstraints
 

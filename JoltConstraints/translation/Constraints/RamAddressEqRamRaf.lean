@@ -1,6 +1,4 @@
 import JoltConstraints.translation.Constraints.RamReadData
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Field.Defs
 
 open LeanRV64D
 

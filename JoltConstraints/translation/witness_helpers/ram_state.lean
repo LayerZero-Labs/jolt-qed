@@ -30,7 +30,8 @@ private theorem ramImageWord_getLsbD (byte : Nat → BitVec 8) (start : Nat)
   fin_cases k <;> simp only [ramImageWord, Nat.reduceMul,
     Nat.zero_add, Nat.add_zero]
   all_goals repeat' (rw [BitVec.getLsbD_append]; split_ifs <;> try omega)
-  all_goals congr 1 <;> omega
+  all_goals congr 1
+  all_goals omega
 
 /-- Equal packed words have equal bytes at every offset from zero through seven. -/
 theorem ramImageWord_injective_byte (f g : Nat → BitVec 8) (start : Nat)
