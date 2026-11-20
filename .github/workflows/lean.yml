@@ -66,9 +66,43 @@ jobs:
         env:
           OPAMSWITCH: sail
         run: scripts/check-sail-model.sh "$RUNNER_TEMP/sail-check"
+      # Cache the build of the generated Sail model, which takes about 23 of the
+      # build's 79 CPU-minutes on main. The key covers every input of that build.
+      # Lake still checks each restored module's trace against its inputs and
+      # rebuilds any module whose source, imports, toolchain or options differ.
+      # GitHub scopes a cache saved by a PR run to that PR; only pushes to main
+      # save caches that every PR can read.
+      - name: Restore the LeanRV64D build
+        id: leanrv64d-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .lake/build/lib/lean/LeanRV64D.*
+            .lake/build/lib/lean/LeanRV64D/
+            .lake/build/ir/LeanRV64D.*
+            .lake/build/ir/LeanRV64D/
+          key: leanrv64d-${{ runner.os }}-${{ hashFiles('LeanRV64D.lean', 'LeanRV64D/**', 'lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}
       - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
         with:
           build: true
           # The composite action's GitHub cache steps use floating action tags.
           # Keep those steps disabled; Mathlib's dependency cache remains enabled.
           use-github-cache: false
+      # Save the LeanRV64D build even when a later proof fails, but only once
+      # every LeanRV64D module is up to date, so a partial build is never saved
+      # under a key that later runs would hit without completing it.
+      - name: Check that the LeanRV64D build is complete
+        id: leanrv64d-complete
+        if: ${{ !cancelled() && steps.leanrv64d-cache.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        run: lake build LeanRV64D --no-build
+      - name: Save the LeanRV64D build
+        if: ${{ !cancelled() && steps.leanrv64d-complete.outcome == 'success' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .lake/build/lib/lean/LeanRV64D.*
+            .lake/build/lib/lean/LeanRV64D/
+            .lake/build/ir/LeanRV64D.*
+            .lake/build/ir/LeanRV64D/
+          key: ${{ steps.leanrv64d-cache.outputs.cache-primary-key }}
