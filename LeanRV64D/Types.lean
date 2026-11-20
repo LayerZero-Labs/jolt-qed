@@ -12,8 +12,6 @@ import LeanRV64D.PlatformConfig
 import LeanRV64D.Extensions
 import LeanRV64D.TypesExt
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -204,6 +202,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -350,6 +349,9 @@ def _update_Misa_MXL (v : (BitVec 64)) (x : (BitVec (64 - 1 - (64 - 2) + 1))) : 
 def Mk_Mstatus (v : (BitVec 64)) : (BitVec 64) :=
   v
 
+def _update_Mstatus_MPP (v : (BitVec 64)) (x : (BitVec 2)) : (BitVec 64) :=
+  (Sail.BitVec.updateSubrange v 12 11 x)
+
 def _update_Mstatus_SXL (v : (BitVec 64)) (x : (BitVec 2)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 35 34 x)
 
@@ -446,7 +448,7 @@ def legalize_xenvcfg_cbie (cbie : (BitVec 2)) : SailM (BitVec 2) := do
       | .Xenvcfg_Fatal => (reserved_behavior "xenvcfg.CBIE = 0b10")
       | .Xenvcfg_ClearPermissions => (pure 0b00#2))
 
-def sys_enable_writable_fiom : Bool := true
+def sys_enable_writable_fiom : Bool := false
 
 def Mk_Seccfg (v : (BitVec 64)) : (BitVec 64) :=
   v
@@ -1529,7 +1531,7 @@ def itype_mnemonic_forwards (arg_ : iop) : String :=
   | .ORI => "ori"
   | .ANDI => "andi"
 
-/-- Type quantifiers: k_ex255672_ : Bool -/
+/-- Type quantifiers: k_ex255739_ : Bool -/
 def maybe_u_forwards (arg_ : Bool) : String :=
   match arg_ with
   | true => "u"
@@ -3120,7 +3122,7 @@ def lrsc_width_valid (width : Nat) : Bool :=
   | 8 => (xlen ≥b 64)
   | _ => false
 
-/-- Type quantifiers: k_ex255800_ : Bool, width : Nat, List.elem width [1, 2, 4, 8] -/
+/-- Type quantifiers: k_ex255867_ : Bool, width : Nat, List.elem width [1, 2, 4, 8] -/
 def valid_load_encdec (width : Nat) (is_unsigned : Bool) : Bool :=
   ((width <b xlen_bytes) || ((not is_unsigned) && (width ≤b xlen_bytes)))
 

@@ -1,8 +1,6 @@
 import Sail
 open PreSail
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -122,13 +120,13 @@ abbrev asidlen  : Int := (if ( xlen = 32  : Bool) then 9 else 16)
 
 abbrev asidbits := (BitVec (if ( 64 = 32  : Bool) then 9 else 16))
 
-abbrev ext_d_supported  : Bool := true
+abbrev ext_d_supported  : Bool := false
 
 abbrev flen_bytes  : Int := (if ( ext_d_supported  : Bool) then 8 else 4)
 
-abbrev flen  : Int := ((if ( true  : Bool) then 8 else 4) * 8)
+abbrev flen  : Int := ((if ( false  : Bool) then 8 else 4) * 8)
 
-abbrev flenbits := (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+abbrev flenbits := (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
 
 abbrev vlen_exp  : Int := 8
 
@@ -176,6 +174,10 @@ abbrev RVFI_DII_Execution_Packet_Ext_MemAccess := (BitVec 704)
 abbrev RVFI_DII_Execution_Packet_V1 := (BitVec 704)
 
 abbrev RVFI_DII_Execution_PacketV2 := (BitVec 512)
+
+inductive ExtContextPolicy where | ExtContext_Off | ExtContext_TwoState | ExtContext_FourState
+  deriving BEq, Inhabited, Repr
+  open ExtContextPolicy
 
 inductive AmocasOddRegisterReservedBehavior where | AMOCAS_Fatal | AMOCAS_Illegal
   deriving BEq, Inhabited, Repr
@@ -1352,6 +1354,9 @@ inductive Register : Type where
   | mtimecmp
   | htif_tohost_base
   | pc_reset_address
+  | reservation_width
+  | reservation_addr
+  | reservation_valid
   | elp
   | minstretcfg
   | mcyclecfg
@@ -1534,6 +1539,9 @@ abbrev RegisterType : Register → Type
   | .mtimecmp => (BitVec 64)
   | .htif_tohost_base => (Option (BitVec (if ( 64 = 32  : Bool) then 34 else 64)))
   | .pc_reset_address => (BitVec 64)
+  | .reservation_width => Int
+  | .reservation_addr => (BitVec (if ( 64 = 32  : Bool) then 34 else 64))
+  | .reservation_valid => Bool
   | .elp => (BitVec 1)
   | .minstretcfg => (BitVec 64)
   | .mcyclecfg => (BitVec 64)
@@ -1574,38 +1582,38 @@ abbrev RegisterType : Register → Type
   | .vr1 => (BitVec (2 ^ 8))
   | .vr0 => (BitVec (2 ^ 8))
   | .fcsr => (BitVec 32)
-  | .f31 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f30 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f29 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f28 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f27 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f26 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f25 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f24 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f23 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f22 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f21 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f20 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f19 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f18 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f17 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f16 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f15 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f14 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f13 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f12 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f11 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f10 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f9 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f8 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f7 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f6 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f5 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f4 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f3 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f2 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f1 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
-  | .f0 => (BitVec ((if ( true  : Bool) then 8 else 4) * 8))
+  | .f31 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f30 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f29 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f28 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f27 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f26 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f25 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f24 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f23 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f22 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f21 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f20 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f19 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f18 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f17 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f16 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f15 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f14 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f13 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f12 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f11 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f10 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f9 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f8 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f7 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f6 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f5 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f4 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f3 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f2 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f1 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
+  | .f0 => (BitVec ((if ( false  : Bool) then 8 else 4) * 8))
   | .pmpaddr_n => (Vector (BitVec 64) 64)
   | .pmpcfg_n => (Vector (BitVec 8) 64)
   | .mideleg => (BitVec 64)
@@ -1752,6 +1760,8 @@ instance : Inhabited (RegisterRef RegisterType (BitVec (2 ^ 8))) where
   default := .Reg vr0
 instance : Inhabited (RegisterRef RegisterType Bool) where
   default := .Reg rvfi_int_data_present
+instance : Inhabited (RegisterRef RegisterType Int) where
+  default := .Reg reservation_width
 instance : Inhabited (RegisterRef RegisterType (List PMA_Region)) where
   default := .Reg pma_regions
 instance : Inhabited (RegisterRef RegisterType (Option (BitVec (if ( 64 = 32  : Bool) then 34 else 64)))) where
