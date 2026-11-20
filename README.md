@@ -47,10 +47,14 @@ The current source and proof-debt inventory determine the status of this working
 `LeanRV64D/` contains the trusted RISC-V reference model used by these proofs.
 It was generated from [`abiswas3`'s fork](https://github.com/abiswas3/sail-riscv)
 of the official [`riscv/sail-riscv`](https://github.com/riscv/sail-riscv)
-repository, using [`abiswas3`'s fork](https://github.com/abiswas3/sail) of the
-official [`rems-project/sail`](https://github.com/rems-project/sail) compiler.
+repository at `266473f8`, using the official
+[`rems-project/sail`](https://github.com/rems-project/sail) compiler at `2ae2199f` with one patch.
 The complete generation process is documented in
-[Sail RISC-V Into Lean](https://randomwalks.xyz/blog/sail-to-lean/). The upstream
+[Sail RISC-V Into Lean](https://randomwalks.xyz/blog/sail-to-lean/).
+[`sail-import/PROVENANCE.toml`](sail-import/PROVENANCE.toml) pins the model commit, the compiler and the patches in `sail-import/patches/` that configure the model as Jolt's hart.
+`scripts/regen-sail-model.sh` regenerates `LeanRV64D/` from those inputs, and `scripts/check-sail-model.sh`, which CI runs when the model or its inputs change, checks that the checked-in tree matches byte for byte.
+[`docs/riscv-alignment.md`](docs/riscv-alignment.md) explains each choice in the configuration and the patches.
+The upstream
 Sail compiler and Sail RISC-V model are distributed under the BSD 2-Clause
 License. The complete notice is included in
 [`LeanRV64D/LICENSE`](LeanRV64D/LICENSE).
