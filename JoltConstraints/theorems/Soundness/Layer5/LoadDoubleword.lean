@@ -19,7 +19,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -39,7 +39,7 @@ theorem LoadRow.canonical :
   rw [loadRow.metadata.canonical] at valid
   simpa only [Bool.and_eq_true] using valid
 
-include charAbove2pow128 context equations selected rowIs loadRow
+include charAbove2pow128Minus2pow64 context equations selected rowIs loadRow
 
 /-- An ordinary-RAM load row succeeds with the value constrained by RamReadValue
 at its accessed doubleword.
@@ -71,13 +71,13 @@ theorem load_ram_step (regionFits : joltInstance.RamRegionFits)
     (∀ _last : t.val + 1 = params.traceLength,
       OrdinaryRamAgreement context.io.memory_layout witness.RamValFinal post) := by
   dsimp only
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have facts := loadRow.metadata
   have canonical := loadRow.canonical context rowIs
   have baseRead := (registers.read base canonical.2 baseLive).1
   have baseIs := registers.rs1Value bound context equations selected rowIs base canonical.2
     facts.rs1Register baseLive
-  obtain ⟨encoded, aligned, -⟩ := AccessRow.address_encoded charAbove2pow128 context equations
+  obtain ⟨encoded, aligned, -⟩ := AccessRow.address_encoded charAbove2pow128Minus2pow64 context equations
     selected rowIs loadRow.access regionFits (sourceValue base pre) baseIs
   have wordAligned := ramAddress_mask_aligned bound context equations t _ encoded
   have nonzero := ramAddress_nonzero_of_inRam bound t _ encoded inRam
@@ -98,7 +98,7 @@ theorem load_ram_step (regionFits : joltInstance.RamRegionFits)
   have loaded := Mmu.load_doubleword_ram pre (width.accessed (sourceValue base pre + imm))
     wordAligned inRam legal
   obtain ⟨output, executed, registerNext⟩ :=
-    registerWriteOn_step context equations selected rowIs charAbove2pow128 registers
+    registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 registers
       destination facts.destinationIs _ written answer advice
       (loadRow.exec_rule pre baseRead aligned _ loaded answer advice)
   have postRam := ram.afterWriteDst destination

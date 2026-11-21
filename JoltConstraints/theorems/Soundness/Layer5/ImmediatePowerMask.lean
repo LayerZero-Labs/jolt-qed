@@ -55,7 +55,7 @@ private theorem index_mod (imm modulus : Nat) (divides : modulus ∣ 2 ^ 64) :
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -72,11 +72,11 @@ private theorem immediatePowerMask_canonical :
       JoltRegisterEncoding.instructionIsCanonical] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem immediatePowerMask_write_value :
     witness.RdWriteValue t = ((operation.value imm).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have normalized : witness.Imm t = (((BitVec.ofNat 64 imm).toNat : Nat) : F) := by
     have fact := imm_of_selected_bytecode bound context equations t slot selected
     cases operation <;>
@@ -119,21 +119,22 @@ private theorem immediatePowerMask_write_value :
   have encoded := rightLookupOperand_add equations.rightLookupAdd t active
     (0#64) (BitVec.ofNat 64 imm)
     (by simpa only [BitVec.toNat_zero, Nat.cast_zero] using left) right
+  have valueBelow := addWideIndex_lt (0#64) (BitVec.ofNat 64 imm)
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   cases operation with
   | pow2I =>
-    have output := lookupOutput_pow2_of_identity charAbove2pow128 context equations
-      t slot selected _ raf encoded table
+    have output := lookupOutput_pow2_of_identity charAbove2pow128Minus2pow64 context equations
+      t slot selected _ raf encoded valueBelow table
     simpa only [ImmediatePowerMask.value, jolt_virtual_pow2i_value,
       index_mod imm 64 (by norm_num : 64 ∣ 2 ^ 64)] using output
   | pow2IW =>
-    have output := lookupOutput_pow2W_of_identity charAbove2pow128 context equations
-      t slot selected _ raf encoded table
+    have output := lookupOutput_pow2W_of_identity charAbove2pow128Minus2pow64 context equations
+      t slot selected _ raf encoded valueBelow table
     simpa only [ImmediatePowerMask.value, jolt_virtual_pow2iw_value,
       index_mod imm 32 (by norm_num : 32 ∣ 2 ^ 64)] using output
   | shiftMaskI =>
     have output := lookupOutput_shiftRightBitmask_of_identity
-      charAbove2pow128 context equations t slot selected _ raf encoded table
+      charAbove2pow128Minus2pow64 context equations t slot selected _ raf encoded valueBelow table
     simpa only [ImmediatePowerMask.value, jolt_virtual_shift_right_bitmaski_value,
       index_mod imm 64 (by norm_num : 64 ∣ 2 ^ 64)] using output
 
@@ -152,9 +153,9 @@ theorem immediatePowerMask_step {pre : SailJoltState}
         (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
         witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
-  have encoded := immediatePowerMask_write_value charAbove2pow128 context equations
+  have encoded := immediatePowerMask_write_value charAbove2pow128Minus2pow64 context equations
     selected rowIs operation instructionIs
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by cases operation <;> rw [instructionIs] <;> rfl)]

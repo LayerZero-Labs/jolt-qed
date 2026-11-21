@@ -23,7 +23,7 @@ base and source; for example, an SD through a live temporary preserves all other
 live values, and a VirtualStoreH at `ea = 0x80000012` updates the word at
 `0x80000010`. -/
 theorem store_ram_step_agreement
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -56,7 +56,7 @@ theorem store_ram_step_agreement
       OrdinaryRamAgreement context.io.memory_layout witness.RamValFinal post) := by
   dsimp only
   obtain ⟨stored, executed, chosen, one, addressIs, memory, nextTable, finalTable⟩ :=
-    store_ram_step charAbove2pow128 context equations selected rowIs storeRow
+    store_ram_step charAbove2pow128Minus2pow64 context equations selected rowIs storeRow
       regionFits registers baseLive sourceLive inRam checked answer advice
   refine ⟨stored, executed, ?_, ?_⟩
   · intro next

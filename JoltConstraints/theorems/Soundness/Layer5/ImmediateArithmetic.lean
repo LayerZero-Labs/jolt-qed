@@ -46,7 +46,7 @@ private def ImmediateArithmetic.table : ImmediateArithmetic → LookupTableKind
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -64,14 +64,14 @@ private theorem immediateArithmetic_canonical :
       JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem immediateArithmetic_write_value {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue source pre) imm).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   obtain ⟨left, right⟩ := agrees.immediateInputs bound context equations selected rowIs
     source imm (immediateArithmetic_canonical context rowIs operation instructionIs).2
     (by cases operation <;> rw [instructionIs] <;> rfl)
@@ -98,15 +98,15 @@ private theorem immediateArithmetic_write_value {pre : SailJoltState}
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   cases operation with
   | addiw =>
-    have output := lookupOutput_signExtendWord_add charAbove2pow128 context equations
+    have output := lookupOutput_signExtendWord_add charAbove2pow128Minus2pow64 context equations
       t slot selected table active _ _ left right
     simpa only [ImmediateArithmetic.value, jolt_addiw_value64, addWide_low] using output
   | muli =>
-    have output := lookupOutput_rangeCheck_mul charAbove2pow128 context equations
+    have output := lookupOutput_rangeCheck_mul charAbove2pow128Minus2pow64 context equations
       t slot selected table active _ _ left right
     simpa only [ImmediateArithmetic.value, jolt_virtual_muli_value, mulWide_low] using output
   | muliw =>
-    have output := lookupOutput_signExtendWord_mul charAbove2pow128 context equations
+    have output := lookupOutput_signExtendWord_mul charAbove2pow128Minus2pow64 context equations
       t slot selected table active _ _ left right
     simpa only [ImmediateArithmetic.value, jolt_virtual_muliw_value, mulWide_low] using output
 
@@ -129,9 +129,9 @@ theorem immediateArithmetic_step {pre : SailJoltState}
   dsimp only
   have sourceRead := (agrees.read source
     (immediateArithmetic_canonical context rowIs operation instructionIs).2 sourceLive).1
-  have encoded := immediateArithmetic_write_value charAbove2pow128 context equations
+  have encoded := immediateArithmetic_write_value charAbove2pow128Minus2pow64 context equations
     selected rowIs operation instructionIs agrees sourceLive
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by cases operation <;> rw [instructionIs] <;> rfl)]

@@ -78,21 +78,21 @@ private theorem canonicalNoOp_lookup_flags :
 
 end NoOp
 
-variable (charAbove2pow128 : 2 ^ 128 < ringChar F)
+variable (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
 
-include charAbove2pow128 equations in
+include charAbove2pow128Minus2pow64 equations in
 private theorem canonicalNoOp_rdInc
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1)
     {row : JoltInstructionRow} (present : bytecodeRow context.bytecode chosen.val = some row)
     (noOp : row.instruction = JoltISA.Instr.canonicalNoOp)
     (zero : witness.RegistersVal 0 t = 0) : witness.RdInc t = 0 := by
-  have charAbove2pow127 : 2 ^ 127 < ringChar F := two_pow_127_lt_char charAbove2pow128
+  have charAbove2pow127 : 2 ^ 127 < ringChar F := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have right := canonicalNoOp_rightLookupOperand charAbove2pow127 context equations t chosen selected present noOp zero
   obtain ⟨raf, tables⟩ := canonicalNoOp_lookup_flags charAbove2pow127 context equations t chosen selected present noOp
-  have output := lookupOutput_rangeCheck_zero charAbove2pow128 context equations t raf right tables
+  have output := lookupOutput_rangeCheck_zero charAbove2pow128Minus2pow64 context equations t raf right tables
   have writeFlag := opFlag_of_selected_bytecode charAbove2pow127 context equations
     .WriteLookupOutputToRD t chosen selected
   have writeOne : witness.OpFlags .WriteLookupOutputToRD t = 1 := by
@@ -123,12 +123,12 @@ private theorem canonicalNoOp_of_destination_zero
     subst destination
     exact rowOk.valid.x0DestinationIsNoOp _ destinationIs rfl
 
-include charAbove2pow128 context equations
+include charAbove2pow128Minus2pow64 context equations
 
 private theorem x0_increment_of_zero (t : Fin params.traceLength)
     (zero : witness.RegistersVal 0 t = 0) :
     witness.RdWa 0 t * witness.RdInc t = 0 := by
-  have charAbove2pow127 : 2 ^ 127 < ringChar F := two_pow_127_lt_char charAbove2pow128
+  have charAbove2pow127 : 2 ^ 127 < ringChar F := two_pow_127_lt_char charAbove2pow128Minus2pow64
   obtain ⟨chosen, selected, _⟩ := bytecodeRa_unique charAbove2pow127 context equations t
   rw [rdWa_of_selected_bytecode charAbove2pow127 context equations 0 t chosen selected]
   cases present : bytecodeRow context.bytecode chosen.val with
@@ -136,7 +136,7 @@ private theorem x0_increment_of_zero (t : Fin params.traceLength)
   | some row =>
     by_cases destinationZero : bytecodeRdRegister row.instruction = some 0
     · have noOp := canonicalNoOp_of_destination_zero context present destinationZero
-      rw [canonicalNoOp_rdInc charAbove2pow128 context equations t chosen selected present noOp zero]
+      rw [canonicalNoOp_rdInc charAbove2pow128Minus2pow64 context equations t chosen selected present noOp zero]
       simp
     · simp [bytecodeRegisterSelector, present, destinationZero]
 
@@ -151,14 +151,14 @@ theorem registersVal_x0 (t : Fin params.traceLength) : witness.RegistersVal 0 t 
     have before : n < params.traceLength := by omega
     have zero := ih before
     rw [registersVal_succ equations.registersValEqPrefixRdInc 0 ⟨n, before⟩ bound,
-      x0_increment_of_zero charAbove2pow128 context equations ⟨n, before⟩ zero,
+      x0_increment_of_zero charAbove2pow128Minus2pow64 context equations ⟨n, before⟩ zero,
       zero, add_zero]
 
 /-- No cycle changes x0, including the final cycle, for which there is no next
 register-table column. This is the write effect needed by the state induction. -/
 theorem x0_write_effect_zero (t : Fin params.traceLength) :
     witness.RdWa 0 t * witness.RdInc t = 0 :=
-  x0_increment_of_zero charAbove2pow128 context equations t
-    (registersVal_x0 charAbove2pow128 context equations t)
+  x0_increment_of_zero charAbove2pow128Minus2pow64 context equations t
+    (registersVal_x0 charAbove2pow128Minus2pow64 context equations t)
 
 end JoltConstraints.Soundness

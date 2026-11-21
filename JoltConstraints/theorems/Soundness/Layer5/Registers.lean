@@ -251,7 +251,7 @@ Sail discards that write. The destination becomes live; for example, REM's
 advice write makes temporary 40 live without requiring its previous value.
 The final cycle has no next register-table column. -/
 theorem RegisterAgreementOn.write {live : Fin 128 → Prop}
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     {t : Fin params.traceLength} (next : t.val + 1 < params.traceLength)
@@ -268,12 +268,12 @@ theorem RegisterAgreementOn.write {live : Fin 128 → Prop}
   intro register member
   by_cases zero : register = 0
   · subst register
-    rw [registersVal_x0 charAbove2pow128 context equations]
+    rw [registersVal_x0 charAbove2pow128Minus2pow64 context equations]
     change (0 : F) = ((0 : BitVec 64).toNat : F)
     simp
   have canonical := instruction_destination_canonical _ _
     (bytecodeRow_rowOk context rowIs).canonical destinationIs
-  rw [registersVal_succ_of_selected_bytecode (two_pow_127_lt_char charAbove2pow128)
+  rw [registersVal_succ_of_selected_bytecode (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations register t next chosen selected]
   simp only [rowIs, Option.bind_some, bytecodeRdRegister_eq_destination,
     destinationIs, Option.map_some]
@@ -292,7 +292,7 @@ comes from expansion. The x0 case uses the proved zero-table invariant, since
 Sail discards that write. The final cycle has no next register-table column.
 For example, an AND write preserves agreement on all other registers. -/
 theorem RegisterAgreement.write
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     {t : Fin params.traceLength} (next : t.val + 1 < params.traceLength)
@@ -303,7 +303,7 @@ theorem RegisterAgreement.write
     (value : BitVec 64) (encoded : witness.RdWriteValue t = (value.toNat : F))
     (written : writeDst destination value pre = .ok () post) :
     RegisterAgreement witness ⟨t.val + 1, next⟩ post := by
-  exact ((agrees.toOn (fun _ => True)).write charAbove2pow128 context equations
+  exact ((agrees.toOn (fun _ => True)).write charAbove2pow128Minus2pow64 context equations
     next chosen selected rowIs destinationIs value encoded written).toFull
       (fun _ => Or.inl True.intro)
 

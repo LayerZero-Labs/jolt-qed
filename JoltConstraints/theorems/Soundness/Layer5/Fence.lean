@@ -18,7 +18,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -26,7 +26,7 @@ variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop}
   {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
   (instructionIs : row.instruction = .FENCE)
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 /-- FENCE retires without changing state and preserves agreement on live registers.
 For example, a live x10 keeps its value at the next witness cycle. -/
@@ -37,7 +37,7 @@ theorem fence_register_step {pre : SailJoltState}
       .ok RETIRE_SUCCESS pre ∧
     ∀ next : t.val + 1 < params.traceLength,
       RegisterAgreementOn live witness ⟨t.val + 1, next⟩ pre := by
-  refine ⟨?_, fun next => registers.noWrite (two_pow_127_lt_char charAbove2pow128)
+  refine ⟨?_, fun next => registers.noWrite (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations next slot selected rowIs (by rw [instructionIs]; rfl)⟩
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl), instructionIs]
   simp only [execWithTapeAnswer, execInstr, pure, EStateM.pure]
@@ -58,7 +58,7 @@ theorem fence_step {pre : SailJoltState}
         (fun index => witness.RamVal index ⟨t.val + 1, next⟩) pre) ∧
     (∀ _last : t.val + 1 = params.traceLength,
       OrdinaryRamAgreement context.io.memory_layout witness.RamValFinal pre) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have noLoad : witness.OpFlags .Load t = 0 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
       JoltMetadata.opcodeFlag, Bool.false_eq_true] using!
@@ -68,7 +68,7 @@ theorem fence_step {pre : SailJoltState}
       JoltMetadata.opcodeFlag, Bool.false_eq_true] using!
       opFlag_of_selected_bytecode bound context equations .Store t slot selected
   have memory := ram.noAccess bound context equations rfl noLoad noStore
-  have step := fence_register_step charAbove2pow128 context equations selected rowIs
+  have step := fence_register_step charAbove2pow128Minus2pow64 context equations selected rowIs
     instructionIs registers answer advice
   exact ⟨step.1, fun next => ⟨step.2 next, memory.1 next⟩, memory.2⟩
 
