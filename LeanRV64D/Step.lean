@@ -10,6 +10,7 @@ import LeanRV64D.ExtRegs
 import LeanRV64D.AddrChecks
 import LeanRV64D.SysExceptions
 import LeanRV64D.ZicfilpRegs
+import LeanRV64D.SysReservation
 import LeanRV64D.SysControl
 import LeanRV64D.Platform
 import LeanRV64D.ZicfilpInsts
@@ -19,8 +20,6 @@ import LeanRV64D.StepExt
 import LeanRV64D.DecodeExt
 import LeanRV64D.Fetch
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -211,6 +210,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -218,7 +218,7 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_ex256185_ : Bool, _step_no : Int -/
+/-- Type quantifiers: k_ex256252_ : Bool, _step_no : Int -/
 def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32)) (exit_wait : Bool) : SailM Step := do
   if ((← (shouldWakeForInterrupt ())) : Bool)
   then
@@ -234,7 +234,7 @@ def run_hart_waiting (_step_no : Int) (wr : WaitReason) (instbits : (BitVec 32))
       (pure (Step_Execute ((Retire_Success ()), instbits))))
   else
     (do
-      match (wr, (valid_reservation ()), exit_wait) with
+      match (wr, (← (valid_reservation ())), exit_wait) with
       | (.WAIT_WRS_STO, false, _) =>
         (do
           if ((get_config_print_instr ()) : Bool)
@@ -396,7 +396,7 @@ def wait_is_nop (wr : WaitReason) : Bool :=
   | .WAIT_WRS_STO => false
   | .WAIT_WRS_NTO => false
 
-/-- Type quantifiers: k_ex256188_ : Bool, step_no : Nat, 0 ≤ step_no -/
+/-- Type quantifiers: k_ex256255_ : Bool, step_no : Nat, 0 ≤ step_no -/
 def try_step (step_no : Nat) (exit_wait : Bool) : SailM Bool := do
   let _ : Unit := (ext_pre_step_hook ())
   writeReg minstret_increment (← (should_inc_minstret (← readReg cur_privilege)))

@@ -1,7 +1,5 @@
 import LeanRV64D.Common
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -192,6 +190,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -199,11 +198,11 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-/-- Type quantifiers: k_ex254578_ : Nat, List.elem k_ex254578_ [16, 32, 64, 128] -/
-def float_is_positive (op : (BitVec k_ex254578_)) : Bool :=
+/-- Type quantifiers: k_ex254640_ : Nat, List.elem k_ex254640_ [16, 32, 64, 128] -/
+def float_is_positive (op : (BitVec k_ex254640_)) : Bool :=
   (is_highest_zero op)
 
-/-- Type quantifiers: k_ex254580_ : Nat, List.elem k_ex254580_ [16, 32, 64, 128] -/
-def float_is_negative (op : (BitVec k_ex254580_)) : Bool :=
+/-- Type quantifiers: k_ex254642_ : Nat, List.elem k_ex254642_ [16, 32, 64, 128] -/
+def float_is_negative (op : (BitVec k_ex254642_)) : Bool :=
   (is_highest_one op)
 

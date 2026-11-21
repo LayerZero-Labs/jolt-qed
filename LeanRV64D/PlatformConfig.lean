@@ -1,7 +1,5 @@
 import LeanRV64D.Prelude
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -192,6 +190,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -202,6 +201,12 @@ open AmocasOddRegisterReservedBehavior
 def plat_cache_block_size_exp : Nat := 6
 
 def plat_reservation_set_size_exp : Nat := 3
+
+def plat_reservation_require_exact_addr_match : Bool := true
+
+def plat_reservation_require_width_within : Bool := true
+
+def plat_reservation_invalidate_on_xret : Bool := false
 
 def plat_enable_dirty_update : Bool := false
 
@@ -250,6 +255,24 @@ def fetch_guest_page_fault_writes_xtval : Bool := false
 def software_check_fault_writes_xtval : Bool := true
 
 def reserved_exceptions_write_xtval : Bool := false
+
+def undefined_ExtContextPolicy (_ : Unit) : SailM ExtContextPolicy := do
+  (internal_pick [ExtContext_Off, ExtContext_TwoState, ExtContext_FourState])
+
+/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 2 -/
+def ExtContextPolicy_of_num (arg_ : Nat) : ExtContextPolicy :=
+  match arg_ with
+  | 0 => ExtContext_Off
+  | 1 => ExtContext_TwoState
+  | _ => ExtContext_FourState
+
+def num_of_ExtContextPolicy (arg_ : ExtContextPolicy) : Int :=
+  match arg_ with
+  | .ExtContext_Off => 0
+  | .ExtContext_TwoState => 1
+  | .ExtContext_FourState => 2
+
+def plat_mstatus_legal_fs : ExtContextPolicy := ExtContext_Off
 
 def undefined_AmocasOddRegisterReservedBehavior (_ : Unit) : SailM AmocasOddRegisterReservedBehavior := do
   (internal_pick [AMOCAS_Fatal, AMOCAS_Illegal])
