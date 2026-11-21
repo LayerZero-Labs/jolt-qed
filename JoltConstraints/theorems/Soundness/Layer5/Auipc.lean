@@ -20,7 +20,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -29,13 +29,13 @@ variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop}
   {destination : Dst} {imm : BitVec 64}
   (instructionIs : row.instruction = .AUIPC destination imm)
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 /-- The AUIPC lookup writes the current address plus its immediate modulo 2^64;
 for example, address 8 and immediate 4096 write 4104. -/
 private theorem auipc_write_value :
     witness.RdWriteValue t = ((row.address + imm).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have flags := opFlag_of_selected_bytecode bound context equations
   have addFlag : witness.OpFlags .AddOperands t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
@@ -55,7 +55,7 @@ private theorem auipc_write_value :
       ↓reduceIte, zero_add, add_zero, address, immediate] using
       instructionInputs_of_selected_bytecode bound context equations t slot selected row rowIs
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
-  exact lookupOutput_rangeCheck_add charAbove2pow128 context equations t slot selected
+  exact lookupOutput_rangeCheck_add charAbove2pow128Minus2pow64 context equations t slot selected
     (by simp only [rowIs, Option.bind_some, instructionIs, JoltMetadata.lookupTable])
     addFlag row.address imm inputs.1 inputs.2
 
@@ -78,9 +78,9 @@ theorem auipc_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witn
   have readPC : liftSail (get_arch_pc ()) pre = .ok row.address pre := by
     unfold liftSail get_arch_pc
     rw [readReg_eq_of_get? Register.PC pre.sail row.address pc]
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by rw [instructionIs]; rfl) _
-    (auipc_write_value charAbove2pow128 context equations selected rowIs instructionIs)
+    (auipc_write_value charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs)
     answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl)]
   rw [instructionIs]

@@ -17,7 +17,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -33,14 +33,14 @@ private theorem addi_canonical :
   simpa only [instructionIs, JoltRegisterEncoding.instructionIsCanonical,
     Bool.and_eq_true] using (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem addi_metadata :
     witness.OpFlags .AddOperands t = 1 ∧
     witness.OpFlags .WriteLookupOutputToRD t = 1 ∧
     (bytecodeRow context.bytecode slot.val).bind
       (fun row => JoltMetadata.lookupTable row.instruction) = some .RangeCheck := by
-  have flags := opFlag_of_selected_bytecode (two_pow_127_lt_char charAbove2pow128)
+  have flags := opFlag_of_selected_bytecode (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations
   refine ⟨?_, ?_, ?_⟩
   · simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
@@ -54,7 +54,7 @@ private theorem addi_inputs {pre : SailJoltState}
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.LeftInstructionInput t = ((sourceValue source pre).toNat : F) ∧
     witness.RightInstructionInput t = (imm.toNat : F) := by
-  exact agrees.immediateInputs (two_pow_127_lt_char charAbove2pow128)
+  exact agrees.immediateInputs (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations selected rowIs source imm
     (addi_canonical context rowIs instructionIs).2
     (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
@@ -65,11 +65,11 @@ private theorem addi_write_value {pre : SailJoltState}
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t = ((sourceValue source pre + imm).toNat : F) := by
   obtain ⟨addFlag, writeFlag, table⟩ :=
-    addi_metadata charAbove2pow128 context equations selected rowIs instructionIs
+    addi_metadata charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
   obtain ⟨left, right⟩ :=
-    addi_inputs charAbove2pow128 context equations selected rowIs instructionIs agrees sourceLive
+    addi_inputs charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs agrees sourceLive
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
-  exact lookupOutput_rangeCheck_add charAbove2pow128 context equations t slot
+  exact lookupOutput_rangeCheck_add charAbove2pow128Minus2pow64 context equations t slot
     selected table addFlag (sourceValue source pre) imm left right
 
 /-- A selected ADDI row writes the constrained wrapped sum and executes to the
@@ -92,10 +92,10 @@ theorem addi_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witne
         witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
   dsimp only
   have sourceCanonical := (addi_canonical context rowIs instructionIs).2
-  have encoded := addi_write_value charAbove2pow128 context equations
+  have encoded := addi_write_value charAbove2pow128Minus2pow64 context equations
     selected rowIs instructionIs agrees sourceLive
   have read := (agrees.read source sourceCanonical sourceLive).1
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by rw [instructionIs]; rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl)]
   rw [instructionIs]

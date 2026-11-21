@@ -2132,7 +2132,8 @@ theorem selected_jalr_lookup_target
         some .RangeCheckAligned := by
     simp [present, jump, JoltMetadata.lookupTable]
   have output := JoltConstraints.Soundness.lookupOutput_rangeCheckAligned_of_identity
-    joltField context equations cycle slot selected _ raf encoded table
+    joltField context equations cycle slot selected _ raf encoded
+    (JoltConstraints.Soundness.addWideIndex_lt value imm) table
   simpa [jolt_jalr_target64, Sail.BitVec.update,
     Sail.BitVec.updateSubrange', BitVec.and_comm,
     BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using output

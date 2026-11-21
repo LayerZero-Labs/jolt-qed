@@ -4,9 +4,6 @@ This note fixes the machine that jolt-qed proves Jolt equivalent to.
 Each section states one decision and argues for it from the RISC-V specification and from Jolt's code.
 Later work (the Sail configuration, the model patches, the step-level and whole-run theorems) implements these decisions; when it finds that one is wrong, this note changes first.
 
-This version holds sections 1 to 8.
-Section 9, on the whole-run system invariant, and the parts of section 2 and section 5 about the whole-run theorem arrive with the PR that adds that theorem.
-
 ## Sources
 
 - RISC-V ISA manual, riscv/riscv-isa-manual at `717aeca3` (2026-11-06).
@@ -16,7 +13,7 @@ Section 9, on the whole-run system invariant, and the parts of section 2 and sec
   jolt-qed's expansions were generated from `c6703570`.
   Every Jolt file cited below is identical at the two commits, except four added lines in `tracer/src/emulator/cpu.rs` that do not touch the code cited.
 - The Jolt changes for this alignment, a16z/jolt `c336a6da7`, the head of a16z/jolt#2384 (stacked on a16z/jolt#2383, with `main` merged in after a16z/jolt#2381).
-  The inline expansions under `crates/jolt-program/src/expand`, `crates/jolt-program/src/image/decode.rs` and `crates/jolt-riscv/src/uncompress.rs` are transcribed from this commit.
+  The inline expansions under `crates/jolt-program/src/expand`, `crates/jolt-program/src/image/decode.rs`, `crates/jolt-program/src/image/elf.rs` (`decode_elf`) and `crates/jolt-riscv/src/uncompress.rs` are transcribed from this commit.
   It contains a16z/jolt#2381, which rejects the reserved C.LUI parcel (section 5).
   The pin moves to a16z/jolt `main` once a16z/jolt#2383 and #2384 merge.
   The system expansions (`JoltBytecode/JoltISA/Expansions/System.lean`) and the decoder (`JoltBytecode/Decode/Jolt.lean`) transcribe this revision, not `9407f93f`: there, a CSR read of `mstatus` returns `v39 | 0x1800`, MRET restores `mstatus` before it jumps, and the decoder accepts CSRRC, CSRRWI, CSRRSI and CSRRCI.
@@ -73,18 +70,37 @@ The Sail configuration has two regions, and nothing else is readable, writable o
 The device-tree region at `0x1000` is removed, because Jolt has no device tree.
 The CLINT stays where the Sail model needs it (`0x0200_0000`), outside both regions; Jolt panics on any access to it (`mmu.rs`, `load_raw` and `store_raw`), so it is not reachable from a Jolt trace.
 
-The PR that adds the whole-run theorem also adds a Lean copy of these regions and a check in `scripts/check-sail-model.sh` that keeps the two the same.
+The Lean side takes the regions from `JoltConstraints/theorems/WholeRun/Relation.lean` (`ioRegion`, `ramRegion`, `platformPma`), not from the json, and `scripts/check-sail-model.sh` keeps the two the same.
 Each region is a superset of what Jolt allows, which is the direction the whole-run theorem needs.
 Jolt's tracer additionally panics on stores into the stack canary, on accesses at or above `heap_end`, on stores to the read-only parts of the I/O window, and on fetches outside the program's bytecode.
 Those runs have no Jolt trace, so the theorem never has to say what Sail does on them.
 Reservability and atomics are restricted the way Jolt restricts them: Jolt's LR and SC expansions assert `rs1 ≥ 0x8000_0000` before touching the reservation (`crates/jolt-program/src/expand/memory/lrw.rs`, `lrd.rs`, `shared.rs` `expand_sc_success`).
 Jolt's platform allows AMOs anywhere its MMU accepts a load and a store, including the output region: its AMO expansions load and store the doubleword through the ordinary MMU.
 The specification leaves a region's atomics to the platform, so the I/O region's atomics are our modelling choice, not a property of Jolt, and AMONone would be wrong for Jolt's platform.
-The I/O region therefore has AMOArithmetic (`sail-import/rv64d_jolt.json`), keeping RsrvNone, which stays exact because LR and SC assert RAM.
+The I/O region therefore has AMOArithmetic (`Relation.lean` and `sail-import/rv64d_jolt.json`), keeping RsrvNone, which stays exact because LR and SC assert RAM.
+Every AMO block is then in RAM or in the I/O window, and the whole-run theorem needs no premise placing AMOs in RAM: `access_classified` (`WholeRun/RunInv.lean`) classifies a block as a RAM access, an I/O load or store, or an I/O AMO (`IoAmoAccess`: a word or doubleword AMO whose containing doubleword lies below `0x8000_0000`), `block_simulates_io_amo` (`WholeRun/IoAmo.lean`) simulates the last kind, and `block_simulates_image` (`WholeRun/Decoded.lean`) combines the three.
+An I/O AMO takes one deviation premise, `AmoNoFlagWord`: no byte of the doubleword it reads and writes is a byte of the panic or termination word, because Jolt's device turns a store of the panic byte into the flag and ignores every other store to those words, while Sail stores the bytes (for example `AMOADD.D` at the panic address).
+The premise covers the AMO's whole doubleword, also for a word AMO, because Jolt's word AMO stores the whole doubleword back. The difference test confirms it: `AMOADD.W` on the high word of the panic doubleword sets Jolt's panic flag, and a premise on the word alone would miss it. In the same rerun, AMOs on the output region that avoid the flag words agree.
+Two premises that the loads and stores need are not needed here.
+First, no low-address premise: a retiring AMO stores to its doubleword, and Jolt's tracer accepts a store only at or above `output_start`, which is at least `memLow`, so the load half reads above `memLow` too.
+Second, no panic-store premise: under `AmoNoFlagWord` the stored doubleword holds no flag byte, so `PanicStoreNonzero` holds trivially.
+Misalignment needs no premise either: Jolt's `LD` and `SD` rows assert `addr & 7 = 0` and its word lane rows (`VirtualLoadW`, `VirtualStoreW`) assert `ea & 3 = 0`, so a misaligned I/O AMO faults in Jolt as it does in Sail (Sail checks natural alignment before the PMA), and Jolt never retires where Sail faults.
 
 The I/O window is not plain memory in Jolt: a store to the panic word sets a flag whatever the value, and the termination word ignores stores and always reads 0 (`JoltBytecode/JoltISA/JoltDevice.lean`, `load?` and `store?`).
 The specification leaves the behaviour of I/O regions to the platform, so this is not a deviation from RISC-V; it is a difference between Jolt's platform and the Sail model's flat memory.
 The whole-run theorem relates the two through the device relation already used by `DeviceMemory.lean`, and reads the panic and termination flags as "the word is nonzero"; a guest that reads back the panic or termination word after writing it is the one documented case where the two platforms differ.
+
+Open item, a premise of step f: Jolt's tracer lets a load read any address at or below `0x8000_0000 - 8` and returns 0 there (`mmu.rs`, `assert_effective_address` and `load_raw`), while Sail raises a load access fault outside the two regions.
+Jolt's prover maps RAM addresses through `MemoryLayout::remap_word_address`, which rejects every nonzero address below the lowest address of the memory layout.
+Step f uses that check: `HaltPrefix.traced` ties each block to its first trace row, and `Block.FirstRowAt.noLowLoad` derives `NoLowLoad` from the RAM address that row records.
+One case remains.
+A byte, halfword or word load records the address of its doubleword, which is 0 when the effective address is below 8, and the prover reads recorded address 0 as no access.
+An LD records its own effective address: an LD at address 0 also escapes the check, and the check rejects an LD at addresses 1 to 7 when they are below the lowest address.
+The whole-run theorem keeps the case as the per-block premise `NoZeroDoublewordLoad` (section 9), which asks every load, LD included, for an effective address of at least 8, to state one bound for every width.
+A fault in Jolt's tracer for loads below the lowest address would remove it, and that goes to the Jolt-changes stream.
+
+The theorem for blocks that access the I/O window (`WholeRun/Io.lean`, `block_simulates_io`) takes three deviation hypotheses, one for each difference above: `NoFlagWordLoad` (no load reads a byte of the panic or termination word), `PanicStoreNonzero` (a store that touches the panic doubleword leaves Sail's panic word nonzero, which excludes a store that zeroes the only nonzero byte of the word, because Jolt's flag is set by any such store) and `NoLowLoad` (no load reads below the lowest address Jolt's prover accepts, which the whole-run theorem derives as described above).
+The theorem for AMOs on the I/O window (`WholeRun/IoAmo.lean`, `block_simulates_io_amo`) takes only `AmoNoFlagWord` (no byte of the AMO's doubleword is a byte of the panic or termination word): a retiring AMO's store already puts its address at or above `memLow`, and its store cannot set the panic flag, so `NoLowLoad` and `PanicStoreNonzero` have no counterpart.
 
 ## 3. Reservation policy
 
@@ -176,6 +192,8 @@ The advice tape is platform state that only the custom instructions of section 7
 
 It also requires the invariants: privilege is Machine, `mie = 0`, `misa` is fixed, and the read-only `mstatus` fields have the values of section 6.
 Counters and Sail-internal registers are not compared.
+Decision (step f): Sail's `misa` is its reset value `0x8000000000001105` (A, C, I, M), set by the relation like `pma_regions`, not copied from the `misa` that Jolt's embedded Sail state carries (`0x800000008014312f`).
+Jolt accepts only the six CSRs of section 6, so no guest observes `misa`; Jolt's rows read only its C bit (in `jump_to`), which both values set (`NonInterference.lean`, `execProgram_withMisa`).
 A generic lifting lemma turns each existing `execute_X` theorem into a `try_step` theorem, by discharging fetch and decode for the instruction's encoding and the PC update once.
 
 ### What step c proves
@@ -275,7 +293,7 @@ Upstream fixed this in `81184531` by legalizing FS through the platform's suppor
 Jolt's guest programs may contain Jolt's own instructions on major opcode `0x5B`, which the specification's opcode map marks custom-2, reserved for custom extensions (`unpriv/rv-32-64g.adoc`, opcode map and the paragraph after it).
 They are not RISC-V instructions, so the Sail model does not decode them, and patching them into the model would make the trusted model depend on Jolt.
 The plan is a platform step: on a `0x5B` encoding it runs a short Lean specification of Jolt's instruction, and on every other encoding it runs `try_step`.
-It is not built yet: the whole-run theorem runs `try_step` only,, so the rest of this section describes the planned extension.
+It is not built yet: the whole-run theorem runs `try_step` only, and `BlockConforms.riscv` restricts it to RISC-V rows (section 9), so the rest of this section describes the planned extension.
 Advice loads read from the advice tape, which the whole-run theorem quantifies over as a private input.
 `VirtualAssertEQ` has no successor state when its operands differ.
 `VirtualHostIO` changes no RISC-V state: it reads guest memory for the host call named in `a0`, and the advice-write call appends those bytes to the advice tape (`JoltBytecode/JoltISA/HostIO.lean`), so the tape is part of the platform state that the relation of section 5 carries.
@@ -322,6 +340,7 @@ The model's own axioms (`LeanRV64D/RiscvExtras.lean`) after the regeneration:
 
 The generated model is checked at Lean's default limits (200000 heartbeats, `maxRecDepth` 512), with no file-wide `set_option`; `scripts/regen-sail-model.sh` removes the two header lines Sail writes and splits each 256-entry S-box table into two 128-entry halves.
 Only the declarations below carry a limit, as `set_option … in` directly before the declaration; each limit is the smallest passing value rounded up to the next 50 (next 50000 for heartbeats).
+The first five are in the closure of `JoltInstance.sail_soundness`, which therefore depends on those options for the model, though not on any file-wide one.
 
 | Declaration | Limit | Reason | In the closure |
 | --- | --- | --- | --- |
@@ -337,5 +356,72 @@ The follow-up is for Sail's Lean backend to split long if-chains and mappings in
 The proofs unfold the CSR chains and the decoder mapping, so the chains are not split by hand.
 
 `#print axioms` on `JoltInstance.soundness` and on every instruction theorem that is fully proved gives only `propext`, `Classical.choice` and `Quot.sound`.
-The headline theorems, including `Decode.joltDecode_compressed_agrees`, use only these three standard axioms, although the generic CSR read in their closure mentions `get_16_random_bits`.
+The headline theorems, including `Decode.joltDecode_compressed_agrees` and the block theorems of section 9, use only these three standard axioms, although the generic CSR read in their closure mentions `get_16_random_bits`.
 None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/theorems/Completeness/`, some of them waiting on a16z/jolt#1949.
+
+Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (the read-back of the panic and termination words in section 2, and anything the difference testing confirms); the classified list is in section 9, "What step f proves".
+The per-block deviations of `JoltInstance.sail_soundness` are premises on the trace that `soundness` extracts, so they are checked on that trace; `HonestTrace.sail_reproduces` states the same for any honest trace given in advance.
+Of the low-address loads of jolt-qed#37, only loads from the doubleword at address 0 remain a premise (`NoZeroDoublewordLoad`); the prover's address check excludes the others.
+
+## 9. Whole-run system invariant
+
+`WholeRun.SystemInv` is a run invariant: raw mstatus contains only MIE/MPIE, mtvec has mode 0 or 1, mepc is even, and the reservation registers form a legal pair.
+It holds initially and is preserved by every source block, including CSR writes, MRET, LR/SC and ECALL, assuming the separately supplied run invariant that the source PC is even.
+`WholeRun.block_simulates` combines these facts with the platform RAM assumptions and fetch/decode results to simulate every RISC-V block before EBREAK by one Sail `try_step`.
+`WholeRun.block_simulates_decoded` removes the fetch and decode premises: Sail's `fetch` and decode at the block's PC come from the program image (`WholeRun/Decoded.lean`).
+`ImageDecoded` says that each RISC-V row of the image is what Jolt's decoder (`joltDecode`, and `joltUncompress` for a compressed row) gives for the bytes `memory_init` loads at its address.
+No constraint checks it, because it describes how the bytecode was produced.
+The whole-run theorems derive it from the platform premise `DecodedFrom` (`WholeRun/Elf.lean`): the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF.
+`DecodedFrom` fixes the layout and every RISC-V row, and every program Jolt builds satisfies it; it does not fix which of Jolt's own instructions a row holds.
+`ElfSections.layout?` transcribes `decode_elf` up to the call of `decode_instruction`: the loaded sections, `memory_init`, `program_end`, `merge_ranges` and `decode_text_section`.
+`decode_elf` reads a merged text range from its byte map with `unwrap_or(0)`.
+The `object` crate reports a section as text only when it is `SHT_PROGBITS`, and it gives such a section exactly `sh_size` bytes of data or fails.
+`ElfSection.text_data_length` records this for every text section `decode_elf` loads, that is, at or above `RAM_START_ADDRESS`.
+Every address of a merged text range therefore has a byte, and `DecodedFrom.imageDecoded` proves that the default 0 never applies.
+The parsing of the ELF file into its sections (`object::File::parse`, section kinds, `entry`) stays outside Lean and is trusted.
+`CodeIntact` says Sail's memory still holds those bytes at every row; it holds at `sailInit` (`codeIntact_sailInit`).
+Its Jolt-side version `JoltCodeIntact` (`WholeRun/CodeInv.lean`) is a run invariant under the documented deviation `NoCodeStore`: the block stores into no instruction byte, counting the whole doubleword Jolt's narrow stores rewrite.
+Jolt does not forbid a store into the code, and its tracer keeps fetching the committed bytecode afterwards, while Sail's model fetches coherently from memory; without Zifencei the specification permits either (`unpriv/zifencei.adoc`).
+
+Platform premise `JoltInstance.HeapNoWrap`: the memory layout ends at least eight bytes below `2^64` (`heap_end ≤ 2^64 - 8`).
+`MemoryLayout.new` checks its additions but rounds only the stack and heap sizes to eight bytes, so a `program_end` near `2^64` gives `heap_end = 2^64 - 1`; real ELFs end far below that.
+The layout never changes during a run, so the premise on the instance holds at every block.
+
+### What step f proves
+
+`HonestTrace.sail_reproduces` (`WholeRun/Top.lean`) is the run-level theorem.
+It applies to every honest trace and every `HaltPrefix` of it, where `HaltPrefix` names the blocks `pre` before the trace's first EBREAK, ending at the state `halt`.
+If Jolt's prover accepts the trace and every block of `pre` satisfies `BlockConforms`, then `sailRun n (sailInit trace.initialState)` succeeds at a Sail state `s` with four properties:
+- `s` is related to `halt` (`Related`), through the register projection and memory conditions that [`whole-run-theorem.md`](whole-run-theorem.md) describes;
+- its trimmed output bytes are those of the trace's final state;
+- its panic word is nonzero exactly when the final state's panic flag is set;
+- either `PC` names an EBREAK row of the image (`SailHalted`), or the trace ended without an EBREAK at `halt`.
+
+`JoltInstance.sail_soundness` composes it with `JoltInstance.soundness`.
+Every instance the constraints accept has an honest trace that satisfies the three conjuncts of `InLanguage`.
+For that trace the same conclusion holds, and the outputs and panic flag are the instance's claimed ones.
+The trace is the one `soundness` extracts from the witness, so conformance has to be checked on that trace.
+Alternatively, it can be argued from Jolt's determinism when the trace is unique for the given inputs.
+
+The relation carried along the run is `RunRel = Related ∧ RunInv ∧ JoltCodeIntact`.
+The premises, by class:
+
+| Premise | Class | Where |
+| --- | --- | --- |
+| `hcfg` (`sail_reproduces` only) | prover acceptance | Jolt's prover accepts the trace; `sail_soundness` obtains it from `soundness` |
+| `DecodedFrom` | platform | the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF; `ImageDecoded` follows from it |
+| `RowsAligned` | platform | every row address is even; Jolt's ELF loader does not check that the text section starts at an even address |
+| `HeapNoWrap` | platform | the layout ends at least eight bytes below `2^64` |
+| `BlockConforms.amo_no_flag_word` | documented deviation | an AMO on the I/O window touches no panic or termination byte (section 2) |
+| `BlockConforms.no_code_store` | documented deviation | stores into the code, above |
+| `BlockConforms.no_flag_word_load`, `no_zero_doubleword_load`, `panic_store_nonzero` | documented deviation | the I/O window (section 2) |
+| `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |
+
+The per-block premises are stated on the blocks of the trace's halt prefix, not on the whole program image.
+In `sail_soundness` that trace is existentially quantified, and a reader who sees only the instance cannot inspect its blocks.
+To obtain the Sail run, the reader has to prove the premises for the returned halt prefix; proving them for every run the program can take, on every private input, is one sufficient way.
+[`whole-run-theorem.md`](whole-run-theorem.md) explains this and lists what the theorems do not say.
+jolt-qed#37 lists low-address loads as an open question.
+`HaltPrefix.traced` links each block to its first trace row, and the prover's check of the recorded `ram_address` (`prover_config`) gives `NoLowLoad` for every load at or above address 8.
+A byte, halfword or word load below address 8 records address 0, which the prover does not check, and `NoZeroDoublewordLoad` remains a premise for it; an LD at address 0 escapes the check as well, and for one bound across widths the premise excludes every LD below 8.
+`#print axioms` on `JoltInstance.sail_soundness` and `HonestTrace.sail_reproduces` gives `propext`, `Classical.choice` and `Quot.sound`.

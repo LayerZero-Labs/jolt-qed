@@ -51,6 +51,7 @@ import JoltConstraints.theorems.Completeness.RightLookupAdd
 import JoltConstraints.theorems.Completeness.RightLookupEqProductIfMul
 import JoltConstraints.theorems.Completeness.RightLookupEqRightInputOtherwise
 import JoltConstraints.theorems.Completeness.RightLookupOperandEqInstructionRaf
+import JoltConstraints.theorems.Completeness.InstructionAddressCanonical
 import JoltConstraints.theorems.Completeness.RightLookupSub
 import JoltConstraints.theorems.Completeness.Rs1RaEqBytecodeRead
 import JoltConstraints.theorems.Completeness.Rs1ValueEqRegistersRead

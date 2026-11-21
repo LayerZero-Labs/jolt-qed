@@ -68,7 +68,7 @@ private theorem word_lane_low (value : BitVec 128) :
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -88,7 +88,7 @@ private theorem addressMask_canonical :
       JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 /-- The selected lane-mask lookup fixes the destination value.
 For example, a byte mask at effective address 2 writes `0xFF0000`. -/
@@ -97,7 +97,7 @@ private theorem addressMask_write_value {pre : SailJoltState}
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue source pre) imm).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   obtain ⟨left, right⟩ := agrees.immediateInputs bound context equations selected rowIs
     source imm (addressMask_canonical context rowIs operation instructionIs).2
     (by cases operation <;> rw [instructionIs] <;> rfl)
@@ -122,11 +122,12 @@ private theorem addressMask_write_value {pre : SailJoltState}
   have raf := instructionRafFlag_one_of_arithmetic bound context equations t (Or.inl active)
   have encoded := rightLookupOperand_add equations.rightLookupAdd t active
     (sourceValue source pre) imm left right
+  have valueBelow := addWideIndex_lt (sourceValue source pre) imm
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
   cases operation with
   | byte =>
-    have output := lookupOutput_windowMaskB_of_identity charAbove2pow128 context equations
-      t slot selected _ raf encoded table
+    have output := lookupOutput_windowMaskB_of_identity charAbove2pow128Minus2pow64 context equations
+      t slot selected _ raf encoded valueBelow table
     have lane := masked_low (BitVec.ofNat 128 (JoltISA.addWide (sourceValue source pre) imm))
       7 (by norm_num : 7 < 2 ^ 64)
     simp only [BitVec.ofNat_eq_ofNat] at output
@@ -134,8 +135,8 @@ private theorem addressMask_write_value {pre : SailJoltState}
     simpa only [AddressMask.value, jolt_virtual_window_mask_b_value64,
       BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using! output
   | halfword =>
-    have output := lookupOutput_windowMaskH_of_identity charAbove2pow128 context equations
-      t slot selected _ raf encoded table
+    have output := lookupOutput_windowMaskH_of_identity charAbove2pow128Minus2pow64 context equations
+      t slot selected _ raf encoded valueBelow table
     have lane := masked_low (BitVec.ofNat 128 (JoltISA.addWide (sourceValue source pre) imm))
       6 (by norm_num : 6 < 2 ^ 64)
     simp only [BitVec.ofNat_eq_ofNat] at output
@@ -143,8 +144,8 @@ private theorem addressMask_write_value {pre : SailJoltState}
     simpa only [AddressMask.value, jolt_virtual_window_mask_h_value64,
       BitVec.setWidth_ofNat_of_le (by decide : 64 ≤ 128)] using! output
   | word =>
-    have output := lookupOutput_windowMaskW_of_identity charAbove2pow128 context equations
-      t slot selected _ raf encoded table
+    have output := lookupOutput_windowMaskW_of_identity charAbove2pow128Minus2pow64 context equations
+      t slot selected _ raf encoded valueBelow table
     have lane := word_lane_low
       (BitVec.ofNat 128 (JoltISA.addWide (sourceValue source pre) imm))
     simp only [BitVec.ofNat_eq_ofNat] at lane output
@@ -171,9 +172,9 @@ theorem addressMask_step {pre : SailJoltState}
   dsimp only
   have sourceRead := (agrees.read source
     (addressMask_canonical context rowIs operation instructionIs).2 sourceLive).1
-  have encoded := addressMask_write_value charAbove2pow128 context equations
+  have encoded := addressMask_write_value charAbove2pow128Minus2pow64 context equations
     selected rowIs operation instructionIs agrees sourceLive
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by cases operation <;> rw [instructionIs] <;> rfl)]

@@ -20,7 +20,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -29,11 +29,11 @@ variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop}
   {destination : Dst} {imm : BitVec 64}
   (instructionIs : row.instruction = .LUI destination imm)
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 /-- The LUI lookup writes its unsigned immediate; for example, immediate 4096 writes 4096. -/
 private theorem lui_write_value : witness.RdWriteValue t = (imm.toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have flags := opFlag_of_selected_bytecode bound context equations
   have addFlag : witness.OpFlags .AddOperands t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, instructionIs,
@@ -50,7 +50,7 @@ private theorem lui_write_value : witness.RdWriteValue t = (imm.toNat : F) := by
       ↓reduceIte, zero_add, add_zero, immediate] using
       instructionInputs_of_selected_bytecode bound context equations t slot selected row rowIs
   rw [rdWriteValue_eq_lookupOutput equations.rdWriteEqLookupIfWriteLookupToRd t writeFlag]
-  have output := lookupOutput_rangeCheck_add charAbove2pow128 context equations t slot
+  have output := lookupOutput_rangeCheck_add charAbove2pow128Minus2pow64 context equations t slot
     selected (by simp only [rowIs, Option.bind_some, instructionIs, JoltMetadata.lookupTable])
     addFlag 0 imm (by simpa only [BitVec.ofNat_eq_ofNat, BitVec.toNat_ofNat,
       Nat.reducePow, Nat.zero_mod, Nat.cast_zero] using inputs.1) inputs.2
@@ -69,9 +69,9 @@ theorem lui_step {pre : SailJoltState} (agrees : RegisterAgreementOn live witnes
       RegisterAgreementOn
         (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
         witness ⟨t.val + 1, next⟩ (afterWriteDst destination imm pre) := by
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by rw [instructionIs]; rfl) imm
-    (lui_write_value charAbove2pow128 context equations selected rowIs instructionIs)
+    (lui_write_value charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs)
     answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instructionIs]; rfl)]
   rw [instructionIs]

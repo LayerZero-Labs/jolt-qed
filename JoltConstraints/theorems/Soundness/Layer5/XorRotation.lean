@@ -67,7 +67,7 @@ private def XorRotation.table : XorRotation → LookupTableKind
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -86,7 +86,7 @@ private theorem xorRotation_canonical :
       JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem xorRotation_write_value {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
@@ -94,7 +94,7 @@ private theorem xorRotation_write_value {pre : SailJoltState}
     (rhsLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue lhs pre) (sourceValue rhs pre)).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have canonical := xorRotation_canonical context rowIs operation instructionIs
   obtain ⟨left, right⟩ := agrees.registerInputs bound context equations selected rowIs
     lhs rhs canonical.1.2 canonical.2
@@ -142,9 +142,9 @@ theorem xorRotation_step {pre : SailJoltState} (agrees : RegisterAgreementOn liv
   have canonical := xorRotation_canonical context rowIs operation instructionIs
   have leftRead := (agrees.read lhs canonical.1.2 lhsLive).1
   have rightRead := (agrees.read rhs canonical.2 rhsLive).1
-  have encoded := xorRotation_write_value charAbove2pow128 context equations selected rowIs
+  have encoded := xorRotation_write_value charAbove2pow128Minus2pow64 context equations selected rowIs
     operation instructionIs agrees lhsLive rhsLive
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by cases operation <;> rw [instructionIs] <;> rfl)]

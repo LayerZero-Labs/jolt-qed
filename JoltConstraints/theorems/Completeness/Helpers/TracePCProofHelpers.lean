@@ -6,7 +6,6 @@ open LeanRV64D
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 set_option autoImplicit false
 set_option linter.unusedSimpArgs false
-set_option maxHeartbeats 400000
 
 namespace PCFrame
 
