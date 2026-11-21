@@ -26,7 +26,7 @@ theorem virtual_assert_mulu_no_overflow_run_ok (lhs : VReg) (rhs : regidx)
   unfold execInstr readSrc readVReg liftSail
   simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos (show mulWide _ _ < 2 ^ 64 from hguard)]
+  rw [ite_eq_left (show mulWide _ _ < 2 ^ 64 from hguard)]
   rfl
 
 /-- Failed real-source unsigned multiplication overflow assertion. -/
@@ -39,7 +39,7 @@ theorem virtual_assert_mulu_no_overflow_run_err (lhs : VReg) (rhs : regidx)
   unfold execInstr readSrc readVReg liftSail
   simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg (show ¬mulWide _ _ < 2 ^ 64 from hguard)]
+  rw [ite_eq_right (show ¬mulWide _ _ < 2 ^ 64 from hguard)]
   rfl
 
 /-- Successful virtual-source unsigned multiplication overflow assertion. -/
@@ -51,7 +51,7 @@ theorem virtual_assert_mulu_no_overflow_v_run_ok (lhs rhs : VReg)
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos (show mulWide _ _ < 2 ^ 64 from hguard)]
+  rw [ite_eq_left (show mulWide _ _ < 2 ^ 64 from hguard)]
   rfl
 
 /-- Failed virtual-source unsigned multiplication overflow assertion. -/
@@ -63,7 +63,7 @@ theorem virtual_assert_mulu_no_overflow_v_run_err (lhs rhs : VReg)
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg (show ¬mulWide _ _ < 2 ^ 64 from hguard)]
+  rw [ite_eq_right (show ¬mulWide _ _ < 2 ^ 64 from hguard)]
   rfl
 
 end JoltISA

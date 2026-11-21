@@ -78,7 +78,7 @@ private theorem amoswapdProgramAuto_eq_sail
       unfold JoltISA.amoswapdProgramAuto
       cases hrd : JoltISA.isX0 rd
       all_goals
-        simp only [hrd, Bool.false_eq_true, if_false, if_true,
+        simp only [hrd, Bool.false_eq_true, ite_false, ite_true,
           oldReg, JoltISA.amoOldVRegFor, JoltISA.amoVRegFor,
           JoltISA.inlineTmp, JoltISA.inlineRegisterBase,
           JoltISA.riscvRegisterBase, JoltISA.riscvRegisterCount,
@@ -134,7 +134,7 @@ private theorem amoswapdProgramAuto_eq_sail
       cases hrd : JoltISA.isX0 rd
       all_goals
         simpa only [JoltISA.amoswapdProgramAuto, hrd,
-          Bool.false_eq_true, if_false, if_true,
+          Bool.false_eq_true, ite_false, ite_true,
           oldReg, rest, JoltISA.amoOldVRegFor, JoltISA.amoVRegFor,
           JoltISA.inlineTmp, JoltISA.inlineRegisterBase,
           JoltISA.riscvRegisterBase, JoltISA.riscvRegisterCount,

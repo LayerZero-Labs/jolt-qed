@@ -44,7 +44,7 @@ jobs:
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/ \
               sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh \
-              JoltConstraints/WholeRun/Relation.lean; then
+              JoltConstraints/theorems/WholeRun/Relation.lean; then
             echo "regenerate=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -55,7 +55,7 @@ jobs:
           echo "Generated Sail sources or their pinned inputs changed:"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/ \
             sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh \
-            JoltConstraints/WholeRun/Relation.lean | head -50
+            JoltConstraints/theorems/WholeRun/Relation.lean | head -50
           echo "regenerate=true" >> "$GITHUB_OUTPUT"
       - name: Install the Sail compiler's build dependencies
         if: steps.sail.outputs.regenerate == 'true'

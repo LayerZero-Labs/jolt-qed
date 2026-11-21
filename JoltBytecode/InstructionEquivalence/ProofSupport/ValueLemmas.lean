@@ -24,14 +24,14 @@ noncomputable section
 
 lemma ctz_of_odd {n : Nat} (h : n % 2 = 1) : ctz n = 0 := by
   have hne : n ≠ 0 := by omega
-  unfold ctz; rw [if_neg hne, if_pos h]
+  unfold ctz; rw [ite_eq_right hne, ite_eq_left h]
 
 lemma ctz_of_double {n : Nat} (hn : 0 < n) : ctz (2 * n) = 1 + ctz n := by
   have h1 : 2 * n ≠ 0 := by omega
   have h2 : ¬(2 * n % 2 = 1) := by omega
   have h3 : (2 * n) / 2 = n := by omega
   conv_lhs => unfold ctz
-  rw [if_neg h1, if_neg h2, h3]
+  rw [ite_eq_right h1, ite_eq_right h2, h3]
 
 lemma ctz_mul_pow2 (k : Nat) {m : Nat} (hm : 0 < m) :
     ctz (2 ^ k * m) = k + ctz m := by

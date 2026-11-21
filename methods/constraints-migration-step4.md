@@ -2,7 +2,7 @@
 
 Ari approved this step on 2026-11-03.
 It is written for an agent that has not seen the earlier steps.
-Delete this file once the step is reviewed and its content is in the code, in `methods/soundness.md` and in `JoltConstraints/model_review.md`.
+Delete this file once the step is reviewed and its content is in the code, in `methods/soundness.md` and in `JoltConstraints/documentation/model_review.md`.
 
 ## Context
 
@@ -23,8 +23,8 @@ Delete this file once the step is reviewed and its content is in the code, in `m
   - `VirtualAlignAddr`, `VirtualAssertHalfwordAlignment` and `VirtualAssertWordAlignment` are gone, with the `AlignAddr`, `HalfwordAlignment` and `WordAlignment` tables.
   - Constraint (01) is now `(Load + Store) · (RamAddress - Rs1Value - Imm + LookupOutput) = 0`, named `ramAddrEqRs1PlusImmMinusLookupIfLoadStore`.
     Constraint (33) adds `RightOperandIsRdWriteValue · RdWriteValue`.
-  - `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` were replaced by `opcodeFlag_load_cases` and `opcodeFlag_store_cases` (`JoltConstraints/metadata.lean`), whose conclusions include the new rows.
-- At Lean commit `7096dca`, before the migration, `JoltInstance.soundness` (`JoltConstraints/Soundness/soundness.lean`) had no `sorry`, and `#print axioms JoltInstance.soundness` listed only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
+  - `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` were replaced by `opcodeFlag_load_cases` and `opcodeFlag_store_cases` (`JoltConstraints/translation/metadata.lean`), whose conclusions include the new rows.
+- At Lean commit `7096dca`, before the migration, `JoltInstance.soundness` (`JoltConstraints/theorems/Soundness/soundness.lean`) had no `sorry`, and `#print axioms JoltInstance.soundness` listed only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
   The plan and layers of the soundness proof are in `methods/soundness.md`.
 
 ## Goal
@@ -35,16 +35,16 @@ The statement of `JoltInstance.soundness`, `JoltInstance.InLanguage` and the sou
 ## Work
 
 1. The six modules that fail today, with their first errors (from the step 2 report):
-   - `Soundness/Layer2/ZeroRegister.lean:45`: unsolved goals.
-   - `Soundness/Layer4/Inputs.lean:34`: unsolved goals.
-   - `Soundness/Layer4/Word.lean:62`: unknown constant `LookupTableKind.AlignAddr`.
-   - `Soundness/Layer4/Assertions.lean:24`: unknown constant `LookupTableKind.HalfwordAlignment`.
-   - `Soundness/Layer5/MemoryAddress.lean:40`: unknown identifier `ramAddrEqRs1PlusImmIfLoadStore`.
-   - `Soundness/Layer5/TapeSemantics.lean:67`: type mismatch.
+   - `theorems/Soundness/Layer2/ZeroRegister.lean:45`: unsolved goals.
+   - `theorems/Soundness/Layer4/Inputs.lean:34`: unsolved goals.
+   - `theorems/Soundness/Layer4/Word.lean:62`: unknown constant `LookupTableKind.AlignAddr`.
+   - `theorems/Soundness/Layer4/Assertions.lean:24`: unknown constant `LookupTableKind.HalfwordAlignment`.
+   - `theorems/Soundness/Layer5/MemoryAddress.lean:40`: unknown identifier `ramAddrEqRs1PlusImmIfLoadStore`.
+   - `theorems/Soundness/Layer5/TapeSemantics.lean:67`: type mismatch.
    Fix these, then every module they unblock, until the whole library builds.
-2. Classifier call sites: `Soundness/Layer6/PlainRow.lean:949` and `:954`, `Soundness/Layer7/TerminationStore.lean:703`, `Soundness/Layer7/StallSuffix.lean:3305`.
+2. Classifier call sites: `theorems/Soundness/Layer6/PlainRow.lean:949` and `:954`, `theorems/Soundness/Layer7/TerminationStore.lean:703`, `theorems/Soundness/Layer7/StallSuffix.lean:3305`.
    Use `opcodeFlag_load_cases` and `opcodeFlag_store_cases`, and handle the new rows.
-3. Align-address proofs: `Soundness/Layer5/AddressMasks.lean:32` and `:124` use `jolt_virtual_align_addr_value64`.
+3. Align-address proofs: `theorems/Soundness/Layer5/AddressMasks.lean:32` and `:124` use `jolt_virtual_align_addr_value64`.
    Replace that reasoning with the new rows' AddressOffset lookup and constraint (01).
 4. Memory rows.
    Where a proof about LD and SD must now also cover the new loads and stores, prove it once over the three widths, not once per row.
@@ -56,7 +56,7 @@ The statement of `JoltInstance.soundness`, `JoltInstance.InLanguage` and the sou
    Extend them exactly as follows, where each new arm checks the 8-byte word the row accesses, `ea &&& ~~~7`, and change nothing else.
    Add one sentence to each restriction's FIXME docstring: the extension to `VirtualLoadB/H/W` and `VirtualStoreB/H/W` was approved by Ari on 2026-11-03, only to fit the new ISA.
 
-   In `Soundness/Layer5/PanicRestriction.lean`, `UntrustedAnswerRun.StoresPanicAt`, before `| _ => False`:
+   In `theorems/Soundness/Layer5/PanicRestriction.lean`, `UntrustedAnswerRun.StoresPanicAt`, before `| _ => False`:
 
    ```lean
    | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ =>
@@ -78,7 +78,7 @@ The statement of `JoltInstance.soundness`, `JoltInstance.InLanguage` and the sou
            ((JoltISA.sourceValue base pre + imm) &&& ~~~7)
    ```
 
-   In `Soundness/Layer5/TerminationRestriction.lean`, `UntrustedAnswerRun.StoresTerminationAt`, before `| _ => False`:
+   In `theorems/Soundness/Layer5/TerminationRestriction.lean`, `UntrustedAnswerRun.StoresTerminationAt`, before `| _ => False`:
 
    ```lean
    | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ =>
@@ -95,7 +95,7 @@ The statement of `JoltInstance.soundness`, `JoltInstance.InLanguage` and the sou
    ```
 
    Adjust only the Lean details needed to make these build, and keep their meaning.
-   Then finish the blocked proofs from them: `row_panic_of_no_store` (`Soundness/Layer5/DeviceMemory.lean`), `termination_effect_is_sd` (`Soundness/Layer7/TerminationStore.lean`) and the `DeviceMemoryStepAgreement` facts they feed.
+   Then finish the blocked proofs from them: `row_panic_of_no_store` (`theorems/Soundness/Layer5/DeviceMemory.lean`), `termination_effect_is_sd` (`theorems/Soundness/Layer7/TerminationStore.lean`) and the `DeviceMemoryStepAgreement` facts they feed.
    A theorem whose conclusion now names only SD may need to name the new stores too; that is a helper change under "Approved without asking".
 
 ## Approved without asking
@@ -135,7 +135,7 @@ A blocker is:
 ## Deliverables
 
 1. The diff, uncommitted.
-2. Update `methods/soundness.md` ("Current state") and "Proofs owed" in `JoltConstraints/model_review.md` to match the code.
+2. Update `methods/soundness.md` ("Current state") and "Proofs owed" in `JoltConstraints/documentation/model_review.md` to match the code.
 3. A report, `reports/YYYY-MM-DD-constraints-migration-soundness.md`, one sentence per line, giving:
    - the date, the Jolt commits (`5def437f`, `c6703570`) and the Lean commit you started from;
    - every declaration changed, added or removed, with file and line;

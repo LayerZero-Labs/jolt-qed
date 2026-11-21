@@ -44,7 +44,7 @@ theorem amo_word_floor_load_aligned_run
       .ok RETIRE_SUCCESS (stateAfterVRegWrite js dst dword) := by
   unfold JoltISA.execInstr JoltISA.readSrc liftSail
   simp only [hread, bind, EStateM.bind, EStateM.run]
-  simp only [add_zero, halign, if_true]
+  simp only [add_zero, halign, ite_true]
   change (do
     match ← JoltISA.Mmu.load_doubleword (amoWordBase addr) with
     | .Ok value => JoltISA.writeDst (.vreg dst) value *> pure RETIRE_SUCCESS
@@ -64,7 +64,7 @@ theorem amo_word_floor_load_misaligned_run
         (Virtaddr addr, ExceptionType.E_SAMO_Addr_Align ())) js := by
   unfold JoltISA.execInstr JoltISA.readSrc liftSail
   simp only [hread, bind, EStateM.bind, EStateM.run]
-  simp only [add_zero, halign, if_false]
+  simp only [add_zero, halign, ite_false]
   rfl
 
 /-- The shared open/extract fragment loads a doubleword, creates its lane mask,
@@ -110,7 +110,7 @@ theorem amo_word_lane_pre_run
     have hrow : (JoltISA.execInstr
         (.VirtualPextSigned (.vreg old) (.vreg dword) (.vreg lane))).run masked =
         .ok RETIRE_SUCCESS (stateAfterVRegWrite masked old (amoWordLaneOld addr value)) := by
-      simpa only [masked, loaded, stateAfterVRegWrite, if_pos rfl, if_neg hdl] using! hextract
+      simpa only [masked, loaded, stateAfterVRegWrite, ite_eq_left rfl, ite_eq_right hdl] using! hextract
     change (JoltISA.execProgram (.instr
       (.VirtualPextSigned (.vreg old) (.vreg dword) (.vreg lane))
       (.done RETIRE_SUCCESS))).run masked = _
@@ -156,7 +156,7 @@ theorem amo_word_floor_store_run
     hbase hram (JoltISA.Mmu.effective_address_ok_of_store hram hjolt)
   rw [JoltISA.Mmu.write_ram_doubleword_eq] at hstore
   unfold JoltISA.execInstr JoltISA.readSrc liftSail readVReg
-  simp only [hread, bind, EStateM.bind, EStateM.run, add_zero, halign, if_true,
+  simp only [hread, bind, EStateM.bind, EStateM.run, add_zero, halign, ite_true,
     get, getThe, MonadStateOf.get, EStateM.get]
   change (JoltISA.Mmu.store_doubleword (amoWordBase addr) (js.vregs value) >>= fun r =>
     match r with | .Ok _ => pure RETIRE_SUCCESS | .Err e => pure e) js = _

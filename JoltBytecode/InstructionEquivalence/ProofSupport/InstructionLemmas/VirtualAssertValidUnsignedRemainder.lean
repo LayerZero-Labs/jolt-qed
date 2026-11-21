@@ -25,7 +25,7 @@ theorem virtual_assert_valid_unsigned_remainder_run_ok (remainder divisor : VReg
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos hguard]
+  rw [ite_eq_left hguard]
   rfl
 
 /-- Failed virtual-register unsigned-remainder assertion throws an assertion error. -/
@@ -38,7 +38,7 @@ theorem virtual_assert_valid_unsigned_remainder_run_err (remainder divisor : VRe
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg hguard]
+  rw [ite_eq_right hguard]
   rfl
 
 /-- Successful real-divisor unsigned-remainder assertion leaves state unchanged. -/
@@ -51,7 +51,7 @@ theorem virtual_assert_valid_unsigned_remainder_real_run_ok
   unfold execInstr readSrc readVReg liftSail
   simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos hguard]
+  rw [ite_eq_left hguard]
   rfl
 
 /-- Failed real-divisor unsigned-remainder assertion throws an assertion error. -/
@@ -64,7 +64,7 @@ theorem virtual_assert_valid_unsigned_remainder_real_run_err
   unfold execInstr readSrc readVReg liftSail
   simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg hguard]
+  rw [ite_eq_right hguard]
   rfl
 
 end JoltISA

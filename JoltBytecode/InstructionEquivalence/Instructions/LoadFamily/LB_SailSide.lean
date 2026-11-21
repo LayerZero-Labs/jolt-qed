@@ -187,7 +187,7 @@ theorem execute_LB_reduces
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
-    EStateM.pure, EStateM.run, if_true]
+    EStateM.pure, EStateM.run, ite_true]
   -- My one lemma that cuts through the memory reads
   -- TODO: (ari) Can I generalise this further?
   rw [vmem_read_byte_reduces
@@ -211,7 +211,7 @@ theorem execute_LB_reduces
       (hpmp := byte_load_pmp_ok imm rs1 js h)
       (hmmio := byte_not_readable_mmio imm rs1 js h))]
 
-  simp only [extend_value, Bool.false_eq_true, if_false, EStateM.bind,
+  simp only [extend_value, Bool.false_eq_true, ite_false, EStateM.bind,
     EStateM.pure]
   obtain ⟨s', hw⟩ := wX_shape rd (writeValue imm rs1 js h) js.sail
   rw [hw]
@@ -232,7 +232,7 @@ theorem execute_LBU_reduces
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind, pure,
-    EStateM.pure, EStateM.run, if_true]
+    EStateM.pure, EStateM.run, ite_true]
   rw [vmem_read_byte_reduces
     (imm := imm)
     (rs1 := rs1)
@@ -254,7 +254,7 @@ theorem execute_LBU_reduces
       (hpmp := byte_load_pmp_ok imm rs1 js h)
       (hmmio := byte_not_readable_mmio imm rs1 js h))]
 
-  simp only [extend_value, if_true, EStateM.bind, EStateM.pure]
+  simp only [extend_value, ite_true, EStateM.bind, EStateM.pure]
   obtain ⟨s', hw⟩ := wX_shape rd (writeValueUnsigned imm rs1 js h) js.sail
   rw [hw]
   simp only [RETIRE_SUCCESS]

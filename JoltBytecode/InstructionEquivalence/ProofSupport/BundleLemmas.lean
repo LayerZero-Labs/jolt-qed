@@ -36,7 +36,7 @@ structure LoadDwordWindowFacts
     Assumptions.NotReadableMmio
       (compute_aligned_dword_base_address h.rs1_val imm) 8 js.sail
 
-def LoadProgramEqSailAssumptions.dwordWindowFacts
+theorem LoadProgramEqSailAssumptions.dwordWindowFacts
     {imm : BitVec 12} {rs1 : regidx} {js : SailJoltState}
     (h : LoadProgramEqSailAssumptions imm rs1 js) :
     LoadDwordWindowFacts imm rs1 js h :=
@@ -76,7 +76,7 @@ structure StoreDwordWindowFacts
     Assumptions.NotWritableMmio
       (compute_aligned_dword_base_address h.rs1_val imm) 8 js.sail
 
-def StoreProgramEqSailAssumptions.dwordWindowFacts
+theorem StoreProgramEqSailAssumptions.dwordWindowFacts
     {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
     (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) :
     StoreDwordWindowFacts imm rs2 rs1 js h :=
@@ -109,7 +109,7 @@ structure StoreAccessFacts
   write_mmio :
     Assumptions.NotWritableMmio (load_effective_address h.rs1_val imm) width js.sail
 
-def StoreProgramEqSailAssumptions.storeAccessFacts
+theorem StoreProgramEqSailAssumptions.storeAccessFacts
     {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
     (h : StoreProgramEqSailAssumptions imm rs2 rs1 js)
     (width : Nat)

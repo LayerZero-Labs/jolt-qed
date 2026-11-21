@@ -7,7 +7,7 @@ equation is only the starting point; it does not establish completeness.
 
 ## Current state (2026-11-02)
 
-Start with [soundness.md](soundness.md#current-state-2026-11-02) for the pins and build status, and with [constraints.md](../JoltConstraints/constraints.md#migration-outline) for the migration order.
+Start with [soundness.md](soundness.md#current-state-2026-11-02) for the pins and build status, and with [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline) for the migration order.
 The bytecode library builds with its seven existing `sorry`s, but the constraints do not build against the migrated bytecode.
 Do not read an old `DONE` label as a claim about `c6703570`.
 An equation definition, a proof body in source, a successful module build and a source-correspondence audit are different evidence; report which of these you have actually checked.
@@ -84,10 +84,10 @@ tracing paths before assuming a jump must be last.
 ## 1. Select and read one target
 
 Pick an open completeness theorem from
-[`constraints.md`](../JoltConstraints/constraints.md), working from easier
+[`constraints.md`](../JoltConstraints/documentation/constraints.md), working from easier
 targets toward harder ones. Read the exact Lean theorem, its current premises,
 the constraint predicate, the witness fields it uses, and their dependencies.
-Check [`model_review.md`](../JoltConstraints/model_review.md) for prior findings,
+Check [`model_review.md`](../JoltConstraints/documentation/model_review.md) for prior findings,
 but revalidate claims against the current source. Record the selected target
 and what is already proved or admitted; do not count a theorem containing
 `sorry` as closed.
@@ -126,8 +126,8 @@ and use the actual honest-witness definitions. Check that any helper theorem
 does not merely move the `sorry` or the same unproved obligation elsewhere.
 
 Before declaring a blocker, inspect the facts already available about an honest
-trace. A row is a [`TraceRow`](../JoltConstraints/trace.lean); `trace.row i h` gives
-the [`HonestTraceRow`](../JoltConstraints/honest_trace.lean) view with its execution
+trace. A row is a [`TraceRow`](../JoltConstraints/translation/trace.lean); `trace.row i h` gives
+the [`HonestTraceRow`](../JoltConstraints/translation/honest_trace.lean) view with its execution
 certificate. For a row `trace.rows[i]`, use:
 
 | Row fact | Available fact |
@@ -164,13 +164,13 @@ lemmas for registers, translation, and memory. Match every helper's exact
 premises to the trace.
 
 For reusable frame facts, check
-[`nextpc_frame.lean`](../JoltConstraints/nextpc_frame.lean) (formerly `Completeness/Helpers/NextPCFrame.lean`) and
-[`HostIOFrame.lean`](../JoltConstraints/Completeness/Helpers/HostIOFrame.lean).
+[`nextpc_frame.lean`](../JoltConstraints/theorems/nextpc_frame.lean) (formerly `Completeness/Helpers/NextPCFrame.lean`) and
+[`HostIOFrame.lean`](../JoltConstraints/theorems/Completeness/Helpers/HostIOFrame.lean).
 The latter proves that a HostIO call leaves Sail state unchanged (its byte reads
 go through `JoltISA.Mmu.load`, which changes no state) and derives the HostIO
 nextPC frame from `executes`. Constraint
 (17) is the worked example in
-[`NextUnexpandedPCUpdateOtherwise.lean`](../JoltConstraints/Constraints/NextUnexpandedPCUpdateOtherwise.lean).
+[`NextUnexpandedPCUpdateOtherwise.lean`](../JoltConstraints/translation/Constraints/NextUnexpandedPCUpdateOtherwise.lean).
 
 **Never add a premise to a completeness theorem without the user's explicit
 permission. NEVER.** This includes adding a condition to a bundled validity

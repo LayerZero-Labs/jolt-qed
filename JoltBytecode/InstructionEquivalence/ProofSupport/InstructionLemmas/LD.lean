@@ -38,7 +38,7 @@ theorem ld_run_vreg_vreg {faultClass : LoadFaultClass}
   unfold execInstr readSrc writeDst readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos h_align]
+  rw [ite_eq_left h_align]
   simp only [EStateM.bind, Mmu.load_doubleword_ram _ _ h_align h_ram h_legal]
   simp only [writeVReg, hvd, ↓reduceIte,
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet, EStateM.pure]
@@ -66,7 +66,7 @@ theorem ld_run_vreg_xreg {faultClass : LoadFaultClass}
   simp only [bind, EStateM.bind, pure, EStateM.run]
   rw [hbase]
   dsimp only
-  rw [if_pos h_align]
+  rw [ite_eq_left h_align]
   simp only [EStateM.bind, Mmu.load_doubleword_ram _ _ h_align h_ram h_legal]
   simp only [writeVReg, hvd, ↓reduceIte,
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet, EStateM.pure]

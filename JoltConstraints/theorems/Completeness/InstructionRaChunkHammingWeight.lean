@@ -1,0 +1,29 @@
+import JoltConstraints.translation.Constraints.InstructionRaChunkHammingWeight
+import JoltConstraints.translation.witness
+import JoltConstraints.translation.honest_witness
+import JoltConstraints.theorems.witness_domain
+
+open LeanRV64D
+
+set_option autoImplicit false
+
+namespace JoltConstraints
+
+open scoped BigOperators
+
+/-- The honest witness satisfies constraint (60). -/
+theorem honestWitness_instructionRaChunkHammingWeight
+    {F : Type} [Field F] (params : WitnessParams)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    (_ramFits : params.RamFits trace)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
+    instructionRaChunkHammingWeight
+      (HonestTrace.honestWitness (F := F) params trace) := by
+  intro chunk t
+  dsimp [instructionRaChunkHammingWeight, HonestTrace.honestWitness,
+    TraceWitness.InstructionRaChunk]
+  exact TraceWitness.sum_addressChunkEntry_some params.chunkBits chunk
+    (TraceWitness.lookupIndex trace t.val).toNat
+
+end JoltConstraints

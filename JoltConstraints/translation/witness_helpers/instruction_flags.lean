@@ -1,0 +1,36 @@
+import Mathlib.Algebra.Field.Defs
+import JoltConstraints.translation.witness
+import JoltConstraints.translation.trace
+import JoltConstraints.translation.metadata
+
+open LeanRV64D
+
+set_option autoImplicit false
+
+-- Rust paths are relative to /Users/ari.biswas/Work-with-A16z/jolt.
+
+namespace TraceWitness
+
+variable {F : Type} (p : WitnessParams)
+
+-- Rust: crates/jolt-witness/src/witnesses/flags.rs::InstructionFlag::{extract_indexed, to_field}.
+-- Rust: crates/jolt-witness/src/backend/trace/cycle.rs::walk_cycles;
+-- crates/jolt-riscv/src/instructions/i/noop.rs (padding sets only IsNoop).
+-- Instruction-flag bits over the padded witness; padding sets only IsNoop to one.
+noncomputable def InstructionFlags [Field F] (trace : Trace) : _root_.InstructionFlags → Fin p.traceLength → F :=
+  fun flag t =>
+    -- t indexes the padded witness; the else branch represents a padding position.
+    -- inBounds supplies the proof needed to read an actual execution row.
+    if inBounds : t.val < trace.rows.size then
+      let row := getElem trace.rows t.val inBounds
+      let instruction :=
+        (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
+      if JoltMetadata.instructionFlag instruction flag then
+        1
+      else 0
+    else
+      match flag with
+      | .IsNoop => 1
+      | _ => 0
+
+end TraceWitness

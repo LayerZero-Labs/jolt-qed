@@ -1,6 +1,5 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Alignment
-import Mathlib.Tactic.IntervalCases
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.SD
 
 open LeanRV64D
@@ -68,7 +67,7 @@ theorem dword_byte_loaded_dword_at (s : SailState) (base : BitVec 64)
     simp (disch := omega) only [hi_bool, Bool.true_and, BitVec.getLsbD_extractLsb',
       Nat.reduceMul, Nat.reduceAdd]
     repeat rw [BitVec.getLsbD_append]
-    simp (disch := omega) only [if_pos, if_neg, BitVec.add_zero]
+    simp (disch := omega) only [ite_eq_left, ite_eq_right, BitVec.add_zero]
     congr 1
     omega
 
@@ -137,7 +136,7 @@ theorem mem_write_value_dword_eq_state_after_dword_store
     .ok (Ok true) (state_after_dword_store s addr data)
   simp only [EStateM.bind, hpmp]
   simp only [hmmio.sail]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
   rw [write_ram_dword_eq_state_after_dword_store addr data s]
@@ -150,7 +149,7 @@ theorem mem_write_ea_plain_dword_ok
       .ok (Ok ()) s := by
   unfold mem_write_ea
   simp only [Bool.false_or, Bool.false_and]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   unfold write_ram_ea
   change
@@ -182,7 +181,7 @@ theorem vmem_write_addr_dword_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_dword_store s addr data) := by
   unfold vmem_write_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false, pure_false_andM]
+  simp only [ha.misalign, Bool.false_eq_true, ite_false, pure_false_andM]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
@@ -234,7 +233,7 @@ theorem vmem_write_addr_dword_store_bridge
     ExceptT.bind, ExceptT.bindCont, ExceptT.map,
     Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange',
     is_store_conditional_store, ↓reduceIte, BEq.beq, Bool.false_and, Bool.false_eq_true,
-    if_true, pure, EStateM.pure, ExceptT.pure]
+    ite_true, pure, EStateM.pure, ExceptT.pure]
 
 /-- Under exact aligned flat-memory evidence, Sail's virtual dword
 store pipeline is exactly the canonical hashmap dword update. -/
@@ -545,7 +544,7 @@ theorem mem_write_ea_plain_store_ok
       .ok (Ok ()) s := by
   unfold mem_write_ea
   simp only [Bool.false_or, Bool.false_and]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   unfold write_ram_ea
   change
@@ -598,7 +597,7 @@ theorem mem_write_value_byte_eq_state_after_byte_store
     .ok (Ok true) (state_after_byte_store s addr data)
   simp only [EStateM.bind, hpmp]
   simp only [hmmio.sail]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
   rw [write_ram_byte_eq_state_after_byte_store addr data s]
@@ -647,7 +646,7 @@ theorem mem_write_value_halfword_eq_state_after_halfword_store
     .ok (Ok true) (state_after_halfword_store s addr data)
   simp only [EStateM.bind, hpmp]
   simp only [hmmio.sail]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
   rw [write_ram_halfword_eq_state_after_halfword_store addr data s]
@@ -696,7 +695,7 @@ theorem mem_write_value_word_eq_state_after_word_store
     .ok (Ok true) (state_after_word_store s addr data)
   simp only [EStateM.bind, hpmp]
   simp only [hmmio.sail]
-  simp only [Bool.false_eq_true, if_false]
+  simp only [Bool.false_eq_true, ite_false]
   unfold write_kind_of_flags
   simp only [EStateM.bind, pure, EStateM.pure]
   rw [write_ram_word_eq_state_after_word_store addr data s]
@@ -772,7 +771,7 @@ theorem vmem_write_addr_byte_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_byte_store s addr data) := by
   unfold vmem_write_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false, pure_false_andM]
+  simp only [ha.misalign, Bool.false_eq_true, ite_false, pure_false_andM]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
@@ -788,7 +787,7 @@ theorem vmem_write_addr_byte_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, ite_true, pure, EStateM.pure, ExceptT.pure]
   have hwrite_int :
       mem_write_value (physaddr.Physaddr addr) (Int.toNat 1) data
         (Store Data) false false false s =
@@ -815,7 +814,7 @@ theorem vmem_write_addr_halfword_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_halfword_store s addr data) := by
   unfold vmem_write_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false, pure_false_andM]
+  simp only [ha.misalign, Bool.false_eq_true, ite_false, pure_false_andM]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
@@ -831,7 +830,7 @@ theorem vmem_write_addr_halfword_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, ite_true, pure, EStateM.pure, ExceptT.pure]
   have hea_int :
       mem_write_ea (physaddr.Physaddr addr) (Int.toNat 2)
         false false false s =
@@ -865,7 +864,7 @@ theorem vmem_write_addr_word_store_bridge
       (Store Data) false false false s =
       .ok (Ok true) (state_after_word_store s addr data) := by
   unfold vmem_write_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false, pure_false_andM]
+  simp only [ha.misalign, Bool.false_eq_true, ite_false, pure_false_andM]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate := translateAddr_store_data_of_machine_mprv_zero addr s hpriv hmprv
   simp only [ExceptT.mk, ExceptT.run,
@@ -881,7 +880,7 @@ theorem vmem_write_addr_word_store_bridge
   simp only [liftM, monadLift, MonadLift.monadLift,
     ExceptT.lift, ExceptT.mk, bind, EStateM.bind, EStateM.map,
     Functor.map, htranslate, ExceptT.bind, ExceptT.bindCont, ExceptT.map,
-    is_store_conditional_store, ↓reduceIte, if_true, pure, EStateM.pure, ExceptT.pure]
+    is_store_conditional_store, ↓reduceIte, ite_true, pure, EStateM.pure, ExceptT.pure]
   have hea_int :
       mem_write_ea (physaddr.Physaddr addr) (Int.toNat 4)
         false false false s =

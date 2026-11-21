@@ -95,10 +95,10 @@ check_sha "$config" "$(field config.used_sha256)"
 
 # 2b. The memory regions of the configuration are the ones the Lean side uses.
 # The Lean side takes its regions from `platformPma` in
-# JoltConstraints/WholeRun/Relation.lean, not from the configuration, so the two
+# JoltConstraints/theorems/WholeRun/Relation.lean, not from the configuration, so the two
 # must agree on every field. The configuration's header comments are stripped
 # before parsing.
-if ! python3 - "$config" "$ROOT/JoltConstraints/WholeRun/Relation.lean" <<'EOF'
+if ! python3 - "$config" "$ROOT/JoltConstraints/theorems/WholeRun/Relation.lean" <<'EOF'
 import json, re, sys
 
 config_path, lean_path = sys.argv[1], sys.argv[2]

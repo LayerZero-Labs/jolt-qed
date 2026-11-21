@@ -1,4 +1,4 @@
-import JoltConstraints.verifier_sizes
+import JoltConstraints.translation.verifier_sizes
 
 /-! A counterexample to deriving `lowest + 8 * maxRamSize ≤ 2^64` from
 `MemoryLayout.new` and the maximum-domain check alone. This is not a satisfying

@@ -1201,7 +1201,7 @@ private theorem amoswapwProgramAuto_eq_window (rs2 rs1 rd : regidx) :
       JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge,
       JoltISA.amoWordOldVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor,
       JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst,
-      hrd, Bool.false_eq_true, if_false, if_true] <;> rfl
+      hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
 
 /-- An aligned `AMOSWAP.W` stores the low word of `rs2` and returns the old
 word sign-extended in `rd`; for example, address 12 updates the upper lane. -/

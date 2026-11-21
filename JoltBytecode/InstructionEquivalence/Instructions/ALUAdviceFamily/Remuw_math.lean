@@ -103,7 +103,7 @@ private theorem sail_remw_value_of_zero_uw (dividend divisor : BitVec 64)
   unfold sail_remw_value
   rw [← hx32, hzero]
   simp only [BitVec.toNatInt, BitVec.toNat_zero, beq_iff_eq, ↓reduceIte]
-  rw [if_pos (show Int.ofNat 0 = 0 from rfl)]
+  rw [ite_eq_left (show Int.ofNat 0 = 0 from rfl)]
   rw [trunc32_of_toNat_remuw x32]
 
 private theorem sail_remw_value_of_normal_uw (dividend divisor : BitVec 64)
@@ -128,7 +128,7 @@ private theorem sail_remw_value_of_normal_uw (dividend divisor : BitVec 64)
   have hbeq_false : ¬ Int.ofNat y32.toNat = 0 := by
     intro h
     exact hyNat_ne (Int.ofNat_eq_zero.mp h)
-  rw [if_neg hbeq_false]
+  rw [ite_eq_right hbeq_false]
   rw [trunc32_tmod_eq_umod_remuw x32 y32 hy_ne]
 
 private lemma zeroExtend32_eq_zero_iff_remuw (x : BitVec 32) :

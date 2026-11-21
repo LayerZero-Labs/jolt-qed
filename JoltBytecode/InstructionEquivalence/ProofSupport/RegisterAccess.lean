@@ -186,7 +186,7 @@ state unchanged. -/
 theorem wX_bits_regidx_zero (v : BitVec 64) (s : SailState) :
     wX_bits (regidx.Regidx 0) v s = .ok () s := by
   unfold wX_bits wX regval_into_reg
-  simp [Sail.BitVec.toNatInt, bind, EStateM.bind, pure, EStateM.pure]
+  simp [Sail.BitVec.toNatInt, pure, EStateM.pure]
 
 theorem eStateM_deterministic {σ ε α : Type} {m : EStateM ε σ α} {s : σ}
     {a1 a2 : α} {s1 s2 : σ}

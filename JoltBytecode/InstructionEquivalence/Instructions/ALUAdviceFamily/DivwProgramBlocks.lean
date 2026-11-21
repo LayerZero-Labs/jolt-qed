@@ -55,10 +55,10 @@ theorem vreg_sign_extend_word_run_ex
   refine ⟨js', ?_, ?_, ?_, rfl⟩
   · simpa only [js'] using vreg_sign_extend_word_run vd vs1 js hvd
   · show (if vd = vd then _ else js.vregs vd) = _
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · intro k h
     show (if k = vd then _ else js.vregs k) = _
-    rw [if_neg h]
+    rw [ite_eq_right h]
 
 theorem vreg_sign_extend_word_to_real_run
     (rd : regidx)

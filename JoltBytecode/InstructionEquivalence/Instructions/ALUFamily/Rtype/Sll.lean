@@ -80,7 +80,7 @@ theorem execute_RTYPE_SLL_factored
   simp only [execute_RTYPE]
   simp only [bind_pure_comp]
   simp only [map_eq_pure_bind]
-  simp only [bind_assoc, pure_bind, sll_sail_operation]
+  simp only [pure_bind, sll_sail_operation]
 
 /-- Program-level concrete theorem for `SLL`.
 
@@ -131,7 +131,6 @@ theorem sllProgramAuto_concrete
   -- The instruction trace leaves `rd` containing the Jolt SLL value.
   have h_final_jolt_value :
       js_afterMul.sail = stateAfterWrite js.sail rd jolt_val := by
-    change js_afterMul.sail = stateAfterWrite js.sail rd jolt_val
     exact h_mul_writes_jolt_val
 
   -- No more execution reasoning remains.

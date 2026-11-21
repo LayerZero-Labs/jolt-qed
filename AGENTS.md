@@ -12,7 +12,7 @@ Never write a bottom-up lemma that no staged statement needs.
 The state of the proof lives in the repository, not in any one session:
 
 - `methods/soundness.md`: the plan, the layers, and the current status.
-- `JoltConstraints/model_review.md`, "Proofs owed": every remaining `sorry` and what it needs.
+- `JoltConstraints/documentation/model_review.md`, "Proofs owed": every remaining `sorry` and what it needs.
 - `reports/`: dated audit reports, named `YYYY-MM-DD-<topic>.md`.
   Read the newest before starting.
   `reports/2026-10-29-soundness-statement-audit.md` checks the soundness statement against Jolt at `5def437f`.
@@ -53,7 +53,7 @@ If you believe a staged statement is false, stop and report the exact missing fa
 - Never replace a proved fact with `sorry`.
 - Do not use `native_decide` or `decide +kernel`, and never raise `maxHeartbeats`.
 - `bv_decide` is accepted for now, to make progress; it will be removed later.
-  List every new use in your report, and add it to the `bv_decide` list in "Proofs owed" (`JoltConstraints/model_review.md`).
+  List every new use in your report, and add it to the `bv_decide` list in "Proofs owed" (`JoltConstraints/documentation/model_review.md`).
 - Delete every lemma no proof uses.
 - For now (Ari, 2026-10-22), correctness comes before speed: the first goal is to learn whether the soundness theorem is true.
   There is no time target for proofs; list any proof that takes more than about ten seconds in your report, so it can be sped up later.
@@ -72,8 +72,8 @@ If you believe a staged statement is false, stop and report the exact missing fa
 4. Split cases on a small classification proved once, such as `stable_stall_control_flow` (a stall is a JAL, a JALR or a branch), not on the whole instruction set inside each lemma.
 5. Use the existing frameworks before writing new ones:
    - `StatePreservation.Preserves` and `preservation_auto` (`JoltBytecode/InstructionEquivalence/ProofSupport/Preservation.lean`) for frame properties;
-   - `expand_program_layout` and `ExpansionRows` (`JoltConstraints/program_facts.lean`) for bytecode layout;
-   - the Layer 1 to 4 witness lemmas under `JoltConstraints/Soundness/`.
+   - `expand_program_layout` and `ExpansionRows` (`JoltConstraints/theorems/program_facts.lean`) for bytecode layout;
+   - the Layer 1 to 4 witness lemmas under `JoltConstraints/theorems/Soundness/`.
 6. Treat these as signs that a lemma is missing:
    - a proof longer than about 60 lines;
    - a blanket `cases … <;> simp_all` with `all_goals try`;
@@ -86,7 +86,7 @@ Each of these has made a staged statement false before.
 1. A trace row or state given on its own carries no execution certificate.
    A property of its post-state, such as `StableStall`, says nothing about its instruction unless the lemma also has the run (`last ∈ run.rows.back?`) or an explicit execution fact.
 2. Witness values are field sums that do not wrap; Sail stores 64-bit words that do.
-   Comparing them needs a bound, such as `NextPCNoWrap` (`joltInstance.program.next_pc_no_wrap`), as in `Soundness/Layer5/Jal.lean`.
+   Comparing them needs a bound, such as `NextPCNoWrap` (`joltInstance.program.next_pc_no_wrap`), as in `theorems/Soundness/Layer5/Jal.lean`.
 3. Some flags are set per row, not per source instruction.
    `stamp_sequence` sets `is_compressed` only on an expansion's last row; use `source_is_compressed` for any row.
 4. A fact about "every row at an address" needs unique addresses: `pc_map_ok` with `pc_map_ok_distinct_addresses`.

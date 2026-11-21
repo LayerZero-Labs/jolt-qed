@@ -88,7 +88,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
       simpa [compute_aligned_dword_base_address, ea] using hclear ea halign_ea
     have hjolt : Assumptions.JoltRamStoreOk ea js := by
       simpa [hbase_eq] using h.jolt_ram_store
-    simp only [halign, if_true]
+    simp only [halign, ite_true]
     simp only [EStateM.bind]
     rw [JoltISA.Mmu.store_doubleword_eq_sail js ea h.rs2_val h.cur_privilege h.mstatus_mprv
       (aligned_dword_access_of_align ea halign_ea) hstore_access.store_pmp
@@ -113,11 +113,11 @@ theorem sdJolt_reduces_to_vmem_write_addr
               ExceptionType.E_SAMO_Addr_Align ())))
           js.sail := by
       unfold vmem_write_addr
-      simp only [hmis, if_true]
+      simp only [hmis, ite_true]
       unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
       simp only [ExceptT.mk, ExceptT.run, bind, EStateM.bind, pure,
         EStateM.pure, ExceptT.pure]
-    simp only [halign, if_false]
+    simp only [halign, ite_false]
     rw [hwrite]
     unfold System.systemProjectResult
     simp only [EStateM.pure]
@@ -143,7 +143,7 @@ theorem sdSail_reduces_to_vmem_write_addr
   unfold LeanRV64D.sail_assert LeanRV64D.Functions.xlen_bytes
   simp (config := { decide := true }) only []
   simp (config := { decide := true }) only [Sail.ConcurrencyInterfaceV1.PreSail.sail_assert, EStateM.bind,
-    pure, EStateM.pure, EStateM.run, if_true]
+    pure, EStateM.pure, EStateM.run, ite_true]
   rw [h.rs2_read]
   simp only
   set data : BitVec (8 * 8) :=

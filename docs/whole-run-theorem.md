@@ -2,7 +2,7 @@
 
 This page states what jolt-qed's two whole-run theorems prove, what they assume, and what they do not say.
 Read it before citing either theorem.
-[`riscv-alignment.md`](riscv-alignment.md) gives the reasoning behind each decision, and `JoltConstraints/WholeRun/Top.lean` holds the theorems and their proofs.
+[`riscv-alignment.md`](riscv-alignment.md) gives the reasoning behind each decision, and `JoltConstraints/theorems/WholeRun/Top.lean` holds the theorems and their proofs.
 
 In one sentence: if Jolt's tracer runs a program, then the Sail RISC-V model, started from the matching state, runs the same program up to its first EBREAK, one `try_step` per source instruction, and ends in a matching state with the same outputs and panic flag.
 The claim holds under the premises listed below, and the most important limits are in [What the theorems do not say](#what-the-theorems-do-not-say).
@@ -75,7 +75,7 @@ The Sail state `s` satisfies four properties:
 
 ### The relation `Related`
 
-`Related jt s` (`JoltConstraints/WholeRun/Relation.lean`) says how a Sail state `s` matches a Jolt state `jt`:
+`Related jt s` (`JoltConstraints/theorems/WholeRun/Relation.lean`) says how a Sail state `s` matches a Jolt state `jt`:
 
 - Sail's registers are Jolt's, as `sailRegs` lays them out. The general-purpose registers come from Jolt's state. Jolt keeps the six machine-mode CSRs in virtual registers `v34`–`v39` and the LR/SC reservation in `v32` and `v33`; Sail's CSRs and reservation are those values, with `mstatus.MPP` read as machine mode.
 - Sail's `PC` is Jolt's `nextPC`, the register in which a Jolt state records the address of the next instruction.
@@ -107,7 +107,7 @@ Jolt checks this itself, and `sail_soundness` obtains it from `JoltInstance.soun
 | `RowsAligned` | Every row address is even. Jolt's ELF loader does not check this. | A check in Jolt's preprocessing. |
 | `HeapNoWrap` | `heap_end ≤ 2^64 - 8`. | A check in `MemoryLayout.new`. |
 
-`DecodedFrom` (`JoltConstraints/WholeRun/Elf.lean`) transcribes `decode_elf` from `crates/jolt-program/src/image/elf.rs` up to the call of `decode_instruction`.
+`DecodedFrom` (`JoltConstraints/theorems/WholeRun/Elf.lean`) transcribes `decode_elf` from `crates/jolt-program/src/image/elf.rs` up to the call of `decode_instruction`.
 The proof derives from it that the committed bytecode is what Jolt's decoder makes of the program image (`ImageDecoded`).
 No constraint can check `DecodedFrom`, because it describes how the bytecode was produced before proving starts.
 Its input `elf` is the list of sections that the `object` crate parses from the ELF file (address, size, data, and whether the section is text) and the entry point.
@@ -139,7 +139,7 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 ### Soundness premises (`sail_soundness` only)
 
-`sail_soundness` keeps every premise of `JoltInstance.soundness` (`JoltConstraints/Soundness/Assumptions.lean`):
+`sail_soundness` keeps every premise of `JoltInstance.soundness` (`JoltConstraints/theorems/Soundness/Assumptions.lean`):
 
 - `JoltField F`: the field's characteristic is above `2^128 - 2^64`. Both of Jolt's fields satisfy this: BN254 (the default Dory build) and `p = 2^128 - 1780711455` (the `akita` build, Jolt's production field since a16z/jolt#2403); `JoltField.akita` and `JoltField.bn254` (`Soundness/FieldModuli.lean`) prove it, including each modulus's primality, by Pratt certificates checked in Lean. Below characteristic `2^128` the constraints include Akita's canonical-address check (63), which Jolt's `akita` build enforces; it is what makes `2^128 - 2^64` enough.
 - `SoundnessAssumptions.ramRegionFits`: the whole maximum padded RAM region lies below `2^64`. The comment in `Assumptions.lean` records it as still to be confirmed with a16z.

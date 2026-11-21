@@ -157,7 +157,7 @@ theorem checked_mem_read_1_eq_loaded_byte (addr : BitVec 64) (s : SailState)
     .ok (Ok (loaded_byte_at s addr (by simpa using hbytes 0 (by omega)), default_meta)) s := by
   unfold checked_mem_read
   simp only [bind, EStateM.bind, pure, EStateM.pure, hpmp, hmmio.sail,
-             Bool.false_eq_true, if_false]
+             Bool.false_eq_true, ite_false]
   unfold read_kind_of_flags
   simp only [pure, EStateM.pure]
   rw [read_ram_1_eq_loaded_byte addr s hbytes]
@@ -171,7 +171,7 @@ theorem checked_mem_read_2_eq_loaded_halfword (addr : BitVec 64) (s : SailState)
     .ok (Ok (loaded_halfword_at s addr hbytes h_no_ovf, default_meta)) s := by
   unfold checked_mem_read
   simp only [bind, EStateM.bind, pure, EStateM.pure, hpmp, hmmio.sail,
-             Bool.false_eq_true, if_false]
+             Bool.false_eq_true, ite_false]
   unfold read_kind_of_flags
   simp only [pure, EStateM.pure]
   rw [read_ram_2_eq_loaded_halfword addr s hbytes h_no_ovf]
@@ -185,7 +185,7 @@ theorem checked_mem_read_4_eq_loaded_word (addr : BitVec 64) (s : SailState)
     .ok (Ok (loaded_word_at s addr hbytes h_no_ovf, default_meta)) s := by
   unfold checked_mem_read
   simp only [bind, EStateM.bind, pure, EStateM.pure, hpmp, hmmio.sail,
-             Bool.false_eq_true, if_false]
+             Bool.false_eq_true, ite_false]
   unfold read_kind_of_flags
   simp only [pure, EStateM.pure]
   rw [read_ram_4_eq_loaded_word addr s hbytes h_no_ovf]
@@ -266,7 +266,7 @@ theorem vmem_read_addr_byte_bridge (addr : BitVec 64) (offset : BitVec 64) (s : 
     vmem_read_addr (Virtaddr addr) offset 1 (Load Data) false false false s =
     .ok (Ok value) s := by
   unfold vmem_read_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false]
+  simp only [ha.misalign, Bool.false_eq_true, ite_false]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate :=
     translateAddr_load_data_of_machine_mprv_zero addr s hpriv hmprv
@@ -314,7 +314,7 @@ theorem vmem_read_addr_halfword_bridge (addr : BitVec 64) (offset : BitVec 64) (
     vmem_read_addr (Virtaddr addr) offset 2 (Load Data) false false false s =
     .ok (Ok value) s := by
   unfold vmem_read_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false]
+  simp only [ha.misalign, Bool.false_eq_true, ite_false]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate :=
     translateAddr_load_data_of_machine_mprv_zero addr s hpriv hmprv
@@ -341,7 +341,7 @@ theorem vmem_read_addr_word_bridge (addr : BitVec 64) (offset : BitVec 64) (s : 
     vmem_read_addr (Virtaddr addr) offset 4 (Load Data) false false false s =
     .ok (Ok value) s := by
   unfold vmem_read_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false]
+  simp only [ha.misalign, Bool.false_eq_true, ite_false]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate :=
     translateAddr_load_data_of_machine_mprv_zero addr s hpriv hmprv
@@ -379,7 +379,7 @@ theorem checked_mem_read_eq_loaded_dword (addr : BitVec 64) (s : SailState)
     .ok (Ok (loaded_dword_at s addr hbytes h_no_ovf, default_meta)) s := by
   unfold checked_mem_read
   simp only [bind, EStateM.bind, pure, EStateM.pure, hpmp, hmmio.sail,
-             Bool.false_eq_true, if_false]
+             Bool.false_eq_true, ite_false]
   unfold read_kind_of_flags
   simp only [pure, EStateM.pure]
   rw [read_ram_eq_loaded_dword addr s hbytes h_no_ovf]
@@ -417,7 +417,7 @@ theorem vmem_read_addr_pipeline_bridge (addr : BitVec 64) (s : SailState)
     vmem_read_addr (Virtaddr addr) 0 8 (Load Data) false false false s =
     .ok (Ok value) s := by
   unfold vmem_read_addr
-  simp only [ha.misalign, Bool.false_eq_true, if_false]
+  simp only [ha.misalign, Bool.false_eq_true, ite_false]
   unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   have htranslate :=
     translateAddr_load_data_of_machine_mprv_zero addr s hpriv hmprv

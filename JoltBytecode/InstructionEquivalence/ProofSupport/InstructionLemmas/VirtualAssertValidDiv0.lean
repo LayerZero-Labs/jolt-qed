@@ -26,7 +26,7 @@ theorem virtual_assert_valid_div0_run_ok (divisor : regidx) (quotient : VReg)
   unfold execInstr readSrc readVReg liftSail
   simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg hguard]
+  rw [ite_eq_right hguard]
   rfl
 
 /-- Failed real-divisor div0 assertion throws an assertion error. -/
@@ -39,7 +39,7 @@ theorem virtual_assert_valid_div0_run_err (divisor : regidx) (quotient : VReg)
   unfold execInstr readSrc readVReg liftSail
   simp only [hread, bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos hguard]
+  rw [ite_eq_left hguard]
   rfl
 
 /-- Successful virtual-divisor div0 assertion leaves the state unchanged. -/
@@ -51,7 +51,7 @@ theorem virtual_assert_valid_div0_v_run_ok (divisor quotient : VReg)
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_neg hguard]
+  rw [ite_eq_right hguard]
   rfl
 
 /-- Failed virtual-divisor div0 assertion throws an assertion error. -/
@@ -63,7 +63,7 @@ theorem virtual_assert_valid_div0_v_run_err (divisor quotient : VReg)
   unfold execInstr readSrc readVReg
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
-  rw [if_pos hguard]
+  rw [ite_eq_left hguard]
   rfl
 
 end JoltISA

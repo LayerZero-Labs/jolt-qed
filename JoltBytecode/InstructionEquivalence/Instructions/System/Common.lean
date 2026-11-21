@@ -89,7 +89,7 @@ theorem extDHashMap_get?_insert_of_ne {α : Type} [BEq α] [Hashable α]
   rw [Std.ExtDHashMap.get?_insert]
   have hfalse : (written == read) = false := beq_false_of_ne h
   simp only [hfalse, Bool.false_eq_true]
-  rw [dif_neg (by intro hf; cases hf)]
+  rw [dite_eq_right (by intro hf; cases hf)]
 
 /-- A later write to the same dependent-map key overwrites the earlier write. -/
 theorem extDHashMap_insert_insert_same {α : Type} [BEq α] [Hashable α]

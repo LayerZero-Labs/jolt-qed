@@ -70,7 +70,7 @@ The Sail configuration has two regions, and nothing else is readable, writable o
 The device-tree region at `0x1000` is removed, because Jolt has no device tree.
 The CLINT stays where the Sail model needs it (`0x0200_0000`), outside both regions; Jolt panics on any access to it (`mmu.rs`, `load_raw` and `store_raw`), so it is not reachable from a Jolt trace.
 
-The Lean side takes the regions from `JoltConstraints/WholeRun/Relation.lean` (`ioRegion`, `ramRegion`, `platformPma`), not from the json, and `scripts/check-sail-model.sh` keeps the two the same.
+The Lean side takes the regions from `JoltConstraints/theorems/WholeRun/Relation.lean` (`ioRegion`, `ramRegion`, `platformPma`), not from the json, and `scripts/check-sail-model.sh` keeps the two the same.
 Each region is a superset of what Jolt allows, which is the direction the whole-run theorem needs.
 Jolt's tracer additionally panics on stores into the stack canary, on accesses at or above `heap_end`, on stores to the read-only parts of the I/O window, and on fetches outside the program's bytecode.
 Those runs have no Jolt trace, so the theorem never has to say what Sail does on them.
@@ -357,7 +357,7 @@ The proofs unfold the CSR chains and the decoder mapping, so the chains are not 
 
 `#print axioms` on `JoltInstance.soundness` and on every instruction theorem that is fully proved gives only `propext`, `Classical.choice` and `Quot.sound`.
 The headline theorems, including `Decode.joltDecode_compressed_agrees` and the block theorems of section 9, use only these three standard axioms, although the generic CSR read in their closure mentions `get_16_random_bits`.
-None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/Completeness/`, some of them waiting on a16z/jolt#1949.
+None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/theorems/Completeness/`, some of them waiting on a16z/jolt#1949.
 
 Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (the read-back of the panic and termination words in section 2, and anything the difference testing confirms); the classified list is in section 9, "What step f proves".
 The per-block deviations of `JoltInstance.sail_soundness` are premises on the trace that `soundness` extracts, so they are checked on that trace; `HonestTrace.sail_reproduces` states the same for any honest trace given in advance.

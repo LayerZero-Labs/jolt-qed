@@ -67,10 +67,10 @@ theorem vreg_MUL_from_real_vs2_run_ex
   refine ⟨js', ?_, ?_, ?_, rfl⟩
   · simpa only [js'] using vreg_MUL_from_real_vs2_run vd vs1 rs2 js rs2_val hrs2 hvd
   · show (if vd = vd then _ else js.vregs vd) = _
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · intro k h
     show (if k = vd then _ else js.vregs k) = _
-    rw [if_neg h]
+    rw [ite_eq_right h]
 
 /-- `vreg_SUB_from_real_vs1 vd rs1 vs2`: real `rs1` − virtual `vs2` → virtual `vd`. -/
 theorem vreg_SUB_from_real_vs1_run
@@ -104,10 +104,10 @@ theorem vreg_SUB_from_real_vs1_run_ex
   refine ⟨js', ?_, ?_, ?_, rfl⟩
   · simpa only [js'] using vreg_SUB_from_real_vs1_run vd rs1 vs2 js rs1_val hrs1 hvd
   · show (if vd = vd then _ else js.vregs vd) = _
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · intro k h
     show (if k = vd then _ else js.vregs k) = _
-    rw [if_neg h]
+    rw [ite_eq_right h]
 
 /-- `vreg_assert_mulu_no_overflow va rs` — success branch. -/
 theorem vreg_assert_mulu_no_overflow_run_ok
@@ -233,7 +233,7 @@ theorem phase_setup_run
     JoltISA.virtual_advice_run v0VReg q js (by unfold WritableVReg; decide)
   have hs1_v0 : s1.vregs v0VReg = q := by
     show (if v0VReg = v0VReg then q else js.vregs v0VReg) = q
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   have hs1_sail : s1.sail = js.sail := rfl
   have hrs2_s1 : rX_bits rs2 s1.sail = .ok divisor s1.sail := hs1_sail.symm ▸ hrs2
   have hguard_s1 : ¬ (divisor = 0#64 ∧ s1.vregs v0VReg ≠ (-1 : BitVec 64)) := by
