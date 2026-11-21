@@ -315,7 +315,7 @@ theorem sbProgram_eq_sail (imm : BitVec 12) (rs2 rs1 : regidx)
     have hlt := write_addr_and_seven_lt_eight ea
     omega
   have hstore_access :=
-    StoreProgramEqSailAssumptions.storeAccessFacts h 1
+    StoreProgramEqSailAssumptions.storeAccessFacts h 1 (by decide)
       (by simpa [ea, offset] using hstore_fits)
   have hwrite_byte :
       vmem_write rs1 (sign_extend (m := 64) imm) 1

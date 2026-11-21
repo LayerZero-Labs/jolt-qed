@@ -65,7 +65,9 @@ theorem addiInstr_preserves_projected_vregs
     hprotected JoltISA.mepcVReg rfl,
     hprotected JoltISA.mcauseVReg rfl,
     hprotected JoltISA.mtvalVReg rfl,
-    hprotected JoltISA.mstatusVReg rfl⟩
+    hprotected JoltISA.mstatusVReg rfl,
+    hprotected JoltISA.reservationWReg rfl,
+    hprotected JoltISA.reservationDReg rfl⟩
 
 /-- Main native `ADDI` equivalence statement. -/
 def addiInstrEqSailStatement

@@ -74,7 +74,7 @@ theorem byte_load_pmp_ok
     h.load_pmp.subaccess
       (offset :=
         (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat)
-      (accessWidth := 1)
+      (accessWidth := 1) (by decide)
       (byte_offset_fits h.rs1_val imm)
 
 /-- The enclosing Jolt non-MMIO window contains Sail's byte-sized access. -/
@@ -87,7 +87,7 @@ theorem byte_not_readable_mmio
     h.not_readable_mmio.subaccess
       (offset :=
         (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat)
-      (accessWidth := 1)
+      (accessWidth := 1) (by decide)
       (byte_offset_fits h.rs1_val imm)
 
 /-- The byte at Sail's effective `LB` address is present. -/
