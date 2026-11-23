@@ -1,5 +1,4 @@
 import JoltBytecode.Decode.Jolt
-import JoltBytecode.Decode.Prefixes
 import JoltBytecode.Decode.Configuration
 import JoltBytecode.Decode.Execute
 
@@ -16,34 +15,9 @@ abbrev Matches (i : RiscvInstruction) (ast : instruction) : Prop :=
 
 end Step
 
+/-- Unfold `ext_decode` to the first test of Sail's 32-bit decoder. -/
 elab "decode32_start" : tactic => do
-  let g ← getMainGoal
-  g.withContext do
-    let some (_, lhs, rhs) := (← whnf (← g.getType)).eq? | throwError "equality expected"
-    let expand (e : Expr) : MetaM Expr := do
-      let ci ← getConstInfo e.getAppFn.constName!
-      return ci.value!.betaRev e.getAppRevArgs true
-    let e ← expand lhs
-    let e ← expand e
-    let w := lhs.getAppArgs[0]!
-    let st := lhs.getAppArgs[1]!
-    let k := e.getAppArgs[4]!
-    let pref ← mkAppM ``Decode.prefetchPrefix #[w, k]
-    let gn ← g.change (← mkEq (mkApp pref st) rhs)
-    setGoals [gn]
-    evalTactic (← `(tactic| rw [Decode.prefetchPrefix_none]))
-    evalTactic (← `(tactic| rw [pure_bind]))
-    let gn ← getMainGoal
-    let some (_, l, r) := (← whnf (← gn.getType)).eq? | throwError "equality expected"
-    let mut l := l.getAppFn.betaRev l.getAppRevArgs true
-    while let some r ← reduceRecMatcher? l do
-      l := r.getAppFn.betaRev r.getAppRevArgs true
-    let k := l.getAppArgs[4]!
-    let pref ← mkAppM ``Decode.ntlPrefix #[w, k]
-    let gn ← gn.change (← mkEq (mkApp pref st) r)
-    setGoals [gn]
-    evalTactic (← `(tactic| rw [Decode.ntlPrefix_none]))
-    evalTactic (← `(tactic| conv_lhs => whnf))
+  evalTactic (← `(tactic| conv_lhs => whnf))
 
 /-- Compressed register fields add eight without a carry, as in C.LW's x8–x15 operands. -/
 private theorem decoder_creg_add (x : BitVec 32) :
@@ -386,7 +360,7 @@ elab "decode32_case" : tactic => do
           fs := fs.push d.toExpr
     pure fs
   runs := runs ++ fields
-  for name in [``Decode.pause_disabled, ``Decode.landingPad_disabled, ``Decode.csr_enabled] do
+  for name in [``Decode.landingPad_disabled, ``Decode.csr_enabled] do
     runs := runs.push (← mkCongrFun (mkConst name) s)
   evalTactic (← `(tactic| decode32_start))
   let g ← getMainGoal
@@ -424,22 +398,7 @@ elab "decode32_case" : tactic => do
 
 /-- Reduce a compressed decoder field case, such as quadrant zero's C.LW arm. -/
 elab "decode16_start" : tactic => do
-  let g ← getMainGoal
-  g.withContext do
-    let some (_, lhs, rhs) := (← whnf (← g.getType)).eq? | throwError "equality expected"
-    let expand (e : Expr) : MetaM Expr := do
-      let ci ← getConstInfo e.getAppFn.constName!
-      return ci.value!.betaRev e.getAppRevArgs true
-    let e ← expand lhs
-    let e ← expand e
-    let h := lhs.getAppArgs[0]!
-    let st := lhs.getAppArgs[1]!
-    let k := e.getAppArgs[4]!
-    let pref ← mkAppM ``Decode.compressedNtlPrefix #[h, k]
-    let gn ← g.change (← mkEq (mkApp pref st) rhs)
-    setGoals [gn]
-    evalTactic (← `(tactic| rw [Decode.compressedNtlPrefix_none]))
-    evalTactic (← `(tactic| conv_lhs => whnf))
+  evalTactic (← `(tactic| conv_lhs => whnf))
 
 /-- Evaluate a compressed decoder after fixing its selector fields, without enumerating parcels. -/
 elab "decode16_case" : tactic => do
@@ -561,7 +520,7 @@ elab "decode_word_case" : tactic => do
     let some (_, lhs, _) := (← whnf (← g.getType)).eq? | throwError "decoder equality expected"
     pure lhs.getAppArgs[1]!
   let mut runs ← decoderRunProofs s
-  for name in [``Decode.pause_disabled, ``Decode.landingPad_disabled, ``Decode.csr_enabled] do
+  for name in [``Decode.landingPad_disabled, ``Decode.csr_enabled] do
     runs := runs.push (← mkCongrFun (mkConst name) s)
   let fields ← withMainContext do
     let mut fields := #[]

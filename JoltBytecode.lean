@@ -10,7 +10,6 @@ import JoltBytecode.Step.SailTrap
 import JoltBytecode.Step.SailReservation
 import JoltBytecode.Decode.Jolt
 import JoltBytecode.Decode.Configuration
-import JoltBytecode.Decode.Prefixes
 import JoltBytecode.Decode.ProofSupport
 import JoltBytecode.Decode.Execute
 import JoltBytecode.Decode.Agreement
