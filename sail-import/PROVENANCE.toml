@@ -65,34 +65,58 @@ used = "sail-import/rv64d_jolt.json"
 used_sha256 = "a60717fcf321459be8736a5e5f481dac2eed9ce864ff2d0e4253f1ad0a0b3992"
 
 [modules]
-# Lean 4.35 compiles inductive types eagerly and rejects one with more than 244
-# constructors carrying data; the full instruction union has 353. The vector and
-# F/D instruction modules (and the modules that require them) are left out,
-# leaving 159 constructors. No hand-written proof refers to a dropped
-# constructor. The Sail decoder modules stay in the selection because
-# `Decode.joltDecode_agrees` and `Decode.joltDecode_compressed_agrees` use
-# `ext_decode` and `ext_decode_compressed`.
-excluded_roots = ["V_instructions", "FD_instructions"]
-dropped_leaves = [
-  "FD_instructions", "V_instructions", "Zfbfmin", "Zvabd_insts", "Zvbb", "Zvbc",
-  "Zvfbfmin", "Zvfbfwma", "Zvkg", "Zvkned", "Zvknhab", "Zvksed", "Zvksh",
-  "bfloat16_core",
-]
+# The selection is the modules Jolt's hart can reach, and nothing else:
+# - the Sail infrastructure: prelude, core, sys, exceptions, pmp, main, postlude;
+# - the instructions Jolt's decoder accepts: I, M, A (Zaamo and Zalrsc), Zca and
+#   Zicsr, plus Zbb for ANDN, which Jolt's expansions use;
+# - the modules those require in model/riscv.sail_project: B_types, V_core,
+#   FD_core, Smcntrpmf, Stateen_csrs, Stateen_regs, Zicbom_types, Zicbop_types,
+#   Zicfilp_regs, Zicfilp_insts and CFI_types.
+# Every other module is for an extension that rv64d_jolt.json turns off and that
+# Jolt never runs, so translating it would only add trusted code. Sail's decoder
+# (`ext_decode`, `ext_decode_compressed`) therefore covers only the selected
+# instructions; the bytecode proofs compare Jolt's decoder with it on every word
+# Jolt accepts.
+# The dropped modules also hold the `currentlyEnabled` clauses of their
+# extensions. For B, H, Sscofpmf, Ssqosid, Zfhmin, Zicbom, Zicboz, Zicntr and Zkr,
+# which the kept code still names, `currentlyEnabled` now fails a Sail assertion
+# where the full model returns false. The kept code asks about them only in
+# S-mode, after decoding a Zbb instruction, and when accessing mseccfg, menvcfg,
+# mip, mstateen0, the Smcntrpmf CSRs or hstateen. Jolt's hart never enters S-mode
+# and Jolt rejects those encodings and CSRs.
 selected = [
-  "A_types", "B_types", "CFI_types", "FD_core", "H", "I_insts", "I_types",
-  "K_core", "M_insts", "M_types", "Smcntrpmf", "Sscofpmf", "Ssqosid", "Sstc",
-  "Stateen_csrs", "Stateen_regs", "Svinval", "V_core", "V_types", "Zaamo",
-  "Zalrsc", "Zawrs_insts", "Zawrs_types", "Zba", "Zbb", "Zbc", "Zbkb", "Zbkx",
-  "Zbs", "Zca", "Zcb", "Zcmop", "Zibi_insts", "Zibi_types", "Zicbom_insts",
-  "Zicbom_types", "Zicbop_insts", "Zicbop_types", "Zicboz", "Zicfilp_insts",
-  "Zicfilp_regs", "Zicfiss_insts", "Zicfiss_regs", "Zicntr", "Zicond_insts",
-  "Zicond_types", "Zicsr_insts", "Zicsr_types", "Zifencei", "Zihintntl_insts",
-  "Zihintntl_types", "Zihintpause", "Zihpm", "Zimop", "Zkn", "Zkr", "Zks",
-  "Zvabd_types", "Zvk_core", "core", "exceptions", "main", "pmp", "postlude",
-  "prelude", "rmem", "sys", "unit_tests",
+  "A_types", "B_types", "CFI_types", "core", "exceptions", "FD_core", "I_insts",
+  "I_types", "M_insts", "M_types", "main", "pmp", "postlude", "prelude",
+  "Smcntrpmf", "Stateen_csrs", "Stateen_regs", "sys", "V_core", "Zaamo",
+  "Zalrsc", "Zbb", "Zca", "Zicbom_types", "Zicbop_types", "Zicfilp_insts",
+  "Zicfilp_regs", "Zicsr_insts", "Zicsr_types",
 ]
+# Every other module and module group in model/riscv.sail_project.
+not_selected = [
+  "A", "B", "B_insts", "bfloat16", "bfloat16_core", "C", "CFI", "extensions",
+  "FD", "FD_instructions", "H", "I", "K", "K_core", "M", "mops", "rmem",
+  "Sscofpmf", "Ssqosid", "Sstc", "Stateen", "Svinval", "unit_tests", "V",
+  "V_instructions", "V_types", "vector_crypto", "Zawrs", "Zawrs_insts",
+  "Zawrs_types", "Zba", "Zbc", "Zbkb", "Zbkx", "Zbs", "Zcb", "Zcmop", "Zfbfmin",
+  "Zibi", "Zibi_insts", "Zibi_types", "Zicbom", "Zicbom_insts", "Zicbop",
+  "Zicbop_insts", "Zicboz", "Zicfilp", "Zicfiss", "Zicfiss_insts",
+  "Zicfiss_regs", "Zicntr", "Zicond", "Zicond_insts", "Zicond_types", "Zicsr",
+  "Zifencei", "Zihintntl", "Zihintntl_insts", "Zihintntl_types", "Zihintpause",
+  "Zihpm", "Zimop", "Zkn", "Zkr", "Zks", "Zvabd", "Zvabd_insts", "Zvabd_types",
+  "Zvbb", "Zvbc", "Zvfbfmin", "Zvfbfwma", "Zvk_core", "Zvkg", "Zvkned",
+  "Zvknhab", "Zvksed", "Zvksh",
+]
+
+[postprocess]
+# scripts/regen-sail-model.sh rewrites `(pure (print_` to
+# `(discard <| pure (print_` in RvfiDii.lean after generation. Both forms are
+# no-op statements; the rewrite avoids leanprover/lean4#13858, which makes the
+# 18 such statements in `print_rvfi_exec` take 20 to 30 minutes to elaborate.
+# Nothing in the model or the proofs calls `print_rvfi_exec`. Remove this once
+# the toolchain includes leanprover/lean4#15682.
+rewritten_files = ["LeanRV64D/RvfiDii.lean"]
 
 [output]
 # sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
 # followed by LeanRV64D.lean.
-tree_sha256 = "74041ff8565d6f9a3fe3ecaf2abdd7fa212c9f78c9d4d1c4a9f77db159f9d4d2"
+tree_sha256 = "bd1616dc05eec013c8af5c111667e7a639d74f69c51aef4ca75fd2156b4dba23"
