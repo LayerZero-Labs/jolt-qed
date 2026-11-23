@@ -92,7 +92,16 @@ selected = [
   "prelude", "rmem", "sys", "unit_tests",
 ]
 
+[postprocess]
+# scripts/regen-sail-model.sh rewrites `(pure (print_` to
+# `(discard <| pure (print_` in RvfiDii.lean after generation. Both forms are
+# no-op statements; the rewrite avoids leanprover/lean4#13858, which makes the
+# 18 such statements in `print_rvfi_exec` take 20 to 30 minutes to elaborate.
+# Nothing in the model or the proofs calls `print_rvfi_exec`. Remove this once
+# the toolchain includes leanprover/lean4#15682.
+rewritten_files = ["LeanRV64D/RvfiDii.lean"]
+
 [output]
 # sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
 # followed by LeanRV64D.lean.
-tree_sha256 = "74041ff8565d6f9a3fe3ecaf2abdd7fa212c9f78c9d4d1c4a9f77db159f9d4d2"
+tree_sha256 = "62cd33e319224e82fcffa019d958750a944e096bf9b5b48643977a5154c840cb"

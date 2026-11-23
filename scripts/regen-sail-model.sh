@@ -5,7 +5,9 @@
 # (model/CMakeLists.txt at the pinned revision): `sail_common`, then
 # `lean_sail_common`, then `lean_sail_default`, then the module selection and the
 # project file. The module selection is the only intended difference from that
-# target; it is recorded in sail-import/PROVENANCE.toml.
+# target; it is recorded in sail-import/PROVENANCE.toml. After generation the
+# script rewrites RvfiDii.lean ([postprocess] in PROVENANCE.toml), the S-box
+# tables and the limit options (steps a to c below).
 #
 # Usage:
 #   scripts/regen-sail-model.sh SAIL_BIN SAIL_RISCV_DIR OUT_DIR [MODULE ...]
@@ -65,6 +67,21 @@ SAIL_DIR="$sail_dir" "$sail_bin" \
   -o Lean_RV64D \
   riscv.sail_project \
   "${modules[@]}"
+
+# Work around leanprover/lean4#13858 (fixed by leanprover/lean4#15682, not in
+# Lean 4.35): a run of non-final `pure (...)` statements in a `do` block takes
+# time exponential in the run's length to elaborate. `print_rvfi_exec` in
+# RvfiDii.lean has a run of 18, which alone takes 20 to 30 minutes on CI.
+# `discard <| pure (...)` is also a no-op statement and elaborates in linear
+# time. Nothing in the model or the proofs calls `print_rvfi_exec`.
+# mit-pdos/xv6iris applies the same rewrite.
+rvfi="$out_dir/Lean_RV64D/LeanRV64D/RvfiDii.lean"
+sed 's/(pure (print_/(discard <| pure (print_/g' "$rvfi" > "$rvfi.tmp"
+mv "$rvfi.tmp" "$rvfi"
+if grep -q '(pure (print_' "$rvfi"; then
+  echo 'regen-sail-model: RvfiDii.lean rewrite left a `(pure (print_` behind' >&2
+  exit 1
+fi
 
 # Post-processing of the generated tree.
 #

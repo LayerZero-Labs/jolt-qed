@@ -1172,41 +1172,41 @@ def rvfi_encode_width_mask (width : Nat) : (BitVec 32) :=
 
 set_option maxHeartbeats 1000000000 in
 def print_rvfi_exec (_ : Unit) : SailM Unit := do
-  (pure (print_bits "rvfi_intr     : "
+  (discard <| pure (print_bits "rvfi_intr     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_intr (← readReg rvfi_inst_data))))
-  (pure (print_bits "rvfi_halt     : "
+  (discard <| pure (print_bits "rvfi_halt     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_halt (← readReg rvfi_inst_data))))
-  (pure (print_bits "rvfi_trap     : "
+  (discard <| pure (print_bits "rvfi_trap     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_trap (← readReg rvfi_inst_data))))
-  (pure (print_bits "rvfi_rd_addr  : "
+  (discard <| pure (print_bits "rvfi_rd_addr  : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rd_addr (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_rs2_addr : "
+  (discard <| pure (print_bits "rvfi_rs2_addr : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rs2_addr (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_rs1_addr : "
+  (discard <| pure (print_bits "rvfi_rs1_addr : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rs1_addr (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_mem_wmask: "
+  (discard <| pure (print_bits "rvfi_mem_wmask: "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_wmask (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_mem_rmask: "
+  (discard <| pure (print_bits "rvfi_mem_rmask: "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_rmask (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_mem_wdata: "
+  (discard <| pure (print_bits "rvfi_mem_wdata: "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_wdata (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_mem_rdata: "
+  (discard <| pure (print_bits "rvfi_mem_rdata: "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_rdata (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_mem_addr : "
+  (discard <| pure (print_bits "rvfi_mem_addr : "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_addr (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_rd_wdata : "
+  (discard <| pure (print_bits "rvfi_rd_wdata : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rd_wdata (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_rs2_data : "
+  (discard <| pure (print_bits "rvfi_rs2_data : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rs2_rdata (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_rs1_data : "
+  (discard <| pure (print_bits "rvfi_rs1_data : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rs1_rdata (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_insn     : "
+  (discard <| pure (print_bits "rvfi_insn     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_insn (← readReg rvfi_inst_data))))
-  (pure (print_bits "rvfi_pc_wdata : "
+  (discard <| pure (print_bits "rvfi_pc_wdata : "
       (_get_RVFI_DII_Execution_Packet_PC_rvfi_pc_wdata (← readReg rvfi_pc_data))))
-  (pure (print_bits "rvfi_pc_rdata : "
+  (discard <| pure (print_bits "rvfi_pc_rdata : "
       (_get_RVFI_DII_Execution_Packet_PC_rvfi_pc_rdata (← readReg rvfi_pc_data))))
-  (pure (print_bits "rvfi_order    : "
+  (discard <| pure (print_bits "rvfi_order    : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_order (← readReg rvfi_inst_data))))
 
 /-- Type quantifiers: width : Nat, width ≥ 0, 0 < width ∧ width ≤ max_mem_access -/
