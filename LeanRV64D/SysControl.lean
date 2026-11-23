@@ -229,7 +229,7 @@ def check_CSR_priv (csr : (BitVec 12)) (p : Privilege) : SailM Bool := do
 def check_CSR_access (csr : (BitVec 12)) (access_type : CSRAccessType) : Bool :=
   (not (((access_type == CSRWrite) || (access_type == CSRReadWrite)) && ((csrAccess csr) == 0b11#2)))
 
-set_option maxRecDepth 900 in
+set_option maxRecDepth 750 in
 def is_CSR_accessible (b__0 : (BitVec 12)) (g__2 : Privilege) (g__3 : CSRAccessType) : SailM Bool := do
   if ((b__0 == (0x301#12 : (BitVec 12))) : Bool)
   then (pure true)

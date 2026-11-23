@@ -208,8 +208,7 @@ open AtomicSupport
 open Architecture
 open AmocasOddRegisterReservedBehavior
 
-set_option maxRecDepth 1450 in
-set_option maxHeartbeats 250000 in
+set_option maxRecDepth 750 in
 noncomputable def encdec_backwards (arg_ : (BitVec 32)) : SailM instruction := do
   let head_exp_ := arg_
   match (← do
@@ -4419,8 +4418,7 @@ noncomputable def encdec_forwards_matches (arg_ : instruction) : SailM Bool := d
   | .ILLEGAL s => (pure true)
   | _ => (pure false)
 
-set_option maxRecDepth 1400 in
-set_option maxHeartbeats 250000 in
+set_option maxRecDepth 750 in
 noncomputable def encdec_backwards_matches (arg_ : (BitVec 32)) : SailM Bool := do
   let head_exp_ := arg_
   match (← do
@@ -8583,7 +8581,6 @@ noncomputable def encdec_compressed_forwards (arg_ : instruction) : SailM (BitVe
       sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-set_option maxRecDepth 550 in
 noncomputable def encdec_compressed_backwards (arg_ : (BitVec 16)) : SailM instruction := do
   let head_exp_ := arg_
   match (← do
@@ -10074,7 +10071,6 @@ noncomputable def encdec_compressed_forwards_matches (arg_ : instruction) : Sail
   | .C_ILLEGAL s => (pure true)
   | _ => (pure false)
 
-set_option maxRecDepth 550 in
 noncomputable def encdec_compressed_backwards_matches (arg_ : (BitVec 16)) : SailM Bool := do
   let head_exp_ := arg_
   match (← do

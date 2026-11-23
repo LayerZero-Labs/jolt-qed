@@ -1135,7 +1135,6 @@ def rvfi_get_mem_data (_ : Unit) : SailM (BitVec 704) := do
 def rvfi_encode_width_mask (width : Nat) : (BitVec 32) :=
   (0xFFFFFFFF#32 >>> (32 -i width))
 
-set_option maxHeartbeats 1000000000 in
 def print_rvfi_exec (_ : Unit) : SailM Unit := do
   (discard <| pure (print_bits "rvfi_intr     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_intr (← readReg rvfi_inst_data))))
