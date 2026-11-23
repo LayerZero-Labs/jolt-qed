@@ -6,8 +6,8 @@
 # `lean_sail_common`, then `lean_sail_default`, then the module selection and the
 # project file. The module selection is the only intended difference from that
 # target; it is recorded in sail-import/PROVENANCE.toml. After generation the
-# script rewrites RvfiDii.lean ([postprocess] in PROVENANCE.toml), the S-box
-# tables and the limit options (steps a to c below).
+# script rewrites RvfiDii.lean ([postprocess] in PROVENANCE.toml) and adjusts the
+# limit options (steps a and b below).
 #
 # Usage:
 #   scripts/regen-sail-model.sh SAIL_BIN SAIL_RISCV_DIR OUT_DIR [MODULE ...]
@@ -97,11 +97,7 @@ fi
 #    SpecializationV1 are copied verbatim from lean-sail and sail-riscv's
 #    handwritten support and carry no header.
 #
-# b. The three 256-entry S-box tables are single `#v[...]` literals, which need
-#    maxRecDepth 526. Each is rewritten as two 128-entry literals joined with `++`;
-#    the name and the type stay the same.
-#
-# c. A few declarations still exceed a default limit. Each gets a
+# b. A few declarations still exceed a default limit. Each gets a
 #    `set_option ... in` directly before it (the declarations have no doc comment
 #    or attribute), with the smallest value that passes rounded up to the next 50
 #    (next 50000 for heartbeats). The values are measured with the options Lake
@@ -117,7 +113,7 @@ fi
 #      proved here refers to it.
 #    Proofs unfold the CSR chains and the mapping, so they are not split here. The
 #    follow-up is for the Sail Lean backend to split long chains into helper
-#    definitions, after which these options and the S-box rewrite can go.
+#    definitions, after which these options can go.
 #    The script fails unless each listed declaration is found exactly once, if
 #    any other limit option is left after step a, or if the tree does not end up
 #    with exactly the listed options.
@@ -146,7 +142,7 @@ for path in files:
 if stripped == 0:
     sys.exit("regen-sail-model: no generated file found")
 # No other limit option may remain anywhere in the tree, file-wide or local:
-# step c below adds the only ones. The check matches the option names anywhere in
+# step b below adds the only ones. The check matches the option names anywhere in
 # the text, so a comment or a line break between `set_option` and the name cannot
 # hide one; Sail's output mentions them nowhere else.
 limit_name = re.compile(r"maxHeartbeats|maxRecDepth|maxSize")
@@ -155,24 +151,7 @@ for path in files:
         if limit_name.search(line):
             sys.exit(f"regen-sail-model: {path}:{n} mentions a limit option after the header strip: '{line}'")
 
-# ---- b. the three 256-entry S-box tables ----------------------------------
-kext = root / "LeanRV64D" / "TypesKext.lean"
-text = kext.read_text()
-for table in ("sm4_sbox_table", "aes_sbox_fwd_table", "aes_sbox_inv_table"):
-    pattern = re.compile(
-        r"^(def " + table + r" : \(Vector \(BitVec 8\) 256\) :=\n)  #v\[([^\]\n]*)\]\n", re.M)
-    matches = pattern.findall(text)
-    if len(matches) != 1:
-        sys.exit(f"regen-sail-model: found {len(matches)} definitions of {table}, expected one")
-    entries = matches[0][1].split(", ")
-    if len(entries) != 256 or not all(re.fullmatch(r"0x[0-9A-F]{2}#8", e) for e in entries):
-        sys.exit(f"regen-sail-model: {table} does not have exactly 256 byte entries")
-    halves = (", ".join(entries[:128]), ", ".join(entries[128:]))
-    text = pattern.sub(
-        lambda m: f"{m.group(1)}  (#v[{halves[0]}] ++\n    #v[{halves[1]}])\n", text)
-kext.write_text(text)
-
-# ---- c. per-declaration limits ---------------------------------------------
+# ---- b. per-declaration limits ---------------------------------------------
 LIMITS = [
     ("SysControl", "is_CSR_accessible", [("maxRecDepth", 900)]),
     ("ZicsrInsts", "read_CSR", [("maxRecDepth", 900)]),
@@ -195,7 +174,7 @@ for module, name, options in LIMITS:
         sys.exit(f"regen-sail-model: {name} is preceded by '{lines[i - 1]}', expected a blank line")
     lines[i:i] = [f"set_option {option} {value} in" for option, value in options]
     path.write_text("\n".join(lines))
-# The tree now mentions the limit options exactly on the lines step c inserted.
+# The tree now mentions the limit options exactly on the lines step b inserted.
 expected = sorted((f"{module}.lean", f"set_option {option} {value} in")
                   for module, _, options in LIMITS for option, value in options)
 found = sorted((path.name, line) for path in files for line in path.read_text().split("\n")

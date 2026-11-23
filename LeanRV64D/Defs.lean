@@ -104,10 +104,6 @@ inductive cbop_zicbop where | PREFETCH_I | PREFETCH_R | PREFETCH_W
   deriving BEq, Inhabited, Repr
   open cbop_zicbop
 
-inductive biop where | BEQI | BNEI
-  deriving BEq, Inhabited, Repr
-  open biop
-
 abbrev xlen  : Int := 64
 
 abbrev log2_xlen  : Int := (if ( xlen = 32  : Bool) then 5 else 6)
@@ -363,10 +359,6 @@ structure mul_op where
   signed_rs2 : Signedness
   deriving BEq, Inhabited, Repr
 
-inductive ntl_type where | NTL_P1 | NTL_PALL | NTL_S1 | NTL_ALL
-  deriving BEq, Inhabited, Repr
-  open ntl_type
-
 inductive rop where | ADD | SUB | SLL | SLT | SLTU | XOR | SRL | SRA | OR | AND
   deriving BEq, Inhabited, Repr
   open rop
@@ -399,41 +391,15 @@ inductive bropw_zbb where | ROLW | RORW
   deriving BEq, Inhabited, Repr
   open bropw_zbb
 
-inductive brop_zbkb where | PACK | PACKH
-  deriving BEq, Inhabited, Repr
-  open brop_zbkb
-
-inductive biop_zbs where | BCLRI | BEXTI | BINVI | BSETI
-  deriving BEq, Inhabited, Repr
-  open biop_zbs
-
-inductive brop_zbs where | BCLR | BEXT | BINV | BSET
-  deriving BEq, Inhabited, Repr
-  open brop_zbs
-
-inductive zicondop where | CZERO_EQZ | CZERO_NEZ
-  deriving BEq, Inhabited, Repr
-  open zicondop
-
 abbrev landing_pad_label := (BitVec 20)
-
-abbrev shamt_zba := (BitVec 2)
 
 abbrev word_width := Int
 
 abbrev word_width_wide := Int
 
-inductive wrsop where | WRS_STO | WRS_NTO
-  deriving BEq, Inhabited, Repr
-  open wrsop
-
 inductive instruction where
   | ILLEGAL (_ : word)
   | C_ILLEGAL (_ : half)
-  | ZICBOP (_ : (cbop_zicbop × regidx × (BitVec 12)))
-  | NTL (_ : ntl_type)
-  | C_NTL (_ : ntl_type)
-  | PAUSE (_ : Unit)
   | LPAD (_ : landing_pad_label)
   | UTYPE (_ : ((BitVec 20) × regidx × uop))
   | JAL (_ : ((BitVec 21) × regidx))
@@ -464,9 +430,6 @@ inductive instruction where
   | MULW (_ : (regidx × regidx × regidx))
   | DIVW (_ : (regidx × regidx × regidx × Bool))
   | REMW (_ : (regidx × regidx × regidx × Bool))
-  | SLLIUW (_ : ((BitVec 6) × regidx × regidx))
-  | ZBA_RTYPEUW (_ : (regidx × regidx × regidx × shamt_zba))
-  | ZBA_RTYPE (_ : (regidx × regidx × regidx × shamt_zba))
   | RORIW (_ : ((BitVec 5) × regidx × regidx))
   | RORI (_ : ((BitVec 6) × regidx × regidx))
   | ZBB_RTYPEW (_ : (regidx × regidx × regidx × bropw_zbb))
@@ -480,11 +443,6 @@ inductive instruction where
   | CLZW (_ : (regidx × regidx))
   | CTZ (_ : (regidx × regidx))
   | CTZW (_ : (regidx × regidx))
-  | CLMUL (_ : (regidx × regidx × regidx))
-  | CLMULH (_ : (regidx × regidx × regidx))
-  | CLMULR (_ : (regidx × regidx × regidx))
-  | ZBS_IOP (_ : ((BitVec 6) × regidx × regidx × biop_zbs))
-  | ZBS_RTYPE (_ : (regidx × regidx × regidx × brop_zbs))
   | C_NOP (_ : (BitVec 6))
   | C_ADDI4SPN (_ : (cregidx × (BitVec 8)))
   | C_LW (_ : ((BitVec 5) × cregidx × cregidx))
@@ -519,74 +477,8 @@ inductive instruction where
   | C_MV (_ : (regidx × regidx))
   | C_EBREAK (_ : Unit)
   | C_ADD (_ : (regidx × regidx))
-  | C_LBU (_ : ((BitVec 2) × cregidx × cregidx))
-  | C_LHU (_ : ((BitVec 2) × cregidx × cregidx))
-  | C_LH (_ : ((BitVec 2) × cregidx × cregidx))
-  | C_SB (_ : ((BitVec 2) × cregidx × cregidx))
-  | C_SH (_ : ((BitVec 2) × cregidx × cregidx))
-  | C_ZEXT_B (_ : cregidx)
-  | C_SEXT_B (_ : cregidx)
-  | C_ZEXT_H (_ : cregidx)
-  | C_SEXT_H (_ : cregidx)
-  | C_ZEXT_W (_ : cregidx)
-  | C_NOT (_ : cregidx)
-  | C_MUL (_ : (cregidx × cregidx))
-  | SHA256SIG0 (_ : (regidx × regidx))
-  | SHA256SIG1 (_ : (regidx × regidx))
-  | SHA256SUM0 (_ : (regidx × regidx))
-  | SHA256SUM1 (_ : (regidx × regidx))
-  | AES32ESMI (_ : ((BitVec 2) × regidx × regidx × regidx))
-  | AES32ESI (_ : ((BitVec 2) × regidx × regidx × regidx))
-  | AES32DSMI (_ : ((BitVec 2) × regidx × regidx × regidx))
-  | AES32DSI (_ : ((BitVec 2) × regidx × regidx × regidx))
-  | SHA512SIG0L (_ : (regidx × regidx × regidx))
-  | SHA512SIG0H (_ : (regidx × regidx × regidx))
-  | SHA512SIG1L (_ : (regidx × regidx × regidx))
-  | SHA512SIG1H (_ : (regidx × regidx × regidx))
-  | SHA512SUM0R (_ : (regidx × regidx × regidx))
-  | SHA512SUM1R (_ : (regidx × regidx × regidx))
-  | AES64KS1I (_ : ((BitVec 4) × regidx × regidx))
-  | AES64KS2 (_ : (regidx × regidx × regidx))
-  | AES64IM (_ : (regidx × regidx))
-  | AES64ESM (_ : (regidx × regidx × regidx))
-  | AES64ES (_ : (regidx × regidx × regidx))
-  | AES64DSM (_ : (regidx × regidx × regidx))
-  | AES64DS (_ : (regidx × regidx × regidx))
-  | SHA512SIG0 (_ : (regidx × regidx))
-  | SHA512SIG1 (_ : (regidx × regidx))
-  | SHA512SUM0 (_ : (regidx × regidx))
-  | SHA512SUM1 (_ : (regidx × regidx))
-  | SM3P0 (_ : (regidx × regidx))
-  | SM3P1 (_ : (regidx × regidx))
-  | SM4ED (_ : ((BitVec 2) × regidx × regidx × regidx))
-  | SM4KS (_ : ((BitVec 2) × regidx × regidx × regidx))
-  | ZBKB_RTYPE (_ : (regidx × regidx × regidx × brop_zbkb))
-  | ZBKB_PACKW (_ : (regidx × regidx × regidx))
-  | ZIP (_ : (regidx × regidx))
-  | UNZIP (_ : (regidx × regidx))
-  | BREV8 (_ : (regidx × regidx))
-  | XPERM8 (_ : (regidx × regidx × regidx))
-  | XPERM4 (_ : (regidx × regidx × regidx))
   | CSRReg (_ : (csreg × regidx × regidx × csrop))
   | CSRImm (_ : (csreg × (BitVec 5) × regidx × csrop))
-  | SINVAL_VMA (_ : (regidx × regidx))
-  | SFENCE_W_INVAL (_ : Unit)
-  | SFENCE_INVAL_IR (_ : Unit)
-  | WRS (_ : wrsop)
-  | SSPUSH (_ : regidx)
-  | C_SSPUSH (_ : Unit)
-  | SSPOPCHK (_ : regidx)
-  | C_SSPOPCHK (_ : Unit)
-  | SSRDP (_ : regidx)
-  | SSAMOSWAP (_ : (Bool × Bool × regidx × regidx × word_width × regidx))
-  | ZICOND_RTYPE (_ : (regidx × regidx × regidx × zicondop))
-  | ZICBOM (_ : (cbop_zicbom × regidx))
-  | BITYPE (_ : ((BitVec 13) × (BitVec 5) × regidx × biop))
-  | ZICBOZ (_ : regidx)
-  | FENCEI (_ : ((BitVec 12) × regidx × regidx))
-  | ZIMOP_MOP_R (_ : ((BitVec 5) × regidx × regidx))
-  | ZIMOP_MOP_RR (_ : ((BitVec 3) × regidx × regidx × regidx))
-  | ZCMOP (_ : (BitVec 3))
   deriving Inhabited, Repr
   open instruction
 
@@ -767,6 +659,20 @@ inductive pmpAddrMatch where | PMP_NoMatch | PMP_PartialMatch | PMP_Match
   deriving BEq, Inhabited, Repr
   open pmpAddrMatch
 
+abbrev shamt_zba := (BitVec 2)
+
+inductive brop_zbkb where | PACK | PACKH
+  deriving BEq, Inhabited, Repr
+  open brop_zbkb
+
+inductive brop_zbs where | BCLR | BEXT | BINV | BSET
+  deriving BEq, Inhabited, Repr
+  open brop_zbs
+
+inductive biop_zbs where | BCLRI | BEXTI | BINVI | BSETI
+  deriving BEq, Inhabited, Repr
+  open biop_zbs
+
 abbrev fregtype := flenbits
 
 inductive f_madd_op_H where | FMADD_H | FMSUB_H | FNMSUB_H | FNMADD_H
@@ -897,14 +803,6 @@ inductive cfregidx where
   open cfregidx
 
 abbrev Fcsr := (BitVec 32)
-
-abbrev nfields_range (k_q : Int) : Bool := k_q > 0 ∧ k_q ≤ 8
-
-abbrev nfields_range_pow2 (k_q : Int) : Bool := List.elem k_q [1, 2, 4, 8]
-
-abbrev nfields := Int
-
-abbrev nfields_pow2 := Int
 
 abbrev vlenbits := (BitVec (2 ^ 8))
 
@@ -1165,38 +1063,6 @@ inductive agtype where | UNDISTURBED | AGNOSTIC
 
 abbrev Vcsr := (BitVec 3)
 
-inductive zvk_vsha2_funct6 where | ZVK_VSHA2CH_VV | ZVK_VSHA2CL_VV
-  deriving BEq, Inhabited, Repr
-  open zvk_vsha2_funct6
-
-inductive zvk_vsm4r_funct6 where | ZVK_VSM4R_VV | ZVK_VSM4R_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vsm4r_funct6
-
-inductive zvk_vaesdf_funct6 where | ZVK_VAESDF_VV | ZVK_VAESDF_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vaesdf_funct6
-
-inductive zvk_vaesdm_funct6 where | ZVK_VAESDM_VV | ZVK_VAESDM_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vaesdm_funct6
-
-inductive zvk_vaesef_funct6 where | ZVK_VAESEF_VV | ZVK_VAESEF_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vaesef_funct6
-
-inductive zvk_vaesem_funct6 where | ZVK_VAESEM_VV | ZVK_VAESEM_VS
-  deriving BEq, Inhabited, Repr
-  open zvk_vaesem_funct6
-
-inductive zvabd_vabd_func6 where | VV_VABD | VV_VABDU
-  deriving BEq, Inhabited, Repr
-  open zvabd_vabd_func6
-
-inductive zvabd_vwabda_func6 where | VV_VWABDA | VV_VWABDAU
-  deriving BEq, Inhabited, Repr
-  open zvabd_vwabda_func6
-
 abbrev CountSmcntrpmf := (BitVec 64)
 
 inductive Software_Check_Code where | SWC_NO_INFO | SWC_LANDING_PAD_FAULT | SWC_SHADOW_STACK_FAULT
@@ -1291,24 +1157,6 @@ abbrev valid_misaligned_order (k_n : Int) (k_first : Int) (k_last : Int) (k_step
   k_first = 0 ∧ k_last = (k_n - 1) ∧ k_step = 1 ∨
   k_first = (k_n - 1) ∧ k_last = 0 ∧ k_step = ((- 1))
 
-inductive seed_opst where | BIST | ES16 | WAIT | DEAD
-  deriving BEq, Inhabited, Repr
-  open seed_opst
-
-abbrev Srmcfg := (BitVec 64)
-
-abbrev HpmEvent := (BitVec 64)
-
-abbrev hpmidx := Nat
-
-inductive cbie where | CBIE_ILLEGAL | CBIE_EXEC_FLUSH | CBIE_EXEC_INVAL
-  deriving BEq, Inhabited, Repr
-  open cbie
-
-inductive checked_cbop where | CBOP_ILLEGAL | CBOP_ILLEGAL_VIRTUAL | CBOP_INVAL_FLUSH | CBOP_INVAL_INVAL
-  deriving BEq, Inhabited, Repr
-  open checked_cbop
-
 inductive HartState where
   | HART_ACTIVE (_ : Unit)
   | HART_WAITING (_ : (WaitReason × instbits))
@@ -1338,10 +1186,6 @@ inductive ISA_Format where | Canonical_Lowercase | DeviceTree_ISA_Extensions
 
 inductive Register : Type where
   | hart_state
-  | mhpmcounter
-  | mhpmevent
-  | ssp
-  | srmcfg
   | satp
   | tlb
   | pma_regions
@@ -1523,10 +1367,6 @@ open Register
 
 abbrev RegisterType : Register → Type
   | .hart_state => HartState
-  | .mhpmcounter => (Vector (BitVec 64) 32)
-  | .mhpmevent => (Vector (BitVec 64) 32)
-  | .ssp => (BitVec 64)
-  | .srmcfg => (BitVec 64)
   | .satp => (BitVec 64)
   | .tlb => (Vector (Option TLB_Entry) (2 ^ 6))
   | .pma_regions => (List PMA_Region)
@@ -1766,8 +1606,6 @@ instance : Inhabited (RegisterRef RegisterType (List PMA_Region)) where
   default := .Reg pma_regions
 instance : Inhabited (RegisterRef RegisterType (Option (BitVec (if ( 64 = 32  : Bool) then 34 else 64)))) where
   default := .Reg htif_tohost_base
-instance : Inhabited (RegisterRef RegisterType (Vector (BitVec 64) 32)) where
-  default := .Reg mhpmevent
 instance : Inhabited (RegisterRef RegisterType (Vector (BitVec 64) 64)) where
   default := .Reg pmpaddr_n
 instance : Inhabited (RegisterRef RegisterType (Vector (BitVec 8) 64)) where
