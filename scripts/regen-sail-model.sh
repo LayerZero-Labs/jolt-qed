@@ -105,12 +105,8 @@ fi
 #    `lean` run, which gave smaller numbers:
 #    - is_CSR_accessible, read_CSR and write_CSR are one generated if-chain over
 #      every CSR address;
-#    - encdec_backwards and encdec_compressed_backwards are the decoder mapping
-#      over every instruction, and the two `_matches` functions are the same
-#      mapping returning a Bool; both functions that cover the 32-bit encodings also
-#      need more heartbeats;
-#    - print_rvfi_exec is a debug printer for the RVFI trace format; nothing
-#      proved here refers to it.
+#    - encdec_backwards is the decoder mapping over every 32-bit instruction, and
+#      encdec_backwards_matches is the same mapping returning a Bool.
 #    Proofs unfold the CSR chains and the mapping, so they are not split here. The
 #    follow-up is for the Sail Lean backend to split long chains into helper
 #    definitions, after which these options can go.
@@ -153,14 +149,11 @@ for path in files:
 
 # ---- b. per-declaration limits ---------------------------------------------
 LIMITS = [
-    ("SysControl", "is_CSR_accessible", [("maxRecDepth", 900)]),
-    ("ZicsrInsts", "read_CSR", [("maxRecDepth", 900)]),
-    ("ZicsrInsts", "write_CSR", [("maxRecDepth", 900)]),
-    ("InstsEnd", "encdec_backwards", [("maxRecDepth", 1450), ("maxHeartbeats", 250000)]),
-    ("InstsEnd", "encdec_backwards_matches", [("maxRecDepth", 1400), ("maxHeartbeats", 250000)]),
-    ("InstsEnd", "encdec_compressed_backwards", [("maxRecDepth", 550)]),
-    ("InstsEnd", "encdec_compressed_backwards_matches", [("maxRecDepth", 550)]),
-    ("RvfiDii", "print_rvfi_exec", [("maxHeartbeats", 1_000_000_000)]),
+    ("SysControl", "is_CSR_accessible", [("maxRecDepth", 750)]),
+    ("ZicsrInsts", "read_CSR", [("maxRecDepth", 700)]),
+    ("ZicsrInsts", "write_CSR", [("maxRecDepth", 800)]),
+    ("InstsEnd", "encdec_backwards", [("maxRecDepth", 750)]),
+    ("InstsEnd", "encdec_backwards_matches", [("maxRecDepth", 750)]),
 ]
 for module, name, options in LIMITS:
     path = root / "LeanRV64D" / f"{module}.lean"

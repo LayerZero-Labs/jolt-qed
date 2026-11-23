@@ -119,4 +119,4 @@ rewritten_files = ["LeanRV64D/RvfiDii.lean"]
 [output]
 # sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
 # followed by LeanRV64D.lean.
-tree_sha256 = "bd1616dc05eec013c8af5c111667e7a639d74f69c51aef4ca75fd2156b4dba23"
+tree_sha256 = "601f607593c4022575c6dbc6fc4ee5dd9ade0c38964df8864ba2a4c8803c5794"

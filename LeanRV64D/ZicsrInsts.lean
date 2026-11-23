@@ -233,7 +233,7 @@ def csr_access_type (op : csrop) (rd_is_x0 : Bool) (rs1_imm_is_zero : Bool) : CS
   | (.CSRRS, _, false) => CSRReadWrite
   | (.CSRRC, _, false) => CSRReadWrite
 
-set_option maxRecDepth 900 in
+set_option maxRecDepth 700 in
 def read_CSR (b__0 : (BitVec 12)) : SailM (BitVec 64) := do
   if ((b__0 == (0x301#12 : (BitVec 12))) : Bool)
   then readReg misa
@@ -806,7 +806,7 @@ def read_CSR (b__0 : (BitVec 12)) : SailM (BitVec 64) := do
                                                                                                                                                                                                                                                                                                                 (BitVec.toFormatted
                                                                                                                                                                                                                                                                                                                   b__0)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
 
-set_option maxRecDepth 900 in
+set_option maxRecDepth 800 in
 def write_CSR (b__0 : (BitVec 12)) (value : (BitVec 64)) : SailM (Result (BitVec 64) Unit) := do
   if ((b__0 == (0x301#12 : (BitVec 12))) : Bool)
   then
