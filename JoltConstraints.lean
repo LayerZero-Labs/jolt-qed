@@ -114,3 +114,5 @@ import JoltConstraints.theorems.WholeRun.Elf
 import JoltConstraints.theorems.WholeRun.Halt
 import JoltConstraints.theorems.WholeRun.CodeInv
 import JoltConstraints.theorems.WholeRun.Top
+
+import JoltConstraints.ConstraintGen.Equiv
