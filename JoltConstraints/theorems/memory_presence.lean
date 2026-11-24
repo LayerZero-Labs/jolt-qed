@@ -50,23 +50,6 @@ private theorem backing_end_ge_heap_arithmetic (base lowest heap words : Nat)
     (rounded : (heap - lowest) / 8 ≤ words) :
     heap ≤ base + (lowest + 8 * words - base) := by omega
 
-private theorem checked_ram_domain_geometry (lowest heap : Nat) (segments : Bool) (k : Nat)
-    (checked : (do
-      guard (heap ≤ 2^64 - 8 && heap % 8 == 0)
-      guard segments
-      let total ← MemoryLayout.checkedSub heap lowest
-      let words := (total / 8).nextPowerOfTwo
-      guard (words < 2^64 && lowest + 8 * words ≤ 2^64)
-      pure words : Option Nat) = some k) :
-    heap % 8 = 0 ∧ lowest ≤ heap ∧ (heap - lowest) / 8 ≤ k := by
-  simp only [bind_some_iff] at checked
-  obtain ⟨_, heapChecked, _, _, total, sub, _, _, result⟩ := checked
-  have heapFacts := (Option.guard_eq_some' _).mp heapChecked
-  simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at heapFacts
-  obtain ⟨rfl, lowBelow⟩ := checkedSub_some sub
-  cases result
-  exact ⟨heapFacts.2, lowBelow, JoltConstraints.Soundness.nextPowerOfTwo_ge _⟩
-
 private theorem backing_end_ge_heap_option (base lowest heap : Nat) (domain : Option Nat)
     (lowestAligned : lowest % 8 = 0) (k : Nat) (present : domain = some k)
     (geometry : heap % 8 = 0 ∧ lowest ≤ heap ∧ (heap - lowest) / 8 ≤ k) :
@@ -90,7 +73,11 @@ theorem heap_end_le_ram_backing_end (device : JoltDevice) (config : MemoryConfig
     device.memory_layout.heap_end.toNat ≤ JoltISA.Mmu.ram_backing_end device := by
   obtain ⟨k, checked⟩ := Option.isSome_iff_exists.mp (new_max_ram_k config _ built)
   exact backing_end_ge_heap_option _ _ _ _ (new_lowest_address_aligned config _ built)
-    k checked (checked_ram_domain_geometry _ _ _ k checked)
+    k checked (by
+      obtain ⟨heapAligned, below, sizeIs, _⟩ := max_ram_k_spec _ k checked
+      refine ⟨heapAligned, below, ?_⟩
+      rw [sizeIs]
+      exact Nat.le_nextPowerOfTwo _)
 
 /-- Device readability depends only on layout, not memory contents or panic.
 For example, an output remains readable after another output byte is stored. -/

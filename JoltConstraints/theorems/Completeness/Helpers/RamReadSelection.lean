@@ -27,6 +27,7 @@ theorem HonestTrace.preState_layout {joltInstance : JoltInstance SourceInstructi
   unfold JoltInstance.validate_inputs at valid
   rw [initialLayout] at valid
   simp only [Bool.and_eq_true, decide_eq_true_eq] at valid
+  have valid := valid.1
   rw [sameLayout]
   exact ⟨_, initialLayout, valid.1.1⟩
 
@@ -96,15 +97,14 @@ theorem bind_ok_first {ε σ α β : Type} (first : EStateM ε σ α) (next : α
     cases ran
 
 /-- A doubleword load that returns at an address `address` at or above `RAM_START_ADDRESS`
-read below the layout's `heap_end`: Jolt's tracer asserts that the start address is below
-it.
-For example, a load at `heap_end` itself fails the assertion.
+read below the padded RAM backing end.
+For example, a load in heap padding can succeed before the backing ends.
 See jolt/tracer/src/emulator/mmu.rs (`Mmu::load_doubleword`, `assert_effective_address`)
-at c6703570. -/
-theorem JoltISA.Mmu.load_doubleword_below_heap_end (address : BitVec 64) (state : SailJoltState)
+at `ff6fc6568`. -/
+theorem JoltISA.Mmu.load_doubleword_below_ram_backing_end (address : BitVec 64) (state : SailJoltState)
     (inRam : JoltISA.RAM_START_ADDRESS ≤ address.toNat)
     (loaded : ∃ result after, JoltISA.Mmu.load_doubleword address state = .ok result after) :
-    address.toNat < state.jolt_device.memory_layout.heap_end.toNat := by
+    address.toNat < JoltISA.Mmu.ram_backing_end state.jolt_device := by
   obtain ⟨result, after, loaded⟩ := loaded
   unfold JoltISA.Mmu.load_doubleword at loaded
   simp only [ite_eq_left inRam] at loaded
@@ -117,15 +117,14 @@ theorem JoltISA.Mmu.load_doubleword_below_heap_end (address : BitVec 64) (state 
     · cases loaded
 
 /-- A doubleword store that returns at an address `address` at or above
-`RAM_START_ADDRESS` wrote below the layout's `heap_end`: Jolt's tracer asserts that the
-start address is below it.
-For example, a store at `heap_end` itself fails the assertion.
+`RAM_START_ADDRESS` wrote below the padded RAM backing end.
+For example, an unprotected store in heap padding can succeed.
 See jolt/tracer/src/emulator/mmu.rs (`Mmu::store_doubleword`, `assert_effective_address`)
-at c6703570. -/
-theorem JoltISA.Mmu.store_doubleword_below_heap_end (address value : BitVec 64)
+at `ff6fc6568`. -/
+theorem JoltISA.Mmu.store_doubleword_below_ram_backing_end (address value : BitVec 64)
     (state : SailJoltState) (inRam : JoltISA.RAM_START_ADDRESS ≤ address.toNat)
     (stored : ∃ result after, JoltISA.Mmu.store_doubleword address value state = .ok result after) :
-    address.toNat < state.jolt_device.memory_layout.heap_end.toNat := by
+    address.toNat < JoltISA.Mmu.ram_backing_end state.jolt_device := by
   obtain ⟨result, after, stored⟩ := stored
   unfold JoltISA.Mmu.store_doubleword at stored
   simp only [ite_eq_left inRam] at stored
@@ -135,12 +134,12 @@ theorem JoltISA.Mmu.store_doubleword_below_heap_end (address value : BitVec 64)
     · rename_i valid
       simp only [JoltISA.Mmu.effective_address_ok, ite_eq_right (Nat.not_lt.mpr inRam),
         ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at valid
-      exact valid.2
+      exact valid.1
     · cases stored
 
 /-- An LD that retires ran its doubleword load at `base + imm` without an error.
 For example, `LD x5, 8(x6)` with `x6 = 0x80000000` ran the load at `0x80000008`.
-See jolt/tracer/src/instruction/ld.rs (`LD::exec`) at c6703570. -/
+See jolt/tracer/src/instruction/ld.rs (`LD::exec`) at `ff6fc6568`. -/
 theorem execInstr_load_access (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
     (base : JoltISA.Src) (imm : BitVec 64) (state after : SailJoltState)
     (runs : JoltISA.execInstr (.LD faultClass dst base imm) state =
@@ -155,7 +154,7 @@ theorem execInstr_load_access (faultClass : JoltISA.LoadFaultClass) (dst : JoltI
 
 /-- An SD that retires ran its doubleword store at `base + imm` without an error.
 For example, `SD x5, 8(x6)` with `x6 = 0x80000000` ran the store at `0x80000008`.
-See jolt/tracer/src/instruction/sd.rs (`SD::exec`) at c6703570. -/
+See jolt/tracer/src/instruction/sd.rs (`SD::exec`) at `ff6fc6568`. -/
 theorem execInstr_store_access (base value : JoltISA.Src) (imm : BitVec 64)
     (state after : SailJoltState)
     (runs : JoltISA.execInstr (.SD base value imm) state = .ok (.Retire_Success ()) after) :
@@ -191,7 +190,7 @@ theorem HonestTrace.floor_load_properties {joltInstance : JoltInstance SourceIns
         TraceWitness.capturedDestinationValue dst (trace.rows[i]'ht).postState = 0) ∧
       (JoltISA.RAM_START_ADDRESS ≤ (ea - (ea &&& offset)).toNat →
         (ea - (ea &&& offset)).toNat <
-          (trace.rows[i]'ht).preState.jolt_device.memory_layout.heap_end.toNat) := by
+          JoltISA.Mmu.ram_backing_end (trace.rows[i]'ht).preState.jolt_device) := by
   obtain ⟨config, built, aboveEight⟩ := trace.preState_layout i ht
   have facts := floor_load_access _ faultClass dst base imm mask fault selected
     (trace.row i ht).runtimeAdvice _ _ (trace.row i ht).executes
@@ -206,14 +205,14 @@ theorem HonestTrace.floor_load_properties {joltInstance : JoltInstance SourceIns
     rw [zero] at access
     simp only [bind, EStateM.bind,
       JoltISA.Mmu.load_doubleword_zero _ config built aboveEight] at access
-    exact captured_zero_retire dst _ _ access
+    cases access
   · intro inRam
     rw [recorded] at inRam ⊢
-    exact JoltISA.Mmu.load_doubleword_below_heap_end _ _ inRam
+    exact JoltISA.Mmu.load_doubleword_below_ram_backing_end _ _ inRam
       (bind_ok_first _ _ _ _ _ facts.2)
 
 /-- A retired floor store records a nonzero aligned doubleword, and writes below
-`heap_end` when the recorded address is in RAM (at or above `RAM_START_ADDRESS`); for
+the padded RAM backing end when the recorded address is in RAM (at or above `RAM_START_ADDRESS`); for
 example, StoreB at ea 9 records 8, while a store into word zero cannot retire.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`, `addresses`)
 at `c6703570`. -/
@@ -231,7 +230,7 @@ theorem HonestTrace.floor_store_properties {joltInstance : JoltInstance SourceIn
     (ea - (ea &&& offset)).toNat % 8 = 0 ∧ ea - (ea &&& offset) ≠ 0 ∧
       (JoltISA.RAM_START_ADDRESS ≤ (ea - (ea &&& offset)).toNat →
         (ea - (ea &&& offset)).toNat <
-          (trace.rows[i]'ht).preState.jolt_device.memory_layout.heap_end.toNat) := by
+          JoltISA.Mmu.ram_backing_end (trace.rows[i]'ht).preState.jolt_device) := by
   obtain ⟨config, built, aboveEight⟩ := trace.preState_layout i ht
   have facts := floor_store_access _ base value imm mask fault selected
     (trace.row i ht).runtimeAdvice _ _ (trace.row i ht).executes
@@ -251,7 +250,7 @@ theorem HonestTrace.floor_store_properties {joltInstance : JoltInstance SourceIn
     cases access
   · intro inRam
     rw [recorded] at inRam ⊢
-    exact JoltISA.Mmu.store_doubleword_below_heap_end _ _ _ inRam
+    exact JoltISA.Mmu.store_doubleword_below_ram_backing_end _ _ _ inRam
       (bind_ok_first _ _ _ _ _ facts.2)
 
 /-- Each recorded RAM address lies on the doubleword grid used by the RAM witness.
@@ -323,19 +322,17 @@ theorem HonestTrace.ram_accesses_valid {joltInstance : JoltInstance SourceInstru
       omega
     · cases accesses
 
-/-- Every RAM address the honest trace records (`TraceRow.ram_address`) at or above
-`RAM_START_ADDRESS` is below the starting layout's `heap_end`: each LD, SD and floor row
-retired its doubleword access, and Jolt's tracer asserts that an access in RAM starts
-below `heap_end`.
-For example, an SD at `heap_end - 8` can be recorded, but no row records `heap_end`.
-See jolt/tracer/src/emulator/mmu.rs (`assert_effective_address`) and
-jolt/tracer/src/instruction/floor_access.rs (`addresses`) at c6703570. -/
-theorem HonestTrace.ram_address_below_heap_end {joltInstance : JoltInstance SourceInstruction}
+/-- Every RAM address the honest trace records at or above `RAM_START_ADDRESS`
+is below the starting layout's padded RAM backing end.
+For example, a doubleword in heap padding can be recorded when its access retires.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`assert_effective_address`). -/
+theorem HonestTrace.ram_address_below_ram_backing_end {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (inTrace : i < trace.rows.size) (address : Nat)
     (touches : (trace.rows[i]'inTrace).ram_address = some address)
     (inRam : JoltISA.RAM_START_ADDRESS ≤ address) :
-    address < trace.initialState.jolt_device.memory_layout.heap_end.toNat := by
+    address < JoltISA.Mmu.ram_backing_end trace.initialState.jolt_device := by
+  change address < JoltISA.RAM_START_ADDRESS + trace.initialState.jolt_device.memory_layout.ram_size
   rw [← (trace_preState_ioSame trace i inTrace).1]
   have runs := (trace.row i inTrace).executes
   dsimp only [HonestTrace.row] at runs
@@ -344,12 +341,12 @@ theorem HonestTrace.ram_address_below_heap_end {joltInstance : JoltInstance Sour
   · rename_i faultClass dst base imm isLoad
     cases touches
     rw [withRuntimeAdvice_load _ faultClass dst base imm isLoad] at runs
-    exact JoltISA.Mmu.load_doubleword_below_heap_end _ _ inRam
+    exact JoltISA.Mmu.load_doubleword_below_ram_backing_end _ _ inRam
       (execInstr_load_access faultClass dst base imm _ _ runs)
   · rename_i base value imm isStore
     cases touches
     rw [withRuntimeAdvice_store _ base value imm isStore] at runs
-    exact JoltISA.Mmu.store_doubleword_below_heap_end _ _ _ inRam
+    exact JoltISA.Mmu.store_doubleword_below_ram_backing_end _ _ _ inRam
       (execInstr_store_access base value imm _ _ runs)
   · rename_i faultClass dst base imm fault selected
     cases touches

@@ -307,3 +307,50 @@ This admits actual accesses in heap padding rather than excluding them through a
 `new_heap_end_ge` retains its statement and follows the pinned aligned heap-end construction.
 These sizing proofs are undergoing their targeted compilation check; no completeness result is claimed for them yet.
 `Soundness/Layer7/ProverAccepts.verifier_ram_image_end_bounded` retains its statement and obtains the maximum from the new checked-domain specification.
+
+Local commit `bdc29d7` records the checked explicit-halt, exact-domain padding and code-admission slice.
+The targeted RAM sizing build now passes `Completeness/Helpers/VerifierSizes`, `Soundness/Layer3/Layout` and their changed initialization/geometry dependencies.
+The verifier-sizes helper module took approximately 16 seconds; individual declaration times remain unmeasured.
+The first proof encountered a kernel recursion limit while transporting an equality through the full checked layout expression.
+Factoring the backing-end arithmetic over a natural-number base, an abstract `Option Nat` domain and a successful-domain certificate resolved that failure without raising a limit.
+The resulting `highest_ram_slot_lt_maximum` uses actual traced RAM bounds and includes padded RAM accesses.
+`witness_params_ram_maximum` retains its prior existential maximum and prover-size inequality with no new hypothesis.
+The independent reviewer is checking this sizing slice against the pinned Jolt implementation.
+
+The next detached integration check builds `JoltConstraints` through the required wrapper, with log `.constraints-repin-integration2.log` and marker `.constraints-repin-integration2.done`.
+This is an integration diagnostic; the obsolete flag-word soundness and whole-run I/O consumers have not yet been migrated, so a passing full build is not claimed.
+
+## Independent sizing review and halt replay work
+
+The fresh `ram_sizing_readback` reviewer completed a code-only read-back before receiving the intended Jolt contract.
+It checked `maxRamSize`, `max_ram_k_spec`, `highest_ram_slot_lt_maximum` and `witness_params_ram_maximum`, including their initialization, execution and prover-size dependencies.
+The reviewed SHA256s were `5a29eebc7a98dfc30c71b545bf7e789f21c23e61537344e810f96e9b8deb3106` for `translation/verifier_sizes.lean`, `b9ed9111e6632c0d33dfc7ce18c892eb74c8db0ca587811e122fa4c04859e5c7` for `theorems/layout_facts.lean`, and `e8f7b3037eee320b234d5000f44a48af07935f06079f633d8165d2b420327386` for `Completeness/Helpers/VerifierSizes.lean`.
+The subsequent comparison against `ff6fc656813d950565c9f6e1258b78bdaf0e60e8` found no sizing discrepancy or added heap-only-access premise.
+The reviewer noted that riscv-tests/tohost mode can allocate less backing than the normal modeled guest; this does not invalidate the maximum-domain upper bound.
+This was a read-only source review, not a separate build or axiom check.
+
+The full `.constraints-repin-integration2.log` still fails, primarily on old device arrays, stable-stall conclusions and primitive frame interfaces.
+The next slice repairs the shared interfaces before updating their remaining callers.
+
+- `Soundness/Layer5/TapeDeviceFrame.lean`: the run/trace `device_relation` hypotheses change from preservation by device-byte stores to compatibility with `recordHalt`'s two panic updates.
+- Their `final_device_same` conclusions retain the existing layout-only `JoltIOSetupFrame.Same` relation.
+- Their `final_outputs_fit_layout` conclusions replace the deleted final device output-array size by the size of `finalDevice.outputsOf finalState.sail.mem`, retaining the initial-layout capacity bound.
+- `Soundness/Layer5/MisaFrame.lean`: public statements are unchanged; the proof now covers `execHalt` and shared-memory initialization.
+- `Completeness/Helpers/TracePCProofHelpers.lean`: public statements are unchanged; the PC frame now covers the shared halt body and `recordHalt`.
+- `Soundness/Layer5/RamInitialization.lean`: `initialRamWord_eq_ram_doubleword` retains its statement and reads the shared initial byte map directly; two unused private overlay-construction proofs are deleted.
+- `theorems/DeviceFrame.lean`: new `store_doubleword_relation` factors the existing device frame over any reflexive/transitive relation that permits Sail-state updates.
+  `store_doubleword_keeps_device` retains its statement and becomes an instance of this shared proof.
+- `theorems/program_facts.lean`: new `pc_map_ok_halt_terminal` derives a zero remaining-row count from PC-map admission, row membership and an explicit halt classifier; its targeted module build passed in approximately 19 seconds.
+- `theorems/execution_conditions.lean`: `HonestTrace.Terminated` retains nonemptiness, the source boundary and repeated PC, replacing `selfJumpRepeats = true` by an existential halt kind, the post-state's recorded kind and its corresponding panic Boolean.
+  `HonestTrace.terminated` retains its theorem signature and is being reproved from this certificate.
+  The new `execHalt_end` and `HonestTrace.halt_row` supply the local execution and accepted-source-boundary facts; the primitive halt fact is a candidate to move into JoltBytecode.
+- `Soundness/Layer7/TapeRebuild.lean`: `rebuild_stops` and `rebuild_runs_until_stop` replace `StableStall` by `Halts`, exactly as their original/replayed trace certificates now require.
+  `rebuild_matches_outputs` retains its signature and uses agreement on shared memory as well as the final device.
+  A shared observation lemma factors the device/memory agreement proofs through the same tape/destination replacement relation.
+
+The first targeted frame check passed `TapeDeviceFrame`, `MisaFrame` and `TracePCProofHelpers` (approximately 29, 28 and 34 seconds as parallel modules).
+The initial RAM-word proof then needed the existing `witness_domain` import for the lowest-address identity; that repair is in the next check.
+`store_doubleword_relation` and its unchanged device corollary pass their isolated module build.
+The halt certificates and tape-replay migration are still awaiting compilation, so their proofs are not reported complete.
+The next detached check is `.constraints-repin-halt-replay2.log`, with marker `.constraints-repin-halt-replay2.done`.
+The three flag-word restrictions, whole-run I/O deletion and two RAM-history completeness proofs remain open.

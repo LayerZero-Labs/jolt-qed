@@ -473,6 +473,36 @@ theorem new_max_ram_k (config : MemoryConfig) (layout : MemoryLayout)
   apply Option.isSome_iff_exists.mpr
   exact ⟨_, by assumption⟩
 
+private theorem checked_ram_domain_spec (lowest heap : Nat) (segments : Bool) (k : Nat)
+    (checked : (do
+      guard (heap ≤ 2^64 - 8 && heap % 8 == 0)
+      guard segments
+      let total ← MemoryLayout.checkedSub heap lowest
+      let words := (total / 8).nextPowerOfTwo
+      guard (words < 2^64 && lowest + 8 * words ≤ 2^64)
+      pure words : Option Nat) = some k) :
+    heap % 8 = 0 ∧ lowest ≤ heap ∧
+      k = ((heap - lowest) / 8).nextPowerOfTwo ∧ lowest + 8 * k ≤ 2^64 := by
+  simp only [bind_some_iff] at checked
+  obtain ⟨_, heapChecked, _, _, total, sub, _, domainChecked, result⟩ := checked
+  have heapFacts := (Option.guard_eq_some' _).mp heapChecked
+  have domainFacts := (Option.guard_eq_some' _).mp domainChecked
+  simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at heapFacts domainFacts
+  obtain ⟨rfl, lowBelow⟩ := checkedSub_some sub
+  cases result
+  exact ⟨heapFacts.2, lowBelow, rfl, domainFacts.2⟩
+
+/-- An accepted maximum RAM domain has aligned heap bounds and a nonwrapping end.
+For example, an end equal to `2^64` is allowed, while a larger end is rejected.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::max_ram_k`). -/
+theorem max_ram_k_spec (layout : MemoryLayout) (k : Nat)
+    (checked : layout.max_ram_k? = some k) :
+    layout.heap_end.toNat % 8 = 0 ∧
+      layout.get_lowest_address.toNat ≤ layout.heap_end.toNat ∧
+      k = ((layout.heap_end.toNat - layout.get_lowest_address.toNat) / 8).nextPowerOfTwo ∧
+      layout.get_lowest_address.toNat + 8 * k ≤ 2^64 :=
+  checked_ram_domain_spec _ _ _ k checked
+
 -- The bootstrap device keeps its layout and starts with a false panic claim.
 theorem init_state_jolt_device (entryAddress : BitVec 64) (ram : Array (BitVec 8))
     (device : JoltDevice) (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig) :

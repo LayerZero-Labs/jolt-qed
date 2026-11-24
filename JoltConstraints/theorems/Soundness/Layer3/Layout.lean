@@ -35,7 +35,7 @@ theorem ram_domain_fits (context : ConstraintContext joltInstance privateInputs 
   unfold JoltInstance.public_io at publicIo
   obtain ⟨layout, hasLayout, sameIo⟩ := Option.bind_eq_some_iff.mp publicIo
   have layoutEq : layout = context.io.memory_layout :=
-    congrArg JoltDevice.memory_layout (Option.some.inj sameIo)
+    congrArg JoltPublicIo.memory_layout (Option.some.inj sameIo)
   have sizes := context.ramSizeBounds
   unfold JoltInstance.ram_size_in_bounds JoltInstance.verifier_ram_bounds at sizes
   rw [hasLayout] at sizes
@@ -64,7 +64,7 @@ theorem public_io_words_fit_ram
   unfold JoltInstance.public_io at publicIo
   obtain ⟨layout, hasLayout, sameIo⟩ := Option.bind_eq_some_iff.mp publicIo
   have layoutEq : layout = context.io.memory_layout :=
-    congrArg JoltDevice.memory_layout (Option.some.inj sameIo)
+    congrArg JoltPublicIo.memory_layout (Option.some.inj sameIo)
   have sizes := context.ramSizeBounds
   unfold JoltInstance.ram_size_in_bounds JoltInstance.verifier_ram_bounds at sizes
   rw [hasLayout] at sizes
