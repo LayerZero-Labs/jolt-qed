@@ -104,6 +104,18 @@ theorem ram_word_peripheral_checks
   unfold ramLowestAddress
   omega
 
+/-- Every byte of an aligned witness word rounds to that word and its remapped index.
+For example, byte seven of witness word three still has remapped index three. -/
+theorem ram_word_byte_geometry (layout : MemoryLayout)
+    (aligned : layout.get_lowest_address.toNat % 8 = 0)
+    (index offset : Nat) (within : offset < 8) :
+    (ramLowestAddress layout + 8 * index + offset) / 8 * 8 =
+        ramLowestAddress layout + 8 * index ∧
+      (ramLowestAddress layout + 8 * index - layout.get_lowest_address.toNat) / 8 = index := by
+  rw [MemoryLayout.get_lowest_address_toNat] at aligned ⊢
+  unfold ramLowestAddress at *
+  constructor <;> omega
+
 /-- A protected byte of an admitted word makes the public C mask one.
 The execution code interval must equal the interval computed from bytecode.
 For example, an input byte and any byte of a canary-overlapping word are protected
@@ -119,16 +131,7 @@ theorem protected_byte_mask_one
       (ramLowestAddress layout + 8 * index + offset) = true) :
     ramWriteProtectedMask (F := F) bytecode layout index = 1 := by
   have lowIs := MemoryLayout.get_lowest_address_toNat layout
-  have floorIs : (ramLowestAddress layout + 8 * index + offset) / 8 * 8 =
-      ramLowestAddress layout + 8 * index := by
-    rw [lowIs] at aligned
-    unfold ramLowestAddress at *
-    omega
-  have indexIs : (ramLowestAddress layout + 8 * index - layout.get_lowest_address.toNat) / 8 =
-      index := by
-    rw [lowIs]
-    unfold ramLowestAddress
-    omega
+  obtain ⟨floorIs, indexIs⟩ := ram_word_byte_geometry layout aligned index offset within
   simp only [Mmu.protected_byte, layoutIs, codeIs, floorIs, indexIs,
     JoltDevice.is_input, JoltDevice.is_trusted_advice, JoltDevice.is_untrusted_advice,
     Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at protects
@@ -139,6 +142,38 @@ theorem protected_byte_mask_one
   simp only [STACK_CANARY_SIZE] at protects ⊢
   clear floorIs indexIs
   omega
+
+/-- A word selected by the verifier's public C mask has every byte MMU-protected.
+For example, a mask-selected input word preserves its eight initialized bytes.
+The checked layout supplies the input/advice alignment used by the byte guard. -/
+theorem mask_one_protected_byte
+    {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (layout : MemoryLayout)
+    (config : MemoryConfig) (built : MemoryLayout.new config = some layout)
+    (state : SailJoltState) (layoutIs : state.jolt_device.memory_layout = layout)
+    (codeIs : state.codeRegion = ramCodeRegion bytecode layout)
+    (index offset : Nat) (within : offset < 8)
+    (masked : ramWriteProtectedMask (F := F) bytecode layout index = 1) :
+    Mmu.protected_byte state (ramLowestAddress layout + 8 * index + offset) = true := by
+  have aligned := new_lowest_address_aligned config layout built
+  have inputAligned := new_input_word_aligned config layout built
+  have low := (new_io_ordered config layout built).1
+  obtain ⟨_, _, _, _, _, _, _, trustedAligned, untrustedAligned, _⟩ :=
+    new_advice_regions config layout built
+  obtain ⟨floorIs, indexIs⟩ := ram_word_byte_geometry layout aligned index offset within
+  obtain ⟨outputAfter, inputMultiple⟩ := new_outputs_after_inputs config layout built
+  have inputEnd := new_input_end_eq_output_start config layout built
+  unfold ramWriteProtectedMask at masked
+  dsimp only at masked
+  split at masked
+  · rename_i selected
+    simp only [Mmu.protected_byte, layoutIs, codeIs, floorIs, indexIs,
+      JoltDevice.is_input, JoltDevice.is_trusted_advice, JoltDevice.is_untrusted_advice,
+      Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq]
+    rw [MemoryLayout.get_lowest_address_toNat] at aligned inputAligned low selected
+    unfold ramLowestAddress
+    simp only [STACK_CANARY_SIZE] at selected ⊢
+    omega
+  · exact False.elim (zero_ne_one masked)
 
 /-- The protected-increment claim supplies the MMU's actual protected-value check.
 The selected word agrees with shared memory, and the stored word is the constrained
