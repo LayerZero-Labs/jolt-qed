@@ -31,7 +31,7 @@ them unable to fail, the model reflects that, and the unrestricted proof is
 established. This is not a verifier check.
 
 For every private input and relaxed execution prefix, the next attempted
-VirtualHostIO row executes without failing. Like `TracerAddressChecks`, it
+VirtualHostIO row executes without failing. This restriction
 depends on the program's execution, not on a witness. -/
 def JoltInstance.HostCallsSucceed (joltInstance : JoltInstance SourceInstruction) : Prop :=
   ∀ (privateInputs : JoltPrivateInputs)

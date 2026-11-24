@@ -29,38 +29,6 @@ namespace JoltConstraints.Soundness
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
-/-- The tracer's address checks for a ready load row, at its accessed doubleword.
-For example, VirtualLoadH at `ea = 10` checks read permission at 8 through 15
-below RAM. -/
-theorem LoadRow.address_checks
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (restricted : joltInstance.TracerAddressChecks)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (next : Fin run.bytecode.size) (pre : SailJoltState) (ready : run.NextStep next pre)
-    {width : MemoryWidth} {destination : Dst} {base : Src} {imm : BitVec 64}
-    (row : LoadRow run.bytecode[next].instruction width destination base imm) :
-    DoublewordAddressChecks pre.jolt_device (width.accessed (sourceValue base pre + imm)) false := by
-  have checked := restricted privateInputs run next pre ready
-  obtain ⟨_, _, same⟩ := row
-  rw [same] at checked
-  cases width <;> exact checked
-
-/-- The tracer's address checks for a ready store row, at its accessed doubleword.
-For example, VirtualStoreB at `ea = 11` checks write permission at 8 through 15
-below RAM. -/
-theorem StoreRow.address_checks
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (restricted : joltInstance.TracerAddressChecks)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (next : Fin run.bytecode.size) (pre : SailJoltState) (ready : run.NextStep next pre)
-    {width : MemoryWidth} {base value : Src} {imm : BitVec 64}
-    (row : StoreRow run.bytecode[next].instruction width base value imm) :
-    DoublewordAddressChecks pre.jolt_device (width.accessed (sourceValue base pre + imm)) true := by
-  have checked := restricted privateInputs run next pre ready
-  obtain ⟨_, same⟩ := row
-  rw [same] at checked
-  cases width <;> exact checked
-
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
   (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
