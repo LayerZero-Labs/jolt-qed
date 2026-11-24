@@ -150,6 +150,12 @@ theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
   cases h
   rfl
 
+private theorem recordHalt_rule (kind : JoltHaltKind) :
+    Preserves (modify (JoltISA.recordHalt kind)) := by
+  intro s t value runs
+  cases runs
+  rfl
+
 /-- A doubleword load preserves the PC because it preserves the entire state;
 for example, the word read by LoadB cannot change the instruction address.
 Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::load_doubleword`) at `c6703570`. -/
@@ -175,6 +181,7 @@ macro "jolt_pc_auto" : tactic => `(tactic|
   | exact pure_rule _
   | exact throw_rule _
   | exact get_rule
+  | exact recordHalt_rule _
   | exact load_doubleword_rule _
   | exact store_doubleword_rule _ _
   | exact lift_rule (PCFrame.read_rule _)
@@ -207,7 +214,7 @@ theorem ordinary_instruction (instr : Instr)
   all_goals try exact False.elim (hload _ _ _ _ rfl)
   all_goals try exact False.elim (hstore _ _ _ rfl)
   all_goals try exact False.elim (hhost rfl)
-  all_goals simp only [execInstr]
+  all_goals simp only [execInstr, execHalt]
   all_goals try jolt_pc_auto
 
 end JoltPCFrame

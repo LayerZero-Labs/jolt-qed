@@ -354,3 +354,67 @@ The initial RAM-word proof then needed the existing `witness_domain` import for 
 The halt certificates and tape-replay migration are still awaiting compilation, so their proofs are not reported complete.
 The next detached check is `.constraints-repin-halt-replay2.log`, with marker `.constraints-repin-halt-replay2.done`.
 The three flag-word restrictions, whole-run I/O deletion and two RAM-history completeness proofs remain open.
+
+## Halt replay continuation
+
+The `.constraints-repin-halt-replay2.log` failures in `execution_conditions`, `RamInitialization` and the tape replay primitives were inspected and repaired.
+The isolated builds of `execution_conditions` and `RamInitialization` now pass (approximately 9 and 20 seconds).
+`HonestTrace.terminated` now derives its retained source-boundary and repeated-PC facts and its new halt-kind certificate from the actual final halt execution.
+The implementation packages the dependent runtime-advice execution existential before selecting the halt constructor, avoiding an invalid dependent rewrite.
+The initial RAM-word proof uses the shared byte map and the existing lowest-address identity directly, without device-overlay reconstruction.
+
+`DeviceFrame.store_raw_map` is a new shared commutation lemma parameterized by the state transformation, preservation of the device, memory and protection checks, and commutation with memory replacement.
+`DeviceFrame.store_bytes_map` derives commutation for a list of byte stores from single-store commutation.
+Both are candidates to move into JoltBytecode.
+The isolated `DeviceFrame` build passes (approximately 2 seconds).
+`WholeRun/NonInterference.store_raw_withReg` and `TapeRebuild.swap_store_raw` now instantiate this common argument, and their byte-fold lemmas instantiate the same fold proof.
+Their existing statements are unchanged.
+This removes the duplicated raw-store branch proof and avoids reducing a guard while retaining an incompatible Boolean decidability instance.
+
+`WholeRun/Blocks.lean` retains all its statements and derives the final source boundary and repeated PC from `HonestTrace.halt_row` rather than projecting the former stable-stall certificate.
+The renamed `Completeness/NextUnexpandedPCEqLookupIfJump.lean` now proves the new row-14 polynomial, replacing the old ShouldJump guard by the actual Jump flag.
+Its public theorem retains the honest-trace, RAM-fit, prover-padding and bytecode-domain hypotheses.
+The old conclusion is `nextUnexpandedPCEqLookupIfShouldJump (honestWitness params trace)`; the new conclusion is `nextUnexpandedPCEqLookupIfJump (honestWitness params trace)`.
+For a nonfinal real row, the no-earlier-halt execution certificate reduces a Jump row to JAL/JALR.
+For the final real row, either halt kind has lookup result zero and the successor column is zero, including when the real trace exactly fills the witness domain.
+The old proof incorrectly relied on a strict padding inequality; that reliance is removed.
+These consumer changes await their compilation check.
+
+A fresh read-only reviewer, `halt_certificate_readback`, is independently reading the changed terminal certificate and its dependencies before receiving the intended contract.
+Its result remains pending.
+The next detached check is `.constraints-repin-halt-replay3.log`, with marker `.constraints-repin-halt-replay3.done`.
+It builds tape replay, register replacement, whole-run block construction, row-14 completeness, the initialization/frame modules, the halt certificates and generator equivalences through the required locked wrapper.
+This is a targeted integration check, not the final `JoltConstraints` acceptance check.
+The whitespace and forbidden-diff scans passed before starting it.
+No new admission, forbidden decision procedure, axiom or resource-limit increase was added.
+The three obsolete flag-word restrictions, whole-run duplicate I/O deletion and both RAM-history completeness proofs remain unfinished.
+The earlier harness-scanner question remains unanswered; its unanchored `decide +kernel` alternative would reject removal of the two baseline occurrences in the obsolete device-memory obstruction file.
+
+## Checked halt replay slice and terminal sizing migration
+
+The `.constraints-repin-halt-replay3.log` check passes `TapeRebuild`, `WholeRun/NonInterference`, `RamInitialization`, `TapeDeviceFrame`, `MisaFrame`, `TracePCProofHelpers`, `execution_conditions` and generator equivalences.
+The replay and noninterference modules took approximately 20 and 69 seconds under the parallel build; the latter recompiled multiple dependencies.
+Declaration timings are not separately measured.
+The only failures were the block initializer's obsolete Option unfolding and an explicit Fin-to-Nat projection needed by row 14's nonjump flag proof.
+Both are repaired for the next targeted check.
+
+The fresh `halt_certificate_audit` reviewer recorded a blind read-back of `execHalt_end`, `HonestTrace.halt_row`, `HonestTrace.Terminated`, `HonestTrace.terminated` and `pc_map_ok_halt_terminal` before receiving their intended contract.
+The reviewed working-file SHA256s were `b61e35e997cd1ecfb904a719fa6bfafbf64b648711f7eeb943fb11a00efbbafe` for `execution_conditions.lean`, `b598940d5861b340007d22fe6d8dcd8d5125aa878608511133b6e38c1bd745d5` for `program_facts.lean`, and `faf62fe85ec78866e04209226c06c806aaed4227c496ba6305000edcc44dd2cc` for `translation/honest_trace.lean`.
+After comparison against `Cpu::halt`, `Cpu::tick` and `BytecodePCMapper::try_new` at `ff6fc6568`, the reviewer found no blocking mismatch in this honest-trace certificate slice.
+It explicitly did not review a proof of public-claim binding or constraint soundness.
+The frozen JoltBytecode model sets the panic bit eagerly in `recordHalt`; Jolt's tracer instead sets the extracted device bit from `cpu.halted` in `Emulator::take_jolt_device` (`tracer/src/emulator/mod.rs:137–146`).
+The final extracted observations agree, but intermediate device-bit timing is an abstraction and is not represented literally.
+The certificate conclusions do not expose the link write, although the primitive executes it, and completion/nonemptiness remain fields of `HonestTrace` rather than a universal termination claim.
+
+`Soundness/Assumptions.lean` now removes `terminationThenStall`, `panicStoresOne`, `claimsNoPanic` and `noMaxLengthTrace` from `JoltInstance.TemporaryRestrictions` and removes the unused `NoMaxLengthTrace` definition.
+The remaining fields are `tracerAddressChecks` and `hostCallsSucceed`.
+The old flag-word restriction definitions and callers still exist in their obsolete modules; their replacement is unfinished and the full library still fails.
+No claim of unrestricted soundness is made yet.
+
+In `Soundness/Layer7/ProverAccepts.lean`, the old `represented_trace_ends_in_jump` conclusion (`trace.rows.size = 0 ∨ dimensions.ends_in_jump = true`) is replaced by `relaxed_trace_ends_in_halt` (`trace.rows.size ≠ 0 ∧ dimensions.ends_in_halt = true`).
+The new theorem needs only the completed relaxed trace, whose existing certificate supplies these facts; the old represented-branch replay helper becomes unused and is deleted.
+`checked_trace_length_fits` retains its rows/domain/public-maximum/floor arguments and conclusion but drops `rows ≠ 2 ^ Nat.log2 maximum.toNat`.
+It now rounds `rows` instead of `rows + 1`, exactly as the pinned prover does.
+`Soundness/TopLevel.soundness_prover_accepts` drops its `NoMaxLengthTrace` argument, checks a nonempty explicit halt and uses this exact sizing result.
+Its caller in `Soundness/soundness.lean` is updated.
+These sizing and acceptance caller changes await compilation, and their top-level dependencies remain under migration.

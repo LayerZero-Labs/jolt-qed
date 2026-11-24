@@ -1,4 +1,5 @@
 import JoltConstraints.theorems.WholeRun.Basic
+import JoltConstraints.theorems.DeviceFrame
 
 /-!
 Jolt rows ignore the embedded Sail copies of the registers in `Untouched`.
@@ -279,17 +280,9 @@ private theorem commutes_load_doubleword (address : BitVec 64) :
 
 private theorem store_raw_withReg (js : SailJoltState) (address : Nat) (w : BitVec 8) :
     JoltISA.Mmu.store_raw? (withReg js r v) address w =
-      (JoltISA.Mmu.store_raw? js address w).map (withReg · r v) := by
-  unfold JoltISA.Mmu.store_raw?
-  change (if !JoltISA.Mmu.effective_address_ok js.jolt_device address true then none
-    else if !JoltISA.Mmu.protected_store_ok js address (w.zeroExtend 64) 1 then none
-    else if JoltISA.RAM_START_ADDRESS ≤ address then
-      some (withReg { js with sail := { js.sail with mem := js.sail.mem.insert address w } } r v)
-    else if JoltISA.Mmu.unsupported_store address then none
-    else (js.jolt_device.store? js.sail.mem address w).map
-      (fun mem => withReg { js with sail := { js.sail with mem := mem } } r v)) = _
-  split_ifs <;> simp only [Option.map_none, Option.map_some, Option.map_map]
-  all_goals rfl
+      (JoltISA.Mmu.store_raw? js address w).map (withReg · r v) :=
+  JoltConstraints.store_raw_map (withReg · r v) (fun _ => rfl) (fun _ => rfl)
+    (fun _ _ _ _ => rfl) (fun _ _ => rfl) js address w
 
 private theorem store_bytes_withReg (address : Nat) (w : BitVec 64)
     (ks : List Nat) (current : Option SailJoltState) :
@@ -298,16 +291,9 @@ private theorem store_bytes_withReg (address : Nat) (w : BitVec 64)
         (current.map (withReg · r v)) =
       (ks.foldl (fun state k => state.bind fun s =>
         JoltISA.Mmu.store_raw? s (address + k) (w.extractLsb' (8 * k) 8)) current).map
-          (withReg · r v) := by
-  induction ks generalizing current with
-  | nil => rfl
-  | cons k ks ih =>
-    simp only [List.foldl_cons]
-    rw [← ih]
-    congr 1
-    cases current with
-    | none => rfl
-    | some js => exact store_raw_withReg js _ _
+          (withReg · r v) :=
+  JoltConstraints.store_bytes_map (withReg · r v)
+    (fun _ _ _ => store_raw_withReg _ _ _) address w ks current
 
 private theorem commutes_store_doubleword (address w : BitVec 64) :
     Commutes r v (JoltISA.Mmu.store_doubleword address w) := by

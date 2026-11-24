@@ -97,7 +97,7 @@ theorem execWithTapeAnswer_keeps_misa (instruction : Instr) (answer : BitVec 64)
       (fun s t : SailJoltState => s.sail.regs.get? Register.misa =
         t.sail.regs.get? Register.misa) (execWithTapeAnswer instruction answer) := by
   change StatePreservation.Preserves SameMisa _
-  cases instruction <;> simp only [execWithTapeAnswer, execInstr, get_arch_pc]
+  cases instruction <;> simp only [execWithTapeAnswer, execInstr, execHalt, get_arch_pc]
   case VirtualAdviceLoad dst width =>
     intro s t v runs
     split at runs
@@ -110,6 +110,7 @@ theorem execWithTapeAnswer_keeps_misa (instruction : Instr) (answer : BitVec 64)
     preservation_auto [read_rule _, write_rule _ _, readReg_rule _, writeNextPC_rule _,
       readReg_rule Register.PC, jump_rule _, load_rule _, store_rule _ _, host_rule,
       StatePreservation.pure_rule (relation := SameMisa) (fun _ => rfl) _,
+      StatePreservation.modify_rule (recordHalt _) (fun _ => rfl),
       StatePreservation.throw_rule SameMisa _,
       StatePreservation.get_rule (relation := SameMisa) (fun _ => rfl)]
       using StatePreservation.bind_rule sameMisa_trans
@@ -127,15 +128,14 @@ private theorem initial_state_misa {Source : Type}
     (joltInstance : JoltInstance Source) (inputs : JoltPrivateInputs) (state : SailJoltState)
     (initialized : joltInstance.initial_state inputs = some state) :
     state.sail.regs.get? Register.misa = some 0x800000008014312f := by
-  unfold JoltInstance.initial_state at initialized
-  cases layout : joltInstance.memory_layout with
-  | none => simp only [layout, bind, Option.bind] at initialized; cases initialized
-  | some deviceLayout =>
-    simp only [layout, bind, Option.bind] at initialized
-    repeat' split at initialized
-    all_goals first
-      | (cases initialized; exact init_state_register _ _ _ _ _ Register.misa)
-      | cases initialized
+  obtain ⟨layout, _, _, _, _, initialized⟩ := initial_state_build
+    joltInstance inputs state initialized
+  obtain ⟨_, _, _, _, shape⟩ := initialState_shape _ _ _ _ _ _ initialized
+  rw [shape]
+  exact init_state_register joltInstance.program.entry_address
+    (initialRam layout joltInstance.program.memory_init)
+    { panic := false, memory_layout := layout }
+    { bytes := inputs.advice_tape, readPosition := 0 } {} Register.misa
 
 /-- The final state of an initialized run retains Jolt's initial `misa` value.
 The final state is the last recorded post-state, or the initial state for an

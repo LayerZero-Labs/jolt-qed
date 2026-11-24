@@ -415,6 +415,35 @@ theorem valid_run_countdown (run : List JoltInstructionRow)
     List.length_range] at atPosition
   exact atPosition
 
+/-- A halt occupies a terminal row in an accepted PC map.
+For example, preprocessing rejects a Panic row in the middle of a virtual sequence.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/bytecode.rs`
+(`BytecodePCMapper::try_new`, `HaltInSequence`). -/
+theorem pc_map_ok_halt_terminal (bytecode : Array JoltInstructionRow)
+    (accepted : pc_map_ok bytecode = true) (row : JoltInstructionRow)
+    (member : row ∈ bytecode) (halt : row.instruction.haltKind?.isSome = true) :
+    row.virtual_sequence_remaining.getD 0 = 0 := by
+  have inRuns : row ∈ (bytecode.toList.splitBy fun a b => a.address == b.address).flatten := by
+    simpa only [List.flatten_splitBy, Array.mem_toList_iff] using member
+  obtain ⟨run, runMember, rowMember⟩ := List.mem_flatten.mp inRuns
+  unfold pc_map_ok at accepted
+  simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at accepted
+  have valid := (accepted.1.1 run runMember).2
+  have atMost : run.length ≤ 1 := by
+    have checked := valid
+    unfold valid_run at checked
+    simp only [Bool.and_eq_true, Bool.or_eq_true, decide_eq_true_eq, List.length_map] at checked
+    rcases checked.2 with short | noHalts
+    · exact short
+    · have noHalt := List.all_eq_true.mp noHalts row rowMember
+      cases kind : row.instruction.haltKind? <;> simp_all
+  obtain ⟨position, inside, atRow⟩ := List.mem_iff_getElem.mp rowMember
+  have count := valid_run_countdown run valid position inside
+  rw [atRow] at count
+  apply BitVec.eq_of_toNat_eq
+  change (row.virtual_sequence_remaining.getD 0).toNat = 0
+  omega
+
 -- In runs laid end to end, where each run counts down to 0 and neighbouring runs
 -- differ in address, a row with count 0 is followed by a row at a different address.
 theorem runs_zero_then_new_address (runs : List (List JoltInstructionRow))

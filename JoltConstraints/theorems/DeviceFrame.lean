@@ -40,34 +40,91 @@ theorem initialState_with_adviceTape (state : SailJoltState)
   cases codeRegionOf state.jolt_device.memory_layout sources <;>
     cases state.jolt_device.initialMem state.sail.mem inputs trusted untrusted <;> rfl
 
-/-- A checked doubleword store keeps the entire non-memory device.
-For example, an output store changes shared bytes, not the layout or panic claim.
+/-- A raw byte store commutes with a state transformation that preserves its checks
+and shared memory, and commutes with replacing memory.
+For example, changing tape bytes or an unused register satisfies these conditions.
+This primitive frame is a candidate to move into JoltBytecode. -/
+theorem store_raw_map (transform : SailJoltState → SailJoltState)
+    (device : ∀ state, (transform state).jolt_device = state.jolt_device)
+    (memory : ∀ state, (transform state).sail.mem = state.sail.mem)
+    (protection : ∀ state address value width,
+      Mmu.protected_store_ok (transform state) address value width =
+        Mmu.protected_store_ok state address value width)
+    (replace : ∀ state mem,
+      { transform state with sail := { (transform state).sail with mem := mem } } =
+        transform { state with sail := { state.sail with mem := mem } })
+    (state : SailJoltState) (address : Nat) (value : BitVec 8) :
+    Mmu.store_raw? (transform state) address value =
+      (Mmu.store_raw? state address value).map transform := by
+  unfold Mmu.store_raw?
+  simp only [device, memory, protection]
+  split_ifs <;> simp only [Option.map_none, Option.map_some, Option.map_map]
+  · simpa only [device] using congrArg some (replace state (state.sail.mem.insert address value))
+  · congr 1
+    funext mem
+    simpa only [device, Function.comp_apply] using replace state mem
+
+/-- Byte-store folds commute whenever their individual stores commute.
+For example, the eight byte writes of a doubleword commute with a tape replacement. -/
+theorem store_bytes_map (transform : SailJoltState → SailJoltState)
+    (commutes : ∀ state address value, Mmu.store_raw? (transform state) address value =
+      (Mmu.store_raw? state address value).map transform)
+    (address : Nat) (value : BitVec 64) (offsets : List Nat)
+    (start : Option SailJoltState) :
+    offsets.foldl (fun current k => current.bind fun state =>
+      Mmu.store_raw? state (address + k) (value.extractLsb' (8 * k) 8))
+        (start.map transform) =
+      (offsets.foldl (fun current k => current.bind fun state =>
+        Mmu.store_raw? state (address + k) (value.extractLsb' (8 * k) 8)) start).map
+          transform := by
+  induction offsets generalizing start with
+  | nil => rfl
+  | cons k rest ih =>
+    simp only [List.foldl_cons]
+    cases start with
+    | none => simpa using ih none
+    | some state =>
+      simp only [Option.map_some, Option.bind_some]
+      rw [commutes]
+      exact ih (Mmu.store_raw? state (address + k) (value.extractLsb' (8 * k) 8))
+
+/-- A checked doubleword store preserves any relation permitting Sail-state changes.
+For example, stores preserve both the non-memory device and the advice tape.
 Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`store_doubleword`).
-This shared-memory frame is a candidate to move into JoltBytecode. -/
-theorem store_doubleword_keeps_device (address value : BitVec 64) :
-    StatePreservation.Preserves
-      (fun s t : SailJoltState => s.jolt_device = t.jolt_device)
-      (Mmu.store_doubleword address value) := by
+This primitive frame is a candidate to move into JoltBytecode. -/
+theorem store_doubleword_relation (relation : SailJoltState → SailJoltState → Prop)
+    (refl : ∀ state, relation state state)
+    (trans : ∀ a b c, relation a b → relation b c → relation a c)
+    (sail : ∀ state after, relation state { state with sail := after })
+    (address value : BitVec 64) :
+    StatePreservation.Preserves relation (Mmu.store_doubleword address value) := by
   intro s t result runs
   simp only [Mmu.store_doubleword] at runs
   split at runs
   · cases runs
   · split at runs
     · split at runs
-      · cases runs; rfl
+      · cases runs; exact sail _ _
       · cases runs
     · split at runs
       · rename_i stored
         cases runs
         exact InstructionFrame.storeFold_rule_of_step
-          (relation := fun s t : SailJoltState => s.jolt_device = t.jolt_device)
-          _ value s (List.range 8)
-          (fun k _ before after kept store => kept.trans
-            (InstructionFrame.storeRaw_rule
-              (relation := fun s t : SailJoltState => s.jolt_device = t.jolt_device)
-              (fun _ _ => rfl) (fun _ _ _ _ _ => rfl) before after _ _ store))
-          (some s) (fun _ same => by cases same; rfl) _ stored
+          (relation := relation) _ value s (List.range 8)
+          (fun k _ before after kept store => trans _ _ _ kept
+            (InstructionFrame.storeRaw_rule sail (fun state _ _ _ _ => sail state _)
+              before after _ _ store))
+          (some s) (fun _ same => by cases same; exact refl _) _ stored
       · cases runs
+
+/-- A checked doubleword store keeps the entire non-memory device.
+For example, an output store changes shared bytes, not the panic claim. -/
+theorem store_doubleword_keeps_device (address value : BitVec 64) :
+    StatePreservation.Preserves
+      (fun s t : SailJoltState => s.jolt_device = t.jolt_device)
+      (Mmu.store_doubleword address value) :=
+  store_doubleword_relation (fun s t => s.jolt_device = t.jolt_device)
+    (fun _ => rfl) (fun _ _ _ ab bc => ab.trans bc) (fun _ _ => rfl) address value
 
 /-- Primitive rules for a device relation, with halt updates made explicit.
 For example, layout equality permits every halt; equality of the whole device does not.
