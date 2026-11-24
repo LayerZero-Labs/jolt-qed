@@ -1,6 +1,6 @@
 import JoltConstraints.theorems.WholeRun.SystemInv
-import JoltConstraints.theorems.WholeRun.Io
-import JoltConstraints.theorems.WholeRun.IoAmo
+import JoltConstraints.theorems.WholeRun.SharedMemorySim
+import JoltConstraints.theorems.WholeRun.AtomicMemorySim
 import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 /-!
@@ -68,7 +68,7 @@ open JoltISA
 
 -- Reuse the rounding lemma of `Io.lean` without changing that module.
 local macro "ioHelper%" n:ident : term =>
-  pure (Lean.mkIdent (Lean.mkPrivateNameCore `JoltConstraints.theorems.WholeRun.Io
+  pure (Lean.mkIdent (Lean.mkPrivateNameCore `JoltConstraints.theorems.WholeRun.SharedMemorySim
     (`WholeRun ++ n.getId)))
 
 /-! ### Even program counter -/

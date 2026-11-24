@@ -2,7 +2,7 @@
 title: Plan for deterministic, non-succinct soundness
 updated: 2026-11-24
 rust_pin: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
-lean_head: ac7a9e5
+lean_head: cea7d6c
 ---
 
 Our goal is to make Jolt secure through formal verification. Each intermediate
@@ -22,26 +22,39 @@ The issue writeups live in `LayerZero-Research/LZ-Notes` under `content/projects
 ## Current re-pin (2026-11-24, incomplete)
 
 The Jolt pin is `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
-The constraint re-pin starts from Lean commit `3522261` on `split/c-constraints`.
-Local commit `877356e` checks the new handwritten constraints against the generated data, including the halt lane and both RAM guard claims.
-Local commits through `ac7a9e5` check shared-memory frames, checked RAM allocation, halt execution certificates, tape replay, register completeness, both RAM-history completeness theorems and the shared-memory load/store soundness steps.
-The full `JoltConstraints` build does not yet pass.
-The previous soundness result below describes the old model and is not a soundness result for this pin.
+The re-pin starts from Lean commit `3522261` on `split/c-constraints`.
+`JoltInstance.soundness` now builds for both public panic claims at `b852fe3`.
+The twenty-first shared-public build printed exactly `propext`, `Classical.choice` and `Quot.sound` in its axiom closure.
+The theorem reconstructs an honest expanded-bytecode trace ending at its first explicit success or panic halt.
+Row 21 binds the public panic claim to that halt kind.
+The three flag-word restrictions and `tracerAddressChecks` are removed from the theorem's restriction structure.
+`TemporaryRestrictions` now contains only `hostCallsSucceed`.
+The frozen bytecode HostIO model still has invalid-event failures and conditional overflow checks that differ from Jolt at this pin.
+The surviving host-call restriction marks this model boundary; the re-pin report records the current tracer's log-and-ignore and checked-read behavior.
+`Layer5/SharedMemoryChecks` derives the admitted word's address and protected-value checks from the two new RAM claims.
 
-At this pin, a valid execution ends at `JoltSuccess` or `Panic`.
-R1CS row 21 binds that halt kind to the public panic claim.
-The new proof must cover both claims and may not use the old panic or termination words.
-The three flag-word restrictions have been removed from `TemporaryRestrictions`, but their old definitions and proof callers still need replacement.
-The load/store soundness steps derive their address and protected-value checks from the constraints at `ac7a9e5`.
-Removing `tracerAddressChecks` from the exported theorem still requires migrating the prefix and whole-run consumers.
-The current prefix migration replaces the ordinary-RAM/device split with full shared-word agreement and removes its synthetic termination-word invariant; that migration has not yet passed an integration build.
+Inputs, advice, outputs, the I/O gap and ordinary RAM use one shared byte map.
+The prefix proof compares every selected shared word and preserves the initialized code interval and protected input bytes.
+The whole-run relation compares shared bytes directly, and initialization uses `JoltDevice.initialMem`.
+The working tree deletes the separate whole-run I/O modules and replaces their useful execution facts with direct shared-map simulations.
+Those simulations and their callers await the twenty-second combined build.
+The full `JoltConstraints` build therefore remains red.
+The soundness theorem executes the supplied source array's expansion; the whole-run layer separately connects source rows to fetch and decode from image bytes.
 
-Inputs, advice, outputs, the I/O gap and ordinary RAM now use the same byte map.
-The whole-run relation compares that map directly and initialization uses `JoltDevice.initialMem`.
-The remaining separate I/O simulation and its consumers still need replacement.
+The handwritten/generated constraint equivalences check at `877356e`.
 Both RAM-history completeness theorems are proved with unchanged statements at `ce5f298`.
-The three admissions for #1949 remain unchanged and are outside this re-pin.
-The working report is [the constraint re-pin report](../reports/2026-11-24-constraints-repin.md).
+Public-I/O completeness checks at `2988dbf` and `490c182`; protected-write completeness and final assembly check at `78ed82d`.
+The three #1949 admissions remain unchanged.
+Actual-value inversion for native/narrow stores checks at `621fcd1`, and for atomic stores at `86d4cfa`.
+The pending conditional-store inversion supplies the two SC widths to the existing bundle-construction theorem without changing that theorem's signature.
+`WholeRun/PlatformMemory.lean` checks at `b118458`; it extracts reusable Sail region checks and plain-memory pipeline facts without a device-byte overlay.
+The eighteenth batch checked the shared store-byte comparison.
+The nineteenth batch checked all SC declarations except the final SC.W guard.
+The twenty-first batch checked the extracted window proof but failed in prefix normalization and final guard transport.
+The twenty-second batch checks explicit normalization repairs, both shared-memory simulations, their callers and the root together.
+The citation pass is committed at `cea7d6c`.
+The final whole-run migration, complete statement inventory and clean committed tree remain open.
+See [the working re-pin report](../reports/2026-11-24-constraints-repin.md) for exact build evidence and statement changes.
 
 ## Previous state (2026-11-03)
 
@@ -49,7 +62,7 @@ The older sections describe the proof as it stood at Lean commit `7096dca`.
 The Step 4 starting commit is `e29949809bbf2c54c315c2ca55ae3b90c7fd37a6`, on `review/audit-completeness-soundness`.
 The Step 4 proof repairs are uncommitted and await review.
 
-- On 2026-11-05 Ari moved the Jolt pin from `5def437f` to `c97e9300`, the merge of a16z/jolt#2250 (see [Current Jolt pin](#current-jolt-pin-2026-11-05)).
+- On 2026-11-05 Ari moved the Jolt pin from `5def437f` to `c97e9300`, the merge of a16z/jolt#2250 (see [Previous Jolt pin](#previous-jolt-pin-2026-11-05)).
 - Steps 1–3 are committed: migrated definitions, completeness repairs, and the approved extension of `TracerAddressChecks` to the containing doubleword of floor loads and stores.
 - Step 4 repairs the six initial failing modules and their callers: destination-value input routing, ShiftData's signed immediate, retired alignment rows, plain-row classification, stall flags and tape replay addresses.
 - Ari approved on 2026-11-03 extending `PanicStoresOne`, `TerminationThenStall`, `StoresPanicAt` and `StoresTerminationAt` to `VirtualLoadB/H/W` and `VirtualStoreB/H/W` at their containing doubleword `ea &&& ~~~7`; no other restriction or assumption changed, and the statements of `JoltInstance.soundness` and `InLanguage` are unchanged.
@@ -207,9 +220,9 @@ Agents work in one checkout on disjoint files; each task's report goes in `repor
 Do not add theorem premises without Ari's approval; do not use `native_decide`, `decide +kernel` or a larger `maxHeartbeats`.
 The issue write-ups remain for the agreed batch; #2044 discussion waits for Michael's comments.
 
-## Current Jolt pin (2026-11-05)
+## Previous Jolt pin (2026-11-05)
 
-The current Jolt source pin is [`c97e93004fbf804409f0374fe8457c8f1562ce71`](https://github.com/a16z/jolt/commit/c97e93004fbf804409f0374fe8457c8f1562ce71), the merge of a16z/jolt#2250.
+The Jolt source pin on 2026-11-05 was [`c97e93004fbf804409f0374fe8457c8f1562ce71`](https://github.com/a16z/jolt/commit/c97e93004fbf804409f0374fe8457c8f1562ce71), the merge of a16z/jolt#2250.
 The constraints were migrated to `c6703570`.
 Of the seven commits from `c6703570` to `c97e9300`, only #2250 changes modeled code (`crates/jolt-prover/src/config.rs` and `crates/jolt-program/src/preprocess/ram.rs`), and the model already followed it.
 The others change CI, dependencies, Dory and GT arithmetic, and an optimized prover kernel, none of which is modeled.

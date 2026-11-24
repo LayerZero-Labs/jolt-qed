@@ -1,8 +1,11 @@
 import JoltConstraints.theorems.WholeRun.SystemInv
 import JoltConstraints.theorems.WholeRun.Relation
+import JoltConstraints.theorems.WholeRun.PlatformMemory
 import JoltConstraints.theorems.WholeRun.Bridge
 import JoltConstraints.theorems.nextpc_frame
 import JoltConstraints.theorems.layout_facts
+import JoltConstraints.theorems.memory_presence
+import JoltConstraints.theorems.WholeRun.ConditionalStoreRuns
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions
@@ -27,6 +30,8 @@ end RiscvInstruction
 
 namespace WholeRun
 
+open PlatformMemory
+
 open MemoryAccessType mem_payload
 
 /-- The doubleword an instruction accesses belongs to Jolt's RAM, whose first
@@ -37,7 +42,7 @@ atomics use that address itself.
 For example, `LB` from `0x80000003` accesses the doubleword at `0x80000000`.
 Instructions without a memory access satisfy this predicate unconditionally.
 These are the addresses used by Jolt's tracer in `tracer/src/emulator/mmu.rs`
-(`Mmu::load_doubleword`, `Mmu::store_doubleword`) at `5def437f`.
+(`Mmu::load_doubleword`, `Mmu::store_doubleword`) at `ff6fc6568`.
 -/
 def RamAccess : RiscvInstruction → SailJoltState → Prop
   | .LB _ rs1 imm, js | .LH _ rs1 imm, js | .LW _ rs1 imm, js
@@ -123,28 +128,6 @@ private theorem mprv_zero (js : SailJoltState)
   simpa only [BitVec.and_allOnes, BitVec.extractLsb'_or, BitVec.reduceExtractLsb',
     BitVec.or_zero] using hb
 
-private theorem range_subset_nat (addr base size : BitVec 64) (n : Nat)
-    (hbase : base.toNat ≤ addr.toNat) (hn : n < 2 ^ 64)
-    (hsum : addr.toNat - base.toNat + n < 2 ^ 64) :
-    range_subset addr (BitVec.ofNat 64 n) base size =
-      decide (addr.toNat - base.toNat + n ≤ size.toNat) := by
-  have hsub : (addr - base).toNat = addr.toNat - base.toNat := BitVec.toNat_sub_of_le (by simpa [BitVec.le_def] using hbase)
-  have hadd : addr + BitVec.ofNat 64 n - base =
-      (addr - base) + BitVec.ofNat 64 n := by
-    simp only [BitVec.sub_eq_add_neg, BitVec.add_assoc, BitVec.add_comm (BitVec.ofNat 64 n)]
-  have hsize : base + size - base = size := by
-    rw [BitVec.add_comm]; exact BitVec.add_sub_cancel _ _
-  have hnat : (BitVec.ofNat 64 n).toNat = n := by
-    rw [BitVec.toNat_ofNat]; exact Nat.mod_eq_of_lt hn
-  have hsum' : (addr - base).toNat + (BitVec.ofNat 64 n).toNat < 2 ^ 64 := by
-    simpa only [hsub, hnat] using hsum
-  simp only [range_subset, hadd, hsize, zopz0zIzJ_u, Sail.BitVec.toNatInt,
-    BitVec.toNat_add_of_lt hsum', hsub, hnat]
-  simp only [Int.ofNat_eq_natCast, Int.ofNat_le]
-  by_cases h : addr.toNat - base.toNat + n ≤ size.toNat
-  · simp [h, show addr.toNat - base.toNat ≤ size.toNat by omega]
-  · simp [h]
-
 private theorem matching_platform_ram (addr : BitVec 64) (n : Nat)
     (hlo : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
     (hn : 0 < n) (hwidth : n ≤ 8) (hhi : addr.toNat + n ≤ 2 ^ 64) :
@@ -229,10 +212,18 @@ private theorem ram_windows (js : SailJoltState) (base : BitVec 64)
     (hpresent : ∀ a, memLow js.jolt_device ≤ a → a < memHigh js.jolt_device →
       ∃ b, js.sail.mem.get? a = some b)
     (hram : JoltISA.RAM_START_ADDRESS ≤ base.toNat)
-    (hheap : base.toNat < js.jolt_device.memory_layout.heap_end.toNat)
-    (hno_wrap : base.toNat + 8 ≤ 2 ^ 64)
+    (hlayout : ∃ config, MemoryLayout.new config = some js.jolt_device.memory_layout)
+    (hbelow : base.toNat < JoltISA.Mmu.ram_backing_end js.jolt_device)
+    (haligned : base &&& 7 = 0)
     (op : amoop) (hop : (op == .AMOCAS) = false) :
     DwordAtomicWindowAssumptions op base js.sail := by
+  obtain ⟨config, built⟩ := hlayout
+  have baseAligned := JoltISA.Mmu.toNat_mod_eight_of_align haligned
+  have endAligned := ram_backing_end_aligned js.jolt_device
+    (new_lowest_address_aligned config _ built)
+  have endBound := ram_backing_end_le_address_space js.jolt_device config built
+  have backed : base.toNat + 8 ≤ JoltISA.Mmu.ram_backing_end js.jolt_device := by omega
+  have hno_wrap : base.toNat + 8 ≤ 2 ^ 64 := by omega
   have hsub : ∀ offset width : Nat, 0 < width → offset + width ≤ 8 →
       JoltISA.RAM_START_ADDRESS ≤ (base + BitVec.ofNat 64 offset).toNat ∧
       (base + BitVec.ofNat 64 offset).toNat + width ≤ 2 ^ 64 := by
@@ -324,34 +315,41 @@ private def NoStoreRow : JoltISA.Instr → Prop
   | .SD .. | .VirtualStoreB .. | .VirtualStoreH .. | .VirtualStoreW .. => False
   | _ => True
 
-private theorem noStoreRow_device (i : JoltISA.Instr) (hi : NoStoreRow i) :
-    StatePreservation.Preserves (fun s t => t.jolt_device = s.jolt_device)
-      (JoltISA.execInstr i) := by
-  apply JoltIOSetupFrame.execInstr_rule_of_device_relation_for_store
-    (fun a b => b = a) (fun _ => rfl) (fun _ _ _ h h' => h'.trans h)
-  · intro base src imm heq
-    subst i
-    exact False.elim hi
-  · intro base src imm fault heq
-    rcases heq with rfl | rfl | rfl <;> exact False.elim hi
-
 private def NoStoreProgram : JoltISA.Program → Prop
   | .done _ => True
   | .instr i rest => NoStoreRow i ∧ NoStoreProgram rest
 
-private theorem noStoreProgram_device (p : JoltISA.Program) (hp : NoStoreProgram p) :
-    StatePreservation.Preserves (fun s t => t.jolt_device = s.jolt_device)
-      (JoltISA.execProgram p) := by
+/-- A scratch-only program changes no architectural register or device field.
+For example, the SUB/MUL/ADD selector of an AMO satisfies this classification. -/
+private def ScratchProgram : JoltISA.Program → Prop
+  | .done _ => True
+  | .instr row rest => ScratchRow row ∧ ScratchProgram rest
+
+private theorem scratchProgram_frozen (p : JoltISA.Program) (hp : ScratchProgram p) :
+    StatePreservation.Preserves Frozen (JoltISA.execProgram p) := by
   induction p with
-  | done _ => exact StatePreservation.pure_rule (fun (s : SailJoltState) => (rfl : s.jolt_device = s.jolt_device)) _
+  | done _ => exact StatePreservation.pure_rule frozen_refl _
   | instr i rest ih =>
     simp only [JoltISA.execProgram]
-    apply StatePreservation.bind_rule (fun _ _ _ h h' => h'.trans h)
-      (noStoreRow_device i hp.1)
-    intro result
+    refine StatePreservation.bind_rule frozen_trans (scratchRow_frozen i hp.1) fun result => ?_
     split
     · exact ih hp.2
-    · exact StatePreservation.pure_rule (fun (s : SailJoltState) => (rfl : s.jolt_device = s.jolt_device)) _
+    · exact StatePreservation.pure_rule frozen_refl _
+
+/-- ADDI writes its destination without changing the non-memory device.
+For example, the AMO's architectural writeback preserves the panic claim. -/
+private theorem addi_device (dst : JoltISA.Dst) (src : JoltISA.Src) (imm : BitVec 64) :
+    StatePreservation.Preserves (fun s t => t.jolt_device = s.jolt_device)
+      (JoltISA.execInstr (.ADDI dst src imm)) := by
+  have read : StatePreservation.Preserves (fun s t => t.jolt_device = s.jolt_device)
+      (JoltISA.readSrc src) := fun s t v h => (readSrc_frozen src s t v h).2
+  have write (value : BitVec 64) :
+      StatePreservation.Preserves (fun s t => t.jolt_device = s.jolt_device)
+        (JoltISA.writeDst dst value) :=
+    InstructionFrame.writeDst_rule _ (fun _ _ _ => rfl) (fun _ _ _ => rfl) dst value
+  simp only [JoltISA.execInstr]
+  preservation_auto [read, write, StatePreservation.pure_rule (fun _ => rfl) _]
+    using (StatePreservation.bind_rule (fun _ _ _ h h' => h'.trans h))
 
 private inductive AccessKind where
   | dword | byte | halfword | word
@@ -385,87 +383,11 @@ private theorem bind_success {α β : Type} (m : JoltMonad α) (f : α → JoltM
   | error e u => simp only [bind, EStateM.bind, hm] at h; cases h
   | ok a u => exact ⟨a, u, rfl, by simpa only [bind, EStateM.bind, hm] using h⟩
 
-private theorem mmu_store_ram (addr value : BitVec 64) (s t : SailJoltState)
-    (r : Result Bool ExecutionResult) (hram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
-    (hrun : JoltISA.Mmu.store_doubleword addr value s = .ok r t) :
-    Assumptions.JoltRamStoreOk addr s ∧ t.jolt_device = s.jolt_device ∧ r = .Ok true := by
-  simp only [JoltISA.Mmu.store_doubleword, if_pos hram] at hrun
-  split at hrun
-  · cases hrun
-  · split at hrun
-    · rename_i valid
-      simp only [JoltISA.Mmu.effective_address_ok, if_neg (Nat.not_lt.mpr hram),
-        ↓reduceIte, Bool.and_eq_true, Bool.or_eq_true, decide_eq_true_eq] at valid
-      cases hrun
-      exact ⟨⟨valid.2, valid.1⟩, rfl, rfl⟩
-    · cases hrun
-
-private theorem store_body_ram (addr value : BitVec 64) (s t : SailJoltState)
-    (hram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
-    (hrun : (do
-      match ← JoltISA.Mmu.store_doubleword addr value with
-      | .Ok _ => pure RETIRE_SUCCESS
-      | .Err e => pure e : JoltMonad ExecutionResult) s = .ok RETIRE_SUCCESS t) :
-    Assumptions.JoltRamStoreOk addr s ∧ t.jolt_device = s.jolt_device := by
-  obtain ⟨r, u, hm, ht⟩ := bind_success _ _ s t RETIRE_SUCCESS hrun
-  obtain ⟨hb, hd, rfl⟩ := mmu_store_ram addr value s u r hram hm
-  cases ht
-  exact ⟨hb, hd⟩
-
 private theorem sourceValue_regs (rs : regidx) (s t : SailJoltState)
     (h : t.sail.regs = s.sail.regs) :
     JoltISA.sourceValue (.xreg rs) t = JoltISA.sourceValue (.xreg rs) s := by
   cases rs
   simp only [JoltISA.sourceValue, h]
-
-private theorem store_row_ram (kind : AccessKind) (rs : regidx) (value : JoltISA.Src)
-    (imm : BitVec 64) (s t : SailJoltState)
-    (hram : JoltISA.RAM_START_ADDRESS ≤
-      (accessAddress kind (JoltISA.sourceValue (.xreg rs) s) imm).toNat)
-    (hrun : JoltISA.execInstr (storeRow kind rs value imm) s = .ok RETIRE_SUCCESS t) :
-    Assumptions.JoltRamStoreOk
-      (accessAddress kind (JoltISA.sourceValue (.xreg rs) s) imm) s ∧
-      t.jolt_device = s.jolt_device := by
-  cases kind
-  all_goals simp only [storeRow, JoltISA.execInstr] at hrun
-  all_goals have hbase := lookup_read_bind (.xreg rs) _ s t RETIRE_SUCCESS hrun
-  case dword =>
-    have hv := lookup_read_bind value _ s t RETIRE_SUCCESS hbase
-    split at hv
-    · exact store_body_ram _ _ s t hram hv
-    · cases hv
-  case byte =>
-    have hv := lookup_read_bind value _ s t RETIRE_SUCCESS hbase
-    exact store_body_ram _ _ s t hram hv
-  all_goals split at hbase
-  all_goals first
-    | cases hbase
-    | exact store_body_ram _ _ s t hram
-        (lookup_read_bind value _ s t RETIRE_SUCCESS hbase)
-
-private theorem storePlan_ram (kind : AccessKind) (rs : regidx) (imm : BitVec 64)
-    (p : JoltISA.Program) (hp : StorePlan kind rs imm p)
-    (s t : SailJoltState)
-    (hram : JoltISA.RAM_START_ADDRESS ≤
-      (accessAddress kind (JoltISA.sourceValue (.xreg rs) s) imm).toNat)
-    (hrun : JoltISA.execProgram p s = .ok RETIRE_SUCCESS t) :
-    Assumptions.JoltRamStoreOk
-      (accessAddress kind (JoltISA.sourceValue (.xreg rs) s) imm) s ∧
-      t.jolt_device = s.jolt_device := by
-  induction hp generalizing s t with
-  | store value rest htail =>
-    obtain ⟨u, hrow, hrest⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
-    obtain ⟨hb, hd⟩ := store_row_ram kind rs value imm s u hram hrow
-    exact ⟨hb, (noStoreProgram_device rest htail u t _ hrest).trans hd⟩
-  | scratch row rest hrow htail ih =>
-    obtain ⟨u, hstep, hrest⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
-    obtain ⟨hregs, hdev⟩ := scratchRow_frozen row hrow s u _ hstep
-    have heq := sourceValue_regs rs s u hregs
-    obtain ⟨hb, hd⟩ := ih u t (by simpa only [heq] using hram) hrest
-    refine ⟨?_, hd.trans hdev⟩
-    exact ⟨by simpa only [heq, hdev] using hb.below_heap_end,
-      by simpa only [heq, hdev] using hb.outside_canary⟩
-
 
 private def loadRow (kind : AccessKind) (dst : JoltISA.Dst) (rs : regidx)
     (imm : BitVec 64) : JoltISA.Instr :=
@@ -474,21 +396,6 @@ private def loadRow (kind : AccessKind) (dst : JoltISA.Dst) (rs : regidx)
   | .byte => .VirtualLoadB .normal dst (.xreg rs) imm (.E_Load_Addr_Align ())
   | .halfword => .VirtualLoadH .normal dst (.xreg rs) imm (.E_Load_Addr_Align ())
   | .word => .VirtualLoadW .normal dst (.xreg rs) imm (.E_Load_Addr_Align ())
-
-private theorem mmu_load_ram (addr : BitVec 64) (s t : SailJoltState)
-    (r : Result (BitVec 64) ExecutionResult)
-    (hram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
-    (hrun : JoltISA.Mmu.load_doubleword addr s = .ok r t) :
-    Assumptions.JoltRamLoadOk addr s := by
-  simp only [JoltISA.Mmu.load_doubleword, if_pos hram] at hrun
-  split at hrun
-  · cases hrun
-  · split at hrun
-    · rename_i valid
-      refine ⟨?_⟩
-      simpa only [JoltISA.Mmu.effective_address_ok,
-        if_neg (Nat.not_lt.mpr hram), Bool.false_eq_true, ↓reduceIte, decide_eq_true_eq] using valid
-    · cases hrun
 
 private theorem load_row_ram (kind : AccessKind) (dst : JoltISA.Dst) (rs : regidx)
     (imm : BitVec 64) (s t : SailJoltState)
@@ -508,37 +415,16 @@ private theorem load_row_ram (kind : AccessKind) (dst : JoltISA.Dst) (rs : regid
         BitVec.and_not_eq_self_of_and_eq_zero _ 7 halign
       rw [hclear] at hram ⊢
       obtain ⟨v, u, hm, _⟩ := bind_success _ _ s t RETIRE_SUCCESS hbase
-      exact mmu_load_ram _ s u v hram hm
+      exact JoltConstraints.Soundness.ramLoad_guard_of_run _ s u v hram hm
     · cases hbase
   case byte =>
     obtain ⟨v, u, hm, _⟩ := bind_success _ _ s t RETIRE_SUCCESS hbase
-    exact mmu_load_ram _ s u v hram hm
+    exact JoltConstraints.Soundness.ramLoad_guard_of_run _ s u v hram hm
   all_goals split at hbase
   all_goals first
     | cases hbase
     | (obtain ⟨v, u, hm, _⟩ := bind_success _ _ s t RETIRE_SUCCESS hbase
-       exact mmu_load_ram _ s u v hram hm)
-
-private theorem native_store_ram (rs : regidx) (value : JoltISA.Src)
-    (imm : BitVec 64) (s t : SailJoltState)
-    (hram : JoltISA.RAM_START_ADDRESS ≤
-      ((JoltISA.sourceValue (.xreg rs) s + imm) &&& (-8 : BitVec 64)).toNat)
-    (hrun : JoltISA.execInstr (.SD (.xreg rs) value imm) s = .ok RETIRE_SUCCESS t) :
-    Assumptions.JoltRamStoreOk
-      ((JoltISA.sourceValue (.xreg rs) s + imm) &&& (-8 : BitVec 64)) s ∧
-      t.jolt_device = s.jolt_device := by
-  simp only [JoltISA.execInstr] at hrun
-  have hbase := lookup_read_bind (.xreg rs) _ s t RETIRE_SUCCESS hrun
-  have hv := lookup_read_bind value _ s t RETIRE_SUCCESS hbase
-  split at hv
-  · rename_i halign
-    have hclear : (JoltISA.sourceValue (.xreg rs) s + imm) &&& (-8 : BitVec 64) =
-        JoltISA.sourceValue (.xreg rs) s + imm :=
-      BitVec.and_not_eq_self_of_and_eq_zero _ 7 halign
-    rw [hclear] at hram ⊢
-    exact store_body_ram _ _ s t hram hv
-  · cases hv
-
+       exact JoltConstraints.Soundness.ramLoad_guard_of_run _ s u v hram hm)
 
 private theorem clear_bit_zero (x : BitVec 64) :
     BitVec.update x 0 0#1 = x &&& ~~~(1#64) := by
@@ -613,7 +499,7 @@ private theorem reservedLoad_conditions (double : Bool) (dst : JoltISA.Dst) (rs1
       (.E_SAMO_Addr_Align ()) (Or.inr (Or.inr ⟨rfl, rfl⟩)) () s t hrun
     simp only [BitVec.add_zero] at hg
     obtain ⟨value, u, hload, _⟩ := bind_success _ _ s t RETIRE_SUCCESS hg.2
-    exact ⟨hg.1, mmu_load_ram _ s u value hram hload⟩
+    exact ⟨hg.1, JoltConstraints.Soundness.ramLoad_guard_of_run _ s u value hram hload⟩
   | true =>
     simp only [reservedLoadRow, ite_true, JoltISA.execInstr] at hrun
     have hb := lookup_read_bind (.xreg rs1) _ s t RETIRE_SUCCESS hrun
@@ -621,7 +507,7 @@ private theorem reservedLoad_conditions (double : Bool) (dst : JoltISA.Dst) (rs1
     split at hb
     · rename_i ha
       obtain ⟨value, u, hload, _⟩ := bind_success _ _ s t RETIRE_SUCCESS hb
-      exact ⟨ha, mmu_load_ram _ s u value hram hload⟩
+      exact ⟨ha, JoltConstraints.Soundness.ramLoad_guard_of_run _ s u value hram hload⟩
     · cases hb
 
 private inductive ReservationLoadPlan (double : Bool) (rs1 : regidx) : JoltISA.Program → Prop where
@@ -650,7 +536,7 @@ private theorem reservationLoadPlan_conditions (double : Bool) (rs1 : regidx)
     have heq := sourceValue_regs rs1 s u hregs
     obtain ⟨ha, hl⟩ := ih u t (by simpa only [heq] using hram) hrest
     exact ⟨by simpa only [heq] using ha,
-      ⟨by simpa only [heq, hdev] using hl.below_heap_end⟩⟩
+      ⟨by simpa only [heq, hdev] using hl.below_backing_end⟩⟩
 
 private theorem reservation_load_plan (store double : Bool) (rd rs1 rs2 : regidx) :
     ReservationLoadPlan double rs1 (if store then SystemProofs.scRows double rd rs1 rs2
@@ -676,39 +562,60 @@ private theorem reservation_store_plan (double : Bool) (rd rs1 rs2 : regidx) :
     | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
     | apply StorePlan.scratch _ _ (by simp [ScratchRow])
 
-private structure ReservationMemory (store double : Bool) (rs1 : regidx)
+private structure ReservationMemory (store double : Bool) (rs1 rs2 : regidx)
     (js : SailJoltState) : Prop where
   align : JoltISA.sourceValue (.xreg rs1) js &&& (if double then 7#64 else 3#64) = 0#64
   load : Assumptions.JoltRamLoadOk
     (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js
   store_ok : if store then Assumptions.JoltRamStoreOk
-    (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js else True
+    (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js
+      (SystemProofs.scStoreValue double js (JoltISA.sourceValue (.xreg rs1) js)
+        (JoltISA.sourceValue (.xreg rs2) js)) 8 else True
 
 private theorem reservation_conditions (store double : Bool) (rd rs1 rs2 : regidx)
-    (s t : SailJoltState)
+    (s t : SailJoltState) (hinv : Step.StepInvariant s.sail)
     (hram : JoltISA.RAM_START_ADDRESS ≤
       (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)).toNat)
     (hrun : JoltISA.execProgram (if store then SystemProofs.scRows double rd rs1 rs2
       else SystemProofs.lrRows double rd rs1 rs2) s = .ok RETIRE_SUCCESS t) :
-    ReservationMemory store double rs1 s ∧ t.jolt_device = s.jolt_device := by
+    ReservationMemory store double rs1 rs2 s := by
   obtain ⟨ha, hl⟩ := reservationLoadPlan_conditions double rs1 _
     (reservation_load_plan store double rd rs1 rs2) s t hram hrun
   cases store with
-  | false =>
-    refine ⟨⟨ha, hl, trivial⟩, noStoreProgram_device _ ?_ s t _ hrun⟩
-    cases double
-    all_goals simp only [SystemProofs.lrRows, Bool.false_eq_true, ite_true, ite_false,
-      JoltISA.lrwProgramAuto, JoltISA.lrdProgramAuto]
-    all_goals split <;> simp [NoStoreProgram, NoStoreRow]
+  | false => exact ⟨ha, hl, trivial⟩
   | true =>
-    have hs := storePlan_ram (if double then .dword else .word) rs1 0#64 _
-      (reservation_store_plan double rd rs1 rs2) s t
-    have heq : accessAddress (if double then .dword else .word)
-        (JoltISA.sourceValue (.xreg rs1) s) 0#64 =
-        SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s) := by
-      cases double <;> simp [accessAddress, SystemProofs.reservationBase, amoWordBase]
-    obtain ⟨hstore, hdev⟩ := hs (by simpa only [heq] using hram) hrun
-    exact ⟨⟨ha, hl, by simpa only [heq, ite_true] using hstore⟩, hdev⟩
+    cases double with
+    | false => exact ⟨ha, hl, scw_ram_guard rd rs1 rs2 s t
+        (source_read s hinv rs1) (source_read s hinv rs2) hram hrun⟩
+    | true => exact ⟨ha, hl, scd_ram_guard rd rs1 rs2 s t
+        (source_read s hinv rs1) (source_read s hinv rs2) hram hrun⟩
+
+/-- The executed source's actual-value RAM obligation.
+Narrow stores check their merged containing word; AMOs check their computed word.
+For example, SH passes source width two to the splice but checks eight written bytes. -/
+private def sourceStoreCondition (width : Nat) (rs2 rs1 : regidx) (imm : BitVec 12)
+    (js : SailJoltState) : Prop :=
+  Assumptions.JoltRamStoreOk
+    (compute_aligned_dword_base_address (JoltISA.sourceValue (.xreg rs1) js) imm) js
+    (JoltISA.storeDwordValue width
+      (load_effective_address (JoltISA.sourceValue (.xreg rs1) js) imm)
+      (JoltISA.Mmu.ram_doubleword js.sail.mem
+        (compute_aligned_dword_base_address (JoltISA.sourceValue (.xreg rs1) js) imm).toNat)
+      (JoltISA.sourceValue (.xreg rs2) js)) 8
+
+private def wordAmoCondition (op : amoop) (rs2 rs1 : regidx) (js : SailJoltState) : Prop :=
+  Assumptions.JoltRamStoreOk (amoWordBase (JoltISA.sourceValue (.xreg rs1) js)) js
+    (JoltISA.amoWordStoreValue op (JoltISA.sourceValue (.xreg rs1) js)
+      (JoltISA.Mmu.ram_doubleword js.sail.mem
+        (amoWordBase (JoltISA.sourceValue (.xreg rs1) js)).toNat)
+      (JoltISA.sourceValue (.xreg rs2) js)) 8
+
+private structure DwordAmoCondition (op : amoop) (rs2 rs1 : regidx)
+    (js : SailJoltState) : Prop where
+  aligned : JoltISA.sourceValue (.xreg rs1) js &&& 7 = 0
+  store_ok : Assumptions.JoltRamStoreOk (JoltISA.sourceValue (.xreg rs1) js) js
+    (JoltISA.amoValue op (JoltISA.sourceValue (.xreg rs2) js)
+      (JoltISA.Mmu.ram_doubleword js.sail.mem (JoltISA.sourceValue (.xreg rs1) js).toNat)) 8
 
 private def MemoryConditions : RiscvInstruction → SailJoltState → Prop
   | .LB _ rs1 imm, js | .LH _ rs1 imm, js | .LW _ rs1 imm, js
@@ -716,43 +623,44 @@ private def MemoryConditions : RiscvInstruction → SailJoltState → Prop
   | .LD _ rs1 imm, js =>
       Assumptions.JoltRamLoadOk
         (compute_aligned_dword_base_address (JoltISA.sourceValue (.xreg rs1) js) imm) js
-  | .SB _ rs1 imm, js | .SH _ rs1 imm, js | .SW _ rs1 imm, js
-  | .SD _ rs1 imm, js =>
-      Assumptions.JoltRamStoreOk
-        (compute_aligned_dword_base_address (JoltISA.sourceValue (.xreg rs1) js) imm) js
-  | .AMOSWAP_W _ rs1 _ _ _, js | .AMOADD_W _ rs1 _ _ _, js
-  | .AMOXOR_W _ rs1 _ _ _, js | .AMOAND_W _ rs1 _ _ _, js
-  | .AMOOR_W _ rs1 _ _ _, js | .AMOMIN_W _ rs1 _ _ _, js
-  | .AMOMAX_W _ rs1 _ _ _, js | .AMOMINU_W _ rs1 _ _ _, js
-  | .AMOMAXU_W _ rs1 _ _ _, js =>
-      Assumptions.JoltRamStoreOk (amoWordBase (JoltISA.sourceValue (.xreg rs1) js)) js
-  | .AMOSWAP_D _ rs1 _ _ _, js | .AMOADD_D _ rs1 _ _ _, js
-  | .AMOXOR_D _ rs1 _ _ _, js | .AMOAND_D _ rs1 _ _ _, js
-  | .AMOOR_D _ rs1 _ _ _, js | .AMOMIN_D _ rs1 _ _ _, js
-  | .AMOMAX_D _ rs1 _ _ _, js | .AMOMINU_D _ rs1 _ _ _, js
-  | .AMOMAXU_D _ rs1 _ _ _, js =>
-      Assumptions.JoltRamStoreOk (JoltISA.sourceValue (.xreg rs1) js) js
-  | .LR_W _ rs1 _ _, js => ReservationMemory false false rs1 js
-  | .LR_D _ rs1 _ _, js => ReservationMemory false true rs1 js
-  | .SC_W _ rs1 _ _ _, js => ReservationMemory true false rs1 js
-  | .SC_D _ rs1 _ _ _, js => ReservationMemory true true rs1 js
+  | .SB rs2 rs1 imm, js => sourceStoreCondition 1 rs2 rs1 imm js
+  | .SH rs2 rs1 imm, js => sourceStoreCondition 2 rs2 rs1 imm js
+  | .SW rs2 rs1 imm, js => sourceStoreCondition 4 rs2 rs1 imm js
+  | .SD rs2 rs1 imm, js => sourceStoreCondition 8 rs2 rs1 imm js
+  | .AMOSWAP_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOSWAP rs2 rs1 js
+  | .AMOADD_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOADD rs2 rs1 js
+  | .AMOXOR_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOXOR rs2 rs1 js
+  | .AMOAND_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOAND rs2 rs1 js
+  | .AMOOR_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOOR rs2 rs1 js
+  | .AMOMIN_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOMIN rs2 rs1 js
+  | .AMOMAX_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOMAX rs2 rs1 js
+  | .AMOMINU_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOMINU rs2 rs1 js
+  | .AMOMAXU_W _ rs1 rs2 _ _, js => wordAmoCondition .AMOMAXU rs2 rs1 js
+  | .AMOSWAP_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOSWAP rs2 rs1 js
+  | .AMOADD_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOADD rs2 rs1 js
+  | .AMOXOR_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOXOR rs2 rs1 js
+  | .AMOAND_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOAND rs2 rs1 js
+  | .AMOOR_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOOR rs2 rs1 js
+  | .AMOMIN_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOMIN rs2 rs1 js
+  | .AMOMAX_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOMAX rs2 rs1 js
+  | .AMOMINU_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOMINU rs2 rs1 js
+  | .AMOMAXU_D _ rs1 rs2 _ _, js => DwordAmoCondition .AMOMAXU rs2 rs1 js
+  | .LR_W _ rs1 _ _, js => ReservationMemory false false rs1 (regidx.Regidx 0) js
+  | .LR_D _ rs1 _ _, js => ReservationMemory false true rs1 (regidx.Regidx 0) js
+  | .SC_W _ rs1 rs2 _ _, js => ReservationMemory true false rs1 rs2 js
+  | .SC_D _ rs1 rs2 _ _, js => ReservationMemory true true rs1 rs2 js
   | _, _ => True
 
 private theorem loadProgram_ram (kind : AccessKind) (dst : JoltISA.Dst) (rs : regidx)
     (imm : BitVec 64) (rest : JoltISA.Program) (s t : SailJoltState)
-    (htail : NoStoreProgram rest)
     (hram : JoltISA.RAM_START_ADDRESS ≤
       ((JoltISA.sourceValue (.xreg rs) s + imm) &&& (-8 : BitVec 64)).toNat)
     (hrun : JoltISA.execProgram (.instr (loadRow kind dst rs imm) rest) s =
       .ok RETIRE_SUCCESS t) :
     Assumptions.JoltRamLoadOk
-      ((JoltISA.sourceValue (.xreg rs) s + imm) &&& (-8 : BitVec 64)) s ∧
-      t.jolt_device = s.jolt_device := by
-  obtain ⟨u, hload, hrest⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
-  refine ⟨load_row_ram kind dst rs imm s u hram hload, ?_⟩
-  have hrow : NoStoreRow (loadRow kind dst rs imm) := by cases kind <;> trivial
-  exact (noStoreProgram_device rest htail u t _ hrest).trans
-    (noStoreRow_device _ hrow s u _ hload)
+      ((JoltISA.sourceValue (.xreg rs) s + imm) &&& (-8 : BitVec 64)) s := by
+  obtain ⟨u, hload, _⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
+  exact load_row_ram kind dst rs imm s u hram hload
 
 private theorem csrRead_noStore (csr : JoltISA.SystemCSR) (rd : regidx)
     (rest : JoltISA.Program) (h : NoStoreProgram rest) :
@@ -796,272 +704,304 @@ private theorem csrImmediateBit_noStore (clear : Bool) (csr : JoltISA.SystemCSR)
   apply csrRead_noStore
   split_ifs <;> cases clear <;> trivial
 
+open private dwordBinop_registers from JoltConstraints.theorems.WholeRun.AtomicStoreRuns
+
+/-- The nine doubleword AMOs share three templates and two scratch allocations.
+For example, rd=x0 reserves v40 before allocating the load's old-value register. -/
+private theorem dword_templates (rd rs1 rs2 : regidx) :
+    JoltISA.amoadddProgramAuto rd rs1 rs2 = JoltISA.amoDoubleBinopProgram JoltISA.Instr.ADD rs2 rs1 rd ∧
+    JoltISA.amoxordProgramAuto rd rs1 rs2 = JoltISA.amoDoubleBinopProgram JoltISA.Instr.XOR rs2 rs1 rd ∧
+    JoltISA.amoanddProgramAuto rd rs1 rs2 = JoltISA.amoDoubleBinopProgram JoltISA.Instr.AND rs2 rs1 rd ∧
+    JoltISA.amoordProgramAuto rd rs1 rs2 = JoltISA.amoDoubleBinopProgram JoltISA.Instr.OR rs2 rs1 rd ∧
+    JoltISA.amomindProgramAuto rd rs1 rs2 =
+      JoltISA.amoDoubleSelectProgram JoltISA.Instr.SLT (.xreg rs2) (.vreg (JoltISA.amoOldVRegFor rd)) rs2 rs1 rd ∧
+    JoltISA.amomaxdProgramAuto rd rs1 rs2 =
+      JoltISA.amoDoubleSelectProgram JoltISA.Instr.SLT (.vreg (JoltISA.amoOldVRegFor rd)) (.xreg rs2) rs2 rs1 rd ∧
+    JoltISA.amominudProgramAuto rd rs1 rs2 =
+      JoltISA.amoDoubleSelectProgram JoltISA.Instr.SLTU (.xreg rs2) (.vreg (JoltISA.amoOldVRegFor rd)) rs2 rs1 rd ∧
+    JoltISA.amomaxudProgramAuto rd rs1 rs2 =
+      JoltISA.amoDoubleSelectProgram JoltISA.Instr.SLTU (.vreg (JoltISA.amoOldVRegFor rd)) (.xreg rs2) rs2 rs1 rd ∧
+    JoltISA.amoswapdProgramAuto rd rs1 rs2 =
+      .instr (JoltISA.Encoded.LD .amo (.vreg (JoltISA.amoOldVRegFor rd)) (.xreg rs1) 0)
+        (.instr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) 0)
+          (.instr (JoltISA.Encoded.ADDI (JoltISA.amoDstFor rd)
+            (.vreg (JoltISA.amoOldVRegFor rd)) 0) (.done RETIRE_SUCCESS))) := by
+  cases hrd : JoltISA.isX0 rd <;>
+    simp only [JoltISA.amoadddProgramAuto, JoltISA.amoxordProgramAuto,
+      JoltISA.amoanddProgramAuto, JoltISA.amoordProgramAuto, JoltISA.amomindProgramAuto,
+      JoltISA.amomaxdProgramAuto, JoltISA.amominudProgramAuto, JoltISA.amomaxudProgramAuto,
+      JoltISA.amoswapdProgramAuto, JoltISA.amoDoubleBinopProgram, JoltISA.amoDoubleSelectProgram,
+      JoltISA.amoDoubleBinopOldVRegFor, JoltISA.amoDoubleBinopNewVRegFor,
+      JoltISA.amoOldVRegFor, JoltISA.amoNewVRegFor, JoltISA.amoTmpVRegFor,
+      JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst,
+      JoltISA.rdZeroRewriteVReg, hrd, Bool.false_eq_true, ite_false, ite_true] <;>
+    exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
 private theorem retire_conditions (i : RiscvInstruction) (hi : i.Lifted)
-    (s t : SailJoltState) (hram : RamAccess i s)
+    (s t : SailJoltState) (hinv : Step.StepInvariant s.sail) (hram : RamAccess i s)
     (hrun : RiscvInstruction.joltRun (honestInstr i s) s = .ok RETIRE_SUCCESS t) :
-    MemoryConditions i s ∧ t.jolt_device = s.jolt_device := by
+    MemoryConditions i s := by
   cases i
   case LB rd rs1 imm =>
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.lbProgramAuto] at hrun
     split at hrun <;> exact loadProgram_ram .byte _ rs1 _ _ s t
-      (by simp [NoStoreProgram, NoStoreRow]) hram hrun
+      hram hrun
   case LBU rd rs1 imm =>
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.lbuProgramAuto] at hrun
     split at hrun <;> exact loadProgram_ram .byte _ rs1 _ _ s t
-      (by simp [NoStoreProgram, NoStoreRow]) hram hrun
+      hram hrun
   case LH rd rs1 imm =>
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.lhProgramAuto] at hrun
     split at hrun <;> exact loadProgram_ram .halfword _ rs1 _ _ s t
-      (by simp [NoStoreProgram, NoStoreRow]) hram hrun
+      hram hrun
   case LHU rd rs1 imm =>
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.lhuProgramAuto] at hrun
     split at hrun <;> exact loadProgram_ram .halfword _ rs1 _ _ s t
-      (by simp [NoStoreProgram, NoStoreRow]) hram hrun
+      hram hrun
   case LW rd rs1 imm =>
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.lwProgramAuto] at hrun
     split at hrun <;> exact loadProgram_ram .word _ rs1 _ _ s t
-      (by simp [NoStoreProgram, NoStoreRow]) hram hrun
+      hram hrun
   case LWU rd rs1 imm =>
     simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.lwuProgramAuto] at hrun
     split at hrun <;> exact loadProgram_ram .word _ rs1 _ _ s t
-      (by simp [NoStoreProgram, NoStoreRow]) hram hrun
+      hram hrun
   case LD rd rs1 imm =>
-    have hl := load_row_ram .dword (JoltISA.sideEffectingRdZeroDst rd) rs1
+    exact load_row_ram .dword (JoltISA.sideEffectingRdZeroDst rd) rs1
       (sign_extend (m := 64) imm) s t hram hrun
-    exact ⟨hl, noStoreRow_device (JoltISA.ldNativeInstr rd rs1 imm) (by simp [NoStoreRow, JoltISA.ldNativeInstr]) s t _ hrun⟩
   case SD rs2 rs1 imm =>
-    exact native_store_ram rs1 (.xreg rs2) _ s t hram hrun
+    exact nativeStore_ram_guard rs1 rs2 imm s t hram hrun
   case SB rs2 rs1 imm =>
-    exact storePlan_ram .byte rs1 (sign_extend (m := 64) imm) _
-      (by
-        simp only [JoltISA.sbProgramAuto]
-        repeat' first
-          | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-          | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t hram hrun
+    exact laneStore_bundle_guard .byte rs1 rs2 imm s t
+      (source_read s hinv rs1) (source_read s hinv rs2) hram hrun
   case SH rs2 rs1 imm =>
-    exact storePlan_ram .halfword rs1 (sign_extend (m := 64) imm) _
-      (by
-        simp only [JoltISA.shProgramAuto]
-        repeat' first
-          | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-          | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t hram hrun
+    exact laneStore_bundle_guard .halfword rs1 rs2 imm s t
+      (source_read s hinv rs1) (source_read s hinv rs2) hram hrun
   case SW rs2 rs1 imm =>
-    exact storePlan_ram .word rs1 (sign_extend (m := 64) imm) _
-      (by
-        simp only [JoltISA.swProgramAuto]
-        repeat' first
-          | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-          | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t hram hrun
+    exact laneStore_bundle_guard .word rs1 rs2 imm s t
+      (source_read s hinv rs1) (source_read s hinv rs2) hram hrun
   case AMOSWAP_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amoswapwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run (AtomicFamily.amoWordWindowProgram
+        (.done RETIRE_SUCCESS) (.xreg rs2) rs1 rd) s t := by
+      rw [← (wordTemplates rd rs1 rs2).2.2.2.2]
+      exact hrun
+    exact wordSwap_ram_guard rs2 rs1 rd s t
+      (source_read s hinv rs1) (source_read s hinv rs2) hram actual
   case AMOADD_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amoaddwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run
+        (JoltISA.amoWordBinopProgram JoltISA.Instr.ADD rs2 rs1 rd) s t := by
+      rw [← (wordTemplates rd rs1 rs2).1]
+      exact hrun
+    refine wordBinop_ram_guard .AMOADD JoltISA.Instr.ADD
+      (fun source old => source + old) rs2 rs1 rd s t (source_read s hinv rs1) hram ?_ ?_ actual
+    · intro opened old original mask sailEq oldEq dwordEq laneEq
+      exact AtomicFamily.amo_word_add_middle_run_into _ _ _ _ rs2 opened _ old original mask
+        (by rw [sailEq]; exact source_read s hinv rs2) oldEq dwordEq laneEq
+        (AtomicFamily.amo_word_register_writable rd 3)
+        (AtomicFamily.amo_word_register_ne rd 2 3 (by decide))
+        (AtomicFamily.amo_word_register_ne rd 0 3 (by decide))
+        (AtomicFamily.amo_word_register_ne rd 1 3 (by decide))
+    · intro source old
+      rw [AtomicFamily.amo_word_extract_add_low]
+      exact congrArg (fun word => (Sail.BitVec.extractLsb source 31 0 : BitVec 32) + word)
+        (AtomicFamily.sign_extend_64_setWidth_32 old)
   case AMOXOR_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amoxorwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run
+        (JoltISA.amoWordBinopProgram JoltISA.Instr.XOR rs2 rs1 rd) s t := by
+      rw [← (wordTemplates rd rs1 rs2).2.1]
+      exact hrun
+    refine wordBinop_ram_guard .AMOXOR JoltISA.Instr.XOR
+      (fun source old => source ^^^ old) rs2 rs1 rd s t (source_read s hinv rs1) hram ?_ ?_ actual
+    · intro opened old original mask sailEq oldEq dwordEq laneEq
+      exact AtomicFamily.amo_word_xor_middle_run_into _ _ _ _ rs2 opened _ old original mask
+        (by rw [sailEq]; exact source_read s hinv rs2) oldEq dwordEq laneEq
+        (AtomicFamily.amo_word_register_writable rd 3)
+        (AtomicFamily.amo_word_register_ne rd 2 3 (by decide))
+        (AtomicFamily.amo_word_register_ne rd 0 3 (by decide))
+        (AtomicFamily.amo_word_register_ne rd 1 3 (by decide))
+    · intro source old
+      rw [AtomicFamily.amo_word_extract_xor_low]
+      exact congrArg (fun word => (Sail.BitVec.extractLsb source 31 0 : BitVec 32) ^^^ word)
+        (AtomicFamily.sign_extend_64_setWidth_32 old)
   case AMOAND_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amoandwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run
+        (JoltISA.amoWordBinopProgram JoltISA.Instr.AND rs2 rs1 rd) s t := by
+      rw [← (wordTemplates rd rs1 rs2).2.2.1]
+      exact hrun
+    refine wordBinop_ram_guard .AMOAND JoltISA.Instr.AND
+      (fun source old => source &&& old) rs2 rs1 rd s t (source_read s hinv rs1) hram ?_ ?_ actual
+    · intro opened old original mask sailEq oldEq dwordEq laneEq
+      exact AtomicFamily.amo_word_and_middle_run_into _ _ _ _ rs2 opened _ old original mask
+        (by rw [sailEq]; exact source_read s hinv rs2) oldEq dwordEq laneEq
+        (AtomicFamily.amo_word_register_writable rd 3)
+        (AtomicFamily.amo_word_register_ne rd 2 3 (by decide))
+        (AtomicFamily.amo_word_register_ne rd 0 3 (by decide))
+        (AtomicFamily.amo_word_register_ne rd 1 3 (by decide))
+    · intro source old
+      rw [AtomicFamily.amo_word_extract_and_low]
+      exact congrArg (fun word => (Sail.BitVec.extractLsb source 31 0 : BitVec 32) &&& word)
+        (AtomicFamily.sign_extend_64_setWidth_32 old)
   case AMOOR_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amoorwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run
+        (JoltISA.amoWordBinopProgram JoltISA.Instr.OR rs2 rs1 rd) s t := by
+      rw [← (wordTemplates rd rs1 rs2).2.2.2.1]
+      exact hrun
+    refine wordBinop_ram_guard .AMOOR JoltISA.Instr.OR
+      (fun source old => source ||| old) rs2 rs1 rd s t (source_read s hinv rs1) hram ?_ ?_ actual
+    · intro opened old original mask sailEq oldEq dwordEq laneEq
+      exact AtomicFamily.amo_word_or_middle_run_into _ _ _ _ rs2 opened _ old original mask
+        (by rw [sailEq]; exact source_read s hinv rs2) oldEq dwordEq laneEq
+        (AtomicFamily.amo_word_register_writable rd 3)
+        (AtomicFamily.amo_word_register_ne rd 2 3 (by decide))
+        (AtomicFamily.amo_word_register_ne rd 0 3 (by decide))
+        (AtomicFamily.amo_word_register_ne rd 1 3 (by decide))
+    · intro source old
+      rw [AtomicFamily.amo_word_extract_or_low]
+      exact congrArg (fun word => (Sail.BitVec.extractLsb source 31 0 : BitVec 32) ||| word)
+        (AtomicFamily.sign_extend_64_setWidth_32 old)
   case AMOMIN_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amominwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run (AtomicFamily.amoWordWindowProgram
+        (AtomicFamily.amoWordSelectLaneMiddle JoltISA.Instr.SLT false rs2 rd)
+        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs1 rd) s t := by
+      rw [← (wordSelectTemplates rd rs1 rs2).1]
+      exact hrun
+    exact wordSelect_ram_guard .AMOMIN JoltISA.Instr.SLT zopz0zI_s false
+      AtomicFamily.amo_word_slt_run_vreg_vreg_vreg (wordSelect_result true false)
+      rs2 rs1 rd s t (source_read s hinv rs1) (source_read s hinv rs2) hram actual
   case AMOMAX_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amomaxwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run (AtomicFamily.amoWordWindowProgram
+        (AtomicFamily.amoWordSelectLaneMiddle JoltISA.Instr.SLT true rs2 rd)
+        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs1 rd) s t := by
+      rw [← (wordSelectTemplates rd rs1 rs2).2.1]
+      exact hrun
+    exact wordSelect_ram_guard .AMOMAX JoltISA.Instr.SLT zopz0zI_s true
+      AtomicFamily.amo_word_slt_run_vreg_vreg_vreg (wordSelect_result true true)
+      rs2 rs1 rd s t (source_read s hinv rs1) (source_read s hinv rs2) hram actual
   case AMOMINU_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amominuwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run (AtomicFamily.amoWordWindowProgram
+        (AtomicFamily.amoWordSelectLaneMiddle JoltISA.Instr.SLTU false rs2 rd)
+        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs1 rd) s t := by
+      rw [← (wordSelectTemplates rd rs1 rs2).2.2.1]
+      exact hrun
+    exact wordSelect_ram_guard .AMOMINU JoltISA.Instr.SLTU zopz0zI_u false
+      AtomicFamily.amo_word_sltu_run_vreg_vreg_vreg (wordSelect_result false false)
+      rs2 rs1 rd s t (source_read s hinv rs1) (source_read s hinv rs2) hram actual
   case AMOMAXU_W rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .word rs1 0 _
-        (by
-          simp only [JoltISA.amomaxuwProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have actual : JoltISA.Program.Run (AtomicFamily.amoWordWindowProgram
+        (AtomicFamily.amoWordSelectLaneMiddle JoltISA.Instr.SLTU true rs2 rd)
+        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs1 rd) s t := by
+      rw [← (wordSelectTemplates rd rs1 rs2).2.2.2]
+      exact hrun
+    exact wordSelect_ram_guard .AMOMAXU JoltISA.Instr.SLTU zopz0zI_u true
+      AtomicFamily.amo_word_sltu_run_vreg_vreg_vreg (wordSelect_result false true)
+      rs2 rs1 rd s t (source_read s hinv rs1) (source_read s hinv rs2) hram actual
   case AMOSWAP_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amoswapdProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).2.2.2.2.2.2.2.2
+    have actual : JoltISA.Program.Run
+        (.instr (JoltISA.Encoded.LD .amo (.vreg (JoltISA.amoOldVRegFor rd)) (.xreg rs1) 0)
+          (.instr (JoltISA.Encoded.SD (.xreg rs1) (.xreg rs2) 0)
+            (.instr (JoltISA.Encoded.ADDI (JoltISA.amoDstFor rd)
+              (.vreg (JoltISA.amoOldVRegFor rd)) 0) (.done RETIRE_SUCCESS)))) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordSwap_ram_guards rs2 rs1 rd s t (source_read s hinv rs2) hram actual
+    exact ⟨guards.1, guards.2.2⟩
   case AMOADD_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amoadddProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).1
+    have actual : JoltISA.Program.Run (JoltISA.amoDoubleBinopProgram JoltISA.Instr.ADD rs2 rs1 rd) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordBinop_ram_guards JoltISA.Instr.ADD
+      (fun source word => source + word) rs2 rs1 rd s t hram
+      (fun word loaded sailEq oldEq => AtomicFamily.amo_dword_add_middle_after_load_into
+        rs2 s 0 _ word (source_read s hinv rs2) _ _
+        (dwordBinop_registers rd).2.1 (dwordBinop_registers rd).2.2 loaded sailEq oldEq) actual
+    exact ⟨guards.1, guards.2.2⟩
   case AMOXOR_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amoxordProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).2.1
+    have actual : JoltISA.Program.Run (JoltISA.amoDoubleBinopProgram JoltISA.Instr.XOR rs2 rs1 rd) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordBinop_ram_guards JoltISA.Instr.XOR
+      (fun source word => source ^^^ word) rs2 rs1 rd s t hram
+      (fun word loaded sailEq oldEq => AtomicFamily.amo_dword_xor_middle_after_load_into
+        rs2 s 0 _ word (source_read s hinv rs2) _ _
+        (dwordBinop_registers rd).2.1 (dwordBinop_registers rd).2.2 loaded sailEq oldEq) actual
+    exact ⟨guards.1, guards.2.2⟩
   case AMOAND_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amoanddProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).2.2.1
+    have actual : JoltISA.Program.Run (JoltISA.amoDoubleBinopProgram JoltISA.Instr.AND rs2 rs1 rd) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordBinop_ram_guards JoltISA.Instr.AND
+      (fun source word => source &&& word) rs2 rs1 rd s t hram
+      (fun word loaded sailEq oldEq => AtomicFamily.amo_dword_and_middle_after_load_into
+        rs2 s 0 _ word (source_read s hinv rs2) _ _
+        (dwordBinop_registers rd).2.1 (dwordBinop_registers rd).2.2 loaded sailEq oldEq) actual
+    exact ⟨guards.1, guards.2.2⟩
   case AMOOR_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amoordProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).2.2.2.1
+    have actual : JoltISA.Program.Run (JoltISA.amoDoubleBinopProgram JoltISA.Instr.OR rs2 rs1 rd) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordBinop_ram_guards JoltISA.Instr.OR
+      (fun source word => source ||| word) rs2 rs1 rd s t hram
+      (fun word loaded sailEq oldEq => AtomicFamily.amo_dword_or_middle_after_load_into
+        rs2 s 0 _ word (source_read s hinv rs2) _ _
+        (dwordBinop_registers rd).2.1 (dwordBinop_registers rd).2.2 loaded sailEq oldEq) actual
+    exact ⟨guards.1, guards.2.2⟩
   case AMOMIN_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amomindProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).2.2.2.2.1
+    have actual : JoltISA.Program.Run
+        (JoltISA.amoDoubleSelectProgram JoltISA.Instr.SLT (.xreg rs2) (.vreg (JoltISA.amoOldVRegFor rd)) rs2 rs1 rd) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordSelect_ram_guards JoltISA.Instr.SLT (.xreg rs2) (.vreg (JoltISA.amoOldVRegFor rd))
+      (fun source word => if (zopz0zI_s source word : Bool) then source else word) rs2 rs1 rd s t hram
+      (fun word loaded sailEq oldEq => AtomicFamily.amo_dword_min_middle_after_load_for
+        rd rs2 s 0 _ word (source_read s hinv rs2) loaded sailEq oldEq) actual
+    exact ⟨guards.1, guards.2.2⟩
   case AMOMAX_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amomaxdProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).2.2.2.2.2.1
+    have actual : JoltISA.Program.Run
+        (JoltISA.amoDoubleSelectProgram JoltISA.Instr.SLT (.vreg (JoltISA.amoOldVRegFor rd)) (.xreg rs2) rs2 rs1 rd) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordSelect_ram_guards JoltISA.Instr.SLT (.vreg (JoltISA.amoOldVRegFor rd)) (.xreg rs2)
+      (fun source word => if (zopz0zI_s word source : Bool) then source else word) rs2 rs1 rd s t hram
+      (fun word loaded sailEq oldEq => AtomicFamily.amo_dword_max_middle_after_load_for
+        rd rs2 s 0 _ word (source_read s hinv rs2) loaded sailEq oldEq) actual
+    exact ⟨guards.1, guards.2.2⟩
   case AMOMINU_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amominudProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).2.2.2.2.2.2.1
+    have actual : JoltISA.Program.Run
+        (JoltISA.amoDoubleSelectProgram JoltISA.Instr.SLTU (.xreg rs2) (.vreg (JoltISA.amoOldVRegFor rd)) rs2 rs1 rd) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordSelect_ram_guards JoltISA.Instr.SLTU (.xreg rs2) (.vreg (JoltISA.amoOldVRegFor rd))
+      (fun source word => if (zopz0zI_u source word : Bool) then source else word) rs2 rs1 rd s t hram
+      (fun word loaded sailEq oldEq => AtomicFamily.amo_dword_minu_middle_after_load_for
+        rd rs2 s 0 _ word (source_read s hinv rs2) loaded sailEq oldEq) actual
+    exact ⟨guards.1, guards.2.2⟩
   case AMOMAXU_D rd rs1 rs2 aq rl =>
-    simpa [MemoryConditions, accessAddress, amoWordBase] using
-      storePlan_ram .dword rs1 0 _
-        (by
-          simp only [JoltISA.amomaxudProgramAuto]
-          split <;> repeat' first
-            | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-            | apply StorePlan.scratch _ _ (by simp [ScratchRow])) s t
-        (by simpa [RamAccess, accessAddress, amoWordBase] using hram) hrun
+    have template := (dword_templates rd rs1 rs2).2.2.2.2.2.2.2.1
+    have actual : JoltISA.Program.Run
+        (JoltISA.amoDoubleSelectProgram JoltISA.Instr.SLTU (.vreg (JoltISA.amoOldVRegFor rd)) (.xreg rs2) rs2 rs1 rd) s t := by
+      rw [← template]
+      exact hrun
+    have guards := dwordSelect_ram_guards JoltISA.Instr.SLTU (.vreg (JoltISA.amoOldVRegFor rd)) (.xreg rs2)
+      (fun source word => if (zopz0zI_u word source : Bool) then source else word) rs2 rs1 rd s t hram
+      (fun word loaded sailEq oldEq => AtomicFamily.amo_dword_maxu_middle_after_load_for
+        rd rs2 s 0 _ word (source_read s hinv rs2) loaded sailEq oldEq) actual
+    exact ⟨guards.1, guards.2.2⟩
   case ECALL => exact False.elim hi
   case EBREAK => exact False.elim hi
-  case LR_W rd rs1 aq rl => exact reservation_conditions false false rd rs1 zreg s t hram hrun
-  case LR_D rd rs1 aq rl => exact reservation_conditions false true rd rs1 zreg s t hram hrun
-  case SC_W rd rs1 rs2 aq rl => exact reservation_conditions true false rd rs1 rs2 s t hram hrun
-  case SC_D rd rs1 rs2 aq rl => exact reservation_conditions true true rd rs1 rs2 s t hram hrun
-  case MRET =>
-    exact ⟨trivial, noStoreProgram_device _ (by trivial) s t _ hrun⟩
-  case CSRRW => exact ⟨trivial, noStoreProgram_device _ (csrrw_noStore _ _ _) s t _ hrun⟩
-  case CSRRS => exact ⟨trivial, noStoreProgram_device _ (csrBit_noStore false _ _ _) s t _ hrun⟩
-  case CSRRC => exact ⟨trivial, noStoreProgram_device _ (csrBit_noStore true _ _ _) s t _ hrun⟩
-  case CSRRWI => exact ⟨trivial, noStoreProgram_device _ (csrrwi_noStore _ _ _) s t _ hrun⟩
-  case CSRRSI => exact ⟨trivial, noStoreProgram_device _ (csrImmediateBit_noStore false _ _ _) s t _ hrun⟩
-  case CSRRCI => exact ⟨trivial, noStoreProgram_device _ (csrImmediateBit_noStore true _ _ _) s t _ hrun⟩
-
-  all_goals
-    refine ⟨True.intro, ?_⟩
-    simp only [honestInstr, RiscvInstruction.joltRun, JoltISA.execLUI] at hrun
-    first
-    | apply noStoreRow_device _ ?_ s t _ hrun
-      first
-      | (unfold JoltISA.pureWritebackNativeInstr; split_ifs <;> trivial)
-      | (unfold JoltISA.Instr.rewriteNative; trivial)
-      | trivial
-    | apply noStoreProgram_device _ ?_ s t _ hrun
-      simp only [JoltISA.slliProgramAuto,
-          JoltISA.srliProgramAuto,
-          JoltISA.sraiProgramAuto,
-          JoltISA.sllProgramAuto,
-          JoltISA.srlProgramAuto,
-          JoltISA.sraProgramAuto,
-          JoltISA.slliwProgramAuto,
-          JoltISA.srliwProgramAuto,
-          JoltISA.sraiwProgramAuto,
-          JoltISA.sllwProgramAuto,
-          JoltISA.srlwProgramAuto,
-          JoltISA.srawProgramAuto,
-          JoltISA.mulhProgramAuto,
-          JoltISA.mulhsuProgramAuto,
-          JoltISA.divProgramAuto,
-          JoltISA.divuProgramAuto,
-          JoltISA.remProgramAuto,
-          JoltISA.remuProgramAuto,
-          JoltISA.divwProgramAuto,
-          JoltISA.divuwProgramAuto,
-          JoltISA.remwProgramAuto,
-          JoltISA.remuwProgramAuto ]
-      split <;> simp [NoStoreProgram, NoStoreRow]
+  case LR_W rd rs1 aq rl => exact reservation_conditions false false rd rs1 zreg s t hinv hram hrun
+  case LR_D rd rs1 aq rl => exact reservation_conditions false true rd rs1 zreg s t hinv hram hrun
+  case SC_W rd rs1 rs2 aq rl => exact reservation_conditions true false rd rs1 rs2 s t hinv hram hrun
+  case SC_D rd rs1 rs2 aq rl =>
+    exact reservation_conditions true true rd rs1 rs2 s t hinv hram hrun
+  all_goals exact True.intro
 
 
 private def loadBundle (js : SailJoltState) (hinv : Step.StepInvariant js.sail)
@@ -1079,14 +1019,19 @@ private def loadBundle (js : SailJoltState) (hinv : Step.StepInvariant js.sail)
 
 private def storeBundle (js : SailJoltState) (hinv : Step.StepInvariant js.sail)
     (hlink : System.systemProject js = js.sail) (hmprv : Assumptions.MstatusMprvZero js.sail)
-    (imm : BitVec 12) (rs2 rs1 : regidx)
+    (imm : BitVec 12) (rs2 rs1 : regidx) (storeWidth : Nat)
     (hw : DwordReadWriteWindowAssumptions
       (compute_aligned_dword_base_address (JoltISA.sourceValue (.xreg rs1) js) imm) js.sail)
     (hr : Assumptions.JoltRamStoreOk
-      (compute_aligned_dword_base_address (JoltISA.sourceValue (.xreg rs1) js) imm) js) :
-    StoreProgramEqSailAssumptions imm rs2 rs1 js :=
+      (compute_aligned_dword_base_address (JoltISA.sourceValue (.xreg rs1) js) imm) js
+      (JoltISA.storeDwordValue storeWidth
+        (load_effective_address (JoltISA.sourceValue (.xreg rs1) js) imm)
+        (JoltISA.Mmu.ram_doubleword js.sail.mem
+          (compute_aligned_dword_base_address (JoltISA.sourceValue (.xreg rs1) js) imm).toNat)
+        (JoltISA.sourceValue (.xreg rs2) js)) 8) :
+    StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth :=
   { loadBundle js hinv hlink hmprv imm rs1 hw.toDwordReadWindowAssumptions
-      ⟨hr.below_heap_end⟩, hw.toDwordWriteWindowAssumptions with
+      ⟨hr.below_backing_end⟩, hw.toDwordWriteWindowAssumptions with
     rs2_val := JoltISA.sourceValue (.xreg rs2) js
     rs2_read := source_read js hinv rs2
     jolt_ram_store := hr }
@@ -1095,26 +1040,32 @@ private def amoWordBundle (js : SailJoltState) (hinv : Step.StepInvariant js.sai
     (hlink : System.systemProject js = js.sail) (hmprv : Assumptions.MstatusMprvZero js.sail)
     (op : amoop) (rs2 rs1 rd : regidx)
     (hw : DwordAtomicWindowAssumptions op (amoWordBase (JoltISA.sourceValue (.xreg rs1) js)) js.sail)
-    (hr : Assumptions.JoltRamStoreOk (amoWordBase (JoltISA.sourceValue (.xreg rs1) js)) js) :
+    (hr : Assumptions.JoltRamStoreOk (amoWordBase (JoltISA.sourceValue (.xreg rs1) js)) js
+      (JoltISA.amoWordStoreValue op (JoltISA.sourceValue (.xreg rs1) js)
+        (JoltISA.Mmu.ram_doubleword js.sail.mem
+          (amoWordBase (JoltISA.sourceValue (.xreg rs1) js)).toNat)
+        (JoltISA.sourceValue (.xreg rs2) js)) 8) :
     AmoWordProgramEqSailAssumptions op rs2 rs1 rd js :=
   { binarySource js hinv hlink rs2 rs1, hw with
     rd_readable := ⟨_, source_read js hinv rd⟩
     cur_privilege := ⟨hinv.machine⟩
     mstatus_mprv := hmprv
-    jolt_ram_load := ⟨hr.below_heap_end⟩
+    jolt_ram_load := ⟨hr.below_backing_end⟩
     jolt_ram_store := hr }
 
 private def amoDwordBundle (js : SailJoltState) (hinv : Step.StepInvariant js.sail)
     (hlink : System.systemProject js = js.sail) (hmprv : Assumptions.MstatusMprvZero js.sail)
     (op : amoop) (rs2 rs1 rd : regidx)
     (hw : DwordAtomicWindowAssumptions op (JoltISA.sourceValue (.xreg rs1) js) js.sail)
-    (hr : Assumptions.JoltRamStoreOk (JoltISA.sourceValue (.xreg rs1) js) js) :
+    (hr : Assumptions.JoltRamStoreOk (JoltISA.sourceValue (.xreg rs1) js) js
+      (JoltISA.amoValue op (JoltISA.sourceValue (.xreg rs2) js)
+        (JoltISA.Mmu.ram_doubleword js.sail.mem (JoltISA.sourceValue (.xreg rs1) js).toNat)) 8) :
     AmoDwordProgramEqSailAssumptions op rs2 rs1 rd js :=
   { binarySource js hinv hlink rs2 rs1, hw with
     rd_readable := ⟨_, source_read js hinv rd⟩
     cur_privilege := ⟨hinv.machine⟩
     mstatus_mprv := hmprv
-    jolt_ram_load := ⟨hr.below_heap_end⟩
+    jolt_ram_load := ⟨hr.below_backing_end⟩
     jolt_ram_store := hr }
 
 private theorem reservation_checks (s : SailState) (double : Bool) (addr : BitVec 64)
@@ -1141,7 +1092,7 @@ private theorem reservation_checks (s : SailState) (double : Bool) (addr : BitVe
 
 private def reservationWindow (js : SailJoltState) (double : Bool) (rs1 : regidx)
     (hinv : Step.StepInvariant js.sail) (hmprv : Assumptions.MstatusMprvZero js.sail)
-    (hm : ReservationMemory false double rs1 js)
+    (hm : ReservationMemory false double rs1 (regidx.Regidx 0) js)
     (hw : DwordAtomicWindowAssumptions .AMOADD
       (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js.sail) :
     SystemProofs.ReservationWindow double (JoltISA.sourceValue (.xreg rs1) js) js :=
@@ -1155,7 +1106,7 @@ private def reservationWindow (js : SailJoltState) (double : Bool) (rs1 : regidx
 private def reservationReadBundle (js : SailJoltState) (double : Bool) (rs1 : regidx)
     (hlink : System.systemProject js = js.sail) (hinv : Step.StepInvariant js.sail)
     (hmprv : Assumptions.MstatusMprvZero js.sail)
-    (hm : ReservationMemory false double rs1 js)
+    (hm : ReservationMemory false double rs1 (regidx.Regidx 0) js)
     (hw : DwordAtomicWindowAssumptions .AMOADD
       (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js.sail)
     (hpma : js.sail.regs.get? Register.pma_regions = some platformPma)
@@ -1170,7 +1121,7 @@ private def reservationReadBundle (js : SailJoltState) (double : Bool) (rs1 : re
 private def reservationStoreBundle (js : SailJoltState) (double : Bool) (rs2 rs1 : regidx)
     (hlink : System.systemProject js = js.sail) (hinv : Step.StepInvariant js.sail)
     (hmprv : Assumptions.MstatusMprvZero js.sail)
-    (hm : ReservationMemory true double rs1 js)
+    (hm : ReservationMemory true double rs1 rs2 js)
     (hw : DwordAtomicWindowAssumptions .AMOADD
       (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) js)) js.sail)
     (hpma : js.sail.regs.get? Register.pma_regions = some platformPma)
@@ -1210,7 +1161,7 @@ The additional premises are: `hsys` (invariant: legal persistent system values),
 `hpc` (invariant: the current PC is even), and
 `hheap` (platform: the heap leaves eight bytes before address wrap).
 The run supplies the heap and stack-canary checks made by Jolt's tracer in
-`tracer/src/emulator/mmu.rs` (`Mmu::assert_effective_address`) at `5def437f`. -/
+`tracer/src/emulator/mmu.rs` (`Mmu::assert_effective_address`) at `ff6fc6568`. -/
 theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
     (js : SailJoltState) (hsys : SystemInv js)
     (hlink : System.systemProject js = js.sail)
@@ -1229,15 +1180,16 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
     ∃ h : RiscvInstruction.equivAssumptions (honestInstr i js) js,
       RiscvInstruction.AdviceHonest (honestInstr i js) js h := by
   obtain ⟨js', hrun⟩ := hok
-  have hc := (retire_conditions i hi js js' hram hrun).1
+  have hc := (retire_conditions i hi js js' hinv hram hrun)
   have hmprv := mprv_zero js hlink hmstatus
   have window (base : BitVec 64)
       (hram : JoltISA.RAM_START_ADDRESS ≤ base.toNat)
-      (hbelow : base.toNat < js.jolt_device.memory_layout.heap_end.toNat)
+      (hbelow : base.toNat < JoltISA.Mmu.ram_backing_end js.jolt_device)
+      (haligned : base &&& 7 = 0)
       (op : amoop) (hop : (op == .AMOCAS) = false) :
       DwordAtomicWindowAssumptions op base js.sail :=
-    ram_windows js base hpma hhtif (layout_memLow js hlayout) hpresent hram hbelow
-      (by omega) op hop
+    ram_windows js base hpma hhtif (layout_memLow js hlayout) hpresent hram hlayout
+      hbelow haligned op hop
   cases i
   case LUI rd imm => exact ⟨noSource js hlink, True.intro⟩
   case AUIPC rd imm => exact ⟨{ noSource js hlink with pc_readable := hinv.present _ }, True.intro⟩
@@ -1246,102 +1198,113 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
   case FENCE => exact ⟨{ noSource js hlink with cur_privilege := ⟨hinv.machine⟩ }, True.intro⟩
   case LB rd rs1 imm =>
     exact ⟨loadBundle js hinv hlink hmprv imm rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
       True.intro⟩
   case LBU rd rs1 imm =>
     exact ⟨loadBundle js hinv hlink hmprv imm rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
       True.intro⟩
   case LH rd rs1 imm =>
     exact ⟨loadBundle js hinv hlink hmprv imm rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
       True.intro⟩
   case LHU rd rs1 imm =>
     exact ⟨loadBundle js hinv hlink hmprv imm rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
       True.intro⟩
   case LW rd rs1 imm =>
     exact ⟨loadBundle js hinv hlink hmprv imm rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
       True.intro⟩
   case LWU rd rs1 imm =>
     exact ⟨loadBundle js hinv hlink hmprv imm rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
       True.intro⟩
   case LD rd rs1 imm =>
     exact ⟨loadBundle js hinv hlink hmprv imm rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWindowAssumptions hc,
       True.intro⟩
   case SB rs2 rs1 imm =>
-    exact ⟨storeBundle js hinv hlink hmprv imm rs2 rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWriteWindowAssumptions hc,
+    exact ⟨storeBundle js hinv hlink hmprv imm rs2 rs1 1
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWriteWindowAssumptions hc,
       True.intro⟩
   case SH rs2 rs1 imm =>
-    exact ⟨storeBundle js hinv hlink hmprv imm rs2 rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWriteWindowAssumptions hc,
+    exact ⟨storeBundle js hinv hlink hmprv imm rs2 rs1 2
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWriteWindowAssumptions hc,
       True.intro⟩
   case SW rs2 rs1 imm =>
-    exact ⟨storeBundle js hinv hlink hmprv imm rs2 rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWriteWindowAssumptions hc,
+    exact ⟨storeBundle js hinv hlink hmprv imm rs2 rs1 4
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWriteWindowAssumptions hc,
       True.intro⟩
   case SD rs2 rs1 imm =>
-    exact ⟨storeBundle js hinv hlink hmprv imm rs2 rs1
-      (window _ hram hc.below_heap_end .AMOADD (by decide)).toDwordReadWriteWindowAssumptions hc,
+    exact ⟨storeBundle js hinv hlink hmprv imm rs2 rs1 8
+      (window _ hram hc.below_backing_end
+        (aligned_dword_addr_aligns _ imm) .AMOADD (by decide)).toDwordReadWriteWindowAssumptions hc,
       True.intro⟩
   case AMOSWAP_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOSWAP rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOSWAP (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOSWAP (by decide)) hc, True.intro⟩
   case AMOADD_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOADD rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOADD (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOADD (by decide)) hc, True.intro⟩
   case AMOXOR_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOXOR rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOXOR (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOXOR (by decide)) hc, True.intro⟩
   case AMOAND_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOAND rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOAND (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOAND (by decide)) hc, True.intro⟩
   case AMOOR_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOOR rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOOR (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOOR (by decide)) hc, True.intro⟩
   case AMOMIN_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOMIN rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOMIN (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOMIN (by decide)) hc, True.intro⟩
   case AMOMAX_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOMAX rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOMAX (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOMAX (by decide)) hc, True.intro⟩
   case AMOMINU_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOMINU rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOMINU (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOMINU (by decide)) hc, True.intro⟩
   case AMOMAXU_W rd rs1 rs2 aq rl =>
     exact ⟨amoWordBundle js hinv hlink hmprv .AMOMAXU rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOMAXU (by decide)) hc, True.intro⟩
+      (window _ hram hc.below_backing_end (align_down_8_and_7_eq_zero _) .AMOMAXU (by decide)) hc, True.intro⟩
   case AMOSWAP_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOSWAP rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOSWAP (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOSWAP (by decide)) hc.store_ok, True.intro⟩
   case AMOADD_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOADD rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOADD (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOADD (by decide)) hc.store_ok, True.intro⟩
   case AMOXOR_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOXOR rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOXOR (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOXOR (by decide)) hc.store_ok, True.intro⟩
   case AMOAND_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOAND rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOAND (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOAND (by decide)) hc.store_ok, True.intro⟩
   case AMOOR_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOOR rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOOR (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOOR (by decide)) hc.store_ok, True.intro⟩
   case AMOMIN_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOMIN rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOMIN (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOMIN (by decide)) hc.store_ok, True.intro⟩
   case AMOMAX_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOMAX rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOMAX (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOMAX (by decide)) hc.store_ok, True.intro⟩
   case AMOMINU_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOMINU rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOMINU (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOMINU (by decide)) hc.store_ok, True.intro⟩
   case AMOMAXU_D rd rs1 rs2 aq rl =>
     exact ⟨amoDwordBundle js hinv hlink hmprv .AMOMAXU rs2 rs1 rd
-      (window _ hram hc.below_heap_end .AMOMAXU (by decide)) hc, True.intro⟩
+      (window _ hram hc.store_ok.below_backing_end hc.aligned .AMOMAXU (by decide)) hc.store_ok, True.intro⟩
   case ECALL => exact False.elim hi
   case EBREAK => exact False.elim hi
   case MRET =>
@@ -1350,33 +1313,22 @@ theorem equivAssumptions_of_retire (i : RiscvInstruction) (hi : i.Lifted)
   case CSRRWI | CSRRSI | CSRRCI => exact ⟨csrBundle js hsys hlink hinv, trivial⟩
   case LR_W rd rs1 aq rl =>
     exact ⟨reservationReadBundle js false rs1 hlink hinv hmprv hc
-      (window _ hram hc.load.below_heap_end .AMOADD (by decide)) hpma hram (by
-        have := hc.load.below_heap_end; dsimp [SystemProofs.reservationBase] at *; omega), trivial⟩
+      (window _ hram hc.load.below_backing_end (align_down_8_and_7_eq_zero _) .AMOADD (by decide)) hpma hram (by
+        exact AtomicFamily.amo_word_base_no_ovf _), trivial⟩
   case LR_D rd rs1 aq rl =>
     exact ⟨reservationReadBundle js true rs1 hlink hinv hmprv hc
-      (window _ hram hc.load.below_heap_end .AMOADD (by decide)) hpma hram (by
-        have := hc.load.below_heap_end; dsimp [SystemProofs.reservationBase] at *; omega), trivial⟩
+      (window _ hram hc.load.below_backing_end (by simpa [SystemProofs.reservationBase] using hc.align) .AMOADD (by decide)) hpma hram (by
+        exact aligned_addr_no_ovf_of_align _ hc.align), trivial⟩
   case SC_W rd rs1 rs2 aq rl =>
     exact ⟨reservationStoreBundle js false rs2 rs1 hlink hinv hmprv hc
-      (window _ hram hc.load.below_heap_end .AMOADD (by decide)) hpma hram (by
-        have := hc.load.below_heap_end; dsimp [SystemProofs.reservationBase] at *; omega) hsys, trivial⟩
+      (window _ hram hc.load.below_backing_end (align_down_8_and_7_eq_zero _) .AMOADD (by decide)) hpma hram (by
+        exact AtomicFamily.amo_word_base_no_ovf _) hsys, trivial⟩
   case SC_D rd rs1 rs2 aq rl =>
     exact ⟨reservationStoreBundle js true rs2 rs1 hlink hinv hmprv hc
-      (window _ hram hc.load.below_heap_end .AMOADD (by decide)) hpma hram (by
-        have := hc.load.below_heap_end; dsimp [SystemProofs.reservationBase] at *; omega) hsys, trivial⟩
+      (window _ hram hc.load.below_backing_end (by simpa [SystemProofs.reservationBase] using hc.align) .AMOADD (by decide)) hpma hram (by
+        exact aligned_addr_no_ovf_of_align _ hc.align) hsys, trivial⟩
   all_goals first
     | exact ⟨unarySource js hinv hlink _, True.intro⟩
     | exact ⟨binarySource js hinv hlink _ _, by first | exact True.intro | rfl⟩
-
-/-- A retiring instruction whose doubleword access is in RAM preserves the
-entire Jolt device, including its outputs and panic flag.
-For example, `SD` into RAM updates Sail memory and leaves the device unchanged.
-Jolt's tracer uses the RAM branch of `Mmu::store_doubleword_raw` in
-`tracer/src/emulator/mmu.rs` at `5def437f`. -/
-theorem joltRun_device_of_ram (i : RiscvInstruction) (hi : i.Lifted)
-    (js js' : SailJoltState) (hram : RamAccess i js)
-    (hrun : RiscvInstruction.joltRun (honestInstr i js) js = .ok RETIRE_SUCCESS js') :
-    js'.jolt_device = js.jolt_device :=
-  (retire_conditions i hi js js' hram hrun).2
 
 end WholeRun

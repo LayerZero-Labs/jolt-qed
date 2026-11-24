@@ -69,16 +69,36 @@ The following records the current changed interfaces; a final declaration-and-li
 The new definitions `haltEndRule`, `ramAccessCount`, `ramCodeRegion`, `ramWriteProtectedMask`, `ramWriteProtected`, and `ModelledKind` support named consumers above.
 No new theorem premise is intended as a workaround for a proof gap.
 
-## Remaining work
+## Remaining work (current checkpoint, shared-public22 launched)
 
-The whole-run relation and its second I/O implementation have not yet been migrated.
-The three flag-word restrictions and their old stopping proofs have not yet been removed.
-The status of `tracerAddressChecks` is not yet established.
-The two RAM completeness admissions have not yet been proved.
-The three #1949 admissions remain untouched.
-The methods pin and other Rust citations remain to be updated after the model is consistent.
-The complete JoltConstraints build, required diff scans, axiom checks and final clean-tree check have not passed.
-No final soundness or completeness claim is made by this working report.
+The re-pin is incomplete because the full library and whole-run simulation have not yet built.
+The seventeenth through twenty-first batches checked `JoltInstance.soundness` for both public panic claims and printed exactly `propext`, `Classical.choice` and `Quot.sound` in its axiom closure.
+Commit `b852fe3` records that checked proof and removes the three flag-word restrictions and their definition modules.
+`TemporaryRestrictions` contains only `hostCallsSucceed`.
+The new RAM access-count and protected-increment claims supply the selected word's address and protected-value checks.
+The obsolete standalone `TracerAddressChecks` definition and its two dead consumers are removed at `3bb089d`.
+
+The completeness assembly checks at `78ed82d`.
+Both requested RAM-history completeness theorems retain their statements and are proved at `ce5f298`; the three #1949 admissions are unchanged.
+Native/narrow store inversion checks at `621fcd1`, and atomic inversion at `86d4cfa`.
+Conditional-store elaboration remains pending.
+The eighteenth build exposed SC scratch-register and continuation normalization errors and a heartbeat timeout without any resource override.
+The nineteenth batch checked every conditional-store declaration except `scw_ram_guard`, which still exceeded the default heartbeat budget.
+The twentieth batch checked that extracted window/store argument, but the outer SC.W prefix assembly still timed out.
+The twenty-first batch checked the window argument but found prefix-state normalization errors and a final guard-transport reduction timeout.
+The twenty-second batch repairs those equalities explicitly; the public guard statement remains unchanged.
+
+The working tree deletes `WholeRun/Io.lean`, `IoAmo.lean`, `LoadAddress.lean` and the obsolete `Soundness/Layer5/DeviceMemory.lean`.
+Reusable Sail-only facts are in the checked `PlatformMemory` and `PlatformStore` modules.
+`SharedMemorySim` and `AtomicMemorySim` compare actual stores in the shared byte map at every address.
+They contain no second device I/O equality or flag-word restrictions.
+Their decoded-block and whole-run callers have been migrated, including deletion of the old zero-doubleword-load workaround.
+These source changes await their conditional-store prerequisite; they are not claimed as checked whole-run results.
+The nineteenth build checked the cleanup of the unused tracer-address restriction and all affected soundness consumers.
+
+The methods pin and reviewed Rust citations are updated; commit `cea7d6c` contains the comment-only citation pass.
+The complete final declaration-and-line inventory, full root build, exact harness checks, final commits and clean `JoltConstraints/` tree remain outstanding.
+The independent blind read-back below certifies the literal main soundness statement's interpretation, not the pending whole-run migration.
 
 ## Validation in progress
 
@@ -771,3 +791,1244 @@ The added-line scan and `git diff --check` pass at this checkpoint.
 `JoltBytecode/` and `LeanRV64D/` remain untouched.
 
 The remaining work still includes explicit-halt prefix/stopping reconstruction, both public panic claims in the exported soundness theorem, deletion of the separate whole-run I/O simulation, migration of public-I/O completeness/output assembly, removal of restriction definitions and old callers, source-reference updates, a green full build, final axiom checks and the complete harness checks.
+
+Current declaration locations for the pending prefix batch:
+
+| File | Declaration | Line |
+| --- | --- | --- |
+| `JoltConstraints/theorems/program_facts.lean` | `ExpandedRows.source_extents` | 1019 |
+| `JoltConstraints/theorems/program_facts.lean` | `expand_program_source_extents` | 1058 |
+| `JoltConstraints/theorems/Soundness/Layer5/CodeRegionFrame.lean` | `initial_state_codeRegion` | 16 |
+| `JoltConstraints/theorems/Soundness/Layer5/CodeRegionFrame.lean` | `UntrustedAnswerRun.final_codeRegion` | 34 |
+| `JoltConstraints/theorems/Soundness/Layer6/ExecutionPrefix.lean` | `RepresentsPrefix` | 52 |
+| `JoltConstraints/theorems/Soundness/Layer6/ExecutionPrefix.lean` | `Represents` | 67 |
+| `JoltConstraints/theorems/Soundness/Layer6/PrefixState.lean` | `BoundaryState` | 27 |
+| `JoltConstraints/theorems/Soundness/Layer6/PrefixState.lean` | `ExpansionState` | 107 |
+| `JoltConstraints/theorems/Soundness/Layer6/RamCutAgreement.lean` | `finalRamWord_eq_ram_doubleword` | 14 |
+| `JoltConstraints/theorems/Soundness/Layer6/RamCutAgreement.lean` | `ramAgreement_iff` | 24 |
+| `JoltConstraints/theorems/Soundness/Layer6/PlainRow.lean` | `representsPrefix_push` | 572 |
+| `JoltConstraints/theorems/Soundness/Layer6/PlainRow.lean` | `rawEntry_state` | 1049 |
+| `JoltConstraints/theorems/Soundness/Layer6/PlainRow.lean` | `append_expansion_row` | 1134 |
+| `JoltConstraints/theorems/Soundness/Layer6/MemoryRowAppend.lean` | `ExpansionState.memoryAt` | 15 |
+| `JoltConstraints/theorems/Soundness/Layer6/MemoryRowAppend.lean` | `rawEntry_memory_invariants` | 33 |
+| `JoltConstraints/theorems/Soundness/Layer6/MemoryRowAppend.lean` | `append_memory_row` | 51 |
+| `JoltConstraints/theorems/Soundness/Layer6/MemoryRowExecution.lean` | `load_row_execution` | 33 |
+| `JoltConstraints/theorems/Soundness/Layer6/MemoryRowExecution.lean` | `store_row_execution` | 55 |
+| `JoltConstraints/theorems/Soundness/Layer6/RowStepMemory.lean` | `append_load_row` | 34 |
+| `JoltConstraints/theorems/Soundness/Layer6/RowStepMemory.lean` | `append_store_row` | 71 |
+| `JoltConstraints/theorems/Soundness/Layer6/RowStepJalr.lean` | `append_nonmemory_row` | 16 |
+| `JoltConstraints/theorems/Soundness/Layer6/RowStepJalr.lean` | `append_jump_row` | 90 |
+
+The next detached batch is `.constraints-repin-prefix-migration1.log`, with marker `.constraints-repin-prefix-migration1.done`.
+It builds `JoltConstraints`, `CodeRegionFrame`, `RamCutAgreement`, `PrefixState`, `MemoryRowExecution` and both RAM-history completeness targets together.
+No result is claimed for that batch yet.
+The checked frame refactor and documentation checkpoint are committed as `a9a48d6`; the prefix changes remain uncommitted pending integration.
+
+### Explicit-halt prefix migration (pending validation)
+
+The unused replay-after-stall proof is deleted from `Layer7/StallSuffix.lean`.
+The following declarations have no remaining Lean caller outside that obsolete proof, and their dependent obsolete helpers are deleted together:
+
+- `StallSuffixInvariant`.
+- `stall_jal_immediate_zero`.
+- `register_unchanged_of_no_write`.
+- `stall_executed_jal_immediate_zero`.
+- `stall_next_cycle_of_remaining`.
+- `stall_jal_step`.
+- `expanded_branch_source_singleton`.
+- `expanded_branch_same_address`.
+- `stall_branch_model_target`.
+- `stall_branch_witness_target`.
+- `stall_branch_control_values`.
+- `stall_branch_controls_succ`.
+- `stall_branch_replay_target`.
+- `stall_branch_replay`.
+- `stall_branch_step`.
+- `stable_jalr_target`.
+- `stable_written_jalr_link`.
+- `regidx_bne_self_false`.
+- `stable_written_jalr_replay_target`.
+- `jalr_destination_base_address_eq_iff`.
+- `stamp_sequence_instruction_member`.
+- `expanded_arch_jalr_singleton`.
+- `architectural_jalr_same_source_row`.
+- `stall_arch_jalr_preserved_step`.
+- `stall_jalr_preserved_base_step`.
+- `xreg_address_ne_zero_of_notX0`.
+- `selected_written_jalr_base_succ`.
+- `stall_jalr_written_base_step`.
+- `expanded_virtual_jalr_source`.
+- `stall_system_jalr_step`.
+- `expanded_jalr_operand_forms`.
+- `stable_stall_control_flow`.
+- `stall_suffix_initial_jal`.
+- `represented_last_branch_invariant`.
+- `stall_suffix_initial_branch`.
+- `stall_suffix_initial_jalr`.
+- `stall_suffix_initial`.
+- `stall_suffix_replays_source`.
+- `stable_stall_source_no_store`.
+- `stall_suffix_no_store`.
+- `soundness_stall_suffix_zero_ram_effects`.
+
+The foreground foundation batch `.constraints-repin-prefix-foundation2.log` completed successfully (9,572 jobs).
+It checked `program_facts` (34 seconds), `CodeRegionFrame` (96 seconds), `RamCutAgreement` (28 seconds), `ExecutionPrefix` (29 seconds), the pre-halt-migration `PrefixState` (15 seconds), `MemoryRowExecution` (4.3 seconds), and both RAM-history completeness targets (3.0 and 4.9 seconds).
+Some prerequisite modules rebuilt in 73–102 seconds, as recorded in that log.
+The current halt migration has not yet been checked.
+
+Additional statement changes in the explicit-halt migration:
+
+- `Layer1/HaltEndRule.lean` adds `nextIsNoop_zero_or_one`, `halt_lane_nonzero` and `selected_halt_forces_next_padding`; the last binds any selected syntactic halt to a padding successor under either public panic claim.
+- `Layer6/SelectedRows.lean` moves `LastJump.selected_represented_row` into the public `RepresentsRows.selected_row`, generalizing its run argument from `UntrustedAnswerRun` to `Trace` without an execution premise.
+- `SelectedRows.lean` adds `ConstraintContext.entry_row` and `ConstraintContext.halt_terminal`, using existing preprocessing admission.
+- `Layer5/TapePrefix.lean` retains the unchanged statement of `honestTracerAdviceAtStepN_extract` and its private helpers from `Layer7/TerminationStore.lean`.
+- `Layer7/TerminationStore.lean` is deleted, including truncation helpers used only by the old termination-store argument.
+- `Layer5/MemoryAccessRestriction.lean`, `UntrustedAnswerRun.NextStep`, replaces `¬ row.StableStall` with `¬ row.Halts` in its earlier-stop and source-boundary clauses.
+- `Layer6/PrefixState.lean`, `BoundaryState` and `ExpansionState`, make that same replacement in `noEarlierStop`, `ready`, `next` and `notStopped`.
+- `Layer6/PlainRow.lean`, `PlainRow`, newly excludes `JoltSuccess` and `Panic`; they now have an explicit row case.
+- `PlainRow.RawRowEntry` replaces its boundary non-stall requirement with non-halt.
+- `Layer6/PrefixAgreement.lean`, `boundary_step` and `soundness_execution_prefix_agreement`, replace stable-stall endpoints and earlier-stop exclusions with explicit halts.
+- `Layer6/RowStepKinds.lean`, `row_kind`, adds the alternative `∃ kind destination, instruction = (match kind with | .success => .JoltSuccess destination | .panic => .Panic destination)`.
+- `Layer5/Jal.lean`, private `jal_write_value` becomes public `jump_write_value`; its JAL instruction equality is replaced by `opcodeFlag row.instruction .Jump = true`.
+- `Layer5/Halt.lean` adds `halt_step`, covering both kinds, with the selected jump link write and unchanged shared memory.
+- `Layer6/RowStepJalr.lean`, `jump_traits` and `append_jump_row`, replace the JAL-or-JALR shape premise with the Jump flag plus destination metadata; both existing jumps and both halts use the common append proof.
+- `Layer6/RowStepTerminal.lean` adds `append_halt_row`, parameterized by the halt kind.
+- `Layer6/DivisionAppend.lean`, `RunExtends.prefix_observations`, replaces the StableStall equivalence with Halts equivalence and removes its termination-store equivalence.
+- `DivisionArithmeticRow.notStoresTerminationAt` is deleted as unused.
+- `Layer7/StallSuffix.lean`, `noncontrol_next_pc`, replaces exclusions of JAL and JALR with `opcodeFlag instruction .Jump = false`, which also excludes halts.
+- `Layer6/TerminalNextPC.lean`, private `terminal_noncontrol`, makes the same replacement; its caller derives that no halt can have a real successor from the halt lane.
+- `StallSuffix.stall_jal_next_target` and `selected_jalr_next_target` retain their statements but use the unconditional Jump guard in row 14, deleting the ShouldJump argument.
+- `Layer7/LastJump.lean` retains only the still-used `unexpanded_zero_of_padding`, `nonterminal_at_last_cycle_impossible` and `selected_terminal_nonjump_flags`; the old stopping classification and its unused private branch/zero-boundary helpers are deleted.
+- `Layer7/Stopping.lean` adds `RepresentsRows.halt_kind`: every represented syntactic halt has `haltKind? = some (if context.io.panic then .panic else .success)`.
+- `Stopping.soundness_stopping`: old input included temporary restrictions, real-row/no-earlier-stall/advice premises and a cut ending at a stall; new input is an executed represented prefix and a cut at padding, an explicit halt or the domain boundary.
+  Its old last-row conclusion was StableStall; its new last-row conclusion is Halts, with nonemptiness and equality at every final shared RAM word.
+  The former excluded synthetic termination word is included.
+- `TopLevel.soundness_reconstruct_trace` retains its signature and consumes the new stopping contract.
+
+The fresh read-only reviewer `halt_prefix_readback` read comment-stripped declarations independently at Lean HEAD `a9a48d6`.
+It recorded these SHA-256 hashes: Stopping `4d878c10205d67d5c337eae73fd6e8c59372f0908c0c284bf2985b314b8e5ab1`; SelectedRows `512ab2b349d3eef55736bc5fb4031e834bc18948b452592ba7849b9e150cfe67`; ExecutionPrefix `d73c641e2a7e01d41706e7e2ddfb1352e11970e73bb6fc3f7a639b00e090d6ef`; PrefixState `90da7b38ef5c5ef19a2b84387c2f5b85b59034d6af7d9a6beae233b379207a66`.
+Its literal read-back identified the exact cut disjunction, syntactic Halts, full-domain RAM agreement, no execution certificate for `RepresentsRows.halt_kind`, and the absence of honest-advice from `ExpansionState` itself.
+It did not run Lean or issue a fidelity verdict.
+My separate comparison with `specs/halt-end-rule.md` finds that these clauses provide the required first-halt cut and both public claims when combined with the prefix invariant's no-earlier-halt clause.
+The exported soundness/output assembly still needs to consume the halt-kind equality, and compilation remains required.
+Prose-only edits to PrefixState after the read-back update descriptions from stalls to halts; no reviewed type changed afterward.
+
+No new admission, axiom, forbidden decision procedure or raised resource limit was introduced in this batch.
+`tracerAddressChecks` remains in the global assumptions until its obsolete whole-run and device consumers are removed; the local shared-memory reconstruction derives its checks directly.
+The next detached integration batch is `.constraints-repin-prefix-halt-integration1.log`, with marker `.constraints-repin-prefix-halt-integration1.done`.
+It builds `JoltConstraints` and all current prefix/halting targets together.
+
+### Halt claim and shared output assembly (pending validation)
+
+Date: 2026-11-24.
+Jolt revision remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD is `22db65c`; the changes below remain uncommitted.
+The preceding detached integration build failed, rather than completing the migration.
+Its local halt failures were a numeral-cast proof in `halt_lane_nonzero` and the unavailable `JoltField` alias in `Layer5/Halt.lean`.
+Those are repaired in this batch, using the explicit characteristic inequality already required by the halt proof.
+The build also found remaining device-array references in `advice_below_input`, the obsolete `DeviceMemoryObstruction`, and `WholeRun/Halt`, plus the unported value/width/backing-bound contracts in `WholeRun/Bundles`.
+Those latter migrations are still open.
+
+The output assembly now uses two separate consequences of Jolt's pinned checks.
+Constraint 26 compares final shared-memory output words with public bytes.
+Row 21 identifies the final halt kind, and actual halt execution sets the device panic Boolean to that kind.
+No synthetic panic or termination memory word enters either argument.
+The existing `execHalt_shape` primitive calculation supplies the actual final panic update; no prepared-PC or register-agreement hypothesis is added to the claim theorem.
+These proof edits have not yet passed Lean.
+
+Additional declaration changes:
+
+- `Layer5/Halt.lean`, new `execHalt_afterWriteDst`: for either kind, a canonical destination and prepared PC/link reads determine the explicit post-state obtained by writing that link, resetting nextPC to the source and recording the kind.
+  This is the former inline calculation in `halt_step`, factored for reuse; it is a candidate to move into JoltBytecode.
+- New `halt_instruction_of_kind`: `instruction.haltKind? = some kind` implies the corresponding `JoltSuccess dst` or `Panic dst` shape for some destination.
+  Its proof splits the three alternatives of the halt classifier, not the full instruction set.
+- New `execWithTapeAnswer_halt_eq`: runtime-advice patching and the arbitrary tape answer leave either shared halt body unchanged.
+- New `execWithTapeAnswer_halt`: combines the preceding execution calculation with the prepared register reads.
+- `Layer7/Stopping.lean`, new `represented_final_panic`: a completed executed represented trace has final device panic equal to `context.io.panic`, for both Boolean claims.
+  The statement takes the already available bytecode equality and row representation, without any flag-word restriction.
+- `Layer8/OutputWords.lean`, `public_words_determine_matches_outputs`: old premises were the device setup relation, an output-array bound, and public-word equality below RAM excluding termination; new premises are final panic equality and equality of the actual final shared-memory words on `[input_start, output_end)`.
+  The output capacity follows from `JoltDevice.outputsOf_size`; there is no output-bound premise.
+  The conclusion remains `trace.matches_outputs joltInstance`.
+- `TopLevel.lean`, `soundness_matches_outputs`: the public signature and conclusion are unchanged.
+  Its proof now consumes `Represents.finalRam` for every index, reads the new output-end mask, and combines `represented_final_panic` with the output-byte argument.
+  The needed bytecode equality follows from the two successful expansions, rather than becoming a new theorem premise.
+- `Layer5/Fence.lean`, `fence_step`: replaces the old ordinary-memory agreement with `SharedRamAgreement`, retaining unchanged-memory execution and next/final agreement over the full shared domain.
+- `Soundness/Assumptions.lean`, `JoltInstance.TemporaryRestrictions`: the former `tracerAddressChecks : joltInstance.TracerAddressChecks` field is deleted.
+  Together with the previously removed three flag-word fields, the structure now contains only `hostCallsSucceed`.
+  No soundness reconstruction consumer uses the tracer field: selected memory rows derive all required address checks from the RAM selector bounds and checked layout.
+  The obsolete standalone `TracerAddressChecks` predicate and old device-memory lemmas that mention it remain until the separate whole-run I/O simulation is removed.
+  This does not claim the remaining whole-run proof has compiled.
+
+`Completeness/Helpers/RamOutputProofHelpers.lean` is also being migrated:
+
+- Deleted `overlayRamBytes_below_input` and `finalRamWord_eq_ramPublicIoWord`, which reconstructed a second image from device-owned buffers.
+  The former statement compared buffer overlays below the input; the latter equated a device-overlay final image with public I/O words.
+  Their completeness consumer still needs a direct protected-input/shared-memory replacement.
+- New `ramImageWord_congr`: agreement of the eight constituent bytes at two possibly different starts implies equality of the packed words.
+- New `outputsOf_get?`: each in-capacity extracted output byte is the zero-default byte in shared memory at `output_start + i`.
+- New `finalRamWord_output`: for a checked layout and matching initial/final layouts, the final shared word at output index `q` equals the packed eight bytes extracted by `outputsOf` at offset `8*q`.
+- `ramPublicIoWord_output`: its `io` parameter changes from `JoltDevice` to `JoltPublicIo`; the existing checked layout, input-size bound and in-capacity word index remain.
+  The conclusion still identifies the public output word with the same packed output bytes; all deleted flag-word geometry is removed from its proof.
+- Deleted `ramPublicIoWord_panic`, since the public word image no longer contains panic metadata.
+- `ramPublicIoWord_trimmed`: both buffer records change from `JoltDevice` to `JoltPublicIo`, and the panic-equality premise is deleted.
+  Layout equality, input equality, trailing-zero output equality, the checked layout and the input-size bound still prove equality at every public word.
+
+No new admission, axiom, forbidden decision procedure, resource raise or change under `JoltBytecode/` or `LeanRV64D/` was introduced.
+`git diff --check` passes before the next batch.
+A full build, the complete harness checks, removal of obsolete modules, public-I/O completeness, whole-run reconstruction, independent checking of the new output assembly, pin-reference cleanup and final commits remain outstanding.
+
+### Shared public-I/O completeness and new RAM claims (pending validation)
+
+Date: 2026-11-24.
+Jolt revision remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD is now `8facfa6`.
+That commit contains the checked `HaltEndRule`, `Jal`, `Halt` and `Fence` changes.
+The preceding `.constraints-repin-prefix-output2.log` build checked `Layer5/Halt`, `Fence`, `MemoryAccessRestriction` (92 seconds each), `Layer1/HaltEndRule` (94 seconds), `ExecutionPrefix` (8.6 seconds) and the halt-based `PrefixState` (18 seconds).
+These are module timings in the concurrent integration build, not isolated proof timings.
+The build failed before completing the prefix and output assembly.
+The local blockers were the reserved identifier `matches` in `SelectedRows.entry_row` and a let-bound overlay rewrite in `ramPublicIoWord_output`.
+The next batch repairs those failures and adds the following shared-memory completeness arguments.
+
+The public-I/O proof uses the initialized input bytes, their zero padding, the MMU's existing protected-memory invariant, and final output extraction.
+It no longer reconstructs memory from device-owned arrays or assumes a separate device-buffer placement predicate.
+The two new RAM-claim proofs are also now written, but not yet checked.
+`honestWitness_ramAccessCount` uses the existing four-width memory-row classification and shows that a retired access cannot record zero.
+`honestWitness_ramWriteProtected` combines per-row protected-word preservation with the already checked RAM history step.
+Neither adds a restriction on the program or the witness.
+
+Statement inventory for this batch:
+
+- `SharedMemoryInitialization.lean`, `zipIdx_fold_get?`: adds a natural-number `start` parameter; the old fixed `RAM_START_ADDRESS` is replaced by that parameter in the inserted and queried addresses.
+  The original initializer consumer supplies `RAM_START_ADDRESS`; input initialization supplies its input-region start.
+- Private `buffer_insert_get?_above`: its old two premises `start + bytes.size ≤ RAM_START_ADDRESS` and `RAM_START_ADDRESS ≤ a` become the single exact premise `start + bytes.size ≤ a`.
+  The conclusion, preservation of byte `a`, is unchanged.
+- New `initialMem_input`: successful initialization under a checked layout yields `some (inputs[a - input_start]?.getD 0)` at every address in `[input_start, output_start)`.
+- New `initial_state_input_get?`: instance initialization gives the same input-capacity byte equation for `inst.inputs`.
+  Both initialization facts are candidates to move into JoltBytecode.
+- `Completeness/Helpers/IOSetupFrame.lean`, new `Trace.preState_relation` and `Trace.finalTraceState_relation`: the trace-fold proofs accept relations at the initial preparation and at links, rather than requiring equal projections.
+  The former takes transitivity and the first-row relation; the latter also takes reflexivity for the empty trace.
+- Existing `Trace.preState_projection_relation` and `Trace.finalTraceState_projection_relation`: signatures unchanged; they instantiate the new shared fold with equality of projections.
+- New `HonestTrace.protected_memory`: returns the existing `Mmu.ProtectedMemory` relation from the initial state to every recorded pre-state and the final state.
+- New `HonestTrace.final_protected_memory`: the final component of that contract, used for input-byte preservation.
+- `Completeness/Helpers/RamOutputProofHelpers.lean`, new `HonestTrace.publicIo`: a `JoltPublicIo` record containing the final layout, the instance's public inputs, outputs extracted from the final shared byte map, and the final panic claim.
+- New `overlayRamBytes_at_word`: an overlay remapped to word `first`, over zero, at `first + q` equals the packed buffer bytes starting at `8*q`.
+  The old output-packing proof is factored through this helper; the input-packing proof uses it too.
+- New `ramPublicIoWord_input`: every in-capacity public input word packs the supplied input bytes with zero defaults.
+- New `input_byte_protected`: checked layout construction makes every byte in `[input_start, output_start)` protected, including input padding.
+- New `finalRamWord_input`: each final shared input word of an honest trace packs the instance's original input bytes with zero defaults.
+- `Completeness/RamOutputEqPublicIo.lean`, `honestWitness_ramOutputEqPublicIo`: replaces the final device parameter in the constraint with `trace.publicIo`, and deletes `adviceBelowInput`.
+  The result still proves constraint 26 for the full public interval, now ending at `output_end`.
+- `theorems/advice_below_input.lean`, `JoltDevice.AdviceBelowInput`, is deleted with its three fields: relative input alignment and device-owned trusted/untrusted buffer bounds.
+  Its redundant `HonestTrace.advice_below_input` consumer in `Completeness/All.lean` is also deleted.
+  The ordinary checked-layout placement lemmas remain in `layout_facts.lean` for initialization and existing consumers.
+- `MemoryRowExecution.lean`, new `LoadRow.continuation_of_run`: factors the former execution-prefix calculation from `LoadRow.write_of_run` into the successful doubleword-load continuation.
+- New `LoadRow.load_of_run`: a retired load has a successful MMU doubleword read at its accessed address.
+- `LoadRow.write_of_run`: signature unchanged; consumes the factored continuation instead of repeating its width cases.
+- `Completeness/RamAccessCount.lean`, new private `memory_flag_has_address`: a Load-or-Store flag implies an address recording, using the existing memory-row families.
+- New `HonestTrace.ram_access_nonzero`: a recorded address of a retired honest memory row is nonzero, since the pinned MMU rejects the first byte at zero.
+- New `honestWitness_ramAccessCount`: the honest witness satisfies the fourth RAM read/write claim at every cycle, including padding.
+- `Soundness/Layer5/SharedMemoryChecks.lean`, new `ram_word_byte_geometry`: each byte of an aligned witness word rounds to that word and its remapped index.
+  `protected_byte_mask_one` retains its signature and now uses this common arithmetic calculation.
+- New `mask_one_protected_byte`: under a checked layout and matching execution code interval, C-mask value one implies MMU protection of each of that word's eight bytes.
+- `Completeness/RamWriteProtected.lean`, new `honestWitness_ramWriteProtected`: the honest witness satisfies the third RAM read/write claim using the actual code, input, advice and canary mask.
+- `Completeness/All.lean`, `honestWitness_constraintEquations`: its result now supplies `trace.publicIo`, its `adviceBelowInput` premise is removed, and its record includes the two new RAM claims.
+- `HonestTrace.allConstraints_prover_sizes`: the public I/O parameter changes from the removed device-buffer representation `JoltDevice` to `JoltPublicIo`.
+  The remaining hypotheses and `AllConstraints` conclusion are unchanged.
+  The transfer from the honest extracted claim to the verifier claim handles panic via the already assumed `claimsRunOutputs`, independently of memory words.
+
+The fresh read-only `output_claim_readback` reviewer is examining the literal new output/claim interfaces with comments and intent withheld.
+Its read-back and the separate source comparison remain pending.
+The added-line forbidden-token scan, `git diff --check`, and the protected-tree diff check pass before the next build.
+No new admission, axiom, forbidden decision procedure or raised resource limit was added.
+The obsolete whole-run I/O/device proof files still block the full build, including the store-value and backing-bound migration in `WholeRun/Bundles`.
+The next detached batch builds the full root and every currently touched existing Lean target together, including both new RAM claim modules and the two RAM-history completeness results.
+
+
+### Shared-public build result and whole-run halt migration (pending validation)
+
+Date: 2026-11-24.
+Jolt revision: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD remains `8facfa6`; the changes in this section are uncommitted.
+The `.constraints-repin-shared-public3.log` build failed before checking the new public-I/O assembly.
+Its failing modules were `MemoryRowExecution`, `IOSetupFrame`, `SelectedRows`, the old `WholeRun/Halt`, and the obsolete `DeviceMemoryObstruction`.
+The generic trace-relation proofs and the main protected-memory fold passed elaboration; the wrapper failed because the extension theorem had been declared in a nested namespace.
+The next batch fixes that namespace, dependent array rewrites at the entry row, the load-continuation conversion, and the successful-load existential witness.
+These fixes are not yet validated.
+
+The new whole-run halt code uses the two-constructor halt-kind classification rather than enumerating the ISA.
+I read `specs/halt-end-rule.md`, `rv64.rs` (`rv64_product_constraint_rows`), `cpu.rs` (`Cpu::halt`), and the two halt instruction implementations at the pin.
+`JoltISA.execHalt_vreg_run` already supplies the necessary scratch-register execution calculation in JoltBytecode; no bytecode edit or duplicate primitive proof is needed.
+Both halt sources preserve shared memory, restore their source address as nextPC, and record the CPU halt marker and panic claim.
+The caller therefore no longer asserts equality of the pre-halt and post-halt devices.
+
+Additional statement changes in `theorems/WholeRun/Halt.lean`:
+
+- Deleted `NextIsEbreak`, whose final condition was `row.instruction = .riscv .EBREAK`.
+  New `haltSource` maps success to `.jolt .JoltSuccess` and panic to `.riscv .EBREAK`.
+  New `NextIsHalt program state kind` retains the nextPC and program-row lookup conditions and requires `row.instruction = haltSource kind`.
+- Deleted private `liftSail_readReg`, `jal_vreg_run` and `ebreak_blockInstrs`, which implemented the obsolete self-jump explanation.
+  New private `halt_blockInstrs` identifies the single scratch-register success or panic row.
+- Replaced `Block.ebreak_post`.
+  Old conclusion: `b.post.jolt_device = b.pre.jolt_device` and nextPC equals the source address.
+  New `Block.halt_post`, for either explicit source halt, concludes shared-map equality, layout equality, nextPC equal to the source address, `post.halted = some kind`, and `post.jolt_device.panic = (kind == panic)`.
+- Private `ebreak_tail` becomes `halt_tail`, preserving memory and layout through a linked chain and recording the selected kind and its panic claim in the last state.
+- New `HaltObservation program halt final`: final and halt share memory and layout; either the next source at halt has kind `kind` and final records that kind and claim, or `halt = final`.
+- Private `halt_prefix_aux` and public `HonestTrace.halt_prefix`: prefix blocks exclude both halt sources rather than EBREAK alone.
+  Old stopping and device clauses were `(NextIsEbreak program halt ∨ halt = final)` and `halt.jolt_device = final.jolt_device`.
+  The new clauses are the single `HaltObservation` contract above.
+  Execution certificates, chain endpoints and first-row trace certificates remain.
+- New `HonestTrace.final_halt`: a completed honest trace and its final-state certificate imply an actual final CPU halt kind and its matching panic claim, including the `halt = final` alternative.
+- Replaced `HonestTrace.matches_outputs_halt` with `HonestTrace.matches_outputs_final`.
+  Old parameters included arbitrary halt/final states and equality of their devices, and the output projection read `halt.jolt_device.outputs`.
+  New parameters are the final state and its back-row certificate; the output projection is `final.jolt_device.outputsOf final.sail.mem` and the final panic equality is retained.
+- Deleted unused `HonestTrace.sailRun_halt`; `HaltPrefix.sailRun` is the actual whole-run consumer and chains the same generic block simulation.
+
+Additional statement changes in `theorems/WholeRun/Top.lean`:
+
+- `SailHalted` gains a halt-kind parameter and replaces its EBREAK-only source condition with `row.instruction = haltSource kind`.
+  `SailHalted.of_related` transports `NextIsHalt` for that kind through the same PC relation.
+- `HaltPrefix.runs` excludes either halt source.
+  The former `stop` and `device` fields become `observation : HaltObservation program halt final`.
+  `HonestTrace.haltPrefix` packages the changed certificate.
+- Deleted `sailOutputs_congr` and `sailPanicWord_congr` with the removed overlay projections.
+- `HaltPrefix.sailRun` retains its signature and supplies the non-EBREAK condition from the stronger two-halt exclusion.
+- `HonestTrace.sail_reproduces` retains all input hypotheses.
+  Its output comparison now reads `halt.jolt_device.outputsOf s.mem` and `final.jolt_device.outputsOf final.sail.mem`.
+  The former memory panic-word condition is replaced by an explicit final CPU halt marker and its claim: `∃ kind, final.halted = some kind ∧ final.jolt_device.panic = (kind == panic) ∧ (SailHalted program s kind ∨ halt = final)`.
+  The claim is therefore required in both stopping alternatives.
+- `JoltInstance.sail_soundness` retains its input hypotheses.
+  It compares the same direct shared-memory outputs to the instance outputs and returns the final CPU halt kind with `joltInstance.panic = (kind == panic)` and the corresponding Sail stopping alternative.
+  No memory panic-word observation remains in this statement.
+  The legacy per-block I/O premises still await the shared-memory simulation replacement; these statements have not yet elaborated.
+
+`DeviceMemoryObstruction.lean` and its sole root import are deleted.
+Its concrete layout, device arrays, ignored termination stores/loads and conflicting selected-store example all describe the removed model and have no remaining proof consumer.
+This also deletes the two pre-existing executable kernel-decision commands in that module.
+The harness's unanchored `decide \+kernel` alternative currently matches those two *deleted* diff lines.
+The added-line scan is clean, and no forbidden procedure was added.
+A prior clarification about that harness issue is still unresolved; no harness file was changed.
+
+`methods/soundness.md` now records HEAD `8facfa6`, the checked halt consequences, the host-call-only restriction structure, and the unverified integration status.
+`Completeness/completeness.lean` drops the stale description of the two fixed RAM-history bugs; the three #1949 obligations remain.
+The final whole-run memory simulation, deletion of `Io.lean`/`IoAmo.lean` and legacy flag restriction definitions, global pin-reference cleanup, full build, axiom closure, complete harness check and final logical commits remain open.
+
+The next detached integration build is `.constraints-repin-shared-public4.done` (`.constraints-repin-shared-public4.log`).
+It builds `JoltConstraints` together with all 44 existing touched Lean modules, including the new public-I/O and RAM-claim modules.
+The build was started under `track-t-build.sh`; its result is pending.
+No code from this continuation has been committed before validation.
+
+
+### Shared-public fourth build and halt read-back
+
+Date: 2026-11-24.
+Jolt revision: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD: `25bf2f1`.
+The `.constraints-repin-shared-public4.log` batch failed in six modules: `WholeRun/Halt`, `Layer7/Stopping`, `Layer6/TerminalNextPC`, `Layer5/SharedMemoryChecks`, `Completeness/RamAccessCount`, and `SharedMemoryInitialization`.
+It checked the new load-continuation lemmas, selected entry-row proof, protected-memory trace fold, RAM history replay and both RAM-history completeness results.
+The protected-memory trace fold and load-continuation changes are committed as `25bf2f1` (`Prove protected-memory trace frames and load continuations`).
+Reported module times included `IOSetupFrame` 733 seconds, `TapeDeviceFrame` 525 seconds and `RamHistoryProofHelpers` 324 seconds; these are concurrent module timings rather than isolated proof timings.
+
+The pending fixes normalize dependent array accesses, call namespaced halt and entry lemmas explicitly, unfold the C-mask's local bindings before splitting its conditional, and derive advice placement from the rounded checked layout rather than the smaller requested capacities.
+`ordinary_row_next_pc_value` in `Layer7/LastJump.lean` is restored with its baseline type and proof because `Layer6/TerminalNextPC` still calls it.
+These fixes have not yet been checked by a subsequent build.
+
+The fresh read-only reviewer `halt_readback5` read comment-stripped halt and whole-run statements without the intended narrative.
+It confirmed that both `sail_reproduces` and `sail_soundness` require a final halt marker and the matching panic claim in both stopping alternatives.
+It also identified the exact limits of those existing contracts: `SailHalted` says the current Sail PC points to the selected source halt, the fallback allows `halt = final`, and the Sail theorem remains conditional on `BlockConforms` for the reconstructed prefix.
+`HaltObservation` alone gives no marker or claim in that equality alternative; the separate `HonestTrace.final_halt` result supplies them to both public callers.
+The reviewer did not build or check axioms, source fidelity, or the remaining per-block I/O restrictions.
+The inspected SHA256 values were `377d400d7b6754ea0ed138decb5a8b0693d8b2366c30623b281691abe8f6cef4` for `WholeRun/Halt.lean` and `be57777c259052f4192d6f7c06154ddfe44bf6868a4f7a6df72d9ac6a3ee8f07` for `WholeRun/Top.lean`.
+
+The unimported obsolete restriction-definition modules are deleted:
+
+- `Layer5/PanicRestriction.lean`: `TouchesPanic`, `UntrustedAnswerRun.StoresPanicAt`, `JoltInstance.PanicStoresOne` and `JoltInstance.ClaimsNoPanic`.
+- `Layer5/TerminationRestriction.lean`: `TouchesTermination`, `UntrustedAnswerRun.StoresTerminationAt`, `JoltInstance.TerminationThenStall`, `termination_next_jal_zero`, `termination_next_no_jalr`, `jal_zero_exec_stalls` and `termination_next_jal_stalls`.
+
+Their old types depended on removed memory flag regions or imposed the three obsolete program restrictions.
+They have no remaining imports or soundness callers; the unconverted `DeviceMemory` file still contains textual uses and must be removed with the old I/O simulation.
+The new stopping and claim-binding statements are listed above.
+The full root build, actual-value store bundle migration and removal of the old I/O simulation remain open.
+
+The added-line forbidden-token scan, generator admission scan, protected-directory diff check and `git diff --check` pass before the next batch.
+The next detached batch, `.constraints-repin-shared-public5.done`, builds the root and all 42 currently touched existing Lean modules together.
+No successful full build or completed soundness integration is claimed.
+
+
+### Shared-public fifth build
+
+Date: 2026-11-24.
+Jolt revision: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD: `844cbd6`.
+The `.constraints-repin-shared-public5.log` build checked `WholeRun/Halt`, `Completeness/RamAccessCount`, `Layer7/LastJump`, `Layer6/TerminalNextPC` and `Layer6/ExpansionFinish`.
+`WholeRun/Halt` is committed as `1fb59ea` (`Track explicit halt kinds in whole-run prefixes`).
+The RAM access-count proof is committed as `844cbd6` (`Prove the honest RAM access-count claim`).
+Both RAM-history completeness proofs replayed successfully again.
+The batch still failed in `Stopping`, `SharedMemoryInitialization`, `SharedMemoryChecks` and `Branch`.
+
+The next changes preserve all four affected declaration types.
+`represented_final_panic` now passes the same normalized natural-index runtime-advice term to the halt rewrite as appears in the executed row.
+`initialMem_input` explicitly identifies its local start offset before reading the supplied array byte.
+`mask_one_protected_byte` no longer attempts to rewrite a lowest-address expression that simplification already removed from its goal.
+`branch_target_ne_zero` is restored with its baseline statement and proof in `Layer7/StallSuffix.lean`, next to the existing shared branch classification it uses.
+This restores a still-needed caller in `Layer5/Branch` without introducing a duplicate ISA classification.
+The previously pruned copy in `LastJump.lean` remains removed.
+The new patch still awaits elaboration.
+
+The next detached batch `.constraints-repin-shared-public6.done` builds `JoltConstraints` and all 40 currently touched existing Lean modules.
+The added-line forbidden-token scan and whitespace check pass before launch.
+
+
+### Shared-public sixth build
+
+Date: 2026-11-24.
+Jolt revision: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+The `.constraints-repin-shared-public6.log` batch checked `SharedMemoryInitialization`, the public C-mask converse, shared load and store soundness, `Layer6/MemoryRowExecution`, the restored branch target argument, and `WholeRun/Init`, `ImageMemory` and `SystemInv`.
+Both RAM-history completeness theorems replayed successfully.
+The input initializer and public mask proofs are committed as `7f02ed3` (`Prove input initialization and protected-word mask checks`).
+The prefix memory execution lemmas are committed separately as `Use shared-memory agreement for prefix memory steps`.
+The root remains red in four modules: `Stopping`, `RamOutputProofHelpers`, `PlainRow`, and the unconverted `WholeRun/Bundles`.
+
+Pending local fixes preserve the affected result types except for the model-driven prepared-entry change listed below.
+`represented_final_panic` normalizes the final row's array access before rewriting its panic field.
+`ramPublicIoWord_input` uses the current remapping guard, which excludes both zero and below-lowest addresses, and unfolds the same lowest-address definition in its word-index arithmetic.
+`finalRamWord_input` unfolds its local layout before the final byte-index arithmetic.
+`PlainRow` calls the namespaced halt-terminal lemma explicitly.
+`nonterminal_virtual_row_pc_plus_one` is restored with its baseline type and proof because `PlainRow.interior_progress` still uses it.
+Its citation names `NEXT_PC_EQ_PC_PLUS_ONE_IF_INLINE` at the current pin.
+
+Statement change: `Layer7/StallSuffix.lean`, `untrusted_prepared_pc`, keeps every parameter and PC conclusion, but its source-boundary entry condition changes from `¬ last.StableStall` to `¬ last.Halts`.
+This is the same model change already made in `RawRowEntry`; the proof discards that conjunct and uses only the prepared-state equality.
+No additional premise is introduced.
+The whole-run store bundle migration still needs the actual stored value for narrow stores, AMOs and store-conditionals, together with the padded backing bounds.
+No completed Sail simulation or unrestricted soundness theorem is claimed.
+
+The next detached batch `.constraints-repin-shared-public7.done` builds the full root and all 37 currently touched existing Lean targets together.
+The added-line forbidden-token scan, protected-tree diff check and whitespace check pass before launch.
+
+
+### Shared-public seventh build and value-aware store inversion
+
+Date: 2026-11-24.
+Jolt revision: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD: `2988dbf`.
+The `.constraints-repin-shared-public7.log` batch checked `Layer7/Stopping`, including `represented_final_panic` and `soundness_stopping` for either public panic claim.
+It also checked `PlainRow`, `BoundaryStart`, `RowStepJalr`, `DivisionDefs`, `DivisionPrograms`, `DivisionLayout`, `TerminalNextPC`, `ExpansionFinish`, `Branch`, `LastJump`, `StallSuffix`, `OutputWords` and the public-I/O helper module.
+The public-I/O helper proofs are committed as `2988dbf` (`Derive public I/O words from shared memory`).
+Both RAM-history completeness proofs remain checked with their unchanged statements.
+The full root still fails, chiefly in the unconverted `WholeRun/Bundles` and `Layer5/DeviceMemory` modules.
+The separate I/O simulation has not been removed.
+
+Five local proof repairs preserve their declaration types:
+
+- `Completeness/RamOutputEqPublicIo.lean` unfolds local bindings before splitting the public I/O mask conditional.
+- `Completeness/RamWriteProtected.lean` simplifies the conditional mask's nonzero branch with the available hypotheses.
+- `Layer6/MemoryRowAppend.lean` normalizes `Array.size_push` when applying the existing RAM image certificate.
+- `Layer6/RowStepTerminal.lean` and `Layer6/DivisionAppend.lean` call the namespaced `ConstraintContext.halt_terminal` declaration explicitly.
+
+These repairs await the eighth batch.
+`Soundness/soundness.lean` now prints the axiom closure of `JoltInstance.soundness` when that module elaborates.
+There is no closure result yet.
+
+New declarations in `WholeRun/StoreRuns.lean` address the actual-value obligation of the remaining store bundles.
+They have no old statements and are not yet validated or integrated into `equivAssumptions_of_retire`:
+
+- Private `floorWidth` maps the three narrow widths to the existing memory-row classification.
+- Private `floorLoad_write` takes a retiring floor-load run and concludes that its post-state is the original state with v40 set to the shared containing word.
+  It uses the existing `LoadRow.write_of_run` argument.
+- Private `floorStore_store` takes a retiring floor-store run and recovers its actual doubleword MMU store of v40 to the containing word.
+  It uses `StoreRow.store_of_run`.
+- `laneStore_store_of_run` takes the width, registers, immediate, starting and final states, source-read certificates, and a retiring `laneStoreProgram` run.
+  It returns an intermediate state with the original Sail state, device and code region, together with the successful MMU store of `fusedSpliceValue` applied to the original shared word, stored source and effective address.
+  This covers RAM and the I/O window.
+  The proof decomposes the existing lane program and reuses `StoreProgramBlocks.fusedSpliceBlock`; it introduces no ISA-wide case split or duplicate splice arithmetic.
+- Private `ramStore_guard` recovers `JoltRamStoreOk address pre value 8` from an actual successful RAM doubleword store.
+- `laneStore_ram_guard` adds the RAM lower bound to the same narrow-store execution hypotheses and concludes the guard for its actual merged doubleword in the original state.
+  Its source-read hypotheses are available from the existing invariant at the intended bundle caller; no premise has been added to a public soundness result.
+
+The primitive lane-store inversion facts are candidates to move into JoltBytecode after validation.
+The root imports the new module, so the required full build also checks these declarations.
+The source check read `expand_narrow_store` in `crates/jolt-program/src/expand/memory/shared.rs` and `Mmu::store_doubleword`, `trace_store` and `assert_write_protected_store` in `tracer/src/emulator/mmu.rs` at the pin.
+Those routines merge the stored lane into the traced containing word and check protected bytes against the old contents.
+The remaining AMO and SC bundle obligations still need their actual computed values; they have not been replaced by address-only guards.
+
+`methods/soundness.md` and `documentation/model_review.md` now distinguish the checked halt-end and public-I/O helpers from the pending full assembly.
+The model review removes current-assumption claims about the deleted flag restrictions and records the resolved RAM-history bugs.
+Historical sections remain labeled by their original revisions.
+No new admission, axiom, forbidden decision procedure or resource-limit change was added.
+
+The next detached batch is `.constraints-repin-shared-public8.done` (`.constraints-repin-shared-public8.log`).
+It builds `JoltConstraints` and all 37 currently touched existing Lean module targets together, including `StoreRuns` and the final soundness module.
+The result is pending.
+Remaining work includes the whole-run shared-memory simulation and deletion of its old I/O modules, the final prefix/soundness assembly, pin-reference cleanup, axiom closure, the complete harness check, and the final logical commits.
+
+
+### Shared-public eighth build and ninth batch
+
+Date: 2026-11-24.
+Jolt revision: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD: `490c182` (`Prove public I/O completeness from shared memory`).
+The eighth detached batch failed; its log is `.constraints-repin-shared-public8.log`.
+It checked `Completeness/RamOutputEqPublicIo` (126 seconds), `Layer6/MemoryRowAppend` (128 seconds), `RowStepTerminal` (134 seconds), `DivisionAppend` (139 seconds), `DivisionBlock` (19 seconds), and `RowStepMemory` (30 seconds).
+The public-I/O equation is now committed as `490c182`.
+The equation's changed statement is recorded above: its public record is `trace.publicIo`, and the obsolete `AdviceBelowInput` premise is deleted.
+The final soundness module did not elaborate, and no axiom-closure result is available.
+
+The ninth batch repairs the reported `JoltHaltKind` binder inference in `row_kind`, the conditional C-mask proof in `honestWitness_ramWriteProtected`, and the v40 annotation, address normalization and code-region frame application in `StoreRuns`.
+Those repairs preserve the affected baseline theorem types.
+The new, still-uncommitted `StoreRuns` interfaces are strengthened as described below.
+
+#### Alignment and actual narrow-store values
+
+`MemoryRowExecution.lean` adds `LoadRow.aligned_continuation_of_run`.
+It has exactly the existing `LoadRow.continuation_of_run` parameters and run premise.
+Its conclusion is the conjunction of `(sourceValue base pre + imm) &&& width.alignMask = 0` and the old shared-load continuation conclusion.
+The existing continuation theorem retains its complete type and now selects the second conjunct.
+The proof performs only the four cases of the existing memory-width classification.
+It reuses the old execution inversion rather than duplicating it.
+
+The uncommitted `StoreRuns.floorLoad_write`, `laneStore_store_of_run` and `laneStore_ram_guard` now also return the alignment equality for the selected narrow width.
+The previous draft statements returned only the register shape, store certificate and guard, respectively.
+These draft statements had not compiled or been committed.
+Their other parameters and conclusions remain as inventoried in the previous section.
+The alignment comes from successful execution, with no added hypothesis.
+
+New `StoreRuns.laneStore_bundle_guard` takes a narrow width, source registers, 12-bit immediate, pre/post states, source-read certificates, RAM membership of the enclosing word, and a retiring `laneStoreProgram` run.
+It concludes `JoltRamStoreOk` for the enclosing word, the original state, and
+`storeDwordValue (match width with | .byte => 1 | .halfword => 2 | .word => 4)`
+applied to the effective address, original shared doubleword and stored source value, with checked row width eight.
+It uses the execution-derived alignment and the existing `StoreSplice.fusedByteSplice_eq`, `fusedHalfwordSplice_eq` and `fusedWordSplice_eq` proofs.
+No splice arithmetic is copied.
+This is the actual-value guard required by the pending source-store bundle migration; it is not yet integrated into that factory.
+The primitive alignment and narrow-store inversion facts are candidates to move into JoltBytecode after validation.
+
+I re-read `tracer/src/instruction/floor_access.rs` (`load`, line 39; `store`, line 50), `expand_narrow_store` in `crates/jolt-program/src/expand/memory/shared.rs` (line 384), and `Mmu::assert_write_protected_store` (line 747) at the pin.
+The floor-load alignment precedes the containing-word read, and the expansion's floor store writes the merged containing doubleword.
+
+#### Block simulation statement changes
+
+In `WholeRun/BlockStep.lean`, both `block_simulates_retire_via` and `block_simulates_retire` remove exactly this old parameter:
+
+```lean
+(hdevice : b.post.jolt_device = b.pre.jolt_device)
+```
+
+Their remaining parameters and final conclusion are unchanged:
+
+```lean
+∀ s, Related b.pre s → ∃ v s',
+  try_step 0 false s = .ok v s' ∧ Related b.post s'
+```
+
+The meaning of `Related` already changed in the shared-memory relation migration recorded above.
+These statements now derive layout preservation directly from `hruns.executes` and `JoltIOSetupFrame.execProgram_setup`.
+The new relation compares shared bytes and uses only layout preservation to carry memory presence and layout construction.
+It no longer has device input/output arrays to transport.
+No replacement premise is added.
+`WholeRun/SystemBlocks.block_simulates_via` retains its statement and stops constructing or passing the old equality.
+The unused local run certificate constructed solely for that equality is deleted.
+
+`WholeRun/Bundles.joltRun_device_of_ram` is deleted after removal of its sole source consumer.
+Its old parameters were `(i : RiscvInstruction)`, `(hi : i.Lifted)`, states `js js'`, `RamAccess i js`, and a successful honest `joltRun` certificate.
+Its old conclusion was `js'.jolt_device = js.jolt_device`.
+There is no replacement declaration; executed blocks supply the layout fact directly.
+The private legacy device-preservation and value-unaware store helpers in `Bundles` remain unconverted and still fail to elaborate.
+Their existence is not evidence of a completed store bundle or whole-run simulation.
+
+A fresh blind read-back of the two changed block-simulation interfaces is in progress.
+The ninth detached build will check `JoltConstraints` and every currently touched existing Lean module together.
+The required final harness has not passed.
+Remaining work includes deletion and replacement of the old I/O simulation, actual-value AMO and SC guards, the final soundness assembly, pin-reference cleanup, complete statement inventory, axiom closure and final commits.
+
+The ninth batch is running detached as `.constraints-repin-shared-public9.done`, with output in `.constraints-repin-shared-public9.log`.
+It builds the root plus 39 additional touched existing Lean targets, under the shared build wrapper.
+Before launch, the added-line forbidden-token scan, `ConstraintGen` admission scan, protected-tree diff check and whitespace check passed.
+These static scans do not establish the final build, final soundness closure or clean-tree condition.
+The block read-back packet has SHA-256 `1d4008a99799cd9c0e148170e47aff1a95b0e970098b24acf6264028f1b3e8c7` for `BlockStep.lean`, `817a16ffdba56a17ebf08cf8ec26cc7cd8d4c494fc32f6fe40554dd8eda7ccf9` for `Relation.lean`, and `7de1f49e203c3a693e87d425116b5e5deb37b09fde4240b44974478f63ce248e` for `Blocks.lean`.
+
+
+### Shared-public ninth build and tenth batch (2026-11-24)
+
+Checked Jolt pin: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Checked Lean base: `3522261`; current committed Lean HEAD: `105ffa7`.
+The ninth detached batch exited 1 at 10:17:35.
+It checked `MemoryRowExecution` (87 seconds), `WholeRun/BlockStep` (90 seconds), `DivisionBlock` (12 seconds), and `RowStepMemory` (21 seconds).
+The alignment-aware load inversion is committed as `31ec98f` (`Recover load alignment from successful execution`).
+The block simulation derives layout preservation from execution, without its old full-device-equality parameter, at `105ffa7` (`Derive block layout preservation from execution`).
+The ninth batch still failed in legacy `WholeRun/Bundles` and `Layer5/DeviceMemory`, and in three local repairs.
+The full library, final soundness theorem and soundness axiom closure remain unchecked.
+
+The local failures were a reserved tactic identifier `protected` in `RamWriteProtected`, an untyped second existential binder in `RowStepKinds.row_kind`, and an inline width match in `StoreRuns.laneStore_bundle_guard` that elaborated with dependent proof arguments.
+The first two repairs rename the tactic identifier and give the destination binder type `Dst`; neither changes a mathematical statement.
+`StoreRuns.narrowStoreBytes : AccessWidth → Nat` now supplies the width mapping byte ↦ 1, halfword ↦ 2, word ↦ 4.
+Replacing the inline match by this definition preserves the guard's value and width.
+These repairs await the tenth batch.
+
+The fresh block-statement read-back delivered an interim description only.
+It identified deletion of `hdevice : b.post.jolt_device = b.pre.jolt_device` as the sole header change in both block simulation theorems, and retained their universal `hinputs` obligation over every related Sail pre-state and PC decomposition.
+It also identified the new relation's admitted layout and full zero-default byte agreement.
+No final reviewer verdict was received, and this report does not count the interim message as a completed fidelity review.
+
+#### Additional primitive inversion interfaces, pending validation
+
+`MemoryRowExecution.LoadRow.vreg_post_of_run` takes a width-classified load into a writable virtual register, runtime advice, pre/post states and the successful execution certificate.
+It concludes that the post-state is exactly `stateAfterVRegWrite pre destination` of the shared doubleword at the accessed address.
+It adds no source-read or address guard premise.
+Its consumers are the narrow-store load inversion and the doubleword-AMO inversion.
+
+`MemoryRowExecution.ramStore_guard_of_run` takes an address, actual value, pre/post states, an MMU result, RAM membership and successful `Mmu.store_doubleword` execution.
+It concludes `JoltRamStoreOk address pre value 8`, including preservation of protected bytes.
+This moves the earlier private `StoreRuns` proof into the shared row owner, with the same type; the private duplicate is deleted.
+`MemoryRowExecution.ramLoad_guard_of_run` takes an address, pre/post states, an MMU result, RAM membership and successful `Mmu.load_doubleword` execution.
+It concludes `JoltRamLoadOk address pre`, using the padded backing end.
+The pending atomic inversion uses it.
+
+`MemoryRowExecution.StoreRow.aligned_store_of_run` takes exactly the old `StoreRow.store_of_run` parameters and run premise.
+It concludes the conjunction of natural alignment and that old theorem's successful MMU-store certificate.
+`StoreRow.store_of_run` keeps its complete old type and selects the second conjunct.
+The proof is factored from its existing four-width execution inversion, rather than copied for a new instruction case.
+`StoreRuns.nativeStore_ram_guard` uses it for native SD.
+That new theorem takes the two source registers, a 12-bit immediate, pre/post states, RAM membership of the containing word, and successful native SD execution.
+Its result is `JoltRamStoreOk` at the containing address for the architectural source value, with checked width eight.
+
+The new `WholeRun/AtomicStoreRuns.lean` supplies four interfaces for the pending actual-value bundle migration.
+`dwordRmw_ram_guards` takes a writable old-value virtual register, source registers, selected value source, middle-program constructor, tail, binary result function, pre/post states, RAM membership, a pure middle calculation contract, and a successful LD/middle/SD/tail run.
+The calculation contract quantifies over a loaded state with unchanged Sail state and the captured old word, and returns a calculated state with unchanged Sail state and a read of the computed result.
+The conclusion gives natural doubleword alignment, the RAM load guard, and the RAM store guard for the computed result applied to the source and original shared word.
+It derives layout and code preservation from execution of the middle and transfers the actual-value guard to the original memory.
+It does not assume the store guard it proves.
+`dwordBinop_ram_guards` specializes that interface to the existing ADD/XOR/AND/OR AMO template and its `AmoDwordMiddleStepInto` calculation certificate.
+`dwordSelect_ram_guards` specializes it to the signed/unsigned min/max template and its existing `AmoDwordSelectMiddleStepInto` certificate.
+`dwordSwap_ram_guards` specializes it to LD/SD/writeback with the architectural source value and its source-read certificate.
+All four have the same alignment/load/store conclusion, parameterized by the actual calculated value.
+Their named intended consumer remains `WholeRun/Bundles.equivAssumptions_of_retire`; integration into that consumer is still open.
+The word-AMO and conditional-store guards are also still open.
+These are draft interfaces awaiting elaboration, not a completed whole-run proof.
+The primitive load/store inversions are candidates to move into JoltBytecode after validation; no JoltBytecode file was edited.
+
+I read Jolt's `crates/jolt-program/src/expand/memory/scd.rs` (`expand_scd`) and `shared.rs` (`expand_amo_minmax_d`) at the pin.
+The conditional store selects its source or previously loaded word before SD and then clears both reservations.
+The existing forward SC equivalence theorem already assumes the protected-store guard and cannot be used to derive that same guard.
+A separate execution inversion is required; the report does not claim SC is settled.
+
+#### Code-memory frame simplification, pending validation
+
+`WholeRun/CodeInv.store_doubleword_mem` retains its complete statement and now uses the shared `store_doubleword_shape` theorem and the existing insertion-footprint lemma.
+The obsolete private `store_raw_mem` and `store_bytes_mem` proofs are deleted.
+`CodeInv.mkeeps_execInstr` retains its complete statement and now applies `JoltConstraints.nonstore_memory`.
+It uses the existing `StoreRow` width classification to exclude the four store widths, rather than splitting the ISA again.
+The separate Sail and Jolt primitive memory-frame proofs and `jolt_keep` tactic, used only by its old proof, are deleted.
+The remaining program-frame combinator and its consumers keep their statements.
+`CodeIntact.of_related` retains its statement and uses `heap_end_le_ram_backing_end` to carry its existing image bound to the padded presence interval.
+`JoltCodeIntact`, `NoCodeStore`, and all public code-invariant theorem types are unchanged by this batch.
+This simplification does not yet delete the separate I/O simulation or its old device-memory dependency.
+
+The tenth batch will build `JoltConstraints` plus every touched existing Lean module, including the two new store-inversion modules.
+The final harness, complete statement inventory, pin-reference cleanup, soundness axiom closure and clean-tree requirement remain outstanding.
+
+Before the tenth launch, the added-line forbidden-token scan, `ConstraintGen` admission scan, protected-tree diff check and whitespace check passed.
+The batch includes the root and 38 additional touched existing Lean modules.
+The new owner declarations are at `MemoryRowExecution.lean:473` (`LoadRow.vreg_post_of_run`), `:490` (`ramStore_guard_of_run`), `:507` (`ramLoad_guard_of_run`) and `:549` (`StoreRow.aligned_store_of_run`).
+The new source-store declarations are at `WholeRun/StoreRuns.lean:20` (`narrowStoreBytes`), `:159` (`laneStore_bundle_guard`) and `:198` (`nativeStore_ram_guard`).
+The doubleword templates are at `WholeRun/AtomicStoreRuns.lean:18` (`dwordRmw_ram_guards`), `:85` (`dwordBinop_ram_guards`), `:118` (`dwordSelect_ram_guards`) and `:150` (`dwordSwap_ram_guards`).
+
+
+### Shared-public tenth build and eleventh batch (2026-11-24)
+
+Jolt pin remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`; committed Lean HEAD remains `105ffa7`.
+The tenth batch exited 1 at 10:34:25.
+It failed in `MemoryRowExecution` because the new `LoadRow.vreg_post_of_run` binder used ambiguous `VReg`, with both root and Jolt interpretations in scope.
+The binder is now explicitly `JoltISA.VReg`.
+That owner-module failure prevented compilation of the store inversions and downstream prefix modules; the absence of further errors is not a successful check of those modules.
+Its attempted module build took 141 seconds.
+The legacy bundle attempt took 142 seconds and still used removed device-frame APIs, under-applied store guards, heap bounds, and the old address-only AMO/SC path.
+The next batch addresses those obligations in the bundle types and begins using the actual-value inversion theorems.
+It does not claim that the full bundle proof, whole-run simulation or final soundness assembly is complete.
+
+#### Padded-window construction
+
+`theorems/memory_presence.lean:72` adds `ram_backing_end_le_address_space`.
+For any device and configuration with `MemoryLayout.new config = some device.memory_layout`, it proves `Mmu.ram_backing_end device ≤ 2^64`.
+It uses the existing checked `max_ram_k?` bound and the exact Nat-valued backing-size definition.
+Its named consumer is `WholeRun/Bundles.ram_windows`.
+
+`WholeRun/Bundles.ram_windows` keeps its state, address, platform, presence, RAM-membership, AMO-operator parameters and complete `DwordAtomicWindowAssumptions` result.
+Its old address premises were `base.toNat < heap_end.toNat` and `base.toNat + 8 ≤ 2^64`.
+Its new premises are a checked layout, `base.toNat < Mmu.ram_backing_end device`, and `base &&& 7 = 0`.
+It derives `base.toNat + 8 ≤ backing_end` from alignment of the base and checked backing end, and derives the old no-wrap fact from the new address-space theorem.
+This supplies every byte of the padded presence interval, including accesses after `heap_end`.
+The caller's local `window` construction takes those actual backing and alignment facts.
+Ordinary loads/stores use alignment of their containing word, word AMOs use the aligned word base, and doubleword AMOs use execution-derived alignment.
+Reservation windows use their existing width-specific alignment fact.
+No premise is added to the public `equivAssumptions_of_retire` theorem.
+
+#### Actual-value bundle statement migration, pending compilation
+
+These are private implementation interfaces in `WholeRun/Bundles.lean`, except where explicitly noted.
+The old under-applied `JoltRamStoreOk address state` references represented address-only guards before the pin; the new guard type requires its stored value and checked width.
+The new statements below supply those arguments, rather than quantifying over arbitrary values or excluding protected addresses.
+
+| Declaration | Old statement component | New statement component |
+| --- | --- | --- |
+| `storeBundle` | No source width parameter; address-only store guard; default-width store bundle. | Adds `storeWidth : Nat`; requires the guard for `storeDwordValue storeWidth ea original source`, checked row width 8; returns the same-width store bundle. |
+| `amoWordBundle` | Address-only guard at `amoWordBase rs1`. | Guard for `amoWordStoreValue op rs1 original rs2`, checked width 8. |
+| `amoDwordBundle` | Address-only guard at `rs1`. | Guard for `amoValue op rs2 original`, checked width 8. |
+| `ReservationMemory` | Parameters `(store double) rs1 state`; conditional address-only store guard. | Adds `rs2`; conditional guard for `SystemProofs.scStoreValue double state rs1 rs2`, checked width 8; alignment and load fields unchanged. |
+| `reservation_conditions` | Returns the previous `ReservationMemory` and device equality. | Its result uses the new `ReservationMemory store double rs1 rs2 state`; device equality component and other parameters remain unchanged pending removal of the legacy path. |
+| `reservationWindow` and `reservationReadBundle` | Read-only `ReservationMemory false double rs1 state`. | Same obligation with the unused value-source index fixed to x0. |
+| `reservationStoreBundle` | Previous `ReservationMemory true double rs1 state`. | New `ReservationMemory true double rs1 rs2 state`, hence its actual SC value guard. |
+| `MemoryConditions` | Stores and both AMO widths required address-only store guards; LR/SC used the old reservation obligation. | Narrow stores use the merged word for widths 1, 2 or 4; SD uses its full value; word AMOs use `amoWordStoreValue`; doubleword AMOs use `DwordAmoCondition`; LR/SC use the new reservation obligation. |
+| `loadProgram_ram` | Tail no-store premise; returns load guard and full-device equality. | No condition on the tail; returns the unchanged load guard from its first executed load. |
+| `retire_conditions` | Returns old `MemoryConditions` and full-device equality. | Takes `Step.StepInvariant s.sail`, which its sole public caller already proves; returns the actual-value `MemoryConditions`. |
+
+The old full-device equalities in `loadProgram_ram` and `retire_conditions` were internal transport facts for the deleted device-array interpretation of memory.
+The shared-memory relation uses preserved layout directly from execution, as already checked in `BlockStep`.
+The new memory obligations are stronger actual-value and alignment obligations required by the pinned model.
+The result, premises and quantifiers of public `equivAssumptions_of_retire` are unchanged.
+Its source-store cases now pass widths 1, 2, 4 and 8 respectively, rather than using the old default width for every case.
+
+New private `sourceStoreCondition` and `wordAmoCondition` name exactly the corresponding merged/computed eight-byte store guards.
+New private `DwordAmoCondition` contains both natural doubleword alignment and the guard for `amoValue op source original`, checked width eight.
+The existing doubleword-AMO cases obtain both fields from execution.
+New private `dword_templates` proves all nine concrete doubleword expansions equal their swap, binop or select templates.
+It handles the two existing rd=x0 scratch allocations once for all templates; it does not split the ISA or repeat a separate allocation proof for each operator.
+The four binops reuse `amo_dword_*_middle_after_load_into` and the four min/max operations reuse `amo_dword_*_middle_after_load_for`.
+The swap case uses the actual architectural source read.
+The existing narrow-store cases now call `laneStore_bundle_guard`, and native SD calls `nativeStore_ram_guard`.
+These are real consumers of the new inversion interfaces; compilation remains pending.
+
+The duplicate private `mmu_load_ram` is deleted in favor of `MemoryRowExecution.ramLoad_guard_of_run`.
+The private `native_store_ram` is deleted after its sole consumer switches to the actual-value native store inversion.
+The old `storePlan_ram` path remains for word AMOs and SC only, and still does not elaborate with the new guard type.
+Its address-only classification is sufficient for memory footprints but cannot determine the computed stored value.
+The old no-store full-device frame is also still pending deletion with its legacy I/O consumers; it is not a valid general frame for halt rows in the pinned model.
+The eleventh batch is expected to continue reporting these legacy blockers until word-AMO and SC inversion and the single shared-memory simulation replace them.
+No proof is replaced by a gap or new admission.
+
+The full library, final soundness closure, old I/O-module deletion, word-AMO and SC inversion, remaining pin references, final statement audit and clean committed tree remain open.
+
+Before the eleventh batch, the added-line forbidden-token scan, `ConstraintGen` admission scan, protected-tree diff check and whitespace check passed.
+The root and all 39 additional touched existing Lean targets are launched together as `.constraints-repin-shared-public11.done`.
+
+
+### Shared-public eleventh build and twelfth batch (2026-11-24)
+
+Jolt pin remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`; committed Lean HEAD remains `105ffa7`.
+The eleventh batch exited 1 at 10:43:45.
+Its only reported failure was kernel recursion in `theorems/memory_presence.lean` at the new `ram_backing_end_le_address_space` proof.
+The attempted module build took 92 seconds.
+That prerequisite failure prevented checking its downstream users, including the pending store inversions, bundle migration and final soundness assembly.
+
+The public backing-end theorem keeps its complete statement.
+Its proof now instantiates two private lemmas over arbitrary natural numbers instead of running arithmetic after substituting concrete 64-bit bounds.
+`backing_end_le_arithmetic` proves `base + (lowest + 8 * words - base) ≤ bound` from `base ≤ bound` and `lowest + 8 * words ≤ bound`.
+`backing_end_le_option` proves the same inequality for the optional RAM-domain representation from `domain = some words` and those same bounds.
+These helpers serve the public backing-end bound and introduce no public premise or new admission.
+No resource limit changes.
+
+The twelfth batch checks the root and every touched existing Lean module together.
+All previously listed whole-run, word-AMO, SC, pin-reference, final closure and committed-tree obligations remain open.
+The static checks and exact launch target count below describe this batch; they do not establish compilation.
+
+Before the twelfth launch, the added-line forbidden-token scan, `ConstraintGen` admission scan, protected-tree diff check and whitespace check passed.
+The batch includes `JoltConstraints` and all 39 additional touched existing Lean targets.
+The completion file is `.constraints-repin-shared-public12.done`.
+
+
+### Shared-public twelfth build and thirteenth batch (2026-11-24)
+
+Jolt pin remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+The twelfth build exited 1 at 11:45:20.
+It checked `memory_presence` (86 seconds), `MemoryRowExecution` (189 seconds), both requested RAM-history completeness modules (151 and 230 seconds), `Completeness.RamWriteProtected` (268 seconds), and the soundness row dispatcher (49 seconds).
+These are whole-module elapsed times, not individual proof timings.
+The primitive owner and bound changes are committed as `613a113` (`Derive shared load shapes and actual RAM store guards`).
+
+`WholeRun/StoreRuns.nativeStore_ram_guard` failed because an implicit instruction argument could not determine the dependent runtime-advice type for `()`.
+The proof now names `instruction` explicitly in the no-advice equality.
+The two analogous applications in `AtomicStoreRuns.dwordRmw_ram_guards` now name their load/store constructors explicitly as well.
+Their statements are unchanged.
+`Completeness.All` failed to parse the multiline record update before its remaining layout-dependent fields.
+The update now puts every field on its own line; the theorem statement is unchanged.
+The old `Layer5.DeviceMemory` also failed on removed fields and retired predicates; that obsolete simulation has not been repaired or retained as a compatibility API.
+It remains pending replacement and deletion with the two I/O modules.
+
+#### Common word-lane inversion and its consumers, pending compilation
+
+`WholeRun/AtomicStoreRuns.lean` adds the following contracts, each with a real consumer.
+These are execution facts under the pinned model, rather than new assumptions on an instance or witness.
+
+| Declaration | Added statement and consumers |
+| --- | --- |
+| `wordLaneMerge_continue` | For distinct writable doubleword/lane temporaries, known old word and lane mask, and the replacement read after clearing, reduces the merge program with any tail to its store row on `amoWordLaneMergeState`; used by `wordLaneMerge_ram_guard` and the existing I/O AMO calculation. |
+| `wordLaneMerge_ram_guard` | Given those same register-calculation facts, RAM membership and a retiring merge with any continuation, derives `JoltRamStoreOk` for its actual `amoWordLaneMerged` value at width eight; used by `wordRmw_ram_guard`. |
+| `wordRmw_ram_guard` | Given a source read, RAM membership, the existing `AmoWordWindowStep` calculation contract and a retiring window, derives word alignment and the actual merged-value store guard on the original shared memory; used by the binop and swap guard theorems. |
+| `wordLaneValue_eq_storeValue` | Word alignment and equality of the calculated result's low word with `amoWordSailResult` imply equality between the executed lane merge and `amoWordStoreValue`; used by the binop and swap guard theorems. |
+| `wordTemplates` | Jointly equates generated ADD/XOR/AND/OR/swap word expansions with the existing common templates, handling the two x0 scratch allocations once; used by `Bundles.retire_conditions` and the five existing I/O AMO callers. |
+| `wordBinop_ram_guard` | The existing binop middle-row certificate, its low-word identity, RAM membership and the executed word-binop template imply the actual `amoWordStoreValue` guard at width eight; used by the four corresponding source cases. |
+| `wordSwap_ram_guard` | Source reads, RAM membership and a retiring swap window imply the `amoWordStoreValue .AMOSWAP` guard at width eight; used by the source swap case. |
+
+The new scratch-register facts instantiate `AtomicFamily.amo_word_register_writable` and `amo_word_register_ne`.
+They do not repeat allocator case splits per operator.
+`IoAmo` now calls the common merge reduction and joint template identity; its duplicate pure merge calculations and five separate expansion-identity proofs are removed.
+All existing public theorem types in `IoAmo` remain unchanged at this intermediate checkpoint.
+The four binops and swap in `Bundles.retire_conditions` now supply their actual-value `MemoryConditions` through these shared inversions.
+No new premise is added to public `equivAssumptions_of_retire`.
+The four word min/max operations and SC remain on the old path; the final shared-memory simulation is still open.
+
+I read the pinned expander implementations in `crates/jolt-program/src/expand/memory/amoswapw.rs` (`expand_amoswapw`) and `shared.rs` (`LaneWindow::merge`, lines 149–162; `expand_amo_w`, lines 293–321).
+They load the containing doubleword, calculate/extract the lane, clear it, shift the replacement, add it, store the merged word, and write back the old word last.
+The new inversion follows that order and checks the actual store; it does not infer an arbitrary-value protected-store guard from an address alone.
+These primitive/template facts are candidates to move into JoltBytecode; no protected-tree files were changed.
+The thirteenth batch checks the root and every touched existing Lean target together.
+Compilation of these new contracts and their downstream consumers is pending.
+
+Before the thirteenth launch, the added-line and new-file forbidden-token scans, `ConstraintGen` admission scan, protected-tree diff check and whitespace check passed.
+The batch includes `JoltConstraints` and all 38 additional touched existing Lean targets.
+The completion file is `.constraints-repin-shared-public13.done`.
+
+
+### Shared-public thirteenth build and fourteenth batch (2026-11-24)
+
+Jolt pin remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+The thirteenth build exited 1 at 11:59:56.
+It checked `WholeRun.StoreRuns` (130 seconds), `Completeness.All` (130 seconds) and `Completeness.completeness` (156 seconds).
+These are whole-module elapsed times, not individual proof timings.
+The completeness assembly and protected-write completeness proof are committed as `78ed82d` (`Assemble completeness for shared memory and halt claims`).
+The source-store execution inversions are committed as `621fcd1` (`Derive actual-value guards for retiring source stores`).
+The assembly still depends on the three unchanged #1949 admissions; compilation does not discharge them.
+
+The thirteenth batch reported two local goals in `Soundness/TopLevel.lean` and elaboration failures in `WholeRun/AtomicStoreRuns.lean`.
+The old `Layer5/DeviceMemory` also failed on the removed device fields; its replacement and deletion remain open.
+The pending atomic prerequisite prevented checking `Bundles`, `CodeInv` and their downstream whole-run users.
+
+`TopLevel.soundness_reconstruct_trace` (line 34) keeps its full statement.
+Its proof now extracts nonzero entry and the checked code region from `context.validInputs`, then rewrites source extents using `expand_program_source_extents`.
+Those existing context facts discharge the new bytecode-admission guards; no new hypothesis is introduced.
+`TopLevel.soundness_prover_accepts` (line 126) also keeps its statement.
+Its proof now supplies the explicit nonempty-array form of the existing terminal-halt certificate to the simplified prover guard.
+
+The atomic proofs now expose `EStateM.run` or `Program.Run` at the points where continuation equalities are rewritten, normalize the zero immediate after reducing the memory width, and read virtual registers through `readVReg_run`.
+The merge continuation names its concrete three pure rows rather than relying on private lane-source projections to rewrite.
+Scratch-register equalities are proved at the named old/doubleword/lane registers before those state updates are simplified.
+Architectural reads use `readSrc_xreg_run_of_read`, which preserves the complete current Jolt state when lifting a Sail read.
+These are proof repairs; the existing public theorem types are unchanged.
+The new dword calculation contract uses explicit `.run` equalities, definitionally equal to its previous function applications.
+No new admission or resource-limit change was introduced.
+
+#### Word min/max inversion and removed duplicate calculations
+
+I read `crates/jolt-program/src/expand/memory/shared.rs` (`expand_amo_minmax_w`, lines 328–388) at the pinned Jolt checkout.
+Jolt allocates containing-word, lane, old-word, source and take-source temporaries in that order.
+It sign-extends the source, compares in the order selected by min/max, computes SUB/MUL/ADD, merges the lane, and writes back the old word last.
+The new shared inversion uses that exact order, including sign extension before unsigned comparison.
+
+| Declaration in `WholeRun/AtomicStoreRuns.lean` | New statement and consumers |
+| --- | --- |
+| `wordSelectTemplates`, line 402 | Jointly equates the four generated min/max word expansions with `amoWordWindowProgram` using `amoWordSelectLaneMiddle` for SLT/SLTU and forward/reverse comparison; used by the four source cases in `Bundles.retire_conditions` and the four existing I/O AMO callers. |
+| `wordSelect_result`, line 429 | For Boolean signed/unsigned and min/max choices, selecting between the two equally sign-extended operands gives the corresponding `amoWordSailResult` low word; used by those source cases and existing I/O callers. |
+| `wordSelect_ram_guard`, line 448 | The existing comparison-row certificate, low-word selection identity, source reads, RAM membership and a retiring word-select template imply `JoltRamStoreOk` for the actual `amoWordStoreValue` at width eight; used by all four source min/max cases. |
+
+The four `Bundles.retire_conditions` min/max branches now invoke the common actual-value inversion instead of `StorePlan`.
+The existing public `equivAssumptions_of_retire` statement is unchanged.
+`IoAmo` uses the joint template and result identities instead of four separate allocator case splits and four repeated low-word calculations.
+Its public theorem statements are unchanged at this checkpoint; the obsolete I/O simulation itself still awaits deletion.
+These new primitive/template facts are candidates to move into JoltBytecode.
+No file under the two protected trees was changed.
+The next build checks these repairs, the soundness assembly and every remaining touched Lean target together with `JoltConstraints`.
+
+Before the fourteenth launch, the added-line and new-file forbidden-token scans, `ConstraintGen` admission scan, protected-tree diff check and whitespace check passed.
+The batch includes `JoltConstraints` and all 33 additional touched existing Lean targets.
+The completion file is `.constraints-repin-shared-public14.done`.
+
+
+### Shared-public fourteenth build and fifteenth batch (2026-11-24)
+
+Jolt pin remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`; committed Lean HEAD remains `621fcd1`.
+The fourteenth build exited 1 at 12:11:33.
+`Soundness.TopLevel` and `WholeRun.AtomicStoreRuns` each ran for 99 seconds before failing.
+The obsolete `Layer5.DeviceMemory` ran for 100 seconds and again failed on the removed device fields.
+These are module timings; no new individual proof timing is available.
+No final soundness closure or whole-run result was checked.
+
+The remaining `soundness_reconstruct_trace` goal was the proposition-valued entry-address guard after all bytecode and code-region checks had been discharged.
+Its proof now unfolds `guard` when simplifying with the existing nonzero-entry fact.
+The prover-acceptance proof produced no error in the fourteenth batch, but its enclosing module still failed.
+Both public statements are unchanged.
+
+The atomic repairs use explicitly typed zero-immediate equalities and equality transport for the address-domain proposition instead of asking `rw` to infer the bit width from a polymorphic zero.
+The merge address read now invokes `readSrc_xreg_run_of_read` directly.
+The word-select result function is explicitly typed `BitVec 32 → BitVec 64`, fixing the unassigned sign-extension input width.
+These are proof changes only.
+The fourteenth batch did not report errors in the joint word-select template and low-word selection identities, but the atomic module as a whole did not compile.
+
+#### Conditional doubleword store inversion, pending compilation
+
+I read `crates/jolt-program/src/expand/memory/scd.rs` (`expand_scd`) and `shared.rs` (`expand_sc_success`, lines 13–24) at the pinned checkout.
+The expansion checks lower RAM, compares rs1 with the doubleword reservation register, loads the old word, computes the reservation-dependent replacement through SUB/MUL/ADD, stores it, clears both reservation registers, and writes the status.
+A failed reservation stores the loaded old word; its protection check must use that value.
+
+| Declaration | New statement or changed private interface |
+| --- | --- |
+| `AtomicStoreRuns.dwordRmw_ram_guards_of_loaded`, line 20 | The retiring doubleword RMW template supplies alignment, a load guard and the actual-value store guard when its middle calculation is proved on `loaded = stateAfterVRegWrite pre old word`; this exact loaded-state equation preserves other scratch-register facts needed by SC.D. |
+| `AtomicStoreRuns.dwordRmw_ram_guards`, line 86 | The previous full statement is retained as a corollary: its middle contract uses only Sail equality and the loaded old-register value; existing AMO consumers are unchanged. |
+| `ConditionalStoreRuns.scdTemplate`, line 16 | Equates the generated SC.D program with its shared RAM-check, comparison, load, selector, store, clear and status fragments; used by the SC.D inversion. |
+| `ConditionalStoreRuns.scd_ram_guard`, line 40 | Source reads, lower-RAM membership and a retiring generated SC.D imply `JoltRamStoreOk` at width eight for `SystemProofs.scStoreValue true pre address source`; used by the source SC.D bundle branch. |
+| `Bundles.reservation_store_plan` | Old: classified `scRows double` for both widths. New: classifies only `scRows false`, its sole remaining SC.W consumer; SC.D no longer uses the address-only plan. |
+| `Bundles.reservation_conditions` | Old: returned `ReservationMemory store double ... ∧ t.jolt_device = s.jolt_device`. New: takes the caller's existing `Step.StepInvariant s.sail` and returns only `ReservationMemory store double ...`; the unused full-device frame and its LR proofs are deleted, and the doubleword-store branch uses the actual-value SC.D guard. |
+
+The public `equivAssumptions_of_retire` statement remains unchanged.
+The existing caller already supplies the step invariant; it is not a new premise on the exported simulation theorem.
+The doubleword inversion is factored once, rather than duplicating the load/store inversion for conditional stores.
+The new execution/template facts are candidates to move into JoltBytecode.
+The two protected source trees are unchanged.
+SC.W inversion, the second I/O simulation's replacement/deletion, remaining pin references, the full build, final statement audit and the final clean committed tree remain open.
+The next batch checks the root and all remaining touched Lean targets together.
+
+Before the fifteenth launch, the added-line and new-file forbidden-token scans, `ConstraintGen` admission scan, protected-tree diff check and whitespace check passed.
+The batch includes `JoltConstraints` and all 34 additional touched existing Lean targets.
+The completion file is `.constraints-repin-shared-public15.done`.
+
+
+### Shared-public fifteenth build and sixteenth batch (2026-11-24)
+
+Jolt pin remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`; committed Lean HEAD remains `621fcd1`.
+The fifteenth build exited 1 at 12:20:24.
+It reported two local proof errors before the legacy device-memory failure: `TopLevel.soundness_reconstruct_trace`'s zero literal did not match the 64-bit guard, and `dwordRmw_ram_guards_of_loaded` used the source-value equality in the wrong direction.
+Both proofs now use the explicit expected type/orientation.
+Their statements are unchanged.
+No final soundness closure or whole-run result was checked by that run.
+
+I re-read `crates/jolt-program/src/expand/memory/scw.rs`, `scd.rs`, and `shared.rs` (`expand_sc_success`, lines 13–24) at the pin.
+SC.W saves its success bit in v32, loads/sign-extends the old word, selects and spills the replacement to v33, reopens the containing word for SW's merge, writes status, and clears the reservations.
+The pending inversion follows those fragments and obtains the second opening's guard from the first actual load, whose shared memory is unchanged by the intervening calculation.
+
+| Declaration | Statement or change |
+| --- | --- |
+| `AtomicStoreRuns.wordOpen_conditions` | New: a retiring AMO word-opening row with lower-RAM membership supplies four-byte alignment, `JoltRamLoadOk` and the successful canonical shared doubleword read; used by both word-AMO and SC.W inversion. |
+| `ConditionalStoreRuns.scScratch_reserved` | New: the three allocated SC scratch registers are distinct from both persistent reservation registers; used by both widths' common prefix and SC.W calculation. |
+| `ConditionalStoreRuns.scPrefix_continue` | New: source read, lower-RAM membership and scratch/reservation disjointness imply the common RAM-check/comparison prefix continues with the computed equality bit, for an arbitrary continuation. |
+| `ConditionalStoreRuns.scTemplates` | New: joint generated-program identities for both SC widths, proved with one allocator classification; used by the two projection identities. |
+| `ConditionalStoreRuns.scdTemplate` | Keeps its full statement; its proof is the doubleword projection of `scTemplates`. |
+| `ConditionalStoreRuns.scwTemplate` | New: the word projection identifies the generated SC.W prefix, first load, selection, spill, reopen, merge, status and clear fragments. |
+| `ConditionalStoreRuns.scwWindow_continue` | New: source reads, alignment, the checked canonical old-word load and the saved success bit imply the pure calculation/reopening fragments continue from a state with the old containing word, lane mask and selected source; used by `scw_ram_guard`. |
+| `ConditionalStoreRuns.scw_ram_guard` | New: source reads, lower-RAM membership and a retiring generated SC.W imply the actual-value `JoltRamStoreOk` for `scStoreValue false`, width eight; used by `Bundles.reservation_conditions`. |
+| `Bundles.reservation_store_plan` | Restores the original two-width classification because `CodeInv.sc_mem` needs both SC footprints; it is no longer used to infer store legality from an address alone. |
+| `Bundles.reservation_conditions` | Keeps its pending fifteenth-batch interface, and its word branch now invokes `scw_ram_guard`; both widths use the actual reservation-dependent value. |
+| `Bundles.mmu_store_ram`, `store_body_ram`, `store_row_ram`, `storePlan_ram` | Deleted: their address-only `JoltRamStoreOk` conclusions omit the pinned value-preservation guard and have no remaining consumer. |
+| `Bundles.noStoreRow_device`, `noStoreProgram_device` | Deleted: absence of a store does not preserve the full device when a row halts. |
+| `Bundles.ScratchProgram`, `scratchProgram_frozen` | New: a program containing only the existing `ScratchRow` class preserves architectural registers and the full device; used by the two existing AMO middle-calculation consumers. |
+| `Bundles.addi_device` | New: ADDI preserves the device for any source/destination; used by the two AMO writeback consumers. |
+| `IoAmo.io_amo_dword`, `io_amo_word` | Private middle-classification premise changes from `NoStoreProgram` to `ScratchProgram`; the concrete middle programs satisfy it, and the exported block theorem types do not change. |
+| `IoAmo.io_amo_dword_binop`, `io_amo_word_binop`, `io_amo_dword_select`, `io_amo_word_select` | Private row-classification premise changes from arbitrary-destination `NoStoreRow` to virtual-destination `ScratchRow`; every supplied arithmetic/comparison constructor satisfies it. |
+
+The new execution and allocation facts are candidates to move into JoltBytecode.
+The sixteenth batch will check them and all remaining touched targets together with `JoltConstraints`.
+The separate I/O modules, their removed-field references, final pin-citation audit, final statement inventory, root build, axiom closure and clean committed tree remain open.
+The methods document now labels its old November 5 pin section as historical, avoiding a second contradictory current-pin declaration.
+
+Before the sixteenth launch, added-line/new-file forbidden-token scans, the generator admission scan, the protected-tree diff check and the whitespace check passed.
+The batch includes the root and all 34 remaining touched existing Lean targets.
+The completion file is `.constraints-repin-shared-public16.done`.
+
+
+### Shared-public sixteenth build and seventeenth batch (2026-11-24)
+
+Jolt pin remains `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`; committed Lean HEAD remains `621fcd1`.
+The sixteenth build exited 1 at 12:33:23.
+`Soundness.TopLevel`, `WholeRun.AtomicStoreRuns` and the old `Layer5.DeviceMemory` each ran for about 93 seconds before failing.
+These are whole-module times, not individual proof measurements.
+No soundness axiom closure was printed.
+The conditional-store prerequisite did not compile because the atomic module failed first.
+
+The entry guard diagnostic now exposes a mismatch between the numeral zero and the explicit `0#64` bitvector literal.
+The proof uses the explicit equality `(0 : BitVec 64) = 0#64`, proved by reflexivity, when simplifying the existing valid-input guard.
+The new word-opening inversion exposed a mismatch between `~~~7` and `-8`, the masks used by `MemoryWidth.accessed` and `amoWordBase`.
+It now explicitly normalizes those masks in the canonical-load equality.
+Both repairs preserve the complete theorem statements.
+The earlier actual-value equality-orientation repair produced no error in this build, although its module as a whole failed.
+
+#### Shared Sail platform and memory pipeline
+
+The old `WholeRun/Io.lean` contains useful Sail permission and pipeline facts as well as the obsolete duplicated device simulation.
+The valid Sail facts now form `WholeRun/PlatformMemory.lean`, with no device arrays, flag-word predicates or device-memory relation.
+This is a source refactor: the moved theorem bodies and hypotheses are unchanged.
+`Bundles` uses its range arithmetic for RAM PMA selection, the remaining ordinary memory simulation opens its namespace, and the atomic simulation calls its declarations directly.
+The new module depends on `Relation`, the fixed hart configuration and the existing bytecode memory libraries; it has no dependency on the pending AMO/SC bundle layer.
+No compatibility forwarding declarations were retained in the old I/O module.
+The old simulation modules still require replacement and deletion; extracting their reusable Sail facts does not complete that migration.
+
+| Old declaration/file | New declaration/file and statement status |
+| --- | --- |
+| `Bundles.range_subset_nat` | `WholeRun.PlatformMemory.range_subset_nat`: same wrapping-range comparison and nonwrap hypotheses; now public for both region checks. |
+| `Io.mod_of_and`, `mod_of_and1`, `mod_of_and3`, `mod_of_and7` | Same mask-to-divisibility statements in `WholeRun.PlatformMemory`. |
+| `Io.aligned_paddr` | Same divisibility-to-Sail-alignment statement in `WholeRun.PlatformMemory`. |
+| `Io.io_matching`, `io_checks`, `not_mmio_io` | Same platform PMA/PMP and MMIO-exclusion statements in `WholeRun.PlatformMemory`; they describe Sail's ordinary I/O region without a Jolt device copy. |
+| `Io.mem_read_of_plain`, `mem_write_value_of_plain` | Same physical plain-memory reduction statements in `WholeRun.PlatformMemory`, parameterized by permission, MMIO and actual read/write evidence. |
+| `Io.byte_of_dword_eq`, `append_bytes` | Same pure byte-packing statements in `WholeRun.PlatformMemory`. |
+| `Io.vmem_read_addr_of_mem_read`, `vmem_read_of_mem_read`, `execute_LOAD_of_mem_read` | Same width-generic virtual-memory and source-load reduction statements in `WholeRun.PlatformMemory`. |
+
+All these declarations retain their old quantified types after the namespace change; only their visibility changes from private to public.
+The new module adds documentation for the shared range comparison and retains the existing concrete examples on the other declarations.
+Its ordinary and atomic consumers have been updated without introducing new hypotheses on exported source simulation theorems.
+The next build checks this refactor, the normalization fixes, both conditional-store inversions and every remaining touched target together with the root.
+
+Before the seventeenth launch, added-line/new-file forbidden-token scans, the generator admission scan, the protected-tree diff check and the whitespace check passed.
+The batch includes the root and all 36 remaining touched existing Lean targets.
+The completion file is `.constraints-repin-shared-public17.done`.
+
+
+### Shared-public seventeenth build and eighteenth batch (2026-11-24)
+
+Jolt pin: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+The seventeenth build checked the working tree based on Lean HEAD `621fcd1` and exited 1 at 12:41:43.
+It checked `Soundness.TopLevel`, `WholeRun.AtomicStoreRuns`, `WholeRun.PlatformMemory` and `Soundness.soundness`.
+The first three modules took about 92–93 seconds each and the final soundness module about 56 seconds; these are module times, not individual proof timings.
+`#print axioms JoltInstance.soundness` printed exactly `[propext, Classical.choice, Quot.sound]`.
+The soundness theorem therefore has no admission or extra axiom in its checked closure.
+The root still failed in the new conditional-store inversion and the legacy device-memory simulation.
+No whole-run simulation result is claimed.
+
+The checked source groups are now committed locally:
+
+- `86d4cfa`: actual-value guard inversion for doubleword and word atomic expansions.
+- `b852fe3`: shared-memory prefix reconstruction, explicit halt-end soundness for both panic claims, deletion of the old three restrictions and termination-store proof layer.
+- `b118458`: reusable Sail region checks, byte packing and plain-memory pipeline facts, separated from the obsolete device overlay.
+
+The conditional-store repairs retain every statement up to definitional equality.
+They use explicit 7-, 12- and 64-bit literals matching the existing bytecode execution certificates, expose scratch-register aliases before continuation rewriting, and close the joint program-template projection equalities by reflexivity.
+They add no premise, resource override or decision-procedure use.
+
+#### Store pipeline and shared bytes
+
+The valid Sail store pipeline and byte-splice equations move from `Io.lean` into `WholeRun/PlatformStore.lean` in the existing `WholeRun.PlatformMemory` namespace.
+The ordinary simulation imports this module, and atomic consumers refer directly to its declarations.
+No forwarding declarations remain at the old locations.
+The old second I/O representation is still present pending its consumers' migration; this extraction alone does not remove it.
+
+| Declaration | Old and new statement |
+| --- | --- |
+| `toNat_and_neg8` | Same floor-to-eight identity; private in `Io` becomes public in `PlatformMemory`. |
+| `vmem_write_of_addr`, `execute_STORE_dword_of_write` | Same source-address and successful-write pipeline statements; namespace/visibility move only. |
+| `io_write_checks` | Same aligned access and platform-register hypotheses, same PMP and MMIO conclusions; namespace/visibility move only. |
+| `sail_store_b`, `sail_store_h`, `sail_store_w`, `sail_store_d` | Same source operands, region/alignment/permission hypotheses and exact Sail post-state equalities; namespace/visibility move only. |
+| `SailStore`, `sailStore_byte`, `sailStore_halfword`, `sailStore_word`, `sailStore_dword` | Same register equality and per-address byte-update relation, and its four canonical store instances; namespace/visibility move only. |
+| `lowHalf_byte`, `lowWord_byte`, `fusedSplice_byte_b`, `fusedSplice_byte_h`, `fusedSplice_byte_w` | Same extraction and narrow-store splice equations; namespace/visibility move only. |
+| `SailStore.agrees_with_doubleword` | New: a direct lane store and a containing-doubleword rewrite have equal zero-default bytes at every address, given the containing-word base, lane fit, old shared bytes and replacement-byte equations. |
+| `SailStore.preserves_present` | New: every address present before a plain store is still present afterwards. |
+| `shared_store_finish` | New caller of those two facts: a successful actual Jolt doubleword store and a Sail lane store with the same splice preserve the device, agree on registers and every shared byte, and retain allocated-byte presence. |
+
+These are generic shared-map facts; their statements do not mention device arrays, panic words or termination words.
+The last theorem is intended to replace the old store-finish obligation already consumed by ordinary and atomic source simulations.
+The new store module and SC repairs await the eighteenth build.
+
+#### Independent blind read-back of main soundness
+
+A fresh read-only reviewer stripped comments/docstrings and read only the Lean theorem and its recursively relevant definitions, without the Jolt checkout, methods documents or author reports.
+The reviewer recorded HEAD `621fcd1fdfa1ce461596604fb5c789c086795acf` with the working-tree theorem closure later committed at `b852fe3`.
+The theorem file SHA-256 was `d7947c54fd5ae6fbd67e132294d16837fef9be9cfff584b0ae1e1432db708d7f`, and `Soundness.TopLevel` was `c72f4d475e244bdd4cab04a291e7894b618a6dfa79e82e7de0f8c97431814e63`.
+The environment was Lean `v4.35.0`, Mathlib `56a005855ea17e0b0958f73ec801ae140b0a1679`, Sail `1e5b216bf881ef08da160db63b44ecda430802d6`.
+The reviewer ran no builds and made no changes.
+
+The literal read-back agrees with the intended deterministic modeled-equation claim:
+for any field with characteristic above `2^128 - 2^64`, instance satisfying `RamRegionFits` and universal `HostCallsSucceed`, and witness satisfying `AllConstraints`, the instance has an honest nonempty expanded-bytecode trace ending at its first success/panic halt, matching normalized output bytes and the public panic Boolean, with an accepted prover configuration and passing spoil assertions.
+The existential private inputs may differ from the supplied private inputs.
+`TemporaryRestrictions` has exactly the one host-call field.
+Both panic claims are admitted by the conclusion.
+The read-back also confirms the existing scope boundaries: the theorem follows supplied structured source instructions and does not equate them with decoding `memory_init`; the whole-run layer supplies that separate bridge.
+The result concerns finite modeled equations, not a cryptographic verifier or PCS security.
+It does not require the reconstructed trace's prover dimensions to equal the supplied witness dimensions, and does not impose `ProverChunkConfig` beyond the actual `WitnessParams`/context fields.
+Outputs are observed after trimming trailing zeros.
+The reviewer found no syntactic contradiction in the assumptions, and did not claim a source-fidelity or proof-completion verdict.
+The pin comparison and build/axiom evidence remain the integrator's separate obligations.
+
+Before the eighteenth launch, added-line/new-file forbidden-token scans, the generator admission scan, the protected-tree diff check and the whitespace check passed.
+The batch includes the root and all 8 remaining touched existing or new Lean targets.
+The completion file is `.constraints-repin-shared-public18.done`.
+
+
+### Shared-public eighteenth build and nineteenth batch (2026-11-24)
+
+Jolt pin: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD: `b118458`; the working tree contains the changes below.
+The eighteenth build exited 1 at 12:53:15.
+It checked `WholeRun/PlatformStore` in about 75 seconds and replayed the three-standard-axiom closure of `JoltInstance.soundness`.
+It failed in the obsolete device-memory module and conditional-store elaboration.
+No whole-run theorem is claimed as checked by that build.
+
+#### Shared-memory source simulations
+
+The old I/O modules are deleted, together with `Layer5/DeviceMemory` and the now-dead `WholeRun/LoadAddress` workaround.
+The replacement source modules are `WholeRun/SharedMemorySim.lean` for ordinary loads/stores and `WholeRun/AtomicMemorySim.lean` for word/doubleword AMOs.
+The remaining code in those modules proves Sail pipeline and shared-map execution facts.
+No compatibility aliases or forwarding declarations retain the old duplicated I/O relation.
+The root and all imports, including private-name references, now use these module names.
+
+I re-read the bytecode MMU shared-map operations and Jolt's pinned `tracer/src/emulator/mmu.rs` load/store paths.
+Jolt's tracer checks mapped addresses before reads and stores, reads input/output/gap bytes from its memory backing, and permits protected stores only when their bytes are preserved.
+A successful Jolt store changes Sail's memory; it does not preserve the complete Sail state.
+The new simulation retains the register frame and compares its actual shared-byte update with Sail's lane store.
+
+| Declaration or group | Old statement | New statement |
+| --- | --- | --- |
+| `MemRel` | Allocation/layout plus duplicated I/O-byte agreement, panic-word agreement and output-array sizing. | Deleted; `MemoryReady` contains allocation and checked layout only. |
+| `Related.memRel` and `MemRel.of_mem_eq` | Construct/transport the duplicated relation. | `Related.memoryReady` and `MemoryReady.of_mem_eq` construct/transport allocation and layout from shared-memory equality. |
+| `IoGeo` and `IoGeo.of_layout` | Bundle input/output/panic/termination geometry for the device overlay. | Deleted; `MemoryGeometry` and its constructor contain only `0x40000000 ≤ memLow` and eight-alignment of `memLow`. |
+| `NoFlagWordLoad`, `PanicStoreNonzero`, `AmoNoFlagWord` | Exclude loads/stores/atomics touching device flag words, or restrict a panic-word value. | Deleted, with all ordinary/atomic/decode/whole-run premises that referenced them. |
+| `NoLowLoad`, `NoZeroDoublewordLoad` and `Block.FirstRowAt.noLowLoad` | Require or derive an address lower bound from prover sizing plus exclusion of recorded address zero. | Deleted; `read_lower` derives `memLow ≤ A` from the actual checked first-byte read and checked layout. |
+| `io_dword_eq` | Requires the device-memory relation and flag-word exclusion to identify the loaded word. | Requires allocation/layout, alignment, lower/upper address bounds and the actual eight-byte read; compares the direct shared map. |
+| `load_access`, `store_access`, `access_congr`, `amo_access_congr` | Transport classifications together with flag/lower-bound or value restrictions. | Supply/transport only the actual address classification; no flag predicates. |
+| `narrow_load_outcome`, `ld_outcome`, `narrow_load_core`, `ld_core` | Receive an independent `memLow` lower bound and device-overlay relation. | Derive the lower bound from execution and use allocation/layout only. |
+| `store_effect`, `outputsAfter`, `memoryReady_of_store`, `outputsAfter_eq` and all output/panic/termination overlay byte helpers | Analyze device array updates and synthetic flag words. | Deleted; actual stores are compared directly through `shared_store_finish`. |
+| `store_finish` | Compares output-array updates and flag-word cases, and returns the old duplicated relation. | A real Jolt doubleword store plus Sail's matching lane store imply register preservation, device preservation, agreement of every shared byte, and `MemoryReady`. |
+| `SailStore.agrees_with_doubleword`, `shared_store_finish` | Eighteenth-batch drafts required all eight old bytes. | Require old-byte agreement only outside the overwritten lane; a full-word store needs no old-byte premise. |
+| `systemProject_of_store` | Assumes the complete Sail state is unchanged. | Assumes only its register map and projected virtual registers are preserved; concludes equality of projected register maps. |
+| `amo_store_low` | Excludes flag words and concludes the complete Sail state is unchanged. | Derives the mapped lower bound and concludes virtual-register preservation and the actual `state_after_dword_store` effect. |
+| `systemProject_regs_after_write` | No previous declaration. | Architectural writeback commutes with register projection under projected-vreg preservation even when memory has changed. |
+| `io_amo_dword`, `io_amo_word`, `IoAmoCtx`, `IoAmoEffect`, `io_amo_conv`, `io_amo_core` | Flag-word exclusions, duplicated relation and byte agreement only above RAM. | No flag exclusions; allocation/layout and byte agreement at every address; writeback follows the actual shared store. |
+| `io_core`, `block_simulates_io_via`, `block_simulates_io` | Ordinary flag-word, panic-value and lower-bound restrictions; duplicated I/O postcondition. | No such restrictions; direct shared-byte agreement and allocation/layout. |
+| `block_simulates_io_amo_via`, `block_simulates_io_amo` | Atomic flag-word exclusion and duplicated I/O postcondition. | No flag exclusion; direct shared-byte agreement and allocation/layout. |
+| `block_simulates_decoded`, `block_simulates_image` | Receive ordinary flag/lower-bound/panic-value premises and, for the image theorem, an atomic flag exclusion. | Those premises are removed; simulation still concludes the full `Related` relation. |
+| `BlockConforms` | Source classification, code preservation, flag-load exclusion, zero-doubleword-load exclusion, nonzero panic store and atomic flag exclusion. | Source classification and code preservation only. |
+| `BlockConforms.simulates` | Additionally takes a separately derived `NoLowLoad` condition. | No separate load-address condition; all memory guards follow from successful execution. |
+| `JoltInstance.TracerAddressChecks`, `LoadRow.address_checks`, `StoreRow.address_checks` | Temporary execution-prefix restriction and its two restriction-dependent consumers. | Deleted; selected-row proofs already use `SharedMemoryChecks` derived from the pinned constraints. |
+
+The pure Sail and splice declarations moved into `PlatformMemory` and `PlatformStore` retain their types as recorded in the preceding tables.
+The source simulation wrappers for particular load widths and AMO operators retain their operation/result equations and inherit the context changes listed above.
+The changed postconditions compare every zero-default shared byte, including the I/O region, instead of reconstructing a second window from device arrays.
+
+#### Conditional-store proof repairs
+
+The SC template proof now supplies its remaining nested conjunction of definitional identities explicitly.
+The SC.W continuation keeps a typed `spillRun`, exposes the scratch-register aliases before rewriting, and explicitly identifies the second word-opening program.
+The SC.D callback and SC.W reservation-bit equation close by definitional equality after their register reductions.
+`wordOpen_prefix_conditions` factors first-row inversion over an arbitrary word-window continuation; its caller is `scw_ram_guard`.
+This helper states the alignment, RAM read guard and exact shared loaded word already needed by that caller.
+Neither exported SC guard nor the bundle-construction theorem gains a premise or changes its result.
+No resource limit was raised to address the earlier timeout.
+
+Before the nineteenth launch, added-line/new-file forbidden-token scans, the generator admission scan, the removed-restriction scan, the protected-tree diff check and the whitespace check passed.
+The detached command builds `JoltConstraints` and all 12 remaining touched existing/new module targets under the shared build wrapper.
+Its completion file is `.constraints-repin-shared-public19.done` and output is `.constraints-repin-shared-public19.log`.
+The full build and clean-tree checks remain pending.
+
+
+### Shared-public nineteenth build and twentieth batch (2026-11-24)
+
+Jolt pin: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+The nineteenth build checked the working tree based on Lean HEAD `b118458` and exited 1 at 13:15:42.
+The only failed prerequisite was `ConditionalStoreRuns.scw_ram_guard`, which reached the default heartbeat limit during reduction.
+The rest of that file, including SC.D and the SC.W continuation and first-row inversion, produced no errors.
+`PlatformStore` and `MemoryAccessRestriction` checked in about 89 seconds each, and the complete affected soundness and completeness assemblies rebuilt.
+`JoltInstance.soundness` again printed exactly `[propext, Classical.choice, Quot.sound]`.
+The ordinary and atomic shared-memory simulation modules remained blocked behind the SC prerequisite.
+
+The checked shared-store pipeline is committed locally as `0fca98c` (`Compare Sail lane stores with shared doubleword updates`).
+The checked removal of `JoltInstance.TracerAddressChecks` and its two dead consumers is committed as `3bb089d` (`Remove the unused tracer address restriction`).
+The `DoublewordAddressChecks` predicate remains because `SharedMemoryChecks.memory_row_address_checks` proves it from the constraints; it is no longer an assumption.
+The prefix's `NextStep` definition remains because host-call success uses that execution boundary.
+
+The SC.W proof now names the repeated open/select/spill/reopen fragment `scwWindowRows`.
+`scwTemplate` and `scwWindow_continue` replace that expanded expression by this definition, with no change up to definitional equality.
+The new private `scwWindow_ram_guard` takes an arbitrary window-entry state, its actual source reads, the saved reservation-equality bit, a RAM lower bound, and its retiring window/merge run.
+It concludes the guard for the actual selected and merged containing word, then transports it through the existing setup-frame theorem.
+The exported `scw_ram_guard` executes only the RAM-check/reservation prefix and saved-bit copy before calling this helper and transporting the same guard back to the original state.
+This extraction avoids reducing the nested prefix state throughout the window proof.
+No public SC hypothesis or conclusion changed, and no resource limit was raised.
+
+A citation audit found 227 distinct source paths and 713 path references in Lean comments, with old explicit pin labels in 147 Lean files.
+Most cited current paths exist; three stale path spellings/configuration references and line-location mappings still require correction against the pinned checkout.
+No citation update is claimed merely from replacing a commit label.
+The source-reference audit and final declaration/line inventory remain pending.
+
+Before the twentieth launch, added-line/new-file forbidden-token scans, the generator admission scan, removed-restriction scan, protected-tree diff check and whitespace check passed.
+The detached command builds the root and all 8 remaining touched existing/new module targets through the shared wrapper.
+Its completion file is `.constraints-repin-shared-public20.done` and log is `.constraints-repin-shared-public20.log`.
+The full-root check, final whole-run validation, remaining commits and clean-tree condition are still pending.
+
+
+### Shared-public twentieth build and twenty-first batch (2026-11-24)
+
+Jolt pin: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Lean HEAD: `3bb089d` with the working-tree migration described above.
+The twentieth batch exited 1 at 13:19:17.
+The SC.W window guard extraction produced no error; the only failed declaration was the outer `scw_ram_guard`, again exceeding the default reduction budget.
+The final soundness axiom report remained exactly `[propext, Classical.choice, Quot.sound]`.
+
+The new `scwPrefixState` names the state after the RAM check, reservation comparison and saved-bit copy.
+The new `scwPrefix_continue` executes those rows before an arbitrary continuation.
+The exported guard now calls that prefix theorem, obtains the saved-bit equation, and applies the checked window guard.
+All new definitions and lemmas are consumed by that exported guard.
+Temporary `trace` checkpoints identify entry, bound, template, prefix and guard milestones if reduction still times out; they do not add assumptions or change checking limits and will be removed before the final commit.
+The public guard's statement is unchanged.
+
+The twenty-first detached command builds the root and all 8 remaining touched module targets through the shared build wrapper.
+Before launch, added-line/new-file forbidden-token scans, the generator admission scan, protected-tree diff and whitespace checks passed.
+Its completion file is `.constraints-repin-shared-public21.done`, with output in `.constraints-repin-shared-public21.log`.
+
+#### Pinned citation audit and remaining host-call model boundary
+
+The numeric-citation audit read the old pinned files and the current `ff6fc6568` files and compared their line sequences.
+Of 238 plain numeric Rust citations, 232 have exact unchanged endpoint anchors at one of the stated historical revisions.
+The remaining citations concern the changed ECALL expansion, changed SC.W expansion, BEQ's macro-based instruction declaration and the changed HostIO handlers.
+The two stale `jolt-trace` preprocessing paths must become their current `jolt-program` paths, and `instructions/b/beq.rs` becomes `instructions/i/beq.rs`.
+The `sail-import/rv64d_jolt.json` references describe the local Sail model configuration, not a file in Jolt's Rust checkout.
+The anchor audit is evidence for locating citations, not an independent semantic proof.
+
+The current Jolt tracer has changed host-call failure behavior beyond the memory and halt changes covered by this re-pin.
+At `tracer/src/emulator/cpu.rs:1118` (`handle_jolt_cycle_marker`) it logs and ignores unknown marker events, restarts duplicate markers, and ignores unmatched end markers.
+At line 1166 (`handle_jolt_print`) it logs and ignores invalid print event types, unreadable messages and stdout failures.
+`tracer/src/emulator/host_io.rs` (`read_host_bytes`, lines 51–87) checks pointer addition and address limits before reading, reserves fallibly, and rejects unreadable ranges.
+`VirtualHostIO::exec` dispatches these handlers in `tracer/src/instruction/virtual_host_io.rs:19–38`.
+
+The frozen JoltBytecode model's `JoltISA/HostIO.lean:43–78` still throws on unknown cycle-marker or print events and makes pointer overflow conditional on `overflowChecks`.
+The initialized soundness run disables that overflow flag.
+The surviving `HostCallsSucceed` restriction therefore marks a limitation of the frozen execution model; it should not be described as a known invalid-event panic in Jolt at this pin.
+Invalid-event success in Jolt and the tracer's checked/fallible host reads are not fully modeled by that frozen layer.
+No change under `JoltBytecode/` is made, no extra assumption is added, and this report does not claim unrestricted Rust HostIO fidelity.
+The checked Lean soundness result continues to concern the modeled instruction execution under its explicit host-call restriction.
+The three removed flag-word restrictions and the removed tracer-address restriction do not depend on this separate HostIO limitation.
+
+
+### Citation relocation working tree (2026-11-24)
+
+The citation pass changes comments only in 194 Lean files.
+It pins GitHub source links to `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`, corrects the old `jolt-trace` preprocessing path and the BEQ instruction path, and updates explicit current-pin labels.
+Unchanged source-line anchors are relocated by matching lines in the cited old revisions against the pinned checkout; changed ECALL, SC.W, BEQ and HostIO locations were read separately.
+Relocation counts: 274 exact anchors, 6 reviewed changed items, 89 pinned URLs, 14 named/path citation instead of stale lines.
+Where an old anchor could not be established, its stale numeric range was removed while retaining a pinned source-file/item citation:
+
+- `common/src/jolt_device.rs`, old location `491-493`.
+- `crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs`, old location `662-668`.
+- `crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs`, old location `668-670`.
+- `crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs`, old location `82-90`.
+- `crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs`, old location `115-128`.
+- `crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs`, old location `135-154`.
+- `crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs`, old location `69-79`.
+- `crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs`, old location `181-201`.
+
+No proof statement or body changes in this citation pass.
+
+
+### Shared-public twenty-first build and twenty-second batch (2026-11-24)
+
+Jolt pin: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+The twenty-first build checked the working tree based on `3bb089d` and exited 1 at 13:23:04.
+The SC.W window guard produced no diagnostic.
+The remaining errors were the copied reservation bit's named-state normalization, the saved reservation-bit equation, and reduction at the final guard transport in `ConditionalStoreRuns.scw_ram_guard`.
+Temporary trace checkpoints showed that execution inversion had already obtained the window guard before this final reduction failed.
+The soundness axiom closure remained exactly `[propext, Classical.choice, Quot.sound]`.
+
+The twenty-second batch makes the copied-register post-state explicit, closes the saved-bit equation by definitional equality, and supplies source-register and shared-memory equalities before normalizing the final guard.
+This changes proof normalization only; the exported SC.W guard's hypotheses and conclusion remain unchanged.
+No checking limit was raised.
+The temporary diagnostic traces still need removal after the declaration checks.
+
+The citation relocation is committed locally as `cea7d6c` (`Update Jolt source citations to ff6fc6568`).
+The commit changes comments in 194 Lean files.
+A comparison that strips nested Lean comments while preserving string literals verified that the staged code matched its parent in every changed file.
+This establishes that the citation commit changes no Lean declaration or proof body.
+
+Before launch, the added-line/new-file forbidden-token scan, generator admission scan, removed-restriction scan, protected-tree diff and whitespace checks passed.
+The twenty-second detached command builds `JoltConstraints` and all 8 remaining touched existing/new module targets through the shared build wrapper.
+Its completion file is `.constraints-repin-shared-public22.done`, with output in `.constraints-repin-shared-public22.log`.
+The shared-memory simulations and their whole-run callers remain unchecked behind the conditional-store prerequisite.
+The root build, final statement inventory, exact harness checks, remaining logical commits and clean-tree condition remain open.

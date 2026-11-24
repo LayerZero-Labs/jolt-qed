@@ -1,4 +1,4 @@
-import JoltConstraints.theorems.WholeRun.Io
+import JoltConstraints.theorems.WholeRun.SharedMemorySim
 import JoltConstraints.theorems.WholeRun.Bundles
 import JoltBytecode.InstructionEquivalence.Instructions.AtomicFamily.Amoaddd
 import JoltBytecode.InstructionEquivalence.Instructions.AtomicFamily.Amoxord
@@ -47,20 +47,6 @@ def amoBase : RiscvInstruction → SailJoltState → Option (BitVec 64)
       some (JoltISA.sourceValue (.xreg rs1) js)
   | _, _ => none
 
-/-- Documented deviation (`docs/riscv-alignment.md`, section 2): an atomic memory
-operation in the I/O window does not touch the panic and termination words.
-Jolt's device turns a store of the panic word into the panic flag and drops every other
-store to the termination word, and its load returns the flag, while Sail stores and
-returns the bytes written. An atomic reads and then writes the whole containing
-doubleword (`LD` and `SD`, or the word lane rows through the same doubleword access in
-`tracer/src/emulator/mmu.rs`, `Mmu::load_doubleword` and `Mmu::store_doubleword`), so no
-byte of that doubleword may be a flag byte.
-For example, `AMOADD.D` at the panic address violates it; at the first output
-doubleword it holds. -/
-def AmoNoFlagWord (i : RiscvInstruction) (js : SailJoltState) : Prop :=
-  ∀ a, i.amoBase js = some a →
-    ∀ k < 8, WholeRun.IsFlagWord js.jolt_device (a.toNat + k) = false
-
 end RiscvInstruction
 
 namespace WholeRun
@@ -74,7 +60,7 @@ local macro "bundleHelper%" n:ident : term =>
   pure (Lean.mkIdent (Lean.mkPrivateNameCore `JoltConstraints.theorems.WholeRun.Bundles
     (`WholeRun ++ n.getId)))
 local macro "ioHelper%" n:ident : term =>
-  pure (Lean.mkIdent (Lean.mkPrivateNameCore `JoltConstraints.theorems.WholeRun.Io
+  pure (Lean.mkIdent (Lean.mkPrivateNameCore `JoltConstraints.theorems.WholeRun.SharedMemorySim
     (`WholeRun ++ n.getId)))
 local macro "storeHelper%" n:ident : term =>
   pure (Lean.mkIdent (Lean.mkPrivateNameCore
@@ -100,8 +86,8 @@ private theorem io_atomic_checks (s : SailState) (addr : BitVec 64) (n : Nat)
     (halign : addr.toNat % n = 0) (op : amoop) (hop : (op == .AMOCAS) = false) :
     Assumptions.AtomicPmpOk op addr n s := by
   have hread := readReg_eq_of_get? Register.pma_regions s _ hpma
-  have hmatch := (ioHelper% io_matching) addr n hlo hn hwidth hhi
-  have hal := (ioHelper% aligned_paddr) addr n halign
+  have hmatch := PlatformMemory.io_matching addr n hlo hn hwidth hhi
+  have hal := PlatformMemory.aligned_paddr addr n halign
   simp [Assumptions.AtomicPmpOk,
     phys_access_check, HartConfig.pmpCheck_run, pmaCheck, hread, hmatch, ioRegion, hal,
     pma_allows_atomic_op, bne, hop,
@@ -598,27 +584,38 @@ For example, reading `v40` gives the value stored there. -/
 private theorem readSrc_vreg (vr : JoltISA.VReg) (js : SailJoltState) :
     JoltISA.readSrc (.vreg vr) js = .ok (js.vregs vr) js := rfl
 
-/-- The access premises of an AMO on a doubleword in the I/O window rule out every
-write that is not to the output buffer: a store of the doubleword at `A` that is not a
-flag-word store lies in the output buffer, and so at or above the lowest address.
-For example, an `AMOADD.D` at the output buffer's first doubleword stores there, while
-the same instruction at the panic word is excluded by `AmoNoFlagWord`. -/
+/-- A retiring atomic store checks its mapped address and inserts the shared bytes.
+For example, an AMO in the output region retains virtual registers and stores its result. -/
 private theorem amo_store_low (js_m js_sd : SailJoltState) (A V : BitVec 64)
-    (hmem : MemRel js_m.jolt_device js_m.sail)
+    (hmem : MemoryReady js_m.jolt_device js_m.sail)
     (hlt : A.toNat < JoltISA.RAM_START_ADDRESS)
-    (hflag : ∀ k < 8, IsFlagWord js_m.jolt_device (A.toNat + k) = false)
     (hst : JoltISA.Mmu.store_doubleword A V js_m = .ok (.Ok true) js_sd) :
-    memLow js_m.jolt_device ≤ A.toNat ∧ js_sd.vregs = js_m.vregs ∧ js_sd.sail = js_m.sail := by
-  have hgeo := IoGeo.of_layout _ hmem.layout
-  obtain ⟨-, hc⟩ := (ioHelper% store_effect) js_m js_sd A V hmem hlt hst
-  have hf0 := hflag 0 (by norm_num)
-  simp only [IsFlagWord, Bool.and_eq_false_iff, decide_eq_false_iff_not, not_le, not_lt,
-    Nat.add_zero] at hf0
-  obtain ⟨hlow, hla, hlo, hoa, hp, hma, ht, he, hbd, -, -, -, -⟩ := hgeo
-  rcases hc with ⟨h1, h2, rfl⟩ | ⟨h1, rfl⟩ | ⟨h1, rfl⟩
-  · exact ⟨by omega, rfl, rfl⟩
-  · exfalso; omega
-  · exfalso; omega
+    memLow js_m.jolt_device ≤ A.toNat ∧ js_sd.vregs = js_m.vregs ∧
+      js_sd.sail = state_after_dword_store js_m.sail A V := by
+  obtain ⟨_, _, checked⟩ := (ioHelper% store_doubleword_below_inv) A V js_m js_sd _ hlt hst
+  have mapped : js_m.jolt_device.readable A.toNat = true := by
+    simpa only [Mmu.effective_address_ok, hlt, ite_true] using checked
+  have lower := (ioHelper% readable_lower) js_m.jolt_device hmem.layout A.toNat mapped
+  have shape := JoltConstraints.store_doubleword_shape js_m js_sd A V _ hst
+  refine ⟨lower, ?_, ?_⟩
+  · rw [shape]
+  · rw [shape]
+    exact Mmu.write_ram_doubleword_eq js_m.sail A V
+
+/-- Register projection commutes with architectural writeback even when memory changes.
+For example, an AMO returns the old word in `rd` after storing its new word. -/
+private theorem systemProject_regs_after_write (js gp : SailJoltState) (rd : regidx)
+    (value : BitVec 64)
+    (registers : gp.sail.regs = (stateAfterWrite js.sail rd value).regs)
+    (projected : Projection.ProjectedVRegsPreserved js gp) :
+    (System.systemProject gp).regs =
+      (stateAfterWrite (System.systemProject js) rd value).regs := by
+  let post := { gp with sail := stateAfterWrite js.sail rd value }
+  have pureWrite := Projection.systemProject_stateAfterWrite_of_projected_vregs_preserved
+    js post rd value rfl projected
+  have same : (System.systemProject gp).regs = (System.systemProject post).regs := by
+    simp only [System.systemProject, Step.setReg, post, registers]
+  exact same.trans (congrArg (fun state : SailState => state.regs) pureWrite)
 
 
 /-- A doubleword AMO whose row sequence is `LD`, a pure middle, `SD`, `ADDI` agrees with
@@ -642,15 +639,13 @@ private theorem io_amo_dword (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fal
           (JoltISA.execProgram tail).run js_m) ∧
         js_m.sail = js_l.sail ∧ js_m.vregs oldReg = D ∧
         JoltISA.readSrc src js_m = .ok (res rs2Val D) js_m)
-    (hNS : (bundleHelper% NoStoreProgram) (mid (.done RETIRE_SUCCESS)))
+    (hNS : (bundleHelper% ScratchProgram) (mid (.done RETIRE_SUCCESS)))
     (hinv : Step.StepInvariant js.sail) (hlink : System.systemProject js = js.sail)
     (hmstatus : js.vregs mstatusVReg &&& ~~~(0x88 : BitVec 64) = 0)
-    (hmem : MemRel js.jolt_device js.sail)
+    (hmem : MemoryReady js.jolt_device js.sail)
     (hpma : js.sail.regs.get? Register.pma_regions = some platformPma)
     (hhtif : js.sail.regs.get? Register.htif_tohost_base = some none)
     (hlt : (JoltISA.sourceValue (.xreg rs1) js).toNat < JoltISA.RAM_START_ADDRESS)
-    (hflag : ∀ k < 8,
-      IsFlagWord js.jolt_device ((JoltISA.sourceValue (.xreg rs1) js).toNat + k) = false)
     (hproj : Projection.ProjectedVRegsPreserved js gp)
     (hrun : (JoltISA.execProgram
       (.instr (JoltISA.Encoded.LD .amo (.vreg oldReg) (.xreg rs1) 0) <|
@@ -661,14 +656,14 @@ private theorem io_amo_dword (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fal
     ∃ t : SailState, (execute_AMO op false false rs2 rs1 8 rd).run js.sail =
         .ok RETIRE_SUCCESS t ∧
       t.regs = (System.systemProject gp).regs ∧
-      (∀ a, RAM_START_ADDRESS ≤ a → Mmu.ram_byte t.mem a = Mmu.ram_byte gp.sail.mem a) ∧
-      MemRel gp.jolt_device t := by
+      (∀ a, Mmu.ram_byte t.mem a = Mmu.ram_byte gp.sail.mem a) ∧
+      MemoryReady gp.jolt_device t := by
   have hr1 := (bundleHelper% source_read) js hinv rs1
   have hr2 := (bundleHelper% source_read) js hinv rs2
   have hrdr := (bundleHelper% source_read) js hinv rd
   have hpriv : Assumptions.CurPrivilegeMachine js.sail := ⟨hinv.machine⟩
   have hmprv := (bundleHelper% mprv_zero) js hlink hmstatus
-  generalize JoltISA.sourceValue (.xreg rs1) js = A at hr1 hlt hflag
+  generalize JoltISA.sourceValue (.xreg rs1) js = A at hr1 hlt
   generalize JoltISA.sourceValue (.xreg rs2) js = rs2Val at hr2
   obtain ⟨js1, hld, hrest⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ _ _ hrun
   obtain ⟨hal, D, hread, hjs1⟩ := ld_amo_inv oldReg hold rs1 A js js1 hr1 hlt hld
@@ -678,22 +673,20 @@ private theorem io_amo_dword (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fal
   obtain ⟨js_m, hmid, hms, hmo, hsrc⟩ := hmiddle rs2Val D js1 hr2 hs1 hv1
   rw [hmid] at hrest
   have hdev : js_m.jolt_device = js.jolt_device := by
-    have := (bundleHelper% noStoreProgram_device) _ hNS js1 js_m RETIRE_SUCCESS
-      ((hmid (.done RETIRE_SUCCESS)).trans rfl)
+    have := ((bundleHelper% scratchProgram_frozen) _ hNS js1 js_m RETIRE_SUCCESS
+      ((hmid (.done RETIRE_SUCCESS)).trans rfl)).2
     rw [this, hd1]
   have hsm : js_m.sail = js.sail := hms.trans hs1
-  have hmem_m : MemRel js_m.jolt_device js_m.sail := by rw [hdev, hsm]; exact hmem
+  have hmem_m : MemoryReady js_m.jolt_device js_m.sail := by rw [hdev, hsm]; exact hmem
   obtain ⟨js_sd, hsd, hrest2⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ _ _ hrest
   have hr1m : rX_bits rs1 js_m.sail = .ok A js_m.sail := by rw [hsm]; exact hr1
   obtain ⟨hal7, hst⟩ := sd_amo_inv rs1 src A _ js_m js_sd hr1m hsrc hlt hsd
-  have hflag_m : ∀ k < 8, IsFlagWord js_m.jolt_device (A.toNat + k) = false := by
-    rw [hdev]; exact hflag
-  obtain ⟨hlow, hvsd, hssd⟩ := amo_store_low js_m js_sd A _ hmem_m hlt hflag_m hst
+  obtain ⟨hlow, hvsd, hssd⟩ := amo_store_low js_m js_sd A _ hmem_m hlt hst
   obtain ⟨hlo40, hhi8⟩ := (ioHelper% store_bounds) js_m js_sd A _ hmem_m hlt hst
-  have hmod := (ioHelper% mod_of_and7) A hal7
+  have hmod := PlatformMemory.mod_of_and7 A hal7
   have hlow' : memLow js.jolt_device ≤ A.toNat := by rw [hdev] at hlow; exact hlow
-  obtain ⟨hb, no, hD⟩ := (ioHelper% io_dword_eq) js A D hmem hmod hlow' hlt hflag hread
-  have hnm := (ioHelper% not_mmio_io) js.sail A 8 hlo40 hhtif
+  obtain ⟨hb, no, hD⟩ := (ioHelper% io_dword_eq) js A D hmem hmod hlow' hlt hread
+  have hnm := PlatformMemory.not_mmio_io js.sail A 8 hlo40 hhtif
   have hatomic := io_atomic_checks js.sail A 8 hpma hlo40 (by norm_num) (by norm_num)
     (by omega) hmod op hnot_cas
   have hsail := io_execute_AMO_dword_non_cas_aligned op rs2 rs1 rd js hpriv hmprv A rs2Val
@@ -713,54 +706,41 @@ private theorem io_amo_dword (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fal
     rw [hadd] at hadd'
     exact (EStateM.Result.ok.inj hadd').2
   have hdev_w : gp.jolt_device = js_sd.jolt_device :=
-    (bundleHelper% noStoreRow_device) _ (by trivial) js_sd gp RETIRE_SUCCESS hadd
-  have hsail_gp : gp.sail = stateAfterWrite js.sail rd D := by
+    (bundleHelper% addi_device) _ _ _ js_sd gp RETIRE_SUCCESS hadd
+  have hsail_gp : gp.sail = stateAfterWrite
+      (state_after_dword_store js.sail A (res rs2Val D)) rd D := by
     rw [hww, hsw', hssd, hsm]
   -- the memory
-  obtain ⟨hgs, hmemT⟩ := (ioHelper% store_finish) js js_m js_sd
+  obtain ⟨hgs, hdevice, hbytes, hmemT⟩ := (ioHelper% store_finish) js js_m js_sd
     (state_after_dword_store js.sail A (res rs2Val D)) A (res rs2Val D) A (res rs2Val D) D 8
     hmem hsm hdev (by norm_num) (by omega) (by omega)
     (fun k hk h => by exfalso; apply h; omega)
     (fun k hk => by rw [ite_eq_left (by omega), hmod, Nat.sub_zero]) hlt hst
-    ((ioHelper% sailStore_dword) js.sail A _)
-    (fun h => by
-      exfalso
-      have hf0 := hflag 0 (by norm_num)
-      have hg := IoGeo.of_layout _ hmem.layout
-      obtain ⟨-, -, -, -, hp, -, ht, he, -, -, -, -, -⟩ := hg
-      simp only [IsFlagWord, Bool.and_eq_false_iff, decide_eq_false_iff_not, not_le,
-        not_lt, Nat.add_zero] at hf0
-      omega)
-  have hsst := (ioHelper% sailStore_dword) js.sail A (res rs2Val D)
+    (PlatformMemory.sailStore_dword js.sail A _)
+  have hsst := PlatformMemory.sailStore_dword js.sail A (res rs2Val D)
   refine ⟨AtomicFamily.amoDwordFinalSailState rd js.sail A (res rs2Val D) D, ?_, ?_, ?_, ?_⟩
   · simpa only [hD] using hsail
-  · rw [(Projection.systemProject_stateAfterWrite_of_projected_vregs_preserved js gp rd D
-      hsail_gp hproj), hlink]
-    change wX_update_regs rd _ _ = wX_update_regs rd _ _
-    rw [hsst.1]
-  · intro a ha
-    rw [hsail_gp]
-    simp only [AtomicFamily.amoDwordFinalSailState, stateAfterWrite, Mmu.ram_byte]
-    rw [hsst.2 a, ite_eq_right]
-    simp only [JoltISA.RAM_START_ADDRESS, RAM_START_ADDRESS] at ha hhi8
-    omega
+  · rw [systemProject_regs_after_write js gp rd D (by rw [hsail_gp]; rfl) hproj, hlink]
+    rfl
+  · intro a
+    simpa only [hsail_gp, AtomicFamily.amoDwordFinalSailState, stateAfterWrite,
+      hssd, hsm] using hbytes a
   · rw [hdev_w]
     exact hmemT.of_mem_eq rfl
 
 
 /-- The state facts every I/O AMO core takes: the step invariant, the link between Sail's
-state and Jolt's, the platform registers, the memory relation, and that the doubleword
-at `a` is in the I/O window and holds no flag byte.
+state and Jolt's, the platform registers, allocation and the checked layout, and that
+the doubleword at `a` lies below RAM.
 For example, for `AMOADD.D` through `0x40000010`, `a` is `0x40000010`. -/
 structure IoAmoCtx (js : SailJoltState) (a : BitVec 64) : Prop where
   inv : Step.StepInvariant js.sail
   link : System.systemProject js = js.sail
   mstatus : js.vregs mstatusVReg &&& ~~~(0x88 : BitVec 64) = 0
-  mem : MemRel js.jolt_device js.sail
+  mem : MemoryReady js.jolt_device js.sail
   pma : js.sail.regs.get? Register.pma_regions = some platformPma
   htif : js.sail.regs.get? Register.htif_tohost_base = some none
   lt : a.toNat < JoltISA.RAM_START_ADDRESS
-  flag : ∀ k < 8, IsFlagWord js.jolt_device (a.toNat + k) = false
 
 /-- What one AMO must achieve on the I/O window: Sail's `execute_AMO` retires to a state
 whose registers are the projection of Jolt's, whose RAM is Jolt's and whose memory
@@ -770,8 +750,8 @@ def IoAmoEffect (op : amoop) (w : Nat) (rs2 rs1 rd : regidx) (js gp : SailJoltSt
   ∃ t : SailState, (execute_AMO op false false rs2 rs1 w rd).run js.sail =
       .ok RETIRE_SUCCESS t ∧
     t.regs = (System.systemProject gp).regs ∧
-    (∀ a, RAM_START_ADDRESS ≤ a → Mmu.ram_byte t.mem a = Mmu.ram_byte gp.sail.mem a) ∧
-    MemRel gp.jolt_device t
+    (∀ a, Mmu.ram_byte t.mem a = Mmu.ram_byte gp.sail.mem a) ∧
+    MemoryReady gp.jolt_device t
 
 private theorem binop_old_writable (rd : regidx) :
     WritableVReg (JoltISA.amoDoubleBinopOldVRegFor rd) := by
@@ -799,7 +779,7 @@ private theorem io_amo_dword_binop (op : amoop) (hnot_cas : (op == amoop.AMOCAS)
       AtomicFamily.amoDwordSailResult op
         (show BitVec (8 * 8) from trunc (m := (((8 : Nat) : Int) * (8 : Int)).toNat) rs2Val)
         (BitVec.setWidth (8 * 8) D) = res rs2Val D)
-    (hNSb : ∀ d l r, (bundleHelper% NoStoreRow) (binop d l r))
+    (hNSb : ∀ vr l r, (bundleHelper% ScratchRow) (binop (.vreg vr) l r))
     (hbin : ∀ (rs2 : regidx) (js : SailJoltState) (rs2Val old : BitVec 64),
       rX_bits rs2 js.sail = .ok rs2Val js.sail →
       ∀ oldReg newReg : JoltISA.VReg, WritableVReg newReg → oldReg ≠ newReg →
@@ -818,7 +798,7 @@ private theorem io_amo_dword_binop (op : amoop) (hnot_cas : (op == amoop.AMOCAS)
     (fun tail => .instr (binop (.vreg (JoltISA.amoDoubleBinopNewVRegFor rd))
       (.vreg (JoltISA.amoDoubleBinopOldVRegFor rd)) (.xreg rs2)) tail)
     (.vreg (JoltISA.amoDoubleBinopNewVRegFor rd)) res hres js gp ?_ ⟨hNSb _ _ _, trivial⟩
-    hc.inv hc.link hc.mstatus hc.mem hc.pma hc.htif hc.lt hc.flag hproj hrun
+    hc.inv hc.link hc.mstatus hc.mem hc.pma hc.htif hc.lt hproj hrun
   intro rs2Val D js_l hrs2 hsail hold
   obtain ⟨js_m, hm⟩ := hbin rs2 js rs2Val D hrs2 _ _ (binop_new_writable rd)
     (binop_old_ne_new rd) js_l hsail hold
@@ -838,7 +818,7 @@ private theorem io_amo_dword_select (op : amoop) (hnot_cas : (op == amoop.AMOCAS
       AtomicFamily.amoDwordSailResult op
         (show BitVec (8 * 8) from trunc (m := (((8 : Nat) : Int) * (8 : Int)).toNat) rs2Val)
         (BitVec.setWidth (8 * 8) D) = res rs2Val D)
-    (hNSc : ∀ d l r, (bundleHelper% NoStoreRow) (cmp d l r))
+    (hNSc : ∀ vr l r, (bundleHelper% ScratchRow) (cmp (.vreg vr) l r))
     (hsel : ∀ (rd rs2 : regidx) (js : SailJoltState) (rs2Val old : BitVec 64),
       rX_bits rs2 js.sail = .ok rs2Val js.sail →
       ∀ js_l : SailJoltState, js_l.sail = js.sail →
@@ -860,14 +840,14 @@ private theorem io_amo_dword_select (op : amoop) (hnot_cas : (op == amoop.AMOCAS
       (JoltISA.amoNewVRegFor rd) (JoltISA.amoTmpVRegFor rd) (JoltISA.amoOldVRegFor rd)
       cmp (lhs rs2 rd) (rhs rs2 rd) rs2 tail)
     (.vreg (JoltISA.amoNewVRegFor rd)) res hres js gp ?_ ?_
-    hc.inv hc.link hc.mstatus hc.mem hc.pma hc.htif hc.lt hc.flag hproj hrun
+    hc.inv hc.link hc.mstatus hc.mem hc.pma hc.htif hc.lt hproj hrun
   · intro rs2Val D js_l hrs2 hsail hold
     obtain ⟨js_m, hm⟩ := hsel rd rs2 js rs2Val D hrs2 js_l hsail hold
     refine ⟨js_m, hm.run, hm.sail, hm.old_vreg, ?_⟩
     rw [readSrc_vreg, hm.result_vreg]
   · unfold AtomicFamily.amoDwordSelectMiddleProgramInto
       AtomicFamily.amoDwordSelectComparePhaseInto AtomicFamily.amoDwordSelectTailPhaseInto
-    exact ⟨hNSc _ _ _, trivial, trivial, trivial, trivial⟩
+    exact ⟨hNSc _ _ _, ⟨_, rfl⟩, ⟨_, rfl⟩, ⟨_, rfl⟩, trivial⟩
 
 /-- `AMOSWAP.D` agrees with Sail on an aligned doubleword in the I/O window.
 For example, at `0x40000008` it stores `rs2` there and returns `D`. -/
@@ -883,7 +863,7 @@ private theorem io_amo_dword_swap (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   refine io_amo_dword amoop.AMOSWAP (by decide) rs2 rs1 rd (JoltISA.amoOldVRegFor rd)
     (JoltISA.amoOldVRegFor_writable rd) (fun tail => tail) (.xreg rs2) (fun v _ => v)
     (fun v D => by unfold AtomicFamily.amoDwordSailResult; unfold trunc Sail.BitVec.truncate; rfl)
-    js gp ?_ trivial hc.inv hc.link hc.mstatus hc.mem hc.pma hc.htif hc.lt hc.flag hproj hrun
+    js gp ?_ trivial hc.inv hc.link hc.mstatus hc.mem hc.pma hc.htif hc.lt hproj hrun
   intro rs2Val D js_l hrs2 hsail hold
   refine ⟨js_l, fun tail => rfl, rfl, hold, ?_⟩
   cases js_l
@@ -908,7 +888,7 @@ private theorem io_amoadd_d (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   rw [hcore] at hrun
   exact io_amo_dword_binop amoop.AMOADD (by decide)
     (fun dst lhs rhs => .ADD dst lhs rhs) (fun rs2Val D => rs2Val + D)
-    AtomicFamily.amoaddd_sail_result (fun _ _ _ => trivial)
+    AtomicFamily.amoaddd_sail_result (fun vr _ _ => ⟨vr, rfl⟩)
     (fun rs2 js rs2Val old h oldReg newReg hn hne js_l hs ho =>
       AtomicFamily.amo_dword_add_middle_after_load_into rs2 js 0 rs2Val old h oldReg newReg hn
         hne js_l hs ho)
@@ -930,7 +910,7 @@ private theorem io_amoxor_d (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   rw [hcore] at hrun
   exact io_amo_dword_binop amoop.AMOXOR (by decide)
     (fun dst lhs rhs => .XOR dst lhs rhs) (fun rs2Val D => rs2Val ^^^ D)
-    AtomicFamily.amoxord_sail_result (fun _ _ _ => trivial)
+    AtomicFamily.amoxord_sail_result (fun vr _ _ => ⟨vr, rfl⟩)
     (fun rs2 js rs2Val old h oldReg newReg hn hne js_l hs ho =>
       AtomicFamily.amo_dword_xor_middle_after_load_into rs2 js 0 rs2Val old h oldReg newReg hn
         hne js_l hs ho)
@@ -952,7 +932,7 @@ private theorem io_amoand_d (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   rw [hcore] at hrun
   exact io_amo_dword_binop amoop.AMOAND (by decide)
     (fun dst lhs rhs => .AND dst lhs rhs) (fun rs2Val D => rs2Val &&& D)
-    AtomicFamily.amoandd_sail_result (fun _ _ _ => trivial)
+    AtomicFamily.amoandd_sail_result (fun vr _ _ => ⟨vr, rfl⟩)
     (fun rs2 js rs2Val old h oldReg newReg hn hne js_l hs ho =>
       AtomicFamily.amo_dword_and_middle_after_load_into rs2 js 0 rs2Val old h oldReg newReg hn
         hne js_l hs ho)
@@ -974,7 +954,7 @@ private theorem io_amoor_d (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   rw [hcore] at hrun
   exact io_amo_dword_binop amoop.AMOOR (by decide)
     (fun dst lhs rhs => .OR dst lhs rhs) (fun rs2Val D => rs2Val ||| D)
-    AtomicFamily.amoord_sail_result (fun _ _ _ => trivial)
+    AtomicFamily.amoord_sail_result (fun vr _ _ => ⟨vr, rfl⟩)
     (fun rs2 js rs2Val old h oldReg newReg hn hne js_l hs ho =>
       AtomicFamily.amo_dword_or_middle_after_load_into rs2 js 0 rs2Val old h oldReg newReg hn
         hne js_l hs ho)
@@ -998,7 +978,7 @@ private theorem io_amomin_d (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   exact io_amo_dword_select amoop.AMOMIN (by decide) (fun dst lhs rhs => .SLT dst lhs rhs)
     (fun rs2 _ => .xreg rs2) (fun _ rd => .vreg (JoltISA.amoOldVRegFor rd))
     (fun rs2Val D => if (zopz0zI_s rs2Val D : Bool) then rs2Val else D)
-    AtomicFamily.amomind_sail_result (fun _ _ _ => trivial)
+    AtomicFamily.amomind_sail_result (fun vr _ _ => ⟨vr, rfl⟩)
     (fun rd rs2 js rs2Val old h js_l hs ho =>
       AtomicFamily.amo_dword_min_middle_after_load_for rd rs2 js 0 rs2Val old h js_l hs ho)
     rs2 rs1 rd js gp hc hproj hrun
@@ -1021,7 +1001,7 @@ private theorem io_amomax_d (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   exact io_amo_dword_select amoop.AMOMAX (by decide) (fun dst lhs rhs => .SLT dst lhs rhs)
     (fun _ rd => .vreg (JoltISA.amoOldVRegFor rd)) (fun rs2 _ => .xreg rs2)
     (fun rs2Val D => if (zopz0zK_s rs2Val D : Bool) then rs2Val else D)
-    AtomicFamily.amomaxd_sail_result (fun _ _ _ => trivial)
+    AtomicFamily.amomaxd_sail_result (fun vr _ _ => ⟨vr, rfl⟩)
     (fun rd rs2 js rs2Val old h js_l hs ho =>
       AtomicFamily.amo_dword_max_middle_after_load_for rd rs2 js 0 rs2Val old h js_l hs ho)
     rs2 rs1 rd js gp hc hproj hrun
@@ -1044,7 +1024,7 @@ private theorem io_amominu_d (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   exact io_amo_dword_select amoop.AMOMINU (by decide) (fun dst lhs rhs => .SLTU dst lhs rhs)
     (fun rs2 _ => .xreg rs2) (fun _ rd => .vreg (JoltISA.amoOldVRegFor rd))
     (fun rs2Val D => if (zopz0zI_u rs2Val D : Bool) then rs2Val else D)
-    AtomicFamily.amominud_sail_result (fun _ _ _ => trivial)
+    AtomicFamily.amominud_sail_result (fun vr _ _ => ⟨vr, rfl⟩)
     (fun rd rs2 js rs2Val old h js_l hs ho =>
       AtomicFamily.amo_dword_minu_middle_after_load_for rd rs2 js 0 rs2Val old h js_l hs ho)
     rs2 rs1 rd js gp hc hproj hrun
@@ -1067,7 +1047,7 @@ private theorem io_amomaxu_d (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   exact io_amo_dword_select amoop.AMOMAXU (by decide) (fun dst lhs rhs => .SLTU dst lhs rhs)
     (fun _ rd => .vreg (JoltISA.amoOldVRegFor rd)) (fun rs2 _ => .xreg rs2)
     (fun rs2Val D => if (zopz0zK_u rs2Val D : Bool) then rs2Val else D)
-    AtomicFamily.amomaxud_sail_result (fun _ _ _ => trivial)
+    AtomicFamily.amomaxud_sail_result (fun vr _ _ => ⟨vr, rfl⟩)
     (fun rd rs2 js rs2Val old h js_l hs ho =>
       AtomicFamily.amo_dword_maxu_middle_after_load_for rd rs2 js 0 rs2Val old h js_l hs ho)
     rs2 rs1 rd js gp hc hproj hrun
@@ -1118,19 +1098,19 @@ private theorem io_amo_word (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fals
       ∃ after, AtomicFamily.AmoWordWindowStep rd middle source
         (word_of_dword D (addr &&& (7 : BitVec 64)).toNat) D (AtomicFamily.amoWordLaneMask addr)
         (res rs2Val (word_of_dword D (addr &&& (7 : BitVec 64)).toNat)) pre after)
-    (hNS : (bundleHelper% NoStoreProgram) middle)
+    (hNS : (bundleHelper% ScratchProgram) middle)
     (hc : IoAmoCtx js (amoWordBase (JoltISA.sourceValue (.xreg rs1) js)))
     (hproj : Projection.ProjectedVRegsPreserved js gp)
     (hrun : (JoltISA.execProgram (AtomicFamily.amoWordWindowProgram middle source rs1 rd)).run
       js = .ok RETIRE_SUCCESS gp) :
     IoAmoEffect op 4 rs2 rs1 rd js gp := by
-  obtain ⟨hinv, hlink, hmstatus, hmem, hpma, hhtif, hlt, hflag⟩ := hc
+  obtain ⟨hinv, hlink, hmstatus, hmem, hpma, hhtif, hlt⟩ := hc
   have hr1 := (bundleHelper% source_read) js hinv rs1
   have hr2 := (bundleHelper% source_read) js hinv rs2
   have hrdr := (bundleHelper% source_read) js hinv rd
   have hpriv : Assumptions.CurPrivilegeMachine js.sail := ⟨hinv.machine⟩
   have hmprv := (bundleHelper% mprv_zero) js hlink hmstatus
-  generalize JoltISA.sourceValue (.xreg rs1) js = addr at hr1 hlt hflag
+  generalize JoltISA.sourceValue (.xreg rs1) js = addr at hr1 hlt
   generalize JoltISA.sourceValue (.xreg rs2) js = rs2Val at hr2
   have hregs : WritableVReg (JoltISA.amoWordDwordVRegFor rd) ∧
       WritableVReg (JoltISA.amoWordLaneVRegFor rd) ∧
@@ -1191,39 +1171,20 @@ private theorem io_amo_word (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fals
   rw [JoltISA.execProgram_append_of_first_succeeds _ _ _ _ hm.run] at hrest
   have hsail_a : after.sail = js.sail := hm.sail.trans hpre_sail
   have hdev_a : after.jolt_device = js.jolt_device :=
-    (bundleHelper% noStoreProgram_device) _ hNS pre after RETIRE_SUCCESS hm.run
+    ((bundleHelper% scratchProgram_frozen) _ hNS pre after RETIRE_SUCCESS hm.run).2
   have hao : after.vregs old = sign_extend (m := 64)
       (word_of_dword D (addr &&& (7 : BitVec 64)).toNat) := hm.old_vreg
   set ow := word_of_dword D (addr &&& (7 : BitVec 64)).toNat with how
   set value := res rs2Val ow with hvalue
   -- the merge
   set mask := AtomicFamily.amoWordLaneMask addr with hmask
-  let cleared := stateAfterVRegWrite after dword (D &&& ~~~mask)
-  let shifted := stateAfterVRegWrite cleared lane (jolt_virtual_shift_data_w_value value addr)
   let merged := AtomicFamily.amoWordLaneMergeState after dword lane addr D value
-  have hclear : (JoltISA.execInstr (.ANDN (.vreg dword) (.vreg dword) (.vreg lane))).run
-      after = .ok RETIRE_SUCCESS cleared := by
-    have h := JoltISA.andn_run_vreg_vreg_vreg dword dword lane after hwd
-    rw [show after.vregs dword = D from hm.dword_vreg,
-      show after.vregs lane = mask from hm.lane_vreg] at h
-    exact h
-  have hshift := AtomicFamily.amo_word_shift_data_run lane source rs1 cleared value addr
-    hm.value_read (by rw [show cleared.sail = js.sail from hsail_a]; exact hr1) hwl
-  have hadd : (JoltISA.execInstr (.ADD (.vreg dword) (.vreg dword) (.vreg lane))).run shifted =
-      .ok RETIRE_SUCCESS merged := by
-    simpa [shifted, cleared, merged, AtomicFamily.amoWordLaneMergeState, stateAfterVRegWrite,
-      hdl, AtomicFamily.amoWordLaneMerged] using
-      JoltISA.add_run_vreg_vreg_vreg dword dword lane shifted hwd
-  change (JoltISA.execProgram (.instr (.ANDN (.vreg dword) (.vreg dword) (.vreg lane))
-    (.instr (.VirtualShiftDataW (.vreg lane) source (.xreg rs1) 0)
-      (.instr (.ADD (.vreg dword) (.vreg dword) (.vreg lane))
-        (.instr (.VirtualStoreW (.xreg rs1) (.vreg dword) 0
-          (ExceptionType.E_SAMO_Addr_Align ()))
-          (.instr (JoltISA.Encoded.ADDI (JoltISA.amoDstFor rd) (.vreg old) 0)
-            (.done RETIRE_SUCCESS))))))).run after = _ at hrest
-  rw [JoltISA.execProgram_instr_run_retire _ _ _ _ hclear,
-    JoltISA.execProgram_instr_run_retire _ _ _ _ hshift,
-    JoltISA.execProgram_instr_run_retire _ _ _ _ hadd] at hrest
+  change (JoltISA.execProgram (JoltISA.laneWindowMerge .word (.vreg dword) (.vreg lane)
+    (.xreg rs1) 0 source (.E_SAMO_Addr_Align ())
+      (.instr (JoltISA.Encoded.ADDI (JoltISA.amoDstFor rd) (.vreg old) 0)
+        (.done RETIRE_SUCCESS)))).run after = _ at hrest
+  rw [wordLaneMerge_continue rs1 dword lane source after addr D value
+    (by rw [hsail_a]; exact hr1) hm.dword_vreg hm.lane_vreg hm.value_read hwd hwl hdl] at hrest
   obtain ⟨js_sd, hsd, hrest2⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ _ _ hrest
   have hms : merged.sail = js.sail := hsail_a
   have hmd : merged.jolt_device = js.jolt_device := hdev_a
@@ -1233,19 +1194,14 @@ private theorem io_amo_word (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fals
   have hst := (ioHelper% floorStore_inv) .word rs1 dword 0 addr
     (ExceptionType.E_SAMO_Addr_Align ()) merged js_sd hr1m hlt' hal0 hsd
   rw [hbase_eq, hmv] at hst
-  have hmem_m : MemRel merged.jolt_device merged.sail := by rw [hms, hmd]; exact hmem
-  have hflag_m : ∀ k < 8,
-      IsFlagWord merged.jolt_device ((amoWordBase addr).toNat + k) = false := by
-    rw [hmd]; exact hflag
-  obtain ⟨hlow, hvsd, hssd⟩ := amo_store_low merged js_sd (amoWordBase addr) _ hmem_m hlt
-    hflag_m hst
+  have hmem_m : MemoryReady merged.jolt_device merged.sail := by rw [hms, hmd]; exact hmem
+  obtain ⟨hlow, hvsd, hssd⟩ := amo_store_low merged js_sd (amoWordBase addr) _ hmem_m hlt hst
   obtain ⟨hlo40, hhi8⟩ := (ioHelper% store_bounds) merged js_sd _ _ hmem_m hlt hst
   have hlow' : memLow js.jolt_device ≤ (amoWordBase addr).toNat := by rw [hmd] at hlow; exact hlow
-  obtain ⟨hb, no, hD⟩ := (ioHelper% io_dword_eq) js (amoWordBase addr) D hmem hmod8 hlow' hlt
-    hflag hread
-  have hA : (amoWordBase addr).toNat = addr.toNat / 8 * 8 := (ioHelper% toNat_and_neg8) addr
-  have hmod4 := (ioHelper% mod_of_and3) addr halign
-  have hnm := (ioHelper% not_mmio_io) js.sail addr 4 (by omega) hhtif
+  obtain ⟨hb, no, hD⟩ := (ioHelper% io_dword_eq) js (amoWordBase addr) D hmem hmod8 hlow' hlt hread
+  have hA : (amoWordBase addr).toNat = addr.toNat / 8 * 8 := PlatformMemory.toNat_and_neg8 addr
+  have hmod4 := PlatformMemory.mod_of_and3 addr halign
+  have hnm := PlatformMemory.not_mmio_io js.sail addr 4 (by omega) hhtif
   have hatomic := io_atomic_checks js.sail addr 4 hpma (by omega) (by norm_num) (by norm_num)
     (by omega) hmod4 op hnot_cas
   have hbase_no := AtomicFamily.amo_word_base_no_ovf addr
@@ -1284,48 +1240,35 @@ private theorem io_amo_word (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fals
     rw [hadd1] at hadd'
     exact (EStateM.Result.ok.inj hadd').2
   have hdev_w : gp.jolt_device = js_sd.jolt_device :=
-    (bundleHelper% noStoreRow_device) _ (by trivial) js_sd gp RETIRE_SUCCESS hadd1
-  have hsail_gp : gp.sail = stateAfterWrite js.sail rd (sign_extend (m := 64) ow) := by
+    (bundleHelper% addi_device) _ _ _ js_sd gp RETIRE_SUCCESS hadd1
+  have hsail_gp : gp.sail = stateAfterWrite
+      (state_after_dword_store js.sail (amoWordBase addr)
+        (AtomicFamily.amoWordLaneMerged addr D value)) rd (sign_extend (m := 64) ow) := by
     rw [hww, hsw', hssd, hms]
   -- the memory
   have hwin : addr.toNat % 8 + 4 ≤ 8 := by omega
-  obtain ⟨hgs, hmemT⟩ := (ioHelper% store_finish) js merged js_sd
+  obtain ⟨hgs, hdevice, hbytes, hmemT⟩ := (ioHelper% store_finish) js merged js_sd
     (state_after_word_store js.sail addr (Sail.BitVec.extractLsb value 31 0))
     (amoWordBase addr) (AtomicFamily.amoWordLaneMerged addr D value) addr value D 4
     hmem hms hmd (by norm_num) hA hwin
-    (fun k hk _ => by
-      rw [(ioHelper% load_raw_load) js _ _
-        (by simp only [JoltISA.RAM_START_ADDRESS] at hhi8 ⊢; omega)
-        ((ioHelper% read_doubleword_bytes) hread k hk)]
-      rfl)
+    (fun k hk _ => (JoltConstraints.load_raw_value js _ _
+      ((ioHelper% read_doubleword_bytes) hread k hk)).symm)
     (fun k hk => by
       have hlea : load_effective_address addr (0 : BitVec 12) = addr :=
         AtomicFamily.amo_word_zero_offset_addr addr
-      have := (ioHelper% fusedSplice_byte_w) D value addr 0 (by rw [hlea]; exact halign) k hk
+      have := PlatformMemory.fusedSplice_byte_w D value addr 0 (by rw [hlea]; exact halign) k hk
       rw [hlea] at this
       exact this)
-    hlt hst ((ioHelper% sailStore_word) js.sail addr value)
-    (fun h => by
-      exfalso
-      have hf0 := hflag 0 (by norm_num)
-      have hg := IoGeo.of_layout _ hmem.layout
-      obtain ⟨-, -, -, -, hp, -, ht, he, -, -, -, -, -⟩ := hg
-      simp only [IsFlagWord, Bool.and_eq_false_iff, decide_eq_false_iff_not, not_le,
-        not_lt, Nat.add_zero] at hf0
-      omega)
-  have hsst := (ioHelper% sailStore_word) js.sail addr value
+    hlt hst (PlatformMemory.sailStore_word js.sail addr value)
+  have hsst := PlatformMemory.sailStore_word js.sail addr value
   refine ⟨AtomicFamily.amoWordFinalSailState rd js.sail addr (Sail.BitVec.extractLsb value 31 0)
     ow, hsail, ?_, ?_, ?_⟩
-  · rw [(Projection.systemProject_stateAfterWrite_of_projected_vregs_preserved js gp rd
-      (sign_extend (m := 64) ow) hsail_gp hproj), hlink]
-    change wX_update_regs rd _ _ = wX_update_regs rd _ _
-    rw [hsst.1]
-  · intro a ha
-    rw [hsail_gp]
-    simp only [AtomicFamily.amoWordFinalSailState, stateAfterWrite, Mmu.ram_byte]
-    rw [hsst.2 a, ite_eq_right]
-    simp only [JoltISA.RAM_START_ADDRESS, RAM_START_ADDRESS] at ha hhi8
-    omega
+  · rw [systemProject_regs_after_write js gp rd (sign_extend (m := 64) ow)
+      (by rw [hsail_gp]; rfl) hproj, hlink]
+    rfl
+  · intro a
+    simpa only [hsail_gp, AtomicFamily.amoWordFinalSailState, stateAfterWrite,
+      hssd, hms] using hbytes a
   · rw [hdev_w]
     exact hmemT.of_mem_eq rfl
 
@@ -1346,7 +1289,7 @@ For example, `AMOXOR.W` at `0x40000004` stores `rs2 ^^^ old` in the upper word a
 private theorem io_amo_word_binop (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = false)
     (binop : JoltISA.Dst → JoltISA.Src → JoltISA.Src → JoltISA.Instr)
     (value : BitVec 64 → BitVec 64 → BitVec 64)
-    (hNSb : ∀ d l r, (bundleHelper% NoStoreRow) (binop d l r))
+    (hNSb : ∀ vr l r, (bundleHelper% ScratchRow) (binop (.vreg vr) l r))
     (hrow : ∀ (new old dword lane : JoltISA.VReg) (rs2 : regidx)
       (js : SailJoltState) (rs2Val oldVal dwordVal laneVal : BitVec 64),
       rX_bits rs2 js.sail = .ok rs2Val js.sail →
@@ -1393,7 +1336,7 @@ there and returns the old word. -/
 private theorem io_amo_word_select (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = false)
     (cmp : JoltISA.Dst → JoltISA.Src → JoltISA.Src → JoltISA.Instr)
     (less : BitVec 64 → BitVec 64 → Bool) (reverse : Bool)
-    (hNSc : ∀ d l r, (bundleHelper% NoStoreRow) (cmp d l r))
+    (hNSc : ∀ vr l r, (bundleHelper% ScratchRow) (cmp (.vreg vr) l r))
     (hcmp : ∀ dst lhs rhs js, WritableVReg dst →
       (JoltISA.execInstr (cmp (.vreg dst) (.vreg lhs) (.vreg rhs))).run js =
         .ok RETIRE_SUCCESS (stateAfterVRegWrite js dst
@@ -1429,7 +1372,7 @@ private theorem io_amo_word_select (op : amoop) (hnot_cas : (op == amoop.AMOCAS)
     exact AtomicFamily.amo_word_select_lane_middle_run cmp less hcmp reverse rs2 rd pre rs2Val
       _ _ _ (by rw [hsail]; exact hr2) hold hdw hlane
   · unfold AtomicFamily.amoWordSelectLaneMiddle AtomicFamily.amoWordSelectLaneTail
-    exact ⟨trivial, hNSc _ _ _, trivial, trivial, trivial, trivial⟩
+    exact ⟨⟨_, rfl⟩, hNSc _ _ _, ⟨_, rfl⟩, ⟨_, rfl⟩, ⟨_, rfl⟩, trivial⟩
 
 /-- `AMOSWAP.W` agrees with Sail on a word in the I/O window.
 For example, at `0x40000004` it stores the low word of `rs2` in the upper word and returns
@@ -1457,14 +1400,11 @@ private theorem io_amoadd_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
     IoAmoEffect amoop.AMOADD 4 rs2 rs1 rd js gp := by
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amoaddwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
-  have hcore : JoltISA.amoaddwProgramAuto rd rs1 rs2 =
-      JoltISA.amoWordBinopProgram (fun dst lhs rhs => .ADD dst lhs rhs) rs2 rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amoaddwProgramAuto, JoltISA.amoWordBinopProgram, JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch, JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+  have hcore := (wordTemplates rd rs1 rs2).1
   rw [hcore] at hrun
   exact io_amo_word_binop amoop.AMOADD (by decide)
     (fun dst lhs rhs => .ADD dst lhs rhs) (fun new old => new + old)
-    (fun _ _ _ => trivial) AtomicFamily.amo_word_add_middle_run_into
+    (fun vr _ _ => ⟨vr, rfl⟩) AtomicFamily.amo_word_add_middle_run_into
     (by intro new old; rw [AtomicFamily.amo_word_extract_add_low]
         exact congrArg (fun word => (Sail.BitVec.extractLsb new 31 0 : BitVec 32) + word)
           (AtomicFamily.sign_extend_64_setWidth_32 old))
@@ -1479,14 +1419,11 @@ private theorem io_amoxor_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
     IoAmoEffect amoop.AMOXOR 4 rs2 rs1 rd js gp := by
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amoxorwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
-  have hcore : JoltISA.amoxorwProgramAuto rd rs1 rs2 =
-      JoltISA.amoWordBinopProgram (fun dst lhs rhs => .XOR dst lhs rhs) rs2 rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amoxorwProgramAuto, JoltISA.amoWordBinopProgram, JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch, JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+  have hcore := (wordTemplates rd rs1 rs2).2.1
   rw [hcore] at hrun
   exact io_amo_word_binop amoop.AMOXOR (by decide)
     (fun dst lhs rhs => .XOR dst lhs rhs) (fun new old => new ^^^ old)
-    (fun _ _ _ => trivial) AtomicFamily.amo_word_xor_middle_run_into
+    (fun vr _ _ => ⟨vr, rfl⟩) AtomicFamily.amo_word_xor_middle_run_into
     (by intro new old; rw [AtomicFamily.amo_word_extract_xor_low]
         exact congrArg (fun word => (Sail.BitVec.extractLsb new 31 0 : BitVec 32) ^^^ word)
           (AtomicFamily.sign_extend_64_setWidth_32 old))
@@ -1501,14 +1438,11 @@ private theorem io_amoand_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
     IoAmoEffect amoop.AMOAND 4 rs2 rs1 rd js gp := by
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amoandwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
-  have hcore : JoltISA.amoandwProgramAuto rd rs1 rs2 =
-      JoltISA.amoWordBinopProgram (fun dst lhs rhs => .AND dst lhs rhs) rs2 rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amoandwProgramAuto, JoltISA.amoWordBinopProgram, JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch, JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+  have hcore := (wordTemplates rd rs1 rs2).2.2.1
   rw [hcore] at hrun
   exact io_amo_word_binop amoop.AMOAND (by decide)
     (fun dst lhs rhs => .AND dst lhs rhs) (fun new old => new &&& old)
-    (fun _ _ _ => trivial) AtomicFamily.amo_word_and_middle_run_into
+    (fun vr _ _ => ⟨vr, rfl⟩) AtomicFamily.amo_word_and_middle_run_into
     (by intro new old; rw [AtomicFamily.amo_word_extract_and_low]
         exact congrArg (fun word => (Sail.BitVec.extractLsb new 31 0 : BitVec 32) &&& word)
           (AtomicFamily.sign_extend_64_setWidth_32 old))
@@ -1523,14 +1457,11 @@ private theorem io_amoor_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
     IoAmoEffect amoop.AMOOR 4 rs2 rs1 rd js gp := by
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amoorwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
-  have hcore : JoltISA.amoorwProgramAuto rd rs1 rs2 =
-      JoltISA.amoWordBinopProgram (fun dst lhs rhs => .OR dst lhs rhs) rs2 rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amoorwProgramAuto, JoltISA.amoWordBinopProgram, JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch, JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+  have hcore := (wordTemplates rd rs1 rs2).2.2.2.1
   rw [hcore] at hrun
   exact io_amo_word_binop amoop.AMOOR (by decide)
     (fun dst lhs rhs => .OR dst lhs rhs) (fun new old => new ||| old)
-    (fun _ _ _ => trivial) AtomicFamily.amo_word_or_middle_run_into
+    (fun vr _ _ => ⟨vr, rfl⟩) AtomicFamily.amo_word_or_middle_run_into
     (by intro new old; rw [AtomicFamily.amo_word_extract_or_low]
         exact congrArg (fun word => (Sail.BitVec.extractLsb new 31 0 : BitVec 32) ||| word)
           (AtomicFamily.sign_extend_64_setWidth_32 old))
@@ -1546,22 +1477,15 @@ private theorem io_amomin_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amominwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
   have hcore : JoltISA.amominwProgramAuto rd rs1 rs2 =
-      JoltISA.amoWordSelectRustProgram
-        (fun dst src => .VirtualSignExtendWord dst src)
-        (fun dst lhs rhs => .SLT dst lhs rhs)
-        (.vreg (JoltISA.amoWordNewVRegFor rd))
-        (.vreg (JoltISA.amoWordOldVRegFor rd)) rs2 rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amominwProgramAuto, JoltISA.amoWordSelectRustProgram, JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch, JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoWordTakeVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+      AtomicFamily.amoWordWindowProgram
+        (AtomicFamily.amoWordSelectLaneMiddle JoltISA.Instr.SLT false rs2 rd)
+        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs1 rd :=
+    (wordSelectTemplates rd rs1 rs2).1
   rw [hcore] at hrun
   exact io_amo_word_select amoop.AMOMIN (by decide)
-    (fun dst lhs rhs => .SLT dst lhs rhs) zopz0zI_s false (fun _ _ _ => trivial)
+    (fun dst lhs rhs => .SLT dst lhs rhs) zopz0zI_s false (fun vr _ _ => ⟨vr, rfl⟩)
     AtomicFamily.amo_word_slt_run_vreg_vreg_vreg
-    (by
-      intro new old
-      simp only [AtomicFamily.amoWordSelectFlag, Bool.false_eq_true, ite_false,
-        AtomicFamily.amoWordSailResult, zopz0zI_s, AtomicFamily.amo_word_toInt_signExtend32_64]
-      rfl)
+    (wordSelect_result true false)
     rs2 rs1 rd js gp hc hproj hrun
 
 /-- `AMOMAX.W` agrees with Sail on a word in the I/O window.
@@ -1574,23 +1498,15 @@ private theorem io_amomax_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amomaxwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
   have hcore : JoltISA.amomaxwProgramAuto rd rs1 rs2 =
-      JoltISA.amoWordSelectRustProgram
-        (fun dst src => .VirtualSignExtendWord dst src)
-        (fun dst lhs rhs => .SLT dst lhs rhs)
-        (.vreg (JoltISA.amoWordOldVRegFor rd))
-        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs2 rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amomaxwProgramAuto, JoltISA.amoWordSelectRustProgram, JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch, JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoWordTakeVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+      AtomicFamily.amoWordWindowProgram
+        (AtomicFamily.amoWordSelectLaneMiddle JoltISA.Instr.SLT true rs2 rd)
+        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs1 rd :=
+    (wordSelectTemplates rd rs1 rs2).2.1
   rw [hcore] at hrun
   exact io_amo_word_select amoop.AMOMAX (by decide)
-    (fun dst lhs rhs => .SLT dst lhs rhs) zopz0zI_s true (fun _ _ _ => trivial)
+    (fun dst lhs rhs => .SLT dst lhs rhs) zopz0zI_s true (fun vr _ _ => ⟨vr, rfl⟩)
     AtomicFamily.amo_word_slt_run_vreg_vreg_vreg
-    (by
-      intro new old
-      simp only [AtomicFamily.amoWordSelectFlag, ite_true,
-        AtomicFamily.amoWordSailResult, zopz0zI_s, zopz0zK_s,
-        AtomicFamily.amo_word_toInt_signExtend32_64]
-      rfl)
+    (wordSelect_result true true)
     rs2 rs1 rd js gp hc hproj hrun
 
 /-- `AMOMINU.W` agrees with Sail on a word in the I/O window.
@@ -1603,21 +1519,15 @@ private theorem io_amominu_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amominuwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
   have hcore : JoltISA.amominuwProgramAuto rd rs1 rs2 =
-      JoltISA.amoWordSelectRustProgram
-        (fun dst src => .VirtualSignExtendWord dst src)
-        (fun dst lhs rhs => .SLTU dst lhs rhs)
-        (.vreg (JoltISA.amoWordNewVRegFor rd))
-        (.vreg (JoltISA.amoWordOldVRegFor rd)) rs2 rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amominuwProgramAuto, JoltISA.amoWordSelectRustProgram, JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch, JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoWordTakeVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+      AtomicFamily.amoWordWindowProgram
+        (AtomicFamily.amoWordSelectLaneMiddle JoltISA.Instr.SLTU false rs2 rd)
+        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs1 rd :=
+    (wordSelectTemplates rd rs1 rs2).2.2.1
   rw [hcore] at hrun
   exact io_amo_word_select amoop.AMOMINU (by decide)
-    (fun dst lhs rhs => .SLTU dst lhs rhs) zopz0zI_u false (fun _ _ _ => trivial)
+    (fun dst lhs rhs => .SLTU dst lhs rhs) zopz0zI_u false (fun vr _ _ => ⟨vr, rfl⟩)
     AtomicFamily.amo_word_sltu_run_vreg_vreg_vreg
-    (by
-      intro new old
-      simp only [AtomicFamily.amoWordSelectFlag, Bool.false_eq_true, ite_false,
-        AtomicFamily.amo_word_sltu_sign_extend, AtomicFamily.amoWordSailResult])
+    (wordSelect_result false false)
     rs2 rs1 rd js gp hc hproj hrun
 
 /-- `AMOMAXU.W` agrees with Sail on a word in the I/O window.
@@ -1630,22 +1540,15 @@ private theorem io_amomaxu_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amomaxuwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
   have hcore : JoltISA.amomaxuwProgramAuto rd rs1 rs2 =
-      JoltISA.amoWordSelectRustProgram
-        (fun dst src => .VirtualSignExtendWord dst src)
-        (fun dst lhs rhs => .SLTU dst lhs rhs)
-        (.vreg (JoltISA.amoWordOldVRegFor rd))
-        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs2 rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amomaxuwProgramAuto, JoltISA.amoWordSelectRustProgram, JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch, JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract, JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordNewVRegFor, JoltISA.amoWordDwordVRegFor, JoltISA.amoWordLaneVRegFor, JoltISA.amoWordTakeVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor, JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+      AtomicFamily.amoWordWindowProgram
+        (AtomicFamily.amoWordSelectLaneMiddle JoltISA.Instr.SLTU true rs2 rd)
+        (.vreg (JoltISA.amoWordNewVRegFor rd)) rs1 rd :=
+    (wordSelectTemplates rd rs1 rs2).2.2.2
   rw [hcore] at hrun
   exact io_amo_word_select amoop.AMOMAXU (by decide)
-    (fun dst lhs rhs => .SLTU dst lhs rhs) zopz0zI_u true (fun _ _ _ => trivial)
+    (fun dst lhs rhs => .SLTU dst lhs rhs) zopz0zI_u true (fun vr _ _ => ⟨vr, rfl⟩)
     AtomicFamily.amo_word_sltu_run_vreg_vreg_vreg
-    (by
-      intro new old
-      simp only [AtomicFamily.amoWordSelectFlag, ite_true,
-        AtomicFamily.amo_word_sltu_sign_extend, AtomicFamily.amoWordSailResult]
-      rfl)
+    (wordSelect_result false true)
     rs2 rs1 rd js gp hc hproj hrun
 
 /-- `AMOSWAP.W` agrees with Sail on a word in the I/O window.
@@ -1657,15 +1560,7 @@ private theorem io_amoswap_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
     IoAmoEffect amoop.AMOSWAP 4 rs2 rs1 rd js gp := by
   have hproj := Projection.execProgram_preserves_projected_vregs_of_no_protected_writes
     (AtomicFamily.amoswapwProgram_doesNotWriteProtectedVRegs rs2 rs1 rd) hrun
-  have hcore : JoltISA.amoswapwProgramAuto rd rs1 rs2 =
-      AtomicFamily.amoWordWindowProgram (.done RETIRE_SUCCESS) (.xreg rs2) rs1 rd := by
-    cases hrd : JoltISA.isX0 rd <;>
-      simp only [JoltISA.amoswapwProgramAuto, AtomicFamily.amoWordWindowProgram,
-        JoltISA.amoPre64Program, JoltISA.amoPre64ProgramWithScratch,
-        JoltISA.amoWordMergeProgram, JoltISA.laneWindowOpen, JoltISA.laneWindowExtract,
-        JoltISA.laneWindowMerge, JoltISA.amoWordOldVRegFor, JoltISA.amoWordDwordVRegFor,
-        JoltISA.amoWordLaneVRegFor, JoltISA.amoVRegFor, JoltISA.amoDstFor,
-        JoltISA.sideEffectingRdZeroDst, hrd, Bool.false_eq_true, ite_false, ite_true] <;> rfl
+  have hcore := (wordTemplates rd rs1 rs2).2.2.2.2
   rw [hcore] at hrun
   exact io_amo_word_swap rs2 rs1 rd js gp hc hproj hrun
 
@@ -1673,18 +1568,18 @@ private theorem io_amoswap_w (rs2 rs1 rd : regidx) (js gp : SailJoltState)
 
 /-- The facts every I/O AMO core takes follow from the premises on the instruction and the
 state.
-For example, `AMOADD.D` through `0x40000010` with no flag byte in the doubleword yields a
+For example, `AMOADD.D` through `0x40000010` yields a
 context for the address `0x40000010`. -/
 private theorem io_amo_ctx (i : RiscvInstruction) (js : SailJoltState)
-    (hio : IoAmoAccess i js) (hflag : i.AmoNoFlagWord js)
+    (hio : IoAmoAccess i js)
     (hlink : System.systemProject js = js.sail) (hinv : Step.StepInvariant js.sail)
     (hmstatus : js.vregs mstatusVReg &&& ~~~(0x88 : BitVec 64) = 0)
-    (hmem : MemRel js.jolt_device js.sail)
+    (hmem : MemoryReady js.jolt_device js.sail)
     (hpma : js.sail.regs.get? Register.pma_regions = some platformPma)
     (hhtif : js.sail.regs.get? Register.htif_tohost_base = some none) :
     ∃ a, i.amoBase js = some a ∧ IoAmoCtx js a := by
   obtain ⟨a, ha, hlt⟩ := hio
-  exact ⟨a, ha, ⟨hinv, hlink, hmstatus, hmem, hpma, hhtif, hlt, hflag a ha⟩⟩
+  exact ⟨a, ha, ⟨hinv, hlink, hmstatus, hmem, hpma, hhtif, hlt⟩⟩
 
 /-- An I/O AMO's effect on Sail's `execute_AMO` is its effect on `execute` of the matching
 instruction, which ignores the acquire and release bits.
@@ -1694,8 +1589,8 @@ private theorem io_amo_conv (op : amoop) (aq rl : Bool) (rs2 rs1 rd : regidx) (w
     ∃ t : SailState, execute (.AMO (op, aq, rl, rs2, rs1, w, rd)) js.sail =
         .ok RETIRE_SUCCESS t ∧
       t.regs = (System.systemProject gp).regs ∧
-      (∀ a, RAM_START_ADDRESS ≤ a → Mmu.ram_byte t.mem a = Mmu.ram_byte gp.sail.mem a) ∧
-      MemRel gp.jolt_device t := by
+      (∀ a, Mmu.ram_byte t.mem a = Mmu.ram_byte gp.sail.mem a) ∧
+      MemoryReady gp.jolt_device t := by
   obtain ⟨t, h1, h2, h3, h4⟩ := h
   refine ⟨t, ?_, h2, h3, h4⟩
   have h5 := congrFun (Step.execute_AMO_flags op aq rl rs2 rs1 w rd) js.sail
@@ -1708,19 +1603,19 @@ satisfies the memory relation with Jolt's device.
 For example, `AMOADD.D` at `0x40000010` yields the Sail state with the sum stored there. -/
 private theorem io_amo_core (i : RiscvInstruction) (ast : instruction)
     (hm : RiscvInstruction.Matches i ast) (js gp : SailJoltState)
-    (hio : IoAmoAccess i js) (hflag : i.AmoNoFlagWord js)
+    (hio : IoAmoAccess i js)
     (hlink : System.systemProject js = js.sail) (hinv : Step.StepInvariant js.sail)
     (hmstatus : js.vregs mstatusVReg &&& ~~~(0x88 : BitVec 64) = 0)
-    (hmem : MemRel js.jolt_device js.sail)
+    (hmem : MemoryReady js.jolt_device js.sail)
     (hpma : js.sail.regs.get? Register.pma_regions = some platformPma)
     (hhtif : js.sail.regs.get? Register.htif_tohost_base = some none)
     (hrun : RiscvInstruction.joltRun (honestInstr i js) js = .ok RETIRE_SUCCESS gp) :
     ∃ t : SailState, execute ast js.sail = .ok RETIRE_SUCCESS t ∧
       t.regs = (System.systemProject gp).regs ∧
-      (∀ a, RAM_START_ADDRESS ≤ a → Mmu.ram_byte t.mem a = Mmu.ram_byte gp.sail.mem a) ∧
-      MemRel gp.jolt_device t := by
-  have hctx := io_amo_ctx i js hio hflag hlink hinv hmstatus hmem hpma hhtif
-  clear hio hflag
+      (∀ a, Mmu.ram_byte t.mem a = Mmu.ram_byte gp.sail.mem a) ∧
+      MemoryReady gp.jolt_device t := by
+  have hctx := io_amo_ctx i js hio hlink hinv hmstatus hmem hpma hhtif
+  clear hio
   cases i with
   | AMOSWAP_W rd rs1 rs2 aq rl =>
     have hm' : ast = .AMO (amoop.AMOSWAP, aq, rl, rs2, rs1, 4, rd) := hm
@@ -1874,13 +1769,11 @@ private theorem io_amo_core (i : RiscvInstruction) (ast : instruction)
 and device.
 For example, the prelude only changes the program counter, so the premises carry over. -/
 private theorem amo_access_congr (i : RiscvInstruction) (s t : SailJoltState)
-    (h : ∀ r, sourceValue (.xreg r) t = sourceValue (.xreg r) s)
-    (hd : t.jolt_device = s.jolt_device) :
-    (IoAmoAccess i s → IoAmoAccess i t) ∧ (i.AmoNoFlagWord s → i.AmoNoFlagWord t) := by
+    (h : ∀ r, sourceValue (.xreg r) t = sourceValue (.xreg r) s) :
+    IoAmoAccess i s → IoAmoAccess i t := by
   have hb : i.amoBase t = i.amoBase s := by
     cases i <;> simp only [RiscvInstruction.amoBase, h]
-  exact ⟨by simp only [IoAmoAccess, hb]; exact id,
-    by simp only [RiscvInstruction.AmoNoFlagWord, hb, hd]; exact id⟩
+  simpa only [IoAmoAccess, hb] using id
 
 /-- As `block_simulates_io_amo`, where Sail decodes the encoding to `cast` and `cast` executes
 like the matching instruction `ast` (for a compressed parcel, its base expansion); with
@@ -1888,7 +1781,6 @@ like the matching instruction `ast` (for a compressed parcel, its base expansion
 theorem block_simulates_io_amo_via (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
     (hsys : SystemInv b.pre) (hio : IoAmoAccess i b.start)
-    (hflag : i.AmoNoFlagWord b.start)
     (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
     (hinputs : ∀ (s : SailState), Related b.pre s →
       ∀ (pc m : BitVec 64) (oldInc : Bool),
@@ -1939,8 +1831,8 @@ theorem block_simulates_io_amo_via (program : Rv64ProgramImage SourceInstruction
   have hsources : ∀ r, sourceValue (.xreg r) Gs = sourceValue (.xreg r) b.start := fun r =>
     ((blockHelper% sourceValue_shadow) hshadow r).trans
       ((blockHelper% sourceValue_overlayRows) b.pre.vregs m inc b.start r)
-  obtain ⟨hio', hflag'⟩ := amo_access_congr i b.start Gs hsources rfl
-  have hmemG : MemRel Gs.jolt_device Gs.sail := hrel.memRel.of_mem_eq rfl
+  have hio' := amo_access_congr i b.start Gs hsources
+  have hmemG : MemoryReady Gs.jolt_device Gs.sail := hrel.memoryReady.of_mem_eq rfl
   have hpmaG : Gs.sail.regs.get? Register.pma_regions = some platformPma := by
     simp [Gs, Step.preludeJolt, Step.preludeState, Step.setReg, hregs,
       sailRegs, Std.ExtDHashMap.get?_insert]
@@ -1948,7 +1840,7 @@ theorem block_simulates_io_amo_via (program : Rv64ProgramImage SourceInstruction
     simpa [Gs, Step.preludeJolt, Step.preludeState, Step.setReg,
       Std.ExtDHashMap.get?_insert] using hrel.htif
   obtain ⟨t, hexec, htregs, htram, htmem⟩ := io_amo_core i ast hm Gs ghostPost
-    (hio' hio) (hflag' hflag) hlink hinvG hsys.mstatus_bits hmemG hpmaG hhtifG hhonest
+    (hio' hio) hlink hinvG hsys.mstatus_bits hmemG hpmaG hhtifG hhonest
   have hexec' : execute ast (System.systemProject Gs) = .ok RETIRE_SUCCESS t := by
     rw [hlink]; exact hexec
   have hinvPre : Step.StepInvariant (System.systemProject Gs) := by
@@ -1990,7 +1882,7 @@ theorem block_simulates_io_amo_via (program : Rv64ProgramImage SourceInstruction
   refine ⟨false, s', hstep, ?_⟩
   have hmem' : s'.mem = t.mem := (blockHelper% finish_mem) t next m inc
   have hdev : ghostPost.jolt_device = b.post.jolt_device := hpost.device
-  have hmemT : MemRel b.post.jolt_device s' := by
+  have hmemT : MemoryReady b.post.jolt_device s' := by
     rw [← hdev]
     exact htmem.of_mem_eq hmem'
   have hhtifT : (System.systemProject ghostPost).regs.get? Register.htif_tohost_base =
@@ -2010,39 +1902,19 @@ theorem block_simulates_io_amo_via (program : Rv64ProgramImage SourceInstruction
           ((blockHelper% finishState) (System.systemProject ghostPost) next m inc).regs from hft]
         cases inc <;> simpa [hfs, Step.setReg,
           Std.ExtDHashMap.get?_insert] using hhtifT
-      ram := fun a ha => by
+      ram := fun a => by
         rw [hmem']
-        exact (htram a ha).trans (hpost.ram a ha)
+        exact (htram a).trans (hpost.ram a)
       present := hmemT.present
-      io := hmemT.io
-      panic := hmemT.panic
-      layout := hmemT.layout
-      outputs_size := hmemT.outputs_size }
+      layout := hmemT.layout }
 
-/-- A block whose source instruction is an atomic memory operation on the doubleword below
-`RAM_START_ADDRESS`, in the I/O window, is one Sail `try_step` that preserves the whole-run
-relation `Related`.
-
-The instruction is AMOSWAP, AMOADD, AMOXOR, AMOAND, AMOOR, AMOMIN, AMOMAX, AMOMINU or
-AMOMAXU, in the word or doubleword form. Alignment and the address range are derived from
-the block's retiring run `hruns`, not assumed: Jolt's rows fault on a misaligned address,
-where Sail also faults, so a retiring block is aligned. For example, an `AMOADD.D` of `1`
-at the first output doubleword is one `try_step` that appends the eight bytes of the old
-value plus one to the device's outputs, and the memory relation after the step includes
-`outputs_size` and the panic flag.
-
-Premises, by class:
-* invariant: `hsys`, the system invariant on the block's entry state.
-* platform: `hio`, the accessed doubleword lies below `RAM_START_ADDRESS`.
-* from decoding: `hrow`, `hm`, `hwidth` and `hinputs`, the decode-only facts that Sail
-  fetches and decodes the instruction word `encoding` to `ast`.
-* documented deviation (`docs/riscv-alignment.md`, section 2): `hflag` (`AmoNoFlagWord`).
-  No premise on the lowest address or on the stored value is needed: a retiring store
-  already lies at or above `memLow`, and the panic word is untouched. -/
+/-- A retiring word or doubleword AMO below RAM simulates one Sail step and preserves
+`Related` at every shared-memory address.
+The checked store changes memory while retaining its other state fields.
+For example, AMOADD.D writes its sum into the output region and returns the old word. -/
 theorem block_simulates_io_amo (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
     (hsys : SystemInv b.pre) (hio : IoAmoAccess i b.start)
-    (hflag : i.AmoNoFlagWord b.start)
     (ast : instruction) (hm : RiscvInstruction.Matches i ast)
     (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
     (hinputs : ∀ (s : SailState), Related b.pre s →
@@ -2056,7 +1928,7 @@ theorem block_simulates_io_amo (program : Rv64ProgramImage SourceInstruction) (b
         encoding.decode (Step.setReg s .minstret_increment inc) =
           .ok ast (Step.setReg s .minstret_increment inc)) :
     ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
-  refine block_simulates_io_amo_via program b hruns i hrow hsys hio hflag encoding hwidth ?_
+  refine block_simulates_io_amo_via program b hruns i hrow hsys hio encoding hwidth ?_
   intro s hrel pc m oldInc hn hr
   obtain ⟨inc, hinc, hf, hd⟩ := hinputs s hrel pc m oldInc hn hr
   exact ⟨inc, hinc, hf, ast, ast, hm, fun _ _ => rfl, hd⟩

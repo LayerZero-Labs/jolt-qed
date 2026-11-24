@@ -54,8 +54,6 @@ import JoltConstraints.theorems.Soundness.Layer5.RamInitialization
 import JoltConstraints.theorems.Soundness.Layer5.RamAgreement
 import JoltConstraints.theorems.Soundness.Layer5.LoadDoubleword
 import JoltConstraints.theorems.Soundness.Layer5.RamStoreAgreement
-import JoltConstraints.theorems.Soundness.Layer5.DeviceMemory
-import JoltConstraints.theorems.Soundness.Layer5.DeviceMemoryObstruction
 import JoltConstraints.theorems.Soundness.Layer5.AdviceExpansion
 import JoltConstraints.theorems.Soundness.Layer5.Registers
 import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
@@ -104,10 +102,12 @@ import JoltConstraints.theorems.WholeRun.Init
 import JoltConstraints.theorems.WholeRun.Ghost
 import JoltConstraints.theorems.WholeRun.BlockStep
 import JoltConstraints.theorems.WholeRun.Bundles
+import JoltConstraints.theorems.WholeRun.StoreRuns
+import JoltConstraints.theorems.WholeRun.AtomicStoreRuns
 import JoltConstraints.theorems.WholeRun.SystemInv
 import JoltConstraints.theorems.WholeRun.SystemBlocks
-import JoltConstraints.theorems.WholeRun.Io
-import JoltConstraints.theorems.WholeRun.IoAmo
+import JoltConstraints.theorems.WholeRun.SharedMemorySim
+import JoltConstraints.theorems.WholeRun.AtomicMemorySim
 import JoltConstraints.theorems.WholeRun.RunInv
 import JoltConstraints.theorems.WholeRun.Decoded
 import JoltConstraints.theorems.WholeRun.Elf

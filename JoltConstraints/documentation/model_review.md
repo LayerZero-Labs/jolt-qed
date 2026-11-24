@@ -2,16 +2,29 @@
 title: Jolt model in Lean, open issues
 updated: 2026-11-24
 rust: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
-lean_head: ce5f298
+lean_head: cea7d6c
 ---
 
 # Open issues
 
 The `ff6fc6568` re-pin is in progress.
-The full library and soundness closure have not passed at this pin.
-The RAM prefix and final-history completeness theorems are proved with unchanged statements at `ce5f298`.
-The latest shared-memory load/store soundness steps also pass, with their local address and protection checks derived from constraints.
-The whole-run and prefix/stopping consumers still require migration.
+`JoltInstance.soundness` builds for both public panic claims at `b852fe3`.
+The twenty-first shared-public build printed only `propext`, `Classical.choice` and `Quot.sound` in its axiom closure.
+The three flag-word restrictions and `tracerAddressChecks` have been removed from `TemporaryRestrictions`; only `hostCallsSucceed` remains.
+The selected RAM word's address and protected-value checks follow from the pinned constraints.
+The frozen bytecode HostIO model still has invalid-event failures and conditional overflow checks that differ from Jolt at this pin.
+The surviving host-call restriction marks this model boundary; the re-pin report records the current tracer's log-and-ignore and checked-read behavior.
+Both requested RAM-history completeness theorems are proved with unchanged statements at `ce5f298`; the completeness assembly checks at `78ed82d`.
+The three #1949 admissions remain unchanged.
+The eighteenth full-root attempt failed in the obsolete device-memory simulation and pending conditional-store elaboration.
+The working tree now deletes that device-memory module and both old I/O simulation modules.
+Native/narrow and atomic store inversion checks at `621fcd1` and `86d4cfa` respectively.
+The reusable Sail platform-memory pipeline checks at `b118458`.
+The whole-run relation and initialization use the shared byte map.
+The shared store-byte comparison checked in the eighteenth batch.
+The new ordinary/atomic shared-memory simulations, restriction-free decoded-block callers, and conditional-store repairs await the twenty-second combined build.
+The citation pass is committed at `cea7d6c`.
+The final whole-run migration, full statement inventory and clean committed tree remain open.
 See [the re-pin report](../../reports/2026-11-24-constraints-repin.md) for checked targets and remaining work.
 The following older green-build descriptions refer to their stated historical revisions.
 
@@ -23,7 +36,8 @@ The latest check of the soundness statement against Jolt's code is `reports/2026
 
 **Jolt pin:** `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`, since 2026-11-24.
 The previous pin was `c97e93004fbf804409f0374fe8457c8f1562ce71`, the merge of a16z/jolt#2250.
-The constraints were migrated to `c6703570`; of the seven commits from it to the pin, only #2250 changes modeled code.
+The earlier constraint migration targeted `c6703570`, then `c97e9300`.
+The current migration also models the shared-memory and halt-end changes at `ff6fc6568`.
 The previous pin was `5def437f`.
 Older findings below keep the revision at which they were established.
 
@@ -55,24 +69,27 @@ If one is still open when the main proofs pass, escalate it.
 | Issue | What breaks | In our model |
 |---|---|---|
 | [#1949](https://github.com/a16z/jolt/issues/1949) | Address sums that wrap break (01), floor-row addition in (08), and ShiftData right-input equality in (11) | (01) and the two honest-row address-bound lemmas remain `sorry`, as approved by Ari on 2026-11-03 |
-| [#1951](https://github.com/a16z/jolt/issues/1951) item 1 | A run that does not panic and never stores to the termination word: an SDK guest exiting through `platform_exit` or `std::process::exit`, or a bare ELF that reaches `j .` first. The tracer records no write to the word, but `jolt-witness`'s `final_ram_state` sets its `RamValFinal` slot to 1 from the panic flag alone, while initial RAM and the increments give 0 | (38) stays `sorry`. The fix proposed in the issue changes only the SDK's exit paths, so a bare ELF stays unprovable |
-| [#1950](https://github.com/a16z/jolt/issues/1950), [#1951](https://github.com/a16z/jolt/issues/1951) item 2 | A store to the termination word is recorded but the device ignores it, so a later load reads 0 (`bug-report/ram-val-termination/`) | (37) stays `sorry`; `Trace.matches_outputs` leaves the termination word out, and `Represents.finalRam` excludes it |
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 1 | The old device model synthesized a termination word in final RAM | The shared-memory pin removes that word; (38) is proved at `ce5f298` |
+| [#1950](https://github.com/a16z/jolt/issues/1950), [#1951](https://github.com/a16z/jolt/issues/1951) item 2 | The old device ignored termination stores | Shared memory retains every accepted store; (37) is proved at `ce5f298`, and `Represents.finalRam` compares every word |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the checked prover configuration rejects it | such runs have no checked `Trace.prover_config` |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` is one slot too small when the highest touched slot is a power of two (`bug-report/ram-k-off-by-one/`). The verifier's maximum is also one word short: `compute_max_ram_k` rounds `total_bytes / 8` down. When `heap_end` is not a multiple of 8 (`program_size` is not rounded), a program may access the word that straddles `heap_end`, and an honest run that does so gets no proof. The issue proposes `touched + 1` together with `div_ceil(8)` | Fixed in Jolt by [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250), merged at the pin `c97e9300`: `ProverConfig.checkedRamSize` rounds `touched + 1` and `VerifierSizes.maxRamSize` rounds `(totalBytes + 7) / 8`, as the issue proposes; completeness uses these sizes. `HonestTrace.prover_config_holds_highest_slot` (the highest touched word is below `ram_K`) and the verifier's RAM bounds (`HonestTrace.witness_params_ram_bounds`) are both proved, since every access starts below `heap_end`, so `touched + 1 ≤ ⌈(heap_end - lowest) / 8⌉` (`HonestTrace.highest_ram_slot_lt_heap_end`) |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 5 | Jolt's tracer loads only some ELF section kinds into RAM; preprocessing loads every section | Lean uses preprocessing's `memory_init` for both (`initialRam`, `program.lean`); see finding 3 of the 2026-10-29 report |
 
-## Device memory
+## Shared memory and halt claims
 
-Jolt's device ignores stores to the termination word and reads it as 0.
-A store to the panic word sets a flag whatever value it stores, and every panic byte reads the flag.
-Jolt's tracer rejects stores to the input and advice regions.
-Lean's execution model follows these rules; they were rechecked at `5def437f` in the 2026-10-29 report.
-The RAM table keeps the stored bytes instead, so the soundness proof uses the temporary restrictions `TerminationThenStall`, `PanicStoresOne` and `TracerAddressChecks` (see Assumptions).
+At `ff6fc6568`, input, advice, output and ordinary RAM bytes all belong to `sail.mem`.
+`JoltDevice` retains the layout and the CPU's panic claim.
+Protected stores succeed when the affected bytes preserve their old values, including stores into code, input, advice and canary words.
+`Layer5/SharedMemoryChecks` derives the selected row's address and protected-value checks from the RAM constraints.
+The soundness restriction structure therefore has no `tracerAddressChecks` field.
+The old standalone predicate still has consumers in the obsolete device-memory simulation, which remains to be deleted during the whole-run migration.
 
-Ari's [#2044](https://github.com/a16z/jolt/issues/2044), following [#2041](https://github.com/a16z/jolt/issues/2041), reports an accepted proof at `00508a09` of stores into the input and both advice regions, which Jolt's tracer rejects.
-The report and patch have been read but not rerun here; Michael's comments on #2044 are still to be reviewed with Ari.
-`TracerAddressChecks` also covers four unconfirmed candidates: stores at zero, the I/O padding gap, stack-canary stores, and accesses at or above `heap_end`.
-Each has its description and next check in `methods/soundness.md`, Layer 5b.
+A valid proof ends at an explicit success or panic halt row.
+Row 21 binds the public panic claim to that kind.
+`Layer7/Stopping` now checks this argument for either claim, without termination or panic memory words.
+The three flag-word restriction fields and their definition modules have been removed.
+The soundness assembly now checks at `b852fe3` for both claims, with only `propext`, `Classical.choice` and `Quot.sound` in its axiom closure.
+The full root and whole-run simulation still require validation.
 
 ## Assumptions
 
@@ -81,22 +98,13 @@ Premises or fields of the final theorems, with their source or reason.
 | Assumption | Where | Why |
 |---|---|---|
 | The field's characteristic exceeds `2^128 - 2^64` | `JoltField F`, soundness premise `joltField` | Ari, 2026-10-10: the relation must distinguish full 128-bit lookup addresses. On 2026-11-10 the premise was weakened from `2^128` so Akita's `p = 2^128 - 1780711455` (Jolt's production field since a16z/jolt#2403) satisfies it; below characteristic `2^128` constraint (63), Akita's address guard, keeps identity-RAF addresses below `2^128 - 2^64`. BN254 also satisfies it. PCS security is outside this work |
-| Every attempted native or floor load/store passes the tracer's address assertions (temporary) | `JoltInstance.TracerAddressChecks` in `theorems/Soundness/Layer5/MemoryAccessRestriction.lean`, field `tracerAddressChecks` | Approved for #2044 and the zero-store, I/O-gap, canary and heap-bound candidates; the floor-row extension was applied at `e299498`, checking the containing doubleword without supplying alignment or device-value agreement. |
 | Every attempted HostIO call succeeds (temporary) | `JoltInstance.HostCallsSucceed` in `theorems/Soundness/Layer5/HostCallRestriction.lean`, field `hostCallsSucceed` | Excludes host-call failures in live mode, which the constraints do not encode; program-execution condition approved by Ari pending the a16z batch |
-| Termination is followed by a stall and no later termination load (temporary) | `JoltInstance.TerminationThenStall` in `theorems/Soundness/Layer5/TerminationRestriction.lean`, field `terminationThenStall` | Approved by Ari for a witness that stops early at a jump, and the termination word's device/table mismatch. Ari approved on 2026-11-03 extending it and `StoresTerminationAt` to the floor loads and stores at their containing doubleword `ea &&& ~~~7`, only to fit the new ISA |
-| Every store to the panic word stores 1, and no load reads the panic word after such a store (temporary) | `JoltInstance.PanicStoresOne` in `theorems/Soundness/Layer5/PanicRestriction.lean`, field `panicStoresOne` | Added 2026-10-20 to exclude a store of 0 being proved as "no panic" (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction. Ari approved on 2026-11-03 extending it and `StoresPanicAt` to the floor loads and stores at their containing doubleword `ea &&& ~~~7`, only to fit the new ISA |
-| The claim says "no panic" (temporary) | `JoltInstance.ClaimsNoPanic` in `theorems/Soundness/Layer5/PanicRestriction.lean`, field `claimsNoPanic` | Added 2026-10-20 to exclude a "panicked" claim proved from an execution cut short at a jump (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`). A Jolt bug: it must be fixed in Jolt and may not remain a restriction |
-| No relaxed trace has exactly the largest power-of-two number of real rows within the instance maximum (temporary) | `JoltInstance.NoMaxLengthTrace`, field `noMaxLengthTrace` | Ari, 2026-10-22: excludes the full-length prover/verifier mismatch in `LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/prover-verifier-trace-length/index.md`, preserves a 256-row run under maximum 1024 that Jolt's prover pads to 512, and must be removed when Jolt resolves the mismatch |
 | The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `theorems/Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10. With the verifier's RAM-size check, all eight bytes of each in-domain word fit, so satisfying LD/SD cycles have nonwrapping addresses. NOTE: to confirm with a16z. An instance restriction, not a verifier check |
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Jolt's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Jolt's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
 | A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | Modeling assumption, not a theorem premise: traces execute the expanded bytecode, while Jolt's tracer decodes each instruction from memory (`HonestTrace` docstring, `honest_trace.lean`) | a16z, 2026-10-07. The unused premise `codeUnchanged` was removed from soundness on 2026-11-03 with Ari's approval |
 | A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | ASSUMPTION in `finalRamWord` | a16z, 2026-10-07 |
 | No spoil assert fails | `Trace.SpoilAssertsPass`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): a spoiled run is meant to have no proof (`jolt-platform/src/spoil.rs`) |
 | Jolt's prover accepts the trace | `(trace.prover_config joltInstance).isSome`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): Jolt's prover refuses other traces (`ProverConfig::derive_from_dimensions`). `JoltInstance.completeness` takes the accepted config `config` and uses Jolt's sizes, modeled with the fix of [#1951](https://github.com/a16z/jolt/issues/1951) item 4 from [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) |
-
-`TracerAddressChecks` quantifies over every private input and relaxed prefix with honest internal runtime advice and checks the next attempted row without assuming that execution succeeds.
-It checks permissions at the starting address in RAM and at every accessed byte below RAM; floor rows use `ea &&& ~~~7`.
-It remains a temporary execution restriction to narrow or remove as the cases are resolved, not a verifier check.
 
 The SC.W and SC.D restriction `noStoreConditional`, which no proof used after a16z/jolt#2039, was removed on 2026-11-03 with Ari's approval.
 
@@ -143,8 +151,8 @@ Do not weaken a main statement to close a gap.
 ### Existing tactic debt
 
 These are source debt, not permission to add such tactics or raise limits during repair.
-- `decide +kernel` at `JoltConstraints/theorems/Soundness/Layer5/DeviceMemoryObstruction.lean:54` and `:61`; `AGENTS.md` bans it.
-- `decide +kernel` is outside the closure of `JoltInstance.sail_soundness`: `DeviceMemoryObstruction` formalizes the termination-device obstruction (#1950/#1951), and only the root module imports it.
+- The obsolete `DeviceMemoryObstruction.lean` and its root import are deleted during the re-pin.
+  This removes its two pre-existing executable kernel-decision commands; the harness regex also matches those deleted diff lines, as recorded in the re-pin report.
 - No raised limits remain in `JoltBytecode/` or `JoltConstraints/` (2026-11-09); the generated model's remaining declaration-local limits are listed in `docs/riscv-alignment.md` section 8.
 - No executable `bv_decide` use remains in `JoltBytecode/` or `JoltConstraints/`; the only textual match is a comment in `theorems/Soundness/Layer4/Interleave.lean:19`.
 
@@ -170,7 +178,6 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 - `source_expansion_split` and `expansion_block_eq` (`Layer6/DivisionLayout.lean`) repeat part of the private `expand_program_block` (`Layer6/PlainRow.lean`); generalize it and derive both.
 - `source_advice_kind` (`Layer6/DivisionLayout.lean`) classifies every source instruction with a long `simp` list; a checker fact would be shorter.
 - Delete the unused `fence_step` (`Layer5/Fence.lean`) and `HonestTrace.code_unchanged` (`honest_trace.lean`).
-- `theorems/Soundness/Layer5/DeviceMemoryObstruction.lean` uses `decide +kernel`, which `AGENTS.md` bans; only `JoltConstraints.lean` imports it and no proof uses it, so delete it or move its finding to the docs.
 - `append_load_row` and `append_store_row` (`Layer6/RowStepMemory.lean`) share their operand and append steps, as their LD/SD predecessors did; extract the shared part once both are reviewed.
 
 ## Gaps in our model
@@ -180,7 +187,8 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
   Modeling the words as field elements changes a core definition and waits for Ari.
 - **HostIO END marker.** Lean's `execHostIOWith` does not read the label for a cycle-marker END, while Jolt's tracer does and can abort on it (2026-10-29 report, finding 2).
 - **ELF sections and `tohost`.** Lean's initial RAM uses preprocessing's `memory_init` for the run; Jolt's tracer loads fewer section kinds, and sizes RAM differently when the ELF defines `tohost` (2026-10-29 report, findings 3 and 4).
-- **Termination word.** `InLanguage` compares only the outputs and the panic flag; Jolt's verifier also checks the termination word, so the theorem says less than Jolt enforces (2026-10-29 report, finding 5).
+- **Termination word (resolved by the re-pin).** The old verifier/model gap described in finding 5 of the 2026-10-29 report disappears with the removed memory word.
+  The new halt lane checks the public claim instead; its full soundness assembly is pending.
 - **Images Jolt never produces.** `Rv64ProgramImage` carries decoded instructions without a decoder certificate.
   It admits ANDN as a source instruction, odd branch and jump offsets, a quotient field on divisions, and instruction lists not tied to the text bytes.
   These only add instances to the theorems.

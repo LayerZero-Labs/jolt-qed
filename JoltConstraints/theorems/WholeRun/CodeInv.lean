@@ -80,75 +80,21 @@ private theorem foldl_insert_get? (ea : Nat) (g : Nat → BitVec 8) (l : List Na
     simp only [Std.ExtHashMap.get?_eq_getElem?, Std.ExtHashMap.getElem?_insert, this,
       Bool.false_eq_true, ↓reduceIte]
 
-private theorem store_raw_mem (s s' : SailJoltState) (ea : Nat) (v : BitVec 8) (a : Nat)
-    (ha : a ≠ ea) (h : JoltISA.Mmu.store_raw? s ea v = some s') :
-    s'.sail.mem.get? a = s.sail.mem.get? a := by
-  unfold JoltISA.Mmu.store_raw? at h
-  split at h
-  · split at h
-    · cases h
-      have : ¬ (ea == a) = true := by simpa only [beq_iff_eq] using ha.symm
-      simp only [Std.ExtHashMap.get?_eq_getElem?, Std.ExtHashMap.getElem?_insert, this,
-        Bool.false_eq_true, ↓reduceIte]
-    · cases h
-  · split at h
-    · cases h
-    · split at h
-      · cases h
-      · obtain ⟨device, _, h⟩ := Option.map_eq_some_iff.mp h
-        cases h
-        rfl
-
-private theorem store_bytes_mem (s0 : SailJoltState) (address : Nat) (v : BitVec 64) (a : Nat)
-    (ks : List Nat) (hk : ∀ k ∈ ks, address + k ≠ a) (current : Option SailJoltState)
-    (hc : ∀ s, current = some s → s.sail.mem.get? a = s0.sail.mem.get? a) :
-    ∀ s, ks.foldl (fun state k => state.bind fun s =>
-      JoltISA.Mmu.store_raw? s (address + k) (v.extractLsb' (8 * k) 8)) current = some s →
-      s.sail.mem.get? a = s0.sail.mem.get? a := by
-  induction ks generalizing current with
-  | nil => exact hc
-  | cons k ks ih =>
-    apply ih (fun k' hk' => hk k' (List.mem_cons_of_mem _ hk'))
-    intro next hnext
-    cases hcur : current with
-    | none => simp [hcur] at hnext
-    | some before =>
-      simp only [hcur, Option.bind_some] at hnext
-      exact (store_raw_mem before next _ _ _ (hk k List.mem_cons_self).symm hnext).trans
-        (hc before hcur)
-
 /-- The bytes of the doubleword that starts at `base`.
 For example, `InDword 0x80000008 0x8000000f` holds and `InDword 0x80000008 0x80000010` does not. -/
 def InDword (base : BitVec 64) (a : Nat) : Prop :=
   base.toNat ≤ a ∧ a < base.toNat + 8
 
-/-- A successful doubleword store writes no byte of Sail's memory map outside its own eight bytes;
-a store to the I/O window writes none. -/
+/-- A successful shared doubleword store leaves bytes outside its eight-byte
+footprint unchanged, including when the word is in the I/O window. -/
 private theorem store_doubleword_mem (address value : BitVec 64) (s t : SailJoltState)
     (r : Result Bool ExecutionResult)
     (h : JoltISA.Mmu.store_doubleword address value s = .ok r t) (a : Nat)
     (ha : ¬ InDword address a) : t.sail.mem.get? a = s.sail.mem.get? a := by
-  have hk : ∀ k ∈ List.range 8, address.toNat + k ≠ a := by
-    intro k hk heq
-    exact ha ⟨by omega, by have := List.mem_range.mp hk; omega⟩
-  unfold JoltISA.Mmu.store_doubleword at h
-  dsimp only at h
-  split at h
-  · cases h
-  · split at h
-    · split at h
-      · cases h
-        exact foldl_insert_get? _ (fun k => value.extractLsb' (8 * k) 8) _ _ _ hk
-      · cases h
-    · split at h
-      · rename_i s' hs'
-        have ht : s' = t := (EStateM.Result.ok.inj h).2
-        exact ht ▸ store_bytes_mem s address.toNat value a (List.range 8) hk (some s)
-          (fun s1 hs1 => by cases hs1; rfl) s' hs'
-      · cases h
-
-
-/-! ### Rows that do not store leave the memory map alone -/
+  rw [JoltConstraints.store_doubleword_shape s t address value r h]
+  apply foldl_insert_get?
+  intro k hk same
+  exact ha ⟨by omega, by have := List.mem_range.mp hk; omega⟩
 
 private def MKeep (s t : SailJoltState) : Prop := t.sail.mem = s.sail.mem
 
@@ -157,265 +103,27 @@ private theorem mkeep_refl (s : SailJoltState) : MKeep s s := rfl
 private theorem mkeep_trans (a b c : SailJoltState) (h : MKeep a b) (h' : MKeep b c) :
     MKeep a c := h'.trans h
 
-private def SKeep (s t : SailState) : Prop := t.mem = s.mem
-
-private theorem skeep_trans (a b c : SailState) (h : SKeep a b) (h' : SKeep b c) :
-    SKeep a c := h'.trans h
-
-private abbrev SKeeps {α : Type} (m : SailM α) : Prop := StatePreservation.Preserves SKeep m
-
 private abbrev MKeeps {α : Type} (m : JoltMonad α) : Prop := StatePreservation.Preserves MKeep m
 
-private theorem skeeps_pure {α : Type} (a : α) : SKeeps (pure a : SailM α) :=
-  StatePreservation.pure_rule (relation := SKeep) (fun _ => rfl) a
-
-private theorem skeeps_bind {α β : Type} {m : SailM α} {f : α → SailM β}
-    (hm : SKeeps m) (hf : ∀ a, SKeeps (f a)) : SKeeps (m >>= f) :=
-  StatePreservation.bind_rule skeep_trans hm hf
-
-private theorem skeeps_ite {α : Type} {c : Prop} [Decidable c] {m n : SailM α}
-    (hm : SKeeps m) (hn : SKeeps n) : SKeeps (if c then m else n) := by
-  split <;> assumption
-
-private theorem skeeps_throw {α : Type} (e : Error exception) : SKeeps (throw e : SailM α) :=
-  StatePreservation.throw_rule SKeep e
-
-private theorem skeeps_readReg (r : Register) :
-    SKeeps (LeanRV64D.readReg r : SailM (RegisterType r)) := by
-  intro s t v h
-  cases hg : s.regs.get? r with
-  | none => rw [Step.readReg_eq_of_get?_none r _ hg] at h; cases h
-  | some w => rw [readReg_eq_of_get? r _ w hg] at h; cases h; rfl
-
-private theorem skeeps_writeReg (r : Register) (v : RegisterType r) :
-    SKeeps (LeanRV64D.writeReg r v : SailM Unit) := by
-  intro s t u h
-  rw [Step.writeReg_run] at h
-  cases h
-  rfl
-
-private theorem skeeps_assert (b : Bool) (msg : String) :
-    SKeeps (LeanRV64D.sail_assert b msg) := by
-  intro s t u h
-  cases b
-  · cases h
-  · cases h; rfl
-
-private theorem skeeps_andM {m n : SailM Bool} (hm : SKeeps m) (hn : SKeeps n) :
-    SKeeps (m <&&> n) := by
-  unfold _root_.andM
-  refine skeeps_bind hm fun b => ?_
-  cases b
-  · exact skeeps_pure _
-  · exact hn
-
-private theorem skeeps_map {α β : Type} (f : α → β) {m : SailM α} (hm : SKeeps m) :
-    SKeeps (f <$> m) := by
-  have h : f <$> m = m >>= fun a => pure (f a) := by
-    funext s
-    cases m s <;> rfl
-  rw [h]
-  exact skeeps_bind hm fun _ => skeeps_pure _
-
-private theorem skeeps_set_next_pc (pc : BitVec 64) : SKeeps (set_next_pc pc) := by
-  unfold set_next_pc
-  exact skeeps_bind (skeeps_writeReg _ _) fun _ => skeeps_pure _
-
-private theorem skeeps_enabled : SKeeps (currentlyEnabled extension.Ext_Zca) := by
-  simp only [currentlyEnabled]
-  refine skeeps_andM (skeeps_pure _) ?_
-  refine skeeps_bind ?_ fun _ => skeeps_pure _
-  exact skeeps_andM (skeeps_pure _) (skeeps_bind (skeeps_readReg _) fun _ => skeeps_pure _)
-
-local macro "sail_keeps" : tactic =>
-  `(tactic| repeat' (first
-    | exact skeeps_readReg _
-    | exact skeeps_writeReg _ _
-    | exact skeeps_assert _ _
-    | exact skeeps_pure _
-    | apply skeeps_andM
-    | apply skeeps_ite
-    | apply skeeps_bind
-    | split
-    | intro _))
-
-private theorem skeeps_rX (r : regidx) : SKeeps (rX_bits r) := by
-  unfold rX_bits rX
-  sail_keeps
-
-private theorem skeeps_wX (r : regidx) (v : BitVec 64) : SKeeps (wX_bits r v) := by
-  unfold wX_bits wX xreg_write_callback
-  sail_keeps
-
-private abbrev SEKeeps {ε α : Type} (m : SailME ε α) : Prop := SKeeps (ExceptT.run m)
-
-private theorem sekeeps_pure {ε α : Type} (a : α) : SEKeeps (pure a : SailME ε α) :=
-  skeeps_pure (Except.ok (ε := Error exception ⊕ ε) a)
-
-private theorem sekeeps_bind {ε α β : Type} {m : SailME ε α} {f : α → SailME ε β}
-    (hm : SEKeeps m) (hf : ∀ a, SEKeeps (f a)) : SEKeeps (m >>= f) := by
-  change SKeeps (ExceptT.run m >>= ExceptT.bindCont f)
-  refine skeeps_bind hm fun result => ?_
-  cases result with
-  | error e => exact skeeps_pure _
-  | ok a => exact hf a
-
-private theorem sekeeps_lift {ε α : Type} {m : SailM α} (hm : SKeeps m) :
-    SEKeeps (liftM m : SailME ε α) := skeeps_map Except.ok hm
-
-private theorem sekeeps_andM {ε : Type} {m n : SailME ε Bool}
-    (hm : SEKeeps m) (hn : SEKeeps n) : SEKeeps (m <&&> n) := by
-  unfold _root_.andM
-  refine sekeeps_bind hm fun b => ?_
-  cases b
-  · exact sekeeps_pure _
-  · exact hn
-
-private theorem sekeeps_ite {ε α : Type} {c : Prop} [Decidable c] {m n : SailME ε α}
-    (hm : SEKeeps m) (hn : SEKeeps n) : SEKeeps (if c then m else n) := by
-  split <;> assumption
-
-private theorem sekeeps_run {α : Type} {m : SailME α α} (hm : SEKeeps m) :
-    SKeeps (SailME.run m) := by
-  unfold SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
-  refine skeeps_bind hm fun result => ?_
-  cases result with
-  | ok a => exact skeeps_pure _
-  | error e =>
-    cases e with
-    | inl e => exact skeeps_throw e
-    | inr a => exact skeeps_pure _
-
-private theorem skeeps_jump_to (target : BitVec 64) : SKeeps (jump_to target) := by
-  unfold jump_to ext_control_check_pc
-  apply sekeeps_run
-  refine sekeeps_bind (sekeeps_lift (skeeps_assert _ _)) fun _ => ?_
-  refine sekeeps_bind ?_ fun b => ?_
-  · refine sekeeps_andM (sekeeps_pure _) ?_
-    exact sekeeps_bind (sekeeps_lift skeeps_enabled) fun _ => sekeeps_pure _
-  · exact sekeeps_ite (sekeeps_pure _)
-      (sekeeps_bind (sekeeps_lift (skeeps_set_next_pc _)) fun _ => sekeeps_pure _)
-
-private theorem mkeeps_lift {α : Type} {m : SailM α} (hm : SKeeps m) : MKeeps (liftSail m) :=
-  StatePreservation.liftSail_rule (relation := MKeep) (sailRelation := SKeep)
-    (fun _ _ h => h) hm
-
 private theorem mkeeps_pure {α : Type} (a : α) : MKeeps (pure a : JoltMonad α) :=
-  StatePreservation.pure_rule (relation := MKeep) mkeep_refl a
+  StatePreservation.pure_rule mkeep_refl a
 
 private theorem mkeeps_bind {α β : Type} {m : JoltMonad α} {f : α → JoltMonad β}
     (hm : MKeeps m) (hf : ∀ a, MKeeps (f a)) : MKeeps (m >>= f) :=
   StatePreservation.bind_rule mkeep_trans hm hf
 
-private theorem mkeeps_ite {α : Type} {c : Prop} [Decidable c] {m n : JoltMonad α}
-    (hm : MKeeps m) (hn : MKeeps n) : MKeeps (if c then m else n) := by
-  split <;> assumption
-
-private theorem mkeeps_throw {α : Type} (e : Error exception) : MKeeps (throw e : JoltMonad α) :=
-  StatePreservation.throw_rule MKeep e
-
-private theorem mkeeps_get : MKeeps (get : JoltMonad SailJoltState) :=
-  StatePreservation.get_rule mkeep_refl
-
-private theorem mkeeps_modify (f : SailJoltState → SailJoltState)
-    (hf : ∀ js, (f js).sail.mem = js.sail.mem) : MKeeps (modify f) :=
-  StatePreservation.modify_rule (relation := MKeep) f hf
-
-private theorem mkeeps_readSrc (src : JoltISA.Src) : MKeeps (JoltISA.readSrc src) := by
-  cases src with
-  | xreg r => exact mkeeps_lift (skeeps_rX r)
-  | vreg r =>
-    unfold JoltISA.readSrc readVReg
-    exact mkeeps_bind mkeeps_get fun _ => mkeeps_pure _
-
-private theorem mkeeps_writeDst (dst : JoltISA.Dst) (v : BitVec 64) :
-    MKeeps (JoltISA.writeDst dst v) := by
-  cases dst with
-  | xreg r => exact mkeeps_lift (skeeps_wX r v)
-  | vreg r =>
-    unfold JoltISA.writeDst writeVReg
-    exact mkeeps_ite (mkeeps_throw _) (mkeeps_modify _ fun _ => rfl)
-
-private theorem mkeeps_load (address : BitVec 64) : MKeeps (JoltISA.Mmu.load address) := by
-  intro s t v h
-  simp only [JoltISA.Mmu.load] at h
-  repeat' split at h
-  all_goals first | (cases h; exact mkeep_refl _) | cases h
-
-private theorem mkeeps_load_doubleword (address : BitVec 64) :
-    MKeeps (JoltISA.Mmu.load_doubleword address) := by
-  intro s t v h
-  simp only [JoltISA.Mmu.load_doubleword] at h
-  repeat' split at h
-  all_goals first | (cases h; exact mkeep_refl _) | cases h
-
-private theorem mkeeps_readHostBytes
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    MKeeps (JoltISA.readHostBytes JoltISA.Mmu.load overflowChecks incrementAfterLast
-      pointer n bytes) := by
-  induction n generalizing pointer bytes with
-  | zero => exact mkeeps_pure _
-  | succ n ih =>
-    dsimp only [JoltISA.readHostBytes]
-    refine mkeeps_bind (mkeeps_load _) (fun result => ?_)
-    cases result with
-    | Err e => exact mkeeps_pure _
-    | Ok byte =>
-      split_ifs
-      · exact mkeeps_bind (mkeeps_throw _) (fun _ => ih _ _)
-      · exact mkeeps_bind (mkeeps_pure _) (fun _ => ih _ _)
-
-private theorem mkeeps_hostIO : MKeeps JoltISA.execHostIO := by
-  unfold JoltISA.execHostIO JoltISA.execHostIOWith
-  refine mkeeps_bind mkeeps_get (fun config => ?_)
-  dsimp only
-  split
-  · exact mkeeps_pure _
-  · refine mkeeps_bind (mkeeps_readSrc _) (fun callId => ?_)
-    preservation_auto [mkeeps_readHostBytes _ _ _ _ _, mkeeps_readSrc _,
-      mkeeps_pure _, mkeeps_throw _, mkeeps_modify _ (fun _ => rfl)]
-      using (StatePreservation.bind_rule mkeep_trans)
-
-local macro "jolt_keep" : tactic =>
-  `(tactic| repeat' (first
-    | exact mkeeps_readSrc _
-    | exact mkeeps_writeDst _ _
-    | exact mkeeps_pure _
-    | exact mkeeps_throw _
-    | exact mkeeps_get
-    | exact mkeeps_modify _ (fun _ => rfl)
-    | apply mkeeps_ite
-    | refine mkeeps_bind ?_ (fun _ => ?_)
-    | exact mkeeps_lift (skeeps_jump_to _)
-    | exact mkeeps_lift (skeeps_set_next_pc _)
-    | exact mkeeps_lift (skeeps_readReg _)
-    | exact mkeeps_lift (skeeps_writeReg _ _)
-    | exact mkeeps_load _
-    | exact mkeeps_load_doubleword _
-    | split))
-
-/-- A row that is not a store leaves Jolt's memory map alone. -/
+/-- A non-store row preserves the shared map, even when it records a halt.
+The existing width classification identifies the excluded store rows once. -/
 private theorem mkeeps_execInstr (i : JoltISA.Instr) (hi : NoStoreRow i) :
     MKeeps (JoltISA.execInstr i) := by
-  cases i
-  case VirtualAdviceLoad dst width =>
-    intro s t v h
-    simp only [JoltISA.execInstr] at h
-    cases hr : JoltISA.readAdviceTape s.adviceTape width with
-    | none => simp only [hr] at h; cases h
-    | some pair =>
-      obtain ⟨value, tape⟩ := pair
-      simp only [hr] at h
-      exact (mkeeps_bind (mkeeps_writeDst dst value) (fun _ => mkeeps_pure _)
-        { s with adviceTape := tape } t v h)
-  case VirtualHostIO => exact mkeeps_hostIO
-  case SD => exact False.elim hi
-  case VirtualStoreB => exact False.elim hi
-  case VirtualStoreH => exact False.elim hi
-  case VirtualStoreW => exact False.elim hi
-  all_goals simp only [JoltISA.execInstr]
-  all_goals jolt_keep
+  apply JoltConstraints.nonstore_memory i
+  cases stored : JoltMetadata.opcodeFlag i .Store with
+  | false => rfl
+  | true =>
+    obtain ⟨width, base, value, imm, row⟩ :=
+      JoltConstraints.Soundness.storeRow_of_flag i stored
+    obtain ⟨fault, rfl⟩ := row
+    cases width <;> exact False.elim hi
 
 private theorem mkeeps_execProgram (p : JoltISA.Program) (hp : NoStoreProgram p) :
     MKeeps (JoltISA.execProgram p) := by
@@ -897,8 +605,13 @@ theorem CodeIntact.of_related {program : Rv64ProgramImage SourceInstruction}
   have hjt := h.2 row hrow k hk b hb
   have hlow := layout_memLow jt hrel.layout
   obtain ⟨b', hb'⟩ := hrel.present (row.address.toNat + k) (by omega)
-    (by unfold memHigh; have := h.1; omega)
-  have hram := hrel.ram _ hR
+    (by
+      obtain ⟨config, built⟩ := hrel.layout
+      have backed := heap_end_le_ram_backing_end jt.jolt_device config built
+      unfold memHigh
+      have := h.1
+      omega)
+  have hram := hrel.ram _
   simp only [JoltISA.Mmu.ram_byte, hb', hjt, Option.getD_some] at hram
   rw [hb', hram]
 
@@ -924,55 +637,9 @@ private theorem initial_image_facts (joltInstance : JoltInstance SourceInstructi
     joltInstance.program.program_end.toNat ≤ jt.jolt_device.memory_layout.heap_end.toNat ∧
     ∀ (a : Nat) (b : BitVec 8), imageByte? joltInstance.program a = some b →
       jt.sail.mem.get? a = some b := by
-  obtain ⟨device, tape, hlayout, hjt⟩ := initial_state_ram joltInstance privateInputs jt built
-  unfold JoltInstance.memory_layout at hlayout
-  obtain ⟨psize, hpsize, hheap⟩ := new_heap_end_ge _ _ hlayout
-  have hpsize' : psize = joltInstance.program.program_size := by
-    simpa using hpsize.symm
-  subst hpsize'
-  have hend_le := joltInstance.program.program_end.isLt
-  have hge := joltInstance.program.program_end_ge_ram_start
-  have hpsize_nat : joltInstance.program.program_size.toNat =
-      joltInstance.program.program_end.toNat - JoltISA.RAM_START_ADDRESS := by
-    have hR64 : (BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS).toNat = JoltISA.RAM_START_ADDRESS := by
-      simp [JoltISA.RAM_START_ADDRESS]
-    unfold Rv64ProgramImage.program_size
-    rw [BitVec.toNat_sub_of_le (by
-      rw [BitVec.le_def, hR64]; exact joltInstance.program.program_end_ge_ram_start), hR64]
-  have hdev : jt.jolt_device.memory_layout = device.memory_layout := by subst hjt; rfl
-  refine ⟨?_, ?_⟩
-  · rw [hdev]
-    simp only [JoltISA.STACK_CANARY_SIZE] at hheap
-    omega
-  · intro a b h
-    obtain ⟨hR, hend⟩ := imageByte?_bounds joltInstance.program h
-    have hbacking := heap_end_le_ram_backing_end device
-    unfold JoltISA.Mmu.ram_backing_end at hbacking
-    have hsize := initialRam_size device.memory_layout joltInstance.program.memory_init
-    have ho : a - JoltISA.RAM_START_ADDRESS < (initialRam device.memory_layout
-        joltInstance.program.memory_init).size := by
-      rw [hsize]
-      simp only [JoltISA.STACK_CANARY_SIZE] at hheap
-      omega
-    have := init_state_mem_get? joltInstance.program.entry_address
-      (initialRam device.memory_layout joltInstance.program.memory_init) device tape
-      (a - JoltISA.RAM_START_ADDRESS)
-    rw [← hjt, Nat.add_sub_cancel' hR] at this
-    rw [this]
-    have ho' : a - JoltISA.RAM_START_ADDRESS < (Array.replicate
-        (8 * ((device.memory_layout.get_total_memory_size.toNat + 7) / 8)) (0 : BitVec 8)).size := by
-      rw [Array.size_replicate]
-      rw [hsize] at ho
-      exact ho
-    have key := initialRam_fold_getElem? joltInstance.program.memory_init
-      (Array.replicate (8 * ((device.memory_layout.get_total_memory_size.toNat + 7) / 8)) 0)
-      (a - JoltISA.RAM_START_ADDRESS) ho'
-    unfold initialRam
-    rw [Nat.add_sub_cancel' hR] at key
-    have h' : lastByte joltInstance.program.memory_init a = some b := h
-    refine key.trans ?_
-    rw [h']
-    rfl
+  refine ⟨initial_state_program_end_le_heap_end joltInstance privateInputs jt built, ?_⟩
+  intro a byte present
+  exact sailInit_get?_image joltInstance privateInputs jt built a byte present
 
 /-- **The code starts intact.** In the initial state of every honest trace, Jolt's memory map
 holds the image's bytes, and the image ends below the heap end. -/
