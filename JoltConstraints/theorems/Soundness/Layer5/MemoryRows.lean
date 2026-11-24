@@ -1,8 +1,7 @@
+import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
 import JoltConstraints.theorems.MemoryRowExecution
 import JoltConstraints.theorems.Soundness.Layer5.RamAlignment
 import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
-import JoltConstraints.theorems.Soundness.Layer5.PanicRestriction
-import JoltConstraints.theorems.Soundness.Layer5.TerminationRestriction
 import JoltConstraints.theorems.Soundness.Layer4.Identity
 import JoltConstraints.theorems.Completeness.Helpers.FloorMemory
 import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
@@ -61,109 +60,6 @@ theorem StoreRow.address_checks
   obtain ⟨_, same⟩ := row
   rw [same] at checked
   cases width <;> exact checked
-
-/-- Under `PanicStoresOne`, a ready store row touching the panic region stores
-the word 1. For example, the SDK's panic SB expansion ends with a VirtualStoreB
-of the merged word 1. -/
-theorem StoreRow.panic_value
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (restricted : joltInstance.PanicStoresOne)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (next : Fin run.bytecode.size) (pre : SailJoltState) (ready : run.NextStep next pre)
-    {width : MemoryWidth} {base value : Src} {imm : BitVec 64}
-    (row : StoreRow run.bytecode[next].instruction width base value imm)
-    (touch : TouchesPanic pre.jolt_device (width.accessed (sourceValue base pre + imm))) :
-    sourceValue value pre = 1 := by
-  have rule := restricted privateInputs run next pre ready
-  obtain ⟨_, same⟩ := row
-  rw [same] at rule
-  cases width <;> exact rule touch
-
-/-- Under `PanicStoresOne`, a ready load row cannot touch the panic region after
-a completed panic store. For example, a VirtualLoadB of the panic word must come
-before the store that sets the flag. -/
-theorem LoadRow.panic_free
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (restricted : joltInstance.PanicStoresOne)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (next : Fin run.bytecode.size) (pre : SailJoltState) (ready : run.NextStep next pre)
-    {width : MemoryWidth} {destination : Dst} {base : Src} {imm : BitVec 64}
-    (row : LoadRow run.bytecode[next].instruction width destination base imm)
-    (stored : ∃ i, run.StoresPanicAt i) :
-    ¬ TouchesPanic pre.jolt_device (width.accessed (sourceValue base pre + imm)) := by
-  have rule := restricted privateInputs run next pre ready
-  obtain ⟨_, _, same⟩ := row
-  rw [same] at rule
-  cases width <;> exact rule stored
-
-/-- Under `TerminationThenStall`, a ready load row cannot touch the termination
-region after a completed termination store. For example, the SDK exit's
-VirtualLoadB of the termination word comes before its store. -/
-theorem LoadRow.termination_free
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (restricted : joltInstance.TerminationThenStall)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (next : Fin run.bytecode.size) (pre : SailJoltState) (ready : run.NextStep next pre)
-    {width : MemoryWidth} {destination : Dst} {base : Src} {imm : BitVec 64}
-    (row : LoadRow run.bytecode[next].instruction width destination base imm)
-    (stored : ∃ i, run.StoresTerminationAt i) :
-    ¬ TouchesTermination pre.jolt_device (width.accessed (sourceValue base pre + imm)) := by
-  have rule := restricted privateInputs run next pre ready stored
-  obtain ⟨_, _, same⟩ := row
-  rw [same] at rule
-  cases width <;> exact rule
-
-/-- Row `row` of a trace over `bytecode` completed a store whose accessed
-doubleword satisfies `touches`: an SD at `base + imm`, or a floor store at
-`(base + imm) &&& ~~~7`. With `touches` set to `TouchesTermination` or
-`TouchesPanic` this is the row form of `UntrustedAnswerRun.StoresTerminationAt`
-or `UntrustedAnswerRun.StoresPanicAt`, with the same cases.
-For example, the SDK exit's final VirtualStoreB touches termination. -/
-def storeTouches (touches : JoltDevice → BitVec 64 → Prop)
-    {bytecode : Array JoltInstructionRow} (row : TraceRow bytecode) : Prop :=
-  match bytecode[row.rowIndex].instruction with
-  | .SD base _ imm => touches row.preState.jolt_device (sourceValue base row.preState + imm)
-  | .VirtualStoreB base _ imm _ | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ =>
-      touches row.preState.jolt_device ((sourceValue base row.preState + imm) &&& ~~~7)
-  | _ => False
-
-/-- A row's store satisfies `touches` exactly when the row is a store row whose
-accessed doubleword satisfies it.
-For example, a VirtualStoreH at `ea = termination + 2` touches termination. -/
-theorem storeTouches_iff (touches : JoltDevice → BitVec 64 → Prop)
-    {bytecode : Array JoltInstructionRow} (row : TraceRow bytecode) :
-    storeTouches touches row ↔ ∃ width base value imm,
-      StoreRow bytecode[row.rowIndex].instruction width base value imm ∧
-      touches row.preState.jolt_device (width.accessed (sourceValue base row.preState + imm)) := by
-  constructor
-  · intro stored
-    unfold storeTouches at stored
-    split at stored
-    · exact ⟨.double, _, _, _, ⟨ExceptionType.E_SAMO_Addr_Align (), by assumption⟩, stored⟩
-    · exact ⟨.byte, _, _, _, ⟨_, by assumption⟩, stored⟩
-    · exact ⟨.halfword, _, _, _, ⟨_, by assumption⟩, stored⟩
-    · exact ⟨.word, _, _, _, ⟨_, by assumption⟩, stored⟩
-    · exact False.elim stored
-  · rintro ⟨width, base, value, imm, ⟨fault, same⟩, touch⟩
-    unfold storeTouches
-    rw [same]
-    cases width <;> exact touch
-
-/-- The termination-store history of a run is the row predicate at that row.
-For example, both read the same SD and pre-state. -/
-theorem storesTerminationAt_iff
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (run : UntrustedAnswerRun joltInstance privateInputs) (i : Fin run.rows.size) :
-    run.StoresTerminationAt i ↔ storeTouches TouchesTermination run.rows[i] :=
-  Iff.rfl
-
-/-- The panic-store history of a run is the row predicate at that row.
-For example, both read the same VirtualStoreB and pre-state. -/
-theorem storesPanicAt_iff
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (run : UntrustedAnswerRun joltInstance privateInputs) (i : Fin run.rows.size) :
-    run.StoresPanicAt i ↔ storeTouches TouchesPanic run.rows[i] :=
-  Iff.rfl
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

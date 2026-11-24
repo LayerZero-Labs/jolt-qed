@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer5.RamAgreement
-import JoltConstraints.theorems.Soundness.Layer5.MemoryRows
+import JoltConstraints.theorems.Soundness.Layer5.SharedMemoryChecks
+import JoltConstraints.theorems.SharedMemoryExecution
 
 open LeanRV64D
 
@@ -7,7 +8,7 @@ open LeanRV64D
 accessed doubleword through the agreed table, writes it to its destination, and
 leaves the RAM table unchanged. The rows are LD and the floor loads
 VirtualLoadB/H/W, classified by `LoadRow`.
-Jolt's tracer at c6703570: `tracer/src/instruction/ld.rs` (`LD::exec`),
+Jolt's tracer at ff6fc6568: `tracer/src/instruction/ld.rs` (`LD::exec`),
 `tracer/src/instruction/floor_access.rs` (`load`) and
 `tracer/src/emulator/mmu.rs` (`Mmu::load_doubleword`). -/
 
@@ -41,20 +42,18 @@ theorem LoadRow.canonical :
 
 include charAbove2pow128Minus2pow64 context equations selected rowIs loadRow
 
-/-- An ordinary-RAM load row succeeds with the value constrained by RamReadValue
+/-- A shared-memory load row succeeds with the value constrained by RamReadValue
 at its accessed doubleword.
-The checked address is a local consequence of the tracer restriction.
+The access-count claim and verifier domain bounds supply the address checks.
 Only the base must be live; for example, a preceding expansion row can initialize
 a temporary base, and the load makes its destination live after the write.
 VirtualLoadH at `ea = 0x80000012` reads the word at `0x80000010`. -/
-theorem load_ram_step (regionFits : joltInstance.RamRegionFits)
+theorem load_shared_step (regionFits : joltInstance.RamRegionFits)
     {live : Fin 128 → Prop} {pre : SailJoltState}
     (registers : RegisterAgreementOn live witness t pre)
     (baseLive : live (TraceWitness.sourceRegisterAddress base))
-    (ram : OrdinaryRamAgreement context.io.memory_layout (fun index => witness.RamVal index t) pre)
-    (inRam : RAM_START_ADDRESS ≤ (width.accessed (sourceValue base pre + imm)).toNat)
-    (checked : DoublewordAddressChecks pre.jolt_device
-      (width.accessed (sourceValue base pre + imm)) false)
+    (ram : SharedRamAgreement context.io.memory_layout (fun index => witness.RamVal index t) pre)
+    (layoutIs : pre.jolt_device.memory_layout = context.io.memory_layout)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let address := width.accessed (sourceValue base pre + imm)
     let value := Mmu.ram_doubleword pre.sail.mem address.toNat
@@ -66,10 +65,10 @@ theorem load_ram_step (regionFits : joltInstance.RamRegionFits)
       RegisterAgreementOn
         (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
         witness ⟨t.val + 1, next⟩ post ∧
-      OrdinaryRamAgreement context.io.memory_layout
+      SharedRamAgreement context.io.memory_layout
         (fun index => witness.RamVal index ⟨t.val + 1, next⟩) post) ∧
     (∀ _last : t.val + 1 = params.traceLength,
-      OrdinaryRamAgreement context.io.memory_layout witness.RamValFinal post) := by
+      SharedRamAgreement context.io.memory_layout witness.RamValFinal post) := by
   dsimp only
   have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have facts := loadRow.metadata
@@ -80,9 +79,14 @@ theorem load_ram_step (regionFits : joltInstance.RamRegionFits)
   obtain ⟨encoded, aligned, -⟩ := AccessRow.address_encoded charAbove2pow128Minus2pow64 context equations
     selected rowIs loadRow.access regionFits (sourceValue base pre) baseIs
   have wordAligned := ramAddress_mask_aligned bound context equations t _ encoded
-  have nonzero := ramAddress_nonzero_of_inRam bound t _ encoded inRam
-  obtain ⟨chosen, one, _⟩ := ramRa_unique_of_address_ne_zero bound context equations t nonzero
-  have read := OrdinaryRamAgreement.read bound context equations ram chosen one _ encoded inRam
+  have memory : witness.OpFlags .Load t + witness.OpFlags .Store t = 1 := by
+    rw [opFlag_of_selected_bytecode bound context equations .Load t slot selected,
+      opFlag_of_selected_bytecode bound context equations .Store t slot selected]
+    simp only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load, facts.notStore]
+    norm_num
+  obtain ⟨chosen, one, _⟩ := ramRa_unique_of_memory bound context equations t memory
+  have addressIs := ramAddress_eq_of_selected bound context equations t chosen one _ encoded
+  have read := SharedRamAgreement.read bound context equations ram chosen one _ encoded
   have loadOne : witness.OpFlags .Load t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.load] using!
       opFlag_of_selected_bytecode bound context equations .Load t slot selected
@@ -92,11 +96,16 @@ theorem load_ram_step (regionFits : joltInstance.RamRegionFits)
     have relation := equations.ramReadEqRdWriteIfLoad t
     rw [loadOne, one_mul, read] at relation
     exact (sub_eq_zero.mp relation).symm
-  have legal : Mmu.effective_address_ok pre.jolt_device
-      (width.accessed (sourceValue base pre + imm)).toNat false = true := by
-    simpa only [DoublewordAddressChecks, inRam, ↓reduceIte] using checked
-  have loaded := Mmu.load_doubleword_ram pre (width.accessed (sourceValue base pre + imm))
-    wordAligned inRam legal
+  have checked (k : Nat) (within : k < 8) : Mmu.effective_address_ok pre.jolt_device
+      ((width.accessed (sourceValue base pre + imm)).toNat + k) false = true := by
+    rw [addressIs]
+    exact ram_word_address_checks context pre.jolt_device layoutIs chosen k within false
+  have peripheral (k : Nat) (_within : k < 8) : Mmu.unsupported_load
+      ((width.accessed (sourceValue base pre + imm)).toNat + k) = false := by
+    rw [addressIs]
+    exact (ram_word_peripheral_checks context pre.jolt_device layoutIs chosen k).1
+  have loaded := load_doubleword_of_checks pre (width.accessed (sourceValue base pre + imm))
+    wordAligned checked peripheral
   obtain ⟨output, executed, registerNext⟩ :=
     registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 registers
       destination facts.destinationIs _ written answer advice

@@ -109,6 +109,62 @@ theorem public_io_words_fit_ram
           rw [← layoutEq]
           simpa [← ioEndEq, offsetIs] using! ioEndBound.trans minimumBound
 
+private theorem domain_reaches_ram (low size maximum : Nat)
+    (aligned : low % 8 = 0) (below : low ≤ JoltISA.RAM_START_ADDRESS)
+    (covers : (JoltISA.RAM_START_ADDRESS - low) / 8 ≤ size) (upper : size ≤ maximum) :
+    JoltISA.RAM_START_ADDRESS ≤ low + 8 * maximum := by
+  simp only [JoltISA.RAM_START_ADDRESS] at *
+  omega
+
+private theorem backing_covers_words (base low size maximum : Nat) (domain : Option Nat)
+    (computed : domain = some maximum) (above : base ≤ low + 8 * maximum)
+    (upper : size ≤ maximum) :
+    low + 8 * size ≤ base + (domain.map fun k => low + 8 * k - base).getD 0 := by
+  rw [computed]
+  simp only [Option.map_some, Option.getD_some]
+  omega
+
+/-- The verifier's admitted RAM domain fits in the tracer's padded backing.
+For example, the last witness word may be in heap padding beyond `heap_end`.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::ram_size`). -/
+theorem ram_domain_within_backing (context : ConstraintContext joltInstance privateInputs params) :
+    ramLowestAddress context.io.memory_layout + 8 * params.ramSize ≤
+      JoltISA.RAM_START_ADDRESS + context.io.memory_layout.ram_size := by
+  have publicIo := context.publicIo
+  unfold JoltInstance.public_io at publicIo
+  obtain ⟨layout, hasLayout, sameIo⟩ := Option.bind_eq_some_iff.mp publicIo
+  have layoutEq : layout = context.io.memory_layout :=
+    congrArg JoltPublicIo.memory_layout (Option.some.inj sameIo)
+  have built := hasLayout
+  unfold JoltInstance.memory_layout at built
+  have lowestAligned := new_lowest_address_aligned _ _ built
+  have order := new_io_ordered _ _ built
+  have ioFits := public_io_words_fit_ram context
+  have sizes := context.ramSizeBounds
+  unfold JoltInstance.ram_size_in_bounds JoltInstance.verifier_ram_bounds at sizes
+  rw [hasLayout] at sizes
+  cases minimumIs : VerifierSizes.minRamSize joltInstance.program layout with
+  | none => simp [minimumIs] at sizes
+  | some minimum =>
+    cases maximumIs : VerifierSizes.maxRamSize layout with
+    | none => simp [minimumIs, maximumIs] at sizes
+    | some maximum =>
+      have bounds : minimum ≤ params.ramSize ∧ params.ramSize ≤ maximum := by
+        simpa [minimumIs, maximumIs] using sizes
+      rw [← layoutEq] at ioFits ⊢
+      rw [MemoryLayout.get_lowest_address_toNat] at lowestAligned order
+      have lowBelow : ramLowestAddress layout ≤ JoltISA.RAM_START_ADDRESS :=
+        order.1.trans (order.2.1.trans (order.2.2.1.trans (by
+          rw [order.2.2.2.1]; exact order.2.2.2.2)))
+      have reaches := domain_reaches_ram (ramLowestAddress layout) params.ramSize maximum
+        lowestAligned lowBelow ioFits bounds.2
+      change layout.max_ram_k? = some maximum at maximumIs
+      have result := backing_covers_words JoltISA.RAM_START_ADDRESS
+        layout.get_lowest_address.toNat params.ramSize maximum layout.max_ram_k? maximumIs
+        (by simpa only [MemoryLayout.get_lowest_address_toNat, ramLowestAddress] using reaches) bounds.2
+      simpa only [MemoryLayout.ram_size, MemoryLayout.get_lowest_address_toNat,
+        ramLowestAddress] using result
+
 /-- All eight bytes of every in-domain word fit below `2^64`, including the
 last word when the region's exclusive endpoint equals `2^64`. -/
 theorem ram_word_byte_lt_two_pow_64

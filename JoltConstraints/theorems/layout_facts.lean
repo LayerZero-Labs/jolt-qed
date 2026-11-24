@@ -137,6 +137,68 @@ theorem new_lowest_address_pos (config : MemoryConfig) (layout : MemoryLayout)
   unfold MemoryLayout.get_lowest_address
   split <;> simp only [BitVec.toNat_ofNat] <;> omega
 
+/-- The smaller advice start is exactly the checked allocation start.
+For example, swapping advice capacities changes their order but not this minimum. -/
+private theorem adviceRegions_min_start {trusted untrusted bytes ts te us ue : Nat}
+    (placed : MemoryLayout.adviceRegions trusted untrusted bytes = some (ts, te, us, ue)) :
+    min ts us = JoltISA.RAM_START_ADDRESS - bytes := by
+  unfold MemoryLayout.adviceRegions at placed
+  rw [bind_some_iff] at placed
+  obtain ⟨start, subtracted, placed⟩ := placed
+  have startIs := (checkedSub_some subtracted).1
+  split at placed
+  · cases placed
+  split at placed <;>
+    rw [bind_some_iff] at placed <;>
+    obtain ⟨middle, added, placed⟩ := placed <;>
+    rw [bind_some_iff] at placed <;>
+    obtain ⟨_, _, placed⟩ := placed <;>
+    cases placed <;>
+    obtain ⟨_, _⟩ := checkedAdd_some added <;>
+    omega
+
+/-- A checked power-of-two I/O allocation starts in the top half below RAM.
+For example, the largest admitted I/O window begins at `0x40000000`, above
+all unsupported emulator peripherals.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::try_new`). -/
+private theorem adviceRegions_power_lower_bound (trusted untrusted total bytes : Nat)
+    (ts te us ue : Nat)
+    (multiplied : MemoryLayout.checkedMul (total / 8).nextPowerOfTwo 8 = some bytes)
+    (placed : MemoryLayout.adviceRegions trusted untrusted bytes = some (ts, te, us, ue)) :
+    0x40000000 ≤ ts ∧ 0x40000000 ≤ us := by
+  obtain ⟨teIs, ueIs, adjacent, starts, _, _⟩ := adviceRegions_some placed
+  obtain ⟨tsPositive, usPositive⟩ := adviceRegions_starts_pos placed
+  have bytesIs := checkedMul_some multiplied
+  obtain ⟨n, power⟩ := Nat.isPowerOfTwo_nextPowerOfTwo (total / 8)
+  have bytesPower : bytes = 2 ^ (n + 3) := by
+    rw [bytesIs, power, Nat.pow_add]
+  have bytesSmall : bytes < 2 ^ 31 := by
+    rcases starts with start | start <;> simp only [JoltISA.RAM_START_ADDRESS] at start <;> omega
+  have exponent : n + 3 < 31 := by
+    rw [bytesPower] at bytesSmall
+    exact (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp bytesSmall
+  have half : bytes ≤ 2 ^ 30 := by
+    rw [bytesPower]
+    exact Nat.pow_le_pow_right (by decide) (by omega)
+  have minimum := adviceRegions_min_start placed
+  simp only [JoltISA.RAM_START_ADDRESS] at minimum
+  omega
+
+/-- Every byte in a checked I/O layout is above emulator peripheral addresses.
+For example, an input load cannot dispatch to the UART at `0x10000000`.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::try_new`). -/
+theorem new_lowest_address_ge_half_ram (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    0x40000000 ≤ layout.get_lowest_address.toNat := by
+  unfold MemoryLayout.new at built
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  cases built
+  have bounds := adviceRegions_power_lower_bound _ _ _ _ _ _ _ _
+    (by assumption) (by assumption)
+  obtain ⟨_, _, _, _, _, _⟩ := adviceRegions_some (by assumption)
+  unfold MemoryLayout.get_lowest_address
+  split <;> simp only [BitVec.toNat_ofNat] <;> omega
+
 -- What Rust's layout says about the advice regions and the inputs: each advice size is
 -- its configured maximum rounded up to a multiple of 8, each advice region is as long as
 -- its size, the two sit next to each other, both start at multiples of 8, and the inputs
@@ -413,6 +475,36 @@ theorem new_io_ordered (config : MemoryConfig) (layout : MemoryLayout)
     unfold MemoryLayout.get_lowest_address
     split <;> omega
   exact ⟨lowestBelow, by omega, by omega, ioEnd.symm, by omega⟩
+
+/-- The output segment begins at the input segment's exclusive end.
+For example, consecutive input and output words leave no unmapped byte between them.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::try_new`). -/
+theorem new_input_end_eq_output_start (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) : layout.input_end = layout.output_start := by
+  unfold MemoryLayout.new at built
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  cases built
+  rfl
+
+/-- Checked advice, input, output and gap intervals cover every byte from the
+lowest I/O address to RAM.
+For example, an unused byte after `output_end` is readable gap memory.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`device_readable`). -/
+theorem JoltDevice.readable_of_layout (device : JoltDevice) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some device.memory_layout)
+    (address : Nat) (lower : device.memory_layout.get_lowest_address.toNat ≤ address)
+    (upper : address < JoltISA.RAM_START_ADDRESS) : device.readable address = true := by
+  obtain ⟨_, _, _, _, trustedEnd, untrustedEnd, adjacent, _, _, inputStart⟩ :=
+    new_advice_regions config device.memory_layout built
+  obtain ⟨outputStart, _⟩ := new_outputs_after_inputs config device.memory_layout built
+  obtain ⟨outputEnd, _, ioEnd, _⟩ := new_io_geometry config device.memory_layout built
+  have inputEnd := congrArg BitVec.toNat (new_input_end_eq_output_start _ _ built)
+  unfold JoltDevice.readable JoltDevice.is_input JoltDevice.is_trusted_advice
+    JoltDevice.is_untrusted_advice JoltDevice.is_output JoltDevice.is_io_gap
+  simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq]
+  rw [ioEnd] at *
+  unfold MemoryLayout.get_lowest_address at lower
+  split at lower <;> omega
 
 /-- A word index counts 8-byte words up from the lowest address:
 `(address - lowest) / 8`.

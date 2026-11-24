@@ -599,3 +599,115 @@ The stopping theorem itself still uses the obsolete termination-word argument.
 `methods/soundness.md` now distinguishes this incomplete re-pin from the old green build and records the pinned stopping and shared-memory rules.
 
 The remaining work is unchanged: replace the separate whole-run I/O simulations, remove all flag-word definitions and callers, finish soundness for both claims, settle the tracer-address restriction, prove both RAM-history completeness targets, migrate the public-I/O completeness assembly, update source references, run the full acceptance checks and commit the checked changes.
+
+## Full integration result and shared-store proof
+
+Date: 2026-11-24.
+Jolt pin: `ff6fc6568`; checked Lean source before the new proof edits: `7bae35b`.
+The completed `.constraints-repin-foreground2.log` ends with `error: build failed`.
+The associated marker's exit zero belongs to the process-exit watcher and is not a passing Lake result.
+The successful modules include `SharedMemoryInitialization`, `WholeRun.Init`, `WholeRun.ImageMemory`, `HaltFlags`, `Completeness.HaltEndRule` and `Completeness.RdWriteEqPCPlusConstIfJump`.
+The checked shared-memory foundation is committed as `0569dbe`, and the checked halt/jump completeness migration as `574c4ff`.
+The full build still fails in the old flag restrictions, `advice_below_input`, `ExecutionPrefix`, `WholeRun.Halt`, the branch completeness bound, `DeviceMemoryObstruction` and `WholeRun.SystemInv`.
+
+The subsequent `.constraints-repin-foundation5.log` batch ran to completion and failed only in the new halt-lane elimination proof and `WholeRun.SystemInv`.
+It checked the branch completeness repair, replacing strict transitivity with strict/non-strict transitivity at the padded trace bound.
+The initial-state virtual-register proof and success-source scratch-register classification in `SystemInv` now pass; its halt primitive still needed a named preservation rule.
+The halt-lane proof needed Boolean equality reduced before algebra and a restricted simplifier to avoid traversing the large characteristic bound.
+These are proof-body repairs with unchanged statements.
+
+The new declarations in `theorems/SharedMemoryExecution.lean` are candidates to move to JoltBytecode.
+`store_raw_shape` says that an accepted one-byte store produces exactly the old state with that shared memory byte inserted.
+`store_doubleword_shape` says that an MMU doubleword store returning `Ok true` produces exactly the old state with `Mmu.write_ram_doubleword` applied to its map, regardless of the RAM/I/O branch.
+Both statements retain every other field, including the device, tape, code region and halt marker.
+Their consumer obligations already occur in both RAM-history completeness targets and the whole-run memory simulation.
+The private `guarded_fold_shape` factors the accepted-step/fold argument, and `byte_inserts_shape` factors the state-update/fold argument.
+I read `Mmu::store_doubleword`, `Mmu::store_raw` and `Mmu::store_doubleword_raw` in the pinned tracer before adding these proofs.
+The proof does not assume that an unchecked store succeeds or bypass its protection checks.
+
+`Soundness/Layer3/Access.lean` adds two consequences of the pinned RAM claims.
+`ramRa_unique_of_memory` takes the existing constraint context/equations and a cycle with `Load + Store = 1`, and proves that exactly one RAM selector equals one.
+In particular, the access-count claim rules out the old all-zero selector escape for an executed load or store.
+`ramInc_zero_of_selected_protected` takes a selected word whose public C mask is one and proves that its increment is zero.
+The proof factors the common increment out of the protected sum and evaluates its remaining selected read.
+These are local constraint consequences; address-domain and mask/protected-byte correspondence still need connecting to MMU execution before deciding whether `tracerAddressChecks` can be removed.
+
+The next full batch is `.constraints-repin-integration4.log`, marker `.constraints-repin-integration4.done`.
+It builds `JoltConstraints` plus the new shared-store and halt-lane modules explicitly.
+The shared-store proofs and new RAM-guard consequences are not yet checked.
+There is no completed soundness re-proof or RAM-history completeness result in this checkpoint.
+No new admission, axiom, forbidden decision procedure or resource-limit increase was added.
+The harness diff scan also needs clarification: its unanchored `decide +kernel` alternative matches deleted baseline lines in the obsolete `DeviceMemoryObstruction` module.
+I requested correction to an added-line scan and have not changed the harness.
+
+
+## Checked RAM-history completeness
+
+Date: 2026-11-24.
+Jolt pin: `ff6fc6568`; Lean checkpoint: `ce5f298`.
+The targeted `.constraints-repin-memory-history10.log` batch passes.
+Both `honestWitness_ramValEqInitialPlusPrefixRamInc` and `honestWitness_ramValFinalEqInitialPlusRamInc` now have checked proofs with unchanged statements.
+The proofs compare the witness fold with shared memory, then telescope each selected store increment.
+They cover RAM and I/O uniformly, including value-preserving stores to protected words.
+The three #1949 admissions remain unchanged.
+This milestone supersedes the earlier statements that the two RAM-history proofs remain open.
+
+The checkpoint adds `Completeness/Helpers/PrefixSum.lean`, `RamHistoryProofHelpers.lean`, `RamHistoryReplay.lean` and `RamValReplay.lean`.
+The common prefix-fold and prefix-sum lemmas replace a private register-history lemma rather than copying that proof.
+`MemoryRowExecution.lean` now contains the shared load/store width classification, metadata and execution facts moved from Layer5, with their moved public statements unchanged.
+It adds `accessRow_of_address`, `LoadRow.write_of_run`, `LoadRow.capture_of_run` and `StoreRow.memory_of_run` for the RAM-history callers.
+`SharedMemoryExecution.lean` adds the non-store memory frame, successful-load shape and captured-word value lemmas.
+These primitive facts are candidates to move to JoltBytecode.
+`store_doubleword_shape` changed its successful result premise from `.ok (.Ok true) after` to `.ok result after` for an explicit `result : Result Bool ExecutionResult`; its exact memory-update conclusion is unchanged.
+No execution-success assumption was removed from that theorem.
+
+The measured slow modules are `RamHistoryProofHelpers` (21 seconds), `RamHistoryReplay` (31 seconds), and `RamValReplay` (17 seconds).
+The two final completeness modules take about four seconds each.
+These measurements include module elaboration and compilation, rather than individual tactic timings.
+The batch also checks Layer1's `selected_halt_of_next_padding`, Layer3's RAM guard consequences and `WholeRun.SystemInv`.
+The corresponding checked commits are `3bc7430`, `b60ee7f` and `ce5f298`.
+The full library still fails in the old whole-run and soundness consumers.
+The whole-run I/O simulations, flag-word soundness callers, public-I/O completeness assembly, final source-reference pass and full acceptance checks remain open.
+
+
+## Checked shared-memory soundness steps
+
+Date: 2026-11-24.
+Jolt pin: `ff6fc6568`; source checkpoint follows `ce5f298`.
+The batch `.constraints-repin-shared-checks12.log` passes for `LoadDoubleword`, `RamStoreAgreement` and both RAM-history completeness targets.
+`layout_facts.lean` proves `new_lowest_address_ge_half_ram`, `new_input_end_eq_output_start` and `JoltDevice.readable_of_layout`.
+These declarations show that the checked power-of-two I/O allocation lies above unsupported peripherals and that the advice, input, output and gap segments cover its byte addresses.
+`Layer3/Layout.lean:130` adds `ram_domain_within_backing`: the verifier's admitted domain ends no later than the tracer's padded backing.
+The arithmetic is factored over natural numbers and an opaque checked-domain option to avoid kernel recursion through the layout validator.
+No resource limit was raised.
+
+`SharedMemoryExecution.lean:200` adds `ram_doubleword_byte`, the byte-extraction fact for the map's packed doubleword.
+`load_doubleword_of_checks` (line 229) and `store_doubleword_of_checks` (line 271) prove execution from the actual address, peripheral and protected-value checks for both RAM and I/O.
+The byte-store fold uses the existing `Mmu.ProtectedMemory` relation to transport protection through intermediate byte writes.
+These three primitive lemmas are candidates to move to JoltBytecode.
+The module takes about 52 seconds to elaborate and compile in this batch.
+
+The new `Layer5/SharedMemoryChecks.lean` contains the local constraint consequences used by the memory steps.
+`ram_word_address_checks` (line 35) proves all eight address checks for any admitted word.
+`memory_row_address_checks` (line 59) uses the access-count claim to apply those checks to an active memory row.
+`unsupported_peripheral_false` (line 82) and `ram_word_peripheral_checks` (line 94) exclude peripheral dispatch from admitted words.
+`protected_byte_mask_one` (line 112) relates the MMU's protected-byte predicate to public mask C, assuming that the execution code interval is the bytecode's interval.
+`protected_store_of_constraints` (line 150) combines this correspondence, shared-word agreement and the protected-increment claim to prove the actual MMU protected-store check.
+Its code-interval equality is an execution invariant, not a new global restriction; carrying that invariant through the prefix assembly remains open.
+This module takes about 33 seconds to elaborate and compile.
+
+Changed statements in this file group:
+
+- `Layer5/RamAgreement.lean:24`: `OrdinaryRamAgreement` becomes `SharedRamAgreement`; the old relation required agreement only after an `inRam` premise, and the new relation requires every in-domain word to agree with the shared map.
+- Its `advance_pc`, `afterWriteDst`, `initial`, `read`, `noEffect` and `noAccess` theorems now use that full relation; `read` no longer takes an `inRam` premise.
+- `RamInitialization.initialRamWord_eq_ram_doubleword`: the old `inRam` premise is removed because initialization now uses the shared map at every index.
+- `LoadDoubleword.load_ram_step` becomes `load_shared_step`; its old ordinary-RAM premise and external address-check premise are replaced by the invariant equality between the pre-state's layout and the public context's layout, and its RAM agreement covers every word.
+- `StoreDoubleword.store_ram_step` becomes `store_shared_step`; its old ordinary-RAM and external address-check premises are replaced by the layout and code-interval invariant equalities plus full shared-word agreement.
+- `RamStoreAgreement.store_ram_step_agreement` becomes `store_shared_step_agreement` with the corresponding invariant premises and full shared-word conclusion.
+- `MemoryRows.lean` deletes the old panic-value, panic/termination-load and store-event helpers; those helpers describe removed flag words and have no replacement in the new memory contract.
+
+`load_shared_step` and `store_shared_step` each take about 29 seconds to elaborate and compile.
+Neither theorem takes `tracerAddressChecks`, a panic-word premise or a termination-word premise.
+This settles the local MMU obligations from the pinned constraints.
+Removing the global `tracerAddressChecks` field still requires migrating its callers, rather than claiming that its universally quantified program restriction follows from one satisfying witness.
+The old prefix, stopping, whole-run I/O and public-output consumers remain unfinished, and the full library has not passed.

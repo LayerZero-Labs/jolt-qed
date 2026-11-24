@@ -1,3 +1,4 @@
+import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
 import JoltConstraints.theorems.DeviceFrame
 import JoltConstraints.translation.metadata
 
@@ -192,5 +193,125 @@ theorem trace_doubleword_value (state : SailJoltState) (address value : BitVec 6
   · split at recorded
     · exact (Option.some.inj recorded).symm
     · cases recorded
+
+/-- Extracting byte `k` of a shared doubleword returns its byte at offset `k`.
+For example, byte zero is its least significant byte, regardless of map presence.
+This byte-packing fact is a candidate to move to JoltBytecode. -/
+theorem ram_doubleword_byte (memory : Std.ExtHashMap Nat (BitVec 8)) (address k : Nat)
+    (within : k < 8) :
+    (Mmu.ram_doubleword memory address).extractLsb' (8 * k) 8 =
+      Mmu.ram_byte memory (address + k) := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [Mmu.ram_doubleword, BitVec.getLsbD_extractLsb',
+    show (i <b 8) = true by simpa using hi, Bool.true_and]
+  repeat rw [BitVec.getLsbD_append]
+  split_ifs <;> congr 2 <;> omega
+
+/-- A checked shared-byte read succeeds when peripheral dispatch is excluded.
+For example, a mapped but absent output byte returns zero. -/
+private theorem load_raw_of_checks (state : SailJoltState) (address : Nat)
+    (checked : Mmu.effective_address_ok state.jolt_device address false = true)
+    (peripheral : Mmu.unsupported_load address = false) :
+    Mmu.load_raw? state address = some (Mmu.ram_byte state.sail.mem address) := by
+  by_cases inRam : RAM_START_ADDRESS ≤ address
+  · simp only [Mmu.load_raw?, checked, Bool.not_true, Bool.false_eq_true,
+      ↓reduceIte, inRam]
+  · have readable : state.jolt_device.readable address = true := by
+      simpa only [Mmu.effective_address_ok, if_pos (Nat.lt_of_not_ge inRam)] using checked
+    simp only [Mmu.load_raw?, checked, Bool.not_true, Bool.false_eq_true,
+      ↓reduceIte, inRam, peripheral, JoltDevice.load?, readable]
+    rfl
+
+/-- Address and peripheral checks suffice for a shared doubleword load.
+For example, an input word and an ordinary RAM word return their packed map bytes.
+This primitive MMU fact is a candidate to move to JoltBytecode. -/
+theorem load_doubleword_of_checks (state : SailJoltState) (address : BitVec 64)
+    (aligned : address &&& 7 = 0)
+    (checked : ∀ k < 8, Mmu.effective_address_ok state.jolt_device (address.toNat + k) false = true)
+    (peripheral : ∀ k < 8, Mmu.unsupported_load (address.toNat + k) = false) :
+    Mmu.load_doubleword address state =
+      .ok (.Ok (Mmu.ram_doubleword state.sail.mem address.toNat)) state := by
+  have raw (k : Nat) (within : k < 8) := load_raw_of_checks state (address.toNat + k)
+    (checked k within) (peripheral k within)
+  have zero := raw 0 (by decide)
+  simp only [Nat.add_zero] at zero
+  simp only [Mmu.load_doubleword, Mmu.toNat_mod_eight_of_align aligned,
+    ne_self_iff_false, ↓reduceIte]
+  split
+  · have start := checked 0 (by decide)
+    simp only [Nat.add_zero] at start
+    simp only [start, ↓reduceIte]
+  · simp only [read_doubleword?, zero, raw 1 (by decide), raw 2 (by decide),
+      raw 3 (by decide), raw 4 (by decide), raw 5 (by decide),
+      raw 6 (by decide), raw 7 (by decide)]
+    rfl
+
+/-- A byte store with successful address and protection checks inserts its byte.
+For example, a value-preserving protected input store is admitted. -/
+private theorem store_raw_of_checks (state : SailJoltState) (address : Nat) (value : BitVec 8)
+    (checked : Mmu.effective_address_ok state.jolt_device address true = true)
+    (peripheral : Mmu.unsupported_store address = false)
+    (preservesProtected : Mmu.protected_store_ok state address (value.zeroExtend 64) 1 = true) :
+    Mmu.store_raw? state address value =
+      some { state with sail := { state.sail with mem := state.sail.mem.insert address value } } := by
+  by_cases inRam : RAM_START_ADDRESS ≤ address
+  · simp only [Mmu.store_raw?, checked, preservesProtected, Bool.not_true,
+      Bool.false_eq_true, ↓reduceIte, inRam]
+  · have readable : state.jolt_device.readable address = true := by
+      simpa only [Mmu.effective_address_ok, if_pos (Nat.lt_of_not_ge inRam)] using checked
+    simp only [Mmu.store_raw?, checked, preservesProtected, Bool.not_true,
+      Bool.false_eq_true, ↓reduceIte, inRam, peripheral, JoltDevice.store?, readable]
+    rfl
+
+/-- Address, peripheral and protected-value checks suffice for a doubleword store
+in the shared map, including I/O.
+For example, replacing an input word by itself succeeds and preserves the device.
+This primitive MMU fact is a candidate to move to JoltBytecode. -/
+theorem store_doubleword_of_checks (state : SailJoltState) (address value : BitVec 64)
+    (aligned : address &&& 7 = 0)
+    (checked : ∀ k < 8, Mmu.effective_address_ok state.jolt_device (address.toNat + k) true = true)
+    (peripheral : ∀ k < 8, Mmu.unsupported_store (address.toNat + k) = false)
+    (preservesProtected : Mmu.protected_store_ok state address.toNat value 8 = true) :
+    Mmu.store_doubleword address value state = .ok (.Ok true)
+      { state with sail := { state.sail with
+        mem := Mmu.write_ram_doubleword state.sail.mem address.toNat value } } := by
+  by_cases inRam : RAM_START_ADDRESS ≤ address.toNat
+  · exact Mmu.store_doubleword_ram state address value aligned inRam
+      (by simpa only [Nat.add_zero] using checked 0 (by decide)) preservesProtected
+  · have folded : ∃ after,
+        (List.range 8).foldl (fun current k => current.bind fun s =>
+          Mmu.store_raw? s (address.toNat + k) (value.extractLsb' (8 * k) 8))
+          (some state) = some after ∧ Mmu.ProtectedMemory state after := by
+      refine List.foldlRecOn (motive := fun current => ∃ after,
+        current = some after ∧ Mmu.ProtectedMemory state after) (List.range 8) _
+        ⟨state, rfl, Mmu.ProtectedMemory.refl state⟩ ?_
+      intro current prior k member
+      obtain ⟨middle, rfl, keeps⟩ := prior
+      have within : k < 8 := List.mem_range.mp member
+      have currentCheck : Mmu.effective_address_ok middle.jolt_device
+          (address.toNat + k) true = true := by
+        simpa only [Mmu.effective_address_ok, Mmu.ram_backing_end, keeps.layout,
+          JoltDevice.readable, JoltDevice.is_input, JoltDevice.is_trusted_advice,
+          JoltDevice.is_untrusted_advice, JoltDevice.is_output, JoltDevice.is_io_gap]
+          using! checked k within
+      have currentProtected : Mmu.protected_store_ok middle (address.toNat + k)
+          ((value.extractLsb' (8 * k) 8).zeroExtend 64) 1 = true := by
+        apply (Mmu.protected_store_byte_iff middle _ _).mpr
+        intro hp
+        have original : Mmu.protected_byte state (address.toNat + k) = true := by
+          rwa [Mmu.protected_byte_congr _ keeps.layout keeps.code] at hp
+        rw [keeps.bytes _ original]
+        have byte := List.all_eq_true.mp preservesProtected k member
+        simpa only [original, Bool.not_true, Bool.false_or, beq_iff_eq] using byte
+      have stored := store_raw_of_checks middle (address.toNat + k)
+        (value.extractLsb' (8 * k) 8) currentCheck (peripheral k within) currentProtected
+      exact ⟨_, stored, keeps.trans (Mmu.store_raw_protected stored)⟩
+    obtain ⟨after, bytes, _⟩ := folded
+    have executed : Mmu.store_doubleword address value state = .ok (.Ok true) after := by
+      simp only [Mmu.store_doubleword, Mmu.toNat_mod_eight_of_align aligned,
+        ne_self_iff_false, ↓reduceIte, inRam, bytes]
+    rw [executed]
+    rw [store_doubleword_shape state after address value _ executed]
 
 end JoltConstraints

@@ -1,11 +1,19 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-11-05
-rust: c97e93004fbf804409f0374fe8457c8f1562ce71
-lean_head: e29949809bbf2c54c315c2ca55ae3b90c7fd37a6
+updated: 2026-11-24
+rust: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
+lean_head: ce5f298
 ---
 
 # Open issues
+
+The `ff6fc6568` re-pin is in progress.
+The full library and soundness closure have not passed at this pin.
+The RAM prefix and final-history completeness theorems are proved with unchanged statements at `ce5f298`.
+The latest shared-memory load/store soundness steps also pass, with their local address and protection checks derived from constraints.
+The whole-run and prefix/stopping consumers still require migration.
+See [the re-pin report](../../reports/2026-11-24-constraints-repin.md) for checked targets and remaining work.
+The following older green-build descriptions refer to their stated historical revisions.
 
 This file lists what the theorems rest on that is not proved: Jolt issues, assumptions, owed proofs and gaps in the model.
 `JoltInstance.soundness` was proved at Lean HEAD `7096dca`, under the temporary restrictions, with no `sorry`; see the [current status](../../methods/soundness.md#current-top-level-status-2026-10-23).
@@ -13,7 +21,8 @@ With the Step 4 changes on top of `e299498`, `JoltConstraints` builds against th
 `JoltInstance.completeness` still has the `sorry`s listed under "Proofs owed".
 The latest check of the soundness statement against Jolt's code is `reports/2026-10-29-soundness-statement-audit.md`.
 
-**Jolt pin:** `c97e93004fbf804409f0374fe8457c8f1562ce71`, the merge of a16z/jolt#2250, since 2026-11-05.
+**Jolt pin:** `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`, since 2026-11-24.
+The previous pin was `c97e93004fbf804409f0374fe8457c8f1562ce71`, the merge of a16z/jolt#2250.
 The constraints were migrated to `c6703570`; of the seven commits from it to the pin, only #2250 changes modeled code.
 The previous pin was `5def437f`.
 Older findings below keep the revision at which they were established.
@@ -107,7 +116,7 @@ See the [Step 4 report](../../reports/2026-11-03-constraints-migration-soundness
 **Completeness.** On 2026-11-03 (Step 5), `JoltInstance.completeness` states that the honest witness at the sizes Jolt's prover picks satisfies `AllConstraints`; the earlier existential statement is `JoltInstance.completeness_someWitness`.
 `#print axioms` for both lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
 `lake build JoltConstraints.theorems.Completeness` and `lake build JoltConstraints.theorems.Completeness.completeness` pass.
-The working tree has these five completeness gaps, including Ari's two approved #1949 wrap lemmas; see the [Step 2 report](../../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md).
+The working tree has the three #1949 completeness gaps listed below; see the [Step 2 report](../../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md).
 The #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot` is proved under the fix of [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) ([experiment report](../../reports/2026-11-03-ram-k-fix-experiment.md)).
 The verifier's RAM bounds at Jolt's sizes, `HonestTrace.witness_params_ram_bounds` (`theorems/Completeness/Helpers/VerifierSizes.lean`), are proved, including that both bounds compute.
 
@@ -116,8 +125,8 @@ The verifier's RAM bounds at Jolt's sizes, `HonestTrace.witness_params_ram_bound
 | (01) `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` (`theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean:36`) | false until #1949 is fixed |
 | (08) `HonestTrace.floorAccess_address_nonneg` (`theorems/Completeness/RightLookupAdd.lean:53`) | false until #1949 is fixed: the signed base-plus-immediate sum must be nonnegative on an actual floor row of an honest trace |
 | (11) `HonestTrace.shiftData_address_noWrap` (`theorems/Completeness/RightLookupEqRightInputOtherwise.lean:52`) | false until #1949 is fixed: the signed address-plus-immediate sum must lie in `[0, 2^64)` on an actual ShiftData row of an honest trace |
-| (37) `honestWitness_ramValEqInitialPlusPrefixRamInc` | false until #1950 is fixed |
-| (38) `honestWitness_ramValFinalEqInitialPlusRamInc` | false until #1951 item 1 is fixed |
+
+Both RAM-history completeness theorems, (37) and (38), are proved at the shared-memory pin; the flag-word bugs no longer apply.
 
 No `bv_decide` remains in `JoltBytecode` or `JoltConstraints`; all 21 uses were replaced on 2026-10-23.
 

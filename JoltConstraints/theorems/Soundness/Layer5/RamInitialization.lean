@@ -36,13 +36,13 @@ theorem overlayRamBytes_below_word (layout : MemoryLayout)
       omega
     simp only [hnot, ↓reduceIte]
 
-/-- At every ordinary-RAM index, the initialized image is the shared byte-map word.
+/-- At every shared-memory index, the initialized image is the shared byte-map word.
 For example, the first program word is read directly from initialized memory. -/
 theorem initialRamWord_eq_ram_doubleword
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     {params : WitnessParams} (context : ConstraintContext joltInstance privateInputs params)
     {state : SailJoltState} (built : joltInstance.initial_state privateInputs = some state)
-    (index : Nat) (inRam : RAM_START_ADDRESS ≤ ramLowestAddress context.io.memory_layout + 8 * index) :
+    (index : Nat) :
     TraceWitness.initialRamWordFromState state index =
       Mmu.ram_doubleword state.sail.mem (ramLowestAddress context.io.memory_layout + 8 * index) := by
   have layoutIs := initial_state_memory_layout context built

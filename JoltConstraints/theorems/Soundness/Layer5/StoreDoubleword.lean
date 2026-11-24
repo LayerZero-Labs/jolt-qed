@@ -1,16 +1,17 @@
 import JoltConstraints.theorems.Soundness.Layer5.RamStore
-import JoltConstraints.theorems.Soundness.Layer5.MemoryRows
+import JoltConstraints.theorems.Soundness.Layer5.SharedMemoryChecks
+import JoltConstraints.theorems.SharedMemoryExecution
 import JoltConstraints.theorems.Soundness.Layer3.Updates
 
 open LeanRV64D
 
-/-! Connect a selected store row to an actual ordinary-RAM write. The rows are
+/-! Connect a selected store row to an actual shared-memory write. The rows are
 SD and the floor stores VirtualStoreB/H/W, classified by `StoreRow`. Register
 agreement supplies both operands; the constraints force the accessed doubleword,
 natural alignment, stored value and single-word table update. The address checks
-are the local facts supplied by the existing TracerAddressChecks restriction
-through `StoreRow.address_checks`. The ordinary-RAM case starts at
-RAM_START_ADDRESS; device stores need a separate argument about their effects.
+are the local facts supplied by the verifier domain checks
+through the access-count and protected-increment claims. The shared-memory case starts at
+RAM_START_ADDRESS; I/O and RAM stores update the same map.
 Jolt's tracer at c6703570: `tracer/src/instruction/sd.rs` (`SD::exec`),
 `tracer/src/instruction/floor_access.rs` (`store`) and
 `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`). -/
@@ -63,21 +64,21 @@ theorem store_write_value {live : Fin 128 → Prop} {pre : SailJoltState}
   rw [store, one_mul, sourceIs] at relation
   exact (sub_eq_zero.mp relation).symm
 
-/-- In the ordinary-RAM case, a store row succeeds with the constrained value and
+/-- In the shared-memory case, a store row succeeds with the constrained value and
 exact byte-map update at its accessed doubleword. The selected table word
 receives that value, all other words stay unchanged, and register agreement is
 preserved. The final-cycle case updates RamValFinal rather than assuming a
 following trace column exists.
 Only the base and stored-value registers must be live; for example, both may
 be temporaries initialized by earlier rows of the same expansion. -/
-theorem store_ram_step (regionFits : joltInstance.RamRegionFits)
+theorem store_shared_step (regionFits : joltInstance.RamRegionFits)
     {live : Fin 128 → Prop} {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (baseLive : live (TraceWitness.sourceRegisterAddress base))
     (sourceLive : live (TraceWitness.sourceRegisterAddress source))
-    (inRam : RAM_START_ADDRESS ≤ (width.accessed (sourceValue base pre + imm)).toNat)
-    (checked : DoublewordAddressChecks pre.jolt_device
-      (width.accessed (sourceValue base pre + imm)) true)
+    (layoutIs : pre.jolt_device.memory_layout = context.io.memory_layout)
+    (codeIs : pre.codeRegion = ramCodeRegion context.bytecode context.io.memory_layout)
+    (ram : SharedRamAgreement context.io.memory_layout (fun index => witness.RamVal index t) pre)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     let address := width.accessed (sourceValue base pre + imm)
     let value := sourceValue source pre
@@ -114,14 +115,25 @@ theorem store_ram_step (regionFits : joltInstance.RamRegionFits)
   have wordAligned := ramAddress_mask_aligned bound context equations t _ encoded
   have stored := store_write_value charAbove2pow128Minus2pow64 context equations selected rowIs storeRow
     agrees sourceLive
-  have legal : Mmu.effective_address_ok pre.jolt_device
-      (width.accessed (sourceValue base pre + imm)).toNat true = true := by
-    simpa only [DoublewordAddressChecks, inRam, ↓reduceIte] using checked
-  have write := Mmu.store_doubleword_ram pre (width.accessed (sourceValue base pre + imm))
-    (sourceValue source pre) wordAligned inRam legal
-  have nonzero := ramAddress_nonzero_of_inRam bound t _ encoded inRam
-  obtain ⟨chosen, one, _⟩ := ramRa_unique_of_address_ne_zero bound context equations t nonzero
+  have memory : witness.OpFlags .Load t + witness.OpFlags .Store t = 1 := by
+    rw [opFlag_of_selected_bytecode bound context equations .Load t slot selected,
+      opFlag_of_selected_bytecode bound context equations .Store t slot selected]
+    simp only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, facts.notLoad, facts.store]
+    norm_num
+  obtain ⟨chosen, one, _⟩ := ramRa_unique_of_memory bound context equations t memory
   have addressIs := ramAddress_eq_of_selected bound context equations t chosen one _ encoded
+  have checked (k : Nat) (within : k < 8) : Mmu.effective_address_ok pre.jolt_device
+      ((width.accessed (sourceValue base pre + imm)).toNat + k) true = true := by
+    rw [addressIs]
+    exact ram_word_address_checks context pre.jolt_device layoutIs chosen k within true
+  have peripheral (k : Nat) (_within : k < 8) : Mmu.unsupported_store
+      ((width.accessed (sourceValue base pre + imm)).toNat + k) = false := by
+    rw [addressIs]
+    exact (ram_word_peripheral_checks context pre.jolt_device layoutIs chosen k).2
+  have preservesProtected := protected_store_of_constraints bound context equations t pre
+    layoutIs codeIs ram chosen one _ (sourceValue source pre) encoded stored
+  have write := store_doubleword_of_checks pre (width.accessed (sourceValue base pre + imm))
+    (sourceValue source pre) wordAligned checked peripheral preservesProtected
   refine ⟨stored, storeRow.exec_rule pre _ baseRead sourceRead aligned _ write answer advice,
     chosen, one, addressIs, ?_, ?_, ?_⟩
   · intro index
