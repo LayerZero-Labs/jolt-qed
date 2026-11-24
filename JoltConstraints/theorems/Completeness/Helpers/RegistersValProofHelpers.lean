@@ -1,4 +1,5 @@
 import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
+import JoltConstraints.theorems.DeviceFrame
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltConstraints.theorems.Completeness.Helpers.HostIOFrame
 import JoltConstraints.theorems.Completeness.Helpers.FloorMemory
@@ -650,6 +651,26 @@ theorem execHostIO_frame : Preserves JoltISA.execHostIO := by
 
 end Register42VRegs
 
+/-- A halt preserves each readable source other than its link destination.
+For example, a panic halt into scratch register 40 preserves x1. -/
+theorem register42_halt_preserves_other (kind : JoltHaltKind)
+    (dst : JoltISA.Dst) (src : JoltISA.Src) (s t : SailJoltState)
+    (hne : src ≠ register42_dstAsSrc dst)
+    (hready : ∀ rd, Assumptions.XRegReadable rd s.sail)
+    (runs : JoltISA.execHalt kind dst s = .ok RETIRE_SUCCESS t) :
+    JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
+  obtain ⟨link, address, middle, _, _, written, shape⟩ :=
+    JoltConstraints.execHalt_shape kind dst s t runs
+  rw [shape]
+  have observed := register42_nextPC_preserves_sourceValue src address middle
+  have recorded : JoltISA.sourceValue src (JoltISA.recordHalt kind
+      { middle with sail := { middle.sail with regs := middle.sail.regs.insert Register.nextPC address } }) =
+      JoltISA.sourceValue src { middle with sail := { middle.sail with
+        regs := middle.sail.regs.insert Register.nextPC address } } := by
+    cases src <;> rfl
+  exact recorded.trans (observed.trans
+    (register42_writeDst_preserves_other dst src link s middle hne hready written))
+
 /-- A retired instruction preserves every readable source except its destination;
 for example, a floor LoadH into x1 preserves x2, and StoreH preserves both.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`)
@@ -664,6 +685,10 @@ theorem register42_instruction_preserves_other
       .ok (.Retire_Success ()) t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
   cases instr
+  case JoltSuccess dst =>
+    exact register42_halt_preserves_other .success dst src s t (hne dst rfl) hready hexec
+  case Panic dst =>
+    exact register42_halt_preserves_other .panic dst src s t (hne dst rfl) hready hexec
   case LD fault dst base imm =>
     exact register42_load_preserves_other fault dst base src imm s t
       (hne dst rfl) hready hexec

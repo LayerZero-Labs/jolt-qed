@@ -3,6 +3,7 @@ import JoltConstraints.translation.metadata
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltConstraints.theorems.trace_interface
+import JoltConstraints.theorems.DeviceFrame
 
 open LeanRV64D
 
@@ -138,6 +139,26 @@ theorem jump_capture_after_nextPC (dst : JoltISA.Dst)
   | vreg vr => rfl
   | xreg rd =>
     reg_cases rd <;> simp_all [JoltISA.sourceValue, Std.ExtDHashMap.get?_insert]
+
+/-- A retiring success or panic halt captures the advanced PC in its destination.
+For example, EBREAK's scratch destination receives the link before the hart halts. -/
+theorem jump_halt_link (kind : JoltHaltKind) (dst : JoltISA.Dst)
+    (link : BitVec 64) (pre post : SailJoltState) (writable : dst.NotX0)
+    (next : pre.sail.regs.get? Register.nextPC = some link)
+    (runs : JoltISA.execHalt kind dst pre = .ok RETIRE_SUCCESS post) :
+    TraceWitness.capturedDestinationValue dst post = link := by
+  obtain ⟨actual, address, middle, nextIs, _, written, shape⟩ :=
+    JoltConstraints.execHalt_shape kind dst pre post runs
+  have linkEq : actual = link := Option.some.inj (nextIs.symm.trans next)
+  subst actual
+  rw [shape]
+  have recorded : TraceWitness.capturedDestinationValue dst (JoltISA.recordHalt kind
+      { middle with sail := { middle.sail with regs := middle.sail.regs.insert Register.nextPC address } }) =
+      TraceWitness.capturedDestinationValue dst { middle with sail := { middle.sail with
+        regs := middle.sail.regs.insert Register.nextPC address } } := by
+    cases TraceWitness.capturedDestination dst <;> rfl
+  rw [recorded, jump_capture_after_nextPC]
+  exact jump_write_capture dst link pre middle writable written
 
 theorem jump_jal_link (dst : JoltISA.Dst) (imm : BitVec 64)
     (link : BitVec 64) (preState postState : SailJoltState)

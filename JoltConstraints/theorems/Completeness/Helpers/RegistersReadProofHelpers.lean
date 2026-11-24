@@ -47,7 +47,7 @@ def rs1Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualAssertLTE src _ _
   | .VirtualLoadB _ _ src _ _ | .VirtualLoadH _ _ src _ _ | .VirtualLoadW _ _ src _ _
   | .VirtualStoreB src _ _ _ | .VirtualStoreH src _ _ _ | .VirtualStoreW src _ _ _ => some src
-  | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
+  | .JoltSuccess _ | .Panic _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
 /-- Second source register read by an instruction, matching `TraceWitness.Rs2Ra`.
@@ -72,7 +72,7 @@ def rs2Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualAssertLTE _ src _
   | .VirtualStoreB _ src _ _ | .VirtualStoreH _ src _ _ | .VirtualStoreW _ src _ _ => some src
   | .ADDI _ _ _ | .ADDIW _ _ _ | .ANDI _ _ _ | .ORI _ _ _ | .XORI _ _ _ | .SLTI _ _ _
-  | .SLTIU _ _ _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .JALR _ _ _ | .FENCE
+  | .SLTIU _ _ _ | .JoltSuccess _ | .Panic _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .JALR _ _ _ | .FENCE
   | .VirtualMULI _ _ _ | .VirtualMULIW _ _ _ | .VirtualPow2 _ _ _ | .VirtualPow2W _ _ _
   | .VirtualPow2I _ _ | .VirtualPow2IW _ _ | .VirtualShiftRightBitmask _ _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualShiftRightBitmaskW _ _ _ | .VirtualSRLI _ _ _
