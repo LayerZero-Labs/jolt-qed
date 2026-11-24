@@ -15,21 +15,11 @@ open ConcurrencyInterfaceV1
 
 namespace Functions
 
-open zvk_vsm4r_funct6
-open zvk_vsha2_funct6
-open zvk_vaesem_funct6
-open zvk_vaesef_funct6
-open zvk_vaesdm_funct6
-open zvk_vaesdf_funct6
-open zvabd_vwabda_func6
-open zvabd_vabd_func6
-open zicondop
 open xRET_type
 open wxfunct6
 open wvxfunct6
 open wvvfunct6
 open wvfunct6
-open wrsop
 open write_kind
 open wmvxfunct6
 open wmvvfunct6
@@ -65,7 +55,6 @@ open uop
 open stateen_bit
 open sopw
 open sop
-open seed_opst
 open rounding_mode
 open ropw
 open rop
@@ -84,7 +73,6 @@ open nxsfunct6
 open nxfunct6
 open nvsfunct6
 open nvfunct6
-open ntl_type
 open nisfunct6
 open nifunct6
 open mvxmafunct6
@@ -147,11 +135,9 @@ open exception
 open ctl_result
 open csrop
 open cregidx
-open checked_cbop
 open cfregidx
 open cbop_zicbop
 open cbop_zicbom
-open cbie
 open cacheop
 open bropw_zbb
 open brop_zbs
@@ -160,7 +146,6 @@ open brop_zbb
 open breakpoint_cause
 open bop
 open biop_zbs
-open biop
 open barrier_kind
 open amoop
 open agtype
@@ -230,7 +215,7 @@ def csr_full_read_callback (x_0 : String) (x_1 : (BitVec 12)) (x_2 : (BitVec 64)
 def redirect_callback (x_0 : (BitVec 64)) : Unit :=
   ()
 
-/-- Type quantifiers: k_ex255891_ : Bool -/
+/-- Type quantifiers: k_ex196173_ : Bool -/
 def trap_callback (x_0 : Bool) (x_1 : (BitVec 6)) : Unit :=
   ()
 
@@ -391,196 +376,6 @@ def csr_name_map_backwards (arg_ : String) : SailM (BitVec 12) := do
     | "sstateen2" => (pure (some 0x10E#12))
     | "sstateen3" => (pure (some 0x10F#12))
     | "satp" => (pure (some 0x180#12))
-    | "seed" => (pure (some 0x015#12))
-    | "hpmcounter3" => (pure (some 0xC03#12))
-    | "hpmcounter4" => (pure (some 0xC04#12))
-    | "hpmcounter5" => (pure (some 0xC05#12))
-    | "hpmcounter6" => (pure (some 0xC06#12))
-    | "hpmcounter7" => (pure (some 0xC07#12))
-    | "hpmcounter8" => (pure (some 0xC08#12))
-    | "hpmcounter9" => (pure (some 0xC09#12))
-    | "hpmcounter10" => (pure (some 0xC0A#12))
-    | "hpmcounter11" => (pure (some 0xC0B#12))
-    | "hpmcounter12" => (pure (some 0xC0C#12))
-    | "hpmcounter13" => (pure (some 0xC0D#12))
-    | "hpmcounter14" => (pure (some 0xC0E#12))
-    | "hpmcounter15" => (pure (some 0xC0F#12))
-    | "hpmcounter16" => (pure (some 0xC10#12))
-    | "hpmcounter17" => (pure (some 0xC11#12))
-    | "hpmcounter18" => (pure (some 0xC12#12))
-    | "hpmcounter19" => (pure (some 0xC13#12))
-    | "hpmcounter20" => (pure (some 0xC14#12))
-    | "hpmcounter21" => (pure (some 0xC15#12))
-    | "hpmcounter22" => (pure (some 0xC16#12))
-    | "hpmcounter23" => (pure (some 0xC17#12))
-    | "hpmcounter24" => (pure (some 0xC18#12))
-    | "hpmcounter25" => (pure (some 0xC19#12))
-    | "hpmcounter26" => (pure (some 0xC1A#12))
-    | "hpmcounter27" => (pure (some 0xC1B#12))
-    | "hpmcounter28" => (pure (some 0xC1C#12))
-    | "hpmcounter29" => (pure (some 0xC1D#12))
-    | "hpmcounter30" => (pure (some 0xC1E#12))
-    | "hpmcounter31" => (pure (some 0xC1F#12))
-    | "hpmcounter3h" => (pure (some 0xC83#12))
-    | "hpmcounter4h" => (pure (some 0xC84#12))
-    | "hpmcounter5h" => (pure (some 0xC85#12))
-    | "hpmcounter6h" => (pure (some 0xC86#12))
-    | "hpmcounter7h" => (pure (some 0xC87#12))
-    | "hpmcounter8h" => (pure (some 0xC88#12))
-    | "hpmcounter9h" => (pure (some 0xC89#12))
-    | "hpmcounter10h" => (pure (some 0xC8A#12))
-    | "hpmcounter11h" => (pure (some 0xC8B#12))
-    | "hpmcounter12h" => (pure (some 0xC8C#12))
-    | "hpmcounter13h" => (pure (some 0xC8D#12))
-    | "hpmcounter14h" => (pure (some 0xC8E#12))
-    | "hpmcounter15h" => (pure (some 0xC8F#12))
-    | "hpmcounter16h" => (pure (some 0xC90#12))
-    | "hpmcounter17h" => (pure (some 0xC91#12))
-    | "hpmcounter18h" => (pure (some 0xC92#12))
-    | "hpmcounter19h" => (pure (some 0xC93#12))
-    | "hpmcounter20h" => (pure (some 0xC94#12))
-    | "hpmcounter21h" => (pure (some 0xC95#12))
-    | "hpmcounter22h" => (pure (some 0xC96#12))
-    | "hpmcounter23h" => (pure (some 0xC97#12))
-    | "hpmcounter24h" => (pure (some 0xC98#12))
-    | "hpmcounter25h" => (pure (some 0xC99#12))
-    | "hpmcounter26h" => (pure (some 0xC9A#12))
-    | "hpmcounter27h" => (pure (some 0xC9B#12))
-    | "hpmcounter28h" => (pure (some 0xC9C#12))
-    | "hpmcounter29h" => (pure (some 0xC9D#12))
-    | "hpmcounter30h" => (pure (some 0xC9E#12))
-    | "hpmcounter31h" => (pure (some 0xC9F#12))
-    | "mhpmevent3" => (pure (some 0x323#12))
-    | "mhpmevent4" => (pure (some 0x324#12))
-    | "mhpmevent5" => (pure (some 0x325#12))
-    | "mhpmevent6" => (pure (some 0x326#12))
-    | "mhpmevent7" => (pure (some 0x327#12))
-    | "mhpmevent8" => (pure (some 0x328#12))
-    | "mhpmevent9" => (pure (some 0x329#12))
-    | "mhpmevent10" => (pure (some 0x32A#12))
-    | "mhpmevent11" => (pure (some 0x32B#12))
-    | "mhpmevent12" => (pure (some 0x32C#12))
-    | "mhpmevent13" => (pure (some 0x32D#12))
-    | "mhpmevent14" => (pure (some 0x32E#12))
-    | "mhpmevent15" => (pure (some 0x32F#12))
-    | "mhpmevent16" => (pure (some 0x330#12))
-    | "mhpmevent17" => (pure (some 0x331#12))
-    | "mhpmevent18" => (pure (some 0x332#12))
-    | "mhpmevent19" => (pure (some 0x333#12))
-    | "mhpmevent20" => (pure (some 0x334#12))
-    | "mhpmevent21" => (pure (some 0x335#12))
-    | "mhpmevent22" => (pure (some 0x336#12))
-    | "mhpmevent23" => (pure (some 0x337#12))
-    | "mhpmevent24" => (pure (some 0x338#12))
-    | "mhpmevent25" => (pure (some 0x339#12))
-    | "mhpmevent26" => (pure (some 0x33A#12))
-    | "mhpmevent27" => (pure (some 0x33B#12))
-    | "mhpmevent28" => (pure (some 0x33C#12))
-    | "mhpmevent29" => (pure (some 0x33D#12))
-    | "mhpmevent30" => (pure (some 0x33E#12))
-    | "mhpmevent31" => (pure (some 0x33F#12))
-    | "mhpmcounter3" => (pure (some 0xB03#12))
-    | "mhpmcounter4" => (pure (some 0xB04#12))
-    | "mhpmcounter5" => (pure (some 0xB05#12))
-    | "mhpmcounter6" => (pure (some 0xB06#12))
-    | "mhpmcounter7" => (pure (some 0xB07#12))
-    | "mhpmcounter8" => (pure (some 0xB08#12))
-    | "mhpmcounter9" => (pure (some 0xB09#12))
-    | "mhpmcounter10" => (pure (some 0xB0A#12))
-    | "mhpmcounter11" => (pure (some 0xB0B#12))
-    | "mhpmcounter12" => (pure (some 0xB0C#12))
-    | "mhpmcounter13" => (pure (some 0xB0D#12))
-    | "mhpmcounter14" => (pure (some 0xB0E#12))
-    | "mhpmcounter15" => (pure (some 0xB0F#12))
-    | "mhpmcounter16" => (pure (some 0xB10#12))
-    | "mhpmcounter17" => (pure (some 0xB11#12))
-    | "mhpmcounter18" => (pure (some 0xB12#12))
-    | "mhpmcounter19" => (pure (some 0xB13#12))
-    | "mhpmcounter20" => (pure (some 0xB14#12))
-    | "mhpmcounter21" => (pure (some 0xB15#12))
-    | "mhpmcounter22" => (pure (some 0xB16#12))
-    | "mhpmcounter23" => (pure (some 0xB17#12))
-    | "mhpmcounter24" => (pure (some 0xB18#12))
-    | "mhpmcounter25" => (pure (some 0xB19#12))
-    | "mhpmcounter26" => (pure (some 0xB1A#12))
-    | "mhpmcounter27" => (pure (some 0xB1B#12))
-    | "mhpmcounter28" => (pure (some 0xB1C#12))
-    | "mhpmcounter29" => (pure (some 0xB1D#12))
-    | "mhpmcounter30" => (pure (some 0xB1E#12))
-    | "mhpmcounter31" => (pure (some 0xB1F#12))
-    | "mhpmcounter3h" => (pure (some 0xB83#12))
-    | "mhpmcounter4h" => (pure (some 0xB84#12))
-    | "mhpmcounter5h" => (pure (some 0xB85#12))
-    | "mhpmcounter6h" => (pure (some 0xB86#12))
-    | "mhpmcounter7h" => (pure (some 0xB87#12))
-    | "mhpmcounter8h" => (pure (some 0xB88#12))
-    | "mhpmcounter9h" => (pure (some 0xB89#12))
-    | "mhpmcounter10h" => (pure (some 0xB8A#12))
-    | "mhpmcounter11h" => (pure (some 0xB8B#12))
-    | "mhpmcounter12h" => (pure (some 0xB8C#12))
-    | "mhpmcounter13h" => (pure (some 0xB8D#12))
-    | "mhpmcounter14h" => (pure (some 0xB8E#12))
-    | "mhpmcounter15h" => (pure (some 0xB8F#12))
-    | "mhpmcounter16h" => (pure (some 0xB90#12))
-    | "mhpmcounter17h" => (pure (some 0xB91#12))
-    | "mhpmcounter18h" => (pure (some 0xB92#12))
-    | "mhpmcounter19h" => (pure (some 0xB93#12))
-    | "mhpmcounter20h" => (pure (some 0xB94#12))
-    | "mhpmcounter21h" => (pure (some 0xB95#12))
-    | "mhpmcounter22h" => (pure (some 0xB96#12))
-    | "mhpmcounter23h" => (pure (some 0xB97#12))
-    | "mhpmcounter24h" => (pure (some 0xB98#12))
-    | "mhpmcounter25h" => (pure (some 0xB99#12))
-    | "mhpmcounter26h" => (pure (some 0xB9A#12))
-    | "mhpmcounter27h" => (pure (some 0xB9B#12))
-    | "mhpmcounter28h" => (pure (some 0xB9C#12))
-    | "mhpmcounter29h" => (pure (some 0xB9D#12))
-    | "mhpmcounter30h" => (pure (some 0xB9E#12))
-    | "mhpmcounter31h" => (pure (some 0xB9F#12))
-    | "mhpmevent3h" => (pure (some 0x723#12))
-    | "mhpmevent4h" => (pure (some 0x724#12))
-    | "mhpmevent5h" => (pure (some 0x725#12))
-    | "mhpmevent6h" => (pure (some 0x726#12))
-    | "mhpmevent7h" => (pure (some 0x727#12))
-    | "mhpmevent8h" => (pure (some 0x728#12))
-    | "mhpmevent9h" => (pure (some 0x729#12))
-    | "mhpmevent10h" => (pure (some 0x72A#12))
-    | "mhpmevent11h" => (pure (some 0x72B#12))
-    | "mhpmevent12h" => (pure (some 0x72C#12))
-    | "mhpmevent13h" => (pure (some 0x72D#12))
-    | "mhpmevent14h" => (pure (some 0x72E#12))
-    | "mhpmevent15h" => (pure (some 0x72F#12))
-    | "mhpmevent16h" => (pure (some 0x730#12))
-    | "mhpmevent17h" => (pure (some 0x731#12))
-    | "mhpmevent18h" => (pure (some 0x732#12))
-    | "mhpmevent19h" => (pure (some 0x733#12))
-    | "mhpmevent20h" => (pure (some 0x734#12))
-    | "mhpmevent21h" => (pure (some 0x735#12))
-    | "mhpmevent22h" => (pure (some 0x736#12))
-    | "mhpmevent23h" => (pure (some 0x737#12))
-    | "mhpmevent24h" => (pure (some 0x738#12))
-    | "mhpmevent25h" => (pure (some 0x739#12))
-    | "mhpmevent26h" => (pure (some 0x73A#12))
-    | "mhpmevent27h" => (pure (some 0x73B#12))
-    | "mhpmevent28h" => (pure (some 0x73C#12))
-    | "mhpmevent29h" => (pure (some 0x73D#12))
-    | "mhpmevent30h" => (pure (some 0x73E#12))
-    | "mhpmevent31h" => (pure (some 0x73F#12))
-    | "scountovf" => (pure (some 0xDA0#12))
-    | "stimecmp" => (pure (some 0x14D#12))
-    | "stimecmph" => (pure (some 0x15D#12))
-    | "ssp" => (pure (some 0x011#12))
-    | "cycle" => (pure (some 0xC00#12))
-    | "time" => (pure (some 0xC01#12))
-    | "instret" => (pure (some 0xC02#12))
-    | "cycleh" => (pure (some 0xC80#12))
-    | "timeh" => (pure (some 0xC81#12))
-    | "instreth" => (pure (some 0xC82#12))
-    | "mcycle" => (pure (some 0xB00#12))
-    | "minstret" => (pure (some 0xB02#12))
-    | "mcycleh" => (pure (some 0xB80#12))
-    | "minstreth" => (pure (some 0xB82#12))
-    | "srmcfg" => (pure (some 0x181#12))
     | mapping0_ =>
       (do
         if ((hex_bits_12_backwards_matches mapping0_) : Bool)

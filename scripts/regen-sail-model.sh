@@ -5,7 +5,9 @@
 # (model/CMakeLists.txt at the pinned revision): `sail_common`, then
 # `lean_sail_common`, then `lean_sail_default`, then the module selection and the
 # project file. The module selection is the only intended difference from that
-# target; it is recorded in sail-import/PROVENANCE.toml.
+# target; it is recorded in sail-import/PROVENANCE.toml. After generation the
+# script rewrites RvfiDii.lean ([postprocess] in PROVENANCE.toml) and adjusts the
+# limit options (steps a and b below).
 #
 # Usage:
 #   scripts/regen-sail-model.sh SAIL_BIN SAIL_RISCV_DIR OUT_DIR [MODULE ...]
@@ -66,6 +68,21 @@ SAIL_DIR="$sail_dir" "$sail_bin" \
   riscv.sail_project \
   "${modules[@]}"
 
+# Work around leanprover/lean4#13858 (fixed by leanprover/lean4#15682, not in
+# Lean 4.35): a run of non-final `pure (...)` statements in a `do` block takes
+# time exponential in the run's length to elaborate. `print_rvfi_exec` in
+# RvfiDii.lean has a run of 18, which alone takes 20 to 30 minutes on CI.
+# `discard <| pure (...)` is also a no-op statement and elaborates in linear
+# time. Nothing in the model or the proofs calls `print_rvfi_exec`.
+# mit-pdos/xv6iris applies the same rewrite.
+rvfi="$out_dir/Lean_RV64D/LeanRV64D/RvfiDii.lean"
+sed 's/(pure (print_/(discard <| pure (print_/g' "$rvfi" > "$rvfi.tmp"
+mv "$rvfi.tmp" "$rvfi"
+if grep -q '(pure (print_' "$rvfi"; then
+  echo 'regen-sail-model: RvfiDii.lean rewrite left a `(pure (print_` behind' >&2
+  exit 1
+fi
+
 # Post-processing of the generated tree.
 #
 # a. Sail's Lean backend starts every generated file with
@@ -80,11 +97,7 @@ SAIL_DIR="$sail_dir" "$sail_bin" \
 #    SpecializationV1 are copied verbatim from lean-sail and sail-riscv's
 #    handwritten support and carry no header.
 #
-# b. The three 256-entry S-box tables are single `#v[...]` literals, which need
-#    maxRecDepth 526. Each is rewritten as two 128-entry literals joined with `++`;
-#    the name and the type stay the same.
-#
-# c. A few declarations still exceed a default limit. Each gets a
+# b. A few declarations still exceed a default limit. Each gets a
 #    `set_option ... in` directly before it (the declarations have no doc comment
 #    or attribute), with the smallest value that passes rounded up to the next 50
 #    (next 50000 for heartbeats). The values are measured with the options Lake
@@ -92,15 +105,11 @@ SAIL_DIR="$sail_dir" "$sail_bin" \
 #    `lean` run, which gave smaller numbers:
 #    - is_CSR_accessible, read_CSR and write_CSR are one generated if-chain over
 #      every CSR address;
-#    - encdec_backwards and encdec_compressed_backwards are the decoder mapping
-#      over every instruction, and the two `_matches` functions are the same
-#      mapping returning a Bool; both functions that cover the 32-bit encodings also
-#      need more heartbeats;
-#    - print_rvfi_exec is a debug printer for the RVFI trace format; nothing
-#      proved here refers to it.
+#    - encdec_backwards is the decoder mapping over every 32-bit instruction, and
+#      encdec_backwards_matches is the same mapping returning a Bool.
 #    Proofs unfold the CSR chains and the mapping, so they are not split here. The
 #    follow-up is for the Sail Lean backend to split long chains into helper
-#    definitions, after which these options and the S-box rewrite can go.
+#    definitions, after which these options can go.
 #    The script fails unless each listed declaration is found exactly once, if
 #    any other limit option is left after step a, or if the tree does not end up
 #    with exactly the listed options.
@@ -129,7 +138,7 @@ for path in files:
 if stripped == 0:
     sys.exit("regen-sail-model: no generated file found")
 # No other limit option may remain anywhere in the tree, file-wide or local:
-# step c below adds the only ones. The check matches the option names anywhere in
+# step b below adds the only ones. The check matches the option names anywhere in
 # the text, so a comment or a line break between `set_option` and the name cannot
 # hide one; Sail's output mentions them nowhere else.
 limit_name = re.compile(r"maxHeartbeats|maxRecDepth|maxSize")
@@ -138,33 +147,13 @@ for path in files:
         if limit_name.search(line):
             sys.exit(f"regen-sail-model: {path}:{n} mentions a limit option after the header strip: '{line}'")
 
-# ---- b. the three 256-entry S-box tables ----------------------------------
-kext = root / "LeanRV64D" / "TypesKext.lean"
-text = kext.read_text()
-for table in ("sm4_sbox_table", "aes_sbox_fwd_table", "aes_sbox_inv_table"):
-    pattern = re.compile(
-        r"^(def " + table + r" : \(Vector \(BitVec 8\) 256\) :=\n)  #v\[([^\]\n]*)\]\n", re.M)
-    matches = pattern.findall(text)
-    if len(matches) != 1:
-        sys.exit(f"regen-sail-model: found {len(matches)} definitions of {table}, expected one")
-    entries = matches[0][1].split(", ")
-    if len(entries) != 256 or not all(re.fullmatch(r"0x[0-9A-F]{2}#8", e) for e in entries):
-        sys.exit(f"regen-sail-model: {table} does not have exactly 256 byte entries")
-    halves = (", ".join(entries[:128]), ", ".join(entries[128:]))
-    text = pattern.sub(
-        lambda m: f"{m.group(1)}  (#v[{halves[0]}] ++\n    #v[{halves[1]}])\n", text)
-kext.write_text(text)
-
-# ---- c. per-declaration limits ---------------------------------------------
+# ---- b. per-declaration limits ---------------------------------------------
 LIMITS = [
-    ("SysControl", "is_CSR_accessible", [("maxRecDepth", 900)]),
-    ("ZicsrInsts", "read_CSR", [("maxRecDepth", 900)]),
-    ("ZicsrInsts", "write_CSR", [("maxRecDepth", 900)]),
-    ("InstsEnd", "encdec_backwards", [("maxRecDepth", 1450), ("maxHeartbeats", 250000)]),
-    ("InstsEnd", "encdec_backwards_matches", [("maxRecDepth", 1400), ("maxHeartbeats", 250000)]),
-    ("InstsEnd", "encdec_compressed_backwards", [("maxRecDepth", 550)]),
-    ("InstsEnd", "encdec_compressed_backwards_matches", [("maxRecDepth", 550)]),
-    ("RvfiDii", "print_rvfi_exec", [("maxHeartbeats", 1_000_000_000)]),
+    ("SysControl", "is_CSR_accessible", [("maxRecDepth", 750)]),
+    ("ZicsrInsts", "read_CSR", [("maxRecDepth", 700)]),
+    ("ZicsrInsts", "write_CSR", [("maxRecDepth", 800)]),
+    ("InstsEnd", "encdec_backwards", [("maxRecDepth", 750)]),
+    ("InstsEnd", "encdec_backwards_matches", [("maxRecDepth", 750)]),
 ]
 for module, name, options in LIMITS:
     path = root / "LeanRV64D" / f"{module}.lean"
@@ -178,7 +167,7 @@ for module, name, options in LIMITS:
         sys.exit(f"regen-sail-model: {name} is preceded by '{lines[i - 1]}', expected a blank line")
     lines[i:i] = [f"set_option {option} {value} in" for option, value in options]
     path.write_text("\n".join(lines))
-# The tree now mentions the limit options exactly on the lines step c inserted.
+# The tree now mentions the limit options exactly on the lines step b inserted.
 expected = sorted((f"{module}.lean", f"set_option {option} {value} in")
                   for module, _, options in LIMITS for option, value in options)
 found = sorted((path.name, line) for path in files for line in path.read_text().split("\n")

@@ -29,21 +29,11 @@ open ConcurrencyInterfaceV1
 
 namespace Functions
 
-open zvk_vsm4r_funct6
-open zvk_vsha2_funct6
-open zvk_vaesem_funct6
-open zvk_vaesef_funct6
-open zvk_vaesdm_funct6
-open zvk_vaesdf_funct6
-open zvabd_vwabda_func6
-open zvabd_vabd_func6
-open zicondop
 open xRET_type
 open wxfunct6
 open wvxfunct6
 open wvvfunct6
 open wvfunct6
-open wrsop
 open write_kind
 open wmvxfunct6
 open wmvvfunct6
@@ -79,7 +69,6 @@ open uop
 open stateen_bit
 open sopw
 open sop
-open seed_opst
 open rounding_mode
 open ropw
 open rop
@@ -98,7 +87,6 @@ open nxsfunct6
 open nxfunct6
 open nvsfunct6
 open nvfunct6
-open ntl_type
 open nisfunct6
 open nifunct6
 open mvxmafunct6
@@ -161,11 +149,9 @@ open exception
 open ctl_result
 open csrop
 open cregidx
-open checked_cbop
 open cfregidx
 open cbop_zicbop
 open cbop_zicbom
-open cbie
 open cacheop
 open bropw_zbb
 open brop_zbs
@@ -174,7 +160,6 @@ open brop_zbb
 open breakpoint_cause
 open bop
 open biop_zbs
-open biop
 open barrier_kind
 open amoop
 open agtype
@@ -222,7 +207,7 @@ def write_pte (paddr : physaddr) (pte_size : Nat) (pte : (BitVec (pte_size * 8))
 def read_pte (paddr : physaddr) (pte_size : Nat) : SailM (Result (BitVec (8 * pte_size)) ExceptionType) := do
   (mem_read_priv (Load PageTableEntry) Supervisor paddr pte_size false false false)
 
-/-- Type quantifiers: k_ex256140_ : Bool, level : Nat, k_ex256138_ : Bool, k_ex256137_ : Bool, sv_width
+/-- Type quantifiers: k_ex196380_ : Bool, level : Nat, k_ex196378_ : Bool, k_ex196377_ : Bool, sv_width
   : Nat, (is_sv_mode sv_width), 0 ≤ level ∧
   level ≤
   (if ( sv_width = 32  : Bool) then 1 else (if ( sv_width = 39  : Bool) then 2 else (if ( sv_width =
@@ -365,7 +350,7 @@ def translationMode (priv : Privilege) : SailM SATPMode := do
       | .some m => (pure m)
       | none => (internal_error "sys/vmem.sail" 224 "invalid translation mode in satp"))
 
-/-- Type quantifiers: tlb_index : Nat, k_ex256148_ : Bool, k_ex256147_ : Bool, sv_width : Nat, (is_sv_mode
+/-- Type quantifiers: tlb_index : Nat, k_ex196388_ : Bool, k_ex196387_ : Bool, sv_width : Nat, (is_sv_mode
   sv_width), 0 ≤ tlb_index ∧ tlb_index ≤ (2 ^ 6 - 1) -/
 def translate_TLB_hit (sv_width : Nat) (_asid : (BitVec (if ( 64 = 32  : Bool) then 9 else 16))) (vpn : (BitVec (sv_width - 12))) (access : (MemoryAccessType mem_payload)) (priv : Privilege) (mxr : Bool) (do_sum : Bool) (ext_ptw : Unit) (tlb_index : Nat) (ent : TLB_Entry) : SailM (Result ((BitVec (if ( sv_width
   = 32  : Bool) then 22 else 44)) × Unit) (PTW_Error × Unit)) := do
@@ -396,7 +381,7 @@ def translate_TLB_hit (sv_width : Nat) (_asid : (BitVec (if ( 64 = 32  : Bool) t
               | .Err _ => (internal_error "sys/vmem.sail" 275 "invalid physical address in TLB")
               (pure (Ok ((tlb_get_ppn sv_width ent vpn), ext_ptw))))))
 
-/-- Type quantifiers: k_ex256156_ : Bool, k_ex256155_ : Bool, sv_width : Nat, (is_sv_mode sv_width) -/
+/-- Type quantifiers: k_ex196396_ : Bool, k_ex196395_ : Bool, sv_width : Nat, (is_sv_mode sv_width) -/
 def translate_TLB_miss (sv_width : Nat) (asid : (BitVec (if ( 64 = 32  : Bool) then 9 else 16))) (base_ppn : (BitVec (if ( sv_width
   = 32  : Bool) then 22 else 44))) (vpn : (BitVec (sv_width - 12))) (access : (MemoryAccessType mem_payload)) (priv : Privilege) (mxr : Bool) (do_sum : Bool) (ext_ptw : Unit) : SailM (Result ((BitVec (if ( sv_width
   = 32  : Bool) then 22 else 44)) × Unit) (PTW_Error × Unit)) := do
@@ -475,7 +460,7 @@ def satp_mode_width_backwards_matches (arg_ : Nat) : Bool :=
   | 57 => true
   | _ => false
 
-/-- Type quantifiers: k_ex256165_ : Bool, k_ex256164_ : Bool, sv_width : Nat, (is_sv_mode sv_width) -/
+/-- Type quantifiers: k_ex196405_ : Bool, k_ex196404_ : Bool, sv_width : Nat, (is_sv_mode sv_width) -/
 def translate (sv_width : Nat) (asid : (BitVec (if ( 64 = 32  : Bool) then 9 else 16))) (base_ppn : (BitVec (if ( sv_width
   = 32  : Bool) then 22 else 44))) (vpn : (BitVec (sv_width - 12))) (access : (MemoryAccessType mem_payload)) (priv : Privilege) (mxr : Bool) (do_sum : Bool) (ext_ptw : Unit) : SailM (Result ((BitVec (if ( sv_width
   = 32  : Bool) then 22 else 44)) × Unit) (PTW_Error × Unit)) := do

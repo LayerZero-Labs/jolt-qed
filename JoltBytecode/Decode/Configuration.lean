@@ -37,11 +37,6 @@ theorem enabledAMO_reset (s : SailState)
   unfold currentlyEnabled
   simp [hartSupports, orM, toBool, bind, EStateM.bind, pure, EStateM.pure, hA]
 
-/-- PAUSE hints are disabled by the fixed hart configuration; FENCE 0x0100000f stays FENCE. -/
-theorem pause_disabled : currentlyEnabled .Ext_Zihintpause = pure false := by
-  unfold currentlyEnabled
-  simp only [hartSupports, pure]
-
 /-- Landing-pad instructions are disabled; AUIPC words retain their ordinary decoding. -/
 theorem landingPad_disabled : currentlyEnabled .Ext_Zicfilp = pure false := by
   funext s

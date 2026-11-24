@@ -14,21 +14,11 @@ open ConcurrencyInterfaceV1
 
 namespace Functions
 
-open zvk_vsm4r_funct6
-open zvk_vsha2_funct6
-open zvk_vaesem_funct6
-open zvk_vaesef_funct6
-open zvk_vaesdm_funct6
-open zvk_vaesdf_funct6
-open zvabd_vwabda_func6
-open zvabd_vabd_func6
-open zicondop
 open xRET_type
 open wxfunct6
 open wvxfunct6
 open wvvfunct6
 open wvfunct6
-open wrsop
 open write_kind
 open wmvxfunct6
 open wmvvfunct6
@@ -64,7 +54,6 @@ open uop
 open stateen_bit
 open sopw
 open sop
-open seed_opst
 open rounding_mode
 open ropw
 open rop
@@ -83,7 +72,6 @@ open nxsfunct6
 open nxfunct6
 open nvsfunct6
 open nvfunct6
-open ntl_type
 open nisfunct6
 open nifunct6
 open mvxmafunct6
@@ -146,11 +134,9 @@ open exception
 open ctl_result
 open csrop
 open cregidx
-open checked_cbop
 open cfregidx
 open cbop_zicbop
 open cbop_zicbom
-open cbie
 open cacheop
 open bropw_zbb
 open brop_zbs
@@ -159,7 +145,6 @@ open brop_zbb
 open breakpoint_cause
 open bop
 open biop_zbs
-open biop
 open barrier_kind
 open amoop
 open agtype
@@ -222,9 +207,6 @@ def _update_Counterin_bits (v : (BitVec 32)) (x : (BitVec 32)) : (BitVec 32) :=
 
 def _update_Fcsr_bits (v : (BitVec 32)) (x : (BitVec 32)) : (BitVec 32) :=
   (Sail.BitVec.updateSubrange v (32 -i 1) 0 x)
-
-def _update_HpmEvent_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
 
 def _update_Hstateen0_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
@@ -313,9 +295,6 @@ def _update_Seccfg_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
 def _update_Sinterrupts_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
 
-def _update_Srmcfg_bits (v : (BitVec 64)) (x : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v (64 -i 1) 0 x)
-
 def _update_Sstateen0_bits (v : (BitVec 32)) (x : (BitVec 32)) : (BitVec 32) :=
   (Sail.BitVec.updateSubrange v (32 -i 1) 0 x)
 
@@ -355,9 +334,6 @@ def _get_Counterin_bits (v : (BitVec 32)) : (BitVec 32) :=
 
 def _get_Fcsr_bits (v : (BitVec 32)) : (BitVec 32) :=
   (Sail.BitVec.extractLsb v (32 -i 1) 0)
-
-def _get_HpmEvent_bits (v : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.extractLsb v (64 -i 1) 0)
 
 def _get_Hstateen0_bits (v : (BitVec 64)) : (BitVec 64) :=
   (Sail.BitVec.extractLsb v (64 -i 1) 0)
@@ -446,9 +422,6 @@ def _get_Seccfg_bits (v : (BitVec 64)) : (BitVec 64) :=
 def _get_Sinterrupts_bits (v : (BitVec 64)) : (BitVec 64) :=
   (Sail.BitVec.extractLsb v (64 -i 1) 0)
 
-def _get_Srmcfg_bits (v : (BitVec 64)) : (BitVec 64) :=
-  (Sail.BitVec.extractLsb v (64 -i 1) 0)
-
 def _get_Sstateen0_bits (v : (BitVec 32)) : (BitVec 32) :=
   (Sail.BitVec.extractLsb v (32 -i 1) 0)
 
@@ -488,10 +461,6 @@ def _set_Counterin_bits (r_ref : (RegisterRef (BitVec 32))) (v : (BitVec 32)) : 
 def _set_Fcsr_bits (r_ref : (RegisterRef (BitVec 32))) (v : (BitVec 32)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Fcsr_bits r v)
-
-def _set_HpmEvent_bits (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_HpmEvent_bits r v)
 
 def _set_Hstateen0_bits (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
@@ -608,10 +577,6 @@ def _set_Seccfg_bits (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 64)) : Sai
 def _set_Sinterrupts_bits (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_Sinterrupts_bits r v)
-
-def _set_Srmcfg_bits (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 64)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_Srmcfg_bits r v)
 
 def _set_Sstateen0_bits (r_ref : (RegisterRef (BitVec 32))) (v : (BitVec 32)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
@@ -1170,43 +1135,42 @@ def rvfi_get_mem_data (_ : Unit) : SailM (BitVec 704) := do
 def rvfi_encode_width_mask (width : Nat) : (BitVec 32) :=
   (0xFFFFFFFF#32 >>> (32 -i width))
 
-set_option maxHeartbeats 1000000000 in
 def print_rvfi_exec (_ : Unit) : SailM Unit := do
-  (pure (print_bits "rvfi_intr     : "
+  (discard <| pure (print_bits "rvfi_intr     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_intr (← readReg rvfi_inst_data))))
-  (pure (print_bits "rvfi_halt     : "
+  (discard <| pure (print_bits "rvfi_halt     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_halt (← readReg rvfi_inst_data))))
-  (pure (print_bits "rvfi_trap     : "
+  (discard <| pure (print_bits "rvfi_trap     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_trap (← readReg rvfi_inst_data))))
-  (pure (print_bits "rvfi_rd_addr  : "
+  (discard <| pure (print_bits "rvfi_rd_addr  : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rd_addr (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_rs2_addr : "
+  (discard <| pure (print_bits "rvfi_rs2_addr : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rs2_addr (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_rs1_addr : "
+  (discard <| pure (print_bits "rvfi_rs1_addr : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rs1_addr (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_mem_wmask: "
+  (discard <| pure (print_bits "rvfi_mem_wmask: "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_wmask (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_mem_rmask: "
+  (discard <| pure (print_bits "rvfi_mem_rmask: "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_rmask (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_mem_wdata: "
+  (discard <| pure (print_bits "rvfi_mem_wdata: "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_wdata (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_mem_rdata: "
+  (discard <| pure (print_bits "rvfi_mem_rdata: "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_rdata (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_mem_addr : "
+  (discard <| pure (print_bits "rvfi_mem_addr : "
       (_get_RVFI_DII_Execution_Packet_Ext_MemAccess_rvfi_mem_addr (← readReg rvfi_mem_data))))
-  (pure (print_bits "rvfi_rd_wdata : "
+  (discard <| pure (print_bits "rvfi_rd_wdata : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rd_wdata (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_rs2_data : "
+  (discard <| pure (print_bits "rvfi_rs2_data : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rs2_rdata (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_rs1_data : "
+  (discard <| pure (print_bits "rvfi_rs1_data : "
       (_get_RVFI_DII_Execution_Packet_Ext_Integer_rvfi_rs1_rdata (← readReg rvfi_int_data))))
-  (pure (print_bits "rvfi_insn     : "
+  (discard <| pure (print_bits "rvfi_insn     : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_insn (← readReg rvfi_inst_data))))
-  (pure (print_bits "rvfi_pc_wdata : "
+  (discard <| pure (print_bits "rvfi_pc_wdata : "
       (_get_RVFI_DII_Execution_Packet_PC_rvfi_pc_wdata (← readReg rvfi_pc_data))))
-  (pure (print_bits "rvfi_pc_rdata : "
+  (discard <| pure (print_bits "rvfi_pc_rdata : "
       (_get_RVFI_DII_Execution_Packet_PC_rvfi_pc_rdata (← readReg rvfi_pc_data))))
-  (pure (print_bits "rvfi_order    : "
+  (discard <| pure (print_bits "rvfi_order    : "
       (_get_RVFI_DII_Execution_Packet_InstMetaData_rvfi_order (← readReg rvfi_inst_data))))
 
 /-- Type quantifiers: width : Nat, width ≥ 0, 0 < width ∧ width ≤ max_mem_access -/
