@@ -402,6 +402,42 @@ private theorem load_bind_word (address : BitVec 64) (destination : Dst)
     obtain ⟨rfl, rfl⟩ := JoltConstraints.load_doubleword_shape pre middle address result loaded
     simpa only [bind, EStateM.bind, loaded] using runs
 
+/-- A retiring load ran the shared doubleword-load continuation at its accessed word.
+For example, a floor byte load continues with the containing eight-byte word. -/
+theorem LoadRow.continuation_of_run {instruction : Instr} {width : MemoryWidth} {destination : Dst}
+    {base : Src} {imm : BitVec 64} (row : LoadRow instruction width destination base imm)
+    (advice : instruction.RuntimeAdvice) (pre post : SailJoltState)
+    (runs : execInstr (instruction.withRuntimeAdvice advice) pre = .ok RETIRE_SUCCESS post) :
+    (do
+      match ← Mmu.load_doubleword (width.accessed (sourceValue base pre + imm)) with
+      | .Ok word => writeDst destination word; pure RETIRE_SUCCESS
+      | .Err error => pure error) pre = .ok RETIRE_SUCCESS post := by
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice row.metadata.noAdvice] at runs
+  obtain ⟨faultClass, fault, rfl⟩ := row
+  cases width <;> simp only [MemoryWidth.load, execInstr] at runs <;>
+    have afterBase := lookup_read_bind base _ pre post _ runs
+  · split at afterBase
+    · simpa only [MemoryWidth.accessed] using! afterBase
+    · cases afterBase
+  · simpa only [MemoryWidth.accessed] using! afterBase
+  all_goals
+    split at afterBase
+    · simpa only [MemoryWidth.accessed] using! afterBase
+    · cases afterBase
+
+/-- A retired load ran its doubleword read successfully.
+For example, a floor halfword load at ten read the word at eight. -/
+theorem LoadRow.load_of_run {instruction : Instr} {width : MemoryWidth} {destination : Dst}
+    {base : Src} {imm : BitVec 64} (row : LoadRow instruction width destination base imm)
+    (advice : instruction.RuntimeAdvice) (pre post : SailJoltState)
+    (runs : execInstr (instruction.withRuntimeAdvice advice) pre = .ok RETIRE_SUCCESS post) :
+    ∃ result middle, Mmu.load_doubleword (width.accessed (sourceValue base pre + imm)) pre =
+      .ok result middle := by
+  have continuation := row.continuation_of_run advice pre post runs
+  cases loaded : Mmu.load_doubleword (width.accessed (sourceValue base pre + imm)) pre with
+  | error error middle => simp only [bind, EStateM.bind, loaded] at continuation; cases continuation
+  | ok result middle => exact ⟨result, middle, rfl⟩
+
 /-- A retired load row writes the doubleword at its accessed address.
 For example, a floor load at effective address ten writes the whole word at eight.
 The conclusion retains the full pre- and post-state of the destination write.
@@ -413,18 +449,7 @@ theorem LoadRow.write_of_run {instruction : Instr} {width : MemoryWidth} {destin
     (do writeDst destination (Mmu.ram_doubleword pre.sail.mem
           (width.accessed (sourceValue base pre + imm)).toNat)
         pure RETIRE_SUCCESS) pre = .ok RETIRE_SUCCESS post := by
-  rw [withRuntimeAdvice_eq_of_noAdvice _ advice row.metadata.noAdvice] at runs
-  obtain ⟨faultClass, fault, rfl⟩ := row
-  cases width <;> simp only [MemoryWidth.load, execInstr] at runs <;>
-    have afterBase := lookup_read_bind base _ pre post _ runs
-  · split at afterBase
-    · exact load_bind_word _ destination pre post afterBase
-    · cases afterBase
-  · exact load_bind_word _ destination pre post afterBase
-  all_goals
-    split at afterBase
-    · exact load_bind_word _ destination pre post afterBase
-    · cases afterBase
+  exact load_bind_word _ destination pre post (row.continuation_of_run advice pre post runs)
 
 /-- A retired load with a writable destination captures its shared-memory word.
 For example, native `LD x0` expands to a temporary destination, which captures
