@@ -1,6 +1,7 @@
 import JoltConstraints.theorems.WholeRun.Basic
 import JoltConstraints.theorems.program_facts
 import JoltConstraints.theorems.execution_facts
+import JoltConstraints.theorems.execution_conditions
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions
@@ -143,7 +144,7 @@ private theorem trace_segment {joltInstance : JoltInstance SourceInstruction}
       have lastIndex : trace.rows.size - 1 = n + k := by omega
       have lastAt : trace.rows.back? = some (trace.rows[n + k]'hk) := by
         rw [Array.back?_eq_getElem?, lastIndex, Array.getElem?_eq_getElem hk]
-      exact remaining (trace.stops _ lastAt).1
+      exact remaining (trace.halt_row (n + k) hk (trace.stops _ lastAt)).1
     have linked := trace.linked (n + k) _ _ (Array.getElem?_eq_getElem hk)
       (Array.getElem?_eq_getElem nextBound)
     rw [ite_eq_left remaining] at linked
@@ -472,7 +473,7 @@ private theorem blocks_suffix {joltInstance : JoltInstance SourceInstruction}
   by_cases finished : segment.stop = trace.rows.size
   · have lastAt : trace.rows.back? = some (trace.rows[segment.stop - 1]'lastBound) := by
       simp only [Array.back?_eq_getElem?, ← finished, Array.getElem?_eq_getElem lastBound]
-    have stalled := (trace.stops _ lastAt).2.1
+    have stalled := (trace.halt_row (segment.stop - 1) lastBound (trace.stops _ lastAt)).2.1
     rw [segment.address, ← segment.post_eq] at stalled
     refine ⟨[segment.block], by simp, ?_, ?_, by simp, ?_, ?_, ?_⟩
     · intro b hb
@@ -526,26 +527,22 @@ decreasing_by
 private theorem initial_nextPC {joltInstance : JoltInstance SourceInstruction}
     {inputs : JoltPrivateInputs} (trace : HonestTrace joltInstance inputs) :
     trace.initialState.sail.regs.get? Register.nextPC = some joltInstance.program.entry_address := by
-  have built := trace.initialized
-  unfold JoltInstance.initial_state at built
-  cases layout : joltInstance.memory_layout with
-  | none => simp only [layout, bind, Option.bind] at built; cases built
-  | some value =>
-    simp only [layout, bind, Option.bind] at built
-    split_ifs at built
-    have stateEq := Option.some.inj built
-    rw [← stateEq]
-    exact init_state_register _ _ _ _ _ Register.nextPC
+  obtain ⟨layout, _, _, _, _, initialized⟩ := initial_state_build
+    joltInstance inputs trace.initialState trace.initialized
+  obtain ⟨_, _, _, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ initialized
+  rw [shape]
+  exact init_state_register joltInstance.program.entry_address
+    (initialRam layout joltInstance.program.memory_init)
+    { panic := false, memory_layout := layout }
+    { bytes := inputs.advice_tape, readPosition := 0 } {} Register.nextPC
 
 /-- Every honest trace is a nonempty chain of whole source-instruction blocks.
 Each block runs its image row with the honest advice, the first starts at the
 initial pre-state, and the last leaves the trace's final state with nextPC at its
 own address.
-For example, a trace consisting of one repeating self-jump gives one block.
-Source boundaries follow Jolt's tracer, `Cpu::tick` in
-`jolt/tracer/src/emulator/cpu.rs` at 5def437f.
-The stable-stall rule follows `Cpu::tick` and `self_jump_repeats` in PR #2109
-(merge commit 0249591a). -/
+For example, a trace consisting of one panic halt gives one block.
+Source boundaries and the final halt follow Jolt's tracer, `Cpu::tick` and
+`Cpu::halt` in `tracer/src/emulator/cpu.rs` at `ff6fc6568`. -/
 theorem HonestTrace.blocks {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     ∃ bs : List Block,

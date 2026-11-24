@@ -77,8 +77,7 @@ private theorem ghost_projects {jt : SailJoltState} {s : SailState} (h : Related
 private theorem prelude_shadow (b : Block) (s : SailState) (pc m : BitVec 64)
     (oldInc inc : Bool) (hp : pc = b.row.address)
     (hregs : s.regs = (sailRegs b.pre pc m oldInc).regs)
-    (hram : ∀ a, RAM_START_ADDRESS ≤ a →
-      Mmu.ram_byte s.mem a = Mmu.ram_byte b.pre.sail.mem a) :
+    (hram : ∀ a, Mmu.ram_byte s.mem a = Mmu.ram_byte b.pre.sail.mem a) :
     Shadow (overlayRows b.pre.vregs m inc b.start)
       (Step.preludeJolt { b.pre with sail := s } inc pc
         (if b.row.is_compressed then 2 else 4)) := by
@@ -86,14 +85,14 @@ private theorem prelude_shadow (b : Block) (s : SailState) (pc m : BitVec 64)
   have hlen : BitVec.addInt b.row.address (if b.row.is_compressed then 2 else 4) =
       b.row.address + (if b.row.is_compressed then 2 else 4 : BitVec 64) := by
     cases b.row.is_compressed <;> rfl
-  refine ⟨?_, rfl, rfl, rfl, rfl, ?_⟩
+  refine ⟨?_, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩
   · simp only [Step.preludeJolt, Step.preludeState, hregs, sailRegs,
       overlayRows, withReg, Step.setReg, System.systemProject, Block.start, advance_pc]
     apply Std.ExtDHashMap.ext_get?
     overlay_keys => simp [*, Std.ExtDHashMap.get?_insert]
-  · intro a ha
+  · intro a
     change Mmu.ram_byte s.mem a = Mmu.ram_byte b.pre.sail.mem a
-    exact hram a ha
+    exact hram a
 
 private theorem sourceValue_overlayRows (cs : BitVec 7 → BitVec 64) (m : BitVec 64)
     (inc : Bool) (js : SailJoltState) (r : regidx) :
@@ -234,14 +233,6 @@ private theorem finish_mem (s : SailState) (pc m : BitVec 64) (inc : Bool) :
     (finishState s pc m inc).mem = s.mem := by
   cases inc <;> rfl
 
-private theorem panicWord_eq {device : JoltDevice} {s t : SailState}
-    (bound : device.memory_layout.panic.toNat + 8 ≤ RAM_START_ADDRESS)
-    (h : ∀ a, a < RAM_START_ADDRESS → t.mem.get? a = s.mem.get? a) :
-    sailPanicWord device t = sailPanicWord device s := by
-  unfold sailPanicWord read_doubleword?
-  rw [h _ (by omega), h _ (by omega), h _ (by omega), h _ (by omega),
-    h _ (by omega), h _ (by omega), h _ (by omega), h _ (by omega)]
-
 /-- A retiring lifted source block is one Sail `try_step`, where Sail decodes the fetched
 encoding to `cast` and `cast` executes like the matching instruction `ast`.
 This is `block_simulates_retire` for a decoder whose result is not itself `ast`, such as a
@@ -251,7 +242,7 @@ they are facts about the state Sail runs from.
 The per-instruction hypotheses supply Sail's fetch and decode and the existing
 equivalence assumptions after the prelude, with honest advice.
 Retirement follows from `Block.Runs`, and the unchanged device preserves its
-layout and output buffer.
+layout.
 For example, an ADD block uses the base encoding case and has no memory or
 advice obligations beyond its existing instruction-equivalence assumptions. -/
 theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction) (b : Block)
@@ -338,10 +329,6 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
     exact hfinish
   refine ⟨false, s', hstep, ?_⟩
   have hmem' : s'.mem = ghostPost.sail.mem := finish_mem _ next m inc
-  have hbelow : ∀ a, a < RAM_START_ADDRESS → s'.mem.get? a = s.mem.get? a := by
-    intro a ha
-    rw [hmem']
-    exact hmem.below a ha
   have hhtif : (System.systemProject ghostPost).regs.get? Register.htif_tohost_base = some none := by
     rw [Step.systemProject_get?_of_not_overlaid _ (by simp [Step.Overlaid]),
       hframe.keep Register.htif_tohost_base (by simp [Step.JoltWritable])]
@@ -354,15 +341,12 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
       htif := ?_
       ram := ?_
       present := ?_
-      io := ?_
-      panic := ?_
-      layout := by rw [hdevice]; exact hrel.layout
-      outputs_size := by rw [hdevice]; exact hrel.outputs_size }
+      layout := by rw [hdevice]; exact hrel.layout }
   · change (finishState _ next m inc).regs.get? Register.htif_tohost_base = some none
     cases inc <;> simpa [finishState, Step.setReg, Std.ExtDHashMap.get?_insert] using hhtif
-  · intro a ha
+  · intro a
     rw [hmem']
-    exact hpost.ram a ha
+    exact hpost.ram a
   · intro a hlo hhi
     rw [hdevice] at hlo hhi
     obtain ⟨byte, hb⟩ := hrel.present a hlo hhi
@@ -373,21 +357,13 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
     have hpresent := hmem.present a hs
     rw [← hmem'] at hpresent
     exact Option.isSome_iff_exists.mp hpresent
-  · intro a hlo hhi hflag
-    rw [hdevice] at hlo hflag ⊢
-    exact (hbelow a hhi).trans (hrel.io a hlo hhi hflag)
-  · rw [hdevice]
-    obtain ⟨config, hconfig⟩ := hrel.layout
-    obtain ⟨_, _, hterm, hend, hbound⟩ := new_io_geometry config _ hconfig
-    rw [panicWord_eq (by omega) hbelow]
-    exact hrel.panic
 
 /-- A retiring lifted source block is one Sail `try_step`, for either a base
 or compressed encoding.
 The per-instruction hypotheses supply Sail's fetch and decode and the existing
 equivalence assumptions after the prelude, with honest advice.
 Retirement follows from `Block.Runs`, and the unchanged device preserves its
-layout and output buffer.
+layout.
 For example, an ADD block uses the base encoding case and has no memory or
 advice obligations beyond its existing instruction-equivalence assumptions. -/
 theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b : Block)
