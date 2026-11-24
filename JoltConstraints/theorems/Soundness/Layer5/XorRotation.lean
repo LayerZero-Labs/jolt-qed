@@ -5,7 +5,7 @@ open LeanRV64D
 
 /-! One execution argument for the twelve XOR-rotation rows. Their lookup
 tables already give the exact interpreter values at the recovered operands.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_xor_rot.rs:8-33
 See : jolt/tracer/src/instruction/virtual_xor_rotw.rs:8-39
 See : jolt/tracer/src/instruction/virtual_xor_rotl1.rs:8-25 -/

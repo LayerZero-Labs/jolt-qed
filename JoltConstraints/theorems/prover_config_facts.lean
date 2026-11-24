@@ -60,7 +60,7 @@ private theorem boundsFor_observe (addresses : List Nat) (bounds : Option (Nat �
 or no bounds when every address is zero.
 For example, observing `[0, 16, 8]` records the bounds `(8, 16)`.
 See jolt/crates/jolt-program/src/execution/trace.rs (`RamAddressBounds::observe`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem boundsFor_fold (addresses : List Nat) :
     BoundsFor addresses (addresses.foldl observe none) := by
   induction addresses using List.reverseRecOn with
@@ -123,7 +123,7 @@ namespace ProverConfig
 /-- Successful checked power-of-two rounding returns `2 ^ Nat.clog 2 value`
 within the 64-bit host range; for example, rounding 9 returns 16.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`checked_next_power_of_two`) at 5def437f. -/
+`checked_next_power_of_two`) at ff6fc6568. -/
 theorem checkedRound_some (value rounded : Nat)
     (accepted : JoltConstraints.VerifierSizes.checkedNextPowerOfTwo value = some rounded) :
     rounded = 2 ^ Nat.clog 2 value ∧ rounded < 2 ^ 64 := by
@@ -195,7 +195,7 @@ private theorem HonestTrace.prover_config_addresses_ok
 maximum padded length.
 For example, a 300-row run pads to 512, and the instance's maximum must be at least 512.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`ProverConfig::from_padded_dimensions`) at c6703570. -/
+`ProverConfig::from_padded_dimensions`) at ff6fc6568. -/
 theorem HonestTrace.prover_config_trace_length
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -244,7 +244,7 @@ For example, with lowest address `0x7fff8000`, a run whose only access is an SD 
 This is the `touched` of Jolt's prover; since a16z/jolt#2250, the
 prover rounds up `touched + 1` to pick its RAM size.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`checked_remap_address`) at c97e9300. -/
+`checked_remap_address`) at ff6fc6568. -/
 def Trace.highest_ram_slot (trace : Trace) : Nat :=
   ((trace.rows.toList.filterMap (·.ram_address)).filterMap
     (remap_address trace.initialState.jolt_device.memory_layout)).max?.getD 0
@@ -258,7 +258,7 @@ fit in 64 bits.
 For example, a run touching word 1024 with an image ending at word 40 gets
 `ram_K = pow2(1025) = 2048`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`checked_remap_address`) at c97e9300. -/
+`checked_remap_address`) at ff6fc6568. -/
 theorem HonestTrace.prover_config_ram_K
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -295,7 +295,7 @@ Since a16z/jolt#2250, Jolt's prover picks
 For example, `h = 1024` with an image ending at word 40 gives `K = pow2(1025) = 2048`,
 which holds word 1024; the prover before #2250, with `pow2(max(h, imageEnd)) = 1024`, did not.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
-at c97e9300 and https://github.com/a16z/jolt/issues/1951 (item 4). -/
+at ff6fc6568 and https://github.com/a16z/jolt/issues/1951 (item 4). -/
 theorem HonestTrace.prover_config_holds_highest_slot
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -315,7 +315,7 @@ which must be below `config.ram_K`.
 The bound on the word index uses `HonestTrace.prover_config_holds_highest_slot`, which
 holds under the fix of a16z/jolt#1951 item 4.
 See jolt/crates/jolt-prover/src/config.rs (`checked_remap_address`) and
-jolt/crates/jolt-witness/src/backend/trace/ram.rs (`remapped_ram_address`) at c6703570. -/
+jolt/crates/jolt-witness/src/backend/trace/ram.rs (`remapped_ram_address`) at ff6fc6568. -/
 theorem HonestTrace.prover_config_ram_fits
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -348,7 +348,7 @@ spans at least one word and the prover adds one more.
 So a RAM word index splits into at least one chunk.
 For example, an image starting at word 0 with one word ends at 2, and `ram_K ≥ 2`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
-at c97e9300. -/
+at ff6fc6568. -/
 theorem HonestTrace.prover_config_ram_K_ge_two
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)

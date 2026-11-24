@@ -4,22 +4,21 @@ import JoltConstraints.theorems.trace_interface
 
 open LeanRV64D
 
-/-! Temporary program restriction for host calls (VirtualHostIO rows).
+/-! The remaining HostIO restriction marks a boundary of the frozen bytecode model.
 
-VirtualHostIO has no opcode circuit flags and no lookup table, so its local
-constraints do not encode host-call failure or side effects. Its operandless
-row selects no register read or write. Jolt's tracer runs the call in
-live mode, which a proved run uses, and there an invalid cycle-marker or print
-event panics. The model's `JoltISA.execHostIOWith` keeps those failures. It
-checks message-pointer overflow only when `hostIO.overflowChecks` is enabled;
-the initialized soundness run has that setting disabled. A message that cannot
-be read does not fail the call: the handler's trap is ignored. This is a
-candidate found by reading the code; no satisfying witness has been built.
-SDK guests pass only valid constant events.
-At public pin 5def437f:
-See : jolt/crates/jolt-riscv/src/instructions/virt/host_io.rs:3-6
-See : jolt/tracer/src/instruction/virtual_host_io.rs:9-38
-See : jolt/tracer/src/emulator/cpu.rs:1079-1128 -/
+VirtualHostIO has no opcode circuit flags or lookup table, and selects no register
+read or write. Its local constraints therefore do not describe host-side effects.
+The bytecode model's `execHostIOWith` can fail on invalid event types and enables
+pointer-overflow rejection only through `hostIO.overflowChecks`; the initialized
+soundness run disables that setting.
+At this pin Jolt's tracer instead logs and ignores invalid marker/print events and
+rejects overflowing or unreadable host ranges before reading them.
+The theorem below retains its existing modeled-success premise; it does not prove
+unrestricted fidelity for Jolt's new checked and fallible HostIO behavior.
+For example, an unknown print event is ignored by Jolt but fails in the frozen model.
+Jolt at `ff6fc6568`: `tracer/src/instruction/virtual_host_io.rs` (`VirtualHostIO::exec`),
+`tracer/src/emulator/cpu.rs` (`Cpu::handle_jolt_cycle_marker`, `Cpu::handle_jolt_print`),
+and `tracer/src/emulator/host_io.rs` (`read_host_bytes`). -/
 
 set_option autoImplicit false
 

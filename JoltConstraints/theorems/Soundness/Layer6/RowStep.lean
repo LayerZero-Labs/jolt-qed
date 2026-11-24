@@ -16,7 +16,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 position: old advice depends only on its prefix and the new value is none.
 For example, adding an AND after a DIV does not change the DIV's honest quotient.
 See jolt/tracer/src/instruction/mod.rs (`trace_inline_sequence_with_advice`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem honestAdvice_push (program : Rv64ProgramImage SourceInstruction)
     {bytecode : Array JoltInstructionRow} (rows : Array (TraceRow bytecode))
     (step : TraceRow bytecode)

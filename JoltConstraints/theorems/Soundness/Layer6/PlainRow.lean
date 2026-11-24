@@ -259,7 +259,7 @@ private theorem expansion_row_countdown
 For example, the first row of a nine-row REM block has eight rows remaining.
 The proof uses Jolt's sequence stamp from
 `jolt/crates/jolt-program/src/expand/metadata.rs` (`stamp_sequence_metadata`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem expansion_row_remaining
     (image : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
     (expanded : expand_program image = some bytecode)
@@ -1067,7 +1067,7 @@ theorem rawEntry_state
 
 /-- Entry preparation preserves live registers, memory and the device while
 updating PC bookkeeping; for example, preparing a native ADD keeps its inputs.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at ff6fc6568. -/
 theorem rawEntry_prepared {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {t : Fin params.traceLength} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

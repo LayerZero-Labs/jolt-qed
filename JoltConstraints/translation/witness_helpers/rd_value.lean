@@ -12,7 +12,7 @@ Absent destinations contribute zero; a pre-state gives the old destination value
 For example, a floor load reads its destination from the post-state to obtain the loaded word.
 Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
 (`RegisterStateLoad`), `virtual_store_{b,h,w}.rs` (`RegisterStateS`) and
-`format/format_shift_data.rs` (`FormatShiftData`) at `c6703570`. -/
+`format/format_shift_data.rs` (`FormatShiftData`) at `ff6fc6568`. -/
 noncomputable def rdValue {F : Type} [Field F]
     (instruction : JoltISA.Instr) (state : SailJoltState) : F :=
   let destinationValue (dst : JoltISA.Dst) : F :=

@@ -162,7 +162,7 @@ Representation supplies those operands because they are not instruction
 temporaries, and the lookup and Assert constraints force equality.
 For example, a custom equality assertion with immediate 2 must have equal sides.
 See jolt/tracer/src/instruction/virtual_assert_eq.rs (`VirtualAssertEQ::exec`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem soundness_spoil_asserts_pass {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)

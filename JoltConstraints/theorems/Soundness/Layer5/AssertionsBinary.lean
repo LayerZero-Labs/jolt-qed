@@ -5,7 +5,7 @@ open LeanRV64D
 
 /-! Three two-register assertion rows. The selected lookup and Assert flag force
 each condition before execution; no successful-assertion premise is assumed.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_assert_eq.rs:17-34
 See : jolt/tracer/src/instruction/virtual_assert_valid_div0.rs:17-25
 See : jolt/tracer/src/instruction/virtual_assert_valid_unsigned_remainder.rs:17-27 -/
@@ -63,7 +63,7 @@ For example, an equality assertion forces `leftWord = rightWord` even when
 its nonzero immediate lets Jolt's tracer continue after unequal operands.
 See jolt/tracer/src/instruction/virtual_assert_eq.rs (`VirtualAssertEQ::exec`)
 and jolt/crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs
-(`LookupQuery<XLEN>::to_lookup_output`) at 5def437f. -/
+(`LookupQuery<XLEN>::to_lookup_output`) at ff6fc6568. -/
 theorem binaryAssertion_passes_of_inputs (leftWord rightWord : BitVec 64)
     (left : witness.LeftInstructionInput t = (leftWord.toNat : F))
     (right : witness.RightInstructionInput t = (rightWord.toNat : F)) :

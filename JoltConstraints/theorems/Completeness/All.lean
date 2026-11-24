@@ -13,7 +13,7 @@ namespace JoltConstraints
 equation (01) and operand selection (33), under their existing trace premises.
 The bundle inherits the gaps listed in `model_review.md`, "Proofs owed".
 Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
-(`rv64_trace_constraints`) at `c6703570`. -/
+(`rv64_trace_constraints`) at `ff6fc6568`. -/
 theorem honestWitness_constraintEquations
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
@@ -119,7 +119,7 @@ open JoltConstraints
 
 -- Rust's entry slot is where the witness starts: the first row's slot, or the NoOp's
 -- slot 0 when the trace is empty (the entry address is then 0).
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:246-254 (get_first_pc)
 theorem HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)

@@ -2,7 +2,7 @@ import JoltConstraints.translation.program
 
 open LeanRV64D
 
--- Source audit: public pin 5def437f, base/Dory full-program mode.
+-- Source audit: public pin ff6fc6568, base/Dory full-program mode.
 set_option autoImplicit false
 
 namespace JoltConstraints.VerifierSizes
@@ -38,7 +38,7 @@ which delegates to `common/src/jolt_device.rs` (`MemoryLayout::max_ram_k`). -/
 def maxRamSize (layout : MemoryLayout) : Option Nat :=
   layout.max_ram_k?
 
-/-- `committed_log_k_chunk` in `jolt/crates/jolt-prover/src/config.rs:206-214` at 5def437f: the width of
+/-- `committed_log_k_chunk` in `jolt/crates/jolt-prover/src/config.rs:221-229` at ff6fc6568: the width of
 the honest prover's one-hot chunks over `2^logT` cycles, 4 below 2^25 cycles, else 8. -/
 def committedLogKChunk (logT : Nat) : Nat := if logT < 25 then 4 else 8
 
@@ -84,7 +84,7 @@ setup has variables, and Jolt opens the committed one-hot chunks at a point with
 verifier's.
 Rust: dory-pcs-0.4.2/src/evaluation_proof.rs:341-352, 394-399 (point size, setup bound)
       crates/jolt-claims/src/protocols/jolt/geometry/committed_openings.rs:164-203
-      crates/jolt-verifier/src/stages/stage8/verify.rs:132-135 -/
+      crates/jolt-verifier/src/stages/stage8/verify.rs:142-145 -/
 def JoltInstance.one_hot_fits_setup {Source : Type} (joltInstance : JoltInstance Source)
     (logT chunkBits : Nat) : Bool :=
   match joltInstance.memory_layout with

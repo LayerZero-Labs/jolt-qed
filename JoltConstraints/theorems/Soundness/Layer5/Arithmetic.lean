@@ -6,7 +6,7 @@ open LeanRV64D
 /-! One register-step proof for ADD, SUB and MUL. They share source recovery,
 RangeCheck lookup consumption and register updates. Only the arithmetic flag,
 the existing Layer 4 rule and the interpreter's operation vary.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/add.rs:17-26
 See : jolt/tracer/src/instruction/sub.rs:17-26
 See : jolt/tracer/src/instruction/mul.rs:17-26

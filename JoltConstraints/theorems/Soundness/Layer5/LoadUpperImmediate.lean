@@ -7,7 +7,7 @@ open LeanRV64D
 checks the sum of zero and that word; no source register is read. This covers
 a LUI row of the expanded bytecode, whether it represents a source instruction
 directly or was emitted inside an expansion.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/lui.rs:20-24
 See : jolt/crates/jolt-riscv/src/instructions/i/lui.rs:3-8
 See : jolt/crates/jolt-lookup-tables/src/instructions/riscv/lui.rs:6-31 -/

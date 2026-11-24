@@ -33,7 +33,7 @@ alignment check after any executed prefix.
 The initial `misa` value has C set and is preserved by successful rows and
 PC preparation.
 See jolt/tracer/src/emulator/cpu.rs (`Cpu::new`) and
-jolt/tracer/src/instruction/beq.rs (`BEQ::exec`) at 5def437f. -/
+jolt/tracer/src/instruction/beq.rs (`BEQ::exec`) at ff6fc6568. -/
 theorem UntrustedAnswerRun.final_compressed_enabled
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs) :
@@ -43,7 +43,7 @@ theorem UntrustedAnswerRun.final_compressed_enabled
 
 /-- Preparing the next source from a run's final state keeps compressed instructions
 enabled; for example, a target ending in binary `10` remains aligned after fetching.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at ff6fc6568. -/
 theorem UntrustedAnswerRun.prepared_compressed_enabled
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs) (address : BitVec 64) (compressed : Bool) :
@@ -148,7 +148,7 @@ and `enabled` follows from `UntrustedAnswerRun.final_compressed_enabled` or
 The satisfying witness supplies target alignment when the branch is taken.
 For example, an equal BEQ can jump to an even target ending in binary `10`.
 See jolt/tracer/src/instruction/beq.rs (`BEQ::exec`) and
-jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs at 5def437f. -/
+jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs at ff6fc6568. -/
 theorem branch_step {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

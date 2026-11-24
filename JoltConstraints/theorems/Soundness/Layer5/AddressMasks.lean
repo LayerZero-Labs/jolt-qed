@@ -6,7 +6,7 @@ open LeanRV64D
 
 /-! Byte, halfword, and word lane-mask rows use the
 checked wide sum of the base register and decoded immediate as the lookup index.
-Jolt's tracer at c6703570: `tracer/src/instruction/virtual_window_mask_b.rs`
+Jolt's tracer at ff6fc6568: `tracer/src/instruction/virtual_window_mask_b.rs`
 (`VirtualWindowMaskB::exec`), and the corresponding H/W implementations. -/
 
 set_option autoImplicit false

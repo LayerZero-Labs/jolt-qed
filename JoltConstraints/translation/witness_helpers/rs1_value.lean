@@ -16,7 +16,7 @@ Absent operands and padding contribute zero.
 For example, a floor load reads its base even if it overwrites that register.
 Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
 (`RegisterStateLoad`), `virtual_store_{b,h,w}.rs` (`RegisterStateS`) and
-`format/format_shift_data.rs` (`FormatShiftData`) at `c6703570`. -/
+`format/format_shift_data.rs` (`FormatShiftData`) at `ff6fc6568`. -/
 noncomputable def Rs1Value [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     -- The witness includes padding beyond the actual execution rows.

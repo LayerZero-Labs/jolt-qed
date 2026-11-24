@@ -62,7 +62,7 @@ Sail's post-state next PC.
 For example, after a terminal ADDI at `0x80000000`, the next real cycle selects
 a source-start row at `0x80000004`.
 See jolt/crates/jolt-witness/src/witnesses/pc.rs (`NextUnexpandedPc::extract`)
-at 5def437f. -/
+at ff6fc6568. -/
 private theorem boundary_successor {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (noWrap : joltInstance.program.NextPCNoWrap)

@@ -7,7 +7,7 @@ RangeCheck entry, independently of honest division advice.
 See jolt/crates/jolt-lookup-tables/src/instructions/virt/advice.rs
 (`LookupQuery::to_lookup_output`) and
 jolt/tracer/src/instruction/virtual_advice.rs (`RISCVInstruction::execute`)
-at 5def437f. -/
+at ff6fc6568. -/
 
 set_option autoImplicit false
 
@@ -20,7 +20,7 @@ The table and write-flag premises describe the selected instruction, without
 requiring a particular destination or a prepared state.
 For example, both VirtualAdvice and VirtualAdviceLoad obtain their words here.
 See jolt/crates/jolt-lookup-tables/src/tables/range_check.rs
-(`RangeCheckTable::materialize_entry`) at 5def437f. -/
+(`RangeCheckTable::materialize_entry`) at ff6fc6568. -/
 theorem rangeCheck_write_value {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -55,7 +55,7 @@ For example, REM may write witness quotient 5 to temporary 40 even when the
 honest quotient is 0; this theorem establishes execution, not advice honesty.
 See jolt/crates/jolt-riscv/src/instructions/virt/advice.rs (VirtualAdvice flags)
 and jolt/crates/jolt-lookup-tables/src/tables/range_check.rs
-(`RangeCheckTable::materialize_entry`) at 5def437f. -/
+(`RangeCheckTable::materialize_entry`) at ff6fc6568. -/
 theorem advice_step {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

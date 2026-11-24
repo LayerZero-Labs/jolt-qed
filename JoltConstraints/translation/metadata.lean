@@ -13,7 +13,7 @@ For example, a floor load or ShiftData with offset -2 contributes -2.
 Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
 (`NormalizedOperands::from`); Jolt's expander:
 `crates/jolt-program/src/expand/memory/shared.rs` (`LaneWindow::open`, `merge`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 def immediate (instruction : JoltISA.Instr) : Int :=
   match instruction with
   | .ADDI _ _ imm | .ADDIW _ _ imm | .ANDI _ _ imm | .ORI _ _ imm | .XORI _ _ imm
@@ -54,7 +54,7 @@ For example, LD selects its captured destination and ShiftData selects both
 its second source and its immediate.
 Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and
 `instructions/virt/{load,store,shift_data}_{b,h,w}.rs` (`jolt_instruction!`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bool :=
   match flag with
   -- All the instructions for which the left operand (first source) is the program counter
@@ -122,7 +122,7 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
       | .BEQ .. | .BNE .. | .BLT .. | .BGE .. | .BLTU .. | .BGEU .. => true
       | _ => false
   -- Jolt's pseudo Noop has IsNoop, but is not a modeled Instr constructor.
-  -- At 8bbb2357, jolt-program/src/image/decode.rs never returns NoOp; its
+  -- At ff6fc6568, jolt-program/src/image/decode.rs never returns NoOp; its
   -- NoOp match arm only defines operands for that already-supplied kind.
   -- expand/operands.rs::noop_for emits ADDI x0, x0, 0, whose IsNoop is false.
   -- Padding flags are supplied separately by bytecodeInstructionFlag.
@@ -136,7 +136,7 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
 For example, a floor load sets `Load` and `AddOperands`; LD sets only `Load`.
 Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and
 `instructions/virt/{load,store,shift_data}_{b,h,w}.rs` (`jolt_instruction!`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
   match flag with
   -- TODO: Why is this virtual shit flipping off Add operands? Double check with rust code
@@ -229,7 +229,7 @@ def hasCombinedLookupOperands (instruction : JoltISA.Instr) : Bool :=
 
 -- A bytecode row's circuit flags: the row-dependent ones come from its sequence
 -- stamp, the rest from its instruction (opcodeFlag).
--- Rust: jolt/crates/jolt-riscv/src/lib.rs:399-421 (circuit_flags), checked 2026-10-07
+-- Rust: jolt/crates/jolt-riscv/src/lib.rs:475-497 (circuit_flags), checked 2026-10-07
 def circuitFlag (row : JoltInstructionRow) (flag : CircuitFlags) : Bool :=
   match flag with
   | .VirtualInstruction => row.virtual_sequence_remaining.isSome
@@ -242,7 +242,7 @@ def circuitFlag (row : JoltInstructionRow) (flag : CircuitFlags) : Bool :=
 /-- A load-flagged row is LD or a floor load of class B, H or W.
 For example, a `VirtualLoadH` satisfies the second alternative with its fault code.
 Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and
-`instructions/virt/load_{b,h,w}.rs` (`jolt_instruction!`) at `c6703570`. -/
+`instructions/virt/load_{b,h,w}.rs` (`jolt_instruction!`) at `ff6fc6568`. -/
 theorem opcodeFlag_load_cases (instruction : JoltISA.Instr)
     (h : opcodeFlag instruction .Load = true) :
     ∃ faultClass dst base imm,
@@ -256,7 +256,7 @@ theorem opcodeFlag_load_cases (instruction : JoltISA.Instr)
 /-- A store-flagged row is SD or a floor store of class B, H or W.
 For example, a `VirtualStoreW` satisfies the last alternative with its fault code.
 Jolt's prover: `crates/jolt-riscv/src/instructions/i/sd.rs` and
-`instructions/virt/store_{b,h,w}.rs` (`jolt_instruction!`) at `c6703570`. -/
+`instructions/virt/store_{b,h,w}.rs` (`jolt_instruction!`) at `ff6fc6568`. -/
 theorem opcodeFlag_store_cases (instruction : JoltISA.Instr)
     (h : opcodeFlag instruction .Store = true) :
     ∃ base value imm,
@@ -283,7 +283,7 @@ For example, a halfword floor load or store selects `AddressOffsetH`,
 while LD and SD select no table.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
 (`floor_access!`) and `instructions/riscv/{ld,sd}.rs` (`impl_lookup_table!`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 def lookupTable (instruction : JoltISA.Instr) : Option LookupTableKind :=
   match instruction with
   | .ADDI .. | .LUI .. | .AUIPC .. | .JAL .. | .ADD .. | .SUB .. | .MUL ..

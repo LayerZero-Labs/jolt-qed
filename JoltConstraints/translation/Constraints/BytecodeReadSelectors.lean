@@ -11,7 +11,7 @@ namespace JoltConstraints
 /-- The encoded first source register, with an absent operand represented by `none`.
 For example, a floor load selects its base.
 Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
-(`NormalizedOperands::from`) at `c6703570`. -/
+(`NormalizedOperands::from`) at `ff6fc6568`. -/
 def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _ | .XORI _ src _
@@ -46,7 +46,7 @@ def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
 /-- The encoded second source register, with an absent operand represented by `none`.
 For example, a floor store selects its value source and a floor load has none.
 Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
-(`NormalizedOperands::from`) at `c6703570`. -/
+(`NormalizedOperands::from`) at `ff6fc6568`. -/
 def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .BEQ _ src _ | .BNE _ src _ | .BLT _ src _ | .BGE _ src _ | .BLTU _ src _ | .BGEU _ src _
@@ -83,7 +83,7 @@ def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
 /-- The encoded destination register, with an absent operand represented by `none`.
 For example, a floor load selects its destination and a floor store has none.
 Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
-(`NormalizedOperands::from`) at `c6703570`. -/
+(`NormalizedOperands::from`) at `ff6fc6568`. -/
 def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
   | .JoltSuccess dst | .Panic dst | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
@@ -129,7 +129,7 @@ def bytecodeRegisterSelector {F : Type} [Field F] (bytecode : Array JoltInstruct
   | none => 0
 
 /-- Fixed lookup-table flags; a padding no-op selects no lookup table.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L668-L670 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs -/
 def bytecodeLookupTableFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRow)
     (table : LookupTableKind) (address : Nat) : F :=
   match bytecodeRow bytecode address with
@@ -137,7 +137,7 @@ def bytecodeLookupTableFlag {F : Type} [Field F] (bytecode : Array JoltInstructi
   | none => 0
 
 /-- Fixed RAF flag: one for combined lookup operands; padding contributes zero.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L662-L668 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs -/
 def bytecodeRafFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (address : Nat) : F :=
   match bytecodeRow bytecode address with
   | some row => if JoltMetadata.instructionRafFlag row.instruction then 1 else 0

@@ -12,7 +12,7 @@ namespace JoltConstraints
 /-- A load preserves its captured doubleword in RAM and its destination,
 including floor rows; for example, a floor byte load preserves the whole loaded word.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs`
-(`load`) at `c6703570`. -/
+(`load`) at `ff6fc6568`. -/
 theorem honestWitness_ramReadEqRamWriteIfLoad
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

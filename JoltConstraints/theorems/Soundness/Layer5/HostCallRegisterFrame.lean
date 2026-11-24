@@ -16,7 +16,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 /-- Keeping Sail state and virtual registers keeps every source value.
 For example, changing only an output buffer keeps x1 and temporary 40.
 See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem sourceValue_of_host_frame (source : Src)
     (pre post : SailJoltState) (sail : post.sail = pre.sail)
     (vregs : post.vregs = pre.vregs) :
@@ -28,7 +28,7 @@ agreement: every live register-table value still matches the execution state.
 For example, an advice-write call may append to the tape without changing any
 register. The slot equation links the selected witness slot to the next
 expanded row. See jolt/tracer/src/instruction/virtual_host_io.rs:9-38 and
-jolt/crates/jolt-witness/src/backend/trace/registers.rs:26-57 at 5def437f. -/
+jolt/crates/jolt-witness/src/backend/trace/registers.rs:26-57 at ff6fc6568. -/
 theorem host_call_selected_step
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction}

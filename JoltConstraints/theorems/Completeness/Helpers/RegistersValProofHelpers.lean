@@ -497,7 +497,7 @@ theorem register42_branch_preserves_sourceValue
 
 /-- Loading a doubleword and writing its destination preserves any other source
 register; for example, loading x1 leaves x2 unchanged.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `ff6fc6568`. -/
 theorem register42_load_word_preserves_other
     (address : BitVec 64) (dst : JoltISA.Dst) (src : JoltISA.Src)
     (s t : SailJoltState) (hne : src ≠ register42_dstAsSrc dst)
@@ -519,7 +519,7 @@ theorem register42_load_word_preserves_other
 
 /-- LD preserves sources other than its destination; for example, LD into x1
 leaves x2 unchanged when both registers are readable.
-Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `ff6fc6568`. -/
 theorem register42_load_preserves_other
     (fault : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
     (base src : JoltISA.Src) (imm : BitVec 64)
@@ -538,7 +538,7 @@ theorem register42_load_preserves_other
 
 /-- A doubleword store preserves every register; for example, storing x1
 changes memory but leaves the captured source x1 unchanged.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `ff6fc6568`. -/
 theorem register42_store_word_preserves_sourceValue
     (address value : BitVec 64) (src : JoltISA.Src) (s t : SailJoltState)
     (runs : (do
@@ -556,7 +556,7 @@ theorem register42_store_word_preserves_sourceValue
       cases result <;> cases runs <;> exact frame
 
 /-- SD preserves every source register, such as its base x2 when storing x1.
-Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) at `ff6fc6568`. -/
 theorem register42_store_preserves_sourceValue
     (base stored src : JoltISA.Src) (imm : BitVec 64)
     (s t : SailJoltState)
@@ -674,7 +674,7 @@ theorem register42_halt_preserves_other (kind : JoltHaltKind)
 /-- A retired instruction preserves every readable source except its destination;
 for example, a floor LoadH into x1 preserves x2, and StoreH preserves both.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem register42_instruction_preserves_other
     (instr : JoltISA.Instr) (src : JoltISA.Src)
     (s t : SailJoltState)

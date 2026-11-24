@@ -13,7 +13,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 /-- Append a terminal direct jump from its prepared PC and live-register state.
 For example, `jal x1, 8` writes its source link into x1 before the next source.
-See jolt/tracer/src/instruction/jal.rs (`JAL::exec`) at 5def437f. -/
+See jolt/tracer/src/instruction/jal.rs (`JAL::exec`) at ff6fc6568. -/
 theorem append_jal_row
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
@@ -124,7 +124,7 @@ theorem append_halt_row
 memory image while allowing its advice tape to grow.
 For example, a successful advice-write host call can append bytes to the tape.
 See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem append_host_row
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}

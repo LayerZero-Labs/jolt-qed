@@ -15,7 +15,7 @@ Absent operands and padding contribute zero.
 For example, a floor load selects its destination and a floor store selects none.
 Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
 (`RegisterStateLoad`), `virtual_store_{b,h,w}.rs` (`RegisterStateS`) and
-`format/format_shift_data.rs` (`FormatShiftData`) at `c6703570`. -/
+`format/format_shift_data.rs` (`FormatShiftData`) at `ff6fc6568`. -/
 noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
     (trace : Trace) :
     Fin 128 → Fin p.traceLength → F :=

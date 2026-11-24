@@ -5,7 +5,7 @@ import JoltConstraints.theorems.Soundness.Layer4.Arithmetic
 open LeanRV64D
 
 /-! The unsigned-multiplication guard uses the full 128-bit product lookup.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_assert_mulu_no_overflow.rs:16-26 -/
 
 set_option autoImplicit false

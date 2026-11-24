@@ -16,7 +16,7 @@ Loads preserve the captured word, and stores use their pre-state value source.
 For example, a floor byte store writes the complete merged doubleword.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`);
 Jolt's prover: `crates/jolt-witness/src/witnesses/ram.rs` (`RamWriteValue`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 noncomputable def RamWriteValue [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     if inBounds : t.val < trace.rows.size then

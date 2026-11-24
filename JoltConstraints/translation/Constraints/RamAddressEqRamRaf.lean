@@ -10,7 +10,7 @@ open scoped BigOperators
 
 /-- Constraint (25) in `constraints.md`:
 Recover the raw byte address from the selected remapped word address.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs#L133-L151 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-verifier/src/stages/stage2/ram_raf_evaluation.rs#L133-L151 -/
 def ramAddressEqRamRaf {F : Type} [Field F] {params : WitnessParams}
     (layout : MemoryLayout) (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

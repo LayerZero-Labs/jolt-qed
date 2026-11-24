@@ -10,7 +10,7 @@ open scoped BigOperators
 
 /-- Constraint (41) in `constraints.md`:
 The right lookup operand is the full address for identity RAF and the deinterleaved right value otherwise.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L181-L201 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs -/
 def rightLookupOperandEqInstructionRaf {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

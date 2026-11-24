@@ -280,7 +280,7 @@ address, provided the mapped RAM domain is word-aligned.
 allow an alignment check before or after reading the value source.
 For example, SD uses `id`, mask 0 before the read and mask 7 after it.
 Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) and
-`tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+`tracer/src/instruction/floor_access.rs` (`store`) at `ff6fc6568`. -/
 private theorem store_sequence_old_present (base value : JoltISA.Src) (imm : BitVec 64)
     (addressOf : BitVec 64 → BitVec 64) (beforeMask afterMask : BitVec 64)
     (fault : ExceptionType) (state after : SailJoltState)
@@ -324,7 +324,7 @@ private theorem store_sequence_old_present (base value : JoltISA.Src) (imm : Bit
 /-- Runtime advice leaves SD and floor stores unchanged; for example,
 VirtualStoreH still stores its source register, not an advice value.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) and
-`tracer/src/instruction/sd.rs` (`SD::exec`) at `c6703570`. -/
+`tracer/src/instruction/sd.rs` (`SD::exec`) at `ff6fc6568`. -/
 private theorem store_runtime_advice {instruction : JoltISA.Instr}
     (advice : instruction.RuntimeAdvice) (base value : JoltISA.Src) (imm : BitVec 64)
     (fault : ExceptionType)
@@ -340,7 +340,7 @@ row in an initialized, linked honest trace.
 `isStore` identifies both the store and its accessed address; floor stores
 clear all three low bits, so a byte floor store at effective address 11 reads
 its old word at 8.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `ff6fc6568`. -/
 theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (inBounds : i < trace.rows.size) (address : BitVec 64)

@@ -13,7 +13,7 @@ open scoped BigOperators
 
 /-- Constraint (42) in `constraints.md` (stage 5):
 each register value is the sum of its write increments at strictly earlier cycles.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs#L69-L79 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/relations/registers/val_evaluation.rs -/
 def registersValEqPrefixRdInc {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ (register : Fin 128) (t : Fin params.traceLength),

@@ -5,7 +5,7 @@ open LeanRV64D
 /-! Selected tape loads use the witness's range-check word and advance only
 the advice cursor before writing a canonical destination.
 See jolt/tracer/src/instruction/virtual_advice_load.rs
-(`VirtualAdviceLoad::exec`) at 5def437f. -/
+(`VirtualAdviceLoad::exec`) at ff6fc6568. -/
 
 set_option autoImplicit false
 
@@ -17,7 +17,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 This lifts the shared advice checker through materialization and program
 expansion; for example, AdviceLH's first row has byte count 2.
 See jolt/crates/jolt-program/src/expand/memory/shared.rs
-(`expand_advice_load`) at 5def437f. -/
+(`expand_advice_load`) at ff6fc6568. -/
 theorem expanded_adviceLoad_width (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode)
     {address : Nat} {row : JoltInstructionRow} (present : bytecodeRow bytecode address = some row)
@@ -46,7 +46,7 @@ no old value is required for a destination that was not live.
 For example, AdviceLD x1 writes a full word and advances the cursor by eight.
 See jolt/crates/jolt-lookup-tables/src/instructions/virt/advice_load.rs
 (`LookupQuery::to_lookup_output`) and jolt/tracer/src/instruction/virtual_advice_load.rs
-(`VirtualAdviceLoad::exec`) at 5def437f. -/
+(`VirtualAdviceLoad::exec`) at ff6fc6568. -/
 theorem adviceLoad_register_step {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

@@ -23,7 +23,7 @@ the witness has another real cycle and the run has not reached a explicit halt.
 For example, after `rem a0, a1, zero`, witness quotient 5 and honest quotient 0 may
 differ in temporary 40, while `a0`, other persistent registers and RAM still agree.
 See jolt/crates/jolt-program/src/expand/division/rem.rs:15-24 and
-jolt/tracer/src/instruction/rem.rs:44-58 at 5def437f. -/
+jolt/tracer/src/instruction/rem.rs:44-58 at ff6fc6568. -/
 structure BoundaryState {F : Type} [Field F] {params : WitnessParams}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (witness : WitnessType F params)
@@ -55,7 +55,7 @@ structure BoundaryState {F : Type} [Field F] {params : WitnessParams}
 When `first` starts a source instruction, this is that instruction's full row count;
 for example, a nonzero-destination REM has nine rows and a native ADDI has one.
 See jolt/crates/jolt-program/src/expand/metadata.rs (`stamp_sequence_metadata`)
-at 5def437f. -/
+at ff6fc6568. -/
 def expansionRowCount (bytecode : Array JoltInstructionRow)
     (first : Fin bytecode.size) : Nat :=
   (bytecode[first].virtual_sequence_remaining.getD 0).toNat + 1
@@ -63,7 +63,7 @@ def expansionRowCount (bytecode : Array JoltInstructionRow)
 /-- Some row of the block beginning at `first`, within its stamped row count,
 is a VirtualAdvice row. This concerns internal division advice, not tape reads.
 For example, REM with a nonzero destination has advice, while AdviceLD does not.
-See jolt/crates/jolt-program/src/expand/division/rem.rs (`expand_rem`) at 5def437f. -/
+See jolt/crates/jolt-program/src/expand/division/rem.rs (`expand_rem`) at ff6fc6568. -/
 def ExpansionHasAdvice (bytecode : Array JoltInstructionRow)
     (first : Fin bytecode.size) : Prop :=
   ∃ offset < expansionRowCount bytecode first,
@@ -103,7 +103,7 @@ slot and the entry/linkage clause of `NextStep`; `notStopped` excludes a final s
 Honest advice is deliberately separate: after REM's first row a run carrying
 witness quotient 5 can satisfy this state, although the honest quotient is 0.
 See jolt/crates/jolt-program/src/expand/division/rem.rs (`expand_rem`) and
-jolt/tracer/src/instruction/mod.rs (`trace_inline_sequence_with_advice`) at 5def437f. -/
+jolt/tracer/src/instruction/mod.rs (`trace_inline_sequence_with_advice`) at ff6fc6568. -/
 structure ExpansionState {F : Type} [Field F] {params : WitnessParams}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (witness : WitnessType F params)

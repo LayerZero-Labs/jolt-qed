@@ -28,7 +28,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 /-- Between two non-read states, the tape cursor is fixed and bytes may only be
 appended. For a tape `[0x2C]`, a host write of `0x01` gives `[0x2C, 0x01]`.
-See `jolt/tracer/src/emulator/cpu.rs:44-60` at 5def437f. -/
+See `jolt/tracer/src/emulator/cpu.rs:48-64` at ff6fc6568. -/
 private def TapeGrowth (a b : SailJoltState) : Prop :=
   a.adviceTape.readPosition = b.adviceTape.readPosition ∧
     ∃ suffix, b.adviceTape.bytes = a.adviceTape.bytes ++ suffix
@@ -1047,7 +1047,7 @@ private theorem advicePairsOk_narrow (instructions : List Instr)
 
 /-- A narrow tape load continues its source expansion and is followed by the
 multiply discarding its high bytes. AdviceLB uses `VirtualMULI rd rd 2^56`.
-See `jolt/crates/jolt-program/src/expand/memory/advice_lb.rs:3-11` at 8bbb2357. -/
+See `jolt/crates/jolt-program/src/expand/memory/advice_lb.rs:3-11` at ff6fc6568. -/
 private theorem narrow_load_shape (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode)
     (k : Nat) (inRange : k < bytecode.size) (dst : Dst) (width : BitVec 64)
@@ -1933,7 +1933,7 @@ theorem rebuild_spoil_asserts
 
 /-- The honest advice calculator reads registers, not tape bytes: replacing
 `[0x2C, 0x01]` with `[0x2C]` leaves its result unchanged.
-See `jolt/tracer/src/instruction/mod.rs:207-233` at 5def437f. -/
+See `jolt/tracer/src/instruction/mod.rs:220-246` at ff6fc6568. -/
 private theorem honestTracerAdvice_ignores_tape
     (source : SourceInstruction) (old replay : SailJoltState)
     (same : SameExceptTapeBytes old replay) :

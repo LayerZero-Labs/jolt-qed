@@ -5,7 +5,7 @@ open LeanRV64D
 
 /-! Execute a selected XORI row using the shared register/immediate inputs,
 XOR lookup and register write. The immediate is already decoded to 64 bits.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/xori.rs:20-27
 See : jolt/crates/jolt-lookup-tables/src/instructions/riscv/xori.rs:6-24 -/
 

@@ -8,7 +8,7 @@ The jump constraint supplies the return address, including compressed rows;
 the execution-prefix induction must connect the selected row's address to
 Sail's PC and its already advanced `nextPC`. The no-wrap fact follows from
 the image's `next_pc_no_wrap` field at the source boundary.
-At public Rust pin 8bbb2357:
+At public Rust pin ff6fc6568:
 See : jolt/tracer/src/instruction/jal.rs:19-30
 See : jolt/crates/jolt-riscv/src/instructions/i/jal.rs -/
 

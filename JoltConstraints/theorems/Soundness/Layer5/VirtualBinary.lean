@@ -8,11 +8,11 @@ open LeanRV64D
 /-! Shared step for extraction, store-lane shifting and conditional negation.
 Their existing interleaved table rules give the interpreter value for arbitrary
 source words, so no lane-mask shape is assumed by these row proofs.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_pext.rs:18-26
 See : jolt/tracer/src/instruction/virtual_pext_signed.rs:17-70
 See : jolt/tracer/src/instruction/virtual_negate_if.rs:17-32
-ShiftData uses address plus signed immediate at c6703570:
+ShiftData uses address plus signed immediate at ff6fc6568:
 `tracer/src/instruction/virtual_shift_data_{b,h,w}.rs` (`VirtualShiftDataB/H/W::exec`). -/
 
 set_option autoImplicit false

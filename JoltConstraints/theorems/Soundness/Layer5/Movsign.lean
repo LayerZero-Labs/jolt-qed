@@ -6,7 +6,7 @@ open LeanRV64D
 /-! VirtualMovsign writes an all-ones or zero mask according to its source
 sign bit. Its decoded immediate is a lookup input but does not affect the
 SignMask table result or the interpreter's write.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_movsign.rs:20-32 -/
 
 set_option autoImplicit false

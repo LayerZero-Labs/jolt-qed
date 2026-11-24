@@ -6,7 +6,7 @@ open LeanRV64D
 /-! Shared register step for ADDW, SUBW, MULW and MULHU. The arithmetic
 flags produce a wide lookup operand; the existing word-table rules truncate
 or select the high word exactly as the interpreter does.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/addw.rs:17-27
 See : jolt/tracer/src/instruction/subw.rs:16-30
 See : jolt/tracer/src/instruction/mulw.rs:17-28

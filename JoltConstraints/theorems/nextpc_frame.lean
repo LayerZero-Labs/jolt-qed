@@ -207,7 +207,7 @@ Sail's nextPC register for every successful computation result.
 For example, ADD writes its destination without changing nextPC.
 The load/store flags exclude both native and floor rows, which `instruction`
 handles separately; Jolt's tracer uses the memory rows in
-`tracer/src/instruction/floor_access.rs` (`load`, `store`) at `c6703570`. -/
+`tracer/src/instruction/floor_access.rs` (`load`, `store`) at `ff6fc6568`. -/
 theorem ordinary_instruction (instr : Instr)
     (hload : JoltMetadata.opcodeFlag instr .Load = false)
     (hstore : JoltMetadata.opcodeFlag instr .Store = false)
@@ -292,7 +292,7 @@ theorem branch_not_taken (instr : Instr) (s t : SailJoltState)
 
 /-- A doubleword load preserves nextPC, even when it returns an MMU error.
 For example, loading the containing doubleword at address 8 cannot change nextPC.
-Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::load_doubleword`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::load_doubleword`) at `ff6fc6568`. -/
 theorem load_doubleword_rule (address : BitVec 64) :
     Preserves (Mmu.load_doubleword address) := by
   intro s t result runs
@@ -300,7 +300,7 @@ theorem load_doubleword_rule (address : BitVec 64) :
 
 /-- A doubleword store preserves nextPC while updating memory or device state.
 For example, storing a merged byte lane at address 8 cannot change nextPC.
-Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`) at `ff6fc6568`. -/
 theorem store_doubleword_rule (address value : BitVec 64) :
     Preserves (Mmu.store_doubleword address value) := by
   intro s t result runs
@@ -308,7 +308,7 @@ theorem store_doubleword_rule (address value : BitVec 64) :
 
 /-- A retired LD preserves nextPC; for example, LD into x5 changes x5 but
 leaves Sail's nextPC register intact.
-Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `ff6fc6568`. -/
 theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
     (imm : BitVec 64) (s t : SailJoltState)
     (hexec : execInstr (.LD fault dst base imm) s = .ok (.Retire_Success ()) t) :
@@ -321,7 +321,7 @@ theorem load_instruction (fault : LoadFaultClass) (dst : Dst) (base : Src)
 
 /-- A retired SD preserves nextPC; for example, writing a doubleword to RAM
 changes its bytes but leaves Sail's nextPC register intact.
-Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) at `ff6fc6568`. -/
 theorem store_instruction (base value : Src) (imm : BitVec 64)
     (s t : SailJoltState)
     (hexec : execInstr (.SD base value imm) s = .ok (.Retire_Success ()) t) :
@@ -334,7 +334,7 @@ theorem store_instruction (base value : Src) (imm : BitVec 64)
 /-- Each floor load preserves nextPC, for all three width classes and all
 successful computation results, including modeled memory exceptions.
 For example, VirtualLoadH at effective address 10 loads from 8 without changing nextPC.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `ff6fc6568`. -/
 theorem floor_load_instruction (instr : Instr) (faultClass : LoadFaultClass)
     (dst : Dst) (base : Src) (imm : BitVec 64) (fault : ExceptionType)
     (selected : instr = .VirtualLoadB faultClass dst base imm fault ∨
@@ -348,7 +348,7 @@ theorem floor_load_instruction (instr : Instr) (faultClass : LoadFaultClass)
 /-- Each floor store preserves nextPC, for all three width classes and all
 successful computation results, including modeled memory exceptions.
 For example, VirtualStoreW at effective address 12 writes to 8 without changing nextPC.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `ff6fc6568`. -/
 theorem floor_store_instruction (instr : Instr) (base value : Src)
     (imm : BitVec 64) (fault : ExceptionType)
     (selected : instr = .VirtualStoreB base value imm fault ∨
@@ -369,7 +369,7 @@ def HostIOFrame (instr : Instr) (s t : SailJoltState) : Prop :=
 its host-call frame holds; for example, a floor load needs no extra premise.
 Memory rows are classified once by their flags and use shared MMU frame rules.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem instruction (instr : Instr) (s t : SailJoltState)
     (hjump : JoltMetadata.opcodeFlag instr .Jump = false)
     (hnot : BranchTaken instr s = false)

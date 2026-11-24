@@ -81,7 +81,7 @@ private theorem nextUnexpandedPC_eq_four_of_bytecodeRa_zero
 /-- Every witness cycle selects exactly one in-domain bytecode slot.
 An all-zero selector would force next PC four, contradicting the shifted PC
 at a following cycle or the zero shift at the final cycle.
-The final-cycle zero matches Jolt revision `8bbb2357890928d8f83b00ca542879077c4d3d28`:
+The final-cycle zero matches Jolt revision `ff6fc6568`:
 `relations/spartan/shift.rs` weights `UnexpandedPC` by `EqPlusOneOuter`, evaluated
 by `stages/stage3/spartan_shift.rs` using `crates/jolt-poly/src/eq_plus_one.rs`.
 Its no-wrap successor polynomial is zero for every output at the last cycle. -/

@@ -16,10 +16,10 @@ Native rows access the doubleword at `ea`; floor rows access the containing
 doubleword `ea &&& ~~~7`.
 For example, VirtualLoadH at `ea = 10` loads the doubleword at 8.
 The facts below are proved once over the four widths and used by every memory step.
-Jolt's tracer at c6703570: `tracer/src/instruction/floor_access.rs`
+Jolt's tracer at ff6fc6568: `tracer/src/instruction/floor_access.rs`
 (`addresses`, `load`, `store`), `tracer/src/instruction/ld.rs` (`LD::exec`) and
 `tracer/src/instruction/sd.rs` (`SD::exec`).
-Jolt's verifier at c6703570 pins the accessed doubleword with constraint (01):
+Jolt's verifier at ff6fc6568 pins the accessed doubleword with constraint (01):
 `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
 (`rv64_eq_constraint_rows`, row 0). -/
 
@@ -47,7 +47,7 @@ native row, and the AddressOffset entry for a floor row.
 Once `sum` is known to be the effective address's value, that offset is
 `sum &&& offsetMask`. For example, a halfword row at `ea = 10` outputs 2.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/address_offset.rs`
-(`AddressOffsetTable::materialize_entry`) at `c6703570`. -/
+(`AddressOffsetTable::materialize_entry`) at `ff6fc6568`. -/
 private theorem AccessRow.lookup_offset (baseValue : BitVec 64)
     (source : witness.Rs1Value t = (baseValue.toNat : F)) :
     ∃ offset : Nat, offset ≤ 7 ∧ witness.LookupOutput t = (offset : F) ∧
@@ -113,7 +113,7 @@ address, and the layout bound rules out wrapping.
 For example, VirtualStoreH with base 16 and immediate -6 has `ea = 10`, records
 `10 - 2 = 8`, and accesses 8; with `ea = 11` it would record 9, which no RAM
 selection allows.
-Jolt's verifier at c6703570: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
+Jolt's verifier at ff6fc6568: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
 (`rv64_eq_constraint_rows`, row 0). -/
 theorem AccessRow.address_encoded (regionFits : joltInstance.RamRegionFits)
     (baseValue : BitVec 64) (source : witness.Rs1Value t = (baseValue.toNat : F)) :

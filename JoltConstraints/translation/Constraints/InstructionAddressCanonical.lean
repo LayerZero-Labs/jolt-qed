@@ -18,7 +18,7 @@ Jolt sets the flag from the `akita` feature, which is also what selects the
 the check off. The model ties the flag to the field the same way: the check is
 on exactly when the characteristic is below `2^128`.
 Rust: `crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs`
-(`CANONICAL_INSTRUCTION_ADDRESS`) at `c97e9300`; the field is `AkitaField` in
+(`CANONICAL_INSTRUCTION_ADDRESS`) at `ff6fc6568`; the field is `AkitaField` in
 `crates/jolt-akita/src/adapters.rs`. -/
 def CanonicalInstructionAddress (F : Type) [Field F] : Prop :=
   ringChar F < 2 ^ 128
@@ -27,7 +27,7 @@ def CanonicalInstructionAddress (F : Type) [Field F] : Prop :=
 the value of Rust's `upper_half_all_ones` at a Boolean address point. For
 example, `2^128 - 2^64` gives 1 and `2^128 - 2^64 - 1` gives 0.
 Rust: `crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs`
-(`upper_half_all_ones`) at `c97e9300`. -/
+(`upper_half_all_ones`) at `ff6fc6568`. -/
 def upperHalfAllOnes {F : Type} [Field F] (address : Fin (2 ^ 128)) : F :=
   if address.val / 2 ^ 64 = 2 ^ 64 - 1 then 1 else 0
 
@@ -38,7 +38,7 @@ Jolt's verifier adds `γ³ · upper_half_all_ones(r_address)` to the `EqRafFlag`
 output term, and the input claim has no `γ³` term, so per cycle the weighted
 sum below must vanish.
 Rust: `crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L198-L212`
-at `c97e9300`. -/
+at `ff6fc6568`. -/
 def instructionAddressCanonical {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   CanonicalInstructionAddress F →

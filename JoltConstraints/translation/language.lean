@@ -13,12 +13,12 @@ nothing else. -/
 def JoltInstance.InLanguage (joltInstance : JoltInstance SourceInstruction) : Prop :=
   ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
     -- The run ends with the claimed outputs (trailing zero bytes dropped) and panic flag.
-    -- See : jolt/jolt-sdk/src/host_utils.rs:320
+    -- See : jolt/jolt-sdk/src/host_utils.rs:303
     --       jolt/book/src/usage/guests_hosts/guests.md:144, 223
     trace.matches_outputs joltInstance ∧
     -- Jolt's prover accepts the trace: it ends in a jump, its RAM addresses are at or
     -- above the lowest address, and its padded length is at most the instance's maximum.
-    -- See : jolt/crates/jolt-prover/src/config.rs:53-100 (derive_from_dimensions)
+    -- See : jolt/crates/jolt-prover/src/config.rs:43-100 (derive_from_dimensions)
     (trace.prover_config joltInstance).isSome ∧
     -- No spoil assert fails: a spoiled run is meant to have no proof.
     -- See : jolt/jolt-platform/src/spoil.rs:1-3

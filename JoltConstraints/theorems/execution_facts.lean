@@ -718,7 +718,7 @@ theorem init_state_sourceValue (entryAddress : BitVec 64) (ram : Array (BitVec 8
 
 -- The instance's initial state has every register, real or virtual, at 0, as Rust's
 -- Cpu::new sets them.
--- See : jolt/tracer/src/emulator/cpu.rs:448 at 5def437f (x: [0; REGISTER_COUNT])
+-- See : jolt/tracer/src/emulator/cpu.rs:464 at ff6fc6568 (x: [0; REGISTER_COUNT])
 theorem initial_state_sourceValue {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState)
@@ -873,7 +873,7 @@ theorem load_doubleword_zero (state : SailJoltState) (config : MemoryConfig)
     load_raw_low state config built aboveEight 0 (by decide)]
 
 -- An SD at address 0 fails: its first byte cannot be written.
--- See : jolt/tracer/src/emulator/mmu.rs:437-443, 729-748 (store_doubleword, store_doubleword_raw)
+-- See : jolt/tracer/src/emulator/mmu.rs:553-559, 729-748 (store_doubleword, store_doubleword_raw)
 theorem store_doubleword_zero (state : SailJoltState) (config : MemoryConfig)
     (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
     (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)

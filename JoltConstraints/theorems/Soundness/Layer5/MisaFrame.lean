@@ -9,7 +9,7 @@ Jolt execution, including independent tape answers.
 Jolt's CSR instructions use virtual registers rather than Sail's CSR map.
 See jolt/tracer/src/emulator/cpu.rs (`Cpu::new`) and
 jolt/crates/jolt-program/src/expand/control_flow/csrrw.rs (`expand_csrrw`)
-at 5def437f. -/
+at ff6fc6568. -/
 
 set_option autoImplicit false
 
@@ -91,7 +91,7 @@ private theorem host_rule : StatePreservation.Preserves SameMisa execHostIO :=
 /-- Every successful instruction with an independent tape answer preserves
 Sail's `misa` register, which holds the enabled ISA extensions.
 For example, a branch can change `nextPC`, but cannot disable compressed instructions.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at ff6fc6568. -/
 theorem execWithTapeAnswer_keeps_misa (instruction : Instr) (answer : BitVec 64) :
     StatePreservation.Preserves
       (fun s t : SailJoltState => s.sail.regs.get? Register.misa =
@@ -118,7 +118,7 @@ theorem execWithTapeAnswer_keeps_misa (instruction : Instr) (answer : BitVec 64)
 /-- Preparing an instruction changes PC and nextPC, leaving `misa` fixed.
 For example, fetching a compressed instruction advances nextPC by two without
 changing the enabled ISA extensions.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at ff6fc6568. -/
 theorem advance_pc_misa (address : BitVec 64) (compressed : Bool) (state : SailJoltState) :
     (advance_pc address compressed state).sail.regs.get? Register.misa =
       state.sail.regs.get? Register.misa := by
@@ -140,7 +140,7 @@ private theorem initial_state_misa {Source : Type}
 /-- The final state of an initialized run retains Jolt's initial `misa` value.
 The final state is the last recorded post-state, or the initial state for an
 empty run; for example, the C extension's bit stays set after a taken branch.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::new`, `Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::new`, `Cpu::tick`) at ff6fc6568. -/
 theorem UntrustedAnswerRun.final_misa
     {joltInstance : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance inputs) :

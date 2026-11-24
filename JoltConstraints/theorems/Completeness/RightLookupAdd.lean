@@ -14,7 +14,7 @@ namespace JoltConstraints
 for other instructions; for example, LoadH with base x2 and offset -2
 returns `(x2, -2)`.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
-(`to_instruction_inputs`) at `c6703570`. -/
+(`to_instruction_inputs`) at `ff6fc6568`. -/
 def floorAccess? : JoltISA.Instr → Option (JoltISA.Src × BitVec 64)
   | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _
   | .VirtualLoadW _ _ base imm _ | .VirtualStoreB base _ imm _
@@ -40,7 +40,7 @@ is `0 + (-16) = -16`; they differ by `2^128`, and the constraint is not
 satisfied.
 Left as `sorry` until a16z/jolt#1949 is fixed.
 
-Rust, at `c6703570`:
+Rust, at `ff6fc6568`:
 - (08): `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs` (`RightLookupAdd`).
 - Flags of these instructions, so `AddOperands t = 1`:
   `crates/jolt-riscv/src/instructions/virt/{load,store}_{b,h,w}.rs` (`jolt_instruction!`).
@@ -66,7 +66,7 @@ inputs; for example, base 10 with immediate -2 yields field value 8.
 Only its nonnegativity uses the honest-row #1949 obligation; the upper bound
 follows from the operand widths.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
-(`to_lookup_operands`) at `c6703570`. -/
+(`to_lookup_operands`) at `ff6fc6568`. -/
 private theorem floor_lookup_sum {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Nat) (ht : t < trace.rows.size)
@@ -112,7 +112,7 @@ private theorem masked_mod_128 (value : Nat) :
 addresses; for example, base 10 and immediate -2 produce index 8.
 The floor address equality depends on the explicit #1949 wrap obligation.
 Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
-(`RightLookupAdd`) at `c6703570`. -/
+(`RightLookupAdd`) at `ff6fc6568`. -/
 theorem honestWitness_rightLookupAdd
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

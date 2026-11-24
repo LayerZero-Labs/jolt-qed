@@ -7,7 +7,7 @@ open LeanRV64D
 tracer adds the instruction's own address; the Lean interpreter reads Sail's PC.
 The execution-prefix invariant must equate that PC with the selected row's
 address.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/auipc.rs:21-28
 See : jolt/crates/jolt-riscv/src/instructions/i/auipc.rs:1-8
 See : jolt/crates/jolt-lookup-tables/src/instructions/riscv/auipc.rs:1-35 -/

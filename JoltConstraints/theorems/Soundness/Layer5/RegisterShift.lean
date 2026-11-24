@@ -7,7 +7,7 @@ open LeanRV64D
 /-! Register-fed right shifts use a mask written by the immediately preceding
 VirtualShiftRightBitmask(W) row. The local step below consumes that derived mask
 shape; the producer bridge supplies it from the actual prior write.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_srl.rs:19-30
 See : jolt/tracer/src/instruction/virtual_sra.rs:19-27
 See : jolt/tracer/src/instruction/virtual_srlw.rs:19-25

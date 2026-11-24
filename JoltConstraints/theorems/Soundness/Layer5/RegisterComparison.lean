@@ -5,7 +5,7 @@ open LeanRV64D
 
 /-! Shared step for signed and unsigned register comparisons. Both tables
 return the exact 0/1 word written by the instruction interpreter.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/slt.rs:17-27
 See : jolt/tracer/src/instruction/sltu.rs:17-29 -/
 

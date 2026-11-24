@@ -13,7 +13,7 @@ theorem finite_of_ofNat_ctorIdx {α : Type} (index : α → Nat) (ofNat : Nat �
   Finite.of_injective (β := Fin bound) (fun a => ⟨index a, index_lt a⟩) fun a b h =>
     (ofNat_index a).symm.trans ((congrArg ofNat (congrArg Fin.val h)).trans (ofNat_index b))
 
--- Rust paths below refer to public pin 8bbb2357, inspected in the local checkout.
+-- Rust paths below refer to public pin ff6fc6568, inspected in the local checkout.
 
 -- Rust: crates/jolt-riscv/src/flags.rs::CircuitFlags.
 inductive CircuitFlags where
@@ -34,7 +34,7 @@ noncomputable instance : Fintype CircuitFlags :=
 
 /-- Operand-routing and branch/no-op flags in Jolt's prover.
 For example, LD selects its captured destination with `RightOperandIsRdWriteValue`.
-Jolt's prover: `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`) at `c6703570`. -/
+Jolt's prover: `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`) at `ff6fc6568`. -/
 inductive InstructionFlags where
   | LeftOperandIsPC | RightOperandIsImm
   | LeftOperandIsRs1Value | RightOperandIsRs2Value | Branch | IsNoop
@@ -52,7 +52,7 @@ noncomputable instance : Fintype InstructionFlags :=
 /-- The 55 lookup tables, in the order used by Jolt's prover.
 For example, `AddressOffsetH` returns an effective address masked with 6.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs`
-(`LookupTableKind<64>`) at `c6703570`. -/
+(`LookupTableKind<64>`) at `ff6fc6568`. -/
 inductive LookupTableKind where
   | RangeCheck
   | RangeCheckAligned

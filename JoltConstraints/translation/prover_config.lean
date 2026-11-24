@@ -62,7 +62,7 @@ so the table holds word `touched`.
 For example, `touched = 1024` with `imageEnd = 40` gives `pow2(1025) = 2048`, where
 Jolt's prover before #2250 rounded `max touched imageEnd` and got 1024.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at
-c97e9300. `touched + 1` cannot overflow, since `touched < 2^61`. -/
+ff6fc6568. `touched + 1` cannot overflow, since `touched < 2^61`. -/
 def checkedRamSize (dimensions : ExecutionDimensions) (layout : MemoryLayout)
     (minBytecodeAddress imageWords : Nat) : Option Nat := do
   let touched ← checkedTouched dimensions.ram_bounds layout

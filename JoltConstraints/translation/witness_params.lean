@@ -15,7 +15,7 @@ of its padded length `config.trace_length` is below 64: the length is a power of
 most the instance's 64-bit maximum.
 For example, a 300-row run pads to `512 = 2^9`, and `9 < 64`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::from_padded_dimensions`)
-at c6703570. -/
+at ff6fc6568. -/
 theorem HonestTrace.prover_config_log_trace_length_lt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -33,7 +33,7 @@ of its RAM size `config.ram_K` is below 64: Jolt's prover checks that the rounde
 fits in 64 bits (`HonestTrace.prover_config_ram_K`).
 For example, `ram_K = 1024 = 2^10` gives `10 < 64`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
-at c97e9300. -/
+at ff6fc6568. -/
 theorem HonestTrace.prover_config_log_ram_K_lt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -70,7 +70,7 @@ See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::from_padded_dimensions
 `validate_inputs_from_parts` call with `config.trace_length`, `config.ram_K` and
 `config.one_hot_config`), jolt/crates/jolt-program/src/preprocess/bytecode.rs
 (`BytecodePreprocessing::preprocess`, `code_size`) and jolt/common/src/constants.rs
-(`ONEHOT_CHUNK_THRESHOLD_LOG_T`) at c6703570. -/
+(`ONEHOT_CHUNK_THRESHOLD_LOG_T`) at ff6fc6568. -/
 noncomputable def HonestTrace.witness_params
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)

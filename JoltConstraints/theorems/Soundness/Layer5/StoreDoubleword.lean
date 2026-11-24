@@ -12,7 +12,7 @@ natural alignment, stored value and single-word table update. The address checks
 are the local facts supplied by the verifier domain checks
 through the access-count and protected-increment claims. The shared-memory case starts at
 RAM_START_ADDRESS; I/O and RAM stores update the same map.
-Jolt's tracer at c6703570: `tracer/src/instruction/sd.rs` (`SD::exec`),
+Jolt's tracer at ff6fc6568: `tracer/src/instruction/sd.rs` (`SD::exec`),
 `tracer/src/instruction/floor_access.rs` (`store`) and
 `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`). -/
 
@@ -37,7 +37,7 @@ include context rowIs storeRow in
 /-- A selected store row has canonical base and value operands.
 For example, a virtual source cannot alias architectural register x1.
 See jolt/crates/jolt-program/src/expand/allocator.rs
-(`RISCV_REGISTER_BASE`, `ExpansionAllocator::allocate`) at 5def437f. -/
+(`RISCV_REGISTER_BASE`, `ExpansionAllocator::allocate`) at ff6fc6568. -/
 theorem StoreRow.canonical :
     JoltRegisterEncoding.sourceIsCanonical base = true ∧
     JoltRegisterEncoding.sourceIsCanonical source = true := by

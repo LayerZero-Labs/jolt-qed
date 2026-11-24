@@ -8,7 +8,7 @@ open LeanRV64D
 /-! Shared step for unary word operations whose AddOperands flag uses the
 source value as the lookup index, without interleaving. The row immediate is ignored by both
 the circuit's operand selection and the interpreter.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_sign_extend_word.rs:17-24
 See : jolt/tracer/src/instruction/virtual_zero_extend_word.rs:17-24
 See : jolt/tracer/src/instruction/virtual_pow2.rs:17-24

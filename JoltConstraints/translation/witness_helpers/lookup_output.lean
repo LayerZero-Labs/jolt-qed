@@ -16,7 +16,7 @@ Floor rows return their address offset, while LD and SD return zero.
 For example, a halfword floor row at effective address 10 returns 2.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
 (`floor_access!`) and `instructions/virt/shift_data_{b,h,w}.rs`
-(`to_lookup_output`) at `c6703570`. -/
+(`to_lookup_output`) at `ff6fc6568`. -/
 noncomputable def rowLookupOutput {bytecode : Array JoltInstructionRow}
     (row : TraceRow bytecode) : BitVec 64 :=
   let bytecodeRow := getElem bytecode row.rowIndex.val row.rowIndex.isLt

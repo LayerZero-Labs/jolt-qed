@@ -13,7 +13,7 @@ set_option autoImplicit false
 
 -- The trace starts at the slot Rust's get_first_pc picks for the entry address: one
 -- past the first row's position, since the NoOp takes slot 0.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:246-254 (get_first_pc)
 theorem HonestTrace.starts_at_entry {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
@@ -63,7 +63,7 @@ theorem HonestTrace.starts_at_entry {joltInstance : JoltInstance SourceInstructi
 
 -- In an honest trace, every LD reads from a whole number of 64-bit units above the
 -- lowest address, as Rust's witness needs to place it in its RAM table.
--- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:260 (remapped_ram_address)
+-- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:222 (remapped_ram_address)
 theorem HonestTrace.load_offset_aligned {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (row : HonestTraceRow trace.bytecode) (faultClass : JoltISA.LoadFaultClass)
@@ -78,7 +78,7 @@ theorem HonestTrace.load_offset_aligned {joltInstance : JoltInstance SourceInstr
 
 -- In an honest trace, every SD writes to a whole number of 64-bit units above the
 -- lowest address, as Rust's witness needs to place it in its RAM table.
--- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:260 (remapped_ram_address)
+-- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:222 (remapped_ram_address)
 theorem HonestTrace.store_offset_aligned {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (row : HonestTraceRow trace.bytecode) (base value : JoltISA.Src) (imm : BitVec 64)

@@ -13,7 +13,7 @@ interleaved rows, recovered from their lookup index; padding contributes zero.
 For example, ShiftData with rs2 = 0 and immediate -1 contributes `2^64 - 1`.
 Jolt's prover: `crates/jolt-lookup-tables/src/traits.rs`
 (`LookupQuery::to_lookup_operands`) and
-`crates/jolt-witness/src/witnesses/operands.rs` (`RightLookupOperand`) at `c6703570`. -/
+`crates/jolt-witness/src/witnesses/operands.rs` (`RightLookupOperand`) at `ff6fc6568`. -/
 noncomputable def RightLookupOperand {F : Type} [Field F] (p : WitnessParams)
     (trace : Trace) : Fin p.traceLength → F :=
   fun t =>

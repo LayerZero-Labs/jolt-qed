@@ -20,7 +20,7 @@ follows from this honest trace's initialization and execution.
 For example, a floor store at effective address 11 reads the old doubleword at 8.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`);
 Jolt's prover: `crates/jolt-witness/src/witnesses/ram.rs` (`RamReadValue`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 noncomputable def RamReadValue [Field F] {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) : Fin p.traceLength → F :=
   fun t =>

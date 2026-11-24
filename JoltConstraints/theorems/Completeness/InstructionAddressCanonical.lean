@@ -42,7 +42,7 @@ addresses below `2^64 + 2^63` once they are not negative. For example, the
 largest product `(2^64 - 1)^2 = 2^128 - 2^65 + 1` is still `2^64 - 1` below the
 bound.
 Rust: `crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs`
-(`canonical_predicate_separates_aliases_from_honest_indices`) at `c97e9300`. -/
+(`canonical_predicate_separates_aliases_from_honest_indices`) at `ff6fc6568`. -/
 theorem instructionLookupIndex_lt_of_raf (instruction : JoltISA.Instr)
     (address : BitVec 64) (preState postState : SailJoltState)
     (raf : JoltMetadata.instructionRafFlag instruction = true)
@@ -69,7 +69,7 @@ all ones; other rows have `InstructionRafFlag = 0`.
 Floor rows use the same nonnegativity obligation as constraint (08)
 (`HonestTrace.floorAccess_address_nonneg`, a16z/jolt#1949).
 Jolt's prover: `crates/jolt-kernels/src/optimized/instruction_read_raf.rs`
-(`CANONICAL_INSTRUCTION_ADDRESS`) at `c97e9300`. -/
+(`CANONICAL_INSTRUCTION_ADDRESS`) at `ff6fc6568`. -/
 theorem honestWitness_instructionAddressCanonical
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

@@ -16,7 +16,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 /-- Preparation after a certified prefix fixes PC and nextPC before the new row
 executes; for example, ECALL's final JALR still has ECALL's prepared source PCs.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at ff6fc6568. -/
 theorem RawRowEntry.prepared_pc
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     {run : UntrustedAnswerRun inst inputs} {next : Fin run.bytecode.size}
@@ -59,7 +59,7 @@ theorem row_kind (instruction : Instr) :
 row; for example, ECALL's JALR is selected after its preceding setup rows.
 Here ordinary excludes jumps, branches and HostIO.
 See jolt/crates/jolt-program/src/expand/metadata.rs (`stamp_sequence_metadata`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem expansion_nonordinary_terminal
     (image : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
     (expanded : expand_program image = some bytecode)
@@ -100,7 +100,7 @@ include joltField assumptions restrictions equations state unfinished honestAdvi
 /-- A terminal HostIO row appends the call certified by `HostCallsSucceed` and
 keeps live-register agreement; for example, an advice-write call changes the tape.
 Porting `host_call_selected_step` to live agreement belongs to the future proof.
-See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`) at 5def437f. -/
+See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`) at ff6fc6568. -/
 theorem host_row_step
     (instruction : run.bytecode[next].instruction = .VirtualHostIO)
     (_terminal : done + 1 = expansionRowCount context.bytecode first) :
@@ -118,7 +118,7 @@ include pc nextPC
 for example, a singleton self-JAL can complete the block at a explicit halt.
 The future proof ports `jal_step` to live agreement and uses the existing no-wrap
 assumption; PC preparation is supplied before execution, not from the new run.
-See jolt/tracer/src/instruction/jal.rs (`JAL::exec`) at 5def437f. -/
+See jolt/tracer/src/instruction/jal.rs (`JAL::exec`) at ff6fc6568. -/
 theorem jal_row_step {destination : Dst} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .JAL destination imm)
     (_terminal : done + 1 = expansionRowCount context.bytecode first) :
@@ -129,7 +129,7 @@ theorem jal_row_step {destination : Dst} {imm : BitVec 64}
 /-- A terminal JALR appends its indirect jump using a live base register;
 for example, ECALL's final JALR reads its initialized virtual mtvec base.
 The future proof must supply the missing Layer 5 rule and the shared append facts.
-See jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at 5def437f. -/
+See jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at ff6fc6568. -/
 theorem jalr_row_step {destination : Dst} {base : Src} {imm : BitVec 64}
     (instruction : run.bytecode[next].instruction = .JALR destination base imm)
     (_terminal : done + 1 = expansionRowCount context.bytecode first) :

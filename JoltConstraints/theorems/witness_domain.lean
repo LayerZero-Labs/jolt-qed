@@ -74,7 +74,7 @@ theorem MemoryLayout.get_lowest_address_toNat (layout : MemoryLayout) :
 `config.ram_K` is a power of two.
 For example, a run touching word 1000 gets `ram_K = 1024 = 2^10`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`ProverConfig::from_padded_dimensions`) at c97e9300. -/
+`ProverConfig::from_padded_dimensions`) at ff6fc6568. -/
 theorem HonestTrace.prover_config_ram_K_pow {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config) :
@@ -136,7 +136,7 @@ theorem HonestTrace.witness_params_ram_fits {joltInstance : JoltInstance SourceI
 /-- Jolt's witness sizes use the chunk widths Jolt's prover picks
 (`WitnessParams.ProverChunkConfig`): 4 and 16 bits below `2^25` cycles, else 8 and 32.
 For example, a run padded to `2^9` cycles uses widths 4 and 16.
-See jolt/crates/jolt-prover/src/config.rs (`one_hot_config`) at c6703570. -/
+See jolt/crates/jolt-prover/src/config.rs (`one_hot_config`) at ff6fc6568. -/
 theorem HonestTrace.witness_params_chunk_config
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)

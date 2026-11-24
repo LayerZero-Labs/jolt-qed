@@ -12,7 +12,7 @@ namespace JoltConstraints
 open scoped BigOperators
 
 /-- A bytecode address digit, most significant first, with leading zero bits.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-witness/src/witnesses/one_hot.rs#L19-L58 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-witness/src/witnesses/one_hot.rs#L19-L58 -/
 def bytecodeAddressChunk (params : WitnessParams) (address : Fin (2 ^ params.logBytecodeK))
     (chunk : Fin params.bytecodeChunks) : Fin (2 ^ params.chunkBits) :=
   ⟨(address.val / 2 ^ ((params.bytecodeChunks - 1 - chunk.val) * params.chunkBits)) %
@@ -21,7 +21,7 @@ def bytecodeAddressChunk (params : WitnessParams) (address : Fin (2 ^ params.log
 
 /-- The full bytecode selector, defined from the witness's committed chunks.
 This is an abbreviation, not an additional witness column.
-Jolt: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L781-L789 -/
+Jolt: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L946-L954 -/
 noncomputable def bytecodeRa {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) (address : Fin (2 ^ params.logBytecodeK))
     (t : Fin params.traceLength) : F := ∏ chunk : Fin params.bytecodeChunks,
@@ -30,14 +30,14 @@ noncomputable def bytecodeRa {F : Type} [Field F] {params : WitnessParams}
 /-- The fixed expanded trace at its padded bytecode slot. Slot 0 and slots
 beyond the trace are no-ops, represented by `none`; array index i occupies
 slot i + 1. These tables use only bytecode; they do not read recorded transitions.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/bytecode.rs#L47-L51 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-program/src/preprocess/bytecode.rs#L47-L51 -/
 def bytecodeRow (bytecode : Array JoltInstructionRow) (address : Nat) : Option JoltInstructionRow :=
   match address with
   | 0 => none
   | index + 1 => bytecode[index]?
 
 /-- The fixed row's raw instruction address, encoded in the field; zero for no-ops.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L606-L613 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L606-L613 -/
 def bytecodeAddress {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (address : Nat) : F :=
   match bytecodeRow bytecode address with
   | some row => (row.address.toNat : F)
@@ -45,14 +45,14 @@ def bytecodeAddress {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (
 
 /-- The normalized row immediate, encoded by an integer-to-field cast.
 Use the shared metadata normalization, including signed load/store offsets.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L612-L635 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L721-L845 -/
 def bytecodeImmediate {F : Type} [Field F] (bytecode : Array JoltInstructionRow) (address : Nat) : F :=
   match bytecodeRow bytecode address with
   | some row => (JoltMetadata.immediate row.instruction : F)
   | none => 0
 
 /-- Fixed circuit flags. A padding no-op sets only DoNotUpdateUnexpandedPC.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-riscv/src/instructions/mod.rs#L536-L547 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-riscv/src/instructions/mod.rs#L555-L566 -/
 def bytecodeCircuitFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRow)
     (flag : CircuitFlags) (address : Nat) : F :=
   match bytecodeRow bytecode address with
@@ -60,7 +60,7 @@ def bytecodeCircuitFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRo
   | none => if flag = .DoNotUpdateUnexpandedPC then 1 else 0
 
 /-- Fixed instruction flags. A padding no-op sets only IsNoop.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-riscv/src/instructions/mod.rs#L550-L560 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-riscv/src/instructions/mod.rs#L569-L579 -/
 def bytecodeInstructionFlag {F : Type} [Field F] (bytecode : Array JoltInstructionRow)
     (flag : InstructionFlags) (address : Nat) : F :=
   match bytecodeRow bytecode address with

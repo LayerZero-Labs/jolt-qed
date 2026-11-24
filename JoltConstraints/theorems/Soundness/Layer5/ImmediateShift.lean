@@ -5,7 +5,7 @@ open LeanRV64D
 
 /-! Immediate right shifts use a checked bitmask in their bytecode row. The
 expansion's `immShiftOk` fact supplies the mask shape required by Layer 4.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_srli.rs:20-31
 See : jolt/tracer/src/instruction/virtual_srai.rs:20-28
 See : jolt/tracer/src/instruction/virtual_srliw.rs:19-27

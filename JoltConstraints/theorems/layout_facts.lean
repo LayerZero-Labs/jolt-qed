@@ -2,8 +2,8 @@
 Facts about the memory layout: where Rust's MemoryLayout::try_new puts the advice regions
 and the inputs. Each one is proved from MemoryLayout.new in JoltDevice.lean and the
 instance's initial state in program.lean.
-Layout source at public pin 8bbb2357:
-https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/common/src/jolt_device.rs#L381-L537
+Layout source at public pin ff6fc6568:
+https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/common/src/jolt_device.rs#L488-L772
 -/
 import JoltConstraints.translation.program
 import JoltConstraints.theorems.DeviceFrame
@@ -66,7 +66,7 @@ theorem alignUp8_some {value aligned : Nat}
 
 -- Each advice region is as long as its size, the two sit next to each other, the first
 -- starts io_bytes below RAM, and both end below 2^64.
--- See : jolt/common/src/jolt_device.rs:435-477
+-- See : jolt/common/src/jolt_device.rs:532-574
 theorem adviceRegions_some {trustedSize untrustedSize ioBytes : Nat}
     {trustedStart trustedEnd untrustedStart untrustedEnd : Nat}
     (placed : MemoryLayout.adviceRegions trustedSize untrustedSize ioBytes =
@@ -203,7 +203,7 @@ theorem new_lowest_address_ge_half_ram (config : MemoryConfig) (layout : MemoryL
 -- its configured maximum rounded up to a multiple of 8, each advice region is as long as
 -- its size, the two sit next to each other, both start at multiples of 8, and the inputs
 -- start where the higher one ends.
--- See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
+-- See : jolt/common/src/jolt_device.rs:488-768 (MemoryLayout::try_new)
 theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     config.max_trusted_advice_size.toNat ≤ layout.max_trusted_advice_size.toNat ∧
@@ -271,8 +271,8 @@ theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
 
 -- Each advice region, holding at most its configured maximum, ends at or before the
 -- inputs start: the advice bytes never reach the public inputs.
--- See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
---       jolt/tracer/src/lib.rs:366-377 (create_emulator checks the advice sizes)
+-- See : jolt/common/src/jolt_device.rs:488-768 (MemoryLayout::try_new)
+--       jolt/tracer/src/lib.rs:374-385 (create_emulator checks the advice sizes)
 theorem new_advice_below_input (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) (trustedSize untrustedSize : Nat)
     (trustedFits : trustedSize ≤ config.max_trusted_advice_size.toNat)
@@ -284,7 +284,7 @@ theorem new_advice_below_input (config : MemoryConfig) (layout : MemoryLayout)
   omega
 
 -- The inputs start a whole number of 64-bit words above the lowest address.
--- See : jolt/common/src/jolt_device.rs:535-537 (get_lowest_address)
+-- See : jolt/common/src/jolt_device.rs:770-772 (get_lowest_address)
 theorem new_input_word_aligned (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     (layout.input_start.toNat - layout.get_lowest_address.toNat) % 8 = 0 := by
@@ -294,7 +294,7 @@ theorem new_input_word_aligned (config : MemoryConfig) (layout : MemoryLayout)
   split <;> omega
 
 -- The lowest address, where the advice regions begin, is a multiple of 8.
--- See : jolt/common/src/jolt_device.rs:535-537 (get_lowest_address)
+-- See : jolt/common/src/jolt_device.rs:770-772 (get_lowest_address)
 theorem new_lowest_address_aligned (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     layout.get_lowest_address.toNat % 8 = 0 := by
@@ -307,7 +307,7 @@ theorem new_lowest_address_aligned (config : MemoryConfig) (layout : MemoryLayou
 
 /-- Outputs end at `io_end`, followed by the reserved I/O gap.
 For example, a zero-capacity output still leaves eight bytes before RAM.
-See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new). -/
+See : jolt/common/src/jolt_device.rs:488-768 (MemoryLayout::try_new). -/
 theorem new_io_geometry (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     layout.output_end.toNat = layout.output_start.toNat + layout.max_output_size.toNat ∧
@@ -378,7 +378,7 @@ theorem new_io_geometry (config : MemoryConfig) (layout : MemoryLayout)
   exact ⟨outputEndIs.1, outputEight, trivial, ioEndBound⟩
 
 -- The outputs start right after the inputs' region, whose size is a multiple of 8.
--- See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
+-- See : jolt/common/src/jolt_device.rs:488-768 (MemoryLayout::try_new)
 theorem new_outputs_after_inputs (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     layout.output_start.toNat = layout.input_start.toNat + layout.max_input_size.toNat ∧
@@ -431,7 +431,7 @@ theorem new_outputs_after_inputs (config : MemoryConfig) (layout : MemoryLayout)
 /-- A successful layout reserves at least the configured maximum number of input
 bytes, rounding the reservation up to an eight-byte boundary.
 For example, a configured maximum of nine bytes occupies sixteen layout bytes.
-See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at 5def437f. -/
+See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at ff6fc6568. -/
 theorem new_input_size_bound (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     config.max_input_size.toNat ≤ layout.max_input_size.toNat := by
@@ -511,7 +511,7 @@ theorem JoltDevice.readable_of_layout (device : JoltDevice) (config : MemoryConf
 In a successful layout the output start and end word indices follow
 from the input word index, and the output end word index is below the index of
 `RAM_START_ADDRESS`.
-See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new). -/
+See : jolt/common/src/jolt_device.rs:488-768 (MemoryLayout::try_new). -/
 theorem new_io_word_geometry (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     (layout.output_start.toNat - layout.get_lowest_address.toNat) / 8 =
@@ -531,7 +531,7 @@ theorem new_io_word_geometry (config : MemoryConfig) (layout : MemoryLayout)
 
 -- With the lowest address above 8, as validate_inputs requires, no device region covers
 -- an address below 8, and the I/O region ends above it.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:999-1016 (validate_ram_remap_base)
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:985-1002 (validate_ram_remap_base)
 theorem JoltDevice.low_address_free (device : JoltDevice) (config : MemoryConfig)
     (built : MemoryLayout.new config = some device.memory_layout)
     (aboveEight : 8 < device.memory_layout.get_lowest_address.toNat)

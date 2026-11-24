@@ -5,7 +5,7 @@ open LeanRV64D
 
 /-! Shared execution proof for two-register AND, OR and ANDN. Each consumes
 the existing interleaved lookup-table rule and the common destination write.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/and.rs:17-26
 See : jolt/tracer/src/instruction/or.rs:17-26
 See : jolt/tracer/src/instruction/andn.rs:17-26 -/

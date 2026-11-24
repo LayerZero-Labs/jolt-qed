@@ -10,7 +10,7 @@ namespace JoltConstraints
 
 /-- Constraint (17) in `constraints.md` (stage 1):
 the remaining rows advance or preserve the unexpanded PC according to their flags.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
 def nextUnexpandedPCUpdateOtherwise {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

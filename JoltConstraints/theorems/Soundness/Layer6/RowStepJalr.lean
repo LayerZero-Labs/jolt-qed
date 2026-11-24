@@ -12,7 +12,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 /-- Append a row with its selected observations, unchanged memory,
 and next-column live-register agreement to the represented expansion prefix.
 For example, a final JALR row adds its link destination to the live set.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at ff6fc6568. -/
 theorem append_nonmemory_row
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
@@ -90,7 +90,7 @@ private theorem jump_traits (instruction : Instr) (destination : Dst) (pre : Sai
 the constrained link; for example, JAL and JALR share the selected-row,
 observation, memory and live-destination argument.
 See jolt/tracer/src/instruction/jal.rs (`JAL::exec`) and
-jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at 5def437f. -/
+jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at ff6fc6568. -/
 theorem append_jump_row
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
@@ -154,7 +154,7 @@ theorem append_jump_row
 
 /-- An indirect jump appends its successful execution and preserves the expansion
 invariant; for example, ECALL's last row jumps through the live mtvec register.
-See jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at 5def437f. -/
+See jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at ff6fc6568. -/
 theorem append_jalr_row
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}

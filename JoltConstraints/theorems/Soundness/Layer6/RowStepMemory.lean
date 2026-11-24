@@ -29,8 +29,8 @@ include joltField assumptions equations state unfinished indexIs entry registers
 /-- A load row appends its row with live-register and cut-RAM agreement in
 either address region; for example, a live temporary can address RAM or an
 input word, and VirtualLoadH reads the doubleword containing its halfword.
-See jolt/tracer/src/instruction/ld.rs (`LD::exec`) at 5def437f and
-jolt/tracer/src/instruction/floor_access.rs (`load`) at c6703570. -/
+See jolt/tracer/src/instruction/ld.rs (`LD::exec`) at ff6fc6568 and
+jolt/tracer/src/instruction/floor_access.rs (`load`) at ff6fc6568. -/
 theorem append_load_row {width : MemoryWidth} {destination : Dst} {base : Src} {imm : BitVec 64}
     (loadRow : LoadRow run.bytecode[next].instruction width destination base imm) :
     PlainRowExtension witness context run first done bound := by
@@ -66,8 +66,8 @@ theorem append_load_row {width : MemoryWidth} {destination : Dst} {base : Src} {
 /-- A store row appends its row in either address region, preserving live
 registers and every shared-memory word at the cut.
 For example, an output SD, a RAM SD and a VirtualStoreB use the same append proof.
-See jolt/tracer/src/instruction/sd.rs (`SD::exec`) at 5def437f and
-jolt/tracer/src/instruction/floor_access.rs (`store`) at c6703570. -/
+See jolt/tracer/src/instruction/sd.rs (`SD::exec`) at ff6fc6568 and
+jolt/tracer/src/instruction/floor_access.rs (`store`) at ff6fc6568. -/
 theorem append_store_row {width : MemoryWidth} {base source : Src} {imm : BitVec 64}
     (storeRow : StoreRow run.bytecode[next].instruction width base source imm) :
     PlainRowExtension witness context run first done bound := by

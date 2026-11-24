@@ -25,7 +25,7 @@ LD interleaves zero with its loaded destination.
 Jolt's prover: `crates/jolt-lookup-tables/src/traits.rs` (`LookupQuery`),
 `instructions/virt/floor_access.rs` (`floor_access!`),
 `instructions/virt/shift_data_{b,h,w}.rs` (`to_instruction_inputs`), and
-`instructions/riscv/{ld,sd}.rs` (`LookupQuery`) at `c6703570`. -/
+`instructions/riscv/{ld,sd}.rs` (`LookupQuery`) at `ff6fc6568`. -/
 noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
     (address : BitVec 64) (preState postState : SailJoltState) : BitVec 128 :=
   let source := fun src => JoltISA.sourceValue src preState
@@ -49,7 +49,7 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   | .LUI _ imm => imm.setWidth 128
   -- Rust's FormatU decoder stores the sign-extended offset as u64 widened to
   -- i128, so AUIPC retains the unsigned 64-bit offset, including any carry.
-  -- Jolt: FormatU decoding, jolt/crates/jolt-program/src/image/decode.rs:513-520 at 5def437f.
+  -- Jolt: FormatU decoding, jolt/crates/jolt-program/src/image/decode.rs:535-542 at ff6fc6568.
   | .AUIPC _ imm =>
       BitVec.ofNat 128 (JoltISA.addWide address imm)
   -- Rust: [JAL](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jal.rs:18).

@@ -7,8 +7,8 @@ open LeanRV64D
 
 /-! FENCE has no destination and no RAM effect. Its selected row therefore
 preserves both register and shared-memory agreement.
-At public pin 8bbb2357:
-See : jolt/tracer/src/instruction/fence.rs:20-26 -/
+At public pin ff6fc6568:
+See : jolt/tracer/src/instruction/fence.rs:21-27 -/
 
 set_option autoImplicit false
 

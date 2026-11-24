@@ -32,7 +32,7 @@ and every Sail register is present so execution reads can succeed.
 For example, between source instructions `live` excludes instruction temporaries
 40–47: a REM witness may retain quotient 5 there while the honest run retains 0.
 The equation uses the same register decoding and field cast as `RegisterAgreement`.
-See jolt/crates/jolt-program/src/expand/allocator.rs:133-143 at 5def437f. -/
+See jolt/crates/jolt-program/src/expand/allocator.rs:133-143 at ff6fc6568. -/
 structure RegisterAgreementOn (live : Fin 128 → Prop) (witness : WitnessType F params)
     (t : Fin params.traceLength) (state : SailJoltState) : Prop where
   present : AllRegistersPresent state.sail

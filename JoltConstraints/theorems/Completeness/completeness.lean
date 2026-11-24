@@ -25,7 +25,7 @@ theorem HonestTrace.exists_preprocessed {joltInstance : JoltInstance SourceInstr
 
 -- Jolt's verifier finds the entry slot with get_first_pc. For the honest trace it is
 -- the slot the witness starts at: the first row's slot.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:246-254 (get_first_pc)
 theorem HonestTrace.first_pc_eq_entry {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots) :

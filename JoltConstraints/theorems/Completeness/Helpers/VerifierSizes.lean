@@ -124,7 +124,7 @@ than the highest touched word (`Trace.highest_ram_slot`) and the image's end, th
 plus `program_image_len_words` plus one; that end and `config.ram_K` fit in 64 bits.
 For example, an image at `0x80000000` with lowest address `0x7fff8000` starts at word 4096.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`checked_remap_address`) at c97e9300. -/
+`checked_remap_address`) at ff6fc6568. -/
 theorem HonestTrace.prover_config_ram_K_of_nonempty
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -166,7 +166,7 @@ number at least the image's end (`HonestTrace.prover_config_ram_K`).
 For example, an image whose first word index plus word count is 40 has minimum
 `pow2(40) = 64`, and Jolt's prover rounds at least 41, so its `ram_K` is at least 64.
 See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_min_ram_k`) and
-jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at c97e9300. -/
+jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at ff6fc6568. -/
 theorem HonestTrace.witness_params_ram_minimum_of_nonempty
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -216,7 +216,7 @@ theorem HonestTrace.witness_params_ram_minimum_of_nonempty
 `RAM_START_ADDRESS + programSize`, where `programSize` is the configured program size:
 the stack canary, the stack and the heap follow the program.
 For example, a 4096-byte program gives `heap_end ≥ 0x80000000 + 4096 + 128`.
-See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at c6703570. -/
+See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at ff6fc6568. -/
 theorem new_heap_end_ge (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     ∃ programSize, config.program_size = some programSize ∧
@@ -266,7 +266,7 @@ theorem new_heap_end_ge (config : MemoryConfig) (layout : MemoryLayout)
 bytes past the program image's end `program_end`: the host sets the program size to
 `program_end - RAM_START_ADDRESS` (`Rv64ProgramImage.program_size`).
 For example, an image ending at `0x80001000` gives `heap_end ≥ 0x80001080`.
-See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at c6703570. -/
+See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at ff6fc6568. -/
 theorem HonestTrace.program_end_below_heap_end {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     joltInstance.program.program_end.toNat + JoltISA.STACK_CANARY_SIZE ≤
@@ -384,7 +384,7 @@ below RAM, and rounding fits in 64 bits because Jolt's RAM size, which is at lea
 large, does.
 For example, an image of words 4096 to 4135 with lowest address `0x7fff8000` has minimum
 `pow2(max(4136, 4096)) = 8192`.
-See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_min_ram_k`) at c6703570. -/
+See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_min_ram_k`) at ff6fc6568. -/
 theorem HonestTrace.verifier_ram_minimum_computes
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -515,7 +515,7 @@ theorem HonestTrace.witness_params_ram_bounds
 length, and its chunk width is the setup's width for that length.
 For example, a run padded to `2^9` cycles with 4-bit chunks needs 13 setup variables,
 and a setup sized for at least `2^9` cycles has at least that many.
-See jolt/crates/jolt-prover/src/dory/preprocessing.rs (`setup_total_vars`) at c6703570. -/
+See jolt/crates/jolt-prover/src/dory/preprocessing.rs (`setup_total_vars`) at ff6fc6568. -/
 theorem HonestTrace.witness_params_one_hot_fits_setup
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)

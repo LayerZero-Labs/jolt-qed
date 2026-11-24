@@ -7,7 +7,7 @@ open LeanRV64D
 REMW, REMUW, LR.W, LR.D, SC.W and SC.D expansions.
 Acceptance is derived from the selected comparison table and Assert constraint;
 it is not an execution premise. The entire state is preserved.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_assert_lte.rs:17-23
 See : jolt/crates/jolt-riscv/src/instructions/assert/assert_lte.rs:3-8
 See : jolt/crates/jolt-lookup-tables/src/instructions/virt/assert_lte.rs:6-21 -/

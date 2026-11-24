@@ -24,7 +24,7 @@ So the equation holds only when `rs1 + imm` does not wrap. For example,
 satisfied.
 Left as `sorry` until a16z/jolt#1949 is fixed.
 
-Rust, at `c6703570`:
+Rust, at `ff6fc6568`:
 - (01): `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
   (`RamAddrEqRs1PlusImmMinusLookupIfLoadStore`, row 0).
 - 64-bit address addition: `tracer/src/instruction/ld.rs` (`LD::exec`),

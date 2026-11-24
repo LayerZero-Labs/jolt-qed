@@ -11,7 +11,7 @@ set_option autoImplicit false
 `ea - (ea &&& mask)`; for example, a byte floor row at effective address 11
 records 8, which is still below `2^64`.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`) and
-`crates/jolt-riscv/src/trace_row.rs` (`ram_address`) at `c6703570`. -/
+`crates/jolt-riscv/src/trace_row.rs` (`ram_address`) at `ff6fc6568`. -/
 theorem TraceRow.ram_address_lt {bytecode : Array JoltInstructionRow}
     (row : TraceRow bytecode) (address : Nat) (touches : row.ram_address = some address) :
     address < 2 ^ 64 := by
@@ -62,7 +62,7 @@ theorem checked_trace_length_fits
 /-- Represented row addresses fit in 64 bits and, unless zero, lie at or above
 the constraint layout's lowest address.
 For example, a selected RAM index 3 records an address 24 bytes above that base.
-See jolt/crates/jolt-prover/src/config.rs (`checked_remap_address`) at 5def437f. -/
+See jolt/crates/jolt-prover/src/config.rs (`checked_remap_address`) at ff6fc6568. -/
 theorem represented_ram_addresses_bounded
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -108,7 +108,7 @@ theorem represented_ram_addresses_bounded
 touched word index below `2 ^ 61`.
 Zero is ignored; for example, `[0, lowest + 24]` yields word index 3.
 See jolt/crates/jolt-program/src/execution/trace.rs (`RamAddressBounds::observe`)
-and jolt/crates/jolt-prover/src/config.rs (`checked_remap_address`) at 5def437f. -/
+and jolt/crates/jolt-prover/src/config.rs (`checked_remap_address`) at ff6fc6568. -/
 theorem checked_touched_of_address_bounds (addresses : List Nat) (layout : MemoryLayout)
     (bounded : ∀ address ∈ addresses, address < 2 ^ 64 ∧
       (address = 0 ∨ layout.get_lowest_address.toNat ≤ address)) :
@@ -134,7 +134,7 @@ word end by `2 ^ 61` and certify its remapping and checked addition.
 For example, an image starting at word 3 with two words has exclusive end 5;
 the prover will subsequently add its extra sentinel word.
 See jolt/crates/jolt-program/src/preprocess/ram.rs
-(`compute_min_ram_k`, `compute_max_ram_k`) at 5def437f. -/
+(`compute_min_ram_k`, `compute_max_ram_k`) at ff6fc6568. -/
 theorem verifier_ram_image_end_bounded {Source : Type}
     (program : Rv64ProgramImage Source) (layout : MemoryLayout) (minimum maximum : Nat)
     (minimumComputed : JoltConstraints.VerifierSizes.minRamSize program layout = some minimum)
@@ -177,7 +177,7 @@ so adding the image sentinel and rounding cannot overflow the 64-bit host size.
 See jolt/crates/jolt-prover/src/config.rs
 (`ProverConfig::derive_from_dimensions`, `checked_remap_address`) and
 jolt/crates/jolt-program/src/preprocess/ram.rs
-(`compute_min_ram_k`, `compute_max_ram_k`) at 5def437f. -/
+(`compute_min_ram_k`, `compute_max_ram_k`) at ff6fc6568. -/
 theorem represented_ram_size_computes
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)

@@ -61,7 +61,7 @@ private theorem first_address_row_starts
 of its source instruction, whose address is the program entry address.
 For example, entry slot 1 identifies row 0 of an ADDI at the entry address.
 See jolt/crates/jolt-program/src/preprocess/bytecode.rs (`get_first_pc`,
-`BytecodePCMapper::try_new`) at 5def437f. -/
+`BytecodePCMapper::try_new`) at ff6fc6568. -/
 private theorem first_row_of_entry_slot
     (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow)

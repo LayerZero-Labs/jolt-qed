@@ -13,7 +13,7 @@ namespace JoltInstance
 /-- A selected padding cycle has unexpanded address zero, as the no-op slots
 have no source address; for example, the reserved no-op slot has address zero.
 See jolt/crates/jolt-witness/src/witnesses/pc.rs (`UnexpandedPc::extract`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem unexpanded_zero_of_padding
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)

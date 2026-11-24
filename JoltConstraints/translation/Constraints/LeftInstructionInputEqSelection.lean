@@ -10,7 +10,7 @@ namespace JoltConstraints
 
 /-- Constraint (32) in `constraints.md` (stage 3):
 the left instruction input is selected from Rs1Value and UnexpandedPC by the instruction flags.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs#L108-L127 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs#L115-L134 -/
 def leftInstructionInputEqSelection {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

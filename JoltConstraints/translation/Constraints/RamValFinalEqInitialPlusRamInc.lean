@@ -10,7 +10,7 @@ open scoped BigOperators
 
 /-- Constraint (38) in `constraints.md`:
 Each final RAM word equals its initial value plus all write increments.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135-L154 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs -/
 def ramValFinalEqInitialPlusRamInc {F : Type} [Field F] {params : WitnessParams}
     (initialRam : Nat → BitVec 64) (witness : WitnessType F params) : Prop :=
   ∀ address : Fin params.ramSize,

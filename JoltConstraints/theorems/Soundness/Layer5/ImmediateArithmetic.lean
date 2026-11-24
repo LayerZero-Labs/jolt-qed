@@ -5,7 +5,7 @@ open LeanRV64D
 
 /-! Shared register step for ADDIW, VirtualMULI and VirtualMULIW. The decoded
 immediate is the second arithmetic operand; word rows sign-extend the low word.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/addiw.rs:20-28
 See : jolt/tracer/src/instruction/virtual_muli.rs:19-28
 See : jolt/tracer/src/instruction/virtual_muliw.rs:19-24 -/

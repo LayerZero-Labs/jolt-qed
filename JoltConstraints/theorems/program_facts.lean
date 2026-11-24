@@ -382,7 +382,7 @@ theorem expand_program_rows (image : Rv64ProgramImage SourceInstruction)
 /-- Every materialized bytecode row belongs to one source instruction's
 expansion. This does not require unique source addresses: for example, a JALR
 row still has an emitting source even before the PC map is checked.
-See jolt/crates/jolt-program/src/expand/materialize.rs:71-101 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/materialize.rs:75-105 at ff6fc6568. -/
 theorem expand_program_source_of_row (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode)
     (row : JoltInstructionRow) (member : row ∈ bytecode.toList) :
@@ -671,7 +671,7 @@ namespace JoltInstance
 
 /-- Rows at one accepted bytecode address come from one source instruction's
 expansion. For example, every row at an ECALL address comes from that ECALL.
-See jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-164 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/preprocess/bytecode.rs:128-187 at ff6fc6568. -/
 theorem expanded_same_source_rows
     (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow)
@@ -1005,7 +1005,7 @@ theorem pc_map_ok_addresses (rows : Array JoltInstructionRow) (accepted : pc_map
   exact (allRuns run inRuns).1 _ inRun
 
 -- Rows the PC map accepts number fewer than 2^32.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-164 (try_new)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:128-187 (try_new)
 theorem pc_map_ok_size (rows : Array JoltInstructionRow) (accepted : pc_map_ok rows = true) :
     rows.size < 2 ^ 32 := by
   unfold pc_map_ok at accepted

@@ -33,7 +33,7 @@ theorem HonestTrace.preState_layout {joltInstance : JoltInstance SourceInstructi
 
 /-- Retiring after a write of zero captures zero even for x0, which always
 reads zero; for example, a load from the zero address captures zero in x0.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `ff6fc6568`. -/
 private theorem captured_zero_retire (dst : JoltISA.Dst) (pre post : SailJoltState)
     (runs : (do JoltISA.writeDst dst 0; pure LeanRV64D.Functions.RETIRE_SUCCESS) pre =
       .ok (.Retire_Success ()) post) :
@@ -54,7 +54,7 @@ private theorem captured_zero_retire (dst : JoltISA.Dst) (pre post : SailJoltSta
 
 /-- An LD row at address zero captures zero, including when its destination is x0.
 For example, LD from base zero with immediate zero reads the special zero word.
-Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `ff6fc6568`. -/
 theorem HonestTrace.load_zero_captured {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (inTrace : i < trace.rows.size) (faultClass : JoltISA.LoadFaultClass)
@@ -172,7 +172,7 @@ theorem execInstr_store_access (base value : JoltISA.Src) (imm : BitVec 64)
 address is zero, and reads below `heap_end` when the recorded address is in RAM (at or
 above `RAM_START_ADDRESS`); for example, LoadH at ea 2 reads word zero.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `addresses`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem HonestTrace.floor_load_properties {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (ht : i < trace.rows.size) (faultClass : JoltISA.LoadFaultClass)
@@ -215,7 +215,7 @@ theorem HonestTrace.floor_load_properties {joltInstance : JoltInstance SourceIns
 the padded RAM backing end when the recorded address is in RAM (at or above `RAM_START_ADDRESS`); for
 example, StoreB at ea 9 records 8, while a store into word zero cannot retire.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`, `addresses`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem HonestTrace.floor_store_properties {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (ht : i < trace.rows.size) (base value : JoltISA.Src)
@@ -256,7 +256,7 @@ theorem HonestTrace.floor_store_properties {joltInstance : JoltInstance SourceIn
 /-- Each recorded RAM address lies on the doubleword grid used by the RAM witness.
 Native rows retire at multiples of eight; floor rows record their containing word,
 for example LoadH at effective address ten records eight.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`) at `ff6fc6568`. -/
 theorem HonestTrace.ram_accesses_valid {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     ramAccessesValid trace := by
@@ -433,7 +433,7 @@ theorem ramAccess_remapped_some (params : WitnessParams)
 /-- A memory row recording address zero has zero RAM read and write cells.
 Stores cannot retire there; for example, LoadH at effective address two reads
 the special zero doubleword and leaves it unchanged.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`) at `ff6fc6568`. -/
 theorem ramValues_zero_at_zero {F : Type} [Field F]
     (params : WitnessParams) {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Fin params.traceLength)
@@ -573,7 +573,7 @@ theorem ramWriteValue_zero_of_remapped_none {F : Type} [Field F]
 
 /-- A RAM write cell equals its read cell plus the store increment.
 For example, replacing word three by five gives increment two; loads give zero.
-Jolt's prover: `crates/jolt-witness/src/witnesses/increments.rs` (`RamInc`) at `c6703570`. -/
+Jolt's prover: `crates/jolt-witness/src/witnesses/increments.rs` (`RamInc`) at `ff6fc6568`. -/
 theorem ramWriteValue_eq_read_add_inc {F : Type} [Field F]
     (params : WitnessParams) {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Fin params.traceLength) :

@@ -346,7 +346,7 @@ theorem AccessRow.ramAccessAddress {instruction : Instr} {width : MemoryWidth} {
 /-- A naturally aligned load row whose accessed doubleword loads `value` writes
 `value` to its destination, ignoring the tape answer and runtime advice.
 For example, VirtualLoadB at `ea = 11` writes the doubleword loaded from 8.
-Jolt's tracer at c6703570: `tracer/src/instruction/floor_access.rs` (`load`)
+Jolt's tracer at ff6fc6568: `tracer/src/instruction/floor_access.rs` (`load`)
 and `tracer/src/instruction/ld.rs` (`LD::exec`). -/
 theorem LoadRow.exec_rule {instruction : Instr} {width : MemoryWidth} {destination : Dst}
     {base : Src} {imm : BitVec 64} (row : LoadRow instruction width destination base imm)
@@ -367,7 +367,7 @@ theorem LoadRow.exec_rule {instruction : Instr} {width : MemoryWidth} {destinati
 /-- A naturally aligned store row whose accessed doubleword store succeeds
 retires with the store's post-state.
 For example, SD at 16 storing 7 retires once `Mmu.store_doubleword 16 7` succeeds.
-Jolt's tracer at c6703570: `tracer/src/instruction/floor_access.rs` (`store`)
+Jolt's tracer at ff6fc6568: `tracer/src/instruction/floor_access.rs` (`store`)
 and `tracer/src/instruction/sd.rs` (`SD::exec`). -/
 theorem StoreRow.exec_rule {instruction : Instr} {width : MemoryWidth} {base value : Src}
     {imm : BitVec 64} (row : StoreRow instruction width base value imm)

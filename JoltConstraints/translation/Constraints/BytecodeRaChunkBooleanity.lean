@@ -10,7 +10,7 @@ namespace JoltConstraints
 
 /-- Constraint (55) in `constraints.md` (stage 6a–6b):
 every bytecode-address chunk selector is Boolean.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs#L40-L58 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/booleanity.rs#L39-L61 -/
 def bytecodeRaChunkBooleanity {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ (chunk : Fin params.bytecodeChunks) (entry : Fin (2 ^ params.chunkBits))

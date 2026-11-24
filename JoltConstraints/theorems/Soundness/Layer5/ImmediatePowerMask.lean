@@ -6,7 +6,7 @@ open LeanRV64D
 
 /-! Immediate powers of two and right-shift masks use a zero left arithmetic
 input and the normalized 64-bit immediate as the right input.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_pow2i.rs:17-21
 See : jolt/tracer/src/instruction/virtual_pow2i_w.rs:17-21
 See : jolt/tracer/src/instruction/virtual_shift_right_bitmaski.rs:17-27 -/

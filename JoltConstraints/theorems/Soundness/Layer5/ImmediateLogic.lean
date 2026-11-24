@@ -5,7 +5,7 @@ open LeanRV64D
 
 /-! Shared register step for the ANDI, ORI and SLTI immediate rows. The
 selected row supplies the decoded 64-bit immediate to the lookup table.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/andi.rs:20-27
 See : jolt/tracer/src/instruction/ori.rs:20-27
 See : jolt/tracer/src/instruction/slti.rs:20-30 -/

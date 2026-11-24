@@ -22,7 +22,7 @@ namespace JoltInstance
 
 /-- A bytecode Branch flag identifies one of the six conditional branches;
 for example, BEQ carries this flag.
-See jolt/crates/jolt-riscv/src/instructions/i/beq.rs:1-20 at 8bbb2357. -/
+See jolt/crates/jolt-riscv/src/instructions/i/beq.rs:1-8 at ff6fc6568. -/
 theorem branch_instruction_of_flag (instruction : JoltISA.Instr)
     (branch : JoltMetadata.instructionFlag instruction .Branch = true) :
     ∃ lhs rhs imm,
@@ -90,7 +90,7 @@ theorem branch_target_ne_zero
 
 /-- A terminal row carries its source's compression flag itself. For example,
 the last ECALL row has the flag used to prepare ECALL's next PC.
-See jolt/crates/jolt-program/src/expand/metadata.rs:25-53 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/metadata.rs:25-53 at ff6fc6568. -/
 theorem source_compressed_of_last (bytecode : Array JoltInstructionRow)
     (i : Fin bytecode.size)
     (last : bytecode[i].virtual_sequence_remaining.getD 0 = 0) :
@@ -103,7 +103,7 @@ theorem source_compressed_of_last (bytecode : Array JoltInstructionRow)
 /-- A terminal bytecode row's 64-bit link equals its unwrapped source address
 plus its length when the image satisfies `NextPCNoWrap`. For example, an
 uncompressed JALR at address `0x1000` links to `0x1004`.
-See jolt/tracer/src/instruction/jalr.rs:19-30 at 8bbb2357. -/
+See jolt/tracer/src/instruction/jalr.rs:19-30 at ff6fc6568. -/
 theorem terminal_link_no_wrap
     (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow)
@@ -129,7 +129,7 @@ theorem terminal_link_no_wrap
 
 /-- At a represented real cycle, the selected bytecode slot is the executed
 row's index plus one; for example, row zero occupies slot one.
-See jolt/crates/jolt-witness/src/witnesses/pc.rs:1-35 at 8bbb2357. -/
+See jolt/crates/jolt-witness/src/witnesses/pc.rs:1-35 at ff6fc6568. -/
 theorem selected_represented_row
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -187,7 +187,7 @@ theorem selected_represented_row
 /-- A selected row's first or second source reads its register-table entry.
 For example, BEQ's two selected operands read the table entries for its bases.
 See jolt/crates/jolt-claims/src/protocols/jolt/relations/registers/read_write_checking.rs:97-121
-at 8bbb2357. -/
+at ff6fc6568. -/
 theorem selected_operand_register
     {F : Type} [Field F] (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -221,7 +221,7 @@ theorem selected_operand_register
 including when the run fills the witness.
 For example, a final BEQ in a full witness still selects its BEQ slot.
 See jolt/crates/jolt-witness/src/witnesses/pc.rs (`Pc::extract`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem selected_last_represented_row_at_end
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -281,7 +281,7 @@ theorem selected_last_represented_row_at_end
 /-- The last represented row occupies a real selected cycle immediately before
 the cut. For example, a retained `jal x0, 0` selects its JAL bytecode slot at
 the cycle before the first suffix cycle.
-See jolt/crates/jolt-witness/src/witnesses/pc.rs:1-35 at 8bbb2357. -/
+See jolt/crates/jolt-witness/src/witnesses/pc.rs:1-35 at ff6fc6568. -/
 theorem selected_last_represented_row
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -380,8 +380,8 @@ private theorem unwritten_no_read (register : JoltISA.VReg) (instructions : List
 /-- An operand read by a branch or JALR in expanded bytecode is not an
 instruction temporary (registers 40–47). For example, ECALL's JALR reads
 persistent register 34 (`mtvec`), while BEQ reads architectural registers.
-See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:47-50 and
-jolt/crates/jolt-program/src/expand/control_flow/mret.rs:11-16 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:47-51 and
+jolt/crates/jolt-program/src/expand/control_flow/mret.rs:17-26 at ff6fc6568. -/
 theorem expanded_control_read_not_temporary
     (program : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
     (expanded : expand_program program = some bytecode)
@@ -454,7 +454,7 @@ theorem expanded_control_read_not_temporary
 /-- A represented nontemporary control operand at the last retained cycle equals the
 corresponding source register in the last row's pre-state. For example, a
 retained BEQ reads its two pre-state operands from their register-table entries.
-See jolt/crates/jolt-witness/src/witnesses/registers.rs:1-35 at 8bbb2357. -/
+See jolt/crates/jolt-witness/src/witnesses/registers.rs:1-35 at ff6fc6568. -/
 theorem represented_last_control_read
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -522,7 +522,7 @@ theorem represented_last_control_read
 cycle's next unexpanded PC. For example, after a BEQ at address `a` targeting
 `a + 8`, the next real row has address `a + 8`.
 See jolt/crates/jolt-witness/src/witnesses/pc.rs (`NextUnexpandedPc::extract`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem next_cycle_address
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -560,8 +560,8 @@ theorem next_cycle_address
 /-- A constrained next unexpanded PC selects padding or a bytecode row at
 that address. For example, a `JAL +0` target at address `a` can only lead to
 padding or a row whose address is `a`.
-See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:344-352
-at 8bbb2357. -/
+See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:395-403
+at ff6fc6568. -/
 theorem next_cycle_of_target
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -589,7 +589,7 @@ theorem next_cycle_of_target
 
 /-- A real bytecode slot is one plus the index of its row in the expanded
 array. For example, slot one contains bytecode row zero.
-See jolt/crates/jolt-program/src/preprocess/bytecode.rs:1-30 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/preprocess/bytecode.rs:1-30 at ff6fc6568. -/
 theorem real_slot_index (bytecode : Array JoltInstructionRow)
     (slot : Nat) (row : JoltInstructionRow)
     (present : JoltConstraints.bytecodeRow bytecode slot = some row) :
@@ -607,7 +607,7 @@ theorem real_slot_index (bytecode : Array JoltInstructionRow)
 /-- A real selected row of accepted expanded bytecode has an array index, and
 its slot can be read through the witness context. For example, bytecode row
 zero is selected through slot one.
-See jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-164 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/preprocess/bytecode.rs:128-187 at ff6fc6568. -/
 theorem stall_cycle_selected_row
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -635,7 +635,7 @@ theorem stall_cycle_selected_row
 /-- A selected JAL row's lookup computes its wrapped bytecode address plus
 its immediate. For example, `JAL +0` at `a` looks up `a`.
 See jolt/crates/jolt-lookup-tables/src/instructions/riscv/jal.rs:18-30
-at 8bbb2357. -/
+at ff6fc6568. -/
 private theorem stall_jal_lookup_target
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -681,8 +681,8 @@ private theorem stall_jal_lookup_target
 /-- If a selected JAL is followed by a real cycle, the jump constraint sets
 the next unexpanded PC to its lookup target. For example, `JAL +0` at `a`
 keeps the next unexpanded PC at `a`.
-See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:344-352
-at 8bbb2357. -/
+See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:395-403
+at ff6fc6568. -/
 theorem stall_jal_next_target
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -714,7 +714,7 @@ theorem stall_jal_next_target
 
 /-- Executing a JAL puts its address plus immediate in Sail's nextPC. For
 example, `JAL +0` at address `a` leaves nextPC at `a`.
-See jolt/tracer/src/instruction/jal.rs:19-30 at 8bbb2357. -/
+See jolt/tracer/src/instruction/jal.rs:19-30 at ff6fc6568. -/
 theorem stall_jal_exec_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
     (pre post : SailJoltState)
     (pc : pre.sail.regs.get? Register.PC = some address)
@@ -739,7 +739,7 @@ theorem stall_jal_exec_target (dst : JoltISA.Dst) (imm address link : BitVec 64)
 /-- A row certified as the back of a run is its final indexed row, so its
 execution certificate and prepared PC are available. For example, a one-row
 `j .` run has its sole row at index zero.
-See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs:616-655,692-716 at ff6fc6568. -/
 private theorem stall_last_run_index
     (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs)
@@ -755,8 +755,8 @@ private theorem stall_last_run_index
 
 /-- Each branch's control inputs come from both source registers, with no
 runtime advice. For example, BEQ compares Rs1 and Rs2 without an immediate
-lookup operand. See jolt/crates/jolt-riscv/src/instructions/b/beq.rs:1-35
-at 8bbb2357. -/
+lookup operand. See jolt/crates/jolt-riscv/src/instructions/i/beq.rs:1-8
+at ff6fc6568. -/
 private theorem stall_branch_control_flags (instruction : JoltISA.Instr)
     (branch : JoltMetadata.instructionFlag instruction .Branch = true) :
     JoltMetadata.instructionFlag instruction .LeftOperandIsRs1Value = true ∧
@@ -772,7 +772,7 @@ private theorem stall_branch_control_flags (instruction : JoltISA.Instr)
 /-- Each branch's comparison table returns the same taken bit as the ISA
 branch decision on two words. For example, BEQ on equal words returns one.
 See jolt/crates/jolt-lookup-tables/src/instructions/riscv/beq.rs:1-35
-at 8bbb2357. -/
+at ff6fc6568. -/
 private theorem stall_branch_table_decision
     {F : Type} [Field F] (instruction : JoltISA.Instr)
     (branch : JoltMetadata.instructionFlag instruction .Branch = true)
@@ -796,8 +796,8 @@ private theorem stall_branch_table_decision
 /-- A selected branch row uses its two register inputs in the comparison
 table, so its lookup output is the ISA taken bit. For example, BEQ with two
 equal register values has lookup output one.
-See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:347-352
-at 8bbb2357. -/
+See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:398-403
+at ff6fc6568. -/
 theorem stall_branch_lookup_decision
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -843,7 +843,7 @@ theorem stall_branch_lookup_decision
 /-- An ordinary row leaves the pending next PC unchanged even when its tape
 answer is chosen independently. For example, an interior VirtualAdviceLoad row
 may choose any value without changing the pending return address.
-See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs:616-655,692-716 at ff6fc6568. -/
 private theorem ordinary_tape_next_pc
     (instruction : JoltISA.Instr) (answer : BitVec 64)
     (before after : SailJoltState)
@@ -877,7 +877,7 @@ private theorem ordinary_tape_next_pc
 
 /-- A non-jump, non-branch tape row retains nextPC, including HostIO, which
 keeps the Sail state. For example, an SD does not alter the pending next PC.
-See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs:616-655,692-716 at ff6fc6568. -/
 private theorem noncontrol_tape_next_pc
     (instruction : JoltISA.Instr) (answer : BitVec 64)
     (before after : SailJoltState)
@@ -901,7 +901,7 @@ private theorem noncontrol_tape_next_pc
 /-- Executing any untrusted-answer row leaves the source PC register unchanged;
 tape answers can change a destination value but not PC. For example, a JAL
 changes nextPC while its PC remains the address of the JAL.
-See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs:616-655,692-716 at ff6fc6568. -/
 private theorem tape_row_preserves_pc
     (instruction : JoltISA.Instr) (answer : BitVec 64)
     (before after : SailJoltState)
@@ -937,7 +937,7 @@ private theorem tape_row_preserves_pc
 
 /-- Consecutive rows within one source read the same compression flag from
 that source's final row. For example, both ECALL rows use its final-row flag.
-See jolt/crates/jolt-program/src/expand/metadata.rs:46-52 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/metadata.rs:46-52 at ff6fc6568. -/
 private theorem source_compressed_next
     (bytecode : Array JoltInstructionRow) (layout : BytecodeLayout bytecode)
     (i j : Fin bytecode.size) (adjacent : j.val = i.val + 1)
@@ -1069,7 +1069,7 @@ private theorem untrusted_prepared_pc_at
 address and nextPC at that address plus its source length, before that row runs.
 For example, ECALL's final JALR starts with the same prepared PCs as its AUIPC.
 The entry clause is written out to avoid importing Layer 6's `RawRowEntry`.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at ff6fc6568. -/
 theorem untrusted_prepared_pc
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
@@ -1104,7 +1104,7 @@ theorem untrusted_prepared_pc
 
 /-- Every row of an untrusted-answer run begins with PC at its bytecode source
 address. For example, the second row of an ECALL expansion still has PC at the
-ECALL address. See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
+ECALL address. See jolt/tracer/src/emulator/cpu.rs:616-655,692-716 at ff6fc6568. -/
 theorem untrusted_row_pc
     (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs)
@@ -1118,7 +1118,7 @@ theorem untrusted_row_pc
 /-- Every row of an untrusted-answer run begins with nextPC prepared to the
 source address plus its full 2-byte or 4-byte length. For example, an interior
 row of a compressed expansion still starts with address + 2.
-See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs:616-655,692-716 at ff6fc6568. -/
 theorem untrusted_row_next_pc
     (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs)
@@ -1132,7 +1132,7 @@ theorem untrusted_row_next_pc
 
 /-- Runtime advice changes only the value carried by VirtualAdvice, so it
 preserves both control flags. For example, patched DIV advice remains ordinary.
-See jolt/tracer/src/instruction/mod.rs:215-241 at 5def437f. -/
+See jolt/tracer/src/instruction/mod.rs:228-254 at ff6fc6568. -/
 private theorem control_flags_with_runtime_advice
     (instruction : JoltISA.Instr) (advice : instruction.RuntimeAdvice) :
     JoltMetadata.opcodeFlag (instruction.withRuntimeAdvice advice) .Jump =
@@ -1144,7 +1144,7 @@ private theorem control_flags_with_runtime_advice
 /-- Any executed row outside JAL, JALR and branch control flow leaves nextPC
 at its source address plus its 2-byte or 4-byte source instruction length.
 For example, an interior row of a compressed expansion retains address + 2.
-See jolt/tracer/src/emulator/cpu.rs:581-620,657-679 at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs:616-655,692-716 at ff6fc6568. -/
 theorem noncontrol_next_pc
     (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs)
@@ -1170,8 +1170,8 @@ theorem noncontrol_next_pc
 
 /-- The final represented branch executes the bytecode branch directly;
 runtime advice never changes a branch. For example, a BEQ run uses its BEQ
-row rather than a tape answer. See jolt/tracer/src/emulator/cpu.rs:581-620,657-679
-at 5def437f. -/
+row rather than a tape answer. See jolt/tracer/src/emulator/cpu.rs:616-655,692-716
+at ff6fc6568. -/
 theorem stall_branch_runs
     (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs)
@@ -1207,7 +1207,7 @@ theorem stall_branch_runs
 /-- An executed JALR writes its masked base-plus-immediate target to `nextPC`,
 even when it also writes a link register. For example, `jalr x1, -4(x2)`
 sets `nextPC` to `(x2 - 4) & ~1`.
-See jolt/tracer/src/instruction/jalr.rs:19-30 at 8bbb2357. -/
+See jolt/tracer/src/instruction/jalr.rs:19-30 at ff6fc6568. -/
 theorem tape_jalr_target
     (dst : JoltISA.Dst) (base : JoltISA.Src) (imm link answer : BitVec 64)
     (pre post : SailJoltState)
@@ -1247,7 +1247,7 @@ theorem tape_jalr_target
 /-- A selected JALR's aligned lookup output is its 64-bit base-plus-immediate
 target. For example, a base of `0x1003` and immediate zero yields `0x1002`.
 See jolt/crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs:29-33
-at 8bbb2357. -/
+at ff6fc6568. -/
 theorem selected_jalr_lookup_target
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -1303,8 +1303,8 @@ theorem selected_jalr_lookup_target
 /-- A selected JALR followed by a real cycle places its aligned lookup target
 in the next unexpanded PC. For example, a stable `jalr x0, 0(x1)` selects its
 own source address as the next unexpanded PC.
-See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:344-352
-at 8bbb2357. -/
+See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:395-403
+at ff6fc6568. -/
 theorem selected_jalr_next_target
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -1339,8 +1339,8 @@ theorem selected_jalr_next_target
 /-- A selected jump writes the source address plus its full source length as
 the link value when that addition does not wrap. For example, an uncompressed
 JALR at `0x1000` writes `0x1004`.
-See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:296-302
-at 8bbb2357. -/
+See jolt/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs:345-351
+at ff6fc6568. -/
 theorem selected_jump_link_write_value
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -1390,7 +1390,7 @@ theorem selected_jump_link_write_value
 /-- A represented branch's register-table entries equal the operands read by
 its executed row. For example, BEQ's two entries equal its pre-state sources.
 See jolt/crates/jolt-witness/src/witnesses/registers.rs (`Rs1Value::extract`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem represented_last_branch_registers
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -1469,7 +1469,7 @@ theorem represented_last_branch_registers
 /-- At the represented last JALR cycle, the base register table equals the
 base value read from the recorded pre-state. For example, a retained
 `jalr x0, 0(x1)` reads x1's pre-state value.
-See jolt/crates/jolt-witness/src/witnesses/registers.rs:1-35 at 8bbb2357. -/
+See jolt/crates/jolt-witness/src/witnesses/registers.rs:1-35 at ff6fc6568. -/
 theorem represented_last_jalr_base
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)

@@ -10,7 +10,7 @@ namespace JoltConstraints
 
 /-- Constraint (13) in `constraints.md` (stage 1):
 rows with WriteLookupOutputToRD copy the lookup output to the destination.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
 def rdWriteEqLookupIfWriteLookupToRd {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,
