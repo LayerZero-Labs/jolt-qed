@@ -418,3 +418,184 @@ It now rounds `rows` instead of `rows + 1`, exactly as the pinned prover does.
 `Soundness/TopLevel.soundness_prover_accepts` drops its `NoMaxLengthTrace` argument, checks a nonempty explicit halt and uses this exact sizing result.
 Its caller in `Soundness/soundness.lean` is updated.
 These sizing and acceptance caller changes await compilation, and their top-level dependencies remain under migration.
+
+Local commit `5b712bd` records the checked halt certificates, generic memory frames, shared-memory initialization, register replacement and tape replay slice.
+The next detached integration check builds `JoltConstraints` through the required wrapper, with log `.constraints-repin-integration3.log` and marker `.constraints-repin-integration3.done`.
+It will also check the repaired block initialization, row-14 coercion and exact-padding acceptance helpers through their imports.
+The full library is still expected to expose old flag-word and duplicate-device-I/O callers; this is diagnostic integration work, not a passing final check.
+
+The remaining memory migration has a concrete consolidation point.
+`Layer5/DeviceMemory.lean` still separately tracks device words and excludes a synthetic termination index, while `Layer5/RamAgreement.lean` compares byte-map words only at or above `RAM_START_ADDRESS`.
+The pinned model instead needs one agreement over all shared words, with checked below-RAM MMU reads/stores reduced to that same map.
+`MemoryRowExecution`, `MemoryRowAppend`, `RamCutAgreement` and `ExecutionPrefix` must then consume that agreement without termination events or a word exception.
+Similarly, `WholeRun/Ghost.Shadow` must compare every zero-default shared byte and retain the new code-region/halted fields; its old frame asserting that every below-RAM byte is fixed is false for output and I/O-gap stores and must be replaced as part of the model change.
+The old `WholeRun/Halt.Block.ebreak_post` device-unchanged claim also belongs to the previous self-jump model: the new panic halt updates final panic metadata.
+These old claims have not been hidden behind compatibility wrappers or new assumptions.
+
+## Shared-memory foundation and halt-link continuation
+
+The `.constraints-repin-integration3.log` failure list was inspected on 2026-11-24 at Lean HEAD `5b712bd`, against Jolt `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+That check passes `WholeRun.Blocks`, the renamed row-14 completeness module, `Soundness.Assumptions` and the verifier-sizing helpers.
+The full build still fails in the old flag-word restrictions, execution-prefix memory exceptions, duplicate whole-run I/O layer, obsolete EBREAK treatment and remaining completeness consumers.
+This continuation does not claim those obligations are discharged.
+
+`DeviceFrame.execHalt_shape` is new and proves the successful halt's two reads, destination write and exact final state for either halt kind.
+Its conclusion is an existential link/address/intermediate state with the original nextPC/PC reads, `writeDst` execution and `post = recordHalt kind` after the nextPC update.
+`execution_conditions.execHalt_end` retains its statement and now derives the existing terminal observations from this shared execution shape.
+`JumpReturnProofHelpers.jump_halt_link` is new: under its existing writable-destination, nextPC-read and successful-halt facts, the captured destination equals the link.
+`RegistersValProofHelpers.register42_halt_preserves_other` is new: a successful halt preserves any distinct source register's value, with the same readability premise used by the enclosing instruction-frame proof.
+Both constructor cases use this common halt fact.
+`honestWitness_rdWriteEqPCPlusConstIfJump` retains its public statement; its proof now handles JAL, JALR and both halt kinds before performing one common field calculation.
+The two next-PC completeness files replace uses of strict trace padding by the new nonstrict padding bound without changing their theorem signatures.
+The relaxed-trace terminal-halt helper fixes a definitional coercion by explicitly unfolding `TraceRow.Halts`.
+
+The isolated `DeviceFrame` build passed after repairing two equality witnesses already rewritten by case analysis (approximately 4 seconds for the successful module build).
+The isolated `WholeRun.Ghost` build also passed (approximately 7 seconds).
+After those checks, its byte-insertion presence proof was factored through the new `DeviceFrame.insert_preserves_present`, so that final factoring awaits the next check.
+`insert_preserves_present`, `execHalt_shape` and the existing primitive initialization/commutation facts are candidates to move into JoltBytecode.
+A foreground helper build was started but its final result was not collected by polling; the next detached batch includes those helpers and their callers.
+
+The changed whole-run declarations are:
+
+- `WholeRun.Ghost.Shadow`: formerly equal registers/vregs/device/tape/host plus zero-default bytes only above RAM; now also equal code regions and halt markers, and equal zero-default bytes at every natural-number address.
+- `WholeRun.Ghost.MemoryFrame`: formerly byte presence plus unchanged values at every below-RAM address; now byte presence.
+  The removed below-RAM assertion is false for shared output/I/O-gap writes at this pin.
+  `execInstr_shadow` and `execProgram_shadow` retain their result structure with these updated predicates, including exact successful values/errors and presence on both execution paths.
+- `WholeRun.Related.ram`: formerly byte agreement only at/above RAM; now byte agreement everywhere.
+  The obsolete `io`, panic-word correspondence and device-output-array-size fields are removed.
+  Registers, Sail's step invariant, HTIF setting, checked layout and memory presence remain.
+- `WholeRun.memHigh`: formerly `heap_end + 8`; now `Mmu.ram_backing_end`, the tracer's padded backing endpoint.
+- `WholeRun.sailInit`: formerly a register overlay plus a reconstructed I/O/zero-fill memory; now only that register overlay, retaining exactly Jolt's initialized shared byte map.
+  `IsFlagWord`, `sailByte`, `sailPanicWord`, `sailInitMem` and `sailOutputs` are deleted.
+- `WholeRun.Init.related_sailInit`: the public signature is unchanged, with the new relation and initial state above.
+  It uses the actual successful `JoltISA.initialState` shape and `JoltDevice.initialMem` rather than asserting that initialization is the old RAM-only `init_state`.
+  The now-false `initial_state_spec` statement is removed; its system-invariant caller also uses the successful initialization shape.
+- `WholeRun.Related.outputs`: formerly equality of trimmed reconstructed Sail outputs and the device output array; now equality of the full `outputsOf` arrays from the two shared memories.
+  This directly supplies equality before any trailing-zero normalization.
+- `WholeRun.Init.sailInitMem_get?` and `load?_output` are removed with their deleted reconstruction/device-array definitions.
+  The unused input/output-boundary wrapper is also removed.
+- `foldl_insert_range_get?`, `zipIdx_fold_get?` and `init_state_mem_get?` move from WholeRun initialization/decoding into `SharedMemoryInitialization.lean`, under `JoltConstraints`, without changing their mathematical signatures.
+  The new `initialMem_present` proves that initialization retains base-byte presence and fills every I/O-window address; it is parameterized by the device, base/result maps and buffers, rather than a witness context.
+- `memory_presence.initialRam_size_eq_ram_size` is new: a checked layout's initial RAM array has exactly `layout.ram_size` bytes.
+  It uses the checked padded-domain bound to rule out u64 size wrap and its alignment to remove allocation rounding.
+- `BlockStep` and `SystemBlocks` retain their public simulation statements with the new `Related` predicate and no separate I/O/panic-word preservation branches.
+  The obsolete private `panicWord_eq` is deleted.
+
+A fresh `shared_memory_readback` reviewer recorded a blind reading of the semantic interfaces before receiving the intended contract.
+The initial reviewed hashes were `fe20600f43f4ecc90cd42f80518edda7d5ae421f006888f93769b0e8c05897b5` for `Ghost.lean` and `817a16ffdba56a17ebf08cf8ec26cc7cd8d4c494fc32f6fe40554dd8eda7ccf9` for `Relation.lean`.
+It explicitly distinguishes zero-default value equality from hash-map domain equality and notes that these shadow theorems concern direct finite instruction/program execution, not CPU fetching or a global termination certificate.
+Its subsequent fidelity/proof comparison against the pinned tracer is pending.
+
+The next detached check is `.constraints-repin-shared-foundation1.log`, with marker `.constraints-repin-shared-foundation1.done`.
+It checks the shared initializer, relation, ghost, block-step/system invariant foundations, halt-link/register completeness consumers, corrected next-PC padding proofs and the terminal-halt acceptance helper through the required build wrapper.
+The forbidden-diff scan and whitespace check pass before launch.
+The duplicate `Io.lean`/`IoAmo.lean` files and their remaining consumers are still pending replacement and deletion, as are the old soundness flag-word definitions/callers and both RAM-history admissions.
+No new admission, forbidden decision procedure, axiom or resource-limit increase was added.
+
+## Shared foundation check and row-21 completeness
+
+The detached `.constraints-repin-shared-foundation1.log` check ended with exit 1 at 04:55:45 on 2026-11-24, at Lean HEAD `5b712bd`, against Jolt `ff6fc6568`.
+It passed `DeviceFrame`, `WholeRun.Ghost`, `WholeRun.NonInterference`, `execution_facts`, `trace_interface`, `witness_domain`, `Soundness.Assumptions` and `Soundness.Layer7.ProverAccepts`.
+The last module confirms the relaxed-trace halt acceptance and exact padded-length helper in this targeted slice, without validating the unfinished top-level theorem.
+The sole failed prerequisite was `memory_presence.initialRam_size_eq_ram_size`, where the kernel reported deep recursion.
+Its statement is unchanged.
+The proof now delegates subtraction bounds, optional-domain arithmetic and allocation rounding to three small private natural-number lemmas, without changing any limit.
+That repair awaits the next check.
+
+`theorems/HaltFlags.lean` adds `JoltMetadata.haltFlags`, identifying the two opcode columns with `Instr.haltKind?`: `Halt` is true exactly when a halt kind exists, and `HaltPanic` exactly for panic.
+The pinned tracer's instruction declarations are `crates/jolt-riscv/src/instructions/virt/halt.rs` (`jolt_instruction!` for `Success` and `Panic`).
+`theorems/Completeness/HaltEndRule.lean` adds `honestWitness_haltEndRule`: the honest witness satisfies row 21 under the actual final state's panic claim, for either halt kind and for an exactly full or padded trace domain.
+Its premises are the honest trace and its existing `ProverPaddedFor` bound; it adds no restriction on the panic claim.
+The proof uses the trace's no-earlier-halt and final-halt execution certificates, and treats padding separately.
+`Completeness.lean` imports this result, and the unfinished `Completeness/All.lean` assembly now supplies the corresponding field.
+These two new lemmas are not yet checked.
+The assembly still needs the public-I/O migration and both new RAM claims; its current status is not completeness of the full bundle.
+
+The next targeted check is `.constraints-repin-shared-foundation2.log`, with marker `.constraints-repin-shared-foundation2.done`.
+It includes the repaired RAM-size lemma, initialization and shared-memory relation consumers, the halt-link/register helpers, row-21 completeness and the next-PC completeness consumers.
+The full `JoltConstraints` acceptance check, removal of the duplicate whole-run I/O modules and old flag-word callers, both RAM-history proofs, and the final soundness proof remain open.
+
+## Checked allocation and shared-foundation repairs
+
+The `.constraints-repin-shared-foundation2.log` batch ended with exit 1 at 05:08:37 on 2026-11-24.
+It replayed the repaired `memory_presence` module successfully, including `initialRam_size_eq_ram_size`.
+It also checked `HaltFlags.haltFlags`, `JumpReturnProofHelpers.jump_halt_link`, the updated `RegistersValProofHelpers`, both next-PC completeness consumers, `WholeRun.Relation` and `WholeRun.BlockStep`.
+`execution_conditions.execHalt_end` passed with its factored proof.
+Local commit `44c094f` records the checked changes to `DeviceFrame.lean`, `WholeRun/Ghost.lean`, `execution_conditions.lean` and `memory_presence.lean`.
+
+The initializer's failure was inference of a Boolean accumulator for `List.foldlRecOn`; each call now supplies the memory-map presence motive explicitly.
+The row-21 completeness failure was simplifier matching across the two bytecode index forms (`Fin` versus its natural-number value); the halt metadata facts now use the same natural-number indexing as the witness columns.
+The link-value proof similarly names its execution and source-end facts in terms of the local bytecode row before rewriting its instruction.
+These are proof-body repairs, not statement changes.
+The existing `rs1Operand?` and `rs2Operand?` classifications now include `JoltSuccess` and `Panic` in their no-source alternatives.
+Their existing source-selector/value/canonicality theorems retain their statements.
+`HaltFlags.jumpCases` is new and classifies a true Jump flag as JAL, JALR, success halt or panic halt; the return-value proof uses this one metadata classification rather than enumerating the ISA.
+`WholeRun.Init` drops an unused verifier-sizing import.
+These repairs await the next targeted check.
+
+Several previously unchanged transitive modules still fail because they use removed advice arrays or flag-word predicates: `advice_below_input`, `PanicRestriction` and `TerminationRestriction`.
+Their old interfaces have not been preserved through compatibility fields.
+The remaining `WholeRun.CodeInv` and `Decoded` paths still reach those obsolete layers, so they are not evidence of a checked whole-run migration.
+The next batch focuses on the repaired initializer, `Init`, `SystemInv`, `Bundles`, `SystemBlocks`, row-21 completeness and register/link consumers.
+Its log is `.constraints-repin-shared-foundation3.log` and marker `.constraints-repin-shared-foundation3.done`.
+The task's final full-library and soundness-closure checks have not passed.
+
+## Loader preservation and image facts
+
+The `.constraints-repin-shared-foundation3.log` check ended with exit 1 at 05:14:23 on 2026-11-24.
+It checked `SharedMemoryInitialization` and `Completeness/Helpers/RegistersReadProofHelpers` successfully.
+Local commit `152cf8c` records the checked halt-link, register-value and register-read helper changes.
+The classification helper `HaltFlags.jumpCases` failed because its first split selected the outer flag match instead of the instruction match.
+Its proof now explicitly exposes the four relevant instruction patterns before splitting; its statement is unchanged.
+`WholeRun.Init` still contained the old `layout_facts` theorem over removed panic-word layout fields and one register theorem application with unconstrained device/tape/host arguments.
+The dead geometry theorem is removed, its sole old use is removed by the image-proof migration, and the register application now gives those arguments explicitly.
+
+The additional changed statements and moves are:
+
+- Delete `WholeRun.Decoded.initial_state_ram`, which asserted successful initialization equals a RAM-only `init_state` with existential device and tape.
+  That equality is false for the new model because initialization installs shared I/O bytes, code-region metadata and the halt marker.
+  Its consumers now use the actual successful initializer shape and pointwise RAM-byte preservation.
+- Delete `WholeRun.Init.layout_facts`, whose old conclusion was lowest address below output start, panic address equal to output start plus output capacity, I/O end equal to panic address plus 16, and I/O end below RAM.
+  The panic and termination words no longer exist at this pin, and the only consumer now uses the checked backing endpoint directly.
+- Add `SharedMemoryInitialization.initialMem_get?_above_ram`: for a checked layout and successful shared I/O initialization, every byte address at or above RAM has exactly the same optional map lookup as in the base map.
+  A single private buffer-fold lemma proves preservation for all three overlays.
+  The guards provide the buffer-capacity bounds; no new execution premise is imposed on any existing theorem.
+- Add `SharedMemoryInitialization.initial_state_ram_get?`: after successful instance initialization, RAM offset `o` has exactly the optional byte lookup of `initialRam` at `o`, including out-of-range offsets.
+- Add `SharedMemoryInitialization.initial_state_program_end_le_heap_end`: a successfully initialized instance's program endpoint is at or below its checked layout's heap endpoint.
+  This factors the geometry previously repeated by the two image-loader proofs.
+- Move `WholeRun.lastByte`, `imageByte?`, `imageParcel?`, `imageWord?`, `lastByte_some`, `imageByte?_bounds`, `imageParcel?_eq_some`, `imageWord?_eq_some`, `initialRam_fold_getElem?` and `sailInit_get?_image` from `Decoded.lean` into `WholeRun/ImageMemory.lean`.
+  Their names and mathematical signatures are unchanged.
+  The last proof now reads the initialized shared memory directly, uses checked array-size equality and has no reconstructed I/O or flag-word cases.
+- `WholeRun.CodeInv.initial_image_facts` keeps its statement and now consumes the common program-end bound and image-byte theorem.
+- `WholeRun.SystemInv.initialState` keeps its statement and names the initialized RAM/device/tape arguments explicitly.
+
+The new loader lemmas and their migrated image proofs await compilation.
+The next targeted build, `.constraints-repin-shared-foundation4.log` with marker `.constraints-repin-shared-foundation4.done`, checks `SharedMemoryInitialization`, `WholeRun.ImageMemory`, `Init`, `SystemInv`, `Bundles`, `SystemBlocks`, row-21 completeness and the jump return-value consumer.
+Whitespace and forbidden-diff checks pass before launch.
+The full whole-run simulation still depends on the obsolete I/O modules, and the flag-word soundness callers and both RAM-history admissions remain unfinished.
+
+## Resumed integration check and halt-lane elimination
+
+Date: 2026-11-24.
+Lean HEAD: `152cf8c`; Jolt: `ff6fc6568`.
+The fourth detached foundation check failed only in `HaltFlags.jumpCases` and the new initializer geometry argument.
+The first foreground batch subsequently checked `HaltFlags`, row-21 completeness and the register-link consumer except for one index-coercion rewrite.
+The latest initializer repair rewrites `output_end = io_end` before comparing their natural-number values.
+The link consumer now states the source-length equality with its exact local bytecode row before rewriting.
+
+The full `track-t-build.sh lake build JoltConstraints` integration check is running, with output in `.constraints-repin-foreground2.log`.
+The tool transport timed out while the child build continued.
+An event-based process-exit watcher records completion in `.constraints-repin-foreground2.done`; the watcher exit code is not the Lake build exit code.
+The build result must be read from the completed Lake log.
+The partial diagnostics already identify the old `PanicRestriction`, `TerminationRestriction` and `advice_below_input` interfaces as failing consumers of removed fields.
+No final library or soundness-closure check has passed.
+
+`Soundness/Layer1/HaltEndRule.lean` adds `selected_halt_of_next_padding`.
+Its statement says that, for a selected real bytecode row with `NextIsNoop = 1`, the instruction halt kind is `some (if context.io.panic then panic else success)`.
+Its premises are the existing field bound, constraint context and equations, selected-slot equality, real-row lookup and next-padding value; it introduces no program restriction.
+The private algebra lemma eliminates the non-halt case by the nonzero field element 2, then identifies the claim from the halt kind.
+This is the row-level obligation of the existing stopping theorem and is not yet compiled or integrated.
+The stopping theorem itself still uses the obsolete termination-word argument.
+`methods/soundness.md` now distinguishes this incomplete re-pin from the old green build and records the pinned stopping and shared-memory rules.
+
+The remaining work is unchanged: replace the separate whole-run I/O simulations, remove all flag-word definitions and callers, finish soundness for both claims, settle the tracer-address restriction, prove both RAM-history completeness targets, migrate the public-I/O completeness assembly, update source references, run the full acceptance checks and commit the checked changes.
