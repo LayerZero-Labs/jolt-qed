@@ -280,7 +280,7 @@ private partial def reduceDecoder (x : Expr) (runs : Array Expr) : TacticM (Expr
       if !fieldNames.isEmpty then
         evalTactic (← `(tactic| try simp only [encdec_uop_backwards_matches,
           encdec_bop_backwards_matches, encdec_iop_backwards_matches,
-          encdec_biop_backwards_matches, encdec_mul_op_backwards_matches,
+          encdec_mul_op_backwards_matches,
           encdec_amoop_backwards_matches, encdec_csrop_backwards_matches,
           $[$fieldNames:ident],*]))
       else
@@ -295,14 +295,14 @@ private partial def reduceDecoder (x : Expr) (runs : Array Expr) : TacticM (Expr
           Decode.signBitMask, decoder_creg_add, Functions.regidx_bit_width, decoder_reg_beq, bne, zreg, sp, ra, zero_extend, Sail.BitVec.zeroExtend, encdec_reg_backwards_matches, encdec_creg_backwards_matches, Functions.base_E_enabled,
           encdec_uop_backwards_matches, encdec_bop_backwards_matches, encdec_iop_backwards_matches,
           encdec_amoop_backwards_matches, encdec_mul_op_backwards_matches, encdec_csrop_backwards_matches, width_enc_wide_backwards_matches,
-          encdec_biop_backwards_matches, lrsc_width_valid, decoder_width_matches, decoder_bool_matches, valid_load_encdec, Functions.xlen_bytes, Functions.xlen, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, Functions.not] <;> decoder_omega))
+          lrsc_width_valid, decoder_width_matches, decoder_bool_matches, valid_load_encdec, Functions.xlen_bytes, Functions.xlen, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, Functions.not] <;> decoder_omega))
         unless (← getGoals).isEmpty do throwError "guard needs the thorough proof"
         return (← instantiateMVars m)
       evalTactic (← `(tactic| simp [-BitVec.shiftLeft_add_distrib, Sail.BitVec.extractLsb, BitVec.extractLsb,
         Decode.signBitMask, decoder_creg_add, Functions.regidx_bit_width, decoder_reg_beq, bne, zreg, sp, ra, zero_extend, Sail.BitVec.zeroExtend, encdec_reg_backwards_matches, encdec_creg_backwards_matches, Functions.base_E_enabled,
         encdec_uop_backwards_matches, encdec_bop_backwards_matches, encdec_iop_backwards_matches,
         encdec_amoop_backwards_matches, encdec_mul_op_backwards_matches, encdec_csrop_backwards_matches, width_enc_wide_backwards_matches,
-        encdec_biop_backwards_matches, lrsc_width_valid, decoder_width_matches, decoder_bool_matches, valid_load_encdec, Functions.xlen_bytes, Functions.xlen, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, Functions.not, *]))
+        lrsc_width_valid, decoder_width_matches, decoder_bool_matches, valid_load_encdec, Functions.xlen_bytes, Functions.xlen, width_enc_backwards, width_enc_wide_backwards, decoder_bool_value, Functions.not, *]))
       for g in ← getGoals do
         if (← whnf (← g.getType)).isConstOf ``False then
           throwError "guard has the opposite value"
