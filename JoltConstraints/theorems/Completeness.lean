@@ -30,6 +30,8 @@ import JoltConstraints.theorems.Completeness.PCEqBytecodeRead
 import JoltConstraints.theorems.Completeness.ProductEqLeftInputMulRightInput
 import JoltConstraints.theorems.Completeness.RamAddrEqRs1PlusImmMinusLookupIfLoadStore
 import JoltConstraints.theorems.Completeness.RamAddrEqZeroIfNotLoadStore
+import JoltConstraints.theorems.Completeness.RamWriteProtected
+import JoltConstraints.theorems.Completeness.RamAccessCount
 import JoltConstraints.theorems.Completeness.RamAddressEqRamRaf
 import JoltConstraints.theorems.Completeness.RamOutputEqPublicIo
 import JoltConstraints.theorems.Completeness.RamRaChunkBooleanity

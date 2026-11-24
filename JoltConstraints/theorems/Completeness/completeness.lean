@@ -2,8 +2,8 @@
 The base completeness statement: for every instance and every honest trace that puts
 it in Jolt's language, the witness Jolt's prover builds, at the sizes Jolt's prover
 picks, satisfies every modeled constraint, under the instance assumptions below.
-It inherits the sorrys listed in model_review.md (Proofs owed). Some of them are
-false until Jolt bugs are fixed (a16z/jolt#1949, #1950 and #1951 items 1 and 4).
+The three open obligations listed in model_review.md (Proofs owed) concern
+a16z/jolt#1949; the shared-memory RAM-history obligations are proved.
 -/
 import JoltConstraints.theorems.Completeness.All
 import JoltConstraints.theorems.Completeness.Assumptions
@@ -107,7 +107,7 @@ theorem JoltInstance.completeness {F : Type} [Field F]
 inputs and a witness, at some sizes, that satisfy every constraint.
 It follows from `JoltInstance.completeness` by unpacking `InLanguage`: the witness is the
 honest one at Jolt's sizes.
-For example, an instance whose program writes its claimed output and ends in `j .` has
+For example, an instance whose program writes its claimed output and ends in `jolt.success` has
 the honest witness of that run as its witness. -/
 theorem JoltInstance.completeness_someWitness {F : Type} [Field F]
     (joltInstance : JoltInstance SourceInstruction)
