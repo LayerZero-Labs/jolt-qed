@@ -11,6 +11,8 @@ set_option autoImplicit false
 
 namespace JoltConstraints.Soundness
 
+open scoped BigOperators
+
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
 
 /-- A cycle with neither memory-operation flag set has zero RAM address. -/
@@ -26,6 +28,44 @@ variable {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPr
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
 
 include charAbove2pow127 context equations
+
+/-- A memory row selects one RAM word, including when its raw address column
+would otherwise be zero.
+For example, the load flag of an LD rules out an all-zero RAM selector.
+Jolt at `ff6fc6568`: `read_write_checking.rs` (the access-count claim). -/
+theorem ramRa_unique_of_memory (t : Fin params.traceLength)
+    (memory : witness.OpFlags .Load t + witness.OpFlags .Store t = 1) :
+    ∃! address, witness.RamRa address t = 1 := by
+  rcases ramRa_zero_or_unique charAbove2pow127 context equations t with zero | selected
+  · have count := equations.ramAccessCount t
+    rw [memory] at count
+    simp only [zero, Finset.sum_const_zero] at count
+    exact False.elim (one_ne_zero count)
+  · exact selected
+
+/-- At a selected protected word, the public mask C forces zero increment.
+For example, writing a protected input word can only retain its table value.
+The store execution proof uses this fact to establish the tracer's value check.
+Jolt at `ff6fc6568`: `read_write_checking.rs` (the protected-increment claim). -/
+theorem ramInc_zero_of_selected_protected (t : Fin params.traceLength)
+    (chosen : Fin params.ramSize) (selected : witness.RamRa chosen t = 1)
+    (maskOne : ramWriteProtectedMask (F := F) context.bytecode
+      context.io.memory_layout chosen.val = 1) :
+    witness.RamInc t = 0 := by
+  have relation := equations.ramWriteProtected t
+  have factor : (∑ k : Fin params.ramSize,
+      ramWriteProtectedMask context.bytecode context.io.memory_layout k.val *
+        (witness.RamRa k t * witness.RamInc t)) =
+      (∑ k : Fin params.ramSize,
+        ramWriteProtectedMask context.bytecode context.io.memory_layout k.val *
+          witness.RamRa k t) * witness.RamInc t := by
+    rw [Finset.sum_mul]
+    apply Finset.sum_congr rfl
+    intro k _
+    exact (mul_assoc _ _ _).symm
+  rw [factor, ram_read_of_selected charAbove2pow127 context equations t _ chosen selected,
+    maskOne, one_mul] at relation
+  exact relation.symm
 
 /-- Every padding cycle has zero RAM address. This does not assume that padding
 forms a suffix; that is a separate Layer 6 obligation. -/

@@ -22,6 +22,7 @@ private theorem ram_lowest_pos
   unfold JoltInstance.validate_inputs at valid
   rw [hasLayout] at valid
   simp only [Bool.and_eq_true, decide_eq_true_eq] at valid
+  have valid := valid.1
   have lowest : 8 < layout.get_lowest_address.toNat := valid.1.1
   have layoutEq : layout = context.io.memory_layout :=
     congrArg JoltPublicIo.memory_layout (Option.some.inj sameIo)
