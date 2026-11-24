@@ -18,7 +18,9 @@ namespace JoltConstraints.Soundness
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
-private theorem jal_write_value
+/-- Every selected jump writes the advanced source PC, including explicit halts.
+For example, a panic halt writes its source address plus four on an uncompressed row. -/
+theorem jump_write_value
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
@@ -27,8 +29,7 @@ private theorem jal_write_value
     {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
     (selected : bytecodeRa witness slot t = 1)
     {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
-    {dst : Dst} {imm : BitVec 64}
-    (instruction : row.instruction = .JAL dst imm)
+    (jump : JoltMetadata.opcodeFlag row.instruction .Jump = true)
     (noWrap : row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64) :
     witness.RdWriteValue t =
       ((row.address + BitVec.ofNat 64 (if row.is_compressed then 2 else 4)).toNat : F) := by
@@ -36,7 +37,7 @@ private theorem jal_write_value
   have flags := opFlag_of_selected_bytecode bound context equations
   have jumpFlag : witness.OpFlags .Jump t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag,
-      instruction, JoltMetadata.opcodeFlag] using! flags .Jump t slot selected
+      jump] using! flags .Jump t slot selected
   have compressedFlag : witness.OpFlags .IsCompressed t =
       if row.is_compressed then 1 else 0 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag] using!
@@ -126,8 +127,8 @@ theorem jal_step
         (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress dst)
         witness ⟨t.val + 1, next⟩ post := by
   dsimp only
-  have encoded := jal_write_value charAbove2pow128Minus2pow64 context equations selected rowIs
-    instruction noWrap
+  have encoded := jump_write_value charAbove2pow128Minus2pow64 context equations selected rowIs
+    (by rw [instruction]; rfl) noWrap
   have canonical := instruction_destination_canonical _ _
     (bytecodeRow_rowOk context rowIs).canonical (by rw [instruction]; rfl)
   have written := writeDst_afterWriteDst dst canonical

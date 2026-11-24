@@ -6,7 +6,7 @@ import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 open LeanRV64D
 
 /-! FENCE has no destination and no RAM effect. Its selected row therefore
-preserves both register and ordinary-RAM agreement.
+preserves both register and shared-memory agreement.
 At public pin 8bbb2357:
 See : jolt/tracer/src/instruction/fence.rs:20-26 -/
 
@@ -48,16 +48,16 @@ The live set contains registers already matched to the witness and stays the sam
 For example, FENCE preserves agreement on a live architectural register. -/
 theorem fence_step {pre : SailJoltState}
     (registers : RegisterAgreementOn live witness t pre)
-    (ram : OrdinaryRamAgreement context.io.memory_layout (fun index => witness.RamVal index t) pre)
+    (ram : SharedRamAgreement context.io.memory_layout (fun index => witness.RamVal index t) pre)
     (answer : BitVec 64) (advice : row.instruction.RuntimeAdvice) :
     execWithTapeAnswer (row.instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS pre ∧
     (∀ next : t.val + 1 < params.traceLength,
       RegisterAgreementOn live witness ⟨t.val + 1, next⟩ pre ∧
-      OrdinaryRamAgreement context.io.memory_layout
+      SharedRamAgreement context.io.memory_layout
         (fun index => witness.RamVal index ⟨t.val + 1, next⟩) pre) ∧
     (∀ _last : t.val + 1 = params.traceLength,
-      OrdinaryRamAgreement context.io.memory_layout witness.RamValFinal pre) := by
+      SharedRamAgreement context.io.memory_layout witness.RamValFinal pre) := by
   have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have noLoad : witness.OpFlags .Load t = 0 := by
     simpa only [bytecodeCircuitFlag, rowIs, instructionIs, JoltMetadata.circuitFlag,
