@@ -1,12 +1,13 @@
 import JoltBytecode.Step.Lift
 import JoltBytecode.JoltISA.Semantics
+import JoltConstraints.theorems.DeviceFrame
 
 /-!
-Jolt rows read RAM through zero-default byte reads and use the Jolt device
-below RAM.
-Thus two embedded Sail memories can differ in byte presence and below RAM
-without changing a row's result.
-For example, a missing RAM byte and an explicitly stored zero behave alike.
+Jolt rows read the I/O window and RAM from the same memory, with zero-default
+byte reads.
+Two embedded Sail memories may differ in byte presence without changing a row's
+result when their zero-default bytes agree everywhere.
+For example, a missing byte and an explicitly stored zero behave alike.
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 LeanRV64D LeanRV64D.Functions
@@ -18,9 +19,9 @@ noncomputable section
 
 namespace WholeRun
 
-/-- A ghost has the same registers, virtual registers, device, advice tape and
-host configuration as the real state, and the same zero-default RAM bytes.
-Its other Sail fields and its memory below RAM may differ.
+/-- A ghost has the same registers, virtual registers, device, advice tape,
+host configuration, code span, halt marker and zero-default shared-memory bytes.
+Its other Sail fields and byte presence may differ.
 For example, adding a present zero byte to otherwise empty RAM gives a shadow. -/
 structure Shadow (js g : SailJoltState) : Prop where
   regs : g.sail.regs = js.sail.regs
@@ -28,27 +29,28 @@ structure Shadow (js g : SailJoltState) : Prop where
   device : g.jolt_device = js.jolt_device
   tape : g.adviceTape = js.adviceTape
   host : g.hostIO = js.hostIO
-  ram : ∀ a, RAM_START_ADDRESS ≤ a → Mmu.ram_byte g.sail.mem a = Mmu.ram_byte js.sail.mem a
+  code : g.codeRegion = js.codeRegion
+  halted : g.halted = js.halted
+  ram : ∀ a, Mmu.ram_byte g.sail.mem a = Mmu.ram_byte js.sail.mem a
 
-/-- Memory evolution that preserves byte presence and keeps every byte below
-RAM unchanged.
-For example, inserting a byte at `0x80000000` has this property. -/
+/-- Memory evolution preserves every present byte's presence, while allowing
+stores to update its value.
+For example, inserting an output byte has this property. -/
 structure MemoryFrame (s t : SailJoltState) : Prop where
   present : ∀ a, (s.sail.mem.get? a).isSome → (t.sail.mem.get? a).isSome
-  below : ∀ a, a < RAM_START_ADDRESS → t.sail.mem.get? a = s.sail.mem.get? a
 
 private theorem MemoryFrame.refl (s : SailJoltState) : MemoryFrame s s :=
-  ⟨fun _ h => h, fun _ _ => rfl⟩
+  ⟨fun _ h => h⟩
 
 private theorem MemoryFrame.trans {s t u : SailJoltState}
     (h : MemoryFrame s t) (k : MemoryFrame t u) : MemoryFrame s u :=
-  ⟨fun a ha => k.present a (h.present a ha), fun a ha => (k.below a ha).trans (h.below a ha)⟩
+  ⟨fun a ha => k.present a (h.present a ha)⟩
 
 private theorem frame_eq {s t : SailJoltState} (h : t.sail.mem = s.sail.mem) :
     MemoryFrame s t := by
   constructor
-  · intro a ha; rwa [h]
-  · intro a _; rw [h]
+  intro a ha
+  rwa [h]
 
 /-- Results agree in constructor and return value or error, with their states
 related by `R`.
@@ -224,14 +226,16 @@ private theorem tracks_writeDst (dst : Dst) (v : BitVec 64) : Tracks (writeDst d
 
 private theorem load_raw_shadow {s g : SailJoltState} (h : Shadow s g) (a : Nat) :
     Mmu.load_raw? g a = Mmu.load_raw? s a := by
-  unfold Mmu.load_raw?
-  dsimp only
-  rw [h.device]
-  split
-  · rfl
-  · split
-    · rw [h.ram a (by assumption)]
-    · rfl
+  have bytes : (g.sail.mem.get? a).getD 0 = (s.sail.mem.get? a).getD 0 := h.ram a
+  unfold Mmu.load_raw? JoltDevice.load?
+  simp only [h.device]
+  split_ifs <;> simp only [h.ram, bytes]
+
+private theorem protected_store_shadow {s g : SailJoltState} (h : Shadow s g)
+    (a : Nat) (v : BitVec 64) (width : Nat) :
+    Mmu.protected_store_ok g a v width = Mmu.protected_store_ok s a v width := by
+  simp only [Mmu.protected_store_ok,
+    Mmu.protected_byte_congr _ (congrArg JoltDevice.memory_layout h.device) h.code, h.ram]
 
 private theorem tracks_load (address : BitVec 64) : Tracks (Mmu.load address) := by
   intro s g h
@@ -258,9 +262,7 @@ private theorem tracks_load_doubleword (address : BitVec 64) :
       have hd : Mmu.ram_doubleword g.sail.mem address.toNat =
           Mmu.ram_doubleword s.sail.mem address.toNat := by
         unfold Mmu.ram_doubleword
-        rw [h.ram _ (by omega), h.ram _ (by omega), h.ram _ (by omega),
-          h.ram _ (by omega), h.ram _ (by omega), h.ram _ (by omega),
-          h.ram _ (by omega), h.ram _ hram]
+        simp only [h.ram]
       rw [hd]
       split
       · exact .ok _ ⟨h, .refl _, .refl _⟩
@@ -270,25 +272,18 @@ private theorem tracks_load_doubleword (address : BitVec 64) :
       · exact .ok _ ⟨h, .refl _, .refl _⟩
 
 private theorem frame_insert (s : SailJoltState) (a : Nat) (v : BitVec 8)
-    (ha : RAM_START_ADDRESS ≤ a) :
-    MemoryFrame s { s with sail := { s.sail with mem := s.sail.mem.insert a v } } := by
-  constructor
-  · intro b hb
-    by_cases hab : a = b
-    · subst b; simp
-    · simpa [Std.ExtHashMap.getElem?_insert, hab] using hb
-  · intro b hb
-    simp [Std.ExtHashMap.getElem?_insert, show a ≠ b by omega]
+    : MemoryFrame s { s with sail := { s.sail with mem := s.sail.mem.insert a v } } := by
+  exact ⟨fun b hb => JoltConstraints.insert_preserves_present s.sail.mem a b v hb⟩
 
 private theorem shadow_insert {s g : SailJoltState} (h : Shadow s g) (a : Nat)
     (v : BitVec 8) :
     Shadow { s with sail := { s.sail with mem := s.sail.mem.insert a v } }
       { g with sail := { g.sail with mem := g.sail.mem.insert a v } } := by
   refine { h with ram := ?_ }
-  intro b hb
+  intro b
   by_cases hab : a = b
   · subst b; simp [Mmu.ram_byte]
-  · simpa [Mmu.ram_byte, Std.ExtHashMap.getElem?_insert, hab] using h.ram b hb
+  · simpa [Mmu.ram_byte, Std.ExtHashMap.getElem?_insert, hab] using h.ram b
 
 private inductive SameOption (R : SailJoltState → SailJoltState → Prop) :
     Option SailJoltState → Option SailJoltState → Prop where
@@ -305,23 +300,13 @@ private theorem SameOption.mono {R S : SailJoltState → SailJoltState → Prop}
 private theorem store_raw_shadow (s g : SailJoltState) (h : Shadow s g)
     (a : Nat) (v : BitVec 8) :
     SameOption (Effects s g) (Mmu.store_raw? s a v) (Mmu.store_raw? g a v) := by
-  unfold Mmu.store_raw?
-  rw [h.device]
-  split
-  · rename_i ha
-    split
-    · refine .some ⟨?_, frame_insert s a v ha, ?_⟩
-      · simpa only [h.device] using shadow_insert h a v
-      · exact ⟨(frame_insert g a v ha).present, (frame_insert g a v ha).below⟩
-    · exact .none
-  · split
-    · exact .none
-    · split
-      · exact .none
-      · cases hd : s.jolt_device.store? a v with
-        | none => exact .none
-        | some device =>
-          exact .some ⟨{ h with device := rfl }, frame_eq rfl, frame_eq rfl⟩
+  have protection := protected_store_shadow h a (v.zeroExtend 64) 1
+  unfold Mmu.store_raw? JoltDevice.store?
+  simp only [h.device, protection]
+  split_ifs <;> first
+    | exact .none
+    | exact .some ⟨by simpa only [h.device] using shadow_insert h a v,
+        frame_insert s a v, ⟨(frame_insert g a v).present⟩⟩
 
 private theorem store_bytes_shadow (a : Nat) (v : BitVec 64) (ks : List Nat)
     (s g : SailJoltState) (current ghost : Option SailJoltState)
@@ -342,32 +327,33 @@ private theorem store_bytes_shadow (a : Nat) (v : BitVec 64) (ks : List Nat)
         fun _ _ hf => ⟨hf.1, he.2.1.trans hf.2.1, he.2.2.trans hf.2.2⟩
 
 private theorem ram_write_shadow (a : Nat) (v : BitVec 64) (ks : List Nat)
-    (s g : SailJoltState) (h : Shadow s g) (ha : RAM_START_ADDRESS ≤ a) :
+    (s g : SailJoltState) (h : Shadow s g) :
     Effects s g
       ({ s with sail := { s.sail with mem := ks.foldl (fun m k => m.insert (a + k) (v.extractLsb' (8 * k) 8)) s.sail.mem } })
       ({ g with sail := { g.sail with mem := ks.foldl (fun m k => m.insert (a + k) (v.extractLsb' (8 * k) 8)) g.sail.mem } }) := by
   induction ks generalizing s g with
   | nil => exact ⟨h, .refl _, .refl _⟩
   | cons k ks ih =>
-    have hs := frame_insert s (a + k) (v.extractLsb' (8 * k) 8) (by omega)
-    have hg := frame_insert g (a + k) (v.extractLsb' (8 * k) 8) (by omega)
+    have hs := frame_insert s (a + k) (v.extractLsb' (8 * k) 8)
+    have hg := frame_insert g (a + k) (v.extractLsb' (8 * k) 8)
     have hn := ih _ _ (shadow_insert h (a + k) (v.extractLsb' (8 * k) 8))
     exact ⟨hn.1, hs.trans hn.2.1, hg.trans hn.2.2⟩
 
 private theorem tracks_store_doubleword (address v : BitVec 64) :
     Tracks (Mmu.store_doubleword address v) := by
   intro s g h
+  have protection := protected_store_shadow h address.toNat v 8
   unfold Mmu.store_doubleword
   dsimp only
-  rw [h.device]
+  rw [h.device, protection]
   split
   · exact .error _ ⟨h, .refl _, .refl _⟩
   · split
     · rename_i ha
       split
-      · have he := ram_write_shadow _ v (List.range 8) s g h ha
+      · have he := ram_write_shadow address.toNat v (List.range 8) s g h
         exact .ok _ ⟨by simpa only [Mmu.write_ram_doubleword, h.device] using he.1,
-          he.2.1, ⟨he.2.2.present, he.2.2.below⟩⟩
+          he.2.1, ⟨he.2.2.present⟩⟩
       · exact .error _ ⟨h, .refl _, .refl _⟩
     · have hb := store_bytes_shadow address.toNat v (List.range 8) s g (some s) (some g)
         (.some ⟨h, .refl _, .refl _⟩)
@@ -470,6 +456,15 @@ private theorem tracks_tape_modify (f : JoltAdviceTape → JoltAdviceTape) :
     exact { h with tape := congrArg f h.tape }
   · intro _; rfl
 
+private theorem tracks_recordHalt (kind : JoltHaltKind) :
+    Tracks (modify (recordHalt kind)) := by
+  apply tracks_modify
+  · intro s g h
+    exact { h with
+      device := by simp only [recordHalt, h.device]
+      halted := rfl }
+  · intro _; rfl
+
 local macro "jolt_tracks" : tactic =>
   `(tactic| repeat' (first
     | exact tracks_readSrc _
@@ -477,6 +472,7 @@ local macro "jolt_tracks" : tactic =>
     | exact tracks_pure _
     | exact tracks_throw _
     | exact tracks_tape_modify _
+    | exact tracks_recordHalt _
     | apply tracks_ite
     | refine tracks_bind ?_ (fun _ => ?_)
     | exact sail_jump _
@@ -507,11 +503,11 @@ private theorem tracks_adviceLoad (rd : Dst) (n : BitVec 64) :
     have he := tracks_bind (tracks_writeDst rd value) (fun _ => tracks_pure RETIRE_SUCCESS)
       { s with adviceTape := tape } { g with adviceTape := tape } { h with tape := rfl }
     exact he.mono fun _ _ ha =>
-      ⟨ha.1, ⟨ha.2.1.present, ha.2.1.below⟩, ⟨ha.2.2.present, ha.2.2.below⟩⟩
+      ⟨ha.1, ⟨ha.2.1.present⟩, ⟨ha.2.2.present⟩⟩
 
 /-- One Jolt row gives the same value or error on a shadow, preserves the
-shadow relation, never removes a byte and never changes Sail memory below RAM.
-For example, an SD row inserts the same eight RAM bytes on both sides. -/
+shadow relation and never removes a byte.
+For example, an SD row inserts the same eight shared-memory bytes on both sides. -/
 theorem execInstr_shadow (i : Instr) (s g : SailJoltState) (h : Shadow s g) :
     SameResult (fun s' g' => Shadow s' g' ∧ MemoryFrame s s' ∧ MemoryFrame g g')
       (execInstr i s) (execInstr i g) := by
@@ -519,11 +515,11 @@ theorem execInstr_shadow (i : Instr) (s g : SailJoltState) (h : Shadow s g) :
   cases i
   case VirtualAdviceLoad rd n => exact tracks_adviceLoad rd n
   case VirtualHostIO => exact tracks_hostIO
-  all_goals simp only [execInstr]
+  all_goals simp only [execInstr, execHalt]
   all_goals jolt_tracks
 
 /-- A whole Jolt program preserves shadows, including a program that stops
-with an error or exception, and preserves memory presence and memory below RAM.
+with an error or exception, and preserves memory presence.
 For example, the two sides of an honest division expansion request equal advice. -/
 theorem execProgram_shadow (p : Program) (s g : SailJoltState) (h : Shadow s g) :
     SameResult (fun s' g' => Shadow s' g' ∧ MemoryFrame s s' ∧ MemoryFrame g g')

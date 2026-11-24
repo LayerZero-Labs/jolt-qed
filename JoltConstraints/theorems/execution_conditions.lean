@@ -1,4 +1,5 @@
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
+import JoltConstraints.theorems.DeviceFrame
 
 open LeanRV64D
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
@@ -17,32 +18,11 @@ theorem execHalt_end (kind : JoltHaltKind) (dst : Dst) (pre post : SailJoltState
     (runs : execHalt kind dst pre = .ok RETIRE_SUCCESS post) :
     post.sail.regs.get? Register.nextPC = some address ∧
       post.halted = some kind ∧ post.jolt_device.panic = (kind == JoltHaltKind.panic) := by
-  have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok address pre := by
-    unfold liftSail
-    rw [readReg_eq_of_get? Register.PC pre.sail address pc]
-  unfold execHalt at runs
-  cases next : pre.sail.regs.get? Register.nextPC with
-  | none =>
-    have failed : liftSail (LeanRV64D.readReg Register.nextPC) pre =
-        .error .Unreachable pre := by
-      unfold liftSail
-      rw [Step.readReg_eq_of_get?_none Register.nextPC pre.sail next]
-    simp only [bind, EStateM.bind, failed] at runs
-    cases runs
-  | some link =>
-    have readNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
-      unfold liftSail
-      rw [readReg_eq_of_get? Register.nextPC pre.sail link next]
-    simp only [bind, EStateM.bind, readNext, readPC] at runs
-    cases written : writeDst dst link pre with
-    | error error middle =>
-      simp only [written] at runs
-      cases runs
-    | ok value middle =>
-      cases value
-      simp only [written] at runs
-      cases runs
-      simp [recordHalt, Std.ExtDHashMap.get?_insert]
+  obtain ⟨link, source, middle, _, sourceIs, _, shape⟩ :=
+    execHalt_shape kind dst pre post runs
+  have sourceEq : source = address := Option.some.inj (sourceIs.symm.trans pc)
+  rw [shape, sourceEq]
+  simp [recordHalt]
 
 end JoltConstraints
 

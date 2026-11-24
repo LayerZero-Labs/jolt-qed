@@ -1,4 +1,5 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
+import JoltBytecode.Step.Lift
 
 open LeanRV64D
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
@@ -7,6 +8,15 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
 set_option autoImplicit false
 
 namespace JoltConstraints
+
+/-- Inserting a byte retains the presence of every previously present byte.
+For example, an output write keeps a present input byte present. -/
+theorem insert_preserves_present (mem : Std.ExtHashMap Nat (BitVec 8))
+    (address other : Nat) (value : BitVec 8) (present : (mem.get? other).isSome) :
+    ((mem.insert address value).get? other).isSome := by
+  by_cases same : address = other
+  · subst other; simp
+  · simpa [Std.ExtHashMap.getElem?_insert, same] using present
 
 /-- A successful shared-memory initialization changes only memory, the code span,
 the panic claim and the halted marker.
@@ -39,6 +49,53 @@ theorem initialState_with_adviceTape (state : SailJoltState)
   unfold initialState
   cases codeRegionOf state.jolt_device.memory_layout sources <;>
     cases state.jolt_device.initialMem state.sail.mem inputs trusted untrusted <;> rfl
+
+/-- A retiring halt reads its link and source address, writes the link, then
+updates nextPC and halt metadata.
+For example, a panic halt writes the advanced PC to its scratch destination.
+Jolt at `ff6fc6568`: `tracer/src/emulator/cpu.rs` (`Cpu::halt`).
+This primitive execution fact is a candidate to move into JoltBytecode. -/
+theorem execHalt_shape (kind : JoltHaltKind) (dst : Dst) (pre post : SailJoltState)
+    (runs : execHalt kind dst pre = .ok RETIRE_SUCCESS post) :
+    ∃ link address middle,
+      pre.sail.regs.get? Register.nextPC = some link ∧
+      pre.sail.regs.get? Register.PC = some address ∧
+      writeDst dst link pre = .ok () middle ∧
+      post = recordHalt kind { middle with sail := { middle.sail with
+        regs := middle.sail.regs.insert Register.nextPC address } } := by
+  unfold execHalt at runs
+  cases next : pre.sail.regs.get? Register.nextPC with
+  | none =>
+    have failed : liftSail (LeanRV64D.readReg Register.nextPC) pre =
+        .error .Unreachable pre := by
+      unfold liftSail
+      rw [Step.readReg_eq_of_get?_none Register.nextPC pre.sail next]
+    simp only [bind, EStateM.bind, failed] at runs
+    cases runs
+  | some link =>
+    have readNext : liftSail (LeanRV64D.readReg Register.nextPC) pre = .ok link pre := by
+      unfold liftSail
+      rw [readReg_eq_of_get? Register.nextPC pre.sail link next]
+    cases pc : pre.sail.regs.get? Register.PC with
+    | none =>
+      have failed : liftSail (LeanRV64D.readReg Register.PC) pre =
+          .error .Unreachable pre := by
+        unfold liftSail
+        rw [Step.readReg_eq_of_get?_none Register.PC pre.sail pc]
+      simp only [bind, EStateM.bind, readNext, failed] at runs
+      cases runs
+    | some address =>
+      have readPC : liftSail (LeanRV64D.readReg Register.PC) pre = .ok address pre := by
+        unfold liftSail
+        rw [readReg_eq_of_get? Register.PC pre.sail address pc]
+      simp only [bind, EStateM.bind, readNext, readPC] at runs
+      cases written : writeDst dst link pre with
+      | error error middle => simp only [written] at runs; cases runs
+      | ok value middle =>
+        cases value
+        simp only [written] at runs
+        cases runs
+        exact ⟨link, address, middle, rfl, rfl, written, rfl⟩
 
 /-- A raw byte store commutes with a state transformation that preserves its checks
 and shared memory, and commutes with replacing memory.

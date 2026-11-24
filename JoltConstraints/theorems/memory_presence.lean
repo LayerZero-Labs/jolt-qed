@@ -79,6 +79,40 @@ theorem heap_end_le_ram_backing_end (device : JoltDevice) (config : MemoryConfig
       rw [sizeIs]
       exact Nat.le_nextPowerOfTwo _)
 
+private theorem padded_size_lt_arithmetic (base total bound : Nat)
+    (basePositive : 0 < base) (boundPositive : 0 < bound) (totalBound : total ≤ bound) :
+    total - base < bound := by omega
+
+private theorem padded_size_lt_option (base lowest bound : Nat) (domain : Option Nat)
+    (k : Nat) (present : domain = some k) (basePositive : 0 < base)
+    (boundPositive : 0 < bound) (totalBound : lowest + 8 * k ≤ bound) :
+    (domain.map fun words => lowest + 8 * words - base).getD 0 < bound := by
+  rw [present]
+  exact padded_size_lt_arithmetic base _ bound basePositive boundPositive totalBound
+
+private theorem rounded_size_exact (base size : Nat)
+    (baseAligned : base % 8 = 0) (endAligned : (base + size) % 8 = 0) :
+    8 * ((size + 7) / 8) = size := by omega
+
+/-- The initialized RAM array has exactly the tracer's padded backing size
+for a checked layout.
+For example, an aligned 248-byte backing allocates exactly 248 bytes, without
+wrapping the size through its u64 representation. -/
+theorem initialRam_size_eq_ram_size (layout : MemoryLayout)
+    (image : List (BitVec 64 × BitVec 8)) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some layout) :
+    (initialRam layout image).size = layout.ram_size := by
+  obtain ⟨words, checked⟩ := Option.isSome_iff_exists.mp (new_max_ram_k config layout built)
+  have bound := (max_ram_k_spec layout words checked).2.2.2
+  have sizeBound : layout.ram_size < 2 ^ 64 :=
+    padded_size_lt_option JoltISA.RAM_START_ADDRESS _ _ _ words checked
+      (by decide) (by decide) bound
+  have aligned := ram_backing_end_aligned
+    { memory_layout := layout, panic := false } (new_lowest_address_aligned config layout built)
+  rw [initialRam_size, MemoryLayout.get_total_memory_size, BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt sizeBound]
+  exact rounded_size_exact JoltISA.RAM_START_ADDRESS layout.ram_size (by decide) aligned
+
 /-- Device readability depends only on layout, not memory contents or panic.
 For example, an output remains readable after another output byte is stored. -/
 theorem device_readable_of_layout (before after : JoltDevice) (address : Nat)
