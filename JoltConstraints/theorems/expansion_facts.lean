@@ -1186,6 +1186,7 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .jolt (.VirtualRev8W rd rs1), _, h => by cases h; exact virtualRev8W_native_ok ..
   | .jolt (.VirtualAssertEQ rs1 rs2 imm), _, h => by cases h; exact virtualAssertEQ_native_ok ..
   | .jolt .VirtualHostIO, _, h => by cases h; exact virtualHostIO_native_ok
+  | .jolt .JoltSuccess, _, h => by cases h; native_ok
 
 /-- The first read of each instruction temporary in a source expansion follows
 a write within that same expansion. Reserved virtual registers are excluded. -/

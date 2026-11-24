@@ -20,7 +20,9 @@ The two inline XOR-rotate kinds remain explicitly outside the modelled ISA.
   `kindLookupTable_kindOf`, `kindRafFlag_kindOf`: Lean's per-instruction
   metadata equals Jolt's per-kind table at every instruction.
 * A `run_meta` check: `kindOf` maps every Lean instruction to the Jolt kind of
-  the same name, and every Jolt kind except `NoOp` has a Lean instruction.
+  the same name (with `Panic` mapped to `JoltPanic`).
+  `kindCoverage_matches` covers the modelled kinds, excluding padding and the
+  explicitly unmodelled inline kinds `VirtualXORROT2` and `VirtualXORROT61`.
 * `circuitFlag_iff_generated`: a bytecode row's circuit flag, including the
   flags its sequence stamp sets, matches the generated tables.
 * `padding_*`: the padding row of `bytecodeCircuitFlag` and its neighbors
@@ -459,7 +461,7 @@ theorem inline_xorRot_not_modelled :
   exact ⟨fun h => h.1 rfl, fun h => h.2 rfl⟩
 
 /-- Generated kind-list membership reads the old opcode flag.
-For example, Load belongs to the LD entry, and Halt belongs to no old instruction entry. -/
+For example, Load belongs to the LD entry, and Halt belongs to both halt entries. -/
 theorem mem_kindCircuitFlags_kindOf (i : JoltISA.Instr) (f : CircuitFlag) :
     f ∈ kindCircuitFlags (kindOf i) ↔ legacyOpcodeFlag i f = true := by
   simp [kindCircuitFlags_kindOf, List.mem_filter, mem_circuitFlagOrder]

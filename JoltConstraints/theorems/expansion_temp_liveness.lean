@@ -56,7 +56,7 @@ def readSources : Instr → List Src
   | .VirtualAssertEQ lhs rhs _ | .VirtualAssertValidDiv0 lhs rhs _
   | .VirtualAssertValidUnsignedRemainder lhs rhs _
   | .VirtualAssertMulUNoOverflow lhs rhs _ | .VirtualAssertLTE lhs rhs _ => [lhs, rhs]
-  | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE
+  | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .JoltSuccess _ | .Panic _
   | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _
   | .VirtualAdviceLoad _ _ | .VirtualHostIO => []

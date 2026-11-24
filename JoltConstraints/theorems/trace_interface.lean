@@ -60,27 +60,14 @@ theorem initial_state_pc {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :
     initialState.sail.regs.get? Register.PC = some joltInstance.program.entry_address := by
-  unfold JoltInstance.initial_state at built
-  rw [bind_some_iff] at built
-  obtain ⟨layout, _, built⟩ := built
-  dsimp only at built
-  -- create_emulator's three size checks
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the state init_state builds
-  cases built
-  rw [init_state_register]
-  rfl
+  obtain ⟨layout, _, _, _, _, initialized⟩ := initial_state_build
+    joltInstance privateInputs initialState built
+  obtain ⟨_, _, _, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ initialized
+  rw [shape]
+  exact init_state_register joltInstance.program.entry_address
+    (initialRam layout joltInstance.program.memory_init)
+    { panic := false, memory_layout := layout }
+    { bytes := privateInputs.advice_tape, readPosition := 0 } {} Register.PC
 
 -- The trace starts at an instruction's first row, at the address PC holds initially.
 theorem HonestTrace.startsAtEntry {joltInstance : JoltInstance SourceInstruction}
