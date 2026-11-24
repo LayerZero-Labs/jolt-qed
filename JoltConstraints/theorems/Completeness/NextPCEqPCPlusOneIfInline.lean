@@ -61,7 +61,7 @@ theorem honestWitness_nextPCEqPCPlusOneIfInline
         else _) at hsucc
       simp only [hcont, ↓reduceIte] at hsucc
       have hnextWitness : t.val + 1 < params.traceLength :=
-        hnext.trans tracePadded.2
+        hnext.trans_le tracePadded.2
       have hpc : TraceWitness.NextPC (F := F) params trace t =
           TraceWitness.PC params trace t + 1 := by
         simp only [TraceWitness.NextPC, dite_eq_left hnextWitness, TraceWitness.PC,
