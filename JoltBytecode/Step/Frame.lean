@@ -1,5 +1,6 @@
 import JoltBytecode.Step.Lift
 import JoltBytecode.JoltISA.Semantics
+import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
 
 /-!
 # Register frames for Jolt rows
@@ -266,18 +267,7 @@ private theorem frames_load_doubleword (address : BitVec 64) :
 private theorem store_raw_regs (js : SailJoltState) (address : Nat) (v : BitVec 8)
     (js' : SailJoltState) (h : JoltISA.Mmu.store_raw? js address v = some js') :
     js'.sail.regs = js.sail.regs := by
-  unfold JoltISA.Mmu.store_raw? at h
-  split at h
-  · split at h
-    · cases h; rfl
-    · cases h
-  · split at h
-    · cases h
-    · split at h
-      · cases h
-      · obtain ⟨device, _, h⟩ := Option.map_eq_some_iff.mp h
-        cases h
-        rfl
+  exact (JoltISA.Mmu.store_raw_regs h).1
 
 private theorem store_bytes_regs (js : SailJoltState) (address : Nat) (v : BitVec 64)
     (ks : List Nat) (current : Option SailJoltState)

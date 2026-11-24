@@ -61,14 +61,12 @@ private theorem amoswapdProgramAuto_eq_sail
         rs1 js h.cur_privilege h.mstatus_mprv addr h.rs1_read
         hbytes hload_pmp hread_mmio h_align
         (JoltISA.amoOldVRegFor_writable rd) h.jolt_ram_load
-    have hld_layout :
-        js_afterLoad.jolt_device.memory_layout = js.jolt_device.memory_layout :=
-      (JoltIOSetupFrame.execInstr_rule _ js js_afterLoad _ hld).1
+    have hld_setup := JoltIOSetupFrame.execInstr_setup _ js js_afterLoad _ hld
     obtain ⟨js_afterStore, hsd, hsd_sail, hsd_vregs⟩ :=
       amo_dword_store_xreg_result_after_load_aligned_run
         rs2 rs1 js js_afterLoad h.cur_privilege h.mstatus_mprv
         addr rs2Val h.rs1_read h.rs2_read hstore_pmp hwrite_mmio
-        h_align hld_sail h.jolt_ram_store hld_layout
+        h_align hld_sail (by simpa [JoltISA.amoValue] using h.jolt_ram_store) hld_setup
     obtain ⟨js_afterWrite, haddi, haddi_sail⟩ :=
       amo_dword_writeback_after_store_run_from oldReg
         rd js_afterLoad js_afterStore addr old hsd_vregs hld_old

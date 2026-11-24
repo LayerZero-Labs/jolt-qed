@@ -8,6 +8,15 @@ open virtaddr MemoryAccessType mem_payload
 noncomputable section
 namespace SystemProofs
 
+/-- The full doubleword written by Jolt's conditional-store expansion.
+A failed SC.D writes the original word, and a failed SC.W merges its original lane.
+For example, a failed SC can write back a protected code word without changing bytes. -/
+def scStoreValue (double : Bool) (js : SailJoltState) (addr src : BitVec 64) : BitVec 64 :=
+  let original := JoltISA.Mmu.ram_doubleword js.sail.mem (reservationBase double addr).toNat
+  let choice := if addr == js.vregs (if double then 33#7 else 32#7) then src else
+    if double then original else AtomicFamily.amoWordLaneOld addr original
+  if double then choice else AtomicFamily.amoWordLaneMerged addr original choice
+
 /-- The environment for an aligned SC, including Jolt's legal initial reservation pair.
 The physical check includes Sail's conditional-store PMP and PMA permissions.
 For example, a word reservation has v33 = 0, and a doubleword reservation has v33 = v32. -/
@@ -16,6 +25,7 @@ structure ReservationStoreEqAssumptions (double : Bool) (rs2 rs1 : regidx)
       ReservationWindow double rs1_val js where
   not_writable_mmio : Assumptions.NotWritableMmioWindow (reservationBase double rs1_val) 8 js.sail
   jolt_ram_store : Assumptions.JoltRamStoreOk (reservationBase double rs1_val) js
+    (scStoreValue double js rs1_val rs2_val) 8
   conditional_access : phys_access_check (StoreConditional Data) Privilege.Machine
     (physaddr.Physaddr rs1_val) (if double then 8 else 4) true js.sail = .ok none js.sail
   reservation_pair : js.vregs 33#7 = 0#64 ∨ js.vregs 33#7 = js.vregs 32#7
@@ -162,9 +172,9 @@ theorem scRows_spec (double : Bool) (rd rs1 rs2 : regidx) (js : SailJoltState)
     cases double
     · simpa only [scRows, joltScStore, scSuccess, reservationBase, Bool.false_eq_true, ite_false, ite_true] using
         scwProgram_spec rd rs1 rs2 js h.rs1_val h.rs2_val h.rs1_read h.rs2_read
-          h.align hmmio.ram hbase.ram hload h.jolt_ram_store
+          h.align hmmio.ram hbase.ram hload (by simpa [scStoreValue, reservationBase] using h.jolt_ram_store)
     · simpa only [scRows, joltScStore, scSuccess, reservationBase, Bool.false_eq_true, ite_false, ite_true] using
-        scdProgram_spec rd rs1 rs2 js h.rs1_val h.rs2_val h.rs1_read h.rs2_read h.align hmmio.ram hload hstore
+        scdProgram_spec rd rs1 rs2 js h.rs1_val h.rs2_val h.rs1_read h.rs2_read h.align hmmio.ram hload (by simpa [scStoreValue, reservationBase] using h.jolt_ram_store)
   rw [hraw, joltScStore_eq double js h.rs1_val h.rs2_val h.align
     (Assumptions.DwordPresent.memBytesPresentAt h.dword_present)]
 
