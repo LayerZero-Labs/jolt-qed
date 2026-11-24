@@ -402,6 +402,33 @@ private theorem load_bind_word (address : BitVec 64) (destination : Dst)
     obtain ⟨rfl, rfl⟩ := JoltConstraints.load_doubleword_shape pre middle address result loaded
     simpa only [bind, EStateM.bind, loaded] using runs
 
+/-- A retiring load passed its natural alignment check and ran the shared word read.
+For example, a halfword floor load at ten passes the low-bit check and reads eight.
+Jolt at `ff6fc6568`: `tracer/src/instruction/floor_access.rs` (`load`). -/
+theorem LoadRow.aligned_continuation_of_run {instruction : Instr} {width : MemoryWidth} {destination : Dst}
+    {base : Src} {imm : BitVec 64} (row : LoadRow instruction width destination base imm)
+    (advice : instruction.RuntimeAdvice) (pre post : SailJoltState)
+    (runs : execInstr (instruction.withRuntimeAdvice advice) pre = .ok RETIRE_SUCCESS post) :
+    (sourceValue base pre + imm) &&& width.alignMask = 0 ∧ (do
+      match ← Mmu.load_doubleword (width.accessed (sourceValue base pre + imm)) with
+      | .Ok word => writeDst destination word; pure RETIRE_SUCCESS
+      | .Err error => pure error) pre = .ok RETIRE_SUCCESS post := by
+  rw [withRuntimeAdvice_eq_of_noAdvice _ advice row.metadata.noAdvice] at runs
+  obtain ⟨faultClass, fault, rfl⟩ := row
+  cases width <;> simp only [MemoryWidth.load, execInstr] at runs <;>
+    have afterBase := lookup_read_bind base _ pre post _ runs
+  · split at afterBase
+    · rename_i aligned
+      exact ⟨aligned, by simpa only [MemoryWidth.accessed] using! afterBase⟩
+    · cases afterBase
+  · exact ⟨by simp [MemoryWidth.alignMask],
+      by simpa only [MemoryWidth.accessed] using! afterBase⟩
+  all_goals
+    split at afterBase
+    · rename_i aligned
+      exact ⟨aligned, by simpa only [MemoryWidth.accessed] using! afterBase⟩
+    · cases afterBase
+
 /-- A retiring load ran the shared doubleword-load continuation at its accessed word.
 For example, a floor byte load continues with the containing eight-byte word. -/
 theorem LoadRow.continuation_of_run {instruction : Instr} {width : MemoryWidth} {destination : Dst}
@@ -411,19 +438,8 @@ theorem LoadRow.continuation_of_run {instruction : Instr} {width : MemoryWidth} 
     (do
       match ← Mmu.load_doubleword (width.accessed (sourceValue base pre + imm)) with
       | .Ok word => writeDst destination word; pure RETIRE_SUCCESS
-      | .Err error => pure error) pre = .ok RETIRE_SUCCESS post := by
-  rw [withRuntimeAdvice_eq_of_noAdvice _ advice row.metadata.noAdvice] at runs
-  obtain ⟨faultClass, fault, rfl⟩ := row
-  cases width <;> simp only [MemoryWidth.load, execInstr] at runs <;>
-    have afterBase := lookup_read_bind base _ pre post _ runs
-  · split at afterBase
-    · simpa only [MemoryWidth.accessed] using! afterBase
-    · cases afterBase
-  · simpa only [MemoryWidth.accessed] using! afterBase
-  all_goals
-    split at afterBase
-    · simpa only [MemoryWidth.accessed] using! afterBase
-    · cases afterBase
+      | .Err error => pure error) pre = .ok RETIRE_SUCCESS post :=
+  (row.aligned_continuation_of_run advice pre post runs).2
 
 /-- A retired load ran its doubleword read successfully.
 For example, a floor halfword load at ten read the word at eight. -/
@@ -479,7 +495,7 @@ private theorem store_bind_result (address word : BitVec 64) (pre post : SailJol
 /-- A store row that retires has run the doubleword store at its accessed
 address with its stored value; an alignment fault would not retire.
 For example, a retired VirtualStoreH at `ea = 10` stored to 8.
-Jolt's tracer at c6703570: `tracer/src/instruction/floor_access.rs` (`store`). -/
+Jolt at `ff6fc6568`: `tracer/src/instruction/floor_access.rs` (`store`, line 50). -/
 theorem StoreRow.store_of_run {instruction : Instr} {width : MemoryWidth} {base value : Src}
     {imm : BitVec 64} (row : StoreRow instruction width base value imm)
     (answer : BitVec 64) (advice : instruction.RuntimeAdvice) (pre post : SailJoltState)
