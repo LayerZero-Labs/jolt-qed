@@ -87,7 +87,11 @@ theorem scwProgram_spec (rd rs1 rs2 : regidx) (js : SailJoltState) (addr src : B
     (ha : addr &&& 3#64 = 0#64) (hram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
     (hbase : JoltISA.RAM_START_ADDRESS ≤ (amoWordBase addr).toNat)
     (hl : JoltISA.Mmu.effective_address_ok js.jolt_device (amoWordBase addr).toNat false = true)
-    (hs : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
+    (hs : Assumptions.JoltRamStoreOk (amoWordBase addr) js
+      (AtomicFamily.amoWordLaneMerged addr
+        (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase addr).toNat)
+        (if addr == js.vregs 32#7 then src else AtomicFamily.amoWordLaneOld addr
+          (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase addr).toNat))) 8) :
     System.systemProjectResult (JoltISA.execProgram (JoltISA.scwProgramAuto rd rs1 rs2) js) =
       .ok RETIRE_SUCCESS (stateAfterWrite (System.systemProject (withReservation
         { js with sail := (state_after_dword_store js.sail (amoWordBase addr)
@@ -167,7 +171,7 @@ theorem scwProgram_spec (rd rs1 rs2 : regidx) (js : SailJoltState) (addr src : B
   have hmerge : JoltISA.Program.Run (JoltISA.laneWindowMerge .word (.vreg flag) (.vreg dword)
       (.xreg rs1) 0 (.vreg 33#7) (ExceptionType.E_SAMO_Addr_Align ()) (.done RETIRE_SUCCESS)) opened stored := by
     apply AtomicFamily.amo_word_lane_merge_run rs1 flag dword (.vreg 33#7) opened addr original choice hr1
-      _ _ hval hf hd hfd ha (AtomicFamily.amo_word_base_aligned addr) hbase ⟨hs.below_heap_end, hs.outside_canary⟩
+      _ _ hval hf hd hfd ha (AtomicFamily.amo_word_base_aligned addr) hbase (hs.transfer rfl rfl rfl)
     · simp [opened, stateAfterVRegWrite, hfd']
     · simp [opened, stateAfterVRegWrite]
   have hstatus : (JoltISA.execInstr (JoltISA.Encoded.XORI (JoltISA.sideEffectingRdZeroDst rd)

@@ -19,7 +19,7 @@ which is stacked on a16z/jolt#2383:
 (`expand_ecall`, `expand_mret`, `emit_csr_read`, `emit_csr_swap`,
 `emit_csr_bit_update`, and the immediate expanders).
 The programs are ECALL, EBREAK, MRET, CSRRW, CSRRS, CSRRC, CSRRWI, CSRRSI and
-CSRRCI; EBREAK retains its existing self-loop sequence.
+CSRRCI; EBREAK lowers to a single failure-halt row at `ff6fc6568`.
 
 The reserved virtual registers follow `tracer/src/utils/virtual_registers.rs`:
 
@@ -78,9 +78,10 @@ def ecallProgram : Program :=
   .instr (.JALR (.vreg inlineTmp0) (.vreg trapHandlerVReg) 0) <|
   .done RETIRE_SUCCESS
 
-/-- Rust `expand_ebreak`: emit `JAL scratch, 0`, a self-loop termination marker. -/
+/-- Jolt's `expand_ebreak` at `ff6fc6568`: emit one `JoltPanic` row.
+For example, its link destination is the first scratch register, v40. -/
 def ebreakProgram : Program :=
-  .instr (JoltISA.Encoded.JAL (.vreg systemScratchVReg) (0 : BitVec 21)) <|
+  .instr (.Panic (.vreg systemScratchVReg)) <|
   .done RETIRE_SUCCESS
 
 /-- Jolt's machine-mode trap return at a86ec3716.

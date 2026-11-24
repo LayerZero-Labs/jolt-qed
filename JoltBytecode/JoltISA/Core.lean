@@ -50,6 +50,13 @@ structure JoltHostIOConfig where
   mode : JoltHostIOMode := .live
   overflowChecks : Bool := false
 
+/-- How the tracer ended a run (`HaltKind` in `tracer/src/emulator/cpu.rs`).
+For example, EBREAK selects `panic`. -/
+inductive JoltHaltKind where
+  | success
+  | panic
+  deriving DecidableEq, Repr
+
 structure SailJoltState where
   sail : SailState
   vregs : BitVec 7 → BitVec 64 := fun _ => 0
@@ -57,6 +64,50 @@ structure SailJoltState where
   jolt_device : JoltDevice
   adviceTape : JoltAdviceTape
   hostIO : JoltHostIOConfig := {}
+  /-- Code-word indices from the lowest mapped address, as `CodeGuard::region`.
+  For example, `(2, 4)` protects exactly domain words two and three. -/
+  codeRegion : Nat × Nat := (0, 0)
+  /-- A recorded halt; for example, `some .success` makes later ticks no-ops. -/
+  halted : Option JoltHaltKind := none
+
+namespace JoltISA
+
+/-- The protected code span from decoded source addresses and compressed flags.
+This is `code_region` in `crates/jolt-program/src/preprocess/ram.rs` at `ff6fc6568`.
+For example, source words two and four protect the whole interval `[2, 5)`, including data between them.
+Zero-address padding is ignored; invalid alignment, underflow or extent overflow fails. -/
+def codeRegionOf (layout : MemoryLayout) (sources : List (BitVec 64 × Bool)) :
+    Option (Nat × Nat) := do
+  let lowest := layout.get_lowest_address.toNat
+  guard (lowest % 8 == 0)
+  let mut region : Option (Nat × Nat) := none
+  for (address, compressed) in sources do
+    if address != 0 then
+      let start := address.toNat
+      let stop ← MemoryLayout.checkedAdd start (if compressed then 2 else 4)
+      guard (lowest ≤ start && start % 2 == 0)
+      let first := (start - lowest) / 8
+      let last := (stop - lowest + 7) / 8
+      region := some (match region with
+        | none => (first, last)
+        | some (left, right) => (min left first, max right last))
+  pure (region.getD (0, 0))
+
+/-- Install input/advice memory and the code guard for a new run.
+The supplied state contains the program image and starting register values.
+For example, input byte zero is written at `memory_layout.input_start`.
+The device retains only layout and the initially false panic claim. -/
+def initialState (state : SailJoltState) (sources : List (BitVec 64 × Bool))
+    (inputs trusted untrusted : Array (BitVec 8)) : Option SailJoltState := do
+  let region ← codeRegionOf state.jolt_device.memory_layout sources
+  let mem ← state.jolt_device.initialMem state.sail.mem inputs trusted untrusted
+  pure { state with
+    sail := { state.sail with mem := mem }
+    jolt_device := { state.jolt_device with panic := false }
+    codeRegion := region
+    halted := none }
+
+end JoltISA
 
 abbrev JoltMonad (α : Type) := EStateM (Error exception) SailJoltState α
 

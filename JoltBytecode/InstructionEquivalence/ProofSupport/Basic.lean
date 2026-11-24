@@ -193,6 +193,7 @@ def InstrWritesNoProtectedVReg : Instr → Prop
   | .BGE _ _ _ => False
   | .BLTU _ _ _ => False
   | .BGEU _ _ _ => False
+  | .JoltSuccess _ | .Panic _ => False
   | .FENCE => False
   | .ADD dst _ _ => DstWritesNoProtectedVReg dst
   | .ADDW dst _ _ => DstWritesNoProtectedVReg dst
@@ -333,7 +334,7 @@ private theorem store_raw_preserves_vregs {s s' : SailJoltState} {ea : Nat} {v :
   all_goals first
     | (cases h; rfl)
     | cases h
-    | (cases hst : s.jolt_device.store? ea v <;> simp [hst] at h; cases h; rfl)
+    | (cases hst : s.jolt_device.store? s.sail.mem ea v <;> simp [hst] at h; cases h; rfl)
 
 private theorem store_bytes_preserves_vregs (ea : Nat) (value : BitVec 64) :
     ∀ (l : List Nat) (o : Option SailJoltState) (s0 s' : SailJoltState),
@@ -906,6 +907,8 @@ theorem execInstr_preserves_protected
       cases hsafe
   | BGEU lhs rhs imm =>
       cases hsafe
+  | JoltSuccess _ => cases hsafe
+  | Panic _ => cases hsafe
   | FENCE =>
       cases hsafe
   | ADD dst lhs rhs =>

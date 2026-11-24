@@ -203,25 +203,6 @@ theorem wordStoreFacts_of_effective_address
       word_offset_cases := word_offset_cases
         (load_effective_address val imm) halign }
 
-/-- The byte-store XOR-mask-XOR expression.  `shift` is measured in bits. -/
-def byteSplice (dword_orig : BitVec 64) (byte_val : BitVec 8) (shift : Nat) : BitVec 64 :=
-  let b_ext : BitVec 64 := byte_val.zeroExtend 64 <<< shift
-  let mask : BitVec 64 := (0x00000000000000FF : BitVec 64) <<< shift
-  dword_orig ^^^ ((dword_orig ^^^ b_ext) &&& mask)
-
-/-- The halfword-store XOR-mask-XOR expression.  `shift` is measured in bits. -/
-def halfwordSplice (dword_orig : BitVec 64) (halfword_val : BitVec 16) (shift : Nat) :
-    BitVec 64 :=
-  let h_ext : BitVec 64 := halfword_val.zeroExtend 64 <<< shift
-  let mask : BitVec 64 := (0x000000000000FFFF : BitVec 64) <<< shift
-  dword_orig ^^^ ((dword_orig ^^^ h_ext) &&& mask)
-
-/-- The word-store XOR-mask-XOR expression.  `shift` is measured in bits. -/
-def wordSplice (dword_orig : BitVec 64) (word_val : BitVec 32) (shift : Nat) : BitVec 64 :=
-  let w_ext : BitVec 64 := word_val.zeroExtend 64 <<< shift
-  let mask : BitVec 64 := (0x00000000FFFFFFFF : BitVec 64) <<< shift
-  dword_orig ^^^ ((dword_orig ^^^ w_ext) &&& mask)
-
 private theorem ofNat_shift_mask (mask n : Nat) :
     BitVec.ofNat 64 (mask <<< n) = (BitVec.ofNat 64 mask) <<< n := by
   apply BitVec.eq_of_toNat_eq
@@ -262,7 +243,9 @@ private theorem masked_add_eq_splice (original value mask : BitVec 64)
       BitVec.and_assoc, BitVec.and_not_self]
     simp
 
-private theorem offset_toNat_eq_low_three {ea base : BitVec 64}
+/-- The offset from the enclosing doubleword is its low three address bits.
+For example, address 12 has offset four from base eight. -/
+theorem offset_toNat_eq_low_three {ea base : BitVec 64}
     (hbase : base = ea &&& (-8 : BitVec 64)) :
     (ea - base).toNat = (ea &&& (7 : BitVec 64)).toNat := by
   subst base
