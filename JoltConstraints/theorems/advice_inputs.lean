@@ -5,17 +5,6 @@ open LeanRV64D
 
 set_option autoImplicit false
 
--- For one fixed instance, varying any prover input cannot change the trusted
--- advice loaded by initialization. ConstraintContext binds initial RAM to it.
-theorem JoltInstance.initial_states_agree_on_trusted_advice {Source : Type}
-    (joltInstance : JoltInstance Source) (a b : JoltPrivateInputs)
-    (stateA stateB : SailJoltState)
-    (initializedA : joltInstance.initial_state a = some stateA)
-    (initializedB : joltInstance.initial_state b = some stateB) :
-    stateA.jolt_device.trusted_advice = stateB.jolt_device.trusted_advice := by
-  exact (initial_state_device joltInstance a stateA initializedA).2.1.trans
-    (initial_state_device joltInstance b stateB initializedB).2.1.symm
-
 -- Replacing the execution tape changes only the tape in the initial state.
 theorem JoltInstance.initial_state_with_advice_tape {Source : Type}
     (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
@@ -28,7 +17,13 @@ theorem JoltInstance.initial_state_with_advice_tape {Source : Type}
   | none => rfl
   | some layout =>
     dsimp only [Option.bind_some]
-    split_ifs <;> rfl
+    split_ifs <;> try rfl
+    exact JoltConstraints.initialState_with_adviceTape
+      (init_state joltInstance.program.entry_address
+        (initialRam layout joltInstance.program.memory_init)
+        { panic := false, memory_layout := layout }
+        { bytes := privateInputs.advice_tape, readPosition := 0 })
+      _ _ _ _ { bytes := tape, readPosition := 0 }
 
 -- A successful initialization starts the execution tape at its first byte.
 theorem JoltInstance.initial_state_adviceTape_readPosition_zero {Source : Type}
@@ -36,14 +31,10 @@ theorem JoltInstance.initial_state_adviceTape_readPosition_zero {Source : Type}
     (state : SailJoltState)
     (initialized : joltInstance.initial_state privateInputs = some state) :
     state.adviceTape.readPosition = 0 := by
-  unfold JoltInstance.initial_state at initialized
-  cases layout : joltInstance.memory_layout with
-  | none => simp [layout] at initialized
-  | some layout =>
-      simp only [layout] at initialized
-      split_ifs at initialized <;> simp_all [init_state]
-      simpa using congrArg (fun state : SailJoltState =>
-        state.adviceTape.readPosition) initialized.symm
+  obtain ⟨_, _, _, _, _, built⟩ := initial_state_build joltInstance privateInputs state initialized
+  obtain ⟨_, _, _, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ built
+  rw [shape]
+  rfl
 
 namespace JoltConstraints
 

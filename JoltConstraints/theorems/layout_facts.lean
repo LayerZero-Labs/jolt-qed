@@ -6,6 +6,7 @@ Layout source at public pin 8bbb2357:
 https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/common/src/jolt_device.rs#L381-L537
 -/
 import JoltConstraints.translation.program
+import JoltConstraints.theorems.DeviceFrame
 import JoltConstraints.theorems.Soundness.Layer5.PowerOfTwo
 
 open LeanRV64D
@@ -187,22 +188,8 @@ theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
   -- the advice regions
   rw [bind_some_iff] at built
   obtain ⟨⟨trustedStart, trustedEnd, untrustedStart, untrustedEnd⟩, placed, built⟩ := built
-  -- input end, output end, termination, I/O end, stack end, stack start, heap end
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the layout itself
+  -- Remaining geometry and padded-RAM admission.
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
   cases built
   obtain ⟨trustedAtLeast, trustedMultiple⟩ := alignUp8_some trustedRounded
   obtain ⟨untrustedAtLeast, untrustedMultiple⟩ := alignUp8_some untrustedRounded
@@ -256,93 +243,15 @@ theorem new_lowest_address_aligned (config : MemoryConfig) (layout : MemoryLayou
   · exact trustedStart
   · exact untrustedStart
 
--- The I/O regions sit in order above the advice regions: the inputs start at or above
--- the lowest address, then the outputs, the panic word, the termination word, and the
--- end of I/O.
--- See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
-theorem new_io_ordered (config : MemoryConfig) (layout : MemoryLayout)
-    (built : MemoryLayout.new config = some layout) :
-    layout.get_lowest_address.toNat ≤ layout.input_start.toNat ∧
-    layout.input_start.toNat ≤ layout.output_start.toNat ∧
-    layout.output_start.toNat ≤ layout.panic.toNat ∧
-    layout.panic.toNat ≤ layout.termination.toNat ∧
-    layout.termination.toNat ≤ layout.io_end.toNat := by
-  obtain ⟨_, _, _, _, trustedEnd, untrustedEnd, _, _, _, inputStart⟩ :=
-    new_advice_regions config layout built
-  have lowestBelow : layout.get_lowest_address.toNat ≤ layout.input_start.toNat := by
-    unfold MemoryLayout.get_lowest_address
-    split <;> omega
-  unfold MemoryLayout.new at built
-  -- program size
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the six sizes, rounded up to multiples of 8
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the two power-of-two checks
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the size of the I/O region
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the advice regions
-  rw [bind_some_iff] at built
-  obtain ⟨⟨trustedStart, trustedTop, untrustedStart, untrustedTop⟩, placed, built⟩ := built
-  -- input end, output end, termination, I/O end
-  rw [bind_some_iff] at built
-  obtain ⟨inputEnd, inputEndAdded, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨outputEnd, outputEndAdded, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨termination, terminationAdded, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨ioEnd, ioEndAdded, built⟩ := built
-  -- stack end, stack start, heap end
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the layout itself
-  cases built
-  obtain ⟨_, _, _, _, trustedTopFits, untrustedTopFits⟩ := adviceRegions_some placed
-  obtain ⟨inputEndIs, inputEndFits⟩ := checkedAdd_some inputEndAdded
-  obtain ⟨outputEndIs, outputEndFits⟩ := checkedAdd_some outputEndAdded
-  obtain ⟨terminationIs, terminationFits⟩ := checkedAdd_some terminationAdded
-  obtain ⟨ioEndIs, ioEndFits⟩ := checkedAdd_some ioEndAdded
-  -- every value fits in 64 bits, so reading it back as a BitVec gives it unchanged
-  dsimp only at lowestBelow ⊢
-  simp only [BitVec.toNat_ofNat] at lowestBelow ⊢
-  rw [Nat.mod_eq_of_lt (a := max untrustedTop trustedTop) (by omega),
-    Nat.mod_eq_of_lt (a := inputEnd) (by omega), Nat.mod_eq_of_lt (a := outputEnd) (by omega),
-    Nat.mod_eq_of_lt (a := termination) (by omega), Nat.mod_eq_of_lt (a := ioEnd) (by omega)]
-  rw [Nat.mod_eq_of_lt (a := max untrustedTop trustedTop) (by omega)] at lowestBelow
-  omega
-
-/-- The output, panic, termination, and I/O end addresses of a successful layout.
+/-- Outputs end at `io_end`, followed by the reserved I/O gap.
+For example, a zero-capacity output still leaves eight bytes before RAM.
 See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new). -/
 theorem new_io_geometry (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
-    layout.panic.toNat = layout.output_start.toNat + layout.max_output_size.toNat ∧
+    layout.output_end.toNat = layout.output_start.toNat + layout.max_output_size.toNat ∧
     layout.max_output_size.toNat % 8 = 0 ∧
-    layout.termination.toNat = layout.panic.toNat + 8 ∧
-    layout.io_end.toNat = layout.termination.toNat + 8 ∧
-    layout.io_end.toNat ≤ JoltISA.RAM_START_ADDRESS := by
+    layout.io_end = layout.output_end ∧
+    layout.io_end.toNat + 8 ≤ JoltISA.RAM_START_ADDRESS := by
   unfold MemoryLayout.new at built
   rw [bind_some_iff] at built
   obtain ⟨_, _, built⟩ := built
@@ -372,10 +281,6 @@ theorem new_io_geometry (config : MemoryConfig) (layout : MemoryLayout)
   obtain ⟨inputEnd, inputAdded, built⟩ := built
   rw [bind_some_iff] at built
   obtain ⟨outputEnd, outputAdded, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨termination, terminationAdded, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨ioEnd, ioEndAdded, built⟩ := built
   repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
   have layoutEq := Option.some.inj built
   rw [← layoutEq]
@@ -398,9 +303,7 @@ theorem new_io_geometry (config : MemoryConfig) (layout : MemoryLayout)
   have regions := adviceRegions_some placed
   have inputEndIs := checkedAdd_some inputAdded
   have outputEndIs := checkedAdd_some outputAdded
-  have terminationIs := checkedAdd_some terminationAdded
-  have ioEndIs := checkedAdd_some ioEndAdded
-  have ioEndBound : ioEnd ≤ JoltISA.RAM_START_ADDRESS := by
+  have ioEndBound : outputEnd + 8 ≤ JoltISA.RAM_START_ADDRESS := by
     unfold MemoryLayout.adviceRegions at placed
     obtain ⟨_, subtracted, _⟩ := Option.bind_eq_some_iff.mp placed
     have startBound := checkedSub_some subtracted
@@ -409,10 +312,8 @@ theorem new_io_geometry (config : MemoryConfig) (layout : MemoryLayout)
   simp only [BitVec.toNat_ofNat]
   rw [Nat.mod_eq_of_lt (a := inputEnd) (by omega),
     Nat.mod_eq_of_lt (a := outputEnd) (by omega),
-    Nat.mod_eq_of_lt (a := termination) (by omega),
-    Nat.mod_eq_of_lt (a := ioEnd) (by omega),
     Nat.mod_eq_of_lt (a := output) (by omega)]
-  omega
+  exact ⟨outputEndIs.1, outputEight, trivial, ioEndBound⟩
 
 -- The outputs start right after the inputs' region, whose size is a multiple of 8.
 -- See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
@@ -453,20 +354,7 @@ theorem new_outputs_after_inputs (config : MemoryConfig) (layout : MemoryLayout)
   -- input end
   rw [bind_some_iff] at built
   obtain ⟨inputEnd, inputEndAdded, built⟩ := built
-  -- output end, termination, I/O end, stack end, stack start, heap end
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the layout itself
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
   cases built
   obtain ⟨_, _, _, _, trustedTopFits, untrustedTopFits⟩ := adviceRegions_some placed
   obtain ⟨inputEndIs, inputEndFits⟩ := checkedAdd_some inputEndAdded
@@ -507,10 +395,29 @@ theorem new_input_size_bound (config : MemoryConfig) (layout : MemoryLayout)
   simp only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt inputLt]
   exact inputGe
 
+/-- The advice, input and output windows appear in order below RAM.
+For example, `output_start` equals the end of the input reservation.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::try_new`). -/
+theorem new_io_ordered (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    layout.get_lowest_address.toNat ≤ layout.input_start.toNat ∧
+    layout.input_start.toNat ≤ layout.output_start.toNat ∧
+    layout.output_start.toNat ≤ layout.output_end.toNat ∧
+    layout.output_end = layout.io_end ∧
+    layout.io_end.toNat ≤ JoltISA.RAM_START_ADDRESS := by
+  obtain ⟨_, _, _, _, trustedEnd, untrustedEnd, _, _, _, inputStart⟩ :=
+    new_advice_regions config layout built
+  obtain ⟨outputStart, _⟩ := new_outputs_after_inputs config layout built
+  obtain ⟨outputEnd, _, ioEnd, bound⟩ := new_io_geometry config layout built
+  have lowestBelow : layout.get_lowest_address.toNat ≤ layout.input_start.toNat := by
+    unfold MemoryLayout.get_lowest_address
+    split <;> omega
+  exact ⟨lowestBelow, by omega, by omega, ioEnd.symm, by omega⟩
+
 /-- A word index counts 8-byte words up from the lowest address:
 `(address - lowest) / 8`.
-In a successful layout the output, panic and termination word indices follow
-from the input word index, and the panic word index is below the index of
+In a successful layout the output start and end word indices follow
+from the input word index, and the output end word index is below the index of
 `RAM_START_ADDRESS`.
 See : jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new). -/
 theorem new_io_word_geometry (config : MemoryConfig) (layout : MemoryLayout)
@@ -518,17 +425,16 @@ theorem new_io_word_geometry (config : MemoryConfig) (layout : MemoryLayout)
     (layout.output_start.toNat - layout.get_lowest_address.toNat) / 8 =
       (layout.input_start.toNat - layout.get_lowest_address.toNat) / 8 +
         layout.max_input_size.toNat / 8 ∧
-    (layout.panic.toNat - layout.get_lowest_address.toNat) / 8 =
+    (layout.output_end.toNat - layout.get_lowest_address.toNat) / 8 =
       (layout.output_start.toNat - layout.get_lowest_address.toNat) / 8 +
         layout.max_output_size.toNat / 8 ∧
-    (layout.termination.toNat - layout.get_lowest_address.toNat) / 8 =
-      (layout.panic.toNat - layout.get_lowest_address.toNat) / 8 + 1 ∧
-    (layout.panic.toNat - layout.get_lowest_address.toNat) / 8 <
+    (layout.output_end.toNat - layout.get_lowest_address.toNat) / 8 <
       (JoltISA.RAM_START_ADDRESS - layout.get_lowest_address.toNat) / 8 := by
   obtain ⟨inputLower, _, _, _, _⟩ := new_io_ordered config layout built
   obtain ⟨outputStart, inputMultiple⟩ := new_outputs_after_inputs config layout built
-  obtain ⟨panicStart, outputMultiple, terminationStart, ioEndStart, ioEndBound⟩ :=
+  obtain ⟨outputEnd, outputMultiple, ioEndStart, ioEndBound⟩ :=
     new_io_geometry config layout built
+  rw [ioEndStart] at ioEndBound
   omega
 
 -- With the lowest address above 8, as validate_inputs requires, no device region covers
@@ -540,9 +446,8 @@ theorem JoltDevice.low_address_free (device : JoltDevice) (config : MemoryConfig
     (address : Nat) (low : address < 8) :
     device.is_input address = false ∧ device.is_trusted_advice address = false ∧
     device.is_untrusted_advice address = false ∧ device.is_output address = false ∧
-    device.is_panic address = false ∧ device.is_termination address = false ∧
-    address ≤ device.memory_layout.io_end.toNat := by
-  obtain ⟨inputAbove, outputAbove, panicAbove, terminationAbove, ioEndAbove⟩ :=
+    address < device.memory_layout.io_end.toNat := by
+  obtain ⟨inputAbove, outputAbove, outputEndAbove, ioEndEq, ioEndAbove⟩ :=
     new_io_ordered config device.memory_layout built
   have trustedAbove : device.memory_layout.get_lowest_address.toNat ≤
       device.memory_layout.trusted_advice_start.toNat := by
@@ -552,55 +457,80 @@ theorem JoltDevice.low_address_free (device : JoltDevice) (config : MemoryConfig
       device.memory_layout.untrusted_advice_start.toNat := by
     unfold MemoryLayout.get_lowest_address
     split <;> omega
+  have ioEndNat := congrArg BitVec.toNat ioEndEq
   unfold JoltDevice.is_input JoltDevice.is_trusted_advice JoltDevice.is_untrusted_advice
-    JoltDevice.is_output JoltDevice.is_panic JoltDevice.is_termination
+    JoltDevice.is_output
   simp only [Bool.and_eq_false_iff, decide_eq_false_iff_not, Nat.not_le]
   omega
 
--- The starting device is the one given to init_state, with no outputs and no panic yet.
+/-- A layout built by the tracer has a checked, nonoverflowing padded RAM domain.
+For example, the final `try_new` admission rejects a wrapping domain end. -/
+theorem new_max_ram_k (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) : layout.max_ram_k?.isSome := by
+  unfold MemoryLayout.new at built
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  cases built
+  apply Option.isSome_iff_exists.mpr
+  exact ⟨_, by assumption⟩
+
+-- The bootstrap device keeps its layout and starts with a false panic claim.
 theorem init_state_jolt_device (entryAddress : BitVec 64) (ram : Array (BitVec 8))
     (device : JoltDevice) (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig) :
     (init_state entryAddress ram device adviceTape hostIO).jolt_device =
-      { device with outputs := #[], panic := false } :=
+      { device with panic := false } :=
   rfl
 
--- The starting device holds the fixed trusted advice and the prover's untrusted
--- advice. create_emulator checks both against the configured maximums.
--- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
+/-- A successful instance initialization passed its three input-size checks
+and installed shared memory on the bootstrap register/RAM state.
+For example, its tape starts at position zero before I/O memory is installed. -/
+theorem initial_state_build {Source : Type} (joltInstance : JoltInstance Source)
+    (privateInputs : JoltPrivateInputs) (state : SailJoltState)
+    (built : joltInstance.initial_state privateInputs = some state) :
+    ∃ layout, joltInstance.memory_layout = some layout ∧
+      joltInstance.trusted_advice.size ≤ joltInstance.memory_config.max_trusted_advice_size.toNat ∧
+      privateInputs.untrusted_advice.size ≤ joltInstance.memory_config.max_untrusted_advice_size.toNat ∧
+      joltInstance.inputs.size ≤ joltInstance.memory_config.max_input_size.toNat ∧
+      JoltISA.initialState
+        (init_state joltInstance.program.entry_address
+          (initialRam layout joltInstance.program.memory_init)
+          { panic := false, memory_layout := layout }
+          { bytes := privateInputs.advice_tape, readPosition := 0 })
+        (joltInstance.program.instructions.toList.map fun row => (row.address, row.is_compressed))
+        joltInstance.inputs joltInstance.trusted_advice privateInputs.untrusted_advice = some state := by
+  unfold JoltInstance.initial_state at built
+  obtain ⟨layout, layoutBuilt, built⟩ := Option.bind_eq_some_iff.mp built
+  dsimp only at built
+  split at built
+  · cases built
+  rename_i trustedTooLong
+  obtain ⟨_, _, built⟩ := Option.bind_eq_some_iff.mp built
+  split at built
+  · cases built
+  rename_i untrustedTooLong
+  obtain ⟨_, _, built⟩ := Option.bind_eq_some_iff.mp built
+  split at built
+  · cases built
+  rename_i inputsTooLong
+  obtain ⟨_, _, built⟩ := Option.bind_eq_some_iff.mp built
+  exact ⟨layout, layoutBuilt, Nat.le_of_not_lt trustedTooLong,
+    Nat.le_of_not_lt untrustedTooLong, Nat.le_of_not_lt inputsTooLong, built⟩
+
+/-- Initialization chooses a checked layout and enforces the tracer's advice limits.
+Advice bytes are installed in shared memory; they are no longer device fields.
+For example, changing private advice cannot change the layout. -/
 theorem initial_state_device {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :
     joltInstance.memory_layout = some initialState.jolt_device.memory_layout ∧
-    initialState.jolt_device.trusted_advice = joltInstance.trusted_advice ∧
-    initialState.jolt_device.untrusted_advice = privateInputs.untrusted_advice ∧
     joltInstance.trusted_advice.size ≤
       joltInstance.memory_config.max_trusted_advice_size.toNat ∧
     privateInputs.untrusted_advice.size ≤
       joltInstance.memory_config.max_untrusted_advice_size.toNat := by
-  unfold JoltInstance.initial_state at built
-  rw [bind_some_iff] at built
-  obtain ⟨layout, layoutBuilt, built⟩ := built
-  dsimp only at built
-  -- create_emulator's three size checks: trusted advice, untrusted advice, inputs
-  split at built
-  · cases built
-  rename_i trustedTooLong
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rename_i untrustedTooLong
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the device holds the layout and the two specified advice buffers
-  cases built
-  rw [init_state_jolt_device]
-  exact ⟨layoutBuilt, rfl, rfl, Nat.le_of_not_lt trustedTooLong,
-    Nat.le_of_not_lt untrustedTooLong⟩
+  obtain ⟨layout, layoutBuilt, trustedFits, untrustedFits, _, built⟩ :=
+    initial_state_build joltInstance privateInputs initialState built
+  obtain ⟨_, _, _, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ built
+  rw [shape]
+  exact ⟨layoutBuilt, trustedFits, untrustedFits⟩
 
 -- Successful initialization inherits the checked layout's exclusion of address zero.
 theorem initial_state_lowest_address_pos {Source : Type} (joltInstance : JoltInstance Source)
@@ -609,33 +539,6 @@ theorem initial_state_lowest_address_pos {Source : Type} (joltInstance : JoltIns
     0 < initialState.jolt_device.memory_layout.get_lowest_address.toNat := by
   have layoutBuilt := (initial_state_device joltInstance privateInputs initialState built).1
   exact new_lowest_address_pos _ _ layoutBuilt
-
--- The starting device holds the instance's inputs.
--- See : jolt/tracer/src/lib.rs:385-386 (create_emulator)
-theorem initial_state_inputs {Source : Type} (joltInstance : JoltInstance Source)
-    (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
-    (built : joltInstance.initial_state privateInputs = some initialState) :
-    initialState.jolt_device.inputs = joltInstance.inputs := by
-  unfold JoltInstance.initial_state at built
-  rw [bind_some_iff] at built
-  obtain ⟨layout, _, built⟩ := built
-  dsimp only at built
-  -- create_emulator's three size checks: trusted advice, untrusted advice, inputs
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the device holds the inputs
-  cases built
-  rw [init_state_jolt_device]
 
 -- In the instance's starting device, each advice region, holding the prover's advice,
 -- ends at or before the inputs start, and the inputs start a multiple of 8 bytes above
@@ -646,15 +549,14 @@ theorem initial_state_advice_below_input {Source : Type} (joltInstance : JoltIns
     (initialState.jolt_device.memory_layout.input_start.toNat -
         initialState.jolt_device.memory_layout.get_lowest_address.toNat) % 8 = 0 ∧
     initialState.jolt_device.memory_layout.trusted_advice_start.toNat +
-        initialState.jolt_device.trusted_advice.size ≤
+        joltInstance.trusted_advice.size ≤
       initialState.jolt_device.memory_layout.input_start.toNat ∧
     initialState.jolt_device.memory_layout.untrusted_advice_start.toNat +
-        initialState.jolt_device.untrusted_advice.size ≤
+        privateInputs.untrusted_advice.size ≤
       initialState.jolt_device.memory_layout.input_start.toNat := by
-  obtain ⟨layoutBuilt, trustedIs, untrustedIs, trustedFits, untrustedFits⟩ :=
+  obtain ⟨layoutBuilt, trustedFits, untrustedFits⟩ :=
     initial_state_device joltInstance privateInputs initialState built
   unfold JoltInstance.memory_layout at layoutBuilt
-  rw [trustedIs, untrustedIs]
   obtain ⟨trustedBelow, untrustedBelow⟩ :=
     new_advice_below_input _ _ layoutBuilt _ _ trustedFits untrustedFits
   exact ⟨new_input_word_aligned _ _ layoutBuilt, trustedBelow, untrustedBelow⟩

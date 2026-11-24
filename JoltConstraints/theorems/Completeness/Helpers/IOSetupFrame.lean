@@ -1,15 +1,15 @@
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.translation.Constraints.RamReadData
-import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
+import JoltConstraints.theorems.DeviceFrame
 
 open LeanRV64D
 
 /-!
-Execution never changes the device fields fixed when Rust builds its emulator:
-the memory layout, the inputs and both advice buffers. Sail steps do not touch the device,
-device stores only change `outputs` and `panic`, and HostIO only appends to the
-advice tape. The trace-level result carries this from the program's initial
-state to the final recorded state.
+Execution preserves the checked memory layout.
+Input, advice, output and gap bytes are in shared Sail memory, rather than device fields.
+The halt primitive updates the device's panic claim.
+The trace-level results carry a halt-compatible device relation from the initial state
+through recorded rows to the final state.
 -/
 
 set_option autoImplicit false
@@ -88,8 +88,8 @@ theorem HonestTrace.device_relation
     (relation : JoltDevice → JoltDevice → Prop)
     (refl : ∀ io, relation io io)
     (trans : ∀ a b c, relation a b → relation b c → relation a c)
-    (store : ∀ io io' address value,
-      JoltDevice.store? io address value = some io' → relation io io') :
+    (halt : ∀ device kind,
+      relation device { device with panic := (kind == JoltHaltKind.panic) }) :
     (∀ (i : Nat) (hi : i < trace.rows.size),
       relation trace.initialState.jolt_device (trace.rows[i]).preState.jolt_device) ∧
     relation trace.initialState.jolt_device
@@ -114,7 +114,7 @@ theorem HonestTrace.device_relation
       relation (trace.rows[step]).preState.jolt_device
         (trace.rows[step]).postState.jolt_device := by
     intro step
-    exact JoltIOSetupFrame.execInstr_rule_of_device_relation relation refl trans store
+    exact execInstr_device_relation relation refl trans halt
       (trace.bytecode[trace.rows[step].rowIndex].instruction.withRuntimeAdvice
         trace.rows[step].runtimeAdvice) _ _ _
       (trace.executes trace.rows[step] (Array.getElem_mem step.isLt))
@@ -128,12 +128,12 @@ theorem trace_preState_ioSame {joltInstance : JoltInstance SourceInstruction} {p
     (i : Nat) (hi : i < trace.rows.size) :
     Same trace.initialState.jolt_device (getElem trace.rows i hi).preState.jolt_device := by
   exact (HonestTrace.device_relation trace Same Same.refl
-    (fun _ _ _ first next => first.trans next) storeDeviceByte_same).1 i hi
+    (fun _ _ _ first next => first.trans next) (fun _ _ => ⟨rfl⟩)).1 i hi
 
 /-- The final recorded state has the program's initial device setup. -/
 theorem finalTraceState_ioSame {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     Same trace.initialState.jolt_device (TraceWitness.finalTraceState trace).jolt_device := by
   exact (HonestTrace.device_relation trace Same Same.refl
-    (fun _ _ _ first next => first.trans next) storeDeviceByte_same).2
+    (fun _ _ _ first next => first.trans next) (fun _ _ => ⟨rfl⟩)).2
 
 end JoltConstraints
