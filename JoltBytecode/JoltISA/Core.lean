@@ -38,17 +38,18 @@ structure JoltAdviceTape where
   bytes : Array (BitVec 8)
   readPosition : Nat
 
-/-- Rust `tracer::emulator::cpu::HostIo`: replay suppresses host effects. -/
+/-- Jolt `ff6fc6568`, `tracer/src/emulator/cpu.rs` (`HostIo`): replay suppresses
+print and cycle-marker effects, but still appends advice writes.
+For example, a replayed print performs no memory reads. -/
 inductive JoltHostIOMode where
   | live
   | replay
   deriving DecidableEq, Repr
 
-/-- Host execution settings. Unchecked arithmetic matches Rust's release
-profile; test/build-fast profiles enable overflow checks. -/
+/-- Host execution mode at Jolt `ff6fc6568` (`cpu.rs`, `HostIo`).
+For example, `replay` skips print and cycle-marker handlers. -/
 structure JoltHostIOConfig where
   mode : JoltHostIOMode := .live
-  overflowChecks : Bool := false
 
 /-- How the tracer ended a run (`HaltKind` in `tracer/src/emulator/cpu.rs`).
 For example, EBREAK selects `panic`. -/

@@ -261,45 +261,13 @@ private theorem storeDoubleword_rule (rules : Rules relation) (address value : B
     StatePreservation.Preserves relation (Mmu.store_doubleword address value) :=
   rules.store address value
 
-private theorem load_rule (rules : NonStoreRules relation) (address : BitVec 64) :
-    StatePreservation.Preserves relation (Mmu.load address) := by
-  intro s t v h
-  simp only [Mmu.load] at h
-  repeat' split at h
-  all_goals first | (cases h; exact rules.refl _) | cases h
-
-private theorem readHostBytes_rule (rules : NonStoreRules relation)
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    StatePreservation.Preserves relation
-      (readHostBytes Mmu.load overflowChecks incrementAfterLast pointer n bytes) := by
-  induction n generalizing pointer bytes with
-  | zero => exact StatePreservation.pure_rule rules.refl _
-  | succ n ih =>
-    dsimp only [readHostBytes]
-    refine StatePreservation.bind_rule rules.trans (load_rule rules _) (fun result => ?_)
-    cases result with
-    | Err e => exact StatePreservation.pure_rule rules.refl _
-    | Ok byte =>
-      split_ifs
-      · exact StatePreservation.bind_rule rules.trans
-          (StatePreservation.throw_rule relation _) (fun _ => ih _ _)
-      · exact StatePreservation.bind_rule rules.trans
-          (StatePreservation.pure_rule rules.refl _) (fun _ => ih _ _)
-
 private theorem execHostIO_rule (rules : NonStoreRules relation) :
     StatePreservation.Preserves relation execHostIO := by
   unfold execHostIO execHostIOWith
-  refine StatePreservation.bind_rule rules.trans
-    (StatePreservation.get_rule rules.refl) (fun config => ?_)
-  dsimp only
-  split
-  · exact StatePreservation.pure_rule rules.refl _
-  · refine StatePreservation.bind_rule rules.trans (readSrc_rule rules _) (fun callId => ?_)
-    preservation_auto [readHostBytes_rule rules _ _ _ _ _, readSrc_rule rules _,
-      StatePreservation.pure_rule rules.refl _, StatePreservation.throw_rule relation _,
-      StatePreservation.modify_rule _ (fun state => rules.append state _)]
-      using (StatePreservation.bind_rule rules.trans)
+  preservation_auto [StatePreservation.get_rule rules.refl,
+    StatePreservation.pure_rule rules.refl _,
+    StatePreservation.modify_rule _ (fun state => rules.append state _)]
+    using (StatePreservation.bind_rule rules.trans)
 
 /-- Every successful instruction preserves a relation satisfying the non-store
 primitive rules, its tape-read obligation, and checked-store obligations for SD and
