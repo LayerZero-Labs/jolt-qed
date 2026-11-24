@@ -280,10 +280,16 @@ private theorem commutes_load_doubleword (address : BitVec 64) :
 private theorem store_raw_withReg (js : SailJoltState) (address : Nat) (w : BitVec 8) :
     JoltISA.Mmu.store_raw? (withReg js r v) address w =
       (JoltISA.Mmu.store_raw? js address w).map (withReg · r v) := by
-  unfold JoltISA.Mmu.store_raw? withReg Step.setReg
-  dsimp only
-  repeat' first | rfl | split
-  cases js.jolt_device.store? address w <;> rfl
+  unfold JoltISA.Mmu.store_raw?
+  change (if !JoltISA.Mmu.effective_address_ok js.jolt_device address true then none
+    else if !JoltISA.Mmu.protected_store_ok js address (w.zeroExtend 64) 1 then none
+    else if JoltISA.RAM_START_ADDRESS ≤ address then
+      some (withReg { js with sail := { js.sail with mem := js.sail.mem.insert address w } } r v)
+    else if JoltISA.Mmu.unsupported_store address then none
+    else (js.jolt_device.store? js.sail.mem address w).map
+      (fun mem => withReg { js with sail := { js.sail with mem := mem } } r v)) = _
+  split_ifs <;> simp only [Option.map_none, Option.map_some, Option.map_map]
+  all_goals rfl
 
 private theorem store_bytes_withReg (address : Nat) (w : BitVec 64)
     (ks : List Nat) (current : Option SailJoltState) :

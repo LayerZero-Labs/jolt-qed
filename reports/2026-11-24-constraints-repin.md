@@ -232,3 +232,78 @@ This establishes the capture prerequisite, not either RAM history completeness t
 
 The foundation build also exposed the new source instruction case in `ExpansionChecks.expand_ok`; it now applies the existing `native_ok` framework to `jolt.success`.
 This classifier repair and the register replacement protection-check proof await their next checks.
+
+## Halt admission and exact-domain padding migration
+
+Local commit `0d9ed87` records the checked initialization/shared-memory frame slice.
+Local commit `66f2e4c` records the checked source-expansion and initial-PC repairs, plus corrected generator coverage documentation.
+`ExpansionChecks.expand_ok` now handles `jolt.success` through the existing native-row framework.
+`initial_state_pc` retains its statement and uses `initial_state_build` and `initialState_shape` before applying the bootstrap register fact.
+The expansion module took about 43 seconds, and the initial-PC interface module took about 21 seconds, in isolated targeted builds.
+Individual proof timings have not been measured.
+
+The following model changes are now implemented and await the next targeted build.
+They follow the pinned halt and code-admission specification; their consumers are still being migrated.
+
+- `translation/program.lean`, new `JoltISA.Instr.haltKind?`, classifies exactly `JoltSuccess` and `Panic` as success/panic halts.
+- `translation/honest_trace.lean`, new `TraceRow.Halts`, states that the row's instruction has a halt kind.
+- `HonestTrace.stops` changes from `∀ last ∈ rows.back?, last.StableStall` to `∀ last ∈ rows.back?, last.Halts`.
+- `HonestTrace.runs_until_stop` changes the earlier-row exclusion from `¬ current.StableStall` to `¬ current.Halts`.
+- `Soundness/Layer5/TapeTrace.lean`, `UntrustedAnswerTrace.stops` and `runs_until_stop`, make exactly the same changes for relaxed tape-answer executions.
+- `padded_trace_length rows` changes from the previous floor/round-up formula with `rows + 1` to `max 256 (2 ^ Nat.clog 2 rows)`.
+- `WitnessParams.proverTraceLength minimumLogT physicalRows` changes from `max (2 ^ minimumLogT) (2 ^ (Nat.log2 physicalRows + 1))` to `max (2 ^ minimumLogT) (2 ^ Nat.clog 2 physicalRows)`.
+- `WitnessParams.ProverPaddedFor` retains its two supported floor formulas but changes the final bound from `physicalRows < p.traceLength` to `physicalRows ≤ p.traceLength`.
+- `padded_trace_length_spec` changes its first conjunct from strict containment to `rows ≤ padded_trace_length rows`; its floor and power-of-two conjuncts remain.
+- `ExecutionDimensions.ends_in_jump` becomes `ends_in_halt`, and `Trace.execution_dimensions` computes it from the final instruction's halt kind.
+- `ProverConfig.checkedTraceLength` removes checked addition of the extra row and rounds the executed row count directly.
+- `ProverConfig.deriveFromDimensions` changes its admission from `trace_length = 0 ∨ ends_in_jump` to `trace_length ≠ 0 ∧ ends_in_halt`.
+- `ProverConfig.checkedTraceLength_rounding` and `checkedTraceLength_eq` replace every `Nat.clog 2 (rows + 1)` by `Nat.clog 2 rows`.
+- `ProverConfig.deriveFromDimensions_sizes` changes its first conclusion to the new nonempty/halt admission condition and retains its size and maximum conclusions.
+- The new `HonestTrace.prover_config_last_halt` extracts the actual accepted final-halt condition.
+- `HonestTrace.prover_config_last_jump` retains its signature and derives the Jump property from that halt condition.
+- `JoltISA.Instr.is_jump` now includes the two halt constructors along with JAL/JALR, matching their circuit flags.
+- The unused `clog_succ_eq_log2_succ` lemma is deleted after removing the old extra-row arithmetic.
+
+`valid_run` retains the descending sequence-count and size checks and adds `run.length ≤ 1 ∨ every row has no halt kind`.
+This models `BytecodePCMapper::try_new` rejecting `HaltInSequence` at `preprocess/bytecode.rs:163–174`.
+`valid_run_countdown` retains its statement and extracts the countdown equality from the enlarged acceptance check.
+The new `bytecode_source_extents` factors the source-anchor calculation used by the public code mask and checked preprocessing.
+
+The new `JoltISA.checkedCodeRegion` requires successful `codeRegionOf`, successful `layout.max_ram_k?`, an ordered interval ending within that maximum, and the unique empty encoding `(0, 0)`.
+It is a candidate to move into JoltBytecode.
+`JoltInstance.bytecode` retains its expansion, PC-map and entry lookup checks and additionally rejects a zero entry and validates the expanded source-anchor code region against the layout.
+`JoltInstance.validate_inputs` retains its public layout and input/output size checks and additionally checks a nonzero entry and the source image's checked code region.
+The context's existing `validInputs` certificate carries these actual verifier checks, without adding a new context assumption.
+The equivalence of the original source extents and expanded terminal-anchor extents still needs an explicit proof.
+The old-bound consumers currently extract the retained bounds conjunct while the new code-admission facts remain available for the upcoming soundness argument.
+
+`methods/soundness.md` now records the requested `ff6fc6568` pin and the current date.
+The three flag-word restrictions, `noMaxLengthTrace`, whole-run duplicate I/O layer and both RAM completeness admissions remain to be removed or proved.
+The old stable-stall support declarations remain until their callers have been replaced by the halt proof.
+No result is claimed for the changed main model until its callers compile.
+
+The next detached targeted build is `.constraints-repin-halt-model1.log`, with marker `.constraints-repin-halt-model1.done`.
+It checks generator equivalences, padding/sizing facts, relaxed trace construction, RAM read selection and register replacement.
+Before starting it, the whitespace check, forbidden-addition scan, generator-admission scan and frozen-directory diff check passed.
+The obsolete baseline `decide +kernel` counterexample has still not been edited; the earlier harness-scan clarification remains pending.
+
+## Halt model checks and padded RAM sizing
+
+The detached halt-model check passed the generator equivalences, trace/configuration padding facts, witness-domain facts, relaxed tape trace and RAM read-selection modules.
+Its sole failure was the register-replacement store commutation proof in `WholeRun/NonInterference.lean`.
+That proof now normalizes the updated protection and shared-memory store branches explicitly, retaining its statement; the isolated module build passed in approximately 22 seconds.
+
+The RAM sizing migration now delegates `VerifierSizes.maxRamSize layout` to `layout.max_ram_k?`.
+The old definition checked subtraction, rounded a ceiling word count and checked only the rounded host integer.
+The new definition additionally checks heap headroom/alignment, contiguous aligned I/O segments and the maximum padded address extent, exactly as `common/src/jolt_device.rs` (`MemoryLayout::max_ram_k`) at `ff6fc6568`.
+The new `max_ram_k_spec` in `theorems/layout_facts.lean` exposes these checked domain facts to the existing geometry callers; it is a candidate to move into JoltBytecode.
+`memory_presence.lean` now derives its heap/backing geometry from that shared specification instead of a second private unfolding proof.
+
+In `Completeness/Helpers/VerifierSizes.lean`, `HonestTrace.highest_ram_slot_lt_heap_end` is replaced by `HonestTrace.highest_ram_slot_lt_maximum`.
+The old conclusion bounded the highest slot by the ceiling word count through `heap_end`.
+The new conclusion bounds it by `layout.max_ram_k?.getD 0`, retaining the honest trace as its only argument.
+This admits actual accesses in heap padding rather than excluding them through a false heap-only bound.
+`HonestTrace.witness_params_ram_maximum` retains its full statement and derives its touched-word bound from this maximum-domain theorem.
+`new_heap_end_ge` retains its statement and follows the pinned aligned heap-end construction.
+These sizing proofs are undergoing their targeted compilation check; no completeness result is claimed for them yet.
+`Soundness/Layer7/ProverAccepts.verifier_ram_image_end_bounded` retains its statement and obtains the maximum from the new checked-domain specification.

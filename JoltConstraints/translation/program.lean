@@ -271,11 +271,23 @@ inductive BytecodeSlot where
 def bytecode_address_ok (address : BitVec 64) : Bool :=
   JoltISA.RAM_START_ADDRESS ≤ address.toNat && address.toNat % 2 == 0
 
+/-- The explicit halt kind of a bytecode instruction, if it has one.
+For example, `Panic` is a panic halt and `JAL` has no halt kind.
+Jolt at `ff6fc6568`: `tracer/src/emulator/cpu.rs` (`Cpu::halt`).
+This instruction classifier is a candidate to move into JoltBytecode. -/
+def JoltISA.Instr.haltKind? : JoltISA.Instr → Option JoltHaltKind
+  | .JoltSuccess _ => some .success
+  | .Panic _ => some .panic
+  | _ => none
+
 -- The rows of one address count down to 0 one step at a time; none counts as 0.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:166-205 (validate_run)
+-- Jolt at ff6fc6568: crates/jolt-program/src/preprocess/bytecode.rs
+-- (BytecodePCMapper::validate_run, BytecodePCMapper::try_new).
+-- A halt can occupy only a one-row source instruction.
 def valid_run (run : List JoltInstructionRow) : Bool :=
   let counts := run.map fun row => (row.virtual_sequence_remaining.getD 0).toNat
-  counts == (List.range counts.length).reverse && counts.length < 2 ^ 16
+  (counts == (List.range counts.length).reverse && counts.length < 2 ^ 16) &&
+    (counts.length ≤ 1 || run.all fun row => row.instruction.haltKind?.isNone)
 
 -- true exactly when Rust's BytecodePCMapper::try_new accepts the expanded rows.
 -- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-164 (try_new)
@@ -304,6 +316,29 @@ def get_first_pc (bytecode : Array BytecodeSlot) (address : BitVec 64) : Option 
   else bytecode.findIdx? fun
     | .row row => row.address == address
     | .noop => false
+
+/-- Source byte extents extracted from the last row at each expanded source address.
+For example, a compressed source contributes two bytes even if its earlier rows
+carry an uncompressed stamp.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/ram.rs`
+(`bytecode_source_extents`). -/
+def bytecode_source_extents (rows : Array JoltInstructionRow) : List (BitVec 64 × Bool) :=
+  (rows.toList.filter fun row => row.virtual_sequence_remaining.getD 0 == 0).map
+    fun row => (row.address, row.is_compressed)
+
+/-- Compute a checked code-word interval within the layout's maximum RAM domain.
+For example, a source beyond the maximum padded RAM end is rejected.
+An empty interval has the unique encoding `(0, 0)`.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/ram.rs`
+(`code_region`, `validate_code_region`).
+This checked primitive is a candidate to move into JoltBytecode. -/
+def JoltISA.checkedCodeRegion (layout : MemoryLayout) (sources : List (BitVec 64 × Bool)) :
+    Option (Nat × Nat) := do
+  let region ← JoltISA.codeRegionOf layout sources
+  let maximum ← layout.max_ram_k?
+  guard (region.1 ≤ region.2 ∧ region.2 ≤ maximum ∧
+    (region.1 = region.2 → region.1 = 0))
+  pure region
 
 -- The lowest address of the program image; 0 if the image is empty.
 -- See : jolt/crates/jolt-program/src/preprocess/ram.rs:46-50
@@ -391,15 +426,19 @@ def JoltInstance.memory_layout {Source : Type} (joltInstance : JoltInstance Sour
 
 -- The verifier's checks on the instance alone; the proof's own parameters come
 -- with the trace.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:357-380 (validate_inputs)
---       jolt/crates/jolt-verifier/src/verifier.rs:999-1016 (validate_ram_remap_base)
+-- Jolt at ff6fc6568: crates/jolt-verifier/src/verifier.rs
+-- (validate_inputs, validate_entry_row, validate_ram_remap_base).
 def JoltInstance.validate_inputs {Source : Type} (joltInstance : JoltInstance Source) : Bool :=
   match joltInstance.memory_layout with
   | none => false
   | some layout =>
       8 < layout.get_lowest_address.toNat &&
       joltInstance.inputs.size ≤ layout.max_input_size.toNat &&
-      joltInstance.outputs.size ≤ layout.max_output_size.toNat
+      joltInstance.outputs.size ≤ layout.max_output_size.toNat &&
+      (joltInstance.program.entry_address != 0 &&
+        (JoltISA.checkedCodeRegion layout
+          (joltInstance.program.instructions.toList.map fun row =>
+            (row.address, row.is_compressed))).isSome)
 
 -- The bytes without their trailing zero bytes, as Rust's verifier trims the claimed
 -- outputs.
@@ -438,6 +477,9 @@ def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) : Opti
   let rows ← expand_program joltInstance.program
   let bytecode ← preprocess rows
   guard (get_first_pc bytecode joltInstance.program.entry_address).isSome
+  guard (joltInstance.program.entry_address != 0)
+  let layout ← joltInstance.memory_layout
+  let _ ← JoltISA.checkedCodeRegion layout (bytecode_source_extents rows)
   pure bytecode
 
 -- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)

@@ -135,26 +135,25 @@ theorem checkedRound_some (value rounded : Nat)
 
 private theorem checkedTraceLength_rounding (rows padded : Nat)
     (accepted : checkedTraceLength rows = some padded) :
-    padded = max (2 ^ Nat.clog 2 (rows + 1)) 256 ∧
-      2 ^ Nat.clog 2 (rows + 1) < 2 ^ 64 := by
+    padded = max (2 ^ Nat.clog 2 rows) 256 ∧
+      2 ^ Nat.clog 2 rows < 2 ^ 64 := by
   unfold checkedTraceLength at accepted
   simp only [bind_some_iff] at accepted
-  obtain ⟨withNoop, added, rounded, roundedOk, result⟩ := accepted
-  obtain ⟨rfl, _⟩ := checkedAdd_some added
+  obtain ⟨rounded, roundedOk, result⟩ := accepted
   obtain ⟨rfl, bound⟩ := checkedRound_some _ _ roundedOk
   cases result
   exact ⟨rfl, bound⟩
 
 theorem checkedTraceLength_eq (rows padded : Nat)
     (accepted : checkedTraceLength rows = some padded) :
-    padded = max (2 ^ Nat.clog 2 (rows + 1)) 256 :=
+    padded = max (2 ^ Nat.clog 2 rows) 256 :=
   (checkedTraceLength_rounding rows padded accepted).1
 
 theorem deriveFromDimensions_sizes (dimensions : ExecutionDimensions) (layout : MemoryLayout)
     (minBytecodeAddress imageWords maximum : Nat) (config : ProverConfig)
     (accepted : deriveFromDimensions dimensions layout minBytecodeAddress imageWords maximum =
       some config) :
-    (dimensions.trace_length = 0 ∨ dimensions.ends_in_jump = true) ∧
+    (dimensions.trace_length ≠ 0 ∧ dimensions.ends_in_halt = true) ∧
     checkedTraceLength dimensions.trace_length = some config.trace_length ∧
     checkedRamSize dimensions layout minBytecodeAddress imageWords = some config.ram_K ∧
     config.trace_length ≤ maximum := by
@@ -170,15 +169,7 @@ theorem checkedTraceLength_eq_padded (rows padded : Nat)
     (accepted : checkedTraceLength rows = some padded) :
     padded = padded_trace_length rows := by
   rw [checkedTraceLength_eq rows padded accepted]
-  unfold padded_trace_length
-  split
-  · have exponent : Nat.clog 2 (rows + 1) ≤ 8 :=
-      Nat.clog_le_of_le_pow (by omega)
-    have rounded : 2 ^ Nat.clog 2 (rows + 1) ≤ 256 :=
-      Nat.pow_le_pow_right (by decide) exponent
-    exact max_eq_right rounded
-  · have roundedUp := Nat.le_pow_clog (by decide : 1 < 2) (rows + 1)
-    exact max_eq_left (by omega)
+  exact max_comm _ _
 
 end ProverConfig
 
@@ -215,29 +206,34 @@ theorem HonestTrace.prover_config_trace_length
     ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts
   exact ⟨ProverConfig.checkedTraceLength_eq_padded _ _ lengthChecked, lengthBound⟩
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), the trace's last row,
-if it has one, is a jump: its bytecode instruction is a JAL or a JALR (`is_jump`).
-For example, a run whose last row is a self-jump `j .` passes; a run ending in an ADD
-is rejected (a16z/jolt#1968).
-See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`TraceDoesNotEndInJump`) at c6703570. -/
+/-- Jolt's checked prover configuration accepts only a nonempty trace ending at a halt.
+For example, a final JoltSuccess row passes and a final self-jump does not.
+Jolt at `ff6fc6568`: `crates/jolt-prover/src/config.rs` (`derive_from_dimensions`). -/
+theorem HonestTrace.prover_config_last_halt
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (proverAccepts : trace.prover_config joltInstance = some config) :
+    (trace.rows.back?.any fun last =>
+      trace.bytecode[last.rowIndex].instruction.haltKind?.isSome) = true := by
+  exact (ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts).1.2
+
+/-- Every accepted terminal halt also carries the Jump flag.
+For example, the panic halt emitted for EBREAK has Jump set.
+Jolt at `ff6fc6568`: `crates/jolt-riscv/src/lib.rs` (`circuit_flags`). -/
 theorem HonestTrace.prover_config_last_jump
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
     (proverAccepts : trace.prover_config joltInstance = some config) :
     (trace.rows.back?.all fun last =>
       trace.bytecode[last.rowIndex].instruction.is_jump) = true := by
-  obtain ⟨jump, _⟩ := ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts
-  rcases jump with empty | jump
-  · change trace.rows.size = 0 at empty
-    have emptyRows := Array.size_eq_zero_iff.mp empty
-    rw [emptyRows]
-    rfl
-  · change (trace.rows.back?.any fun last =>
-      trace.bytecode[last.rowIndex].instruction.is_jump) = true at jump
-    cases last : trace.rows.back? with
-    | none => rfl
-    | some row => simpa only [last, Option.any_some, Option.all_some] using jump
+  have halt := trace.prover_config_last_halt config proverAccepts
+  cases last : trace.rows.back? with
+  | none => simp [last] at halt
+  | some row =>
+    simp only [last, Option.any_some] at halt
+    change trace.bytecode[row.rowIndex].instruction.is_jump = true
+    unfold JoltISA.Instr.haltKind? at halt
+    split at halt <;> simp_all [JoltISA.Instr.is_jump]
 
 /-- The highest RAM word index a run touches: the largest word index
 `(address - lowest) / 8` over the run's nonzero recorded RAM addresses

@@ -41,6 +41,12 @@ def TraceRow.StableStall {bytecode : Array JoltInstructionRow}
   row.postState.sail.regs.get? Register.nextPC = some bytecode[row.rowIndex].address ∧
   bytecode[row.rowIndex].selfJumpRepeats = true
 
+/-- A row executes one of Jolt's two explicit halt instructions.
+For example, the row expanded from EBREAK has the panic halt kind.
+Jolt at `ff6fc6568`: `tracer/src/emulator/cpu.rs` (`Cpu::halt`). -/
+def TraceRow.Halts {bytecode : Array JoltInstructionRow} (row : TraceRow bytecode) : Prop :=
+  bytecode[row.rowIndex].instruction.haltKind?.isSome = true
+
 -- Whether the source instruction whose rows start at `start` is compressed. Stamping
 -- puts the source's flag on the last row of its block; a native row carries it itself.
 -- See : jolt/crates/jolt-program/src/expand/metadata.rs:46-52 (stamp_sequence_metadata)
@@ -213,17 +219,14 @@ structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
   -- the value the honest tracer gives it (`honestTracerAdviceAtStepN`).
   advice_from_honest_tracer : ∀ n : Fin rows.size,
     rows[n].someTracerAdvice? = honestTracerAdviceAtStepN joltInstance.program rows n
-  -- The tracer stops only at a self-jump that repeats on re-execution.
-  -- See : a16z/jolt PR #2109, merge commit 0249591a, `Cpu::tick`.
-  stops : ∀ last ∈ rows.back?, last.StableStall
-  -- No earlier row meets that stopping rule.
+  -- Every accepted run ends at one of the two explicit halt kinds.
+  -- Jolt at ff6fc6568: tracer/src/emulator/cpu.rs (Cpu::halt).
+  stops : ∀ last ∈ rows.back?, last.Halts
+  -- No earlier row is a halt, since every tracer driver stops at the first halt.
   runs_until_stop : ∀ (i : Nat) (current next : TraceRow bytecode),
     rows[i]? = some current → rows[i + 1]? = some next →
-    ¬ current.StableStall
-  -- Language membership has no empty trace because this field requires it;
-  -- `prover_config` itself allows trace length zero. Soundness obtains this
-  -- bound from the termination store.
-  -- See : a16z/jolt PR #2109, merge commit 0249591a.
+    ¬ current.Halts
+  -- The prover rejects an empty trace (TraceDoesNotEndInHalt).
   nonempty : 0 < rows.size
 
 instance {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} :
@@ -245,16 +248,18 @@ def remap_address (layout : MemoryLayout) (address : Nat) : Option Nat :=
   if address = 0 then none
   else some ((address - layout.get_lowest_address.toNat) / 8)
 
--- The witness length Rust's prover pads a run to: the smallest power of two that
--- is larger than the run, and at least 256.
--- See : jolt/crates/jolt-prover/src/config.rs:63-70 at 5def437f
+/-- The base prover's smallest power-of-two domain containing the real rows,
+with a floor of 256 cycles.
+For example, 256 rows occupy exactly 256 cycles, while 257 rows require 512.
+Jolt at `ff6fc6568`: `crates/jolt-prover/src/config.rs` (`padded_trace_length`). -/
 def padded_trace_length (rows : Nat) : Nat :=
-  if rows < 256 then 256 else 2 ^ Nat.clog 2 (rows + 1)
+  max 256 (2 ^ Nat.clog 2 rows)
 
--- The rows that carry Rust's Jump circuit flag: JAL and JALR.
--- See : jolt/crates/jolt-riscv/src/instructions/i/jal.rs:6, jalr.rs:6
+/-- The Jump circuit flag, including both halts.
+For example, JoltSuccess writes a link and returns the PC to its own source address.
+Jolt at `ff6fc6568`: `crates/jolt-riscv/src/lib.rs` (`circuit_flags`). -/
 def JoltISA.Instr.is_jump : JoltISA.Instr → Bool
-  | .JAL .. | .JALR .. => true
+  | .JAL .. | .JALR .. | .JoltSuccess .. | .Panic .. => true
   | _ => false
 
 -- The two sizes Rust's prover picks from a run before it builds the witness.

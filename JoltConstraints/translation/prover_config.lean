@@ -5,9 +5,9 @@ open LeanRV64D
 
 set_option autoImplicit false
 
-/- Checked base/Dory sizing at public pin 5def437f, on a 64-bit host.
+/- Checked base/Dory sizing at public pin ff6fc6568, on a 64-bit host.
    Rust: crates/jolt-program/src/execution/trace.rs:193-288 and
-   crates/jolt-prover/src/config.rs:52-139. Error variants are erased to none.
+   crates/jolt-prover/src/config.rs (derive_from_dimensions, padded_trace_length). Error variants are erased to none.
    Addresses and lengths use Nat as in the layout model; summaries produced
    from an honest trace contain 64-bit addresses. Akita is outside this model. -/
 
@@ -17,7 +17,7 @@ nonzero 64-bit byte addresses. The Nat representation does not encode those
 producer invariants as verifier checks or theorem premises. -/
 structure ExecutionDimensions where
   trace_length : Nat
-  ends_in_jump : Bool
+  ends_in_halt : Bool
   ram_bounds : Option (Nat × Nat)
 
 /-- `RamAddressBounds::observe`: zero is the no-access sentinel. -/
@@ -32,18 +32,17 @@ def ExecutionDimensions.observe (bounds : Option (Nat × Nat)) (address : Nat) :
 to the bounds, including stores whose value is unchanged. -/
 def Trace.execution_dimensions (trace : Trace) : ExecutionDimensions :=
   { trace_length := trace.rows.size
-    ends_in_jump := trace.rows.back?.any fun last =>
-      trace.bytecode[last.rowIndex].instruction.is_jump
+    ends_in_halt := trace.rows.back?.any fun last =>
+      trace.bytecode[last.rowIndex].instruction.haltKind?.isSome
     ram_bounds := (trace.rows.toList.filterMap (·.ram_address)).foldl
       ExecutionDimensions.observe none }
 
 namespace ProverConfig
 
 /-- The checked padding path in `derive_from_dimensions`, before the public
-maximum check. Both the addition and the rounding can fail. -/
+maximum check. The power-of-two rounding can overflow. -/
 def checkedTraceLength (rows : Nat) : Option Nat := do
-  let withNoop ← MemoryLayout.checkedAdd rows 1
-  let rounded ← JoltConstraints.VerifierSizes.checkedNextPowerOfTwo withNoop
+  let rounded ← JoltConstraints.VerifierSizes.checkedNextPowerOfTwo rows
   return max rounded 256
 
 /-- Validate the nonzero address bounds and remap the largest address. -/
@@ -78,7 +77,7 @@ remaining fields follow the base chunk policy in `WitnessParams.ProverChunkConfi
 and cycle-major order; they are not additional acceptance conditions. -/
 def deriveFromDimensions (dimensions : ExecutionDimensions) (layout : MemoryLayout)
     (minBytecodeAddress imageWords maxPaddedTraceLength : Nat) : Option ProverConfig := do
-  guard (dimensions.trace_length = 0 ∨ dimensions.ends_in_jump = true)
+  guard (dimensions.trace_length ≠ 0 ∧ dimensions.ends_in_halt = true)
   let traceLength ← checkedTraceLength dimensions.trace_length
   let ramK ← checkedRamSize dimensions layout minBytecodeAddress imageWords
   guard (traceLength ≤ maxPaddedTraceLength)

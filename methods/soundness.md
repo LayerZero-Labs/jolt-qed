@@ -1,7 +1,7 @@
 ---
 title: Plan for deterministic, non-succinct soundness
-updated: 2026-11-05
-rust_pin: c97e93004fbf804409f0374fe8457c8f1562ce71
+updated: 2026-11-24
+rust_pin: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
 lean_head: e29949809bbf2c54c315c2ca55ae3b90c7fd37a6
 ---
 

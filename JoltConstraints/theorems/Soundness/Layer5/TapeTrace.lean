@@ -72,17 +72,15 @@ structure UntrustedAnswerTrace (joltInstance : JoltInstance SourceInstruction)
   -- the value the honest tracer gives it (`honestTracerAdviceAtStepN`).
   advice_from_honest_tracer : ∀ n : Fin rows.size,
     rows[n].someTracerAdvice? = honestTracerAdviceAtStepN joltInstance.program rows n
-  -- The tracer stops at a self-jump only when re-execution jumps there again.
-  -- See : a16z/jolt PR #2109, merge commit 0249591a, `Cpu::tick`.
-  stops : ∀ last ∈ rows.back?, last.StableStall
+  -- The tracer stops at its first explicit halt (Cpu::halt at ff6fc6568).
+  stops : ∀ last ∈ rows.back?, last.Halts
   -- No earlier row meets that stopping rule.
   runs_until_stop : ∀ (i : Nat) (current next : TraceRow bytecode),
     rows[i]? = some current → rows[i + 1]? = some next →
-    ¬ current.StableStall
+    ¬ current.Halts
   -- Language membership has no empty trace because this field requires it;
-  -- `prover_config` itself allows trace length zero. Soundness obtains this
-  -- bound from the termination store.
-  -- See : a16z/jolt PR #2109, merge commit 0249591a.
+  -- Jolt's prover rejects trace length zero.
+  -- See : crates/jolt-prover/src/config.rs (derive_from_dimensions) at ff6fc6568.
   nonempty : 0 < rows.size
 
 instance {joltInstance : JoltInstance SourceInstruction}

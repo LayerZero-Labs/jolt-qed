@@ -15,8 +15,7 @@ The last row carries the source compression bit; other rows of its expansion do 
 Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/ram.rs` (`code_region`). -/
 def ramCodeRegion (bytecode : Array JoltInstructionRow) (layout : MemoryLayout) : Nat × Nat :=
   (JoltISA.codeRegionOf layout
-    ((bytecode.toList.filter fun row => row.virtual_sequence_remaining.getD 0 == 0).map
-      fun row => (row.address, row.is_compressed))).getD (0, 0)
+    (bytecode_source_extents bytecode)).getD (0, 0)
 
 /-- Public mask C on remapped words: code, input, advice and canary words.
 For example, an output word has mask zero and a word overlapping the canary has mask one.

@@ -148,40 +148,9 @@ theorem HonestTrace.witness_params_chunk_config
   · exact Or.inl ⟨small, ite_eq_left small, ite_eq_left small⟩
   · exact Or.inr ⟨by omega, ite_eq_right small, ite_eq_right small⟩
 
--- For n ≥ 1, the smallest power of two that holds n + 1 is the one just above n.
-theorem clog_succ_eq_log2_succ (n : Nat) (positive : 1 ≤ n) :
-    Nat.clog 2 (n + 1) = Nat.log2 n + 1 := by
-  have below := (Nat.lt_log2_self (n := n))
-  have above := Nat.log2_self_le (n := n) (by omega)
-  apply Nat.le_antisymm
-  · exact (Nat.clog_le_iff_le_pow (by decide : 1 < 2)).mpr (by omega)
-  · by_contra tooSmall
-    have fits := (Nat.clog_le_iff_le_pow (by decide : 1 < 2)
-      (x := n + 1) (y := Nat.log2 n)).mp (by omega)
-    omega
-
 -- Rust's padded length is the witness's prover length with Rust's 256-cycle floor.
 theorem padded_trace_length_eq_prover (rows : Nat) :
-    padded_trace_length rows = WitnessParams.proverTraceLength 8 rows := by
-  unfold padded_trace_length WitnessParams.proverTraceLength
-  have below := (Nat.lt_log2_self (n := rows))
-  split
-  · -- a short run: the power of two above it is at most 256
-    rename_i short
-    have small : 2 ^ (Nat.log2 rows + 1) ≤ 2 ^ 8 := by
-      apply Nat.pow_le_pow_right (by decide)
-      by_cases zero : rows = 0
-      · subst zero
-        decide
-      · have := (Nat.log2_lt zero (k := 8)).mpr (by omega)
-        omega
-    have floor : (2 : Nat) ^ 8 = 256 := rfl
-    omega
-  · -- a longer run: the power of two that holds rows + 1 is the one above rows
-    rename_i long
-    rw [clog_succ_eq_log2_succ rows (by omega)]
-    have floor : (2 : Nat) ^ 8 = 256 := rfl
-    omega
+    padded_trace_length rows = WitnessParams.proverTraceLength 8 rows := rfl
 
 /-- The witness length at Jolt's sizes, `2 ^ logT`, is the run's padded length
 `padded_trace_length trace.rows.size`.

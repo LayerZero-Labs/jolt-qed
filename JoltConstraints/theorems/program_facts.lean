@@ -410,7 +410,7 @@ theorem valid_run_countdown (run : List JoltInstructionRow)
     (run[position].virtual_sequence_remaining.getD 0).toNat = run.length - 1 - position := by
   unfold valid_run at valid
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at valid
-  have atPosition := List.getElem_of_eq valid.1 (by rw [List.length_map]; exact inRange)
+  have atPosition := List.getElem_of_eq valid.1.1 (by rw [List.length_map]; exact inRange)
   simp only [List.getElem_map, List.getElem_reverse, List.getElem_range, List.length_map,
     List.length_range] at atPosition
   exact atPosition
