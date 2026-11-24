@@ -21,14 +21,15 @@ inductive CircuitFlags where
   | Load | Store | Jump | WriteLookupOutputToRD
   | VirtualInstruction | Assert | DoNotUpdateUnexpandedPC | Advice
   | IsCompressed | IsFirstInSequence | IsLastInSequence
+  | Halt | HaltPanic
   deriving DecidableEq
 
-theorem CircuitFlags.ctorIdx_lt (a : CircuitFlags) : a.ctorIdx < 14 := by
+theorem CircuitFlags.ctorIdx_lt (a : CircuitFlags) : a.ctorIdx < 16 := by
   cases a <;> decide
 
 noncomputable instance : Fintype CircuitFlags :=
   haveI : Finite CircuitFlags :=
-    finite_of_ofNat_ctorIdx CircuitFlags.ctorIdx CircuitFlags.ofNat 14 CircuitFlags.ctorIdx_lt CircuitFlags.ofNat_ctorIdx
+    finite_of_ofNat_ctorIdx CircuitFlags.ctorIdx CircuitFlags.ofNat 16 CircuitFlags.ctorIdx_lt CircuitFlags.ofNat_ctorIdx
   Fintype.ofFinite CircuitFlags
 
 /-- Operand-routing and branch/no-op flags in Jolt's prover.
@@ -267,8 +268,6 @@ structure WitnessType (Value : Type) (p : WitnessParams) where
   Product : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/witnesses/flags.rs::ShouldBranch.
   ShouldBranch : Fin p.traceLength → Value
-  -- Rust: crates/jolt-witness/src/witnesses/flags.rs::ShouldJump.
-  ShouldJump : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/witnesses/pc.rs::NextUnexpandedPc.
   NextUnexpandedPC : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/witnesses/pc.rs::NextPc.
@@ -291,8 +290,6 @@ structure WitnessType (Value : Type) (p : WitnessParams) where
   RdInc : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/witnesses/increments.rs::RamInc.
   RamInc : Fin p.traceLength → Value
-  -- Rust: crates/jolt-witness/src/witnesses/ram.rs::RamHammingWeight.
-  RamHammingWeight : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/backend/trace/registers.rs::materialize_register_read_write_virtual.
   -- Rust: common/src/constants.rs::REGISTER_COUNT = 128.
   Rs1Ra : Fin 128 → Fin p.traceLength → Value

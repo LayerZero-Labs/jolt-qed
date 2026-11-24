@@ -40,7 +40,7 @@ def immediate (instruction : JoltISA.Instr) : Int :=
   | .BLTU _ _ imm | .BGEU _ _ imm | .VirtualAssertEQ _ _ imm => imm.toInt
   | .VirtualAssertValidDiv0 _ _ imm | .VirtualAssertValidUnsignedRemainder _ _ imm
   | .VirtualAssertMulUNoOverflow _ _ imm | .VirtualAssertLTE _ _ imm => imm.toInt
-  | .FENCE | .ADD .. | .ADDW .. | .SUB .. | .SUBW .. | .MUL .. | .MULW ..
+  | .JoltSuccess .. | .Panic .. | .FENCE | .ADD .. | .ADDW .. | .SUB .. | .SUBW .. | .MUL .. | .MULW ..
   | .MULHU .. | .ANDN .. | .VirtualSRL .. | .VirtualSRA .. | .VirtualSRLW .. | .VirtualSRAW ..
   | .VirtualXORROT32 .. | .VirtualXORROT24 .. | .VirtualXORROT16 .. | .VirtualXORROT63 ..
   | .VirtualXORROTL1 ..
@@ -170,7 +170,15 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
       | _ => false
   | .Jump =>
       match instruction with
-      | .JAL .. | .JALR .. => true
+      | .JoltSuccess .. | .Panic .. | .JAL .. | .JALR .. => true
+      | _ => false
+  | .Halt =>
+      match instruction with
+      | .JoltSuccess .. | .Panic .. => true
+      | _ => false
+  | .HaltPanic =>
+      match instruction with
+      | .Panic .. => true
       | _ => false
   | .WriteLookupOutputToRD =>
       match instruction with
@@ -259,6 +267,17 @@ theorem opcodeFlag_store_cases (instruction : JoltISA.Instr)
   simp only [opcodeFlag] at h
   split at h <;> simp_all
 
+/-- An instruction cannot be both a load and a store.
+For example, a floor load sets `Load` but never `Store`.
+These are the disjoint memory-row families in Jolt's pinned instruction registry. -/
+theorem opcodeFlag_load_store_disjoint (instruction : JoltISA.Instr)
+    (load : opcodeFlag instruction .Load = true) :
+    opcodeFlag instruction .Store = false := by
+  obtain ⟨faultClass, dst, base, imm, native | ⟨fault, floor⟩⟩ :=
+    opcodeFlag_load_cases instruction load
+  · subst instruction; rfl
+  · rcases floor with rfl | rfl | rfl <;> rfl
+
 /-- The table selected by an instruction, or `none` when it has no table.
 For example, a halfword floor load or store selects `AddressOffsetH`,
 while LD and SD select no table.
@@ -281,7 +300,7 @@ def lookupTable (instruction : JoltISA.Instr) : Option LookupTableKind :=
   | .BNE .. => some .NotEqual
   | .BGE .. => some .SignedGreaterThanEqual
   | .BGEU .. => some .UnsignedGreaterThanEqual
-  | .FENCE .. | .LD .. | .SD .. | .VirtualHostIO .. => none
+  | .JoltSuccess .. | .Panic .. | .FENCE .. | .LD .. | .SD .. | .VirtualHostIO .. => none
   | .MULHU .. => some .UpperWord
   | .ANDN .. => some .Andn
   | .VirtualPow2 .. | .VirtualPow2I .. => some .Pow2

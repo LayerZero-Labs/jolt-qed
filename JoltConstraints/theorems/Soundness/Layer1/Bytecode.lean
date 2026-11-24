@@ -44,24 +44,6 @@ private theorem bytecodeAddress_ne_four (charAbove2pow127 : 2 ^ 127 < ringChar F
       exact (by decide : bytecode_address_ok (4 : BitVec 64) ≠ true) valid
     · simpa [bytecodeAddress, bytecodeRow, inRange] using zero_ne_four (F := F) charAbove2pow127
 
-/-- Once a bytecode address is selected, every read of a fixed bytecode column
-returns that address's entry. The selected address hypothesis is discharged by
-`bytecodeRa_unique` below. -/
-theorem bytecode_read_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
-    (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-    (t : Fin params.traceLength) (value : Fin (2 ^ params.logBytecodeK) → F)
-    (chosen : Fin (2 ^ params.logBytecodeK)) (one : bytecodeRa witness chosen t = 1) :
-    (∑ address, value address * bytecodeRa witness address t) = value chosen := by
-  apply read_eq_selected (fun address => bytecodeRa witness address t) value
-  · intro address
-    rcases bytecodeRa_zero_or_one context equations address t with zero | one
-    · simp [zero]
-    · simp [one]
-  · exact one
-  · exact fun address selected =>
-      bytecodeRa_at_most_one charAbove2pow127 context equations t address chosen selected one
-
 /-- The unexpanded PC cannot be four, even before ruling out an all-zero
 bytecode selector. Such a selector would instead give PC zero. -/
 private theorem unexpandedPC_ne_four (charAbove2pow127 : 2 ^ 127 < ringChar F)

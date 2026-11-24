@@ -121,6 +121,7 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .MRET => some (.ofProgram JoltISA.mretProgram)
   | .jolt instruction =>
     match instruction with
+    | .JoltSuccess => some (.ofNative (.JoltSuccess (.xreg (regidx.Regidx 0))))
     | .AdviceLB rd => some (.ofProgram (JoltISA.advicelbProgramAuto rd))
     | .AdviceLH rd => some (.ofProgram (JoltISA.advicelhProgramAuto rd))
     | .AdviceLW rd => some (.ofProgram (JoltISA.advicelwProgramAuto rd))

@@ -17,6 +17,8 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 -- See : jolt/crates/jolt-program/src/image/decode.rs:71-72, 192-210 at 5def437f (decode_custom)
 --       jolt/tracer/src/instruction/format/ (operand formats)
 inductive JoltCustomInstruction where
+  /-- The custom success halt; for example, opcode `0x0000305B`. -/
+  | JoltSuccess
   | AdviceLB (rd : regidx)                                -- FormatAdviceLoadI
   | AdviceLH (rd : regidx)
   | AdviceLW (rd : regidx)

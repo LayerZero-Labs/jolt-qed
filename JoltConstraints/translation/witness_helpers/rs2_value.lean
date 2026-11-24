@@ -54,7 +54,7 @@ noncomputable def Rs2Value [Field F] (trace : Trace) : Fin p.traceLength → F :
       | .LD _ _ _ _
       | .VirtualLoadB _ _ _ _ _ | .VirtualLoadH _ _ _ _ _ | .VirtualLoadW _ _ _ _ _
       | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
-      | .VirtualHostIO => 0
+      | .JoltSuccess _ | .Panic _ | .VirtualHostIO => 0
     else 0
 
 end TraceWitness

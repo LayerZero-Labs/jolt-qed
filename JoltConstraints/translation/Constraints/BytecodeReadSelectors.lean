@@ -40,7 +40,7 @@ def bytecodeRs1Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
   | .VirtualAssertLTE src _ _ =>
       some (TraceWitness.sourceRegisterAddress src)
-  | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
+  | .JoltSuccess _ | .Panic _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
 /-- The encoded second source register, with an absent operand represented by `none`.
@@ -78,7 +78,7 @@ def bytecodeRs2Register (instruction : JoltISA.Instr) : Option (Fin 128) :=
   | .LD _ _ _ _
   | .VirtualLoadB _ _ _ _ _ | .VirtualLoadH _ _ _ _ _ | .VirtualLoadW _ _ _ _ _
   | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _
-  | .VirtualHostIO => none
+  | .JoltSuccess _ | .Panic _ | .VirtualHostIO => none
 
 /-- The encoded destination register, with an absent operand represented by `none`.
 For example, a floor load selects its destination and a floor store has none.
@@ -86,7 +86,7 @@ Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
 (`NormalizedOperands::from`) at `c6703570`. -/
 def bytecodeRdRegister (instruction : JoltISA.Instr) : Option (Fin 128) :=
   match instruction with
-  | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
+  | .JoltSuccess dst | .Panic dst | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
   | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
   | .ADD dst _ _ | .ADDW dst _ _ | .SUB dst _ _ | .SUBW dst _ _ | .MUL dst _ _
   | .MULW dst _ _ | .MULHU dst _ _ | .ANDN dst _ _ | .VirtualMULI dst _ _

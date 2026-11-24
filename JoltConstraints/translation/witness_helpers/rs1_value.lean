@@ -51,7 +51,7 @@ noncomputable def Rs1Value [Field F] (trace : Trace) : Fin p.traceLength → F :
       | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
       | .VirtualAssertLTE src _ _ =>
           ((JoltISA.sourceValue src row.preState).toNat : F)
-      | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
+      | .JoltSuccess _ | .Panic _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
       | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => 0
     else 0
 

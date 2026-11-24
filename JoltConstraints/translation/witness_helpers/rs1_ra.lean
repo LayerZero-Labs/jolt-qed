@@ -51,7 +51,7 @@ noncomputable def Rs1Ra [Field F] (trace : Trace) : Fin 128 → Fin p.traceLengt
       | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
       | .VirtualAssertLTE src _ _ =>
           if address = sourceRegisterAddress src then 1 else 0
-      | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
+      | .JoltSuccess _ | .Panic _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
       | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => 0
     else 0
 

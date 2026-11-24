@@ -27,17 +27,10 @@ open Generated
 
 variable {F : Type} [Field F] {params : WitnessParams}
 
-/-- Inputs absent from the old witness model, kept explicit during the repin.
-`halt` and `haltPanic` are the two new circuit-flag columns; `writeProtected k`
-is the verifier's public mask C at remapped RAM word k.
-For example, C is one on a code word and zero on a heap word.
-These inputs are unconstrained here: no old witness is claimed to determine them.
-Jolt at ff6fc6568: `crates/jolt-riscv/src/flags.rs` (`CircuitFlags`) and
-`crates/jolt-verifier/src/stages/stage2/ram_read_write_checking.rs`
-(`RamReadWriteChecking::public_value`). -/
+/-- The public mask C used by the RAM relation.
+For example, C is one on a code word and zero on an output word.
+`ConstraintEquations.generated` supplies the mask fixed by bytecode and layout. -/
 structure RepinInputs (F : Type) (params : WitnessParams) where
-  halt : Fin params.traceLength → F
-  haltPanic : Fin params.traceLength → F
   writeProtected : Fin params.ramSize → F
 
 /-! ## R1CS rows -/
@@ -86,8 +79,8 @@ def Generated.R1CSVar.value (w : WitnessType F params) (extra : RepinInputs F pa
   | .Branch => w.InstructionFlags .Branch t
   | .NextIsNoop => w.NextIsNoop t
   | .IsNoop => w.InstructionFlags .IsNoop t
-  | .OpFlags_Halt => extra.halt t
-  | .OpFlags_HaltPanic => extra.haltPanic t
+  | .OpFlags_Halt => w.OpFlags .Halt t
+  | .OpFlags_HaltPanic => w.OpFlags .HaltPanic t
 
 /-- The value of a linear combination: the sum of coefficient times value.
 For example, `[(x, 1), (y, -1)]` has value `1 * x + (-1 * y + 0)`. -/
@@ -177,7 +170,8 @@ def legacyOpcodeFlag (i : JoltISA.Instr) : CircuitFlag → Bool
   | .IsCompressed => JoltMetadata.opcodeFlag i .IsCompressed
   | .IsFirstInSequence => JoltMetadata.opcodeFlag i .IsFirstInSequence
   | .IsLastInSequence => JoltMetadata.opcodeFlag i .IsLastInSequence
-  | .Halt | .HaltPanic => false
+  | .Halt => JoltMetadata.opcodeFlag i .Halt
+  | .HaltPanic => JoltMetadata.opcodeFlag i .HaltPanic
 
 /-- Read a generated flag in an old stamped row, e.g. `IsCompressed` reads the old row flag.
 The halt flags are false on every old row. -/
@@ -196,12 +190,15 @@ def legacyCircuitFlag (row : JoltInstructionRow) : CircuitFlag → Bool
   | .IsCompressed => JoltMetadata.circuitFlag row .IsCompressed
   | .IsFirstInSequence => JoltMetadata.circuitFlag row .IsFirstInSequence
   | .IsLastInSequence => JoltMetadata.circuitFlag row .IsLastInSequence
-  | .Halt | .HaltPanic => false
+  | .Halt => JoltMetadata.circuitFlag row .Halt
+  | .HaltPanic => JoltMetadata.circuitFlag row .HaltPanic
 
 /-- The Jolt instruction kind of a Lean instruction: the kind with the same
 name. Every `JoltISA.Instr` constructor is named after its Jolt kind
 (`JoltInstructionKind::name`). -/
 def kindOf : JoltISA.Instr → JoltKind
+  | .JoltSuccess .. => .JoltSuccess
+  | .Panic .. => .JoltPanic
   | .ADDI .. => .ADDI
   | .ADDIW .. => .ADDIW
   | .ANDI .. => .ANDI

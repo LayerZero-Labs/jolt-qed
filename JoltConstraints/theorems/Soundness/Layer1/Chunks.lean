@@ -38,36 +38,4 @@ theorem instruction_chunk_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
   · exact fun entry => equations.instructionRaChunkBooleanity chunk entry t
   · exact equations.instructionRaChunkHammingWeight chunk t
 
-/-- The RAM weight shared by all RAM chunks decodes to zero or one. -/
-theorem ram_weight_zero_or_one
-    (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-    (t : Fin params.traceLength) :
-    witness.RamHammingWeight t = 0 ∨ witness.RamHammingWeight t = 1 :=
-  eq_zero_or_one_of_boolean (equations.ramHammingWeightBooleanity t)
-
-/-- A zero RAM weight forces every entry of every RAM chunk to be zero. -/
-theorem ram_chunk_all_zero (charAbove2pow127 : 2 ^ 127 < ringChar F)
-    (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-    (t : Fin params.traceLength) (zero : witness.RamHammingWeight t = 0)
-    (chunk : Fin params.ramChunks) :
-    ∀ entry, witness.RamRaChunk chunk entry t = 0 := by
-  apply all_zero_of_boolean_sum_zero (fun entry => witness.RamRaChunk chunk entry t)
-  · exact context.chunk_card_lt_char charAbove2pow127
-  · exact fun entry => equations.ramRaChunkBooleanity chunk entry t
-  · exact (equations.ramRaChunkHammingWeight chunk t).trans zero
-
-/-- A RAM weight of one forces each RAM chunk to select exactly one entry. -/
-theorem ram_chunk_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
-    (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-    (t : Fin params.traceLength) (one : witness.RamHammingWeight t = 1)
-    (chunk : Fin params.ramChunks) :
-    ∃! entry, witness.RamRaChunk chunk entry t = 1 := by
-  apply existsUnique_of_boolean_sum_one (fun entry => witness.RamRaChunk chunk entry t)
-  · exact context.chunk_card_lt_char charAbove2pow127
-  · exact fun entry => equations.ramRaChunkBooleanity chunk entry t
-  · exact (equations.ramRaChunkHammingWeight chunk t).trans one
-
 end JoltConstraints.Soundness

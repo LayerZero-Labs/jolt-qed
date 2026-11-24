@@ -32,7 +32,6 @@ noncomputable def HonestTrace.honestWitness {F : Type} [Field F] (p : WitnessPar
     LookupOutput := TraceWitness.LookupOutput p trace
     Product := TraceWitness.Product p trace
     ShouldBranch := TraceWitness.ShouldBranch p trace
-    ShouldJump := TraceWitness.ShouldJump p trace
     NextUnexpandedPC := TraceWitness.NextUnexpandedPC p trace
     NextPC := TraceWitness.NextPC p trace
     NextIsVirtual := TraceWitness.NextIsVirtual p trace
@@ -44,7 +43,6 @@ noncomputable def HonestTrace.honestWitness {F : Type} [Field F] (p : WitnessPar
     InstructionRafFlag := TraceWitness.InstructionRafFlag p trace
     RdInc := TraceWitness.RdInc p trace
     RamInc := HonestWitness.RamInc p trace
-    RamHammingWeight := TraceWitness.RamHammingWeight p trace
     Rs1Ra := TraceWitness.Rs1Ra p trace
     Rs2Ra := TraceWitness.Rs2Ra p trace
     RdWa := TraceWitness.RdWa p trace

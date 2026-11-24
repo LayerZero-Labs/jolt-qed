@@ -9,12 +9,8 @@ set_option autoImplicit false
 
 The comparisons use the regenerated data at ff6fc6568 and the reading in
 `ConstraintGen/Semantics.lean`.
-Rows 14 and 21, the enlarged RAM relation, and total kind coverage are marked
-mismatch admissions.
-All other proofs below are kernel checked independently of those admissions,
-except the aggregate row and `ConstraintEquations.generated` assembly theorems
-that explicitly use them.
-Neither aggregate certifies the old model against Jolt main.
+The model includes the halt columns and the two new RAM claims.
+The two inline XOR-rotate kinds remain explicitly outside the modelled ISA.
 
 * `rv64RowNN_holds_iff`: R1CS row `NN` of `rv64_trace_constraints` holds iff the
   matching handwritten constraint holds. `rv64Rows_holds_iff` collects all 22.
@@ -136,11 +132,11 @@ theorem rv64Row13_holds_iff (w : WitnessType F params) :
     rv64Row13.Holds w extra ↔ rdWriteEqPCPlusConstIfJump w := by
   row_equiv rv64Row13 rdWriteEqPCPlusConstIfJump
 
-/-- Compare generated row 14 with `nextUnexpandedPCEqLookupIfShouldJump` at every padded cycle.
-For example, its generated identity is `(OpFlags_Jump) * (NextUnexpandedPC + -LookupOutput) = 0`. This comparison is an admitted mismatch. -/
+/-- Compare generated row 14 with `nextUnexpandedPCEqLookupIfJump` at every padded cycle.
+For example, its generated identity is `(OpFlags_Jump) * (NextUnexpandedPC + -LookupOutput) = 0`.  -/
 theorem rv64Row14_holds_iff (w : WitnessType F params) :
-    rv64Row14.Holds w extra ↔ nextUnexpandedPCEqLookupIfShouldJump w := by
-  sorry -- mismatch: generated row 14 uses Jump rather than ShouldJump after Jolt #2451.
+    rv64Row14.Holds w extra ↔ nextUnexpandedPCEqLookupIfJump w := by
+  row_equiv rv64Row14 nextUnexpandedPCEqLookupIfJump
 
 /-- Compare generated row 15 with `nextUnexpandedPCEqPCPlusImmIfShouldBranch` at every padded cycle.
 For example, its generated identity is `(ShouldBranch) * (NextUnexpandedPC + -UnexpandedPC + -Imm) = 0`. -/
@@ -178,14 +174,19 @@ theorem rv64Row20_holds_iff (w : WitnessType F params) :
     rv64Row20.Holds w extra ↔ shouldBranchEqLookupOutputMulBranch w := by
   row_equiv rv64Row20 shouldBranchEqLookupOutputMulBranch
 
-/-- Compare generated row 21 with `shouldJumpEqJumpMulNotNextIsNoop` at every padded cycle.
-For example, its generated identity is `2 * (NextIsNoop - IsNoop) = (2 - panic) * Halt + HaltPanic`. This comparison is an admitted mismatch. -/
+/-- Compare generated row 21 with `haltEndRule` at every padded cycle.
+For example, its generated identity is `2 * (NextIsNoop - IsNoop) = (2 - panic) * Halt + HaltPanic`.  -/
 theorem rv64Row21_holds_iff (w : WitnessType F params) :
-    (rv64Row21 claimedPanic).Holds w extra ↔ shouldJumpEqJumpMulNotNextIsNoop w := by
-  sorry -- mismatch: generated row 21 is the panic-dependent halt lane after Jolt #2451.
+    (rv64Row21 claimedPanic).Holds w extra ↔ haltEndRule claimedPanic w := by
+  unfold R1CSRow.Holds haltEndRule
+  refine forall_congr' fun t => ?_
+  cases claimedPanic <;>
+    simp only [rv64Row21, lcValue, List.foldr, R1CSVar.value, Bool.false_eq_true,
+      ite_false, ite_true] <;> push_cast <;>
+    constructor <;> intro h <;> linear_combination h
 
-/-- Assemble all 22 comparisons, including the admitted row-14 and row-21 mismatches.
-For example, the load-address row is checked, while the halt-lane comparison is admitted. -/
+/-- Assemble all 22 pointwise row comparisons.
+For example, row 21 uses the public panic claim and both authenticated halt flags. -/
 theorem rv64Rows_holds_iff (w : WitnessType F params) :
     (∀ row ∈ rv64Rows claimedPanic, row.Holds w extra) ↔
       ramAddrEqRs1PlusImmMinusLookupIfLoadStore w ∧
@@ -202,14 +203,14 @@ theorem rv64Rows_holds_iff (w : WitnessType F params) :
       assertLookupOne w ∧
       rdWriteEqLookupIfWriteLookupToRd w ∧
       rdWriteEqPCPlusConstIfJump w ∧
-      nextUnexpandedPCEqLookupIfShouldJump w ∧
+      nextUnexpandedPCEqLookupIfJump w ∧
       nextUnexpandedPCEqPCPlusImmIfShouldBranch w ∧
       nextUnexpandedPCUpdateOtherwise w ∧
       nextPCEqPCPlusOneIfInline w ∧
       mustStartSequenceFromBeginning w ∧
       productEqLeftInputMulRightInput w ∧
       shouldBranchEqLookupOutputMulBranch w ∧
-      shouldJumpEqJumpMulNotNextIsNoop w := by
+      haltEndRule claimedPanic w := by
   simp only [rv64Rows, List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
     rv64Row00_holds_iff extra w, rv64Row01_holds_iff extra w, rv64Row02_holds_iff extra w, rv64Row03_holds_iff extra w, rv64Row04_holds_iff extra w, rv64Row05_holds_iff extra w, rv64Row06_holds_iff extra w, rv64Row07_holds_iff extra w, rv64Row08_holds_iff extra w, rv64Row09_holds_iff extra w, rv64Row10_holds_iff extra w, rv64Row11_holds_iff extra w, rv64Row12_holds_iff extra w, rv64Row13_holds_iff extra w, rv64Row14_holds_iff extra w, rv64Row15_holds_iff extra w, rv64Row16_holds_iff extra w, rv64Row17_holds_iff extra w, rv64Row18_holds_iff extra w, rv64Row19_holds_iff extra w, rv64Row20_holds_iff extra w, rv64Row21_holds_iff extra claimedPanic w]
 
@@ -220,12 +221,22 @@ handwritten definition up to unfolding; `decide` checks that the claim is well
 formed. -/
 macro "claim_rfl" : tactic => `(tactic| exact ⟨fun h => h.2, fun h => ⟨by decide, h⟩⟩)
 
-/-- Compare all generated RAM claims with the two old RAM value equations.
-For example, generated claim 2 also forbids changing a protected word; that absent old condition makes this an admitted mismatch. -/
+/-- The four generated RAM claims are the read, write, protected increment and
+access-count equations; for example, protected words have zero increment. -/
 theorem ramReadWriteChecking_holds_iff (w : WitnessType F params) :
     ramReadWriteChecking.Holds w extra ↔
-      ramReadValueEqRamRead w ∧ ramWriteValueEqRamReadWrite w := by
-  sorry -- mismatch: RamReadWriteChecking adds protected-store and selector-sum claims in Jolt #2408; #2509 removes N.
+      ramReadValueEqRamRead w ∧ ramWriteValueEqRamReadWrite w ∧
+        ramWriteProtected extra.writeProtected w ∧ ramAccessCount w := by
+  refine (and_iff_right (by decide)).trans ?_
+  simp only [ramReadWriteChecking, List.mem_cons, List.not_mem_nil,
+    or_false, forall_eq_or_imp, forall_eq]
+  refine and_congr ?_ (and_congr ?_ (and_congr ?_ ?_))
+  · claim_rfl
+  · claim_rfl
+  · simp only [RelationClaim.Holds, ramWriteProtected, ClaimExpr.eval,
+      RelationPoly.ramValue, RelationPoly.cycleValue, Int.cast_zero]
+    exact and_iff_right (by decide)
+  · claim_rfl
 
 /-- The three generated register claims are the old read/write equations.
 For example, the destination claim sums RdWa * (RegistersVal + RdInc) over all 128 registers. -/
@@ -325,21 +336,127 @@ run_meta do
       whnf (mkApp (mkConst ``kindOf) (mkAppN (mkConst c) xs))
     let some k := image.constName?
       | throwError "kindOf {c} does not reduce to a JoltKind constructor"
-    unless k.lastComponentAsString == c.lastComponentAsString do
+    unless k.lastComponentAsString == c.lastComponentAsString ||
+        (c.lastComponentAsString == "Panic" && k.lastComponentAsString == "JoltPanic") do
       throwError "kindOf maps {c} to {k}"
-  let expectedMissing := ["VirtualXORROT2", "VirtualXORROT61", "JoltSuccess", "JoltPanic"]
+  let expectedMissing := ["VirtualXORROT2", "VirtualXORROT61"]
   let missing := (kind.ctors.map (·.lastComponentAsString)).filter fun n =>
-    n != "NoOp" && !instrNames.contains n
+    n != "NoOp" && n != "JoltPanic" && !instrNames.contains n
   unless missing.length == expectedMissing.length &&
       expectedMissing.all missing.contains do
     throwError "Kind coverage mismatch changed: expected {expectedMissing}, found {missing}"
 
-/-- Total kind coverage expected by T3, including kinds the old ISA cannot yet express.
-For example, `JoltSuccess` currently has no preimage; this is an admitted mismatch,
-not a certificate that the old ISA models halts or the two new XOR rotations. -/
-theorem kindCoverage_matches : ∀ k : JoltKind,
+/-- Modelled kinds exclude the two inline-only XOR rotations.
+For example, both halt kinds are modelled, while `VirtualXORROT2` is not. -/
+def ModelledKind (k : JoltKind) : Prop :=
+  k ≠ .VirtualXORROT2 ∧ k ≠ .VirtualXORROT61
+
+/-- Every modelled kind is padding or has a concrete ISA preimage.
+For example, `JoltPanic` is represented by `JoltISA.Instr.Panic`. -/
+theorem kindCoverage_matches (k : JoltKind) (modelled : ModelledKind k) :
     k = .NoOp ∨ ∃ i : JoltISA.Instr, kindOf i = k := by
-  sorry -- mismatch: JoltSuccess/JoltPanic (#2417), VirtualXORROT2/VirtualXORROT61 (#2369) have no old constructors.
+  cases k with
+  | NoOp => exact Or.inl rfl
+  | VirtualXORROT2 => exact False.elim (modelled.1 rfl)
+  | VirtualXORROT61 => exact False.elim (modelled.2 rfl)
+  | ADDI => exact Or.inr ⟨.ADDI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | ADDIW => exact Or.inr ⟨.ADDIW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | ANDI => exact Or.inr ⟨.ANDI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | ORI => exact Or.inr ⟨.ORI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | XORI => exact Or.inr ⟨.XORI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | SLTI => exact Or.inr ⟨.SLTI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | SLTIU => exact Or.inr ⟨.SLTIU (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | LUI => exact Or.inr ⟨.LUI (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | AUIPC => exact Or.inr ⟨.AUIPC (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | JAL => exact Or.inr ⟨.JAL (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | JALR => exact Or.inr ⟨.JALR (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | BEQ => exact Or.inr ⟨.BEQ (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | BNE => exact Or.inr ⟨.BNE (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | BLT => exact Or.inr ⟨.BLT (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | BGE => exact Or.inr ⟨.BGE (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | BLTU => exact Or.inr ⟨.BLTU (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | BGEU => exact Or.inr ⟨.BGEU (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | FENCE => exact Or.inr ⟨.FENCE , rfl⟩
+  | JoltSuccess => exact Or.inr ⟨.JoltSuccess (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | JoltPanic => exact Or.inr ⟨.Panic (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | ADD => exact Or.inr ⟨.ADD (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | ADDW => exact Or.inr ⟨.ADDW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | SUB => exact Or.inr ⟨.SUB (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | SUBW => exact Or.inr ⟨.SUBW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | MUL => exact Or.inr ⟨.MUL (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | MULW => exact Or.inr ⟨.MULW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | MULHU => exact Or.inr ⟨.MULHU (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | ANDN => exact Or.inr ⟨.ANDN (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualMULI => exact Or.inr ⟨.VirtualMULI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualMULIW => exact Or.inr ⟨.VirtualMULIW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualPow2 => exact Or.inr ⟨.VirtualPow2 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualPow2W => exact Or.inr ⟨.VirtualPow2W (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualPow2I => exact Or.inr ⟨.VirtualPow2I (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualPow2IW => exact Or.inr ⟨.VirtualPow2IW (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualShiftRightBitmask => exact Or.inr ⟨.VirtualShiftRightBitmask (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualShiftRightBitmaskI => exact Or.inr ⟨.VirtualShiftRightBitmaskI (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualShiftRightBitmaskW => exact Or.inr ⟨.VirtualShiftRightBitmaskW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualSRLI => exact Or.inr ⟨.VirtualSRLI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualSRAI => exact Or.inr ⟨.VirtualSRAI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualSRLIW => exact Or.inr ⟨.VirtualSRLIW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualSRAIW => exact Or.inr ⟨.VirtualSRAIW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualSRL => exact Or.inr ⟨.VirtualSRL (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualSRA => exact Or.inr ⟨.VirtualSRA (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualSRLW => exact Or.inr ⟨.VirtualSRLW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualSRAW => exact Or.inr ⟨.VirtualSRAW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualROTRI => exact Or.inr ⟨.VirtualROTRI (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualROTRIW => exact Or.inr ⟨.VirtualROTRIW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualRev8W => exact Or.inr ⟨.VirtualRev8W (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualXORROT32 => exact Or.inr ⟨.VirtualXORROT32 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROT24 => exact Or.inr ⟨.VirtualXORROT24 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROT16 => exact Or.inr ⟨.VirtualXORROT16 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROT63 => exact Or.inr ⟨.VirtualXORROT63 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROTL1 => exact Or.inr ⟨.VirtualXORROTL1 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROTW16 => exact Or.inr ⟨.VirtualXORROTW16 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROTW12 => exact Or.inr ⟨.VirtualXORROTW12 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROTW8 => exact Or.inr ⟨.VirtualXORROTW8 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROTW7 => exact Or.inr ⟨.VirtualXORROTW7 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROTW22 => exact Or.inr ⟨.VirtualXORROTW22 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROTW19 => exact Or.inr ⟨.VirtualXORROTW19 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualXORROTW6 => exact Or.inr ⟨.VirtualXORROTW6 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | OR => exact Or.inr ⟨.OR (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | XOR => exact Or.inr ⟨.XOR (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | AND => exact Or.inr ⟨.AND (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | SLT => exact Or.inr ⟨.SLT (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | SLTU => exact Or.inr ⟨.SLTU (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualWindowMaskB => exact Or.inr ⟨.VirtualWindowMaskB (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualWindowMaskH => exact Or.inr ⟨.VirtualWindowMaskH (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualWindowMaskW => exact Or.inr ⟨.VirtualWindowMaskW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualPext => exact Or.inr ⟨.VirtualPext (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualPextSigned => exact Or.inr ⟨.VirtualPextSigned (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualShiftDataB => exact Or.inr ⟨.VirtualShiftDataB (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualShiftDataH => exact Or.inr ⟨.VirtualShiftDataH (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualShiftDataW => exact Or.inr ⟨.VirtualShiftDataW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualSignExtendWord => exact Or.inr ⟨.VirtualSignExtendWord (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualZeroExtendWord => exact Or.inr ⟨.VirtualZeroExtendWord (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualMovsign => exact Or.inr ⟨.VirtualMovsign (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualLoadB => exact Or.inr ⟨.VirtualLoadB .normal (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0 (.E_Load_Addr_Align ()), rfl⟩
+  | VirtualLoadH => exact Or.inr ⟨.VirtualLoadH .normal (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0 (.E_Load_Addr_Align ()), rfl⟩
+  | VirtualLoadW => exact Or.inr ⟨.VirtualLoadW .normal (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0 (.E_Load_Addr_Align ()), rfl⟩
+  | VirtualStoreB => exact Or.inr ⟨.VirtualStoreB (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0 (.E_Load_Addr_Align ()), rfl⟩
+  | VirtualStoreH => exact Or.inr ⟨.VirtualStoreH (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0 (.E_Load_Addr_Align ()), rfl⟩
+  | VirtualStoreW => exact Or.inr ⟨.VirtualStoreW (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0 (.E_Load_Addr_Align ()), rfl⟩
+  | LD => exact Or.inr ⟨.LD .normal (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | SD => exact Or.inr ⟨.SD (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualAdvice => exact Or.inr ⟨.VirtualAdvice (.xreg (LeanRV64D.regidx.Regidx 0)) 0 0, rfl⟩
+  | VirtualAdviceLoad => exact Or.inr ⟨.VirtualAdviceLoad (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualHostIO => exact Or.inr ⟨.VirtualHostIO , rfl⟩
+  | VirtualAssertEQ => exact Or.inr ⟨.VirtualAssertEQ (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualAssertValidDiv0 => exact Or.inr ⟨.VirtualAssertValidDiv0 (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualNegateIf => exact Or.inr ⟨.VirtualNegateIf (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)), rfl⟩
+  | VirtualAssertValidUnsignedRemainder => exact Or.inr ⟨.VirtualAssertValidUnsignedRemainder (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualAssertMulUNoOverflow => exact Or.inr ⟨.VirtualAssertMulUNoOverflow (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+  | VirtualAssertLTE => exact Or.inr ⟨.VirtualAssertLTE (.xreg (LeanRV64D.regidx.Regidx 0)) (.xreg (LeanRV64D.regidx.Regidx 0)) 0, rfl⟩
+
+/-- The two inline-only XOR rotations are explicitly not modelled. -/
+theorem inline_xorRot_not_modelled :
+    ¬ ModelledKind .VirtualXORROT2 ∧ ¬ ModelledKind .VirtualXORROT61 := by
+  exact ⟨fun h => h.1 rfl, fun h => h.2 rfl⟩
 
 /-- Generated kind-list membership reads the old opcode flag.
 For example, Load belongs to the LD entry, and Halt belongs to no old instruction entry. -/
@@ -408,20 +525,21 @@ theorem padding_lookupTable_rafFlag :
 
 /-! ## Link to `ConstraintEquations` -/
 
-/-- Assemble the expected old-model-to-generated implication, using the marked
-row-14, row-21 and RAM-relation admissions above.
-For example, the load rows are proved, but the new halt lane and protected-store
-claim remain mismatches, so this theorem is not a Jolt-main correctness certificate.
-The row list uses the context's `io.panic` as the public panic bit.
-`ConstraintEquations` has 29 further conjuncts that T3 does not generate. -/
+/-- The handwritten equations imply every generated row and all four relations.
+For example, the generated halt flags read the witness's bytecode-authenticated
+columns, and C is the public mask computed from bytecode and layout. -/
 theorem ConstraintEquations.generated {bytecode : Array JoltInstructionRow}
-    {initialRam : Nat → BitVec 64} {io : JoltDevice} {entry : Fin (2 ^ params.logBytecodeK)}
+    {initialRam : Nat → BitVec 64} {io : JoltPublicIo} {entry : Fin (2 ^ params.logBytecodeK)}
     {w : WitnessType F params} (h : ConstraintEquations bytecode initialRam io entry w) :
+    let extra : RepinInputs F params :=
+      ⟨fun k => ramWriteProtectedMask bytecode io.memory_layout k.val⟩
     (∀ row ∈ rv64Rows io.panic, row.Holds w extra) ∧ ramReadWriteChecking.Holds w extra ∧
       registersReadWriteChecking.Holds w extra ∧ instructionInputVirtualization.Holds w extra ∧
-      spartanShift.Holds w extra :=
-  ⟨(rv64Rows_holds_iff extra io.panic w).2 ⟨h.ramAddrEqRs1PlusImmMinusLookupIfLoadStore, h.ramAddrEqZeroIfNotLoadStore, h.ramReadEqRamWriteIfLoad, h.ramReadEqRdWriteIfLoad, h.rs2EqRamWriteIfStore, h.leftLookupZeroIfAddSubMul, h.leftLookupEqLeftInputOtherwise, h.rightLookupAdd, h.rightLookupSub, h.rightLookupEqProductIfMul, h.rightLookupEqRightInputOtherwise, h.assertLookupOne, h.rdWriteEqLookupIfWriteLookupToRd, h.rdWriteEqPCPlusConstIfJump, h.nextUnexpandedPCEqLookupIfShouldJump, h.nextUnexpandedPCEqPCPlusImmIfShouldBranch, h.nextUnexpandedPCUpdateOtherwise, h.nextPCEqPCPlusOneIfInline, h.mustStartSequenceFromBeginning, h.productEqLeftInputMulRightInput, h.shouldBranchEqLookupOutputMulBranch, h.shouldJumpEqJumpMulNotNextIsNoop⟩,
-    (ramReadWriteChecking_holds_iff extra w).2 ⟨h.ramReadValueEqRamRead, h.ramWriteValueEqRamReadWrite⟩,
+      spartanShift.Holds w extra := by
+  let extra : RepinInputs F params :=
+    ⟨fun k => ramWriteProtectedMask bytecode io.memory_layout k.val⟩
+  exact ⟨(rv64Rows_holds_iff extra io.panic w).2 ⟨h.ramAddrEqRs1PlusImmMinusLookupIfLoadStore, h.ramAddrEqZeroIfNotLoadStore, h.ramReadEqRamWriteIfLoad, h.ramReadEqRdWriteIfLoad, h.rs2EqRamWriteIfStore, h.leftLookupZeroIfAddSubMul, h.leftLookupEqLeftInputOtherwise, h.rightLookupAdd, h.rightLookupSub, h.rightLookupEqProductIfMul, h.rightLookupEqRightInputOtherwise, h.assertLookupOne, h.rdWriteEqLookupIfWriteLookupToRd, h.rdWriteEqPCPlusConstIfJump, h.nextUnexpandedPCEqLookupIfJump, h.nextUnexpandedPCEqPCPlusImmIfShouldBranch, h.nextUnexpandedPCUpdateOtherwise, h.nextPCEqPCPlusOneIfInline, h.mustStartSequenceFromBeginning, h.productEqLeftInputMulRightInput, h.shouldBranchEqLookupOutputMulBranch, h.haltEndRule⟩,
+    (ramReadWriteChecking_holds_iff extra w).2 ⟨h.ramReadValueEqRamRead, h.ramWriteValueEqRamReadWrite, h.ramWriteProtected, h.ramAccessCount⟩,
     (registersReadWriteChecking_holds_iff extra w).2
       ⟨h.rdWriteValueEqRegistersReadWrite, h.rs1ValueEqRegistersRead, h.rs2ValueEqRegistersRead⟩,
     (instructionInputVirtualization_holds_iff extra w).2

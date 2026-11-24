@@ -87,7 +87,7 @@ def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   | .VirtualAssertMulUNoOverflow lhs rhs _ | .VirtualAssertLTE lhs rhs _ =>
       sourceIsCanonical lhs && sourceIsCanonical rhs
   -- Destination only; runtime advice is a value, not a register operand.
-  | .LUI dst _ | .AUIPC dst _ | .JAL dst _
+  | .JoltSuccess dst | .Panic dst | .LUI dst _ | .AUIPC dst _ | .JAL dst _
   | .VirtualPow2I dst _ | .VirtualPow2IW dst _ | .VirtualShiftRightBitmaskI dst _
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       destinationIsCanonical dst

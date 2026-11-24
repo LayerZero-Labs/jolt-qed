@@ -86,13 +86,8 @@ noncomputable def init_state
       (fun regs r => regs.insert r (initialRegisterValue entryAddress ram.size r))
       {}
 
-  -- Logically Jolt models memory as one table, but the Rust tracer splits it
-  -- in two and so do we: RAM, and the rest, which Rust calls the Jolt device
-  -- (inputs, advice, outputs, panic, termination).
-  -- Jolt RAM starts at RAM_START_ADDRESS (`JoltISA.RAM_START_ADDRESS`, 0x80000000).
-  -- Sail has its own devices (CLINT and HTIF), but these are not the Jolt device.
-  -- CLINT lies below RAM and HTIF is switched off, so Sail's memory hash map
-  -- corresponds to Jolt RAM only. The Jolt device lives in `io` instead.
+  -- The bootstrap map contains the program/RAM bytes.
+  -- `JoltISA.initialState` installs I/O bytes and the code guard in this same map.
   let memory : Std.ExtHashMap Nat (BitVec 8) :=
     ram.toList.zipIdx.foldl
       (fun mem (byte, offset) => mem.insert (JoltISA.RAM_START_ADDRESS + offset) byte)
@@ -108,7 +103,7 @@ noncomputable def init_state
 
   { sail := sail
     vregs := fun _ => 0 -- Jolt initialises all virtual registers to zero.
-    jolt_device := { io with outputs := #[], panic := false } -- TODO: (ari) draw this out and link later
+    jolt_device := { io with panic := false } -- TODO: (ari) draw this out and link later
     adviceTape := { adviceTape with readPosition := 0 }-- TODO: (ari) draw this out and link later
     hostIO := hostIO -- TODO: (ari) draw this out and link later
   }
@@ -412,17 +407,24 @@ def JoltInstance.validate_inputs {Source : Type} (joltInstance : JoltInstance So
 def trimTrailingZeros (bytes : Array (BitVec 8)) : Array (BitVec 8) :=
   (bytes.toList.reverse.dropWhile (· == 0)).reverse.toArray
 
--- The public I/O the verifier checks a proof against: the instance's layout, inputs,
--- claimed outputs (trailing zero bytes dropped) and panic flag. Rust's verify takes it
--- as a JoltDevice and never reads its advice fields.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:38-43 (verify), 357, 432-439 at 5def437f
---       jolt/crates/jolt-program/src/preprocess/public_io.rs:21-65
+/-- Public statement bytes and the halt claim, separate from the execution device.
+For example, a success statement contains output bytes and `panic = false`.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`JoltDevice`) and
+`crates/jolt-program/src/preprocess/public_io.rs` (`PublicIoMemory::new`). -/
+structure JoltPublicIo where
+  memory_layout : MemoryLayout
+  inputs : Array (BitVec 8)
+  outputs : Array (BitVec 8)
+  panic : Bool
+
+/-- The verifier's public I/O statement, with trailing output zeros removed.
+For example, output `[1, 0]` is represented by `[1]`.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/public_io.rs`
+(`PublicIoMemory::new`). -/
 def JoltInstance.public_io {Source : Type} (joltInstance : JoltInstance Source) :
-    Option JoltDevice := do
+    Option JoltPublicIo := do
   let layout ← joltInstance.memory_layout
   pure { inputs := joltInstance.inputs
-         trusted_advice := #[]
-         untrusted_advice := #[]
          outputs := trimTrailingZeros joltInstance.outputs
          panic := joltInstance.panic
          memory_layout := layout }
@@ -449,12 +451,10 @@ noncomputable def JoltInstance.initial_state {Source : Type} (joltInstance : Jol
   (if joltInstance.memory_config.max_trusted_advice_size.toNat < joltInstance.trusted_advice.size then none else pure ())
   (if joltInstance.memory_config.max_untrusted_advice_size.toNat < privateInputs.untrusted_advice.size then none else pure ())
   (if joltInstance.memory_config.max_input_size.toNat < joltInstance.inputs.size then none else pure ())
-  let device : JoltDevice :=
-    { inputs := joltInstance.inputs
-      trusted_advice := joltInstance.trusted_advice
-      untrusted_advice := privateInputs.untrusted_advice
-      outputs := #[]
-      panic := false
-      memory_layout := layout }
-  pure (init_state joltInstance.program.entry_address (initialRam layout joltInstance.program.memory_init) device
-    { bytes := privateInputs.advice_tape, readPosition := 0 })
+  let device : JoltDevice := { panic := false, memory_layout := layout }
+  JoltISA.initialState
+    (init_state joltInstance.program.entry_address
+      (initialRam layout joltInstance.program.memory_init) device
+      { bytes := privateInputs.advice_tape, readPosition := 0 })
+    (joltInstance.program.instructions.toList.map fun row => (row.address, row.is_compressed))
+    joltInstance.inputs joltInstance.trusted_advice privateInputs.untrusted_advice

@@ -20,7 +20,7 @@ structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) (params : WitnessParams) where
   bytecode : Array JoltInstructionRow
   initialRam : Nat → BitVec 64
-  io : JoltDevice
+  io : JoltPublicIo
   entry : Fin (2 ^ params.logBytecodeK)
   expands : expand_program joltInstance.program = some bytecode
   initialized : ∃ state, joltInstance.initial_state privateInputs = some state ∧

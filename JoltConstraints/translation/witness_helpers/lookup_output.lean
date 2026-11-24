@@ -112,7 +112,7 @@ noncomputable def rowLookupOutput {bytecode : Array JoltInstructionRow}
   -- Rust permits a nonzero immediate to suppress this assertion. Such a row
   -- can retire with unequal operands; its lookup output must still be zero.
   | .VirtualAssertEQ lhs rhs _ => if jolt_assert_eq (source lhs) (source rhs) then 1 else 0
-  | .FENCE | .LD .. | .SD .. | .VirtualHostIO .. => 0
+  | .JoltSuccess _ | .Panic _ | .FENCE | .LD .. | .SD .. | .VirtualHostIO .. => 0
 
 -- Rust: [LookupOutput](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:23).
 -- Cast the unsigned 64-bit result into F. The no-op padding output is zero.

@@ -297,4 +297,4 @@ def Trace.matches_outputs (joltInstance : JoltInstance SourceInstruction) (trace
   let finalState : SailJoltState := (trace.rows.back?.map (fun row => row.postState)).getD trace.initialState
   -- The claim: The output claimed is the actual output on the final states device region, likewise for the claimed panic and what 
   -- happened.
-  trimTrailingZeros finalState.jolt_device.outputs = trimTrailingZeros joltInstance.outputs ∧ finalState.jolt_device.panic = joltInstance.panic
+  trimTrailingZeros (finalState.jolt_device.outputsOf finalState.sail.mem) = trimTrailingZeros joltInstance.outputs ∧ finalState.jolt_device.panic = joltInstance.panic

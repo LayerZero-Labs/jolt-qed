@@ -6,14 +6,16 @@ open LeanRV64D
 
 set_option autoImplicit false
 
+open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
+
 namespace JoltConstraints
 
-/-- Constraint (22) in `constraints.md` (stage 2):
-ShouldJump is the jump flag multiplied by one minus the next no-op flag.
+/-- Constraint (15) in `constraints.md` (stage 1):
+every jump, including a halt, selects the lookup output as the next unexpanded PC.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs -/
-def shouldJumpEqJumpMulNotNextIsNoop {F : Type} [Field F] {params : WitnessParams}
+def nextUnexpandedPCEqLookupIfJump {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,
-    witness.ShouldJump t = witness.OpFlags .Jump t * (1 - witness.NextIsNoop t)
+    witness.OpFlags .Jump t * (witness.NextUnexpandedPC t - witness.LookupOutput t) = 0
 
 end JoltConstraints

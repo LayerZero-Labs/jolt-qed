@@ -22,28 +22,22 @@ noncomputable def ramInitialValue {F : Type} [Field F]
     (initialRam : Nat → BitVec 64) (address : Nat) : F :=
   ((initialRam address).toNat : F)
 
-/-- Public I/O mask: remapped words from input_start up to RAM_START_ADDRESS,
-excluding RAM_START_ADDRESS. As in Rust preprocessing, the layout must be valid;
+/-- Public I/O mask: remapped words from input_start up to output_end,
+excluding output_end. As in Rust preprocessing, the layout must be valid;
 completeness theorems assume the relevant part as `JoltDevice.AdviceBelowInput`.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/public_io.rs#L20-L25 -/
-def ramPublicIoMask {F : Type} [Field F] (io : JoltDevice) (address : Nat) : F :=
+def ramPublicIoMask {F : Type} [Field F] (io : JoltPublicIo) (address : Nat) : F :=
   let lowest := ramLowestAddress io.memory_layout
   let first := (io.memory_layout.input_start.toNat - lowest) / 8
-  let last := (JoltISA.RAM_START_ADDRESS - lowest) / 8
+  let last := (io.memory_layout.output_end.toNat - lowest) / 8
   if first ≤ address ∧ address < last then 1 else 0
 
-/-- Public I/O words only: input, output, panic, and termination (1 unless
-panicking), with zero elsewhere. Byte buffers are packed little-endian and the
+/-- Public I/O words only: inputs and outputs, with zero elsewhere. Byte buffers are packed little-endian and the
 last partial word is zero-padded. Advice buffers do not enter this array.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/public_io.rs#L27-L55 -/
-def ramPublicIoWord (io : JoltDevice) (address : Nat) : BitVec 64 :=
+def ramPublicIoWord (io : JoltPublicIo) (address : Nat) : BitVec 64 :=
   let input := TraceWitness.overlayRamBytes io.memory_layout io.memory_layout.input_start io.inputs address 0
   let output := TraceWitness.overlayRamBytes io.memory_layout io.memory_layout.output_start io.outputs address input
-  let panic := if TraceWitness.remapRamAddress io.memory_layout io.memory_layout.panic = some address then
-      (if io.panic then 1 else 0)
-    else output
-  if !io.panic && TraceWitness.remapRamAddress io.memory_layout io.memory_layout.termination == some address then
-    1
-  else panic
+  output
 
 end JoltConstraints
