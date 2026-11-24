@@ -2,7 +2,7 @@
 title: Plan for deterministic, non-succinct soundness
 updated: 2026-11-24
 rust_pin: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
-lean_head: e29949809bbf2c54c315c2ca55ae3b90c7fd37a6
+lean_head: ac7a9e5
 ---
 
 Our goal is to make Jolt secure through formal verification. Each intermediate
@@ -24,7 +24,7 @@ The issue writeups live in `LayerZero-Research/LZ-Notes` under `content/projects
 The Jolt pin is `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
 The constraint re-pin starts from Lean commit `3522261` on `split/c-constraints`.
 Local commit `877356e` checks the new handwritten constraints against the generated data, including the halt lane and both RAM guard claims.
-Local commits through `152cf8c` check shared-memory frames, checked RAM allocation, halt execution certificates, tape replay and register completeness.
+Local commits through `ac7a9e5` check shared-memory frames, checked RAM allocation, halt execution certificates, tape replay, register completeness, both RAM-history completeness theorems and the shared-memory load/store soundness steps.
 The full `JoltConstraints` build does not yet pass.
 The previous soundness result below describes the old model and is not a soundness result for this pin.
 
@@ -32,12 +32,15 @@ At this pin, a valid execution ends at `JoltSuccess` or `Panic`.
 R1CS row 21 binds that halt kind to the public panic claim.
 The new proof must cover both claims and may not use the old panic or termination words.
 The three flag-word restrictions have been removed from `TemporaryRestrictions`, but their old definitions and proof callers still need replacement.
-The status of `tracerAddressChecks` remains open until the new RAM guard claims are connected to reconstructed memory execution.
+The load/store soundness steps derive their address and protected-value checks from the constraints at `ac7a9e5`.
+Removing `tracerAddressChecks` from the exported theorem still requires migrating the prefix and whole-run consumers.
+The current prefix migration replaces the ordinary-RAM/device split with full shared-word agreement and removes its synthetic termination-word invariant; that migration has not yet passed an integration build.
 
 Inputs, advice, outputs, the I/O gap and ordinary RAM now use the same byte map.
 The whole-run relation compares that map directly and initialization uses `JoltDevice.initialMem`.
 The remaining separate I/O simulation and its consumers still need replacement.
-The two RAM-history completeness proofs remain open; the three admissions for #1949 are outside this re-pin.
+Both RAM-history completeness theorems are proved with unchanged statements at `ce5f298`.
+The three admissions for #1949 remain unchanged and are outside this re-pin.
 The working report is [the constraint re-pin report](../reports/2026-11-24-constraints-repin.md).
 
 ## Previous state (2026-11-03)

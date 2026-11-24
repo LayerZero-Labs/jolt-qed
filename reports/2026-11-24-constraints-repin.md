@@ -711,3 +711,63 @@ Neither theorem takes `tracerAddressChecks`, a panic-word premise or a terminati
 This settles the local MMU obligations from the pinned constraints.
 Removing the global `tracerAddressChecks` field still requires migrating its callers, rather than claiming that its universally quantified program restriction follows from one satisfying witness.
 The old prefix, stopping, whole-run I/O and public-output consumers remain unfinished, and the full library has not passed.
+
+## Prefix migration and code-region frame checkpoint
+
+Date: 2026-11-24.
+Jolt pin: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
+Last checked memory-step commit: `ac7a9e5`.
+This section records checked frame proofs and an uncommitted prefix migration; it does not report a green integration build.
+I read `CodeGuard::new` and the protected-store checks in the pinned tracer's `tracer/src/emulator/mmu.rs` before connecting the code interval to the shared-store proof.
+
+The first `.constraints-repin-code-frame1.log` build checked `TapeSemantics`, `IOSetupFrame`, `TapeTrace` and `TapeDeviceFrame`.
+It failed on four local proof errors in the new source-extent extraction lemmas in `program_facts.lean`.
+The repairs reduce the countdown at the final index, obtain a list bound before applying the minimum inequality, and identify singleton flattening with `List.map_eq_flatMap`.
+Those repairs and `CodeRegionFrame` await the next batch.
+`TapeSemantics` took 16 seconds, `IOSetupFrame` 72 seconds, `TapeTrace` 65 seconds and `TapeDeviceFrame` 64 seconds to elaborate and compile.
+These are module timings, not individual tactic timings.
+
+The checked frame declarations are:
+
+- `Soundness/Layer5/TapeSemantics.lean:70`, `execWithTapeAnswer_relation`: a new generic preservation theorem over a state relation, its `InstructionFrame.Rules` and preservation under tape-cursor advance.
+- `TapeSemantics.lean:98`, `execWithTapeAnswer_device_relation`: its statement is unchanged; its proof now instantiates the generic theorem.
+- `TapeSemantics.lean:114`, `execWithTapeAnswer_codeRegion`: every successful relaxed instruction retains `codeRegion`, including stores and both explicit halts.
+- `Completeness/Helpers/IOSetupFrame.lean:26`, `Trace.preState_projection_relation`, and line 58, `Trace.finalTraceState_projection_relation`: the existing trace-fold argument is generalized from the device projection to an arbitrary state projection and reflexive/transitive relation.
+- The existing `Trace.preState_device_relation` and `Trace.finalTraceState_device_relation` retain their statements and instantiate those generic trace lemmas.
+
+New statements awaiting validation:
+
+- `program_facts.lean`, `ExpandedRows.source_extents`: filtering one expansion to rows with zero remaining countdown and taking `(address, is_compressed)` yields exactly its source extent.
+- `program_facts.lean`, `expand_program_source_extents`: the bytecode's extracted source extents equal the decoded program's source-address/compression list, in order.
+- `Soundness/Layer5/CodeRegionFrame.lean`, `initial_state_codeRegion`: successful instance initialization and expansion imply that the initialized `codeRegion` equals `ramCodeRegion` of the materialized bytecode and initialized layout.
+- `CodeRegionFrame.lean`, `UntrustedAnswerRun.final_codeRegion`: a certified prefix's final code region equals that public interval computed with its initial layout.
+- `Layer6/MemoryRowAppend.lean`, `rawEntry_memory_invariants`: a raw row entry preserves the context layout and that code interval; this discharges the local store theorem's invariant premises without adding a program restriction.
+
+Changed prefix statements awaiting validation:
+
+- `Layer6/ExecutionPrefix.lean`, `RepresentsPrefix.cutRam`: old agreement excluded the synthetic termination index at the next and final columns; new agreement quantifies over every `Fin params.ramSize` index.
+- `ExecutionPrefix.lean`, `Represents.finalRam`: the same exception is removed from final agreement.
+- `Layer6/PrefixState.lean`, `BoundaryState` and `ExpansionState`: the `terminationWord` field and its conditional zero-word obligation are deleted; all other fields currently retain their old statements, including the old stopping predicates that still require migration.
+- `Layer6/RamCutAgreement.lean`, `finalRamWord_ordinary`: the old initialized-run statement with an ordinary-RAM premise is replaced by `finalRamWord_eq_ram_doubleword`, valid for any plain trace and every natural-number index.
+- `RamCutAgreement.lean`, `ramAgreement_iff`: old image agreement outside termination was equivalent to ordinary-RAM agreement plus device agreement; new agreement at every index is equivalent to `SharedRamAgreement` for a plain trace, without a constraint context or execution premise.
+- `RamCutAgreement.lean`, `ordinary_memory_step` and its supporting termination-index helpers are deleted because the shared-memory load/store steps already provide the full update contract.
+- `Layer6/PlainRow.lean`, `representsPrefix_push`: the result now covers every RAM word, and its obsolete device-equality premise is removed; unchanged shared memory and the zero-address constraint suffice.
+- `PlainRow.lean`, `rawEntry_state`: its statement is unchanged and its visibility becomes public for the code/layout invariant consumer.
+- `PlainRow.lean`, `append_expansion_row_of_termination` is deleted; its general append proof becomes `append_expansion_row`, without the conditional termination-word premise.
+- The former `append_expansion_row` wrapper's zero-RAM-address premise is also removed; it is unnecessary when the caller already supplies full prefix agreement.
+- `Layer6/MemoryRowAppend.lean`, `ExpansionState.memoryAt`: old output was ordinary-RAM agreement at the prepared state plus a separate device-image agreement at the retained prefix; new output is full shared-word agreement at the prepared state.
+- `MemoryRowAppend.lean`, `append_memory_row`: replaces `DeviceMemoryStepAgreement` and a termination-store event with full shared-word agreement at the next and final columns.
+- Its `memory_step_mono` and `exists_fin_push` event helpers are deleted.
+- `Layer6/MemoryRowExecution.lean`, `load_row_execution`: removes the restrictions, readiness, selected-slot-number, device, conditional termination, device-equality and redundant address-encoding premises; takes shared RAM agreement and the prepared layout equality, and returns execution, register agreement and full next/final shared RAM agreement.
+- `MemoryRowExecution.lean`, `store_row_execution`: makes the same replacement, additionally taking the prepared code-interval equality supplied by `rawEntry_memory_invariants`.
+- `Layer6/RowStepMemory.lean`, `append_load_row` and `append_store_row`: remove the temporary-restrictions and honest-advice premises; consume the common shared agreement and invariant equalities, without a RAM/device address split.
+- `Layer6/RowStepJalr.lean`, `append_nonmemory_row` and `append_jump_row`: remove device equality from the non-memory append contract; full shared-memory agreement depends on the byte map, allowing halt metadata to change independently.
+
+`BoundaryStart`, `ExpansionFinish`, `DivisionAppend`, `RowStep`, `RowStepJalr` and `RowStepTerminal` migrate their callers and structure constructors to these statements.
+`BoundaryStart` deletes the initial-device buffer overlays and flag-word-zero helpers, and compares the empty run directly with initialized memory.
+`DivisionAppend` removes its termination-store transport proof and compares every shared word in the replay.
+No new admission, axiom, forbidden decision procedure or resource-limit increase was introduced.
+The added-line scan and `git diff --check` pass at this checkpoint.
+`JoltBytecode/` and `LeanRV64D/` remain untouched.
+
+The remaining work still includes explicit-halt prefix/stopping reconstruction, both public panic claims in the exported soundness theorem, deletion of the separate whole-run I/O simulation, migration of public-I/O completeness/output assembly, removal of restriction definitions and old callers, source-reference updates, a green full build, final axiom checks and the complete harness checks.

@@ -64,6 +64,34 @@ theorem execWithTapeAnswer_of_ne (instruction : Instr) (answer : BitVec 64)
     execWithTapeAnswer instruction answer = execInstr instruction := by
   cases instruction <;> first | rfl | exact absurd rfl (notAdvice _ _)
 
+/-- The relaxed interpreter preserves a state relation whenever its primitive
+instruction rules and tape-cursor advance preserve that relation.
+For example, code-region equality permits every primitive and tape advance. -/
+theorem execWithTapeAnswer_relation
+    (relation : SailJoltState → SailJoltState → Prop)
+    (rules : InstructionFrame.Rules relation)
+    (advance : ∀ state width, relation state
+      { state with adviceTape := { state.adviceTape with
+        readPosition := state.adviceTape.readPosition + width } })
+    (instruction : Instr) (answer : BitVec 64) :
+    StatePreservation.Preserves relation (execWithTapeAnswer instruction answer) := by
+  by_cases advice : ∃ dst width, instruction = .VirtualAdviceLoad dst width
+  · obtain ⟨destination, byteCount, rfl⟩ := advice
+    intro before after value runs
+    simp only [execWithTapeAnswer] at runs
+    split at runs
+    · have keeps := StatePreservation.bind_rule rules.trans
+        (InstructionFrame.writeDst_rule relation rules.sail rules.vreg destination answer)
+        (fun _ => StatePreservation.pure_rule rules.refl RETIRE_SUCCESS)
+      exact rules.trans _ _ _ (advance before byteCount.toNat)
+        (keeps _ after value runs)
+    · cases runs
+  · rw [execWithTapeAnswer_of_ne instruction answer
+      (fun dst width same => advice ⟨dst, width, same⟩)]
+    apply InstructionFrame.execInstr_rule rules instruction
+    intro dst width same
+    exact False.elim (advice ⟨dst, width, same⟩)
+
 /-- Every relaxed instruction preserves a device relation compatible with halt updates.
 For example, every tape read and both halts preserve the memory layout.
 Stores change shared memory and no longer need device-store premises. -/
@@ -76,27 +104,28 @@ theorem execWithTapeAnswer_device_relation
     (instruction : Instr) (answer : BitVec 64) :
     StatePreservation.Preserves
       (fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
+      (execWithTapeAnswer instruction answer) :=
+  execWithTapeAnswer_relation _ (deviceRelationRules relation refl trans halt)
+    (fun state _ => refl state.jolt_device) instruction answer
+
+/-- Every relaxed instruction retains the initialized code-word interval.
+For example, an output store and a panic halt preserve the same protected code words.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`CodeGuard`, `assert_write_protected_store`). -/
+theorem execWithTapeAnswer_codeRegion (instruction : Instr) (answer : BitVec 64) :
+    StatePreservation.Preserves
+      (fun s t : SailJoltState => s.codeRegion = t.codeRegion)
       (execWithTapeAnswer instruction answer) := by
-  by_cases advice : ∃ dst width, instruction = .VirtualAdviceLoad dst width
-  · obtain ⟨destination, byteCount, rfl⟩ := advice
-    intro before after value runs
-    simp only [execWithTapeAnswer] at runs
-    split at runs
-    · have keeps := StatePreservation.bind_rule
-        (relation := fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
-        (fun a b c ab bc => trans _ _ _ ab bc)
-        (InstructionFrame.writeDst_rule _
-          (fun s _ _ => refl s.jolt_device) (fun s _ _ => refl s.jolt_device)
-          destination answer)
-        (fun _ => StatePreservation.pure_rule
-          (fun s : SailJoltState => refl s.jolt_device) RETIRE_SUCCESS)
-      exact keeps { before with adviceTape :=
-        { before.adviceTape with readPosition :=
-          before.adviceTape.readPosition + byteCount.toNat } } after value runs
-    · cases runs
-  · rw [execWithTapeAnswer_of_ne instruction answer
-      (fun dst width same => advice ⟨dst, width, same⟩)]
-    exact execInstr_device_relation relation refl trans halt instruction
+  let rules : InstructionFrame.Rules
+      (fun s t : SailJoltState => s.codeRegion = t.codeRegion) := {
+    refl := fun _ => rfl
+    trans := fun _ _ _ first next => first.trans next
+    sail := fun _ _ _ => rfl
+    vreg := fun _ _ _ => rfl
+    store := store_doubleword_relation _ (fun _ => rfl)
+      (fun _ _ _ first next => first.trans next) (fun _ _ => rfl)
+    halt := fun _ _ => rfl
+    append := fun _ _ => rfl }
+  exact execWithTapeAnswer_relation _ rules (fun _ _ => rfl) instruction answer
 
 /-- The answer supplied by the existing fixed-tape interpreter, or zero for an
 instruction with no tape answer or a read that fails. -/

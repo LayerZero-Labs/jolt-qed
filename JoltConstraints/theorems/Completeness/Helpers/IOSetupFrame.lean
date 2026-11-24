@@ -21,22 +21,22 @@ namespace JoltConstraints
 
 open JoltIOSetupFrame
 
-/-- Carry a device relation from a plain trace's initial state to every
+/-- Carry a relation on a state projection from a plain trace's initial state to every
 recorded row's pre-state using the start, linkage and per-row preservation facts. -/
-theorem Trace.preState_device_relation (trace : Trace)
-    (relation : JoltDevice → JoltDevice → Prop)
+theorem Trace.preState_projection_relation {α : Type} (trace : Trace) (project : SailJoltState → α)
+    (relation : α → α → Prop)
     (refl : ∀ io, relation io io)
     (trans : ∀ a b c, relation a b → relation b c → relation a c)
     (starts : ∀ first, trace.rows[0]? = some first →
-      first.preState.jolt_device = trace.initialState.jolt_device)
+      (project first.preState) = (project trace.initialState))
     (linked : ∀ i current next,
       trace.rows[i]? = some current → trace.rows[i + 1]? = some next →
-      next.preState.jolt_device = current.postState.jolt_device)
+      (project next.preState) = (project current.postState))
     (preserved : ∀ step : Fin trace.rows.size,
-      relation (trace.rows[step]).preState.jolt_device
-        (trace.rows[step]).postState.jolt_device)
+      relation (project (trace.rows[step]).preState)
+        (project (trace.rows[step]).postState))
     (i : Nat) (hi : i < trace.rows.size) :
-    relation trace.initialState.jolt_device (trace.rows[i]).preState.jolt_device := by
+    relation (project trace.initialState) (project (trace.rows[i]).preState) := by
   induction i with
   | zero =>
     have first := starts (trace.rows[0])
@@ -53,8 +53,52 @@ theorem Trace.preState_device_relation (trace : Trace)
     rw [link]
     exact trans _ _ _ (ih (by omega)) step
 
-/-- Carry a device relation from a plain trace's initial state to its final
+/-- Carry a relation on a state projection from a plain trace's initial state to its final
 state using its first-row, row-linkage and execution facts. -/
+theorem Trace.finalTraceState_projection_relation {α : Type} (trace : Trace) (project : SailJoltState → α)
+    (relation : α → α → Prop)
+    (refl : ∀ io, relation io io)
+    (trans : ∀ a b c, relation a b → relation b c → relation a c)
+    (starts : ∀ first, trace.rows[0]? = some first →
+      (project first.preState) = (project trace.initialState))
+    (linked : ∀ i current next,
+      trace.rows[i]? = some current → trace.rows[i + 1]? = some next →
+      (project next.preState) = (project current.postState))
+    (preserved : ∀ step : Fin trace.rows.size,
+      relation (project (trace.rows[step]).preState)
+        (project (trace.rows[step]).postState)) :
+    relation (project trace.initialState)
+      (project (TraceWitness.finalTraceState trace)) := by
+  unfold TraceWitness.finalTraceState
+  split
+  · rename_i nonempty
+    exact trans _ _ _
+      (Trace.preState_projection_relation trace project relation refl trans starts linked preserved
+        (trace.rows.size - 1) (by omega))
+      (preserved ⟨trace.rows.size - 1, by omega⟩)
+  · exact refl _
+
+/-- Carry a device relation to each recorded pre-state.
+For example, equality of memory layouts follows from row preservation and linkage. -/
+theorem Trace.preState_device_relation (trace : Trace)
+    (relation : JoltDevice → JoltDevice → Prop)
+    (refl : ∀ io, relation io io)
+    (trans : ∀ a b c, relation a b → relation b c → relation a c)
+    (starts : ∀ first, trace.rows[0]? = some first →
+      first.preState.jolt_device = trace.initialState.jolt_device)
+    (linked : ∀ i current next,
+      trace.rows[i]? = some current → trace.rows[i + 1]? = some next →
+      next.preState.jolt_device = current.postState.jolt_device)
+    (preserved : ∀ step : Fin trace.rows.size,
+      relation (trace.rows[step]).preState.jolt_device
+        (trace.rows[step]).postState.jolt_device)
+    (i : Nat) (hi : i < trace.rows.size) :
+    relation trace.initialState.jolt_device (trace.rows[i]).preState.jolt_device :=
+  Trace.preState_projection_relation trace SailJoltState.jolt_device relation
+    refl trans starts linked preserved i hi
+
+/-- Carry a device relation to the final recorded state.
+For example, stores and halts retain the initialized memory layout. -/
 theorem Trace.finalTraceState_device_relation (trace : Trace)
     (relation : JoltDevice → JoltDevice → Prop)
     (refl : ∀ io, relation io io)
@@ -68,15 +112,9 @@ theorem Trace.finalTraceState_device_relation (trace : Trace)
       relation (trace.rows[step]).preState.jolt_device
         (trace.rows[step]).postState.jolt_device) :
     relation trace.initialState.jolt_device
-      (TraceWitness.finalTraceState trace).jolt_device := by
-  unfold TraceWitness.finalTraceState
-  split
-  · rename_i nonempty
-    exact trans _ _ _
-      (Trace.preState_device_relation trace relation refl trans starts linked preserved
-        (trace.rows.size - 1) (by omega))
-      (preserved ⟨trace.rows.size - 1, by omega⟩)
-  · exact refl _
+      (TraceWitness.finalTraceState trace).jolt_device :=
+  Trace.finalTraceState_projection_relation trace SailJoltState.jolt_device relation
+    refl trans starts linked preserved
 
 /-- An honest fixed-tape trace carries any reflexive, transitive device
 relation preserved by successful device byte stores to every pre-state and
