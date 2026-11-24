@@ -467,6 +467,57 @@ theorem LoadRow.write_of_run {instruction : Instr} {width : MemoryWidth} {destin
         pure RETIRE_SUCCESS) pre = .ok RETIRE_SUCCESS post := by
   exact load_bind_word _ destination pre post (row.continuation_of_run advice pre post runs)
 
+/-- A retired load into a writable virtual register changes only that register.
+For example, an AMO's LD into v40 saves the shared old word and keeps its Sail state.
+Jolt at `ff6fc6568`: `tracer/src/instruction/floor_access.rs` (`load`). -/
+theorem LoadRow.vreg_post_of_run {instruction : Instr} {width : MemoryWidth}
+    {destination : JoltISA.VReg} {base : Src} {imm : BitVec 64}
+    (row : LoadRow instruction width (.vreg destination) base imm)
+    (writable : WritableVReg destination) (advice : instruction.RuntimeAdvice)
+    (pre post : SailJoltState)
+    (runs : execInstr (instruction.withRuntimeAdvice advice) pre = .ok RETIRE_SUCCESS post) :
+    post = stateAfterVRegWrite pre destination (Mmu.ram_doubleword pre.sail.mem
+      (width.accessed (sourceValue base pre + imm)).toNat) := by
+  have write := row.write_of_run advice pre post runs
+  have high : ¬ destination.toNat < 32 := writable
+  simpa only [writeDst, writeVReg, stateAfterVRegWrite, high, ite_false,
+    bind, EStateM.bind, modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
+    pure, EStateM.pure, EStateM.Result.ok.injEq, true_and] using write.symm
+
+/-- A successful RAM doubleword store passed its bound and actual-value check.
+For example, a same-value code write is accepted with width eight.
+Jolt at `ff6fc6568`: `Mmu::store_doubleword` and `assert_write_protected_store`. -/
+theorem ramStore_guard_of_run (address value : BitVec 64) (pre post : SailJoltState)
+    (result : Result Bool ExecutionResult) (inRam : RAM_START_ADDRESS ≤ address.toNat)
+    (runs : Mmu.store_doubleword address value pre = .ok result post) :
+    Assumptions.JoltRamStoreOk address pre value 8 := by
+  simp only [Mmu.store_doubleword, if_pos inRam] at runs
+  split at runs
+  · cases runs
+  · split at runs
+    · rename_i valid
+      simp only [Bool.and_eq_true, Mmu.effective_address_ok,
+        if_neg (Nat.not_lt.mpr inRam), decide_eq_true_eq] at valid
+      exact ⟨valid.1, valid.2⟩
+    · cases runs
+
+/-- A successful RAM doubleword load passed the padded backing bound.
+For example, loading a word in heap padding needs no `heap_end` bound.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`load_doubleword`). -/
+theorem ramLoad_guard_of_run (address : BitVec 64) (pre post : SailJoltState)
+    (result : Result (BitVec 64) ExecutionResult) (inRam : RAM_START_ADDRESS ≤ address.toNat)
+    (runs : Mmu.load_doubleword address pre = .ok result post) :
+    Assumptions.JoltRamLoadOk address pre := by
+  simp only [Mmu.load_doubleword, if_pos inRam] at runs
+  split at runs
+  · cases runs
+  · split at runs
+    · rename_i valid
+      refine ⟨?_⟩
+      simpa only [Mmu.effective_address_ok, if_neg (Nat.not_lt.mpr inRam),
+        decide_eq_true_eq] using valid
+    · cases runs
+
 /-- A retired load with a writable destination captures its shared-memory word.
 For example, native `LD x0` expands to a temporary destination, which captures
 its loaded word even though the architectural destination is discarded. -/
@@ -492,15 +543,15 @@ private theorem store_bind_result (address word : BitVec 64) (pre post : SailJol
     simp only [bind, EStateM.bind, stored] at runs
     cases result <;> simp only [pure, EStateM.pure] at runs <;> cases runs <;> exact ⟨_, rfl⟩
 
-/-- A store row that retires has run the doubleword store at its accessed
-address with its stored value; an alignment fault would not retire.
-For example, a retired VirtualStoreH at `ea = 10` stored to 8.
+/-- A retiring store passed its width's alignment check and ran the actual word write.
+For example, VirtualStoreH at ten is halfword aligned and writes at eight.
 Jolt at `ff6fc6568`: `tracer/src/instruction/floor_access.rs` (`store`, line 50). -/
-theorem StoreRow.store_of_run {instruction : Instr} {width : MemoryWidth} {base value : Src}
+theorem StoreRow.aligned_store_of_run {instruction : Instr} {width : MemoryWidth} {base value : Src}
     {imm : BitVec 64} (row : StoreRow instruction width base value imm)
     (answer : BitVec 64) (advice : instruction.RuntimeAdvice) (pre post : SailJoltState)
     (runs : execWithTapeAnswer (instruction.withRuntimeAdvice advice) answer pre =
       .ok RETIRE_SUCCESS post) :
+    (sourceValue base pre + imm) &&& width.alignMask = 0 ∧
     ∃ result, Mmu.store_doubleword (width.accessed (sourceValue base pre + imm))
       (sourceValue value pre) pre = .ok result post := by
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice row.metadata.noAdvice] at runs
@@ -509,13 +560,27 @@ theorem StoreRow.store_of_run {instruction : Instr} {width : MemoryWidth} {base 
     have afterBase := lookup_read_bind base _ pre post _ runs
   · have afterValue := lookup_read_bind value _ pre post _ afterBase
     split at afterValue
-    · exact store_bind_result _ _ pre post afterValue
+    · rename_i aligned
+      exact ⟨aligned, store_bind_result _ _ pre post afterValue⟩
     · cases afterValue
-  · exact store_bind_result _ _ pre post (lookup_read_bind value _ pre post _ afterBase)
+  · exact ⟨by simp [MemoryWidth.alignMask],
+      store_bind_result _ _ pre post (lookup_read_bind value _ pre post _ afterBase)⟩
   all_goals
     split at afterBase
-    · exact store_bind_result _ _ pre post (lookup_read_bind value _ pre post _ afterBase)
+    · rename_i aligned
+      exact ⟨aligned, store_bind_result _ _ pre post (lookup_read_bind value _ pre post _ afterBase)⟩
     · cases afterBase
+
+/-- A store row that retires has run the doubleword store at its accessed address.
+For example, a retired VirtualStoreH at ten stored its source word to eight. -/
+theorem StoreRow.store_of_run {instruction : Instr} {width : MemoryWidth} {base value : Src}
+    {imm : BitVec 64} (row : StoreRow instruction width base value imm)
+    (answer : BitVec 64) (advice : instruction.RuntimeAdvice) (pre post : SailJoltState)
+    (runs : execWithTapeAnswer (instruction.withRuntimeAdvice advice) answer pre =
+      .ok RETIRE_SUCCESS post) :
+    ∃ result, Mmu.store_doubleword (width.accessed (sourceValue base pre + imm))
+      (sourceValue value pre) pre = .ok result post :=
+  (row.aligned_store_of_run answer advice pre post runs).2
 
 
 /-- A retired store row changes only the eight bytes of its accessed word.

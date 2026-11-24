@@ -65,6 +65,29 @@ theorem ram_backing_end_aligned (device : JoltDevice)
     JoltISA.Mmu.ram_backing_end device % 8 = 0 := by
   exact aligned_backing_end_option _ _ _ (by decide) aligned
 
+private theorem backing_end_le_arithmetic (base lowest words bound : Nat)
+    (baseBound : base ≤ bound) (totalBound : lowest + 8 * words ≤ bound) :
+    base + (lowest + 8 * words - base) ≤ bound := by
+  omega
+
+private theorem backing_end_le_option (base lowest bound : Nat) (domain : Option Nat)
+    (words : Nat) (present : domain = some words) (baseBound : base ≤ bound)
+    (totalBound : lowest + 8 * words ≤ bound) :
+    base + (domain.map fun k => lowest + 8 * k - base).getD 0 ≤ bound := by
+  rw [present]
+  exact backing_end_le_arithmetic base lowest words bound baseBound totalBound
+
+/-- The padded RAM backing of a checked layout ends within the u64 address domain.
+For example, its final aligned word can end exactly at `2^64` without wrapping
+its first byte's address.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::try_new`). -/
+theorem ram_backing_end_le_address_space (device : JoltDevice) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some device.memory_layout) :
+    JoltISA.Mmu.ram_backing_end device ≤ 2 ^ 64 := by
+  obtain ⟨words, checked⟩ := Option.isSome_iff_exists.mp (new_max_ram_k config _ built)
+  have bound := (max_ram_k_spec device.memory_layout words checked).2.2.2
+  exact backing_end_le_option JoltISA.RAM_START_ADDRESS _ _ _ words checked (by decide) bound
+
 /-- The padded RAM domain reaches the configured heap end.
 For example, padding can add accessible words after `heap_end`.
 Only checked layouts, rather than arbitrary records of addresses, have this property. -/
