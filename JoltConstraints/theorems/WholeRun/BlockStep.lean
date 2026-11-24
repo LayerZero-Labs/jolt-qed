@@ -241,15 +241,13 @@ compressed parcel decoded to a compressed AST that runs as its base expansion; w
 they are facts about the state Sail runs from.
 The per-instruction hypotheses supply Sail's fetch and decode and the existing
 equivalence assumptions after the prelude, with honest advice.
-Retirement follows from `Block.Runs`, and the unchanged device preserves its
-layout.
+Retirement and layout preservation follow from `Block.Runs`.
 For example, an ADD block uses the base encoding case and has no memory or
 advice obligations beyond its existing instruction-equivalence assumptions. -/
 theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
     (hi : i.Lifted)
     (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
-    (hdevice : b.post.jolt_device = b.pre.jolt_device)
     (hinputs : ∀ (s : SailState), Related b.pre s →
       ∀ (pc m : BitVec 64) (oldInc : Bool),
       b.pre.sail.regs.get? Register.nextPC = some pc →
@@ -283,6 +281,8 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
   have hshadow : Shadow (overlayRows b.pre.vregs m inc b.start) Gs :=
     prelude_shadow b s pc m oldInc inc hp hregs hrel.ram
   obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
+  have layout : b.post.jolt_device.memory_layout = b.pre.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.execProgram_setup (Program.seq instrs) b.start b.post _ hrun).1
   have hadvice : blockInstrs b.row Gs = blockInstrs b.row b.start := by
     have he := (advice_shadow i _ _ hshadow).trans
       (advice_overlayRows i b.pre.vregs m inc b.start)
@@ -341,15 +341,20 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
       htif := ?_
       ram := ?_
       present := ?_
-      layout := by rw [hdevice]; exact hrel.layout }
+      layout := by
+        rw [layout]
+        exact hrel.layout }
   · change (finishState _ next m inc).regs.get? Register.htif_tohost_base = some none
     cases inc <;> simpa [finishState, Step.setReg, Std.ExtDHashMap.get?_insert] using hhtif
   · intro a
     rw [hmem']
     exact hpost.ram a
   · intro a hlo hhi
-    rw [hdevice] at hlo hhi
-    obtain ⟨byte, hb⟩ := hrel.present a hlo hhi
+    have low : memLow b.pre.jolt_device ≤ a := by
+      simpa only [memLow, layout] using hlo
+    have high : a < memHigh b.pre.jolt_device := by
+      simpa only [memHigh, Mmu.ram_backing_end, layout] using hhi
+    obtain ⟨byte, hb⟩ := hrel.present a low high
     have hs : (Gs.sail.mem.get? a).isSome := by
       change (s.mem.get? a).isSome
       rw [hb]
@@ -362,15 +367,13 @@ theorem block_simulates_retire_via (program : Rv64ProgramImage SourceInstruction
 or compressed encoding.
 The per-instruction hypotheses supply Sail's fetch and decode and the existing
 equivalence assumptions after the prelude, with honest advice.
-Retirement follows from `Block.Runs`, and the unchanged device preserves its
-layout.
+Retirement and layout preservation follow from `Block.Runs`.
 For example, an ADD block uses the base encoding case and has no memory or
 advice obligations beyond its existing instruction-equivalence assumptions. -/
 theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b : Block)
     (hruns : b.Runs program) (i : RiscvInstruction) (hrow : b.row.instruction = .riscv i)
     (hi : i.Lifted) (ast : instruction) (hm : RiscvInstruction.Matches i ast)
     (encoding : BlockEncoding) (hwidth : b.row.is_compressed = encoding.isCompressed)
-    (hdevice : b.post.jolt_device = b.pre.jolt_device)
     (hinputs : ∀ (s : SailState), Related b.pre s →
       ∀ (pc m : BitVec 64) (oldInc : Bool),
       b.pre.sail.regs.get? Register.nextPC = some pc →
@@ -392,7 +395,7 @@ theorem block_simulates_retire (program : Rv64ProgramImage SourceInstruction) (b
             (Step.preludeJolt { b.pre with sail := s } inc pc
               (if b.row.is_compressed then 2 else 4)) h) :
     ∀ s, Related b.pre s → ∃ v s', try_step 0 false s = .ok v s' ∧ Related b.post s' := by
-  refine block_simulates_retire_via program b hruns i hrow hi encoding hwidth hdevice ?_
+  refine block_simulates_retire_via program b hruns i hrow hi encoding hwidth ?_
   intro s hrel pc m oldInc hn hr
   obtain ⟨inc, hinc, hf, hd, h, hadv⟩ := hinputs s hrel pc m oldInc hn hr
   exact ⟨inc, hinc, hf, ast, ast, hm, fun _ _ => rfl, hd, h, hadv⟩

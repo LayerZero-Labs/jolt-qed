@@ -153,10 +153,7 @@ theorem block_simulates_ecall (program : Rv64ProgramImage SourceInstruction) (b 
       htif := ?_
       ram := ?_
       present := ?_
-      io := ?_
-      panic := ?_
-      layout := by rw [hdev]; exact hrel.layout
-      outputs_size := by rw [hdev]; exact hrel.outputs_size }
+      layout := by rw [hdev]; exact hrel.layout }
   · simp [hpost, SystemProofs.ecallPost, System.setNextPCState, target,
       Block.start, advance_pc, Std.ExtDHashMap.get?_insert]
   · simpa only [s', gp, jp, js, target, hpost, Block.start, ← hp] using
@@ -164,20 +161,13 @@ theorem block_simulates_ecall (program : Rv64ProgramImage SourceInstruction) (b 
   · simpa [s', gp, SystemProofs.ecallPost, jp, js, Step.preludeJolt, Step.preludeState,
       System.systemProject, System.setNextPCState, Step.setReg, Std.ExtDHashMap.get?_insert]
       using hrel.htif
-  · intro a ha
+  · intro a
     rw [hmem, hmemJ]
-    exact hrel.ram a ha
+    exact hrel.ram a
   · intro a hlo hhi
     rw [hdev] at hlo hhi
     rw [hmem]
     exact hrel.present a hlo hhi
-  · intro a hlo hhi hflag
-    rw [hdev] at hlo hflag ⊢
-    rw [hmem]
-    exact hrel.io a hlo hhi hflag
-  · rw [hdev]
-    change b.pre.jolt_device.panic = true ↔ sailPanicWord b.pre.jolt_device s ≠ 0
-    exact hrel.panic
 
 private theorem ramAccess_of_sources (i : RiscvInstruction) (s t : SailJoltState)
     (h : ∀ r, sourceValue (.xreg r) t = sourceValue (.xreg r) s)
@@ -230,13 +220,7 @@ theorem block_simulates_via (program : Rv64ProgramImage SourceInstruction) (b : 
     clear hinputs
     cases i <;> simp_all [RiscvInstruction.Lifted]
   obtain ⟨instrs, hblock, hrun⟩ := hruns.executes
-  have hraw := blockInstrs_run i b.row.address b.row.is_compressed b.start instrs
-    (by simpa only [← hrow] using hblock)
-  have hhonest : RiscvInstruction.joltRun (honestInstr i b.start) b.start =
-      .ok RETIRE_SUCCESS b.post := hraw.symm.trans hrun
-  have hdevice : b.post.jolt_device = b.pre.jolt_device :=
-    joltRun_device_of_ram i hlift b.start b.post hram hhonest
-  apply block_simulates_retire_via program b hruns i hrow hlift encoding hwidth hdevice
+  apply block_simulates_retire_via program b hruns i hrow hlift encoding hwidth
   intro s hrel pc m oldInc hn hr
   obtain ⟨inc, hi, hdecode⟩ := hinputs s hrel pc m oldInc hn hr
   rw [if_neg hecall] at hdecode
