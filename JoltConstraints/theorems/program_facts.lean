@@ -1011,3 +1011,69 @@ theorem pc_map_ok_size (rows : Array JoltInstructionRow) (accepted : pc_map_ok r
   unfold pc_map_ok at accepted
   simp only [Bool.and_eq_true, decide_eq_true_eq] at accepted
   exact accepted.2
+
+/-- The terminal rows of one expansion reproduce its source byte extent.
+For example, only REM's last row contributes its address and compression bit.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/ram.rs`
+(`bytecode_source_extents`). -/
+theorem ExpandedRows.source_extents {address : BitVec 64} {compressed : Bool}
+    {rows : List JoltInstructionRow} (expanded : ExpandedRows address compressed rows) :
+    ((rows.filter fun row => row.virtual_sequence_remaining.getD 0 == 0).map
+      fun row => (row.address, row.is_compressed)) = [(address, compressed)] := by
+  have lengthPos : 0 < rows.length := List.length_pos_iff.mpr expanded.nonempty
+  have lastBound : rows.length - 1 < rows.length := by omega
+  have terminal : rows[rows.length - 1].virtual_sequence_remaining.getD 0 = 0 := by
+    apply BitVec.eq_of_toNat_eq
+    change (rows[rows.length - 1].virtual_sequence_remaining.getD 0).toNat = 0
+    have count := expanded.countdown (rows.length - 1) lastBound
+    omega
+  have filtered : (rows.filter fun row => row.virtual_sequence_remaining.getD 0 == 0) =
+      [rows[rows.length - 1]] := by
+    apply List.filter_eq_cons_iff.mpr
+    refine ⟨rows.take (rows.length - 1), [], ?_, ?_, ?_, rfl⟩
+    · simpa only [List.getLast_eq_getElem, List.append_nil] using
+        (List.take_append_getLast rows expanded.nonempty).symm
+    · intro row member
+      obtain ⟨k, inTake, same⟩ := List.mem_iff_getElem.mp member
+      have inRows : k < rows.length := by
+        simp only [List.length_take] at inTake
+        omega
+      have beforeLast : k < rows.length - 1 :=
+        lt_of_lt_of_le inTake (by simp only [List.length_take]; exact Nat.min_le_left _ _)
+      rw [List.getElem_take] at same
+      subst row
+      intro zero
+      have count := expanded.countdown k inRows
+      have isZero := congrArg BitVec.toNat (beq_iff_eq.mp zero)
+      change (rows[k].virtual_sequence_remaining.getD 0).toNat = 0 at isZero
+      omega
+    · simpa only [terminal, beq_self_eq_true]
+  rw [filtered]
+  simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true, Prod.mk.injEq]
+  exact ⟨expanded.same_address _ (List.getElem_mem lastBound),
+    by simpa only [beq_self_eq_true, Bool.true_and] using expanded.compressed _ lastBound⟩
+
+/-- Materializing a program retains exactly its decoded source byte extents.
+For example, a multirow expansion contributes one source extent, as a native row does.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/ram.rs`
+(`bytecode_source_extents`, `code_region`). -/
+theorem expand_program_source_extents (image : Rv64ProgramImage SourceInstruction)
+    (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode) :
+    bytecode_source_extents bytecode =
+      image.instructions.toList.map (fun source => (source.address, source.is_compressed)) := by
+  obtain ⟨instructions, same, lengths, steps⟩ := expand_program_rows image bytecode expanded
+  subst bytecode
+  have blocks : (instructions.map fun rows =>
+      (rows.filter fun row => row.virtual_sequence_remaining.getD 0 == 0).map
+        fun row => (row.address, row.is_compressed)) =
+      image.instructions.toList.map (fun source => [(source.address, source.is_compressed)]) := by
+    apply List.ext_getElem
+    · simp only [List.length_map, Array.length_toList, lengths]
+    · intro k leftBound rightBound
+      simp only [List.length_map, lengths] at leftBound
+      simp only [List.getElem_map, Array.getElem_toList]
+      exact (steps k leftBound (by omega)).source_extents
+  simp only [bytecode_source_extents, List.toList_toArray, List.filter_flatten, List.map_flatten,
+    List.map_map, Function.comp_def]
+  rw [blocks]
+  exact List.map_eq_flatMap.symm
