@@ -23,8 +23,8 @@ noncomputable def ramInitialValue {F : Type} [Field F]
   ((initialRam address).toNat : F)
 
 /-- Public I/O mask: remapped words from input_start up to output_end,
-excluding output_end. As in Rust preprocessing, the layout must be valid;
-completeness theorems assume the relevant part as `JoltDevice.AdviceBelowInput`.
+excluding output_end.
+The checked layout and protected input bytes supply the completeness proof.
 Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-trace/src/preprocess/public_io.rs#L20-L25 -/
 def ramPublicIoMask {F : Type} [Field F] (io : JoltPublicIo) (address : Nat) : F :=
   let lowest := ramLowestAddress io.memory_layout

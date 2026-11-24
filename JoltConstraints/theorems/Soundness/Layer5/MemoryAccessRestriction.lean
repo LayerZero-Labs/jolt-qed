@@ -15,8 +15,8 @@ excluded, including at the first row. No witness columns occur here.
 
 Use Mmu.effective_address_ok at the addresses the tracer checks: the starting
 address for ordinary RAM doubleword accesses, every byte for device accesses.
-Alignment, raw peripheral dispatch, and device value agreement are separate
-proof obligations. In particular, panic and termination mismatches remain. -/
+Alignment, peripheral dispatch and protected-store checks are discharged by
+the selected-row shared-memory reconstruction. -/
 
 set_option autoImplicit false
 
@@ -25,9 +25,9 @@ namespace JoltConstraints.Soundness
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- The prefix uses honest internal runtime advice, has not continued past a
-stable stall, and is about to attempt `next` in `pre`. The row need not succeed.
+halt, and is about to attempt `next` in `pre`. The row need not succeed.
 The boundary cases follow the entry and linkage rules of UntrustedAnswerRun.
-The stopping rule follows a16z/jolt PR #2109, merge commit 0249591a. -/
+The stopping rule follows `Cpu::halt` at ff6fc6568. -/
 structure UntrustedAnswerRun.NextStep
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)
@@ -37,7 +37,7 @@ structure UntrustedAnswerRun.NextStep
       honestTracerAdviceAtStepN joltInstance.program run.rows n
   noEarlierStop : ∀ (i : Nat) (current following : TraceRow run.bytecode),
     run.rows[i]? = some current → run.rows[i + 1]? = some following →
-    ¬ current.StableStall
+    ¬ current.Halts
   ready :
     match run.rows.back? with
     | none =>
@@ -50,7 +50,7 @@ structure UntrustedAnswerRun.NextStep
         next.val = last.rowIndex.val + 1 ∧ pre = last.postState
       else
         ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
-          ¬ last.StableStall ∧
+          ¬ last.Halts ∧
           run.bytecode[next].address = address ∧
           run.bytecode[next].starts_source ∧
           pre = advance_pc address (source_is_compressed run.bytecode next) last.postState

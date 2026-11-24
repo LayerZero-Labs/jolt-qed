@@ -12,15 +12,14 @@ namespace JoltInstance
 open JoltConstraints.Soundness
 
 /-- Agreement after `run.rows.size` witness cycles, at a source-instruction boundary.
-`represents` compares retained row observations and RAM outside the termination word;
+`represents` compares retained row observations and every shared RAM word;
 `real` excludes retained padding and `noEarlierStop` excludes a stall before the last row.
 `honestAdvice` records the honest tracer's advice at every retained row, while
 `atBoundary` says the last row, if present, completes its source instruction.
 `registers` compares all non-instruction-temporary registers at the next witness cycle
 with the run's final state and retains the presence of every Sail register.
-`terminationWord` keeps the termination RAM word zero until a store touches it.
 `ready` supplies the next selected bytecode row and its prepared execution state when
-the witness has another real cycle and the run has not reached a stable stall.
+the witness has another real cycle and the run has not reached a explicit halt.
 For example, after `rem a0, a1, zero`, witness quotient 5 and honest quotient 0 may
 differ in temporary 40, while `a0`, other persistent registers and RAM still agree.
 See jolt/crates/jolt-program/src/expand/division/rem.rs:15-24 and
@@ -35,7 +34,7 @@ structure BoundaryState {F : Type} [Field F] {params : WitnessParams}
     t.val < run.rows.size → witness.InstructionFlags .IsNoop t = 0
   noEarlierStop : ∀ (i : Nat) (current next : TraceRow run.bytecode),
     run.rows[i]? = some current → run.rows[i + 1]? = some next →
-    ¬ current.StableStall
+    ¬ current.Halts
   honestAdvice : ∀ n : Fin run.rows.size,
     run.rows[n].someTracerAdvice? =
       honestTracerAdviceAtStepN joltInstance.program run.rows n
@@ -44,15 +43,9 @@ structure BoundaryState {F : Type} [Field F] {params : WitnessParams}
   registers : ∀ bound : run.rows.size < params.traceLength,
     RegisterAgreementOn (fun register => ¬ IsInstructionTemporary register)
       witness ⟨run.rows.size, bound⟩ (TraceWitness.finalTraceState run.toTrace)
-  terminationWord : ∀ bound : run.rows.size < params.traceLength,
-    (¬ ∃ i : Fin run.rows.size, run.StoresTerminationAt i) →
-    ∀ address : Fin params.ramSize,
-      address.val = (run.initialState.jolt_device.memory_layout.termination.toNat -
-        JoltConstraints.ramLowestAddress run.initialState.jolt_device.memory_layout) / 8 →
-      witness.RamVal address ⟨run.rows.size, bound⟩ = 0
   ready : ∀ bound : run.rows.size < params.traceLength,
     witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 0 →
-    (∀ last ∈ run.rows.back?, ¬ last.StableStall) →
+    (∀ last ∈ run.rows.back?, ¬ last.Halts) →
     ∃ (next : Fin run.bytecode.size) (pre : SailJoltState)
       (slot : Fin (2 ^ params.logBytecodeK)),
       JoltConstraints.bytecodeRa witness slot ⟨run.rows.size, bound⟩ = 1 ∧
@@ -101,8 +94,7 @@ def RunExtends {joltInstance : JoltInstance SourceInstruction}
     (same ▸ extended.rows : Array (TraceRow run.bytecode)).extract 0 run.rows.size = run.rows
 
 /-- Agreement after executing the first `done` rows of the source starting at
-`first` in the context bytecode. `represents`, `real`, `noEarlierStop` and
-`terminationWord` have the boundary invariant's meanings.
+`first` in the context bytecode. `represents`, `real` and `noEarlierStop` have the boundary invariant's meanings.
 `starts`, `done_le`, `retained`, `ordered` and `priorBoundary` locate these rows
 at the end of the run, following an empty prefix or a completed source.
 `registers` compares the final state with the next witness column on `ExpansionLive`.
@@ -123,13 +115,7 @@ structure ExpansionState {F : Type} [Field F] {params : WitnessParams}
     t.val < run.rows.size → witness.InstructionFlags .IsNoop t = 0
   noEarlierStop : ∀ (i : Nat) (current next : TraceRow run.bytecode),
     run.rows[i]? = some current → run.rows[i + 1]? = some next →
-    ¬ current.StableStall
-  terminationWord : ∀ bound : run.rows.size < params.traceLength,
-    (¬ ∃ i : Fin run.rows.size, run.StoresTerminationAt i) →
-    ∀ address : Fin params.ramSize,
-      address.val = (run.initialState.jolt_device.memory_layout.termination.toNat -
-        JoltConstraints.ramLowestAddress run.initialState.jolt_device.memory_layout) / 8 →
-      witness.RamVal address ⟨run.rows.size, bound⟩ = 0
+    ¬ current.Halts
   starts : context.bytecode[first].starts_source = true
   done_le : done ≤ expansionRowCount context.bytecode first
   retained : done ≤ run.rows.size
@@ -160,11 +146,11 @@ structure ExpansionState {F : Type} [Field F] {params : WitnessParams}
             next.val = last.rowIndex.val + 1 ∧ pre = last.postState
           else
             ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
-              ¬ last.StableStall ∧
+              ¬ last.Halts ∧
               run.bytecode[next].address = address ∧
               run.bytecode[next].starts_source ∧
               pre = advance_pc address (source_is_compressed run.bytecode next) last.postState)
   notStopped : done < expansionRowCount context.bytecode first →
-    ∀ last ∈ run.rows.back?, ¬ last.StableStall
+    ∀ last ∈ run.rows.back?, ¬ last.Halts
 
 end JoltInstance

@@ -14,7 +14,7 @@ namespace JoltInstance
 
 open JoltConstraints.Soundness
 
-/-- From a boundary with a real next witness cycle and no final stable stall,
+/-- From a boundary with a real next witness cycle and no final explicit halt,
 execute a whole source instruction to obtain a larger run satisfying the same
 boundary invariant. The conclusion requires progress, without specifying the
 array extension used to construct that run.
@@ -33,7 +33,7 @@ theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
     (boundary : BoundaryState witness context run)
     (bound : run.rows.size < params.traceLength)
     (real : witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 0)
-    (notStopped : ∀ last ∈ run.rows.back?, ¬ last.StableStall) :
+    (notStopped : ∀ last ∈ run.rows.back?, ¬ last.Halts) :
     ∃ run' : UntrustedAnswerRun joltInstance privateInputs,
       run.rows.size < run'.rows.size ∧ BoundaryState witness context run' := by
   classical
@@ -80,7 +80,7 @@ theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
   exact ⟨run', by omega, expansion_finish joltField joltInstance
     privateInputs witness context equations run' first state advice⟩
 
-/-- Reconstruct witness rows through the first stable stall, or through padding
+/-- Reconstruct witness rows through the first explicit halt, or through padding
 or the last cycle when no stall occurs. Every retained row is real, no retained
 row stops before the last, and its observations and internal advice agree. -/
 theorem soundness_execution_prefix_agreement {F : Type} [Field F]
@@ -100,11 +100,11 @@ theorem soundness_execution_prefix_agreement {F : Type} [Field F]
         t.val < run.rows.size → witness.InstructionFlags .IsNoop t = 0) ∧
       (∀ (i : Nat) (current next : TraceRow run.bytecode),
         run.rows[i]? = some current → run.rows[i + 1]? = some next →
-        ¬ current.StableStall) ∧
+        ¬ current.Halts) ∧
       (run.rows.size = params.traceLength ∨
         ∃ bound : run.rows.size < params.traceLength,
           witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 1 ∨
-          ∃ last ∈ run.rows.back?, last.StableStall) ∧
+          ∃ last ∈ run.rows.back?, last.Halts) ∧
       (∀ n : Fin run.rows.size,
         run.rows[n].someTracerAdvice? =
           honestTracerAdviceAtStepN joltInstance.program run.rows n) := by
@@ -118,7 +118,7 @@ theorem soundness_execution_prefix_agreement {F : Type} [Field F]
     by_cases cut : run.rows.size = params.traceLength ∨
         ∃ bound : run.rows.size < params.traceLength,
           witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 1 ∨
-          ∃ last ∈ run.rows.back?, last.StableStall
+          ∃ last ∈ run.rows.back?, last.Halts
     · exact ⟨run, Option.some.inj (run.expands.symm.trans context.expands),
         boundary.represents, boundary.real, boundary.noEarlierStop, cut,
         boundary.honestAdvice⟩
@@ -136,7 +136,7 @@ theorem soundness_execution_prefix_agreement {F : Type} [Field F]
       split at flag
       · simpa only [JoltMetadata.instructionFlag, Bool.false_eq_true, ↓reduceIte] using flag
       · exact False.elim (notPadding (by simpa only [↓reduceIte] using flag))
-    have notStopped : ∀ last ∈ run.rows.back?, ¬ last.StableStall := by
+    have notStopped : ∀ last ∈ run.rows.back?, ¬ last.Halts := by
       intro last atEnd stalled
       exact cut (Or.inr ⟨bound, Or.inr ⟨last, atEnd, stalled⟩⟩)
     obtain ⟨run', grows, boundary'⟩ := boundary_step joltField joltInstance

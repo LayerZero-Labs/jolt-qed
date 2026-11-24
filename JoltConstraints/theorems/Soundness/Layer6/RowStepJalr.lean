@@ -9,7 +9,7 @@ namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
-/-- Append a row with its selected observations, unchanged memory and device,
+/-- Append a row with its selected observations, unchanged memory,
 and next-column live-register agreement to the represented expansion prefix.
 For example, a final JALR row adds its link destination to the live set.
 See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
@@ -40,7 +40,6 @@ theorem append_nonmemory_row
     (noAccess : TraceWitness.ramAccessAddress
       run.bytecode[step.rowIndex].instruction step.preState = none)
     (memory : step.postState.sail.mem = step.preState.sail.mem)
-    (device : step.postState.jolt_device = step.preState.jolt_device)
     (after : ∀ h : run.rows.size + 1 < params.traceLength,
       RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1)) witness
         ⟨run.rows.size + 1, h⟩ step.postState)
@@ -54,10 +53,10 @@ theorem append_nonmemory_row
     (by simpa only [noAccess] using zero)
   have prepared := rawEntry_prepared entry (state.registers bound)
   have represented := representsPrefix_push joltField witness context equations run.toTrace step
-    state.represents bound rows zero (memory.trans prepared.2.1) (device.trans prepared.2.2)
+    state.represents bound rows zero (memory.trans prepared.2.1)
   obtain ⟨candidate, traceEq, answers, extendsRun, size, extended⟩ := append_expansion_row
     joltField witness context equations run first done state unfinished bound step answer indexIs
-    executes entry represented zero after
+    executes entry represented after
   refine ⟨step, answer, candidate, indexIs, entry, registers.present, traceEq, executes,
     ?_, ?_, answers, extendsRun, size, extended⟩
   · intro value member
@@ -68,8 +67,8 @@ theorem append_nonmemory_row
     exact False.elim (notAdviceLoad dst width same)
 
 private theorem jump_traits (instruction : Instr) (destination : Dst) (pre : SailJoltState)
-    (jump : (∃ imm, instruction = .JAL destination imm) ∨
-      (∃ base imm, instruction = .JALR destination base imm)) :
+    (jump : JoltMetadata.opcodeFlag instruction .Jump = true)
+    (destinationIs : instruction.destination? = some destination) :
     JoltMetadata.opcodeFlag instruction .Load = false ∧
     JoltMetadata.opcodeFlag instruction .Store = false ∧
     rs2Operand? instruction = none ∧
@@ -77,11 +76,15 @@ private theorem jump_traits (instruction : Instr) (destination : Dst) (pre : Sai
     instruction.adviceValue? = none ∧
     instruction.destination? = some destination ∧
     (∀ dst width, instruction ≠ .VirtualAdviceLoad dst width) := by
-  rcases jump with ⟨imm, isJal⟩ | ⟨base, imm, isJalr⟩
-  · simp [isJal, JoltMetadata.opcodeFlag, rs2Operand?, TraceWitness.ramAccessAddress,
-      Instr.adviceValue?, Instr.destination?]
-  · simp [isJalr, JoltMetadata.opcodeFlag, rs2Operand?, TraceWitness.ramAccessAddress,
-      Instr.adviceValue?, Instr.destination?]
+  rcases JoltMetadata.jumpCases instruction jump with ⟨dst, imm, same⟩ |
+      ⟨dst, base, imm, same⟩ | ⟨kind, dst, same⟩
+  · simpa [same, Instr.destination?, JoltMetadata.opcodeFlag, rs2Operand?, TraceWitness.ramAccessAddress,
+      Instr.adviceValue?] using destinationIs
+  · simpa [same, Instr.destination?, JoltMetadata.opcodeFlag, rs2Operand?, TraceWitness.ramAccessAddress,
+      Instr.adviceValue?] using destinationIs
+  · cases kind <;>
+      simpa [same, Instr.destination?, JoltMetadata.opcodeFlag, rs2Operand?, TraceWitness.ramAccessAddress,
+        Instr.adviceValue?] using destinationIs
 
 /-- Append either kind of terminal jump after its local execution has written
 the constrained link; for example, JAL and JALR share the selected-row,
@@ -102,8 +105,8 @@ theorem append_jump_row
     (registers : RegisterAgreementOn (ExpansionLive context.bytecode first done)
       witness ⟨run.rows.size, bound⟩ pre)
     (destination : Dst)
-    (jump : (∃ imm, run.bytecode[next].instruction = .JAL destination imm) ∨
-      (∃ base imm, run.bytecode[next].instruction = .JALR destination base imm))
+    (jump : JoltMetadata.opcodeFlag run.bytecode[next].instruction .Jump = true)
+    (destinationIs : run.bytecode[next].instruction.destination? = some destination)
     (post : SailJoltState) (advice : run.bytecode[next].instruction.RuntimeAdvice)
     (executes : execWithTapeAnswer
       (run.bytecode[next].instruction.withRuntimeAdvice advice) 0 pre = .ok RETIRE_SUCCESS post)
@@ -115,12 +118,11 @@ theorem append_jump_row
     (rs1 : witness.Rs1Value ⟨run.rows.size, bound⟩ =
       match rs1Operand? run.bytecode[next].instruction with
       | some src => ((sourceValue src pre).toNat : F) | none => 0)
-    (memory : post.sail.mem = pre.sail.mem)
-    (device : post.jolt_device = pre.jolt_device) :
+    (memory : post.sail.mem = pre.sail.mem) :
     PlainRowExtension witness context run first done bound := by
   obtain ⟨atRow, slot, selected, _, rowIs⟩ := state.selectedRow unfinished bound next indexIs
   obtain ⟨noLoad, noStore, rs2None, noAccess, noAdvice, destinationIs, notAdviceLoad⟩ :=
-    jump_traits run.bytecode[next].instruction destination pre jump
+    jump_traits run.bytecode[next].instruction destination pre jump destinationIs
   have zero : witness.RamAddress ⟨run.rows.size, bound⟩ = 0 := by
     apply ramAddress_zero_of_not_load_store equations.ramAddrEqZeroIfNotLoadStore
     · simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag, noLoad,
@@ -147,7 +149,7 @@ theorem append_jump_row
       exact Or.inr (same.trans (congrArg TraceWitness.destinationRegisterAddress equal.symm))
   exact append_nonmemory_row joltField witness context equations run first done state
     unfinished bound step 0 indexIs entry registers executes zero rs1
-    (by simpa only [step, rs2None] using witnessRs2) noAccess memory device after
+    (by simpa only [step, rs2None] using witnessRs2) noAccess memory after
     noAdvice notAdviceLoad
 
 /-- An indirect jump appends its successful execution and preserves the expansion
@@ -192,7 +194,7 @@ theorem append_jalr_row
   have rs1 := registers.rs1Value (two_pow_127_lt_char joltField) context equations selected rowIs
     base canonical.2 (by rw [instruction]; rfl) baseLive
   exact append_jump_row joltField witness context equations run first done state unfinished bound
-    next pre indexIs entry registers destination (Or.inr ⟨base, imm, instruction⟩) post advice
+    next pre indexIs entry registers destination (by rw [instruction]; rfl) (by rw [instruction]; rfl) post advice
     executes registerNext (by simpa only [instruction, rs1Operand?] using rs1)
-    (by cases destination <;> rfl) (by cases destination <;> rfl)
+    (by cases destination <;> rfl)
 end JoltInstance

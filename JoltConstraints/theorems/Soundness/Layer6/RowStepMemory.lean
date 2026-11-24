@@ -1,4 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer6.MemoryRowExecution
+import JoltConstraints.theorems.Soundness.Layer6.MemoryRowAppend
 
 open LeanRV64D
 
@@ -11,21 +12,19 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 section
 variable {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
-    (assumptions : inst.SoundnessAssumptions) (restrictions : inst.TemporaryRestrictions)
+    (assumptions : inst.SoundnessAssumptions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
     (state : ExpansionState witness context run first done)
     (unfinished : done < expansionRowCount context.bytecode first)
-    (honestAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN inst.program run.rows n)
     (bound : run.rows.size < params.traceLength)
     (next : Fin run.bytecode.size) (pre : SailJoltState)
     (indexIs : next.val = first.val + done) (entry : RawRowEntry run next pre)
     (registers : RegisterAgreementOn (ExpansionLive context.bytecode first done)
       witness ⟨run.rows.size, bound⟩ pre)
 
-include joltField assumptions restrictions equations state unfinished honestAdvice indexIs entry registers
+include joltField assumptions equations state unfinished indexIs entry registers
 
 /-- A load row appends its row with live-register and cut-RAM agreement in
 either address region; for example, a live temporary can address RAM or an
@@ -36,7 +35,6 @@ theorem append_load_row {width : MemoryWidth} {destination : Dst} {base : Src} {
     (loadRow : LoadRow run.bytecode[next].instruction width destination base imm) :
     PlainRowExtension witness context run first done bound := by
   obtain ⟨atRow, slot, selected, slotIs, rowIs⟩ := state.selectedRow unfinished bound next indexIs
-  have ready : run.NextStep next pre := ⟨honestAdvice, state.noEarlierStop, entry⟩
   have facts := loadRow.metadata
   have canonical := loadRow.canonical context rowIs
   have baseLive := expansion_sources_live inst.program context.bytecode context.expands first
@@ -45,12 +43,12 @@ theorem append_load_row {width : MemoryWidth} {destination : Dst} {base : Src} {
     base canonical.2 facts.rs1Register baseLive
   obtain ⟨encoded, _, recorded⟩ := AccessRow.address_encoded joltField context equations selected
     rowIs loadRow.access assumptions.ramRegionFits (sourceValue base pre) rs1
-  have prepared := rawEntry_prepared entry (state.registers bound)
-  obtain ⟨ram, device⟩ := state.memoryAt bound entry
+  have ram := state.memoryAt bound entry
+  obtain ⟨layoutIs, codeIs⟩ := rawEntry_memory_invariants context run entry
   let advice := runtimeAdviceFor run.bytecode[next].instruction 0
-  obtain ⟨value, executes, registerNext, memory⟩ := load_row_execution joltField assumptions restrictions witness
-    context equations run ⟨run.rows.size, bound⟩ next pre ready slot selected slotIs rowIs registers ram device
-    (state.terminationWord bound) prepared.2.2 advice loadRow baseLive encoded
+  obtain ⟨value, executes, registerNext, memory⟩ := load_row_execution joltField assumptions witness
+    context equations run ⟨run.rows.size, bound⟩ next pre slot selected rowIs registers ram
+    layoutIs advice loadRow baseLive
   let step : TraceRow run.bytecode := ⟨next, advice, pre, afterWriteDst destination value pre⟩
   have rs2 := rs2Value_of_selected_bytecode (two_pow_127_lt_char joltField) context equations
     ⟨run.rows.size, bound⟩ slot selected
@@ -63,10 +61,10 @@ theorem append_load_row {width : MemoryWidth} {destination : Dst} {base : Src} {
     indexIs entry registers.present facts.noAdvice loadRow.access.not_tape executes rows
   · intro nextCycle
     simpa [step, facts.destinationIs, -Fin.getElem_fin] using registerNext nextCycle
-  · exact memory_step_mono memory Or.inl
+  · exact memory
 
 /-- A store row appends its row in either address region, preserving live
-registers and excluding only the termination word from cut agreement.
+registers and every shared-memory word at the cut.
 For example, an output SD, a RAM SD and a VirtualStoreB use the same append proof.
 See jolt/tracer/src/instruction/sd.rs (`SD::exec`) at 5def437f and
 jolt/tracer/src/instruction/floor_access.rs (`store`) at c6703570. -/
@@ -74,7 +72,6 @@ theorem append_store_row {width : MemoryWidth} {base source : Src} {imm : BitVec
     (storeRow : StoreRow run.bytecode[next].instruction width base source imm) :
     PlainRowExtension witness context run first done bound := by
   obtain ⟨atRow, slot, selected, slotIs, rowIs⟩ := state.selectedRow unfinished bound next indexIs
-  have ready : run.NextStep next pre := ⟨honestAdvice, state.noEarlierStop, entry⟩
   have facts := storeRow.metadata
   have canonical := storeRow.canonical context rowIs
   have live (source : Src) (member : source ∈ ExpansionTempLiveness.readSources run.bytecode[next].instruction) :=
@@ -87,12 +84,12 @@ theorem append_store_row {width : MemoryWidth} {base source : Src} {imm : BitVec
     source canonical.2 facts.rs2Register sourceLive
   obtain ⟨encoded, _, recorded⟩ := AccessRow.address_encoded joltField context equations selected
     rowIs storeRow.access assumptions.ramRegionFits (sourceValue base pre) rs1
-  have prepared := rawEntry_prepared entry (state.registers bound)
-  obtain ⟨ram, device⟩ := state.memoryAt bound entry
+  have ram := state.memoryAt bound entry
+  obtain ⟨layoutIs, codeIs⟩ := rawEntry_memory_invariants context run entry
   let advice := runtimeAdviceFor run.bytecode[next].instruction 0
-  obtain ⟨post, executes, registerNext, memory⟩ := store_row_execution joltField assumptions restrictions witness
-    context equations run ⟨run.rows.size, bound⟩ next pre ready slot selected slotIs rowIs registers ram device
-    (state.terminationWord bound) prepared.2.2 advice storeRow baseLive sourceLive encoded
+  obtain ⟨post, executes, registerNext, memory⟩ := store_row_execution joltField assumptions witness
+    context equations run ⟨run.rows.size, bound⟩ next pre slot selected rowIs registers ram
+    layoutIs advice codeIs storeRow baseLive sourceLive
   let step : TraceRow run.bytecode := ⟨next, advice, pre, post⟩
   have rows := representsRows_push_operands joltField witness context equations run.toTrace step
     state.represents.toRepresentsRows bound slot selected slotIs
@@ -104,7 +101,6 @@ theorem append_store_row {width : MemoryWidth} {base source : Src} {imm : BitVec
   · intro nextCycle
     simpa only [step, facts.noDestination, Option.not_mem_none, false_and, exists_false, or_false]
       using registerNext nextCycle
-  · exact memory_step_mono memory (Or.imp_right fun touch =>
-      (storeTouches_iff _ step).mpr ⟨width, base, source, imm, storeRow, touch⟩)
+  · exact memory
 end
 end JoltInstance

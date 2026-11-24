@@ -1,5 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer6.RowStepKinds
-import JoltConstraints.theorems.Soundness.Layer7.TerminationStore
+import JoltConstraints.theorems.Soundness.Layer5.TapePrefix
 
 open LeanRV64D
 
@@ -62,15 +62,16 @@ private theorem row_extension {F : Type} [Field F] (joltField : JoltField F)
       done unfinished _ atRow nonordinary
   rcases row_kind run.bytecode[next].instruction with
     plain | ⟨width, destination, base, imm, kind⟩ | ⟨width, base, source, imm, kind⟩ |
-      kind | ⟨destination, imm, kind⟩ | ⟨destination, base, imm, kind⟩
+      kind | ⟨destination, imm, kind⟩ | ⟨destination, base, imm, kind⟩ |
+      ⟨haltKind, destination, kind⟩
   · apply plain_row_step joltField witness context equations run first done state unfinished bound
     intro row member
     have same := Option.some.inj (atRow.symm.trans member)
     simpa only [← same] using plain
-  · exact append_load_row joltField assumptions restrictions witness context equations run first done
-      state unfinished honest bound next pre indexIs ready registers kind
-  · exact append_store_row joltField assumptions restrictions witness context equations run first done
-      state unfinished honest bound next pre indexIs ready registers kind
+  · exact append_load_row joltField assumptions witness context equations run first done
+      state unfinished bound next pre indexIs ready registers kind
+  · exact append_store_row joltField assumptions witness context equations run first done
+      state unfinished bound next pre indexIs ready registers kind
   · exact host_row_step joltField assumptions restrictions witness context equations run first done
       state unfinished honest bound next pre indexIs ready registers kind
       (terminal (by rw [kind]; rfl))
@@ -80,6 +81,9 @@ private theorem row_extension {F : Type} [Field F] (joltField : JoltField F)
   · exact jalr_row_step joltField assumptions restrictions witness context equations run first done
       state unfinished honest bound next pre indexIs ready registers pc nextPC kind
       (terminal (by rw [kind]; rfl))
+
+  · exact append_halt_row joltField witness context equations run first done state
+      unfinished bound next pre indexIs ready registers pc nextPC haltKind destination kind
 
 /-- Append one row of an unfinished source with no VirtualAdvice, preserving
 the expansion invariant and honest advice throughout the extended run.

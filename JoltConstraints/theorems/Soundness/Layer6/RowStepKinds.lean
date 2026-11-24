@@ -26,7 +26,7 @@ theorem RawRowEntry.prepared_pc
         if source_is_compressed run.bytecode next then 2 else 4) :=
   untrusted_prepared_pc run next pre entry
 
-/-- Every row is plain, a load row, a store row, HostIO, JAL or JALR.
+/-- Every row is plain, a load row, a store row, HostIO, JAL, JALR or an explicit halt.
 Load and store rows are classified by their Load and Store flags.
 For example, AND is plain, while LD and VirtualLoadH are load rows. -/
 theorem row_kind (instruction : Instr) :
@@ -35,7 +35,9 @@ theorem row_kind (instruction : Instr) :
     (∃ width base source imm, StoreRow instruction width base source imm) ∨
     instruction = .VirtualHostIO ∨
     (∃ destination imm, instruction = .JAL destination imm) ∨
-    (∃ destination base imm, instruction = .JALR destination base imm) := by
+    (∃ destination base imm, instruction = .JALR destination base imm) ∨
+    (∃ (kind : JoltHaltKind) (destination : Dst), instruction =
+      match kind with | .success => .JoltSuccess destination | .panic => .Panic destination) := by
   by_cases load : JoltMetadata.opcodeFlag instruction .Load = true
   · exact Or.inr (Or.inl (loadRow_of_flag instruction load))
   by_cases store : JoltMetadata.opcodeFlag instruction .Store = true
@@ -48,7 +50,10 @@ theorem row_kind (instruction : Instr) :
     | exact (store rfl).elim
     | exact Or.inr (Or.inr (Or.inr (Or.inl rfl)))
     | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨_, _, rfl⟩))))
-    | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨_, _, _, rfl⟩))))
+    | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨_, _, _, rfl⟩)))))
+
+    | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨.success, _, rfl⟩)))))
+    | exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨.panic, _, rfl⟩)))))
 
 /-- A non-ordinary row can be selected in an unfinished block only as its final
 row; for example, ECALL's JALR is selected after its preceding setup rows.
@@ -110,7 +115,7 @@ variable (pc : pre.sail.regs.get? Register.PC = some run.bytecode[next].address)
 include pc nextPC
 
 /-- A terminal JAL appends its jump and retains the expansion invariant;
-for example, a singleton self-JAL can complete the block at a stable stall.
+for example, a singleton self-JAL can complete the block at a explicit halt.
 The future proof ports `jal_step` to live agreement and uses the existing no-wrap
 assumption; PC preparation is supplied before execution, not from the new run.
 See jolt/tracer/src/instruction/jal.rs (`JAL::exec`) at 5def437f. -/

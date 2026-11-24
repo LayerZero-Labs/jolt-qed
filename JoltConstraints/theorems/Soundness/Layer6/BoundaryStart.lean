@@ -1,8 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer6.PrefixState
 import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
-import JoltConstraints.theorems.Soundness.Layer7.TerminationStore
+import JoltConstraints.theorems.Soundness.Layer6.PlainRow
 import JoltConstraints.theorems.Soundness.Layer3.State
-import JoltConstraints.theorems.advice_below_input
 
 open LeanRV64D
 
@@ -114,168 +113,10 @@ private theorem first_row_of_entry_slot
     exact earlier position before (same.trans slotMatches)
   exact ⟨first, slotIs, slotMatches, starts⟩
 
-/-- The initialized device has no output or panic yet, and the supplied input
-bytes fit their configured maximum.
-For example, before an entry ADDI the output buffer is empty and panic is false.
-See jolt/tracer/src/lib.rs (`create_emulator`) and
-jolt/common/src/jolt_device.rs (`JoltDevice::new`) at 5def437f. -/
-private theorem initial_state_empty_outputs_and_input_bound {Source : Type}
-    (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
-    (state : SailJoltState)
-    (built : joltInstance.initial_state privateInputs = some state) :
-    state.jolt_device.outputs = #[] ∧ state.jolt_device.panic = false ∧
-      joltInstance.inputs.size ≤ joltInstance.memory_config.max_input_size.toNat := by
-  unfold JoltInstance.initial_state at built
-  rw [bind_some_iff] at built
-  obtain ⟨initialLayout, _, built⟩ := built
-  dsimp only at built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rename_i inputTooLong
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  cases built
-  rw [init_state_jolt_device]
-  exact ⟨rfl, rfl, Nat.le_of_not_lt inputTooLong⟩
-
-/-- Initialization leaves output empty and panic false, and its initial RAM
-image has zero at the panic word.
-For example, before the first ADDI the panic word has not been written.
-See jolt/tracer/src/lib.rs (`create_emulator`) and
-jolt/common/src/jolt_device.rs (`JoltDevice::new`, `MemoryLayout::try_new`)
-at 5def437f. -/
-private theorem initialized_device_words {Source : Type}
-    (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
-    (state : SailJoltState)
-    (built : joltInstance.initial_state privateInputs = some state) :
-    state.jolt_device.outputs = #[] ∧ state.jolt_device.panic = false ∧
-      TraceWitness.initialRamWordFromState state
-        ((state.jolt_device.memory_layout.panic.toNat -
-          JoltConstraints.ramLowestAddress state.jolt_device.memory_layout) / 8) = 0 := by
-  let layout := state.jolt_device.memory_layout
-  have layoutBuilt : MemoryLayout.new
-      {joltInstance.memory_config with program_size := some joltInstance.program.program_size} =
-      some layout :=
-    (initial_state_device joltInstance privateInputs state built).1
-  have adviceFacts := initial_state_advice_below_input joltInstance privateInputs state built
-  rw [MemoryLayout.get_lowest_address_toNat] at adviceFacts
-  have adviceBelow : state.jolt_device.AdviceBelowInput :=
-    ⟨adviceFacts.1, adviceFacts.2.1, adviceFacts.2.2⟩
-  obtain ⟨outputsEmpty, panicFalse, inputBound⟩ :=
-    initial_state_empty_outputs_and_input_bound joltInstance privateInputs state built
-  have inputFits : state.jolt_device.inputs.size ≤ layout.max_input_size.toNat := by
-    rw [initial_state_inputs joltInstance privateInputs state built]
-    exact inputBound.trans (new_input_size_bound
-      {joltInstance.memory_config with program_size := some joltInstance.program.program_size}
-      layout layoutBuilt)
-  obtain ⟨lowLeInput, _, outputLePanic, _, _⟩ := new_io_ordered _ layout layoutBuilt
-  rw [MemoryLayout.get_lowest_address_toNat] at lowLeInput
-  change JoltConstraints.ramLowestAddress layout ≤ layout.input_start.toNat at lowLeInput
-  have inputAligned := new_input_word_aligned _ layout layoutBuilt
-  rw [MemoryLayout.get_lowest_address_toNat] at inputAligned
-  change (layout.input_start.toNat - JoltConstraints.ramLowestAddress layout) % 8 = 0
-    at inputAligned
-  obtain ⟨outputStart, inputMultiple⟩ := new_outputs_after_inputs _ layout layoutBuilt
-  obtain ⟨panicStart, outputMultiple, terminationStart, ioEndStart, ioEndBound⟩ :=
-    new_io_geometry _ layout layoutBuilt
-  have panicOffset : layout.panic.toNat - JoltConstraints.ramLowestAddress layout =
-      (layout.input_start.toNat - JoltConstraints.ramLowestAddress layout) +
-        layout.max_input_size.toNat + layout.max_output_size.toNat := by
-    omega
-  have panicAligned :
-      (layout.panic.toNat - JoltConstraints.ramLowestAddress layout) % 8 = 0 := by
-    rw [panicOffset]
-    omega
-  have panicAbsolute : JoltConstraints.ramLowestAddress layout +
-      8 * ((layout.panic.toNat - JoltConstraints.ramLowestAddress layout) / 8) =
-      layout.panic.toNat := by omega
-  have afterOutput : layout.output_start.toNat ≤ JoltConstraints.ramLowestAddress layout +
-      8 * ((layout.panic.toNat - JoltConstraints.ramLowestAddress layout) / 8) := by
-    rw [panicAbsolute]
-    exact outputLePanic
-  have beforeRam : JoltConstraints.ramLowestAddress layout +
-      8 * ((layout.panic.toNat - JoltConstraints.ramLowestAddress layout) / 8) <
-      JoltISA.RAM_START_ADDRESS := by
-    rw [panicAbsolute]
-    omega
-  refine ⟨outputsEmpty, panicFalse, ?_⟩
-  exact initialRamWord_after_output_zero _ layout layoutBuilt state rfl adviceBelow inputFits
-    _ afterOutput beforeRam
-
-/-- On an empty initialized run, the final RAM image equals the initial image
-outside the synthetic termination word: the initial output buffer is empty and
-the panic bit is false.
-For example, an untouched input word retains its initial value at cycle zero.
-See jolt/crates/jolt-witness/src/backend/trace/ram.rs (`initial_ram_state`,
-`final_ram_state`) at 5def437f. -/
-private theorem empty_run_ram_word
-    {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs}
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (empty : run.rows = #[]) (address : Nat)
-    (outsideTermination : address ≠
-      (run.initialState.jolt_device.memory_layout.termination.toNat -
-        JoltConstraints.ramLowestAddress run.initialState.jolt_device.memory_layout) / 8) :
-    TraceWitness.finalRamWord run.toTrace address =
-      TraceWitness.initialRamWordFromState run.initialState address := by
-  obtain ⟨outputsEmpty, panicFalse, panicZero⟩ :=
-    initialized_device_words joltInstance privateInputs run.initialState run.initialized
-  let layout := run.initialState.jolt_device.memory_layout
-  have finalState : TraceWitness.finalTraceState run.toTrace = run.initialState := by
-    simp [TraceWitness.finalTraceState, empty]
-  have outputOverlay (previous : BitVec 64) :
-      TraceWitness.overlayRamBytes layout layout.output_start #[] address previous = previous := by
-    unfold TraceWitness.overlayRamBytes
-    cases TraceWitness.remapRamAddress layout layout.output_start <;> simp
-  have noTermination :
-      TraceWitness.remapRamAddress layout layout.termination ≠ some address := by
-    intro remapped
-    change (if layout.termination.toNat = 0 ∨
-        layout.termination.toNat < JoltConstraints.ramLowestAddress layout then none
-      else some ((layout.termination.toNat - JoltConstraints.ramLowestAddress layout) / 8)) =
-        some address at remapped
-    by_cases bad : layout.termination.toNat = 0 ∨
-        layout.termination.toNat < JoltConstraints.ramLowestAddress layout
-    · simp [bad] at remapped
-    · simp only [bad, ↓reduceIte, Option.some.injEq] at remapped
-      exact outsideTermination (by simpa [layout] using remapped.symm)
-  unfold TraceWitness.finalRamWord
-  rw [finalState]
-  simp only [outputsEmpty, panicFalse]
-  rw [outputOverlay]
-  dsimp only [layout] at noTermination
-  simp only [Bool.not_false, Bool.true_and, beq_iff_eq]
-  rw [ite_eq_right noTermination]
-  by_cases atPanic : TraceWitness.remapRamAddress layout layout.panic = some address
-  · have initialZero : TraceWitness.initialRamWordFromState run.initialState address = 0 := by
-      change (if layout.panic.toNat = 0 ∨
-          layout.panic.toNat < JoltConstraints.ramLowestAddress layout then none
-        else some ((layout.panic.toNat - JoltConstraints.ramLowestAddress layout) / 8)) =
-          some address at atPanic
-      by_cases bad : layout.panic.toNat = 0 ∨
-          layout.panic.toNat < JoltConstraints.ramLowestAddress layout
-      · simp [bad] at atPanic
-      · simp only [bad, ↓reduceIte, Option.some.injEq] at atPanic
-        simpa [layout, ← atPanic] using panicZero
-    dsimp only [layout] at atPanic
-    rw [ite_eq_left atPanic]
-    exact initialZero.symm
-  · dsimp only [layout] at atPanic
-    rw [ite_eq_right atPanic]
-    rfl
-
 /-- The instance's initialized state admits an empty run satisfying the boundary
 invariant at witness cycle zero. The run's `initialized` certificate identifies
 its state with the state supplied by `context.initialized`.
-For example, before an entry ADDI, registers and nontermination RAM agree with
+For example, before an entry ADDI, registers and shared RAM agree with
 their initial tables, and the selected entry row supplies `ready` if it is real. -/
 theorem boundaryState_empty {F : Type} [Field F] (joltField : JoltField F)
     {joltInstance : JoltInstance SourceInstruction} {params : WitnessParams}
@@ -305,7 +146,6 @@ theorem boundaryState_empty {F : Type} [Field F] (joltField : JoltField F)
     honestAdvice := by intro n; exact False.elim (by simpa [run] using n.isLt)
     atBoundary := by intro last member; simp [run] at member
     registers := ?_
-    terminationWord := ?_
     ready := ?_
   }⟩
   · refine {
@@ -318,10 +158,13 @@ theorem boundaryState_empty {F : Type} [Field F] (joltField : JoltField F)
       }
       cutRam := ⟨?_, ?_⟩
     }
-    · intro bound address outside
+    · intro bound address
       have initial := ramVal_initial_state context
         equations.ramValEqInitialPlusPrefixRamInc initialized address
-      have final := empty_run_ram_word run rfl address.val outside
+      have final : TraceWitness.finalRamWord run.toTrace address.val =
+          TraceWitness.initialRamWordFromState state address.val := by
+        simp only [TraceWitness.finalRamWord, TraceWitness.initialRamWordFromState,
+          TraceWitness.finalTraceState, run, Array.size_empty, Nat.not_lt_zero, ↓reduceDIte]
       simpa [run] using initial.trans (congrArg (fun word : BitVec 64 => ((word.toNat : Nat) : F)) final.symm)
     · intro full
       have floor := context.traceLengthFloor
@@ -331,15 +174,6 @@ theorem boundaryState_empty {F : Type} [Field F] (joltField : JoltField F)
     have initial := RegisterAgreement.initial equations.registersValEqPrefixRdInc initialized
     simpa [run, TraceWitness.finalTraceState] using
       (initial.toOn (fun register => ¬ IsInstructionTemporary register))
-  · intro bound _ address termAddress
-    have layout := initial_state_memory_layout context initialized
-    have zero := context_initial_termination_zero context
-    have initial := ramVal_zero equations.ramValEqInitialPlusPrefixRamInc address
-    have sameAddress : address.val =
-        (context.io.memory_layout.termination.toNat -
-          JoltConstraints.ramLowestAddress context.io.memory_layout) / 8 := by
-      simpa only [run, layout] using termAddress
-    simpa [run, JoltConstraints.ramInitialValue, sameAddress, zero] using initial
   · intro bound real _
     have selected := equations.bytecodeRaAtEntryEqOne
     have entryNonzero : context.entry.val ≠ 0 := by
@@ -377,7 +211,7 @@ theorem expansion_start {F : Type} [Field F] {params : WitnessParams}
     (boundary : BoundaryState witness context run)
     (bound : run.rows.size < params.traceLength)
     (real : witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 0)
-    (notStopped : ∀ last ∈ run.rows.back?, ¬ last.StableStall) :
+    (notStopped : ∀ last ∈ run.rows.back?, ¬ last.Halts) :
     ∃ first : Fin context.bytecode.size, ExpansionState witness context run first 0 := by
   obtain ⟨next, pre, slot, selected, slotIs, step⟩ :=
     boundary.ready bound real notStopped
@@ -403,7 +237,6 @@ theorem expansion_start {F : Type} [Field F] {params : WitnessParams}
     represents := boundary.represents
     real := boundary.real
     noEarlierStop := boundary.noEarlierStop
-    terminationWord := boundary.terminationWord
     starts := starts
     done_le := Nat.zero_le _
     retained := Nat.zero_le _

@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer6.RowStepJalr
 import JoltConstraints.theorems.Soundness.Layer5.Jal
+import JoltConstraints.theorems.Soundness.Layer5.Halt
 import JoltConstraints.theorems.Soundness.Layer5.HostCallRegisterFrame
 
 open LeanRV64D
@@ -60,9 +61,64 @@ theorem append_jal_row
       rs1Value_of_selected_bytecode (two_pow_127_lt_char joltField) context equations
         ⟨run.rows.size, bound⟩ slot selected
   exact append_jump_row joltField witness context equations run first done state unfinished bound
-    next pre indexIs entry registers destination (Or.inl ⟨imm, instruction⟩) post advice
+    next pre indexIs entry registers destination (by rw [instruction]; rfl) (by rw [instruction]; rfl) post advice
     executes registerNext (by simpa only [instruction, rs1Operand?] using rs1)
-    (by cases destination <;> rfl) (by cases destination <;> rfl)
+    (by cases destination <;> rfl)
+
+/-- Append either explicit halt with its link write and recorded halt kind.
+For example, EBREAK's Panic row completes the represented source expansion. -/
+theorem append_halt_row
+    {F : Type} [Field F] (joltField : JoltField F)
+    {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
+    (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
+    (state : ExpansionState witness context run first done)
+    (unfinished : done < expansionRowCount context.bytecode first)
+    (bound : run.rows.size < params.traceLength)
+    (next : Fin run.bytecode.size) (pre : SailJoltState)
+    (indexIs : next.val = first.val + done) (entry : RawRowEntry run next pre)
+    (registers : RegisterAgreementOn (ExpansionLive context.bytecode first done)
+      witness ⟨run.rows.size, bound⟩ pre)
+    (pc : pre.sail.regs.get? Register.PC = some run.bytecode[next].address)
+    (nextPC : pre.sail.regs.get? Register.nextPC = some (run.bytecode[next].address +
+      if source_is_compressed run.bytecode next then 2 else 4))
+    (kind : JoltHaltKind) (destination : Dst)
+    (instruction : run.bytecode[next].instruction =
+      match kind with | .success => .JoltSuccess destination | .panic => .Panic destination) :
+    PlainRowExtension witness context run first done bound := by
+  obtain ⟨_, slot, selected, _, rowIs⟩ := state.selectedRow unfinished bound next indexIs
+  have halted : run.bytecode[next].instruction.haltKind?.isSome = true := by
+    cases kind <;> rw [instruction] <;> rfl
+  have bytecodeEq : run.bytecode = context.bytecode :=
+    Option.some.inj (run.expands.symm.trans context.expands)
+  have last : run.bytecode[next].virtual_sequence_remaining.getD 0 = 0 := by
+    apply JoltConstraints.Soundness.ConstraintContext.halt_terminal context _ _ halted
+    rw [← bytecodeEq]
+    exact Array.getElem_mem next.isLt
+  rw [source_compressed_of_last run.bytecode next last] at nextPC
+  have noWrap := expand_program_next_pc_no_wrap inst.program run.bytecode run.expands
+    inst.program.next_pc_no_wrap next
+  rw [source_compressed_of_last run.bytecode next last] at noWrap
+  have link : pre.sail.regs.get? Register.nextPC =
+      some (run.bytecode[next].address +
+        BitVec.ofNat 64 (if run.bytecode[next].is_compressed then 2 else 4)) := by
+    cases compressed : run.bytecode[next].is_compressed <;>
+      simpa only [compressed, Bool.false_eq_true, ↓reduceIte] using! nextPC
+  let advice := runtimeAdviceFor run.bytecode[next].instruction 0
+  obtain ⟨executes, registerNext⟩ := halt_step joltField context equations selected rowIs
+    kind destination instruction noWrap registers pc link 0 advice
+  have rs1 : witness.Rs1Value ⟨run.rows.size, bound⟩ = 0 := by
+    have read := rs1Value_of_selected_bytecode (two_pow_127_lt_char joltField)
+      context equations ⟨run.rows.size, bound⟩ slot selected
+    cases kind <;>
+      simpa only [rowIs, Option.bind_some, instruction, bytecodeRs1Register] using read
+  exact append_jump_row joltField witness context equations run first done state unfinished bound
+    next pre indexIs entry registers destination
+    (by cases kind <;> rw [instruction] <;> rfl)
+    (by cases kind <;> rw [instruction] <;> rfl) _ advice executes registerNext
+    (by cases kind <;> simpa only [instruction, rs1Operand?] using rs1)
+    (by cases destination <;> rfl)
 
 /-- Append a successful terminal HostIO row, preserving live registers and the
 memory image while allowing its advice tape to grow.
@@ -108,14 +164,6 @@ theorem append_host_row
     simpa only [rowIs, Option.bind_some, instruction, bytecodeRs2Register] using
       rs2Value_of_selected_bytecode (two_pow_127_lt_char joltField) context equations
         ⟨run.rows.size, bound⟩ slot selected
-  have hostExec : execWithTapeAnswer .VirtualHostIO 0 pre = .ok RETIRE_SUCCESS post := by
-    simpa only [withRuntimeAdvice_eq_of_noAdvice _ advice (by rw [instruction]; rfl),
-      instruction] using executes
-  have device : post.jolt_device = pre.jolt_device :=
-    (execWithTapeAnswer_device_of_not_store .VirtualHostIO 0
-      (by intro base source imm; nofun)
-      (by intro base source imm fault; rintro (h | h | h) <;> cases h))
-      pre post RETIRE_SUCCESS hostExec |>.symm
   let step : TraceRow run.bytecode := ⟨next, advice, pre, post⟩
   have after (h : run.rows.size + 1 < params.traceLength) :
       RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1)) witness
@@ -139,7 +187,7 @@ theorem append_host_row
     (by simpa only [step, instruction, rs1Operand?] using rs1)
     (by simpa only [step, instruction, rs2Operand?] using rs2)
     (by simp only [step, instruction, TraceWitness.ramAccessAddress])
-    (by exact congrArg (·.mem) sail) device after
+    (by exact congrArg (·.mem) sail) after
     (by rw [instruction]; rfl)
     (by intro dst width; rw [instruction]; nofun)
 
