@@ -54,9 +54,14 @@ reservation virtual registers initially contain zero. -/
 theorem SystemInv.initialState {inst : JoltInstance SourceInstruction}
     {inputs : JoltPrivateInputs} (trace : HonestTrace inst inputs) :
     SystemInv trace.initialState := by
-  obtain ⟨ram, device, tape, he⟩ := initial_state_spec inst inputs _ trace.initialized
-  rw [he]
-  exact SystemInv.init_state _ _ _ _
+  obtain ⟨layout, _, _, _, _, initialized⟩ :=
+    initial_state_build inst inputs _ trace.initialized
+  obtain ⟨_, _, _, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ initialized
+  rw [shape]
+  apply (SystemInv.init_state inst.program.entry_address
+    (initialRam layout inst.program.memory_init) { memory_layout := layout, panic := false }
+    { bytes := inputs.advice_tape, readPosition := 0 }).of_vregs
+  rfl
 
 private def VFrame (r : JoltISA.VReg) (s t : SailJoltState) : Prop :=
   t.vregs r = s.vregs r
@@ -104,6 +109,11 @@ private theorem store_vframe (r : JoltISA.VReg) (addr value : BitVec 64) :
   intro s t result h
   exact congrFun (JoltISA.Mmu.store_doubleword_regs h).2 r
 
+private theorem halt_vframe (r : JoltISA.VReg) (kind : JoltHaltKind) :
+    StatePreservation.Preserves (VFrame r)
+      (modify (JoltISA.recordHalt kind) : JoltMonad Unit) :=
+  StatePreservation.modify_rule _ (fun _ => rfl)
+
 private theorem row_vframe (i : JoltISA.Instr) (r : JoltISA.VReg)
     (hne : i.destination? ≠ some (.vreg r)) :
     StatePreservation.Preserves (VFrame r) (JoltISA.execInstr i) := by
@@ -130,6 +140,7 @@ private theorem row_vframe (i : JoltISA.Instr) (r : JoltISA.VReg)
       lift_vframe r _, load_vframe r _, store_vframe r _ _,
       StatePreservation.pure_rule (vframe_refl r) _,
       StatePreservation.throw_rule (VFrame r) _,
+      halt_vframe r _,
       StatePreservation.get_rule (vframe_refl r)]
       using (StatePreservation.bind_rule (vframe_trans r))
 
@@ -488,7 +499,7 @@ local macro "plain_rows_safe" : tactic =>
     first | split_ifs | skip
     all_goals simp [expandedCode, ProgramAvoids, JoltISA.Program.seq,
       JoltISA.Program.instrs, JoltISA.Instr.destination?, JoltISA.Instr.canonicalNoOp,
-      JoltISA.sideEffectingDst, JoltISA.sideEffectingRdZeroDst, JoltISA.inlineTmp,
+      JoltISA.sideEffectingDst, JoltISA.sideEffectingRdZeroDst, JoltISA.isX0, JoltISA.inlineTmp,
       JoltISA.systemScratchVReg, JoltISA.inlineTmp0,
       JoltISA.inlineRegisterBase, JoltISA.riscvRegisterBase, JoltISA.riscvRegisterCount,
       JoltISA.numReservedVirtualRegisters, outside_window 32 40 r hlo hhi]))

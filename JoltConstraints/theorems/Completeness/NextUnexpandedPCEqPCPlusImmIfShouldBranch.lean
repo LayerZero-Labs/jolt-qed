@@ -185,7 +185,7 @@ theorem honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
           rw [isBranch]
           rfl
       -- the witness reads the next row's address, this row's address and the offset
-      have hnextWitness : t.val + 1 < params.traceLength := hnext.trans tracePadded.2
+      have hnextWitness : t.val + 1 < params.traceLength := hnext.trans_le tracePadded.2
       simp only [TraceWitness.NextUnexpandedPC, dite_eq_left hnextWitness, TraceWitness.UnexpandedPC,
         dite_eq_left hnext, dite_eq_left ht, TraceWitness.Imm]
       simp only [Fin.getElem_fin] at nextIs immIs
