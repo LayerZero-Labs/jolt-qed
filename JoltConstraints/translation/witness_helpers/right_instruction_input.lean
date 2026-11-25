@@ -1,4 +1,3 @@
-import JoltConstraints.translation.metadata
 import JoltConstraints.translation.witness_helpers.rs2_value
 import JoltConstraints.translation.witness_helpers.imm
 import JoltConstraints.translation.witness_helpers.rd_write_value

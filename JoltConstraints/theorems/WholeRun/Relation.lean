@@ -1,4 +1,3 @@
-import JoltConstraints.theorems.WholeRun.Run
 import JoltBytecode.Decode.Configuration
 
 /-!

@@ -2,7 +2,6 @@ import JoltConstraints.translation.honest_witness
 import JoltConstraints.translation.Constraints.HaltEndRule
 import JoltConstraints.theorems.HaltFlags
 import JoltConstraints.theorems.execution_conditions
-import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D
 

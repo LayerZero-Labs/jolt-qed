@@ -1,6 +1,9 @@
-import JoltConstraints.theorems.Soundness.Layer5.AssertLessThanEqual
 import JoltConstraints.theorems.Soundness.Layer4.Assertions
 import JoltConstraints.theorems.Soundness.Layer4.Arithmetic
+import JoltConstraints.theorems.Soundness.Layer4.Outputs
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
+import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
+import JoltConstraints.theorems.Soundness.Layer5.TapeSemantics
 
 open LeanRV64D
 

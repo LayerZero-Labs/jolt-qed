@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer4.Bitwise
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 
 open LeanRV64D
 

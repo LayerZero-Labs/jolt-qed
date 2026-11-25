@@ -1,7 +1,5 @@
 import JoltConstraints.translation.witness_helpers.address_chunk
 import JoltConstraints.translation.witness_helpers.ram_address
-import JoltConstraints.translation.witness
-import JoltConstraints.translation.trace
 
 open LeanRV64D
 

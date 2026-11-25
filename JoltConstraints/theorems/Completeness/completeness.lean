@@ -7,7 +7,6 @@ a16z/jolt#1949; the shared-memory RAM-history obligations are proved.
 -/
 import JoltConstraints.theorems.Completeness.All
 import JoltConstraints.theorems.Completeness.Assumptions
-import JoltConstraints.translation.language
 
 open LeanRV64D
 

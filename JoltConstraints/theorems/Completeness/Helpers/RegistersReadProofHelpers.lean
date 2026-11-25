@@ -1,6 +1,9 @@
 import JoltConstraints.theorems.Completeness.Helpers.RegistersValHistoryProofHelpers
 import JoltConstraints.translation.Constraints.BytecodeReadSelectors
-import JoltConstraints.translation.honest_witness
+import JoltConstraints.translation.witness_helpers.rs1_ra
+import JoltConstraints.translation.witness_helpers.rs1_value
+import JoltConstraints.translation.witness_helpers.rs2_ra
+import JoltConstraints.translation.witness_helpers.rs2_value
 
 open LeanRV64D
 

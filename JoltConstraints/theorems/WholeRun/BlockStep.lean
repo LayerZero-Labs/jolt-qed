@@ -2,8 +2,6 @@ import JoltConstraints.theorems.WholeRun.Relation
 import JoltConstraints.theorems.WholeRun.Bridge
 import JoltConstraints.theorems.WholeRun.Ghost
 import JoltConstraints.theorems.WholeRun.NonInterference
-import JoltConstraints.theorems.layout_facts
-import JoltBytecode.Step.Invariant
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions JoltISA

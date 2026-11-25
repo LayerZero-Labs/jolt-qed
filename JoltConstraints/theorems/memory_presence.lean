@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.execution_facts
-import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 open LeanRV64D
 

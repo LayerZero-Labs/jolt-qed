@@ -3,9 +3,7 @@ Facts about the honest trace as a whole: how its rows sit in the program's bytec
 Each one is proved from honest_trace.lean and the program facts.
 -/
 import JoltConstraints.theorems.program_facts
-import JoltConstraints.translation.honest_trace
 import JoltConstraints.theorems.execution_facts
-import JoltConstraints.theorems.layout_facts
 
 open LeanRV64D
 

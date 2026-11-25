@@ -1,5 +1,3 @@
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Ring
 import JoltConstraints.translation.Constraints.All
 import JoltConstraints.ConstraintGen.Semantics
 

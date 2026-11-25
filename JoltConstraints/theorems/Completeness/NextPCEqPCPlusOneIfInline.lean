@@ -1,9 +1,7 @@
 import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.translation.Constraints.NextPCEqPCPlusOneIfInline
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.execution_conditions
-import JoltConstraints.theorems.trace_interface
 import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D

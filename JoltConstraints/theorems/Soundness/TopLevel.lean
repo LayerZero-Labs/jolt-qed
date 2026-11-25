@@ -3,23 +3,11 @@ The immediate obligations below `JoltInstance.soundness`. Each unfinished helper
 has a name and a concrete statement so the main theorem can be assembled without
 adding premises. See `JoltConstraints/documentation/model_review.md`, "Proofs owed".
 -/
-import JoltConstraints.translation.Constraints.All
-import JoltConstraints.theorems.Soundness.Assumptions
-import JoltConstraints.theorems.Soundness.Layer0.Words
-import JoltConstraints.theorems.Soundness.Layer5.PowerOfTwo
-import JoltConstraints.theorems.Completeness.Helpers.RamOutputProofHelpers
-import JoltConstraints.theorems.Completeness.All
-import JoltConstraints.translation.language
-import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import JoltConstraints.theorems.Soundness.Layer6.PrefixAgreement
 import JoltConstraints.theorems.Soundness.Layer7.Stopping
 import JoltConstraints.theorems.Soundness.Layer7.ProverAccepts
 import JoltConstraints.theorems.Soundness.Layer7.SpoilAsserts
 import JoltConstraints.theorems.Soundness.Layer8.OutputWords
-import JoltConstraints.translation.witness_helpers.pc
-import JoltConstraints.translation.witness_helpers.rs1_value
-import JoltConstraints.translation.witness_helpers.rs2_value
-import JoltConstraints.translation.witness_helpers.ram_address
 
 open LeanRV64D
 

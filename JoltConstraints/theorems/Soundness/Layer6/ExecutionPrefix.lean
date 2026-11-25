@@ -1,10 +1,8 @@
-import JoltConstraints.translation.Constraints.All
-import JoltConstraints.theorems.Soundness.Assumptions
-import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import JoltConstraints.translation.witness_helpers.pc
 import JoltConstraints.translation.witness_helpers.rs1_value
 import JoltConstraints.translation.witness_helpers.rs2_value
-import JoltConstraints.translation.witness_helpers.ram_address
+import JoltConstraints.translation.Constraints.BytecodeReadSelectors
+import JoltConstraints.translation.witness_helpers.ram_state
 
 open LeanRV64D
 

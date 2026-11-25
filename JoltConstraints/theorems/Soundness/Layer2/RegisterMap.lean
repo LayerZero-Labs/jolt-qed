@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.trace_interface
-import JoltConstraints.translation.witness_helpers.register_address
 import JoltConstraints.translation.constraint_context
 import JoltConstraints.translation.Constraints.BytecodeReadSelectors
 

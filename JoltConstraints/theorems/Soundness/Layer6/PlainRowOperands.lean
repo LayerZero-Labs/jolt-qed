@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer5.Registers
 import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
-import JoltConstraints.theorems.expansion_temp_liveness
 
 open LeanRV64D
 

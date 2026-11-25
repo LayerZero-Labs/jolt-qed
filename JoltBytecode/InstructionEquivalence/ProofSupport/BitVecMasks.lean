@@ -1,7 +1,9 @@
 module
 
 public import Mathlib.Data.BitVec
-public import Mathlib.Tactic
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Data.Nat.Basic
+public import Mathlib.Order.Basic
 
 /-! Bit-mask identities shared by bytecode equivalence and constraint completeness. -/
 

@@ -1,9 +1,7 @@
-import Mathlib.Algebra.Field.Defs
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
-import Mathlib.Data.Fintype.Basic
 import Mathlib.Data.Nat.Log
-import Mathlib.Tactic
+import Mathlib.Order.SuccPred.Nat
+import JoltBytecode.MathlibTactics
 
 set_option autoImplicit false
 

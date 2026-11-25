@@ -1,4 +1,5 @@
 import JoltConstraints.translation.Constraints.LookupOperandData
+import JoltConstraints.translation.Constraints.InstructionLookupRa
 
 open LeanRV64D
 

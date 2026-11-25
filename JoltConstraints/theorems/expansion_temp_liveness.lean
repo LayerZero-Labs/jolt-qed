@@ -5,7 +5,7 @@ reservations at 32 and 33, and are deliberately excluded here.
 See : jolt/crates/jolt-program/src/expand/allocator.rs:1-15, 115-139, 184-199
       (ff6fc6568)
 -/
-import JoltConstraints.translation.expansions
+import JoltConstraints.translation.expansion_helpers
 
 open LeanRV64D
 

@@ -1,7 +1,4 @@
 import Mathlib.Data.Fintype.Fin
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Field.Defs
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.metadata
 import JoltConstraints.ConstraintGen.Generated.R1CS
 import JoltConstraints.ConstraintGen.Generated.Relations

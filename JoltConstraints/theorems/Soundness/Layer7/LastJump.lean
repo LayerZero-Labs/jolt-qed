@@ -1,6 +1,6 @@
-import JoltConstraints.theorems.Soundness.Layer6.ExecutionPrefix
-import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
-import JoltConstraints.theorems.Soundness.Layer6.SelectedRows
+import JoltConstraints.theorems.Soundness.Assumptions
+import JoltConstraints.theorems.Soundness.Layer1.Bytecode
+import JoltConstraints.theorems.Soundness.Layer1.BytecodeReads
 
 open LeanRV64D
 

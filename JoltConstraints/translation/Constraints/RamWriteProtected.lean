@@ -1,7 +1,5 @@
 import JoltConstraints.translation.program
 import JoltConstraints.translation.witness
-import Mathlib.Algebra.Field.Defs
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 set_option autoImplicit false
 

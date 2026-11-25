@@ -1,7 +1,7 @@
 import JoltBytecode.JoltISA.Expansions.Mul
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.ValueLemmas
-import Mathlib
+import JoltBytecode.MathlibTactics
 
 open LeanRV64D
 

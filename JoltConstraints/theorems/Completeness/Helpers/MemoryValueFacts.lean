@@ -1,4 +1,7 @@
-import JoltConstraints.translation.honest_witness
+import JoltConstraints.translation.honest_witness_helpers.ram_read_value
+import JoltConstraints.translation.metadata
+import JoltConstraints.translation.witness_helpers.ram_write_value
+import JoltConstraints.translation.witness_helpers.rd_write_value
 
 open LeanRV64D
 

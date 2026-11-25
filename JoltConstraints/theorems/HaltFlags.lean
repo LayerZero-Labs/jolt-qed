@@ -1,5 +1,4 @@
 import JoltConstraints.translation.metadata
-import JoltConstraints.translation.honest_trace
 
 set_option autoImplicit false
 

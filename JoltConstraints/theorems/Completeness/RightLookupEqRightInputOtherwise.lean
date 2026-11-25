@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.RightLookupEqRightInputOtherwise
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.AddressSum
 import JoltConstraints.theorems.Soundness.Layer4.Interleave

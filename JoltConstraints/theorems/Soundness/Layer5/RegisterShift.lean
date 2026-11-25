@@ -1,4 +1,3 @@
-import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer5.UnaryWord
 import JoltConstraints.theorems.Soundness.Layer4.Shift
 

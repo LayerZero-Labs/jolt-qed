@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.interleave_facts
 import JoltConstraints.translation.lookup_table
+import JoltConstraints.translation.Constraints.LookupOperandData
 
 open LeanRV64D
 

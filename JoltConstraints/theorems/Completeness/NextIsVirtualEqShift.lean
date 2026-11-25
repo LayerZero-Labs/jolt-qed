@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.NextIsVirtualEqShift
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.witness_domain
 

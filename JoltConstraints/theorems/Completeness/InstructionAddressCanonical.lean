@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.theorems.Completeness.RightLookupAdd
-import JoltConstraints.translation.Constraints.InstructionAddressCanonical
 import JoltConstraints.theorems.Soundness.Layer4.Identity
 
 open LeanRV64D

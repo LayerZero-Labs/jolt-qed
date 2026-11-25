@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.BytecodeReadData
-import JoltConstraints.translation.witness_helpers
 
 open LeanRV64D
 

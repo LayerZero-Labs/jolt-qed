@@ -2,7 +2,6 @@
 The witness sizes Jolt's prover picks, built from its config and the bytecode
 instead of taken as free parameters.
 -/
-import JoltConstraints.theorems.trace_facts
 import JoltConstraints.theorems.prover_config_facts
 import JoltConstraints.translation.witness
 

@@ -1,6 +1,7 @@
 import JoltConstraints.theorems.Completeness.Helpers.RamReadSelection
 import JoltConstraints.translation.Constraints.RamAddressEqRamRaf
 import JoltConstraints.theorems.Completeness.Helpers.RamReadSelection
+import JoltConstraints.translation.honest_witness
 
 open LeanRV64D
 

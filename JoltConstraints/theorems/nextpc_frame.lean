@@ -1,9 +1,4 @@
 import JoltConstraints.translation.metadata
-import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
-import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
-import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 
 open LeanRV64D
 

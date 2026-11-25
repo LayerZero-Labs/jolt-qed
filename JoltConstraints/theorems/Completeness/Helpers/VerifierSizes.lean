@@ -1,5 +1,3 @@
-import JoltConstraints.translation.verifier_sizes
-import JoltConstraints.theorems.witness_domain
 import JoltConstraints.theorems.Completeness.Helpers.RamReadSelection
 
 open LeanRV64D

@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer0.Field
 import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Data.Fintype.Card
 
 set_option autoImplicit false
 

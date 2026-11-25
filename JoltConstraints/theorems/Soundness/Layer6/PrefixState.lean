@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer6.ExecutionPrefix
 import JoltConstraints.theorems.Soundness.Layer5.Registers
+import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
 
 open LeanRV64D
 

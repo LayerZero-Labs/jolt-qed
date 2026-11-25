@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer6.PrefixState
 import JoltConstraints.theorems.Soundness.Layer6.TerminalNextPC
+import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
 
 open LeanRV64D
 

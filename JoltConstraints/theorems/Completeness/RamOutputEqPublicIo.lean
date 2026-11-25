@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Completeness.Helpers.RamOutputProofHelpers
 import JoltConstraints.translation.Constraints.RamOutputEqPublicIo
+import JoltConstraints.translation.honest_witness
 
 open LeanRV64D
 set_option autoImplicit false

@@ -1,5 +1,5 @@
 import JoltConstraints.translation.witness
-import JoltConstraints.translation.trace
+import JoltConstraints.translation.program
 
 open LeanRV64D
 

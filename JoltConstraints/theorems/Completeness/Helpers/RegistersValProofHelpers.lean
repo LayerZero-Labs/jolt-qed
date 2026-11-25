@@ -1,8 +1,7 @@
-import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
-import JoltConstraints.theorems.DeviceFrame
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltConstraints.theorems.Completeness.Helpers.HostIOFrame
 import JoltConstraints.theorems.Completeness.Helpers.FloorMemory
+import JoltConstraints.translation.witness_helpers.rd_inc
+import JoltConstraints.translation.witness_helpers.rd_wa
 
 open LeanRV64D
 

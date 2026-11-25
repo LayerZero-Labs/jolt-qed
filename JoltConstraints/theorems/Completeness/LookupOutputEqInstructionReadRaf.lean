@@ -1,7 +1,6 @@
 import JoltConstraints.theorems.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.theorems.Completeness.Helpers.LookupEntryProofHelpers
 import JoltConstraints.translation.Constraints.LookupOutputEqInstructionReadRaf
-import JoltConstraints.translation.Constraints.InstructionLookupRa
 import JoltConstraints.theorems.Completeness.Helpers.InstructionReadSelection
 import JoltConstraints.theorems.Completeness.Helpers.LookupEntryProofHelpers
 

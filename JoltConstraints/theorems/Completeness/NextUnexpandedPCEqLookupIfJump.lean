@@ -1,9 +1,8 @@
-import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.translation.Constraints.NextUnexpandedPCEqLookupIfJump
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.theorems.Completeness.Helpers.JumpReturnProofHelpers
 
 open LeanRV64D
 

@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer1.Chunks
 import JoltConstraints.theorems.Soundness.Layer1.Products
-import JoltConstraints.translation.witness_helpers.address_chunk
 
 open LeanRV64D
 

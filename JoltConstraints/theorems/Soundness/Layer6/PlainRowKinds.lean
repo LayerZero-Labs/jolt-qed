@@ -1,22 +1,14 @@
 import JoltConstraints.theorems.Soundness.Layer5.Arithmetic
 import JoltConstraints.theorems.Soundness.Layer5.WordArithmetic
 import JoltConstraints.theorems.Soundness.Layer5.BitwiseBinary
-import JoltConstraints.theorems.Soundness.Layer5.RegisterComparison
 import JoltConstraints.theorems.Soundness.Layer5.VirtualBinary
 import JoltConstraints.theorems.Soundness.Layer5.XorRotation
 import JoltConstraints.theorems.Soundness.Layer5.ImmediateArithmetic
 import JoltConstraints.theorems.Soundness.Layer5.ImmediateLogic
 import JoltConstraints.theorems.Soundness.Layer5.AddressMasks
-import JoltConstraints.theorems.Soundness.Layer5.UnaryWord
 import JoltConstraints.theorems.Soundness.Layer5.ImmediateShift
 import JoltConstraints.theorems.Soundness.Layer5.ImmediatePowerMask
-import JoltConstraints.theorems.Soundness.Layer5.LoadUpperImmediate
-import JoltConstraints.theorems.Soundness.Layer5.Auipc
-import JoltConstraints.theorems.Soundness.Layer5.SetLessThanImmediate
-import JoltConstraints.theorems.Soundness.Layer5.XorImmediate
-import JoltConstraints.theorems.Soundness.Layer5.Movsign
 import JoltConstraints.theorems.Soundness.Layer5.RegisterShift
-import JoltConstraints.theorems.expansion_temp_liveness
 
 open LeanRV64D
 

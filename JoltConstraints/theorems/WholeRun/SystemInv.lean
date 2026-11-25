@@ -1,8 +1,8 @@
-import JoltConstraints.theorems.WholeRun.Basic
 import JoltConstraints.theorems.WholeRun.Bridge
-import JoltConstraints.theorems.WholeRun.Init
 import JoltConstraints.theorems.nextpc_frame
 import JoltBytecode.Step.Ecall
+import JoltConstraints.theorems.execution_facts
+import JoltConstraints.theorems.expansion_facts
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions

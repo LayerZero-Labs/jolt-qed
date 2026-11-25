@@ -1,10 +1,25 @@
-import Mathlib.Algebra.Field.Defs
-import JoltConstraints.translation.witness
-import JoltConstraints.translation.honest_trace
-import JoltConstraints.translation.witness_helpers
-import JoltConstraints.translation.honest_witness_helpers.ram_read_value
 import JoltConstraints.translation.honest_witness_helpers.ram_inc
 import JoltConstraints.translation.honest_witness_helpers.ram_val
+import JoltConstraints.translation.witness_helpers.branch
+import JoltConstraints.translation.witness_helpers.bytecode_ra_chunk
+import JoltConstraints.translation.witness_helpers.instruction_ra
+import JoltConstraints.translation.witness_helpers.instruction_ra_chunk
+import JoltConstraints.translation.witness_helpers.instruction_raf_flag
+import JoltConstraints.translation.witness_helpers.left_lookup_operand
+import JoltConstraints.translation.witness_helpers.lookup_output
+import JoltConstraints.translation.witness_helpers.lookup_table_flag
+import JoltConstraints.translation.witness_helpers.next_is_first_in_sequence
+import JoltConstraints.translation.witness_helpers.next_is_noop
+import JoltConstraints.translation.witness_helpers.next_is_virtual
+import JoltConstraints.translation.witness_helpers.next_pc
+import JoltConstraints.translation.witness_helpers.next_unexpanded_pc
+import JoltConstraints.translation.witness_helpers.product
+import JoltConstraints.translation.witness_helpers.ram_val_final
+import JoltConstraints.translation.witness_helpers.rd_inc
+import JoltConstraints.translation.witness_helpers.registers_val
+import JoltConstraints.translation.witness_helpers.right_lookup_operand
+import JoltConstraints.translation.witness_helpers.rs1_ra
+import JoltConstraints.translation.witness_helpers.rs2_ra
 
 open LeanRV64D
 

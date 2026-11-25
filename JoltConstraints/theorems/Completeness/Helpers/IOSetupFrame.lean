@@ -1,6 +1,6 @@
-import JoltConstraints.translation.honest_witness
-import JoltConstraints.translation.Constraints.RamReadData
 import JoltConstraints.theorems.DeviceFrame
+import JoltConstraints.translation.honest_trace
+import JoltConstraints.translation.witness_helpers.ram_state
 
 open LeanRV64D
 

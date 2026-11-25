@@ -1,5 +1,4 @@
-import JoltConstraints.theorems.Completeness.Helpers.JumpReturnProofHelpers
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
+import JoltConstraints.theorems.trace_interface
 
 open LeanRV64D
 

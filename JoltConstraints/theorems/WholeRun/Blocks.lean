@@ -1,7 +1,6 @@
 import JoltConstraints.theorems.WholeRun.Basic
-import JoltConstraints.theorems.program_facts
-import JoltConstraints.theorems.execution_facts
 import JoltConstraints.theorems.execution_conditions
+import Mathlib.Order.SuccPred.Nat
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions

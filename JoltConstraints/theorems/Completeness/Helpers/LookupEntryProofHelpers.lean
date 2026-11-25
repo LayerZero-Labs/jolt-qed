@@ -1,6 +1,4 @@
 import JoltConstraints.theorems.Completeness.Helpers.AddressOffsetEntry
-import JoltConstraints.translation.Constraints.LookupOperandData
-import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltConstraints.theorems.Soundness.Layer4.ByteSwap
 import JoltConstraints.theorems.Soundness.Layer4.WordEntry
 import JoltConstraints.theorems.Soundness.Layer4.BitwiseEntry
@@ -8,8 +6,8 @@ import JoltConstraints.theorems.Soundness.Layer4.ComparisonEntry
 import JoltConstraints.theorems.Soundness.Layer4.ConditionalEntry
 import JoltConstraints.theorems.Soundness.Layer4.RotateEntry
 import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
-import JoltConstraints.theorems.Completeness.Helpers.LookupPextProofHelpers
-import JoltConstraints.theorems.Completeness.Helpers.LookupShiftProofHelpers
+import JoltConstraints.theorems.Soundness.Layer4.PextEntry
+import JoltConstraints.theorems.Soundness.Layer4.RangeCheckEntry
 
 open LeanRV64D
 

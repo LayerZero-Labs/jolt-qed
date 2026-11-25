@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.Soundness.Layer6.RowStepJalr
-import JoltConstraints.theorems.Soundness.Layer5.Jal
 import JoltConstraints.theorems.Soundness.Layer5.Halt
 import JoltConstraints.theorems.Soundness.Layer5.HostCallRegisterFrame
 

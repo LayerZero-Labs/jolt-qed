@@ -1,7 +1,5 @@
-import JoltConstraints.theorems.Soundness.Layer6.PlainRow
-import JoltConstraints.theorems.Soundness.Layer6.RowStepJalr
 import JoltConstraints.theorems.Soundness.Layer6.RowStepTerminal
-import JoltConstraints.theorems.Soundness.Layer6.RowStepMemory
+import JoltConstraints.theorems.MemoryRowExecution
 
 open LeanRV64D
 

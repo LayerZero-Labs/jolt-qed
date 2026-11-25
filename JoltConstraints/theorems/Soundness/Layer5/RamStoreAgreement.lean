@@ -1,4 +1,3 @@
-import JoltConstraints.theorems.Soundness.Layer5.RamAgreement
 import JoltConstraints.theorems.Soundness.Layer5.StoreDoubleword
 
 open LeanRV64D

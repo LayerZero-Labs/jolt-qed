@@ -4,8 +4,6 @@ instruction execution, initialization, row linkage and termination. The program
 and input assumptions below are the existing conditions on Rust-accepted runs.
 -/
 import JoltConstraints.translation.trace
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divw_math
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divuw_math
 
 open LeanRV64D
 

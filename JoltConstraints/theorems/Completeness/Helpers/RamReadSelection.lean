@@ -1,10 +1,11 @@
-import JoltConstraints.translation.Constraints.RamReadData
 import JoltConstraints.theorems.Completeness.Helpers.RamAccesses
 import JoltConstraints.theorems.Completeness.Helpers.IOSetupFrame
 import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.theorems.Completeness.Helpers.FloorMemory
 import JoltConstraints.theorems.Completeness.Helpers.MemoryValueFacts
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.translation.honest_witness_helpers.ram_inc
+import JoltConstraints.translation.witness_helpers.ram_ra
 
 open LeanRV64D
 

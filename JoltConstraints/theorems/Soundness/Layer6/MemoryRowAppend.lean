@@ -1,6 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer6.RamCutAgreement
 import JoltConstraints.theorems.Soundness.Layer6.PlainRow
 import JoltConstraints.theorems.Soundness.Layer5.CodeRegionFrame
+import JoltConstraints.theorems.Soundness.Layer5.TapeDeviceFrame
 
 open LeanRV64D
 
