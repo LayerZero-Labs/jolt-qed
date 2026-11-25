@@ -33,7 +33,9 @@ include charAbove2pow127 context equations
 /-- A memory row selects one RAM word, including when its raw address column
 would otherwise be zero.
 For example, the load flag of an LD rules out an all-zero RAM selector.
-Jolt at `ff6fc6568`: `read_write_checking.rs` (the access-count claim). -/
+Jolt at `ff6fc6568`:
+`crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs`
+(the access-count claim). -/
 theorem ramRa_unique_of_memory (t : Fin params.traceLength)
     (memory : witness.OpFlags .Load t + witness.OpFlags .Store t = 1) :
     ∃! address, witness.RamRa address t = 1 := by
@@ -47,7 +49,9 @@ theorem ramRa_unique_of_memory (t : Fin params.traceLength)
 /-- At a selected protected word, the public mask C forces zero increment.
 For example, writing a protected input word can only retain its table value.
 The store execution proof uses this fact to establish the tracer's value check.
-Jolt at `ff6fc6568`: `read_write_checking.rs` (the protected-increment claim). -/
+Jolt at `ff6fc6568`:
+`crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs`
+(the protected-increment claim). -/
 theorem ramInc_zero_of_selected_protected (t : Fin params.traceLength)
     (chosen : Fin params.ramSize) (selected : witness.RamRa chosen t = 1)
     (maskOne : ramWriteProtectedMask (F := F) context.bytecode

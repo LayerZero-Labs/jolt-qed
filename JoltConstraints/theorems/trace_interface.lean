@@ -114,8 +114,7 @@ theorem HonestTrace.linkedState {joltInstance : JoltInstance SourceInstruction}
     exact startState
 
 -- Which row comes next: the next row of the same instruction, or the first row
--- at nextPC. A JALR self-jump may continue when it does not repeat on re-run.
--- See : a16z/jolt PR #2109, merge commit 0249591a.
+-- at nextPC.
 theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (currentExists : i < trace.rows.size) (nextExists : i + 1 < trace.rows.size) :

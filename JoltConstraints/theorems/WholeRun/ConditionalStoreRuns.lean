@@ -11,7 +11,7 @@ namespace WholeRun
 /-- SC's three scratch registers avoid both persistent reservation registers.
 For example, the x0 allocation uses v41 through v43, all distinct from v32/v33.
 The joint fact serves both widths without repeating allocator cases.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_sc_success`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_sc_success`). -/
 theorem scScratch_reserved (rd : regidx) :
     SystemProofs.scScratch rd ≠ 32#7 ∧ SystemProofs.scScratch rd ≠ 33#7 ∧
     SystemProofs.scScratch rd + 1#7 ≠ 32#7 ∧ SystemProofs.scScratch rd + 1#7 ≠ 33#7 ∧
@@ -21,7 +21,7 @@ theorem scScratch_reserved (rd : regidx) :
 /-- The common SC prefix checks RAM and computes its reservation equality bit.
 For example, SC.W compares v32 and SC.D compares v33.
 An arbitrary continuation then runs with that bit in the scratch register.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_sc_success`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_sc_success`). -/
 theorem scPrefix_continue (rd rs1 : regidx) (reservation : JoltISA.VReg)
     (pre : SailJoltState) (address : BitVec 64)
     (baseRead : rX_bits rs1 pre.sail = .ok address pre.sail)

@@ -23,7 +23,8 @@ For example, a floor load with base 10 and immediate -2 has index 8;
 LD interleaves zero with its loaded destination.
 Jolt's prover: `crates/jolt-lookup-tables/src/traits.rs` (`LookupQuery`),
 `instructions/virt/floor_access.rs` (`floor_access!`),
-`instructions/virt/shift_data_{b,h,w}.rs` (`to_instruction_inputs`), and
+`crates/jolt-lookup-tables/src/instructions/virt/shift_data_{b,h,w}.rs`
+(`to_instruction_inputs`), and
 `instructions/riscv/{ld,sd}.rs` (`LookupQuery`) at `ff6fc6568`. -/
 noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
     (address : BitVec 64) (preState postState : SailJoltState) : BitVec 128 :=

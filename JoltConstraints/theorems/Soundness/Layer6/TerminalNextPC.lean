@@ -700,7 +700,6 @@ next unexpanded PC equal Sail's post-state next PC.
 For example, an ADDI at `0x80000000` followed by a real instruction selects
 Sail's `0x80000004` as the next source address.
 See jolt/crates/jolt-witness/src/witnesses/pc.rs (`NextUnexpandedPc::extract`)
-and jolt/crates/jolt-witness/src/witnesses/flags.rs (`ShouldJump::extract`)
 at ff6fc6568. -/
 theorem terminal_next_unexpanded_pc
     {F : Type} [Field F] (joltField : JoltField F)

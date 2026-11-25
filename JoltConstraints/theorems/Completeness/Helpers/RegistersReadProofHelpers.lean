@@ -23,7 +23,7 @@ namespace JoltConstraints
 /-- First source register read by an instruction, matching `TraceWitness.Rs1Ra`.
 For example, a floor LoadH selects its base, and ShiftDataH selects its value.
 Jolt's prover: `crates/jolt-riscv/src/instructions/virt/load_h.rs` and
-`shift_data_h.rs` (`jolt_instruction!`) at `ff6fc6568`. -/
+`crates/jolt-riscv/src/instructions/virt/shift_data_h.rs` (`jolt_instruction!`) at `ff6fc6568`. -/
 def rs1Operand? : JoltISA.Instr → Option JoltISA.Src
   | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _ | .XORI _ src _
   | .SLTI _ src _ | .SLTIU _ src _ | .JALR _ src _ | .BEQ src _ _ | .BNE src _ _
@@ -56,7 +56,7 @@ def rs1Operand? : JoltISA.Instr → Option JoltISA.Src
 /-- Second source register read by an instruction, matching `TraceWitness.Rs2Ra`.
 For example, StoreH selects the stored value, and ShiftDataH selects its address.
 Jolt's prover: `crates/jolt-riscv/src/instructions/virt/store_h.rs` and
-`shift_data_h.rs` (`jolt_instruction!`) at `ff6fc6568`. -/
+`crates/jolt-riscv/src/instructions/virt/shift_data_h.rs` (`jolt_instruction!`) at `ff6fc6568`. -/
 def rs2Operand? : JoltISA.Instr → Option JoltISA.Src
   | .BEQ _ src _ | .BNE _ src _ | .BLT _ src _ | .BGE _ src _ | .BLTU _ src _ | .BGEU _ src _
   | .ADD _ _ src | .ADDW _ _ src | .SUB _ _ src | .SUBW _ _ src | .MUL _ _ src

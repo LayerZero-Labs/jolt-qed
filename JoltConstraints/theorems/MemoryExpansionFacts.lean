@@ -434,8 +434,8 @@ theorem csrImmediateBitUpdate_memoryOk
 /-- Every source instruction's expansion passes the memory checks.
 For example, `SW x3, 4(x2)` emits `ShiftDataW v41 x3 x2 4`, `ADD v40 v40 v41`
 and `StoreW x2 v40 4`, and its offset 4 is small.
-Jolt at ff6fc6568: `crates/jolt-program/src/expand/memory/store.rs`
-(`expand_store`) and `crates/jolt-program/src/expand/memory/shared.rs`
+Jolt at ff6fc6568: `crates/jolt-program/src/expand/memory/shared.rs`
+(`expand_narrow_store`) and `crates/jolt-program/src/expand/memory/shared.rs`
 (`LaneWindow`). -/
 theorem expand_memoryOk : ∀ (source : SourceInstruction) (expanded : ExpandedSource),
     source.expand = some expanded → ExpandedMemoryOk expanded

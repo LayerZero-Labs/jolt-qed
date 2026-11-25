@@ -6,7 +6,7 @@ The files under `JoltConstraints/ConstraintGen/Generated/` are written by
 `scripts/expansion-parity/src/bin/constraint-gen.rs` from Jolt's own code.
 This file only fixes the shapes they use. What the data means for a witness is
 in `ConstraintGen/Semantics.lean`, and the proofs that the handwritten
-constraints say the same thing are in `ConstraintGen/Equiv.lean`, with the repin mismatches marked explicitly. -/
+constraints say the same thing are in `ConstraintGen/Equiv.lean`. -/
 
 namespace JoltConstraints.ConstraintGen
 

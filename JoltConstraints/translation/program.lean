@@ -154,7 +154,8 @@ structure SourceInstructionRow (Source : Type) where
 def MAX_FINAL_ROWS_PER_SOURCE : Nat := 64
 
 -- The final rows for one source row; none where Rust returns an error.
--- Rust also checks every final row against the profile (metadata.rs:39-45); for
+-- Rust also checks every final row against the profile
+-- (crates/jolt-program/src/expand/metadata.rs:39-45); for
 -- RV64IMAC_JOLT that check always passes, so it is left out.
 -- See : jolt/crates/jolt-program/src/expand/materialize.rs:75-105, 150-175
 --       jolt/crates/jolt-program/src/expand/metadata.rs:25-53
@@ -475,17 +476,20 @@ def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) : Opti
   let _ ← JoltISA.checkedCodeRegion layout (bytecode_source_extents rows)
   pure bytecode
 
--- See : jolt/tracer/src/lib.rs:372-397 (create_emulator)
--- Each size check is written as `(if _ then none else pure ())`: Lean 4.35's `do` elaborator
--- copies the continuation into both branches of a bare `if _ then none`.
+/-- **The tracer's initial state for an instance and private inputs**, or none where Jolt's
+`create_emulator` fails. It builds the checked memory layout, loads the program image and the
+starting registers (`init_state`), and installs the inputs, the advice and the code guard
+(`JoltISA.initialState`). The only size checks are those of `JoltDevice.initialMem`, which,
+like Jolt's `JoltDevice::try_with_io`, compare each length with the layout's capacity: the
+configured maximum rounded up to a multiple of 8.
+For example, `max_input_size = 1` gives an input capacity of 8 bytes, so two input bytes are
+accepted and nine are rejected (`initial_state_isSome_iff` in `theorems/layout_facts.lean`).
+Jolt at ff6fc6568: `tracer/src/lib.rs` (`create_emulator`) and `common/src/jolt_device.rs`
+(`JoltDevice::try_with_io`, `MemoryLayout::try_new`). -/
 noncomputable def JoltInstance.initial_state {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) :
     Option SailJoltState := do
   let layout ← joltInstance.memory_layout
-  -- create_emulator asserts these sizes against the configuration.
-  (if joltInstance.memory_config.max_trusted_advice_size.toNat < joltInstance.trusted_advice.size then none else pure ())
-  (if joltInstance.memory_config.max_untrusted_advice_size.toNat < privateInputs.untrusted_advice.size then none else pure ())
-  (if joltInstance.memory_config.max_input_size.toNat < joltInstance.inputs.size then none else pure ())
   let device : JoltDevice := { panic := false, memory_layout := layout }
   JoltISA.initialState
     (init_state joltInstance.program.entry_address

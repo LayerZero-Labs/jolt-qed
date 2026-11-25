@@ -79,7 +79,7 @@ theorem dwordRmw_ram_guards_of_loaded (old : JoltISA.VReg) (writable : WritableV
 /-- A pure AMO middle can use only Sail equality and the loaded old word.
 For example, an ADD certificate needs no other scratch-register values.
 The more general loaded-state inversion also supports SC's reservation flag.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_d`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_d`). -/
 theorem dwordRmw_ram_guards (old : JoltISA.VReg) (writable : WritableVReg old)
     (rs1 rs2 : regidx) (source : Src) (middle : Program → Program) (tail : Program)
     (resultValue : BitVec 64 → BitVec 64 → BitVec 64) (pre post : SailJoltState)
@@ -113,7 +113,7 @@ private theorem dwordBinop_registers (rd : regidx) :
 /-- An ADD, XOR, AND or OR doubleword-AMO template accepts its computed result.
 The caller supplies the existing pure middle-row calculation, once for its operator.
 For example, AMOADD.D uses the ADD middle certificate and stores `rs2 + old`.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_d`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_d`). -/
 theorem dwordBinop_ram_guards
     (binop : Dst → Src → Src → Instr) (value : BitVec 64 → BitVec 64 → BitVec 64)
     (rs2 rs1 rd : regidx) (pre post : SailJoltState)
@@ -146,7 +146,7 @@ theorem dwordBinop_ram_guards
 The existing middle certificate calculates the selection before the checked store.
 For example, AMOMIN.D selects the smaller signed operand and retains the old word
 for architectural writeback.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_minmax_d`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_minmax_d`). -/
 theorem dwordSelect_ram_guards
     (compare : Dst → Src → Src → Instr) (left right : Src)
     (value : BitVec 64 → BitVec 64 → BitVec 64)
@@ -178,7 +178,7 @@ theorem dwordSelect_ram_guards
 /-- A doubleword swap template accepts exactly its architectural source value.
 For example, AMOSWAP.D to a protected word retires only when that word stays equal.
 Its temporary load and final writeback do not add a source-read premise.
-Jolt at `ff6fc6568`: `amoswapd.rs` (`AMOSWAPD::expand`). -/
+Jolt at `ff6fc6568`: `expand/memory/amoswapd.rs` (`AMOSWAPD::expand`). -/
 theorem dwordSwap_ram_guards (rs2 rs1 rd : regidx) (pre post : SailJoltState)
     (valueRead : rX_bits rs2 pre.sail = .ok (sourceValue (.xreg rs2) pre) pre.sail)
     (inRam : RAM_START_ADDRESS ≤ (sourceValue (.xreg rs1) pre).toNat)
@@ -201,7 +201,7 @@ theorem dwordSwap_ram_guards (rs2 rs1 rd : regidx) (pre post : SailJoltState)
 /-- The three pure merge rows compute the containing word before its checked store.
 For example, replacing the upper word clears that lane and adds its shifted value.
 The equation keeps an arbitrary continuation, so AMOs and SC share this reduction.
-Jolt at `ff6fc6568`: `shared.rs` (`LaneWindow::merge`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`LaneWindow::merge`). -/
 theorem wordLaneMerge_continue (rs1 : regidx) (dword lane : JoltISA.VReg)
     (source : Src) (pre : SailJoltState) (address original value : BitVec 64)
     (baseRead : rX_bits rs1 pre.sail = .ok address pre.sail)
@@ -245,7 +245,7 @@ theorem wordLaneMerge_continue (rs1 : regidx) (dword lane : JoltISA.VReg)
 /-- A retiring merge checks its computed eight-byte word against protection.
 For example, an SC.W merge into code can retire only if its selected lane stays equal.
 Only the merge's register calculation is supplied; its store guard follows from execution.
-Jolt at `ff6fc6568`: `shared.rs` (`LaneWindow::merge`) and `Mmu::trace_store`. -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`LaneWindow::merge`) and `Mmu::trace_store`. -/
 theorem wordLaneMerge_ram_guard (rs1 : regidx) (dword lane : JoltISA.VReg)
     (source : Src) (pre post : SailJoltState) (address original value : BitVec 64)
     (baseRead : rX_bits rs1 pre.sail = .ok address pre.sail)
@@ -290,7 +290,7 @@ theorem wordLaneMerge_ram_guard (rs1 : regidx) (dword lane : JoltISA.VReg)
 /-- A retiring floor word load determines its alignment, guard and shared value.
 For example, a word load at address twelve reads the doubleword at eight.
 The same inversion supplies AMO opening loads and SC.W's first opening load.
-Jolt at `ff6fc6568`: `shared.rs` (`LaneWindow::open`).
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`LaneWindow::open`).
 This primitive fact is a candidate to move into JoltBytecode. -/
 theorem wordOpen_conditions (rs1 : regidx) (dword : JoltISA.VReg)
     (pre post : SailJoltState)
@@ -322,7 +322,7 @@ theorem wordOpen_conditions (rs1 : regidx) (dword : JoltISA.VReg)
 /-- Every retiring word-AMO window checks the word calculated by its middle fragment.
 For example, a swap supplies its architectural source without a middle row.
 The opening load determines the old shared word and the four-byte alignment.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_w`, `LaneWindow`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_w`, `LaneWindow`). -/
 theorem wordRmw_ram_guard (rd rs1 : regidx) (middle : Program) (source : Src)
     (resultValue : BitVec 32 → BitVec 64) (pre post : SailJoltState)
     (baseRead : rX_bits rs1 pre.sail = .ok (sourceValue (.xreg rs1) pre) pre.sail)
@@ -397,7 +397,7 @@ theorem wordRmw_ram_guard (rd rs1 : regidx) (middle : Program) (source : Src)
 
 /-- Matching low words make the executed lane merge equal the bundle's AMO value.
 For example, a sign-extended result and its zero-extended low word write the same lane.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_w`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_w`). -/
 theorem wordLaneValue_eq_storeValue (op : amoop) (address original source value : BitVec 64)
     (aligned : address &&& 3 = 0)
     (lowWord : (Sail.BitVec.extractLsb value 31 0 : BitVec 32) =
@@ -425,7 +425,7 @@ theorem wordLaneValue_eq_storeValue (op : amoop) (address original source value 
 /-- The four binops and swap use the same opened-lane and merge templates.
 For example, ADD inserts one ADD row between opening and merging the word.
 The joint identity handles the x0 scratch allocation once for all five programs.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_w`) and `amoswapw.rs`. -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_w`) and `expand/memory/amoswapw.rs`. -/
 theorem wordTemplates (rd rs1 rs2 : regidx) :
     amoaddwProgramAuto rd rs1 rs2 = amoWordBinopProgram Instr.ADD rs2 rs1 rd ∧
     amoxorwProgramAuto rd rs1 rs2 = amoWordBinopProgram Instr.XOR rs2 rs1 rd ∧
@@ -446,7 +446,7 @@ theorem wordTemplates (rd rs1 rs2 : regidx) :
 one comparison template.
 For example, unsigned max reverses the SLTU operands.
 The x0 allocator case is shared across the four identities.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_minmax_w`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_minmax_w`). -/
 theorem wordSelectTemplates (rd rs1 rs2 : regidx) :
     amominwProgramAuto rd rs1 rs2 = AtomicFamily.amoWordWindowProgram
       (AtomicFamily.amoWordSelectLaneMiddle Instr.SLT false rs2 rd)
@@ -473,7 +473,7 @@ theorem wordSelectTemplates (rd rs1 rs2 : regidx) :
 /-- Extending both operands preserves each word min/max selection.
 The two Boolean parameters choose signed versus unsigned order and min versus max.
 For example, signed max compares old against new after sign extension.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_minmax_w`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_minmax_w`). -/
 theorem wordSelect_result (signed reverse : Bool) (source : BitVec 64) (old : BitVec 32) :
     (if AtomicFamily.amoWordSelectFlag (if signed then zopz0zI_s else zopz0zI_u) reverse
         (sign_extend (m := 64) (Sail.BitVec.extractLsb source 31 0 : BitVec 32))
@@ -492,7 +492,7 @@ theorem wordSelect_result (signed reverse : Bool) (source : BitVec 64) (old : Bi
 For example, signed min stores the smaller low word while keeping the other lane.
 The existing comparison certificate supplies selection; the retiring store supplies
 protection of code and public input bytes.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_minmax_w`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_minmax_w`). -/
 theorem wordSelect_ram_guard (op : amoop)
     (cmp : Dst → Src → Src → Instr) (less : BitVec 64 → BitVec 64 → Bool)
     (reverse : Bool)
@@ -545,7 +545,7 @@ theorem wordSelect_ram_guard (op : amoop)
 /-- An executed word binop supplies acceptance of its actual computed lane.
 For example, XOR preserves the containing word's other four bytes.
 The existing row certificate supplies the calculation; execution supplies protection.
-Jolt at `ff6fc6568`: `shared.rs` (`expand_amo_w`). -/
+Jolt at `ff6fc6568`: `expand/memory/shared.rs` (`expand_amo_w`). -/
 theorem wordBinop_ram_guard (op : amoop) (binop : Dst → Src → Src → Instr)
     (value : BitVec 64 → BitVec 64 → BitVec 64) (rs2 rs1 rd : regidx)
     (pre post : SailJoltState)
@@ -587,7 +587,7 @@ theorem wordBinop_ram_guard (op : amoop) (binop : Dst → Src → Src → Instr)
 
 /-- A retiring word swap supplies the guard for its actual architectural source.
 For example, swapping the same word into protected code passes the check.
-Jolt at `ff6fc6568`: `amoswapw.rs` (`AMOSWAPW::expand`). -/
+Jolt at `ff6fc6568`: `expand/memory/amoswapw.rs` (`AMOSWAPW::expand`). -/
 theorem wordSwap_ram_guard (rs2 rs1 rd : regidx) (pre post : SailJoltState)
     (baseRead : rX_bits rs1 pre.sail = .ok (sourceValue (.xreg rs1) pre) pre.sail)
     (valueRead : rX_bits rs2 pre.sail = .ok (sourceValue (.xreg rs2) pre) pre.sail)

@@ -37,15 +37,13 @@ Then build the comparison module through the shared build lock:
 
 `Types.lean` fixes the shapes of rows and relations.
 `Semantics.lean` maps generated names to this branch's `translation/` witness model.
-Its `RepinInputs` keeps the new `Halt`, `HaltPanic` columns and public protected-word mask C explicit, since the old witness model lacks them.
+The witness model has the `Halt` and `HaltPanic` columns, and `RepinInputs` holds only the public protected-word mask C (`writeProtected`), which `ConstraintEquations.generated` fixes from the bytecode and layout.
 The C mask multiplies the output inside the RAM-address sum; it is not dropped or treated as a constant-one weight.
-Generated circuit-flag and lookup-table types preserve names the old types cannot represent.
-The name-preserving bridges map every old flag/table exhaustively; halt flags are false on old instructions, whose ISA has no halt constructor.
+The name-preserving bridges map every handwritten flag and table exhaustively, and the halt flags read the model's `Halt` and `HaltPanic` flags.
 
-`Equiv.lean` proves the unchanged comparisons and retains marked mismatch admissions for the changed comparisons and missing kind coverage.
-The aggregate theorems depend on those admissions and do not certify equivalence to Jolt main.
-The handwritten constraints, witness, ISA, language and soundness proofs are unchanged.
-See [the complete repin inventory](../../reports/2026-11-24-constraint-repin-diff.md) for exact old/new equations, source lines, PRs, proof status and the uncovered handwritten conjuncts.
+`Equiv.lean` proves every comparison with no admission: each R1CS row and each of the four relations holds iff its handwritten counterpart holds, and the per-kind flag, lookup-table and RAF tables equal Lean's metadata.
+An elaboration-time check requires that the only Jolt kinds without a Lean constructor are the inline-only `VirtualXORROT2` and `VirtualXORROT61`, which the model leaves out.
+[The repin inventory](../../reports/2026-11-24-constraint-repin-diff.md) records the old and new equations, source lines and PRs as of 2026-11-24, before the handwritten constraints were updated.
 
 ## Checks
 

@@ -47,7 +47,7 @@ The tracer accepts that store's address only inside the window
 `[0x40000000, 2^63 + 2^31)`, so its sum does not wrap (`HonestTrace.access_noWrap`).
 In the example, the store at the wrapped address `2^64 - 16` lies above the
 window, and the tracer stops before the ShiftData row retires.
-Jolt at ff6fc6568: `crates/jolt-program/src/expand/memory/store.rs` (`expand_store`)
+Jolt at ff6fc6568: `crates/jolt-program/src/expand/memory/shared.rs` (`expand_narrow_store`)
 and `tracer/src/emulator/mmu.rs` (`assert_effective_address`).
 
 Rust, at `ff6fc6568`:
@@ -101,7 +101,8 @@ private theorem shiftData_lookup_sum {F : Type} [Field F]
 right input; LD uses its captured destination and ShiftData uses address plus
 immediate, for example 10 + (-2) = 8, using `HonestTrace.shiftData_address_noWrap`.
 Jolt's prover: `crates/jolt-lookup-tables/src/traits.rs` (`to_lookup_operands`)
-and `instructions/virt/shift_data_b.rs` (`to_instruction_inputs`) at `ff6fc6568`. -/
+and `crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs`
+(`to_instruction_inputs`) at `ff6fc6568`. -/
 private theorem lookupIndex_right_eq_input {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Fin params.traceLength) (ht : t.val < trace.rows.size)

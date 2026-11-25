@@ -55,8 +55,11 @@ theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
   exact ⟨v, s', hstep, hrel', RunInv.of_block hruns hrows hinv,
     JoltCodeIntact.of_block hruns hcode⟩
 
-/-- Sail is about to execute the source halt of `kind`.
-For example, EBREAK identifies a panic halt, while `jolt.success` identifies success. -/
+/-- Sail is about to execute the source halt of `kind`: Sail's PC is the address of the program's
+row holding that halt.
+For example, EBREAK identifies a panic halt, while `jolt.success` identifies success. For a
+program built from the ELF, the success row's bytes are the word `0x0000305B`
+(`SailHalted.success_word`). -/
 def SailHalted (program : Rv64ProgramImage SourceInstruction) (s : SailState)
     (kind : JoltHaltKind) : Prop :=
   ∃ row : SourceInstructionRow SourceInstruction,
@@ -84,6 +87,22 @@ theorem SailHalted.of_related {program : Rv64ProgramImage SourceInstruction} {jt
     {s : SailState} (h : Related jt s) (kind : JoltHaltKind) (hn : NextIsHalt program jt kind) : SailHalted program s kind := by
   obtain ⟨row, hnext, hat, hebreak⟩ := hn
   exact ⟨row, h.pc_eq_nextPC hnext, hat, hebreak⟩
+
+/-- **At a success halt, Sail's PC points at the success word.** For a program built from the
+ELF's sections, the row Sail's PC names holds, in the image, an encoding whose decoded word is
+`Decode.joltSuccessWord`, `0x0000305B`. For example, Sail's PC cannot name a success halt at an
+address whose image bytes are the ADDI bytes `93 00 10 00`.
+Jolt at ff6fc6568: `crates/jolt-program/src/image/decode.rs` (`decode_custom`). -/
+theorem SailHalted.success_word {program : Rv64ProgramImage SourceInstruction}
+    {elf : ElfSections} (hdecoded : program.DecodedFrom elf) {s : SailState}
+    (h : SailHalted program s .success) :
+    ∃ (row : SourceInstructionRow SourceInstruction) (e : BlockEncoding),
+      s.regs.get? Register.PC = some row.address ∧ RowEncoding program row e ∧
+        e.decodedWord = Decode.joltSuccessWord := by
+  obtain ⟨row, hpc, hat, hsource⟩ := h
+  obtain ⟨e, henc, hword⟩ :=
+    hdecoded.joltSuccess_word (Array.mem_of_find?_eq_some hat) hsource
+  exact ⟨row, e, hpc, henc, hword⟩
 
 /-- The trace's non-halting source blocks form a linked prefix ending at `halt`.
 Its observation retains final memory, layout and the explicit halt claim.
@@ -126,19 +145,20 @@ private theorem chain_layout (program : Rv64ProgramImage SourceInstruction) :
           (fun c hc => (hlink c hc).symm) b hb
         exact ⟨ih.1.trans hpost, ih.2.trans hpost⟩
 
-/-- Simulate every conforming block in a halt prefix and chain its Sail steps.
-For example, an ADDI before a halt contributes one successful Sail step. -/
+/-- Simulate every conforming block in a halt prefix and chain its Sail steps: Sail takes exactly
+one step per block of the prefix.
+For example, an ADDI before a halt contributes one successful Sail step, and an empty prefix
+takes none. -/
 theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {trace : HonestTrace joltInstance privateInputs}
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hcfg : (trace.prover_config joltInstance).isSome)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
-    ∃ (n : Nat) (s : SailState), sailRun n (sailInit trace.initialState) = .ok () s ∧
+    ∃ s : SailState, sailRun pre.length (sailInit trace.initialState) = .ok () s ∧
       RunRel joltInstance.program halt s := by
   have h₀ := RunRel.initial trace
   cases pre with
-  | nil => exact ⟨0, _, rfl, by rw [hp.empty rfl]; exact h₀⟩
+  | nil => exact ⟨_, rfl, by rw [hp.empty rfl]; exact h₀⟩
   | cons first rest =>
     obtain ⟨l, s, hl, hrun, hrel⟩ := sailRun_of_chain (RunRel joltInstance.program)
       (first :: rest) hp.chain
@@ -146,28 +166,28 @@ theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
         (hconf b hb)
         (fun ebreak => (hp.runs b hb).2 ⟨.panic, ebreak⟩)) first rfl (sailInit trace.initialState)
       (by rw [hp.first first rfl]; exact h₀)
-    exact ⟨_, s, hrun, hp.last l hl ▸ hrel⟩
+    exact ⟨s, hrun, hp.last l hl ▸ hrel⟩
 
-/-- Sail reproduces the non-halting blocks of an honest trace and extracts the
-same final output bytes from shared memory.
+/-- Sail reproduces the non-halting blocks of an honest trace, one `try_step` per block, and
+extracts the same final output bytes from shared memory.
 The stopping alternative records the explicit halt kind and its panic claim;
-for example, EBREAK records panic true without reading a flag word. -/
+for example, EBREAK records panic true without reading a flag word, and a prefix of three blocks
+gives `sailRun 3`. -/
 theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
-    ∃ (n : Nat) (s : SailState),
-      WholeRun.sailRun n (sailInit trace.initialState) = .ok () s ∧
+    ∃ s : SailState,
+      WholeRun.sailRun pre.length (sailInit trace.initialState) = .ok () s ∧
       Related halt s ∧
       trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
         trimTrailingZeros (final.jolt_device.outputsOf final.sail.mem) ∧
       ∃ kind, final.halted = some kind ∧
         final.jolt_device.panic = (kind == JoltHaltKind.panic) ∧
         (SailHalted joltInstance.program s kind ∨ halt = final) := by
-  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun hdecoded hcfg hconf
-  refine ⟨n, s, hrun, hrel.1, ?_, ?_⟩
+  obtain ⟨s, hrun, hrel⟩ := hp.sailRun hdecoded hconf
+  refine ⟨s, hrun, hrel.1, ?_, ?_⟩
   · rw [hrel.1.outputs]
     simp only [JoltDevice.outputsOf, hp.observation.1, hp.observation.2.1]
   · rcases hp.observation.2.2 with ⟨kind, next, recorded, claim⟩ | same
@@ -180,8 +200,8 @@ end WholeRun
 open WholeRun
 
 /-- Every accepted constraint witness has an honest trace and a Sail run through
-its conforming non-halting prefix, with the claimed shared output bytes.
-At an explicit halt, its kind determines the public panic claim.
+its conforming non-halting prefix, one `try_step` per block, with the claimed shared output
+bytes. At an explicit halt, its kind determines the public panic claim.
 For example, a panic-ending trace is covered with public panic true.
 Jolt at `ff6fc6568`: `rv64_trace_constraints` halt lane and `Cpu::halt`. -/
 theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField F)
@@ -197,8 +217,8 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
       ∃ (pre : List Block) (halt final : SailJoltState),
         HaltPrefix trace pre halt final ∧
         ((∀ b ∈ pre, BlockConforms joltInstance.program b) →
-          ∃ (n : Nat) (s : SailState),
-            sailRun n (sailInit trace.initialState) = .ok () s ∧
+          ∃ s : SailState,
+            sailRun pre.length (sailInit trace.initialState) = .ok () s ∧
             Related halt s ∧
             trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
               trimTrailingZeros joltInstance.outputs ∧
@@ -210,10 +230,10 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
       satisfied
   obtain ⟨pre, halt, final, hp⟩ := trace.haltPrefix
   refine ⟨privateInputs, trace, hmo, hcfg, hspoil, pre, halt, final, hp, fun hconf => ?_⟩
-  obtain ⟨n, s, hrun, hrel, houts, hstop⟩ :=
-    trace.sail_reproduces hdecoded hcfg hp hconf
+  obtain ⟨s, hrun, hrel, houts, hstop⟩ :=
+    trace.sail_reproduces hdecoded hp hconf
   obtain ⟨hmo_out, hmo_panic⟩ :=
     (trace.matches_outputs_final final hp.back).1 hmo
-  refine ⟨n, s, hrun, hrel, houts.trans hmo_out, ?_⟩
+  refine ⟨s, hrun, hrel, houts.trans hmo_out, ?_⟩
   obtain ⟨kind, recorded, claim, stop⟩ := hstop
   exact ⟨kind, recorded, hmo_panic.symm.trans claim, stop⟩

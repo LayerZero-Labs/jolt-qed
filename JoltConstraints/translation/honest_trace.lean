@@ -144,8 +144,8 @@ def Rv64ProgramImage.instructionAt (program : Rv64ProgramImage SourceInstruction
 -- project's equivalence proofs use for that expansion; they agree with the honest
 -- tracer's formulas, including division by zero and the signed overflow cases. Other
 -- instructions are not patched.
--- See : jolt/tracer/src/instruction/div.rs, divu.rs, rem.rs, remu.rs, divw.rs,
---       divuw.rs, remw.rs, remuw.rs (trace)
+-- See : the `trace` methods in tracer/src/instruction/{div,divu,rem,remu,divw,divuw,
+--       remw,remuw}.rs
 -- SC.W and SC.D have no runtime advice after merged PR #2039 (0dad0d9e),
 -- rechecked at public pin ff6fc6568:
 -- https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/tracer/src/instruction/scw.rs#L46-L51
@@ -269,7 +269,8 @@ structure ProverConfig where
 -- at all. An honest prover never reaches it, so this condition is very mild.
 -- See : jolt/tracer/src/instruction/virtual_assert_eq.rs:18-32
 --       jolt/jolt-platform/src/spoil.rs:1-26
---       jolt/crates/jolt-program/src/expand/memory/scw.rs:49-56 (and scd.rs: immediate 0)
+--       jolt/crates/jolt-program/src/expand/memory/scw.rs:49-56 (and
+--       crates/jolt-program/src/expand/memory/scd.rs: immediate 0)
 --       jolt/jolt-inlines/p256/src/sdk.rs:768-787, 853-858 (ECDSA advice checks)
 def Trace.SpoilAssertsPass (trace : Trace) : Prop :=
   ∀ row ∈ trace.rows, ∀ (lhs rhs : JoltISA.Src) (imm : BitVec 128),

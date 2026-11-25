@@ -54,7 +54,9 @@ theorem ram_word_address_checks
 /-- A memory row selects an admitted word, so its accessed doubleword passes
 all address-only checks, including loads from I/O and stores to heap padding.
 For example, `Load + Store = 1` excludes an otherwise unconstrained zero address.
-Jolt at `ff6fc6568`: `read_write_checking.rs` (the access-count claim). -/
+Jolt at `ff6fc6568`:
+`crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs`
+(the access-count claim). -/
 theorem memory_row_address_checks
     {F : Type} [Field F] {inst : JoltInstance SourceInstruction}
     {inputs : JoltPrivateInputs} {params : WitnessParams} {witness : WitnessType F params}
@@ -179,7 +181,9 @@ The selected word agrees with shared memory, and the stored word is the constrai
 write value.
 For example, an input SD is admitted precisely when it keeps the old word.
 No additional program restriction is an input to this theorem.
-Jolt at `ff6fc6568`: `read_write_checking.rs` (protected-increment claim) and
+Jolt at `ff6fc6568`:
+`crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs`
+(protected-increment claim) and
 `tracer/src/emulator/mmu.rs` (`assert_write_protected_store`). -/
 theorem protected_store_of_constraints
     {F : Type} [Field F] {inst : JoltInstance SourceInstruction}
