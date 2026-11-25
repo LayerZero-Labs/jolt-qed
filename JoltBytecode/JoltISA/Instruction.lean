@@ -59,10 +59,10 @@ def LoadFaultClass.alignFault : LoadFaultClass → ExceptionType
 -- Rust: [instruction formats](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format).
 -- Final immediates are already decoded; inline expansion may emit full u64
 -- operands (e.g. ADDI with 4096). Source encoding widths belong in Encoded below.
--- Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/expand/inline.rs#L204-L245
--- Rust formats: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_i.rs#L9-L14
+-- Rust: `crates/jolt-program/src/expand/inline.rs` (`emit_i`, `emit_ld`) at ff6fc6568
+-- Rust formats: `tracer/src/instruction/format/format_i.rs` (`FormatI`) at ff6fc6568
 -- FormatB retains a signed i128; proof-trace conversion separately bounds its magnitude.
--- Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_b.rs#L9-L14
+-- Rust: `tracer/src/instruction/format/format_b.rs` (`FormatB`) at ff6fc6568
 inductive Instr where
   | ADDI (dst : Dst) (src : Src) (imm : BitVec 64)
   | ADDIW (dst : Dst) (src : Src) (imm : BitVec 64)
@@ -288,7 +288,8 @@ end Encoded
 
 /-- Nat-valued helper parameters denote Rust u64 immediates. Keep Nat for the
 arithmetic helper API, but reject values that Rust's final format cannot store.
-Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_virtual_right_shift_i.rs#L9-L14
+Rust: `tracer/src/instruction/format/format_virtual_right_shift_i.rs`
+(`FormatVirtualRightShiftI`) at ff6fc6568
 -/
 def Instr.OperandsRepresentable : Instr → Prop
   | .VirtualPow2I _ imm | .VirtualPow2IW _ imm | .VirtualShiftRightBitmaskI _ imm
@@ -299,7 +300,7 @@ def Instr.OperandsRepresentable : Instr → Prop
 
 /-- FormatB carries i128, but successful proof-trace conversion requires a u64
 magnitude. Preserve the signed immediate, including values ignored by execution.
-Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-riscv/src/trace_row.rs#L279-L283
+Rust: `crates/jolt-riscv/src/trace_row.rs` (`JoltTraceRow::new`, error `ImmTooWide`) at ff6fc6568
 -/
 def Instr.CompactImmediateFits : Instr → Prop
   | .BEQ _ _ imm | .BNE _ _ imm | .BLT _ _ imm | .BGE _ _ imm

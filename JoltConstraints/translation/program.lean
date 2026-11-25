@@ -154,7 +154,8 @@ structure SourceInstructionRow (Source : Type) where
 def MAX_FINAL_ROWS_PER_SOURCE : Nat := 64
 
 -- The final rows for one source row; none where Rust returns an error.
--- Rust also checks every final row against the profile (metadata.rs:39-45); for
+-- Rust also checks every final row against the profile
+-- (crates/jolt-program/src/expand/metadata.rs:39-45); for
 -- RV64IMAC_JOLT that check always passes, so it is left out.
 -- See : jolt/crates/jolt-program/src/expand/materialize.rs:75-105, 150-175
 --       jolt/crates/jolt-program/src/expand/metadata.rs:25-53

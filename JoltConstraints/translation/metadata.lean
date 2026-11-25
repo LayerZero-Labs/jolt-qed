@@ -53,7 +53,8 @@ def immediate (instruction : JoltISA.Instr) : Int :=
 For example, LD selects its captured destination and ShiftData selects both
 its second source and its immediate.
 Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and
-`instructions/virt/{load,store,shift_data}_{b,h,w}.rs` (`jolt_instruction!`)
+`crates/jolt-riscv/src/instructions/virt/{load,store,shift_data}_{b,h,w}.rs`
+(`jolt_instruction!`)
 at `ff6fc6568`. -/
 def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bool :=
   match flag with
@@ -135,7 +136,8 @@ def instructionFlag (instruction : JoltISA.Instr) (flag : InstructionFlags) : Bo
 /-- The circuit flags fixed by an instruction, before sequence stamping.
 For example, a floor load sets `Load` and `AddOperands`; LD sets only `Load`.
 Jolt's prover: `crates/jolt-riscv/src/instructions/i/ld.rs` and
-`instructions/virt/{load,store,shift_data}_{b,h,w}.rs` (`jolt_instruction!`)
+`crates/jolt-riscv/src/instructions/virt/{load,store,shift_data}_{b,h,w}.rs`
+(`jolt_instruction!`)
 at `ff6fc6568`. -/
 def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
   match flag with

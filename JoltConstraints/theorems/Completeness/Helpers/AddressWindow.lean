@@ -79,7 +79,7 @@ The backing ends at the lowest address plus `8 * k` bytes, where `k` is a power 
 two and the end fits in 64 bits, so `8 * k ≤ 2^63`; the lowest address lies below
 RAM, which starts at `2^31`.
 For example, a layout with `k = 2^20` words ends its backing near `2^31 + 2^23`.
-Jolt at ff6fc6568: `crates/jolt-common/src/jolt_device.rs` (`MemoryLayout::ram_size`). -/
+Jolt at ff6fc6568: `common/src/jolt_device.rs` (`MemoryLayout::ram_size`). -/
 theorem ram_backing_end_le (device : JoltDevice) (config : MemoryConfig)
     (built : MemoryLayout.new config = some device.memory_layout) :
     Mmu.ram_backing_end device ≤ 0x8000000080000000 := by
@@ -321,7 +321,7 @@ theorem _root_.HonestTrace.xreg_kept {joltInstance : JoltInstance SourceInstruct
 architectural base and offset, which reads the same base value.
 For example, `ShiftDataW v41 x3 x2 4` at row `t` is followed by `ADD v40 v40 v41`
 and `StoreW x2 v40 4`, and x2 is unchanged at row `t + 2`.
-Jolt at ff6fc6568: `crates/jolt-program/src/expand/memory/store.rs` (`expand_store`). -/
+Jolt at ff6fc6568: `crates/jolt-program/src/expand/memory/shared.rs` (`expand_narrow_store`). -/
 theorem _root_.HonestTrace.shiftData_store {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (t : Nat) (inside : t < trace.rows.size) {address : Src} {imm : BitVec 64}

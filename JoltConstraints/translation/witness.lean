@@ -145,7 +145,8 @@ structure WitnessParams where
 
 -- The widths Rust's prover picks from the padded trace length: 4 and 16 below 2^25
 -- cycles, else 8 and 32. The verifier does not check this choice; it accepts any
--- widths that pass the structural checks above (dimensions.rs:381-412). So this is
+-- widths that pass the structural checks above (`JoltFormulaDimensions::try_from` in
+-- crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs). So this is
 -- a fact about the honest prover's sizes, used only by completeness.
 -- Rust: crates/jolt-prover/src/config.rs::one_hot_config.
 def WitnessParams.ProverChunkConfig (p : WitnessParams) : Prop :=

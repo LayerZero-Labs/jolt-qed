@@ -9,7 +9,8 @@ namespace JoltConstraints
 For example, a success halt has `Halt = 1`, `HaltPanic = 0`, and can enter padding
 only when `claimedPanic = false`.
 Jolt at `ff6fc6568`: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
-(`NextIsNoopEqIsNoopUnlessHalt`) and `geometry/spartan.rs` (`PRODUCT_HALT_LANE_OUTPUT`). -/
+(`NextIsNoopEqIsNoopUnlessHalt`) and
+`crates/jolt-claims/src/protocols/jolt/geometry/spartan.rs` (`PRODUCT_HALT_LANE_OUTPUT`). -/
 def haltEndRule {F : Type} [Field F] {params : WitnessParams}
     (claimedPanic : Bool) (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

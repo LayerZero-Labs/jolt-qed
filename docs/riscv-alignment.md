@@ -364,7 +364,7 @@ It holds initially and is preserved by every source block, including CSR writes,
 `ImageDecoded` says that each RISC-V row of the image is what Jolt's decoder (`joltDecode`, and `joltUncompress` for a compressed row) gives for the bytes `memory_init` loads at its address.
 No constraint checks it, because it describes how the bytecode was produced.
 The whole-run theorems derive it from the platform premise `DecodedFrom` (`WholeRun/Elf.lean`): the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF.
-`DecodedFrom` fixes the layout and every RISC-V row, and every program Jolt builds satisfies it; it does not fix which of Jolt's own instructions a row holds.
+`DecodedFrom` fixes the layout and the instruction of every row, and every program Jolt builds satisfies it. A RISC-V row is `joltDecode` of its bytes, and a row of one of Jolt's own instructions is `JoltCustomInstruction.decode?` of them, a transcription of Jolt's `decode_custom`. For example, a `jolt.success` row must sit on the word `0x0000305B` (`DecodedFrom.joltSuccess_word`).
 `ElfSections.layout?` transcribes `decode_elf` at `ff6fc6568` up to the call of `decode_instruction`: the loaded sections, `memory_init`, `program_end`, `merge_ranges`, the data ranges that `$d` mapping symbols mark inside text sections, `decode_text_section` with its odd-address check, and the check that no writable section overlaps the code region (`code_region`, transcribed as `codeRegionAt`).
 `decode_elf` reads each piece of a merged text range outside the data ranges from its byte map with `unwrap_or(0)`.
 The `object` crate reports a section as text only when it is `SHT_PROGBITS`, and it gives such a section exactly `sh_size` bytes of data or fails.
@@ -387,7 +387,7 @@ The layout never changes during a run, so the bound holds at every block.
 
 `HonestTrace.sail_reproduces` (`WholeRun/Top.lean`) is the run-level theorem.
 It applies to every honest trace and every `HaltPrefix` of it, where `HaltPrefix` names the blocks `pre` before the trace's first explicit halt, ending at the state `halt`.
-If Jolt's prover accepts the trace and every block of `pre` satisfies `BlockConforms`, then `sailRun n (sailInit trace.initialState)` succeeds at a Sail state `s` with three properties:
+If every block of `pre` satisfies `BlockConforms`, then `sailRun pre.length (sailInit trace.initialState)` succeeds at a Sail state `s` with three properties. Sail takes exactly one step per block of `pre`.
 - `s` is related to `halt` (`Related`), through the register projection and memory conditions that [`whole-run-theorem.md`](whole-run-theorem.md) describes;
 - the trimmed output bytes that `outputsOf` reads from its memory are those it reads from the trace's final state;
 - the final state records a halt kind that fixes its panic flag, and either `PC` names a halt row of that kind in the image (`SailHalted`), or `halt` is the final state.
@@ -403,7 +403,6 @@ The premises, by class:
 
 | Premise | Class | Where |
 | --- | --- | --- |
-| `hcfg` (`sail_reproduces` only) | prover acceptance | Jolt's prover accepts the trace; `sail_soundness` obtains it from `soundness` |
 | `DecodedFrom` | platform | the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF; `ImageDecoded` and `RowsAligned` follow from it |
 | `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |
 

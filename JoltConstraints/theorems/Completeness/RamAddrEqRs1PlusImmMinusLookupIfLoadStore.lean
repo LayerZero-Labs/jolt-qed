@@ -37,7 +37,9 @@ Rust, at `ff6fc6568`:
   `tracer/src/instruction/sd.rs` (`SD::exec`) and
   `tracer/src/instruction/floor_access.rs` (`addresses`), all `wrapping_add`.
 - The cells: `crates/jolt-witness/src/witnesses/ram.rs` (`RamAddress`),
-  `registers.rs` (`Rs1Value`), `operands.rs` (`Imm`) and `lookups.rs` (`LookupOutput`). -/
+  `crates/jolt-witness/src/witnesses/registers.rs` (`Rs1Value`),
+  `crates/jolt-witness/src/witnesses/operands.rs` (`Imm`) and
+  `crates/jolt-witness/src/witnesses/lookups.rs` (`LookupOutput`). -/
 theorem honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
