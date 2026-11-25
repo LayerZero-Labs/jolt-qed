@@ -75,6 +75,133 @@ See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_elf`, `memory_init.ex
 def ElfSection.bytes (section_ : ElfSection) : List (BitVec 64 × BitVec 8) :=
   section_.data.mapIdx fun offset byte => (BitVec.ofNat 64 (section_.address.toNat + offset), byte)
 
+/-! ## The code region -/
+
+/-- **Jolt's `code_region`**: the interval of doubleword indices, counted from `lowest`, from
+the doubleword that holds the first source instruction through the one that holds the last.
+`sources` lists the address and compressed flag of each source instruction. A source at address
+0 is padding and is skipped. It is none where `lowest` is not doubleword aligned, a source
+extent overflows `u64`, a source lies below `lowest`, or a source address is odd. Without
+sources the interval is `(0, 0)`.
+`JoltISA.codeRegionOf` is this function at the lowest address of a memory layout
+(`codeRegionOf_eq`), and `decode_elf` calls it with `lowest = 0`.
+For example, sources at `lowest + 6` (compressed) and `lowest + 38` give `(0, 6)`.
+See : `jolt/crates/jolt-program/src/preprocess/ram.rs` at `ff6fc6568` (`code_region`,
+`source_word_intervals`). -/
+def codeRegionAt (lowest : Nat) (sources : List (BitVec 64 × Bool)) : Option (Nat × Nat) := do
+  guard (lowest % 8 == 0)
+  let mut region : Option (Nat × Nat) := none
+  for (address, compressed) in sources do
+    if address != 0 then
+      let start := address.toNat
+      let stop ← MemoryLayout.checkedAdd start (if compressed then 2 else 4)
+      guard (lowest ≤ start && start % 2 == 0)
+      let first := (start - lowest) / 8
+      let last := (stop - lowest + 7) / 8
+      region := some (match region with
+        | none => (first, last)
+        | some (left, right) => (min left first, max right last))
+  pure (region.getD (0, 0))
+
+/-- The code region of a memory layout is `codeRegionAt` at the layout's lowest address.
+For example, both give the same interval for the source rows of a program. -/
+theorem codeRegionOf_eq (layout : MemoryLayout) (sources : List (BitVec 64 × Bool)) :
+    JoltISA.codeRegionOf layout sources = codeRegionAt layout.get_lowest_address.toNat sources :=
+  rfl
+
+/-- The word interval `region`, counted from `lowest`, covers the source `x`: `x` lies at or
+above `lowest` at an even address, and the interval contains every doubleword that holds a byte
+of `x`. For example, `(0, 1)` covers a 4-byte source at `lowest + 4`. -/
+def RegionCovers (lowest : Nat) (region : Nat × Nat) (x : BitVec 64 × Bool) : Prop :=
+  lowest ≤ x.1.toNat ∧ x.1.toNat % 2 = 0 ∧ region.1 ≤ (x.1.toNat - lowest) / 8 ∧
+    (x.1.toNat + (if x.2 then 2 else 4) - lowest + 7) / 8 ≤ region.2
+
+/-- The interval `r'` contains the interval `r`, if `r` exists. -/
+private def Widens (r r' : Option (Nat × Nat)) : Prop :=
+  ∀ a b, r = some (a, b) → ∃ a' b', r' = some (a', b') ∧ a' ≤ a ∧ b ≤ b'
+
+/-- The loop of `codeRegionAt` only widens its interval, and the final interval covers every
+nonzero source. -/
+private theorem forIn_region (lowest : Nat)
+    (f : (BitVec 64 × Bool) → Option (Nat × Nat) → Option (ForInStep (Option (Nat × Nat))))
+    (hf : ∀ x r y, f x r = some y → ∃ r', y = .yield r' ∧ Widens r r' ∧
+      (x.1 ≠ 0 → ∃ c, r' = some c ∧ RegionCovers lowest c x)) :
+    ∀ (l : List (BitVec 64 × Bool)) (r r' : Option (Nat × Nat)), forIn l r f = some r' →
+      Widens r r' ∧ ∀ x ∈ l, x.1 ≠ 0 → ∃ c, r' = some c ∧ RegionCovers lowest c x
+  | [], r, r', h => by
+    simp only [List.forIn_nil] at h
+    cases h
+    exact ⟨fun a b h => ⟨a, b, h, le_refl _, le_refl _⟩, by simp⟩
+  | x :: l, r, r', h => by
+    simp only [List.forIn_cons] at h
+    obtain ⟨y, hy, hrest⟩ := Option.bind_eq_some_iff.mp h
+    obtain ⟨r₁, rfl, hw, hc⟩ := hf x r _ hy
+    obtain ⟨hw', hl⟩ := forIn_region lowest f hf l r₁ r' hrest
+    refine ⟨fun a b hab => ?_, fun z hz hne => ?_⟩
+    · obtain ⟨a₁, b₁, h₁, ha₁, hb₁⟩ := hw a b hab
+      obtain ⟨a₂, b₂, h₂, ha₂, hb₂⟩ := hw' a₁ b₁ h₁
+      exact ⟨a₂, b₂, h₂, by omega, by omega⟩
+    · rcases List.mem_cons.mp hz with rfl | hz
+      · obtain ⟨⟨c₁, c₂⟩, rfl, hcov⟩ := hc hne
+        obtain ⟨a₂, b₂, h₂, ha₂, hb₂⟩ := hw' c₁ c₂ rfl
+        refine ⟨(a₂, b₂), h₂, hcov.1, hcov.2.1, ?_, ?_⟩
+        · have := hcov.2.2.1; simp only at this ⊢; omega
+        · have := hcov.2.2.2; simp only at this ⊢; omega
+      · exact hl z hz hne
+
+/-- **The code region covers every source.** If `codeRegionAt` succeeds, `lowest` is doubleword
+aligned and the interval covers every source at a nonzero address.
+For example, the interval of a program's rows contains the doubleword of each row's bytes. -/
+theorem codeRegionAt_covers {lowest : Nat} {sources : List (BitVec 64 × Bool)}
+    {region : Nat × Nat} (h : codeRegionAt lowest sources = some region)
+    {x : BitVec 64 × Bool} (hx : x ∈ sources) (hne : x.1 ≠ 0) :
+    lowest % 8 = 0 ∧ RegionCovers lowest region x := by
+  unfold codeRegionAt at h
+  simp only [Option.bind_eq_bind] at h
+  obtain ⟨u, hg, h⟩ := Option.bind_eq_some_iff.mp h
+  have hlow : lowest % 8 = 0 := by
+    simpa [guard, failure] using hg
+  refine ⟨hlow, ?_⟩
+  obtain ⟨r, hr, h⟩ := Option.bind_eq_some_iff.mp h
+  have key := forIn_region lowest _ ?_ sources none r hr
+  · obtain ⟨-, hcov⟩ := key
+    obtain ⟨c, rfl, hc⟩ := hcov x hx hne
+    simp only [Option.getD_some, pure, Option.some.injEq] at h
+    subst h
+    exact hc
+  · rintro ⟨address, compressed⟩ r y hy
+    simp only at hy
+    split at hy
+    · obtain ⟨stop, hstop, hy⟩ := Option.bind_eq_some_iff.mp hy
+      obtain ⟨u, hg, hy⟩ := Option.bind_eq_some_iff.mp hy
+      have hg' : lowest ≤ address.toNat ∧ address.toNat % 2 = 0 := by
+        simpa [guard, failure] using hg
+      have hstop' : stop = address.toNat + (if compressed then 2 else 4) := by
+        unfold MemoryLayout.checkedAdd at hstop
+        generalize (if compressed = true then 2 else 4) = w at hstop ⊢
+        by_cases hw : address.toNat + w < 2 ^ 64
+        · simp only [hw, ↓reduceIte, Option.some.injEq] at hstop
+          exact hstop.symm
+        · simp only [hw, ↓reduceIte, reduceCtorEq] at hstop
+      subst hstop'
+      simp only [pure, Option.some.injEq] at hy
+      subst hy
+      refine ⟨_, rfl, ?_, fun _ => ⟨_, rfl, ?_⟩⟩
+      · rintro a b rfl
+        exact ⟨_, _, rfl, Nat.min_le_left _ _, Nat.le_max_left _ _⟩
+      · refine ⟨hg'.1, hg'.2, ?_, ?_⟩
+        · cases r with
+          | none => exact le_refl _
+          | some ab => exact Nat.min_le_right _ _
+        · cases r with
+          | none => exact le_refl _
+          | some ab => exact Nat.le_max_right _ _
+    · rename_i hzero
+      simp only [pure, Option.some.injEq] at hy
+      subst hy
+      refine ⟨_, rfl, fun a b h => ⟨a, b, h, le_refl _, le_refl _⟩, fun hne' => ?_⟩
+      exact absurd (by simpa using hzero) hne'
+
 /-! ## Transcription of `decode_elf` -/
 
 /-- One step of Jolt's `merge_ranges` over sorted ranges. `merged` holds the ranges merged so

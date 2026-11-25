@@ -352,8 +352,8 @@ The proofs unfold the CSR chains and the decoder mapping, so the chains are not 
 The headline theorems, including `Decode.joltDecode_compressed_agrees` and the block theorems of section 9, use only these three standard axioms, although the generic CSR read in their closure mentions `get_16_random_bits`.
 None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/theorems/Completeness/`, some of them waiting on a16z/jolt#1949.
 
-Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7) or a documented deviation (stores into the code in section 9, and anything the difference testing confirms); the classified list is in section 9, "What step f proves".
-The per-block deviations of `JoltInstance.sail_soundness` are premises on the trace that `soundness` extracts, so they are checked on that trace; `HonestTrace.sail_reproduces` states the same for any honest trace given in advance.
+Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7), a scope premise, or a documented deviation (anything the difference testing confirms; stores into the code, the deviation of earlier revisions, now follow from the tracer's protected-store check, section 9); the classified list is in section 9, "What step f proves".
+The per-block premises of `JoltInstance.sail_soundness` are premises on the trace that `soundness` extracts, so they are checked on that trace; `HonestTrace.sail_reproduces` states the same for any honest trace given in advance.
 The low-address loads of jolt-qed#37 need no premise at `ff6fc6568`: Jolt's tracer rejects every load below the lowest address of the memory layout (section 2).
 
 ## 9. Whole-run system invariant
@@ -373,8 +373,11 @@ The `object` crate reports a section as text only when it is `SHT_PROGBITS`, and
 Every address of a merged text range therefore has a byte, and `DecodedFrom.imageDecoded` proves that the default 0 never applies.
 The parsing of the ELF file into its sections (`object::File::parse`, section kinds, `entry`) stays outside Lean and is trusted.
 `CodeIntact` says Sail's memory still holds those bytes at every row; it holds at `sailInit` (`codeIntact_sailInit`).
-Its Jolt-side version `JoltCodeIntact` (`WholeRun/CodeInv.lean`) is a run invariant under the documented deviation `NoCodeStore`: the block stores into no instruction byte, counting the whole doubleword Jolt's narrow stores rewrite.
-Jolt does not forbid a store into the code, and its tracer keeps fetching the committed bytecode afterwards, while Sail's model fetches coherently from memory; without Zifencei the specification permits either (`unpriv/zifencei.adoc`).
+Its Jolt-side version `JoltCodeIntact` (`WholeRun/CodeInv.lean`) is a run invariant with no premise.
+Jolt's tracer fetches the committed bytecode, while Sail's model fetches coherently from memory; without Zifencei the specification permits either (`unpriv/zifencei.adoc`).
+The two can differ only after a store changes a code byte, and Jolt's tracer rejects such a store.
+`JoltInstance.initial_state` computes the code region from the program's rows (`codeRegionOf`, Jolt's `code_region`), and `codeRegionAt_covers` (`WholeRun/Elf.lean`) shows that it covers every byte of every row.
+Every store goes through `protected_store_ok`, which fails on a store that changes a byte of that region, so a block that runs keeps every code byte (`JoltIOSetupFrame.execProgram_memory`, `JoltCodeIntact.of_block`).
 
 Platform premise `JoltInstance.HeapNoWrap`: the memory layout ends at least eight bytes below `2^64` (`heap_end ≤ 2^64 - 8`).
 `MemoryLayout.new` checks its additions but rounds only the stack and heap sizes to eight bytes, so a `program_end` near `2^64` gives `heap_end = 2^64 - 1`; real ELFs end far below that.
@@ -404,13 +407,13 @@ The premises, by class:
 | `DecodedFrom` | platform | the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF; `ImageDecoded` follows from it |
 | `RowsAligned` | platform | every row address is even; Jolt's ELF loader at `ff6fc6568` rejects an odd address, but `DecodedFrom` transcribes the loader at `c336a6da7`, which does not |
 | `HeapNoWrap` | platform | the layout ends at least eight bytes below `2^64` |
-| `BlockConforms.no_code_store` | documented deviation | stores into the code, above |
 | `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |
 
 The per-block premises are stated on the blocks of the trace's halt prefix, not on the whole program image.
 In `sail_soundness` that trace is existentially quantified, and a reader who sees only the instance cannot inspect its blocks.
 To obtain the Sail run, the reader has to prove the premises for the returned halt prefix; proving them for every run the program can take, on every private input, is one sufficient way.
 [`whole-run-theorem.md`](whole-run-theorem.md) explains this and lists what the theorems do not say.
-`BlockConforms` has only the fields `riscv` and `no_code_store`.
+`BlockConforms` has only the field `riscv`.
+The earlier documented deviation `no_code_store` (no store into an instruction row) is gone: the run derives it from the tracer's protected-store check, as above.
 The I/O-window premises of earlier revisions (`amo_no_flag_word`, `no_flag_word_load`, `panic_store_nonzero` and `no_zero_doubleword_load`) are gone, because Jolt at `ff6fc6568` has no flag words and its tracer rejects loads below the lowest address of the memory layout (section 2).
 `#print axioms` on `JoltInstance.sail_soundness` and `HonestTrace.sail_reproduces` gives `propext`, `Classical.choice` and `Quot.sound`.

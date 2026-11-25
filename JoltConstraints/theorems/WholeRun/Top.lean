@@ -33,10 +33,11 @@ theorem RunRel.initial {joltInstance : JoltInstance SourceInstruction}
 
 /-- Per-block conditions supplied to the source-instruction simulation.
 For example, an ADDI block needs only the RISC-V source classification.
-Successful mapped-memory guards are derived from each block run. -/
+Successful mapped-memory guards and the protection of the code bytes are derived from each
+block run. -/
 structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Block) : Prop where
   riscv : ∃ i, b.row.instruction = .riscv i
-  no_code_store : NoCodeStore program b
+
 /-- A conforming non-EBREAK source block has one matching Sail step.
 For example, an arithmetic block transports the register and shared-memory relation. -/
 theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
@@ -52,7 +53,7 @@ theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
     hrow hi hinv.system (hruns.pc_even hrows) (fun _ hr => CodeIntact.of_related hr hcode)
     hinv.heap_no_wrap s hrel
   exact ⟨v, s', hstep, hrel', RunInv.of_block hruns hrows hinv,
-    JoltCodeIntact.of_block hruns hconf.no_code_store hcode⟩
+    JoltCodeIntact.of_block hruns hcode⟩
 
 /-- Sail is about to execute the source halt of `kind`.
 For example, EBREAK identifies a panic halt, while `jolt.success` identifies success. -/

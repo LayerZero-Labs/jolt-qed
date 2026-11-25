@@ -90,12 +90,13 @@ The Sail state `s` satisfies three properties:
 
 ## What the theorems assume
 
-Each premise is in one of four classes:
+Each premise is in one of three classes:
 
 - a **platform** premise is true of Jolt's real platform, but Jolt does not check it;
-- a **documented deviation** excludes a case where Jolt and the RISC-V specification really differ;
 - a **scope** premise excludes a part of Jolt that the proof does not cover yet;
 - a **soundness** premise belongs to `JoltInstance.soundness` and appears only in `sail_soundness`.
+
+No premise is a documented deviation, that is, a premise that excludes a case where Jolt and the RISC-V specification really differ (see [Former deviation premises](#former-deviation-premises)).
 
 `sail_reproduces` also takes `hcfg`, which says that Jolt's prover accepts the trace.
 Jolt checks this itself, and `sail_soundness` obtains it from `JoltInstance.soundness`.
@@ -120,13 +121,14 @@ Every program Jolt builds from the ELF therefore satisfies `DecodedFrom`, and th
 `decode_elf` never reads the data of a section below `RAM_START_ADDRESS`, and the data `elf` records for such a section may be arbitrary.
 Three things stay trusted: that `elf` is what the `object` crate parses from the guest ELF, including that it gives every loaded text section of a successfully decoded ELF exactly as many bytes of data as its size; that Jolt's preprocessing and the verifier key were built from this program; and that the Lean transcriptions of `decode_elf`, `joltDecode` and `joltUncompress` match Jolt.
 
-### Documented deviation
+### Former deviation premises
 
-`BlockConforms` has two fields, `riscv` (the scope premise below) and `no_code_store`, and both must hold for every block of the halt prefix.
-
-| Premise | Meaning | What would remove it |
-| --- | --- | --- |
-| `no_code_store` | No store writes into an instruction row of the program. The check covers the whole aligned doubleword of each store, because Jolt's narrow stores rewrite their doubleword. Jolt keeps fetching the committed bytecode, while Sail fetches from memory; without Zifencei the specification allows both. Jolt's tracer at `ff6fc6568` rejects a store that changes a byte of its protected code region (`protected_store_ok` in `JoltBytecode/JoltISA/DeviceMemory.lean`), but the proof does not use that check. | A proof that the tracer's protected-store check implies the premise, or a constraint in Jolt that every store's doubleword lies outside the code. |
+`BlockConforms` has one field, `riscv` (the scope premise below), and it must hold for every block of the halt prefix.
+Earlier revisions also had a documented deviation `no_code_store`: no store writes into an instruction row of the program.
+Jolt keeps fetching the committed bytecode, while Sail fetches from memory, and without Zifencei the specification allows both.
+The two differ only after a store changes a code byte.
+Jolt's tracer at `ff6fc6568` rejects every store that changes a byte of its protected code region (`protected_store_ok` in `JoltBytecode/JoltISA/DeviceMemory.lean`), and that region covers every byte of every instruction row.
+The proof now derives from this check that every block of an honest trace keeps the code bytes (`JoltCodeIntact.of_block` in `JoltConstraints/theorems/WholeRun/CodeInv.lean`), so the premise is gone.
 
 Jolt at `ff6fc6568` has no panic or termination word: a run ends at an explicit halt row, and the I/O region below `RAM_START_ADDRESS` is ordinary shared byte memory.
 The premises that excluded loads, stores and atomic operations on those words are gone with them.
@@ -154,10 +156,8 @@ To obtain the Sail run, a reader has to prove that the halt prefix of the return
 A reader who sees only the instance cannot inspect those blocks.
 The usual way is to show that the program conforms on every run it can take, for every private input.
 That is sufficient but not required: a proof may also use what the theorem says about the returned trace.
-For the deviation, conformance holds by construction of the program: compiled code does not store into its own instructions.
-It is still an argument about the program, which neither the theorem nor Jolt's verifier checks.
-
-Every deviation premise that Jolt's constraints come to enforce leaves `BlockConforms`, and with it this argument.
+Since no deviation premise remains, `BlockConforms` asks only that every block of the halt prefix runs a RISC-V instruction.
+Every scope premise that the proof comes to cover leaves `BlockConforms`, and with it this argument.
 
 ## What the theorems do not say
 
