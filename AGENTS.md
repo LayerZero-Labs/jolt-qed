@@ -124,7 +124,9 @@ On every re-pin:
    Its necessity witness (`JoltConstraints/Audit/Necessity.lean`) stops building once the check is transcribed; that failure is the signal, not a proof to repair.
    Removing a premise changes a theorem statement, so it needs Ari's approval.
 5. When a binder or field changes, the build of `JoltConstraints/Audit/Premises.lean` fails and prints the new list.
-   Update that list and the entry's `appears_in` in `assumptions.toml` together.
+   When a headline statement, or a definition below it, changes, the build of `JoltConstraints/Audit/Statements.lean` fails and names each changed definition.
+   Review the change, then run `LAKE="<your lake command>" python3 scripts/update-audit-tables.py`, which rewrites both expected tables from the build.
+   Update the entry's `appears_in` in `assumptions.toml` to match, and run `scripts/check-assumptions.py`.
 6. Rerun the reproducer of each bug-report folder whose header says `status = "open"` or `"unknown"`, and update `status`, `reproduced_at` and `fixed_by`.
    An entry whose upstream issue closed needs the same check.
 

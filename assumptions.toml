@@ -17,18 +17,28 @@
 #   lean               the Lean declaration, field or expression.
 #   kind               premise:     an assumption the model does not prove;
 #                      scope:       excludes a part of Jolt the proofs do not cover yet;
+#                      correspondence: a place where the model is a transcription of Jolt's
+#                                   code that no theorem compares with that code, and where
+#                                   the two are known to differ or are not shown to agree;
+#                                   the headline theorems are about the model;
 #                      field:       a premise on the field F;
 #                      image-field: a proof field of Rv64ProgramImage, a fact every instance carries;
+#                      derived:     a former premise that is now a theorem; the entry keeps
+#                                   the Jolt functions its proof depends on watched;
 #                      sorry:       an unproved lemma;
 #                      statement:   what the theorem is about (the constraints accept, the
 #                                   instance is in Jolt's language, Jolt's prover accepts);
 #                      data:        an ordinary quantified object.
 #   appears_in         where it is a binder or field: "<theorem or structure> (<name>)",
-#                      exactly as in JoltConstraints/Audit/Premises.lean.
+#                      exactly as in JoltConstraints/Audit/Premises.lean. Entries that are not
+#                      binders or fields (correspondence, derived, some scope) have none.
 #   file               for a sorry: the file that holds it.
 #   anchors            Jolt functions it depends on: "<path> (<fn>)" at `jolt_rev`.
 #   witness            a necessity witness (JoltConstraints/Audit/Necessity.lean).
-#   derived_by         a theorem that proves the fact from another premise.
+#   derived_by         a theorem that proves the fact from another premise, or from nothing.
+#                      Every witness and derived_by is a line of #audit_statements in
+#                      JoltConstraints/Audit/Statements.lean, which checks that the name exists,
+#                      its axioms, and its statement.
 #   no_witness_reason  why it has no witness. Every entry other than `data` has a witness
 #                      or this reason.
 #   upstream           the upstream issue, if any.
@@ -90,6 +100,107 @@ anchors = [
   "crates/jolt-riscv/src/kind.rs (SourceInstruction)",
 ]
 witness = "JoltConstraints.Audit.blockConformsRiscv_not_implied"
+upstream = ""
+bug_report = ""
+
+# ---------------------------------------------------------------------------
+# Scope and correspondence: boundaries that are not binders. The theorems are about the
+# model; these entries record where the model is known not to cover, or not shown to match,
+# what Jolt runs.
+
+[[entry]]
+name = "DoryConfiguration"
+lean = "JoltConstraints.ConstraintContext.traceLengthFloor"
+kind = "scope"
+anchors = [
+  "crates/jolt-verifier/src/config.rs (MIN_PADDED_TRACE_LENGTH)",
+  "crates/jolt-verifier/src/verifier.rs (validate_trace_length)",
+  "crates/jolt-prover/src/config.rs (derive_from_dimensions)",
+  "crates/jolt-prover/src/config.rs (one_hot_config)",
+]
+no_witness_reason = """Scope boundary, not a premise: the configuration model \
+(JoltConstraints/translation/prover_config.lean, ConstraintContext) is Jolt's build without \
+the `akita` feature. It pads traces to at least 256 cycles (MIN_PADDED_TRACE_LENGTH), where \
+an Akita build pads to 4096 and always uses log_k_chunk = 4 in one_hot_config. The field \
+inequalities and the constraint algebra cover Akita's field; trace sizing, one-hot chunking \
+and acceptance are Dory-specific. Follow-up: parameterize ProverConfig and the witness \
+construction by protocol mode."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "TracerInitialization"
+lean = "JoltInstance.initial_state"
+kind = "correspondence"
+anchors = [
+  "crates/jolt-program/src/image/elf.rs (decode_elf)",
+  "tracer/src/emulator/mod.rs (setup_program)",
+  "tracer/src/emulator/mod.rs (tohost_address)",
+  "tracer/src/emulator/mod.rs (TEST_MEMORY_CAPACITY)",
+  "tracer/src/lib.rs (create_emulator)",
+  "common/src/jolt_device.rs (try_with_io)",
+]
+no_witness_reason = """Correspondence gap: the model initializes RAM from decode_elf's \
+memory_init (every section at or above RAM_START_ADDRESS), while Jolt's tracer \
+(setup_program) loads only sections of type 1, 14, 15 and 16 with a positive file offset \
+and size, and caps memory at TEST_MEMORY_CAPACITY when the ELF has a nonzero `tohost` \
+symbol. An allocated readable section of another type (for example a NOTE section) \
+initializes model memory but not tracer memory. ElfSections records no section type, file \
+offset or symbols, so DecodedFrom cannot state agreement, and no Lean object can witness \
+the difference. Follow-up: model setup_program and prove agreement with initial_state on a \
+defined ELF subset, or expose an initialization-agreement premise."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "HostAllocation"
+lean = "JoltISA.readHostBytes"
+kind = "correspondence"
+anchors = [
+  "tracer/src/emulator/host_io.rs (read_host_bytes)",
+  "tracer/src/emulator/cpu.rs (handle_advice_write)",
+]
+no_witness_reason = """Correspondence gap: the model assumes host allocation succeeds \
+(JoltBytecode/JoltISA/HostIO.lean). Jolt's read_host_bytes returns an Allocation error when \
+`try_reserve` fails, and handle_advice_write then logs it and appends nothing to the advice \
+tape. Allocation depends on the host machine, not on the guest, so no Lean object can \
+witness it."""
+upstream = ""
+bug_report = ""
+
+# ---------------------------------------------------------------------------
+# Derived: former premises that are now theorems (reports/2026-11-25-stale-assumptions.md).
+# Each keeps the Jolt functions its proof transcribes watched, so that a Jolt change that
+# removes the check shows up in the nightly report.
+
+[[entry]]
+name = "derived.HeapNoWrap"
+lean = "layout.heap_end.toNat ≤ 2 ^ 64 - 8 (formerly the premise JoltInstance.HeapNoWrap)"
+kind = "derived"
+anchors = [
+  "common/src/jolt_device.rs (validate_heap_end)",
+  "common/src/jolt_device.rs (max_ram_k)",
+  "common/src/jolt_device.rs (try_new)",
+]
+derived_by = "new_heap_end_le"
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "derived.ImageNonempty"
+lean = "Rv64ProgramImage.ImageNonempty (formerly a completeness premise)"
+kind = "derived"
+anchors = ["crates/jolt-prover/src/config.rs (derive_from_dimensions)"]
+derived_by = "HonestTrace.prover_config_image_nonempty"
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "derived.RamRegionFits"
+lean = "JoltInstance.RamRegionFits (formerly a soundness premise)"
+kind = "derived"
+anchors = ["common/src/jolt_device.rs (max_ram_k)"]
+derived_by = "JoltInstance.ramRegionFits"
 upstream = ""
 bug_report = ""
 

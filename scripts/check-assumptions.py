@@ -13,7 +13,11 @@ Run from anywhere; paths are relative to the repository root. The script checks:
    some entry's `appears_in`.
 4. The binder and field lists of JoltConstraints/Audit/Premises.lean, which the build
    checks against Lean, match the `appears_in` lists exactly.
-5. Every `witness` and `derived_by` names a declaration that exists.
+5. The `witness` and `derived_by` names are exactly the `witness` and `derived` lines of
+   `#audit_statements` in JoltConstraints/Audit/Statements.lean, and its `headline` lines are
+   exactly the theorems Premises.lean lists. The build resolves each of those names exactly in
+   Lean's environment, checks its axioms and fingerprints its statement, so a registered name
+   that does not exist fails the build.
 6. Every bug-report/*/README.md starts with a TOML header (between `+++` lines) with
    `status`, `reproduced_at`, `fixed_by` and `registry`, and its `registry` names entries.
 7. `jolt_rev` equals JOLT_REV in .github/workflows/constraint-generation.yml.
@@ -31,8 +35,12 @@ import subprocess
 import sys
 import tomllib
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from lean_source import strip_comments  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-KINDS = {"premise", "scope", "field", "image-field", "sorry", "statement", "data"}
+KINDS = {"premise", "scope", "correspondence", "field", "image-field", "derived", "sorry",
+         "statement", "data"}
 STATUSES = {"open", "fixed-upstream", "fixed-in-model", "not-a-bug", "unknown"}
 ANCHOR = re.compile(r"^(?P<path>[\w./-]+) \((?P<name>[\w:]+)\)$")
 REQUIRED = ("name", "lean", "kind", "anchors", "upstream", "bug_report")
@@ -42,33 +50,6 @@ errors = []
 
 def error(message):
     errors.append(message)
-
-
-def strip_comments(text):
-    """Remove Lean comments (`-- …` and nested `/- … -/`) and string literals' contents."""
-    out, i, depth = [], 0, 0
-    while i < len(text):
-        if depth == 0 and text.startswith("--", i):
-            i = text.find("\n", i)
-            if i < 0:
-                break
-        elif text.startswith("/-", i):
-            depth += 1
-            i += 2
-        elif depth > 0 and text.startswith("-/", i):
-            depth -= 1
-            i += 2
-        elif depth == 0 and text[i] == '"':
-            j = i + 1
-            while j < len(text) and text[j] != '"':
-                j += 2 if text[j] == "\\" else 1
-            out.append('""')
-            i = j + 1
-        else:
-            if depth == 0 or text[i] == "\n":
-                out.append(text[i])
-            i += 1
-    return "".join(out)
 
 
 DECL = re.compile(r"^(?:[\w@\[\]() ]*?)(?:theorem|lemma|def|abbrev|instance|example)\s+([^\s:({\[]*)",
@@ -118,12 +99,19 @@ def strip_comments_keep_strings(text):
     return re.sub(r"--[^\n]*", "", text)
 
 
-def declaration_exists(full_name, sources):
-    """Whether some file declares `full_name`, possibly inside namespaces or `_root_`."""
-    parts = full_name.split(".")
-    suffixes = {".".join(parts[i:]) for i in range(len(parts))}
-    pattern = re.compile(r"(?:theorem|lemma|def|abbrev|structure|instance)\s+(?:_root_\.)?([\w.?!']+)")
-    return any(name in suffixes for text in sources for name in pattern.findall(text))
+def audited_roots():
+    """Return {label: [names]} from `#audit_statements` in Audit/Statements.lean."""
+    text = strip_comments_keep_strings((ROOT / "JoltConstraints/Audit/Statements.lean").read_text())
+    block = re.search(r"^#audit_statements\n(.*?)^expect ", text, re.M | re.S)
+    if not block:
+        error("JoltConstraints/Audit/Statements.lean has no `#audit_statements` block")
+        return {}
+    roots = {}
+    for line in block.group(1).splitlines():
+        if line.strip():
+            label, name = line.split()
+            roots.setdefault(label, []).append(name)
+    return roots
 
 
 def bug_report_headers(names):
@@ -188,9 +176,9 @@ def main():
         for anchor in entry.get("anchors", []):
             if not ANCHOR.match(anchor):
                 error(f"{label}: anchor {anchor!r} is not of the form 'path (name)'")
-        has_reason = bool(entry.get("witness")) or bool(entry.get("no_witness_reason"))
+        has_reason = any(entry.get(key) for key in ("witness", "derived_by", "no_witness_reason"))
         if entry.get("kind") != "data" and not has_reason:
-            error(f"{label}: needs a `witness` or a `no_witness_reason`")
+            error(f"{label}: needs a `witness`, a `derived_by` or a `no_witness_reason`")
         if entry.get("kind") not in ("data", "statement") and not entry.get("anchors"):
             error(f"{label}: needs at least one anchor")
         if entry.get("kind") == "sorry" and not entry.get("file"):
@@ -226,13 +214,24 @@ def main():
     for item in sorted(appears.keys() - expected):
         error(f"{item} ({appears[item]}) is not in JoltConstraints/Audit/Premises.lean")
 
-    # 5. Witnesses and derivations exist.
-    sources = [p.read_text() for folder in ("JoltConstraints", "JoltBytecode")
-               for p in (ROOT / folder).rglob("*.lean")]
-    for entry in entries:
-        for key in ("witness", "derived_by"):
-            if entry.get(key) and not declaration_exists(entry[key], sources):
-                error(f"{entry['name']}: {key} {entry[key]} is not declared anywhere")
+    # 5. Witnesses, derivations and headline theorems are the ones the build audits.
+    roots = audited_roots()
+    for key, label in (("witness", "witness"), ("derived_by", "derived")):
+        registered = {e[key] for e in entries if e.get(key)}
+        audited = set(roots.get(label, []))
+        for name in sorted(registered - audited):
+            error(f"{key} {name} is not a `{label}` line of #audit_statements "
+                  "(JoltConstraints/Audit/Statements.lean)")
+        for name in sorted(audited - registered):
+            error(f"`{label} {name}` in #audit_statements is not a `{key}` in assumptions.toml")
+    headlines = {item.split(" (")[0] for item in expected
+                 if not item.startswith(("Rv64ProgramImage ", "WholeRun.BlockConforms "))}
+    if set(roots.get("headline", [])) != headlines:
+        error(f"the `headline` lines of #audit_statements {sorted(roots.get('headline', []))} "
+              f"differ from the theorems Premises.lean lists {sorted(headlines)}")
+    for label in roots:
+        if label not in ("headline", "witness", "derived"):
+            error(f"#audit_statements has an unknown label {label!r}")
 
     # 6. Bug-report headers.
     bug_report_headers(set(names))
@@ -252,7 +251,8 @@ def main():
         print(f"check-assumptions: {len(errors)} problem(s); see assumptions.toml", file=sys.stderr)
         return 1
     print(f"check-assumptions: {len(entries)} entries, {len(found)} sorry, "
-          f"{len(expected)} binders and fields: all registered")
+          f"{len(expected)} binders and fields, "
+          f"{sum(len(v) for v in roots.values())} audited theorems: all registered")
     return 0
 
 
