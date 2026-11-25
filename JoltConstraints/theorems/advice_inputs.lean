@@ -17,7 +17,6 @@ theorem JoltInstance.initial_state_with_advice_tape {Source : Type}
   | none => rfl
   | some layout =>
     dsimp only [Option.bind_some]
-    split_ifs <;> try rfl
     exact JoltConstraints.initialState_with_adviceTape
       (init_state joltInstance.program.entry_address
         (initialRam layout joltInstance.program.memory_init)

@@ -64,6 +64,27 @@ theorem alignUp8_some {value aligned : Nat}
   · obtain ⟨total, _⟩ := checkedAdd_some rounded
     omega
 
+/-- Rounding a 64-bit value up to a multiple of 8 stays below `2^64` when it succeeds.
+For example, `alignUp8 9 = some 16`. -/
+theorem alignUp8_lt {value aligned : Nat}
+    (rounded : MemoryLayout.alignUp8 value = some aligned) (small : value < 2 ^ 64) :
+    aligned < 2 ^ 64 := by
+  unfold MemoryLayout.alignUp8 at rounded
+  split at rounded
+  · cases rounded
+    exact small
+  · obtain ⟨rfl, fits⟩ := checkedAdd_some rounded
+    exact fits
+
+/-- **The raw configured capacity and the capacity Jolt checks.** Jolt's `align_up` rounds each
+configured maximum up to a multiple of 8: raw sizes 0, 1, 7, 8 and 9 give 0, 8, 8, 8 and 16.
+Jolt at ff6fc6568: `common/src/jolt_device.rs` (`MemoryLayout::try_new`, `align_up`). -/
+example : MemoryLayout.alignUp8 0 = some 0 := by decide
+example : MemoryLayout.alignUp8 1 = some 8 := by decide
+example : MemoryLayout.alignUp8 7 = some 8 := by decide
+example : MemoryLayout.alignUp8 8 = some 8 := by decide
+example : MemoryLayout.alignUp8 9 = some 16 := by decide
+
 -- Each advice region is as long as its size, the two sit next to each other, the first
 -- starts io_bytes below RAM, and both end below 2^64.
 -- See : jolt/common/src/jolt_device.rs:532-574
@@ -269,14 +290,41 @@ theorem new_advice_regions (config : MemoryConfig) (layout : MemoryLayout)
     Nat.mod_eq_of_lt (a := max untrustedEnd trustedEnd) (by omega)]
   omega
 
--- Each advice region, holding at most its configured maximum, ends at or before the
--- inputs start: the advice bytes never reach the public inputs.
+/-- **The layout's capacities are the configured maxima rounded up to a multiple of 8**, as
+`align_up` computes them. For example, `max_input_size = 1` gives a layout input capacity of 8.
+Jolt at ff6fc6568: `common/src/jolt_device.rs` (`MemoryLayout::try_new`, `align_up`). -/
+theorem new_capacities (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    MemoryLayout.alignUp8 config.max_trusted_advice_size.toNat =
+      some layout.max_trusted_advice_size.toNat ∧
+    MemoryLayout.alignUp8 config.max_untrusted_advice_size.toNat =
+      some layout.max_untrusted_advice_size.toNat ∧
+    MemoryLayout.alignUp8 config.max_input_size.toNat = some layout.max_input_size.toNat := by
+  unfold MemoryLayout.new at built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨trusted, trustedRounded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨untrusted, untrustedRounded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨input, inputRounded, built⟩ := built
+  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  cases built
+  simp only [BitVec.toNat_ofNat]
+  rw [Nat.mod_eq_of_lt (alignUp8_lt trustedRounded (BitVec.isLt _)),
+    Nat.mod_eq_of_lt (alignUp8_lt untrustedRounded (BitVec.isLt _)),
+    Nat.mod_eq_of_lt (alignUp8_lt inputRounded (BitVec.isLt _))]
+  exact ⟨trustedRounded, untrustedRounded, inputRounded⟩
+
+-- Each advice region, holding at most its capacity, ends at or before the inputs start: the
+-- advice bytes never reach the public inputs.
 -- See : jolt/common/src/jolt_device.rs:488-768 (MemoryLayout::try_new)
---       jolt/tracer/src/lib.rs:374-385 (create_emulator checks the advice sizes)
+--       jolt/common/src/jolt_device.rs:210-237 (JoltDevice::try_with_io checks the advice sizes)
 theorem new_advice_below_input (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) (trustedSize untrustedSize : Nat)
-    (trustedFits : trustedSize ≤ config.max_trusted_advice_size.toNat)
-    (untrustedFits : untrustedSize ≤ config.max_untrusted_advice_size.toNat) :
+    (trustedFits : trustedSize ≤ layout.max_trusted_advice_size.toNat)
+    (untrustedFits : untrustedSize ≤ layout.max_untrusted_advice_size.toNat) :
     layout.trusted_advice_start.toNat + trustedSize ≤ layout.input_start.toNat ∧
     layout.untrusted_advice_start.toNat + untrustedSize ≤ layout.input_start.toNat := by
   obtain ⟨_, _, _, _, trustedEnd, untrustedEnd, _, _, _, inputStart⟩ :=
@@ -625,16 +673,33 @@ theorem init_state_jolt_device (entryAddress : BitVec 64) (ram : Array (BitVec 8
       { device with panic := false } :=
   rfl
 
-/-- A successful instance initialization passed its three input-size checks
-and installed shared memory on the bootstrap register/RAM state.
+/-- A successful shared-memory installation passed its three size checks, each against the
+layout's capacity. For example, with a layout input capacity of 8, nine input bytes fail.
+Jolt at ff6fc6568: `common/src/jolt_device.rs` (`JoltDevice::try_with_io`). -/
+theorem initialState_fits (state after : SailJoltState) (sources : List (BitVec 64 × Bool))
+    (inputs trusted untrusted : Array (BitVec 8))
+    (built : JoltISA.initialState state sources inputs trusted untrusted = some after) :
+    trusted.size ≤ state.jolt_device.memory_layout.max_trusted_advice_size.toNat ∧
+    untrusted.size ≤ state.jolt_device.memory_layout.max_untrusted_advice_size.toNat ∧
+    inputs.size ≤ state.jolt_device.memory_layout.max_input_size.toNat := by
+  obtain ⟨_, _, _, memBuilt, _⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ built
+  unfold JoltDevice.initialMem at memBuilt
+  obtain ⟨admittedUnit, admitted, _⟩ := Option.bind_eq_some_iff.mp memBuilt
+  have fits := (Option.guard_eq_some' admittedUnit).mp admitted
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at fits
+  exact ⟨fits.1.2, fits.2, fits.1.1⟩
+
+/-- A successful instance initialization built the checked layout, passed its three size
+checks against the layout's capacities, and installed shared memory on the bootstrap
+register/RAM state.
 For example, its tape starts at position zero before I/O memory is installed. -/
 theorem initial_state_build {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (state : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some state) :
     ∃ layout, joltInstance.memory_layout = some layout ∧
-      joltInstance.trusted_advice.size ≤ joltInstance.memory_config.max_trusted_advice_size.toNat ∧
-      privateInputs.untrusted_advice.size ≤ joltInstance.memory_config.max_untrusted_advice_size.toNat ∧
-      joltInstance.inputs.size ≤ joltInstance.memory_config.max_input_size.toNat ∧
+      joltInstance.trusted_advice.size ≤ layout.max_trusted_advice_size.toNat ∧
+      privateInputs.untrusted_advice.size ≤ layout.max_untrusted_advice_size.toNat ∧
+      joltInstance.inputs.size ≤ layout.max_input_size.toNat ∧
       JoltISA.initialState
         (init_state joltInstance.program.entry_address
           (initialRam layout joltInstance.program.memory_init)
@@ -644,33 +709,89 @@ theorem initial_state_build {Source : Type} (joltInstance : JoltInstance Source)
         joltInstance.inputs joltInstance.trusted_advice privateInputs.untrusted_advice = some state := by
   unfold JoltInstance.initial_state at built
   obtain ⟨layout, layoutBuilt, built⟩ := Option.bind_eq_some_iff.mp built
-  dsimp only at built
-  split at built
-  · cases built
-  rename_i trustedTooLong
-  obtain ⟨_, _, built⟩ := Option.bind_eq_some_iff.mp built
-  split at built
-  · cases built
-  rename_i untrustedTooLong
-  obtain ⟨_, _, built⟩ := Option.bind_eq_some_iff.mp built
-  split at built
-  · cases built
-  rename_i inputsTooLong
-  obtain ⟨_, _, built⟩ := Option.bind_eq_some_iff.mp built
-  exact ⟨layout, layoutBuilt, Nat.le_of_not_lt trustedTooLong,
-    Nat.le_of_not_lt untrustedTooLong, Nat.le_of_not_lt inputsTooLong, built⟩
+  obtain ⟨trustedFits, untrustedFits, inputsFit⟩ := initialState_fits _ _ _ _ _ _ built
+  exact ⟨layout, layoutBuilt, trustedFits, untrustedFits, inputsFit, built⟩
 
-/-- Initialization chooses a checked layout and enforces the tracer's advice limits.
-Advice bytes are installed in shared memory; they are no longer device fields.
+/-- **Initialization fails exactly where Jolt's `create_emulator` does**: the checked layout
+must exist, the code region of the program's rows must be valid, and each of the inputs, the
+trusted advice and the untrusted advice must fit the layout's capacity, its configured maximum
+rounded up to a multiple of 8. There is no check against the raw configured maximum.
+For example, `max_input_size = 1` admits two input bytes (below).
+Jolt at ff6fc6568: `tracer/src/lib.rs` (`create_emulator`) and `common/src/jolt_device.rs`
+(`JoltDevice::try_with_io`). -/
+theorem initial_state_isSome_iff {Source : Type} (joltInstance : JoltInstance Source)
+    (privateInputs : JoltPrivateInputs) :
+    (joltInstance.initial_state privateInputs).isSome ↔
+      ∃ layout, joltInstance.memory_layout = some layout ∧
+        (JoltISA.codeRegionOf layout (joltInstance.program.instructions.toList.map
+          fun row => (row.address, row.is_compressed))).isSome ∧
+        joltInstance.trusted_advice.size ≤ layout.max_trusted_advice_size.toNat ∧
+        privateInputs.untrusted_advice.size ≤ layout.max_untrusted_advice_size.toNat ∧
+        joltInstance.inputs.size ≤ layout.max_input_size.toNat := by
+  constructor
+  · intro initialized
+    obtain ⟨state, built⟩ := Option.isSome_iff_exists.mp initialized
+    obtain ⟨layout, layoutBuilt, trustedFits, untrustedFits, inputsFit, built⟩ :=
+      initial_state_build joltInstance privateInputs state built
+    obtain ⟨region, _, regionBuilt, _, _⟩ :=
+      JoltConstraints.initialState_shape _ _ _ _ _ _ built
+    exact ⟨layout, layoutBuilt, Option.isSome_iff_exists.mpr ⟨region, regionBuilt⟩,
+      trustedFits, untrustedFits, inputsFit⟩
+  · rintro ⟨layout, layoutBuilt, code, trustedFits, untrustedFits, inputsFit⟩
+    obtain ⟨region, regionBuilt⟩ := Option.isSome_iff_exists.mp code
+    unfold JoltInstance.initial_state
+    simp only [layoutBuilt, Option.bind_eq_bind, Option.bind_some]
+    unfold JoltISA.initialState JoltDevice.initialMem
+    simp only [init_state_jolt_device]
+    simp [regionBuilt, trustedFits, untrustedFits, inputsFit]
+
+/-- With the raw `max_input_size = 1`, initialization admits two input bytes: the layout's
+input capacity is 8. Before the fix, a raw-capacity guard rejected them, while Jolt's
+`JoltDevice::try_with_io` accepts them. -/
+example {Source : Type} (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
+    (layout : MemoryLayout) (built : joltInstance.memory_layout = some layout)
+    (raw : joltInstance.memory_config.max_input_size = 1)
+    (code : (JoltISA.codeRegionOf layout (joltInstance.program.instructions.toList.map
+      fun row => (row.address, row.is_compressed))).isSome)
+    (twoInputs : joltInstance.inputs.size = 2) (noTrusted : joltInstance.trusted_advice.size = 0)
+    (noUntrusted : privateInputs.untrusted_advice.size = 0) :
+    (joltInstance.initial_state privateInputs).isSome := by
+  have capacity := (new_capacities _ _ built).2.2
+  simp only [raw] at capacity
+  have eight : layout.max_input_size.toNat = 8 :=
+    (Option.some.inj ((by decide : MemoryLayout.alignUp8 1 = some 8).symm.trans capacity)).symm
+  exact (initial_state_isSome_iff _ _).mpr
+    ⟨layout, built, code, by omega, by omega, by omega⟩
+
+/-- With the raw `max_input_size = 1`, nine input bytes exceed the capacity 8 and
+initialization fails, as `JoltDevice::try_with_io` fails. -/
+example {Source : Type} (joltInstance : JoltInstance Source) (privateInputs : JoltPrivateInputs)
+    (layout : MemoryLayout) (built : joltInstance.memory_layout = some layout)
+    (raw : joltInstance.memory_config.max_input_size = 1)
+    (nineInputs : joltInstance.inputs.size = 9) :
+    joltInstance.initial_state privateInputs = none := by
+  have capacity := (new_capacities _ _ built).2.2
+  simp only [raw] at capacity
+  have eight : layout.max_input_size.toNat = 8 :=
+    (Option.some.inj ((by decide : MemoryLayout.alignUp8 1 = some 8).symm.trans capacity)).symm
+  rw [← Option.not_isSome_iff_eq_none, initial_state_isSome_iff]
+  rintro ⟨layout', built', -, -, -, fits⟩
+  rw [built] at built'
+  cases built'
+  omega
+
+/-- Initialization chooses a checked layout and enforces the tracer's advice limits, the
+layout's capacities. Advice bytes are installed in shared memory; they are no longer device
+fields.
 For example, changing private advice cannot change the layout. -/
 theorem initial_state_device {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :
     joltInstance.memory_layout = some initialState.jolt_device.memory_layout ∧
     joltInstance.trusted_advice.size ≤
-      joltInstance.memory_config.max_trusted_advice_size.toNat ∧
+      initialState.jolt_device.memory_layout.max_trusted_advice_size.toNat ∧
     privateInputs.untrusted_advice.size ≤
-      joltInstance.memory_config.max_untrusted_advice_size.toNat := by
+      initialState.jolt_device.memory_layout.max_untrusted_advice_size.toNat := by
   obtain ⟨layout, layoutBuilt, trustedFits, untrustedFits, _, built⟩ :=
     initial_state_build joltInstance privateInputs initialState built
   obtain ⟨_, _, _, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ built
