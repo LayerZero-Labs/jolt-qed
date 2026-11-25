@@ -1,8 +1,8 @@
 ---
 title: Plan for deterministic, non-succinct soundness
-updated: 2026-11-24
+updated: 2026-11-25
 rust_pin: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
-lean_head: cea7d6c
+lean_head: 3ff14b2
 ---
 
 Our goal is to make Jolt secure through formal verification. Each intermediate
@@ -19,42 +19,29 @@ Read these before beginning work:
 
 The issue writeups live in `LayerZero-Research/LZ-Notes` under `content/projects/jolt-qed/blog/`.
 
-## Current re-pin (2026-11-24, incomplete)
+## Current re-pin (2026-11-25)
 
 The Jolt pin is `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
-The re-pin starts from Lean commit `3522261` on `split/c-constraints`.
-`JoltInstance.soundness` now builds for both public panic claims at `b852fe3`.
-The twenty-first shared-public build printed exactly `propext`, `Classical.choice` and `Quot.sound` in its axiom closure.
+The re-pin starts from Lean commit `3522261` on `split/c-constraints` and ends at `3ff14b2`.
+At that commit `lake build JoltConstraints` succeeds, and `#print axioms JoltInstance.soundness` prints exactly `propext`, `Classical.choice` and `Quot.sound`.
+`JoltInstance.soundness` takes no temporary program restriction.
+Its premises are `JoltField F` and `JoltInstance.SoundnessAssumptions`, which contains only `RamRegionFits`.
 The theorem reconstructs an honest expanded-bytecode trace ending at its first explicit success or panic halt.
 Row 21 binds the public panic claim to that halt kind.
-The three flag-word restrictions and `tracerAddressChecks` are removed from the theorem's restriction structure.
-`TemporaryRestrictions` now contains only `hostCallsSucceed`.
-The frozen bytecode HostIO model still has invalid-event failures and conditional overflow checks that differ from Jolt at this pin.
-The surviving host-call restriction marks this model boundary; the re-pin report records the current tracer's log-and-ignore and checked-read behavior.
+The three flag-word restrictions and `tracerAddressChecks` were removed earlier in the re-pin.
+The last restriction, `hostCallsSucceed`, is removed because the merged bytecode model makes every host call succeed (`JoltISA.execHostIO_succeeds`), as Jolt's tracer does at this pin.
+`JoltInstance.TemporaryRestrictions` and `JoltInstance.HostCallsSucceed` no longer exist.
 `Layer5/SharedMemoryChecks` derives the admitted word's address and protected-value checks from the two new RAM claims.
 
 Inputs, advice, outputs, the I/O gap and ordinary RAM use one shared byte map.
 The prefix proof compares every selected shared word and preserves the initialized code interval and protected input bytes.
 The whole-run relation compares shared bytes directly, and initialization uses `JoltDevice.initialMem`.
-The working tree deletes the separate whole-run I/O modules and replaces their useful execution facts with direct shared-map simulations.
-Those simulations and their callers await the twenty-second combined build.
-The full `JoltConstraints` build therefore remains red.
+The whole-run I/O modules are replaced by direct shared-map simulations (`WholeRun/SharedMemorySim.lean` and `WholeRun/AtomicMemorySim.lean`).
 The soundness theorem executes the supplied source array's expansion; the whole-run layer separately connects source rows to fetch and decode from image bytes.
 
-The handwritten/generated constraint equivalences check at `877356e`.
-Both RAM-history completeness theorems are proved with unchanged statements at `ce5f298`.
-Public-I/O completeness checks at `2988dbf` and `490c182`; protected-write completeness and final assembly check at `78ed82d`.
+Both RAM-history completeness theorems are proved with unchanged statements.
 The three #1949 admissions remain unchanged.
-Actual-value inversion for native/narrow stores checks at `621fcd1`, and for atomic stores at `86d4cfa`.
-The pending conditional-store inversion supplies the two SC widths to the existing bundle-construction theorem without changing that theorem's signature.
-`WholeRun/PlatformMemory.lean` checks at `b118458`; it extracts reusable Sail region checks and plain-memory pipeline facts without a device-byte overlay.
-The eighteenth batch checked the shared store-byte comparison.
-The nineteenth batch checked all SC declarations except the final SC.W guard.
-The twenty-first batch checked the extracted window proof but failed in prefix normalization and final guard transport.
-The twenty-second batch checks explicit normalization repairs, both shared-memory simulations, their callers and the root together.
-The citation pass is committed at `cea7d6c`.
-The final whole-run migration, complete statement inventory and clean committed tree remain open.
-See [the working re-pin report](../reports/2026-11-24-constraints-repin.md) for exact build evidence and statement changes.
+See [the re-pin report](../reports/2026-11-24-constraints-repin.md) for the build evidence and the full list of changed statements.
 
 ## Previous state (2026-11-03)
 
@@ -266,10 +253,11 @@ We aim to preserve the supplied untrusted advice in RAM and choose the tape answ
 The premises are bundled in
 [theorems/Soundness/Assumptions.lean](../JoltConstraints/theorems/Soundness/Assumptions.lean):
 `JoltField F` (`2^128 - 2^64 < ringChar F`, with constraint (63) on below `2^128`); `JoltInstance.SoundnessAssumptions`
-(`RamRegionFits`); and the temporary
-`JoltInstance.TemporaryRestrictions` (`TracerAddressChecks`,
-`HostCallsSucceed`, `NoMaxLengthTrace`, `TerminationThenStall`, `PanicStoresOne`,
-`ClaimsNoPanic`).
+(`RamRegionFits`).
+Since the `ff6fc6568` re-pin the theorem takes no temporary program restrictions.
+The rest of this section records how the earlier restrictions
+(`TracerAddressChecks`, `HostCallsSucceed`, `NoMaxLengthTrace`,
+`TerminationThenStall`, `PanicStoresOne`, `ClaimsNoPanic`) arose; none remains.
 On 2026-10-10, Ari approved `RamRegionFits`: for the instance's layout and
 successfully computed maximum RAM size, `lowest + 8 * maxRamSize ≤ 2^64`.
 **NOTE: to confirm with a16z.** The definition is in

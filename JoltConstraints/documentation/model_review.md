@@ -1,31 +1,22 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-11-24
+updated: 2026-11-25
 rust: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
-lean_head: cea7d6c
+lean_head: 3ff14b2
 ---
 
 # Open issues
 
-The `ff6fc6568` re-pin is in progress.
-`JoltInstance.soundness` builds for both public panic claims at `b852fe3`.
-The twenty-first shared-public build printed only `propext`, `Classical.choice` and `Quot.sound` in its axiom closure.
-The three flag-word restrictions and `tracerAddressChecks` have been removed from `TemporaryRestrictions`; only `hostCallsSucceed` remains.
+The `ff6fc6568` re-pin is complete at `3ff14b2` on `split/c-constraints`.
+At that commit `lake build JoltConstraints` succeeds, and `JoltInstance.soundness` depends only on `propext`, `Classical.choice` and `Quot.sound`.
+The soundness theorem takes no temporary program restriction: the three flag-word restrictions, `tracerAddressChecks` and `hostCallsSucceed` are all removed, and so is the `TemporaryRestrictions` structure.
+`hostCallsSucceed` became unnecessary because the merged bytecode HostIO model is total, as Jolt's tracer is at this pin: an invalid event or a rejected guest read is ignored, and every call retires (`JoltISA.execHostIO_succeeds`).
 The selected RAM word's address and protected-value checks follow from the pinned constraints.
-The frozen bytecode HostIO model still has invalid-event failures and conditional overflow checks that differ from Jolt at this pin.
-The surviving host-call restriction marks this model boundary; the re-pin report records the current tracer's log-and-ignore and checked-read behavior.
-Both requested RAM-history completeness theorems are proved with unchanged statements at `ce5f298`; the completeness assembly checks at `78ed82d`.
+Both requested RAM-history completeness theorems are proved with unchanged statements.
 The three #1949 admissions remain unchanged.
-The eighteenth full-root attempt failed in the obsolete device-memory simulation and pending conditional-store elaboration.
-The working tree now deletes that device-memory module and both old I/O simulation modules.
-Native/narrow and atomic store inversion checks at `621fcd1` and `86d4cfa` respectively.
-The reusable Sail platform-memory pipeline checks at `b118458`.
-The whole-run relation and initialization use the shared byte map.
-The shared store-byte comparison checked in the eighteenth batch.
-The new ordinary/atomic shared-memory simulations, restriction-free decoded-block callers, and conditional-store repairs await the twenty-second combined build.
-The citation pass is committed at `cea7d6c`.
-The final whole-run migration, full statement inventory and clean committed tree remain open.
-See [the re-pin report](../../reports/2026-11-24-constraints-repin.md) for checked targets and remaining work.
+The whole-run relation and initialization use the shared byte map, and the shared-memory simulations replace the old device-memory and I/O modules.
+`docs/whole-run-theorem.md` still describes the pre-re-pin whole-run statement and needs a rewrite.
+See [the re-pin report](../../reports/2026-11-24-constraints-repin.md) for the changed statements.
 The following older green-build descriptions refer to their stated historical revisions.
 
 This file lists what the theorems rest on that is not proved: Jolt issues, assumptions, owed proofs and gaps in the model.
@@ -98,7 +89,6 @@ Premises or fields of the final theorems, with their source or reason.
 | Assumption | Where | Why |
 |---|---|---|
 | The field's characteristic exceeds `2^128 - 2^64` | `JoltField F`, soundness premise `joltField` | Ari, 2026-10-10: the relation must distinguish full 128-bit lookup addresses. On 2026-11-10 the premise was weakened from `2^128` so Akita's `p = 2^128 - 1780711455` (Jolt's production field since a16z/jolt#2403) satisfies it; below characteristic `2^128` constraint (63), Akita's address guard, keeps identity-RAF addresses below `2^128 - 2^64`. BN254 also satisfies it. PCS security is outside this work |
-| Every attempted HostIO call succeeds (temporary) | `JoltInstance.HostCallsSucceed` in `theorems/Soundness/Layer5/HostCallRestriction.lean`, field `hostCallsSucceed` | Excludes host-call failures in live mode, which the constraints do not encode; program-execution condition approved by Ari pending the a16z batch |
 | The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `theorems/Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10. With the verifier's RAM-size check, all eight bytes of each in-domain word fit, so satisfying LD/SD cycles have nonwrapping addresses. NOTE: to confirm with a16z. An instance restriction, not a verifier check |
 | A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Jolt's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Jolt's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
 | A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | Modeling assumption, not a theorem premise: traces execute the expanded bytecode, while Jolt's tracer decodes each instruction from memory (`HonestTrace` docstring, `honest_trace.lean`) | a16z, 2026-10-07. The unused premise `codeUnchanged` was removed from soundness on 2026-11-03 with Ari's approval |
@@ -185,7 +175,7 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 - **Untrusted-advice words.** Lean builds untrusted advice from bytes, so every advice word in initial RAM is a 64-bit value; Jolt's verifier takes those words from a committed polynomial and does not range-check them.
   The soundness hypothesis is therefore stronger than Jolt's check, and the gap appears to allow a false claim (2026-10-29 report, finding 1; not reproduced).
   Modeling the words as field elements changes a core definition and waits for Ari.
-- **HostIO END marker.** Lean's `execHostIOWith` does not read the label for a cycle-marker END, while Jolt's tracer does and can abort on it (2026-10-29 report, finding 2).
+- **HostIO END marker (resolved by the re-pin).** At `ff6fc6568` Jolt's tracer reads the label for both cycle-marker events and ignores a rejected read; the total host-call model (`JoltISA.execHostIOWith`) does the same, so finding 2 of the 2026-10-29 report no longer applies.
 - **ELF sections and `tohost`.** Lean's initial RAM uses preprocessing's `memory_init` for the run; Jolt's tracer loads fewer section kinds, and sizes RAM differently when the ELF defines `tohost` (2026-10-29 report, findings 3 and 4).
 - **Termination word (resolved by the re-pin).** The old verifier/model gap described in finding 5 of the 2026-10-29 report disappears with the removed memory word.
   The new halt lane checks the public claim instead; its full soundness assembly is pending.

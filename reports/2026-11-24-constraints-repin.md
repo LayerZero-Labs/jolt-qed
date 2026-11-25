@@ -3,9 +3,124 @@
 Date: 2026-11-24.
 Jolt revision inspected: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
 Lean baseline: `3522261`, branch `split/c-constraints`.
-This is a working report; the repin and its validation are incomplete.
-Local commit `877356e` records the checked halt/RAM constraint interface and generator equivalences.
-No push, branch switch, or change under `JoltBytecode/` or `LeanRV64D/` has occurred.
+Final update: 2026-11-25.
+The re-pin is complete at `3ff14b2`: `lake build JoltConstraints` succeeds and `JoltInstance.soundness` depends only on `propext`, `Classical.choice` and `Quot.sound`.
+The section "Final state" below records the final step; the sections after it are the working log and describe the revisions they name.
+No push or branch switch has occurred; `JoltBytecode/` changed only through the merge of `split/b-bytecode` and the import trim from `perf/constraints-build-time`, and `LeanRV64D/` did not change.
+
+## Final state (2026-11-25)
+
+The re-pin is complete at `3ff14b2` on `split/c-constraints`.
+`track-t-build.sh lake build JoltConstraints` succeeds; the log is `.constraints-repin-final10.log` and ends with:
+
+```
+✔ [2474/2475] Built JoltConstraints (2.6s)
+Build completed successfully (2475 jobs).
+```
+
+`Soundness/soundness.lean` prints the axioms of the main theorem during that build:
+
+```
+info: JoltConstraints/theorems/Soundness/soundness.lean:43:0: 'JoltInstance.soundness' depends on axioms: [propext, Classical.choice, Quot.sound]
+```
+
+`JoltInstance.soundness` takes no temporary program restriction.
+Its premises are the field premise `JoltField F` and `JoltInstance.SoundnessAssumptions`, which contains only `RamRegionFits`.
+The completeness assembly, both RAM-history completeness theorems and the three #1949 admissions are as recorded in the sections below.
+
+### Branches merged in this step
+
+- `split/b-bytecode` (merge commit `6f1b2b2`) brings the total HostIO model from Jolt #2410.
+  `JoltISA.execHostIOWith` now takes a guest-byte reader that returns `Option`, ignores rejected reads and invalid events, and always retires.
+  `JoltISA.execHostIO_result` says each call leaves the state unchanged or only appends bytes to the advice tape.
+  `JoltISA.execHostIO_succeeds` says each call retires.
+- `perf/constraints-build-time` (merge commit `84d3be2`) brings `ccd6b14`, `e2bda0f` and `8f7e70c`, which trim imports to the modules each file uses.
+  No import from that rewrite was reverted.
+
+### Proof repairs
+
+- `WholeRun/Bundles.lean`, `addi_device`: the device-frame proof now gives `preservation_auto` the write rule applied to its value and an explicit rule for the final `pure`.
+- `WholeRun/SharedMemorySim.lean`, `ld_outcome`: the lower I/O bound now rewrites the load address to `base + sign_extend imm` before `omega`.
+- `WholeRun/SharedMemorySim.lean`, `narrow_store_core`, and `WholeRun/AtomicMemorySim.lean`, `io_amo_word`: `load_raw_value` already states the byte equation in the direction `store_finish` needs, so the extra `.symm` is removed.
+- `WholeRun/RunInv.lean`: `aligned_or_below` uses the public `PlatformMemory.toNat_and_neg8` instead of a macro that named a private copy in `SharedMemorySim`, which no longer exists.
+- `WholeRun/CodeInv.lean`: `CodeIntact.of_related` gives `Related.ram` its address explicitly, and `initial_image_facts` names `JoltConstraints.initial_state_program_end_le_heap_end` in full.
+- `WholeRun/Top.lean`: `HonestTrace.sail_reproduces` calls `HonestTrace.final_halt` by its name in the `WholeRun` namespace, because field notation on `trace` does not find it.
+
+None of these repairs changes a statement.
+
+### HostIO consumers
+
+The old model's byte reader could fail, so several modules carried frame rules for each step of `readHostBytes`.
+With the total model each consumer now case-splits on `execHostIO_result`, or zeta-reduces the call's `have` bindings and reuses the generic monadic rules.
+These proof-only changes do not alter any statement:
+`execHostIO_keeps_state` (`execution_facts.lean`), `JoltHostFrame.execHostIO_frame` (`Completeness/Helpers/HostIOFrame.lean`), `Register42VRegs.execHostIO_frame` (`Completeness/Helpers/RegistersValProofHelpers.lean`), `tracks_hostIO` (`WholeRun/Ghost.lean`), `commutes_hostIO` (`WholeRun/NonInterference.lean`) and `swap_execHostIO` (`Soundness/Layer7/TapeRebuild.lean`).
+
+The following helpers served only the old byte reader and are deleted:
+`JoltHostFrame.{pure_rule, bind_rule, read_rule, get_rule, throw_rule, modifyAdvice_rule, loadByte_rule, readHostBytes_frame}`, the same set in `Register42VRegs`, `JoltNextPCFrame.readHostBytes_frame` and `execHostIOWith_frame`, the `SailAndVRegsUnchanged` and `SailUnchanged` namespaces in `execution_facts.lean`, `tracks_readHostBytes`, `commutes_readHostBytes`, `swap_load` and `swap_readHostBytes`.
+None had a caller outside these proofs.
+
+### Removed assumptions
+
+- `JoltInstance.HostCallsSucceed` (was in `Soundness/Layer5/HostCallRestriction.lean`, now deleted):
+
+  ```lean
+  def JoltInstance.HostCallsSucceed (joltInstance : JoltInstance SourceInstruction) : Prop :=
+    ∀ (privateInputs : JoltPrivateInputs)
+      (run : JoltConstraints.Soundness.UntrustedAnswerRun joltInstance privateInputs)
+      (next : Fin run.bytecode.size) (pre : SailJoltState),
+      run.NextStep next pre →
+        match run.bytecode[next].instruction with
+        | .VirtualHostIO => ∃ post, execHostIO pre = .ok RETIRE_SUCCESS post
+        | _ => True
+  ```
+
+  It required that every attempted host call in the modelled execution succeed.
+  At Jolt `ff6fc6568` the tracer logs and ignores invalid or rejected host calls (`tracer/src/instruction/virtual_host_io.rs`, `tracer/src/emulator/host_io.rs`), and the merged model does the same.
+  The one use of the restriction, `host_call_exec_sail_frame`, now obtains the successful call from `execHostIO_succeeds`.
+  No premise replaces it.
+- `JoltInstance.TemporaryRestrictions` (was in `Soundness/Assumptions.lean`): its only remaining field was `hostCallsSucceed`, so the structure is deleted together with every `restrictions` argument.
+
+`model_review.md` no longer lists the host-call row among the theorem's assumptions, and marks finding 2 of the 2026-10-29 audit (the HostIO END marker) as resolved by the re-pin.
+
+### Statements changed in this step
+
+Every change below removes a premise; no conclusion changes.
+
+| Declaration | File | Old premises removed | New statement |
+|---|---|---|---|
+| `JoltInstance.soundness` | `Soundness/soundness.lean` | `(restrictions : joltInstance.TemporaryRestrictions)` | same premises otherwise, same conclusion `joltInstance.InLanguage` |
+| `JoltInstance.sail_soundness` | `WholeRun/Top.lean` | `(restrictions : joltInstance.TemporaryRestrictions)` | otherwise unchanged |
+| `soundness_reconstruct_trace` | `Soundness/TopLevel.lean` | `(restrictions : joltInstance.TemporaryRestrictions)` | otherwise unchanged |
+| `soundness_execution_prefix_agreement` | `Soundness/Layer6/PrefixAgreement.lean` | `(restrictions : joltInstance.TemporaryRestrictions)` | otherwise unchanged |
+| `JoltInstance.boundary_step` | `Soundness/Layer6/PrefixAgreement.lean` | `(restrictions : joltInstance.TemporaryRestrictions)` | otherwise unchanged |
+| `JoltInstance.row_step` | `Soundness/Layer6/RowStep.lean` | `(restrictions : joltInstance.TemporaryRestrictions)` | otherwise unchanged |
+| `row_extension` (private) | `Soundness/Layer6/RowStep.lean` | `(restrictions : inst.TemporaryRestrictions)` | otherwise unchanged |
+| `host_row_step`, `jal_row_step`, `jalr_row_step` | `Soundness/Layer6/RowStepKinds.lean` | the section variable `(restrictions : inst.TemporaryRestrictions)` | otherwise unchanged |
+| `append_host_row` | `Soundness/Layer6/RowStepTerminal.lean` | `(restrictions : inst.TemporaryRestrictions)` and `(honestAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? = honestTracerAdviceAtStepN inst.program run.rows n)` | otherwise unchanged; the advice premise only fed `run.NextStep`, which the restriction needed |
+| `host_call_exec_sail_frame` | moved from `Layer5/HostCallRestriction.lean` to `Layer5/HostCallRegisterFrame.lean` | `(restricted : joltInstance.HostCallsSucceed)` and `(ready : run.NextStep next pre)` | `∃ post, execWithTapeAnswer (run.bytecode[next].instruction.withRuntimeAdvice advice) answer pre = .ok RETIRE_SUCCESS post ∧ post.sail = pre.sail ∧ post.vregs = pre.vregs`, unchanged |
+| `host_call_selected_step` | `Soundness/Layer5/HostCallRegisterFrame.lean` | `(restricted : joltInstance.HostCallsSucceed)` and `(ready : run.NextStep nextRow pre)` | otherwise unchanged |
+
+`Soundness/Assumptions.lean` now imports `Layer5.MemoryAccessRestriction`, `Layer5.RuntimeAdvice` and `theorems.execution_facts` in place of the deleted module, so that every downstream module keeps the same import closure.
+
+### Commits
+
+- `94ae194` repairs the whole-run proofs listed under "Proof repairs". It also contains the deletion of `Soundness/Layer5/HostCallRestriction.lean`, which belongs with `3ff14b2`; the two commits only build together.
+- `8e7dae3` ports the HostIO consumers.
+- `3ff14b2` removes `HostCallsSucceed` and `TemporaryRestrictions`.
+- The commit that adds this section updates this report, `JoltConstraints/documentation/model_review.md` and `methods/soundness.md`.
+
+### Checks
+
+- The forbidden-name scan (`terminationThenStall`, `panicStoresOne`, `claimsNoPanic`, `HostCallsSucceed`, `overflowChecks` and their capitalised forms) over `JoltConstraints/*.lean` and `JoltBytecode/*.lean` prints nothing.
+- Over `git diff 6b6a9df` outside `JoltBytecode/` and `LeanRV64D/`, the only added line that mentions `sorry`, `admit`, `native_decide`, `bv_decide`, `decide +kernel`, `axiom` or a heartbeat, recursion-depth or instance-synthesis option is a prose sentence in the bytecode re-pin report brought in by the merge. No Lean source adds any of them.
+- `git diff --check` reports no whitespace errors.
+
+### Remaining documentation work
+
+`docs/whole-run-theorem.md` still describes the whole-run statement before the re-pin: it shows `sailOutputs`, `sailPanicWord`, the `TemporaryRestrictions` table and the old `BlockConforms` deviations.
+`BlockConforms` now has only the `riscv` and `no_code_store` fields.
+That page needs a rewrite against `WholeRun/Top.lean`; this step did not change it.
+The historical sections of `methods/soundness.md` and of this report still mention the removed restrictions; they describe earlier revisions.
 
 ## Source review and baseline
 
@@ -45,9 +160,9 @@ Coverage includes both halt kinds and explicitly excludes the two inline-only ki
 The generator equivalences compile at local commit `877356e`.
 No generated data file has changed.
 
-## Statement changes in progress
+## Statement changes earlier in the re-pin
 
-The following records the current changed interfaces; a final declaration-and-line inventory remains to be produced after the proofs compile.
+The following records the interfaces changed earlier in the re-pin; the statements changed in the final step are listed under "Final state".
 
 - `CircuitFlags.ctorIdx_lt`: old bound 14; new bound 16, reflecting the two new flags.
 - `JoltInstance.public_io`: old result `Option JoltDevice`; new result `Option JoltPublicIo`, retaining statement input/output bytes while removing advice buffers from that statement record.
@@ -69,7 +184,7 @@ The following records the current changed interfaces; a final declaration-and-li
 The new definitions `haltEndRule`, `ramAccessCount`, `ramCodeRegion`, `ramWriteProtectedMask`, `ramWriteProtected`, and `ModelledKind` support named consumers above.
 No new theorem premise is intended as a workaround for a proof gap.
 
-## Remaining work (current checkpoint, shared-public22 launched)
+## Checkpoint before the final step (shared-public22, superseded)
 
 The re-pin is incomplete because the full library and whole-run simulation have not yet built.
 The seventeenth through twenty-first batches checked `JoltInstance.soundness` for both public panic claims and printed exactly `propext`, `Classical.choice` and `Quot.sound` in its axiom closure.
@@ -100,7 +215,7 @@ The methods pin and reviewed Rust citations are updated; commit `cea7d6c` contai
 The complete final declaration-and-line inventory, full root build, exact harness checks, final commits and clean `JoltConstraints/` tree remain outstanding.
 The independent blind read-back below certifies the literal main soundness statement's interpretation, not the pending whole-run migration.
 
-## Validation in progress
+## Early core validation (superseded)
 
 The targeted build is `track-t-build.sh lake build JoltConstraints.ConstraintGen.Equiv`.
 Its log and completion marker are `.constraints-repin-core.log` and `.constraints-repin-core.done`.
