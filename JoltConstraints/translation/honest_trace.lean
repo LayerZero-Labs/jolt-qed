@@ -144,8 +144,8 @@ def Rv64ProgramImage.instructionAt (program : Rv64ProgramImage SourceInstruction
 -- project's equivalence proofs use for that expansion; they agree with the honest
 -- tracer's formulas, including division by zero and the signed overflow cases. Other
 -- instructions are not patched.
--- See : the `trace` methods in tracer/src/instruction/{div,divu,rem,remu,divw,divuw,
---       remw,remuw}.rs
+-- See : the `trace` methods in
+--       tracer/src/instruction/{div,divu,rem,remu,divw,divuw,remw,remuw}.rs
 -- SC.W and SC.D have no runtime advice after merged PR #2039 (0dad0d9e),
 -- rechecked at public pin ff6fc6568:
 -- https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/tracer/src/instruction/scw.rs#L46-L51
