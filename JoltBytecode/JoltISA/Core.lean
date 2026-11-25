@@ -73,13 +73,18 @@ structure SailJoltState where
 
 namespace JoltISA
 
-/-- The protected code span from decoded source addresses and compressed flags.
-This is `code_region` in `crates/jolt-program/src/preprocess/ram.rs` at `ff6fc6568`.
-For example, source words two and four protect the whole interval `[2, 5)`, including data between them.
-Zero-address padding is ignored; invalid alignment, underflow or extent overflow fails. -/
-def codeRegionOf (layout : MemoryLayout) (sources : List (BitVec 64 × Bool)) :
-    Option (Nat × Nat) := do
-  let lowest := layout.get_lowest_address.toNat
+/-- **Jolt's `code_region`**: the interval of doubleword indices, counted from `lowest`, from
+the doubleword that holds the first source instruction through the one that holds the last.
+`sources` lists the address and compressed flag of each source instruction. A source at address
+0 is padding and is skipped. It is none where `lowest` is not doubleword aligned, a source
+extent overflows `u64`, a source lies below `lowest`, or a source address is odd. Without
+sources the interval is `(0, 0)`.
+`codeRegionOf` is this function at the lowest address of a memory layout, and `decode_elf`
+calls it with `lowest = 0`.
+For example, sources at `lowest + 6` (compressed) and `lowest + 38` give `(0, 6)`.
+See : `jolt/crates/jolt-program/src/preprocess/ram.rs` at `ff6fc6568` (`code_region`,
+`source_word_intervals`). -/
+def codeRegionAt (lowest : Nat) (sources : List (BitVec 64 × Bool)) : Option (Nat × Nat) := do
   guard (lowest % 8 == 0)
   let mut region : Option (Nat × Nat) := none
   for (address, compressed) in sources do
@@ -93,6 +98,14 @@ def codeRegionOf (layout : MemoryLayout) (sources : List (BitVec 64 × Bool)) :
         | none => (first, last)
         | some (left, right) => (min left first, max right last))
   pure (region.getD (0, 0))
+
+/-- The protected code span of a memory layout: `codeRegionAt` at the layout's lowest address.
+This is `code_region` in `crates/jolt-program/src/preprocess/ram.rs` at `ff6fc6568`, as the
+tracer's code guard calls it.
+For example, source words two and four protect the whole interval `[2, 5)`, including data between them. -/
+def codeRegionOf (layout : MemoryLayout) (sources : List (BitVec 64 × Bool)) :
+    Option (Nat × Nat) :=
+  codeRegionAt layout.get_lowest_address.toNat sources
 
 /-- Install input/advice memory and the code guard for a new run.
 The supplied state contains the program image and starting register values.

@@ -312,14 +312,6 @@ private theorem scratchRow_frozen (i : JoltISA.Instr) (hi : ScratchRow i) :
     StatePreservation.pure_rule frozen_refl _, StatePreservation.throw_rule Frozen _]
     using (StatePreservation.bind_rule frozen_trans)
 
-private def NoStoreRow : JoltISA.Instr → Prop
-  | .SD .. | .VirtualStoreB .. | .VirtualStoreH .. | .VirtualStoreW .. => False
-  | _ => True
-
-private def NoStoreProgram : JoltISA.Program → Prop
-  | .done _ => True
-  | .instr i rest => NoStoreRow i ∧ NoStoreProgram rest
-
 /-- A scratch-only program changes no architectural register or device field.
 For example, the SUB/MUL/ADD selector of an AMO satisfies this classification. -/
 private def ScratchProgram : JoltISA.Program → Prop
@@ -359,28 +351,6 @@ private theorem addi_device (dst : JoltISA.Dst) (src : JoltISA.Src) (imm : BitVe
 
 private inductive AccessKind where
   | dword | byte | halfword | word
-
-private def accessAddress (kind : AccessKind) (value imm : BitVec 64) : BitVec 64 :=
-  match kind with
-  | .dword => value + imm
-  | _ => (value + imm) &&& (-8 : BitVec 64)
-
-private def storeRow (kind : AccessKind) (rs : regidx) (value : JoltISA.Src)
-    (imm : BitVec 64) : JoltISA.Instr :=
-  match kind with
-  | .dword => .SD (.xreg rs) value imm
-  | .byte => .VirtualStoreB (.xreg rs) value imm (.E_SAMO_Addr_Align ())
-  | .halfword => .VirtualStoreH (.xreg rs) value imm (.E_SAMO_Addr_Align ())
-  | .word => .VirtualStoreW (.xreg rs) value imm (.E_SAMO_Addr_Align ())
-
-private inductive StorePlan (kind : AccessKind) (rs : regidx) (imm : BitVec 64) :
-    JoltISA.Program → Prop where
-  | store (value : JoltISA.Src) (rest : JoltISA.Program) (htail : NoStoreProgram rest) :
-      StorePlan kind rs imm (.instr (storeRow kind rs value imm) rest)
-  | scratch (row : JoltISA.Instr) (rest : JoltISA.Program) (hrow : ScratchRow row)
-      (htail : StorePlan kind rs imm rest) :
-      StorePlan kind rs imm (.instr row rest)
-
 
 private theorem bind_success {α β : Type} (m : JoltMonad α) (f : α → JoltMonad β)
     (s t : SailJoltState) (v : β) (h : (m >>= f) s = .ok v t) :
@@ -557,17 +527,6 @@ private theorem reservation_load_plan (store double : Bool) (rd rs1 rs2 : regidx
     | exact ReservationLoadPlan.load _ _
     | apply ReservationLoadPlan.scratch _ _ (by simp [ScratchRow])
 
-private theorem reservation_store_plan (double : Bool) (rd rs1 rs2 : regidx) :
-    StorePlan (if double then .dword else .word) rs1 0#64
-      (SystemProofs.scRows double rd rs1 rs2) := by
-  cases double
-  all_goals simp only [SystemProofs.scRows, Bool.false_eq_true, ite_true, ite_false,
-    JoltISA.scwProgramAuto, JoltISA.scdProgramAuto]
-  all_goals split
-  all_goals repeat' first
-    | exact StorePlan.store _ _ (by simp [NoStoreProgram, NoStoreRow])
-    | apply StorePlan.scratch _ _ (by simp [ScratchRow])
-
 private structure ReservationMemory (store double : Bool) (rs1 rs2 : regidx)
     (js : SailJoltState) : Prop where
   align : JoltISA.sourceValue (.xreg rs1) js &&& (if double then 7#64 else 3#64) = 0#64
@@ -667,48 +626,6 @@ private theorem loadProgram_ram (kind : AccessKind) (dst : JoltISA.Dst) (rs : re
       ((JoltISA.sourceValue (.xreg rs) s + imm) &&& (-8 : BitVec 64)) s := by
   obtain ⟨u, hload, _⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
   exact load_row_ram kind dst rs imm s u hram hload
-
-private theorem csrRead_noStore (csr : JoltISA.SystemCSR) (rd : regidx)
-    (rest : JoltISA.Program) (h : NoStoreProgram rest) :
-    NoStoreProgram (JoltISA.csrReadInto csr rd rest) := by
-  unfold JoltISA.csrReadInto
-  split_ifs <;> simp [NoStoreProgram, NoStoreRow, h]
-
-private theorem csrSwap_noStore (csr : JoltISA.SystemCSR) (src : JoltISA.Src) :
-    NoStoreProgram (JoltISA.csrSwapWrite csr src) := by
-  cases csr <;> simp [JoltISA.csrSwapWrite, NoStoreProgram, NoStoreRow]
-
-private theorem csrrw_noStore (csr : JoltISA.SystemCSR) (rs rd : regidx) :
-    NoStoreProgram (JoltISA.csrrwProgram csr rs rd) := by
-  unfold JoltISA.csrrwProgram
-  split_ifs <;> simp only [NoStoreProgram, NoStoreRow, true_and]
-  all_goals apply csrRead_noStore
-  all_goals first | exact csrSwap_noStore _ _ | trivial
-
-private theorem csrBit_noStore (clear : Bool) (csr : JoltISA.SystemCSR) (rs rd : regidx) :
-    NoStoreProgram (JoltISA.csrBitUpdateProgram clear csr rs rd) := by
-  unfold JoltISA.csrBitUpdateProgram
-  split_ifs
-  all_goals simp only [NoStoreProgram, NoStoreRow, true_and]
-  all_goals first
-    | exact csrRead_noStore _ _ _ (by cases clear <;> trivial)
-    | simp [JoltISA.pureWritebackRdZeroProgram, NoStoreProgram, NoStoreRow]
-
-private theorem csrrwi_noStore (csr : JoltISA.SystemCSR) (imm : BitVec 5) (rd : regidx) :
-    NoStoreProgram (JoltISA.csrrwiProgram csr imm rd) := by
-  unfold JoltISA.csrrwiProgram
-  apply csrRead_noStore
-  cases csr <;> simp only
-  all_goals first
-    | trivial
-    | (split_ifs <;> trivial)
-
-private theorem csrImmediateBit_noStore (clear : Bool) (csr : JoltISA.SystemCSR)
-    (imm : BitVec 5) (rd : regidx) :
-    NoStoreProgram (JoltISA.csrImmediateBitUpdateProgram clear csr imm rd) := by
-  unfold JoltISA.csrImmediateBitUpdateProgram
-  apply csrRead_noStore
-  split_ifs <;> cases clear <;> trivial
 
 open private dwordBinop_registers from JoltConstraints.theorems.WholeRun.AtomicStoreRuns
 

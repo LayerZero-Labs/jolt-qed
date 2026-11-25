@@ -112,7 +112,7 @@ No constraint can check `DecodedFrom`, because it describes how the bytecode was
 Its input `elf` is the list of sections that the `object` crate parses from the ELF file (address, size, data, whether the section is text, whether it is writable, and the `$x` and `$d` mapping symbols that point into it) and the entry point.
 The program's `memory_init`, `program_end` and `entry_address` are what `decode_elf` computes from them.
 Its rows are, one to one and in order, the instructions `decode_text_section` finds in the merged text ranges, without the data ranges that `$d` mapping symbols mark, each with the instruction's address and width, and each RISC-V row is `joltDecode` of the instruction's word.
-`DecodedFrom` includes the checks by which `decode_elf` rejects an ELF before it decodes an instruction: an instruction at an odd address, an instruction extent that `code_region` rejects, and a writable section that overlaps the code region.
+`DecodedFrom` includes every check by which `decode_elf` rejects an ELF, other than the checks of `decode_instruction`: a section whose end overflows, a truncated instruction parcel, an instruction at an odd address, an instruction extent that `code_region` rejects, and a writable section that overlaps the code region.
 A row of one of Jolt's own instructions is constrained only in address and width, because Lean does not transcribe Jolt's decoder for those opcodes.
 `DecodedFrom` also leaves out the checks by which `decode_instruction` rejects a program.
 Every program Jolt builds from the ELF therefore satisfies `DecodedFrom`, and the relation still fixes the layout and every RISC-V row.
@@ -125,8 +125,8 @@ Three things stay trusted: that `elf` is what the `object` crate parses from the
 Earlier revisions also had a documented deviation `no_code_store`: no store writes into an instruction row of the program.
 Jolt keeps fetching the committed bytecode, while Sail fetches from memory, and without Zifencei the specification allows both.
 The two differ only after a store changes a code byte.
-Jolt's tracer at `ff6fc6568` rejects every store that changes a byte of its protected code region (`protected_store_ok` in `JoltBytecode/JoltISA/DeviceMemory.lean`), and that region covers every byte of every instruction row.
-The proof now derives from this check that every block of an honest trace keeps the code bytes (`JoltCodeIntact.of_block` in `JoltConstraints/theorems/WholeRun/CodeInv.lean`), so the premise is gone.
+Jolt's tracer at `ff6fc6568` rejects every store that changes a byte of its protected code region (`protected_store_ok` in `JoltBytecode/JoltISA/DeviceMemory.lean`), and that region covers every row byte that the image loads.
+The proof now derives from this check that every block of an honest trace keeps the code bytes (`JoltCodeIntact.of_block` in `JoltConstraints/theorems/WholeRun/CodeInv.lean`). The premise is therefore gone.
 
 Jolt at `ff6fc6568` has no panic or termination word: a run ends at an explicit halt row, and the I/O region below `RAM_START_ADDRESS` is ordinary shared byte memory.
 The premises that excluded loads, stores and atomic operations on those words are gone with them.

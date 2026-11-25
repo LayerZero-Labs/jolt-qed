@@ -30,6 +30,8 @@ set_option autoImplicit false
 
 namespace WholeRun
 
+open JoltISA (codeRegionAt)
+
 /-! ## The parsed ELF -/
 
 /-- The kind of an ELF mapping symbol: `$x` (and any name that starts with `$x`) marks the start
@@ -40,7 +42,7 @@ inductive MappingSymbol where
   | data
   deriving DecidableEq
 
-/-- **One section of the guest ELF**, as the `object` crate (0.40.0) reports it to `decode_elf`:
+/-- **One section of the guest ELF**, as the `object` crate (0.41.0, the version Jolt locks at `ff6fc6568`) reports it to `decode_elf`:
 `address` is `section.address()`, `size` is `section.size()`, `isText` is
 `section.kind() == SectionKind::Text` and `isWritable` says that `sh_flags` contains
 `SHF_WRITE`. For a section at or above `RAM_START_ADDRESS`, `data` is `section.data()`.
@@ -58,7 +60,7 @@ symbol of `obj.symbols()` that is local (`is_local()`), has kind `SymbolKind::Un
 never for `SHT_NOBITS`. `data()` of a section that is not `SHT_NOBITS` returns exactly `sh_size`
 bytes of the file or fails, and `decode_elf` reports a failure as "section data is not
 readable".
-See `object-0.40.0/src/read/elf/section.rs` (`ElfSection::kind`, `SectionHeader::data`).
+See `object-0.41.0/src/read/elf/section.rs` (`ElfSection::kind`, `SectionHeader::data`).
 
 For example, a `.text` section at `0x80000000` holding `addi x1, x0, 1` has `size = 4`,
 `data = [0x93, 0x00, 0x10, 0x00]`, `isText = true`, `isWritable = false` and, if the assembler
@@ -97,32 +99,6 @@ def ElfSection.bytes (section_ : ElfSection) : List (BitVec 64 × BitVec 8) :=
   section_.data.mapIdx fun offset byte => (BitVec.ofNat 64 (section_.address.toNat + offset), byte)
 
 /-! ## The code region -/
-
-/-- **Jolt's `code_region`**: the interval of doubleword indices, counted from `lowest`, from
-the doubleword that holds the first source instruction through the one that holds the last.
-`sources` lists the address and compressed flag of each source instruction. A source at address
-0 is padding and is skipped. It is none where `lowest` is not doubleword aligned, a source
-extent overflows `u64`, a source lies below `lowest`, or a source address is odd. Without
-sources the interval is `(0, 0)`.
-`JoltISA.codeRegionOf` is this function at the lowest address of a memory layout
-(`codeRegionOf_eq`), and `decode_elf` calls it with `lowest = 0`.
-For example, sources at `lowest + 6` (compressed) and `lowest + 38` give `(0, 6)`.
-See : `jolt/crates/jolt-program/src/preprocess/ram.rs` at `ff6fc6568` (`code_region`,
-`source_word_intervals`). -/
-def codeRegionAt (lowest : Nat) (sources : List (BitVec 64 × Bool)) : Option (Nat × Nat) := do
-  guard (lowest % 8 == 0)
-  let mut region : Option (Nat × Nat) := none
-  for (address, compressed) in sources do
-    if address != 0 then
-      let start := address.toNat
-      let stop ← MemoryLayout.checkedAdd start (if compressed then 2 else 4)
-      guard (lowest ≤ start && start % 2 == 0)
-      let first := (start - lowest) / 8
-      let last := (stop - lowest + 7) / 8
-      region := some (match region with
-        | none => (first, last)
-        | some (left, right) => (min left first, max right last))
-  pure (region.getD (0, 0))
 
 /-- The code region of a memory layout is `codeRegionAt` at the layout's lowest address.
 For example, both give the same interval for the source rows of a program. -/

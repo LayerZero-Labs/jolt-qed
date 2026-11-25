@@ -32,7 +32,7 @@ Read it before citing the result.
 ## Status
 
 The recorded Jolt pin is `ff6fc6568` (`ff6fc656813d950565c9f6e1258b78bdaf0e60e8`), the merge of a16z/jolt#2509.
-The system expansions other than EBREAK, the decoder and the ELF loader (`decode_elf`) still transcribe a16z/jolt `c336a6da7`, the head of a16z/jolt#2384 (see [`docs/riscv-alignment.md`](docs/riscv-alignment.md), Sources).
+The system expansions other than EBREAK and the decoder still transcribe a16z/jolt `c336a6da7`, the head of a16z/jolt#2384. The ELF loader (`decode_elf`) follows `ff6fc6568` (see [`docs/riscv-alignment.md`](docs/riscv-alignment.md), Sources).
 The constraints migration is merged. `lake build JoltBytecode` and `lake build JoltConstraints` pass, and `JoltBytecode/` has no `sorry`.
 The remaining `sorry`s are in completeness proofs under `JoltConstraints/theorems/Completeness/`.
 None of them is used by the soundness or whole-run theorems, whose `#print axioms` lists only `propext`, `Classical.choice` and `Quot.sound`.

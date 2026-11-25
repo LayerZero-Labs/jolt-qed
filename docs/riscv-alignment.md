@@ -378,7 +378,7 @@ The parsing of the ELF file into its sections (`object::File::parse`, section ki
 Its Jolt-side version `JoltCodeIntact` (`WholeRun/CodeInv.lean`) is a run invariant with no premise.
 Jolt's tracer fetches the committed bytecode, while Sail's model fetches coherently from memory; without Zifencei the specification permits either (`unpriv/zifencei.adoc`).
 The two can differ only after a store changes a code byte, and Jolt's tracer rejects such a store.
-`JoltInstance.initial_state` computes the code region from the program's rows (`codeRegionOf`, Jolt's `code_region`), and `codeRegionAt_covers` (`WholeRun/Elf.lean`) shows that it covers every byte of every row.
+`JoltInstance.initial_state` computes the code region from the program's rows (`codeRegionOf`, Jolt's `code_region`), and `codeRegionAt_covers` (`WholeRun/Elf.lean`) shows that it covers every row byte that the image loads.
 Every store goes through `protected_store_ok`, which fails on a store that changes a byte of that region, so a block that runs keeps every code byte (`JoltIOSetupFrame.execProgram_memory`, `JoltCodeIntact.of_block`).
 
 Platform premise `JoltInstance.HeapNoWrap`: the memory layout ends at least eight bytes below `2^64` (`heap_end ≤ 2^64 - 8`).
