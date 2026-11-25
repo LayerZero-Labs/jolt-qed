@@ -271,7 +271,7 @@ RAM no-wrap predicate and its next-step helper have been deleted.
 On 2026-10-10, Ari approved excluding `SC.W` and `SC.D` from every source row while their advice mismatch was unresolved ([a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)).
 PR #2039 fixed that mismatch, the SC rows go through the ordinary row steps, and no proof used the restriction, so Ari removed it on 2026-11-03.
 No proof used the premise `CodeUnchanged`, so Ari removed it on 2026-11-03; that a program does not change its own code (a16z/jolt#1952) remains a modeling assumption, recorded in `model_review.md`.
-Stopping is proved in Layer 7, and the panic cases are covered by the temporary `PanicStoresOne` and `ClaimsNoPanic` restrictions.
+Stopping is proved in Layer 7. Before the `ff6fc6568` re-pin, the temporary `PanicStoresOne` and `ClaimsNoPanic` restrictions covered the panic cases. At that pin a run ends at an explicit halt, row 21 binds the panic claim to the halt kind, and both restrictions were removed.
 Ari approved `TracerAddressChecks`, a temporary program restriction for both
 LD and SD. It covers the input/advice-store counterexample reported in
 [a16z/jolt#2044](https://github.com/a16z/jolt/issues/2044), following
@@ -299,7 +299,7 @@ input/advice stores alone; the theorem does not accumulate both premises.
 It assumes precisely these address assertions, not successful LD/SD execution
 or table agreement.
 The proof derives alignment and excludes peripheral addresses separately, in Layer 5b.
-The known panic, termination and stopping discrepancies are covered by the `PanicStoresOne`, `ClaimsNoPanic` and `TerminationThenStall` restrictions, and stopping is proved in Layer 7.
+Before the `ff6fc6568` re-pin, the `PanicStoresOne`, `ClaimsNoPanic` and `TerminationThenStall` restrictions covered the known panic, termination and stopping discrepancies. Jolt at that pin has no panic or termination word and ends a run at an explicit halt, and the re-pin removed all three restrictions. Stopping is proved in Layer 7.
 On 2026-10-10, Ari also decided to treat every advice-tape answer as untrusted for the planned soundness theorem, pending a16z's confirmation. Retain the fixed-tape specification for completeness and add the relaxed specification alongside it, as recorded in Layer 5a.
 On 2026-10-15, Ari decided the theorem keeps the fixed-tape language. Jolt's tracer reads one tape, in order; "untrusted" means the prover chooses its contents, which the ∃ over private inputs already allows. The relaxed specification stays, as a proof device.
 On 2026-10-10, Ari chose to model Akita separately. On 2026-11-10, after a16z/jolt#2403 made `p = 2^128 - 1780711455` Jolt's production field, the model took in Akita's one extra relation instead: the canonical lookup-address check, constraint (63), on when the characteristic is below `2^128`. The theorem now covers fields with characteristic above `2^128 - 2^64`, including BN254 and Akita's field. The audit in Layer 4 records the argument.
@@ -1136,7 +1136,7 @@ The rule follows a16z/jolt PR #2109 at merge commit `0249591a`: a self-jumping J
 The execution prefix is cut at its first stable self-jump, or at padding or the last witness cycle if no stable stall occurs.
 The stopping proof `soundness_stopping` (`Layer7/Stopping.lean`, with `StallSuffix.lean`, `LastJump.lean` and `TerminationStore.lean`) proves the cut ends at a stable stall and that later witness rows stay on its source instruction with zero RAM updates; it does not depend on `sorryAx`.
 The execution-prefix lemma owns RAM agreement at the cut, and the stopping lemma owns the final RAM comparison.
-The temporary `TerminationThenStall` and `ClaimsNoPanic` restrictions address the separate case of a witness that stops early at a jump (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`).
+Before the `ff6fc6568` re-pin, the temporary `TerminationThenStall` and `ClaimsNoPanic` restrictions addressed the separate case of a witness that stops early at a jump (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`). The re-pin removed both: at that pin the trace ends at its first explicit success or panic halt.
 Take the instance facts, including `initialized`, from the context; Layer 5a left `JoltPrivateInputs` unchanged. `accepted` follows from `expands` and `entryIsRust`.
 Then rebuild one tape from the answers' low bytes, in read order, and run the program on it. Prove that this run is an `HonestTrace` with the same bytecode rows, ending every source instruction with the same registers and memory ([Choosing the private inputs](#choosing-the-private-inputs)).
 Why: once all these obligations are resolved, the constructed prefix can be packaged as a relaxed trace, and the rebuilt tape turns it into an `HonestTrace`, the form the theorem concludes.
@@ -1152,8 +1152,8 @@ Helper B (`soundness_matches_outputs`) proves this layer without `sorryAx`.
 Translate the agreed RAM encoding on the public I/O region into the final device's output bytes and panic flag.
 Then use `RamOutputEqPublicIo` to prove that the final device has the instance's output bytes, after trimming trailing zeros, and its panic flag.
 For an empty trace, use the initial device.
-In the panic-store discrepancy, a store of 0 to the panic word sets Jolt's tracer's flag but leaves 0 in the RAM table, so a false "no panic" claim passes (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`).
-It no longer blocks this step: B needs no panic restriction, and the burden now sits in the execution prefix's `cutRam` at the panic word, where the temporary `PanicStoresOne` restriction excludes it.
+Before the `ff6fc6568` re-pin, in the panic-store discrepancy, a store of 0 to the panic word set Jolt's tracer's flag but left 0 in the RAM table, and a false "no panic" claim passed (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/completeness-and-soundness/index.md`).
+It does not block this step: B needs no panic restriction. Until the re-pin the burden sat in the execution prefix's `cutRam` at the panic word, where the temporary `PanicStoresOne` restriction excluded it. Jolt at `ff6fc6568` has no panic word, and the panic claim comes from the halt kind.
 Why: this gives `matches_outputs` for the relaxed trace. The rebuilt run has the same final device, so it carries over to Layer 7's `HonestTrace`, which proves the theorem's existential conclusion.
 Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputEqPublicIo`, device semantics.
 
@@ -1201,7 +1201,9 @@ privately, as Markdown files over a Slack channel, not as public GitHub issues
    independently of the tape specification.
    Assumed meanwhile: `RamRegionFits`, approved by Ari on 2026-10-10.
    NOTE: to confirm with a16z.
-3. **Will the constraints enforce the MMU's input/advice write permissions?**
+3. **Removed at the `ff6fc6568` re-pin: will the constraints enforce the MMU's input/advice write permissions?**
+   The re-pin removed the `TracerAddressChecks` premise (commit `3bb089d`); at that pin the theorem derives the address and protected-value checks from the constraints (`Layer5/SharedMemoryChecks.lean`).
+   The rest of this item records the question as it stood before the re-pin.
    Asked in [#2041](https://github.com/a16z/jolt/issues/2041); Ari's
    [#2044](https://github.com/a16z/jolt/issues/2044) now reports an accepted
    proof despite the tracer's rejection. If these permissions are instead only
@@ -1211,11 +1213,14 @@ privately, as Markdown files over a Slack channel, not as public GitHub issues
    Also open: whether and how the verifier enforces the separate zero-store,
    I/O-gap, canary-store and heap-boundary cases listed above. These four remain
    code-reading candidates, without complete witnesses.
-   Assumed meanwhile: the approved temporary `TracerAddressChecks` premise,
+   Assumed until the re-pin: the approved temporary `TracerAddressChecks` premise,
    with a FIXME to narrow or remove it as each case is resolved and proved.
-4. **Temporary restrictions added since, each needing a write-up for the batch.**
+4. **Removed at the `ff6fc6568` re-pin: temporary restrictions added since, each needing a write-up for the batch.**
+   The re-pin removed every restriction in this list, and `JoltInstance.soundness` takes none.
+   The list records why each was added.
    - `HostCallsSucceed`: host calls that fail in Jolt's tracer pass the
      constraints as no-op rows.
+     Jolt at `ff6fc6568` ignores a rejected host call and retires it, and the model does the same (`JoltISA.execHostIO_succeeds`). The restriction was therefore removed in `3ff14b2`.
    - `TerminationThenStall`: a witness that stops early at a jump, and the
      termination word's device/table mismatch.
    - `PanicStoresOne`: a store of 0 proved as "no panic", and loads of the panic word after a store.

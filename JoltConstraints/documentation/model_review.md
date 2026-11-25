@@ -15,7 +15,7 @@ The selected RAM word's address and protected-value checks follow from the pinne
 Both requested RAM-history completeness theorems are proved with unchanged statements.
 The three #1949 admissions remain unchanged.
 The whole-run relation and initialization use the shared byte map, and the shared-memory simulations replace the old device-memory and I/O modules.
-`docs/whole-run-theorem.md` still describes the pre-re-pin whole-run statement and needs a rewrite.
+`docs/whole-run-theorem.md` and `docs/riscv-alignment.md` describe the current whole-run statements since 2026-11-25.
 See [the re-pin report](../../reports/2026-11-24-constraints-repin.md) for the changed statements.
 The following older green-build descriptions refer to their stated historical revisions.
 
@@ -72,15 +72,13 @@ At `ff6fc6568`, input, advice, output and ordinary RAM bytes all belong to `sail
 `JoltDevice` retains the layout and the CPU's panic claim.
 Protected stores succeed when the affected bytes preserve their old values, including stores into code, input, advice and canary words.
 `Layer5/SharedMemoryChecks` derives the selected row's address and protected-value checks from the RAM constraints.
-The soundness restriction structure therefore has no `tracerAddressChecks` field.
-The old standalone predicate still has consumers in the obsolete device-memory simulation, which remains to be deleted during the whole-run migration.
+The soundness theorem therefore takes no `tracerAddressChecks` restriction, and the `TracerAddressChecks` predicate no longer exists.
 
 A valid proof ends at an explicit success or panic halt row.
 Row 21 binds the public panic claim to that kind.
 `Layer7/Stopping` now checks this argument for either claim, without termination or panic memory words.
 The three flag-word restriction fields and their definition modules have been removed.
-The soundness assembly now checks at `b852fe3` for both claims, with only `propext`, `Classical.choice` and `Quot.sound` in its axiom closure.
-The full root and whole-run simulation still require validation.
+The full `lake build JoltConstraints` at `3ff14b2`, recorded at the top of this file, includes the whole-run simulation and the soundness assembly for both claims.
 
 ## Assumptions
 
@@ -134,7 +132,7 @@ No `bv_decide` remains in `JoltBytecode` or `JoltConstraints`; all 21 uses were 
 At Lean HEAD `7096dca` it had seven: ECALL, EBREAK, LR.W, SC.W, LR.D and SC.D in the dispatcher `equivalenceStatement_holds`, and MRET's exception-handler postlude in `InstructionEquivalence/Instructions/System/Mret.lean`.
 The MRET theorem is now proved.
 `joltRun_eq_execute` (`JoltBytecode/Step/Instructions.lean`) replaces the dispatcher, and the step theorems in `JoltBytecode/Step/` cover ECALL's trap entry and LR/SC against `try_step`.
-EBREAK is not executed: the whole-run theorem stops in front of it (`docs/riscv-alignment.md` section 4).
+Explicit halts (EBREAK and `jolt.success`) are not executed: the whole-run theorem stops in front of the first one (`docs/riscv-alignment.md` section 4).
 
 Do not weaken a main statement to close a gap.
 
@@ -176,9 +174,10 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
   The soundness hypothesis is therefore stronger than Jolt's check, and the gap appears to allow a false claim (2026-10-29 report, finding 1; not reproduced).
   Modeling the words as field elements changes a core definition and waits for Ari.
 - **HostIO END marker (resolved by the re-pin).** At `ff6fc6568` Jolt's tracer reads the label for both cycle-marker events and ignores a rejected read; the total host-call model (`JoltISA.execHostIOWith`) does the same, so finding 2 of the 2026-10-29 report no longer applies.
+- **Host allocation.** The model assumes every host allocation succeeds. In Jolt's tracer at `ff6fc6568`, a failed `try_reserve` while reading an advice range makes the tracer ignore that advice write, while the model appends the bytes to the advice tape. Host out-of-memory aborts, for example in memory-access bookkeeping or the tracing subscriber, are not modelled as guest outcomes ([host-call report](../../reports/2026-11-24-hostio-repin.md), "Explicit modelling choices and limits").
 - **ELF sections and `tohost`.** Lean's initial RAM uses preprocessing's `memory_init` for the run; Jolt's tracer loads fewer section kinds, and sizes RAM differently when the ELF defines `tohost` (2026-10-29 report, findings 3 and 4).
 - **Termination word (resolved by the re-pin).** The old verifier/model gap described in finding 5 of the 2026-10-29 report disappears with the removed memory word.
-  The new halt lane checks the public claim instead; its full soundness assembly is pending.
+  The new halt lane checks the public claim instead, and the soundness proof uses it for both claims (`Layer7/Stopping`).
 - **Images Jolt never produces.** `Rv64ProgramImage` carries decoded instructions without a decoder certificate.
   It admits ANDN as a source instruction, odd branch and jump offsets, a quotient field on divisions, and instruction lists not tied to the text bytes.
   These only add instances to the theorems.

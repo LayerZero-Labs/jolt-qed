@@ -4,7 +4,7 @@ This page states what jolt-qed's two whole-run theorems prove, what they assume,
 Read it before citing either theorem.
 [`riscv-alignment.md`](riscv-alignment.md) gives the reasoning behind each decision, and `JoltConstraints/theorems/WholeRun/Top.lean` holds the theorems and their proofs.
 
-In one sentence: if Jolt's tracer runs a program, then the Sail RISC-V model, started from the matching state, runs the same program up to its first EBREAK, one `try_step` per source instruction, and ends in a matching state with the same outputs and panic flag.
+In one sentence: if Jolt's tracer runs a program, then the Sail RISC-V model, started from the matching state, runs the same program up to its first explicit halt, one `try_step` per source instruction, and ends in a matching state with the same outputs and a halt kind that fixes the panic flag.
 The claim holds under the premises listed below, and the most important limits are in [What the theorems do not say](#what-the-theorems-do-not-say).
 
 ## The two theorems
@@ -21,15 +21,15 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
     ∃ (n : Nat) (s : SailState),
       WholeRun.sailRun n (sailInit trace.initialState) = .ok () s ∧
       Related halt s ∧
-      trimTrailingZeros (sailOutputs trace.initialState.jolt_device s) =
-        trimTrailingZeros final.jolt_device.outputs ∧
-      (sailPanicWord trace.initialState.jolt_device s ≠ 0 ↔ final.jolt_device.panic = true) ∧
-      (SailHalted joltInstance.program s ∨ halt = final)
+      trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
+        trimTrailingZeros (final.jolt_device.outputsOf final.sail.mem) ∧
+      ∃ kind, final.halted = some kind ∧
+        final.jolt_device.panic = (kind == JoltHaltKind.panic) ∧
+        (SailHalted joltInstance.program s kind ∨ halt = final)
 
 theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
-    (restrictions : joltInstance.TemporaryRestrictions)
     {params : WitnessParams} (givenInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
@@ -46,17 +46,19 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
           ∃ (n : Nat) (s : SailState),
             sailRun n (sailInit trace.initialState) = .ok () s ∧
             Related halt s ∧
-            trimTrailingZeros (sailOutputs trace.initialState.jolt_device s) =
+            trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
               trimTrailingZeros joltInstance.outputs ∧
-            (sailPanicWord trace.initialState.jolt_device s ≠ 0 ↔ joltInstance.panic = true) ∧
-            (SailHalted joltInstance.program s ∨ halt = final))
+            ∃ kind, final.halted = some kind ∧
+              joltInstance.panic = (kind == JoltHaltKind.panic) ∧
+              (SailHalted joltInstance.program s kind ∨ halt = final))
 ```
 
 `#print axioms` lists only `propext`, `Classical.choice` and `Quot.sound` for both.
 
 `sail_reproduces` is about a trace you already have.
 An `HonestTrace` is a run of Jolt's tracer, as modelled in Lean, on the program and some private inputs.
-A `HaltPrefix` of it is the list of blocks before its first EBREAK, where a block is one source instruction with the Jolt states before and after its rows.
+A `HaltPrefix` of it is the list of blocks before its first explicit halt, where a block is one source instruction with the Jolt states before and after its rows.
+Jolt has two explicit halts (`haltSource` in `JoltConstraints/theorems/WholeRun/Halt.lean`): the `jolt.success` instruction ends a successful run, and EBREAK ends a run with a panic.
 If Jolt's prover accepts the trace (`hcfg`) and every block of that prefix conforms (`BlockConforms`), Sail's emulator loop `sailRun`, started from `sailInit` of the trace's initial state, takes `n` successful steps to a state `s`.
 `sail_soundness` needs no `hcfg` premise, because `JoltInstance.soundness` returns an accepted trace.
 
@@ -66,12 +68,11 @@ Jolt's soundness theorem, `JoltInstance.soundness`, turns a witness that satisfi
 
 ## What the conclusion says
 
-The Sail state `s` satisfies four properties:
+The Sail state `s` satisfies three properties:
 
 - `Related halt s`: Sail's state matches Jolt's state `halt`, as the next subsection describes.
-- Sail's output region, with trailing zero bytes dropped, equals Jolt's outputs with trailing zero bytes dropped.
-- Sail's panic word is nonzero exactly when Jolt's panic flag is set.
-- Either Sail's PC is the address of an EBREAK row of the program (`SailHalted`), or the trace ended at `halt` without reaching an EBREAK.
+- The output bytes `outputsOf` reads from Sail's memory, with trailing zero bytes dropped, equal the output bytes it reads from the final Jolt state's memory, with trailing zero bytes dropped. Jolt keeps its outputs in the same shared byte memory as RAM, and `outputsOf` reads the output region of the memory layout, with zero for a missing byte.
+- The final Jolt state records a halt kind `kind`, and Jolt's panic flag is set exactly when `kind` is the panic kind. Either Sail's PC is the address of the program's halt row of that kind (`SailHalted`, which takes the kind), or `halt` is the final state (`halt = final`). The panic clause comes from the halt kind; no memory word encodes it.
 
 ### The relation `Related`
 
@@ -80,12 +81,12 @@ The Sail state `s` satisfies four properties:
 - Sail's registers are Jolt's, as `sailRegs` lays them out. The general-purpose registers come from Jolt's state. Jolt keeps the six machine-mode CSRs in virtual registers `v34`–`v39` and the LR/SC reservation in `v32` and `v33`; Sail's CSRs and reservation are those values, with `mstatus.MPP` read as machine mode.
 - Sail's `PC` is Jolt's `nextPC`, the register in which a Jolt state records the address of the next instruction.
 - Sail's `misa` is its reset value, and its memory regions are the platform's. Sail's `minstret` and its increment flag are unconstrained.
-- Sail's RAM equals Jolt's RAM at and above `RAM_START_ADDRESS`.
-- Between `memLow`, the lowest address in Jolt's memory layout, and `RAM_START_ADDRESS`, each byte of Sail's memory is the byte Jolt's device reads there, except in the panic and termination words.
-  Those bytes must be present, and Sail's panic word must be nonzero exactly when Jolt's panic flag is set. `Related` constrains them no further.
+- Sail's memory equals Jolt's shared byte memory at every address (`Related.ram`), reading a missing byte as zero on either side. The same rule covers RAM and the I/O region below `RAM_START_ADDRESS`, and no address is excepted.
+- Sail's memory holds a byte at every address from `memLow`, the lowest address in Jolt's memory layout, up to `memHigh` (`Related.present`).
+- Jolt's memory layout is one that `MemoryLayout.new` builds (`Related.layout`).
 - The advice tape is not part of the relation.
 
-`Related` also records facts that keep Sail's `try_step` a plain fetch-decode-execute step: the step invariant, Sail's HTIF device being off, and the presence of every memory byte the run can touch.
+`Related` also records facts that keep Sail's `try_step` a plain fetch-decode-execute step: the step invariant and Sail's HTIF device being off.
 
 ## What the theorems assume
 
@@ -104,7 +105,7 @@ Jolt checks this itself, and `sail_soundness` obtains it from `JoltInstance.soun
 | Premise | Meaning | What would remove it |
 | --- | --- | --- |
 | `DecodedFrom` | Agreement of the program with Jolt's `decode_elf` on `elf`, the sections of the guest ELF | Nothing in Jolt (trusted, as described below) |
-| `RowsAligned` | Every row address is even. Jolt's ELF loader does not check this. | A check in Jolt's preprocessing. |
+| `RowsAligned` | Every row address is even. Jolt's ELF loader at `ff6fc6568` rejects an odd address, but `DecodedFrom` transcribes the loader at `c336a6da7`, which does not. | Transcribing that check into `DecodedFrom`. |
 | `HeapNoWrap` | `heap_end ≤ 2^64 - 8`. | A check in `MemoryLayout.new`. |
 
 `DecodedFrom` (`JoltConstraints/theorems/WholeRun/Elf.lean`) transcribes `decode_elf` from `crates/jolt-program/src/image/elf.rs` up to the call of `decode_instruction`.
@@ -119,17 +120,18 @@ Every program Jolt builds from the ELF therefore satisfies `DecodedFrom`, and th
 `decode_elf` never reads the data of a section below `RAM_START_ADDRESS`, and the data `elf` records for such a section may be arbitrary.
 Three things stay trusted: that `elf` is what the `object` crate parses from the guest ELF, including that it gives every loaded text section of a successfully decoded ELF exactly as many bytes of data as its size; that Jolt's preprocessing and the verifier key were built from this program; and that the Lean transcriptions of `decode_elf`, `joltDecode` and `joltUncompress` match Jolt.
 
-### Documented deviations
+### Documented deviation
 
-All five are fields of `BlockConforms`, which must hold for every block of the halt prefix.
+`BlockConforms` has two fields, `riscv` (the scope premise below) and `no_code_store`, and both must hold for every block of the halt prefix.
 
 | Premise | Meaning | What would remove it |
 | --- | --- | --- |
-| `no_code_store` | No store writes into an instruction row of the program. The check covers the whole aligned doubleword of each store, because Jolt's narrow stores rewrite their doubleword. Jolt keeps fetching the committed bytecode after such a store, while Sail fetches from memory; without Zifencei the specification allows both. | A constraint in Jolt that every store's doubleword lies outside the code, with the same check in the tracer. |
-| `no_flag_word_load` | No load reads a byte of the panic or termination word. | Treating both words as plain memory in Jolt's tracer and verifier, with "panic" meaning "the panic word is nonzero". |
-| `panic_store_nonzero` | A store into the panic doubleword leaves Sail's panic word nonzero. Jolt sets its panic flag on any such store, even of zero. | The same change as for `no_flag_word_load`. |
-| `amo_no_flag_word` | An atomic memory operation on the I/O window touches no byte of the panic or termination word, across its whole doubleword. | The same change as for `no_flag_word_load`. |
-| `no_zero_doubleword_load` | Every load's effective address is at least 8. Jolt's tracer records a byte, halfword or word load at the address of its doubleword, which is 0 below address 8, and returns zero, while Sail raises an access fault. Jolt's prover reads recorded address 0 as no access and does not reject the load. An LD records its own effective address, and an LD at address 0 escapes the check too. The premise excludes every LD below 8, to state one bound for every width. The prover rejects every other load below the lowest address of the memory layout, and the proof derives that bound (`Block.FirstRowAt.noLowLoad`). | A fault in Jolt's tracer for loads below the lowest address of the memory layout, as Sail has (jolt-qed#37). |
+| `no_code_store` | No store writes into an instruction row of the program. The check covers the whole aligned doubleword of each store, because Jolt's narrow stores rewrite their doubleword. Jolt keeps fetching the committed bytecode, while Sail fetches from memory; without Zifencei the specification allows both. Jolt's tracer at `ff6fc6568` rejects a store that changes a byte of its protected code region (`protected_store_ok` in `JoltBytecode/JoltISA/DeviceMemory.lean`), but the proof does not use that check. | A proof that the tracer's protected-store check implies the premise, or a constraint in Jolt that every store's doubleword lies outside the code. |
+
+Jolt at `ff6fc6568` has no panic or termination word: a run ends at an explicit halt row, and the I/O region below `RAM_START_ADDRESS` is ordinary shared byte memory.
+The premises that excluded loads, stores and atomic operations on those words are gone with them.
+The premise on loads from the doubleword at address 0 is gone too: the tracer now rejects every access below `RAM_START_ADDRESS` outside the mapped I/O regions (`effective_address_ok` and `JoltDevice.readable`), and `read_lower` in `JoltConstraints/theorems/WholeRun/SharedMemorySim.lean` derives the lower bound `memLow` from the checked read itself.
+The earlier derivation from the prover's recorded address, `Block.FirstRowAt.noLowLoad`, no longer exists.
 
 ### Scope premise
 
@@ -143,21 +145,6 @@ All five are fields of `BlockConforms`, which must hold for every block of the h
 
 - `JoltField F`: the field's characteristic is above `2^128 - 2^64`. Both of Jolt's fields satisfy this: BN254 (the default Dory build) and `p = 2^128 - 1780711455` (the `akita` build, Jolt's production field since a16z/jolt#2403); `JoltField.akita` and `JoltField.bn254` (`Soundness/FieldModuli.lean`) prove it, including each modulus's primality, by Pratt certificates checked in Lean. Below characteristic `2^128` the constraints include Akita's canonical-address check (63), which Jolt's `akita` build enforces; it is what makes `2^128 - 2^64` enough.
 - `SoundnessAssumptions.ramRegionFits`: the whole maximum padded RAM region lies below `2^64`. The comment in `Assumptions.lean` records it as still to be confirmed with a16z.
-- `TemporaryRestrictions`: six restrictions that exclude programs exposing reported or suspected Jolt bugs. Jolt's verifier makes none of these checks.
-
-| Restriction | What it excludes |
-| --- | --- |
-| `tracerAddressChecks` | A load or store that fails Jolt's tracer address checks (a16z/jolt#2044 and related cases). |
-| `hostCallsSucceed` | A host call (`VirtualHostIO`) that fails in the modelled execution. |
-| `noMaxLengthTrace` | A trace that fills the largest power-of-two length the verifier admits, which Jolt's prover cannot produce. |
-| `terminationThenStall` | A program whose next jump after a store to the termination word is not the stall (a JAL with offset 0), or that loads the termination word again. |
-| `panicStoresOne` | A store to the panic word of any value other than 1, and a load of the panic word after such a store. |
-| `claimsNoPanic` | An instance that claims a panic. With this restriction, the panic clause of `sail_soundness` says that Sail's panic word is zero. |
-
-Four restrictions (`tracerAddressChecks`, `hostCallsSucceed`, `terminationThenStall` and `panicStoresOne`) constrain the next row the program attempts after every prefix of a relaxed execution, for every private input.
-A relaxed execution is one in which every advice read gets an arbitrary answer; the attempted row need not succeed.
-`noMaxLengthTrace` constrains every completed relaxed trace, and `claimsNoPanic` constrains only the instance.
-The deviation premises in `BlockConforms` are stated differently, as the next section explains.
 
 ## Conformance is a premise on a trace the verifier does not see
 
@@ -167,7 +154,7 @@ To obtain the Sail run, a reader has to prove that the halt prefix of the return
 A reader who sees only the instance cannot inspect those blocks.
 The usual way is to show that the program conforms on every run it can take, for every private input.
 That is sufficient but not required: a proof may also use what the theorem says about the returned trace.
-For most deviations, conformance holds by construction of the program: compiled code does not store into its own instructions, and guests do not read the panic word.
+For the deviation, conformance holds by construction of the program: compiled code does not store into its own instructions.
 It is still an argument about the program, which neither the theorem nor Jolt's verifier checks.
 
 Every deviation premise that Jolt's constraints come to enforce leaves `BlockConforms`, and with it this argument.
@@ -175,10 +162,10 @@ Every deviation premise that Jolt's constraints come to enforce leaves `BlockCon
 ## What the theorems do not say
 
 - **They do not say anything about Jolt's verifier.** `AllConstraints` checks every constraint equation directly on the whole witness. Jolt's verifier instead runs sumchecks, reductions and a polynomial commitment scheme, which jolt-qed has not verified (see the [README](../README.md)). "Accepted" in `sail_soundness` means "has a witness that satisfies the modelled constraints".
-- **They are one-directional.** Every honest Jolt run up to its first EBREAK is reproduced by Sail. The converse is not claimed: a Sail run need not correspond to a Jolt run, and the theorems say nothing about programs whose runs Jolt's tracer aborts.
-- **They stop at the first EBREAK.** Jolt treats EBREAK as the end of the program, and the RISC-V reading of that is entering debug mode. The Sail model does not implement the debug extension, and the theorems stop in front of the first EBREAK or C.EBREAK without executing it ([`riscv-alignment.md`](riscv-alignment.md) section 4). They say nothing about later instructions.
+- **They are one-directional.** Every honest Jolt run up to its first explicit halt is reproduced by Sail. The converse is not claimed: a Sail run need not correspond to a Jolt run, and the theorems say nothing about programs whose runs Jolt's tracer aborts.
+- **They stop at the first explicit halt.** Jolt ends a run at a `jolt.success` row (success) or at EBREAK (panic). The RISC-V reading of EBREAK as a halt is entering debug mode, which the Sail model does not implement, and `jolt.success` is one of Jolt's own instructions, which Sail does not have. The theorems stop in front of the first halt row without executing it ([`riscv-alignment.md`](riscv-alignment.md) section 4). They say nothing about later instructions.
 - **They do not cover Jolt's own instructions**, the inline opcodes `0x0B` and `0x2B`, or the advice tape (see the scope premise above).
-- **They describe a particular Jolt revision.** The system expansions, the decoder and the ELF loader (`decode_elf`) transcribe a16z/jolt `c336a6da7`, the head of a16z/jolt#2384. That change is not on Jolt `main` until a16z/jolt#2383 and #2384 merge ([`riscv-alignment.md`](riscv-alignment.md), Sources).
+- **They describe particular Jolt revisions.** The halt rows, the shared memory and the constraints follow a16z/jolt `ff6fc6568`. The system expansions other than EBREAK, the compressed decoder (`joltUncompress`) and the ELF loader (`decode_elf`, in `JoltConstraints/theorems/WholeRun/Elf.lean`) still transcribe `c336a6da7`, the head of a16z/jolt#2384; #2383 and #2384 have since merged into Jolt `main`. `decode_elf` at `ff6fc6568` differs from that transcription: it skips data ranges that `$d` mapping symbols mark inside text sections, rejects a writable section that overlaps the code region, and rejects an odd instruction address. `DecodedFrom` does not model these changes. A program whose text sections contain marked data ranges may therefore not satisfy it.
 - **They compare outputs only up to trailing zero bytes**, as `JoltInstance.soundness` does.
 - **They describe one hart configuration.** The Sail model is configured as an RV64IMAC hart with only M-mode and no interrupts, with Jolt's memory map ([`riscv-alignment.md`](riscv-alignment.md) sections 1 and 2). They say nothing about other configurations.
 

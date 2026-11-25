@@ -34,7 +34,10 @@ The completeness assembly, both RAM-history completeness theorems and the three 
   `JoltISA.execHostIOWith` now takes a guest-byte reader that returns `Option`, ignores rejected reads and invalid events, and always retires.
   `JoltISA.execHostIO_result` says each call leaves the state unchanged or only appends bytes to the advice tape.
   `JoltISA.execHostIO_succeeds` says each call retires.
-- `perf/constraints-build-time` (merge commit `84d3be2`) brings `ccd6b14`, `e2bda0f` and `8f7e70c`, which trim imports to the modules each file uses.
+- `perf/constraints-build-time` (merge commit `84d3be2`) brings three commits.
+  `ccd6b14` imports only the Mathlib modules each library uses, and adds `ExceptT.run_bind`, `ExceptT.run_liftM`, `bind_map_left` and `bind_assoc` to two `simp` calls in `WholeRun/NonInterference.lean` (`jump_to_eval` and `jump_to_odd`) that needed them after the trim.
+  `e2bda0f` tries `rfl` before `simp` in the row checks of `expansion_facts.lean`.
+  `8f7e70c` imports only the JoltConstraints modules each file uses.
   No import from that rewrite was reverted.
 
 ### Proof repairs
@@ -44,7 +47,7 @@ The completeness assembly, both RAM-history completeness theorems and the three 
 - `WholeRun/SharedMemorySim.lean`, `narrow_store_core`, and `WholeRun/AtomicMemorySim.lean`, `io_amo_word`: `load_raw_value` already states the byte equation in the direction `store_finish` needs, so the extra `.symm` is removed.
 - `WholeRun/RunInv.lean`: `aligned_or_below` uses the public `PlatformMemory.toNat_and_neg8` instead of a macro that named a private copy in `SharedMemorySim`, which no longer exists.
 - `WholeRun/CodeInv.lean`: `CodeIntact.of_related` gives `Related.ram` its address explicitly, and `initial_image_facts` names `JoltConstraints.initial_state_program_end_le_heap_end` in full.
-- `WholeRun/Top.lean`: `HonestTrace.sail_reproduces` calls `HonestTrace.final_halt` by its name in the `WholeRun` namespace, because field notation on `trace` does not find it.
+- `WholeRun/Top.lean` (in `3ff14b2`, not `94ae194`): `HonestTrace.sail_reproduces` calls `HonestTrace.final_halt` by its name in the `WholeRun` namespace, because field notation on `trace` does not find it.
 
 None of these repairs changes a statement.
 
@@ -104,10 +107,15 @@ Every change below removes a premise; no conclusion changes.
 
 ### Commits
 
-- `94ae194` repairs the whole-run proofs listed under "Proof repairs". It also contains the deletion of `Soundness/Layer5/HostCallRestriction.lean`, which belongs with `3ff14b2`; the two commits only build together.
+- `94ae194` repairs the whole-run proofs listed under "Proof repairs", except the `Top.lean` repair, which is in `3ff14b2`. It also deletes `Soundness/Layer5/HostCallRestriction.lean`.
 - `8e7dae3` ports the HostIO consumers.
+  Its message says "No statement changes", but it deletes 29 public declarations: `JoltHostFrame.{pure_rule, bind_rule, read_rule, get_rule, throw_rule, modifyAdvice_rule, loadByte_rule, readHostBytes_frame}` and the same eight in `Register42VRegs`; the `SailAndVRegsUnchanged` namespace (`Preserves`, `pure_rule`, `bind_rule`, `read_rule`, `get_rule`, `throw_rule`, `modify_rule`, `load_rule`, `readHostBytes_rule`); the `SailUnchanged` namespace (`Preserves`, `read_rule`); and `JoltNextPCFrame.readHostBytes_frame` and `JoltNextPCFrame.execHostIOWith_frame`.
+  It also deletes four private helpers: `swap_load`, `swap_readHostBytes`, `tracks_readHostBytes` and `commutes_readHostBytes`.
 - `3ff14b2` removes `HostCallsSucceed` and `TemporaryRestrictions`.
 - The commit that adds this section updates this report, `JoltConstraints/documentation/model_review.md` and `methods/soundness.md`.
+
+The HostIO consumers do not build from the merge `6f1b2b2`, which brings in the total HostIO model, until `8e7dae3` ports them.
+The intermediate commits `6f1b2b2`, `84d3be2` and `94ae194` therefore do not build on their own; the branch head builds.
 
 ### Checks
 
