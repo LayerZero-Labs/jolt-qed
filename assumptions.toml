@@ -358,11 +358,11 @@ lean = "HonestTrace.prover_config"
 kind = "statement"
 appears_in = [
   "JoltInstance.completeness (proverAccepts)",
-  "WholeRun.HonestTrace.sail_reproduces (hcfg)",
 ]
 anchors = ["crates/jolt-prover/src/config.rs (derive_from_dimensions)"]
 no_witness_reason = """Part of JoltInstance.InLanguage: Jolt's prover accepts the trace. \
-JoltInstance.sail_soundness obtains it from JoltInstance.soundness."""
+JoltInstance.sail_soundness obtains it from JoltInstance.soundness. The Sail reproduction \
+(WholeRun.HonestTrace.sail_reproduces) does not need it and no longer takes it."""
 upstream = ""
 bug_report = ""
 
