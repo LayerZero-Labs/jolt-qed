@@ -3,24 +3,27 @@ import JoltConstraints.theorems.WholeRun.Decoded
 /-!
 # The program image built from the ELF's sections
 
-Jolt's `decode_elf` (`jolt/crates/jolt-program/src/image/elf.rs` at `c336a6da7`) builds the
+Jolt's `decode_elf` (`jolt/crates/jolt-program/src/image/elf.rs` at `ff6fc6568`) builds the
 program image from the guest ELF. This file transcribes it and proves that every image it builds
-satisfies `ImageDecoded`. The whole-run theorems therefore need no premise on the decoder beyond
-"the program was built from this ELF".
+satisfies `ImageDecoded` and has only even row addresses (`RowsAligned`). The whole-run theorems
+therefore need no premise on the decoder beyond "the program was built from this ELF".
 
-* `ElfSection`, `ElfSections`: the sections of the ELF and its entry point, as the `object` crate
-  parses them. That parsing step stays trusted.
+* `ElfSection`, `ElfSections`: the sections of the ELF, with their mapping symbols, and its entry
+  point, as the `object` crate parses them. That parsing step stays trusted.
+* `codeRegionAt`: Jolt's `code_region`, which `decode_elf` and the tracer's code guard share.
 * `ElfSections.layout?`: `decode_elf` up to the call of `decode_instruction`. It gives the memory
   image, the program end, the entry point and the address and encoding of every instruction.
 * `Rv64ProgramImage.DecodedFrom`: the program agrees with what `decode_elf` builds from the
   sections. Every program Jolt builds satisfies it.
 * `Rv64ProgramImage.DecodedFrom.imageDecoded`: such a program satisfies `ImageDecoded`.
+* `Rv64ProgramImage.DecodedFrom.rowsAligned`: such a program satisfies `RowsAligned`.
 
-`decode_elf` reads each text range from its byte map with `unwrap_or(0)`. When `decode_elf`
-succeeds, the `object` crate has given every loaded text section, at or above
-`RAM_START_ADDRESS`, exactly `size` bytes of data (`ElfSection.text_data_length`). Every address
-of a merged text range therefore has a byte, and the default never applies
-(`mergeRanges_covered`, `ElfSection.lastByte_isSome`).
+`decode_elf` decodes each merged text range, except the data ranges that `$d` mapping symbols
+mark, from its byte map with `unwrap_or(0)`. When `decode_elf` succeeds, the `object` crate has
+given every loaded text section, at or above `RAM_START_ADDRESS`, exactly `size` bytes of data
+(`ElfSection.text_data_length`). Every decoded address lies in a merged text range
+(`textSegments_within`), so it has a byte, and the default never applies (`mergeRanges_covered`,
+`ElfSection.lastByte_isSome`).
 -/
 
 set_option autoImplicit false
@@ -29,12 +32,26 @@ namespace WholeRun
 
 /-! ## The parsed ELF -/
 
+/-- The kind of an ELF mapping symbol: `$x` (and any name that starts with `$x`) marks the start
+of code, `$d` (and any name that starts with `$d.`) marks the start of data.
+See : `jolt/crates/jolt-program/src/image/elf.rs` (`MappingSymbol`). -/
+inductive MappingSymbol where
+  | code
+  | data
+  deriving DecidableEq
+
 /-- **One section of the guest ELF**, as the `object` crate (0.40.0) reports it to `decode_elf`:
-`address` is `section.address()`, `size` is `section.size()` and `isText` is
-`section.kind() == SectionKind::Text`. For a section at or above `RAM_START_ADDRESS`, `data` is
-`section.data()`. `decode_elf` never reads the data of a section below `RAM_START_ADDRESS`.
-Below that address, `data` may be any list, for example `[]` when the section's file extent is
-unreadable.
+`address` is `section.address()`, `size` is `section.size()`, `isText` is
+`section.kind() == SectionKind::Text` and `isWritable` says that `sh_flags` contains
+`SHF_WRITE`. For a section at or above `RAM_START_ADDRESS`, `data` is `section.data()`.
+`decode_elf` never reads the data of a section below `RAM_START_ADDRESS`. Below that address,
+`data` may be any list, for example `[]` when the section's file extent is unreadable.
+
+`mappingSymbols` lists, in symbol-table order, the address (`symbol.address()`) and kind of
+every mapping symbol whose section index (`symbol.section_index()`) is this section's index: every
+symbol of `obj.symbols()` that is local (`is_local()`), has kind `SymbolKind::Unknown` (the
+`object` crate's kind for `STT_NOTYPE`), and whose name starts with `$x`, is `$d` or starts with
+`$d.` (`decode_elf`, the loop over `obj.symbols()`).
 
 `text_data_length` records how the crate reads a text section that `decode_elf` loads.
 `kind()` returns `Text` only for an `SHT_PROGBITS` section with `SHF_ALLOC` and `SHF_EXECINSTR`,
@@ -44,18 +61,22 @@ readable".
 See `object-0.40.0/src/read/elf/section.rs` (`ElfSection::kind`, `SectionHeader::data`).
 
 For example, a `.text` section at `0x80000000` holding `addi x1, x0, 1` has `size = 4`,
-`data = [0x93, 0x00, 0x10, 0x00]` and `isText = true`, while a `.bss` section has
-`isText = false`, a nonzero `size` and `data = []`. -/
+`data = [0x93, 0x00, 0x10, 0x00]`, `isText = true`, `isWritable = false` and, if the assembler
+emitted one, the mapping symbol `(0x80000000, .code)`, while a `.bss` section has
+`isText = false`, `isWritable = true`, a nonzero `size` and `data = []`. -/
 structure ElfSection where
   address : BitVec 64
   size : BitVec 64
   data : List (BitVec 8)
   isText : Bool
+  isWritable : Bool
+  mappingSymbols : List (BitVec 64 × MappingSymbol)
   text_data_length : JoltISA.RAM_START_ADDRESS ≤ address.toNat → isText = true →
     data.length = size.toNat
 
 /-- **The parsed guest ELF**: its sections in section-header order and its entry point
-(`obj.entry()`). Producing this from the file is the trusted parsing step.
+(`obj.entry()`). Producing this from the file, including each section's mapping symbols, is the
+trusted parsing step.
 For example, an ELF with one `.text` section at `0x80000000` and entry `0x80000000` has
 `sections` of length one and `entry = 0x80000000`. -/
 structure ElfSections where
@@ -225,18 +246,20 @@ def mergeRanges (ranges : List (Nat × Nat)) : List (Nat × Nat) :=
 
 /-- Jolt's `decode_text_section` without the call of `decode_instruction`: the address and
 encoding of every instruction in the bytes of a text range that starts at `address`, or none
-where Jolt reports a truncated halfword or word.
+where Jolt reports an odd instruction address or a truncated halfword or word. Every instruction
+address has the parity of `address`, so Jolt rejects nonempty bytes at an odd `address`.
 A halfword whose low two bits are not `0b11` is a compressed parcel; a zero parcel gives no
 instruction. Any other halfword starts a 32-bit word.
 For example, the bytes `[0x01, 0x45, 0x93, 0x80, 0x10, 0x00, 0x00, 0x00]` at `0x80000000` give
 `[(0x80000000, .compressed 0x4501), (0x80000002, .base 0x00108093)]`, and `[0x93, 0x80]` gives
-none.
+none, as does any nonempty list at `0x80000001`.
 See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_text_section`). -/
 def decodeText (address : Nat) : List (BitVec 8) → Option (List (Nat × BlockEncoding))
   | [] => some []
   | [_] => none
   | b0 :: b1 :: rest =>
-    if (b1 ++ b0).extractLsb 1 0 ≠ 0b11#2 then
+    if address % 2 ≠ 0 then none
+    else if (b1 ++ b0).extractLsb 1 0 ≠ 0b11#2 then
       (decodeText (address + 2) rest).map fun parcels =>
         if b1 ++ b0 = 0#16 then parcels else (address, .compressed (b1 ++ b0)) :: parcels
     else
@@ -272,17 +295,79 @@ See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_elf`, the `filter`). 
 def ElfSections.loaded (elf : ElfSections) : List ElfSection :=
   elf.sections.filter fun section_ => JoltISA.RAM_START_ADDRESS ≤ section_.address.toNat
 
+/-- Sort mapping symbols by address, a code symbol after a data symbol at the same address, as
+`sort_by_key(|&(address, kind)| (address, matches!(kind, MappingSymbol::Code)))`. -/
+def mappingLe (a b : Nat × MappingSymbol) : Bool :=
+  a.1 < b.1 || (a.1 == b.1 && (a.2 == .data || b.2 == .code))
+
+/-- The data ranges of a sorted list of mapping symbols in a section that ends at `stop`: each
+data symbol starts a range that ends at the next symbol's address, or at `stop` after the last
+symbol; an empty range is dropped.
+For example, symbols `[(0, .code), (8, .data), (12, .code)]` give `[(8, 12)]`, and
+`[(8, .data), (8, .code)]` gives `[]`.
+See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_elf`, the loop that pushes to
+`data_ranges`). -/
+def dataRangesFrom (stop : Nat) : List (Nat × MappingSymbol) → List (Nat × Nat)
+  | [] => []
+  | (address, kind) :: rest =>
+    let next := match rest with
+      | (nextAddress, _) :: _ => nextAddress
+      | [] => stop
+    if address < next ∧ kind = .data then (address, next) :: dataRangesFrom stop rest
+    else dataRangesFrom stop rest
+
+/-- **The data ranges a text section's mapping symbols mark.** Keep the symbols inside the
+section, sort them by `mappingLe`, and take `dataRangesFrom` the section's end.
+Rust's sort is stable, and two symbols with the same key are equal, so `mergeSort` gives the
+same list.
+For example, a section `[0x80000000, 0x80000010)` with symbols `(0x80000000, .code)` and
+`(0x80000008, .data)` gives `[(0x80000008, 0x80000010)]`.
+See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_elf`, `retain`, `sort_by_key`). -/
+def ElfSection.dataRanges (section_ : ElfSection) : List (Nat × Nat) :=
+  let inSection := (section_.mappingSymbols.map fun symbol => (symbol.1.toNat, symbol.2)).filter
+    fun symbol => decide (section_.address.toNat ≤ symbol.1 ∧ symbol.1 < section_.endAddress)
+  dataRangesFrom section_.endAddress (inSection.mergeSort mappingLe)
+
+/-- The pieces of a text range between the data ranges, from `cursor` to `stop`: each data range
+ends the current piece at its start and starts the next piece at its end. A piece may be empty,
+or even have its end before its start, in which case Jolt decodes no bytes from it.
+See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_elf`, `cursor`). -/
+def segmentsFrom (cursor stop : Nat) : List (Nat × Nat) → List (Nat × Nat)
+  | [] => [(cursor, stop)]
+  | data :: rest => (cursor, data.1) :: segmentsFrom data.2 stop rest
+
+/-- **The pieces of a merged text range that `decode_elf` decodes**: the range with the merged
+data ranges that overlap it cut out, in order.
+For example, the range `(0, 16)` with the data range `(8, 12)` gives `[(0, 8), (12, 16)]`.
+See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_elf`, the loop over
+`merge_ranges(text_ranges)`). -/
+def textSegments (dataRanges : List (Nat × Nat)) (range : Nat × Nat) : List (Nat × Nat) :=
+  segmentsFrom range.1 range.2
+    (dataRanges.filter fun data => decide (data.1 < range.2 ∧ range.1 < data.2))
+
+/-- Whether `decode_elf` rejects a writable section that overlaps the code region `code`: the
+doublewords from the one holding the section's start to the one holding its last byte meet the
+code region's doublewords. For example, with code region `(0, 2)`, a section at `8` overlaps
+and a section at `16` does not.
+See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_elf`, `writable_ranges`). -/
+def ElfSection.overlapsCode (section_ : ElfSection) (code : Nat × Nat) : Bool :=
+  decide (code.1 < (section_.endAddress + 7) / 8 ∧ section_.address.toNat / 8 < code.2)
+
 /-- **Jolt's `decode_elf`, up to the call of `decode_instruction`.** It is none where `decode_elf`
-fails because a section's end overflows `u64` or a text range ends inside an instruction.
+fails because a section's end overflows `u64`, a decoded piece of text starts at an odd address
+or ends inside an instruction, the instructions' code region is invalid, or a writable section
+overlaps that code region.
 `decode_elf`'s other failures (a malformed file, ELF32, unreadable data) belong to the parsing
 step, and the failures of `decode_instruction` are left out, which only admits more ELFs.
 
 The memory image lists every byte of every loaded section in order; `program_end` is the largest
-section end, at least `RAM_START_ADDRESS`; each merged text range is decoded from the bytes the
-memory image holds there.
-For example, one `.text` section at `0x80000000` with data `[0x93, 0x00, 0x10, 0x00]` gives the
-four `memory_init` entries, `program_end = 0x80000004`, and the single parcel
-`(0x80000000, .base 0x00100093)`.
+section end, at least `RAM_START_ADDRESS`; each merged text range is decoded, without the data
+ranges its sections' mapping symbols mark, from the bytes the memory image holds there.
+The code region is `code_region` of the decoded instructions with lowest address 0
+(`codeRegionAt 0`), and only a writable section with a nonzero size can overlap it.
+For example, one `.text` section at `0x80000000` with data `[0x93, 0x00, 0x10, 0x00]` and no
+mapping symbols gives the four `memory_init` entries, `program_end = 0x80000004`, and the
+single parcel `(0x80000000, .base 0x00100093)`.
 See : `jolt/crates/jolt-program/src/image/elf.rs` (`decode_elf`). -/
 def ElfSections.layout? (elf : ElfSections) : Option ElfLayout :=
   let loaded := elf.loaded
@@ -290,14 +375,24 @@ def ElfSections.layout? (elf : ElfSections) : Option ElfLayout :=
     let memoryInit := loaded.flatMap ElfSection.bytes
     let programEnd := loaded.foldl (fun e section_ => max e section_.endAddress)
       JoltISA.RAM_START_ADDRESS
-    let textRanges := (loaded.filter (·.isText)).map fun section_ =>
-      (section_.address.toNat, section_.endAddress)
-    ((mergeRanges textRanges).mapM fun range => decodeText range.1 (rangeBytes memoryInit range))
-      |>.map fun parcels =>
-        { memory_init := memoryInit
-          program_end := BitVec.ofNat 64 programEnd
-          entry_address := elf.entry
-          parcels := parcels.flatten }
+    let texts := loaded.filter (·.isText)
+    let textRanges := texts.map fun section_ => (section_.address.toNat, section_.endAddress)
+    let dataRanges := mergeRanges (texts.flatMap ElfSection.dataRanges)
+    let segments := (mergeRanges textRanges).flatMap (textSegments dataRanges)
+    (segments.mapM fun range => decodeText range.1 (rangeBytes memoryInit range)).bind
+      fun parcelLists =>
+        let parcels := parcelLists.flatten
+        (codeRegionAt 0 (parcels.map fun p => (BitVec.ofNat 64 p.1, p.2.isCompressed))).bind
+          fun code =>
+            let writable := loaded.filter fun section_ =>
+              section_.isWritable && decide (section_.address.toNat < section_.endAddress)
+            if writable.all fun section_ => !section_.overlapsCode code then
+              some
+                { memory_init := memoryInit
+                  program_end := BitVec.ofNat 64 programEnd
+                  entry_address := elf.entry
+                  parcels := parcels }
+            else none
   else none
 
 /-- The 32-bit word Jolt passes to `decode_instruction` for an encoding: the word itself, or the
@@ -456,6 +551,8 @@ theorem decodeText_parcels (program : Rv64ProgramImage SourceInstruction) :
       simp [imageParcel?, h0, h1]
     unfold decodeText at hdecode
     split at hdecode
+    · cases hdecode
+    split at hdecode
     · rename_i hlow
       obtain ⟨tail, htail, rfl⟩ := Option.map_eq_some_iff.mp hdecode
       have ih := decodeText_parcels program (address + 2) rest tail (fun k b hk => by
@@ -490,6 +587,69 @@ theorem decodeText_parcels (program : Rv64ProgramImage SourceInstruction) :
       · simp at hdecode
 
 termination_by _ bytes => bytes.length
+
+/-- **Every instruction address `decodeText` finds is even.** `decode_text_section` rejects an
+odd address. For example, `decodeText 0x80000001 [0x01, 0x45]` is none. -/
+theorem decodeText_even :
+    ∀ (address : Nat) (bytes : List (BitVec 8)) (parcels : List (Nat × BlockEncoding)),
+      decodeText address bytes = some parcels → ∀ p ∈ parcels, p.1 % 2 = 0
+  | _, [], _, hdecode => by
+    simp only [decodeText, Option.some.injEq] at hdecode
+    subst hdecode
+    simp
+  | _, [_], _, hdecode => by simp [decodeText] at hdecode
+  | address, b0 :: b1 :: rest, parcels, hdecode => by
+    unfold decodeText at hdecode
+    split at hdecode
+    · cases hdecode
+    rename_i heven
+    split at hdecode
+    · obtain ⟨tail, htail, rfl⟩ := Option.map_eq_some_iff.mp hdecode
+      have ih := decodeText_even (address + 2) rest tail htail
+      intro p hp
+      split at hp
+      · exact ih p hp
+      · rcases List.mem_cons.mp hp with rfl | hp
+        · simp only; omega
+        · exact ih p hp
+    · split at hdecode
+      · rename_i b2 b3 rest'
+        obtain ⟨tail, htail, rfl⟩ := Option.map_eq_some_iff.mp hdecode
+        have ih := decodeText_even (address + 4) rest' tail htail
+        intro p hp
+        rcases List.mem_cons.mp hp with rfl | hp
+        · simp only; omega
+        · exact ih p hp
+      · simp at hdecode
+termination_by _ bytes => bytes.length
+
+/-- Every address of a piece `segmentsFrom` makes lies between the first `cursor` and `stop`,
+when every cut lies inside that interval. -/
+theorem segmentsFrom_within {start stop : Nat} :
+    ∀ (cursor : Nat) (cuts : List (Nat × Nat)), start ≤ cursor →
+      (∀ cut ∈ cuts, cut.1 < stop ∧ start < cut.2) →
+      ∀ segment ∈ segmentsFrom cursor stop cuts, ∀ a, segment.1 ≤ a → a < segment.2 →
+        start ≤ a ∧ a < stop
+  | cursor, [], hcursor, _, segment, hsegment, a, hstart, hlt => by
+    simp only [segmentsFrom, List.mem_singleton] at hsegment
+    subst hsegment
+    exact ⟨by simp only at hstart; omega, hlt⟩
+  | cursor, cut :: cuts, hcursor, hcuts, segment, hsegment, a, hstart, hlt => by
+    have hcut := hcuts cut (by simp)
+    rcases List.mem_cons.mp hsegment with rfl | hsegment
+    · simp only at hstart hlt
+      omega
+    · exact segmentsFrom_within cut.2 cuts (by omega)
+        (fun c hc => hcuts c (List.mem_cons_of_mem _ hc)) segment hsegment a hstart hlt
+
+/-- **Every decoded address lies in its text range.** Every address of a piece of a text range
+that `textSegments` makes lies in the range. For example, the pieces `(0, 8)` and `(12, 16)` of
+`(0, 16)` lie in it. -/
+theorem textSegments_within {dataRanges : List (Nat × Nat)} {range segment : Nat × Nat}
+    (hsegment : segment ∈ textSegments dataRanges range) {a : Nat} (hstart : segment.1 ≤ a)
+    (hlt : a < segment.2) : range.1 ≤ a ∧ a < range.2 :=
+  segmentsFrom_within range.1 _ (le_refl _)
+    (fun cut hcut => by simpa using (List.mem_filter.mp hcut).2) segment hsegment a hstart hlt
 
 /-- An element of the result of an `Option`-valued `mapM` comes from some input.
 For example, `[1, 2].mapM (fun n => some (n + 1)) = some [2, 3]`, and 3 comes from 2. -/
@@ -529,11 +689,42 @@ theorem exists_of_forall₂_right {α β : Type} {R : α → β → Prop} :
 
 /-! ## The image is decoded -/
 
+/-- **Where a parcel of the layout comes from.** If `decode_elf` succeeds, every loaded section
+ends below `2^64`, the memory image is the bytes of the loaded sections, and every parcel is one
+that `decodeText` finds in a piece of a merged text range.
+For example, the parcel `(0x80000000, .base 0x00100093)` of a one-instruction `.text` section
+comes from the piece `(0x80000000, 0x80000004)` of the range `(0x80000000, 0x80000004)`. -/
+theorem ElfSections.layout?_parcel {elf : ElfSections} {layout : ElfLayout}
+    (h : elf.layout? = some layout) {p : Nat × BlockEncoding} (hp : p ∈ layout.parcels) :
+    (∀ section_ ∈ elf.loaded, section_.endAddress < 2 ^ 64) ∧
+    layout.memory_init = elf.loaded.flatMap ElfSection.bytes ∧
+    ∃ range ∈ mergeRanges ((elf.loaded.filter (·.isText)).map fun section_ =>
+        (section_.address.toNat, section_.endAddress)),
+      ∃ dataRanges, ∃ segment ∈ textSegments dataRanges range, ∃ ps,
+        decodeText segment.1 (rangeBytes (elf.loaded.flatMap ElfSection.bytes) segment) =
+          some ps ∧ p ∈ ps := by
+  dsimp only [ElfSections.layout?] at h
+  split at h
+  · rename_i hall
+    obtain ⟨parcelLists, hmapM, h⟩ := Option.bind_eq_some_iff.mp h
+    obtain ⟨code, -, h⟩ := Option.bind_eq_some_iff.mp h
+    split at h
+    · cases h
+      refine ⟨fun section_ hs => of_decide_eq_true (List.all_eq_true.mp hall section_ hs), rfl,
+        ?_⟩
+      obtain ⟨ps, hps, hpin⟩ := List.mem_flatten.mp hp
+      obtain ⟨segment, hsegment, hdecode⟩ := exists_of_mapM_eq_some hmapM ps hps
+      obtain ⟨range, hrange, hsegment⟩ := List.mem_flatMap.mp hsegment
+      exact ⟨range, hrange, _, segment, hsegment, ps, hdecode, hpin⟩
+    · cases h
+  · cases h
+
 /-- **A program built from the ELF's sections satisfies `ImageDecoded`.** Each RISC-V row comes
-from a parcel `decodeText` found in a merged text range. Every address of that range has a byte
-in `memory_init`, because each address lies in a text section, whose data covers it
-(`mergeRanges_covered`, `ElfSection.lastByte_isSome`). The bytes `decode_elf` reads are
-therefore the image's bytes, and the row is what `joltDecode` makes of them.
+from a parcel `decodeText` found in a piece of a merged text range. Every address of that piece
+lies in the range (`textSegments_within`) and has a byte in `memory_init`, because each address
+of the range lies in a text section, whose data covers it (`mergeRanges_covered`,
+`ElfSection.lastByte_isSome`). The bytes `decode_elf` reads are therefore the image's bytes, and
+the row is what `joltDecode` makes of them.
 For example, for the `.text` section at `0x80000000` holding `addi x1, x0, 1`, the ADDI row has
 `RowDecodes … (.base 0x00100093)`. -/
 theorem _root_.Rv64ProgramImage.DecodedFrom.imageDecoded
@@ -544,47 +735,58 @@ theorem _root_.Rv64ProgramImage.DecodedFrom.imageDecoded
   obtain ⟨p, hp, haddr, hcomp, hdec⟩ :=
     exists_of_forall₂_right hrows row (Array.mem_toList_iff.mpr hrow)
   obtain ⟨advice, hadvice⟩ := hdec i hi
-  dsimp only [ElfSections.layout?] at hlayout
-  split at hlayout
-  · rename_i hall
-    obtain ⟨parcelLists, hmapM, rfl⟩ := Option.map_eq_some_iff.mp hlayout
-    simp only at hp hmem
-    obtain ⟨ps, hps, hpin⟩ := List.mem_flatten.mp hp
-    obtain ⟨range, hrange, hdecode⟩ := exists_of_mapM_eq_some hmapM ps hps
-    have hbytes : ∀ k (b : BitVec 8), (rangeBytes (elf.loaded.flatMap ElfSection.bytes) range)[k]?
-        = some b → imageByte? program (range.1 + k) = some b := by
-      intro k b hk
-      simp only [rangeBytes, List.getElem?_map, Option.map_eq_some_iff] at hk
-      obtain ⟨offset, hoffset, rfl⟩ := hk
-      obtain ⟨hklt, rfl⟩ := List.getElem?_eq_some_iff.mp hoffset
-      rw [List.length_range] at hklt
-      rw [List.getElem_range]
-      obtain ⟨q, hq, hq1, hq2⟩ := mergeRanges_covered hrange (a := range.1 + k) (by omega)
-        (by omega)
-      simp only [List.mem_map, List.mem_filter] at hq
-      obtain ⟨section_, ⟨hloaded, htext⟩, rfl⟩ := hq
-      have hsome := ElfSection.lastByte_isSome
-        (fun e he => List.mem_flatMap.mpr ⟨section_, hloaded, he⟩)
-        (of_decide_eq_true (List.mem_filter.mp hloaded).2) htext
-        (of_decide_eq_true (List.all_eq_true.mp hall section_ hloaded)) hq1 hq2
-      obtain ⟨b', hb'⟩ := Option.isSome_iff_exists.mp hsome
-      unfold imageByte?
-      rw [hmem, hb']
+  obtain ⟨hall, hinit, range, hrange, dataRanges, segment, hsegment, ps, hdecode, hpin⟩ :=
+    ElfSections.layout?_parcel hlayout hp
+  have hbytes : ∀ k (b : BitVec 8),
+      (rangeBytes (elf.loaded.flatMap ElfSection.bytes) segment)[k]? = some b →
+        imageByte? program (segment.1 + k) = some b := by
+    intro k b hk
+    simp only [rangeBytes, List.getElem?_map, Option.map_eq_some_iff] at hk
+    obtain ⟨offset, hoffset, rfl⟩ := hk
+    obtain ⟨hklt, rfl⟩ := List.getElem?_eq_some_iff.mp hoffset
+    rw [List.length_range] at hklt
+    rw [List.getElem_range]
+    obtain ⟨hr1, hr2⟩ := textSegments_within hsegment (a := segment.1 + k) (by omega) (by omega)
+    obtain ⟨q, hq, hq1, hq2⟩ := mergeRanges_covered hrange hr1 hr2
+    simp only [List.mem_map, List.mem_filter] at hq
+    obtain ⟨section_, ⟨hloaded, htext⟩, rfl⟩ := hq
+    have hsome := ElfSection.lastByte_isSome
+      (fun e he => List.mem_flatMap.mpr ⟨section_, hloaded, he⟩)
+      (of_decide_eq_true (List.mem_filter.mp hloaded).2) htext (hall section_ hloaded) hq1 hq2
+    obtain ⟨b', hb'⟩ := Option.isSome_iff_exists.mp hsome
+    unfold imageByte?
+    rw [hmem, hinit, hb']
+    rfl
+  obtain ⟨hword, hparcel⟩ := decodeText_parcels program segment.1 _ ps hbytes hdecode p hpin
+  cases hp2 : p.2 with
+  | base w =>
+    obtain ⟨hw, hlow⟩ := hword w hp2
+    refine ⟨.base w, ?_, by rw [haddr]; exact hw, hlow, advice, ?_⟩
+    · rw [hcomp, hp2]
       rfl
-    obtain ⟨hword, hparcel⟩ := decodeText_parcels program range.1 _ ps hbytes hdecode p hpin
-    cases hp2 : p.2 with
-    | base w =>
-      obtain ⟨hw, hlow⟩ := hword w hp2
-      refine ⟨.base w, ?_, by rw [haddr]; exact hw, hlow, advice, ?_⟩
-      · rw [hcomp, hp2]
-        rfl
-      · simpa [BlockEncoding.decodedWord, hp2] using hadvice
-    | compressed h =>
-      obtain ⟨hh, hlow⟩ := hparcel h hp2
-      refine ⟨.compressed h, ?_, by rw [haddr]; exact hh, hlow, advice, ?_⟩
-      · rw [hcomp, hp2]
-        rfl
-      · simpa [BlockEncoding.decodedWord, hp2] using hadvice
-  · simp at hlayout
+    · simpa [BlockEncoding.decodedWord, hp2] using hadvice
+  | compressed h =>
+    obtain ⟨hh, hlow⟩ := hparcel h hp2
+    refine ⟨.compressed h, ?_, by rw [haddr]; exact hh, hlow, advice, ?_⟩
+    · rw [hcomp, hp2]
+      rfl
+    · simpa [BlockEncoding.decodedWord, hp2] using hadvice
+
+/-- **A program built from the ELF's sections has only even row addresses.** Each row has the
+address of a parcel `decodeText` found, and `decode_text_section` rejects an odd address
+(`decodeText_even`).
+For example, the ADDI row at `0x80000000` of a one-instruction `.text` section is even. -/
+theorem _root_.Rv64ProgramImage.DecodedFrom.rowsAligned
+    {program : Rv64ProgramImage SourceInstruction} {elf : ElfSections}
+    (hdecoded : program.DecodedFrom elf) : program.RowsAligned := by
+  obtain ⟨layout, hlayout, -, -, -, hrows⟩ := hdecoded
+  intro row hrow
+  obtain ⟨p, hp, haddr, -, -⟩ :=
+    exists_of_forall₂_right hrows row (Array.mem_toList_iff.mpr hrow)
+  obtain ⟨-, -, -, -, -, segment, -, ps, hdecode, hpin⟩ := ElfSections.layout?_parcel hlayout hp
+  have heven := decodeText_even segment.1 _ ps hdecode p hpin
+  rw [← haddr] at heven
+  simp only [BitVec.getLsbD, Nat.testBit, Nat.shiftRight_zero, Nat.one_and_eq_mod_two, heven,
+    bne_self_eq_false]
 
 end WholeRun

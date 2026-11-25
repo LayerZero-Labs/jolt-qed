@@ -13,7 +13,8 @@ Later work (the Sail configuration, the model patches, the step-level and whole-
   jolt-qed's expansions were generated from `c6703570`.
   Every Jolt file cited below is identical at the two commits, except four added lines in `tracer/src/emulator/cpu.rs` that do not touch the code cited.
 - The Jolt changes for this alignment, a16z/jolt `c336a6da7`, the head of a16z/jolt#2384 (stacked on a16z/jolt#2383, with `main` merged in after a16z/jolt#2381).
-  The inline expansions under `crates/jolt-program/src/expand`, `crates/jolt-program/src/image/decode.rs`, `crates/jolt-program/src/image/elf.rs` (`decode_elf`) and `crates/jolt-riscv/src/uncompress.rs` are transcribed from this commit.
+  The inline expansions under `crates/jolt-program/src/expand`, `crates/jolt-program/src/image/decode.rs` and `crates/jolt-riscv/src/uncompress.rs` are transcribed from this commit.
+  `crates/jolt-program/src/image/elf.rs` (`decode_elf`) is transcribed from a16z/jolt `ff6fc6568`, which adds `$d` mapping-symbol data ranges, the odd-address check and the writable-section check to it.
   It contains a16z/jolt#2381, which rejects the reserved C.LUI parcel (section 5).
   The pin moves to a16z/jolt `main` once a16z/jolt#2383 and #2384 merge.
   The system expansions (`JoltBytecode/JoltISA/Expansions/System.lean`) and the decoder (`JoltBytecode/Decode/Jolt.lean`) transcribe this revision, not `9407f93f`: there, a CSR read of `mstatus` returns `v39 | 0x1800`, MRET restores `mstatus` before it jumps, and the decoder accepts CSRRC, CSRRWI, CSRRSI and CSRRCI.
@@ -366,11 +367,12 @@ It holds initially and is preserved by every source block, including CSR writes,
 No constraint checks it, because it describes how the bytecode was produced.
 The whole-run theorems derive it from the platform premise `DecodedFrom` (`WholeRun/Elf.lean`): the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF.
 `DecodedFrom` fixes the layout and every RISC-V row, and every program Jolt builds satisfies it; it does not fix which of Jolt's own instructions a row holds.
-`ElfSections.layout?` transcribes `decode_elf` up to the call of `decode_instruction`: the loaded sections, `memory_init`, `program_end`, `merge_ranges` and `decode_text_section`.
-`decode_elf` reads a merged text range from its byte map with `unwrap_or(0)`.
+`ElfSections.layout?` transcribes `decode_elf` at `ff6fc6568` up to the call of `decode_instruction`: the loaded sections, `memory_init`, `program_end`, `merge_ranges`, the data ranges that `$d` mapping symbols mark inside text sections, `decode_text_section` with its odd-address check, and the check that no writable section overlaps the code region (`code_region`, transcribed as `codeRegionAt`).
+`decode_elf` reads each piece of a merged text range outside the data ranges from its byte map with `unwrap_or(0)`.
 The `object` crate reports a section as text only when it is `SHT_PROGBITS`, and it gives such a section exactly `sh_size` bytes of data or fails.
 `ElfSection.text_data_length` records this for every text section `decode_elf` loads, that is, at or above `RAM_START_ADDRESS`.
 Every address of a merged text range therefore has a byte, and `DecodedFrom.imageDecoded` proves that the default 0 never applies.
+`DecodedFrom.rowsAligned` derives from the odd-address check that every row address is even (`RowsAligned`), which `Block.Runs.pc_even` needs.
 The parsing of the ELF file into its sections (`object::File::parse`, section kinds, `entry`) stays outside Lean and is trusted.
 `CodeIntact` says Sail's memory still holds those bytes at every row; it holds at `sailInit` (`codeIntact_sailInit`).
 Its Jolt-side version `JoltCodeIntact` (`WholeRun/CodeInv.lean`) is a run invariant with no premise.
@@ -404,8 +406,7 @@ The premises, by class:
 | Premise | Class | Where |
 | --- | --- | --- |
 | `hcfg` (`sail_reproduces` only) | prover acceptance | Jolt's prover accepts the trace; `sail_soundness` obtains it from `soundness` |
-| `DecodedFrom` | platform | the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF; `ImageDecoded` follows from it |
-| `RowsAligned` | platform | every row address is even; Jolt's ELF loader at `ff6fc6568` rejects an odd address, but `DecodedFrom` transcribes the loader at `c336a6da7`, which does not |
+| `DecodedFrom` | platform | the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF; `ImageDecoded` and `RowsAligned` follow from it |
 | `HeapNoWrap` | platform | the layout ends at least eight bytes below `2^64` |
 | `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |
 

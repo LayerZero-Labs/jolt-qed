@@ -16,7 +16,7 @@ not derive) or a **documented deviation** (a place where Jolt and Sail differ;
 | Fact | Class | Where |
 | --- | --- | --- |
 | legal system values | invariant | `SystemInv` |
-| even PC | platform premise `RowsAligned`, then invariant | `Block.Runs.pc_even` |
+| even PC | `RowsAligned` (from `DecodedFrom`), then invariant | `Block.Runs.pc_even` |
 | heap end below `2^64 - 8` | platform premise `HeapNoWrap`, then invariant | `RunInv.heap_no_wrap` |
 | LR/SC address in RAM | invariant | `access_classified` |
 | AMO address in RAM or the I/O window | invariant | `access_classified` |
@@ -29,20 +29,14 @@ set_option autoImplicit false
 
 noncomputable section
 
-/-- Platform premise: every instruction row of the image is at an even address.
+/-- Every instruction row of the image is at an even address.
 For example, a text section starting at `0x80000000` gives rows at `0x80000000`,
 `0x80000004` (after a 4-byte instruction) and `0x80000006` (after a 2-byte one),
 while a text section starting at `0x80000001` would give odd rows.
-Jolt's loader does not enforce this: `decode_elf` in
-`jolt/crates/jolt-program/src/image/elf.rs` takes each executable section
-(`SectionKind::Text`, at or above `RAM_START_ADDRESS`), merges overlapping ranges
-(`merge_ranges`) and calls `decode_text_section` at the range's start, where an
-instruction's address is the start plus its offset. That offset advances by 2
-after a compressed parcel and by 4 after a 32-bit word, so every row's address
-has the parity of its range's start, and the start is a section address that no
-code checks. Linkers align `.text` to at least two bytes, so real ELFs satisfy
-the premise. It can be discharged later by rejecting a text section at an odd
-address in `decode_elf`, or by making it a field of `Rv64ProgramImage`. -/
+Jolt's loader enforces this: `decode_text_section` in
+`jolt/crates/jolt-program/src/image/elf.rs` at `ff6fc6568` rejects an odd
+instruction address. `Rv64ProgramImage.DecodedFrom.rowsAligned`
+(`WholeRun/Elf.lean`) derives it from `DecodedFrom`. -/
 def Rv64ProgramImage.RowsAligned {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
   ∀ row ∈ image.instructions, row.address.getLsbD 0 = false
 
@@ -65,7 +59,7 @@ open JoltISA
 
 /-! ### Even program counter -/
 
-/-- **Run invariant**, given the platform premise `RowsAligned`: a running block's
+/-- **Run invariant**, given `RowsAligned`: a running block's
 instruction is at an even address.
 For example, with all rows aligned, a block at `0x80000006` has bit zero clear. -/
 theorem Block.Runs.pc_even {program : Rv64ProgramImage SourceInstruction} {b : Block}

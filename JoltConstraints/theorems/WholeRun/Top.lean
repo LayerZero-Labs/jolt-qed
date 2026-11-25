@@ -41,11 +41,12 @@ structure BlockConforms (program : Rv64ProgramImage SourceInstruction) (b : Bloc
 /-- A conforming non-EBREAK source block has one matching Sail step.
 For example, an arithmetic block transports the register and shared-memory relation. -/
 theorem BlockConforms.simulates {program : Rv64ProgramImage SourceInstruction}
-    {elf : ElfSections} (hdecoded : program.DecodedFrom elf) (hrows : program.RowsAligned)
+    {elf : ElfSections} (hdecoded : program.DecodedFrom elf)
     {b : Block} (hruns : b.Runs program)
     (hconf : BlockConforms program b)
     (hbreak : b.row.instruction ≠ .riscv .EBREAK) :
     BlockSimulates (RunRel program) b := by
+  have hrows := hdecoded.rowsAligned
   obtain ⟨i, hrow⟩ := hconf.riscv
   have hi : i ≠ .EBREAK := fun h => hbreak (by rw [hrow, h])
   rintro s ⟨hrel, hinv, hcode⟩
@@ -132,7 +133,6 @@ theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {trace : HonestTrace joltInstance privateInputs}
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
@@ -144,7 +144,7 @@ theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
   | cons first rest =>
     obtain ⟨l, s, hl, hrun, hrel⟩ := sailRun_of_chain (RunRel joltInstance.program)
       (first :: rest) hp.chain
-      (fun b hb => BlockConforms.simulates hdecoded hrows (hp.runs b hb).1
+      (fun b hb => BlockConforms.simulates hdecoded (hp.runs b hb).1
         (hconf b hb)
         (fun ebreak => (hp.runs b hb).2 ⟨.panic, ebreak⟩)) first rfl (sailInit trace.initialState)
       (by rw [hp.first first rfl]; exact h₀)
@@ -157,7 +157,6 @@ for example, EBREAK records panic true without reading a flag word. -/
 theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
@@ -170,7 +169,7 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
       ∃ kind, final.halted = some kind ∧
         final.jolt_device.panic = (kind == JoltHaltKind.panic) ∧
         (SailHalted joltInstance.program s kind ∨ halt = final) := by
-  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun hdecoded hrows hheap hcfg hconf
+  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun hdecoded hheap hcfg hconf
   refine ⟨n, s, hrun, hrel.1, ?_, ?_⟩
   · rw [hrel.1.outputs]
     simp only [JoltDevice.outputsOf, hp.observation.1, hp.observation.2.1]
@@ -195,7 +194,6 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
@@ -218,7 +216,7 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
   obtain ⟨pre, halt, final, hp⟩ := trace.haltPrefix
   refine ⟨privateInputs, trace, hmo, hcfg, hspoil, pre, halt, final, hp, fun hconf => ?_⟩
   obtain ⟨n, s, hrun, hrel, houts, hstop⟩ :=
-    trace.sail_reproduces hdecoded hrows hheap hcfg hp hconf
+    trace.sail_reproduces hdecoded hheap hcfg hp hconf
   obtain ⟨hmo_out, hmo_panic⟩ :=
     (trace.matches_outputs_final final hp.back).1 hmo
   refine ⟨n, s, hrun, hrel, houts.trans hmo_out, ?_⟩

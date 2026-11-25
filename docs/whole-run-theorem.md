@@ -13,7 +13,6 @@ The claim holds under the premises listed below, and the most important limits a
 theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
@@ -34,7 +33,6 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hrows : joltInstance.program.RowsAligned)
     (hheap : joltInstance.HeapNoWrap) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
@@ -106,15 +104,15 @@ Jolt checks this itself, and `sail_soundness` obtains it from `JoltInstance.soun
 | Premise | Meaning | What would remove it |
 | --- | --- | --- |
 | `DecodedFrom` | Agreement of the program with Jolt's `decode_elf` on `elf`, the sections of the guest ELF | Nothing in Jolt (trusted, as described below) |
-| `RowsAligned` | Every row address is even. Jolt's ELF loader at `ff6fc6568` rejects an odd address, but `DecodedFrom` transcribes the loader at `c336a6da7`, which does not. | Transcribing that check into `DecodedFrom`. |
 | `HeapNoWrap` | `heap_end ≤ 2^64 - 8`. | A check in `MemoryLayout.new`. |
 
-`DecodedFrom` (`JoltConstraints/theorems/WholeRun/Elf.lean`) transcribes `decode_elf` from `crates/jolt-program/src/image/elf.rs` up to the call of `decode_instruction`.
-The proof derives from it that the committed bytecode is what Jolt's decoder makes of the program image (`ImageDecoded`).
+`DecodedFrom` (`JoltConstraints/theorems/WholeRun/Elf.lean`) transcribes `decode_elf` from `crates/jolt-program/src/image/elf.rs` at `ff6fc6568` up to the call of `decode_instruction`.
+The proof derives from it that the committed bytecode is what Jolt's decoder makes of the program image (`ImageDecoded`) and that every row address is even (`RowsAligned`, which earlier revisions took as a separate platform premise).
 No constraint can check `DecodedFrom`, because it describes how the bytecode was produced before proving starts.
-Its input `elf` is the list of sections that the `object` crate parses from the ELF file (address, size, data, and whether the section is text) and the entry point.
+Its input `elf` is the list of sections that the `object` crate parses from the ELF file (address, size, data, whether the section is text, whether it is writable, and the `$x` and `$d` mapping symbols that point into it) and the entry point.
 The program's `memory_init`, `program_end` and `entry_address` are what `decode_elf` computes from them.
-Its rows are, one to one and in order, the instructions `decode_text_section` finds in the merged text ranges, each with the instruction's address and width, and each RISC-V row is `joltDecode` of the instruction's word.
+Its rows are, one to one and in order, the instructions `decode_text_section` finds in the merged text ranges, without the data ranges that `$d` mapping symbols mark, each with the instruction's address and width, and each RISC-V row is `joltDecode` of the instruction's word.
+`DecodedFrom` includes the checks by which `decode_elf` rejects an ELF before it decodes an instruction: an instruction at an odd address, an instruction extent that `code_region` rejects, and a writable section that overlaps the code region.
 A row of one of Jolt's own instructions is constrained only in address and width, because Lean does not transcribe Jolt's decoder for those opcodes.
 `DecodedFrom` also leaves out the checks by which `decode_instruction` rejects a program.
 Every program Jolt builds from the ELF therefore satisfies `DecodedFrom`, and the relation still fixes the layout and every RISC-V row.
@@ -165,7 +163,7 @@ Every scope premise that the proof comes to cover leaves `BlockConforms`, and wi
 - **They are one-directional.** Every honest Jolt run up to its first explicit halt is reproduced by Sail. The converse is not claimed: a Sail run need not correspond to a Jolt run, and the theorems say nothing about programs whose runs Jolt's tracer aborts.
 - **They stop at the first explicit halt.** Jolt ends a run at a `jolt.success` row (success) or at EBREAK (panic). The RISC-V reading of EBREAK as a halt is entering debug mode, which the Sail model does not implement, and `jolt.success` is one of Jolt's own instructions, which Sail does not have. The theorems stop in front of the first halt row without executing it ([`riscv-alignment.md`](riscv-alignment.md) section 4). They say nothing about later instructions.
 - **They do not cover Jolt's own instructions**, the inline opcodes `0x0B` and `0x2B`, or the advice tape (see the scope premise above).
-- **They describe particular Jolt revisions.** The halt rows, the shared memory and the constraints follow a16z/jolt `ff6fc6568`. The system expansions other than EBREAK, the compressed decoder (`joltUncompress`) and the ELF loader (`decode_elf`, in `JoltConstraints/theorems/WholeRun/Elf.lean`) still transcribe `c336a6da7`, the head of a16z/jolt#2384; #2383 and #2384 have since merged into Jolt `main`. `decode_elf` at `ff6fc6568` differs from that transcription: it skips data ranges that `$d` mapping symbols mark inside text sections, rejects a writable section that overlaps the code region, and rejects an odd instruction address. `DecodedFrom` does not model these changes. A program whose text sections contain marked data ranges may therefore not satisfy it.
+- **They describe particular Jolt revisions.** The halt rows, the shared memory and the constraints follow a16z/jolt `ff6fc6568`. The ELF loader (`decode_elf`, in `JoltConstraints/theorems/WholeRun/Elf.lean`) follows `ff6fc6568` too. The system expansions other than EBREAK and the compressed decoder (`joltUncompress`) still transcribe `c336a6da7`, the head of a16z/jolt#2384; #2383 and #2384 have since merged into Jolt `main`, and `crates/jolt-riscv/src/uncompress.rs` is the same at both commits.
 - **They compare outputs only up to trailing zero bytes**, as `JoltInstance.soundness` does.
 - **They describe one hart configuration.** The Sail model is configured as an RV64IMAC hart with only M-mode and no interrupts, with Jolt's memory map ([`riscv-alignment.md`](riscv-alignment.md) sections 1 and 2). They say nothing about other configurations.
 
