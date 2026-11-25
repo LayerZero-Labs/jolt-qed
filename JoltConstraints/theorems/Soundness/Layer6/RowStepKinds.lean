@@ -79,7 +79,7 @@ section Steps
 
 variable {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
-    (assumptions : inst.SoundnessAssumptions) (restrictions : inst.TemporaryRestrictions)
+    (assumptions : inst.SoundnessAssumptions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
@@ -93,18 +93,17 @@ variable {F : Type} [Field F] (joltField : JoltField F)
     (registers : RegisterAgreementOn (ExpansionLive context.bytecode first done)
       witness ⟨run.rows.size, bound⟩ pre)
 
-include joltField assumptions restrictions equations state unfinished honestAdvice indexIs entry registers
+include joltField assumptions equations state unfinished honestAdvice indexIs entry registers
 
-/-- A terminal HostIO row appends the call certified by `HostCallsSucceed` and
-keeps live-register agreement; for example, an advice-write call changes the tape.
-Porting `host_call_selected_step` to live agreement belongs to the future proof.
+/-- A terminal HostIO row appends its call, which always retires, and keeps
+live-register agreement; for example, an advice-write call changes the tape.
 See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`) at ff6fc6568. -/
 theorem host_row_step
     (instruction : run.bytecode[next].instruction = .VirtualHostIO)
     (_terminal : done + 1 = expansionRowCount context.bytecode first) :
     PlainRowExtension witness context run first done bound := by
-  exact append_host_row joltField restrictions witness context equations run first done state
-    unfinished honestAdvice bound next pre indexIs entry registers instruction
+  exact append_host_row joltField witness context equations run first done state
+    unfinished bound next pre indexIs entry registers instruction
 
 variable (pc : pre.sail.regs.get? Register.PC = some run.bytecode[next].address)
     (nextPC : pre.sail.regs.get? Register.nextPC = some (run.bytecode[next].address +

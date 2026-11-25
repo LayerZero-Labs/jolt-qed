@@ -22,7 +22,6 @@ advice, even when the witness's quotient differs in instruction temporaries. -/
 theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
-    (restrictions : joltInstance.TemporaryRestrictions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
@@ -68,7 +67,7 @@ theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
         intro done current left state advice
         have unfinished : done < count := by omega
         obtain ⟨next, _, size, state', advice'⟩ := row_step joltField joltInstance
-          assumptions restrictions privateInputs witness context equations current first
+          assumptions privateInputs witness context equations current first
           done state unfinished advice hasAdvice
         obtain ⟨result, total, completed, honest⟩ := ih (done + 1) next
           (by omega) state' advice'
@@ -86,7 +85,6 @@ theorem soundness_execution_prefix_agreement {F : Type} [Field F]
     (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
-    (restrictions : joltInstance.TemporaryRestrictions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
@@ -139,7 +137,7 @@ theorem soundness_execution_prefix_agreement {F : Type} [Field F]
       intro last atEnd stalled
       exact cut (Or.inr ⟨bound, Or.inr ⟨last, atEnd, stalled⟩⟩)
     obtain ⟨run', grows, boundary'⟩ := boundary_step joltField joltInstance
-      assumptions restrictions privateInputs witness context equations run boundary
+      assumptions privateInputs witness context equations run boundary
       bound real notStopped
     have nextBound := boundary'.represents.rowsBound
     exact ih (params.traceLength - run'.rows.size) (by omega) run' boundary' rfl

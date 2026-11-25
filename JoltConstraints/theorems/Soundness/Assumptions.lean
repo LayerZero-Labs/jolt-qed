@@ -1,10 +1,12 @@
 /-
 What the soundness theorem assumes, grouped by what each assumption is about:
-the field, the instance, and temporary workarounds for known issues.
+the field and the instance.
 Nothing is assumed about the witness.
 -/
 import JoltConstraints.theorems.Soundness.Layer3.Layout
-import JoltConstraints.theorems.Soundness.Layer5.HostCallRestriction
+import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
+import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
+import JoltConstraints.theorems.execution_facts
 import Mathlib.Algebra.Field.ZMod
 
 open LeanRV64D
@@ -76,24 +78,10 @@ theorem JoltField.zmod_bn254ScalarModulus [Fact bn254ScalarModulus.Prime] :
   exact bn254ScalarModulus_above
 
 -- What the soundness theorem assumes about the instance. Each field's comment says
--- whether a16z has confirmed it or it is still awaiting confirmation. Workarounds
--- for known issues are not here; they are in `JoltInstance.TemporaryRestrictions`.
+-- whether a16z has confirmed it or it is still awaiting confirmation.
 structure JoltInstance.SoundnessAssumptions
     (joltInstance : JoltInstance SourceInstruction) : Prop where
   -- The whole maximum padded RAM region, including all eight bytes of every word,
   -- lies below 2^64. Approved by Ari on 2026-10-10.
   -- NOTE: to confirm with a16z.
   ramRegionFits : joltInstance.RamRegionFits
-
--- Temporary program restrictions. Each excludes programs that expose reported
--- or suspected Jolt bugs. None is a check Jolt's verifier makes. Remove each
--- once Jolt and the model are fixed and the unrestricted proof is established.
-structure JoltInstance.TemporaryRestrictions
-    (joltInstance : JoltInstance SourceInstruction) : Prop where
-  -- FIXME: every attempted VirtualHostIO call succeeds in the modeled
-  -- execution. This excludes invalid cycle-marker or print events, and
-  -- pointer overflow when the model enables its overflow check. Matching
-  -- checked Rust overflow behavior remains a separate obligation.
-  -- The local constraints do not encode host-call success.
-  -- Candidate, not reproduced; to raise with a16z with the other FIXMEs.
-  hostCallsSucceed : joltInstance.HostCallsSucceed

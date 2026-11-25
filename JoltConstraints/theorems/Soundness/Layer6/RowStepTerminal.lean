@@ -121,20 +121,17 @@ theorem append_halt_row
 
 /-- Append a successful terminal HostIO row, preserving live registers and the
 memory image while allowing its advice tape to grow.
-For example, a successful advice-write host call can append bytes to the tape.
+Every host call retires; for example, an advice-write call can append bytes to the tape.
 See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`)
 at ff6fc6568. -/
 theorem append_host_row
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
-    (restrictions : inst.TemporaryRestrictions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
     (state : ExpansionState witness context run first done)
     (unfinished : done < expansionRowCount context.bytecode first)
-    (honestAdvice : ∀ n : Fin run.rows.size, run.rows[n].someTracerAdvice? =
-      honestTracerAdviceAtStepN inst.program run.rows n)
     (bound : run.rows.size < params.traceLength)
     (next : Fin run.bytecode.size) (pre : SailJoltState)
     (indexIs : next.val = first.val + done) (entry : RawRowEntry run next pre)
@@ -143,10 +140,9 @@ theorem append_host_row
     (instruction : run.bytecode[next].instruction = .VirtualHostIO) :
     PlainRowExtension witness context run first done bound := by
   obtain ⟨atRow, slot, selected, slotIs, rowIs⟩ := state.selectedRow unfinished bound next indexIs
-  have ready : run.NextStep next pre := ⟨honestAdvice, state.noEarlierStop, entry⟩
   let advice := runtimeAdviceFor run.bytecode[next].instruction 0
   obtain ⟨post, executes, sail, _⟩ := host_call_exec_sail_frame
-    restrictions.hostCallsSucceed run next pre ready 0 instruction advice
+    run next pre 0 instruction advice
   have zero : witness.RamAddress ⟨run.rows.size, bound⟩ = 0 := by
     apply ramAddress_zero_of_not_load_store equations.ramAddrEqZeroIfNotLoadStore
     · simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag,
@@ -168,7 +164,7 @@ theorem append_host_row
       RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1)) witness
         ⟨run.rows.size + 1, h⟩ step.postState := by
     obtain ⟨other, otherExec, otherRegisters⟩ := host_call_selected_step joltField
-      context equations restrictions.hostCallsSucceed run next pre ready h slot slotIs
+      context equations run next pre h slot slotIs
       selected rowIs instruction registers advice 0
     have same : other = post := by
       rw [executes] at otherExec

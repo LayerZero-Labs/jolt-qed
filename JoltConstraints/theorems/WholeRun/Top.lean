@@ -175,7 +175,7 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
     simp only [JoltDevice.outputsOf, hp.observation.1, hp.observation.2.1]
   · rcases hp.observation.2.2 with ⟨kind, next, recorded, claim⟩ | same
     · exact ⟨kind, recorded, claim, Or.inl (SailHalted.of_related hrel.1 kind next)⟩
-    · obtain ⟨kind, recorded, claim⟩ := trace.final_halt final hp.back
+    · obtain ⟨kind, recorded, claim⟩ := HonestTrace.final_halt trace final hp.back
       exact ⟨kind, recorded, claim, Or.inr same⟩
 
 end WholeRun
@@ -190,7 +190,6 @@ Jolt at `ff6fc6568`: `rv64_trace_constraints` halt lane and `Cpu::halt`. -/
 theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (assumptions : joltInstance.SoundnessAssumptions)
-    (restrictions : joltInstance.TemporaryRestrictions)
     {params : WitnessParams} (givenInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
@@ -213,7 +212,7 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
               joltInstance.panic = (kind == JoltHaltKind.panic) ∧
               (SailHalted joltInstance.program s kind ∨ halt = final)) := by
   obtain ⟨privateInputs, trace, hmo, hcfg, hspoil⟩ :=
-    JoltInstance.soundness joltField joltInstance assumptions restrictions givenInputs witness
+    JoltInstance.soundness joltField joltInstance assumptions givenInputs witness
       satisfied
   obtain ⟨pre, halt, final, hp⟩ := trace.haltPrefix
   refine ⟨privateInputs, trace, hmo, hcfg, hspoil, pre, halt, final, hp, fun hconf => ?_⟩
