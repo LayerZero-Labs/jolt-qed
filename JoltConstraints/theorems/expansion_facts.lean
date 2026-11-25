@@ -323,9 +323,12 @@ theorem wordMaskOk_shamt (shamt : BitVec 5) :
   simp [shamt.isLt]
 
 -- Evaluate the unchanged sequence checks after a program's branches are exposed.
+-- Try `rfl` first: most branches evaluate by definitional unfolding, which is
+-- several times cheaper than `simp` reducing matches on `JoltISA.Instr`.
 macro "finish_rows_ok" : tactic => `(tactic| (
-  all_goals
-    simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
+  all_goals first
+  | rfl
+  | simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
       wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
@@ -360,8 +363,9 @@ macro "pure_rows_ok " program:ident notX0:ident : tactic => `(tactic| (
   unfold $program
   simp only [$notX0:ident, Bool.false_eq_true, ↓reduceIte]
   repeat' split
-  all_goals
-    simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
+  all_goals first
+  | rfl
+  | simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
       wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
