@@ -3,8 +3,8 @@
 Date: 2026-11-24.
 Jolt revision checked: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
 Lean baseline checked: `fdfd7891e9ba59d7ab2fae68c9ad8fa74c9e8fe6` on `split/b-bytecode`.
-The code changes described below are currently uncommitted against that baseline.
-Validation is pending in `.hostio-build-1.log`, with completion marker `.hostio-build-1.done`.
+The changes are in `3cefd41` (model and first proofs) and the commit that follows it (proof fixes and this report).
+`lake build JoltBytecode` is green; see Validation.
 This is an ordinary source review, not the separate Claude audit required before Ari's approval.
 
 ## Pinned tracer behavior
@@ -78,7 +78,17 @@ In `DeviceMemory.lean`, `Mmu.load` succeeds with a byte and unchanged state exac
 Consequently host readability uses the model's complete traced guest-byte acceptance, including its containing-doubleword checks, not merely raw byte mapping.
 No separate permissive host-memory predicate was added.
 
-`JoltBytecode/JoltISA/HostIO.lean:111`, `execHostIO_succeeds`, exports the whole-run interface:
+`JoltBytecode/JoltISA/HostIO.lean:111`, `execHostIO_result`, states the result shape: every host call retires successfully, and the post-state is either the pre-state or the pre-state with bytes appended to the advice tape (read cursor unchanged).
+
+```lean
+theorem execHostIO_result (state : SailJoltState) :
+    execHostIO state = .ok RETIRE_SUCCESS state ∨
+      ∃ bytes, execHostIO state = .ok RETIRE_SUCCESS
+        { state with adviceTape :=
+            { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } }
+```
+
+`JoltBytecode/JoltISA/HostIO.lean:132`, `execHostIO_succeeds`, follows from it and exports the whole-run interface:
 
 ```lean
 theorem execHostIO_succeeds (state : SailJoltState) :
@@ -132,7 +142,7 @@ The call-ID definitions retain their signatures and values.
 
 The private `InstructionFrame.execHostIO_rule` moves from baseline `InstructionFrame.lean:290` to `JoltBytecode/InstructionEquivalence/ProofSupport/InstructionFrame.lean:264`.
 Its statement is unchanged: `(rules : NonStoreRules relation) → StatePreservation.Preserves relation execHostIO`.
-The new proof composes only snapshot retrieval, pure computation and the existing tape-append rule.
+Its proof now cases on `execHostIO_result` and uses `rules.refl` or `rules.append`.
 
 The following private helper statements are deleted because their only purpose was to frame the former stateful byte reader; there is no replacement stateful reader to frame.
 Their consequences are covered by the retained host-call frame proofs.
@@ -164,8 +174,17 @@ private theorem frames_readHostBytes
 
 `Step.frames_hostIO` moves from baseline `Step/Frame.lean:340` to `JoltBytecode/Step/Frame.lean:317`.
 Its statement remains `Frames JoltISA.execHostIO`, including error-result framing, and its proof no longer needs a byte-load induction.
+It also cases on `execHostIO_result`: the unchanged state frames by reflexivity, and the tape append leaves Sail registers equal.
 All exported generic instruction frame statements retain their types.
-`execHostIO_succeeds` is the only newly added theorem statement.
+`execHostIO_result` and `execHostIO_succeeds` are the only newly added theorem statements.
+
+### Changes made while fixing the build
+
+`3cefd41` did not build. The fixes changed proofs and added one lemma; no theorem statement was weakened or changed.
+
+- `execHostIO_succeeds`: the statement is unchanged. The original `simp only [...]; repeat' split` proof left `getThe` unfolded and could not split an `if` applied to the state. It now follows from `execHostIO_result`.
+- `execHostIO_result`: new public theorem (statement above). Its proof unfolds the handler and case-splits on the advice call ID and the `readHostBytes` result.
+- `execHostIO_rule` and `frames_hostIO`: statements unchanged. The `preservation_auto` and `jolt_frame` tactic proofs from `3cefd41` got stuck on the `let` bindings in the new handler; both proofs now case on `execHostIO_result`.
 
 ## Explicit modelling choices and limits
 
@@ -192,8 +211,13 @@ Those files are outside this task's writable scope and were not edited.
 
 ## Validation
 
-The required command `~/claude-work/track-t-build.sh lake build JoltBytecode` is running detached.
-I have not yet claimed a passing build or a final commit.
-`git diff --check` passed before the build.
-Per-proof timing and the final prohibited-token, scope and clean-tree checks remain pending.
-There are no new admissions, axioms, prohibited decision procedures or resource-limit increases in the proposed changes.
+`~/claude-work/track-t-build.sh lake build JoltBytecode` is green (log `.hostio-build-4.log`, untracked):
+
+```
+✔ [9364/9365] Built JoltBytecode (32s)
+Build completed successfully (9365 jobs).
+```
+
+The touched files add no new warnings; `InstructionFrame.lean` keeps two older warnings at lines 141 and 211.
+`#print axioms` on `JoltISA.execHostIO_succeeds` and `JoltISA.execHostIO_result` reports `[propext, Classical.choice, Quot.sound]`.
+Against `fdfd789`, the diff touches only `JoltBytecode/` and `reports/`, adds no `sorry`, `admit`, `native_decide`, `bv_decide`, `decide +kernel`, `axiom` or `maxHeartbeats`/`maxRecDepth`/`synthInstance` option, and passes `git diff --check`.
