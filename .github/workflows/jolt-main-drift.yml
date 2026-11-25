@@ -2,23 +2,29 @@ name: jolt-main-drift
 
 # Nightly check of what changed in Jolt main since the pin (`jolt_rev` in
 # assumptions.toml). The theorems in this repository are proved about the pinned
-# commit; this job finds the Jolt changes that may invalidate a premise, a sorry
-# or a field listed in assumptions.toml (reports/2026-11-25-stale-assumptions.md).
+# commit; this job finds the Jolt changes that may invalidate a premise, a scope
+# boundary or a transcription listed in assumptions.toml, or any other Jolt file
+# the Lean sources cite (reports/2026-11-25-stale-assumptions.md).
 #
 # The job:
 #   1. regenerates the constraint data from Jolt main's head with
-#      scripts/expansion-parity/run-constraint-gen.sh, records how the generated
-#      files differ from the committed ones, and builds the equivalence proofs
-#      (JoltConstraints.ConstraintGen.Equiv) on the regenerated data;
+#      scripts/expansion-parity/run-constraint-gen.sh into an empty directory;
+#      only when the generator produces all three files does it copy them over
+#      the committed ones, record the diff and build the equivalence proofs
+#      (JoltConstraints.ConstraintGen.Equiv) on them;
 #   2. runs `git diff --stat <pin> <main>` over every Jolt file that an anchor in
-#      assumptions.toml cites, and lists the registry entries those files back;
+#      assumptions.toml or a citation in the Lean sources names
+#      (scripts/jolt_citations.py), and lists the registry entries and Lean files
+#      those files back;
 #   3. reads the state of each upstream issue the registry names;
 #   4. creates or updates one open issue titled "Drift against Jolt main"
 #      (label `jolt-drift`) with the report from scripts/jolt-drift-report.py.
 #
-# Drift is expected and is information, not a failure: the job never fails, so
-# it never marks the default branch red. Every step that can fail continues on
-# error, and the report records each step's outcome.
+# Drift is information: a regenerated file that differs, an equivalence proof
+# that no longer builds, or a changed anchor never fails the job. A monitoring
+# failure does: when checking out Jolt main, fetching the pin, setting up Lean,
+# writing the report or updating the issue fails, the issue says so (it never
+# keeps an earlier night's report), and the last step fails the job.
 #
 # Anchors are compared file by file for now. Function-level anchors (a hash of
 # each cited function's body, so that an edit elsewhere in the same file does
@@ -38,17 +44,22 @@ concurrency:
   group: jolt-main-drift
   cancel-in-progress: false
 
+env:
+  ISSUE_TITLE: Drift against Jolt main
+
 jobs:
   drift:
     name: drift
     runs-on: ubuntu-latest
     timeout-minutes: 240
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: self
         with:
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: jolt
+        continue-on-error: true
         with:
           repository: a16z/jolt
           ref: main
@@ -56,67 +67,157 @@ jobs:
           persist-credentials: false
       - name: Fetch the pinned Jolt commit
         id: pin
+        if: ${{ steps.jolt.outcome == 'success' }}
+        continue-on-error: true
         run: |
           pin="$(python3 -c 'import tomllib; print(tomllib.load(open("assumptions.toml", "rb"))["jolt_rev"])')"
-          echo "rev=$pin" >> "$GITHUB_OUTPUT"
           git -C jolt-main fetch --depth=1 origin "$pin"
           echo "Pin $pin, Jolt main $(git -C jolt-main rev-parse HEAD)"
-      # Exit status 1 means a generator check failed; status 2 means the
-      # generator could not run. Both are recorded in the report.
+      # The generator writes into an empty directory. Its exit status is 0 when
+      # its checks pass, 1 when a check fails and 2 when it cannot run; all three
+      # are drift, recorded in the report. `produced` says whether it wrote all
+      # three files; only then are they copied over the committed ones.
       - name: Regenerate the constraint data from Jolt main
         id: generate
+        if: ${{ steps.pin.outcome == 'success' }}
         continue-on-error: true
         run: |
           set +e
-          JOLT_DIR="$GITHUB_WORKSPACE/jolt-main" \
+          fresh="$RUNNER_TEMP/generated"
+          rm -rf "$fresh"
+          mkdir -p "$fresh"
+          LEAN_ROOT="$fresh" JOLT_DIR="$GITHUB_WORKSPACE/jolt-main" \
             scripts/expansion-parity/run-constraint-gen.sh "$RUNNER_TEMP/constraint-gen"
           echo "status=$?" >> "$GITHUB_OUTPUT"
-          git add -N JoltConstraints/ConstraintGen/Generated
-          git diff --stat -- JoltConstraints/ConstraintGen/Generated > "$RUNNER_TEMP/generated.stat"
-          git diff -- JoltConstraints/ConstraintGen/Generated > "$RUNNER_TEMP/generated.diff"
-          cat "$RUNNER_TEMP/generated.stat"
+          out="$fresh/JoltConstraints/ConstraintGen/Generated"
+          present=0
+          for file in R1CS Relations KindTables; do
+            [ -s "$out/$file.lean" ] && present=$((present + 1))
+          done
+          if [ "$present" -eq 3 ]; then
+            produced=yes
+            cp "$out"/R1CS.lean "$out"/Relations.lean "$out"/KindTables.lean \
+              JoltConstraints/ConstraintGen/Generated/
+            git diff --stat -- JoltConstraints/ConstraintGen/Generated > "$RUNNER_TEMP/generated.stat"
+            git diff -- JoltConstraints/ConstraintGen/Generated > "$RUNNER_TEMP/generated.diff"
+            cat "$RUNNER_TEMP/generated.stat"
+          elif [ "$present" -eq 0 ]; then
+            produced=no
+          else
+            produced=partial
+          fi
+          echo "produced=$produced" >> "$GITHUB_OUTPUT"
+          echo "The generator produced: $produced"
       - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
+        id: toolchain
+        if: ${{ steps.generate.outputs.produced == 'yes' }}
         continue-on-error: true
         with:
           build: false
           use-github-cache: false
       - name: Build the equivalence proofs on the regenerated data
         id: equiv
+        if: ${{ steps.toolchain.outcome == 'success' }}
         continue-on-error: true
         run: |
           set +e
           lake build JoltConstraints.ConstraintGen.Equiv
           echo "status=$?" >> "$GITHUB_OUTPUT"
+      # Runs whatever happened above. If the report script itself fails, a short
+      # report that says so replaces it, so the issue never keeps old content.
       - name: Write the report
         id: report
+        if: ${{ always() && steps.self.outcome == 'success' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          GENERATION_STATUS: ${{ steps.generate.outputs.status || '2' }}
-          EQUIV_STATUS: ${{ steps.equiv.outputs.status || '1' }}
+          JOLT_OUTCOME: ${{ steps.jolt.outcome }}
+          PIN_OUTCOME: ${{ steps.pin.outcome }}
+          TOOLCHAIN_OUTCOME: ${{ steps.toolchain.outcome }}
+          GENERATION_STATUS: ${{ steps.generate.outputs.status }}
+          GENERATED: ${{ steps.generate.outputs.produced }}
+          EQUIV_STATUS: ${{ steps.equiv.outputs.status }}
         run: |
-          python3 scripts/jolt-drift-report.py --jolt-dir jolt-main --main HEAD \
-            --generated-stat "$RUNNER_TEMP/generated.stat" \
-            --generated-diff "$RUNNER_TEMP/generated.diff" \
-            --generation-status "$GENERATION_STATUS" --equiv-status "$EQUIV_STATUS" \
-            --upstream --run-url "$RUN_URL" > "$RUNNER_TEMP/report.md"
+          if [ "$GENERATED" = yes ] && [ -z "$EQUIV_STATUS" ]; then
+            EQUIV_STATUS="Lean setup failed"
+          fi
+          jolt=()
+          if [ "$JOLT_OUTCOME" = success ] && [ "$PIN_OUTCOME" = success ]; then
+            jolt=(--jolt-dir jolt-main --main HEAD)
+          fi
+          if ! python3 scripts/jolt-drift-report.py "${jolt[@]}" \
+              --monitor "Jolt main checkout=$JOLT_OUTCOME" \
+              --monitor "pin fetch=$PIN_OUTCOME" \
+              --monitor "Lean setup=${TOOLCHAIN_OUTCOME:-skipped}" \
+              --generation-status "$GENERATION_STATUS" --generated "$GENERATED" \
+              --generated-stat "$RUNNER_TEMP/generated.stat" \
+              --generated-diff "$RUNNER_TEMP/generated.diff" \
+              --equiv-status "$EQUIV_STATUS" \
+              --upstream --run-url "$RUN_URL" > "$RUNNER_TEMP/report.md"; then
+            {
+              echo "**Monitoring failed in this run.** The report script failed; see [the run]($RUN_URL)."
+              echo "Nothing here is carried over from an earlier run."
+            } > "$RUNNER_TEMP/report.md"
+            exit 1
+          fi
           cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Create or update the drift issue
-        if: ${{ !cancelled() && steps.report.outcome == 'success' }}
+        id: issue
+        if: ${{ always() && steps.self.outcome == 'success' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TITLE: Drift against Jolt main
         run: |
           gh label create jolt-drift --force --color d93f0b \
             --description "Jolt main changed something the proofs depend on"
           number="$(gh issue list --state open --label jolt-drift --limit 50 \
-            --json number,title --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")"
+            --json number,title --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")"
           if [ -n "$number" ]; then
             gh issue edit "$number" --body-file "$RUNNER_TEMP/report.md"
             echo "Updated issue #$number"
           else
-            gh issue create --title "$TITLE" --label jolt-drift --body-file "$RUNNER_TEMP/report.md"
+            gh issue create --title "$ISSUE_TITLE" --label jolt-drift --body-file "$RUNNER_TEMP/report.md"
           fi
+      # Without this repository's checkout there is no report script; write a
+      # short report that says the run failed instead.
+      - name: Report a failed checkout of this repository
+        id: fallback
+        if: ${{ always() && steps.self.outcome != 'success' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="**Monitoring failed in this run.** Checking out this repository failed; see [the run]($RUN_URL). Nothing here is carried over from an earlier run."
+          number="$(gh issue list --state open --label jolt-drift --limit 50 \
+            --json number,title --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")"
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body "$body"
+          else
+            gh label create jolt-drift --force --color d93f0b \
+              --description "Jolt main changed something the proofs depend on"
+            gh issue create --title "$ISSUE_TITLE" --label jolt-drift --body "$body"
+          fi
+      - name: Fail when the run could not monitor Jolt main
+        if: ${{ always() }}
+        env:
+          OUTCOMES: >-
+            self=${{ steps.self.outcome }}
+            jolt=${{ steps.jolt.outcome }}
+            pin=${{ steps.pin.outcome }}
+            toolchain=${{ steps.toolchain.outcome }}
+            report=${{ steps.report.outcome }}
+            issue=${{ steps.issue.outcome }}
+            fallback=${{ steps.fallback.outcome }}
+        run: |
+          failed=0
+          for item in $OUTCOMES; do
+            case "${item#*=}" in
+              success|skipped|"") ;;
+              *) echo "::error::monitoring step ${item%%=*}: ${item#*=}"; failed=1 ;;
+            esac
+          done
+          exit "$failed"

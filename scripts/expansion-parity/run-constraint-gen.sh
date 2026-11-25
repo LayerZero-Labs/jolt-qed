@@ -4,6 +4,9 @@
 #   scripts/expansion-parity/run-constraint-gen.sh WORK_DIR [--no-lean]
 # Only constraint-gen is built. Output: Generated/{R1CS,Relations,KindTables}.lean
 # (unless --no-lean) and WORK_DIR/out/constraint_summary.json.
+# The Lean files go under LEAN_ROOT/JoltConstraints/ConstraintGen/Generated/;
+# LEAN_ROOT defaults to this repository. The nightly drift job sets it to an
+# empty directory, so a run that stops early leaves no file behind.
 # Exit status is 0 for passing checks, 1 for failed checks, 2 for invalid input.
 set -euo pipefail
 
@@ -12,7 +15,7 @@ REPO="$(cd "$HERE/../.." && pwd)"
 work="${1:?usage: run-constraint-gen.sh WORK_DIR [--no-lean]}"
 shift
 
-lean=(--lean-root "$REPO")
+lean=(--lean-root "${LEAN_ROOT:-$REPO}")
 for a in "$@"; do
   case "$a" in
     --no-lean) lean=() ;;
