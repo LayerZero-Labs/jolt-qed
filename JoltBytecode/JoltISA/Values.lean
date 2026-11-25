@@ -91,7 +91,7 @@ end Riscv
 -- Jolt-side value helpers
 -- ============================================================================
 
--- Rust: [bitwise and comparison lookup outputs](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv).
+-- Rust: bitwise and comparison lookup outputs, `crates/jolt-lookup-tables/src/instructions/riscv/` (`to_lookup_output`).
 -- Transparent pure calculations shared by execInstr and witness extraction.
 -- Keeping these transparent preserves the existing execution proof reductions.
 abbrev jolt_xor_value (x y : BitVec 64) : BitVec 64 := x ^^^ y
@@ -101,14 +101,14 @@ abbrev jolt_andn_value (x y : BitVec 64) : BitVec 64 := x &&& Complement.complem
 abbrev jolt_slt_value (x y : BitVec 64) : BitVec 64 :=
   zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y))
 
--- Rust: [JALR target](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs:29).
+-- Rust: JALR target, `crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs` (`to_lookup_output`).
 abbrev jolt_jalr_target64 (base : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
   BitVec.update (BitVec.ofNat 64 (JoltISA.addWide base imm)) 0 0#1
 
 abbrev jolt_jalr_target (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   BitVec.update (BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))) 0 0#1
 
--- Rust: [AssertEq output](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs:17).
+-- Rust: AssertEq output, `crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs` (`to_lookup_output`).
 -- Equality is still the lookup predicate when a nonzero immediate suppresses
 -- the execution assertion; successful retirement alone does not imply equality.
 abbrev jolt_assert_eq (x y : BitVec 64) : Prop := x = y

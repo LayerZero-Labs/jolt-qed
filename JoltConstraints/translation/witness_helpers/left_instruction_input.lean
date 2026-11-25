@@ -8,7 +8,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [LeftInstructionInput](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:77).
+-- Rust: `crates/jolt-witness/src/witnesses/operands.rs` (`LeftInstructionInput`).
 -- The instruction flags select the original instruction address or captured rs1.
 -- Loads, stores, advice, HOST_IO, and other instructions with neither flag use
 -- zero, even if their trace row has a captured source register. Padding is zero.

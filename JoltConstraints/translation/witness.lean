@@ -156,7 +156,7 @@ def WitnessParams.ProverChunkConfig (p : WitnessParams) : Prop :=
 /-- Number of witness positions, including padding, always a power of two.
 `trace.rows.size` counts actual execution steps and may be smaller: for example,
 six execution steps can occupy an eight-position witness, with two padding positions.
-Rust: [walk_cycles](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/cycle.rs:107).
+Rust: `crates/jolt-witness/src/backend/trace/cycle.rs` (`walk_cycles`).
 -/
 def WitnessParams.traceLength (p : WitnessParams) : Nat := 2 ^ p.logT
 

@@ -206,7 +206,7 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
   The expansions and this model both compute success from virtual registers 32 and 33. No correspondence with the native reservation remains to be proved.
 - **Floating-point axioms.** `LeanRV64D/RiscvExtras.lean`, the Sail model's handwritten platform file, declares 67 floating-point primitives (for example `riscv_f16Add`) as Lean `axiom`s.
   They lie outside the headline closures: F and D are off in Jolt's hart, their instruction modules are not generated (`docs/riscv-alignment.md` section 8), and `#print axioms` for the soundness and whole-run theorems lists none of them.
-- **To do.** Fix comments that cite `/Users/ari.biswas/...` paths, an unpinned fork, or the crate `jolt-trace`; answer the `metadata.lean` TODOs the 2026-10-29 report settled.
+- **To do.** Fix comments that cite an unpinned fork or the crate `jolt-trace`; answer the `metadata.lean` TODOs the 2026-10-29 report settled.
   Drop the unused `ramFits`, `traceFits` and `bytecodeDomain` arguments.
 
 ## Classifier call sites

@@ -5,7 +5,7 @@ open LeanRV64D
 
 set_option autoImplicit false
 
--- Rust: [remapped_ram_address](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:260).
+-- Rust: `crates/jolt-witness/src/backend/trace/ram.rs` (`remapped_ram_address`).
 -- Every nonzero RAM access must remap successfully and fit the chosen witness
 -- domain. This includes device I/O. Rust treats raw address zero as no access;
 -- a nonzero address below the layout's lowest address is an error, not padding.

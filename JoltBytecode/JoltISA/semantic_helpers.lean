@@ -12,15 +12,15 @@ namespace JoltISA
 -- Keep the full arithmetic value until the caller chooses its output width.
 -- Execution keeps the low 64 bits (or a sign-extended low word); instruction
 -- lookup addresses retain the carry or the full 128-bit product.
--- Rust: [ADD](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/add.rs:9).
+-- Rust: ADD, `crates/jolt-lookup-tables/src/instructions/riscv/add.rs` (`to_lookup_operands`).
 def addWide (lhs rhs : BitVec 64) : Nat := lhs.toNat + rhs.toNat
 
 -- The extra 2^64 makes subtraction nonnegative and is part of Rust's lookup
 -- address, including when rhs = 0. Truncating to 64 bits gives lhs - rhs.
--- Rust: [SUB](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/sub.rs:9).
+-- Rust: SUB, `crates/jolt-lookup-tables/src/instructions/riscv/sub.rs` (`to_lookup_operands`).
 def subWide (lhs rhs : BitVec 64) : Nat := (2 ^ 64 - rhs.toNat) + lhs.toNat
 
--- Rust: [MUL](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/mul.rs:9).
+-- Rust: MUL, `crates/jolt-lookup-tables/src/instructions/riscv/mul.rs` (`to_lookup_operands`).
 def mulWide (lhs rhs : BitVec 64) : Nat := lhs.toNat * rhs.toNat
 
 -- These are definitional equalities: sharing the full calculation preserves

@@ -7,7 +7,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [Product](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:131).
+-- Rust: `crates/jolt-witness/src/witnesses/operands.rs` (`Product`).
 -- For the RV64 instructions modeled here, both selected inputs are in [0, 2^64).
 -- Signed branch/store immediates are not selected as instruction inputs, and
 -- I/U/J immediates have already been wrapped to u64. Their product fits Rust's
