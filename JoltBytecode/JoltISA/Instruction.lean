@@ -492,6 +492,17 @@ def Instr.destination? : Instr → Option Dst
 def Instr.canonicalNoOp : Instr :=
   .ADDI (.xreg (.Regidx 0)) (.xreg (.Regidx 0)) 0
 
+/-- **Rust's `rd = x0` rule for a native source row.** An instruction with side effects keeps
+running with its x0 destination redirected to a temporary (`sideEffectingDst`); any other
+instruction whose destination is x0 becomes the canonical no-op. The side-effecting
+instructions with a destination are those whose kind has `has_side_effects` in Rust: the two
+halts, JAL, JALR, LD, `VirtualAdviceLoad` and the floor loads `VirtualLoadB`, `VirtualLoadH`
+and `VirtualLoadW`, whose read can fault. Instructions without a destination are unchanged.
+For example, `VirtualLoadB` into x0 still reads its doubleword, into the temporary, while
+`ADD x0 x1 x2` becomes `ADDI x0 x0 0`.
+Jolt at ff6fc6568: `crates/jolt-program/src/expand/mod.rs`
+(`expand_source_instruction_with_provider`) and `crates/jolt-riscv/src/kind.rs`
+(`jolt_side_effects_for_marker`, `source_side_effects_for_marker`). -/
 def Instr.rewriteNative (instruction : Instr) : Instr :=
   match instruction with
   | .JoltSuccess dst => .JoltSuccess (sideEffectingDst dst)
@@ -501,6 +512,12 @@ def Instr.rewriteNative (instruction : Instr) : Instr :=
   | .LD fault dst base imm => .LD fault (sideEffectingDst dst) base imm
   | .VirtualAdviceLoad dst byteCount =>
       .VirtualAdviceLoad (sideEffectingDst dst) byteCount
+  | .VirtualLoadB faultClass dst base imm fault =>
+      .VirtualLoadB faultClass (sideEffectingDst dst) base imm fault
+  | .VirtualLoadH faultClass dst base imm fault =>
+      .VirtualLoadH faultClass (sideEffectingDst dst) base imm fault
+  | .VirtualLoadW faultClass dst base imm fault =>
+      .VirtualLoadW faultClass (sideEffectingDst dst) base imm fault
   | instruction =>
       match instruction.destination? with
       | some (.xreg rd) =>
