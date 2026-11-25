@@ -350,10 +350,9 @@ private theorem addi_device (dst : JoltISA.Dst) (src : JoltISA.Src) (imm : BitVe
     InstructionFrame.writeDst_rule _ (fun _ _ _ => rfl) (fun _ _ _ => rfl) dst value
   have finish (value : ExecutionResult) :
       StatePreservation.Preserves (fun s t => t.jolt_device = s.jolt_device)
-        (pure value : JoltMonad ExecutionResult) := by
-    intro before after result runs
-    cases runs
-    rfl
+        (pure value : JoltMonad ExecutionResult) :=
+    StatePreservation.pure_rule
+      (relation := fun (s t : SailJoltState) => t.jolt_device = s.jolt_device) (fun _ => rfl) value
   simp only [JoltISA.execInstr]
   preservation_auto [read, write _, finish _]
     using (StatePreservation.bind_rule (fun _ _ _ h h' => h'.trans h))

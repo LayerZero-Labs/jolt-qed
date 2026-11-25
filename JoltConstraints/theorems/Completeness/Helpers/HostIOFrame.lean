@@ -1,10 +1,10 @@
 import JoltConstraints.theorems.nextpc_frame
-import JoltConstraints.translation.honest_trace
+import JoltConstraints.theorems.execution_facts
 
 open LeanRV64D
 
 -- HostIO changes no Sail state: it either leaves the state unchanged or only
--- appends to the advice tape (`JoltISA.execHostIO_result`).
+-- appends to the advice tape (`execHostIO_keeps_state`).
 
 set_option autoImplicit false
 
@@ -15,10 +15,8 @@ namespace JoltHostFrame
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
   ∀ (s t : SailJoltState) (v : α), m s = .ok v t → t.sail = s.sail
 
-theorem execHostIO_frame : Preserves (JoltISA.execHostIO) := by
-  intro s t v h
-  rcases JoltISA.execHostIO_result s with result | ⟨_, result⟩ <;>
-    rw [result] at h <;> cases h <;> rfl
+theorem execHostIO_frame : Preserves (JoltISA.execHostIO) :=
+  fun s t v h => (execHostIO_keeps_state s t v h).1
 
 end JoltHostFrame
 

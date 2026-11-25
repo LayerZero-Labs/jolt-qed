@@ -575,10 +575,8 @@ namespace Register42VRegs
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
   ∀ (s t : SailJoltState) (v : α), m s = .ok v t → t.vregs = s.vregs
 
-theorem execHostIO_frame : Preserves JoltISA.execHostIO := by
-  intro s t v h
-  rcases JoltISA.execHostIO_result s with result | ⟨_, result⟩ <;>
-    rw [result] at h <;> cases h <;> rfl
+theorem execHostIO_frame : Preserves JoltISA.execHostIO :=
+  fun s t v h => (execHostIO_keeps_state s t v h).2
 
 end Register42VRegs
 

@@ -335,27 +335,15 @@ private theorem commutes_hostIO (hr : Inert r) : Commutes r v JoltISA.execHostIO
   · have keep (x : Register) (hx : x ≠ r) :
         (withReg js r v).sail.regs.get? x = js.sail.regs.get? x :=
       Step.setReg_get?_ne js.sail v (Ne.symm hx)
-    have h10 : JoltISA.sourceValue (.xreg (.Regidx 10)) (withReg js r v) =
-        JoltISA.sourceValue (.xreg (.Regidx 10)) js := by
-      show ((withReg js r v).sail.regs.get? Register.x10).getD 0 =
-        (js.sail.regs.get? Register.x10).getD 0
-      rw [keep Register.x10 (by inert_ne)]
-    have h11 : JoltISA.sourceValue (.xreg (.Regidx 11)) (withReg js r v) =
-        JoltISA.sourceValue (.xreg (.Regidx 11)) js := by
-      show ((withReg js r v).sail.regs.get? Register.x11).getD 0 =
-        (js.sail.regs.get? Register.x11).getD 0
-      rw [keep Register.x11 (by inert_ne)]
-    have h12 : JoltISA.sourceValue (.xreg (.Regidx 12)) (withReg js r v) =
-        JoltISA.sourceValue (.xreg (.Regidx 12)) js := by
-      show ((withReg js r v).sail.regs.get? Register.x12).getD 0 =
-        (js.sail.regs.get? Register.x12).getD 0
-      rw [keep Register.x12 (by inert_ne)]
-    have h13 : JoltISA.sourceValue (.xreg (.Regidx 13)) (withReg js r v) =
-        JoltISA.sourceValue (.xreg (.Regidx 13)) js := by
-      show ((withReg js r v).sail.regs.get? Register.x13).getD 0 =
-        (js.sail.regs.get? Register.x13).getD 0
-      rw [keep Register.x13 (by inert_ne)]
-    simp only [h10, h11, h12, h13]
+    have src (i : regidx) (x : Register) (hx : x ≠ r)
+        (read : Option (RegisterType x) → BitVec 64)
+        (hi : ∀ s : SailJoltState, JoltISA.sourceValue (.xreg i) s = read (s.sail.regs.get? x)) :
+        JoltISA.sourceValue (.xreg i) (withReg js r v) = JoltISA.sourceValue (.xreg i) js := by
+      rw [hi, hi, keep x hx]
+    simp only [src (.Regidx 10) Register.x10 (by inert_ne) (·.getD 0) fun _ => rfl,
+      src (.Regidx 11) Register.x11 (by inert_ne) (·.getD 0) fun _ => rfl,
+      src (.Regidx 12) Register.x12 (by inert_ne) (·.getD 0) fun _ => rfl,
+      src (.Regidx 13) Register.x13 (by inert_ne) (·.getD 0) fun _ => rfl]
     rfl
   · dsimp only
     jolt_commutes
