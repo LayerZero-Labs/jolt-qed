@@ -3,7 +3,7 @@
 Date: 2026-11-24.
 Jolt revision checked: `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
 Lean baseline checked: `fdfd7891e9ba59d7ab2fae68c9ad8fa74c9e8fe6` on `split/b-bytecode`.
-The changes are in `3cefd41` (model and first proofs) and the commit that follows it (proof fixes and this report).
+The changes are in `3cefd41` (model and first proofs), `9b9948c` (proof fixes), and `3b49f8a` (the validation record in this report).
 `lake build JoltBytecode` is green; see Validation.
 This is an ordinary source review, not the separate Claude audit required before Ari's approval.
 
