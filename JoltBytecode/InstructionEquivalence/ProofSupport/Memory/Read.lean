@@ -1,7 +1,7 @@
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Alignment
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.LD
-import Mathlib.Tactic
+import JoltBytecode.MathlibTactics
 
 open LeanRV64D
 

@@ -2,6 +2,8 @@ import JoltConstraints.translation.Constraints.RamOutputEqPublicIo
 import JoltConstraints.theorems.Completeness.Helpers.IOSetupFrame
 import JoltConstraints.theorems.witness_domain
 import JoltConstraints.theorems.SharedMemoryInitialization
+import Mathlib.Data.List.DropRight
+import Mathlib.Data.List.TakeWhile
 
 open LeanRV64D
 

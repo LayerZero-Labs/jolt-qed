@@ -1,4 +1,6 @@
 import JoltConstraints.translation.Constraints.LookupOperandData
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Algebra.BigOperators.Ring.Finset
 
 open LeanRV64D
 

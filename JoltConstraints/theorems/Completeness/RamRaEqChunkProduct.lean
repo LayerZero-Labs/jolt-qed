@@ -2,6 +2,7 @@ import JoltConstraints.translation.Constraints.RamRaEqChunkProduct
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.witness_domain
+import Mathlib.Algebra.BigOperators.GroupWithZero.Finset
 
 open LeanRV64D
 

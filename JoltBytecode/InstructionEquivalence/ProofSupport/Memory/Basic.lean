@@ -1,5 +1,6 @@
 import JoltBytecode.Assumptions
-import Mathlib.Tactic
+import Mathlib.Algebra.Group.Nat.Defs
+import JoltBytecode.MathlibTactics
 
 open LeanRV64D
 

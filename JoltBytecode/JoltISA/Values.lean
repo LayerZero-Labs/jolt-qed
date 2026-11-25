@@ -5,8 +5,10 @@ Authors: Ari
 -/
 import JoltBytecode.JoltISA.Core
 import JoltBytecode.JoltISA.semantic_helpers
-import Mathlib.Tactic
+import Mathlib.Algebra.Group.Int.Defs
+import Mathlib.Algebra.Group.Nat.Defs
 import Mathlib.Data.BitVec
+import JoltBytecode.MathlibTactics
 
 open LeanRV64D
 

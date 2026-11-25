@@ -3,6 +3,7 @@ Facts about the Jolt program: what the rows built from an ELF always look like.
 Each one is proved from how program.lean builds the rows.
 -/
 import JoltConstraints.translation.program
+import Mathlib.Data.List.SplitBy
 
 open LeanRV64D
 

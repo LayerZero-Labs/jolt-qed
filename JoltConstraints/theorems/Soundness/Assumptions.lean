@@ -10,6 +10,7 @@ import JoltConstraints.theorems.Soundness.Layer3.Layout
 import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
 import JoltConstraints.theorems.Soundness.Layer5.HostCallRestriction
 import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
+import Mathlib.Algebra.Field.ZMod
 
 open LeanRV64D
 

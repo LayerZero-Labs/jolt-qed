@@ -441,7 +441,8 @@ private theorem jump_to_eval (t : BitVec 64) (s : SailState) (ht : BitVec.access
           | .error e s2 => .error e s2)
       else ((fun _ => RETIRE_SUCCESS) <$> set_next_pc t) s := by
   unfold jump_to ext_control_check_pc
-  simp [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run]
+  simp [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run_bind,
+    ExceptT.run_liftM, bind_map_left, bind_assoc]
   simp only [PreSail.sail_assert, pure, EStateM.pure, bind, EStateM.bind, liftM, monadLift,
     MonadLift.monadLift, ExceptT.lift, ExceptT.run, andM, ExceptT.bind, ExceptT.mk,
     ExceptT.bindCont, ExceptT.map, ExceptT.pure, Functor.map, EStateM.map,
@@ -465,7 +466,8 @@ private theorem jump_to_odd (t : BitVec 64) (s : SailState) (ht : BitVec.access 
     ∃ e s', jump_to t s = .error e s' := by
   have hb : (BitVec.access t 0 == 0#1) = false := by simpa using ht
   unfold jump_to ext_control_check_pc
-  simp [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run]
+  simp [SailME.run, Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run, ExceptT.run_bind,
+    ExceptT.run_liftM, bind_map_left, bind_assoc]
   simp only [PreSail.sail_assert, pure, bind, EStateM.bind, hb]
   exact ⟨_, _, rfl⟩
 

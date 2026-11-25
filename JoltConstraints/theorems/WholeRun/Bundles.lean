@@ -6,6 +6,7 @@ import JoltConstraints.theorems.nextpc_frame
 import JoltConstraints.theorems.layout_facts
 import JoltConstraints.theorems.memory_presence
 import JoltConstraints.theorems.WholeRun.ConditionalStoreRuns
+import Batteries.Tactic.OpenPrivate
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions

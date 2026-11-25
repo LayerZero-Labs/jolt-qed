@@ -1,5 +1,7 @@
 import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Primitives
-import Mathlib
+import Mathlib.Data.BitVec
+import Mathlib.Tactic.NormNum.Eq
+import JoltBytecode.MathlibTactics
 
 open LeanRV64D
 
