@@ -712,10 +712,13 @@ theorem initial_state_build {Source : Type} (joltInstance : JoltInstance Source)
   obtain ⟨trustedFits, untrustedFits, inputsFit⟩ := initialState_fits _ _ _ _ _ _ built
   exact ⟨layout, layoutBuilt, trustedFits, untrustedFits, inputsFit, built⟩
 
-/-- **Initialization fails exactly where Jolt's `create_emulator` does**: the checked layout
-must exist, the code region of the program's rows must be valid, and each of the inputs, the
-trusted advice and the untrusted advice must fit the layout's capacity, its configured maximum
-rounded up to a multiple of 8. There is no check against the raw configured maximum.
+/-- **When the modelled initialization succeeds**: the checked layout must exist, the code
+region of the program's rows must be valid, and each of the inputs, the trusted advice and the
+untrusted advice must fit the layout's capacity, its configured maximum rounded up to a
+multiple of 8, as in Jolt's `JoltDevice::try_with_io`. There is no check against the raw
+configured maximum. The tracer's `create_emulator` can also fail while loading the ELF, for
+example a text section past the memory cap of a nonzero `tohost` symbol; the model loads
+preprocessing's `memory_init` and has no such failure (`docs/whole-run-theorem.md`).
 For example, `max_input_size = 1` admits two input bytes (below).
 Jolt at ff6fc6568: `tracer/src/lib.rs` (`create_emulator`) and `common/src/jolt_device.rs`
 (`JoltDevice::try_with_io`). -/

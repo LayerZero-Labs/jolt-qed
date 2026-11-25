@@ -178,7 +178,7 @@ theorem dwordSelect_ram_guards
 /-- A doubleword swap template accepts exactly its architectural source value.
 For example, AMOSWAP.D to a protected word retires only when that word stays equal.
 Its temporary load and final writeback do not add a source-read premise.
-Jolt at `ff6fc6568`: `expand/memory/amoswapd.rs` (`AMOSWAPD::expand`). -/
+Jolt at `ff6fc6568`: `expand/memory/amoswapd.rs` (`expand_amoswapd`). -/
 theorem dwordSwap_ram_guards (rs2 rs1 rd : regidx) (pre post : SailJoltState)
     (valueRead : rX_bits rs2 pre.sail = .ok (sourceValue (.xreg rs2) pre) pre.sail)
     (inRam : RAM_START_ADDRESS ≤ (sourceValue (.xreg rs1) pre).toNat)
@@ -587,7 +587,7 @@ theorem wordBinop_ram_guard (op : amoop) (binop : Dst → Src → Src → Instr)
 
 /-- A retiring word swap supplies the guard for its actual architectural source.
 For example, swapping the same word into protected code passes the check.
-Jolt at `ff6fc6568`: `expand/memory/amoswapw.rs` (`AMOSWAPW::expand`). -/
+Jolt at `ff6fc6568`: `expand/memory/amoswapw.rs` (`expand_amoswapw`). -/
 theorem wordSwap_ram_guard (rs2 rs1 rd : regidx) (pre post : SailJoltState)
     (baseRead : rX_bits rs1 pre.sail = .ok (sourceValue (.xreg rs1) pre) pre.sail)
     (valueRead : rX_bits rs2 pre.sail = .ok (sourceValue (.xreg rs2) pre) pre.sail)

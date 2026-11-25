@@ -476,12 +476,17 @@ def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) : Opti
   let _ ← JoltISA.checkedCodeRegion layout (bytecode_source_extents rows)
   pure bytecode
 
-/-- **The tracer's initial state for an instance and private inputs**, or none where Jolt's
-`create_emulator` fails. It builds the checked memory layout, loads the program image and the
-starting registers (`init_state`), and installs the inputs, the advice and the code guard
-(`JoltISA.initialState`). The only size checks are those of `JoltDevice.initialMem`, which,
-like Jolt's `JoltDevice::try_with_io`, compare each length with the layout's capacity: the
-configured maximum rounded up to a multiple of 8.
+/-- **The modelled initial state for an instance and private inputs**, or none where a size
+or layout check fails. It builds the checked memory layout, loads the program image as
+preprocessing records it (`memory_init`) and the starting registers (`init_state`), and
+installs the inputs, the advice and the code guard (`JoltISA.initialState`). The only size
+checks are those of `JoltDevice.initialMem`, which, like Jolt's `JoltDevice::try_with_io`,
+compare each length with the layout's capacity: the configured maximum rounded up to a
+multiple of 8.
+This is not exactly the state the tracer's `create_emulator` builds. The tracer loads only
+some section types and caps its memory when the ELF has a nonzero `tohost` symbol, so a
+readable NOTE section, for example, initializes model RAM but not tracer RAM
+(`docs/whole-run-theorem.md`, "Initial memory is preprocessing's, not the tracer's").
 For example, `max_input_size = 1` gives an input capacity of 8 bytes, so two input bytes are
 accepted and nine are rejected (`initial_state_isSome_iff` in `theorems/layout_facts.lean`).
 Jolt at ff6fc6568: `tracer/src/lib.rs` (`create_emulator`) and `common/src/jolt_device.rs`
