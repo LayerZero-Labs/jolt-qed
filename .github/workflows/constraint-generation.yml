@@ -6,7 +6,7 @@ name: constraint-generation
 # reports/2026-11-24-constraint-repin-diff.md).
 # It checks out Jolt at JOLT_REV, rebuilds constraint-gen, regenerates the Lean
 # data, fails if the result differs from the committed files, and builds the
-# comparison proofs, retaining the explicitly marked repin mismatch admissions.
+# comparison proofs in JoltConstraints/ConstraintGen/Equiv.lean.
 #
 # The job fails when the generator's own checks fail (status 1), when the
 # generator cannot run (status 2), when the regenerated files differ from the

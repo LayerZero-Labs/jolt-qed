@@ -4,7 +4,10 @@ constraint shows the instance is in Jolt's language, under the premises below.
 Source programs are limited to the instructions represented by `SourceInstruction`.
 Jolt's inline/precompile opcodes 0x0B and 0x2B, including the SHA-256 and Keccak
 inlines, are outside that type. Guests using them are outside this theorem's scope.
-Akita's extra constraints are to be modeled separately; PCS security is out of scope.
+Of the extra checks in Jolt's `akita` build, the model includes the canonical
+lookup-address check as constraint (63), `instructionAddressCanonical`, which applies
+when the field characteristic is below 2^128. The build's other changes only
+re-encode or add constraints, which soundness does not need. PCS security is out of scope.
 The top-level proof is a short chain of named helpers.
 It takes no temporary program restrictions.
 -/

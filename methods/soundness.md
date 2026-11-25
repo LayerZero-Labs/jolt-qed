@@ -273,15 +273,15 @@ PR #2039 fixed that mismatch, the SC rows go through the ordinary row steps, and
 No proof used the premise `CodeUnchanged`, so Ari removed it on 2026-11-03; that a program does not change its own code (a16z/jolt#1952) remains a modeling assumption, recorded in `model_review.md`.
 Stopping is proved in Layer 7. Before the `ff6fc6568` re-pin, the temporary `PanicStoresOne` and `ClaimsNoPanic` restrictions covered the panic cases. At that pin a run ends at an explicit halt, row 21 binds the panic claim to the halt kind, and both restrictions were removed.
 Ari approved `TracerAddressChecks`, a temporary program restriction for both
-LD and SD. It covers the input/advice-store counterexample reported in
+LD and SD; the re-pin removed it in commit `3bb089d`. It covered the input/advice-store counterexample reported in
 [a16z/jolt#2044](https://github.com/a16z/jolt/issues/2044), following
 [#2041](https://github.com/a16z/jolt/issues/2041), and four separate candidates:
 stores at zero, the I/O padding gap, stores to the stack canary, and accesses
 at or above `heap_end`. Each remains individually tracked in Layer 5b below;
 #2044 does not establish a counterexample for any of those four cases.
-The definition is in
+The definition was in
 [Layer5/MemoryAccessRestriction.lean](../JoltConstraints/theorems/Soundness/Layer5/MemoryAccessRestriction.lean).
-The restriction covers LD and SD; Ari approved on 2026-11-02 extending it to the floor-row accesses as a temporary premise (constraints.md, migration item 10).
+The restriction covered LD and SD; Ari approved on 2026-11-02 extending it to the floor-row accesses as a temporary premise (constraints.md, migration item 10).
 For every private input and initialized prefix under relaxed tape semantics,
 with honest internal runtime advice and no earlier PC stall, the next attempted
 LD or SD must pass `Mmu.effective_address_ok` at the addresses the tracer checks:
@@ -867,6 +867,10 @@ is needed. Its execution and write-value conclusions also apply at the last
 cycle. Every other instruction family has a local step too, and Layer 6
 composes them.
 
+**Before the `ff6fc6568` re-pin.** The paragraphs from here to the list of restrictions below describe Layer 5b as it stood at `7096dca`.
+Jolt at `ff6fc6568` has no panic or termination word, and the re-pin removed every restriction they name: `TracerAddressChecks`, `HostCallsSucceed`, `TerminationThenStall`, `PanicStoresOne` and `ClaimsNoPanic`.
+`Layer5/SharedMemoryChecks.lean` now derives the address and protected-value checks from the RAM constraints, and `Layer5/DeviceMemory.lean` and `Layer7/TerminationStore.lean` no longer exist.
+
 **Device-memory obligations.** These are three cases of a broader obligation:
 derive both successful memory access and the device's value from the RAM
 constraints. Consistent RAM history alone does not establish either one.
@@ -1067,7 +1071,7 @@ statement or the instance. Keep the metadata lemmas grouped by family and split
 further when a family has different operand modes. Compose those proved facts
 with the state-transition lemma.
 
-**Layer 5b was closed at `7096dca`.** It uses these restrictions for suspected Jolt bugs:
+**Layer 5b was closed at `7096dca`.** At that commit it used these restrictions for suspected Jolt bugs; the `ff6fc6568` re-pin removed all of them:
 - `TracerAddressChecks` supplies the address checks for attempted LD/SD rows.
   Narrow or remove it as the address cases documented above are resolved.
 - Host calls that fail in Jolt's tracer but pass the constraints as no-op

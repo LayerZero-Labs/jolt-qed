@@ -214,5 +214,6 @@ No call to the old SD-only or LD-only classifiers remains.
 - Step 1 migrated the seven instruction flags, AddressOffset tables, metadata, register selectors and floor-row observations; Ari reviewed those definitions.
 - Step 2 migrates the completeness proofs with no new premises and only the approved (08) and (11) wrap gaps.
   Its AddressOffset dispatch and constraint (39) now build after the approved `Soundness.Layer4.WordEntry` repair.
-- `TracerAddressChecks` (`theorems/Soundness/Layer5/MemoryAccessRestriction.lean:89`) now covers native and floor loads/stores, as approved in Step 3.
-  `PanicStoresOne`, `TerminationThenStall` and their completed-store predicates cover them too, as approved by Ari on 2026-11-03 (Step 4, work item 5).
+- `TracerAddressChecks` (then at `theorems/Soundness/Layer5/MemoryAccessRestriction.lean:89`) covered native and floor loads/stores, as approved in Step 3.
+  `PanicStoresOne`, `TerminationThenStall` and their completed-store predicates covered them too, as approved by Ari on 2026-11-03 (Step 4, work item 5).
+  The `ff6fc6568` re-pin removed all three restrictions.
