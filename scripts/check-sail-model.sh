@@ -11,6 +11,11 @@
 #
 # Usage:
 #   scripts/check-sail-model.sh WORK_DIR
+#   scripts/check-sail-model.sh --inputs-only
+#
+# --inputs-only runs only the checks that need no download or build: the Lean
+# runtime pin, the tree digest, the digests of the inputs kept in this
+# repository, and the memory regions. CI runs it on every build.
 #
 # Needs git, python3 (3.11 or later), z3 and an initialised opam switch that can
 # build Sail. Set SAIL_BIN to an absolute path to skip building Sail; that binary
@@ -19,9 +24,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROVENANCE="$ROOT/sail-import/PROVENANCE.toml"
-work="${1:?usage: check-sail-model.sh WORK_DIR}"
-mkdir -p "$work"
-work="$(cd "$work" && pwd)"
+usage="usage: check-sail-model.sh WORK_DIR | --inputs-only"
+work="${1:?$usage}"
+inputs_only=false
+if [[ "$work" == --inputs-only ]]; then
+  inputs_only=true
+else
+  mkdir -p "$work"
+  work="$(cd "$work" && pwd)"
+fi
 
 fail() { echo "check-sail-model: $*" >&2; exit 1; }
 
@@ -79,6 +90,43 @@ tree_sha256() {
     echo "$(sha256 LeanRV64D.lean)  LeanRV64D.lean"
   ) | if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi | cut -d' ' -f1
 }
+
+# 0. The generated model runs against the Lean Sail runtime that Lake fetches.
+# PROVENANCE.toml records the runtime it was generated for; lakefile.toml and
+# lake-manifest.json must name exactly that repository, tag and commit.
+python3 - "$PROVENANCE" "$ROOT/lake-manifest.json" "$ROOT/lakefile.toml" <<'EOF' ||
+import json, sys, tomllib
+
+provenance, manifest_path, lakefile_path = sys.argv[1:]
+runtime = tomllib.load(open(provenance, "rb"))["runtime"]
+packages = [p for p in json.load(open(manifest_path))["packages"] if p["name"] == "Sail"]
+requires = [r for r in tomllib.load(open(lakefile_path, "rb")).get("require", [])
+            if r.get("name") == "Sail"]
+problems = []
+if len(packages) != 1:
+    problems.append(f"lake-manifest.json has {len(packages)} packages named Sail, expected 1")
+if len(requires) != 1:
+    problems.append(f"lakefile.toml has {len(requires)} requires named Sail, expected 1")
+if not problems:
+    package, require = packages[0], requires[0]
+    for where, key, value, want in [
+        ("lake-manifest.json", "url", package.get("url"), runtime["repository"]),
+        ("lake-manifest.json", "inputRev", package.get("inputRev"), runtime["tag"]),
+        ("lake-manifest.json", "rev", package.get("rev"), runtime["commit"]),
+        ("lakefile.toml", "git", require.get("git"), runtime["repository"]),
+        ("lakefile.toml", "rev", require.get("rev"), runtime["tag"]),
+    ]:
+        if value != want:
+            problems.append(f"{where} has Sail {key} {value!r}; [runtime] in "
+                            f"sail-import/PROVENANCE.toml records {want!r}")
+for problem in problems:
+    print(f"check-sail-model: runtime: {problem}", file=sys.stderr)
+if problems:
+    sys.exit(1)
+print(f"check-sail-model: the Lean Sail runtime is {runtime['repository']} "
+      f"{runtime['tag']} ({runtime['commit'][:12]}), as PROVENANCE.toml records")
+EOF
+  fail "the Lean Sail runtime differs from [runtime] in PROVENANCE.toml"
 
 # 1. The checked-in tree must match the recorded digest.
 recorded="$(field output.tree_sha256)"
@@ -165,6 +213,11 @@ EOF
 then
   echo FAIL
   fail "the configuration's memory regions differ from Relation.lean"
+fi
+
+if $inputs_only; then
+  echo "check-sail-model: the pinned inputs and the tree digest match PROVENANCE.toml"
+  exit 0
 fi
 
 # 3. The Sail compiler.
