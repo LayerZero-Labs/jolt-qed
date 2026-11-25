@@ -54,6 +54,7 @@ An `HonestTrace` is a run of Jolt's tracer, as modelled in Lean, on the program 
 A `HaltPrefix` of it is the list of blocks before its first explicit halt, where a block is one source instruction with the Jolt states before and after its rows.
 Jolt has two explicit halts (`haltSource` in `JoltConstraints/theorems/WholeRun/Halt.lean`): the `jolt.success` instruction ends a successful run, and EBREAK ends a run with a panic.
 If every block of that prefix conforms (`BlockConforms`), Sail's emulator loop `sailRun`, started from `sailInit` of the trace's initial state, takes exactly `pre.length` successful steps, one per block, to a state `s`.
+The theorems start from the state `WholeRun.sailInit` builds from Jolt's initialized state, not from Sail's own initialization: `sail_model_init` (`LeanRV64D.lean:223`) calls `legalize_senvcfg`, which asks whether Zicboz and Zicbom are enabled (`LeanRV64D/Types.lean:833-841`), and the translation, which drops those extensions, fails a Sail assertion there ([`PROVENANCE.toml`](../sail-import/PROVENANCE.toml)).
 `sail_reproduces` does not assume that Jolt's prover accepts the trace. `sail_soundness` still returns that fact (`(trace.prover_config joltInstance).isSome`) as part of its conclusion, because `JoltInstance.soundness` provides it.
 
 `sail_soundness` is about an instance the constraints accept.

@@ -80,10 +80,15 @@ used_sha256 = "a60717fcf321459be8736a5e5f481dac2eed9ce864ff2d0e4253f1ad0a0b3992"
 # The dropped modules also hold the `currentlyEnabled` clauses of their
 # extensions. For B, H, Sscofpmf, Ssqosid, Zfhmin, Zicbom, Zicboz, Zicntr and Zkr,
 # which the kept code still names, `currentlyEnabled` now fails a Sail assertion
-# where the full model returns false. The kept code asks about them only in
-# S-mode, after decoding a Zbb instruction, and when accessing mseccfg, menvcfg,
-# mip, mstateen0, the Smcntrpmf CSRs or hstateen. Jolt's hart never enters S-mode
-# and Jolt rejects those encodings and CSRs.
+# where the full model returns false. The kept code asks about them in S-mode,
+# after decoding a Zbb instruction, when accessing mseccfg, menvcfg, mip,
+# mstateen0, the Smcntrpmf CSRs or hstateen, and during initialization:
+# `sail_model_init` (LeanRV64D.lean:223) calls `legalize_senvcfg`, which asks
+# about Zicboz and Zicbom (LeanRV64D/Types.lean:833-841), so the translated
+# initialization fails that assertion. Jolt's hart never enters S-mode and Jolt
+# rejects those encodings and CSRs. The theorems never run `sail_model_init`: they
+# start from the state `WholeRun.sailInit` builds from Jolt's initialized state
+# (JoltConstraints/theorems/WholeRun/Relation.lean).
 selected = [
   "A_types", "B_types", "CFI_types", "core", "exceptions", "FD_core", "I_insts",
   "I_types", "M_insts", "M_types", "main", "pmp", "postlude", "prelude",
