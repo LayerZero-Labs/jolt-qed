@@ -48,13 +48,20 @@ has to be removed. All three premises above would have failed this way at the re
 
 A witness guards only the boundary it names. It is stated at the premise's own boundary,
 not at a helper, so that a guarantee arriving through a different function still breaks it.
+A witness shows that a headline theorem needs its premise only when the object it builds
+meets every other premise of that theorem. The `JoltField` and `BlockConforms.riscv`
+witnesses do not yet (see the order of work), and `witness_shows` in `assumptions.toml`
+says what each witness proves.
 
 ### 2. Jolt changes code the model transcribes: anchored citations, checked against Jolt main
 
-Some checks already compare the model with Jolt, all at a fixed `JOLT_REV`:
-constraint generation, expansion parity, the decoder sweep, lookup tables, difftest, and
-the provenance manifest from #56 (T7). Nothing compares the model with Jolt *main*, and
-the provenance manifest records whole files, which is too coarse for `config.rs`.
+Two checks on this branch compare the model with Jolt, both at a fixed `JOLT_REV`:
+constraint generation (`scripts/expansion-parity/`, which despite the folder name holds
+only `constraint-gen`) and difftest (`scripts/difftest/`, Sail against Jolt's tracer). This
+branch has no expansion-parity, decoder-sweep or lookup-table executable, and the
+provenance manifest is proposed in #56 (T7), not on this branch. Nothing compared the model
+with Jolt *main*, and the #56 manifest records whole files, which is too coarse for
+`config.rs`.
 
 - **Function anchors.** Every `See : jolt/<path> (<fn>) at <rev>` citation names a Rust
   function. A checker extracts each cited function's body at the pin, hashes it, and
@@ -96,8 +103,16 @@ longer reproduces, or no longer builds, flags its entries.
    Recording that every loaded section has at most `size` bytes of data closes it, but changes a definition.
    The bug-report folders have headers with their status.
 2. Done on 2026-11-25: the nightly job against Jolt main (`.github/workflows/jolt-main-drift.yml`) with the tracking issue "Drift against Jolt main".
-   It compares anchors file by file.
-3. Still open: function anchors in the provenance manifest. This builds on #56's T7 scripts, so it
+   It compares anchors file by file, and also every Jolt file the Lean sources cite (`scripts/jolt_citations.py`), so a newly cited file is watched without a registry edit.
+   The job writes the report and updates the issue even when an earlier step fails; the report opens with whether the run could monitor Jolt main, and only a monitoring failure fails the job.
+   The generator writes into an empty directory, and the report labels the equivalence result by whether new data was produced.
+3. Done on 2026-11-25, after a review of this branch:
+   - `scripts/check-lean-policy.py` (a step of `lean.yml`) rejects `sorry`, `admit`, axioms outside `scripts/lean-policy-allowlist.toml`, `native_decide`, `bv_decide`, `decide +kernel`, `maxHeartbeats`, `synthInstance` options, `respectTransparency false`, and `maxRecDepth` outside the five generated Sail options.
+   - `JoltConstraints/Audit/Statements.lean` checks the axioms of the headline theorems, the necessity witnesses and the derived facts (`#audit_statements`), and compares their full statements and a fingerprint of every definition the statements depend on with a checked-in table. A definition that changes the meaning of a headline statement fails the build even when every proof still compiles. `scripts/update-audit-tables.py` rewrites the table after a reviewed change.
+   - The audit commands resolve names exactly, and `scripts/check-assumptions.py` compares the registry's `witness` and `derived_by` names with the audited lists.
+   - `assumptions.toml` gained entries for the Dory-only configuration, the tracer's initialization and host allocation, and `derived` entries for `HeapNoWrap`, `ImageNonempty` and `RamRegionFits`, whose Jolt functions stay watched.
+   - `scripts/check-sail-model.sh --inputs-only` (every build) requires the Lean Sail runtime in `lakefile.toml` and `lake-manifest.json` to be `[runtime]` in `sail-import/PROVENANCE.toml`; a change to the Lake files or `lean-toolchain` triggers the full regeneration check.
+4. Still open: function anchors in the provenance manifest. This builds on #56's T7 scripts, so it
    waits until the #71–#73 re-pin and #56 meet.
    The nightly job then switches from file-level to function-level anchors.
-4. Follow-ups: remove the three image fields that `DecodedFrom` now implies from `Rv64ProgramImage`, which changes a definition; a `JoltField` witness at the constraint boundary rather than any small field; a `BlockConforms.riscv` witness at the block level; the per-instruction `JoltBytecode` theorems, which the registry does not gate yet.
+5. Follow-ups: remove the three image fields that `DecodedFrom` now implies from `Rv64ProgramImage`, which changes a definition; a `JoltField` witness at the constraint boundary (an instance outside the language with a satisfying assignment over a small field) rather than any small field; a `BlockConforms.riscv` witness at the block level (a `HonestTrace` whose `HaltPrefix` has a block with a `.jolt` row); both need a concrete program run. Also the per-instruction `JoltBytecode` theorems, which the registry does not gate yet, and the 36 Lean citations that resolve to no Jolt file at the pin (`scripts/jolt_citations.py --unresolved`).

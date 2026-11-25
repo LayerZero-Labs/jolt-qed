@@ -35,6 +35,10 @@
 #   file               for a sorry: the file that holds it.
 #   anchors            Jolt functions it depends on: "<path> (<fn>)" at `jolt_rev`.
 #   witness            a necessity witness (JoltConstraints/Audit/Necessity.lean).
+#   witness_shows      what the witness proves, and what it does not; required with `witness`.
+#                      A witness tests the premise at the boundary its theorem states; it
+#                      shows the premise is needed for a headline theorem only when it builds
+#                      an object that meets every other premise of that theorem.
 #   derived_by         a theorem that proves the fact from another premise, or from nothing.
 #                      Every witness and derived_by is a line of #audit_statements in
 #                      JoltConstraints/Audit/Statements.lean, which checks that the name exists,
@@ -63,6 +67,12 @@ anchors = [
   "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs (rv64_trace_constraints)",
 ]
 witness = "JoltConstraints.Audit.joltField_not_implied"
+witness_shows = """Only that `[Field F]` does not imply JoltField: ZMod 2 is a field that \
+breaks it. It does not show that soundness needs the premise. JoltInstance.completeness_someWitness \
+holds over every field, and no instance outside the language with a satisfying assignment of \
+AllConstraints over ZMod 2 is built. If a later change made AllConstraints imply JoltField, the \
+witness would keep building. Follow-up: an instance that is not InLanguage with a satisfying \
+assignment over a small field, which needs a concrete program and constraint assignment."""
 upstream = ""
 bug_report = ""
 
@@ -100,6 +110,12 @@ anchors = [
   "crates/jolt-riscv/src/kind.rs (SourceInstruction)",
 ]
 witness = "JoltConstraints.Audit.blockConformsRiscv_not_implied"
+witness_shows = """Only that DecodedFrom admits a program with a row of one of Jolt's own \
+instructions (AdviceLD), so DecodedFrom alone does not rule out such rows. It builds no trace: \
+no HonestTrace, no halt, no accepted prover configuration, and no block of a HaltPrefix that \
+breaks BlockConforms.riscv. If a later change made the other premises of sail_reproduces exclude \
+such blocks, the witness would keep building. Follow-up: a HonestTrace of a decoded program whose \
+HaltPrefix has a block with a `.jolt` row, which needs a concrete run of the program."""
 upstream = ""
 bug_report = ""
 
@@ -227,6 +243,10 @@ kind = "image-field"
 appears_in = ["Rv64ProgramImage (memory_init_in_program)"]
 anchors = ["crates/jolt-program/src/image/elf.rs (decode_elf)"]
 witness = "JoltConstraints.Audit.memoryInitInProgram_not_derived"
+witness_shows = """That the transcription of decode_elf (ElfSections.layout?) yields a layout \
+with a loaded byte at or past program_end, so DecodedFrom does not imply this field. The witness \
+is at the boundary where the field would be derived; the field itself is a proof field every \
+instance carries, not a binder."""
 upstream = ""
 bug_report = ""
 

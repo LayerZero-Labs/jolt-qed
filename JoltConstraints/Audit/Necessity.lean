@@ -7,17 +7,29 @@ import Mathlib.Algebra.Field.ZMod
 
 A premise of a headline theorem claims that the model does *not* already guarantee something.
 Each theorem here tests that claim on concrete data: it builds a model object that breaks the
-premise at the boundary where the premise is stated. If a later re-pin transcribes a Jolt check
-that makes the premise provable, the witness stops building, and the premise has to be removed
-(see `reports/2026-11-25-stale-assumptions.md`). `assumptions.toml` names each witness in the
-`witness` field of its entry.
+premise. If a later re-pin transcribes a Jolt check that makes the premise provable at the
+boundary the witness tests, the witness stops building, and the premise has to be removed (see
+`reports/2026-11-25-stale-assumptions.md`). `assumptions.toml` names each witness in the
+`witness` field of its entry, and says in `witness_shows` what it proves.
 
-* `joltField_not_implied`: a field that breaks `JoltField`.
+A witness shows that a headline theorem needs its premise only if the object it builds meets
+every other premise of that theorem. The first two witnesses below do not: each tests its
+premise against a weaker boundary than the theorem's, so a change that made the premise
+redundant given the theorem's other premises would leave them building.
+
+* `joltField_not_implied`: `ZMod 2` is a field that breaks `JoltField`. This shows only that
+  `[Field F]` does not imply `JoltField F`. It builds no instance and no assignment of
+  `AllConstraints` over `ZMod 2`.
 * `blockConformsRiscv_not_implied`: a program that `decode_elf` accepts, with a row of one of
-  Jolt's own instructions, so `BlockConforms.riscv` is not implied by `DecodedFrom`.
+  Jolt's own instructions, so `DecodedFrom` alone does not exclude such rows. It builds no
+  trace, so it does not show that a block of an accepted run can break `BlockConforms.riscv`.
 * `memoryInitInProgram_not_derived`: a parsed ELF whose layout breaks the image field
   `memory_init_in_program`, so that field is not yet implied by the transcription of
   `decode_elf` (the other three image fields are, see `JoltConstraints/Audit/ImageFields.lean`).
+
+Stronger witnesses for the first two need a concrete program run: an instance outside the
+language with a satisfying assignment over a small field, and a `HonestTrace` whose
+`HaltPrefix` has a block with a `.jolt` row. `assumptions.toml` lists both as follow-ups.
 -/
 
 set_option autoImplicit false
@@ -28,9 +40,10 @@ namespace JoltConstraints.Audit
 
 /-! ## `JoltField` -/
 
-/-- **`JoltField` is not implied for the fields the theorems quantify over.** `ZMod 2` is a
-field of characteristic 2, far below `2^128 - 2^64`. If the model ever restricted its field so
-that `JoltField` always held, this witness would stop building. -/
+/-- **`[Field F]` does not imply `JoltField F`.** `ZMod 2` is a field of characteristic 2, far
+below `2^128 - 2^64`. If the model ever restricted its field so that `JoltField` always held,
+this witness would stop building. It says nothing about whether `AllConstraints` can be
+satisfied over `ZMod 2` by an instance outside the language. -/
 theorem joltField_not_implied : ¬ JoltField (ZMod 2) := by
   rw [JoltField, ZMod.ringChar_zmod_n]
   norm_num
@@ -95,11 +108,12 @@ def customProgram : Rv64ProgramImage SourceInstruction where
     subst hrow
     decide
 
-/-- **`BlockConforms.riscv` is not implied by `DecodedFrom`.** `decode_elf` accepts a program
-whose only row is one of Jolt's own instructions, which no block theorem covers yet. The
-whole-run theorems' only premise on the program, `DecodedFrom`, therefore does not exclude a
-block that breaks `BlockConforms.riscv`. If a re-pin made `DecodedFrom` reject Jolt's own
-instructions, this witness would stop building. -/
+/-- **`DecodedFrom` admits a row of one of Jolt's own instructions.** `decode_elf` accepts a
+program whose only row is `AdviceLD`, which no block theorem covers yet, so `DecodedFrom` alone
+does not exclude a program on which `BlockConforms.riscv` could fail. If a re-pin made
+`DecodedFrom` reject Jolt's own instructions, this witness would stop building. It builds no
+trace, halt or prover configuration, so it does not show that a block of an accepted run breaks
+`BlockConforms.riscv`. -/
 theorem blockConformsRiscv_not_implied :
     ∃ (elf : ElfSections) (program : Rv64ProgramImage SourceInstruction),
       program.DecodedFrom elf ∧

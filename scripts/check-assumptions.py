@@ -6,7 +6,8 @@ Usage: scripts/check-assumptions.py [--jolt-dir PATH]
 Run from anywhere; paths are relative to the repository root. The script checks:
 
 1. Every entry has the required fields, a known kind, well-formed anchors, and (unless it is
-   `data`) a necessity witness or a `no_witness_reason`.
+   `data`) a necessity witness or a `no_witness_reason`. An entry with a witness also says in
+   `witness_shows` what the witness proves.
 2. Every `sorry` in JoltConstraints/ and JoltBytecode/ (comments ignored) has a `sorry`
    entry naming its file and declaration, and every `sorry` entry still has its `sorry`.
 3. Every field of `Rv64ProgramImage` (JoltConstraints/translation/program.lean) appears in
@@ -179,6 +180,8 @@ def main():
         has_reason = any(entry.get(key) for key in ("witness", "derived_by", "no_witness_reason"))
         if entry.get("kind") != "data" and not has_reason:
             error(f"{label}: needs a `witness`, a `derived_by` or a `no_witness_reason`")
+        if entry.get("witness") and not entry.get("witness_shows"):
+            error(f"{label}: an entry with a `witness` needs `witness_shows`")
         if entry.get("kind") not in ("data", "statement") and not entry.get("anchors"):
             error(f"{label}: needs at least one anchor")
         if entry.get("kind") == "sorry" and not entry.get("file"):
