@@ -13,11 +13,10 @@ The claim holds under the premises listed below, and the most important limits a
 theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
-    ∃ (n : Nat) (s : SailState),
-      WholeRun.sailRun n (sailInit trace.initialState) = .ok () s ∧
+    ∃ s : SailState,
+      WholeRun.sailRun pre.length (sailInit trace.initialState) = .ok () s ∧
       Related halt s ∧
       trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
         trimTrailingZeros (final.jolt_device.outputsOf final.sail.mem) ∧
@@ -38,8 +37,8 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
       ∃ (pre : List Block) (halt final : SailJoltState),
         HaltPrefix trace pre halt final ∧
         ((∀ b ∈ pre, BlockConforms joltInstance.program b) →
-          ∃ (n : Nat) (s : SailState),
-            sailRun n (sailInit trace.initialState) = .ok () s ∧
+          ∃ s : SailState,
+            sailRun pre.length (sailInit trace.initialState) = .ok () s ∧
             Related halt s ∧
             trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
               trimTrailingZeros joltInstance.outputs ∧
@@ -54,8 +53,8 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
 An `HonestTrace` is a run of Jolt's tracer, as modelled in Lean, on the program and some private inputs.
 A `HaltPrefix` of it is the list of blocks before its first explicit halt, where a block is one source instruction with the Jolt states before and after its rows.
 Jolt has two explicit halts (`haltSource` in `JoltConstraints/theorems/WholeRun/Halt.lean`): the `jolt.success` instruction ends a successful run, and EBREAK ends a run with a panic.
-If Jolt's prover accepts the trace (`hcfg`) and every block of that prefix conforms (`BlockConforms`), Sail's emulator loop `sailRun`, started from `sailInit` of the trace's initial state, takes `n` successful steps to a state `s`.
-`sail_soundness` needs no `hcfg` premise, because `JoltInstance.soundness` returns an accepted trace.
+If every block of that prefix conforms (`BlockConforms`), Sail's emulator loop `sailRun`, started from `sailInit` of the trace's initial state, takes exactly `pre.length` successful steps, one per block, to a state `s`.
+`sail_reproduces` does not assume that Jolt's prover accepts the trace. `sail_soundness` still returns that fact (`(trace.prover_config joltInstance).isSome`) as part of its conclusion, because `JoltInstance.soundness` provides it.
 
 `sail_soundness` is about an instance the constraints accept.
 Jolt's soundness theorem, `JoltInstance.soundness`, turns a witness that satisfies `AllConstraints` into an honest trace with the instance's claimed outputs and panic flag.
@@ -93,9 +92,6 @@ Each premise is in one of three classes:
 
 No premise is a documented deviation, that is, a premise that excludes a case where Jolt and the RISC-V specification really differ (see [Former deviation premises](#former-deviation-premises)).
 
-`sail_reproduces` also takes `hcfg`, which says that Jolt's prover accepts the trace.
-Jolt checks this itself, and `sail_soundness` obtains it from `JoltInstance.soundness`.
-
 ### Platform premises
 
 | Premise | Meaning | What would remove it |
@@ -107,13 +103,14 @@ The proof derives from it that the committed bytecode is what Jolt's decoder mak
 No constraint can check `DecodedFrom`, because it describes how the bytecode was produced before proving starts.
 Its input `elf` is the list of sections that the `object` crate parses from the ELF file (address, size, data, whether the section is text, whether it is writable, and the `$x` and `$d` mapping symbols that point into it) and the entry point.
 The program's `memory_init`, `program_end` and `entry_address` are what `decode_elf` computes from them.
-Its rows are, one to one and in order, the instructions `decode_text_section` finds in the merged text ranges, without the data ranges that `$d` mapping symbols mark, each with the instruction's address and width, and each RISC-V row is `joltDecode` of the instruction's word.
+Its rows are, one to one and in order, the instructions `decode_text_section` finds in the merged text ranges, without the data ranges that `$d` mapping symbols mark, each with the instruction's address and width.
+Every row also decodes from the instruction's word (`SourceInstruction.DecodesFrom`): a RISC-V row is `joltDecode` of the word, and a row of one of Jolt's own instructions is `JoltCustomInstruction.decode?` of the word, a transcription of `decode_custom` in `crates/jolt-program/src/image/decode.rs`.
+For example, a `jolt.success` row must sit on the exact word `0x0000305B` (`DecodedFrom.joltSuccess_word`), and the ADDI word `0x00100093` admits no `jolt.success` row (`WholeRun/ElfRegression.lean`).
 `DecodedFrom` includes every check by which `decode_elf` rejects an ELF, other than the checks of `decode_instruction`: a section whose end overflows, a truncated instruction parcel, an instruction at an odd address, an instruction extent that `code_region` rejects, and a writable section that overlaps the code region.
-A row of one of Jolt's own instructions is constrained only in address and width, because Lean does not transcribe Jolt's decoder for those opcodes.
-`DecodedFrom` also leaves out the checks by which `decode_instruction` rejects a program.
-Every program Jolt builds from the ELF therefore satisfies `DecodedFrom`, and the relation still fixes the layout and every RISC-V row.
+`DecodedFrom` leaves out the checks by which `decode_instruction` rejects a program.
+Every program Jolt builds from the ELF therefore satisfies `DecodedFrom`, and the relation fixes the layout and every row.
 `decode_elf` never reads the data of a section below `RAM_START_ADDRESS`, and the data `elf` records for such a section may be arbitrary.
-Three things stay trusted: that `elf` is what the `object` crate parses from the guest ELF, including that it gives every loaded text section of a successfully decoded ELF exactly as many bytes of data as its size; that Jolt's preprocessing and the verifier key were built from this program; and that the Lean transcriptions of `decode_elf`, `joltDecode` and `joltUncompress` match Jolt.
+Three things stay trusted: that `elf` is what the `object` crate parses from the guest ELF, including that it gives every loaded text section of a successfully decoded ELF exactly as many bytes of data as its size; that Jolt's preprocessing and the verifier key were built from this program; and that the Lean transcriptions of `decode_elf`, `joltDecode`, `JoltCustomInstruction.decode?` and `joltUncompress` match Jolt.
 
 ### Former deviation premises
 

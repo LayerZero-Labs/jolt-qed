@@ -111,6 +111,7 @@ import JoltConstraints.theorems.WholeRun.AtomicMemorySim
 import JoltConstraints.theorems.WholeRun.RunInv
 import JoltConstraints.theorems.WholeRun.Decoded
 import JoltConstraints.theorems.WholeRun.Elf
+import JoltConstraints.theorems.WholeRun.ElfRegression
 import JoltConstraints.theorems.WholeRun.Halt
 import JoltConstraints.theorems.WholeRun.CodeInv
 import JoltConstraints.theorems.WholeRun.Top

@@ -13,8 +13,13 @@ therefore need no premise on the decoder beyond "the program was built from this
 * `codeRegionAt`: Jolt's `code_region`, which `decode_elf` and the tracer's code guard share.
 * `ElfSections.layout?`: `decode_elf` up to the call of `decode_instruction`. It gives the memory
   image, the program end, the entry point and the address and encoding of every instruction.
+* `JoltCustomInstruction.decode?`: Jolt's `decode_custom`, the decoder of Jolt's own
+  instructions, with their operands. `jolt.success` decodes only from the word `0x0000305B`.
 * `Rv64ProgramImage.DecodedFrom`: the program agrees with what `decode_elf` builds from the
-  sections. Every program Jolt builds satisfies it.
+  sections, and every row, RISC-V or Jolt's own, decodes from its bytes. Every program Jolt
+  builds satisfies it.
+* `Rv64ProgramImage.DecodedFrom.rowEncoding`: every row decodes from the image's bytes at its
+  address; `DecodedFrom.joltSuccess_word` specializes it to the success word.
 * `Rv64ProgramImage.DecodedFrom.imageDecoded`: such a program satisfies `ImageDecoded`.
 * `Rv64ProgramImage.DecodedFrom.rowsAligned`: such a program satisfies `RowsAligned`.
 
@@ -378,32 +383,82 @@ def BlockEncoding.decodedWord : BlockEncoding → BitVec 32
   | .base w => w
   | .compressed h => Decode.joltUncompress h
 
+/-- **Jolt's `decode_custom`, with the operand formats of its instructions.** It decodes a word
+of Jolt's custom opcode `0x5B` into one of Jolt's own source instructions, or none where Jolt
+reports an invalid custom instruction. `funct3` selects the kind, and for `funct3 = 0`, `funct7`
+selects the advice load or `VirtualRev8W`. The operands come from `format_advice_load_operands`
+(`rd`), `format_t_operands` (`rd`, `rs1`) and `format_b_operands` (`rs1`, `rs2`, branch
+immediate). `VirtualHostIO` keeps no operand and requires `rd = 0`, and `jolt.success` requires
+the exact word `Decode.joltSuccessWord`, `0x0000305B`, whose `rd`, `rs1` and immediate are zero.
+For example, `0x0000305B` gives `JoltSuccess`, while `0x0000315B` (the same word with `rd = 2`)
+and the ADDI word `0x00100093` give none.
+Jolt at ff6fc6568: `crates/jolt-program/src/image/decode.rs` (`decode_instruction`, the
+`0b1011011` arm; `decode_custom`; `operands`). -/
+def JoltCustomInstruction.decode? (word : BitVec 32) : Option JoltCustomInstruction :=
+  if (word.extractLsb 6 0).toNat = 0x5b then
+    match Decode.funct3 word, Decode.funct7 word with
+    | 0, 0 => some (.AdviceLB (Decode.rd word))
+    | 0, 1 => some (.AdviceLH (Decode.rd word))
+    | 0, 2 => some (.AdviceLW (Decode.rd word))
+    | 0, 3 => some (.AdviceLD (Decode.rd word))
+    | 0, 5 => some (.VirtualRev8W (Decode.rd word) (Decode.rs1 word))
+    | 1, _ => some (.VirtualAssertEQ (Decode.rs1 word) (Decode.rs2 word) (Decode.immB word))
+    | 2, _ => if word.extractLsb 11 7 = 0 then some .VirtualHostIO else none
+    | 3, _ => if word = Decode.joltSuccessWord then some .JoltSuccess else none
+    | _, _ => none
+  else none
+
+/-- The custom decoder gives `JoltSuccess` only for the exact success word `0x0000305B`.
+For example, the ADDI word `0x00100093` and the word `0x0000315B`, which sets `rd = 2`, are
+rejected. Jolt at ff6fc6568: `crates/jolt-program/src/image/decode.rs` (`decode_custom`). -/
+theorem JoltCustomInstruction.decode?_eq_joltSuccess {word : BitVec 32}
+    (h : JoltCustomInstruction.decode? word = some .JoltSuccess) :
+    word = Decode.joltSuccessWord := by
+  unfold JoltCustomInstruction.decode? at h
+  split at h
+  · split at h <;> first | cases h | (split at h <;> first | assumption | cases h)
+  · cases h
+
+/-- **Jolt's `decode_instruction` gives this source instruction for `word`**, up to the
+legality checks that only reject programs. A RISC-V instruction is `joltDecode` of the word for
+some advice operand, which the encoding does not carry; one of Jolt's own instructions is
+`JoltCustomInstruction.decode?` of the word.
+For example, `.riscv (.ADDI x1 x0 1)` decodes from `0x00100093`, and `.jolt .JoltSuccess`
+decodes only from `0x0000305B`.
+Jolt at ff6fc6568: `crates/jolt-program/src/image/decode.rs` (`decode_instruction`). -/
+def _root_.SourceInstruction.DecodesFrom : SourceInstruction → BitVec 32 → Prop
+  | .riscv i, word => ∃ advice, Decode.joltDecode word advice = some i
+  | .jolt c, word => JoltCustomInstruction.decode? word = some c
+
 /-- A source row is what `decode_instruction` makes of a parcel: it has the parcel's address
-and width, and a RISC-V row is `joltDecode` of the parcel's word for some advice operand, which
-the encoding does not carry. A row of one of Jolt's own instructions (`SourceInstruction.jolt`)
-is constrained only in address and width, because Lean has no transcription of Jolt's
-`decode_custom`.
+and width, and its instruction decodes from the parcel's word (`SourceInstruction.DecodesFrom`).
+Every row is constrained, including a row of one of Jolt's own instructions and the terminal
+`jolt.success` row.
 For example, the parcel `(0x80000000, .base 0x00100093)` gives the row at `0x80000000`, not
-compressed, holding `.riscv (.ADDI x1 x0 1)`. -/
+compressed, holding `.riscv (.ADDI x1 x0 1)`, and no `.jolt .JoltSuccess` row; only the parcel
+`(a, .base 0x0000305B)` gives a `.jolt .JoltSuccess` row at `a`.
+Jolt at ff6fc6568: `crates/jolt-program/src/image/decode.rs` (`decode_instruction`). -/
 def RowFromParcel (parcel : Nat × BlockEncoding) (row : SourceInstructionRow SourceInstruction) :
     Prop :=
   row.address.toNat = parcel.1 ∧ row.is_compressed = parcel.2.isCompressed ∧
-    ∀ i, row.instruction = .riscv i →
-      ∃ advice, Decode.joltDecode parcel.2.decodedWord advice = some i
+    row.instruction.DecodesFrom parcel.2.decodedWord
 
 /-- **The program agrees with what `decode_elf` builds from the ELF's sections.** The layout of
 `elf` exists; the program's `memory_init`, `program_end` and `entry_address` are the layout's;
 and its rows correspond, one to one and in order, to the layout's parcels (`RowFromParcel`).
 
-The relation fixes the layout and the decoding of every RISC-V row. It does not fix which of
-Jolt's own instructions a `.jolt` row holds, and it leaves out the checks by which
-`decode_instruction` rejects a program. Every program Jolt builds from the ELF satisfies it.
+The relation fixes the layout and the instruction of every row: a RISC-V row is `joltDecode` of
+its parcel's word, and a row of one of Jolt's own instructions, the terminal `jolt.success` row
+included, is `JoltCustomInstruction.decode?` of it. It leaves out the checks by which
+`decode_instruction` rejects a program (the instruction profile and, without the compressed
+extension, 4-byte alignment). Every program Jolt builds from the ELF satisfies it.
 This premise replaces `ImageDecoded` in the whole-run theorems. What stays trusted is that
 `elf` is what the `object` crate parses from the guest ELF, and that Jolt's preprocessing and the
 verifier key were built from this program.
 For example, for one `.text` section at `0x80000000` holding `addi x1, x0, 1`, the program Jolt
 builds, with the single row ADDI x1,x0,1 at `0x80000000` and the four bytes of the section as
-`memory_init`, satisfies the relation. -/
+`memory_init`, satisfies the relation, and the same program with the row `.jolt .JoltSuccess`
+does not (`WholeRun/ElfRegression.lean`). -/
 def _root_.Rv64ProgramImage.DecodedFrom (program : Rv64ProgramImage SourceInstruction)
     (elf : ElfSections) : Prop :=
   ∃ layout, elf.layout? = some layout ∧ program.memory_init = layout.memory_init ∧
@@ -695,22 +750,33 @@ theorem ElfSections.layout?_parcel {elf : ElfSections} {layout : ElfLayout}
     · cases h
   · cases h
 
-/-- **A program built from the ELF's sections satisfies `ImageDecoded`.** Each RISC-V row comes
-from a parcel `decodeText` found in a piece of a merged text range. Every address of that piece
-lies in the range (`textSegments_within`) and has a byte in `memory_init`, because each address
-of the range lies in a text section, whose data covers it (`mergeRanges_covered`,
-`ElfSection.lastByte_isSome`). The bytes `decode_elf` reads are therefore the image's bytes, and
-the row is what `joltDecode` makes of them.
-For example, for the `.text` section at `0x80000000` holding `addi x1, x0, 1`, the ADDI row has
-`RowDecodes … (.base 0x00100093)`. -/
-theorem _root_.Rv64ProgramImage.DecodedFrom.imageDecoded
+/-- The image holds the encoding `e` at the row's address, with the row's width: a word whose
+low two bits are `0b11` for a 4-byte row, a halfword whose low two bits are not `0b11` for a
+compressed row. For example, the ADDI row at `0x80000000` whose image bytes are
+`93 00 10 00` has `RowEncoding … (.base 0x00100093)`. -/
+def RowEncoding (program : Rv64ProgramImage SourceInstruction)
+    (row : SourceInstructionRow SourceInstruction) : BlockEncoding → Prop
+  | .base w => row.is_compressed = false ∧
+      imageWord? program row.address.toNat = some w ∧ w.extractLsb 1 0 = 0b11#2
+  | .compressed h => row.is_compressed = true ∧
+      imageParcel? program row.address.toNat = some h ∧ h.extractLsb 1 0 ≠ 0b11#2
+
+/-- **Every row of a program built from the ELF's sections is what Jolt decodes from the
+image's bytes at its address.** Each row comes from a parcel `decodeText` found in a piece of a
+merged text range. Every address of that piece lies in the range (`textSegments_within`) and has
+a byte in `memory_init`, because each address of the range lies in a text section, whose data
+covers it (`mergeRanges_covered`, `ElfSection.lastByte_isSome`). The bytes `decode_elf` reads are
+therefore the image's bytes, and the row's instruction decodes from them.
+For example, the `jolt.success` row of a program built from the bytes `5B 30 00 00` has the
+encoding `.base 0x0000305B`. -/
+theorem _root_.Rv64ProgramImage.DecodedFrom.rowEncoding
     {program : Rv64ProgramImage SourceInstruction} {elf : ElfSections}
-    (hdecoded : program.DecodedFrom elf) : ImageDecoded program := by
+    (hdecoded : program.DecodedFrom elf) {row : SourceInstructionRow SourceInstruction}
+    (hrow : row ∈ program.instructions) :
+    ∃ e : BlockEncoding, RowEncoding program row e ∧ row.instruction.DecodesFrom e.decodedWord := by
   obtain ⟨layout, hlayout, hmem, -, -, hrows⟩ := hdecoded
-  intro row hrow i hi
   obtain ⟨p, hp, haddr, hcomp, hdec⟩ :=
     exists_of_forall₂_right hrows row (Array.mem_toList_iff.mpr hrow)
-  obtain ⟨advice, hadvice⟩ := hdec i hi
   obtain ⟨hall, hinit, range, hrange, dataRanges, segment, hsegment, ps, hdecode, hpin⟩ :=
     ElfSections.layout?_parcel hlayout hp
   have hbytes : ∀ k (b : BitVec 8),
@@ -734,19 +800,48 @@ theorem _root_.Rv64ProgramImage.DecodedFrom.imageDecoded
     rw [hmem, hinit, hb']
     rfl
   obtain ⟨hword, hparcel⟩ := decodeText_parcels program segment.1 _ ps hbytes hdecode p hpin
+  refine ⟨p.2, ?_, hdec⟩
   cases hp2 : p.2 with
   | base w =>
     obtain ⟨hw, hlow⟩ := hword w hp2
-    refine ⟨.base w, ?_, by rw [haddr]; exact hw, hlow, advice, ?_⟩
-    · rw [hcomp, hp2]
-      rfl
-    · simpa [BlockEncoding.decodedWord, hp2] using hadvice
+    refine ⟨?_, by rw [haddr]; exact hw, hlow⟩
+    rw [hcomp, hp2]
+    rfl
   | compressed h =>
     obtain ⟨hh, hlow⟩ := hparcel h hp2
-    refine ⟨.compressed h, ?_, by rw [haddr]; exact hh, hlow, advice, ?_⟩
-    · rw [hcomp, hp2]
-      rfl
-    · simpa [BlockEncoding.decodedWord, hp2] using hadvice
+    refine ⟨?_, by rw [haddr]; exact hh, hlow⟩
+    rw [hcomp, hp2]
+    rfl
+
+/-- **A program built from the ELF's sections satisfies `ImageDecoded`.** Each RISC-V row is
+`joltDecode` of the encoding the image holds at its address (`DecodedFrom.rowEncoding`).
+For example, for the `.text` section at `0x80000000` holding `addi x1, x0, 1`, the ADDI row has
+`RowDecodes … (.base 0x00100093)`. -/
+theorem _root_.Rv64ProgramImage.DecodedFrom.imageDecoded
+    {program : Rv64ProgramImage SourceInstruction} {elf : ElfSections}
+    (hdecoded : program.DecodedFrom elf) : ImageDecoded program := by
+  intro row hrow i hi
+  obtain ⟨e, henc, hdec⟩ := hdecoded.rowEncoding hrow
+  rw [hi] at hdec
+  obtain ⟨advice, hadvice⟩ := hdec
+  cases e with
+  | base w => exact ⟨.base w, henc.1, henc.2.1, henc.2.2, advice, hadvice⟩
+  | compressed h => exact ⟨.compressed h, henc.1, henc.2.1, henc.2.2, advice, hadvice⟩
+
+/-- **A `jolt.success` row of a program built from the ELF's sections sits on the success
+word.** The image holds, at the row's address, an encoding whose decoded word is
+`Decode.joltSuccessWord`, `0x0000305B`, because Jolt's `decode_custom` accepts `jolt.success`
+only at that exact word. For example, a program whose image holds the ADDI bytes `93 00 10 00`
+at `0x80000000` has no `jolt.success` row there.
+Jolt at ff6fc6568: `crates/jolt-program/src/image/decode.rs` (`decode_custom`). -/
+theorem _root_.Rv64ProgramImage.DecodedFrom.joltSuccess_word
+    {program : Rv64ProgramImage SourceInstruction} {elf : ElfSections}
+    (hdecoded : program.DecodedFrom elf) {row : SourceInstructionRow SourceInstruction}
+    (hrow : row ∈ program.instructions) (hsuccess : row.instruction = .jolt .JoltSuccess) :
+    ∃ e : BlockEncoding, RowEncoding program row e ∧ e.decodedWord = Decode.joltSuccessWord := by
+  obtain ⟨e, henc, hdec⟩ := hdecoded.rowEncoding hrow
+  rw [hsuccess] at hdec
+  exact ⟨e, henc, JoltCustomInstruction.decode?_eq_joltSuccess hdec⟩
 
 /-- **A program built from the ELF's sections has only even row addresses.** Each row has the
 address of a parcel `decodeText` found, and `decode_text_section` rejects an odd address
