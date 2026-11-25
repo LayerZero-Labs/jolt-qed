@@ -36,7 +36,7 @@ no identity-RAF cycle selects a lookup address whose upper half is all ones.
 Jolt's verifier adds `γ³ · upper_half_all_ones(r_address)` to the `EqRafFlag`
 output term, and the input claim has no `γ³` term, so per cycle the weighted
 sum below must vanish.
-Rust: `crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L198-L212`
+Rust: `crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L167-L180`
 at `ff6fc6568`. -/
 def instructionAddressCanonical {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=

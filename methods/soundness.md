@@ -894,7 +894,7 @@ panic paths and other exit paths must also be checked. The RAM invariant
 distinguishes the termination table entry from readable device memory.
 `termination_next_jal_stalls` proves a zero-offset JAL actually leaves
 `nextPC` at its own address.
-The last-real-row argument is proved in `Layer7/LastJump.lean` and `Layer7/TerminationStore.lean`.
+Before the `ff6fc6568` re-pin, `Layer7/LastJump.lean` and `Layer7/TerminationStore.lean` proved the last-real-row argument. The re-pin removed the termination word and deleted `TerminationStore.lean`.
 
 Any proposed restriction must be a property of the program under every allowed
 private input and every reachable prefix of relaxed execution, including
@@ -1135,10 +1135,11 @@ The proof does not assume a positive entry address; a completed soundness run ha
 What: use the prefix constructed on the supplied untrusted advice and the tape answers from the witness.
 Take the successful execution, linkage and runtime-advice equalities from `Agrees w n prefix state` for the relaxed trace's counterparts of the `HonestTrace` fields.
 L also requires two facts about the rebuilt trace: Jolt's prover accepts it (it ends in a jump, its RAM addresses are at or above the lowest address, and its padded length is at most the maximum), and none of its spoil asserts fails.
-The required stopping obligations are `stops` (the final source instruction is a stable self-jump), `runs_until_stop` (no earlier source instruction is a stable self-jump), and unconditional `nonempty`, derived from the termination store.
-The rule follows a16z/jolt PR #2109 at merge commit `0249591a`: a self-jumping JALR with destination equal to its nonzero base register continues if re-execution would jump elsewhere.
-The execution prefix is cut at its first stable self-jump, or at padding or the last witness cycle if no stable stall occurs.
-The stopping proof `soundness_stopping` (`Layer7/Stopping.lean`, with `StallSuffix.lean`, `LastJump.lean` and `TerminationStore.lean`) proves the cut ends at a stable stall and that later witness rows stay on its source instruction with zero RAM updates; it does not depend on `sorryAx`.
+The required stopping obligations are `stops` (the last row executes an explicit halt, `jolt.success` or EBREAK, as `TraceRow.Halts` says), `runs_until_stop` (no earlier row is a halt) and `nonempty`.
+The execution prefix is cut at its first halt row, or at padding or the last witness cycle if no halt occurs.
+The stopping proof `soundness_stopping` (`Layer7/Stopping.lean`, with `StallSuffix.lean` and `LastJump.lean`) proves that the cut is nonempty, because the entry row is not padding.
+It also proves that the cut's last row is a halt: the next witness cycle is padding, and `haltEndRule` then forces the last row to be a halt of the claimed kind.
+It then proves the final RAM comparison, and it does not depend on `sorryAx`.
 The execution-prefix lemma owns RAM agreement at the cut, and the stopping lemma owns the final RAM comparison.
 Before the `ff6fc6568` re-pin, the temporary `TerminationThenStall` and `ClaimsNoPanic` restrictions addressed the separate case of a witness that stops early at a jump (`LayerZero-Research/LZ-Notes:content/projects/jolt-qed/blog/proof-stops-at-any-jump/index.md`). The re-pin removed both: at that pin the trace ends at its first explicit success or panic halt.
 Take the instance facts, including `initialized`, from the context; Layer 5a left `JoltPrivateInputs` unchanged. `accepted` follows from `expands` and `entryIsRust`.

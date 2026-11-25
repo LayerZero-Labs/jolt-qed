@@ -105,4 +105,4 @@ Each of these has made a staged statement false before.
 - Jolt's Rust code: `/Users/ari.biswas/Work-with-A16z/jolt`.
   The model is pinned to the commit recorded in `methods/soundness.md` (currently `ff6fc6568`), which may not be the checked-out HEAD.
   Read pinned files with `git -C /Users/ari.biswas/Work-with-A16z/jolt show <pin>:<path>`.
-- The stopping rule follows a16z/jolt PR #2109 at merge commit `0249591a`.
+- A run stops at its first explicit halt (`jolt.success` or EBREAK), as Jolt's tracer does at `ff6fc6568` (a16z/jolt#2417 and #2451).

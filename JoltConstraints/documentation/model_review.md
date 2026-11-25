@@ -206,7 +206,8 @@ Step 1 replaced `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` b
 Step 2 migrated both completeness load callers through `theorems/Completeness/Helpers/MemoryValueFacts.lean` and the store caller in `theorems/Completeness/Rs2EqRamWriteIfStore.lean`.
 These proofs use the shared classification and retain their original premises.
 Step 4 migrates `plain_no_memory` (`theorems/Soundness/Layer6/PlainRow.lean`) and `stable_stall_source_no_store` (`theorems/Soundness/Layer7/StallSuffix.lean`) to the widened classifiers.
-`loadRow_of_flag` and `storeRow_of_flag` (`theorems/Soundness/Layer5/MemoryRows.lean`) wrap them as the `LoadRow`/`StoreRow` classification used by `row_kind` (`theorems/Soundness/Layer6/RowStepKinds.lean`), `row_panic_of_no_store` (`theorems/Soundness/Layer5/DeviceMemory.lean`) and `termination_effect_is_store` (`theorems/Soundness/Layer7/TerminationStore.lean`).
+`loadRow_of_flag` and `storeRow_of_flag` (`theorems/Soundness/Layer5/MemoryRows.lean`) wrap them as the `LoadRow`/`StoreRow` classification used by `row_kind` (`theorems/Soundness/Layer6/RowStepKinds.lean`).
+Before the `ff6fc6568` re-pin, `row_panic_of_no_store` (`Layer5/DeviceMemory.lean`) and `termination_effect_is_store` (`Layer7/TerminationStore.lean`) used it too; the re-pin deleted both files.
 No call to the old SD-only or LD-only classifiers remains.
 
 ## Correspondence migration (2026-11-03)
