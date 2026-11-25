@@ -1232,8 +1232,8 @@ private theorem io_amo_word (op : amoop) (hnot_cas : (op == amoop.AMOCAS) = fals
     (state_after_word_store js.sail addr (Sail.BitVec.extractLsb value 31 0))
     (amoWordBase addr) (AtomicFamily.amoWordLaneMerged addr D value) addr value D 4
     hmem hms hmd (by norm_num) hA hwin
-    (fun k hk _ => (JoltConstraints.load_raw_value js _ _
-      ((ioHelper% read_doubleword_bytes) hread k hk)).symm)
+    (fun k hk _ => JoltConstraints.load_raw_value js _ _
+      ((ioHelper% read_doubleword_bytes) hread k hk))
     (fun k hk => by
       have hlea : load_effective_address addr (0 : BitVec 12) = addr :=
         AtomicFamily.amo_word_zero_offset_addr addr

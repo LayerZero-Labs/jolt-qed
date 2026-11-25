@@ -758,6 +758,7 @@ private theorem ld_outcome (rd rs1 : regidx) (imm : BitVec 12) (js gp : SailJolt
   have hlowA := read_lower js _ D hmem hlt hrd
   have hlo40 : 0x40000000 ≤ (load_effective_address base imm).toNat := by
     have := hgeo.low
+    rw [hea]
     omega
   obtain ⟨hb, no, hDeq⟩ := io_dword_eq js _ D hmem hmod hlowA hlt hrd
   have hDeq' : loaded_dword_at js.sail (load_effective_address base imm) hb no = D := hDeq
@@ -1177,7 +1178,7 @@ private theorem narrow_store_core (w : JoltISA.AccessWidth) (n : Nat) (hn : 0 < 
         Mmu.ram_byte js.sail.mem (((base + sign_extend (m := 64) imm) &&&
           ~~~(7 : BitVec 64)).toNat + k) := by
     intro k hk _
-    exact (JoltConstraints.load_raw_value js _ _ (read_doubleword_bytes hrd k hk)).symm
+    exact JoltConstraints.load_raw_value js _ _ (read_doubleword_bytes hrd k hk)
   obtain ⟨t, hex, hst'⟩ := hsail base val hr1 hr2 hal' (by omega) hhi
   obtain ⟨hgp, hdevice, hbytes, hmemT⟩ := store_finish js js_s gp t _ _ (load_effective_address base imm) val D
     n hmem hs1 hs2 hn hA hfit' hDb (hsplice base D val hal') hltA hst hst'

@@ -609,7 +609,7 @@ theorem CodeIntact.of_related {program : Rv64ProgramImage SourceInstruction}
       unfold memHigh
       have := h.1
       omega)
-  have hram := hrel.ram _
+  have hram := hrel.ram (row.address.toNat + k)
   simp only [JoltISA.Mmu.ram_byte, hb', hjt, Option.getD_some] at hram
   rw [hb', hram]
 
@@ -635,7 +635,7 @@ private theorem initial_image_facts (joltInstance : JoltInstance SourceInstructi
     joltInstance.program.program_end.toNat ≤ jt.jolt_device.memory_layout.heap_end.toNat ∧
     ∀ (a : Nat) (b : BitVec 8), imageByte? joltInstance.program a = some b →
       jt.sail.mem.get? a = some b := by
-  refine ⟨initial_state_program_end_le_heap_end joltInstance privateInputs jt built, ?_⟩
+  refine ⟨JoltConstraints.initial_state_program_end_le_heap_end joltInstance privateInputs jt built, ?_⟩
   intro a byte present
   exact sailInit_get?_image joltInstance privateInputs jt built a byte present
 

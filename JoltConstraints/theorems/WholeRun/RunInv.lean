@@ -63,11 +63,6 @@ namespace WholeRun
 
 open JoltISA
 
--- Reuse the rounding lemma of `Io.lean` without changing that module.
-local macro "ioHelper%" n:ident : term =>
-  pure (Lean.mkIdent (Lean.mkPrivateNameCore `JoltConstraints.theorems.WholeRun.SharedMemorySim
-    (`WholeRun ++ n.getId)))
-
 /-! ### Even program counter -/
 
 /-- **Run invariant**, given the platform premise `RowsAligned`: a running block's
@@ -85,7 +80,7 @@ theorem Block.Runs.pc_even {program : Rv64ProgramImage SourceInstruction} {b : B
 `0x80000007 &&& -8 = 0x80000000`. -/
 private theorem aligned_or_below (ea : BitVec 64) :
     RAM_START_ADDRESS ≤ (ea &&& (-8 : BitVec 64)).toNat ∨ ea.toNat < RAM_START_ADDRESS := by
-  have h : (ea &&& (-8 : BitVec 64)).toNat = ea.toNat / 8 * 8 := (ioHelper% toNat_and_neg8) ea
+  have h : (ea &&& (-8 : BitVec 64)).toNat = ea.toNat / 8 * 8 := PlatformMemory.toNat_and_neg8 ea
   unfold RAM_START_ADDRESS at *
   omega
 
