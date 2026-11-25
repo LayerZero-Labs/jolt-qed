@@ -116,3 +116,6 @@ import JoltConstraints.theorems.WholeRun.CodeInv
 import JoltConstraints.theorems.WholeRun.Top
 
 import JoltConstraints.ConstraintGen.Equiv
+import JoltConstraints.Audit.Premises
+import JoltConstraints.Audit.ImageFields
+import JoltConstraints.Audit.Necessity

@@ -85,6 +85,13 @@ jobs:
             .lake/build/ir/LeanRV64D.*
             .lake/build/ir/LeanRV64D/
           key: leanrv64d-${{ runner.os }}-${{ hashFiles('LeanRV64D.lean', 'LeanRV64D/**', 'lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}
+      # assumptions.toml lists every premise, sorry and image field the
+      # headline theorems depend on (reports/2026-11-25-stale-assumptions.md).
+      # The script fails when a sorry, a field of Rv64ProgramImage or a binder
+      # listed in JoltConstraints/Audit/Premises.lean has no registry entry, when
+      # an entry is stale, or when a bug-report header is missing.
+      - name: Check the assumption registry
+        run: python3 scripts/check-assumptions.py
       - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
         with:
           build: true

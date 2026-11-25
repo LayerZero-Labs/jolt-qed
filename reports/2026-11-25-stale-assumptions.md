@@ -87,11 +87,17 @@ longer reproduces, or no longer builds, flags its entries.
 
 ## Order of work
 
-1. Necessity witnesses and the registry, for what remains after this change: `JoltField`,
-   `DecodedFrom`, `BlockConforms.riscv` and the three #1949 `sorry`s. The image fields
-   `next_pc_no_wrap`, `memory_init_in_program` and `instruction_loaded` state facts of
-   `decode_elf`, not premises. They need anchors, and proofs that `DecodedFrom` implies each
-   of them, so that the Lean transcription of `decode_elf` checks them.
-2. Function anchors in the provenance manifest. This builds on #56's T7 scripts, so it
+1. Done on 2026-11-25 (branch `drift-guards`): the registry and the necessity witnesses.
+   `assumptions.toml` has an entry for every binder of the headline theorems, the three #1949 `sorry`s, every field of `Rv64ProgramImage` and the scope premises.
+   `JoltConstraints/Audit/Premises.lean` makes the build fail when a binder or field changes, and `scripts/check-assumptions.py` (a step of `lean.yml`) checks that the registry and those lists agree.
+   `JoltConstraints/Audit/Necessity.lean` has witnesses for `JoltField`, `BlockConforms.riscv` and `memory_init_in_program`.
+   `JoltConstraints/Audit/ImageFields.lean` proves that `DecodedFrom` implies `next_pc_no_wrap`, `instruction_loaded` and `program_end_ge_ram_start` without using the image fields.
+   `memory_init_in_program` does not follow yet: `ElfSection` records nothing about the data length of a non-text section, and the witness shows the gap.
+   Recording that every loaded section has at most `size` bytes of data closes it, but changes a definition.
+   The bug-report folders have headers with their status.
+2. Done on 2026-11-25: the nightly job against Jolt main (`.github/workflows/jolt-main-drift.yml`) with the tracking issue "Drift against Jolt main".
+   It compares anchors file by file.
+3. Still open: function anchors in the provenance manifest. This builds on #56's T7 scripts, so it
    waits until the #71–#73 re-pin and #56 meet.
-3. The nightly job against Jolt main, with the tracking issue.
+   The nightly job then switches from file-level to function-level anchors.
+4. Follow-ups: remove the three image fields that `DecodedFrom` now implies from `Rv64ProgramImage`, which changes a definition; a `JoltField` witness at the constraint boundary rather than any small field; a `BlockConforms.riscv` witness at the block level; the per-instruction `JoltBytecode` theorems, which the registry does not gate yet.

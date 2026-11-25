@@ -1,3 +1,12 @@
++++
+status = "fixed-upstream"
+reproduced_at = "3cb4e24361ae2006e9713ae65d58a3fa51fd0518"
+fixed_by = "a16z/jolt#2451"
+upstream = "a16z/jolt#1950"
+registry = []
+note = "Inferred from the code: a16z/jolt#2451 deleted the termination word, so no store is ignored. Not rerun at ff6fc6568; a16z/jolt#1950 is still open."
++++
+
 # A store that the device ignores breaks the RAM history constraint
 
 ## Summary

@@ -106,3 +106,26 @@ Each of these has made a staged statement false before.
   The model is pinned to the commit recorded in `methods/soundness.md` (currently `ff6fc6568`), which may not be the checked-out HEAD.
   Read pinned files with `git -C /Users/ari.biswas/Work-with-A16z/jolt show <pin>:<path>`.
 - A run stops at its first explicit halt (`jolt.success` or EBREAK), as Jolt's tracer does at `ff6fc6568` (a16z/jolt#2417 and #2451).
+
+## Re-pinning Jolt
+
+The theorems are proved about one Jolt commit, the pin.
+`assumptions.toml` lists every premise, `sorry`, scope premise and field of `Rv64ProgramImage` the headline theorems depend on, with the Jolt functions each one cites (see `reports/2026-11-25-stale-assumptions.md`).
+On every re-pin:
+
+1. Read the open issue "Drift against Jolt main" (label `jolt-drift`).
+   The nightly workflow `.github/workflows/jolt-main-drift.yml` writes it: the registry entries whose anchor files changed since the pin, the regenerated constraint data, and the state of each upstream issue.
+2. Move the pin in one commit: `jolt_rev` in `assumptions.toml`, `JOLT_REV` in `.github/workflows/constraint-generation.yml`, and the pin in `methods/soundness.md`.
+   `scripts/check-assumptions.py` fails when the first two differ.
+3. Run `python3 scripts/check-assumptions.py --jolt-dir <Jolt checkout>`.
+   It fails when an anchor's file is gone at the new pin or no longer mentions the anchor's function; update or remove that anchor.
+4. For each new Jolt check, and for each entry the issue flags, ask which registry entry the check makes provable.
+   A premise that Jolt now guarantees must be removed, not kept.
+   Its necessity witness (`JoltConstraints/Audit/Necessity.lean`) stops building once the check is transcribed; that failure is the signal, not a proof to repair.
+   Removing a premise changes a theorem statement, so it needs Ari's approval.
+5. When a binder or field changes, the build of `JoltConstraints/Audit/Premises.lean` fails and prints the new list.
+   Update that list and the entry's `appears_in` in `assumptions.toml` together.
+6. Rerun the reproducer of each bug-report folder whose header says `status = "open"` or `"unknown"`, and update `status`, `reproduced_at` and `fixed_by`.
+   An entry whose upstream issue closed needs the same check.
+
+Anchors are compared file by file for now; function-level anchors build on #56 and come later.
