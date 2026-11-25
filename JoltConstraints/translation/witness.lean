@@ -202,17 +202,6 @@ theorem WitnessParams.BytecodeDomainFor.rowsFit {p : WitnessParams} {expandedRow
 -- Rust: crates/jolt-witness/src/backend/trace/mod.rs::ram_log_k.
 def WitnessParams.ramSize (p : WitnessParams) : Nat := 2 ^ p.logRamK
 
-/-- Resource check for materializing every dense grid in Rust's trace-backed
-witness backend with a field whose elements occupy `fieldBytes` bytes. The
-address counts are `2^chunkBits` for one-hot chunks, `128` for registers,
-and `ramSize` for RAM; each grid has `traceLength` cycles. Rust caps each
-allocation at `2^35` bytes. This check depends on the field and backend, so
-it is separate from the prover's dimension policy above.
-Rust: crates/jolt-witness/src/backend/trace/mod.rs::checked_dense_grid_len. -/
-def WitnessParams.TraceBackendGridFits (p : WitnessParams) (fieldBytes : Nat) : Prop :=
-  0 < fieldBytes ∧
-  fieldBytes * max (2 ^ p.chunkBits) (max 128 p.ramSize) * p.traceLength ≤ 2 ^ 35
-
 -- Rust: crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs::JoltFormulaDimensions::try_from (instruction_d).
 -- Rust: crates/jolt-witness/src/backend/trace/mod.rs::RV64_LOOKUP_ADDRESS_BITS = 128.
 def WitnessParams.instructionChunks (p : WitnessParams) : Nat :=
