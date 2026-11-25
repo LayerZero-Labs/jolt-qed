@@ -186,8 +186,8 @@ theorem amo_word_select_eq_sail
       (amoWordSelectLaneMiddle cmp reverse rs2 rd) (.vreg (JoltISA.amoWordNewVRegFor rd))
       rs1 rd js h.rs1_val (if selected then h.rs2_val else sign_extend (m := 64) old)
       h.rs1_read (Assumptions.DwordPresent.memBytesPresentAt h.dword_present)
-      (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega))
-      (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega))
+      (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
+      (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
       halign h.jolt_ram_load h.jolt_ram_store
       (by intro pre hsail hdword hlane hold
           exact amo_word_select_lane_middle_run cmp less hcmp reverse rs2 rd pre h.rs2_val

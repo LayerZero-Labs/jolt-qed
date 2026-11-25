@@ -384,7 +384,7 @@ theorem swProgram_eq_sail (imm : BitVec 12) (rs2 rs1 : regidx)
       have hcases := write_word_offset_cases ea (by simpa [ea] using halign)
       rcases hcases with h0 | h4 <;> omega
     have hstore_access :=
-      StoreProgramEqSailAssumptions.storeAccessFacts h 4
+      StoreProgramEqSailAssumptions.storeAccessFacts h 4 (by decide)
         (by simpa [ea, offset] using hstore_fits)
     have hwrite_word :
         vmem_write rs1 (sign_extend (m := 64) imm) 4

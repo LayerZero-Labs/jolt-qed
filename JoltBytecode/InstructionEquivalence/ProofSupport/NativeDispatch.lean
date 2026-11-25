@@ -70,11 +70,7 @@ theorem systemProject_afterDst (js : SailJoltState) (rd : regidx)
   split
   · rename_i hx0
     rw [JoltISA.stateAfterWrite_of_isX0_eq_true hx0]
-    simp [System.systemProject, JoltISA.rdZeroRewriteVReg, JoltISA.inlineTmp,
-      JoltISA.inlineRegisterBase, JoltISA.riscvRegisterBase,
-      JoltISA.riscvRegisterCount, JoltISA.numReservedVirtualRegisters,
-      JoltISA.trapHandlerVReg, JoltISA.mscratchVReg, JoltISA.mepcVReg,
-      JoltISA.mcauseVReg, JoltISA.mtvalVReg, JoltISA.mstatusVReg]
+    exact Projection.systemProject_rdZeroRewriteVReg js value
   · exact Projection.systemProject_stateAfterWrite js rd value
 
 end NativeDispatch

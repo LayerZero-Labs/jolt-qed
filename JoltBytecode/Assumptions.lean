@@ -4,7 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Ari 
 -/
 
-import JoltBytecode.JoltISA.VirtualRegisters
+import JoltBytecode.JoltISA.SystemProjection
 import JoltBytecode.JoltISA.DeviceMemory
 
 open LeanRV64D
@@ -103,11 +103,12 @@ abbrev LoadPmpOk (addr : BitVec 64) (width : Nat) (s : SailState) : Prop :=
   phys_access_check (Load Data) Privilege.Machine
     (physaddr.Physaddr addr) width false s = .ok none s
 
-/-- Machine-mode PMP accepts every explicit sub-load inside a memory window. -/
+/-- Machine-mode PMP accepts every positive-width sub-load inside a memory window.
+For example, an eight-byte window includes byte loads, but excludes zero-byte accesses. -/
 structure LoadPmpOkWindow
     (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       LoadPmpOk (base + BitVec.ofNat 64 offset) accessWidth s
 
 /-- Machine-mode PMP accepts a data store to `addr` for `width` bytes.
@@ -121,11 +122,12 @@ abbrev StorePmpOk (addr : BitVec 64) (width : Nat) (s : SailState) : Prop :=
   phys_access_check (Store Data) Privilege.Machine
     (physaddr.Physaddr addr) width false s = .ok none s
 
-/-- Machine-mode PMP accepts every explicit sub-store inside a memory window. -/
+/-- Machine-mode PMP accepts every positive-width sub-store inside a memory window.
+For example, an eight-byte window includes byte stores, but excludes zero-byte accesses. -/
 structure StorePmpOkWindow
     (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       StorePmpOk (base + BitVec.ofNat 64 offset) accessWidth s
 
 /-- Machine-mode PMP accepts an AMO at `addr` for `width` bytes.
@@ -140,11 +142,12 @@ abbrev AtomicPmpOk
   phys_access_check (Atomic (op, Data, Data)) Privilege.Machine
     (physaddr.Physaddr addr) width true s = .ok none s
 
-/-- Machine-mode PMP accepts every explicit sub-AMO inside a memory window. -/
+/-- Machine-mode PMP accepts every positive-width sub-AMO inside a memory window.
+For example, an eight-byte window includes word AMOs, but excludes zero-byte accesses. -/
 structure AtomicPmpOkWindow
     (op : amoop) (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       AtomicPmpOk op (base + BitVec.ofNat 64 offset) accessWidth s
 
 /-- The physical range is not readable MMIO.
@@ -161,11 +164,12 @@ structure NotReadableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Pro
   ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_readable (physaddr.Physaddr addr) width s = .ok false s
 
-/-- Every explicit sub-load inside a memory window avoids readable MMIO. -/
+/-- Every positive-width sub-load inside a memory window avoids readable MMIO.
+For example, an eight-byte window includes byte loads, but excludes zero-byte accesses. -/
 structure NotReadableMmioWindow
     (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       NotReadableMmio (base + BitVec.ofNat 64 offset) accessWidth s
 
 /-- The physical range is not writable MMIO.
@@ -181,11 +185,12 @@ structure NotWritableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Pro
   ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_writable (physaddr.Physaddr addr) width s = .ok false s
 
-/-- Every explicit sub-store inside a memory window avoids writable MMIO. -/
+/-- Every positive-width sub-store inside a memory window avoids writable MMIO.
+For example, an eight-byte window includes byte stores, but excludes zero-byte accesses. -/
 structure NotWritableMmioWindow
     (base : BitVec 64) (width : Nat) (s : SailState) : Prop where
   ok :
-    ∀ offset accessWidth : Nat, offset + accessWidth ≤ width →
+    ∀ offset accessWidth : Nat, 0 < accessWidth → offset + accessWidth ≤ width →
       NotWritableMmio (base + BitVec.ofNat 64 offset) accessWidth s
 
 -- ============================================================================
@@ -223,20 +228,6 @@ structure CurPrivilegeMachine (s : SailState) : Prop where
   value : s.regs.get? Register.cur_privilege =
     some (Privilege.Machine : RegisterType Register.cur_privilege)
 
-/-- The generated `misa` CSR is present and has the U extension bit set.
-
-Rust source:
-`jolt/tracer/src/emulator/cpu.rs:471` at `5def437f`.
-Generated Sail source: `LeanRV64D/Types.lean:381-382`.
-
-Rust initializes `misa` to `0x800000008014312f`; generated Sail's
-`_get_Misa_U` reads bit 20, which is set in that value.
--/
-structure MisaUserEnabled (s : SailState) : Prop where
-  exists_value : ∃ misa : BitVec 64,
-    s.regs.get? Register.misa = some (misa : RegisterType Register.misa) ∧
-    _get_Misa_U misa = 1#1
-
 /-- The Sail `mstatus` register is readable and has MPRV=0.
 
 Rust source: `tracer/src/emulator/mmu.rs:870-898`.
@@ -250,21 +241,14 @@ structure MstatusMprvZero (s : SailState) : Prop where
     s.regs.get? Register.mstatus = some mval ∧
     _get_Mstatus_MPRV mval = 0#1
 
-/-- The generated Sail Zicfilp landing-pad extension is disabled.
-
-Jolt does not model the generated Sail `elp` register or Zicfilp landing-pad
-state.
--/
-structure ZicfilpDisabled (s : SailState) : Prop where
-  value : currentlyEnabled extension.Ext_Zicfilp s = .ok false s
-
 -- vreg == sail.csr begins  here 
 
-/-- Sail `mstatus` agrees with Jolt's persistent `mstatus` virtual register. -/
+/-- Sail `mstatus` agrees with Jolt's v39 with MPP forced to Machine.
+For example, v39 = 0 corresponds to Sail mstatus = 0x1800. -/
 structure MstatusVRegMatchesSail (js : SailJoltState) : Prop where
   value_eq :
     js.sail.regs.get? Register.mstatus =
-      some (js.vregs JoltISA.mstatusVReg)
+      some (js.vregs JoltISA.mstatusVReg ||| 0x1800#64)
 
 /-- Sail `mtvec` agrees with Jolt's persistent trap-handler virtual register. -/
 structure MtvecVRegMatchesSail (js : SailJoltState) : Prop where
@@ -299,16 +283,29 @@ structure MtvalVRegMatchesSail (js : SailJoltState) : Prop where
 -- vreg == sail.csr ends here 
 
 
-/-- A value written to `mtvec` uses Direct mode, so Sail's `legalize_tvec`
-accepts it unchanged.
+/-- Sail's reservation registers agree with Jolt's reservation virtual registers.
+For example, v32 = v33 = 0 means no live reservation. -/
+structure ReservationVRegsMatchSail (js : SailJoltState) : Prop where
+  valid_eq :
+    js.sail.regs.get? Register.reservation_valid =
+      some (js.vregs JoltISA.reservationWReg != 0#64)
+  addr_eq :
+    js.sail.regs.get? Register.reservation_addr = some (js.vregs JoltISA.reservationWReg)
+  width_eq :
+    js.sail.regs.get? Register.reservation_width =
+      some (System.reservationWidth (js.vregs JoltISA.reservationWReg)
+        (js.vregs JoltISA.reservationDReg))
 
-The ZeroOS/Jolt boot path writes `_trap_handler` to `mtvec` with `csrw mtvec,
-t0`; ZeroOS defines `_trap_handler` under `.align 2`, which gives 4-byte
-alignment, so the lower two bits are `00`. 
--/
-structure MtvecWriteDirectMode (value : BitVec 64) : Prop where
-  mode_eq : _get_Mtvec_Mode value = 0b00#2
-
+/-- The values Jolt's own sequences keep in its system virtual registers.
+Only MIE and MPIE can be set in v39, mtvec mode bit 1 and mepc bit 0 are clear,
+and v33 is zero or equals v32; for example, all-zero registers are legal. -/
+structure JoltSystemVRegsLegal (js : SailJoltState) : Prop where
+  mstatus_bits : js.vregs JoltISA.mstatusVReg &&& ~~~(0x88#64) = 0#64
+  mtvec_mode : (js.vregs JoltISA.trapHandlerVReg).getLsbD 1 = false
+  mepc_align : (js.vregs JoltISA.mepcVReg).getLsbD 0 = false
+  reservation_pair :
+    js.vregs JoltISA.reservationDReg = 0#64 ∨
+      js.vregs JoltISA.reservationDReg = js.vregs JoltISA.reservationWReg
 
 /-- A stored `mepc` value is already aligned for Sail's read-side `align_pc`.
 
@@ -318,45 +315,13 @@ relevant invariant is `mepc[0] = 0`.
 structure MepcReadAligned (value : BitVec 64) (s : SailState) : Prop where
   value_eq : align_pc value s = .ok value s
 
-/-- A value written to `mepc` is already legal, so Sail's `legalize_xepc`
-accepts it unchanged.
-
-This is the write-side counterpart of `MepcReadAligned`: CSRRW writes the new
-`rs1` value, so the assumption must be about that source value rather than only
-the old stored `mepc`.
--/
-structure MepcWriteLegalized (value : BitVec 64) : Prop where
-  value_eq : legalize_xepc value = value
-
-/-- A value written to `mstatus` is already legal in the current Sail state, so
-
-This assumption is the proof boundary that the ZeroOS/Jolt `mstatus` value is
-stable under that generated-Sail legalizer. -/
-structure MstatusWriteLegalized
-    (old value : BitVec 64) (s : SailState) : Prop where
-  value_eq : legalize_mstatus old value s = .ok value s
-
-/-- Jolt's fixed `mstatus` virtual register has `MPP = Machine`.
-
-Rust source:
-`/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/mret.rs:7-18`;
--/
-structure MstatusMppMachine (js : SailJoltState) : Prop where
-  value_eq :
-    _get_Mstatus_MPP (js.vregs JoltISA.mstatusVReg) =
-      privLevel_to_bits Privilege.Machine
-
 end Assumptions
 
 export Assumptions (
   CurPrivilegeMachine
   MstatusMprvZero
-  ZicfilpDisabled
   XRegReadable
   SailRegReadable
-  MisaUserEnabled
-  MtvecWriteDirectMode
-  MstatusMppMachine
   DwordPresent
   LoadPmpOk
   LoadPmpOkWindow

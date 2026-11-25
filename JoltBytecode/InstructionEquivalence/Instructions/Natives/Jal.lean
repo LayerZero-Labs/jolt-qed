@@ -1,4 +1,5 @@
 import JoltBytecode.Bundles
+import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 
 open LeanRV64D

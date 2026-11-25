@@ -55,13 +55,13 @@ theorem amo_word_program_eq_sail
         (by have := amo_word_base_no_ovf addr; dsimp only [base]; omega)
     have hpmp : Assumptions.AtomicPmpOk op addr 4 js.sail := by
       rw [← haddr]
-      exact h.atomic_pmp.subaccess (offset := offset) (accessWidth := 4) hoff
+      exact h.atomic_pmp.subaccess (offset := offset) (accessWidth := 4) (by decide) hoff
     have hread : Assumptions.NotReadableMmio addr 4 js.sail := by
       rw [← haddr]
-      exact h.not_readable_mmio.subaccess (offset := offset) (accessWidth := 4) hoff
+      exact h.not_readable_mmio.subaccess (offset := offset) (accessWidth := 4) (by decide) hoff
     have hwrite : Assumptions.NotWritableMmio addr 4 js.sail := by
       rw [← haddr]
-      exact h.not_writable_mmio.subaccess (offset := offset) (accessWidth := 4) hoff
+      exact h.not_writable_mmio.subaccess (offset := offset) (accessWidth := 4) (by decide) hoff
     have hold : loaded_word_at js.sail addr hbytes
         (amo_word_aligned_no_ovf addr (amo_word_base_no_ovf addr) halign) =
         amoWordBundleOld op rs2 rs1 rd js h := by
@@ -240,8 +240,8 @@ theorem amo_word_binop_eq_sail
       amo_word_lane_old_eq h.rs1_val dword halign
     apply amo_word_binop_program_concrete_aligned binop rs2 rs1 rd js h.rs1_val
       (value h.rs2_val old) _ h.rs1_read hbytes
-      (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega))
-      (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega))
+      (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
+      (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
       halign h.jolt_ram_load h.jolt_ram_store (by rw [hold]; exact hvalue _ _)
     intro pre hsail hdword hlane hold
     apply hrow _ _ _ _ rs2 pre h.rs2_val old dword (amoWordLaneMask h.rs1_val)
