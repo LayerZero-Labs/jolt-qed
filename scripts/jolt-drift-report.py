@@ -3,7 +3,7 @@
 
 Usage:
   scripts/jolt-drift-report.py [--jolt-dir PATH] [--main REV] [--monitor NAME=OUTCOME]...
-      [--generation-status N] [--generated yes|partial|no] [--generated-stat FILE]
+      [--generation-status N] [--generated yes|partial|copy-failed|no] [--generated-stat FILE]
       [--generated-diff FILE] [--equiv-status N] [--upstream] [--run-url URL]
 
 PATH is a Jolt checkout that holds both the pinned commit (`jolt_rev` in assumptions.toml)
@@ -25,7 +25,9 @@ the report depends on, such as checking out Jolt main. Any outcome other than `s
 --jolt-dir, or when the checkout lacks the pin or REV, the anchor sections say that they could
 not be computed. The report never repeats data from an earlier run.
 
-Exit status: 0 whenever a report was written.
+Exit status: 0 when the report was written and monitoring succeeded, 3 when the report was
+written and says that monitoring failed (a failed step, no usable Jolt checkout, or a failed
+anchor comparison), and anything else when no report was written.
 """
 
 import argparse
@@ -150,7 +152,9 @@ def generation_section(out, args):
                f"({meaning}). It wrote into an empty directory.")
     produced = args.generated or "no"
     if produced != "yes":
-        what = "only some of the three files" if produced == "partial" else "no file"
+        what = {"partial": "only some of the three files",
+                "copy-failed": "all three files, but copying them over the committed ones failed"
+                }.get(produced, "no file")
         out.append(f"It produced {what}, so there is no regenerated data to compare and the "
                    "equivalence proofs were not built on it.")
         out.append("")
@@ -250,7 +254,7 @@ def main():
     if len(report) > MAX_BODY:
         report = report[:MAX_BODY] + "\n\n… (cut to fit an issue; the run's log has the rest)\n"
     print(report)
-    return 0
+    return 3 if failures else 0
 
 
 if __name__ == "__main__":

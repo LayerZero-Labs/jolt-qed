@@ -76,7 +76,8 @@ jobs:
       # The generator writes into an empty directory. Its exit status is 0 when
       # its checks pass, 1 when a check fails and 2 when it cannot run; all three
       # are drift, recorded in the report. `produced` says whether it wrote all
-      # three files; only then are they copied over the committed ones.
+      # three files and copied them over the committed ones; only then does the
+      # equivalence build run. A failed copy fails this step.
       - name: Regenerate the constraint data from Jolt main
         id: generate
         if: ${{ steps.pin.outcome == 'success' }}
@@ -94,13 +95,18 @@ jobs:
           for file in R1CS Relations KindTables; do
             [ -s "$out/$file.lean" ] && present=$((present + 1))
           done
-          if [ "$present" -eq 3 ]; then
+          if [ "$present" -eq 3 ] && cp "$out"/R1CS.lean "$out"/Relations.lean \
+              "$out"/KindTables.lean JoltConstraints/ConstraintGen/Generated/; then
             produced=yes
-            cp "$out"/R1CS.lean "$out"/Relations.lean "$out"/KindTables.lean \
-              JoltConstraints/ConstraintGen/Generated/
             git diff --stat -- JoltConstraints/ConstraintGen/Generated > "$RUNNER_TEMP/generated.stat"
             git diff -- JoltConstraints/ConstraintGen/Generated > "$RUNNER_TEMP/generated.diff"
             cat "$RUNNER_TEMP/generated.stat"
+          elif [ "$present" -eq 3 ]; then
+            # The copy failed, so the committed files may be partly replaced. Nothing builds
+            # on them, and the step fails: this is a monitoring failure, not drift.
+            echo "produced=copy-failed" >> "$GITHUB_OUTPUT"
+            echo "::error::copying the regenerated files failed"
+            exit 1
           elif [ "$present" -eq 0 ]; then
             produced=no
           else
@@ -135,6 +141,7 @@ jobs:
           JOLT_OUTCOME: ${{ steps.jolt.outcome }}
           PIN_OUTCOME: ${{ steps.pin.outcome }}
           TOOLCHAIN_OUTCOME: ${{ steps.toolchain.outcome }}
+          GENERATE_OUTCOME: ${{ steps.generate.outcome }}
           GENERATION_STATUS: ${{ steps.generate.outputs.status }}
           GENERATED: ${{ steps.generate.outputs.produced }}
           EQUIV_STATUS: ${{ steps.equiv.outputs.status }}
@@ -146,15 +153,20 @@ jobs:
           if [ "$JOLT_OUTCOME" = success ] && [ "$PIN_OUTCOME" = success ]; then
             jolt=(--jolt-dir jolt-main --main HEAD)
           fi
-          if ! python3 scripts/jolt-drift-report.py "${jolt[@]}" \
+          # Exit status 3 means the report was written and says monitoring failed: keep it,
+          # publish it, and fail this step so that the last step fails the job.
+          status=0
+          python3 scripts/jolt-drift-report.py "${jolt[@]}" \
               --monitor "Jolt main checkout=$JOLT_OUTCOME" \
               --monitor "pin fetch=$PIN_OUTCOME" \
+              --monitor "constraint regeneration=${GENERATE_OUTCOME:-skipped}" \
               --monitor "Lean setup=${TOOLCHAIN_OUTCOME:-skipped}" \
               --generation-status "$GENERATION_STATUS" --generated "$GENERATED" \
               --generated-stat "$RUNNER_TEMP/generated.stat" \
               --generated-diff "$RUNNER_TEMP/generated.diff" \
               --equiv-status "$EQUIV_STATUS" \
-              --upstream --run-url "$RUN_URL" > "$RUNNER_TEMP/report.md"; then
+              --upstream --run-url "$RUN_URL" > "$RUNNER_TEMP/report.md" || status=$?
+          if [ "$status" -ne 0 ] && [ "$status" -ne 3 ]; then
             {
               echo "**Monitoring failed in this run.** The report script failed; see [the run]($RUN_URL)."
               echo "Nothing here is carried over from an earlier run."
@@ -162,6 +174,10 @@ jobs:
             exit 1
           fi
           cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -eq 3 ]; then
+            echo "::error::the report lists a monitoring failure"
+            exit 1
+          fi
       - name: Create or update the drift issue
         id: issue
         if: ${{ always() && steps.self.outcome == 'success' }}
@@ -208,6 +224,7 @@ jobs:
             self=${{ steps.self.outcome }}
             jolt=${{ steps.jolt.outcome }}
             pin=${{ steps.pin.outcome }}
+            generate=${{ steps.generate.outcome }}
             toolchain=${{ steps.toolchain.outcome }}
             report=${{ steps.report.outcome }}
             issue=${{ steps.issue.outcome }}

@@ -44,13 +44,17 @@ def _char_literal_end(text, i):
 
 def strip_comments(text):
     """Remove `-- …` and nested `/- … -/` comments, and blank out the contents of string and
-    character literals (a string becomes `""`), keeping every newline."""
+    character literals (a string becomes `""`), keeping every newline. A block comment becomes
+one space, so that the tokens on either side stay separate."""
     out, i, depth = [], 0, 0
     while i < len(text):
         if depth == 0 and text.startswith("--", i):
             end = text.find("\n", i)
             i = len(text) if end < 0 else end
         elif text.startswith("/-", i):
+            if depth == 0:
+                # A comment separates tokens: `by/- c -/admit` is `by admit`.
+                out.append(" ")
             depth += 1
             i += 2
         elif depth > 0 and text.startswith("-/", i):

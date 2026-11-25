@@ -2,6 +2,7 @@
 """List every Jolt source file the Lean model cites, resolved against a Jolt commit.
 
 Usage: scripts/jolt_citations.py --jolt-dir PATH [--rev REV] [--lean-root DIR] [--unresolved]
+                                 [--check]
 
 The model cites the Jolt code it transcribes in comments and docstrings, as a path
 (`tracer/src/emulator/mmu.rs`), a GitHub URL, a path under some local Jolt checkout, or a
@@ -15,9 +16,12 @@ JoltBytecode/ and JoltConstraints/, and resolves each one against the tree of RE
 
 It prints one resolved path per line, followed by the Lean files that cite it. With
 --unresolved it prints the citations that resolve to no file instead: stale paths or
-suffixes that match several files. A brace list (`relations/{ram,registers}/x.rs`) counts as
+suffixes that match several files, and brace lists cut by a line break. A brace list (`relations/{ram,registers}/x.rs`) counts as
 one citation per alternative. Citations of vendored crates (`dory-pcs-0.4.2/src/...`) and of
 this repository's `scripts/` are skipped.
+
+With --check the exit status is 1 when any citation does not resolve; CI runs it against the
+pin in .github/workflows/constraint-generation.yml.
 
 scripts/jolt-drift-report.py uses the resolved set, together with the anchors in
 assumptions.toml, as the files it compares with Jolt main, so a newly cited file is watched
@@ -36,6 +40,9 @@ CITATION = re.compile(r"[A-Za-z0-9_./:-]*[A-Za-z0-9_-]\.rs\b")
 # A brace list names one file per alternative: `virt/{load,store}_{b,h,w}.rs` is six files.
 BRACED = re.compile(r"[A-Za-z0-9_./:{},-]*\{[A-Za-z0-9_./:{},-]*\.rs\b")
 BRACE = re.compile(r"\{([A-Za-z0-9_./:-]*(?:,[A-Za-z0-9_./:-]*)+)\}")
+# A brace list cut by a line break, such as `instruction/{div,rem,` at the end of a line,
+# names files that the patterns above cannot see. It is reported as unresolved.
+OPEN_BRACE = re.compile(r"[A-Za-z0-9_./:-]*/[A-Za-z0-9_./:-]*\{[A-Za-z0-9_,]*$", re.MULTILINE)
 # Rust sources outside Jolt: a vendored crate (`dory-pcs-0.4.2/src/...`) or this
 # repository's own generator (`scripts/...`). They are listed apart, not as stale.
 EXTERNAL = re.compile(r"^(?:[A-Za-z0-9_-]+-\d+\.\d+\.\d+/|scripts/)")
@@ -54,6 +61,9 @@ def cited_paths(root=ROOT):
                               path.read_text())
             for match in CITATION.finditer(text):
                 cited.setdefault(match.group(0), set()).add(str(path.relative_to(root)))
+            for match in OPEN_BRACE.finditer(text):
+                cited.setdefault(match.group(0) + "…  (brace list continues on the next line)",
+                                 set()).add(str(path.relative_to(root)))
     return cited
 
 
@@ -107,7 +117,7 @@ def resolved_citations(jolt_dir, rev, root=ROOT):
     for citation, lean_files in cited_paths(root).items():
         if EXTERNAL.match(citation):
             continue
-        path = resolve(citation, files, by_name)
+        path = None if citation.endswith("next line)") else resolve(citation, files, by_name)
         target = resolved if path else unresolved
         target.setdefault(path or citation, set()).update(lean_files)
     return resolved, unresolved
@@ -120,6 +130,8 @@ def main():
     parser.add_argument("--lean-root", type=pathlib.Path, default=ROOT,
                         help="the jolt-qed checkout whose Lean files are scanned (default: this one)")
     parser.add_argument("--unresolved", action="store_true")
+    parser.add_argument("--check", action="store_true",
+                        help="exit with status 1 when any citation does not resolve")
     args = parser.parse_args()
     rev = args.rev or tomllib.loads((ROOT / "assumptions.toml").read_text())["jolt_rev"]
     resolved, unresolved = resolved_citations(args.jolt_dir, rev, args.lean_root)
@@ -128,7 +140,7 @@ def main():
         print(f"{path}  ({', '.join(sorted(shown[path]))})")
     print(f"jolt_citations: {len(resolved)} cited files resolve at {rev[:9]}, "
           f"{len(unresolved)} citations do not", file=sys.stderr)
-    return 0
+    return 1 if args.check and unresolved else 0
 
 
 if __name__ == "__main__":
