@@ -263,11 +263,11 @@ private theorem storeDoubleword_rule (rules : Rules relation) (address value : B
 
 private theorem execHostIO_rule (rules : NonStoreRules relation) :
     StatePreservation.Preserves relation execHostIO := by
-  unfold execHostIO execHostIOWith
-  preservation_auto [StatePreservation.get_rule rules.refl,
-    StatePreservation.pure_rule rules.refl _,
-    StatePreservation.modify_rule _ (fun state => rules.append state _)]
-    using (StatePreservation.bind_rule rules.trans)
+  intro before after value runs
+  rcases execHostIO_result before with result | ⟨bytes, result⟩ <;>
+    rw [result] at runs <;> cases runs
+  · exact rules.refl _
+  · exact rules.append _ _
 
 /-- Every successful instruction preserves a relation satisfying the non-store
 primitive rules, its tape-read obligation, and checked-store obligations for SD and

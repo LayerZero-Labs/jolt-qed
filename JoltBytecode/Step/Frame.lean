@@ -315,8 +315,10 @@ local macro "jolt_frame" : tactic =>
     | split))
 
 private theorem frames_hostIO : Frames JoltISA.execHostIO := by
-  unfold JoltISA.execHostIO JoltISA.execHostIOWith
-  jolt_frame
+  intro js
+  rcases JoltISA.execHostIO_result js with result | ⟨_, result⟩ <;> rw [result]
+  · exact RegFrame.refl js
+  · exact frame_of_regs_eq rfl
 
 /-- A single Jolt row preserves every Sail register outside `JoltWritable`
 and never removes a present register, on success or error.

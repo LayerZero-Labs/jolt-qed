@@ -104,15 +104,33 @@ See `tracer/src/emulator/mmu.rs` (`is_host_readable`, `load_host_byte`) at `ff6f
 noncomputable def execHostIO : JoltMonad ExecutionResult :=
   execHostIOWith Mmu.load?
 
+/-- Every host call retires successfully, and its only state change is an
+append to the advice tape.
+For example, a rejected advice write or any print returns the state unchanged,
+and an accepted advice write appends its bytes without moving the read cursor. -/
+theorem execHostIO_result (state : SailJoltState) :
+    execHostIO state = .ok RETIRE_SUCCESS state ∨
+      ∃ bytes, execHostIO state = .ok RETIRE_SUCCESS
+        { state with adviceTape :=
+            { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } } := by
+  simp only [execHostIO, execHostIOWith, get, getThe, MonadStateOf.get, EStateM.get,
+    bind, EStateM.bind, pure, modify, modifyGet, MonadStateOf.modifyGet]
+  by_cases hadvice : (sourceValue (.xreg (.Regidx 10)) state).setWidth 32 = hostAdviceWriteCall
+  · rw [ite_eq_left hadvice]
+    cases readHostBytes (Mmu.load? state) (sourceValue (.xreg (.Regidx 11)) state).toNat
+        (sourceValue (.xreg (.Regidx 12)) state).toNat (2 ^ 64 - 1) #[] with
+    | none => exact .inl rfl
+    | some bytes => exact .inr ⟨bytes, rfl⟩
+  · rw [ite_eq_right hadvice]
+    simp only [ite_self]
+    exact .inl rfl
+
 /-- Every host call retires successfully from every state, including rejected
 calls and partial register maps.
 For example, a whole-run proof can use the resulting post-state for an arbitrary
 next `VirtualHostIO` row without a host-call-success restriction. -/
 theorem execHostIO_succeeds (state : SailJoltState) :
     ∃ post, execHostIO state = .ok RETIRE_SUCCESS post := by
-  simp only [execHostIO, execHostIOWith, get, MonadStateOf.get, EStateM.get,
-    bind, EStateM.bind, pure, EStateM.pure, modify, modifyGet,
-    MonadStateOf.modifyGet, EStateM.modifyGet]
-  repeat' split <;> exact ⟨_, rfl⟩
+  rcases execHostIO_result state with h | ⟨_, h⟩ <;> exact ⟨_, h⟩
 
 end JoltISA
