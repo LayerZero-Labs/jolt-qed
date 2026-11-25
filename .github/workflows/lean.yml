@@ -92,6 +92,14 @@ jobs:
       # an entry is stale, or when a bug-report header is missing.
       - name: Check the assumption registry
         run: python3 scripts/check-assumptions.py
+      # The build checks the axioms of the audited theorems (#audit_statements in
+      # JoltConstraints/Audit/Statements.lean). This step rejects the mechanisms
+      # anywhere in the source: sorry, admit, unlisted axioms, native_decide,
+      # bv_decide, decide +kernel, maxHeartbeats, synthInstance options,
+      # respectTransparency false, and maxRecDepth outside the five generated
+      # Sail options in scripts/lean-policy-allowlist.toml.
+      - name: Check the Lean source policy
+        run: python3 scripts/check-lean-policy.py
       - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
         with:
           build: true
