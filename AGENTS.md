@@ -69,7 +69,7 @@ If you believe a staged statement is false, stop and report the exact missing fa
    Do not pass the whole witness context to a bytecode fact.
 3. Prove a property of a constructor or combinator once, then derive the instances.
    For example, if every expansion is built from a few combinators, show they preserve "no control row" or "no store row" rather than checking each expansion separately.
-4. Split cases on a small classification proved once, such as `stable_stall_control_flow` (a stall is a JAL, a JALR or a branch), not on the whole instruction set inside each lemma.
+4. Split cases on a small classification proved once, such as `row_kind` in `Layer6/RowStepKinds.lean` (every row is plain, a load, a store, HostIO, JAL, JALR or an explicit halt), not on the whole instruction set inside each lemma.
 5. Use the existing frameworks before writing new ones:
    - `StatePreservation.Preserves` and `preservation_auto` (`JoltBytecode/InstructionEquivalence/ProofSupport/Preservation.lean`) for frame properties;
    - `expand_program_layout` and `ExpansionRows` (`JoltConstraints/theorems/program_facts.lean`) for bytecode layout;

@@ -9,7 +9,11 @@ set_option autoImplicit false
    Rust: crates/jolt-program/src/execution/trace.rs:193-288 and
    crates/jolt-prover/src/config.rs (derive_from_dimensions, padded_trace_length). Error variants are erased to none.
    Addresses and lengths use Nat as in the layout model; summaries produced
-   from an honest trace contain 64-bit addresses. Akita is outside this model. -/
+   from an honest trace contain 64-bit addresses. Akita is outside this model:
+   with the `akita` feature, Jolt pads every trace to at least 4096 rows
+   (crates/jolt-verifier/src/config.rs:93-103, MIN_PADDED_TRACE_LENGTH) and keeps
+   4/16-bit one-hot chunks at every trace length (crates/jolt-prover/src/config.rs:207-208,
+   one_hot_config), while this file uses the base 256-row floor. -/
 
 /-- The dimension summary produced below. Like Rust’s `RamAddressBounds`,
 `ram_bounds` is absent for no nonzero accesses, otherwise an ordered pair of

@@ -16,7 +16,7 @@ def JoltInstance.InLanguage (joltInstance : JoltInstance SourceInstruction) : Pr
     -- See : jolt/jolt-sdk/src/host_utils.rs:303
     --       jolt/book/src/usage/guests_hosts/guests.md:144, 223
     trace.matches_outputs joltInstance ∧
-    -- Jolt's prover accepts the trace: it ends in a jump, its RAM addresses are at or
+    -- Jolt's prover accepts the trace: it ends at an explicit halt, its RAM addresses are at or
     -- above the lowest address, and its padded length is at most the instance's maximum.
     -- See : jolt/crates/jolt-prover/src/config.rs:43-100 (derive_from_dimensions)
     (trace.prover_config joltInstance).isSome ∧

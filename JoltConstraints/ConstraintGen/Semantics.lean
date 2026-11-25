@@ -11,7 +11,7 @@ set_option autoImplicit false
 This file is the handwritten, trusted part of the T3 check. It says which
 witness column each name in the generated data stands for, and how a row or a
 claim constrains a witness. `ConstraintGen/Equiv.lean` proves that, under this
-reading, the unchanged data agree; it marks the known repin mismatches explicitly.
+reading, the generated data and the handwritten constraints agree.
 
 Each map below is an exhaustive `match` on a generated type. A name that Jolt
 adds or renames changes the generated type, and this file then fails to
@@ -92,7 +92,7 @@ def R1CSRow.Holds (row : R1CSRow R1CSVar) (w : WitnessType F params) (extra : Re
 
 /-! ## Per-kind flags -/
 
-/-- Embed an old lookup table by name, e.g. old `And` becomes generated `And`. -/
+/-- Embed a handwritten lookup table by name, e.g. handwritten `And` becomes generated `And`. -/
 def liftLookupTable : LookupTableKind → LookupTable
   | .RangeCheck => .RangeCheck
   | .RangeCheckAligned => .RangeCheckAligned
@@ -150,8 +150,8 @@ def liftLookupTable : LookupTableKind → LookupTable
   | .AddressOffsetH => .AddressOffsetH
   | .AddressOffsetW => .AddressOffsetW
 
-/-- Read a generated flag in the old instruction model.
-For example, `Load` reads `opcodeFlag`; both halt flags are false because old instructions lack them. -/
+/-- Read a generated flag in the handwritten instruction model.
+For example, `Load` and both halt flags read `opcodeFlag`. -/
 def legacyOpcodeFlag (i : JoltISA.Instr) : CircuitFlag → Bool
   | .AddOperands => JoltMetadata.opcodeFlag i .AddOperands
   | .SubtractOperands => JoltMetadata.opcodeFlag i .SubtractOperands
@@ -170,8 +170,8 @@ def legacyOpcodeFlag (i : JoltISA.Instr) : CircuitFlag → Bool
   | .Halt => JoltMetadata.opcodeFlag i .Halt
   | .HaltPanic => JoltMetadata.opcodeFlag i .HaltPanic
 
-/-- Read a generated flag in an old stamped row, e.g. `IsCompressed` reads the old row flag.
-The halt flags are false on every old row. -/
+/-- Read a generated flag in a handwritten stamped row, e.g. `IsCompressed` reads the row flag.
+The halt flags read `circuitFlag`, as every other flag does. -/
 def legacyCircuitFlag (row : JoltInstructionRow) : CircuitFlag → Bool
   | .AddOperands => JoltMetadata.circuitFlag row .AddOperands
   | .SubtractOperands => JoltMetadata.circuitFlag row .SubtractOperands

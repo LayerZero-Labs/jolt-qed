@@ -2,7 +2,7 @@
 title: Jolt model in Lean, open issues
 updated: 2026-11-25
 rust: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
-lean_head: 3ff14b2
+lean_head: db02bb9
 ---
 
 # Open issues
@@ -17,12 +17,10 @@ The three #1949 obligations are proved since 2026-11-25: honest memory rows neve
 The whole-run relation and initialization use the shared byte map, and the shared-memory simulations replace the old device-memory and I/O modules.
 `docs/whole-run-theorem.md` and `docs/riscv-alignment.md` describe the current whole-run statements since 2026-11-25.
 See [the re-pin report](../../reports/2026-11-24-constraints-repin.md) for the changed statements.
-The following older green-build descriptions refer to their stated historical revisions.
+Neither `JoltBytecode/` nor `JoltConstraints/` has a `sorry`.
 
 This file lists what the theorems rest on that is not proved: Jolt issues, assumptions, owed proofs and gaps in the model.
-`JoltInstance.soundness` was proved at Lean HEAD `7096dca`, under the temporary restrictions, with no `sorry`; see the [current status](../../methods/soundness.md#current-top-level-status-2026-10-23).
-With the Step 4 changes on top of `e299498`, `JoltConstraints` builds against the migrated model and `JoltInstance.soundness` is again proved with no `sorry`; see [Current state](../../methods/soundness.md#current-state-2026-11-03).
-`JoltInstance.completeness` still has the `sorry`s listed under "Proofs owed".
+Two earlier milestones keep their revisions: `JoltInstance.soundness` was first proved at Lean HEAD `7096dca`, under temporary restrictions that the re-pin removed ([2026-10-23 status](../../methods/soundness.md#top-level-status-on-2026-10-23)), and again after the Step 4 migration on top of `e299498` ([2026-11-03 state](../../methods/soundness.md#current-state-2026-11-03)).
 The latest check of the soundness statement against Jolt's code is `reports/2026-10-29-soundness-statement-audit.md`.
 
 **Jolt pin:** `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`, since 2026-11-24.
@@ -62,9 +60,9 @@ If one is still open when the main proofs pass, escalate it.
 | [#1949](https://github.com/a16z/jolt/issues/1949) | Address sums that wrap break (01), floor-row addition in (08), and ShiftData right-input equality in (11) | Not an issue for honest traces: the tracer accepts an address only in `[0x40000000, 2^63 + 2^31)` and every offset is a sign-extended 12-bit value, so no retired row wraps. (01) and the two honest-row address-bound lemmas are proved since 2026-11-25 (`HonestTrace.access_noWrap`, `HonestTrace.shiftData_store`) |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 1 | The old device model synthesized a termination word in final RAM | The shared-memory pin removes that word; (38) is proved at `ce5f298` |
 | [#1950](https://github.com/a16z/jolt/issues/1950), [#1951](https://github.com/a16z/jolt/issues/1951) item 2 | The old device ignored termination stores | Shared memory retains every accepted store; (37) is proved at `ce5f298`, and `Represents.finalRam` compares every word |
-| [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the checked prover configuration rejects it | such runs have no checked `Trace.prover_config` |
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: at the earlier pin the tracer ran it and only the checked prover configuration rejected it | Resolved at `ff6fc6568`: the tracer's MMU panics on a load below the lowest address (`IoUnderflow`), on any other access below RAM outside the I/O region (`UnmappedDevice`), and on any access at or above the end of the padded RAM backing (`BeyondRamDomain`) (`tracer/src/emulator/mmu.rs:133-143, 269-283`). The checked prover configuration also rejects such runs |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 4 | `ram_K` is one slot too small when the highest touched slot is a power of two (`bug-report/ram-k-off-by-one/`). The verifier's maximum is also one word short: `compute_max_ram_k` rounds `total_bytes / 8` down. When `heap_end` is not a multiple of 8 (`program_size` is not rounded), a program may access the word that straddles `heap_end`, and an honest run that does so gets no proof. The issue proposes `touched + 1` together with `div_ceil(8)` | Fixed in Jolt by [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250), merged at the pin `c97e9300`: `ProverConfig.checkedRamSize` rounds `touched + 1` and `VerifierSizes.maxRamSize` rounds `(totalBytes + 7) / 8`, as the issue proposes; completeness uses these sizes. `HonestTrace.prover_config_holds_highest_slot` (the highest touched word is below `ram_K`) and the verifier's RAM bounds (`HonestTrace.witness_params_ram_bounds`) are both proved, since every access starts below `heap_end`, so `touched + 1 ≤ ⌈(heap_end - lowest) / 8⌉` (`HonestTrace.highest_ram_slot_lt_heap_end`) |
-| [#1951](https://github.com/a16z/jolt/issues/1951) item 5 | Jolt's tracer loads only some ELF section kinds into RAM; preprocessing loads every section | Lean uses preprocessing's `memory_init` for both (`initialRam`, `program.lean`); see finding 3 of the 2026-10-29 report |
+| [#1951](https://github.com/a16z/jolt/issues/1951) item 5 | Jolt's tracer loads fewer ELF sections into RAM than preprocessing does | Open. Lean uses preprocessing's `memory_init` for both (`initialRam`, `program.lean`); see "ELF sections and `tohost`" under "Gaps in our model" and finding 3 of the 2026-10-29 report |
 
 ## Shared memory and halt claims
 
@@ -113,7 +111,7 @@ The proof's structure is in `methods/soundness.md`, "The argument in brief".
 See the [Step 4 report](../../reports/2026-11-03-constraints-migration-soundness.md).
 
 **Completeness.** On 2026-11-03 (Step 5), `JoltInstance.completeness` states that the honest witness at the sizes Jolt's prover picks satisfies `AllConstraints`; the earlier existential statement is `JoltInstance.completeness_someWitness`.
-`#print axioms` for both lists `propext`, `sorryAx`, `Classical.choice` and `Quot.sound`; `sys_enable_experimental_extensions` has been a definition, not an axiom, since the Sail model was regenerated with the Jolt hart patch.
+On that date `#print axioms` for both listed `propext`, `sorryAx`, `Classical.choice` and `Quot.sound`. Since 2026-11-25 neither theorem has a `sorry`. `sys_enable_experimental_extensions` has been a definition, not an axiom, since the Sail model was regenerated with the Jolt hart patch.
 `lake build JoltConstraints.theorems.Completeness` and `lake build JoltConstraints.theorems.Completeness.completeness` pass.
 The three #1949 completeness gaps recorded in the [Step 2 report](../../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md) are proved since 2026-11-25, as the table below records.
 The #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot` is proved under the fix of [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) ([experiment report](../../reports/2026-11-03-ram-k-fix-experiment.md)).
@@ -168,17 +166,21 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 - `RawRowEntry` (`Layer6/PlainRow.lean`) repeats the entry and linkage clause of `UntrustedAnswerRun.NextStep` and `ExpansionState.next`; defining both from it changes approved definitions and waits for Ari.
 - `source_expansion_split` and `expansion_block_eq` (`Layer6/DivisionLayout.lean`) repeat part of the private `expand_program_block` (`Layer6/PlainRow.lean`); generalize it and derive both.
 - `source_advice_kind` (`Layer6/DivisionLayout.lean`) classifies every source instruction with a long `simp` list; a checker fact would be shorter.
-- Delete the unused `fence_step` (`Layer5/Fence.lean`) and `HonestTrace.code_unchanged` (`honest_trace.lean`).
+- Delete the unused `fence_step` (`Layer5/Fence.lean`). The re-pin already deleted `HonestTrace.code_unchanged`.
 - `append_load_row` and `append_store_row` (`Layer6/RowStepMemory.lean`) share their operand and append steps, as their LD/SD predecessors did; extract the shared part once both are reviewed.
 
 ## Gaps in our model
 
-- **Untrusted-advice words.** Lean builds untrusted advice from bytes, so every advice word in initial RAM is a 64-bit value; Jolt's verifier takes those words from a committed polynomial and does not range-check them.
-  The soundness hypothesis is therefore stronger than Jolt's check, and the gap appears to allow a false claim (2026-10-29 report, finding 1; not reproduced).
-  Modeling the words as field elements changes a core definition and waits for Ari.
+- **Advice words in initial RAM.** Lean builds untrusted advice from bytes, and every advice word in initial RAM is therefore a 64-bit value. Jolt's verifier takes those words from a committed polynomial and does not range-check them.
+  The soundness hypothesis is therefore stronger than Jolt's check: the theorems say nothing about a proof whose committed advice holds a word of `2^64` or more.
+  Trusted advice has the same gap, because Lean also models its contents as bytes.
+  The 2026-10-29 report (finding 1) suggested that LD followed by MULHU could turn such a word into a false claim. The constraints block that attack at `ff6fc6568`: LD carries `RightOperandIsRdWriteValue` (`crates/jolt-riscv/src/instructions/i/ld.rs:1-8`). Constraint (11) therefore makes the loaded value the right lookup operand, and constraint (41) bounds that operand below `2^64` through the instruction read-RAF.
+  Closing the gap still needs either a proof that no satisfying witness reads an out-of-range advice word, or a model of advice words as field elements, which changes a core definition and waits for Ari.
 - **HostIO END marker (resolved by the re-pin).** At `ff6fc6568` Jolt's tracer reads the label for both cycle-marker events and ignores a rejected read; the total host-call model (`JoltISA.execHostIOWith`) does the same, so finding 2 of the 2026-10-29 report no longer applies.
-- **Host allocation.** The model assumes every host allocation succeeds. In Jolt's tracer at `ff6fc6568`, a failed `try_reserve` while reading an advice range makes the tracer ignore that advice write, while the model appends the bytes to the advice tape. Host out-of-memory aborts, for example in memory-access bookkeeping or the tracing subscriber, are not modelled as guest outcomes ([host-call report](../../reports/2026-11-24-hostio-repin.md), "Explicit modelling choices and limits").
-- **ELF sections and `tohost`.** Lean's initial RAM uses preprocessing's `memory_init` for the run; Jolt's tracer loads fewer section kinds, and sizes RAM differently when the ELF defines `tohost` (2026-10-29 report, findings 3 and 4).
+- **Host allocation.** The model assumes every host allocation succeeds. In Jolt's tracer at `ff6fc6568`, `read_host_bytes` returns `HostReadError::Allocation` when `try_reserve` fails (`tracer/src/emulator/host_io.rs:72-75`), and `handle_advice_write` then logs the error and appends nothing (`tracer/src/emulator/cpu.rs:1185-1196`). The model appends the bytes to the advice tape. Host out-of-memory aborts, for example in memory-access bookkeeping or the tracing subscriber, are not modelled as guest outcomes ([host-call report](../../reports/2026-11-24-hostio-repin.md), "Explicit modelling choices and limits").
+- **ELF sections and `tohost`.** Lean's initial RAM (`initialRam`, `program.lean`) zero-fills the RAM region and writes preprocessing's `memory_init`, which `decode_elf` fills from every section at or above `RAM_START_ADDRESS` (`crates/jolt-program/src/image/elf.rs:84-133`). Jolt's tracer differs in two ways (`setup_program`, `tracer/src/emulator/mod.rs:270-340`). The model cannot state either difference, because `ElfSection` (`WholeRun/Elf.lean`) records no section type, file offset or symbol (2026-10-29 report, findings 3 and 4).
+  - **Section types and offsets.** The tracer loads only sections of type `SHT_PROGBITS`, `SHT_INIT_ARRAY`, `SHT_FINI_ARRAY` and `SHT_PREINIT_ARRAY` (1, 14, 15 and 16), and only when the section starts at or above `RAM_START_ADDRESS` and has a nonzero file offset and size. Any other section that `decode_elf` loads stays zero in the tracer.
+  - **`tohost` cap.** When the ELF has a nonzero `tohost` symbol (`tohost_address`, `mod.rs:51-56`), the tracer treats it as a riscv-tests ELF and caps its RAM backing at the smaller of the layout's RAM size and `TEST_MEMORY_CAPACITY` (`DEFAULT_HEAP_SIZE`, `mod.rs:1`). Accesses past that cap fault in the tracer, while the model keeps the full layout.
 - **Termination word (resolved by the re-pin).** The old verifier/model gap described in finding 5 of the 2026-10-29 report disappears with the removed memory word.
   The new halt lane checks the public claim instead, and the soundness proof uses it for both claims (`Layer7/Stopping`).
 - **Images Jolt never produces.** `Rv64ProgramImage` carries decoded instructions without a decoder certificate.
@@ -190,16 +192,20 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 - **Trace representation.** Jolt's `JoltTraceRow` stores encoded operands, optional captures and a resolved bytecode PC.
   Lean's `TraceRow` derives observations from full pre- and post-states; this is a source-audited correspondence, not a formal equivalence with Jolt's packed representation.
   Lean does not represent missing captures or noncanonical NoOp rows; Jolt's row-constructor checks are producer checks, not verifier constraints or premises.
-- **Not modeled.** The Akita build's 4096-cycle padding floor, program commitments (ProgramBytecode, ProgramImageInit), and the advice witness columns and commitment protocols.
+- **Not modeled.** The Akita build's prover configuration (see the Akita item below), program commitments (ProgramBytecode, ProgramImageInit), and the advice witness columns and commitment protocols.
   Trusted advice contents are modeled directly as part of the instance; Lean has no flag for a trusted-advice commitment being absent.
-- **Akita.** The relation includes Akita's instruction-address canonicality guard as constraint (63), on exactly when the characteristic is below `2^128`, as Jolt's `akita` feature turns it on together with the fp128 field (`methods/soundness.md`, Layer 4).
+- **Akita.** The field premise and the constraint algebra cover Akita's field. The relation includes Akita's instruction-address canonicality guard as constraint (63), on exactly when the characteristic is below `2^128`, as Jolt's `akita` feature turns it on together with the fp128 field (`methods/soundness.md`, Layer 4).
+  The prover configuration and sizing model is for the base Dory build only. `translation/prover_config.lean` pads to at least 256 rows, `WitnessParams.ProverChunkConfig` follows the base one-hot chunk policy, `ConstraintContext.traceLengthFloor` requires only 256 rows, and `oneHotFitsSetup` checks Dory's setup bound (`dorySetupLogN`).
+  With the `akita` feature, pinned Jolt pads every trace to at least 4096 rows (`crates/jolt-verifier/src/config.rs:93-103`) and keeps 4/16-bit one-hot chunks at every trace length (`one_hot_config`, `crates/jolt-prover/src/config.rs:207-208`), where the base build switches to 8/32-bit chunks from `log_T = 25`.
+  Completeness at Akita's own sizes is therefore not proved.
 - **Expansions.** `SourceInstruction.expand` uses the bytecode project's programs.
   On 2026-10-29 every source kind's rows were compared with Jolt's expander at `5def437f` and match (2026-10-29 report).
   The header of `JoltBytecode/JoltISA/ExpansionsAutomated.lean` says it is generated by `jolt-lean-gen`, but the generator at the pin cannot produce it; the local generator patches are in `methods/model_update/`.
-  LR/SC are not proved against Sail.
-- **LR/SC reservation correspondence.** Jolt's native `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`; the expanded sequences and this model compute success from virtual registers 32 and 33.
-  Their agreement remains to be proved at source-instruction boundaries: initialization, LR.W setting only the word reservation, LR.D setting both, either SC clearing both, and other instructions preserving them.
-  It is an obligation relating the model to Jolt's execution paths, not a soundness premise.
+  The LR/SC expansions are proved against Sail by `joltRun_eq_execute` (`JoltBytecode/Step/Instructions.lean`).
+- **LR/SC reservations.** Jolt's native `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`, but the tracer does not use them at `ff6fc6568`: `SCW::trace` and `SCD::trace` run the expanded sequence, and untraced execution (`Instruction::execute`, `tracer/src/instruction/mod.rs:714-741`) dispatches to `trace(cpu, None)`.
+  The expansions and this model both compute success from virtual registers 32 and 33. No correspondence with the native reservation remains to be proved.
+- **Floating-point axioms.** `LeanRV64D/RiscvExtras.lean`, the Sail model's handwritten platform file, declares 67 floating-point primitives (for example `riscv_f16Add`) as Lean `axiom`s.
+  They lie outside the headline closures: F and D are off in Jolt's hart, their instruction modules are not generated (`docs/riscv-alignment.md` section 8), and `#print axioms` for the soundness and whole-run theorems lists none of them.
 - **To do.** Fix comments that cite `/Users/ari.biswas/...` paths, an unpinned fork, or the crate `jolt-trace`; answer the `metadata.lean` TODOs the 2026-10-29 report settled.
   Drop the unused `ramFits`, `traceFits` and `bytecodeDomain` arguments.
 
@@ -208,7 +214,7 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 Step 1 replaced `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` by `opcodeFlag_load_cases` and `opcodeFlag_store_cases`, covering LD/SD and the floor rows with unchanged hypotheses.
 Step 2 migrated both completeness load callers through `theorems/Completeness/Helpers/MemoryValueFacts.lean` and the store caller in `theorems/Completeness/Rs2EqRamWriteIfStore.lean`.
 These proofs use the shared classification and retain their original premises.
-Step 4 migrates `plain_no_memory` (`theorems/Soundness/Layer6/PlainRow.lean`) and `stable_stall_source_no_store` (`theorems/Soundness/Layer7/StallSuffix.lean`) to the widened classifiers.
+Step 4 migrates `plain_no_memory` (`theorems/Soundness/Layer6/PlainRow.lean`) and `stable_stall_source_no_store` (`theorems/Soundness/Layer7/StallSuffix.lean`) to the widened classifiers; the `ff6fc6568` re-pin later deleted `stable_stall_source_no_store` with the stall-based ending.
 `loadRow_of_flag` and `storeRow_of_flag` (`theorems/Soundness/Layer5/MemoryRows.lean`) wrap them as the `LoadRow`/`StoreRow` classification used by `row_kind` (`theorems/Soundness/Layer6/RowStepKinds.lean`).
 Before the `ff6fc6568` re-pin, `row_panic_of_no_store` (`Layer5/DeviceMemory.lean`) and `termination_effect_is_store` (`Layer7/TerminationStore.lean`) used it too; the re-pin deleted both files.
 No call to the old SD-only or LD-only classifiers remains.
