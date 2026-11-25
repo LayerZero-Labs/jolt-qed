@@ -13,7 +13,7 @@ The soundness theorem takes no temporary program restriction: the three flag-wor
 `hostCallsSucceed` became unnecessary because the merged bytecode HostIO model is total, as Jolt's tracer is at this pin: an invalid event or a rejected guest read is ignored, and every call retires (`JoltISA.execHostIO_succeeds`).
 The selected RAM word's address and protected-value checks follow from the pinned constraints.
 Both requested RAM-history completeness theorems are proved with unchanged statements.
-The three #1949 admissions remain unchanged.
+The three #1949 obligations are proved since 2026-11-25: honest memory rows never wrap their effective address (`HonestTrace.access_noWrap`, `theorems/Completeness/Helpers/AddressWindow.lean`), and `JoltInstance.completeness` has no `sorry`.
 The whole-run relation and initialization use the shared byte map, and the shared-memory simulations replace the old device-memory and I/O modules.
 `docs/whole-run-theorem.md` and `docs/riscv-alignment.md` describe the current whole-run statements since 2026-11-25.
 See [the re-pin report](../../reports/2026-11-24-constraints-repin.md) for the changed statements.
@@ -59,7 +59,7 @@ If one is still open when the main proofs pass, escalate it.
 
 | Issue | What breaks | In our model |
 |---|---|---|
-| [#1949](https://github.com/a16z/jolt/issues/1949) | Address sums that wrap break (01), floor-row addition in (08), and ShiftData right-input equality in (11) | (01) and the two honest-row address-bound lemmas remain `sorry`, as approved by Ari on 2026-11-03 |
+| [#1949](https://github.com/a16z/jolt/issues/1949) | Address sums that wrap break (01), floor-row addition in (08), and ShiftData right-input equality in (11) | Not an issue for honest traces: the tracer accepts an address only in `[0x40000000, 2^63 + 2^31)` and every offset is a sign-extended 12-bit value, so no retired row wraps. (01) and the two honest-row address-bound lemmas are proved since 2026-11-25 (`HonestTrace.access_noWrap`, `HonestTrace.shiftData_store`) |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 1 | The old device model synthesized a termination word in final RAM | The shared-memory pin removes that word; (38) is proved at `ce5f298` |
 | [#1950](https://github.com/a16z/jolt/issues/1950), [#1951](https://github.com/a16z/jolt/issues/1951) item 2 | The old device ignored termination stores | Shared memory retains every accepted store; (37) is proved at `ce5f298`, and `Represents.finalRam` compares every word |
 | [#1951](https://github.com/a16z/jolt/issues/1951) item 3 | A load from a nonzero address below the lowest address: the tracer runs it, the checked prover configuration rejects it | such runs have no checked `Trace.prover_config` |
@@ -115,15 +115,15 @@ See the [Step 4 report](../../reports/2026-11-03-constraints-migration-soundness
 **Completeness.** On 2026-11-03 (Step 5), `JoltInstance.completeness` states that the honest witness at the sizes Jolt's prover picks satisfies `AllConstraints`; the earlier existential statement is `JoltInstance.completeness_someWitness`.
 `#print axioms` for both lists `propext`, `sorryAx`, `Classical.choice` and `Quot.sound`; `sys_enable_experimental_extensions` has been a definition, not an axiom, since the Sail model was regenerated with the Jolt hart patch.
 `lake build JoltConstraints.theorems.Completeness` and `lake build JoltConstraints.theorems.Completeness.completeness` pass.
-The working tree has the three #1949 completeness gaps listed below; see the [Step 2 report](../../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md).
+The three #1949 completeness gaps recorded in the [Step 2 report](../../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md) are proved since 2026-11-25, as the table below records.
 The #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot` is proved under the fix of [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) ([experiment report](../../reports/2026-11-03-ram-k-fix-experiment.md)).
 The verifier's RAM bounds at Jolt's sizes, `HonestTrace.witness_params_ram_bounds` (`theorems/Completeness/Helpers/VerifierSizes.lean`), are proved, including that both bounds compute.
 
 | Theorem | What it needs |
 |---|---|
-| (01) `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` (`theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean:36`) | false until #1949 is fixed |
-| (08) `HonestTrace.floorAccess_address_nonneg` (`theorems/Completeness/RightLookupAdd.lean:53`) | false until #1949 is fixed: the signed base-plus-immediate sum must be nonnegative on an actual floor row of an honest trace |
-| (11) `HonestTrace.shiftData_address_noWrap` (`theorems/Completeness/RightLookupEqRightInputOtherwise.lean:52`) | false until #1949 is fixed: the signed address-plus-immediate sum must lie in `[0, 2^64)` on an actual ShiftData row of an honest trace |
+| (01) `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` (`theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean`) | proved on 2026-11-25 from `HonestTrace.access_noWrap` |
+| (08) `HonestTrace.floorAccess_address_nonneg` (`theorems/Completeness/RightLookupAdd.lean`) | proved on 2026-11-25 from `HonestTrace.access_noWrap` |
+| (11) `HonestTrace.shiftData_address_noWrap` (`theorems/Completeness/RightLookupEqRightInputOtherwise.lean`) | proved on 2026-11-25: the floor store two rows later has the same base and offset (`HonestTrace.shiftData_store`) and does not wrap |
 
 Both RAM-history completeness theorems, (37) and (38), are proved at the shared-memory pin; the flag-word bugs no longer apply.
 

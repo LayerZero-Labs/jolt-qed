@@ -40,7 +40,7 @@ The whole-run I/O modules are replaced by direct shared-map simulations (`WholeR
 The soundness theorem executes the supplied source array's expansion; the whole-run layer separately connects source rows to fetch and decode from image bytes.
 
 Both RAM-history completeness theorems are proved with unchanged statements.
-The three #1949 admissions remain unchanged.
+The three #1949 obligations are proved since 2026-11-25: honest memory rows never wrap their effective address (`HonestTrace.access_noWrap`).
 See [the re-pin report](../reports/2026-11-24-constraints-repin.md) for the build evidence and the full list of changed statements.
 
 ## Previous state (2026-11-03)

@@ -66,7 +66,7 @@ Identity-RAF rows select their honest lookup index, which lies below
 `2^128 - 2^64` (`instructionLookupIndex_lt_of_raf`), so its upper half is not
 all ones; other rows have `InstructionRafFlag = 0`.
 Floor rows use the same nonnegativity obligation as constraint (08)
-(`HonestTrace.floorAccess_address_nonneg`, a16z/jolt#1949).
+(`HonestTrace.floorAccess_address_nonneg`).
 Jolt's prover: `crates/jolt-kernels/src/optimized/instruction_read_raf.rs`
 (`CANONICAL_INSTRUCTION_ADDRESS`) at `ff6fc6568`. -/
 theorem honestWitness_instructionAddressCanonical
