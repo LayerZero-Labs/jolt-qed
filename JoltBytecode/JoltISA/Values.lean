@@ -233,8 +233,16 @@ def jolt_virtual_srliw_value (x : BitVec 64) (bitmask : Nat) : BitVec 64 :=
   if bitmask = 0 then 0
   else ((x.setWidth 32) >>> ctz bitmask).signExtend 64
 
-/-- RV64 `VirtualSRAIW` value: arithmetically shift the low word by the
-encoded mask's trailing-zero count, then sign-extend it. -/
+/-- RV64 `VirtualSRAIW` value: arithmetically shift the low word by the encoded
+mask's trailing-zero count, then sign-extend it.
+It matches Rust for masks with fewer than 32 trailing zeros, the only masks the
+expansions supply: `sraiwProgramAuto` emits `2^32 - 2^s` with `s < 32`
+(`ctz_word_shift_immediate_lt`). Outside that domain Rust shifts an `i32` by
+`trailing_zeros`, which is at least 32 there (64 for a zero mask), and the shift
+panics under overflow checks and otherwise uses the count modulo 32. This
+definition shifts by `ctz` itself, which gives a word of sign bits for counts 32
+to 63 and no shift for a zero mask (`ctz 0 = 0`).
+Rust: `tracer/src/instruction/virtual_sraiw.rs` (`VirtualSRAIW::exec`). -/
 def jolt_virtual_sraiw_value (x : BitVec 64) (bitmask : Nat) : BitVec 64 :=
   ((x.setWidth 32).sshiftRight (ctz bitmask)).signExtend 64
 
@@ -248,11 +256,30 @@ stored in the second source register. -/
 def jolt_virtual_sra_value (x bitmask : BitVec 64) : BitVec 64 :=
   x.sshiftRight (ctz bitmask.toNat)
 
-/-- RV64 `VirtualSRLW` value. -/
+/-- RV64 `VirtualSRLW` value: logically shift the low word by `ctz` of the
+bitmask in the second source register, then sign-extend the word result.
+It matches Rust for bitmasks with fewer than 32 trailing zeros, the only ones
+the expansions supply: `srlwProgramAuto` computes the bitmask with
+`VirtualShiftRightBitmaskW` (`ctz_jolt_virtual_shift_right_bitmaskw_value_lt`).
+Outside that domain Rust shifts a `u32` by `trailing_zeros`, which is at least
+32 there (64 for a zero mask), and the shift panics under overflow checks and
+otherwise uses the count modulo 32. This definition shifts by `ctz` itself,
+which gives zero for counts 32 to 63 and no shift for a zero mask (`ctz 0 = 0`).
+Rust: `tracer/src/instruction/virtual_srlw.rs` (`VirtualSRLW::exec`). -/
 def jolt_virtual_srlw_value (x bitmask : BitVec 64) : BitVec 64 :=
   ((x.setWidth 32) >>> ctz bitmask.toNat).signExtend 64
 
-/-- RV64 `VirtualSRAW` value. -/
+/-- RV64 `VirtualSRAW` value: arithmetically shift the low word by `ctz` of the
+bitmask in the second source register, then sign-extend it.
+It matches Rust for bitmasks with fewer than 32 trailing zeros, the only ones
+the expansions supply: `srawProgramAuto` computes the bitmask with
+`VirtualShiftRightBitmaskW` (`ctz_jolt_virtual_shift_right_bitmaskw_value_lt`).
+Outside that domain Rust shifts an `i32` by `trailing_zeros`, which is at least
+32 there (64 for a zero mask), and the shift panics under overflow checks and
+otherwise uses the count modulo 32. This definition shifts by `ctz` itself,
+which gives a word of sign bits for counts 32 to 63 and no shift for a zero mask
+(`ctz 0 = 0`).
+Rust: `tracer/src/instruction/virtual_sraw.rs` (`VirtualSRAW::exec`). -/
 def jolt_virtual_sraw_value (x bitmask : BitVec 64) : BitVec 64 :=
   ((x.setWidth 32).sshiftRight (ctz bitmask.toNat)).signExtend 64
 

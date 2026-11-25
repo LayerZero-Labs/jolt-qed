@@ -416,6 +416,43 @@ theorem ctz_jolt_virtual_shift_right_bitmask_value (x : BitVec 64) :
     ctz_of_odd (pow2_sub_one_odd h_diff_pos)]
   omega
 
+/-- The word bitmask written by `VirtualShiftRightBitmaskW` has exactly
+`x[4:0]` trailing zeroes. -/
+theorem ctz_jolt_virtual_shift_right_bitmaskw_value (x : BitVec 64) :
+    ctz (jolt_virtual_shift_right_bitmaskw_value x).toNat =
+      (x.setWidth 5).toNat := by
+  unfold jolt_virtual_shift_right_bitmaskw_value
+  rw [BitVec.toNat_ofNat]
+  have hlt : 2 ^ 32 - 2 ^ (x.setWidth 5).toNat < 2 ^ 64 :=
+    lt_of_le_of_lt (Nat.sub_le _ _) (by norm_num)
+  rw [Nat.mod_eq_of_lt hlt]
+  simpa only [Nat.shiftLeft_eq, one_mul] using
+    ctz_word_shift_bitmask (x.setWidth 5).toNat (by
+      have := (x.setWidth 5).isLt
+      norm_num at this
+      exact this)
+
+/-- The word bitmask written by `VirtualShiftRightBitmaskW` has fewer than 32
+trailing zeroes, so `VirtualSRLW` and `VirtualSRAW` stay in the domain where
+they match Rust. -/
+theorem ctz_jolt_virtual_shift_right_bitmaskw_value_lt (x : BitVec 64) :
+    ctz (jolt_virtual_shift_right_bitmaskw_value x).toNat < 32 := by
+  rw [ctz_jolt_virtual_shift_right_bitmaskw_value]
+  have := (x.setWidth 5).isLt
+  norm_num at this
+  exact this
+
+/-- The immediate mask `2^32 - 2^shamt` that the `SRLIW` and `SRAIW` expansions
+emit has fewer than 32 trailing zeroes. -/
+theorem ctz_word_shift_immediate_lt (shamt : BitVec 5) :
+    ctz ((1 <<< 32) - (1 <<< shamt.toNat)) < 32 := by
+  have h : shamt.toNat < 32 := by
+    have := shamt.isLt
+    norm_num at this
+    exact this
+  rw [ctz_word_shift_bitmask shamt.toNat h]
+  exact h
+
 /-- `SLTU` returns one when the unsigned comparison is true. -/
 theorem jolt_sltu_value_eq_one_of_lt (x y : BitVec 64)
     (h : x.toNat < y.toNat) :
