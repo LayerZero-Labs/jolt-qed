@@ -1,10 +1,5 @@
-import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.translation.Constraints.NextUnexpandedPCEqPCPlusImmIfShouldBranch
-import JoltConstraints.translation.witness
-import JoltConstraints.translation.honest_witness
-import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.theorems.Completeness.NextUnexpandedPCUpdateOtherwise
-import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 
 open LeanRV64D
 

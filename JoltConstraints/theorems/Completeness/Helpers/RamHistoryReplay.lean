@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.Completeness.Helpers.RamHistoryProofHelpers
-import JoltConstraints.theorems.Completeness.Helpers.PrefixSum
 
 open LeanRV64D JoltISA
 

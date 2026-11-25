@@ -3,25 +3,21 @@ import JoltConstraints.theorems.Soundness.Layer6.PlainRowOperands
 import JoltConstraints.theorems.Soundness.Layer6.PlainRowKinds
 import JoltConstraints.theorems.Soundness.Layer5.Fence
 import JoltConstraints.theorems.Completeness.Helpers.LookupEntryProofHelpers
-import JoltConstraints.theorems.Soundness.Layer5.RegisterShift
-import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
-import JoltConstraints.theorems.Soundness.Layer7.StallSuffix
-import JoltConstraints.theorems.Soundness.Layer7.LastJump
-import JoltConstraints.theorems.Soundness.Layer5.Advice
 import JoltConstraints.theorems.Soundness.Layer5.AdviceLoad
 import JoltConstraints.theorems.Soundness.Layer5.Branch
 import JoltConstraints.theorems.Soundness.Layer5.AddImmediate
-import JoltConstraints.theorems.Soundness.Layer5.Arithmetic
 import JoltConstraints.theorems.Soundness.Layer5.Xor
-import JoltConstraints.theorems.Soundness.Layer5.VirtualBinary
-import JoltConstraints.theorems.Soundness.Layer5.UnaryWord
 import JoltConstraints.theorems.Soundness.Layer5.AssertionsBinary
 import JoltConstraints.theorems.Soundness.Layer5.AssertionMulOverflow
 import JoltConstraints.theorems.Soundness.Layer5.AssertLessThanEqual
-import JoltConstraints.theorems.Soundness.Layer3.Access
 import JoltConstraints.theorems.Soundness.Layer3.Updates
-import JoltConstraints.theorems.Soundness.Layer5.MemoryRows
+import JoltConstraints.theorems.Soundness.Layer5.Auipc
+import JoltConstraints.theorems.Soundness.Layer5.LoadUpperImmediate
+import JoltConstraints.theorems.Soundness.Layer5.Movsign
+import JoltConstraints.theorems.Soundness.Layer5.SetLessThanImmediate
+import JoltConstraints.theorems.Soundness.Layer5.XorImmediate
+import JoltConstraints.theorems.Soundness.Layer6.SelectedRows
 
 open LeanRV64D
 

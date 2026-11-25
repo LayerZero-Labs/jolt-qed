@@ -1,6 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer4.Comparison
-import JoltBytecode.InstructionEquivalence.ProofSupport.ValueLemmas
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 
 open LeanRV64D
 

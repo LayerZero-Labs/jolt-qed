@@ -10,8 +10,6 @@ instruction stores into a code byte (`NoCodeStore`, `JoltCodeIntact.of_block`).
 `docs/riscv-alignment.md` section 2 records this as a documented deviation of the model.
 -/
 import JoltConstraints.theorems.WholeRun.Decoded
-import JoltConstraints.theorems.WholeRun.RunInv
-import JoltConstraints.theorems.WholeRun.SystemBlocks
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions

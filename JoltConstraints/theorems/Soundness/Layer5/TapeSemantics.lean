@@ -1,6 +1,4 @@
-import JoltBytecode.JoltISA.Semantics
 import JoltConstraints.theorems.DeviceFrame
-import JoltBytecode.MathlibTactics
 
 open LeanRV64D
 

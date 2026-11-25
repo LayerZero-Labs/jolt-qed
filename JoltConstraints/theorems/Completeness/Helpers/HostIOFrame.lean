@@ -1,5 +1,5 @@
-import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.theorems.nextpc_frame
+import JoltConstraints.translation.honest_trace
 
 open LeanRV64D
 

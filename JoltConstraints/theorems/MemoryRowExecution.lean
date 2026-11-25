@@ -1,9 +1,9 @@
 import JoltConstraints.theorems.SharedMemoryExecution
-import JoltConstraints.theorems.Completeness.Helpers.FloorMemory
 import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.theorems.Soundness.Layer5.TapeSemantics
 import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
-import JoltConstraints.theorems.expansion_temp_liveness
+import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
+import JoltConstraints.translation.witness_helpers.ram_address
 
 open LeanRV64D
 

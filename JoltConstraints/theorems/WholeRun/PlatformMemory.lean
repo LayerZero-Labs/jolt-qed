@@ -1,7 +1,4 @@
 import JoltConstraints.theorems.WholeRun.Relation
-import JoltBytecode.HartConfig
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 
 /-!
 Sail's platform permissions and plain-memory pipeline, independent of Jolt's

@@ -1,7 +1,6 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.CharP.Defs
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.Constraints.InstructionLookupRa
+import Mathlib.Algebra.Order.Ring.Star
 
 open LeanRV64D
 

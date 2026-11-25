@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.Soundness.Layer6.DivisionPrograms
-import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.theorems.Soundness.Layer5.TapePrefix
 
 open LeanRV64D

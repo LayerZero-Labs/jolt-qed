@@ -1,7 +1,5 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.trace
-import JoltBytecode.JoltISA.semantic_helpers
 
 open LeanRV64D
 

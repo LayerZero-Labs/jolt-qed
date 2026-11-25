@@ -1,7 +1,4 @@
-import JoltConstraints.theorems.WholeRun.SystemInv
-import JoltConstraints.theorems.WholeRun.SharedMemorySim
 import JoltConstraints.theorems.WholeRun.AtomicMemorySim
-import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 /-!
 # Run invariants for the block theorems

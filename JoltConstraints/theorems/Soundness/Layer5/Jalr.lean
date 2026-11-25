@@ -1,6 +1,7 @@
-import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer7.StallSuffix
 import JoltConstraints.theorems.Completeness.Helpers.RegistersValProofHelpers
+import JoltConstraints.theorems.Soundness.Layer5.RegisterWrite
+import JoltConstraints.theorems.Soundness.Layer5.Registers
 
 open LeanRV64D
 

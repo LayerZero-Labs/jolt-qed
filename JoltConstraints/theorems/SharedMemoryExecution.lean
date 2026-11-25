@@ -1,5 +1,3 @@
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
-import JoltConstraints.theorems.DeviceFrame
 import JoltConstraints.translation.metadata
 
 open LeanRV64D JoltISA

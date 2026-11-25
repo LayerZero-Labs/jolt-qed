@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.Soundness.Assumptions
-import JoltConstraints.theorems.prover_config_facts
 import JoltConstraints.theorems.Soundness.Layer3.Address
 import JoltConstraints.theorems.Soundness.Layer3.State
 

@@ -1,4 +1,3 @@
-import Mathlib.Data.Fin.Basic
 import Mathlib.Data.Nat.Log
 import Mathlib.Data.Fintype.EquivFin
 

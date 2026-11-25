@@ -1,4 +1,3 @@
-import Mathlib.Tactic.Ring
 import JoltConstraints.translation.lookup_table
 import JoltBytecode.JoltISA.Values
 

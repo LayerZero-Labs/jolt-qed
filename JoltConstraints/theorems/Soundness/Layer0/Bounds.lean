@@ -1,6 +1,5 @@
 import JoltConstraints.translation.constraint_context
 import Mathlib.Algebra.CharP.Defs
-import Mathlib.Data.Fintype.Card
 
 open LeanRV64D
 

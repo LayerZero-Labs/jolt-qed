@@ -1,6 +1,6 @@
 import JoltConstraints.theorems.Completeness.Helpers.RegistersValProofHelpers
-import Batteries.Data.Fin.Fold
 import JoltConstraints.theorems.Completeness.Helpers.PrefixSum
+import JoltConstraints.translation.witness_helpers.registers_val
 
 open LeanRV64D
 

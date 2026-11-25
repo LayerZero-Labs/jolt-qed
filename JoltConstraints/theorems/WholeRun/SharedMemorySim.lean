@@ -1,22 +1,5 @@
 import JoltConstraints.theorems.WholeRun.SystemBlocks
 import JoltConstraints.theorems.WholeRun.PlatformStore
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.StoreExec
-import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.ProgramBlocks
-import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.FloorLoad
-import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.DwordArithmetic
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
-import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LB_main
-import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LBU_main
-import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LH_main
-import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LHU_main
-import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LW_main
-import JoltBytecode.InstructionEquivalence.Instructions.LoadFamily.LWU_main
-import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sb_main
-import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sh_main
-import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sw_main
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
-import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.VirtualWindowMask
-import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.VirtualPext
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions JoltISA

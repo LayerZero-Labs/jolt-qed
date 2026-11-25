@@ -1,5 +1,5 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.metadata
+import JoltConstraints.translation.trace
 
 open LeanRV64D
 

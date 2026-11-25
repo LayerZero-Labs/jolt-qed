@@ -1,4 +1,3 @@
-import JoltConstraints.translation.honest_trace
 import JoltConstraints.translation.witness_helpers.ram_state
 import JoltConstraints.translation.witness_helpers.ram_ra
 import JoltConstraints.translation.honest_witness_helpers.ram_read_value

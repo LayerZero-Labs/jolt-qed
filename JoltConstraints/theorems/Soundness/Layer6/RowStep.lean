@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer6.RowStepKinds
 import JoltConstraints.theorems.Soundness.Layer5.TapePrefix
+import JoltConstraints.theorems.Soundness.Layer6.RowStepMemory
 
 open LeanRV64D
 

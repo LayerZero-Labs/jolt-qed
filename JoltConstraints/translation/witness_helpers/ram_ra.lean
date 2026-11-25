@@ -1,4 +1,3 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness_helpers.ram_ra_chunk
 
 open LeanRV64D

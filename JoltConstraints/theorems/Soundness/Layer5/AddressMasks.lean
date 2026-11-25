@@ -1,6 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer4.Word
 import JoltConstraints.theorems.Soundness.Layer4.Arithmetic
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 
 open LeanRV64D
 

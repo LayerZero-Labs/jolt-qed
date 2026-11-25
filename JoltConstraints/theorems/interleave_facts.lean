@@ -1,6 +1,7 @@
-import JoltConstraints.translation.Constraints.LookupOperandData
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Algebra.BigOperators.Ring.Finset
+import JoltConstraints.translation.witness_helpers.lookup_index
+import Mathlib.Order.SuccPred.Nat
 
 open LeanRV64D
 

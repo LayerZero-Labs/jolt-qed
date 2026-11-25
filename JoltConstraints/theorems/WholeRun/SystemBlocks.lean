@@ -1,4 +1,3 @@
-import JoltConstraints.theorems.WholeRun.SystemInv
 import JoltConstraints.theorems.WholeRun.Bundles
 import JoltConstraints.theorems.WholeRun.BlockStep
 

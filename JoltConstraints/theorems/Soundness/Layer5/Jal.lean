@@ -1,5 +1,7 @@
-import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
-import JoltConstraints.theorems.Soundness.Layer4.Arithmetic
+import JoltConstraints.theorems.Soundness.Layer5.RegisterWrite
+import JoltConstraints.theorems.Soundness.Layer5.Registers
+import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
+import JoltConstraints.theorems.Soundness.Layer5.TapeSemantics
 
 open LeanRV64D
 

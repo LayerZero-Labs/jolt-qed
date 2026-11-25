@@ -2,6 +2,7 @@ import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer4.Pext
 import JoltConstraints.theorems.Soundness.Layer4.Conditional
 import JoltConstraints.theorems.Soundness.Layer5.MemoryAddress
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 
 open LeanRV64D
 

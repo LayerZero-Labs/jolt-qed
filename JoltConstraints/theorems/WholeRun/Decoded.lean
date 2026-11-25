@@ -1,10 +1,6 @@
 import JoltConstraints.theorems.WholeRun.ImageMemory
-import JoltConstraints.theorems.WholeRun.SharedMemorySim
-import JoltConstraints.theorems.WholeRun.AtomicMemorySim
 import JoltConstraints.theorems.WholeRun.RunInv
 import JoltConstraints.theorems.WholeRun.Fetch
-import JoltConstraints.theorems.WholeRun.Init
-import JoltConstraints.theorems.memory_presence
 import JoltBytecode.Decode.Compressed
 
 /-!

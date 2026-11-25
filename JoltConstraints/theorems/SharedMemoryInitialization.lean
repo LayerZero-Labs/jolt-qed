@@ -1,6 +1,3 @@
-import JoltConstraints.translation.program
-import JoltConstraints.theorems.DeviceFrame
-import JoltConstraints.theorems.memory_presence
 import JoltConstraints.theorems.Completeness.Helpers.VerifierSizes
 
 open LeanRV64D JoltISA

@@ -1,16 +1,12 @@
 import JoltConstraints.theorems.Soundness.Layer6.ExecutionPrefix
-import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
-import JoltConstraints.theorems.Soundness.Layer3.Access
 import JoltConstraints.theorems.Soundness.Layer2.Registers
-import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqPCPlusImmIfShouldBranch
 import JoltConstraints.theorems.Soundness.Layer4.Interleaved
-import JoltConstraints.theorems.Soundness.Layer5.Registers
 import JoltConstraints.theorems.Soundness.Layer4.Word
 import JoltConstraints.theorems.Soundness.Layer4.ComparisonEntry
 import JoltConstraints.theorems.Soundness.Layer4.Inputs
 import JoltConstraints.theorems.Soundness.Layer4.Arithmetic
-import JoltConstraints.theorems.trace_interface
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
+import JoltConstraints.theorems.Soundness.Assumptions
 
 open LeanRV64D
 

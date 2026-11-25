@@ -1,7 +1,6 @@
 import JoltConstraints.theorems.MemoryRowExecution
 import JoltConstraints.theorems.Completeness.Helpers.RamReadSelection
 import JoltConstraints.theorems.Soundness.Layer5.RamStore
-import JoltConstraints.theorems.Completeness.Helpers.MemoryValueFacts
 
 open LeanRV64D JoltISA
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail

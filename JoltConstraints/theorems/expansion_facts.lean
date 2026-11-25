@@ -2,7 +2,6 @@
 Syntactic facts about the rows each expansion emits. `trace_interface.lean` turns
 them into `ExpansionRowsValid`.
 -/
-import JoltConstraints.translation.expansions
 import JoltConstraints.translation.register_encoding
 import JoltConstraints.translation.metadata
 import JoltConstraints.theorems.expansion_temp_liveness

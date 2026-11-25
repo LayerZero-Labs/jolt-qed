@@ -1,6 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
 import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
-import JoltConstraints.theorems.trace_interface
+import JoltConstraints.theorems.execution_facts
 
 open LeanRV64D
 

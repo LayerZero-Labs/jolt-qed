@@ -1,4 +1,6 @@
 import JoltConstraints.theorems.Completeness.Helpers.JumpReturnProofHelpers
+import JoltConstraints.translation.witness_helpers.lookup_output
+import JoltConstraints.translation.witness_helpers.rd_value
 
 open LeanRV64D
 

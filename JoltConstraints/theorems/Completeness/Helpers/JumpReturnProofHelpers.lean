@@ -1,9 +1,6 @@
-import JoltConstraints.translation.honest_witness
-import JoltConstraints.translation.metadata
-import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
-import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltConstraints.theorems.trace_interface
-import JoltConstraints.theorems.DeviceFrame
+import JoltConstraints.theorems.ProgramLayout
+import JoltConstraints.translation.witness_helpers.destination_capture
 
 open LeanRV64D
 

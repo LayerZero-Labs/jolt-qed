@@ -1,6 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer5.MisaFrame
 import JoltConstraints.theorems.Soundness.Layer5.Jal
 import JoltConstraints.theorems.Soundness.Layer6.TerminalNextPC
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 
 open LeanRV64D
 

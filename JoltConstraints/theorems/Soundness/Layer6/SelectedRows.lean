@@ -1,7 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer6.ExecutionPrefix
 import JoltConstraints.theorems.Soundness.Layer1.BytecodeReads
-import JoltConstraints.theorems.Soundness.Layer1.HaltEndRule
-import JoltConstraints.theorems.program_facts
+import JoltConstraints.theorems.Soundness.Assumptions
+import JoltConstraints.theorems.Soundness.Layer1.Bytecode
 
 open LeanRV64D
 set_option autoImplicit false

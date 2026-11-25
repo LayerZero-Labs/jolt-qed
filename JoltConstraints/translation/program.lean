@@ -2,13 +2,8 @@
 The program Jolt is asked to prove, and the public instance the verifier checks it
 against. Each definition is checked against the Rust source.
 -/
-import JoltBytecode.JoltISA.Semantics
-import JoltBytecode.JoltISA.DeviceMemory
-import JoltBytecode.JoltISA.JoltDevice
-import JoltBytecode.RiscvInstruction
 import JoltConstraints.translation.expansions
 import Mathlib.Tactic.DeriveFintype
-import Mathlib.Data.Fintype.EquivFin
 import Mathlib.Data.Nat.Log
 
 open LeanRV64D

@@ -1,6 +1,5 @@
 import JoltConstraints.translation.constraint_context
 import JoltConstraints.translation.Constraints.RamReadData
-import JoltConstraints.theorems.layout_facts
 import JoltConstraints.theorems.witness_domain
 
 open LeanRV64D

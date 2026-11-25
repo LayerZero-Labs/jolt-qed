@@ -1,6 +1,6 @@
-import JoltConstraints.translation.witness_helpers.right_instruction_input
 import JoltConstraints.translation.witness_helpers.lookup_index
 import JoltConstraints.translation.lookup_table
+import JoltConstraints.translation.metadata
 
 open LeanRV64D
 

@@ -1,6 +1,4 @@
 import JoltConstraints.theorems.WholeRun.Relation
-import JoltConstraints.theorems.execution_facts
-import JoltConstraints.theorems.layout_facts
 import JoltConstraints.theorems.SharedMemoryInitialization
 
 /-!

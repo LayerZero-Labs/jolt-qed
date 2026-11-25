@@ -1,5 +1,5 @@
-import JoltConstraints.theorems.Soundness.Layer5.MemoryAddress
 import JoltConstraints.theorems.Soundness.Layer3.State
+import JoltConstraints.theorems.Soundness.Layer3.Address
 
 open LeanRV64D
 

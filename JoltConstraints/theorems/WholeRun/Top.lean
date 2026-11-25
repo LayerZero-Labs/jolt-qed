@@ -1,10 +1,11 @@
 import JoltConstraints.theorems.Soundness.soundness
 import JoltConstraints.theorems.WholeRun.Halt
 import JoltConstraints.theorems.WholeRun.CodeInv
-import JoltConstraints.theorems.WholeRun.Decoded
 import JoltConstraints.theorems.WholeRun.Elf
-import JoltConstraints.theorems.WholeRun.Init
-import JoltConstraints.theorems.WholeRun.RunInv
+import JoltConstraints.theorems.Completeness
+import JoltConstraints.theorems.Completeness.All
+import JoltConstraints.theorems.Completeness.Helpers.LookupPextProofHelpers
+import JoltConstraints.theorems.Completeness.Helpers.LookupShiftProofHelpers
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D
   LeanRV64D.Functions

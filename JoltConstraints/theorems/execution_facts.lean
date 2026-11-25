@@ -4,11 +4,6 @@ one is proved from the instruction semantics in JoltBytecode.
 -/
 import JoltConstraints.translation.honest_trace
 import JoltConstraints.theorems.layout_facts
-import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
-import Mathlib.Tactic.IntervalCases
-import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
-import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 
 open LeanRV64D
 

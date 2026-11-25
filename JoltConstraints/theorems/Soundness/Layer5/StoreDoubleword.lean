@@ -1,7 +1,8 @@
 import JoltConstraints.theorems.Soundness.Layer5.RamStore
 import JoltConstraints.theorems.Soundness.Layer5.SharedMemoryChecks
-import JoltConstraints.theorems.SharedMemoryExecution
 import JoltConstraints.theorems.Soundness.Layer3.Updates
+import JoltConstraints.theorems.Soundness.Layer5.MemoryRows
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 
 open LeanRV64D
 

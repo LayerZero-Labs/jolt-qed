@@ -3,13 +3,8 @@ What the soundness theorem assumes, grouped by what each assumption is about:
 the field, the instance, and temporary workarounds for known issues.
 Nothing is assumed about the witness.
 -/
-import Mathlib.Algebra.CharP.Defs
-import Mathlib.Data.ZMod.Basic
-import JoltConstraints.translation.honest_trace
 import JoltConstraints.theorems.Soundness.Layer3.Layout
-import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
 import JoltConstraints.theorems.Soundness.Layer5.HostCallRestriction
-import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import Mathlib.Algebra.Field.ZMod
 
 open LeanRV64D

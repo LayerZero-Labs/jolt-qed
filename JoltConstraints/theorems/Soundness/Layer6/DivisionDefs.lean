@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.Soundness.Layer6.PlainRow
-import JoltBytecode.InstructionEquivalence.ProofSupport.ProgramComposition
 
 open LeanRV64D
 

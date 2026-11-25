@@ -1,5 +1,4 @@
-import JoltConstraints.theorems.WholeRun.Run
-import JoltConstraints.theorems.DeviceFrame
+import JoltConstraints.theorems.WholeRun.Blocks
 
 /-!
 # The run before an explicit halt

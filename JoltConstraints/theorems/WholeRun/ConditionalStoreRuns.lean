@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.WholeRun.AtomicStoreRuns
-import JoltBytecode.InstructionEquivalence.Instructions.System.Sc
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions JoltISA JoltConstraints JoltConstraints.Soundness

@@ -1,4 +1,5 @@
-import JoltConstraints.theorems.WholeRun.Init
+import JoltConstraints.theorems.SharedMemoryInitialization
+import JoltConstraints.theorems.WholeRun.Relation
 
 /-!
 The program image and the initialized shared byte map.

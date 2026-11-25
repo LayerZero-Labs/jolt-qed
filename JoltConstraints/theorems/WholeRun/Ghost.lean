@@ -1,5 +1,3 @@
-import JoltBytecode.Step.Lift
-import JoltBytecode.JoltISA.Semantics
 import JoltConstraints.theorems.DeviceFrame
 
 /-!

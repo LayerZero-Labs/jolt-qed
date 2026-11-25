@@ -1,8 +1,9 @@
-import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 import JoltConstraints.theorems.Soundness.Layer5.RegisterWrite
 import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.theorems.Soundness.Layer5.TapeSemantics
 import JoltConstraints.theorems.Soundness.Layer4.Outputs
+import JoltConstraints.theorems.Soundness.Layer4.Inputs
+import JoltConstraints.theorems.Soundness.Layer5.Registers
 
 open LeanRV64D
 

@@ -1,10 +1,8 @@
 import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
 import JoltConstraints.translation.Constraints.RdWriteEqPCPlusConstIfJump
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.execution_conditions
-import JoltConstraints.theorems.Completeness.Helpers.JumpReturnProofHelpers
 import JoltConstraints.theorems.witness_domain
 import JoltConstraints.theorems.HaltFlags
 

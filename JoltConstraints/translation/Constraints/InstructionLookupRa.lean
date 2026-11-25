@@ -1,6 +1,6 @@
 import JoltConstraints.translation.witness
-import JoltConstraints.translation.lookup_table
-import JoltConstraints.translation.witness_helpers
+import JoltBytecode.MathlibTactics
+import LeanRV64D.Defs
 
 open LeanRV64D
 

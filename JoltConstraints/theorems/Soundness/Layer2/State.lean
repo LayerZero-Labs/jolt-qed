@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer2.Registers
-import JoltConstraints.theorems.Soundness.Layer2.RegisterMap
+import JoltConstraints.theorems.execution_facts
+import JoltConstraints.translation.register_encoding
 
 open LeanRV64D
 

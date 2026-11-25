@@ -2,7 +2,7 @@
 What the completeness theorem assumes about the instance. Nothing is assumed
 about the trace: what Jolt says it proves is part of `JoltInstance.InLanguage`.
 -/
-import JoltConstraints.translation.honest_trace
+import JoltConstraints.translation.program
 
 open LeanRV64D
 

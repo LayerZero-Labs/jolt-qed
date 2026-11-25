@@ -1,5 +1,4 @@
-import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
-import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
+import JoltConstraints.translation.honest_trace
 
 open LeanRV64D
 set_option autoImplicit false

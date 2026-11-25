@@ -1,6 +1,3 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Field.Defs
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.metadata
 
 open LeanRV64D

@@ -1,5 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer7.StallSuffix
 import JoltConstraints.theorems.Soundness.Layer7.LastJump
+import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqPCPlusImmIfShouldBranch
+import JoltConstraints.theorems.Soundness.Layer1.HaltEndRule
 
 open LeanRV64D
 

@@ -1,6 +1,6 @@
-import JoltConstraints.theorems.Soundness.Layer1.Addresses
 import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.EquivFin
+import JoltConstraints.theorems.Soundness.Layer1.Chunks
+import JoltConstraints.theorems.Soundness.Layer1.Products
 
 open LeanRV64D
 

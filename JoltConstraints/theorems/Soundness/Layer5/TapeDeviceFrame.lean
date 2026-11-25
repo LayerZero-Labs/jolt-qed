@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import JoltConstraints.theorems.Completeness.Helpers.IOSetupFrame
-import JoltConstraints.theorems.layout_facts
 
 open LeanRV64D
 

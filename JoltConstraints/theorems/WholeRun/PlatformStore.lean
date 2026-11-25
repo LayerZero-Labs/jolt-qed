@@ -1,9 +1,5 @@
 import JoltConstraints.theorems.WholeRun.PlatformMemory
 import JoltConstraints.theorems.SharedMemoryExecution
-import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.ProgramBlocks
-import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sb_main
-import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sh_main
-import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sw_main
 
 /-!
 Plain Sail stores and byte-splice equations for shared memory.

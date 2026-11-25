@@ -1,4 +1,5 @@
 import JoltConstraints.theorems.Completeness.Helpers.RamHistoryReplay
+import JoltConstraints.translation.honest_witness_helpers.ram_val
 
 open LeanRV64D JoltISA
 

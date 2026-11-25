@@ -1,7 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer6.PrefixState
-import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
-import JoltConstraints.theorems.Soundness.Layer6.PlainRow
 import JoltConstraints.theorems.Soundness.Layer3.State
+import JoltConstraints.theorems.ProgramLayout
+import JoltConstraints.theorems.Soundness.Assumptions
 
 open LeanRV64D
 

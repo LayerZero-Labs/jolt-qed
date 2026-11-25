@@ -1,4 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
+import JoltConstraints.theorems.Soundness.Layer4.Table
 
 open LeanRV64D
 

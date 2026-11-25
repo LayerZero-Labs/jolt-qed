@@ -3,10 +3,7 @@ Execution and program-layout facts derived from the honest trace's certificates.
 These facts are not assumptions on the general trace in `trace.lean`.
 The facts about what `expand` emits come from `expansion_facts.lean`.
 -/
-import JoltConstraints.theorems.ProgramLayout
 import JoltConstraints.theorems.execution_facts
-import JoltConstraints.theorems.layout_facts
-import JoltConstraints.translation.register_encoding
 import JoltConstraints.theorems.nextpc_frame
 import JoltConstraints.theorems.expansion_facts
 import JoltConstraints.theorems.Soundness.Layer7.AdjacentRows

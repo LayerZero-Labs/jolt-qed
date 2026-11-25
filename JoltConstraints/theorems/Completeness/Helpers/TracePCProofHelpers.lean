@@ -1,6 +1,5 @@
-import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
+import JoltConstraints.theorems.ProgramLayout
+import JoltConstraints.theorems.trace_interface
 
 open LeanRV64D
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions

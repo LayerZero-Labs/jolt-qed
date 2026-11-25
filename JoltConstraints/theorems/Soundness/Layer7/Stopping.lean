@@ -3,7 +3,7 @@ import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
 import JoltConstraints.theorems.Soundness.Layer3.Access
 import JoltConstraints.theorems.Soundness.Layer3.History
 import JoltConstraints.theorems.Soundness.Layer5.Halt
-import JoltConstraints.theorems.DeviceFrame
+import JoltConstraints.theorems.Soundness.Layer1.HaltEndRule
 
 open LeanRV64D
 set_option autoImplicit false

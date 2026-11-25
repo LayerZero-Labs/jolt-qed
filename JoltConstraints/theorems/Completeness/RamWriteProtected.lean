@@ -1,8 +1,8 @@
-import JoltConstraints.translation.Constraints.RamWriteProtected
 import JoltConstraints.theorems.Soundness.Layer5.SharedMemoryChecks
 import JoltConstraints.theorems.Soundness.Layer5.CodeRegionFrame
 import JoltConstraints.theorems.Completeness.Helpers.RamHistoryProofHelpers
 import JoltConstraints.theorems.Completeness.Helpers.RamOutputProofHelpers
+import JoltConstraints.translation.honest_witness
 
 open LeanRV64D JoltISA
 set_option autoImplicit false

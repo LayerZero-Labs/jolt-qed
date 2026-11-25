@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
-import JoltConstraints.theorems.DeviceFrame
 
 open LeanRV64D
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail

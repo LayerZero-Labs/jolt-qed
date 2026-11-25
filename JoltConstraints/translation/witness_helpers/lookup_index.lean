@@ -1,6 +1,5 @@
 import JoltConstraints.translation.trace
 import JoltConstraints.translation.witness_helpers.destination_capture
-import JoltBytecode.JoltISA.semantic_helpers
 
 open LeanRV64D
 

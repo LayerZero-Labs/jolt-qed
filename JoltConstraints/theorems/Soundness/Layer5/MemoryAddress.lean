@@ -1,7 +1,5 @@
-import JoltConstraints.theorems.Soundness.Layer3.Layout
-import JoltConstraints.theorems.Soundness.Layer3.Address
-import JoltConstraints.theorems.Soundness.Layer1.BytecodeReads
-import JoltConstraints.theorems.Soundness.Layer4.Table
+import JoltConstraints.translation.Constraints.RamAddrEqRs1PlusImmMinusLookupIfLoadStore
+import Mathlib.Algebra.CharP.Basic
 
 open LeanRV64D
 

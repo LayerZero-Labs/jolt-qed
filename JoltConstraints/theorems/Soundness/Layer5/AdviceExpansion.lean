@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer5.Program
 import JoltConstraints.theorems.Soundness.Layer5.NarrowAdvice
-import JoltBytecode.InstructionEquivalence.ProofSupport.NativeDispatch
 import JoltConstraints.translation.expansions
 
 open LeanRV64D

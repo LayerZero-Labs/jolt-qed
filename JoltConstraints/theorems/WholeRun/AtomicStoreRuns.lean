@@ -1,7 +1,4 @@
-import JoltConstraints.theorems.WholeRun.StoreRuns
-import JoltBytecode.InstructionEquivalence.Instructions.AtomicFamily.Dword
-import JoltBytecode.InstructionEquivalence.Instructions.AtomicFamily.WordProgram
-import JoltBytecode.InstructionEquivalence.Instructions.AtomicFamily.WordSelectLane
+import JoltConstraints.theorems.MemoryRowExecution
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions JoltISA JoltConstraints JoltConstraints.Soundness

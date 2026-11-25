@@ -2,7 +2,6 @@ import JoltConstraints.theorems.Soundness.Layer6.BoundaryStart
 import JoltConstraints.theorems.Soundness.Layer6.DivisionBlock
 import JoltConstraints.theorems.Soundness.Layer6.RowStep
 import JoltConstraints.theorems.Soundness.Layer6.ExpansionFinish
-import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
 
 open LeanRV64D
 

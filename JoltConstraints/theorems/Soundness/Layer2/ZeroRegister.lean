@@ -1,6 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer2.Registers
 import JoltConstraints.theorems.Soundness.Layer2.RegisterMap
 import JoltConstraints.theorems.Soundness.Layer2.ZeroLookup
+import JoltConstraints.theorems.Soundness.Layer1.Bytecode
 
 open LeanRV64D
 

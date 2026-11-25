@@ -1,8 +1,5 @@
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.translation.Constraints.RamValFinalEqInitialPlusRamInc
-import JoltConstraints.translation.Constraints.RamReadData
-import JoltConstraints.theorems.Completeness.Helpers.RamAccesses
-import JoltConstraints.theorems.witness_domain
 import JoltConstraints.theorems.Completeness.Helpers.RamHistoryReplay
 
 open LeanRV64D

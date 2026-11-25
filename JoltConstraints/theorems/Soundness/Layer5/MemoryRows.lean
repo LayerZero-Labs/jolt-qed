@@ -1,11 +1,9 @@
-import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
 import JoltConstraints.theorems.MemoryRowExecution
 import JoltConstraints.theorems.Soundness.Layer5.RamAlignment
-import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
-import JoltConstraints.theorems.Soundness.Layer4.Identity
-import JoltConstraints.theorems.Completeness.Helpers.FloorMemory
-import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
-import JoltConstraints.theorems.expansion_temp_liveness
+import JoltConstraints.theorems.Soundness.Layer3.Layout
+import JoltConstraints.theorems.Soundness.Layer4.Inputs
+import JoltConstraints.theorems.Soundness.Layer4.Table
+import JoltConstraints.theorems.Soundness.Layer5.MemoryAddress
 
 open LeanRV64D
 
