@@ -4,8 +4,8 @@ it in Jolt's language, the witness Jolt's prover builds, at the sizes Jolt's pro
 picks, satisfies every modeled constraint. The statement assumes nothing about the
 instance: a program whose run Jolt's prover accepts is not empty
 (`HonestTrace.prover_config_image_nonempty`).
-The three open obligations listed in model_review.md (Proofs owed) concern
-a16z/jolt#1949; the shared-memory RAM-history obligations are proved.
+The address-wrap cases of a16z/jolt#1949 are proved: honest memory rows never
+wrap their effective address. The shared-memory RAM-history obligations are proved.
 -/
 import JoltConstraints.theorems.Completeness.All
 

@@ -16,7 +16,7 @@ A checked box means the stated honest-witness theorem is proved in Lean without 
 The labels are `DONE:` for a checked proof, `TODO:` for unfinished proof or correspondence work, and `FIXME:` for a confirmed issue.
 The original 62 base targets were checked by source inspection and `#print axioms`.
 The review rechecked the assembled theorem's axioms against the target and confirmed its recorded `sorryAx` dependency.
-The current checklist has 63 targets: 60 checked, including Akita's (63) added on 2026-11-10, and three `FIXME:` targets.
+The current checklist has 63 targets, all checked, including Akita's (63) added on 2026-11-10; the last three, (01), (08) and (11), were checked on 2026-11-25 with a fresh `#print axioms JoltInstance.completeness`.
 The `ff6fc6568` re-pin retired (22), (57) and (62) and added (64), (65) and (66); the numbers of retired targets are not reused.
 
 Each checklist item links to its constraint definition and matching completeness
@@ -24,9 +24,9 @@ module. [AllConstraints](../translation/Constraints/All.lean) bundles the 63 rel
 [honestWitness_constraintEquations](../theorems/Completeness/All.lean) assembles their proofs
 under the stated conditions.
 
-The `FIXME:` targets are (01), (08) and (11), blocked by the address-wrap issue [a16z/jolt#1949](https://github.com/a16z/jolt/issues/1949).
+The address-wrap issue [a16z/jolt#1949](https://github.com/a16z/jolt/issues/1949) used to block (01), (08) and (11); since 2026-11-25 all three are proved, because no honest memory row wraps its address.
 At `ff6fc6568` Jolt has no termination word, and the re-pin proved (37) and (38) without changing their statements.
-The checked boxes for (37), (38), (64), (65) and (66) rest on the successful build and a source search that finds `sorry` only in the modules for (01), (08) and (11), not on a fresh `#print axioms`.
+The checked boxes for (37), (38), (64), (65) and (66) rested on the successful build and a source search that found `sorry` only in the modules for (01), (08) and (11), not on a fresh `#print axioms`.
 Constraint (16)'s theorem assumes the trace's last row is a jump, which Jolt's prover requires; without it, a [taken self-branch](../../bug-report/self-branch.md) as the last row is a counterexample.
 Its checked box rests on a source search for `sorry`, not a fresh `#print axioms`.
 Constraint (39), including the complete AddressOffset dispatch, now builds against the target and its fresh axiom check contains no `sorryAx`.
@@ -89,7 +89,7 @@ Current definition state after Step 1:
    The target and Lean type both have seven instruction flags.
 2. **RAM-address equation, Jolt R1CS row 0, Lean (01) — definition implemented and built.**
    Renamed the definition and its `translation/Constraints/All.lean` field to `ramAddrEqRs1PlusImmMinusLookupIfLoadStore`, with the matching module name.
-   The matching completeness theorem, module, import and assembly field now use the new name; its existing #1949 gap remains.
+   The matching completeness theorem, module, import and assembly field now use the new name; its #1949 gap was proved on 2026-11-25.
    Its target right side is `Rs1Value + Imm - LookupOutput`, from the row's comment in `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`.
 3. **Right-input routing, (33) and (11) — definitions and proofs migrated.**
    Add the summand `RightOperandIsRdWriteValue * RdWriteValue` to (33), as in `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs`.
@@ -141,7 +141,7 @@ Current definition state after Step 1:
     Keep the main statements, `InLanguage`, the assumptions and the restrictions fixed; repair their dependencies after the definitions are audited.
     Preserve the four existing completeness obligations (01), (37), (38) and the RAM-bounds theorem.
     Step 5 proved the RAM-bounds theorem at Jolt's sizes (`HonestTrace.witness_params_ram_bounds`) and added the known-false #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot`, as Ari decided on 2026-11-03.
-    Ari approved the additional #1949 wrap lemmas for (08) and (11) on 2026-11-03; each is now restricted to a matching row of an honest trace.
+    Ari approved the additional #1949 wrap lemmas for (08) and (11) on 2026-11-03; each is restricted to a matching row of an honest trace, and both were proved on 2026-11-25.
     The old arbitrary-bitvector admissions were deleted, and the field equalities are proved from the approved row bounds.
     No other new `sorry` was needed in Step 2.
     Reuse the frame, layout, row-composition and splice lemmas, then rebuild both libraries before declaring the migration complete.
@@ -189,17 +189,17 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanOuter — stage 1
 
-- [ ] (01) FIXME: [RAM address for loads and stores](../translation/Constraints/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean) · [completeness](../theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean)
+- [x] (01) DONE: [RAM address for loads and stores](../translation/Constraints/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean) · [completeness](../theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean)
 - [x] (02) DONE: [Zero RAM address for other instructions](../translation/Constraints/RamAddrEqZeroIfNotLoadStore.lean) · [completeness](../theorems/Completeness/RamAddrEqZeroIfNotLoadStore.lean)
 - [x] (03) DONE: [Loads preserve RAM](../translation/Constraints/RamReadEqRamWriteIfLoad.lean) · [completeness](../theorems/Completeness/RamReadEqRamWriteIfLoad.lean)
 - [x] (04) DONE: [Loads copy RAM to the destination](../translation/Constraints/RamReadEqRdWriteIfLoad.lean) · [completeness](../theorems/Completeness/RamReadEqRdWriteIfLoad.lean)
 - [x] (05) DONE: [Stores copy the second source to RAM](../translation/Constraints/Rs2EqRamWriteIfStore.lean) · [completeness](../theorems/Completeness/Rs2EqRamWriteIfStore.lean)
 - [x] (06) DONE: [Zero left lookup operand for add/subtract/multiply](../translation/Constraints/LeftLookupZeroIfAddSubMul.lean) · [completeness](../theorems/Completeness/LeftLookupZeroIfAddSubMul.lean)
 - [x] (07) DONE: [Left lookup operand for other modes](../translation/Constraints/LeftLookupEqLeftInputOtherwise.lean) · [completeness](../theorems/Completeness/LeftLookupEqLeftInputOtherwise.lean)
-- [ ] (08) FIXME: [Addition lookup operand](../translation/Constraints/RightLookupAdd.lean) · [completeness](../theorems/Completeness/RightLookupAdd.lean)
+- [x] (08) DONE: [Addition lookup operand](../translation/Constraints/RightLookupAdd.lean) · [completeness](../theorems/Completeness/RightLookupAdd.lean)
 - [x] (09) DONE: [Subtraction lookup operand](../translation/Constraints/RightLookupSub.lean) · [completeness](../theorems/Completeness/RightLookupSub.lean)
 - [x] (10) DONE: [Multiplication lookup operand](../translation/Constraints/RightLookupEqProductIfMul.lean) · [completeness](../theorems/Completeness/RightLookupEqProductIfMul.lean)
-- [ ] (11) FIXME: [Right lookup operand for other modes](../translation/Constraints/RightLookupEqRightInputOtherwise.lean) · [completeness](../theorems/Completeness/RightLookupEqRightInputOtherwise.lean)
+- [x] (11) DONE: [Right lookup operand for other modes](../translation/Constraints/RightLookupEqRightInputOtherwise.lean) · [completeness](../theorems/Completeness/RightLookupEqRightInputOtherwise.lean)
 - [x] (12) DONE: [Assertion lookup output](../translation/Constraints/AssertLookupOne.lean) · [completeness](../theorems/Completeness/AssertLookupOne.lean)
 - [x] (13) DONE: [Write lookup output to the destination](../translation/Constraints/RdWriteEqLookupIfWriteLookupToRd.lean) · [completeness](../theorems/Completeness/RdWriteEqLookupIfWriteLookupToRd.lean)
 - [x] (14) DONE: [Jump return address](../translation/Constraints/RdWriteEqPCPlusConstIfJump.lean) · [completeness](../theorems/Completeness/RdWriteEqPCPlusConstIfJump.lean)

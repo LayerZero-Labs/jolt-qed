@@ -351,7 +351,7 @@ The proofs unfold the CSR chains and the decoder mapping, so the chains are not 
 
 `#print axioms` on `JoltInstance.soundness` and on every instruction theorem that is fully proved gives only `propext`, `Classical.choice` and `Quot.sound`.
 The headline theorems, including `Decode.joltDecode_compressed_agrees` and the block theorems of section 9, use only these three standard axioms, although the generic CSR read in their closure mentions `get_16_random_bits`.
-None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; the sorries left are in `JoltConstraints/theorems/Completeness/`, some of them waiting on a16z/jolt#1949.
+None of these, and nothing `JoltInstance.soundness` uses, lists `sorryAx`; since 2026-11-25 `JoltInstance.completeness` has none either, because honest memory rows never wrap their address (a16z/jolt#1949, `HonestTrace.access_noWrap`).
 
 Step f classifies whatever is left in the whole-run theorem as an invariant, a platform fact (sections 2, 4 and 7), a scope premise, or a documented deviation (anything the difference testing confirms; stores into the code, the deviation of earlier revisions, now follow from the tracer's protected-store check, section 9); the classified list is in section 9, "What step f proves".
 The per-block premises of `JoltInstance.sail_soundness` are premises on the trace that `soundness` extracts, so they are checked on that trace; `HonestTrace.sail_reproduces` states the same for any honest trace given in advance.
