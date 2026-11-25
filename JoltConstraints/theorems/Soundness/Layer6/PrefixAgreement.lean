@@ -78,7 +78,7 @@ theorem boundary_step {F : Type} [Field F] (joltField : JoltField F)
     privateInputs witness context equations run' first state advice⟩
 
 /-- Reconstruct witness rows through the first explicit halt, or through padding
-or the last cycle when no stall occurs. Every retained row is real, no retained
+or the last cycle when no halt occurs. Every retained row is real, no retained
 row stops before the last, and its observations and internal advice agree. -/
 theorem soundness_execution_prefix_agreement {F : Type} [Field F]
     (joltField : JoltField F)

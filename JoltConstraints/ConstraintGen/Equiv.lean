@@ -238,7 +238,7 @@ theorem ramReadWriteChecking_holds_iff (w : WitnessType F params) :
     exact and_iff_right (by decide)
   · claim_rfl
 
-/-- The three generated register claims are the old read/write equations.
+/-- The three generated register claims are the handwritten read/write equations.
 For example, the destination claim sums RdWa * (RegistersVal + RdInc) over all 128 registers. -/
 theorem registersReadWriteChecking_holds_iff (w : WitnessType F params) :
     registersReadWriteChecking.Holds w extra ↔
@@ -295,32 +295,31 @@ theorem kindCircuitFlags_kindOf (i : JoltISA.Instr) :
     kindCircuitFlags (kindOf i) = circuitFlagOrder.filter (legacyOpcodeFlag i ·) := by
   cases i <;> rfl
 
-/-- Old instruction-routing flags equal the generated kind entry.
+/-- Handwritten instruction-routing flags equal the generated kind entry.
 For example, LD selects RightOperandIsRdWriteValue. -/
 theorem kindInstructionFlags_kindOf (i : JoltISA.Instr) :
     kindInstructionFlags (kindOf i) =
       instructionFlagOrder.filter (JoltMetadata.instructionFlag i ·) := by
   cases i <;> rfl
 
-/-- Old lookup-table selections equal the generated entries after embedding names.
+/-- Handwritten lookup-table selections equal the generated entries after embedding names.
 For example, AND selects the generated And table. -/
 theorem kindLookupTable_kindOf (i : JoltISA.Instr) :
     kindLookupTable (kindOf i) = (JoltMetadata.lookupTable i).map liftLookupTable := by
   cases i <;> rfl
 
-/-- The old RAF selector equals the generated kind entry.
-For example, the combined-operand ADD kind has its old RAF flag. -/
+/-- The handwritten RAF selector equals the generated kind entry.
+For example, the combined-operand ADD kind has its handwritten RAF flag. -/
 theorem kindRafFlag_kindOf (i : JoltISA.Instr) :
     kindRafFlag (kindOf i) = JoltMetadata.instructionRafFlag i := by
   cases i <;> rfl
 
 /-! `kindOf` maps each `JoltISA.Instr` constructor to the Jolt kind of the same
 name.
-The elaboration-time check preserves that name test and checks the exact set
-of missing kinds against the four recorded repin gaps.
-An unrecorded gap, or a mapping arm naming the wrong kind, fails the build.
-The total-coverage expectation is separately stated with a marked mismatch
-below; the check does not claim those four old constructors exist. -/
+The elaboration-time check tests that name match and checks that the Jolt kinds
+without a Lean constructor are exactly the inline-only `VirtualXORROT2` and
+`VirtualXORROT61` (padding `NoOp` and `JoltPanic`, the image of `Panic`, aside).
+A new unmodelled kind, or a mapping arm naming the wrong kind, fails the build. -/
 
 open Lean Meta in
 run_meta do
@@ -458,13 +457,13 @@ theorem inline_xorRot_not_modelled :
     ¬ ModelledKind .VirtualXORROT2 ∧ ¬ ModelledKind .VirtualXORROT61 := by
   exact ⟨fun h => h.1 rfl, fun h => h.2 rfl⟩
 
-/-- Generated kind-list membership reads the old opcode flag.
+/-- Generated kind-list membership reads the handwritten opcode flag.
 For example, Load belongs to the LD entry, and Halt belongs to both halt entries. -/
 theorem mem_kindCircuitFlags_kindOf (i : JoltISA.Instr) (f : CircuitFlag) :
     f ∈ kindCircuitFlags (kindOf i) ↔ legacyOpcodeFlag i f = true := by
   simp [kindCircuitFlags_kindOf, List.mem_filter, mem_circuitFlagOrder]
 
-/-- Generated routing-list membership reads the old instruction flag.
+/-- Generated routing-list membership reads the handwritten instruction flag.
 For example, RightOperandIsRdWriteValue belongs to the LD entry. -/
 theorem mem_kindInstructionFlags_kindOf (i : JoltISA.Instr) (f : InstructionFlags) :
     f ∈ kindInstructionFlags (kindOf i) ↔ JoltMetadata.instructionFlag i f = true := by

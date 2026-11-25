@@ -2,7 +2,7 @@
 title: Plan for deterministic, non-succinct soundness
 updated: 2026-11-25
 rust_pin: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
-lean_head: 3ff14b2
+lean_head: db02bb9
 ---
 
 Our goal is to make Jolt secure through formal verification. Each intermediate
@@ -122,14 +122,15 @@ Read this before the layers below; the rest of this document fills it in.
 - **The language.** `JoltInstance.InLanguage` says there exist private inputs
   and an `HonestTrace` on them whose final device has the claimed outputs and
   panic flag (`matches_outputs`), which Jolt's prover accepts, and whose spoil
-  asserts all pass. Stopping at the PC stall is part of `HonestTrace` itself.
+  asserts all pass. Stopping at the first explicit halt is part of `HonestTrace`
+  itself.
 - **The existential.** The private inputs are the given untrusted advice and a tape built from the values the witness records at its tape-read cycles.
   The given tape cannot be used: no constraint reads it (`AllConstraints.advice_tape_irrelevant`).
-  The relaxed trace ends at the first stable stall, or at padding or the last witness cycle if neither comes first.
+  The relaxed trace ends at the first explicit halt, or at padding or the last witness cycle if neither comes first.
   The rebuilt tape then gives an honest trace with the same source-level results.
 - **The connection, step 1.** For every retained cycle `t`, the witness's columns describe the relaxed trace's state before step `t`: the selected row, its live registers and its memory.
-  The witness may repeat the stable source instruction after the cut before padding begins.
-  Its final memory (`RamValFinal`) then equals the relaxed trace's final memory outside the synthetic termination word.
+  Row 21 (the halt lane) lets a real row enter padding only when it is a halt of the publicly claimed kind, and the stopping theorem (`soundness_stopping`, Layer 7) uses it to show that the retained prefix ends at an explicit halt.
+  The witness's final memory (`RamValFinal`) then equals the relaxed trace's final memory at every word.
   The retained-prefix comparison is proved by induction on `t`, using the constraints; it is the `Agrees` invariant below.
 - **The claim, step 2.** Constraint 26 (`ramOutputEqPublicIo`) says that in the public I/O region the witness's final memory equals the claimed I/O.
   With step 1, the relaxed trace's final memory holds the claim, which gives `matches_outputs`; the rebuilt honest trace inherits that result.
@@ -144,7 +145,11 @@ The proof first runs with the witness's tape values fed in directly (the
 relaxed semantics of Layer 5a), then shows the run on the built tape ends
 every source instruction with the same registers and memory (Layer 7).
 
-### Current top-level status (2026-10-23)
+### Top-level status on 2026-10-23
+
+This section records the proof at Lean commit `7096dca`.
+The `ff6fc6568` re-pin later replaced the stall-based stopping rule with the explicit halt, removed the termination word and every temporary restriction, and made `sys_enable_experimental_extensions` a definition; see [Current re-pin](#current-re-pin-2026-11-25).
+The LD/MULHU attack that finding 1 of the 2026-10-29 audit suggested is blocked by constraints (11) and (41); the remaining advice-word gap is described in `model_review.md` ("Advice words in initial RAM").
 
 At Lean HEAD `7096dca` on 2026-10-23, `JoltInstance.soundness` was proved, under the temporary restrictions, with no `sorry`.
 `lake build JoltBytecode JoltConstraints` passed then (8,832 jobs), and `#print axioms JoltInstance.soundness` listed only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
@@ -171,7 +176,7 @@ First rule out a translation issue.
 Our constraints, Jolt's tracer semantics, the device and the prover's sizing are Lean translations of Jolt's Rust code.
 Compare every Lean definition the counterexample depends on with Jolt's code at the pin.
 If they differ, the issue is ours: propose a model fix to Ari, and record it in `model_review.md` under "Gaps in our model".
-For example, the code that builds the claimed I/O words suggests a panicked claim never checks the termination word; the verifier's check covers the whole I/O region, so it does check it, against 0.
+For example, before the `ff6fc6568` re-pin the code that built the claimed I/O words suggested that a panicked claim never checked the termination word; the verifier's check covered the whole I/O region and therefore did check it, against 0.
 
 If the Lean definitions match Jolt's code, decide which kind of issue it is:
 - a Jolt bug, where a false claim is accepted, as in the panic-word and early-stop posts;
@@ -196,6 +201,8 @@ A scratch register can retain a different value across native rows that never wr
 Temporaries 40–47 are dead at every source boundary, by `tempsReadAfterWrite`.
 
 ## Remaining work (2026-11-02)
+
+This plan is dated. Item 0 is done, finding 2 was resolved by the `ff6fc6568` re-pin, and finding 1 is now the advice-word gap in `model_review.md` ("Advice words in initial RAM").
 
 0. Migrate the constraints to the `c6703570` ISA, as the eleven items in [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline) describe, then repair the dependent proofs and rebuild both libraries.
    Helper statements may change within the approved scope; the main statements do not.
@@ -301,10 +308,11 @@ The proof derives alignment and excludes peripheral addresses separately, in Lay
 Before the `ff6fc6568` re-pin, the `PanicStoresOne`, `ClaimsNoPanic` and `TerminationThenStall` restrictions covered the known panic, termination and stopping discrepancies. Jolt at that pin has no panic or termination word and ends a run at an explicit halt, and the re-pin removed all three restrictions. Stopping is proved in Layer 7.
 On 2026-10-10, Ari also decided to treat every advice-tape answer as untrusted for the planned soundness theorem, pending a16z's confirmation. Retain the fixed-tape specification for completeness and add the relaxed specification alongside it, as recorded in Layer 5a.
 On 2026-10-15, Ari decided the theorem keeps the fixed-tape language. Jolt's tracer reads one tape, in order; "untrusted" means the prover chooses its contents, which the ∃ over private inputs already allows. The relaxed specification stays, as a proof device.
-On 2026-10-10, Ari chose to model Akita separately. On 2026-11-10, after a16z/jolt#2403 made `p = 2^128 - 1780711455` Jolt's production field, the model took in Akita's one extra relation instead: the canonical lookup-address check, constraint (63), on when the characteristic is below `2^128`. The theorem now covers fields with characteristic above `2^128 - 2^64`, including BN254 and Akita's field. The audit in Layer 4 records the argument.
+On 2026-10-10, Ari chose to model Akita separately. On 2026-11-10, after a16z/jolt#2403 made `p = 2^128 - 1780711455` Jolt's production field, the model took in Akita's one extra relation instead: the canonical lookup-address check, constraint (63), on when the characteristic is below `2^128`. The field premise and the constraint algebra now cover fields with characteristic above `2^128 - 2^64`, including BN254 and Akita's field. The audit in Layer 4 records the argument. The prover-acceptance part of `InLanguage` models only the base Dory configuration: Jolt's `akita` build pads traces to at least 4096 rows and uses a different one-hot chunk policy, and neither is modelled (`model_review.md`, "Akita").
 PCS security, commitments, and opening protocols are outside the current proof scope.
-`reports/2026-10-29-soundness-statement-audit.md` checks that the modeled constraints are the ones Jolt's verifier checks.
-They are, except that Lean requires untrusted-advice words to be 64-bit values (its finding 1).
+`reports/2026-10-29-soundness-statement-audit.md` checks that the modeled constraints are the ones Jolt's verifier checks, and they are.
+The remaining difference is in the inputs: Lean builds the advice words in initial RAM from bytes, while Jolt's verifier takes them from committed polynomials without a range check.
+The audit's finding 1 suggested that LD followed by MULHU could exploit this; constraints (11) and (41) block that attack at `ff6fc6568`, and `model_review.md` ("Advice words in initial RAM") states what remains to prove.
 
 ## Key ideas
 
@@ -342,9 +350,10 @@ It connects the prefix and its current state to these witness columns:
 - **Registers:** `RegistersVal r t`, the value `w` says register `r` holds before cycle `t`; the read selectors `Rs1Ra`, `Rs2Ra` and write selector `RdWa`; and the values `Rs1Value`, `Rs2Value`, `RdWriteValue`.
 - **RAM:** `RamVal a t`, the value `w` says the memory word at RAM index `a` holds before cycle `t`; `RamAddress`, the selector `RamRa`, and the values `RamReadValue`, `RamWriteValue`. `RamValFinal a` is the claimed value at RAM index `a` after all cycles.
 
-`OrdinaryRamAgreement` compares every ordinary-RAM table entry with the
-interpreter's byte-map word. Device-region entries need a separate relation,
-as described below.
+`SharedRamAgreement` (`Layer5/RamAgreement.lean`) compares every RAM table
+entry with the interpreter's shared byte-map word. Since the `ff6fc6568`
+re-pin, inputs, advice, outputs and ordinary RAM share one byte map, and no
+separate device relation is needed.
 The register table is compared over [live registers](#register-agreement-must-be-over-live-registers).
 The columns not listed above need not be unique.
 Individual helpers that accept a plain `Trace`, such as `TraceWitness.PC`, can be reused when stating agreement.
@@ -355,8 +364,8 @@ For a fixed-tape trace `T : HonestTrace`, `f(T) := T.honestWitness params` is th
 
 Let `N := params.traceLength`.
 Call cycle `t < N` a padding cycle when `w.InstructionFlags .IsNoop t = 1`.
-The first pseudo Noop marks padding, but the retained execution prefix can end earlier at its first stable stall.
-The prefix includes that stall row, or ends at padding or the last witness cycle if no stall occurs.
+The first pseudo Noop marks padding, but the retained execution prefix can end earlier at its first explicit halt.
+The prefix includes that halt row, or ends at padding or the last witness cycle if no halt occurs.
 
 **Noop source audit:** rechecked at Jolt revision
 `8bbb2357890928d8f83b00ca542879077c4d3d28`, the pseudo instruction
@@ -375,8 +384,9 @@ audit resolves the TODO in `metadata.lean`; it is not the Layer 6 suffix proof.
 
 This definition does not establish the shape of the suffix after the retained prefix.
 Layer 6 proves that every retained cycle selects a real bytecode row, as part of `soundness_execution_prefix_agreement`.
-Layer 7 (`Layer7/StallSuffix.lean`) proves that the witness may repeat the stable source instruction before padding begins, that repeated stall rows leave RAM unchanged, and that the retained run stops at its final row.
-The case with no padding includes the last witness cycle in the retained prefix when no stable stall occurs earlier.
+Row 21 (`haltEndRule`) lets a real row enter padding only when it is a halt of the publicly claimed kind (`Layer1/HaltEndRule.lean`).
+Layer 7 (`soundness_stopping`, `Layer7/Stopping.lean`) uses it to show that the retained run ends at an explicit halt and agrees with every final shared-memory word.
+The case with no padding includes the last witness cycle in the retained prefix when no halt occurs earlier.
 
 ### Agreement is proved by induction on the step
 
@@ -395,9 +405,9 @@ same equality.
 The predicate records successful execution and linkage of the prefix, agreement with the witness columns for its executed rows, and the runtime-advice equality required by `advice_from_honest_tracer` for each of those rows.
 State agreement is retained through the endpoint `t = n`:
 
-- For `t ≤ n` and `t < N`, compare `RegistersVal r t` with the corresponding register value in `state` for every [live register](#register-agreement-must-be-over-live-registers) `r`. Compare `RamVal a t` with `state` for every ordinary-RAM index `a`; device indices need the separate relation below.
-- At the cut, `RepresentsPrefix.cutRam` requires RAM agreement for every RAM index except the termination word, including input, advice, output and panic words.
-- For `t = n = N`, compare `RamValFinal a` with the final state's RAM encoding for every RAM index `a` except the termination word. There is no `RegistersVal` column at cycle `N`.
+- For `t ≤ n` and `t < N`, compare `RegistersVal r t` with the corresponding register value in `state` for every [live register](#register-agreement-must-be-over-live-registers) `r`. Compare `RamVal a t` with `state` for every RAM index `a`.
+- At the cut, `RepresentsPrefix.cutRam` requires RAM agreement for every RAM index, including input, advice and output words.
+- For `t = n = N`, compare `RamValFinal a` with the final state's RAM encoding for every RAM index `a`. There is no `RegistersVal` column at cycle `N`.
 
 Also retain `AllRegistersPresent state.sail`: agreement with `sourceValue`
 alone would not ensure a successful read, because that function defaults missing
@@ -406,12 +416,12 @@ portion as `RegisterAgreement`, proves it for the initialized state, and
 preserves it through PC preparation and destination writes. Register presence
 is a proved induction invariant, not an added soundness premise.
 
-The RAM comparison must account for address remapping and the device regions.
-Device indices cannot be compared by equality with readable device memory
-after every store: termination ignores writes, and panic reads a flag rather
-than the stored bytes. Its device cases need a separate invariant relating
-table history, permitted reads and final public I/O; Layer 5b proves it
-(`Layer5/DeviceMemory.lean`).
+The RAM comparison must account for address remapping.
+Before the `ff6fc6568` re-pin, device indices could not be compared by
+equality, because termination ignored writes and panic read a flag rather than
+the stored bytes; Layer 5b then proved a separate invariant in
+`Layer5/DeviceMemory.lean`. The re-pin removed both words and deleted that
+file, and every index is now compared with the shared byte map.
 The predicate also records that the prefix's tape answers are the witness's answers at its tape-reading rows.
 For `t < n`, it requires the slot `w` selects at cycle `t` to be:
 
@@ -459,25 +469,18 @@ its evidence and next step.
 A proof counts as closed only after compilation and checking its dependencies
 for remaining `sorry`s or unjustified axioms.
 Run `#print axioms` on each layer's top lemmas and on the final theorem.
-The axiom policy allows the three standard logical axioms `propext`,
-`Classical.choice`, and `Quot.sound`, plus these named, uninterpreted Sail
-constants declared in [`RiscvExtras.lean`](../LeanRV64D/RiscvExtras.lean):
-
-| Constant | Role |
-| --- | --- |
-| `sys_enable_experimental_extensions : Unit → Bool` | Sail configuration flag |
-| `load_reservation : Arch.pa → Nat → SailM Unit` | Reservation update hook |
-| `match_reservation : Arch.pa → Bool` | Reservation query hook |
-| `cancel_reservation : Unit → SailM Unit` | Reservation cancellation hook |
-| `valid_reservation : Unit → Bool` | Reservation validity query hook |
-
-These constants have inhabited types and impose no proposition about their
-behavior. A proof that uses no additional assumptions about them holds for
-every interpretation of them, with the semantics in its statement interpreted
-accordingly. They cannot supply an unproved fact about execution, such as a
-reservation hook preserving state or agreeing with Jolt's reservation model.
-Such behavior still needs a proof; this policy does not authorize new soundness
-premises or resolve the LR/SC equivalence gaps.
+The axiom policy allows only the three standard logical axioms `propext`,
+`Classical.choice`, and `Quot.sound`.
+Before the Sail model was regenerated as Jolt's hart, the policy also allowed
+five uninterpreted constants declared with `axiom` in
+[`RiscvExtras.lean`](../LeanRV64D/RiscvExtras.lean):
+`sys_enable_experimental_extensions` and the reservation hooks
+`load_reservation`, `match_reservation`, `cancel_reservation` and
+`valid_reservation`. The regenerated model defines
+`sys_enable_experimental_extensions` as `false` and models reservations as
+registers. None of the five remains (`docs/riscv-alignment.md` section 8).
+`RiscvExtras.lean` still declares 67 floating-point primitives as `axiom`s.
+They are outside the policy, and no headline theorem depends on them.
 
 Forbid `sorryAx`, native-evaluation or compiler-trust axioms such as
 `Lean.ofReduceBool` and `Lean.trustCompiler`, and every dependency outside this
@@ -487,16 +490,12 @@ in a Sail file is not sufficient. Record the exact constants used by each layer
 and by the final theorem. Prefer narrower lemmas when they avoid dependencies
 the current proof does not need.
 
-The `noEarlyNextPCChange` field of `expand_program_rows_valid` depends on
-`sys_enable_experimental_extensions`. That dependency is acceptable under this
-policy, and `#print axioms JoltInstance.soundness` lists it. Layer 2 uses the narrower row-validity and canonicality
-facts and therefore still has only the standard three axioms.
+Before the regeneration, the `noEarlyNextPCChange` field of
+`expand_program_rows_valid` depended on `sys_enable_experimental_extensions`,
+and `#print axioms JoltInstance.soundness` listed it.
 Before using instruction-equivalence results in Layer 5b, check their actual
-dependencies: `RiscvInstruction.lean` and `Mret.lean` contain unfinished cases,
-and the LR/SC modules document the reservation hooks declared in
-`RiscvExtras.lean`. The quoted `axiom` lines in those module comments are not
-additional declarations. Importing a module alone does not introduce a proof
-dependency, but using its results can.
+dependencies with `#print axioms`. Importing a module alone does not introduce
+a proof dependency, but using its results can.
 
 ## Proof layers
 
@@ -506,7 +505,7 @@ stays in `JoltConstraints/theorems/Soundness/soundness.lean`.
 Algebraic helpers shared across layers live in `JoltConstraints/theorems/Soundness/Helpers/`.
 Layer 5 has two parts: 5a adds the relaxed semantics for tape answers, used inside the proof, and
 5b proves execution steps, one file per instruction family in `Layer5/`.
-At Lean HEAD `7096dca`, all layers were proved and `JoltInstance.soundness` had no `sorry`.
+All layers are proved and `JoltInstance.soundness` has no `sorry`; this first held at Lean HEAD `7096dca`.
 
 Layers 0 to 4 prove field bounds, selection, table histories and lookup facts.
 Layer 5a adds the untrusted-answer semantics alongside the fixed-tape semantics and proves inclusion; the execution-prefix induction in Layers 5b and 6 then takes tape answers from the witness.
@@ -525,7 +524,7 @@ Uses: `charAbove2pow127`, `ConstraintContext.oneHotFitsSetup`, bounds on paramet
 
 ### Layer 1: selection
 
-What: (a) at each cycle, the bytecode chunks and instruction-lookup chunks are one-hot, and the RAM chunks are one-hot or all zero as `RamHammingWeight` says.
+What: (a) at each cycle, the bytecode chunks and instruction-lookup chunks are one-hot, and the RAM selector sums to `Load + Store`, as constraint (66) says; (66) replaced the RAM Hamming-weight constraints at `ff6fc6568`.
 (b) Every cycle selects exactly one bytecode slot, and each `InstructionRa` lookup selector selects exactly one address.
 `InstructionRa` is not committed: it is rebuilt from small chunks and has an address domain of `virtualChunkBits` bits. This use of "virtual" in the parameter name is unrelated to virtual instructions.
 For RAM, the full selector is all zero exactly when `RamAddress` is zero; otherwise it selects exactly one RAM index.
@@ -601,14 +600,15 @@ Reuse `sum_before_succ` from
 for the RAM prefix sums; Layer 2 already uses this shared lemma for registers.
 Cycles that do not touch memory and the remapping of addresses to RAM indices must be accounted for.
 Prove the last-cycle update into `RamValFinal`, as well as updates between `RamVal` columns.
-If the per-word increments `RamRa a t * RamInc t` vanish for `n ≤ t < N`, prove `RamVal a n = RamValFinal a` when `n < N`; the Layer 7 stopping proof discharges that condition for stall replays and padding.
+If the per-word increments `RamRa a t * RamInc t` vanish for `n ≤ t < N`, prove `RamVal a n = RamValFinal a` when `n < N`; the Layer 7 stopping proof discharges that condition for padding.
 Also prove that `advance_pc` preserves the RAM encoding used in agreement.
 The initial state's layout must equal the context's public layout, so the RAM
 indices in the initial-state and address-remapping lemmas refer to the same base.
 The proved state lemmas compare the initial image and preserve every observation
 of the memory map and device under `advance_pc`. They do not identify later
-device reads with the last stored word: that execution obligation remains in
-Layer 5b, including the known panic and termination discrepancies.
+reads with the last stored word: Layer 5b proves that in its load and store
+steps over the shared byte map. Before the `ff6fc6568` re-pin this obligation
+also covered the panic and termination discrepancies.
 `ram_zero_effects` now supplies the zero-address updates;
 the unused overlapping `ram_read_of_address_zero` lemma was removed.
 Why: this does for memory what Layer 2 does for registers.
@@ -800,14 +800,16 @@ parameterized by the execution rule; this review does not require that refactor.
 
 **Premise decision, 2026-10-10.** Ari approved replacing the run-based RAM
 no-wrap assumption with `RamRegionFits`, the instance-only bound
-`lowest + 8 * maxRamSize ≤ 2^64`. **NOTE: to confirm with a16z.**
+`lowest + 8 * maxRamSize ≤ 2^64`. Since 2026-11-25 the bound is the theorem
+`JoltInstance.ramRegionFits`, because Jolt's `MemoryLayout::max_ram_k` rejects
+any layout that breaks it. No confirmation from a16z is needed.
 The former predicate and next-step helper are removed. This avoids quantifying
 over either fixed-tape or relaxed runs: the no-wrap fact is derived only at
 satisfying LD/SD cycles, by the integer argument in Layer 3 above.
 The bound and its use in the proof are recorded in `model_review.md`.
 
 Both trace specifications execute the expanded bytecode rather than fetching instructions from memory.
-That a program does not change its own code is what relates this to Jolt's tracer; it is a modeling assumption, not a premise.
+That a program does not change its own code is what relates this to Jolt's tracer. It is not an assumption: Jolt's tracer at `ff6fc6568` rejects every store that changes a code byte, and the whole-run proof derives that the code stays intact (`JoltCodeIntact.of_block`).
 After reviewing Layer 5a, Ari approved this premise replacement and continuing
 with Layer 5b. The later approved device-store restriction is recorded above
 and in Layer 5b below.
@@ -1099,14 +1101,13 @@ Do not add a new FIXME restriction for unfinished proof work.
 
 ### Layer 6: control flow
 
-What: prove entry selection and the two next-slot rules in `Agrees` for every retained cycle up to and including the first stable stall, or up to padding or the final witness cycle when no stall occurs.
-After the cut, the witness may repeat the stall's whole source expansion before padding begins.
-That stall-replay suffix, padding persistence and the zero per-word RAM updates `RamRa a t * RamInc t = 0` after the cut are proved in Layer 7 (`Layer7/StallSuffix.lean`, using `padding_persists` and `padding_from` in `Layer6/BytecodePC.lean`).
+What: prove entry selection and the two next-slot rules in `Agrees` for every retained cycle up to and including the first explicit halt, or up to padding or the final witness cycle when no halt occurs.
+Padding persistence and the zero per-word RAM updates `RamRa a t * RamInc t = 0` after the cut are proved in Layer 7 (`Layer7/Stopping.lean`, using `padding_persists` and `padding_from` in `Layer6/BytecodePC.lean`).
 Handle `n = 0` and `n = N` explicitly.
 Why: Layer 5b handles the state; this handles which bytecode row runs next.
-It supplies the `starts` and `linked` fields; Layer 7 connects the cut boundary to stall replays and then the no-op suffix.
+It supplies the `starts` and `linked` fields; Layer 7 connects the cut boundary to the no-op suffix.
 Uses: the PC and sequence constraints, Layer 5b.
-Layers 5b–6 are proved; see [Current top-level status](#current-top-level-status-2026-10-23).
+Layers 5b–6 are proved; see [Current re-pin](#current-re-pin-2026-11-25).
 
 **Entry and interior slots.**
 [BytecodePC.lean](../JoltConstraints/theorems/Soundness/Layer6/BytecodePC.lean)
@@ -1123,20 +1124,19 @@ selected instruction feeds the register shift's mask.
 
 **Entry address zero:** neither the [program image type nor entry preprocessing](../JoltConstraints/translation/program.lean) excludes it; `get_first_pc` maps it to slot 0.
 The earlier tracer initialized `prev_pc` to 0 and could produce no rows at entry address 0.
-PR #2109, merged as `0249591a`, starts `Cpu.stalled` as false (`jolt/tracer/src/emulator/cpu.rs:441-453` at `5def437f`), but a first fetch at address 0 may still fail because address 0 is not program memory.
-`get_first_pc` still maps address 0 to the no-op entry, as checked in `crates/jolt-program/src/preprocess/bytecode.rs:224-232`.
-We have not established whether `AllConstraints` admits such an instance.
-Soundness does not need to rule it out: the cut allows a zero-row prefix, and the completed run's nonemptiness comes from the proved `soundness_termination_store_exists`.
-The proof does not assume a positive entry address; a completed soundness run has at least one row because its termination store executes.
+At `5def437f`, `get_first_pc` mapped address 0 to the no-op entry (`crates/jolt-program/src/preprocess/bytecode.rs:224-232` at that revision).
+Soundness does not need to rule such an entry out by a premise: `ConstraintContext.entry_row` (`Layer6/SelectedRows.lean`) shows that the selected entry slot is a real row, following Jolt's `ProgramPreprocessing::validate_entry_row` at `ff6fc6568`.
+`soundness_stopping` uses it to show that a completed soundness run has at least one row.
 
 ### Layer 7: the relaxed trace and the rebuilt tape
 
 What: use the prefix constructed on the supplied untrusted advice and the tape answers from the witness.
 Take the successful execution, linkage and runtime-advice equalities from `Agrees w n prefix state` for the relaxed trace's counterparts of the `HonestTrace` fields.
-L also requires two facts about the rebuilt trace: Jolt's prover accepts it (it ends in a jump, its RAM addresses are at or above the lowest address, and its padded length is at most the maximum), and none of its spoil asserts fails.
+L also requires two facts about the rebuilt trace: Jolt's prover accepts it (it ends at an explicit halt, its RAM addresses are at or above the lowest address, and its padded length is at most the maximum), and none of its spoil asserts fails.
 The required stopping obligations are `stops` (the last row executes an explicit halt, `jolt.success` or EBREAK, as `TraceRow.Halts` says), `runs_until_stop` (no earlier row is a halt) and `nonempty`.
 The execution prefix is cut at its first halt row, or at padding or the last witness cycle if no halt occurs.
-The stopping proof `soundness_stopping` (`Layer7/Stopping.lean`, with `StallSuffix.lean` and `LastJump.lean`) proves that the cut is nonempty, because the entry row is not padding.
+The stopping proof `soundness_stopping` (`Layer7/Stopping.lean`) proves that the cut is nonempty, because the entry row is not padding (`ConstraintContext.entry_row`).
+`StallSuffix.lean` and `LastJump.lean` keep their pre-re-pin names; they now hold selected-row, padding, JAL, branch and next-PC lemmas that other proofs use.
 It also proves that the cut's last row is a halt: the next witness cycle is padding, and `haltEndRule` then forces the last row to be a halt of the claimed kind.
 It then proves the final RAM comparison, and it does not depend on `sorryAx`.
 The execution-prefix lemma owns RAM agreement at the cut, and the stopping lemma owns the final RAM comparison.
@@ -1151,7 +1151,7 @@ Uses: the context, Layers 5 and 6, stopping proofs.
 
 ### Layer 8: outputs
 
-What: use `Represents.finalRam`, which the Layer 7 stopping proof obtains by carrying the cut RAM comparison to `RamValFinal` across stall replays and padding.
+What: use `Represents.finalRam`, which the Layer 7 stopping proof obtains by carrying the cut RAM comparison to `RamValFinal` across padding.
 Helper B (`soundness_matches_outputs`) proves this layer without `sorryAx`.
 Translate the agreed RAM encoding on the public I/O region into the final device's output bytes and panic flag.
 Then use `RamOutputEqPublicIo` to prove that the final device has the instance's output bytes, after trimming trailing zeros, and its panic flag.
@@ -1174,8 +1174,10 @@ Uses: endpoint agreement from Layers 5b–6, Layer 3's suffix lemma, `RamOutputE
 - **Field-valued histories are not machine states.** Layers 2–3 prove update
   equations; Layer 5b establishes and preserves their interpretation as machine
   words. This relies on every initial RAM word being a 64-bit value, which
-  Jolt's verifier does not check for untrusted advice
-  (`reports/2026-10-29-soundness-statement-audit.md`, finding 1).
+  Jolt's verifier does not check for advice words
+  (`model_review.md`, "Advice words in initial RAM"; the LD/MULHU attack that
+  finding 1 of `reports/2026-10-29-soundness-statement-audit.md` suggested is
+  blocked by constraints (11) and (41)).
 - **Lookup reuse must not assume execution.** `lookupEntryCorrect_*` takes an
   `HonestTraceRow`, which already includes a proof of execution. Reuse pure identities such
   as `and_entry`; separately prove the connection to arbitrary witness operands.

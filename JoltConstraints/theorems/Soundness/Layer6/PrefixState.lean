@@ -14,7 +14,7 @@ open JoltConstraints.Soundness
 
 /-- Agreement after `run.rows.size` witness cycles, at a source-instruction boundary.
 `represents` compares retained row observations and every shared RAM word;
-`real` excludes retained padding and `noEarlierStop` excludes a stall before the last row.
+`real` excludes retained padding and `noEarlierStop` excludes a halt before the last row.
 `honestAdvice` records the honest tracer's advice at every retained row, while
 `atBoundary` says the last row, if present, completes its source instruction.
 `registers` compares all non-instruction-temporary registers at the next witness cycle
@@ -100,7 +100,7 @@ def RunExtends {joltInstance : JoltInstance SourceInstruction}
 at the end of the run, following an empty prefix or a completed source.
 `registers` compares the final state with the next witness column on `ExpansionLive`.
 While unfinished, `next` provides a real next cycle, its consecutive selected
-slot and the entry/linkage clause of `NextStep`; `notStopped` excludes a final stall.
+slot and the entry/linkage clause of `NextStep`; `notStopped` excludes a final halt.
 Honest advice is deliberately separate: after REM's first row a run carrying
 witness quotient 5 can satisfy this state, although the honest quotient is 0.
 See jolt/crates/jolt-program/src/expand/division/rem.rs (`expand_rem`) and

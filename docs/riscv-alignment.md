@@ -67,7 +67,7 @@ The Sail configuration has two regions, and nothing else is readable, writable o
 | RAM | `[0x8000_0000, 2^64)` | yes | yes | yes | AMOArithmetic | RsrvEventual |
 | I/O | `[IO_BASE, 0x8000_0000)` | yes | yes | no | AMOArithmetic | RsrvNone |
 
-`IO_BASE` is a fixed platform constant, `0x4000_0000`; the whole-run theorem assumes `IO_BASE ≤ io_start`, which every layout with an I/O window of at most 1 GiB satisfies.
+`IO_BASE` is a fixed platform constant, `0x4000_0000`. The whole-run theorem does not assume `IO_BASE ≤ io_start`: `new_lowest_address_ge_half_ram` (`JoltConstraints/theorems/layout_facts.lean`) proves it for every layout that `MemoryLayout::try_new` accepts, because that function pads the I/O region to a power of two and requires a nonzero `io_start`.
 The device-tree region at `0x1000` is removed, because Jolt has no device tree.
 The CLINT stays where the Sail model needs it (`0x0200_0000`), outside both regions; Jolt panics on any access to it (`mmu.rs`, `load_raw` and `store_raw`), so it is not reachable from a Jolt trace.
 
@@ -166,7 +166,7 @@ The prover is the external debugger that set `ebreakm` and ends the session when
 The Sail model does not implement the debug extension, and the halt is therefore stated outside the model: the whole-run theorem ends at the first state whose next instruction is a halt row (EBREAK or C.EBREAK for a panic, `jolt.success` for success) and does not execute it.
 No model patch is needed, and the Sail model stays a plain specification of the base and privileged architecture.
 
-The same treatment covers the other way a Jolt run stops, a jump to itself (a16z/jolt PR #2109): in Sail, executing such a jump changes only the counters, so the Sail state reached is a fixed point of the observation, and the theorem can stop there as well.
+An explicit halt is the only way a Jolt run ends at `ff6fc6568`. A run that stalls in a jump to itself without reaching a halt is a tracer error (`TraceError::EndedWithoutHalt`, `tracer/src/emulator/cpu.rs:333-337`), and the prover rejects any trace that does not end in a halt row (`ProverError::TraceDoesNotEndInHalt`, `crates/jolt-prover/src/config.rs:77-78`).
 
 ## 5. Equivalence is stated against `try_step`
 
@@ -317,7 +317,7 @@ After the regeneration of step b each of them is one of:
 | `SailRegReadable`, `XRegReadable`, the source-read bundles | invariant | Every register is present in the initial state and no step removes one (`Step.StepInvariant.present`, kept by `Step.RegFrame.present` and the Sail frames) |
 | `DwordPresent` | invariant | The initial state's memory map covers RAM and the I/O window |
 | `MstatusVRegMatchesSail` and the five other `…VRegMatchesSail` | relation | Section 6 |
-| `JoltRamLoadOk`, `JoltRamStoreOk` | Jolt fact | Jolt's MMU panics at or above `heap_end` and on stores into the stack canary |
+| `JoltRamLoadOk`, `JoltRamStoreOk` | Jolt fact | Jolt's MMU panics on an access at or above the end of the padded RAM backing (`below_backing_end`, against `ram_backing_end`) and on a store that changes a protected byte (`preserves_protected`) |
 | `MstatusWriteLegalized`, `MtvecWriteDirectMode`, `MepcWriteLegalized` | removed in step d | The jolt-changes sequences legalize the written value the way Sail does |
 | `MstatusMppMachine` | removed in step d | `v39` no longer holds MPP; every read adds `MPP = 3` |
 | `MepcReadAligned` | invariant (step d) | `v36[0] = 0`, kept by the `mepc` write mask |
@@ -330,23 +330,21 @@ The model's own axioms (`LeanRV64D/RiscvExtras.lean`) after the regeneration:
 | `sys_enable_experimental_extensions` | removed: a definition, `false` |
 | `plat_term_write`, `plat_term_read` | removed: definitions; the platform has no console |
 | `get_16_random_bits` | removed: an opaque function (unspecified entropy). It is the entropy source behind the Zkr `seed` CSR. Zkr is off, and Jolt rejects the CSR, so no Jolt step reaches it; as an opaque constant it adds no axiom and proofs cannot assume anything about its result |
-| floating-point operations (`riscv_f16Add` and the rest) | not reached: F and D are off and their instruction modules are not generated |
+| floating-point operations (`riscv_f16Add` and the rest) | kept: 67 `axiom` declarations. They are not reached, because F and D are off and their instruction modules are not generated, and `#print axioms` for the headline theorems lists none of them |
 
-The generated model is checked at Lean's default limits (200000 heartbeats, `maxRecDepth` 512), with no file-wide `set_option`; `scripts/regen-sail-model.sh` removes the two header lines Sail writes and splits each 256-entry S-box table into two 128-entry halves.
-Only the declarations below carry a limit, as `set_option … in` directly before the declaration; each limit is the smallest passing value rounded up to the next 50 (next 50000 for heartbeats).
-The first five are in the closure of `JoltInstance.sail_soundness`, which therefore depends on those options for the model, though not on any file-wide one.
+The generated model is checked at Lean's default limits (200000 heartbeats, `maxRecDepth` 512), with no file-wide `set_option`; `scripts/regen-sail-model.sh` removes the two header lines Sail writes.
+Only the five declarations below carry a limit, as `set_option … in` directly before the declaration; each limit is the smallest `maxRecDepth` that passes under `lake build`, rounded up to the next 50. No declaration raises `maxHeartbeats`.
+The first four are in the closure of `JoltInstance.sail_soundness`, which therefore depends on those options for the model, though not on any file-wide one.
 
 | Declaration | Limit | Reason | In the closure |
 | --- | --- | --- | --- |
-| `is_CSR_accessible` (`SysControl`) | `maxRecDepth` 900 | generated if-chain over every CSR address | yes |
-| `read_CSR`, `write_CSR` (`ZicsrInsts`) | `maxRecDepth` 900 | the same chain, for reads and writes | yes |
-| `encdec_backwards` (`InstsEnd`) | `maxRecDepth` 1450, `maxHeartbeats` 250000 | decoder mapping over every instruction | yes |
-| `encdec_compressed_backwards` (`InstsEnd`) | `maxRecDepth` 550 | the same mapping for compressed instructions | yes |
-| `encdec_backwards_matches` (`InstsEnd`) | `maxRecDepth` 1400, `maxHeartbeats` 250000 | the same mapping, returning a `Bool` | no |
-| `encdec_compressed_backwards_matches` (`InstsEnd`) | `maxRecDepth` 550 | the same mapping, returning a `Bool` | no |
-| `print_rvfi_exec` (`RvfiDii`) | `maxHeartbeats` 1000000000 | debug printer for the RVFI trace format | no |
+| `is_CSR_accessible` (`SysControl`) | `maxRecDepth` 750 | generated if-chain over every CSR address | yes |
+| `read_CSR` (`ZicsrInsts`) | `maxRecDepth` 700 | the same chain, for reads | yes |
+| `write_CSR` (`ZicsrInsts`) | `maxRecDepth` 800 | the same chain, for writes | yes |
+| `encdec_backwards` (`InstsEnd`) | `maxRecDepth` 750 | decoder mapping over every 32-bit instruction | yes |
+| `encdec_backwards_matches` (`InstsEnd`) | `maxRecDepth` 750 | the same mapping, returning a `Bool` | no |
 
-The follow-up is for Sail's Lean backend to split long if-chains and mappings into helper definitions, so that these options, and the S-box rewrite, can be dropped from the regeneration.
+The follow-up is for Sail's Lean backend to split long if-chains and mappings into helper definitions, so that these options can be dropped from the regeneration.
 The proofs unfold the CSR chains and the decoder mapping, so the chains are not split by hand.
 
 `#print axioms` on `JoltInstance.soundness` and on every instruction theorem that is fully proved gives only `propext`, `Classical.choice` and `Quot.sound`.

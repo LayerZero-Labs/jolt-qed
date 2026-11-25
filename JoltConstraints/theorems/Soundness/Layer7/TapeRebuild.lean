@@ -2106,8 +2106,9 @@ theorem rebuild_honest_advice
     observed.symm.trans (originalAdvice.trans
       (agreement.honestAdviceAt_eq n.val old new oldAt newAt))
 
-/-- PR #2109's stable-stall predicate depends on bytecode, row index and nextPC,
-all preserved by replay. Pinned to a16z/jolt PR #2109 merge commit 0249591a. -/
+/-- The replay ends at an explicit halt because the original does: `Halts` reads
+the bytecode row's instruction, and replay preserves the bytecode and row index.
+For example, a replay of a run that ends at a `JoltSuccess` row ends at that row. -/
 theorem rebuild_stops
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
