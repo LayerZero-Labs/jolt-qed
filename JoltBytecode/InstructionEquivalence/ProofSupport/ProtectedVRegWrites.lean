@@ -27,8 +27,6 @@ register, meaning a virtual register mirrored in Sail's state.
 For example, a floor load can write one when its destination is protected,
 whereas a floor store writes no register. -/
 def Instr.WritesProtectedVReg : Instr → Prop
-  | .JoltSuccess dst
-  | .Panic dst
   | .ADDI dst _ _
   | .ADDIW dst _ _
   | .ANDI dst _ _

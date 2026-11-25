@@ -417,11 +417,11 @@ def equivAssumptions : (instr : RiscvInstruction) → SailJoltState → Type
   | .LD _rd rs1 imm, js =>
       LoadProgramEqSailAssumptions imm rs1 js
   | .SB rs2 rs1 imm, js =>
-      StoreProgramEqSailAssumptions imm rs2 rs1 js 1
+      StoreProgramEqSailAssumptions imm rs2 rs1 js
   | .SH rs2 rs1 imm, js =>
-      StoreProgramEqSailAssumptions imm rs2 rs1 js 2
+      StoreProgramEqSailAssumptions imm rs2 rs1 js
   | .SW rs2 rs1 imm, js =>
-      StoreProgramEqSailAssumptions imm rs2 rs1 js 4
+      StoreProgramEqSailAssumptions imm rs2 rs1 js
   | .SD rs2 rs1 imm, js =>
       StoreProgramEqSailAssumptions imm rs2 rs1 js
   | .MUL _rd rs1 rs2, js =>

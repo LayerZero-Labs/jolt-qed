@@ -18,62 +18,6 @@ def amoWordBundleOld (op : amoop) (rs2 rs1 rd : regidx) (js : SailJoltState)
       (amo_word_base_no_ovf h.rs1_val))
     (h.rs1_val &&& (7 : BitVec 64)).toNat
 
-/-- The word-AMO bundle accepts any full result with the required low word.
-For example, sign-extending a negative result does not alter the merged lane. -/
-theorem amo_word_bundle_store_spliced_ok {op : amoop} {rs2 rs1 rd : regidx}
-    {js : SailJoltState} (h : AmoWordProgramEqSailAssumptions op rs2 rs1 rd js)
-    (value : BitVec 64)
-    (hresult : (Sail.BitVec.extractLsb value 31 0 : BitVec 32) =
-      amoWordSailResult op (Sail.BitVec.extractLsb h.rs2_val 31 0)
-        (amoWordBundleOld op rs2 rs1 rd js h)) :
-    Assumptions.JoltRamStoreOk (amoWordBase h.rs1_val) js
-      (amoWordSplicedDword h.rs1_val value
-        (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase h.rs1_val).toNat)) 8 := by
-  have hoff : (h.rs1_val - amoWordBase h.rs1_val).toNat =
-      (h.rs1_val &&& (7 : BitVec 64)).toNat :=
-    StoreSplice.offset_toNat_eq_low_three rfl
-  have hloaded :
-      ((JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase h.rs1_val).toNat) >>>
-        ((h.rs1_val - amoWordBase h.rs1_val).toNat * 8)).setWidth 32 =
-      amoWordBundleOld op rs2 rs1 rd js h := by
-    rw [JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail _
-      (Assumptions.DwordPresent.memBytesPresentAt h.dword_present)
-      (amo_word_base_no_ovf h.rs1_val), hoff]
-    simp only [amoWordBundleOld, word_of_dword, Nat.mul_comm]
-  have haccepted := h.jolt_ram_store
-  change Assumptions.JoltRamStoreOk (amoWordBase h.rs1_val) js
-    (StoreSplice.wordSplice
-      (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase h.rs1_val).toNat)
-      (JoltISA.amoValue op (h.rs2_val.setWidth 32)
-        (((JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase h.rs1_val).toNat) >>>
-          ((h.rs1_val - amoWordBase h.rs1_val).toNat * 8)).setWidth 32))
-      ((h.rs1_val - amoWordBase h.rs1_val).toNat * 8)) 8 at haccepted
-  rw [hloaded] at haccepted
-  unfold amoWordSplicedDword
-  rw [hresult]
-  have hsource : h.rs2_val.setWidth 32 = (Sail.BitVec.extractLsb h.rs2_val 31 0 : BitVec 32) := by
-    simpa only [Sail.BitVec.extractLsb, BitVec.extractLsb] using
-      (BitVec.setWidth_eq_extractLsb' (x := h.rs2_val) (w := 32) (by decide))
-  rw [hsource] at haccepted
-  have hop (source loaded : BitVec 32) :
-      JoltISA.amoValue op source loaded = amoWordSailResult op source loaded := rfl
-  rw [hop] at haccepted
-  simpa only [Nat.mul_comm] using haccepted
-
-/-- The word-AMO bundle also accepts the value produced by the current lane rows.
-For example, the upper-lane ADD rows preserve the lower word. -/
-theorem amo_word_bundle_store_lane_ok {op : amoop} {rs2 rs1 rd : regidx}
-    {js : SailJoltState} (h : AmoWordProgramEqSailAssumptions op rs2 rs1 rd js)
-    (halign : h.rs1_val &&& (3 : BitVec 64) = 0) (value : BitVec 64)
-    (hresult : (Sail.BitVec.extractLsb value 31 0 : BitVec 32) =
-      amoWordSailResult op (Sail.BitVec.extractLsb h.rs2_val 31 0)
-        (amoWordBundleOld op rs2 rs1 rd js h)) :
-    Assumptions.JoltRamStoreOk (amoWordBase h.rs1_val) js
-      (amoWordLaneMerged h.rs1_val
-        (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase h.rs1_val).toNat) value) 8 := by
-  rw [amo_word_lane_merged_eq_spliced _ _ _ halign]
-  exact amo_word_bundle_store_spliced_ok h value hresult
-
 /-- Relate a word-AMO program's successful or alignment-fault run to Sail.
 The program supplies its bytecode execution and protected-register frame;
 for example, binops and selects share this memory and projection argument. -/
@@ -210,7 +154,7 @@ theorem amo_word_window_program_aligned_run
     (hwrite : Assumptions.NotWritableMmio (amoWordBase addr) 8 js.sail)
     (halign : addr &&& (3 : BitVec 64) = 0)
     (hload : Assumptions.JoltRamLoadOk (amoWordBase addr) js)
-    (hstore : Assumptions.JoltRamStoreOk (amoWordBase addr) js (amoWordLaneMerged addr (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase addr).toNat) value) 8)
+    (hstore : Assumptions.JoltRamStoreOk (amoWordBase addr) js)
     (hmiddle : ∀ pre,
       pre.sail = js.sail →
       pre.vregs (JoltISA.amoWordDwordVRegFor rd) =
@@ -235,13 +179,13 @@ theorem amo_word_window_program_aligned_run
   let dword := JoltISA.amoWordDwordVRegFor rd
   let lane := JoltISA.amoWordLaneVRegFor rd
   let post := JoltISA.amoWordMergeProgram rs1 rd source dword lane old
-  obtain ⟨pre, hpre, hpre_sail, hdword, hlane, hold, hsetup⟩ :=
+  obtain ⟨pre, hpre, hpre_sail, hdword, hlane, hold, hlayout⟩ :=
     amo_word_pre64_aligned_run_for rd (middle.append post) rs1 js addr hrs1 hbytes
       hread (amo_word_base_no_ovf addr) halign hload
   obtain ⟨after, hm⟩ := hmiddle pre hpre_sail hdword hlane
     (hold.trans (amo_word_lane_old_eq addr _ halign))
   have hsail : after.sail = js.sail := hm.sail.trans hpre_sail
-  have hsetup' := hsetup.trans (JoltIOSetupFrame.execProgram_setup middle pre after RETIRE_SUCCESS hm.run)
+  have hlayout' := (JoltIOSetupFrame.execProgram_rule middle pre after RETIRE_SUCCESS hm.run).1.trans hlayout
   have hregs : WritableVReg dword ∧ WritableVReg lane ∧
       dword ≠ lane ∧ old ≠ dword ∧ old ≠ lane := by
     dsimp [old, dword, lane, JoltISA.amoWordOldVRegFor, JoltISA.amoWordDwordVRegFor,
@@ -253,12 +197,8 @@ theorem amo_word_window_program_aligned_run
     (by simpa only [dword, hm.dword_vreg] using hm.value_read)
     hm.old_vreg hregs.1 hregs.2.1 hregs.2.2.1 hregs.2.2.2.1 hregs.2.2.2.2 halign
     (by rw [hsail]; exact hwrite)
-    (by
-      rw [hm.dword_vreg]
-      rw [JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail (amoWordBase addr)
-        hbytes (amo_word_base_no_ovf addr)] at hstore
-      simpa only [hsail] using hstore.transfer hsetup'.1 hsetup'.2
-        (congrArg (fun s : SailState => s.mem) hsail))
+    ⟨by rw [hlayout']; exact hstore.below_heap_end,
+     by rw [hlayout']; exact hstore.outside_canary⟩
   refine ⟨jsf, ?_, ?_⟩
   · change (JoltISA.execProgram _).run js = _
     unfold amoWordWindowProgram
@@ -302,9 +242,7 @@ theorem amo_word_binop_eq_sail
       (value h.rs2_val old) _ h.rs1_read hbytes
       (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
       (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
-      halign h.jolt_ram_load
-      (amo_word_bundle_store_spliced_ok h _ (by rw [hold]; exact hvalue _ _))
-      (by rw [hold]; exact hvalue _ _)
+      halign h.jolt_ram_load h.jolt_ram_store (by rw [hold]; exact hvalue _ _)
     intro pre hsail hdword hlane hold
     apply hrow _ _ _ _ rs2 pre h.rs2_val old dword (amoWordLaneMask h.rs1_val)
       (by rw [hsail]; exact h.rs2_read) hold hdword hlane

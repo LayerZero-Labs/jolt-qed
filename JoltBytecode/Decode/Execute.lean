@@ -1,5 +1,4 @@
 import JoltBytecode.Step.Instructions
-import JoltBytecode.Decode.Jolt
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
   LeanRV64D LeanRV64D.Functions
@@ -449,35 +448,5 @@ theorem compressed_branch_swap (imm : BitVec 13) (a b : regidx) (op : bop)
   rcases hop with rfl | rfl <;>
     simp only [execute, execute_BTYPE, ha, hb, bind, EStateM.bind, pure, EStateM.pure,
       bne, he]
-
-/-! Source execution at Jolt `ff6fc6568` uses an explicit halted state.
-`SourceInstruction.tick` guards the entire Sail step, including its bookkeeping.
-Its body uses the decoded success row with the tracer's side-effecting x0 rewrite;
-EBREAK uses its single Panic row. The raw row/program executors remain available
-for the local equivalence proofs. For example, the tick following a success halt
-cannot change memory, registers, the advice cursor or counters. -/
-
-/-- Run a decoded source's rows at the instruction-body boundary.
-For example, success writes the advanced PC into instruction temporary v40. -/
-noncomputable def SourceInstruction.body : SourceInstruction → JoltMonad ExecutionResult
-  | .standard instruction => instruction.joltRun
-  | .joltSuccess => JoltISA.execInstr
-      ((JoltISA.Instr.JoltSuccess (.xreg (.Regidx 0))).rewriteNative)
-
-/-- One source tick with an explicit instruction length and encoding.
-For example, compressed EBREAK uses length two; a recorded halt makes all later ticks no-ops.
-The caller supplies a decoded source at the fetched PC, as for the existing Sail step. -/
-noncomputable def SourceInstruction.tick (instruction : SourceInstruction)
-    (length : Int) (bits : BitVec 32) : JoltMonad Bool :=
-  fun state => if state.halted.isSome then .ok true state
-    else _root_.Step.joltStep length bits instruction.body state
-
-/-- A halted source tick preserves the entire state, including memory and counters.
-For example, trying to tick ADDI after EBREAK cannot update its destination. -/
-theorem SourceInstruction.tick_halted (instruction : SourceInstruction)
-    (length : Int) (bits : BitVec 32) (state : SailJoltState) (kind : JoltHaltKind)
-    (h : state.halted = some kind) :
-    instruction.tick length bits state = .ok true state := by
-  simp only [SourceInstruction.tick, h, Option.isSome_some, ite_true]
 
 end Decode

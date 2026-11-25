@@ -82,10 +82,6 @@ inductive Instr where
   | BLTU (lhs rhs : Src) (imm : BitVec 128)
   | BGEU (lhs rhs : Src) (imm : BitVec 128)
   | FENCE
-  /-- Success halt row; for example, decoded jolt.success uses x0 as link destination. -/
-  | JoltSuccess (dst : Dst)
-  /-- Failure halt row; for example, EBREAK lowers to this row with scratch v40. -/
-  | Panic (dst : Dst)
   | ADD  (dst : Dst) (lhs rhs : Src)
   | ADDW (dst : Dst) (lhs rhs : Src)
   | SUB  (dst : Dst) (lhs rhs : Src)
@@ -457,7 +453,7 @@ def sideEffectingDst : Dst → Dst
     sideEffectingDst (.vreg v) = .vreg v := rfl
 
 def Instr.destination? : Instr → Option Dst
-  | .JoltSuccess dst | .Panic dst | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
+  | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
   | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
   | .ADD dst _ _ | .ADDW dst _ _ | .SUB dst _ _ | .SUBW dst _ _ | .MUL dst _ _
   | .MULW dst _ _ | .MULHU dst _ _ | .ANDN dst _ _ | .VirtualMULI dst _ _
@@ -494,8 +490,6 @@ def Instr.canonicalNoOp : Instr :=
 
 def Instr.rewriteNative (instruction : Instr) : Instr :=
   match instruction with
-  | .JoltSuccess dst => .JoltSuccess (sideEffectingDst dst)
-  | .Panic dst => .Panic (sideEffectingDst dst)
   | .JAL dst imm => .JAL (sideEffectingDst dst) imm
   | .JALR dst base imm => .JALR (sideEffectingDst dst) base imm
   | .LD fault dst base imm => .LD fault (sideEffectingDst dst) base imm

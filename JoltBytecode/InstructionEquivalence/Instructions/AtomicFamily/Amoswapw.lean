@@ -47,7 +47,7 @@ theorem amo_word_swap_pre64_aligned_run_for
       pre.vregs (JoltISA.amoWordLaneVRegFor rd) = amoWordLaneMask addr ∧
       pre.vregs (JoltISA.amoWordOldVRegFor rd) = amoWordLaneOld addr
         (loaded_dword_at js.sail (amoWordBase addr) hbytes h_no_ovf) ∧
-      JoltIOSetupFrame.SetupSame js pre :=
+      pre.jolt_device.memory_layout = js.jolt_device.memory_layout :=
   amo_word_pre64_aligned_run_for rd tail rs1 js addr hrs1 hbytes hread h_no_ovf halign hjolt
 
 /-- The first two postlude instructions seed the low-word mask and preserve the
@@ -772,7 +772,7 @@ theorem amo_word_swap_sd_spliced_dword_run
     (h_base : js.vregs JoltISA.amoWordSwapMaskVReg = amoWordBase addr)
     (h_dword : js.vregs JoltISA.amoWordSwapDwordVReg = dwordNew)
     (h_old : js.vregs JoltISA.amoWordSwapOldVReg = old)
-    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js dwordNew 8) :
+    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
     ∃ js',
       js'.sail = state_after_dword_store s (amoWordBase addr) dwordNew ∧
       js'.vregs JoltISA.amoWordSwapOldVReg = old ∧
@@ -817,7 +817,7 @@ theorem amo_word_swap_sd_spliced_dword_run
       (by rw [h_sail]; exact hpriv) (by rw [h_sail]; exact hmprv)
       (by rw [h_sail, h_base, amo_word_zero_offset_addr]; exact hstore_pmp)
       (by rw [h_sail, h_base, amo_word_zero_offset_addr]; exact hwrite_mmio)
-      (by rw [h_base, amo_word_zero_offset_addr, h_dword]; exact hjolt)
+      (by rw [h_base, amo_word_zero_offset_addr]; exact hjolt)
   refine ⟨js', rfl, ?_, ?_⟩
   · exact h_old
   · intro tail
@@ -836,7 +836,7 @@ theorem amo_word_swap_sd_spliced_dword_run_for
     (h_base : js.vregs (JoltISA.amoWordSwapMaskVRegFor rd) = amoWordBase addr)
     (h_dword : js.vregs (JoltISA.amoWordSwapDwordVRegFor rd) = dwordNew)
     (h_old : js.vregs (JoltISA.amoWordSwapOldVRegFor rd) = old)
-    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js dwordNew 8) :
+    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
     ∃ js',
       js'.sail = state_after_dword_store s (amoWordBase addr) dwordNew ∧
       js'.vregs (JoltISA.amoWordSwapOldVRegFor rd) = old ∧
@@ -884,7 +884,7 @@ theorem amo_word_swap_sd_spliced_dword_run_for
       (by rw [h_sail]; exact hpriv) (by rw [h_sail]; exact hmprv)
       (by rw [h_sail, h_base, amo_word_zero_offset_addr]; exact hstore_pmp)
       (by rw [h_sail, h_base, amo_word_zero_offset_addr]; exact hwrite_mmio)
-      (by rw [h_base, amo_word_zero_offset_addr, h_dword]; exact hjolt)
+      (by rw [h_base, amo_word_zero_offset_addr]; exact hjolt)
   refine ⟨js', rfl, ?_, ?_⟩
   · exact h_old
   · intro tail
@@ -962,8 +962,8 @@ theorem amo_word_swap_post64_amoswap_aligned_run
         (amoWordShiftedOld addr
           (loaded_dword_at js.sail (amoWordBase addr) hbytes_base h_no_ovf))
         31 0 : BitVec 32) = oldWord)
-    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js (amoWordSplicedDword addr rs2Val (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase addr).toNat)) 8)
-    (hpre_setup : JoltIOSetupFrame.SetupSame js js_pre) :
+    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js)
+    (hpre_layout : js_pre.jolt_device.memory_layout = js.jolt_device.memory_layout) :
     ∃ jsf : SailJoltState,
       (JoltISA.execProgram
         (JoltISA.amoPost64ProgramWithScratch rs1 rd (.xreg rs2)
@@ -1010,17 +1010,19 @@ theorem amo_word_swap_post64_amoswap_aligned_run
       hstore_base_old, hstore_base_tail⟩ :=
     amo_word_swap_store_base_prefix_run rs1 js_splice js.sail addr dwordNew old
       hsplice_sail hrs1 hsplice_dword hsplice_old
-  have hstore_base_setup : JoltIOSetupFrame.SetupSame js js_store_base :=
-    (((((hpre_setup).trans (JoltIOSetupFrame.setup_of_tail_run hmask_tail)).trans (JoltIOSetupFrame.setup_of_tail_run hshift_mask_tail)).trans (JoltIOSetupFrame.setup_of_tail_run hshift_new_tail)).trans (JoltIOSetupFrame.setup_of_tail_run hsplice_tail)).trans (JoltIOSetupFrame.setup_of_tail_run hstore_base_tail)
+  have hstore_base_layout :
+      js_store_base.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.layout_of_tail_run hstore_base_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hsplice_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hshift_new_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hshift_mask_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hmask_tail).trans hpre_layout
   obtain ⟨js_store, hstore_sail, hstore_old, hstore_tail⟩ :=
     amo_word_swap_sd_spliced_dword_run js_store_base js.sail addr dwordNew old
       hpriv hmprv hstore_pmp hwrite_mmio h_no_ovf hstore_base_sail
       hstore_base hstore_base_dword hstore_base_old
-      (by
-        have hs := hjolt_store.transfer hstore_base_setup.1 hstore_base_setup.2
-          (congrArg (fun s : SailState => s.mem) hstore_base_sail)
-        simpa only [dwordNew, dword,
-          JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail _ hbytes_base h_no_ovf] using hs)
+      ⟨by rw [hstore_base_layout]; exact hjolt_store.below_heap_end,
+       by rw [hstore_base_layout]; exact hjolt_store.outside_canary⟩
   have hword_store :
       state_after_dword_store js.sail (amoWordBase addr) dwordNew =
         state_after_word_store js.sail addr wordResult := by
@@ -1087,8 +1089,8 @@ theorem amo_word_swap_post64_amoswap_aligned_run_for
         (amoWordShiftedOld addr
           (loaded_dword_at js.sail (amoWordBase addr) hbytes_base h_no_ovf))
         31 0 : BitVec 32) = oldWord)
-    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js (amoWordSplicedDword addr rs2Val (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase addr).toNat)) 8)
-    (hpre_setup : JoltIOSetupFrame.SetupSame js js_pre) :
+    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js)
+    (hpre_layout : js_pre.jolt_device.memory_layout = js.jolt_device.memory_layout) :
     ∃ jsf : SailJoltState,
       (JoltISA.execProgram
         (JoltISA.amoPost64ProgramWithScratch rs1 rd (.xreg rs2)
@@ -1137,17 +1139,19 @@ theorem amo_word_swap_post64_amoswap_aligned_run_for
       hstore_base_old, hstore_base_tail⟩ :=
     amo_word_swap_store_base_prefix_run_for rd rs1 js_splice js.sail addr
       dwordNew old hsplice_sail hrs1 hsplice_dword hsplice_old
-  have hstore_base_setup : JoltIOSetupFrame.SetupSame js js_store_base :=
-    (((((hpre_setup).trans (JoltIOSetupFrame.setup_of_tail_run hmask_tail)).trans (JoltIOSetupFrame.setup_of_tail_run hshift_mask_tail)).trans (JoltIOSetupFrame.setup_of_tail_run hshift_new_tail)).trans (JoltIOSetupFrame.setup_of_tail_run hsplice_tail)).trans (JoltIOSetupFrame.setup_of_tail_run hstore_base_tail)
+  have hstore_base_layout :
+      js_store_base.jolt_device.memory_layout = js.jolt_device.memory_layout :=
+    (JoltIOSetupFrame.layout_of_tail_run hstore_base_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hsplice_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hshift_new_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hshift_mask_tail).trans <|
+    (JoltIOSetupFrame.layout_of_tail_run hmask_tail).trans hpre_layout
   obtain ⟨js_store, hstore_sail, hstore_old, hstore_tail⟩ :=
     amo_word_swap_sd_spliced_dword_run_for rd js_store_base js.sail addr
       dwordNew old hpriv hmprv hstore_pmp hwrite_mmio h_no_ovf
       hstore_base_sail hstore_base hstore_base_dword hstore_base_old
-      (by
-        have hs := hjolt_store.transfer hstore_base_setup.1 hstore_base_setup.2
-          (congrArg (fun s : SailState => s.mem) hstore_base_sail)
-        simpa only [dwordNew, dword,
-          JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail _ hbytes_base h_no_ovf] using hs)
+      ⟨by rw [hstore_base_layout]; exact hjolt_store.below_heap_end,
+       by rw [hstore_base_layout]; exact hjolt_store.outside_canary⟩
   have hword_store :
       state_after_dword_store js.sail (amoWordBase addr) dwordNew =
         state_after_word_store js.sail addr wordResult := by
@@ -1215,7 +1219,7 @@ theorem amoswapwProgram_concrete_aligned
     (hwrite_mmio : Assumptions.NotWritableMmio (amoWordBase addr) 8 js.sail)
     (h_align : addr &&& (3 : BitVec 64) = 0)
     (hjolt_load : Assumptions.JoltRamLoadOk (amoWordBase addr) js)
-    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js (amoWordSplicedDword addr rs2Val (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase addr).toNat)) 8)
+    (hjolt_store : Assumptions.JoltRamStoreOk (amoWordBase addr) js)
     (hold :
       (Sail.BitVec.extractLsb
         (amoWordShiftedOld addr
@@ -1240,8 +1244,7 @@ theorem amoswapwProgram_concrete_aligned
       addr h_align
   obtain ⟨jsf, hrun, hfinal⟩ := amo_word_window_program_aligned_run
     (.done RETIRE_SUCCESS) (.xreg rs2) rs1 rd js addr rs2Val hrs1 hbytes_base
-    hread_mmio hwrite_mmio h_align hjolt_load
-    (by simpa only [amo_word_lane_merged_eq_spliced addr _ _ h_align] using hjolt_store)
+    hread_mmio hwrite_mmio h_align hjolt_load hjolt_store
     (by intro pre hsail hdword hlane hold
         refine ⟨pre, rfl, rfl, hold, hdword, hlane, ?_⟩
         exact JoltISA.readSrc_xreg_run_of_read rs2 _ rs2Val (by
@@ -1272,7 +1275,7 @@ private theorem amoswapwProgramAuto_eq_sail
       (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
       (by simpa using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
       (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
-      halign h.jolt_ram_load (amo_word_bundle_store_spliced_ok h _ rfl)
+      halign h.jolt_ram_load h.jolt_ram_store
       (by apply amo_word_sign_extend_64_injective
           simpa only [amoWordShiftedOld, amoWordBundleOld] using
             srl_sign_extend_word_extracts_word

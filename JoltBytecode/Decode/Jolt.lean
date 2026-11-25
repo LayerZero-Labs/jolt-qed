@@ -1,8 +1,10 @@
 import JoltBytecode.RiscvInstruction
 
 /-!
-Jolt's image decoder and RV64 compressed-instruction normalization at `ff6fc6568`.
-Reserved compressed parcels, including `0x6001`, normalize to the invalid word.
+Jolt's image decoder and RV64 compressed-instruction normalization at
+`c336a6da7`, the head of a16z/jolt#2384, which is stacked on a16z/jolt#2383 and
+contains a16z/jolt#2381. Since a16z/jolt#2381, the parcel `0x6001` normalizes to the
+invalid word, as every other reserved parcel does.
 The opcode and operand helpers transcribe `crates/jolt-program/src/image/decode.rs`;
 the parcel normalization transcribes `crates/jolt-riscv/src/uncompress.rs`.
 -/
@@ -183,35 +185,6 @@ def joltDecode (w : BitVec 32) (advice : BitVec 64) : Option RiscvInstruction :=
     | _ => none
   -- Inline, decode_custom, and field-inline opcodes are outside standard RISC-V.
   | _ => none
-
-/-- The exact custom success word (`decode_custom` at `ff6fc6568`).
-For example, changing rd from zero makes decoding fail. -/
-def joltSuccessWord : BitVec 32 := 0x0000305B
-
-/-- Jolt's success-halt decoder, keeping custom rows outside standard Sail decoding.
-For example, 0x0000305B produces the operand-free source's x0-link row. -/
-def decodeJoltSuccess (word : BitVec 32) : Option JoltISA.Instr :=
-  if word = joltSuccessWord then some (.JoltSuccess (.xreg (.Regidx 0))) else none
-
-/-- The source decoder's standard/custom split; for example, ADDI uses `standard`
-and jolt.success uses `joltSuccess`, which has no Sail instruction counterpart. -/
-inductive SourceInstruction where
-  | standard (instruction : RiscvInstruction)
-  | joltSuccess
-
-/-- Decode a modeled source instruction at `ff6fc6568`.
-For example, success accepts exactly zero rd, rs1 and immediate; EBREAK follows
-the standard decoder and its one-row panic expansion. -/
-def decodeSource (word : BitVec 32) (advice : BitVec 64) : Option SourceInstruction :=
-  if word = joltSuccessWord then some .joltSuccess
-  else (joltDecode word advice).map .standard
-
-/-- The custom decoder accepts exactly the success word, with every reserved operand zero.
-For example, a nonzero rd changes the word and is rejected by this decoder. -/
-theorem decodeJoltSuccess_some_iff (word : BitVec 32) (instruction : JoltISA.Instr) :
-    decodeJoltSuccess word = some instruction ↔
-      word = joltSuccessWord ∧ instruction = .JoltSuccess (.xreg (.Regidx 0)) := by
-  by_cases h : word = joltSuccessWord <;> simp [decodeJoltSuccess, h, eq_comm]
 
 /-- Jolt's `sign_bit_mask` in `uncompress.rs`; a set sign bit supplies the mask, e.g. -32. -/
 def signBitMask (value bit mask : BitVec 32) : BitVec 32 :=

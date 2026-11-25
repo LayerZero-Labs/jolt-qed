@@ -197,20 +197,21 @@ structure NotWritableMmioWindow
 -- Jolt RAM assumptions
 -- ============================================================================
 
-/-- Jolt's RAM address check for a load (`assert_effective_address` at `ff6fc6568`).
-For example, an address in heap padding below the backing bound is accepted. -/
+-- Rust's MMU accepts a 64-bit RAM load at `addr` without panicking: the address
+-- is below heap_end. Sail has no such check, so only the Sail equivalence proofs
+-- assume it; a Jolt trace gets it from the load succeeding.
+-- See : jolt/tracer/src/emulator/mmu.rs:177-182 (assert_effective_address, loads)
 structure JoltRamLoadOk (addr : BitVec 64) (js : SailJoltState) : Prop where
-  below_backing_end : addr.toNat < JoltISA.Mmu.ram_backing_end js.jolt_device
+  below_heap_end : addr.toNat < js.jolt_device.memory_layout.heap_end.toNat
 
-/-- Rust's MMU accepts this RAM store without panicking at `ff6fc6568`:
-its start is backed and each protected byte touched by its width keeps its value.
-The value is little-endian, as in `assert_write_protected_store`.
-For example, an eight-byte same-value store in code or the canary is accepted;
-a value-changing store there is rejected. Alignment is the instruction's separate check. -/
-structure JoltRamStoreOk (addr : BitVec 64) (js : SailJoltState)
-    (value : BitVec 64) (width : Nat) : Prop where
-  below_backing_end : addr.toNat < JoltISA.Mmu.ram_backing_end js.jolt_device
-  preserves_protected : JoltISA.Mmu.protected_store_ok js addr.toNat value width = true
+-- Rust's MMU accepts a 64-bit RAM store at `addr` without panicking: the address
+-- is below heap_end and outside the stack canary.
+-- See : jolt/tracer/src/emulator/mmu.rs:160-176 (assert_effective_address, stores)
+structure JoltRamStoreOk (addr : BitVec 64) (js : SailJoltState) : Prop where
+  below_heap_end : addr.toNat < js.jolt_device.memory_layout.heap_end.toNat
+  outside_canary :
+    addr.toNat < js.jolt_device.memory_layout.stack_end.toNat ∨
+      js.jolt_device.memory_layout.stack_end.toNat + JoltISA.STACK_CANARY_SIZE ≤ addr.toNat
 
 -- ============================================================================
 -- System/CSR register assumptions

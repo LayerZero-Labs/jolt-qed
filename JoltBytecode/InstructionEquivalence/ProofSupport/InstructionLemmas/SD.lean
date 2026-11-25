@@ -25,9 +25,7 @@ theorem execInstr_sd_vreg_run (base value : VReg) (imm : BitVec 12)
       (js.vregs base + sign_extend (m := 64) imm) &&& (7 : BitVec 64) = 0)
     (h_ram : RAM_START_ADDRESS ≤ (js.vregs base + sign_extend (m := 64) imm).toNat)
     (h_legal : Mmu.effective_address_ok js.jolt_device
-      (js.vregs base + sign_extend (m := 64) imm).toNat true = true)
-    (h_protected : Mmu.protected_store_ok js
-      (js.vregs base + sign_extend (m := 64) imm).toNat (js.vregs value) 8 = true) :
+      (js.vregs base + sign_extend (m := 64) imm).toNat true = true) :
     (execInstr (JoltISA.Encoded.SD (.vreg base) (.vreg value) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
@@ -38,7 +36,7 @@ theorem execInstr_sd_vreg_run (base value : VReg) (imm : BitVec 12)
   simp only [bind, EStateM.bind, pure, EStateM.pure, EStateM.run,
     get, getThe, MonadStateOf.get, EStateM.get]
   rw [ite_eq_left h_align]
-  simp only [EStateM.bind, Mmu.store_doubleword_ram _ _ _ h_align h_ram h_legal h_protected, EStateM.pure]
+  simp only [EStateM.bind, Mmu.store_doubleword_ram _ _ _ h_align h_ram h_legal, EStateM.pure]
 
 -- The same, from architectural-register base and value sources.
 theorem execInstr_sd_xreg_xreg_run
@@ -50,9 +48,7 @@ theorem execInstr_sd_xreg_xreg_run
       (baseValue + sign_extend (m := 64) imm) &&& (7 : BitVec 64) = 0)
     (h_ram : RAM_START_ADDRESS ≤ (baseValue + sign_extend (m := 64) imm).toNat)
     (h_legal : Mmu.effective_address_ok js.jolt_device
-      (baseValue + sign_extend (m := 64) imm).toNat true = true)
-    (h_protected : Mmu.protected_store_ok js
-      (baseValue + sign_extend (m := 64) imm).toNat stored 8 = true) :
+      (baseValue + sign_extend (m := 64) imm).toNat true = true) :
     (execInstr (JoltISA.Encoded.SD (.xreg base) (.xreg value) imm)).run js =
       .ok RETIRE_SUCCESS
         { js with
@@ -66,7 +62,7 @@ theorem execInstr_sd_xreg_xreg_run
   rw [hvalue]
   dsimp only
   rw [ite_eq_left h_align]
-  simp only [EStateM.bind, Mmu.store_doubleword_ram _ _ _ h_align h_ram h_legal h_protected, EStateM.pure]
+  simp only [EStateM.bind, Mmu.store_doubleword_ram _ _ _ h_align h_ram h_legal, EStateM.pure]
 
 end JoltISA
 

@@ -15,7 +15,6 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Splice
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
-import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 open LeanRV64D
 
@@ -621,7 +620,7 @@ theorem setupBlock (rest : JoltISA.Program)
         (by rw [haddr_ld]; exact hbytes)
         (by rw [haddr_ld]; exact hpmp)
         (by rw [haddr_ld]; exact hmmio)
-        (by rw [haddr_ld]; exact ⟨hjolt.below_backing_end⟩))
+        (by rw [haddr_ld]; exact ⟨hjolt.below_heap_end⟩))
   refine ⟨js_load, ?_, rfl, ?_, ?_, ?_, rfl⟩
   · rw [JoltISA.execProgram_instr_run_retire _ _ js js0 haddi]
     rw [JoltISA.execProgram_instr_run_retire _ _ js0 js1 handi]
@@ -813,10 +812,7 @@ theorem laneStoreProgram_run (width : JoltISA.AccessWidth) (imm : BitVec 12)
     (hbytes : MemBytesPresentAt js.sail (compute_aligned_dword_base_address baseValue imm) 8)
     (hram : JoltISA.RAM_START_ADDRESS ≤ (compute_aligned_dword_base_address baseValue imm).toNat)
     (hload : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address baseValue imm) js)
-    (hstore : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address baseValue imm) js
-      (fusedSpliceValue width
-        (loaded_dword_at js.sail (compute_aligned_dword_base_address baseValue imm) hbytes haligned.no_ovf)
-        value (load_effective_address baseValue imm)) 8) :
+    (hstore : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address baseValue imm) js) :
     ∃ js', JoltISA.Program.Run (laneStoreProgram width rs1 rs2 (sign_extend (m := 64) imm)) js js' ∧
       js'.sail = state_after_dword_store js.sail (compute_aligned_dword_base_address baseValue imm)
         (fusedSpliceValue width
@@ -836,17 +832,13 @@ theorem laneStoreProgram_run (width : JoltISA.AccessWidth) (imm : BitVec 12)
     fusedSpliceBlock width 40 41 (by decide) (by unfold WritableVReg; decide)
       (by unfold WritableVReg; decide) rs1 rs2 (sign_extend (m := 64) imm)
       baseValue value js_load hbase hvalue
-  have hcode : js_splice.codeRegion = js.codeRegion :=
-    JoltIOSetupFrame.codeRegion_of_program_run (s := js_load) hsplice
-  have hstore' : Assumptions.JoltRamStoreOk base js_splice (js_splice.vregs 40) 8 := by
-    rw [hdword]
-    simpa [js_load, stateAfterVRegWrite, dword, load_effective_address] using
-      hstore.transfer (congrArg JoltDevice.memory_layout hdevice) hcode
-        (congrArg (fun s : SailState => s.mem) hsail)
+  have hstore' : Assumptions.JoltRamStoreOk base js_splice :=
+    ⟨by rw [hdevice]; exact hstore.below_heap_end,
+     by rw [hdevice]; exact hstore.outside_canary⟩
   have hmem' : JoltISA.Mmu.store_doubleword base (js_splice.vregs 40) js_splice =
       .ok (.Ok true) { js_splice with sail := state_after_dword_store js_splice.sail base (js_splice.vregs 40) } := by
     rw [JoltISA.Mmu.store_doubleword_ram js_splice base (js_splice.vregs 40)
-      haligned.align hram (JoltISA.Mmu.effective_address_ok_of_store hram hstore') hstore'.preserves_protected,
+      haligned.align hram (JoltISA.Mmu.effective_address_ok_of_store hram hstore'),
       JoltISA.Mmu.write_ram_doubleword_eq]
   have hlast := floorStore_run width rs1 40 (sign_extend (m := 64) imm) baseValue
     (ExceptionType.E_SAMO_Addr_Align ()) js_splice _ (by rw [hsail]; exact hbase) halign hmem'
@@ -1679,7 +1671,7 @@ theorem sdWriteBlock (rest : JoltISA.Program)
     (hmprv : Assumptions.MstatusMprvZero js_store.sail)
     (hpmp : Assumptions.StorePmpOk base 8 js_store.sail)
     (hmmio : Assumptions.NotWritableMmio base 8 js_store.sail)
-    (hjolt : Assumptions.JoltRamStoreOk base js_store dword_new 8) :
+    (hjolt : Assumptions.JoltRamStoreOk base js_store) :
     ∃ js_write : SailJoltState,
       (JoltISA.execProgram (.instr (JoltISA.Encoded.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0) rest)).run js_store =
         (JoltISA.execProgram rest).run js_write ∧
@@ -1714,7 +1706,7 @@ theorem sdWriteBlock (rest : JoltISA.Program)
         hpriv hmprv
         (by rw [haddr]; exact hpmp)
         (by rw [haddr]; exact hmmio)
-        (by rw [haddr, hdword]; exact hjolt))
+        (by rw [haddr]; exact hjolt))
   refine ⟨js_write, ?_, rfl, rfl⟩
   rw [JoltISA.execProgram_instr_run_retire _ _ js_store js_write hsd]
 

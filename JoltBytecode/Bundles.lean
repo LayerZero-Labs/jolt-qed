@@ -5,7 +5,6 @@ Authors: Ari
 -/
 
 import JoltBytecode.Assumptions
-import JoltBytecode.JoltISA.Values
 import JoltBytecode.HartConfig
 import JoltBytecode.JoltISA.MemoryAccess
 import JoltBytecode.JoltISA.SystemCSR
@@ -227,25 +226,19 @@ theorem LoadProgramEqSailAssumptions.linkedCSRs
 /-- Public assumptions for store-family equivalence theorems.
 
 Stores reuse the load-family enclosing-dword read assumptions, then add the
-second source register and write-side memory window.
-`storeWidth` is the source width (one, two, four or eight bytes); acceptance checks
-the complete eight-byte value written by the lowered store.
-For example, SB replaces one byte and preserves the other seven. -/
+second source register and write-side memory window. -/
 structure StoreProgramEqSailAssumptions
-    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState) (storeWidth : Nat := 8)
+    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState)
     extends LoadProgramEqSailAssumptions imm rs1 js,
       DwordWriteWindowAssumptions
         (compute_aligned_dword_base_address rs1_val imm) js.sail where
   rs2_val : BitVec 64
   rs2_read : rX_bits rs2 js.sail = .ok rs2_val js.sail
   jolt_ram_store : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address rs1_val imm) js
-    (JoltISA.storeDwordValue storeWidth (rs1_val + sign_extend (m := 64) imm)
-      (JoltISA.Mmu.ram_doubleword js.sail.mem
-        (compute_aligned_dword_base_address rs1_val imm).toNat) rs2_val) 8
 
 theorem StoreProgramEqSailAssumptions.linkedCSRs
-    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState} {storeWidth : Nat}
-    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth) :
+    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
+    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) :
     LinkedCSRs js :=
   h.toLoadProgramEqSailAssumptions.linkedCSRs
 
@@ -284,7 +277,6 @@ structure AmoDwordProgramEqSailAssumptions
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
   jolt_ram_load : Assumptions.JoltRamLoadOk rs1_val js
   jolt_ram_store : Assumptions.JoltRamStoreOk rs1_val js
-    (JoltISA.amoValue op rs2_val (JoltISA.Mmu.ram_doubleword js.sail.mem rs1_val.toNat)) 8
 
 theorem AmoDwordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
@@ -308,8 +300,6 @@ structure AmoWordProgramEqSailAssumptions
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
   jolt_ram_load : Assumptions.JoltRamLoadOk (amoWordBase rs1_val) js
   jolt_ram_store : Assumptions.JoltRamStoreOk (amoWordBase rs1_val) js
-    (JoltISA.amoWordStoreValue op rs1_val
-      (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase rs1_val).toNat) rs2_val) 8
 
 theorem AmoWordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}

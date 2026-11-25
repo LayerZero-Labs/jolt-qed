@@ -147,13 +147,13 @@ theorem amo_word_floor_store_run
     (halign : addr &&& (3 : BitVec 64) = 0)
     (hbase : amoWordBase addr &&& (7 : BitVec 64) = 0)
     (hram : JoltISA.RAM_START_ADDRESS ≤ (amoWordBase addr).toNat)
-    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js (js.vregs value) 8) :
+    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
     (JoltISA.execInstr (.VirtualStoreW (.xreg rs1) (.vreg value) 0
       (ExceptionType.E_SAMO_Addr_Align ()))).run js =
       .ok RETIRE_SUCCESS
         { js with sail := state_after_dword_store js.sail (amoWordBase addr) (js.vregs value) } := by
   have hstore := JoltISA.Mmu.store_doubleword_ram js (amoWordBase addr) (js.vregs value)
-    hbase hram (JoltISA.Mmu.effective_address_ok_of_store hram hjolt) hjolt.preserves_protected
+    hbase hram (JoltISA.Mmu.effective_address_ok_of_store hram hjolt)
   rw [JoltISA.Mmu.write_ram_doubleword_eq] at hstore
   unfold JoltISA.execInstr JoltISA.readSrc liftSail readVReg
   simp only [hread, bind, EStateM.bind, EStateM.run, add_zero, halign, ite_true,
@@ -193,7 +193,7 @@ theorem amo_word_lane_merge_run
     (halign : addr &&& (3 : BitVec 64) = 0)
     (hbase : amoWordBase addr &&& (7 : BitVec 64) = 0)
     (hram : JoltISA.RAM_START_ADDRESS ≤ (amoWordBase addr).toNat)
-    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js (amoWordLaneMerged addr original value) 8) :
+    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
     JoltISA.Program.Run
       (JoltISA.laneWindowMerge .word (.vreg dword) (.vreg lane) (.xreg rs1) 0 source
         (ExceptionType.E_SAMO_Addr_Align ()) (.done RETIRE_SUCCESS)) js
@@ -213,8 +213,7 @@ theorem amo_word_lane_merge_run
     simpa [shifted, cleared, merged, amoWordLaneMergeState, stateAfterVRegWrite, hdl,
       amoWordLaneMerged] using JoltISA.add_run_vreg_vreg_vreg dword dword lane shifted hdword
   have hstore := amo_word_floor_store_run rs1 dword merged addr hread halign hbase hram
-    (by simpa [merged, amoWordLaneMergeState, stateAfterVRegWrite] using
-      hjolt.transfer (t := merged) rfl rfl rfl)
+    ⟨hjolt.below_heap_end, hjolt.outside_canary⟩
   have hstore' : (JoltISA.execInstr (.VirtualStoreW (.xreg rs1) (.vreg dword) 0
       (ExceptionType.E_SAMO_Addr_Align ()))).run merged =
       .ok RETIRE_SUCCESS { merged with

@@ -24,14 +24,6 @@ rust code
 `execInstr` gives each Jolt-ISA instruction its monadic meaning over
 `SailJoltState`.  `execProgram` is the small interpreter used by generated
 Rust expansion lists.
-At Jolt `ff6fc6568`, `SailJoltState.halted` records success or panic, and
-`recordHalt` records the corresponding panic claim eagerly.
-The tracer sets that claim when `Emulator::take_jolt_device` extracts final I/O;
-both choices give the same claim at the end of a halted run.
-`Decode.SourceInstruction.tick` guards the entire source step after a halt.
-Raw `execInstr` and `execProgram` remain local interpreters for equivalence proofs;
-the caller supplies the decoded source at its fetched address.
-For example, EBREAK runs one Panic row, and every following source tick is a no-op.
 -/
 
 set_option linter.unusedVariables false
@@ -45,31 +37,11 @@ noncomputable section
 
 namespace JoltISA
 
-/-- Record a halt without touching memory (`Cpu::halt` at `ff6fc6568`).
-For example, a panic halt sets the public panic claim and records its kind. -/
-def recordHalt (kind : JoltHaltKind) (state : SailJoltState) : SailJoltState :=
-  { state with
-    halted := some kind
-    jolt_device := { state.jolt_device with panic := (kind == JoltHaltKind.panic) } }
-
-/-- Execute the shared halt body, including its link write (`Cpu::halt`).
-For example, EBREAK writes the advanced PC to its scratch destination and
-leaves the next PC on the halt's source address. -/
-def execHalt (kind : JoltHaltKind) (dst : Dst) : JoltMonad ExecutionResult := do
-  let link ← liftSail (LeanRV64D.readReg Register.nextPC)
-  let address ← liftSail (LeanRV64D.readReg Register.PC)
-  writeDst dst link
-  liftSail (LeanRV64D.writeReg Register.nextPC address)
-  modify (recordHalt kind)
-  pure RETIRE_SUCCESS
-
 /-- Execute one Jolt row on the combined Sail, virtual-register and device state.
 The result records retirement or an architectural exception.
 For example, `VirtualLoadW` at effective address 12 reads the entire doubleword
 at address 8 and writes it to the row's destination. -/
 def execInstr : Instr → JoltMonad ExecutionResult
-  | .JoltSuccess dst => execHalt .success dst
-  | .Panic dst => execHalt .panic dst
   | .ADDI dst src imm => do
       let x ← readSrc src
       writeDst dst (BitVec.ofNat 64 (addWide x imm))
@@ -631,16 +603,9 @@ inductive JoltExecution where
   | expandedInstr (program : Program)
   deriving Repr
 
-/-- One tracer tick at an instruction boundary (`Cpu::tick` at `ff6fc6568`).
-A recorded halt makes every later tick a no-op, for example after EBREAK.
-`execInstr` and `execProgram` are unguarded row executors used by the local
-proofs; callers executing a run use this guarded entry. Valid source expansions
-contain no halt inside a multi-row sequence (`HaltInSequence`). -/
-noncomputable def JoltExecution.run (execution : JoltExecution) : JoltMonad ExecutionResult :=
-  fun state => if state.halted.isSome then .ok RETIRE_SUCCESS state else
-    match execution with
-    | .nativeInstr instr => execInstr instr state
-    | .expandedInstr program => execProgram program state
+noncomputable def JoltExecution.run : JoltExecution → JoltMonad ExecutionResult
+  | .nativeInstr instr => execInstr instr
+  | .expandedInstr program => execProgram program
 
 end JoltISA
 

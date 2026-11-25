@@ -182,22 +182,19 @@ theorem amo_word_select_eq_sail
     let selected := amoWordSelectFlag less reverse
       (sign_extend (m := 64) (Sail.BitVec.extractLsb h.rs2_val 31 0 : BitVec 32))
       (sign_extend (m := 64) old)
-    have hlow : (Sail.BitVec.extractLsb (sign_extend (m := 64) old) 31 0 : BitVec 32) = old :=
-      sign_extend_64_setWidth_32 old
     obtain ⟨jsf, hrun, hfinal⟩ := amo_word_window_program_aligned_run
       (amoWordSelectLaneMiddle cmp reverse rs2 rd) (.vreg (JoltISA.amoWordNewVRegFor rd))
       rs1 rd js h.rs1_val (if selected then h.rs2_val else sign_extend (m := 64) old)
       h.rs1_read (Assumptions.DwordPresent.memBytesPresentAt h.dword_present)
       (by simpa using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
       (by simpa using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by decide) (by omega))
-      halign h.jolt_ram_load
-      (amo_word_bundle_store_lane_ok h halign _ (by
-        rw [amo_word_extract_select_result, hlow]
-        exact hselect _ _))
+      halign h.jolt_ram_load h.jolt_ram_store
       (by intro pre hsail hdword hlane hold
           exact amo_word_select_lane_middle_run cmp less hcmp reverse rs2 rd pre h.rs2_val
             _ _ _ (by rw [hsail]; exact h.rs2_read) hold hdword hlane)
     refine ⟨jsf, hrun, ?_⟩
+    have hlow : (Sail.BitVec.extractLsb (sign_extend (m := 64) old) 31 0 : BitVec 32) = old :=
+      sign_extend_64_setWidth_32 old
     rw [amo_word_extract_select_result, hlow] at hfinal
     simpa only [selected, hselect] using! hfinal
   · intro halign
