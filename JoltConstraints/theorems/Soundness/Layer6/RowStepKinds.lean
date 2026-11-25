@@ -79,7 +79,6 @@ section Steps
 
 variable {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
-    (assumptions : inst.SoundnessAssumptions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
@@ -93,7 +92,7 @@ variable {F : Type} [Field F] (joltField : JoltField F)
     (registers : RegisterAgreementOn (ExpansionLive context.bytecode first done)
       witness ⟨run.rows.size, bound⟩ pre)
 
-include joltField assumptions equations state unfinished honestAdvice indexIs entry registers
+include joltField equations state unfinished honestAdvice indexIs entry registers
 
 /-- A terminal HostIO row appends its call, which always retires, and keeps
 live-register agreement; for example, an advice-write call changes the tape.

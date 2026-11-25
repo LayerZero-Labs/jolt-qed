@@ -19,19 +19,18 @@ open LeanRV64D
 set_option autoImplicit false
 
 -- Soundness: if some private inputs and witness satisfy every constraint, the instance
--- is in Jolt's language. The field is a `JoltField`. The instance satisfies
--- `JoltInstance.SoundnessAssumptions` in theorems/Soundness/Assumptions.lean.
+-- is in Jolt's language. The field is a `JoltField`; nothing is assumed about the
+-- instance.
 -- The private inputs of the run need not be the ones given.
 theorem JoltInstance.soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance privateInputs witness) :
     joltInstance.InLanguage := by
   obtain ⟨context, equations⟩ := satisfied
   obtain ⟨trace, bytecodeEq, represented⟩ :=
-    soundness_reconstruct_trace joltField joltInstance assumptions
+    soundness_reconstruct_trace joltField joltInstance
       privateInputs witness context equations
   apply JoltConstraints.Soundness.untrustedAnswerLanguage_implies_inLanguage
   refine ⟨privateInputs, trace, ?_, ?_, ?_⟩

@@ -39,7 +39,6 @@ theorem honestAdvice_push (program : Rv64ProgramImage SourceInstruction)
 
 private theorem row_extension {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {params : WitnessParams} {inputs : JoltPrivateInputs}
-    (assumptions : inst.SoundnessAssumptions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
@@ -69,17 +68,17 @@ private theorem row_extension {F : Type} [Field F] (joltField : JoltField F)
     intro row member
     have same := Option.some.inj (atRow.symm.trans member)
     simpa only [← same] using plain
-  · exact append_load_row joltField assumptions witness context equations run first done
+  · exact append_load_row joltField witness context equations run first done
       state unfinished bound next pre indexIs ready registers kind
-  · exact append_store_row joltField assumptions witness context equations run first done
+  · exact append_store_row joltField witness context equations run first done
       state unfinished bound next pre indexIs ready registers kind
-  · exact host_row_step joltField assumptions witness context equations run first done
+  · exact host_row_step joltField witness context equations run first done
       state unfinished honest bound next pre indexIs ready registers kind
       (terminal (by rw [kind]; rfl))
-  · exact jal_row_step joltField assumptions witness context equations run first done
+  · exact jal_row_step joltField witness context equations run first done
       state unfinished honest bound next pre indexIs ready registers pc nextPC kind
       (terminal (by rw [kind]; rfl))
-  · exact jalr_row_step joltField assumptions witness context equations run first done
+  · exact jalr_row_step joltField witness context equations run first done
       state unfinished honest bound next pre indexIs ready registers pc nextPC kind
       (terminal (by rw [kind]; rfl))
 
@@ -92,7 +91,6 @@ For example, SLL's first row writes temporary 40, which becomes live for its
 second row; no hypothesis equates that temporary before its first write. -/
 theorem row_step {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
@@ -112,7 +110,7 @@ theorem row_step {F : Type} [Field F] (joltField : JoltField F)
         honestTracerAdviceAtStepN joltInstance.program run'.rows n) := by
   obtain ⟨bound, _⟩ := state.next unfinished
   obtain ⟨step, answer, candidate, indexIs, _, _, traceEq, _, _, _, _, extendsRun, size, after⟩ :=
-    row_extension joltField assumptions witness context equations run first done
+    row_extension joltField witness context equations run first done
       state unfinished honestAdvice bound
   have bytecodeEq : run.bytecode = context.bytecode :=
     Option.some.inj (run.expands.symm.trans context.expands)

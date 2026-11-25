@@ -227,10 +227,6 @@ theorem HonestTrace.allConstraints_prover_sizes
     (spoilAssertsPass : trace.SpoilAssertsPass)
     -- assumed: a legal ELF's PC does not wrap (a16z confirmed)
     (noWrap : joltInstance.program.NextPCNoWrap)
-    -- assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program is
-    -- never empty, so its memory image loads at least one byte. Jolt's prover does not
-    -- reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
-    (imageNonempty : joltInstance.program.ImageNonempty)
     -- the instance claims the outputs the run produced
     (claimsRunOutputs : trace.matches_outputs joltInstance)
     -- the public I/O the verifier checks the proof against
@@ -256,7 +252,7 @@ theorem HonestTrace.allConstraints_prover_sizes
       · rw [akita, WitnessParams.proverTraceLength]
         exact le_trans (by decide : 256 ≤ 2 ^ 12) (Nat.le_max_left _ _)
     bytecodeDomain := trace.witness_params_bytecode_domain config proverAccepts
-    ramSizeBounds := trace.witness_params_ram_bounds config proverAccepts imageNonempty
+    ramSizeBounds := trace.witness_params_ram_bounds config proverAccepts
     oneHotFitsSetup := by
       cases hasLayout : joltInstance.memory_layout with
       | none =>

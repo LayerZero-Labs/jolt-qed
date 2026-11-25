@@ -25,7 +25,7 @@ The Jolt pin is `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`.
 The re-pin starts from Lean commit `3522261` on `split/c-constraints` and ends at `3ff14b2`.
 At that commit `lake build JoltConstraints` succeeds, and `#print axioms JoltInstance.soundness` prints exactly `propext`, `Classical.choice` and `Quot.sound`.
 `JoltInstance.soundness` takes no temporary program restriction.
-Its premises are `JoltField F` and `JoltInstance.SoundnessAssumptions`, which contains only `RamRegionFits`.
+Its only premise is `JoltField F`. The instance premise `RamRegionFits` became the theorem `JoltInstance.ramRegionFits` on 2026-11-25: Jolt's verifier maximum `MemoryLayout::max_ram_k` rejects any layout whose padded region passes `2^64`.
 The theorem reconstructs an honest expanded-bytecode trace ending at its first explicit success or panic halt.
 Row 21 binds the public panic claim to that halt kind.
 The three flag-word restrictions and `tracerAddressChecks` were removed earlier in the re-pin.
@@ -250,18 +250,17 @@ The existing `HonestTrace` describes Jolt's tracer running with a fixed tape: ea
 The proof first builds a relaxed trace, which allows independent tape answers while retaining the other execution, internal runtime-advice and stopping requirements. Its definition and the inclusion of fixed-tape traces are implemented in Layer 5a. Layer 7 then rebuilds one tape from the answers, giving an `HonestTrace`.
 We aim to preserve the supplied untrusted advice in RAM and choose the tape answers from the witness. The audit has found no constraint linking those answers to one tape; none is needed, because one tape can be rebuilt from them.
 
-The premises are bundled in
-[theorems/Soundness/Assumptions.lean](../JoltConstraints/theorems/Soundness/Assumptions.lean):
-`JoltField F` (`2^128 - 2^64 < ringChar F`, with constraint (63) on below `2^128`); `JoltInstance.SoundnessAssumptions`
-(`RamRegionFits`).
+The only premise is `JoltField F` (`2^128 - 2^64 < ringChar F`, with constraint (63) on below `2^128`),
+defined in [theorems/Soundness/Assumptions.lean](../JoltConstraints/theorems/Soundness/Assumptions.lean).
 Since the `ff6fc6568` re-pin the theorem takes no temporary program restrictions.
 The rest of this section records how the earlier restrictions
 (`TracerAddressChecks`, `HostCallsSucceed`, `NoMaxLengthTrace`,
 `TerminationThenStall`, `PanicStoresOne`, `ClaimsNoPanic`) arose; none remains.
-On 2026-10-10, Ari approved `RamRegionFits`: for the instance's layout and
+On 2026-10-10, Ari approved `RamRegionFits` as a premise: for the instance's layout and
 successfully computed maximum RAM size, `lowest + 8 * maxRamSize ≤ 2^64`.
-**NOTE: to confirm with a16z.** The definition is in
-[Layer3/Layout.lean](../JoltConstraints/theorems/Soundness/Layer3/Layout.lean).
+Since 2026-11-25 it is the theorem `JoltInstance.ramRegionFits` in
+[Layer3/Layout.lean](../JoltConstraints/theorems/Soundness/Layer3/Layout.lean): at `ff6fc6568`
+Jolt's `MemoryLayout::max_ram_k`, which the verifier's maximum uses, rejects any layout that breaks it.
 This restricts the instance's maximum padded RAM region, not its execution runs.
 Together with `ConstraintContext.ramSizeBounds`, it bounds all eight bytes of
 every in-domain word. Layer 5b recovers integer address sums from satisfying
@@ -270,7 +269,7 @@ to both fixed-tape and independent-answer execution. The former run-based
 RAM no-wrap predicate and its next-step helper have been deleted.
 On 2026-10-10, Ari approved excluding `SC.W` and `SC.D` from every source row while their advice mismatch was unresolved ([a16z/jolt#2037](https://github.com/a16z/jolt/issues/2037)).
 PR #2039 fixed that mismatch, the SC rows go through the ordinary row steps, and no proof used the restriction, so Ari removed it on 2026-11-03.
-No proof used the premise `CodeUnchanged`, so Ari removed it on 2026-11-03; that a program does not change its own code (a16z/jolt#1952) remains a modeling assumption, recorded in `model_review.md`.
+No proof used the premise `CodeUnchanged`, so Ari removed it on 2026-11-03. That a program does not change its own code (a16z/jolt#1952) is no longer a modeling assumption: Jolt's tracer at `ff6fc6568` rejects every store that changes a code byte (`protected_store_ok`), and the whole-run proof derives that the code stays intact (`JoltCodeIntact.of_block`).
 Stopping is proved in Layer 7. Before the `ff6fc6568` re-pin, the temporary `PanicStoresOne` and `ClaimsNoPanic` restrictions covered the panic cases. At that pin a run ends at an explicit halt, row 21 binds the panic claim to the halt kind, and both restrictions were removed.
 Ari approved `TracerAddressChecks`, a temporary program restriction for both
 LD and SD; the re-pin removed it in commit `3bb089d`. It covered the input/advice-store counterexample reported in
@@ -616,7 +615,7 @@ Why: this does for memory what Layer 2 does for registers.
 `RamValFinal` is also where `w` holds the output bytes.
 Uses: the RAM equations, `ConstraintContext.initialized`, Layer 1.
 
-**Address wraparound, derived from `RamRegionFits` (NOTE: to confirm with a16z):**
+**Address wraparound, derived from `RamRegionFits` (a theorem since 2026-11-25):**
 the address lemmas take `encoded : RamAddress = raw.toNat`.
 The load/store constraint adds `Rs1Value` and the signed immediate in the field,
 while execution wraps the sum at 64 bits. The layout premise states
@@ -1204,8 +1203,8 @@ privately, as Markdown files over a Slack channel, not as public GitHub issues
    of its last word. We use it with the RAM-size check and the address
    constraints to derive nonwrapping addresses for satisfying LD/SD cycles,
    independently of the tape specification.
-   Assumed meanwhile: `RamRegionFits`, approved by Ari on 2026-10-10.
-   NOTE: to confirm with a16z.
+   Answered by Jolt: `MemoryLayout::max_ram_k` rejects any layout that breaks it, so
+   `JoltInstance.ramRegionFits` proves it for every instance (2026-11-25).
 3. **Removed at the `ff6fc6568` re-pin: will the constraints enforce the MMU's input/advice write permissions?**
    The re-pin removed the `TracerAddressChecks` premise (commit `3bb089d`); at that pin the theorem derives the address and protected-value checks from the constraints (`Layer5/SharedMemoryChecks.lean`).
    The rest of this item records the question as it stood before the re-pin.

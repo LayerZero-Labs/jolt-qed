@@ -12,7 +12,6 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 section
 variable {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
-    (assumptions : inst.SoundnessAssumptions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (first : Fin context.bytecode.size) (done : Nat)
@@ -24,7 +23,7 @@ variable {F : Type} [Field F] (joltField : JoltField F)
     (registers : RegisterAgreementOn (ExpansionLive context.bytecode first done)
       witness ⟨run.rows.size, bound⟩ pre)
 
-include joltField assumptions equations state unfinished indexIs entry registers
+include joltField equations state unfinished indexIs entry registers
 
 /-- A load row appends its row with live-register and cut-RAM agreement in
 either address region; for example, a live temporary can address RAM or an
@@ -42,11 +41,11 @@ theorem append_load_row {width : MemoryWidth} {destination : Dst} {base : Src} {
   have rs1 := registers.rs1Value (two_pow_127_lt_char joltField) context equations selected rowIs
     base canonical.2 facts.rs1Register baseLive
   obtain ⟨encoded, _, recorded⟩ := AccessRow.address_encoded joltField context equations selected
-    rowIs loadRow.access assumptions.ramRegionFits (sourceValue base pre) rs1
+    rowIs loadRow.access inst.ramRegionFits (sourceValue base pre) rs1
   have ram := state.memoryAt bound entry
   obtain ⟨layoutIs, codeIs⟩ := rawEntry_memory_invariants context run entry
   let advice := runtimeAdviceFor run.bytecode[next].instruction 0
-  obtain ⟨value, executes, registerNext, memory⟩ := load_row_execution joltField assumptions witness
+  obtain ⟨value, executes, registerNext, memory⟩ := load_row_execution joltField witness
     context equations run ⟨run.rows.size, bound⟩ next pre slot selected rowIs registers ram
     layoutIs advice loadRow baseLive
   let step : TraceRow run.bytecode := ⟨next, advice, pre, afterWriteDst destination value pre⟩
@@ -83,11 +82,11 @@ theorem append_store_row {width : MemoryWidth} {base source : Src} {imm : BitVec
   have rs2 := registers.rs2Value (two_pow_127_lt_char joltField) context equations selected rowIs
     source canonical.2 facts.rs2Register sourceLive
   obtain ⟨encoded, _, recorded⟩ := AccessRow.address_encoded joltField context equations selected
-    rowIs storeRow.access assumptions.ramRegionFits (sourceValue base pre) rs1
+    rowIs storeRow.access inst.ramRegionFits (sourceValue base pre) rs1
   have ram := state.memoryAt bound entry
   obtain ⟨layoutIs, codeIs⟩ := rawEntry_memory_invariants context run entry
   let advice := runtimeAdviceFor run.bytecode[next].instruction 0
-  obtain ⟨post, executes, registerNext, memory⟩ := store_row_execution joltField assumptions witness
+  obtain ⟨post, executes, registerNext, memory⟩ := store_row_execution joltField witness
     context equations run ⟨run.rows.size, bound⟩ next pre slot selected rowIs registers ram
     layoutIs advice codeIs storeRow baseLive sourceLive
   let step : TraceRow run.bytecode := ⟨next, advice, pre, post⟩

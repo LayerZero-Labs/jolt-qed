@@ -133,20 +133,6 @@ def JoltInstructionRow.starts_source (row : JoltInstructionRow) : Bool :=
 def JoltInstructionRow.continues (row : JoltInstructionRow) : Bool :=
   row.virtual_sequence_remaining.getD 0 != 0
 
-/-- Whether a row that jumped to its own address would jump there again.
-The expanded JALR row retains the normalized base and sign-extended immediate;
-the `rd = x0` rewrite uses a virtual destination and takes the `true` branch.
-See : a16z/jolt#2109, merge commit 0249591a, crates/jolt-riscv/src/row.rs
-(`JoltInstructionRow::self_jump_repeats`). -/
-def JoltInstructionRow.selfJumpRepeats (row : JoltInstructionRow) : Bool :=
-  match row.instruction with
-  | .JALR (.xreg rd) (.xreg rs1) imm =>
-      if JoltISA.isX0 rd || rd != rs1 then true
-      else
-        jolt_jalr_target64
-          (row.address + (if row.is_compressed then 2 else 4)) imm == row.address
-  | _ => true
-
 -- See : jolt/crates/jolt-program/src/expand/metadata.rs:25-53 (stamp_sequence_metadata)
 def stamp_sequence (address : BitVec 64) (is_compressed : Bool)
     (instructions : List JoltISA.Instr) : List JoltInstructionRow :=
@@ -217,6 +203,16 @@ structure Rv64ProgramImage (Source : Type) where
   --       118-141 (decode_text_section)
   next_pc_no_wrap : ∀ row ∈ instructions,
     row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
+  -- decode_text_section emits an instruction only when its first halfword is nonzero:
+  -- it skips a zero halfword as padding, and a 4-byte instruction's first byte ends in
+  -- binary 11. decode_elf reads that halfword from the section bytes it also puts in
+  -- memory_init, and reads an address that no section loads as 0. So memory_init holds
+  -- a byte at each instruction's address or at the next address.
+  -- For example, an ELF whose text section is empty has no instructions.
+  -- See : jolt/crates/jolt-program/src/image/elf.rs:121-140 (decode_elf),
+  --       201-228 (decode_text_section)
+  instruction_loaded : ∀ row ∈ instructions, ∃ entry ∈ memory_init,
+    row.address.toNat ≤ entry.1.toNat ∧ entry.1.toNat < row.address.toNat + 2
 
 -- No instruction's next PC, its address plus its length (2 if compressed, else 4),
 -- passes 2^64. Every image meets this: it is the field `next_pc_no_wrap`, which
@@ -225,10 +221,9 @@ def Rv64ProgramImage.NextPCNoWrap {Source : Type} (image : Rv64ProgramImage Sour
   ∀ row ∈ image.instructions, row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 
 -- The program is not empty: its memory image loads at least one byte.
--- Assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program is
--- never empty. Rust's prover does not reject an empty ELF: it traces it and picks
--- its sizes, and only Rust's verifier rejects those sizes (InvalidRamK;
--- bug-report/verifier-ram-minimum). (model_review.md, Assumptions)
+-- Every program whose run Jolt's prover accepts meets this
+-- (`HonestTrace.prover_config_image_nonempty`): the prover rejects an empty trace,
+-- and a program with an instruction loads that instruction's bytes.
 def Rv64ProgramImage.ImageNonempty {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
   image.memory_init ≠ []
 
@@ -245,7 +240,10 @@ def Rv64ProgramImage.toJolt (image : Rv64ProgramImage RiscvInstruction) : Rv64Pr
       { row with instruction := .riscv row.instruction }
     next_pc_no_wrap := fun row member => by
       obtain ⟨source, inImage, rfl⟩ := Array.mem_map.mp member
-      exact image.next_pc_no_wrap source inImage }
+      exact image.next_pc_no_wrap source inImage
+    instruction_loaded := fun row member => by
+      obtain ⟨source, inImage, rfl⟩ := Array.mem_map.mp member
+      exact image.instruction_loaded source inImage }
 
 -- Every source row's final rows, in order; none if any source row fails.
 -- Rust's preprocessing then puts a NoOp at slot 0 and pads with NoOps (preprocess below).

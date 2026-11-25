@@ -595,6 +595,29 @@ theorem max_ram_k_spec (layout : MemoryLayout) (k : Nat)
       layout.get_lowest_address.toNat + 8 * k ≤ 2^64 :=
   checked_ram_domain_spec _ _ _ k checked
 
+/-- An admitted layout ends its heap at least eight bytes below `2^64`.
+For example, a heap end of `2^64 - 8` is admitted, while `2^64 - 7` is rejected.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::validate_heap_end`,
+called first by `max_ram_k`). -/
+theorem max_ram_k_heap_end_le (layout : MemoryLayout) (k : Nat)
+    (checked : layout.max_ram_k? = some k) :
+    layout.heap_end.toNat ≤ 2 ^ 64 - 8 := by
+  unfold MemoryLayout.max_ram_k? at checked
+  simp only [bind_some_iff] at checked
+  obtain ⟨_, heapChecked, -⟩ := checked
+  have heapFacts := (Option.guard_eq_some' _).mp heapChecked
+  simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at heapFacts
+  exact heapFacts.1
+
+/-- Every layout `MemoryLayout.new` builds ends its heap at least eight bytes below
+`2^64`, because `new` admits a layout only when `max_ram_k` does.
+For example, a configuration whose heap would end at `2^64 - 1` builds no layout. -/
+theorem new_heap_end_le (config : MemoryConfig) (layout : MemoryLayout)
+    (built : MemoryLayout.new config = some layout) :
+    layout.heap_end.toNat ≤ 2 ^ 64 - 8 := by
+  obtain ⟨k, checked⟩ := Option.isSome_iff_exists.mp (new_max_ram_k config layout built)
+  exact max_ram_k_heap_end_le layout k checked
+
 -- The bootstrap device keeps its layout and starts with a false panic claim.
 theorem init_state_jolt_device (entryAddress : BitVec 64) (ram : Array (BitVec 8))
     (device : JoltDevice) (adviceTape : JoltAdviceTape) (hostIO : JoltHostIOConfig) :

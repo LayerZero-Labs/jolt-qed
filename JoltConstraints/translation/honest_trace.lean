@@ -29,16 +29,6 @@ def advance_pc (address : BitVec 64) (is_compressed : Bool)
     (address + length)
   { state with sail := { state.sail with regs := registers } }
 
-/-- The last row of a source instruction that jumped to its own address and
-would jump there again if re-run. Jolt's tracer stops after it.
-This matches `Cpu::tick` and `self_jump_repeats` in a16z/jolt PR #2109,
-merge commit 0249591a. -/
-def TraceRow.StableStall {bytecode : Array JoltInstructionRow}
-    (row : TraceRow bytecode) : Prop :=
-  bytecode[row.rowIndex].virtual_sequence_remaining.getD 0 = 0 ∧
-  row.postState.sail.regs.get? Register.nextPC = some bytecode[row.rowIndex].address ∧
-  bytecode[row.rowIndex].selfJumpRepeats = true
-
 /-- A row executes one of Jolt's two explicit halt instructions.
 For example, the row expanded from EBREAK has the panic halt kind.
 Jolt at `ff6fc6568`: `tracer/src/emulator/cpu.rs` (`Cpu::halt`). -/
@@ -200,9 +190,10 @@ def honestTracerAdviceAtStepN (program : Rv64ProgramImage SourceInstruction)
 -- The rows Rust's tracer records when it runs the instance's program on these
 -- private inputs: a valid run that uses Rust's runtime advice and stops where
 -- Rust's tracer stops. The trace executes the expanded bytecode, while Jolt's
--- tracer decodes each instruction from memory as it starts; the two agree because
--- a16z confirmed on 2026-10-07 that a program does not change its own code
--- (a16z/jolt#1952). That is a modeling assumption, not a premise of any theorem.
+-- tracer decodes each instruction from memory as it starts. The two agree because
+-- Jolt's tracer rejects every store that changes a byte of the code region
+-- (`protected_store_ok` in `JoltBytecode/JoltISA/DeviceMemory.lean`); the
+-- whole-run proof derives that the code stays intact (`JoltCodeIntact.of_block`).
 -- See : jolt/tracer/src/lib.rs:79-140 (trace)
 structure HonestTrace (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) extends ValidRun joltInstance privateInputs where

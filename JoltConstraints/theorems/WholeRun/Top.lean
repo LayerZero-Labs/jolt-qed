@@ -25,11 +25,10 @@ def RunRel (program : Rv64ProgramImage SourceInstruction) (jt : SailJoltState)
 /-- An honest trace starts in the whole-run relation.
 For example, its Sail initial state uses the platform register overlay. -/
 theorem RunRel.initial {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (hheap : joltInstance.HeapNoWrap) :
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     RunRel joltInstance.program trace.initialState (sailInit trace.initialState) :=
   ⟨related_sailInit joltInstance privateInputs _ trace.initialized,
-    RunInv.initial trace hheap, JoltCodeIntact.initial trace⟩
+    RunInv.initial trace, JoltCodeIntact.initial trace⟩
 
 /-- Per-block conditions supplied to the source-instruction simulation.
 For example, an ADDI block needs only the RISC-V source classification.
@@ -133,12 +132,11 @@ theorem HaltPrefix.sailRun {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} {trace : HonestTrace joltInstance privateInputs}
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
     ∃ (n : Nat) (s : SailState), sailRun n (sailInit trace.initialState) = .ok () s ∧
       RunRel joltInstance.program halt s := by
-  have h₀ := RunRel.initial trace hheap
+  have h₀ := RunRel.initial trace
   cases pre with
   | nil => exact ⟨0, _, rfl, by rw [hp.empty rfl]; exact h₀⟩
   | cons first rest =>
@@ -157,7 +155,6 @@ for example, EBREAK records panic true without reading a flag word. -/
 theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
@@ -169,7 +166,7 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
       ∃ kind, final.halted = some kind ∧
         final.jolt_device.panic = (kind == JoltHaltKind.panic) ∧
         (SailHalted joltInstance.program s kind ∨ halt = final) := by
-  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun hdecoded hheap hcfg hconf
+  obtain ⟨n, s, hrun, hrel⟩ := hp.sailRun hdecoded hcfg hconf
   refine ⟨n, s, hrun, hrel.1, ?_, ?_⟩
   · rw [hrel.1.outputs]
     simp only [JoltDevice.outputsOf, hp.observation.1, hp.observation.2.1]
@@ -189,12 +186,10 @@ For example, a panic-ending trace is covered with public panic true.
 Jolt at `ff6fc6568`: `rv64_trace_constraints` halt lane and `Cpu::halt`. -/
 theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     {params : WitnessParams} (givenInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
-    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hheap : joltInstance.HeapNoWrap) :
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
       (trace.prover_config joltInstance).isSome ∧
@@ -211,12 +206,12 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
               joltInstance.panic = (kind == JoltHaltKind.panic) ∧
               (SailHalted joltInstance.program s kind ∨ halt = final)) := by
   obtain ⟨privateInputs, trace, hmo, hcfg, hspoil⟩ :=
-    JoltInstance.soundness joltField joltInstance assumptions givenInputs witness
+    JoltInstance.soundness joltField joltInstance givenInputs witness
       satisfied
   obtain ⟨pre, halt, final, hp⟩ := trace.haltPrefix
   refine ⟨privateInputs, trace, hmo, hcfg, hspoil, pre, halt, final, hp, fun hconf => ?_⟩
   obtain ⟨n, s, hrun, hrel, houts, hstop⟩ :=
-    trace.sail_reproduces hdecoded hheap hcfg hp hconf
+    trace.sail_reproduces hdecoded hcfg hp hconf
   obtain ⟨hmo_out, hmo_panic⟩ :=
     (trace.matches_outputs_final final hp.back).1 hmo
   refine ⟨n, s, hrun, hrel, houts.trans hmo_out, ?_⟩

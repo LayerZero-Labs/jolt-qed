@@ -17,7 +17,7 @@ not derive) or a **documented deviation** (a place where Jolt and Sail differ;
 | --- | --- | --- |
 | legal system values | invariant | `SystemInv` |
 | even PC | `RowsAligned` (from `DecodedFrom`), then invariant | `Block.Runs.pc_even` |
-| heap end below `2^64 - 8` | platform premise `HeapNoWrap`, then invariant | `RunInv.heap_no_wrap` |
+| heap end below `2^64 - 8` | invariant (`MemoryLayout.new` admits no other layout) | `RunInv.heap_no_wrap` |
 | LR/SC address in RAM | invariant | `access_classified` |
 | AMO address in RAM or the I/O window | invariant | `access_classified` |
 -/
@@ -39,19 +39,6 @@ instruction address. `Rv64ProgramImage.DecodedFrom.rowsAligned`
 (`WholeRun/Elf.lean`) derives it from `DecodedFrom`. -/
 def Rv64ProgramImage.RowsAligned {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
   ∀ row ∈ image.instructions, row.address.getLsbD 0 = false
-
-/-- Platform premise: the heap of the layout `MemoryLayout.new` builds for the
-instance ends at least eight bytes below `2^64`.
-For example, a program image ending at `0x80010000` with stack size `0x10000` and
-heap size `0x100000` gives `heap_end = 0x80120080`, far below the bound.
-`MemoryLayout.new` only checks that `heap_end` fits in 64 bits, and the program
-size is the image's `program_end - RAM_START_ADDRESS`, which need not be a multiple
-of eight: a `program_end` of `2^64 - 129` with all configured sizes zero gives
-`heap_end = 2^64 - 1`. Real ELFs end far below that, as Jolt's tracer allocates
-`heap_end - RAM_START_ADDRESS` bytes of RAM when it starts
-(`ram_backing_end` in `JoltISA/DeviceMemory.lean`). -/
-def JoltInstance.HeapNoWrap {Source : Type} (joltInstance : JoltInstance Source) : Prop :=
-  ∀ layout, joltInstance.memory_layout = some layout → layout.heap_end.toNat ≤ 2 ^ 64 - 8
 
 namespace WholeRun
 
@@ -259,7 +246,7 @@ theorem access_classified (program : Rv64ProgramImage SourceInstruction) (b : Bl
 
 /-- The Jolt-side facts the block theorems need that hold along the whole run:
 the legal system values (`SystemInv`, an invariant) and the heap bound
-(`heap_no_wrap`, an invariant given the platform premise `JoltInstance.HeapNoWrap`).
+(`heap_no_wrap`, an invariant because `MemoryLayout.new` admits no other layout).
 The PC parity and the access class are properties of the block being run, derived
 from `RowsAligned` (`Block.Runs.pc_even`) and from the instruction (`access_classified`).
 `program` is the image the run executes, which later invariants about its code
@@ -270,14 +257,14 @@ structure RunInv (program : Rv64ProgramImage SourceInstruction) (jt : SailJoltSt
   system : SystemInv jt
   heap_no_wrap : jt.jolt_device.memory_layout.heap_end.toNat ≤ 2 ^ 64 - 8
 
-/-- An honest trace begins with the run invariants, given the heap premise.
-For example, the layout of the instance's own memory configuration is the one
-`HeapNoWrap` speaks about. -/
+/-- An honest trace begins with the run invariants.
+For example, the heap bound holds because the instance's layout is one that
+`MemoryLayout.new` admits (`new_heap_end_le`). -/
 theorem RunInv.initial {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (hheap : joltInstance.HeapNoWrap) : RunInv joltInstance.program trace.initialState :=
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
+    RunInv joltInstance.program trace.initialState :=
   ⟨SystemInv.initialState trace,
-    hheap _ (initial_state_device joltInstance privateInputs trace.initialState
+    new_heap_end_le _ _ (initial_state_device joltInstance privateInputs trace.initialState
       trace.initialized).1⟩
 
 /-- Running a block keeps the memory layout: no Jolt row and no `advance_pc` changes

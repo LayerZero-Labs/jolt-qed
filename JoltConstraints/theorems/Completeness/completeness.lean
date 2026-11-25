@@ -1,12 +1,13 @@
 /-
 The base completeness statement: for every instance and every honest trace that puts
 it in Jolt's language, the witness Jolt's prover builds, at the sizes Jolt's prover
-picks, satisfies every modeled constraint, under the instance assumptions below.
+picks, satisfies every modeled constraint. The statement assumes nothing about the
+instance: a program whose run Jolt's prover accepts is not empty
+(`HonestTrace.prover_config_image_nonempty`).
 The three open obligations listed in model_review.md (Proofs owed) concern
 a16z/jolt#1949; the shared-memory RAM-history obligations are proved.
 -/
 import JoltConstraints.theorems.Completeness.All
-import JoltConstraints.theorems.Completeness.Assumptions
 
 open LeanRV64D
 
@@ -65,8 +66,7 @@ theorem HonestTrace.exists_public_io {joltInstance : JoltInstance SourceInstruct
 
 /-- Completeness of Jolt: the verifier accepts the table Jolt's prover builds, at the sizes
 Jolt's prover picks.
-For an instance `joltInstance` that meets `JoltInstance.CompletenessAssumptions`
-(`theorems/Completeness/Assumptions.lean`), take any private inputs `privateInputs` and any honest
+For any instance `joltInstance`, take any private inputs `privateInputs` and any honest
 trace `trace` of the instance on them that meets the three conditions of
 `JoltInstance.InLanguage`: it ends with the claimed outputs (`claimsRunOutputs`), no spoil
 assert fails (`spoilAssertsPass`), and Jolt's prover accepts it with config `config`
@@ -81,7 +81,6 @@ Jolt's prover and verifier RAM sizes include the fix of a16z/jolt#2250 (`touched
 (`HonestTrace.prover_config_holds_highest_slot`). -/
 theorem JoltInstance.completeness {F : Type} [Field F]
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.CompletenessAssumptions)
     (privateInputs : JoltPrivateInputs)
     (trace : HonestTrace joltInstance privateInputs)
      -- These are the same as saying x in the language 
@@ -99,10 +98,10 @@ theorem JoltInstance.completeness {F : Type} [Field F]
   exact trace.allConstraints_prover_sizes config proverAccepts slots preprocessed
     ⟨TraceWitness.bytecodePc trace 0, trace.entry_lt_bytecode_domain config proverAccepts⟩
     (trace.first_pc_eq_entry slots preprocessed) spoilAssertsPass
-    joltInstance.program.next_pc_no_wrap assumptions.imageNonempty claimsRunOutputs io publicIo
+    joltInstance.program.next_pc_no_wrap claimsRunOutputs io publicIo
 
 /-- Completeness, existential form: every instance in Jolt's language
-(`JoltInstance.InLanguage`) that meets `JoltInstance.CompletenessAssumptions` has private
+(`JoltInstance.InLanguage`) has private
 inputs and a witness, at some sizes, that satisfy every constraint.
 It follows from `JoltInstance.completeness` by unpacking `InLanguage`: the witness is the
 honest one at Jolt's sizes.
@@ -110,7 +109,6 @@ For example, an instance whose program writes its claimed output and ends in `jo
 the honest witness of that run as its witness. -/
 theorem JoltInstance.completeness_someWitness {F : Type} [Field F]
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.CompletenessAssumptions)
     (inLanguage : joltInstance.InLanguage) :
     ∃ (privateInputs : JoltPrivateInputs) (params : WitnessParams)
       (witness : WitnessType F params),
@@ -118,5 +116,5 @@ theorem JoltInstance.completeness_someWitness {F : Type} [Field F]
   obtain ⟨privateInputs, trace, claimsRunOutputs, proverAccepts, spoilAssertsPass⟩ :=
     inLanguage
   obtain ⟨config, accepted⟩ := Option.isSome_iff_exists.mp proverAccepts
-  exact ⟨privateInputs, _, _, JoltInstance.completeness joltInstance assumptions privateInputs
+  exact ⟨privateInputs, _, _, JoltInstance.completeness joltInstance privateInputs
     trace claimsRunOutputs spoilAssertsPass config accepted⟩

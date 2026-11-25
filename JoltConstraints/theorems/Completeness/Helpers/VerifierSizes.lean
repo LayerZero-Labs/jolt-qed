@@ -482,19 +482,17 @@ the verifier computes both its minimum and its maximum
 (`HonestTrace.verifier_ram_minimum_computes`, `HonestTrace.witness_params_ram_maximum`),
 and Jolt's RAM size `config.ram_K` lies between them
 (`HonestTrace.witness_params_ram_minimum_of_nonempty`).
-An empty program is excluded by the a16z-confirmed assumption `imageNonempty`.
+The program is not empty, because Jolt's prover accepts its run
+(`HonestTrace.prover_config_image_nonempty`).
 For example, with lowest address `0x7fff8000` and `heap_end = 0x80010000`, a run
 touching word 1000 with an image of words 4096 to 4135 gets
 `ram_K = pow2(max(1001, 4137)) = 8192`, between the minimum 8192 and the maximum 16384. -/
 theorem HonestTrace.witness_params_ram_bounds
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config)
-    -- Assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program
-    -- is never empty, so its memory image loads at least one byte. Jolt's prover does
-    -- not reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
-    (imageNonempty : joltInstance.program.ImageNonempty) :
+    (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config) :
     joltInstance.ram_size_in_bounds (trace.witness_params config proverAccepts).ramSize = true := by
+  have imageNonempty := trace.prover_config_image_nonempty config proverAccepts
   have layoutBuilt :=
     (initial_state_device joltInstance privateInputs trace.initialState trace.initialized).1
   obtain ⟨minimum, minimumComputed⟩ :=

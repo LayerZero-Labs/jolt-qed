@@ -14,7 +14,6 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail
 section
 variable {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
-    (assumptions : inst.SoundnessAssumptions)
     (witness : WitnessType F params) (context : ConstraintContext inst inputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     (run : UntrustedAnswerRun inst inputs) (t : Fin params.traceLength)
@@ -26,7 +25,7 @@ variable {F : Type} [Field F] (joltField : JoltField F)
     (layoutIs : pre.jolt_device.memory_layout = context.io.memory_layout)
     (advice : run.bytecode[next].instruction.RuntimeAdvice)
 
-include joltField assumptions equations selected rowIs registers ram layoutIs
+include joltField equations selected rowIs registers ram layoutIs
 
 /-- A load succeeds with its constrained shared word and preserves the full memory table.
 For example, an input LD and a RAM floor load have the same register/memory contract. -/
@@ -47,7 +46,7 @@ theorem load_row_execution
       (∀ last : t.val + 1 = params.traceLength,
         SharedRamAgreement context.io.memory_layout witness.RamValFinal post) := by
   obtain ⟨_, executes, nextRam, finalRam⟩ := load_shared_step joltField context equations selected rowIs
-    loadRow assumptions.ramRegionFits registers baseLive ram layoutIs 0 advice
+    loadRow inst.ramRegionFits registers baseLive ram layoutIs 0 advice
   exact ⟨_, executes, fun next => (nextRam next).1, fun next => (nextRam next).2, finalRam⟩
 
 /-- A store succeeds with the constrained update and preserves full shared-word agreement.
@@ -69,7 +68,7 @@ theorem store_row_execution
       (∀ last : t.val + 1 = params.traceLength,
         SharedRamAgreement context.io.memory_layout witness.RamValFinal post) := by
   obtain ⟨_, executes, nextRam, finalRam⟩ := store_shared_step_agreement joltField context equations
-    selected rowIs storeRow assumptions.ramRegionFits registers baseLive sourceLive ram layoutIs codeIs 0 advice
+    selected rowIs storeRow inst.ramRegionFits registers baseLive sourceLive ram layoutIs codeIs 0 advice
   exact ⟨_, executes, fun next => (nextRam next).1, fun next => (nextRam next).2, finalRam⟩
 end
 end JoltInstance

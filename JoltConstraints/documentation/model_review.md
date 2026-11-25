@@ -32,7 +32,7 @@ The current migration also models the shared-memory and halt-end changes at `ff6
 The previous pin was `5def437f`.
 Older findings below keep the revision at which they were established.
 
-The completeness theorem is `JoltInstance.completeness` (`theorems/Completeness/completeness.lean`): for every instance that meets `JoltInstance.CompletenessAssumptions`, and every honest trace that meets the three conditions of `JoltInstance.InLanguage` (`language.lean`) with Jolt's prover config `config`, the honest witness at Jolt's own sizes (`HonestTrace.witness_params`) satisfies `AllConstraints`.
+The completeness theorem is `JoltInstance.completeness` (`theorems/Completeness/completeness.lean`): for every instance and every honest trace that meets the three conditions of `JoltInstance.InLanguage` (`language.lean`) with Jolt's prover config `config`, the honest witness at Jolt's own sizes (`HonestTrace.witness_params`) satisfies `AllConstraints`.
 The earlier existential form, some private inputs and some witness, is `JoltInstance.completeness_someWitness`, proved from it by unpacking `InLanguage`.
 Its workhorse is `HonestTrace.allConstraints_prover_sizes` (`theorems/Completeness/All.lean`).
 `Trace.prover_config` models Jolt's checked sizing policy, and `HonestTrace.witness_params` takes its trace length and RAM size.
@@ -87,10 +87,10 @@ Premises or fields of the final theorems, with their source or reason.
 | Assumption | Where | Why |
 |---|---|---|
 | The field's characteristic exceeds `2^128 - 2^64` | `JoltField F`, soundness premise `joltField` | Ari, 2026-10-10: the relation must distinguish full 128-bit lookup addresses. On 2026-11-10 the premise was weakened from `2^128` so Akita's `p = 2^128 - 1780711455` (Jolt's production field since a16z/jolt#2403) satisfies it; below characteristic `2^128` constraint (63), Akita's address guard, keeps identity-RAF addresses below `2^128 - 2^64`. BN254 also satisfies it. PCS security is outside this work |
-| The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | `JoltInstance.RamRegionFits` in `theorems/Soundness/Layer3/Layout.lean`, field `ramRegionFits` of `JoltInstance.SoundnessAssumptions` | Approved by Ari, 2026-10-10. With the verifier's RAM-size check, all eight bytes of each in-domain word fit, so satisfying LD/SD cycles have nonwrapping addresses. NOTE: to confirm with a16z. An instance restriction, not a verifier check |
-| A program is never empty: its memory image loads at least one byte | `Rv64ProgramImage.ImageNonempty`, field `imageNonempty` of `JoltInstance.CompletenessAssumptions` | a16z, by phone, 2026-10-08. Jolt's prover does not reject an empty ELF: it traces it and picks `ram_K = 4`, and only Jolt's verifier rejects that size (`InvalidRamK`, minimum 16 with a 64-byte output region; `bug-report/verifier-ram-minimum/`) |
-| A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | Modeling assumption, not a theorem premise: traces execute the expanded bytecode, while Jolt's tracer decodes each instruction from memory (`HonestTrace` docstring, `honest_trace.lean`) | a16z, 2026-10-07. The unused premise `codeUnchanged` was removed from soundness on 2026-11-03 with Ari's approval |
-| A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | ASSUMPTION in `finalRamWord` | a16z, 2026-10-07 |
+| The maximum padded RAM region satisfies `lowest + 8 * maxRamSize ≤ 2^64` | No longer an assumption: `JoltInstance.ramRegionFits` (`theorems/Soundness/Layer3/Layout.lean`) proves it for every instance, because the verifier's maximum `MemoryLayout::max_ram_k` at `ff6fc6568` rejects any layout that breaks it. `JoltInstance.SoundnessAssumptions`, which held only this field, was removed on 2026-11-25 | Approved by Ari, 2026-10-10, as a premise |
+| A program is never empty: its memory image loads at least one byte | No longer an assumption: `HonestTrace.prover_config_image_nonempty` derives `Rv64ProgramImage.ImageNonempty`. Jolt's prover at `ff6fc6568` rejects an empty trace (`TraceDoesNotEndInHalt` in `derive_from_dimensions`), and a program with an instruction loads that instruction's bytes (the image field `Rv64ProgramImage.instruction_loaded`) | a16z, by phone, 2026-10-08. At the earlier revision Jolt's prover traced an empty ELF, picked `ram_K = 4`, and only Jolt's verifier rejected that size (`bug-report/verifier-ram-minimum/`). `JoltInstance.CompletenessAssumptions`, which held only this field, was removed on 2026-11-25 |
+| A program does not change its own code ([#1952](https://github.com/a16z/jolt/issues/1952)) | No longer an assumption: Jolt's tracer at `ff6fc6568` rejects every store that changes a code byte (`protected_store_ok`), and the whole-run proof derives that the code stays intact (`JoltCodeIntact.of_block`) | a16z, 2026-10-07. The unused premise `codeUnchanged` was removed from soundness on 2026-11-03 with Ari's approval |
+| A run uses no RAM 2 GiB or more above `RAM_START` (`bug-report/final-ram-over-2gib/`) | No longer an assumption: a16z/jolt#2509 (in `ff6fc6568`) removed the branch of `final_ram_state` that filed bytes 2 GiB or more above `RAM_START` at the wrong address, and `TraceWitness.finalRamWord` models the fixed code, which puts every byte at its own address | a16z, 2026-10-07 |
 | No spoil assert fails | `Trace.SpoilAssertsPass`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): a spoiled run is meant to have no proof (`jolt-platform/src/spoil.rs`) |
 | Jolt's prover accepts the trace | `(trace.prover_config joltInstance).isSome`, part of `JoltInstance.InLanguage` | Part of L, not a premise (Ari, 2026-10-15): Jolt's prover refuses other traces (`ProverConfig::derive_from_dimensions`). `JoltInstance.completeness` takes the accepted config `config` and uses Jolt's sizes, modeled with the fix of [#1951](https://github.com/a16z/jolt/issues/1951) item 4 from [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) |
 
@@ -98,6 +98,9 @@ The SC.W and SC.D restriction `noStoreConditional`, which no proof used after a1
 
 The premise `pcNoWrap`, that no instruction's next PC passes 2^64, was removed from both theorems on 2026-11-05 with Ari's approval.
 Since a16z/jolt#2129, Jolt's ELF decoder (`decode_elf` in `crates/jolt-program/src/image/elf.rs`) rejects any program that breaks it, so it is now the image field `Rv64ProgramImage.next_pc_no_wrap` in `program.lean`.
+
+The premise `imageNonempty`, that the program's memory image loads at least one byte, was removed from completeness on 2026-11-25.
+Jolt's prover rejects an empty trace, every trace row runs a row of the expanded bytecode, and `decode_elf` emits an instruction only from a nonzero halfword of a loaded section. `HonestTrace.prover_config_image_nonempty` combines the three, with the last as the image field `Rv64ProgramImage.instruction_loaded`.
 
 ## Proofs owed
 
@@ -110,7 +113,7 @@ The proof's structure is in `methods/soundness.md`, "The argument in brief".
 See the [Step 4 report](../../reports/2026-11-03-constraints-migration-soundness.md).
 
 **Completeness.** On 2026-11-03 (Step 5), `JoltInstance.completeness` states that the honest witness at the sizes Jolt's prover picks satisfies `AllConstraints`; the earlier existential statement is `JoltInstance.completeness_someWitness`.
-`#print axioms` for both lists `propext`, `sorryAx`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
+`#print axioms` for both lists `propext`, `sorryAx`, `Classical.choice` and `Quot.sound`; `sys_enable_experimental_extensions` has been a definition, not an axiom, since the Sail model was regenerated with the Jolt hart patch.
 `lake build JoltConstraints.theorems.Completeness` and `lake build JoltConstraints.theorems.Completeness.completeness` pass.
 The working tree has the three #1949 completeness gaps listed below; see the [Step 2 report](../../reports/2026-11-03-constraints-migration-completeness.md) and the [Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md).
 The #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot` is proved under the fix of [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) ([experiment report](../../reports/2026-11-03-ram-k-fix-experiment.md)).

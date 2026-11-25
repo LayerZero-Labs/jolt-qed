@@ -217,6 +217,41 @@ theorem HonestTrace.prover_config_last_halt
       trace.bytecode[last.rowIndex].instruction.haltKind?.isSome) = true := by
   exact (ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts).1.2
 
+/-- Jolt's prover accepts a run only of a program whose memory image loads at least one byte.
+The prover rejects an empty trace (`deriveFromDimensions`). Each trace row runs a row of the
+expanded bytecode, which is empty when the program has no instructions. Every instruction has
+a byte in the image (`Rv64ProgramImage.instruction_loaded`).
+For example, an ELF with an empty text section has no instructions and an empty trace, and
+Jolt's prover rejects it with `TraceDoesNotEndInHalt`.
+Jolt at `ff6fc6568`: `crates/jolt-prover/src/config.rs:77-79` (`derive_from_dimensions`). -/
+theorem HonestTrace.prover_config_image_nonempty
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
+    (proverAccepts : trace.prover_config joltInstance = some config) :
+    joltInstance.program.ImageNonempty := by
+  have rowsNonempty : trace.rows.size ≠ 0 :=
+    (ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts).1.1
+  have bytecodeNonempty : 0 < trace.bytecode.size :=
+    Nat.lt_of_le_of_lt (Nat.zero_le _)
+      (trace.rows[0]'(Nat.pos_of_ne_zero rowsNonempty)).rowIndex.isLt
+  intro imageEmpty
+  cases instructions : joltInstance.program.instructions.toList with
+  | nil =>
+    have expands := trace.expands
+    unfold expand_program at expands
+    rw [instructions] at expands
+    have bytecodeEmpty : trace.bytecode = #[] := by
+      simpa using expands.symm
+    rw [bytecodeEmpty] at bytecodeNonempty
+    exact absurd bytecodeNonempty (Nat.lt_irrefl 0)
+  | cons first _ =>
+    have member : first ∈ joltInstance.program.instructions := by
+      rw [← Array.mem_toList_iff, instructions]
+      exact List.mem_cons_self
+    obtain ⟨entry, loaded, _⟩ := joltInstance.program.instruction_loaded first member
+    rw [imageEmpty] at loaded
+    exact absurd loaded List.not_mem_nil
+
 /-- Every accepted terminal halt also carries the Jump flag.
 For example, the panic halt emitted for EBREAK has Jump set.
 Jolt at `ff6fc6568`: `crates/jolt-riscv/src/lib.rs` (`circuit_flags`). -/

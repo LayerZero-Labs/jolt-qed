@@ -73,12 +73,3 @@ theorem JoltField.zmod_bn254ScalarModulus [Fact bn254ScalarModulus.Prime] :
   unfold JoltField
   rw [ZMod.ringChar_zmod_n]
   exact bn254ScalarModulus_above
-
--- What the soundness theorem assumes about the instance. Each field's comment says
--- whether a16z has confirmed it or it is still awaiting confirmation.
-structure JoltInstance.SoundnessAssumptions
-    (joltInstance : JoltInstance SourceInstruction) : Prop where
-  -- The whole maximum padded RAM region, including all eight bytes of every word,
-  -- lies below 2^64. Approved by Ari on 2026-10-10.
-  -- NOTE: to confirm with a16z.
-  ramRegionFits : joltInstance.RamRegionFits

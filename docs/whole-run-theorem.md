@@ -13,7 +13,6 @@ The claim holds under the premises listed below, and the most important limits a
 theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hheap : joltInstance.HeapNoWrap)
     (hcfg : (trace.prover_config joltInstance).isSome)
     {pre : List Block} {halt final : SailJoltState} (hp : HaltPrefix trace pre halt final)
     (hconf : ∀ b ∈ pre, BlockConforms joltInstance.program b) :
@@ -28,12 +27,10 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
 
 theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     {params : WitnessParams} (givenInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
-    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf)
-    (hheap : joltInstance.HeapNoWrap) :
+    {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
       (trace.prover_config joltInstance).isSome ∧
@@ -104,7 +101,6 @@ Jolt checks this itself, and `sail_soundness` obtains it from `JoltInstance.soun
 | Premise | Meaning | What would remove it |
 | --- | --- | --- |
 | `DecodedFrom` | Agreement of the program with Jolt's `decode_elf` on `elf`, the sections of the guest ELF | Nothing in Jolt (trusted, as described below) |
-| `HeapNoWrap` | `heap_end ≤ 2^64 - 8`. | A check in `MemoryLayout.new`. |
 
 `DecodedFrom` (`JoltConstraints/theorems/WholeRun/Elf.lean`) transcribes `decode_elf` from `crates/jolt-program/src/image/elf.rs` at `ff6fc6568` up to the call of `decode_instruction`.
 The proof derives from it that the committed bytecode is what Jolt's decoder makes of the program image (`ImageDecoded`) and that every row address is even (`RowsAligned`, which earlier revisions took as a separate platform premise).
@@ -133,6 +129,9 @@ The premises that excluded loads, stores and atomic operations on those words ar
 The premise on loads from the doubleword at address 0 is gone too: the tracer now rejects every access below `RAM_START_ADDRESS` outside the mapped I/O regions (`effective_address_ok` and `JoltDevice.readable`), and `read_lower` in `JoltConstraints/theorems/WholeRun/SharedMemorySim.lean` derives the lower bound `memLow` from the checked read itself.
 The earlier derivation from the prover's recorded address, `Block.FirstRowAt.noLowLoad`, no longer exists.
 
+Earlier revisions also took the platform premise `HeapNoWrap`: the heap ends at least eight bytes below `2^64`.
+Jolt's `MemoryLayout::try_new` at `ff6fc6568` rejects every other layout (`validate_heap_end`, called by `max_ram_k`), and `new_heap_end_le` (`JoltConstraints/theorems/layout_facts.lean`) proves the bound for every layout `MemoryLayout.new` builds. The premise is therefore gone.
+
 ### Scope premise
 
 | Premise | Meaning | What would remove it |
@@ -141,10 +140,11 @@ The earlier derivation from the prover's recorded address, `Block.FirstRowAt.noL
 
 ### Soundness premises (`sail_soundness` only)
 
-`sail_soundness` keeps every premise of `JoltInstance.soundness` (`JoltConstraints/theorems/Soundness/Assumptions.lean`):
+`sail_soundness` keeps the one premise of `JoltInstance.soundness` (`JoltConstraints/theorems/Soundness/Assumptions.lean`):
 
 - `JoltField F`: the field's characteristic is above `2^128 - 2^64`. Both of Jolt's fields satisfy this: BN254 (the default Dory build) and `p = 2^128 - 1780711455` (the `akita` build, Jolt's production field since a16z/jolt#2403); `JoltField.akita` and `JoltField.bn254` (`Soundness/FieldModuli.lean`) prove it, including each modulus's primality, by Pratt certificates checked in Lean. Below characteristic `2^128` the constraints include Akita's canonical-address check (63), which Jolt's `akita` build enforces; it is what makes `2^128 - 2^64` enough.
-- `SoundnessAssumptions.ramRegionFits`: the whole maximum padded RAM region lies below `2^64`. The comment in `Assumptions.lean` records it as still to be confirmed with a16z.
+
+The instance premise `SoundnessAssumptions.ramRegionFits`, that the whole maximum padded RAM region lies below `2^64`, is gone. Jolt's verifier computes the maximum with `MemoryLayout::max_ram_k`, which rejects a layout whose padded region passes `2^64`, so `JoltInstance.ramRegionFits` (`Soundness/Layer3/Layout.lean`) proves it for every instance.
 
 ## Conformance is a premise on a trace the verifier does not see
 

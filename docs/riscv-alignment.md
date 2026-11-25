@@ -381,9 +381,9 @@ The two can differ only after a store changes a code byte, and Jolt's tracer rej
 `JoltInstance.initial_state` computes the code region from the program's rows (`codeRegionOf`, Jolt's `code_region`), and `codeRegionAt_covers` (`WholeRun/Elf.lean`) shows that it covers every row byte that the image loads.
 Every store goes through `protected_store_ok`, which fails on a store that changes a byte of that region, so a block that runs keeps every code byte (`JoltIOSetupFrame.execProgram_memory`, `JoltCodeIntact.of_block`).
 
-Platform premise `JoltInstance.HeapNoWrap`: the memory layout ends at least eight bytes below `2^64` (`heap_end ≤ 2^64 - 8`).
-`MemoryLayout.new` checks its additions but rounds only the stack and heap sizes to eight bytes, so a `program_end` near `2^64` gives `heap_end = 2^64 - 1`; real ELFs end far below that.
-The layout never changes during a run, so the premise on the instance holds at every block.
+The memory layout ends at least eight bytes below `2^64` (`heap_end ≤ 2^64 - 8`).
+This is a run invariant, not a premise: `MemoryLayout.new` admits a layout only when `max_ram_k` does, and `max_ram_k` first rejects a heap end above `2^64 - 8` (`validate_heap_end` in Jolt at `ff6fc6568`; `new_heap_end_le` in `JoltConstraints/theorems/layout_facts.lean`).
+The layout never changes during a run, so the bound holds at every block.
 
 ### What step f proves
 
@@ -407,7 +407,6 @@ The premises, by class:
 | --- | --- | --- |
 | `hcfg` (`sail_reproduces` only) | prover acceptance | Jolt's prover accepts the trace; `sail_soundness` obtains it from `soundness` |
 | `DecodedFrom` | platform | the program agrees with what Jolt's `decode_elf` builds from the sections of the guest ELF; `ImageDecoded` and `RowsAligned` follow from it |
-| `HeapNoWrap` | platform | the layout ends at least eight bytes below `2^64` |
 | `BlockConforms.riscv` | scope | Jolt's own instructions (section 7) have no block theorem yet |
 
 The per-block premises are stated on the blocks of the trace's halt prefix, not on the whole program image.

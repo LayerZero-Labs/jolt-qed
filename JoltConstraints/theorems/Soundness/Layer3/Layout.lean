@@ -1,6 +1,7 @@
 import JoltConstraints.translation.constraint_context
 import JoltConstraints.translation.Constraints.RamReadData
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.theorems.layout_facts
 
 open LeanRV64D
 
@@ -10,15 +11,27 @@ domain. These facts depend only on the instance and verifier size checks. -/
 set_option autoImplicit false
 
 /-- The maximum padded RAM region fits in the machine's 64-bit address space.
-NOTE: to confirm with a16z. Approved by Ari on 2026-10-10 as a replacement for
-the run-based no-wrap assumption. This is a theorem premise, not a modeled
-verifier check. Failed layout or maximum-size computations admit no constraint
-context, so the restriction is stated for their successful results. -/
+Every instance meets it (`JoltInstance.ramRegionFits`): Jolt's verifier computes the maximum
+with `MemoryLayout::max_ram_k`, which rejects a layout whose padded region passes `2^64`.
+Failed layout or maximum-size computations admit no constraint context, so the property is
+stated for their successful results. -/
 def JoltInstance.RamRegionFits {Source : Type} (joltInstance : JoltInstance Source) : Prop :=
   ∀ (layout : MemoryLayout) (maximum : Nat),
     joltInstance.memory_layout = some layout →
     JoltConstraints.VerifierSizes.maxRamSize layout = some maximum →
       layout.get_lowest_address.toNat + 8 * maximum ≤ 2 ^ 64
+
+/-- Every instance's maximum padded RAM region fits below `2^64`. Jolt's verifier maximum
+`VerifierSizes.maxRamSize` is `MemoryLayout.max_ram_k?`, which returns a size only when
+`lowest + 8 * size ≤ 2^64` (`max_ram_k_spec`). This was the soundness premise
+`ramRegionFits` until 2026-11-25.
+For example, a layout with lowest address `2^64 - 2^20` and a maximum of `2^18` words is
+rejected, since its region would end at `2^64 + 2^20`.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs:650` (`MemoryLayout::max_ram_k`). -/
+theorem JoltInstance.ramRegionFits {Source : Type} (joltInstance : JoltInstance Source) :
+    joltInstance.RamRegionFits := by
+  intro layout maximum _ computed
+  exact (max_ram_k_spec layout maximum computed).2.2.2
 
 namespace JoltConstraints.Soundness
 

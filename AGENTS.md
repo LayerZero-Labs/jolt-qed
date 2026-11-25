@@ -84,7 +84,7 @@ If you believe a staged statement is false, stop and report the exact missing fa
 Each of these has made a staged statement false before.
 
 1. A trace row or state given on its own carries no execution certificate.
-   A property of its post-state, such as `StableStall`, says nothing about its instruction unless the lemma also has the run (`last ∈ run.rows.back?`) or an explicit execution fact.
+   A property of its post-state, such as whether it recorded a halt kind, says nothing about its instruction unless the lemma also has the run (`last ∈ run.rows.back?`) or an explicit execution fact.
 2. Witness values are field sums that do not wrap; Sail stores 64-bit words that do.
    Comparing them needs a bound, such as `NextPCNoWrap` (`joltInstance.program.next_pc_no_wrap`), as in `theorems/Soundness/Layer5/Jal.lean`.
 3. Some flags are set per row, not per source instruction.

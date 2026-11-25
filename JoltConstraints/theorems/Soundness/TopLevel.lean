@@ -21,7 +21,6 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 final shared RAM word agrees with the witness. -/
 theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
@@ -31,7 +30,7 @@ theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField 
       trace.bytecode = context.bytecode ∧
         Represents witness trace.toUntrustedAnswerRun.toTrace := by
   obtain ⟨run, bytecodeEq, representedRows, realRows, noEarlierStop, cut, advice⟩ :=
-    soundness_execution_prefix_agreement joltField joltInstance assumptions
+    soundness_execution_prefix_agreement joltField joltInstance
       privateInputs witness context equations
   obtain ⟨stops, nonempty, finalRam⟩ :=
     soundness_stopping joltField joltInstance
