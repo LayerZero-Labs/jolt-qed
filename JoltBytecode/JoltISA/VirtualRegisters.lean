@@ -353,16 +353,22 @@ def dropInstructionRegister (n : Nat) (live : InstructionLiveSet) :
     InstructionLiveSet :=
   live.erase n
 
-/-- Rust `allocate_for_inline()` scans the large inline pool from register 48. -/
-def firstFreeLargeInlineIndex (live : LargeInlineLiveSet) : Nat :=
-  (List.range live.length).foldl (fun candidate n =>
-    if live.contains candidate then n + 1 else candidate) 0
+/-- First free large inline index, matching Rust `allocate_for_inline()`'s scan
+of the `numLargeInlineRegisters` registers from register 48. It is `none` when
+every register in the pool is live. -/
+def firstFreeLargeInlineIndex (live : LargeInlineLiveSet) : Option Nat :=
+  (List.range numLargeInlineRegisters).find? fun n =>
+    !live.contains n
 
-/-- Rust `allocate_for_inline()` on the large inline pool. -/
+/-- Rust `allocate_for_inline()` on the large inline pool. With all 80 registers
+live, Rust returns `VirtualRegisterExhausted` and this returns `none`.
+Rust: `crates/jolt-program/src/expand/allocator.rs`
+(`ExpansionAllocator::allocate_for_inline`, `allocate_in_range`). -/
 def allocateLargeInlineRegister
-    (live : LargeInlineLiveSet) : VReg × LargeInlineLiveSet :=
-  let n := firstFreeLargeInlineIndex live
-  (largeInlineTmp n, n :: live)
+    (live : LargeInlineLiveSet) : Option (VReg × LargeInlineLiveSet) :=
+  match firstFreeLargeInlineIndex live with
+  | some n => some (largeInlineTmp n, n :: live)
+  | none => none
 
 /-- Rust `VirtualRegisterGuard::drop` for a large inline register. -/
 def dropLargeInlineRegister (n : Nat) (live : LargeInlineLiveSet) :
