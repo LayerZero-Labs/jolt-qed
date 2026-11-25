@@ -166,56 +166,6 @@ upstream = ""
 bug_report = ""
 
 # ---------------------------------------------------------------------------
-# Sorries. The three below wait on a16z/jolt#1949 and are being proved on a separate branch.
-
-[[entry]]
-name = "sorry.ramAddrEqRs1PlusImmMinusLookupIfLoadStore"
-lean = "JoltConstraints.honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore"
-kind = "sorry"
-file = "JoltConstraints/theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean"
-anchors = [
-  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs (RamAddrEqRs1PlusImmMinusLookupIfLoadStore)",
-  "tracer/src/instruction/ld.rs (exec)",
-  "tracer/src/instruction/floor_access.rs (addresses)",
-  "tracer/src/emulator/mmu.rs (assert_effective_address)",
-]
-no_witness_reason = """Expected to be provable at the pin: Jolt's tracer (assert_effective_address) \
-and the layout bounds exclude a wrapping access. The proof is in progress on a separate branch."""
-upstream = "a16z/jolt#1949"
-bug_report = "bug-report/ram-address-wrap.md"
-
-[[entry]]
-name = "sorry.floorAccess_address_nonneg"
-lean = "HonestTrace.floorAccess_address_nonneg"
-kind = "sorry"
-file = "JoltConstraints/theorems/Completeness/RightLookupAdd.lean"
-anchors = [
-  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs (RightLookupAdd)",
-  "crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs (to_instruction_inputs)",
-  "tracer/src/emulator/mmu.rs (assert_effective_address)",
-]
-no_witness_reason = """Expected to be provable at the pin: Jolt's tracer (assert_effective_address) \
-and the layout bounds exclude a negative address. The proof is in progress on a separate branch."""
-upstream = "a16z/jolt#1949"
-bug_report = "bug-report/ram-address-wrap.md"
-
-[[entry]]
-name = "sorry.shiftData_address_noWrap"
-lean = "HonestTrace.shiftData_address_noWrap"
-kind = "sorry"
-file = "JoltConstraints/theorems/Completeness/RightLookupEqRightInputOtherwise.lean"
-anchors = [
-  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs (RightLookupEqRightInputOtherwise)",
-  "crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs (to_instruction_inputs)",
-  "crates/jolt-lookup-tables/src/traits.rs (to_lookup_operands)",
-  "tracer/src/emulator/mmu.rs (assert_effective_address)",
-]
-no_witness_reason = """Expected to be provable at the pin: Jolt's tracer (assert_effective_address) \
-and the layout bounds exclude a wrapping address. The proof is in progress on a separate branch."""
-upstream = "a16z/jolt#1949"
-bug_report = "bug-report/ram-address-wrap.md"
-
-# ---------------------------------------------------------------------------
 # Statements: what the theorems are about. Each is a check Jolt itself runs or the
 # relation the theorem proves something about, not an assumption about the model.
 

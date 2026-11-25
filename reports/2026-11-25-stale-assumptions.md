@@ -88,7 +88,7 @@ longer reproduces, or no longer builds, flags its entries.
 ## Order of work
 
 1. Done on 2026-11-25 (branch `drift-guards`): the registry and the necessity witnesses.
-   `assumptions.toml` has an entry for every binder of the headline theorems, the three #1949 `sorry`s, every field of `Rv64ProgramImage` and the scope premises.
+   `assumptions.toml` has an entry for every binder of the headline theorems, every `sorry` (the three #1949 `sorry`s were proved the same day, in `db02bb9`), every field of `Rv64ProgramImage` and the scope premises.
    `JoltConstraints/Audit/Premises.lean` makes the build fail when a binder or field changes, and `scripts/check-assumptions.py` (a step of `lean.yml`) checks that the registry and those lists agree.
    `JoltConstraints/Audit/Necessity.lean` has witnesses for `JoltField`, `BlockConforms.riscv` and `memory_init_in_program`.
    `JoltConstraints/Audit/ImageFields.lean` proves that `DecodedFrom` implies `next_pc_no_wrap`, `instruction_loaded` and `program_end_ge_ram_start` without using the image fields.
