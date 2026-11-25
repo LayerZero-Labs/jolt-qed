@@ -78,19 +78,18 @@ statement WholeRun.HonestTrace.sail_reproduces
   ∀ {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) {elf : WholeRun.ElfSections},
     joltInstance.program.DecodedFrom elf →
-      (Trace.prover_config joltInstance trace.toTrace).isSome = true →
-        ∀ {pre : List WholeRun.Block} {halt final : SailJoltState},
-          WholeRun.HaltPrefix trace pre halt final →
-            (∀ b ∈ pre, WholeRun.BlockConforms joltInstance.program b) →
-              ∃ n s,
-                WholeRun.sailRun n (WholeRun.sailInit trace.initialState) = EStateM.Result.ok () s ∧
-                  WholeRun.Related halt s ∧
-                    trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
-                        trimTrailingZeros (final.jolt_device.outputsOf final.sail.mem) ∧
-                      ∃ kind,
-                        final.halted = some kind ∧
-                          final.jolt_device.panic = (kind == JoltHaltKind.panic) ∧
-                            (WholeRun.SailHalted joltInstance.program s kind ∨ halt = final)
+      ∀ {pre : List WholeRun.Block} {halt final : SailJoltState},
+        WholeRun.HaltPrefix trace pre halt final →
+          (∀ b ∈ pre, WholeRun.BlockConforms joltInstance.program b) →
+            ∃ s,
+              WholeRun.sailRun pre.length (WholeRun.sailInit trace.initialState) = EStateM.Result.ok () s ∧
+                WholeRun.Related halt s ∧
+                  trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
+                      trimTrailingZeros (final.jolt_device.outputsOf final.sail.mem) ∧
+                    ∃ kind,
+                      final.halted = some kind ∧
+                        final.jolt_device.panic = (kind == JoltHaltKind.panic) ∧
+                          (WholeRun.SailHalted joltInstance.program s kind ∨ halt = final)
 statement JoltInstance.sail_soundness
   ∀ {F : Type} [inst : Field F],
     JoltField F →
@@ -106,8 +105,9 @@ statement JoltInstance.sail_soundness
                       ∃ pre halt final,
                         WholeRun.HaltPrefix trace pre halt final ∧
                           ((∀ b ∈ pre, WholeRun.BlockConforms joltInstance.program b) →
-                            ∃ n s,
-                              WholeRun.sailRun n (WholeRun.sailInit trace.initialState) = EStateM.Result.ok () s ∧
+                            ∃ s,
+                              WholeRun.sailRun pre.length (WholeRun.sailInit trace.initialState) =
+                                  EStateM.Result.ok () s ∧
                                 WholeRun.Related halt s ∧
                                   trimTrailingZeros (halt.jolt_device.outputsOf s.mem) =
                                       trimTrailingZeros joltInstance.outputs ∧
@@ -158,6 +158,7 @@ fingerprint d1704272ab22e01f Decode.immS
 fingerprint 2661e934ca5cc807 Decode.immU
 fingerprint 96fc446b2918d37b Decode.jOffset
 fingerprint 76724bd16f758302 Decode.joltDecode
+fingerprint 3a3e3a8b4fc5342b Decode.joltSuccessWord
 fingerprint c65caf28b62e3099 Decode.joltUncompress
 fingerprint 48ab4190292fbb56 Decode.rd
 fingerprint c19749b930918b70 Decode.resetMisa
@@ -398,7 +399,7 @@ fingerprint ce158a57c3060532 JoltISA.Instr.canonicalNoOp
 fingerprint e924a13c210e6f28 JoltISA.Instr.ctorIdx
 fingerprint fabf50802d681ece JoltISA.Instr.destination?
 fingerprint edf5f3037aa0a7a4 JoltISA.Instr.haltKind?
-fingerprint 635673faf3d6ee00 JoltISA.Instr.rewriteNative
+fingerprint ae9b6100a31e9cb3 JoltISA.Instr.rewriteNative
 fingerprint 60c945aa1aef01b1 JoltISA.Instr.withRuntimeAdvice
 fingerprint e26833c8bd9f8f97 JoltISA.LoadFaultClass
 fingerprint cf87d6b3dbf2b9e6 JoltISA.LoadFaultClass.alignFault
@@ -557,13 +558,13 @@ fingerprint f5225139defedc5b JoltInstance.RamRegionFits
 fingerprint 846aa3fa461fb4ce JoltInstance.bytecode
 fingerprint 99e8b86b28a56aa1 JoltInstance.completeness
 fingerprint 12899078341d4c7a JoltInstance.completeness_someWitness
-fingerprint ba306b10c3bfab69 JoltInstance.initial_state
+fingerprint d2a81868d78c24e6 JoltInstance.initial_state
 fingerprint c2cf38db2def1990 JoltInstance.memory_layout
 fingerprint 60f26ebc5c882574 JoltInstance.one_hot_fits_setup
 fingerprint 716bc56a18818986 JoltInstance.public_io
 fingerprint f940de405774e031 JoltInstance.ramRegionFits
 fingerprint 093b6a70d53010e6 JoltInstance.ram_size_in_bounds
-fingerprint de399726d977a0b9 JoltInstance.sail_soundness
+fingerprint ad23e02ee275295b JoltInstance.sail_soundness
 fingerprint 6c0955e9e94edcfa JoltInstance.soundness
 fingerprint 64b129d2ccc27442 JoltInstance.validate_inputs
 fingerprint 6cdfbf8e504ab90b JoltInstance.verifier_ram_bounds
@@ -618,6 +619,7 @@ fingerprint 20eec48d540df9e3 Rv64ProgramImage.program_size
 fingerprint 16edc040423d1134 SailJoltState
 fingerprint 53652ba416ebae19 SailState
 fingerprint be92db0b54bb8e1a SourceInstruction
+fingerprint d9b43089d25fa5d0 SourceInstruction.DecodesFrom
 fingerprint 7e9f8717a8dc1f6a SourceInstruction.ctorIdx
 fingerprint 1330692acb211bd1 SourceInstruction.expand
 fingerprint 9830898c2702e7b3 SourceInstruction.honestTracerAdvice
@@ -712,12 +714,13 @@ fingerprint c4683541a5202971 WholeRun.ElfSections.layout?
 fingerprint ec5ce1b13adc0e38 WholeRun.ElfSections.loaded
 fingerprint fb52f307ba131b33 WholeRun.HaltObservation
 fingerprint a405f873fc59eb47 WholeRun.HaltPrefix
-fingerprint a2829479435fe871 WholeRun.HonestTrace.sail_reproduces
+fingerprint 1b0363385504cd5a WholeRun.HonestTrace.sail_reproduces
+fingerprint 1348ccfbe62b98a1 WholeRun.JoltCustomInstruction.decode?
 fingerprint 375a6f2e8dc24355 WholeRun.MappingSymbol
 fingerprint 89edf4f321aa3464 WholeRun.MappingSymbol.ctorIdx
 fingerprint b17baf33b5c90b02 WholeRun.NextIsHalt
 fingerprint 32fcb6015b07c589 WholeRun.Related
-fingerprint 3a4ad6481822023d WholeRun.RowFromParcel
+fingerprint b06ce22c7310c005 WholeRun.RowFromParcel
 fingerprint 7135a95ee2e370a8 WholeRun.SailHalted
 fingerprint 2f021d76f2366dc5 WholeRun.blockInstrs
 fingerprint e79dfa07d8557845 WholeRun.dataRangesFrom

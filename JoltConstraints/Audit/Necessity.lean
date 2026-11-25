@@ -120,7 +120,8 @@ theorem blockConformsRiscv_not_implied :
       ∃ row ∈ program.instructions, ∀ i, row.instruction ≠ .riscv i := by
   refine ⟨customElf, customProgram, ⟨customLayout, customElf_layout, rfl, rfl, rfl, ?_⟩,
     customRow, by simp [customProgram], fun i h => by cases h⟩
-  refine List.Forall₂.cons ⟨rfl, rfl, fun i h => by cases h⟩ List.Forall₂.nil
+  -- The word `0x060000DB` decodes to `AdviceLD x1` through `decode_custom`.
+  refine List.Forall₂.cons ⟨rfl, rfl, by rfl⟩ List.Forall₂.nil
 
 /-! ## `memory_init_in_program`
 

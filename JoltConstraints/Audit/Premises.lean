@@ -68,7 +68,6 @@ whole-run theorems of `docs/whole-run-theorem.md`. -/
   "trace : HonestTrace joltInstance privateInputs"
   "elf : WholeRun.ElfSections"
   "hdecoded : joltInstance.program.DecodedFrom elf"
-  "hcfg : (Trace.prover_config joltInstance trace.toTrace).isSome = true"
   "pre : List WholeRun.Block"
   "halt : SailJoltState"
   "final : SailJoltState"
