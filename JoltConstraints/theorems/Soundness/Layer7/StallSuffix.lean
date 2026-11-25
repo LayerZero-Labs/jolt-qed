@@ -7,6 +7,8 @@ import JoltConstraints.theorems.Soundness.Layer4.Inputs
 import JoltConstraints.theorems.Soundness.Layer4.Arithmetic
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.theorems.Soundness.Assumptions
+import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
+import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
 
 open LeanRV64D
 

@@ -1,4 +1,5 @@
 import JoltConstraints.theorems.Soundness.Assumptions
+import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import JoltConstraints.theorems.Soundness.Layer3.Address
 import JoltConstraints.theorems.Soundness.Layer3.State
 

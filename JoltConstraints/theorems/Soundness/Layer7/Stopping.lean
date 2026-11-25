@@ -4,6 +4,7 @@ import JoltConstraints.theorems.Soundness.Layer3.Access
 import JoltConstraints.theorems.Soundness.Layer3.History
 import JoltConstraints.theorems.Soundness.Layer5.Halt
 import JoltConstraints.theorems.Soundness.Layer1.HaltEndRule
+import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 
 open LeanRV64D
 set_option autoImplicit false

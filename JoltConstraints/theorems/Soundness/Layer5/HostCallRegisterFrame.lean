@@ -1,4 +1,4 @@
-import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
+import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.theorems.execution_facts
 import JoltConstraints.theorems.Soundness.Layer5.Registers

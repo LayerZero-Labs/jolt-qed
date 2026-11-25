@@ -103,7 +103,7 @@ Every change below removes a premise; no conclusion changes.
 | `host_call_exec_sail_frame` | moved from `Layer5/HostCallRestriction.lean` to `Layer5/HostCallRegisterFrame.lean` | `(restricted : joltInstance.HostCallsSucceed)` and `(ready : run.NextStep next pre)` | `∃ post, execWithTapeAnswer (run.bytecode[next].instruction.withRuntimeAdvice advice) answer pre = .ok RETIRE_SUCCESS post ∧ post.sail = pre.sail ∧ post.vregs = pre.vregs`, unchanged |
 | `host_call_selected_step` | `Soundness/Layer5/HostCallRegisterFrame.lean` | `(restricted : joltInstance.HostCallsSucceed)` and `(ready : run.NextStep nextRow pre)` | otherwise unchanged |
 
-`Soundness/Assumptions.lean` now imports `Layer5.MemoryAccessRestriction`, `Layer5.RuntimeAdvice` and `theorems.execution_facts` in place of the deleted module, so that every downstream module keeps the same import closure.
+`Soundness/Assumptions.lean` imports only `Layer3.Layout` and `Mathlib.Algebra.Field.ZMod`, which it uses. A later commit moved the imports that kept the downstream closure (`Layer5.TapeTrace` and `Layer5.RuntimeAdvice`) to the Layer 7 modules that use them: `LastJump`, `ProverAccepts`, `StallSuffix` and `Stopping`. `Layer5/HostCallRegisterFrame.lean` imports `Layer5.TapeTrace` instead of `Layer5.MemoryAccessRestriction`, because it no longer uses `NextStep`.
 
 ### Commits
 

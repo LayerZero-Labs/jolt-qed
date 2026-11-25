@@ -4,9 +4,6 @@ the field and the instance.
 Nothing is assumed about the witness.
 -/
 import JoltConstraints.theorems.Soundness.Layer3.Layout
-import JoltConstraints.theorems.Soundness.Layer5.MemoryAccessRestriction
-import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
-import JoltConstraints.theorems.execution_facts
 import Mathlib.Algebra.Field.ZMod
 
 open LeanRV64D
