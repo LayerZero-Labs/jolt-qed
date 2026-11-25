@@ -307,24 +307,6 @@ private theorem commutes_store_doubleword (address w : BitVec 64) :
     JoltISA.Mmu.store_raw? s (address.toNat + k) (w.extractLsb' (8 * k) 8)) (some js) = stored
   cases stored <;> simp only [Option.map_none, Option.map_some, mapState_ite] <;> rfl
 
-private theorem commutes_readHostBytes
-    (loadByte : BitVec 64 → JoltMonad (Result (BitVec 8) ExecutionResult))
-    (hload : ∀ address, Commutes r v (loadByte address))
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    Commutes r v
-      (JoltISA.readHostBytes loadByte overflowChecks incrementAfterLast pointer count bytes) := by
-  induction count generalizing pointer bytes with
-  | zero => exact commutes_pure _
-  | succ count ih =>
-    unfold JoltISA.readHostBytes
-    refine commutes_bind (hload _) fun result => ?_
-    cases result with
-    | Err _ => exact commutes_pure _
-    | Ok byte =>
-      dsimp only
-      exact commutes_ite (commutes_bind (commutes_throw _) fun _ => ih _ _) (ih _ _)
-
 set_option hygiene false in
 local macro "jolt_commutes" : tactic =>
   `(tactic| repeat' (first
@@ -344,11 +326,39 @@ local macro "jolt_commutes" : tactic =>
     | exact commutes_store_doubleword _ _
     | split))
 
+/-- Host calls read x10..x13, the host mode and the guest-load query, none of
+which an inert register affects; for example, replacing embedded `mstatus`
+leaves the advice range unchanged. -/
 private theorem commutes_hostIO (hr : Inert r) : Commutes r v JoltISA.execHostIO := by
   unfold JoltISA.execHostIO JoltISA.execHostIOWith
-  refine commutes_get_bind (fun _ => rfl) (fun _ => ?_)
-  jolt_commutes
-  all_goals exact commutes_readHostBytes _ commutes_load _ _ _ _ _
+  refine commutes_get_bind (fun js => ?_) (fun _ => ?_)
+  · have keep (x : Register) (hx : x ≠ r) :
+        (withReg js r v).sail.regs.get? x = js.sail.regs.get? x :=
+      Step.setReg_get?_ne js.sail v (Ne.symm hx)
+    have h10 : JoltISA.sourceValue (.xreg (.Regidx 10)) (withReg js r v) =
+        JoltISA.sourceValue (.xreg (.Regidx 10)) js := by
+      show ((withReg js r v).sail.regs.get? Register.x10).getD 0 =
+        (js.sail.regs.get? Register.x10).getD 0
+      rw [keep Register.x10 (by inert_ne)]
+    have h11 : JoltISA.sourceValue (.xreg (.Regidx 11)) (withReg js r v) =
+        JoltISA.sourceValue (.xreg (.Regidx 11)) js := by
+      show ((withReg js r v).sail.regs.get? Register.x11).getD 0 =
+        (js.sail.regs.get? Register.x11).getD 0
+      rw [keep Register.x11 (by inert_ne)]
+    have h12 : JoltISA.sourceValue (.xreg (.Regidx 12)) (withReg js r v) =
+        JoltISA.sourceValue (.xreg (.Regidx 12)) js := by
+      show ((withReg js r v).sail.regs.get? Register.x12).getD 0 =
+        (js.sail.regs.get? Register.x12).getD 0
+      rw [keep Register.x12 (by inert_ne)]
+    have h13 : JoltISA.sourceValue (.xreg (.Regidx 13)) (withReg js r v) =
+        JoltISA.sourceValue (.xreg (.Regidx 13)) js := by
+      show ((withReg js r v).sail.regs.get? Register.x13).getD 0 =
+        (js.sail.regs.get? Register.x13).getD 0
+      rw [keep Register.x13 (by inert_ne)]
+    simp only [h10, h11, h12, h13]
+    rfl
+  · dsimp only
+    jolt_commutes
 
 private theorem commutes_adviceLoad (hr : Inert r) (rd : JoltISA.Dst)
     (num_bytes : BitVec 64) :

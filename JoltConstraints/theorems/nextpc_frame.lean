@@ -234,43 +234,6 @@ def BranchTaken (instr : Instr) (s : SailJoltState) : Bool :=
       branchDecisionPure instr (sourceValue lhs s) (sourceValue rhs s)
   | _ => false
 
-theorem readHostBytes_frame
-    (loadByte : BitVec 64 → JoltMonad (Result (BitVec 8) ExecutionResult))
-    (hload : ∀ address, Preserves (loadByte address))
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (readHostBytes loadByte overflowChecks incrementAfterLast pointer n bytes) := by
-  induction n generalizing pointer bytes with
-  | zero =>
-    exact pure_rule _
-  | succ n ih =>
-    dsimp only [readHostBytes]
-    refine bind_rule (hload _) (fun result => ?_)
-    cases result with
-    | Err e => exact pure_rule _
-    | Ok byte =>
-      split_ifs with h
-      · exact bind_rule (throw_rule _) (fun _ => ih _ _)
-      · exact bind_rule (pure_rule _) (fun _ => ih _ _)
-
-theorem execHostIOWith_frame
-    (loadByte : BitVec 64 → JoltMonad (Result (BitVec 8) ExecutionResult))
-    (hload : ∀ address, Preserves (loadByte address)) :
-    Preserves (execHostIOWith loadByte) := by
-  unfold execHostIOWith
-  refine bind_rule get_rule (fun config => ?_)
-  dsimp only
-  split
-  · exact pure_rule _
-  · repeat' first
-      | exact readHostBytes_frame loadByte hload _ _ _ _ _
-      | exact read_rule _
-      | exact pure_rule _
-      | exact throw_rule _
-      | exact modify_rule _ (by intro s; rfl)
-      | split
-      | refine bind_rule ?_ (fun x => ?_)
-
 theorem branch_not_taken (instr : Instr) (s t : SailJoltState)
     (hbranch : JoltMetadata.instructionFlag instr .Branch = true)
     (hnot : BranchTaken instr s = false)

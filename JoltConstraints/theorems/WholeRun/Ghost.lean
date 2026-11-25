@@ -431,22 +431,6 @@ private theorem sail_jump (pc : BitVec 64) : SailTracks (jump_to pc) := by
   · exact sailE_ite (sailE_pure _)
       (sailE_bind (sailE_lift (sail_next_pc _)) fun _ => sailE_pure _)
 
-private theorem tracks_readHostBytes
-    (loadByte : BitVec 64 → JoltMonad (Result (BitVec 8) ExecutionResult))
-    (hload : ∀ a, Tracks (loadByte a)) (overflowChecks incrementAfterLast : Bool)
-    {width : Nat} (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    Tracks (readHostBytes loadByte overflowChecks incrementAfterLast pointer count bytes) := by
-  induction count generalizing pointer bytes with
-  | zero => exact tracks_pure _
-  | succ count ih =>
-    unfold readHostBytes
-    refine tracks_bind (hload _) fun result => ?_
-    cases result with
-    | Err _ => exact tracks_pure _
-    | Ok _ =>
-      dsimp only
-      exact tracks_ite (tracks_bind (tracks_throw _) fun _ => ih _ _) (ih _ _)
-
 private theorem tracks_tape_modify (f : JoltAdviceTape → JoltAdviceTape) :
     Tracks (modify fun s : SailJoltState => { s with adviceTape := f s.adviceTape }) := by
   apply tracks_modify
@@ -482,13 +466,27 @@ local macro "jolt_tracks" : tactic =>
     | exact tracks_store_doubleword _ _
     | split))
 
+/-- Host calls read only registers, the host mode and the guest-load query, all
+of which a shadow shares; for example, an accepted advice range appends the same
+bytes to both tapes. -/
 private theorem tracks_hostIO : Tracks execHostIO := by
   unfold execHostIO execHostIOWith
-  refine tracks_get_bind (fun _ _ h => by rw [h.host]) fun _ => ?_
-  jolt_tracks
-  all_goals first
-    | exact tracks_readHostBytes _ tracks_load _ _ _ _ _
-    | exact tracks_tape_modify (fun tape => { tape with bytes := tape.bytes ++ _ })
+  refine tracks_get_bind (fun s g h => ?_) fun _ => ?_
+  · have hload : Mmu.load? g = Mmu.load? s := by
+      funext a
+      unfold Mmu.load?
+      rw [h.device, load_raw_shadow h]
+    have hsrc : ∀ src, sourceValue src g = sourceValue src s := by
+      intro src
+      cases src with
+      | vreg q => simp only [sourceValue, h.vregs]
+      | xreg q =>
+        cases q
+        simp only [sourceValue, h.regs]
+    simp only [hload, hsrc, h.host]
+  · dsimp only
+    jolt_tracks
+    all_goals exact tracks_tape_modify (fun tape => { tape with bytes := tape.bytes ++ _ })
 
 private theorem tracks_adviceLoad (rd : Dst) (n : BitVec 64) :
     Tracks (execInstr (.VirtualAdviceLoad rd n)) := by

@@ -622,14 +622,6 @@ private theorem swap_write (dst : Dst) (value : BitVec 64) :
     simp only [writeDst, writeVReg]
     split <;> rfl
 
-private theorem swap_load (address : BitVec 64) :
-    SwapInvariant (Mmu.load address) := by
-  intro s b
-  have same : Mmu.load? (swapBytes s b) address.toNat = Mmu.load? s address.toNat := rfl
-  unfold Mmu.load
-  simp only [same]
-  cases Mmu.load? s address.toNat <;> rfl
-
 private theorem swap_load_doubleword (address : BitVec 64) :
     SwapInvariant (Mmu.load_doubleword address) := by
   intro s b
@@ -696,22 +688,6 @@ private theorem swap_execInstr_nonhost (instr : Instr)
     swap_throw _, swap_lift _, swap_load_doubleword _, swap_store_doubleword _ _]
     using swap_bind
 
-private theorem swap_readHostBytes
-    (overflow increment : Bool) {width : Nat}
-    (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    SwapInvariant (readHostBytes Mmu.load overflow increment pointer count bytes) := by
-  induction count generalizing pointer bytes with
-  | zero => exact swap_pure _
-  | succ count ih =>
-    dsimp only [readHostBytes]
-    refine swap_bind (swap_load _) (fun result => ?_)
-    cases result with
-    | Err e => exact swap_pure _
-    | Ok byte =>
-      split_ifs
-      · exact swap_bind (swap_throw _) (fun _ => ih _ _)
-      · exact swap_bind (swap_pure _) (fun _ => ih _ _)
-
 /-- A successful action appends the same suffix after any replacement tape.
 For example, a host write of `[1]` extends replacement `[44]` to `[44, 1]`. -/
 private def SwapAppend {α : Type} (m : JoltMonad α) : Prop :=
@@ -775,14 +751,10 @@ private theorem swapAppend_getHostIO {α : Type} (next : SailJoltState → JoltM
 
 private theorem swap_execHostIO : SwapAppend execHostIO := by
   unfold execHostIO execHostIOWith
-  refine swapAppend_getHostIO _ (by intro s b; rfl) (fun config => ?_)
+  refine swapAppend_getHostIO _ (by intro s b; rfl) (fun state => ?_)
   dsimp only
-  split
-  · exact swapInvariant_to_append (swap_pure _)
-  · preservation_auto [swapInvariant_to_append (swap_read _),
-      swapInvariant_to_append (swap_readHostBytes _ _ _ _ _),
-      swapInvariant_to_append (swap_pure _), swapInvariant_to_append (swap_throw _),
-      swapAppend_append _] using swapAppend_bind
+  preservation_auto [swapInvariant_to_append (swap_pure _), swapAppend_append _]
+    using swapAppend_bind
 
 private theorem swap_execInstr_nonload (instruction : Instr)
     (notLoad : ∀ dst width, instruction ≠ .VirtualAdviceLoad dst width) :
